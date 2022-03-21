@@ -7,8 +7,42 @@ on:
     default: "default"
 
 jobs:
+  Run:
+    strategy:
+      fail-fast: false
+      matrix:
+        test:
+        - FourValidatorsReconnect
+        - MultipleValidatorsDown
+        - FourValidatorsReconnectRmDatabase
+        - FourValidatorsReconnectSpammer
+        - MacroBlockProduction
+        - Validators90sDown
+        - LowViewChangeDelay
+        - EraseState
+        - ReleaseFiveValidatorsWithSpammer
+        include:
+        - test: FourValidatorsReconnect
+          devnet_args:
+        - test: MultipleValidatorsDown
+          devnet_args: -k 2
+        - test: FourValidatorsReconnectRmDatabase
+          devnet_args: -d
+        - test: FourValidatorsReconnectSpammer
+          devnet_args: -s 500
+        - test: MacroBlockProduction
+          pre: "sed -i 's/BLOCKS_PER_BATCH: u32 = 32;/BLOCKS_PER_BATCH: u32 = 2;/g' primitives/src/policy.rs"
+          devnet_args: -k 0 -s 150
+        - test: Validators90sDown
+          devnet_args: -s 500 -t 90
+        - test: LowViewChangeDelay
+          pre: "sed -i 's/VIEW_CHANGE_DELAY: Duration = Duration::from_secs(10);/VIEW_CHANGE_DELAY: Duration = Duration::from_secs(2);/g' validator/src/validator.rs"
+          devnet_args: -k 0 -s 150
+        - test: EraseState
+          devnet_args: -e
+        - test: ReleaseFiveValidatorsWithSpammer
+          devnet_args: --validators 5 -R -s 500 -k 0
 
-  FourValidatorsReconnectTest:
     runs-on: ubuntu-20.04
 
     steps:
@@ -27,17 +61,19 @@ jobs:
         profile: minimal
         toolchain: stable
         override: true
+    - name: Optionally patch the source
+      run: ${{ matrix.pre }}
     - uses: actions-rs/cargo@v1
       with:
         command: build
     - name: Executes the test
       run: |          
-          bash scripts/devnet/devnet.sh
+          bash scripts/devnet/devnet.sh ${{ matrix.devnet_args }}
     - name: Archive test results
       if: always()
       uses: actions/upload-artifact@v2
       with:
-          name: FourValidatorsReconnectTest-logs
+          name: ${{ matrix.test }}-logs
           path: |
             temp-logs/
     - name: Retrieve failure reason
@@ -54,7 +90,7 @@ jobs:
       uses: ravsamhq/notify-slack-action@v1
       with:
           status: ${{ job.status }}
-          notification_title: 'Potential deadlock detected in FourValidatorsReconnectTest'
+          notification_title: 'Potential deadlock detected in ${{ matrix.test }}'
           footer: '<{run_url}|View Run>'
       env:
           SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
@@ -63,7 +99,7 @@ jobs:
       uses: ravsamhq/notify-slack-action@v1
       with:
           status: ${{ job.status }}
-          notification_title: 'Long lock hold time in FourValidatorsReconnectTest'
+          notification_title: 'Long lock hold time in ${{ matrix.test }}'
           footer: '<{run_url}|View Run>'
       env:
           SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
@@ -72,7 +108,7 @@ jobs:
       uses: ravsamhq/notify-slack-action@v1
       with:
           status: ${{ job.status }}
-          notification_title: 'Slow lock acquisition detected in FourValidatorsReconnectTest'
+          notification_title: 'Slow lock acquisition detected in ${{ matrix.test }}'
           footer: '<{run_url}|View Run>'
       env:
           SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
@@ -82,487 +118,7 @@ jobs:
       with:
           status: ${{ job.status }}
           notify_when: 'failure'
-          notification_title: 'FourValidatorsReconnectTest failed because of ${{ steps.reason.outputs.FAIL_REASON }}'
-          footer: '<{run_url}|View Run>'
-      env:
-          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
- 
-  MultipleValidatorsDownTest:
-    runs-on: ubuntu-20.04
-
-    steps:
-    - uses: actions/checkout@v3
-    - uses: actions/setup-python@v3
-    - uses: actions/cache@v3
-      with:
-        path:
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: cargo-${{ hashFiles('**/Cargo.toml') }}
-    - name: Set up Rust toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: stable
-        override: true
-    - uses: actions-rs/cargo@v1
-      with:
-        command: build
-    - name: Executes the test
-      run: |
-          bash scripts/devnet/devnet.sh -k 2
-    - name: Archive test results
-      if: always()
-      uses: actions/upload-artifact@v2
-      with:
-          name: MultipleValidatorsDownTest-logs
-          path: |
-            temp-logs/
-    - name: Retrieve failure reason
-      if: always()
-      run: |
-          if [ -f temp-state/RESULT.TXT ]; then
-            echo "::set-output name=FAIL_REASON::$(cat temp-state/RESULT.TXT)"
-          else
-            echo "::set-output name=FAIL_REASON::other"
-          fi
-      id: reason
-    - name: Report potential deadlocks to slack
-      if: always() && contains(steps.reason.outputs.FAIL_REASON, 'DEADLOCK')
-      uses: ravsamhq/notify-slack-action@v1
-      with:
-          status: ${{ job.status }}
-          notification_title: 'Potential deadlock detected in MultipleValidatorsDownTest'
-          footer: '<{run_url}|View Run>'
-      env:
-          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
-    - name: Report long lock hold times
-      if: always() && contains(steps.reason.outputs.FAIL_REASON, 'LONG_LOCK_HOLD_TIME')
-      uses: ravsamhq/notify-slack-action@v1
-      with:
-          status: ${{ job.status }}
-          notification_title: 'Long lock hold time detected in MultipleValidatorsDownTest'
-          footer: '<{run_url}|View Run>'
-      env:
-          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
-    - name: Report slow lock acquisitions
-      if: always() && contains(steps.reason.outputs.FAIL_REASON, 'SLOW_LOCK_ACQUISITION')
-      uses: ravsamhq/notify-slack-action@v1
-      with:
-          status: ${{ job.status }}
-          notification_title: 'Slow lock acquisition detected in MultipleValidatorsDownTest'
-          footer: '<{run_url}|View Run>'
-      env:
-          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
-    - name: Report Status to Slack
-      if: always() && github.ref == 'refs/heads/albatross'
-      uses: ravsamhq/notify-slack-action@v1
-      with:
-          status: ${{ job.status }}
-          notify_when: 'failure'
-          notification_title: 'MultipleValidatorsDownTest failed because of ${{ steps.reason.outputs.FAIL_REASON }}'
-          footer: '<{run_url}|View Run>'
-      env:
-          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
-
-  FourValidatorsReconnectRMdatabaseTest:
-    runs-on: ubuntu-20.04
-
-    steps:
-    - uses: actions/checkout@v3
-    - uses: actions/setup-python@v3
-    - uses: actions/cache@v3
-      with:
-        path:
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: cargo-${{ hashFiles('**/Cargo.toml') }}
-    - name: Set up Rust toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: stable
-        override: true
-    - uses: actions-rs/cargo@v1
-      with:
-        command: build
-    - name: Executes the test
-      run: |          
-          bash scripts/devnet/devnet.sh -d
-    - name: Archive test results
-      if: always()
-      uses: actions/upload-artifact@v2
-      with:
-          name: FourValidatorsReconnectRMdatabaseTest-logs
-          path: |
-            temp-logs/
-    - name: Retrieve failure reason
-      if: always()
-      run: |
-          if [ -f temp-state/RESULT.TXT ]; then
-            echo "::set-output name=FAIL_REASON::$(cat temp-state/RESULT.TXT)"
-          else
-            echo "::set-output name=FAIL_REASON::other"
-          fi
-      id: reason
-    - name: Report potential deadlocks to slack
-      if: always() && contains(steps.reason.outputs.FAIL_REASON, 'DEADLOCK')
-      uses: ravsamhq/notify-slack-action@v1
-      with:
-          status: ${{ job.status }}
-          notification_title: 'Potential deadlock detected in FourValidatorsReconnectRMdatabaseTest'
-          footer: '<{run_url}|View Run>'
-      env:
-          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
-    - name: Report long lock hold times
-      if: always() && contains(steps.reason.outputs.FAIL_REASON, 'LONG_LOCK_HOLD_TIME')
-      uses: ravsamhq/notify-slack-action@v1
-      with:
-          status: ${{ job.status }}
-          notification_title: 'Long lock hold time detected in FourValidatorsReconnectRMdatabaseTest'
-          footer: '<{run_url}|View Run>'
-      env:
-          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
-    - name: Report slow lock acquisitions
-      if: always() && contains(steps.reason.outputs.FAIL_REASON, 'SLOW_LOCK_ACQUISITION')
-      uses: ravsamhq/notify-slack-action@v1
-      with:
-          status: ${{ job.status }}
-          notification_title: 'Slow lock acquisition detected in FourValidatorsReconnectRMdatabaseTest'
-          footer: '<{run_url}|View Run>'
-      env:
-          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
-    - name: Report Status to Slack
-      if: always() && github.ref == 'refs/heads/albatross'
-      uses: ravsamhq/notify-slack-action@v1
-      with:
-          status: ${{ job.status }}
-          notify_when: 'failure'
-          notification_title: 'FourValidatorsReconnectRMdatabaseTest failed because of ${{ steps.reason.outputs.FAIL_REASON }}'
-          footer: '<{run_url}|View Run>'
-      env:
-          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
-
-  FourValidatorsReconnectSpammer:
-    runs-on: ubuntu-20.04
-
-    steps:
-    - uses: actions/checkout@v3
-    - uses: actions/setup-python@v3
-    - uses: actions/cache@v3
-      with:
-        path:
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: cargo-${{ hashFiles('**/Cargo.toml') }}
-    - name: Set up Rust toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: stable
-        override: true
-    - uses: actions-rs/cargo@v1
-      with:
-        command: build
-    - name: Executes the test
-      run: |
-          bash scripts/devnet/devnet.sh -s 500
-    - name: Archive test results
-      if: always()
-      uses: actions/upload-artifact@v2
-      with:
-          name: FourValidatorsReconnectSpammer-logs
-          path: |
-            temp-logs/
-    - name: Retrieve failure reason
-      if: always()
-      run: |
-          if [ -f temp-state/RESULT.TXT ]; then
-            echo "::set-output name=FAIL_REASON::$(cat temp-state/RESULT.TXT)"
-          else
-            echo "::set-output name=FAIL_REASON::other"
-          fi
-      id: reason
-    - name: Report potential deadlocks to slack
-      if: always() && contains(steps.reason.outputs.FAIL_REASON, 'DEADLOCK')
-      uses: ravsamhq/notify-slack-action@v1
-      with:
-          status: ${{ job.status }}
-          notification_title: 'Potential deadlock detected in FourValidatorsReconnectSpammer'
-          footer: '<{run_url}|View Run>'
-      env:
-          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
-    - name: Report long lock hold times
-      if: always() && contains(steps.reason.outputs.FAIL_REASON, 'LONG_LOCK_HOLD_TIME')
-      uses: ravsamhq/notify-slack-action@v1
-      with:
-          status: ${{ job.status }}
-          notification_title: 'Long lock hold time detected in FourValidatorsReconnectSpammer'
-          footer: '<{run_url}|View Run>'
-      env:
-          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
-    - name: Report slow lock acquisitions
-      if: always() && contains(steps.reason.outputs.FAIL_REASON, 'SLOW_LOCK_ACQUISITION')
-      uses: ravsamhq/notify-slack-action@v1
-      with:
-          status: ${{ job.status }}
-          notification_title: 'Slow lock acquisition detected in FourValidatorsReconnectSpammer'
-          footer: '<{run_url}|View Run>'
-      env:
-          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
-    - name: Report Status to Slack
-      if: always() && github.ref == 'refs/heads/albatross'
-      uses: ravsamhq/notify-slack-action@v1
-      with:
-          status: ${{ job.status }}
-          notify_when: 'failure'
-          notification_title: 'FourValidatorsReconnectSpammer failed because of ${{ steps.reason.outputs.FAIL_REASON }}'
-          footer: '<{run_url}|View Run>'
-      env:
-          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
-
-  MacroBlockProduction:
-    runs-on: ubuntu-20.04
-
-    steps:
-    - uses: actions/checkout@v3
-    - uses: actions/setup-python@v3
-    - uses: actions/cache@v3
-      with:
-        path:
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: cargo-${{ hashFiles('**/Cargo.toml') }}
-    - name: Set up Rust toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: stable
-        override: true
-    - name: Configure micro block per epoch
-      run: |
-          sed -i 's/BLOCKS_PER_BATCH: u32 = 32;/BLOCKS_PER_BATCH: u32 = 2;/g' primitives/src/policy.rs
-    - uses: actions-rs/cargo@v1
-      with:
-        command: build
-    - name: Executes the test
-      run: |
-          bash scripts/devnet/devnet.sh -k 0 -s 150
-    - name: Archive test results
-      if: always()
-      uses: actions/upload-artifact@v2
-      with:
-          name: MacroBlockProduction-logs
-          path: |
-            temp-logs/
-    - name: Retrieve failure reason
-      if: always()
-      run: |
-          if [ -f temp-state/RESULT.TXT ]; then
-            echo "::set-output name=FAIL_REASON::$(cat temp-state/RESULT.TXT)"
-          else
-            echo "::set-output name=FAIL_REASON::other"
-          fi
-      id: reason
-    - name: Report potential deadlocks to slack
-      if: always() && contains(steps.reason.outputs.FAIL_REASON, 'DEADLOCK')
-      uses: ravsamhq/notify-slack-action@v1
-      with:
-          status: ${{ job.status }}
-          notification_title: 'Potential deadlock detected in MacroProductionTest'
-          footer: '<{run_url}|View Run>'
-      env:
-          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
-    - name: Report long lock hold times
-      if: always() && contains(steps.reason.outputs.FAIL_REASON, 'LONG_LOCK_HOLD_TIME')
-      uses: ravsamhq/notify-slack-action@v1
-      with:
-          status: ${{ job.status }}
-          notification_title: 'Long lock hold time detected in MacroProductionTest'
-          footer: '<{run_url}|View Run>'
-      env:
-          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
-    - name: Report slow lock acquisitions
-      if: always() && contains(steps.reason.outputs.FAIL_REASON, 'SLOW_LOCK_ACQUISITION')
-      uses: ravsamhq/notify-slack-action@v1
-      with:
-          status: ${{ job.status }}
-          notification_title: 'Slow lock acquisition detected in MacroProductionTest'
-          footer: '<{run_url}|View Run>'
-      env:
-          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
-    - name: Report Status to Slack
-      if: always() && github.ref == 'refs/heads/albatross'
-      uses: ravsamhq/notify-slack-action@v1
-      with:
-          status: ${{ job.status }}
-          notify_when: 'failure'
-          notification_title: 'MacroBlockProduction failed because of ${{ steps.reason.outputs.FAIL_REASON }}'
-          footer: '<{run_url}|View Run>'
-      env:
-          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
-
-  Validators10sDown:
-    runs-on: ubuntu-20.04
-
-    steps:
-    - uses: actions/checkout@v3
-    - uses: actions/setup-python@v3
-    - uses: actions/cache@v3
-      with:
-        path:
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: cargo-${{ hashFiles('**/Cargo.toml') }}
-    - name: Set up Rust toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: stable
-        override: true
-    - uses: actions-rs/cargo@v1
-      with:
-        command: build
-    - name: Executes the test
-      run: |
-          bash scripts/devnet/devnet.sh -s 500 -t 90
-    - name: Archive test results
-      if: always()
-      uses: actions/upload-artifact@v2
-      with:
-          name: Validators10sDown-logs
-          path: |
-            temp-logs/
-    - name: Retrieve failure reason
-      if: always()
-      run: |
-          if [ -f temp-state/RESULT.TXT ]; then
-            echo "::set-output name=FAIL_REASON::$(cat temp-state/RESULT.TXT)"
-          else
-            echo "::set-output name=FAIL_REASON::other"
-          fi
-      id: reason
-    - name: Report potential deadlocks to slack
-      if: always() && contains(steps.reason.outputs.FAIL_REASON, 'DEADLOCK')
-      uses: ravsamhq/notify-slack-action@v1
-      with:
-          status: ${{ job.status }}
-          notification_title: 'Potential deadlock detected in Validators10sDown'
-          footer: '<{run_url}|View Run>'
-      env:
-          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
-    - name: Report long lock hold times
-      if: always() && contains(steps.reason.outputs.FAIL_REASON, 'LONG_LOCK_HOLD_TIME')
-      uses: ravsamhq/notify-slack-action@v1
-      with:
-          status: ${{ job.status }}
-          notification_title: 'Long lock hold time detected in Validators10sDown'
-          footer: '<{run_url}|View Run>'
-      env:
-          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
-    - name: Report slow lock acquisitions
-      if: always() && contains(steps.reason.outputs.FAIL_REASON, 'SLOW_LOCK_ACQUISITION')
-      uses: ravsamhq/notify-slack-action@v1
-      with:
-          status: ${{ job.status }}
-          notification_title: 'Slow lock acquisition detected in Validators10sDown'
-          footer: '<{run_url}|View Run>'
-      env:
-          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
-    - name: Report Status to Slack
-      if: always() && github.ref == 'refs/heads/albatross'
-      uses: ravsamhq/notify-slack-action@v1
-      with:
-          status: ${{ job.status }}
-          notify_when: 'failure'
-          notification_title: 'Validators10sDown failed because of ${{ steps.reason.outputs.FAIL_REASON }}'
-          footer: '<{run_url}|View Run>'
-      env:
-          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
-
-  LowViewChangeDelay:
-    runs-on: ubuntu-20.04
-
-    steps:
-    - uses: actions/checkout@v3
-    - uses: actions/setup-python@v3
-    - uses: actions/cache@v3
-      with:
-        path:
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: cargo-${{ hashFiles('**/Cargo.toml') }}
-    - name: Set up Rust toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: stable
-        override: true
-    - name: Configure the view change delay 
-      run: |
-          sed -i 's/VIEW_CHANGE_DELAY: Duration = Duration::from_secs(10);/VIEW_CHANGE_DELAY: Duration = Duration::from_secs(2);/g' validator/src/validator.rs
-    - uses: actions-rs/cargo@v1
-      with:
-        command: build
-    - name: Executes the test
-      run: |
-          bash scripts/devnet/devnet.sh -k 0 -s 150
-    - name: Archive test results
-      if: always()
-      uses: actions/upload-artifact@v2
-      with:
-          name: LowViewChangeDelay-logs
-          path: |
-            temp-logs/
-    - name: Retrieve failure reason
-      if: always()
-      run: |
-          if [ -f temp-state/RESULT.TXT ]; then
-            echo "::set-output name=FAIL_REASON::$(cat temp-state/RESULT.TXT)"
-          else
-            echo "::set-output name=FAIL_REASON::other"
-          fi
-      id: reason
-    - name: Report potential deadlocks to slack
-      if: always() && contains(steps.reason.outputs.FAIL_REASON, 'DEADLOCK')
-      uses: ravsamhq/notify-slack-action@v1
-      with:
-          status: ${{ job.status }}
-          notification_title: 'Potential deadlock detected in LowViewChangeDelay'
-          footer: '<{run_url}|View Run>'
-      env:
-          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
-    - name: Report long lock hold times
-      if: always() && contains(steps.reason.outputs.FAIL_REASON, 'LONG_LOCK_HOLD_TIME')
-      uses: ravsamhq/notify-slack-action@v1
-      with:
-          status: ${{ job.status }}
-          notification_title: 'Long lock hold time detected in LowViewChangeDelay'
-          footer: '<{run_url}|View Run>'
-      env:
-          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
-    - name: Report slow lock acquisitions
-      if: always() && contains(steps.reason.outputs.FAIL_REASON, 'SLOW_LOCK_ACQUISITION')
-      uses: ravsamhq/notify-slack-action@v1
-      with:
-          status: ${{ job.status }}
-          notification_title: 'Slow lock acquisition detected in LowViewChangeDelay'
-          footer: '<{run_url}|View Run>'
-      env:
-          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
-    - name: Report Status to Slack
-      if: always() && github.ref == 'refs/heads/albatross'
-      uses: ravsamhq/notify-slack-action@v1
-      with:
-          status: ${{ job.status }}
-          notify_when: 'failure'
-          notification_title: 'LowViewChangeDelay failed because of ${{ steps.reason.outputs.FAIL_REASON }}'
+          notification_title: '${{ matrix.test }} failed because of ${{ steps.reason.outputs.FAIL_REASON }}'
           footer: '<{run_url}|View Run>'
       env:
           SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
