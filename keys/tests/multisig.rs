@@ -478,7 +478,10 @@ fn it_can_delinearize_private_keys() {
 
         for i in 0..test.priv_keys.len() {
             let key_pair: KeyPair = KeyPair::from(test.priv_keys[i].clone());
-            assert_eq!((i, key_pair.delinearize_private_key(&test.pub_keys_hash)), (i, test.delinearized_priv_keys[i]));
+            assert_eq!(
+                (i, key_pair.delinearize_private_key(&test.pub_keys_hash)),
+                (i, test.delinearized_priv_keys[i])
+            );
         }
     }
 }
@@ -489,7 +492,10 @@ fn it_can_delinearize_public_keys() {
         let test = TestVector::from_str(vector);
 
         for i in 0..test.priv_keys.len() {
-            assert_eq!((i, test.pub_keys[i].delinearize(&test.pub_keys_hash)), (i, test.delinearized_pub_keys[i]));
+            assert_eq!(
+                (i, test.pub_keys[i].delinearize(&test.pub_keys_hash)),
+                (i, test.delinearized_pub_keys[i])
+            );
         }
     }
 }
@@ -500,8 +506,12 @@ fn it_can_construct_commitments() {
         let test = TestVector::from_str(vector);
 
         for i in 0..test.priv_keys.len() {
-            let commitment: EdwardsPoint = &test.secrets[i].0 * &::curve25519_dalek::constants::ED25519_BASEPOINT_TABLE;
-            assert_eq!((j, i, commitment.compress().to_bytes()), (j, i, test.commitments[i].to_bytes()));
+            let commitment: EdwardsPoint =
+                &test.secrets[i].0 * &::curve25519_dalek::constants::ED25519_BASEPOINT_TABLE;
+            assert_eq!(
+                (j, i, commitment.compress().to_bytes()),
+                (j, i, test.commitments[i].to_bytes())
+            );
         }
     }
 }

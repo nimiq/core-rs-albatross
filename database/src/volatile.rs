@@ -475,10 +475,8 @@ mod tests {
     fn duplicates_test() {
         let env = VolatileEnvironment::with_max_readers(1, 126).unwrap();
         {
-            let db = env.open_database_with_flags(
-                "test".to_string(),
-                DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_UINT_VALUES,
-            );
+            let db =
+                env.open_database_with_flags("test".to_string(), DatabaseFlags::DUPLICATE_KEYS);
 
             // Write one value.
             let mut txw = WriteTransaction::new(&env);
@@ -539,10 +537,8 @@ mod tests {
     fn cursor_test() {
         let env = VolatileEnvironment::with_max_readers(1, 126).unwrap();
         {
-            let db = env.open_database_with_flags(
-                "test".to_string(),
-                DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_UINT_VALUES,
-            );
+            let db =
+                env.open_database_with_flags("test".to_string(), DatabaseFlags::DUPLICATE_KEYS);
 
             let test1: String = "test1".to_string();
             let test2: String = "test2".to_string();
@@ -577,24 +573,14 @@ mod tests {
             );
             assert!(cursor.seek_key::<str, u32>("test").is_none());
             assert_eq!(cursor.seek_key::<str, u32>("test1"), Some(12));
-            //assert_eq!(cursor.count_duplicates(), 3);
             assert_eq!(cursor.last_duplicate::<u32>(), Some(5783));
-            //            assert_eq!(cursor.seek_key_both::<String, u32>(&test1), Some((test1.clone(), 12)));
-            //assert!(!cursor.seek_key_value::<str, u32>("test1", &15));
-            //assert!(cursor.seek_key_value::<str, u32>("test1", &125));
             assert_eq!(
                 cursor.get_current::<String, u32>(),
-                //Some((test1.clone(), 125))
                 Some((test1.clone(), 5783))
             );
-            //assert_eq!(
-            //    cursor.seek_key_nearest_value::<str, u32>("test1", &126),
-            //    Some(5783)
-            //);
             assert_eq!(cursor.get_current::<String, u32>(), Some((test1, 5783)));
             assert!(cursor.prev_no_duplicate::<String, u32>().is_none());
             assert_eq!(cursor.next::<String, u32>(), Some((test2, 5783)));
-            //            assert_eq!(cursor.seek_range_key::<String, u32>("test"), Some((test1.clone(), 12)));
         }
     }
 }

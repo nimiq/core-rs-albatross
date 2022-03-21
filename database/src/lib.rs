@@ -61,8 +61,6 @@ bitflags! {
         /// Keys are binary integers in native byte order and will be sorted as such
         /// (`std::os::raw::c_uint`, i.e. most likely `u32`).
         const UINT_KEYS             = 0b0000_0100;
-        /// This option specifies that duplicate data items are binary integers, similar to `UINT_KEYS` keys.
-        const DUP_UINT_VALUES       = 0b0000_1000;
     }
 }
 

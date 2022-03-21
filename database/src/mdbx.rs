@@ -46,7 +46,7 @@ impl MdbxEnvironment {
 
         let mut env = libmdbx::Environment::new();
 
-        //Configure the environment flags
+        // Configure the environment flags
         let geo = libmdbx::Geometry::<std::ops::Range<usize>> {
             size: Some(0..size),
             ..Default::default()
@@ -95,11 +95,6 @@ impl MdbxEnvironment {
             if flags.contains(DatabaseFlags::DUP_FIXED_SIZE_VALUES) {
                 db_flags.insert(libmdbx::DatabaseFlags::DUP_FIXED);
             }
-
-            //MDBX doesnt like this flag
-            //if flags.contains(DatabaseFlags::DUP_UINT_VALUES) {
-            //    db_flags.insert(libmdbx::DatabaseFlags::INTEGER_DUP);
-            //}
         }
         if flags.contains(DatabaseFlags::UINT_KEYS) {
             db_flags.insert(libmdbx::DatabaseFlags::INTEGER_KEY);
@@ -982,10 +977,8 @@ mod tests {
         let tempdir = tempdir().unwrap();
         {
             let env = MdbxEnvironment::new(tempdir.path().join("test3"), 0, 1).unwrap();
-            let db = env.open_database_with_flags(
-                "test".to_string(),
-                DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_UINT_VALUES,
-            );
+            let db =
+                env.open_database_with_flags("test".to_string(), DatabaseFlags::DUPLICATE_KEYS);
 
             // Write one value.
             let mut txw = WriteTransaction::new(&env);
@@ -1048,10 +1041,8 @@ mod tests {
         let tempdir = tempdir().unwrap();
         {
             let env = MdbxEnvironment::new(tempdir.path().join("test4"), 0, 1).unwrap();
-            let db = env.open_database_with_flags(
-                "test".to_string(),
-                DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_UINT_VALUES,
-            );
+            let db =
+                env.open_database_with_flags("test".to_string(), DatabaseFlags::DUPLICATE_KEYS);
 
             let test1: String = "test1".to_string();
             let test2: String = "test2".to_string();
