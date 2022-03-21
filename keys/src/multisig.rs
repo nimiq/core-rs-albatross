@@ -227,7 +227,7 @@ impl KeyPair {
         )
     }
 
-    fn delinearize_private_key(&self, public_keys_hash: &[u8; 64]) -> Scalar {
+    pub fn delinearize_private_key(&self, public_keys_hash: &[u8; 64]) -> Scalar {
         // Compute H(C||P).
         let mut h: sha2::Sha512 = sha2::Sha512::default();
 
@@ -252,7 +252,7 @@ impl PublicKey {
         compressed.decompress()
     }
 
-    fn delinearize(&self, public_keys_hash: &[u8; 64]) -> EdwardsPoint {
+    pub fn delinearize(&self, public_keys_hash: &[u8; 64]) -> EdwardsPoint {
         // Compute H(C||P).
         let mut h: sha2::Sha512 = sha2::Sha512::default();
 
@@ -267,7 +267,7 @@ impl PublicKey {
     }
 }
 
-fn hash_public_keys(public_keys: &[PublicKey]) -> [u8; 64] {
+pub fn hash_public_keys(public_keys: &[PublicKey]) -> [u8; 64] {
     // 1. Compute hash over public keys public_keys_hash = C = H(P_1 || ... || P_n).
     let mut h: sha2::Sha512 = sha2::Sha512::default();
     let mut public_keys_hash: [u8; 64] = [0u8; 64];
