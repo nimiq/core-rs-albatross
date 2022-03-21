@@ -67,7 +67,10 @@ impl WalletAccount {
          * Adding a prefix to the message makes the calculated signature recognisable as
          * a Nimiq specific signature. This and the hashing prevents misuse where a malicious
          * request can sign arbitrary data (e.g. a transaction) and use the signature to
-         * impersonate the victim. (https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_sign)
+         * impersonate the victim.
+         *
+         * See also
+         * https://github.com/ethereum/EIPs/blob/af249ed715879ca2d77c6b43ed331c9c0ab8f6cb/EIPS/eip-191.md#specification.
          */
         let mut buffer = NIMIQ_SIGN_MESSAGE_PREFIX.to_vec();
         // Append length of message as encoded string.
