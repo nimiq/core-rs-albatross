@@ -60,7 +60,7 @@ where
             return Ok(peer);
         }
 
-        self.network.dial_peer(peer_id.clone()).await?;
+        self.network.dial_peer(peer_id).await?;
 
         let future = async move {
             loop {
@@ -114,10 +114,10 @@ where
         let entry = state.validator_peer_id_cache.entry(public_key.clone());
 
         match entry {
-            Entry::Occupied(occupied) => Ok(occupied.get().clone()),
+            Entry::Occupied(occupied) => Ok(*occupied.get()),
             Entry::Vacant(vacant) => {
                 if let Some(peer_id) = Self::resolve_peer_id(&self.network, &public_key).await? {
-                    Ok(vacant.insert(peer_id).clone())
+                    Ok(*vacant.insert(peer_id))
                 } else {
                     log::error!(
                         "Could not find peer ID for validator in DHT: public_key = {:?}",
@@ -203,12 +203,10 @@ where
                         // set the cache with he new peer_id for this public key
                         state
                             .validator_peer_id_cache
-                            .entry(public_key.clone())
-                            .and_modify(|id| *id = peer_id.clone())
-                            .or_insert_with(|| peer_id.clone());
+                            .insert(public_key.clone(), peer_id);
 
                         // try to get the peer for the peer_id. If it does not exist it should be dialed
-                        if let Some(peer) = self.network.get_peer(peer_id.clone()) {
+                        if let Some(peer) = self.network.get_peer(peer_id) {
                             peer
                         } else {
                             log::debug!("Not connected to validator {} @ {:?}, dialing...", validator_id, peer_id);

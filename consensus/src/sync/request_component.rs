@@ -107,10 +107,10 @@ impl<TNetwork: Network + 'static> BlockRequestComponent<TNetwork> {
     /// Adds all outdated peers that were checked more than TIMEOUT ago to history sync
     fn check_peers_up_to_date(&mut self) {
         let mut peers_todo = Vec::new();
-        self.outdated_timeouts.retain(|peer, last_checked| {
+        self.outdated_timeouts.retain(|&peer_id, last_checked| {
             let timeouted = last_checked.elapsed() >= Self::CHECK_OUTDATED_TIMEOUT;
             if timeouted {
-                peers_todo.push(peer.clone());
+                peers_todo.push(peer_id);
             }
             !timeouted
         });
