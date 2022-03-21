@@ -277,6 +277,8 @@ impl Mempool {
                                         "There is no account for this sender in the blockchain {}",
                                         tx.sender.to_user_friendly_address()
                                     );
+                                    // The account from this sender was pruned/removed, so we need to delete all txns sent from this address
+                                    mempool_state.remove_sender_txns(&tx.sender);
                                     continue;
                                 }
                                 Some(account) => account,
@@ -689,6 +691,18 @@ impl MempoolState {
         self.total_size -= tx.serialized_size();
 
         Some(tx)
+    }
+
+    // Removes all the transactions sent by some specific address
+    pub(crate) fn remove_sender_txns(&mut self, sender_address: &Address) {
+        if let Some(sender_state) = &self.state_by_sender.remove(sender_address) {
+            for tx_hash in &sender_state.txns {
+                self.best_transactions.remove(tx_hash);
+                self.worst_transactions.remove(tx_hash);
+                self.oldest_transactions.remove(tx_hash);
+                self.transactions.remove(tx_hash);
+            }
+        }
     }
 }
 

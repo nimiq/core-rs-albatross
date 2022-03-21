@@ -291,7 +291,11 @@ pub(crate) async fn verify_tx<'a>(
     }
 
     if sender_in_fly_balance > blockchain_sender_balance {
-        log::debug!("Dropped because sum of txs in mempool is larger than the account balance");
+        log::debug!(
+            "Dropped because sum of txs in mempool {} is larger than the account balance {}",
+            sender_in_fly_balance,
+            blockchain_sender_balance
+        );
         return Err(VerifyErr::NotEnoughFunds);
     }
 
