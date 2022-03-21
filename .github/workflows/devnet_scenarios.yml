@@ -406,7 +406,7 @@ jobs:
       env:
           SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
 
-  Validators10sDown:
+  Validators90sDown:
     runs-on: ubuntu-20.04
 
     steps:
@@ -435,7 +435,7 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v2
       with:
-          name: Validators10sDown-logs
+          name: Validators90sDown-logs
           path: |
             temp-logs/
     - name: Retrieve failure reason
@@ -452,7 +452,7 @@ jobs:
       uses: ravsamhq/notify-slack-action@v1
       with:
           status: ${{ job.status }}
-          notification_title: 'Potential deadlock detected in Validators10sDown'
+          notification_title: 'Potential deadlock detected in Validators90sDown'
           footer: '<{run_url}|View Run>'
       env:
           SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
@@ -461,7 +461,7 @@ jobs:
       uses: ravsamhq/notify-slack-action@v1
       with:
           status: ${{ job.status }}
-          notification_title: 'Long lock hold time detected in Validators10sDown'
+          notification_title: 'Long lock hold time detected in Validators90sDown'
           footer: '<{run_url}|View Run>'
       env:
           SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
@@ -470,7 +470,7 @@ jobs:
       uses: ravsamhq/notify-slack-action@v1
       with:
           status: ${{ job.status }}
-          notification_title: 'Slow lock acquisition detected in Validators10sDown'
+          notification_title: 'Slow lock acquisition detected in Validators90sDown'
           footer: '<{run_url}|View Run>'
       env:
           SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
@@ -480,7 +480,7 @@ jobs:
       with:
           status: ${{ job.status }}
           notify_when: 'failure'
-          notification_title: 'Validators10sDown failed because of ${{ steps.reason.outputs.FAIL_REASON }}'
+          notification_title: 'Validators90sDown failed because of ${{ steps.reason.outputs.FAIL_REASON }}'
           footer: '<{run_url}|View Run>'
       env:
           SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
