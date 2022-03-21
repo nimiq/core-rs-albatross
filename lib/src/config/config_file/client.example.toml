@@ -116,30 +116,6 @@ password = "secret"
 
 ##############################################################################
 #
-# Configure Prometheus-compatible metrics server.
-#
-##############################################################################
-
-# Uncomment the following line to enable the metrics server.
-#[metrics-server]
-
-# Bind the RPC server to specified IP
-# Default: 127.0.0.1
-#bind="127.0.0.1"
-
-# TCP-Port to use to create a listening socket for the metrics server.
-# Possible values: any valid port number
-# Default: 8649
-#port = 8649
-
-# Declare a password required to access the metrics server.
-# Default: none
-#password = "secret"
-
-
-
-##############################################################################
-#
 # Configure log output.
 #
 ##############################################################################

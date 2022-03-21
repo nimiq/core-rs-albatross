@@ -1,4 +1,4 @@
-#[cfg(any(feature = "rpc-server", feature = "metrics-server"))]
+#[cfg(feature = "rpc-server")]
 use std::net::IpAddr;
 use std::{
     path::{Path, PathBuf},
@@ -20,7 +20,7 @@ use nimiq_utils::file_store::FileStore;
 #[cfg(feature = "validator")]
 use nimiq_utils::key_rng::SecureGenerate;
 
-#[cfg(any(feature = "rpc-server", feature = "metrics-server"))]
+#[cfg(feature = "rpc-server")]
 use crate::config::consts;
 use crate::{
     client::Client,
@@ -561,29 +561,6 @@ pub struct RpcServerConfig {
     pub credentials: Option<Credentials>,
 }
 
-#[cfg(feature = "metrics-server")]
-#[derive(Debug, Clone, Builder)]
-#[builder(setter(into))]
-pub struct MetricsServerConfig {
-    /// Bind the metrics server to the specified IP address.
-    ///
-    /// Default: `127.0.0.1`
-    ///
-    #[builder(setter(strip_option))]
-    pub bind_to: Option<IpAddr>,
-
-    /// Bind the server to the specified port.
-    ///
-    /// Default: `8649`
-    ///
-    #[builder(default = "consts::METRICS_DEFAULT_PORT")]
-    pub port: u16,
-
-    /// If specified, require HTTP basic auth with these credentials
-    #[builder(setter(strip_option))]
-    pub credentials: Option<Credentials>,
-}
-
 /// Client configuration
 ///
 /// # ToDo
@@ -639,12 +616,6 @@ pub struct ClientConfig {
     #[cfg(feature = "rpc-server")]
     #[builder(default)]
     pub rpc_server: Option<RpcServerConfig>,
-
-    /// The optional metrics server configuration
-    ///
-    #[cfg(feature = "metrics-server")]
-    #[builder(default)]
-    pub metrics_server: Option<MetricsServerConfig>,
 }
 
 impl ClientConfig {
@@ -828,28 +799,6 @@ impl ClientConfigBuilder {
                     corsdomain: Some(rpc_config.corsdomain.clone()),
                     allow_ips,
                     allowed_methods: Some(rpc_config.methods.clone()),
-                    credentials,
-                }));
-            }
-        }
-
-        // Configure metrics server
-        #[cfg(feature = "metrics-server")]
-        {
-            if let Some(metrics_config) = &config_file.metrics_server {
-                let bind_to = metrics_config
-                    .bind
-                    .as_ref()
-                    .and_then(|addr| addr.into_ip_address());
-
-                let credentials = metrics_config
-                    .password
-                    .as_ref()
-                    .map(|password| Credentials::new("metrics", password));
-
-                self.metrics_server = Some(Some(MetricsServerConfig {
-                    bind_to,
-                    port: metrics_config.port.unwrap_or(consts::METRICS_DEFAULT_PORT),
                     credentials,
                 }));
             }

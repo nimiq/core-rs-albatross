@@ -29,7 +29,6 @@ version = "0.1"
 features = [
     "validator",
     "rpc-server",
-    # "metrics-server",
     "deadlock",
     "logging",
     "wallet",
