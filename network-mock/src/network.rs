@@ -403,14 +403,14 @@ impl Network for MockNetwork {
             return Err(RequestError::SendError);
         }
 
-        let sender_id = MockPeerId::from(self.address.clone());
+        let sender_id = MockPeerId::from(self.address);
         let (tx, rx) = oneshot::channel::<Vec<u8>>();
 
         let (mut sender, request_id) = {
             let mut hub = self.hub.lock();
 
             let key = RequestKey {
-                recipient: peer_id.clone().into(),
+                recipient: peer_id.into(),
                 message_type: Req::TYPE_ID,
             };
             let sender = if let Some(sender) = hub.request_senders.get(&key) {
