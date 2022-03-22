@@ -50,4 +50,5 @@ nimiq-genesis-builder = { path = "../genesis-builder" }
 nimiq-network-mock = { path = "../network-mock" }
 nimiq-test-log = { path = "../test-log" }
 nimiq-test-utils = { path = "../test-utils" }
+nimiq-transaction-builder = { path = "../transaction-builder" }
 nimiq-vrf = { path = "../vrf" }

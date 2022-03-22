@@ -188,10 +188,10 @@ pub(crate) async fn verify_tx<'a>(
         let duplicate = match data.clone() {
             OutgoingStakingTransactionProof::DeleteValidator { proof } => mempool_state
                 .outgoing_validators
-                .contains(&proof.compute_signer()),
+                .contains_key(&proof.compute_signer()),
             OutgoingStakingTransactionProof::Unstake { proof } => mempool_state
                 .outgoing_stakers
-                .contains(&proof.compute_signer()),
+                .contains_key(&proof.compute_signer()),
         };
 
         if duplicate {
@@ -226,10 +226,10 @@ pub(crate) async fn verify_tx<'a>(
         let duplicate = match data.clone() {
             IncomingStakingTransactionData::CreateValidator { proof, .. } => mempool_state
                 .creating_validators
-                .contains(&proof.compute_signer()),
+                .contains_key(&proof.compute_signer()),
             IncomingStakingTransactionData::CreateStaker { proof, .. } => mempool_state
                 .creating_stakers
-                .contains(&proof.compute_signer()),
+                .contains_key(&proof.compute_signer()),
             _ => false,
         };
 

@@ -14,7 +14,8 @@ use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis_builder::GenesisBuilder;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::{
-    Address, KeyPair as SchnorrKeyPair, PublicKey as SchnorrPublicKey, SecureGenerate,
+    Address, KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey,
+    PublicKey as SchnorrPublicKey, SecureGenerate,
 };
 use nimiq_mempool::config::MempoolConfig;
 use nimiq_mempool::mempool::Mempool;
@@ -26,11 +27,23 @@ use nimiq_test_utils::{
     test_transaction::{generate_accounts, generate_transactions, TestTransaction},
 };
 use nimiq_transaction::Transaction;
+use nimiq_transaction_builder::TransactionBuilder;
 use nimiq_utils::time::OffsetTime;
 use nimiq_vrf::VrfSeed;
 
 const BASIC_TRANSACTION: &str = "000222666efadc937148a6d61589ce6d4aeecca97fda4c32348d294eab582f14a0754d1260f15bea0e8fb07ab18f45301483599e34000000000000c350000000000000008a00019640023fecb82d3aef4be76853d5c5b263754b7d495d9838f6ae5df60cf3addd3512a82988db0056059c7a52ae15285983ef0db8229ae446c004559147686d28f0a30a";
 const NUM_TXNS_START_STOP: usize = 100;
+
+pub const ACCOUNT_SECRET_KEY: &str =
+    "6c9320ac201caf1f8eaa5b05f5d67a9e77826f3f6be266a0ecccc20416dc6587";
+
+const STAKER_ADDRESS: &str = "NQ20TSB0DFSMUH9C15GQGAGJTTE4D3MA859E";
+
+fn ed25519_key_pair(secret_key: &str) -> SchnorrKeyPair {
+    let priv_key: SchnorrPrivateKey =
+        Deserialize::deserialize(&mut &hex::decode(secret_key).unwrap()[..]).unwrap();
+    priv_key.into()
+}
 
 async fn send_get_mempool_txns(
     blockchain: Arc<RwLock<Blockchain>>,
@@ -1223,6 +1236,123 @@ async fn mempool_update_pruned_account() {
             Ok(PushResult::Extended)
         );
     }
+}
+
+#[test(tokio::test(flavor = "multi_thread", worker_threads = 10))]
+async fn mempool_update_create_staker_twice() {
+    let time = Arc::new(OffsetTime::new());
+    let env = VolatileEnvironment::new(10).unwrap();
+
+    let key_pair = ed25519_key_pair(ACCOUNT_SECRET_KEY);
+    let address = Address::from_any_str(STAKER_ADDRESS).unwrap();
+
+    // This is the transaction produced in the block
+    let tx = TransactionBuilder::new_create_staker(
+        &key_pair,
+        &key_pair,
+        Some(address.clone()),
+        100_000_000.try_into().unwrap(),
+        100.try_into().unwrap(),
+        1,
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
+
+    // This is a slightly different transaction, that also creates the same staker
+    let tx_dup = TransactionBuilder::new_create_staker(
+        &key_pair,
+        &key_pair,
+        Some(address),
+        100.try_into().unwrap(),
+        0.try_into().unwrap(),
+        1,
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
+
+    let txns = vec![tx_dup];
+
+    let adopted_txns = vec![tx];
+
+    let mut adopted_micro_blocks = vec![];
+
+    adopted_micro_blocks.push((
+        Blake2bHash::default(),
+        create_dummy_micro_block(Some(adopted_txns.to_vec())),
+    ));
+
+    log::debug!("Done generating adopted micro block");
+
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+    ));
+
+    // Create mempool and subscribe with a custom txn stream.
+    let mempool = Mempool::new(blockchain.clone(), MempoolConfig::default());
+    let mut hub = MockHub::new();
+    let mock_id = MockId::new(hub.new_address().into());
+    let mock_network = Arc::new(hub.new_network());
+
+    // Send txns to mempool
+    send_txn_to_mempool(&mempool, mock_network, mock_id, txns).await;
+
+    assert_eq!(
+        mempool.num_transactions(),
+        1,
+        "Number of txns in mempool is not what is expected"
+    );
+
+    // We need a block producer to produce blocks
+    let producer = BlockProducer::new(signing_key(), voting_key());
+
+    {
+        let bc = blockchain.upgradable_read();
+
+        let block = producer.next_micro_block(
+            &bc,
+            bc.time.now(),
+            0,
+            None,
+            vec![],
+            adopted_txns,
+            vec![0x41],
+        );
+
+        assert_eq!(
+            Blockchain::push(bc, Block::Micro(block)),
+            Ok(PushResult::Extended)
+        );
+    }
+
+    // Call mempool update
+    mempool.mempool_update(&adopted_micro_blocks[..], &[].to_vec());
+
+    // Get txns from mempool
+    let updated_txns = mempool.get_transactions_for_block(10_000);
+
+    assert_eq!(
+        updated_txns.len(),
+        0,
+        "Number of txns is not what is expected"
+    );
+
+    let bc = blockchain.upgradable_read();
+
+    let block = producer.next_micro_block(
+        &bc,
+        bc.time.now(),
+        0,
+        None,
+        vec![],
+        updated_txns.clone(),
+        vec![0x41],
+    );
+
+    // We should succeed producing a block with the remaining mempool transactions
+    assert_eq!(
+        Blockchain::push(bc, Block::Micro(block)),
+        Ok(PushResult::Extended)
+    );
 }
 
 #[tokio::test]

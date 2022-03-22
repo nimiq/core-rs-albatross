@@ -2888,6 +2888,7 @@ dependencies = [
  "nimiq-test-log",
  "nimiq-test-utils",
  "nimiq-transaction",
+ "nimiq-transaction-builder",
  "nimiq-utils",
  "nimiq-vrf",
  "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",

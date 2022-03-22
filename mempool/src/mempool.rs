@@ -65,10 +65,10 @@ impl Mempool {
             worst_transactions: KeyedPriorityQueue::new(),
             oldest_transactions: KeyedPriorityQueue::new(),
             state_by_sender: HashMap::new(),
-            outgoing_validators: HashSet::new(),
-            outgoing_stakers: HashSet::new(),
-            creating_validators: HashSet::new(),
-            creating_stakers: HashSet::new(),
+            outgoing_validators: HashMap::new(),
+            outgoing_stakers: HashMap::new(),
+            creating_validators: HashMap::new(),
+            creating_stakers: HashMap::new(),
             total_size_limit: config.size_limit,
             total_size: 0,
             tx_counter: 0,
@@ -257,7 +257,7 @@ impl Mempool {
                     }
 
                     // Check if we know the sender of this transaction.
-                    if let Some(sender_state) = mempool_state.state_by_sender.get_mut(&tx.sender) {
+                    if let Some(sender_state) = mempool_state.state_by_sender.get(&tx.sender) {
                         // This an unknown transaction from a known sender, we need to update our
                         // senders balance and some transactions could become invalid
 
@@ -315,6 +315,59 @@ impl Mempool {
                                 mempool_state.remove(hash);
                             }
                         }
+                    }
+
+                    // Perform checks for staking transactions
+                    let mut txs_to_remove: Vec<Blake2bHash> = vec![];
+                    // If it is an outgoing staking transaction then we have additional checks.
+                    if tx.sender_type == AccountType::Staking {
+                        // Parse transaction data.
+                        let data = OutgoingStakingTransactionProof::parse(tx)
+                            .expect("The proof should have already been parsed");
+
+                        // If the sender was already in the mempool then we need to remove the transaction.
+                        let transaction = match data.clone() {
+                            OutgoingStakingTransactionProof::DeleteValidator { proof } => {
+                                mempool_state
+                                    .outgoing_validators
+                                    .get(&proof.compute_signer())
+                            }
+                            OutgoingStakingTransactionProof::Unstake { proof } => {
+                                mempool_state.outgoing_stakers.get(&proof.compute_signer())
+                            }
+                        };
+
+                        if let Some(transaction) = transaction {
+                            txs_to_remove.push(transaction.hash());
+                        }
+                    }
+
+                    // If it is an incoming staking transaction then we have additional checks.
+                    if tx.recipient_type == AccountType::Staking {
+                        // Parse transaction data.
+                        let data = IncomingStakingTransactionData::parse(tx)
+                            .expect("The data should have already been parsed before");
+
+                        // If the recipient was already in the mempool we need to remove all txs for this recipient
+                        let transaction = match data.clone() {
+                            IncomingStakingTransactionData::CreateValidator { proof, .. } => {
+                                mempool_state
+                                    .creating_validators
+                                    .get(&proof.compute_signer())
+                            }
+                            IncomingStakingTransactionData::CreateStaker { proof, .. } => {
+                                mempool_state.creating_stakers.get(&proof.compute_signer())
+                            }
+                            _ => None,
+                        };
+
+                        if let Some(transaction) = transaction {
+                            txs_to_remove.push(transaction.hash());
+                        }
+                    }
+
+                    for tx in txs_to_remove {
+                        mempool_state.remove(&tx);
                     }
                 }
             }
@@ -517,14 +570,14 @@ pub(crate) struct MempoolState {
     // The sets of all senders of staking transactions. For simplicity, each validator/staker can
     // only have one outgoing staking transaction in the mempool. This makes sure that the outgoing
     // staking transaction can actually pay its fee.
-    pub(crate) outgoing_validators: HashSet<Address>,
-    pub(crate) outgoing_stakers: HashSet<Address>,
+    pub(crate) outgoing_validators: HashMap<Address, Transaction>,
+    pub(crate) outgoing_stakers: HashMap<Address, Transaction>,
 
     // The sets of all recipients of creation staking transactions. For simplicity, each
     // validator/staker can only have one creation staking transaction in the mempool. This makes
     // sure that the creation staking transactions do not interfere with one another.
-    pub(crate) creating_validators: HashSet<Address>,
-    pub(crate) creating_stakers: HashSet<Address>,
+    pub(crate) creating_validators: HashMap<Address, Transaction>,
+    pub(crate) creating_stakers: HashMap<Address, Transaction>,
 
     // Maximum allowed total size (in bytes) of all transactions in the mempool.
     pub(crate) total_size_limit: usize,
@@ -601,10 +654,18 @@ impl MempoolState {
             // Insert the sender address in the correct set.
             match data {
                 OutgoingStakingTransactionProof::DeleteValidator { proof } => {
-                    assert!(self.outgoing_validators.insert(proof.compute_signer()));
+                    assert_eq!(
+                        self.outgoing_validators
+                            .insert(proof.compute_signer(), tx.clone()),
+                        None
+                    );
                 }
                 OutgoingStakingTransactionProof::Unstake { proof } => {
-                    assert!(self.outgoing_stakers.insert(proof.compute_signer()));
+                    assert_eq!(
+                        self.outgoing_stakers
+                            .insert(proof.compute_signer(), tx.clone()),
+                        None
+                    );
                 }
             }
         }
@@ -618,10 +679,18 @@ impl MempoolState {
             // Insert the recipient address in the correct set, if it is a creation transaction.
             match data {
                 IncomingStakingTransactionData::CreateValidator { proof, .. } => {
-                    assert!(self.creating_validators.insert(proof.compute_signer()));
+                    assert_eq!(
+                        self.creating_validators
+                            .insert(proof.compute_signer(), tx.clone()),
+                        None
+                    );
                 }
                 IncomingStakingTransactionData::CreateStaker { proof, .. } => {
-                    assert!(self.creating_stakers.insert(proof.compute_signer()));
+                    assert_eq!(
+                        self.creating_stakers
+                            .insert(proof.compute_signer(), tx.clone()),
+                        None
+                    );
                 }
                 _ => {}
             }
@@ -685,10 +754,13 @@ impl MempoolState {
             // Remove the sender address from the correct set.
             match data {
                 OutgoingStakingTransactionProof::DeleteValidator { proof } => {
-                    assert!(self.outgoing_validators.remove(&proof.compute_signer()));
+                    assert_ne!(
+                        self.outgoing_validators.remove(&proof.compute_signer()),
+                        None
+                    );
                 }
                 OutgoingStakingTransactionProof::Unstake { proof } => {
-                    assert!(self.outgoing_stakers.remove(&proof.compute_signer()));
+                    assert_ne!(self.outgoing_stakers.remove(&proof.compute_signer()), None);
                 }
             }
         }
@@ -702,10 +774,13 @@ impl MempoolState {
             // Remove the recipient address from the correct set, if it is a creation transaction.
             match data {
                 IncomingStakingTransactionData::CreateValidator { proof, .. } => {
-                    assert!(self.creating_validators.remove(&proof.compute_signer()));
+                    assert_ne!(
+                        self.creating_validators.remove(&proof.compute_signer()),
+                        None
+                    );
                 }
                 IncomingStakingTransactionData::CreateStaker { proof, .. } => {
-                    assert!(self.creating_stakers.remove(&proof.compute_signer()));
+                    assert_ne!(self.creating_stakers.remove(&proof.compute_signer()), None);
                 }
                 _ => {}
             }
