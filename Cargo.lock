@@ -3249,9 +3249,9 @@ dependencies = [
 name = "nimiq-tendermint"
 version = "0.1.0"
 dependencies = [
- "async-stream",
  "async-trait",
  "beserial",
+ "beserial_derive",
  "futures",
  "nimiq-block",
  "nimiq-hash",

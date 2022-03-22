@@ -165,7 +165,11 @@ impl<N: ValidatorNetwork + 'static> BackgroundTask<N> {
                 .map(|(hash, contribution)| {
                     (
                         hash.clone(),
-                        (contribution.clone(), self.signature_weight(contribution)),
+                        (
+                            contribution.clone(),
+                            u16::try_from(self.signature_weight(contribution))
+                                .expect("Interger conversion usize -> u16 failed"),
+                        ),
                     )
                 })
                 .collect();

@@ -118,7 +118,7 @@ pub struct Validator<TNetwork: Network, TValidatorNetwork: ValidatorNetwork + 's
     blockchain_state: BlockchainState,
     parking_state: Option<ParkingState>,
 
-    macro_producer: Option<ProduceMacroBlock>,
+    macro_producer: Option<ProduceMacroBlock<TValidatorNetwork>>,
     macro_state: Option<PersistedMacroState<TValidatorNetwork>>,
 
     micro_producer: Option<ProduceMicroBlock<TValidatorNetwork>>,
@@ -494,24 +494,16 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                              gone already because new blocks were pushed since it was created."
                         );
                     }
-                    let persistable_state = PersistedMacroState::<TValidatorNetwork> {
-                        height: update.height,
-                        step: update.step.into(),
-                        round: update.round,
-                        locked_round: update.locked_round,
-                        locked_value: update.locked_value,
-                        valid_round: update.valid_round,
-                        valid_value: update.valid_value,
-                    };
 
                     write_transaction.put::<str, Vec<u8>>(
                         &self.database,
                         Self::MACRO_STATE_KEY,
-                        &beserial::Serialize::serialize_to_vec(&persistable_state),
+                        &beserial::Serialize::serialize_to_vec(&update),
                     );
 
                     write_transaction.commit();
 
+                    let persistable_state = PersistedMacroState(update);
                     self.macro_state = Some(persistable_state);
                 }
             }

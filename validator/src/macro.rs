@@ -7,43 +7,33 @@ use futures::task::{Context, Poll};
 use parking_lot::RwLock;
 
 use beserial::{Deserialize, Serialize};
-use nimiq_block::{
-    MacroBlock, MacroHeader, MultiSignature, SignedTendermintProposal, TendermintStep,
-};
+use nimiq_block::SignedTendermintProposal;
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::Blockchain;
 use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_primitives::slots::Validators;
-use nimiq_tendermint::{
-    Checkpoint, Step, TendermintOutsideDeps, TendermintReturn, TendermintState,
-};
+use nimiq_tendermint::{TendermintOutsideDeps, TendermintReturn, TendermintState};
 use nimiq_validator_network::ValidatorNetwork;
 use nimiq_vrf::VrfSeed;
 
 use crate::tendermint::TendermintInterface;
-
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub(crate) struct PersistedMacroState<TValidatorNetwork: ValidatorNetwork + 'static> {
-    pub height: u32,
-    pub round: u32,
-    pub step: TendermintStep,
-    pub locked_value:
-        Option<<TendermintInterface<TValidatorNetwork> as TendermintOutsideDeps>::ProposalTy>,
-    pub locked_round: Option<u32>,
-    pub valid_value:
-        Option<<TendermintInterface<TValidatorNetwork> as TendermintOutsideDeps>::ProposalTy>,
-    pub valid_round: Option<u32>,
-}
+pub(crate) struct PersistedMacroState<TValidatorNetwork: ValidatorNetwork + 'static>(
+    pub  TendermintState<
+        <TendermintInterface<TValidatorNetwork> as TendermintOutsideDeps>::ProposalTy,
+        <TendermintInterface<TValidatorNetwork> as TendermintOutsideDeps>::ProposalHashTy,
+        <TendermintInterface<TValidatorNetwork> as TendermintOutsideDeps>::ProofTy,
+    >,
+);
 
 impl<TValidatorNetwork: ValidatorNetwork> IntoDatabaseValue
     for PersistedMacroState<TValidatorNetwork>
 {
     fn database_byte_size(&self) -> usize {
-        self.serialized_size()
+        self.0.serialized_size()
     }
 
     fn copy_into_database(&self, mut bytes: &mut [u8]) {
-        Serialize::serialize(&self, &mut bytes).unwrap();
+        Serialize::serialize(&self.0, &mut bytes).unwrap();
     }
 }
 
@@ -55,16 +45,16 @@ impl<TValidatorNetwork: ValidatorNetwork> FromDatabaseValue
         Self: Sized,
     {
         let mut cursor = io::Cursor::new(bytes);
-        Ok(Deserialize::deserialize(&mut cursor)?)
+        Ok(Self(Deserialize::deserialize(&mut cursor)?))
     }
 }
 
-pub(crate) struct ProduceMacroBlock {
-    tendermint: BoxStream<'static, TendermintReturn<MacroHeader, MultiSignature, MacroBlock>>,
+pub(crate) struct ProduceMacroBlock<TValidatorNetwork: ValidatorNetwork + 'static> {
+    tendermint: BoxStream<'static, TendermintReturn<TendermintInterface<TValidatorNetwork>>>,
 }
 
-impl ProduceMacroBlock {
-    pub fn new<TValidatorNetwork: ValidatorNetwork + 'static>(
+impl<TValidatorNetwork: ValidatorNetwork + 'static> ProduceMacroBlock<TValidatorNetwork> {
+    pub fn new(
         blockchain: Arc<RwLock<Blockchain>>,
         network: Arc<TValidatorNetwork>,
         block_producer: BlockProducer,
@@ -95,34 +85,17 @@ impl ProduceMacroBlock {
             initial_round,
         );
 
-        let state_opt =
-            state
-                .filter(|s| {
-                    let up_to_date = s.height == block_height;
-                    if !up_to_date {
-                        log::info!(state_height = s.height, block_height,
+        let state_opt = state.map(|s| s.0).filter(|s| {
+            let up_to_date = s.height == block_height;
+            if !up_to_date {
+                log::info!(
+                    state_height = s.height,
+                    block_height,
                     "got outdated persisted state, this should only happen on unclean restarts"
                 );
-                    }
-                    up_to_date
-                })
-                .map(|s| TendermintState {
-                    height: s.height,
-                    round: s.round,
-                    step: match s.step {
-                        TendermintStep::PreVote => Step::Prevote,
-                        TendermintStep::PreCommit => Step::Precommit,
-                        TendermintStep::Propose => Step::Propose,
-                    },
-                    locked_value: s.locked_value,
-                    locked_round: s.locked_round,
-                    valid_value: s.valid_value,
-                    valid_round: s.valid_round,
-                    current_checkpoint: Checkpoint::StartRound,
-                    current_proof: None,
-                    current_proposal: None,
-                    current_proposal_vr: None,
-                });
+            }
+            up_to_date
+        });
 
         // create the Tendermint instance, which implements Stream
 
@@ -146,8 +119,10 @@ impl ProduceMacroBlock {
     }
 }
 
-impl Stream for ProduceMacroBlock {
-    type Item = TendermintReturn<MacroHeader, MultiSignature, MacroBlock>;
+impl<TValidatorNetwork: ValidatorNetwork + 'static> Stream
+    for ProduceMacroBlock<TValidatorNetwork>
+{
+    type Item = TendermintReturn<TendermintInterface<TValidatorNetwork>>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         self.tendermint.poll_next_unpin(cx)

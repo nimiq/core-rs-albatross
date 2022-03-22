@@ -254,12 +254,12 @@ where
                 // If the event is an Aggregation there are some comparisons to be made before it can be returned (or not)
                 AggregationResult::Aggregation(map) => {
                     // keep trck of the combined weight of all proposals which this node has not signed.
-                    let mut combined_weight = 0usize;
-                    let mut total_weight = 0usize;
+                    let mut combined_weight = 0u16;
+                    let mut total_weight = 0u16;
 
                     // iterate all proposals present in this contribution
                     for (proposal, (_, weight)) in map.iter() {
-                        if *weight >= policy::TWO_F_PLUS_ONE as usize {
+                        if *weight >= policy::TWO_F_PLUS_ONE {
                             if step == TendermintStep::PreCommit {
                                 // PreCommit Aggreations are never requested again, so the aggregation can be canceled.
                                 self.event_sender
@@ -283,7 +283,7 @@ where
                     }
 
                     // combined weight of all proposals excluding the one this node signed reached 2f+1
-                    if combined_weight >= policy::TWO_F_PLUS_ONE as usize {
+                    if combined_weight >= policy::TWO_F_PLUS_ONE {
                         if step == TendermintStep::PreCommit {
                             // PreCommit Aggreations are never requested again, so the aggregation can be canceled.
                             self.event_sender
@@ -303,7 +303,7 @@ where
                     }
 
                     // none of the above but every signatory is present and thus no improvement can be made
-                    if total_weight == policy::SLOTS as usize {
+                    if total_weight == policy::SLOTS {
                         if step == TendermintStep::PreCommit {
                             // PreCommit Aggreations are never requested again, so the aggregation can be canceled.
                             self.event_sender
@@ -363,9 +363,12 @@ where
                             hash.clone(),
                             (
                                 contribution.clone(),
-                                self.validator_registry
-                                    .signature_weight(contribution)
-                                    .expect("Cannot compute weight of signatories"),
+                                u16::try_from(
+                                    self.validator_registry
+                                        .signature_weight(contribution)
+                                        .expect("Cannot compute weight of signatories"),
+                                )
+                                .expect("Interger conversion usize -> u16 failed"),
                             ),
                         )
                     })

@@ -1,5 +1,8 @@
+#[macro_use]
+extern crate beserial_derive;
+
 use async_trait::async_trait;
-use beserial::Serialize;
+use beserial::{Deserialize, Serialize};
 use futures::{FutureExt, StreamExt};
 use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
 use nimiq_primitives::policy::{SLOTS, TWO_F_PLUS_ONE};
@@ -9,12 +12,12 @@ use std::collections::BTreeMap;
 use std::io;
 
 // We need to create a type of proposal just for testing. The first field is meant to be the actual
-// proposal value (eg: proposal A) while the second field can be used to represent the round when a
+// proposal value (eg: proposal 1) while the second field can be used to represent the round when a
 // proposal is proposed.
 // Note that the second field is invisible to Tendermint (as can be seen from the following trait
 // implementations), it is only meant to uniquely identify a proposal during testing.
-#[derive(Copy, Clone, Debug, Eq)]
-pub struct TestProposal(char, u32);
+#[derive(Copy, Clone, Debug, Eq, Serialize, Deserialize)]
+pub struct TestProposal(u32, u32);
 
 // We only check equality for the first field.
 impl PartialEq for TestProposal {
@@ -27,7 +30,7 @@ impl PartialEq for TestProposal {
 // to a u32.
 impl SerializeContent for TestProposal {
     fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
-        let size = self.0.to_digit(36).unwrap().serialize(writer)?;
+        let size = self.0.serialize(writer)?;
         Ok(size)
     }
 }
@@ -35,6 +38,7 @@ impl SerializeContent for TestProposal {
 impl Hash for TestProposal {}
 
 // We use this struct to mimic a validator. It determines which messages a single validator sees.
+#[derive(Clone)]
 pub struct TestValidator {
     // This is the round when this validator will be the proposer.
     proposer_round: u32,
@@ -80,8 +84,11 @@ impl TendermintOutsideDeps for TestValidator {
     }
 
     // We never call this on tests. Needs to be implemented if we want to use it.
-    fn verify_state(&self, _state: &TendermintState<Self::ProposalTy, Self::ProofTy>) -> bool {
-        unimplemented!()
+    fn verify_state(
+        &self,
+        _state: &TendermintState<Self::ProposalTy, Self::ProposalHashTy, Self::ProofTy>,
+    ) -> bool {
+        true
     }
 
     fn is_our_turn(&self, round: u32) -> bool {
@@ -104,85 +111,81 @@ impl TendermintOutsideDeps for TestValidator {
     }
 
     async fn broadcast_proposal(
-        &mut self,
+        self,
         _round: u32,
         _proposal: Self::ProposalTy,
         _valid_round: Option<u32>,
-    ) -> Result<(), TendermintError> {
-        Ok(())
+    ) -> Result<Self, TendermintError> {
+        Ok(self)
     }
 
     async fn await_proposal(
-        &mut self,
+        self,
         round: u32,
-    ) -> Result<ProposalResult<Self::ProposalTy>, TendermintError> {
+    ) -> Result<(Self, ProposalResult<Self::ProposalTy>), TendermintError> {
         if self.proposal_rounds[round as usize].0 {
             // If the timeout flag is set, return timeout.
-            Ok(ProposalResult::Timeout)
+            Ok((self, ProposalResult::Timeout))
         } else {
             // Otherwise, return the proposal.
-            Ok(ProposalResult::Proposal(
+            let proposal = ProposalResult::Proposal(
                 self.proposal_rounds[round as usize].1,
                 self.proposal_rounds[round as usize].2,
-            ))
+            );
+            Ok((self, proposal))
         }
     }
 
     // Note that this function returns an AggregationResult, not VoteResult. AggregationResult can
     // only be an Aggregation (containing the raw votes) or a NewRound.
     async fn broadcast_and_aggregate(
-        &mut self,
+        self,
         round: u32,
         step: Step,
         _proposal_hash: Option<Self::ProposalHashTy>,
-    ) -> Result<AggregationResult<Self::ProposalHashTy, Self::ProofTy>, TendermintError> {
+    ) -> Result<(Self, AggregationResult<Self::ProposalHashTy, Self::ProofTy>), TendermintError>
+    {
         // Calculate the hashes for the proposals 'A' and 'B'.
-        let a_hash = TestProposal('A', 0).hash();
-        let b_hash = TestProposal('B', 0).hash();
+        let a_hash = TestProposal(0, 0).hash();
+        let b_hash = TestProposal(1, 0).hash();
 
         match step {
             Step::Prevote => {
                 if self.agg_prevote_rounds[round as usize].0 {
                     // If the new round flag is set, return NewRound for the next round.
-                    Ok(AggregationResult::NewRound(round + 1))
+                    Ok((self, AggregationResult::NewRound(round + 1)))
                 } else {
                     // Otherwise, save the votes for 'A', 'B' and Nil in a BTreeMap and return it.
                     let mut agg = BTreeMap::new();
                     agg.insert(
                         Some(a_hash),
-                        ((), self.agg_prevote_rounds[round as usize].1 as usize),
+                        ((), self.agg_prevote_rounds[round as usize].1),
                     );
                     agg.insert(
                         Some(b_hash),
-                        ((), self.agg_prevote_rounds[round as usize].2 as usize),
+                        ((), self.agg_prevote_rounds[round as usize].2),
                     );
-                    agg.insert(
-                        None,
-                        ((), self.agg_prevote_rounds[round as usize].3 as usize),
-                    );
-                    Ok(AggregationResult::Aggregation(agg))
+                    agg.insert(None, ((), self.agg_prevote_rounds[round as usize].3));
+                    Ok((self, AggregationResult::Aggregation(agg)))
                 }
             }
             Step::Precommit => {
                 if self.agg_precommit_rounds[round as usize].0 {
                     // If the new round flag is set, return NewRound for the next round.
-                    Ok(AggregationResult::NewRound(round + 1))
+                    Ok((self, AggregationResult::NewRound(round + 1)))
                 } else {
                     // Otherwise, save the votes for 'A', 'B' and Nil in a BTreeMap and return it.
                     let mut agg = BTreeMap::new();
                     agg.insert(
                         Some(a_hash),
-                        ((), self.agg_precommit_rounds[round as usize].1 as usize),
+                        ((), self.agg_precommit_rounds[round as usize].1),
                     );
                     agg.insert(
                         Some(b_hash),
-                        ((), self.agg_precommit_rounds[round as usize].2 as usize),
+                        ((), self.agg_precommit_rounds[round as usize].2),
                     );
-                    agg.insert(
-                        None,
-                        ((), self.agg_precommit_rounds[round as usize].3 as usize),
-                    );
-                    Ok(AggregationResult::Aggregation(agg))
+                    agg.insert(None, ((), self.agg_precommit_rounds[round as usize].3));
+                    Ok((self, AggregationResult::Aggregation(agg)))
                 }
             }
             _ => unreachable!(),
@@ -191,30 +194,25 @@ impl TendermintOutsideDeps for TestValidator {
 
     // Same as ´broadcast_and_aggregate´ but here we only check for prevotes.
     async fn get_aggregation(
-        &mut self,
+        self,
         round: u32,
         _step: Step,
-    ) -> Result<AggregationResult<Self::ProposalHashTy, Self::ProofTy>, TendermintError> {
+    ) -> Result<(Self, AggregationResult<Self::ProposalHashTy, Self::ProofTy>), TendermintError>
+    {
         // Calculate the hashes for the proposals 'A' and 'B'.
-        let a_hash = TestProposal('A', 0).hash();
-        let b_hash = TestProposal('B', 0).hash();
+        let a_hash = TestProposal(0, 0).hash();
+        let b_hash = TestProposal(1, 0).hash();
 
         if self.get_agg_rounds[round as usize].0 {
             // If the new round flag is set, return NewRound for the next round.
-            Ok(AggregationResult::NewRound(round + 1))
+            Ok((self, AggregationResult::NewRound(round + 1)))
         } else {
             // Otherwise, save the votes for 'A', 'B' and Nil in a BTreeMap and return it.
             let mut agg = BTreeMap::new();
-            agg.insert(
-                Some(a_hash),
-                ((), self.get_agg_rounds[round as usize].1 as usize),
-            );
-            agg.insert(
-                Some(b_hash),
-                ((), self.get_agg_rounds[round as usize].2 as usize),
-            );
-            agg.insert(None, ((), self.get_agg_rounds[round as usize].3 as usize));
-            Ok(AggregationResult::Aggregation(agg))
+            agg.insert(Some(a_hash), ((), self.get_agg_rounds[round as usize].1));
+            agg.insert(Some(b_hash), ((), self.get_agg_rounds[round as usize].2));
+            agg.insert(None, ((), self.get_agg_rounds[round as usize].3));
+            Ok((self, AggregationResult::Aggregation(agg)))
         }
     }
 
@@ -236,6 +234,7 @@ async fn tendermint_loop(
     state_opt: Option<
         TendermintState<
             <TestValidator as TendermintOutsideDeps>::ProposalTy,
+            <TestValidator as TendermintOutsideDeps>::ProposalHashTy,
             <TestValidator as TendermintOutsideDeps>::ProofTy,
         >,
     >,
@@ -257,7 +256,7 @@ async fn tendermint_loop(
             }
             // Whenever there is a state update we print it. That way if the test fails we have log
             // of what the validator did.
-            TendermintReturn::StateUpdate(state) => println!("{:?}\n", state),
+            TendermintReturn::StateUpdate(state) => println!("{:#?}\n", state),
             // We can never get an error because our implementation of TendermintOutsideDeps doesn't
             // returns errors.
             TendermintReturn::Error(_) => unreachable!(),
@@ -266,32 +265,218 @@ async fn tendermint_loop(
     Ok(())
 }
 
+#[tokio::test]
+async fn it_can_reenter_from_state() {
+    // try to capture state transitions
+    // first round is timedout proposal with Nil votes in both aggregation steps.
+    // second round is a proposal and a NewRound for the aggregate prevote
+    // third round is a proposal with a new round for aggregate precommit
+    // forth round is a proposal with slots prevotes but 0 precommits. This should lock.
+    // fifth round is (1,3) again with VR(3) SLOTS prevotes and 0 precommits
+    // sixth this node is proposing, it should propose what was proposed a round ago (and two rounds ago)
+    let proposer = TestValidator {
+        proposer_round: 5,
+        proposal_rounds: vec![
+            (true, TestProposal(0, 0), None),
+            (false, TestProposal(0, 1), None),
+            (false, TestProposal(0, 2), None),
+            (false, TestProposal(1, 3), None),
+            (false, TestProposal(1, 3), Some(3)),
+            (false, TestProposal(0, 5), None), // irrelevant the node should propose (1,3)
+        ],
+        agg_prevote_rounds: vec![
+            (false, 0, 0, SLOTS),
+            (true, 0, 0, SLOTS),
+            (false, 0, 0, SLOTS),
+            (false, 0, SLOTS, 0),
+            (false, 0, SLOTS, 0),
+            (false, 0, SLOTS, 0),
+        ],
+        agg_precommit_rounds: vec![
+            (false, 0, 0, SLOTS),
+            (false, 0, 0, SLOTS),
+            (true, 0, 0, SLOTS),
+            (false, 0, 0, SLOTS),
+            (false, 0, 0, SLOTS),
+            (false, 0, SLOTS, 0),
+        ],
+        get_agg_rounds: vec![
+            (false, 0, 0, SLOTS),
+            (false, 0, 0, SLOTS),
+            (false, 0, SLOTS, 0),
+            (false, 0, SLOTS, 0),
+            (false, 0, 0, SLOTS),
+            (false, 0, 0, SLOTS),
+        ],
+    };
+
+    let mut state = None;
+    let mut next_state = None;
+
+    if let Ok(mut tendermint) = Tendermint::new(proposer.clone(), None) {
+        if let Some(value) = tendermint.next().await {
+            match value {
+                TendermintReturn::Result(_) => {
+                    unreachable!();
+                }
+                TendermintReturn::StateUpdate(st) => next_state = Some(st),
+                TendermintReturn::Error(e) => {
+                    println!("Error: {:?}", e);
+                    unreachable!();
+                }
+            }
+        }
+    } else {
+        panic!("Could not create Tendermint instance.");
+    }
+
+    loop {
+        // create Tendermint instance without a state.
+        if let Ok(mut tendermint) = Tendermint::new(proposer.clone(), state.take()) {
+            if let Some(value) = tendermint.next().await {
+                match value {
+                    TendermintReturn::Result(result) => {
+                        // make sure the accepted proposal is correct.
+                        assert_eq!(result.0, 1);
+                        assert_eq!(result.1, 3);
+                        break;
+                    }
+                    // Whenever there is a state update we print it. That way if the test fails we have log
+                    // of what the validator did.
+                    TendermintReturn::StateUpdate(st) => {
+                        // compare state with the next state we are expecting
+                        let st = Some(st);
+                        println!("{:?}\n", &st);
+                        assert_eq!(&st, &next_state);
+                        state = st;
+
+                        // produce the next state to be checked against next loop cycle.
+                        if let Some(value) = tendermint.next().await {
+                            match value {
+                                TendermintReturn::Result(result) => {
+                                    // make sure the accepted proposal is correct.
+                                    assert_eq!(result.0, 1);
+                                    assert_eq!(result.1, 3);
+                                }
+                                TendermintReturn::StateUpdate(st) => next_state = Some(st),
+                                TendermintReturn::Error(e) => {
+                                    println!("Error: {:?}", e);
+                                    unreachable!();
+                                }
+                            }
+                        }
+                    }
+                    // We can never get an error because our implementation of TendermintOutsideDeps doesn't
+                    // returns errors.
+                    TendermintReturn::Error(e) => {
+                        println!("Error: {:?}", e);
+                        unreachable!();
+                    }
+                }
+            }
+        } else {
+            panic!("Could not create Tendermint instance.");
+        }
+    }
+}
+
+#[tokio::test]
+async fn it_does_not_unlock() {
+    let val = TestValidator {
+        proposer_round: 99,
+        proposal_rounds: vec![
+            (false, TestProposal(0, 0), None),
+            (true, TestProposal(1, 1), None),
+        ],
+        agg_prevote_rounds: vec![(false, SLOTS, 0, 0), (false, 0, SLOTS, 0)],
+        agg_precommit_rounds: vec![(false, 0, 0, SLOTS), (false, 0, 0, SLOTS)],
+        get_agg_rounds: vec![(false, SLOTS, 0, 0), (false, 0, SLOTS, 0)],
+    };
+
+    if let Ok(mut tendermint) = Tendermint::new(val, None) {
+        // process until the first AggregatePreCommit state to check that the node is indeed locked
+        loop {
+            if let Some(ret) = tendermint.next().await {
+                match ret {
+                    TendermintReturn::Error(err) => {
+                        println!("Error: {:?}", err);
+                        unreachable!();
+                    }
+                    TendermintReturn::Result(res) => {
+                        println!("Result: {:?}", res);
+                        unreachable!();
+                    }
+                    TendermintReturn::StateUpdate(state) => {
+                        if state.current_checkpoint == Checkpoint::AggregatePreCommit {
+                            assert!(state.locked.is_some());
+                            let locked = state.locked.as_ref().unwrap();
+                            assert_eq!(state.round, 0);
+                            assert_eq!(locked.proposal.0, 0);
+                            assert_eq!(locked.proposal.1, 0);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // process further until we reach the next precommit. This node should not see the proposal and thus will
+        // be unable to unlock even if it sees >2f+1 Prevotes
+        loop {
+            if let Some(ret) = tendermint.next().await {
+                match ret {
+                    TendermintReturn::Error(err) => {
+                        println!("Error: {:?}", err);
+                        unreachable!();
+                    }
+                    TendermintReturn::Result(res) => {
+                        println!("Result: {:?}", res);
+                        unreachable!();
+                    }
+                    TendermintReturn::StateUpdate(state) => {
+                        if state.current_checkpoint == Checkpoint::AggregatePreCommit {
+                            assert!(state.locked.is_some());
+                            assert_eq!(state.round, 1);
+                            let locked = state.locked.as_ref().unwrap();
+                            assert_eq!(locked.proposal.0, 0);
+                            assert_eq!(locked.proposal.1, 0);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        panic!("Could not create Tendermint instance.");
+    }
+}
+
 // Simple test where everything goes normally.
 #[test(tokio::test)]
 async fn everything_works() {
     // From the perspective of the proposer.
     let proposer = TestValidator {
         proposer_round: 0,
-        proposal_rounds: vec![(false, TestProposal('A', 0), None)],
+        proposal_rounds: vec![(false, TestProposal(0, 0), None)],
         agg_prevote_rounds: vec![(false, SLOTS, 0, 0)],
         agg_precommit_rounds: vec![(false, SLOTS, 0, 0)],
         get_agg_rounds: vec![],
     };
 
-    assert!(tendermint_loop(proposer, None, TestProposal('A', 0))
+    assert!(tendermint_loop(proposer, None, TestProposal(0, 0))
         .await
         .is_ok());
 
     // From the perspective of another validator.
     let validator = TestValidator {
         proposer_round: 99,
-        proposal_rounds: vec![(false, TestProposal('A', 0), None)],
+        proposal_rounds: vec![(false, TestProposal(0, 0), None)],
         agg_prevote_rounds: vec![(false, SLOTS, 0, 0)],
         agg_precommit_rounds: vec![(false, SLOTS, 0, 0)],
         get_agg_rounds: vec![],
     };
 
-    assert!(tendermint_loop(validator, None, TestProposal('A', 0))
+    assert!(tendermint_loop(validator, None, TestProposal(0, 0))
         .await
         .is_ok());
 }
@@ -302,15 +487,15 @@ async fn no_proposal() {
     let validator = TestValidator {
         proposer_round: 99,
         proposal_rounds: vec![
-            (true, TestProposal('A', 0), None),
-            (false, TestProposal('A', 1), None),
+            (true, TestProposal(0, 0), None),
+            (false, TestProposal(0, 1), None),
         ],
         agg_prevote_rounds: vec![(false, 0, 0, SLOTS), (false, SLOTS, 0, 0)],
         agg_precommit_rounds: vec![(false, 0, 0, SLOTS), (false, SLOTS, 0, 0)],
         get_agg_rounds: vec![],
     };
 
-    assert!(tendermint_loop(validator, None, TestProposal('A', 1))
+    assert!(tendermint_loop(validator, None, TestProposal(0, 1))
         .await
         .is_ok());
 }
@@ -324,15 +509,15 @@ async fn all_timeouts() {
     let validator = TestValidator {
         proposer_round: 99,
         proposal_rounds: vec![
-            (true, TestProposal('A', 0), None),
-            (false, TestProposal('A', 1), None),
+            (true, TestProposal(0, 0), None),
+            (false, TestProposal(0, 1), None),
         ],
         agg_prevote_rounds: vec![(false, 0, 0, 0), (false, SLOTS, 0, 0)],
         agg_precommit_rounds: vec![(false, 0, 0, 0), (false, SLOTS, 0, 0)],
         get_agg_rounds: vec![],
     };
 
-    assert!(tendermint_loop(validator, None, TestProposal('A', 1))
+    assert!(tendermint_loop(validator, None, TestProposal(0, 1))
         .await
         .is_ok());
 }
@@ -343,15 +528,15 @@ async fn not_enough_prevotes() {
     let validator = TestValidator {
         proposer_round: 99,
         proposal_rounds: vec![
-            (false, TestProposal('A', 0), None),
-            (false, TestProposal('A', 1), None),
+            (false, TestProposal(0, 0), None),
+            (false, TestProposal(0, 1), None),
         ],
         agg_prevote_rounds: vec![(false, TWO_F_PLUS_ONE - 1, 0, 0), (false, SLOTS, 0, 0)],
         agg_precommit_rounds: vec![(false, 0, 0, SLOTS), (false, SLOTS, 0, 0)],
         get_agg_rounds: vec![],
     };
 
-    assert!(tendermint_loop(validator, None, TestProposal('A', 1))
+    assert!(tendermint_loop(validator, None, TestProposal(0, 1))
         .await
         .is_ok());
 }
@@ -362,15 +547,15 @@ async fn not_enough_precommits() {
     let validator = TestValidator {
         proposer_round: 99,
         proposal_rounds: vec![
-            (false, TestProposal('A', 0), None),
-            (false, TestProposal('A', 1), None),
+            (false, TestProposal(0, 0), None),
+            (false, TestProposal(0, 1), None),
         ],
         agg_prevote_rounds: vec![(false, SLOTS, 0, 0), (false, SLOTS, 0, 0)],
         agg_precommit_rounds: vec![(false, TWO_F_PLUS_ONE - 1, 0, 0), (false, SLOTS, 0, 0)],
         get_agg_rounds: vec![],
     };
 
-    assert!(tendermint_loop(validator, None, TestProposal('A', 1))
+    assert!(tendermint_loop(validator, None, TestProposal(0, 1))
         .await
         .is_ok());
 }
@@ -382,17 +567,17 @@ async fn locks_and_rebroadcasts() {
     let validator = TestValidator {
         proposer_round: 1,
         proposal_rounds: vec![
-            (false, TestProposal('A', 0), None),
+            (false, TestProposal(0, 0), None),
             // This is not actually sent. Validator Rebroadcasts TestProposal('A', 0) since that is
             // what it has stored.
-            (false, TestProposal('A', 1), None),
+            (false, TestProposal(0, 1), None),
         ],
         agg_prevote_rounds: vec![(false, SLOTS, 0, 0), (false, SLOTS, 0, 0)],
         agg_precommit_rounds: vec![(false, 0, 0, 0), (false, SLOTS, 0, 0)],
         get_agg_rounds: vec![],
     };
 
-    assert!(tendermint_loop(validator, None, TestProposal('A', 0))
+    assert!(tendermint_loop(validator, None, TestProposal(0, 0))
         .await
         .is_ok());
 }
@@ -404,15 +589,15 @@ async fn locks_and_unlocks() {
     let validator = TestValidator {
         proposer_round: 99,
         proposal_rounds: vec![
-            (false, TestProposal('A', 0), None),
-            (false, TestProposal('B', 1), None),
+            (false, TestProposal(0, 0), None),
+            (false, TestProposal(1, 1), None),
         ],
         agg_prevote_rounds: vec![(false, SLOTS, 0, 0), (false, 0, SLOTS, 0)],
         agg_precommit_rounds: vec![(false, 0, 0, 0), (false, 0, SLOTS, 0)],
         get_agg_rounds: vec![],
     };
 
-    assert!(tendermint_loop(validator, None, TestProposal('B', 1))
+    assert!(tendermint_loop(validator, None, TestProposal(1, 1))
         .await
         .is_ok());
 }
@@ -423,13 +608,13 @@ async fn locks_and_unlocks() {
 async fn forced_commit() {
     let validator = TestValidator {
         proposer_round: 99,
-        proposal_rounds: vec![(false, TestProposal('A', 0), None)],
+        proposal_rounds: vec![(false, TestProposal(0, 0), None)],
         agg_prevote_rounds: vec![(false, 0, 0, 0)],
         agg_precommit_rounds: vec![(false, SLOTS, 0, 0)],
         get_agg_rounds: vec![],
     };
 
-    assert!(tendermint_loop(validator, None, TestProposal('A', 0))
+    assert!(tendermint_loop(validator, None, TestProposal(0, 0))
         .await
         .is_ok());
 }
@@ -441,16 +626,16 @@ async fn past_proposal() {
     let validator = TestValidator {
         proposer_round: 99,
         proposal_rounds: vec![
-            (false, TestProposal('A', 0), None),
-            (false, TestProposal('B', 1), None),
-            (false, TestProposal('A', 2), Some(0)),
+            (false, TestProposal(0, 0), None),
+            (false, TestProposal(1, 1), None),
+            (false, TestProposal(0, 2), Some(0)),
         ],
         agg_prevote_rounds: vec![(false, 0, 0, 0), (false, 0, 0, SLOTS), (false, SLOTS, 0, 0)],
         agg_precommit_rounds: vec![(false, 0, 0, 0), (false, 0, 0, SLOTS), (false, SLOTS, 0, 0)],
         get_agg_rounds: vec![(false, SLOTS, 0, 0)],
     };
 
-    assert!(tendermint_loop(validator, None, TestProposal('A', 2))
+    assert!(tendermint_loop(validator, None, TestProposal(0, 2))
         .await
         .is_ok());
 }

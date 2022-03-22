@@ -9,18 +9,18 @@ repository = "https://github.com/nimiq/core-rs-albatross"
 license = "Apache-2.0"
 
 [dependencies]
-async-stream = "0.3.3"
 async-trait = "0.1"
 futures = "0.3"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 thiserror = "1.0"
 
+beserial = { path = "../beserial" }
+beserial_derive = { path = "../beserial/beserial_derive" }
 nimiq-block = { path = "../primitives/block" }
 nimiq-hash = { path = "../hash" }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }
 
 [dev-dependencies]
-beserial = { path = "../beserial" }
 nimiq-test-log = { path = "../test-log" }
 tokio = { version = "1.16", features = [
     "macros",

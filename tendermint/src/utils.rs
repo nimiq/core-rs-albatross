@@ -1,5 +1,6 @@
 use crate::state::TendermintState;
-use crate::{ProofTrait, ProposalHashTrait, ProposalTrait, ResultTrait};
+use crate::{ProofTrait, ProposalHashTrait, ProposalTrait, TendermintOutsideDeps};
+use beserial::{Deserialize, Serialize};
 use nimiq_block::TendermintStep;
 use nimiq_primitives::policy::TWO_F_PLUS_ONE;
 use std::collections::BTreeMap;
@@ -7,21 +8,20 @@ use thiserror::Error;
 
 /// Represents the current stage of the Tendermint state machine. Each stage corresponds to a
 /// function of our implementation of the Tendermint protocol (see protocol.rs).
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+#[repr(u8)]
 pub enum Checkpoint {
     StartRound,
-    OnProposal,
-    OnPastProposal,
-    OnPolka,
-    OnNilPolka,
-    OnDecision,
-    OnTimeoutPropose,
-    OnTimeoutPrevote,
-    OnTimeoutPrecommit,
+    Propose,
+    WaitForProposal,
+    VerifyValidRound,
+    AggregatePreVote,
+    AggregatePreCommit,
 }
 
 /// The steps of the Tendermint protocol, as described in the paper.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Deserialize, Serialize)]
+#[repr(u8)]
 pub enum Step {
     Propose,
     Prevote,
@@ -67,9 +67,6 @@ pub enum VoteResult<ProofTy: ProofTrait> {
     Nil(ProofTy),
     // Means that we have timed out while waiting for the votes.
     Timeout,
-    // Means that we have received f+1 messages for a round greater than our current one. The field
-    // states for which round we received those messages.
-    NewRound(u32),
 }
 
 /// Represents the results we can get from calling `broadcast_and_aggregate` from
@@ -80,7 +77,7 @@ pub enum AggregationResult<ProposalHashTy: ProposalHashTrait, ProofTy: ProofTrai
     // different vote messages (Some(hash) is a vote for a proposal with that hash, None is a vote
     // for Nil) along with the corresponding proofs (the aggregation of the votes signatures) and
     // a integer representing how many votes were received for that particular message.
-    Aggregation(BTreeMap<Option<ProposalHashTy>, (ProofTy, usize)>),
+    Aggregation(BTreeMap<Option<ProposalHashTy>, (ProofTy, u16)>),
     // Means that we have received f+1 messages for a round greater than our current one. The field
     // states for which round we received those messages.
     NewRound(u32),
@@ -88,12 +85,12 @@ pub enum AggregationResult<ProposalHashTy: ProposalHashTrait, ProofTy: ProofTrai
 
 /// These are the possible return options for the `expect_block` Stream.
 #[derive(Clone, Debug)]
-pub enum TendermintReturn<ProposalTy: ProposalTrait, ProofTy: ProofTrait, ResultTy: ResultTrait> {
+pub enum TendermintReturn<DepsTy: TendermintOutsideDeps> {
     // Means we got a completed block. The field is the block.
-    Result(ResultTy),
+    Result(DepsTy::ResultTy),
     // This just sends our current state. It is useful in case we go down for some reason and need
     // to start from the point where we left off.
-    StateUpdate(TendermintState<ProposalTy, ProofTy>),
+    StateUpdate(TendermintState<DepsTy::ProposalTy, DepsTy::ProposalHashTy, DepsTy::ProofTy>),
     // Just means that we encountered an error.
     Error(TendermintError),
 }
@@ -115,8 +112,8 @@ pub enum TendermintError {
     CannotAssembleBlock,
 }
 
-pub enum StreamResult<ProposalTy: ProposalTrait, ProofTy: ProofTrait, ResultTy: ResultTrait> {
-    Tendermint(TendermintReturn<ProposalTy, ProofTy, ResultTy>),
+pub enum StreamResult<DepsTy: TendermintOutsideDeps> {
+    Tendermint(TendermintReturn<DepsTy>),
     BackgroundTask,
 }
 
@@ -125,45 +122,34 @@ pub enum StreamResult<ProposalTy: ProposalTrait, ProofTy: ProofTrait, ResultTy: 
 /// semantics to translate that into the VoteResult that the Tendermint protocol expects.
 pub(crate) fn aggregation_to_vote<ProposalHashTy: ProposalHashTrait, ProofTy: ProofTrait>(
     // This is the hash of the current proposal (None means we don't have a current proposal).
-    proposal_hash: Option<ProposalHashTy>,
-    aggregation: AggregationResult<ProposalHashTy, ProofTy>,
+    proposal_hash: &Option<ProposalHashTy>,
+    agg: BTreeMap<Option<ProposalHashTy>, (ProofTy, u16)>,
 ) -> VoteResult<ProofTy> {
-    match aggregation {
-        // If we got an aggregation we need to handle it.
-        AggregationResult::Aggregation(agg) => {
-            if proposal_hash.is_some()
-                && agg.get(&proposal_hash).map_or(0, |x| x.1) >= TWO_F_PLUS_ONE as usize
-            {
-                log::debug!(
-                    "Aggregate: {:#?}\nCurrent proposal {:?} has {} votes",
-                    &agg,
-                    &proposal_hash,
-                    agg.get(&proposal_hash).map_or(0, |x| x.1),
-                );
-                // If we received 2f+1 votes for the current (assuming that it isn't None), then we
-                // must return Block.
-                VoteResult::Block(agg.get(&proposal_hash).cloned().unwrap().0)
-            } else if agg.get(&None).map_or(0, |x| x.1) >= TWO_F_PLUS_ONE as usize {
-                log::debug!(
-                    "Aggregate: {:#?}\nNil has {} votes",
-                    &agg,
-                    agg.get(&None).map_or(0, |x| x.1),
-                );
-                // If we received 2f+1 votes for Nil, then we must return Nil.
-                VoteResult::Nil(agg.get(&None).cloned().unwrap().0)
-            } else {
-                log::debug!("Aggregate: {:#?}\nAggregation timed out", &agg);
-                // There are two cases when we must return Timeout:
-                // 1) When we receive 2f+1 votes for a proposal that we don't have.
-                // 2) When we don't have 2f+1 votes for a single proposal or for Nil.
-                VoteResult::Timeout
-            }
-        }
-        // If we got f+1 votes for a round greater than our current one, we must return NewRound.
-        AggregationResult::NewRound(round) => {
-            log::debug!("Aggregation resulted in NewRound({})", round);
-            VoteResult::NewRound(round)
-        }
+    if proposal_hash.is_some() && agg.get(proposal_hash).map_or(0, |x| x.1) >= TWO_F_PLUS_ONE {
+        log::debug!(
+            "Aggregate: {:#?}\nCurrent proposal {:?} has {} votes",
+            &agg,
+            &proposal_hash,
+            agg.get(proposal_hash).map_or(0, |x| x.1),
+        );
+        // If we received 2f+1 votes for the current (assuming that it isn't None), then we
+        // must return Block.
+        VoteResult::Block(agg.get(proposal_hash).cloned().unwrap().0)
+    } else if agg.get(&None).map_or(0, |x| x.1) >= TWO_F_PLUS_ONE {
+        // is f+1 sufficient here?
+        log::debug!(
+            "Aggregate: {:#?}\nNil has {} votes",
+            &agg,
+            agg.get(&None).map_or(0, |x| x.1),
+        );
+        // If we received 2f+1 votes for Nil, then we must return Nil.
+        VoteResult::Nil(agg.get(&None).cloned().unwrap().0)
+    } else {
+        log::debug!("Aggregate: {:#?}\nAggregation timed out", &agg);
+        // There are two cases when we must return Timeout:
+        // 1) When we receive 2f+1 votes for a proposal that we don't have.
+        // 2) When we don't have 2f+1 votes for a single proposal or for Nil.
+        VoteResult::Timeout
     }
 }
 
@@ -186,5 +172,5 @@ pub(crate) fn has_2f1_votes<ProposalHashTy: ProposalHashTrait, ProofTy: ProofTra
         &prop_opt,
         agg.get(&prop_opt).map_or(0, |x| x.1),
     );
-    agg.get(&prop_opt).map_or(0, |x| x.1) >= TWO_F_PLUS_ONE as usize
+    agg.get(&prop_opt).map_or(0, |x| x.1) >= TWO_F_PLUS_ONE
 }

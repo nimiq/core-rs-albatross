@@ -99,7 +99,10 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
     /// in memory, but then we have bigger problems).
     /// So, we leave this function simply returning true and not doing any checks. Mostly likely we
     /// will get rid of it in the future.
-    fn verify_state(&self, state: &TendermintState<Self::ProposalTy, Self::ProofTy>) -> bool {
+    fn verify_state(
+        &self,
+        state: &TendermintState<Self::ProposalTy, Self::ProposalHashTy, Self::ProofTy>,
+    ) -> bool {
         self.initial_round() <= state.round
     }
 
@@ -177,11 +180,11 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
     // frequently, it might make sense for us to have the validator broadcast his proposal twice.
     // One at the beginning and another at half of the timeout duration.
     async fn broadcast_proposal(
-        &mut self,
+        self,
         round: u32,
         proposal: Self::ProposalTy,
         valid_round: Option<u32>,
-    ) -> Result<(), TendermintError> {
+    ) -> Result<Self, TendermintError> {
         // Create the Tendermint proposal message.
         let proposal_message = TendermintProposal {
             value: proposal,
@@ -201,7 +204,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
             error!("Publishing proposal failed: {:?}", err);
         }
 
-        Ok(())
+        Ok(self)
     }
 
     /// Receives a proposal from this round's proposer. It also checks if the proposal is valid. If
@@ -211,9 +214,9 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
     /// invalid, then it will immediately return Timeout, even if the timeout duration hasn't elapsed
     /// yet.
     async fn await_proposal(
-        &mut self,
+        mut self,
         round: u32,
-    ) -> Result<ProposalResult<Self::ProposalTy>, TendermintError> {
+    ) -> Result<(Self, ProposalResult<Self::ProposalTy>), TendermintError> {
         let (timeout, proposer_slot_band, proposer_voting_key, proposer_signing_key) = {
             let blockchain = self.blockchain.read();
 
@@ -265,7 +268,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
             Ok(v) => v,
             Err(err) => {
                 debug!("Tendermint - await_proposal: Timed out: {:?}", err);
-                return Ok(ProposalResult::Timeout);
+                return Ok((self, ProposalResult::Timeout));
             }
         };
 
@@ -363,33 +366,38 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
         // Regardless of broadcast result, process proposal if it exists. Timeout otherwise.
         if let Some(header) = header {
             // Return the proposal.
-            Ok(ProposalResult::Proposal(header, valid_round))
+            Ok((self, ProposalResult::Proposal(header, valid_round)))
         } else {
-            Ok(ProposalResult::Timeout)
+            Ok((self, ProposalResult::Timeout))
         }
     }
 
     /// This broadcasts our vote for a given proposal and aggregates the votes from the other
     /// validators. It simply calls the aggregation adapter, which does all the work.
     async fn broadcast_and_aggregate(
-        &mut self,
+        mut self,
         round: u32,
         step: Step,
         proposal_hash: Option<Self::ProposalHashTy>,
-    ) -> Result<AggregationResult<Self::ProposalHashTy, Self::ProofTy>, TendermintError> {
+    ) -> Result<(Self, AggregationResult<Self::ProposalHashTy, Self::ProofTy>), TendermintError>
+    {
         self.aggregation_adapter
             .broadcast_and_aggregate(round, step, proposal_hash)
             .await
+            .map(|result| (self, result))
     }
 
     /// Returns the vote aggregation for a given round and step. It simply calls the aggregation
     /// adapter, which does all the work.
     async fn get_aggregation(
-        &mut self,
+        self,
         round: u32,
         step: Step,
-    ) -> Result<AggregationResult<Self::ProposalHashTy, Self::ProofTy>, TendermintError> {
-        self.aggregation_adapter.get_aggregate(round, step)
+    ) -> Result<(Self, AggregationResult<Self::ProposalHashTy, Self::ProofTy>), TendermintError>
+    {
+        self.aggregation_adapter
+            .get_aggregate(round, step)
+            .map(|result| (self, result))
     }
 
     /// Calculates the nano_zkp_hash used as the proposal hash, but for performance reasons we fetch
