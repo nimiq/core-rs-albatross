@@ -2,11 +2,14 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
+use std::time::Duration;
 
 use async_trait::async_trait;
 use futures::{
-    future::BoxFuture,
+    channel::{mpsc, oneshot},
+    future::{BoxFuture, FutureExt},
     stream::{BoxStream, StreamExt},
+    SinkExt,
 };
 use parking_lot::Mutex;
 use thiserror::Error;
@@ -15,14 +18,16 @@ use tokio_stream::wrappers::{errors::BroadcastStreamRecvError, BroadcastStream};
 
 use beserial::{Deserialize, Serialize};
 use nimiq_network_interface::{
-    message::{Message, RequestError, ResponseMessage},
+    message::{Message, RequestError, ResponseError, ResponseMessage},
     network::Network,
     network::{MsgAcceptance, NetworkEvent, PubsubId, Topic},
     peer::Peer,
     peer_map::ObservablePeerMap,
 };
 
-use crate::{hub::MockHubInner, peer::MockPeer, MockAddress, MockPeerId};
+use crate::hub::{MockHubInner, RequestKey, ResponseSender};
+use crate::peer::MockPeer;
+use crate::{MockAddress, MockPeerId};
 
 #[derive(Debug, Error, PartialEq)]
 pub enum MockNetworkError {
@@ -40,6 +45,9 @@ pub enum MockNetworkError {
 
     #[error("Peer is already unsubscribed to topic: {0}")]
     AlreadyUnsubscribed(&'static str),
+
+    #[error("Can't respond to request: {0}")]
+    CantRespond(MockRequestId),
 }
 
 pub type MockRequestId = u64;
@@ -70,6 +78,8 @@ pub struct MockNetwork {
 }
 
 impl MockNetwork {
+    const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
+
     pub(crate) fn new(address: MockAddress, hub: Arc<Mutex<MockHubInner>>) -> Self {
         let peers = ObservablePeerMap::default();
 
@@ -370,8 +380,8 @@ impl Network for MockNetwork {
 
     async fn request<'a, Req: Message, Res: Message>(
         &self,
-        _request: Req,
-        _peer_id: <Self::PeerType as Peer>::Id,
+        request: Req,
+        peer_id: MockPeerId,
     ) -> Result<
         BoxFuture<
             'a,
@@ -383,20 +393,131 @@ impl Network for MockNetwork {
         >,
         RequestError,
     > {
-        unimplemented!();
+        if self.peers.get_peer(&peer_id).is_none() {
+            log::warn!(
+                "Cannot send request {} from {} to {} - peers not connected",
+                std::any::type_name::<Req>(),
+                self.address,
+                peer_id,
+            );
+            return Err(RequestError::SendError);
+        }
+
+        let sender_id = MockPeerId::from(self.address.clone());
+        let (tx, rx) = oneshot::channel::<Vec<u8>>();
+
+        let (mut sender, request_id) = {
+            let mut hub = self.hub.lock();
+
+            let key = RequestKey {
+                recipient: peer_id.clone().into(),
+                message_type: Req::TYPE_ID,
+            };
+            let sender = if let Some(sender) = hub.request_senders.get(&key) {
+                sender.clone()
+            } else {
+                log::warn!("No request sender: {:?}", key);
+                return Err(RequestError::SendError);
+            };
+
+            let request_id = hub.next_request_id;
+            hub.response_senders.insert(
+                request_id,
+                ResponseSender {
+                    peer: self.address.into(),
+                    sender: tx,
+                },
+            );
+            hub.next_request_id += 1;
+
+            (sender, request_id)
+        };
+
+        let mut data = Vec::with_capacity(request.serialized_message_size());
+        request.serialize_message(&mut data).unwrap();
+
+        let request = (data, request_id, sender_id);
+        if let Err(e) = sender.send(request).await {
+            log::warn!(
+                "Cannot send request {} from {} to {} - {:?}",
+                std::any::type_name::<Req>(),
+                self.address,
+                peer_id,
+                e
+            );
+            self.hub.lock().response_senders.remove(&request_id);
+            return Err(RequestError::SendError);
+        }
+
+        let hub = Arc::clone(&self.hub);
+        let future = tokio::time::timeout(MockNetwork::REQUEST_TIMEOUT, rx)
+            .map(move |result| {
+                let response = match result {
+                    Ok(Ok(data)) => match Res::deserialize_message(&mut &data[..]) {
+                        Ok(message) => ResponseMessage::Response(message),
+                        Err(_) => ResponseMessage::Error(ResponseError::DeSerializationError),
+                    },
+                    Ok(Err(_)) => ResponseMessage::Error(ResponseError::SenderFutureDropped),
+                    Err(_) => {
+                        hub.lock().response_senders.remove(&request_id);
+                        ResponseMessage::Error(ResponseError::Timeout)
+                    }
+                };
+                (response, request_id, peer_id)
+            })
+            .boxed();
+        Ok(future)
     }
 
     fn receive_requests<'a, M: Message>(
         &self,
     ) -> BoxStream<'a, (M, Self::RequestId, <Self::PeerType as Peer>::Id)> {
-        unimplemented!();
+        let mut hub = self.hub.lock();
+        let (tx, rx) = mpsc::channel(16);
+
+        let key = RequestKey {
+            recipient: self.address,
+            message_type: M::TYPE_ID,
+        };
+        if hub.request_senders.insert(key, tx).is_some() {
+            log::warn!(
+                "Replacing existing request sender for {}",
+                std::any::type_name::<M>()
+            );
+        }
+
+        rx.filter_map(|(data, request_id, sender)| async move {
+            match M::deserialize_message(&mut &data[..]) {
+                Ok(message) => Some((message, request_id, sender)),
+                Err(e) => {
+                    log::warn!("Failed to deserialize request: {}", e);
+                    None
+                }
+            }
+        })
+        .boxed()
     }
 
     async fn respond<'a, M: Message>(
         &self,
-        _request_id: Self::RequestId,
-        _response: M,
+        request_id: Self::RequestId,
+        response: M,
     ) -> Result<(), Self::Error> {
-        unimplemented!();
+        let mut hub = self.hub.lock();
+        if let Some(responder) = hub.response_senders.remove(&request_id) {
+            if self.peers.get_peer(&responder.peer).is_none() {
+                return Err(MockNetworkError::NotConnected);
+            }
+
+            let mut data = Vec::with_capacity(response.serialized_message_size());
+            response.serialize_message(&mut data).unwrap();
+
+            responder
+                .sender
+                .send(data)
+                .map_err(|_| MockNetworkError::CantRespond(request_id))
+        } else {
+            Err(MockNetworkError::CantRespond(request_id))
+        }
     }
 }

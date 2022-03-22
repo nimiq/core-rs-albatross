@@ -4,18 +4,33 @@ use std::{
     sync::{atomic::AtomicBool, Arc},
 };
 
-use futures::channel::mpsc;
+use futures::channel::{mpsc, oneshot};
 use parking_lot::Mutex;
 use tokio::sync::broadcast;
 
-use crate::{network::MockNetwork, peer::MockPeer, MockAddress, MockPeerId};
 use nimiq_network_interface::peer_map::ObservablePeerMap;
+
+use crate::network::{MockNetwork, MockRequestId};
+use crate::peer::MockPeer;
+use crate::{MockAddress, MockPeerId};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct SenderKey {
     pub network_recipient: MockAddress,
     pub sender_peer: MockPeerId,
     pub message_type: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct RequestKey {
+    pub recipient: MockAddress,
+    pub message_type: u64,
+}
+
+#[derive(Debug)]
+pub(crate) struct ResponseSender {
+    pub peer: MockPeerId,
+    pub sender: oneshot::Sender<Vec<u8>>,
 }
 
 #[derive(Debug)]
@@ -39,6 +54,15 @@ pub(crate) struct MockHubInner {
     ///
     /// The data is Arc'd, such that cloning is cheap, and we need only a borrow when we deserialize.
     pub gossipsub_topics: HashMap<&'static str, MockTopic>,
+
+    /// Senders for dispatching requests
+    pub request_senders: HashMap<RequestKey, mpsc::Sender<(Vec<u8>, MockRequestId, MockPeerId)>>,
+
+    /// Senders for returning responses
+    pub response_senders: HashMap<MockRequestId, ResponseSender>,
+
+    /// Counter for unique request IDs
+    pub next_request_id: MockRequestId,
 
     /// DHT
     pub dht: HashMap<Vec<u8>, Vec<u8>>,
