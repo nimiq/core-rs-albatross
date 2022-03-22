@@ -1796,9 +1796,9 @@ dependencies = [
 
 [[package]]
 name = "libmdbx"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9a8a3723c12c5caa3f2a456b645063d1d8ffb1562895fa43746a999d205b0c6"
+checksum = "7aad903a1d068eb7f13818475367f6d3825c55499ceb4b28fda49ceaf2a37a8c"
 dependencies = [
  "bitflags",
  "byteorder",
@@ -1806,7 +1806,7 @@ dependencies = [
  "indexmap",
  "libc",
  "mdbx-sys",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "thiserror",
 ]
 
@@ -2209,9 +2209,9 @@ checksum = "a3e378b66a060d48947b590737b30a1be76706c8dd7b8ba0f2fe3989c68a853f"
 
 [[package]]
 name = "mdbx-sys"
-version = "0.11.4-git.20210105"
+version = "0.11.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b21b3e0def3a5c880f6388ed2e33b695097c6b0eca039dae6010527b059f8be1"
+checksum = "742a7272aa65031b4c1d9f66faedbc5a4f97d29b7a38abbc82b82716492c9874"
 dependencies = [
  "bindgen",
  "cc",
