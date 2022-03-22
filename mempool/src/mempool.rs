@@ -653,10 +653,33 @@ impl MempoolState {
             self.state_by_sender.remove(&tx.sender);
         }
 
+        self.remove_from_staking_state(&tx);
+
+        self.total_size -= tx.serialized_size();
+
+        Some(tx)
+    }
+
+    // Removes all the transactions sent by some specific address
+    pub(crate) fn remove_sender_txns(&mut self, sender_address: &Address) {
+        if let Some(sender_state) = &self.state_by_sender.remove(sender_address) {
+            for tx_hash in &sender_state.txns {
+                self.best_transactions.remove(tx_hash);
+                self.worst_transactions.remove(tx_hash);
+                self.oldest_transactions.remove(tx_hash);
+                if let Some(tx) = self.transactions.remove(tx_hash) {
+                    self.remove_from_staking_state(&tx);
+                }
+            }
+        }
+    }
+
+    // Internal helper function that takes care of removing staking transactions from the mempool state
+    fn remove_from_staking_state(&mut self, tx: &Transaction) {
         // If it is an outgoing staking transaction then we have additional work.
         if tx.sender_type == AccountType::Staking {
             // Parse transaction data.
-            let data = OutgoingStakingTransactionProof::parse(&tx)
+            let data = OutgoingStakingTransactionProof::parse(tx)
                 .expect("The proof should have already been parsed before, so this cannot panic!");
 
             // Remove the sender address from the correct set.
@@ -673,7 +696,7 @@ impl MempoolState {
         // If it is an incoming staking transaction then we have additional work.
         if tx.recipient_type == AccountType::Staking {
             // Parse transaction data.
-            let data = IncomingStakingTransactionData::parse(&tx)
+            let data = IncomingStakingTransactionData::parse(tx)
                 .expect("The data should have already been parsed before, so this cannot panic!");
 
             // Remove the recipient address from the correct set, if it is a creation transaction.
@@ -685,22 +708,6 @@ impl MempoolState {
                     assert!(self.creating_stakers.remove(&proof.compute_signer()));
                 }
                 _ => {}
-            }
-        }
-
-        self.total_size -= tx.serialized_size();
-
-        Some(tx)
-    }
-
-    // Removes all the transactions sent by some specific address
-    pub(crate) fn remove_sender_txns(&mut self, sender_address: &Address) {
-        if let Some(sender_state) = &self.state_by_sender.remove(sender_address) {
-            for tx_hash in &sender_state.txns {
-                self.best_transactions.remove(tx_hash);
-                self.worst_transactions.remove(tx_hash);
-                self.oldest_transactions.remove(tx_hash);
-                self.transactions.remove(tx_hash);
             }
         }
     }
