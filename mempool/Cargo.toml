@@ -42,6 +42,7 @@ rand = "0.8"
 
 nimiq-block = { path = "../primitives/block" }
 nimiq-blockchain = { path = "../blockchain" }
+nimiq-block-production = {path = "../block-production"}
 nimiq-bls = { path = "../bls" }
 nimiq-database = { path = "../database" }
 nimiq-genesis = { path = "../genesis" }

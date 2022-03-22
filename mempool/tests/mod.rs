@@ -7,7 +7,8 @@ use rand::SeedableRng;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_block::{Block, MicroBlock, MicroBody, MicroHeader};
-use nimiq_blockchain::Blockchain;
+use nimiq_block_production::BlockProducer;
+use nimiq_blockchain::{Blockchain, PushResult};
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis_builder::GenesisBuilder;
@@ -20,8 +21,9 @@ use nimiq_mempool::mempool::Mempool;
 use nimiq_network_mock::{MockHub, MockId, MockNetwork, MockPeerId};
 use nimiq_primitives::networks::NetworkId;
 use nimiq_test_log::test;
-use nimiq_test_utils::test_transaction::{
-    generate_accounts, generate_transactions, TestTransaction,
+use nimiq_test_utils::{
+    blockchain::{signing_key, voting_key},
+    test_transaction::{generate_accounts, generate_transactions, TestTransaction},
 };
 use nimiq_transaction::Transaction;
 use nimiq_utils::time::OffsetTime;
@@ -737,7 +739,7 @@ async fn multiple_start_stop() {
     multiple_start_stop_send(blockchain, txns).await;
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+#[test(tokio::test(flavor = "multi_thread", worker_threads = 10))]
 async fn mempool_update() {
     let mut rng = StdRng::seed_from_u64(0);
     let time = Arc::new(OffsetTime::new());
@@ -908,6 +910,317 @@ async fn mempool_update() {
             expected_txns[i], updated_txns[i],
             "Transaction at position {} is not expected",
             i
+        );
+    }
+}
+
+#[test(tokio::test(flavor = "multi_thread", worker_threads = 10))]
+async fn mempool_update_not_enough_balance() {
+    let mut rng = StdRng::seed_from_u64(0);
+    let time = Arc::new(OffsetTime::new());
+    let env = VolatileEnvironment::new(10).unwrap();
+    let mut genesis_builder = GenesisBuilder::default();
+
+    // Generate and sign transactions
+    let balance = 100;
+    let num_txns = 30;
+    let mut mempool_transactions = vec![];
+    let sender_balances = vec![balance; num_txns as usize];
+    let recipient_balances = vec![0; num_txns as usize];
+
+    // Generate recipient accounts
+    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, false);
+    // Generate sender accounts
+    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true);
+
+    // Generate transactions
+    for i in 0..num_txns {
+        let mempool_transaction = TestTransaction {
+            fee: 0 as u64,
+            value: 60,
+            recipient: recipient_accounts[i as usize].clone(),
+            sender: sender_accounts[i as usize].clone(),
+        };
+        mempool_transactions.push(mempool_transaction);
+    }
+    let (txns, _) = generate_transactions(mempool_transactions, true);
+    log::debug!("Done generating transactions and accounts");
+
+    // Build a couple of blocks with adopted transactions
+    let num_txns = 10;
+    let mut adopted_transactions = vec![];
+    let recipient_balances = vec![0; num_txns as usize];
+
+    // Generate recipient accounts
+    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, false);
+    // Use same senders as before, because we want to test that the sender doesn't have enough funds to pay all pending txns
+
+    // Generate transactions
+    for i in 0..num_txns {
+        let mempool_transaction = TestTransaction {
+            fee: 0 as u64,
+            value: 60,
+            recipient: recipient_accounts[i as usize].clone(),
+            sender: sender_accounts[i as usize].clone(),
+        };
+        adopted_transactions.push(mempool_transaction);
+    }
+    let (adopted_txns, _) = generate_transactions(adopted_transactions, true);
+
+    let mut adopted_micro_blocks = vec![];
+
+    adopted_micro_blocks.push((
+        Blake2bHash::default(),
+        create_dummy_micro_block(Some(adopted_txns.to_vec())),
+    ));
+
+    log::debug!("Done generating adopted micro block");
+
+    // Add validator to genesis
+    genesis_builder.with_genesis_validator(
+        Address::from(&SchnorrKeyPair::generate(&mut rng)),
+        signing_key().public,
+        voting_key().public_key,
+        Address::default(),
+    );
+
+    // Generate the genesis and blockchain
+    let genesis_info = genesis_builder.generate(env.clone()).unwrap();
+
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::with_genesis(
+            env.clone(),
+            time,
+            NetworkId::UnitAlbatross,
+            genesis_info.block,
+            genesis_info.accounts,
+        )
+        .unwrap(),
+    ));
+
+    // Create mempool and subscribe with a custom txn stream
+    let mempool = Mempool::new(blockchain.clone(), MempoolConfig::default());
+    let mut hub = MockHub::new();
+    let mock_id = MockId::new(hub.new_address().into());
+    let mock_network = Arc::new(hub.new_network());
+
+    // Send txns to mempool
+    send_txn_to_mempool(&mempool, mock_network, mock_id, txns).await;
+
+    assert_eq!(
+        mempool.num_transactions(),
+        30,
+        "Number of txns in the mempools is not what is expected"
+    );
+
+    // We need a block producer to produce blocks
+    let producer = BlockProducer::new(signing_key(), voting_key());
+
+    {
+        let bc = blockchain.upgradable_read();
+
+        let block = producer.next_micro_block(
+            &bc,
+            bc.time.now(),
+            0,
+            None,
+            vec![],
+            adopted_txns,
+            vec![0x41],
+        );
+
+        assert_eq!(
+            Blockchain::push(bc, Block::Micro(block)),
+            Ok(PushResult::Extended)
+        );
+    }
+
+    // Call mempool update
+    mempool.mempool_update(&adopted_micro_blocks[..], &[].to_vec());
+
+    // Get txns from mempool
+    let updated_txns = mempool.get_transactions_for_block(10_000);
+
+    // Expect only 20 transations because in the adopted blocks we included 10 txns that would cause the senders
+    // to not have enough balance to pay for all txns already in the mempool
+    assert_eq!(
+        updated_txns.len(),
+        20,
+        "Number of txns is not what is expected"
+    );
+
+    {
+        let bc = blockchain.upgradable_read();
+
+        let block = producer.next_micro_block(
+            &bc,
+            bc.time.now(),
+            0,
+            None,
+            vec![],
+            updated_txns.clone(),
+            vec![0x41],
+        );
+
+        // We should succeed producing a block with the remaining mempool transactions
+        assert_eq!(
+            Blockchain::push(bc, Block::Micro(block)),
+            Ok(PushResult::Extended)
+        );
+    }
+}
+
+#[test(tokio::test(flavor = "multi_thread", worker_threads = 10))]
+async fn mempool_update_pruned_account() {
+    let mut rng = StdRng::seed_from_u64(0);
+    let time = Arc::new(OffsetTime::new());
+    let env = VolatileEnvironment::new(10).unwrap();
+    let mut genesis_builder = GenesisBuilder::default();
+
+    // Generate and sign transactions
+    let balance = 100;
+    let num_txns = 30;
+    let mut mempool_transactions = vec![];
+    let sender_balances = vec![balance; num_txns as usize];
+    let recipient_balances = vec![0; num_txns as usize];
+
+    // Generate recipient accounts
+    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, false);
+    // Generate sender accounts
+    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true);
+
+    // Generate transactions
+    for i in 0..num_txns {
+        let mempool_transaction = TestTransaction {
+            fee: 0 as u64,
+            value: 60,
+            recipient: recipient_accounts[i as usize].clone(),
+            sender: sender_accounts[i as usize].clone(),
+        };
+        mempool_transactions.push(mempool_transaction);
+    }
+    let (txns, _) = generate_transactions(mempool_transactions, true);
+    log::debug!("Done generating transactions and accounts");
+
+    // Build a couple of blocks with adopted transactions
+    let num_txns = 10;
+    let mut adopted_transactions = vec![];
+    let recipient_balances = vec![0; num_txns as usize];
+
+    // Generate recipient accounts
+    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, false);
+    // Use same senders as before, because we want to test that the sender doesn't have enough funds to pay all pending txns
+
+    // Generate transactions, these transactions will consume all the sender balance, which will cause the sender to be pruned
+    // from the accounts tree
+    for i in 0..num_txns {
+        let mempool_transaction = TestTransaction {
+            fee: 0 as u64,
+            value: 100,
+            recipient: recipient_accounts[i as usize].clone(),
+            sender: sender_accounts[i as usize].clone(),
+        };
+        adopted_transactions.push(mempool_transaction);
+    }
+    let (adopted_txns, _) = generate_transactions(adopted_transactions, true);
+
+    let mut adopted_micro_blocks = vec![];
+
+    adopted_micro_blocks.push((
+        Blake2bHash::default(),
+        create_dummy_micro_block(Some(adopted_txns.to_vec())),
+    ));
+
+    log::debug!("Done generating adopted micro block");
+
+    // Add validator to genesis
+    genesis_builder.with_genesis_validator(
+        Address::from(&SchnorrKeyPair::generate(&mut rng)),
+        signing_key().public,
+        voting_key().public_key,
+        Address::default(),
+    );
+
+    // Generate the genesis and blockchain
+    let genesis_info = genesis_builder.generate(env.clone()).unwrap();
+
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::with_genesis(
+            env.clone(),
+            time,
+            NetworkId::UnitAlbatross,
+            genesis_info.block,
+            genesis_info.accounts,
+        )
+        .unwrap(),
+    ));
+
+    // Create mempool and subscribe with a custom txn stream.
+    let mempool = Mempool::new(blockchain.clone(), MempoolConfig::default());
+    let mut hub = MockHub::new();
+    let mock_id = MockId::new(hub.new_address().into());
+    let mock_network = Arc::new(hub.new_network());
+
+    // Send txns to mempool
+    send_txn_to_mempool(&mempool, mock_network, mock_id, txns).await;
+
+    assert_eq!(
+        mempool.num_transactions(),
+        30,
+        "Number of txns in the mempools is not what is expected"
+    );
+
+    // We need a block producer to produce blocks
+    let producer = BlockProducer::new(signing_key(), voting_key());
+
+    {
+        let bc = blockchain.upgradable_read();
+
+        let block = producer.next_micro_block(
+            &bc,
+            bc.time.now(),
+            0,
+            None,
+            vec![],
+            adopted_txns,
+            vec![0x41],
+        );
+
+        assert_eq!(
+            Blockchain::push(bc, Block::Micro(block)),
+            Ok(PushResult::Extended)
+        );
+    }
+
+    // Call mempool update
+    mempool.mempool_update(&adopted_micro_blocks[..], &[].to_vec());
+
+    // Get txns from mempool
+    let updated_txns = mempool.get_transactions_for_block(10_000);
+
+    assert_eq!(
+        updated_txns.len(),
+        20,
+        "Number of txns is not what is expected"
+    );
+
+    {
+        let bc = blockchain.upgradable_read();
+
+        let block = producer.next_micro_block(
+            &bc,
+            bc.time.now(),
+            0,
+            None,
+            vec![],
+            updated_txns.clone(),
+            vec![0x41],
+        );
+
+        // We should succeed producing a block with the remaining mempool transactions
+        assert_eq!(
+            Blockchain::push(bc, Block::Micro(block)),
+            Ok(PushResult::Extended)
         );
     }
 }
