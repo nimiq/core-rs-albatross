@@ -9,7 +9,7 @@ use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis_builder::GenesisBuilder;
 use nimiq_handel::update::{LevelUpdate, LevelUpdateMessage};
 use nimiq_keys::{Address, KeyPair, SecureGenerate};
-use nimiq_network_interface::network::Network as NetworkInterface;
+use nimiq_network_interface::{network::Network as NetworkInterface, peer::Peer};
 use nimiq_network_libp2p::Network;
 use nimiq_network_mock::MockHub;
 use nimiq_test_log::test;
@@ -239,7 +239,10 @@ async fn validator_can_catch_up() {
     // At which point the prepared view_change message is broadcast
     // (only a subset of the validators will accept it as it send as level 1 message)
     for network in &networks {
-        network.broadcast(vc.clone()).await;
+        let peers = network.get_peers();
+        for peer in peers {
+            let _ = network.request::<LevelUpdateMessage<SignedViewChangeMessage, ViewChange>, LevelUpdateMessage<SignedViewChangeMessage, ViewChange>>(vc.clone(), peer.id()).await;
+        }
     }
 
     // wait enough time to complete the view change (it really does not matter how long, as long as the vc completes)

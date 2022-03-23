@@ -27,8 +27,7 @@ use nimiq_handel::protocol;
 use nimiq_handel::store::ReplaceStore;
 use nimiq_handel::update::LevelUpdateMessage;
 use nimiq_handel::verifier;
-use nimiq_network_interface::message::Message;
-use nimiq_network_interface::network::Network;
+use nimiq_network_interface::{message::Message, network::Network, peer::Peer};
 use nimiq_network_mock::{MockHub, MockNetwork};
 use nimiq_test_log::test;
 
@@ -177,7 +176,10 @@ struct SendingFuture<N: Network> {
 
 impl<N: Network> SendingFuture<N> {
     pub async fn send<M: Message + Clone + Unpin + std::fmt::Debug>(self, msg: M) {
-        self.network.broadcast(msg).await
+        let peers = self.network.get_peers();
+        for peer in peers {
+            let _ = self.network.request::<M, M>(msg.clone(), peer.id()).await;
+        }
     }
 }
 
@@ -212,7 +214,7 @@ impl<M: Message + Clone + Unpin + std::fmt::Debug, N: Network> Sink<(M, usize)>
     }
 
     fn start_send(mut self: Pin<&mut Self>, item: (M, usize)) -> Result<(), Self::Error> {
-        // If there is future poll_ready didnot return Ready(Ok(())) or poll_ready was not called resulting in an error
+        // If there is future poll_ready did not return Ready(Ok(())) or poll_ready was not called resulting in an error
         if self.current_future.is_some() {
             Err(())
         } else {
@@ -299,7 +301,7 @@ async fn it_can_aggregate() {
             config.clone(),
             contribution,
             Box::pin(
-                net.receive_from_all::<LevelUpdateMessage<Contribution, u8>>()
+                net.receive_requests::<LevelUpdateMessage<Contribution, u8>>()
                     .map(move |msg| msg.0.update),
             ),
             Box::new(NetworkSink {
@@ -340,7 +342,7 @@ async fn it_can_aggregate() {
         config.clone(),
         contribution,
         Box::pin(
-            net.receive_from_all::<LevelUpdateMessage<Contribution, u8>>()
+            net.receive_requests::<LevelUpdateMessage<Contribution, u8>>()
                 .map(move |msg| msg.0.update),
         ),
         Box::new(NetworkSink {
@@ -394,7 +396,7 @@ async fn it_can_aggregate() {
         config.clone(),
         contribution,
         Box::pin(
-            net.receive_from_all::<LevelUpdateMessage<Contribution, u8>>()
+            net.receive_requests::<LevelUpdateMessage<Contribution, u8>>()
                 .map(move |msg| msg.0.update),
         ),
         Box::new(NetworkSink {

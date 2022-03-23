@@ -734,7 +734,7 @@ type ProposalAndPubsubId<TValidatorNetwork> = (
 
 struct ProposalBuffer<TValidatorNetwork: ValidatorNetwork + 'static> {
     buffer: LinkedHashMap<
-        <TValidatorNetwork::PeerType as Peer>::Id,
+        <<TValidatorNetwork::NetworkType as Network>::PeerType as Peer>::Id,
         ProposalAndPubsubId<TValidatorNetwork>,
     >,
     waker: Option<Waker>,

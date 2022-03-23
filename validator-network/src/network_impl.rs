@@ -142,7 +142,7 @@ where
     N::Error: Send,
 {
     type Error = NetworkError<N::Error>;
-    type PeerType = N::PeerType;
+    type NetworkType = N;
     type PubsubId = N::PubsubId;
 
     /// Tells the validator network the validator keys for the current set of active validators. The keys must be
@@ -220,10 +220,9 @@ where
                         return Err(NetworkError::UnknownValidator(validator_id));
                     }
                 };
-                peer
-                    .send(msg.clone())
-                    .await
-                    .map_err(NetworkError::Send)?;
+                // We don't care about the response. Just do the request to send a message to the peer.
+                // Response type is expected to be the same as the request.
+                let _ = self.network.request::<M, M>(msg.clone(), peer.id()).await.map_err(NetworkError::Request)?;
                 Ok(())
             });
 
@@ -233,11 +232,12 @@ where
             .collect::<Vec<Result<(), Self::Error>>>()
     }
 
-    fn receive<M: Message>(&self) -> MessageStream<M, PeerId<N>> {
+    fn receive<M: Message + Clone>(&self) -> MessageStream<M, PeerId<N>> {
+        let network = Arc::clone(&self.network);
         Box::pin(
-            self.network
-                .receive_from_all()
-                .map(|(message, peer)| (message, peer.id())),
+            network
+                .receive_requests::<M>()
+                .map(move |(message, _request_id, peer_id)| (message, peer_id)),
         )
     }
 

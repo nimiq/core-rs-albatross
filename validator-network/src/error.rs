@@ -1,7 +1,7 @@
 use thiserror::Error;
 
 use beserial::SerializingError;
-use nimiq_network_interface::peer::SendError;
+use nimiq_network_interface::{peer::SendError, prelude::RequestError};
 
 /// No notion of connected or disconnected!
 /// If a peer is not connected the connection must be pursued.
@@ -32,4 +32,7 @@ where
 
     #[error("Send error: {0}")]
     Send(SendError),
+
+    #[error("Request error: {0}")]
+    Request(RequestError),
 }

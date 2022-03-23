@@ -8,7 +8,6 @@ use bls::SecretKey;
 use hash::Blake2sHash;
 use nimiq_block::{MultiSignature, TendermintIdentifier, TendermintStep, TendermintVote};
 use nimiq_handel::{identity::WeightRegistry, update::LevelUpdateMessage};
-
 use nimiq_primitives::{policy, slots::Validators};
 use nimiq_tendermint::{AggregationResult, TendermintError};
 use nimiq_validator_network::ValidatorNetwork;
@@ -41,7 +40,7 @@ pub struct HandelTendermintAdapter<N: ValidatorNetwork> {
 
 impl<N: ValidatorNetwork + 'static> HandelTendermintAdapter<N>
 where
-    <<N as ValidatorNetwork>::PeerType as network_interface::peer::Peer>::Id: 'static,
+    <<<N as ValidatorNetwork>::NetworkType as network_interface::network::Network>::PeerType as network_interface::peer::Peer>::Id: 'static,
 {
     pub fn new(
         validator_slot_band: u16,

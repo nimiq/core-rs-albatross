@@ -13,7 +13,7 @@ use futures::{stream::BoxStream, Stream};
 use nimiq_bls::{CompressedPublicKey, SecretKey};
 use nimiq_network_interface::{
     message::Message,
-    network::{MsgAcceptance, PubsubId, Topic},
+    network::{MsgAcceptance, Network, PubsubId, Topic},
     peer::Peer,
 };
 
@@ -27,8 +27,8 @@ pub type MessageStream<TMessage, TPeerId> =
 #[async_trait]
 pub trait ValidatorNetwork: Send + Sync {
     type Error: std::error::Error + Send + 'static;
-    type PeerType: Peer;
-    type PubsubId: PubsubId<<Self::PeerType as Peer>::Id> + Send;
+    type NetworkType: Network;
+    type PubsubId: PubsubId<<<Self::NetworkType as Network>::PeerType as Peer>::Id> + Send;
 
     /// Tells the validator network the validator keys for the current set of active validators. The keys must be
     /// ordered, such that the k-th entry is the validator with ID k.
@@ -37,7 +37,7 @@ pub trait ValidatorNetwork: Send + Sync {
     async fn get_validator_peer(
         &self,
         validator_id: usize,
-    ) -> Result<Option<Arc<Self::PeerType>>, Self::Error>;
+    ) -> Result<Option<Arc<<Self::NetworkType as Network>::PeerType>>, Self::Error>;
 
     /// must make a reasonable effort to establish a connection to the peer denoted with `validator_address`
     /// before returning a connection not established error.
@@ -48,7 +48,9 @@ pub trait ValidatorNetwork: Send + Sync {
     ) -> Vec<Result<(), Self::Error>>;
 
     /// Will receive from all connected peers
-    fn receive<M: Message>(&self) -> MessageStream<M, <Self::PeerType as Peer>::Id>;
+    fn receive<M: Message + Clone>(
+        &self,
+    ) -> MessageStream<M, <<Self::NetworkType as Network>::PeerType as Peer>::Id>;
 
     async fn publish<TTopic: Topic + Sync>(&self, item: TTopic::Item) -> Result<(), Self::Error>;
 
