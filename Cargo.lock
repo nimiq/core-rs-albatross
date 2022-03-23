@@ -2873,6 +2873,7 @@ dependencies = [
  "keyed_priority_queue",
  "nimiq-account",
  "nimiq-block",
+ "nimiq-block-production",
  "nimiq-blockchain",
  "nimiq-bls",
  "nimiq-collections",
