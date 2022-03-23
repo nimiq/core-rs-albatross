@@ -392,6 +392,7 @@ async fn both_peers_can_talk_with_each_other() {
     assert_eq!(msg2.id, 420);
 }
 
+#[ignore]
 #[test(tokio::test)]
 async fn connections_are_properly_closed() {
     let (net1, net2) = create_connected_networks().await;
