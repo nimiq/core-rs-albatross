@@ -1,15 +1,8 @@
-use std::{fmt::Debug, pin::Pin, sync::Arc};
+use std::{fmt::Debug, sync::Arc};
 
 use async_trait::async_trait;
-use futures::{
-    future,
-    future::BoxFuture,
-    ready, stream,
-    stream::{BoxStream, FusedStream, SelectAll},
-    task::{Context, Poll},
-    Stream, StreamExt, TryFutureExt,
-};
-use tokio_stream::wrappers::{errors::BroadcastStreamRecvError, BroadcastStream};
+use futures::{future::BoxFuture, stream::BoxStream};
+use tokio_stream::wrappers::BroadcastStream;
 
 use beserial::{Deserialize, Serialize};
 
@@ -86,20 +79,6 @@ pub trait Network: Send + Sync + 'static {
 
     fn subscribe_events(&self) -> BroadcastStream<NetworkEvent<Self::PeerType>>;
 
-    async fn broadcast<T: Message + Clone>(&self, msg: T) {
-        future::join_all(self.get_peers().iter().map(|peer| {
-            // TODO: Close reason
-            peer.send_or_close(msg.clone(), |_| CloseReason::Other)
-                .unwrap_or_else(|_| ())
-        }))
-        .await;
-    }
-
-    /// Should panic if there is already a non-closed sink registered for a message type.
-    fn receive_from_all<'a, T: Message>(&self) -> BoxStream<'a, (T, Arc<Self::PeerType>)> {
-        ReceiveFromAll::new(self).boxed()
-    }
-
     async fn subscribe<'a, T>(
         &self,
     ) -> Result<BoxStream<'a, (T::Item, Self::PubsubId)>, Self::Error>
@@ -159,76 +138,4 @@ pub trait Network: Send + Sync + 'static {
         request_id: Self::RequestId,
         response: M,
     ) -> Result<(), Self::Error>;
-}
-
-// .next() To get next item of stream.
-
-/// A wrapper around `SelectAll` that automatically subscribes to new peers.
-pub struct ReceiveFromAll<T: Message, P> {
-    inner: SelectAll<Pin<Box<dyn Stream<Item = (T, Arc<P>)> + Send>>>,
-    event_stream:
-        Pin<Box<dyn FusedStream<Item = Result<NetworkEvent<P>, BroadcastStreamRecvError>> + Send>>,
-}
-
-impl<T: Message, P: Peer + 'static> ReceiveFromAll<T, P> {
-    pub fn new<N: Network<PeerType = P> + ?Sized>(network: &N) -> Self {
-        let (peers, updates) = network.get_peer_updates();
-
-        ReceiveFromAll {
-            inner: stream::select_all(peers.into_iter().map(|peer| {
-                let peer_inner = Arc::clone(&peer);
-                peer.receive::<T>()
-                    .map(move |item| (item, Arc::clone(&peer_inner)))
-                    .boxed()
-            })),
-            event_stream: Box::pin(updates.fuse()),
-        }
-    }
-}
-
-impl<T: Message, P: Peer + 'static> Stream for ReceiveFromAll<T, P> {
-    type Item = (T, Arc<P>);
-
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        loop {
-            match self.event_stream.poll_next_unpin(cx) {
-                Poll::Pending => break,
-                Poll::Ready(Some(Ok(NetworkEvent::PeerJoined(peer)))) => {
-                    // We have a new peer to receive from.
-                    let peer_inner = Arc::clone(&peer);
-                    self.inner.push(
-                        peer.receive::<T>()
-                            .map(move |item| (item, Arc::clone(&peer_inner)))
-                            .boxed(),
-                    )
-                }
-                #[allow(unreachable_patterns)]
-                Poll::Ready(Some(Ok(_))) => {} // Ignore others.
-                // The receiver lagged too far behind.
-                // Attempting to receive again will return the oldest message still retained by the channel.
-                // So, that's what we do.
-                Poll::Ready(Some(Err(BroadcastStreamRecvError::Lagged(_)))) => {}
-                Poll::Ready(None) => {
-                    // There are no more active senders implying no further messages will ever be sent.
-                    return Poll::Ready(None); // Discard this stream entirely.
-                }
-            }
-        }
-        match ready!(self.inner.poll_next_unpin(cx)) {
-            // `SelectAll` is built upon a `FuturesUnordered`, which returns `None` once the list of
-            // futures is all worked through. However, it allows to add new futures and then
-            // may resume to return values.
-            // Thus, it is fine for us to return `Pending` once all streams in the select all are
-            // gone as we know `SelectAll` can actually recover from the `None` case once we
-            // push new streams into it.
-            None => Poll::Pending,
-            other => Poll::Ready(other),
-        }
-    }
-}
-
-impl<T: Message, P: Peer + 'static> FusedStream for ReceiveFromAll<T, P> {
-    fn is_terminated(&self) -> bool {
-        self.event_stream.is_terminated()
-    }
 }

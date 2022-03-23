@@ -1,14 +1,10 @@
 use std::fmt::Debug;
 use std::hash::Hash;
-use std::pin::Pin;
 
 use async_trait::async_trait;
-use futures::Stream;
 use thiserror::Error;
 
 use beserial::{Deserialize, Serialize, SerializingError};
-
-use crate::message::Message;
 
 pub mod dispatch;
 
@@ -40,31 +36,5 @@ pub trait Peer: Send + Sync + Hash + Eq {
 
     fn id(&self) -> Self::Id;
 
-    async fn send<T: Message>(&self, msg: T) -> Result<(), SendError>;
-
-    async fn send_or_close<T: Message, F: FnOnce(&SendError) -> CloseReason + Send>(
-        &self,
-        msg: T,
-        f: F,
-    ) -> Result<(), SendError> {
-        if let Err(e) = self.send(msg).await {
-            log::error!("Sending failed: {}", e);
-            self.close(f(&e));
-            Err(e)
-        } else {
-            Ok(())
-        }
-    }
-
-    /// Should panic if there is already a non-closed sink registered for a message type.
-    fn receive<T: Message>(&self) -> Pin<Box<dyn Stream<Item = T> + Send>>;
-
     fn close(&self, ty: CloseReason);
-
-    async fn request<R: RequestResponse>(
-        &self,
-        request: &R::Request,
-    ) -> Result<R::Response, Self::Error>;
-
-    fn requests<R: RequestResponse>(&self) -> Box<dyn Stream<Item = R::Request>>;
 }

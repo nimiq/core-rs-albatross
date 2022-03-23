@@ -4,11 +4,7 @@ use std::{
     time::{Duration, Instant, SystemTime},
 };
 
-use bytes::Bytes;
-use futures::{
-    channel::mpsc,
-    task::{noop_waker_ref, Context, Poll, Waker},
-};
+use futures::task::{Context, Poll, Waker};
 use ip_network::IpNetwork;
 use libp2p::swarm::dial_opts::PeerCondition;
 use libp2p::{
@@ -24,9 +20,7 @@ use rand::seq::IteratorRandom;
 use rand::thread_rng;
 use tokio::time::Interval;
 
-use nimiq_network_interface::{
-    message::MessageType, peer::CloseReason, peer_map::ObservablePeerMap,
-};
+use nimiq_network_interface::{peer::CloseReason, peer_map::ObservablePeerMap};
 
 use crate::discovery::peer_contacts::{PeerContactBook, Services};
 use crate::peer::Peer;
@@ -183,8 +177,6 @@ pub struct ConnectionPoolBehaviour {
     banned: HashMap<IpNetwork, SystemTime>,
     waker: Option<Waker>,
     housekeeping_timer: Interval,
-
-    message_receivers: HashMap<MessageType, mpsc::Sender<(Bytes, Arc<Peer>)>>,
 }
 
 impl ConnectionPoolBehaviour {
@@ -214,7 +206,6 @@ impl ConnectionPoolBehaviour {
             banned: HashMap::new(),
             waker: None,
             housekeeping_timer,
-            message_receivers: HashMap::new(),
         }
     }
 
@@ -351,52 +342,6 @@ impl ConnectionPoolBehaviour {
             log::debug!("{:?} was not part of banned set of peers", ip);
         }
     }
-
-    /// Registers a receiver to receive from all peers. This will also make sure that any newly connected peer already
-    /// has a receiver (a.k.a. message handler) registered before any messages can be received.
-    ///
-    /// # Note
-    ///
-    /// When a peer connects, this will be registered in its `MessageDispatch`. Thus you must not register a separate
-    /// receiver with the peer.
-    ///
-    /// # Arguments
-    ///
-    ///  - `type_id`: The message type (e.g. `MessageType::new(200)` for `RequestBlockHashes`)
-    ///  - `tx`: The sender through which the data of the messages is sent to the handler.
-    ///
-    /// # Panics
-    ///
-    /// Panics if a receiver was already registered for this message type.
-    ///
-    pub fn receive_from_all(&mut self, type_id: MessageType, tx: mpsc::Sender<(Bytes, Arc<Peer>)>) {
-        if let Some(sender) = self.message_receivers.get_mut(&type_id) {
-            let mut cx = Context::from_waker(noop_waker_ref());
-            if let Poll::Ready(Ok(_)) = sender.poll_ready(&mut cx) {
-                panic!(
-                    "A receiver for message type {} is already registered",
-                    type_id
-                );
-            } else {
-                log::debug!(
-                    "Removing stale sender from global message_receivers: TYPE_ID: {}",
-                    &type_id
-                );
-                self.message_receivers.remove(&type_id);
-            }
-        }
-
-        // add the receiver to the pre existing peers
-        for peer in self.peers.get_peers() {
-            let mut dispatch = peer.dispatch.lock();
-
-            dispatch.remove_receiver_raw(type_id);
-            dispatch.receive_multiple_raw(vec![(type_id, tx.clone())]);
-        }
-
-        // add the receiver to the globally defined map
-        self.message_receivers.insert(type_id, tx);
-    }
 }
 
 impl NetworkBehaviour for ConnectionPoolBehaviour {
@@ -438,7 +383,6 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
                 event: HandlerInEvent::PeerConnected {
                     peer_id: *peer_id,
                     outbound: endpoint.is_dialer(),
-                    receive_from_all: self.message_receivers.clone(),
                 },
             });
 
@@ -593,11 +537,6 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
         match event {
             HandlerOutEvent::PeerJoined { peer } => {
                 log::trace!("Peer {:?} joined, inserting it into our map", peer_id);
-                {
-                    let mut dispatch = peer.dispatch.lock();
-                    dispatch.remove_all_raw();
-                    dispatch.receive_multiple_raw(self.message_receivers.clone());
-                }
 
                 if !self.peers.insert(Arc::clone(&peer)) {
                     log::error!("Peer joined but it already exists ");

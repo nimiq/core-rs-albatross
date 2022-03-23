@@ -1,62 +1,27 @@
-use std::{
-    hash::{Hash, Hasher},
-    pin::Pin,
-    sync::Arc,
-    task::{Context, Poll},
-};
+use std::hash::{Hash, Hasher};
 
 use async_trait::async_trait;
-use futures::{
-    channel::oneshot,
-    stream::{Stream, StreamExt},
-};
-use libp2p::{swarm::NegotiatedSubstream, PeerId};
+use futures::channel::oneshot;
+use libp2p::PeerId;
 use parking_lot::Mutex;
 
-use nimiq_network_interface::message::Message;
-use nimiq_network_interface::peer::{
-    CloseReason, Peer as PeerInterface, RequestResponse, SendError,
-};
+use nimiq_network_interface::peer::{CloseReason, Peer as PeerInterface};
 
-use crate::{
-    dispatch::{codecs::typed::Error, message_dispatch::MessageDispatch},
-    NetworkError,
-};
+use crate::NetworkError;
 
 pub struct Peer {
     pub id: PeerId,
-
-    pub(crate) dispatch: Arc<Mutex<MessageDispatch<NegotiatedSubstream>>>,
 
     /// Channel used to pass the close reason the the network handler.
     close_tx: Mutex<Option<oneshot::Sender<CloseReason>>>,
 }
 
 impl Peer {
-    pub fn new(
-        id: PeerId,
-        dispatch: MessageDispatch<NegotiatedSubstream>,
-        close_tx: oneshot::Sender<CloseReason>,
-    ) -> Self {
+    pub fn new(id: PeerId, close_tx: oneshot::Sender<CloseReason>) -> Self {
         Self {
             id,
-            dispatch: Arc::new(Mutex::new(dispatch)),
             close_tx: Mutex::new(Some(close_tx)),
         }
-    }
-
-    /// Polls the underlying dispatch's inbound stream by first trying to acquire the mutex. If it's not available,
-    /// this will return `Poll::Pending` and make sure that the task is woken up, once the mutex was released.
-    pub fn poll_inbound(self: &Arc<Peer>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
-        self.dispatch.lock().poll_inbound(cx, self)
-    }
-
-    pub fn poll_outbound(self: &Arc<Peer>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
-        self.dispatch.lock().poll_outbound(cx)
-    }
-
-    pub fn poll_close(&self, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
-        self.dispatch.lock().poll_close(cx)
     }
 }
 
@@ -97,15 +62,6 @@ impl PeerInterface for Peer {
         self.id
     }
 
-    async fn send<M: Message>(&self, message: M) -> Result<(), SendError> {
-        self.dispatch.lock().send(message).map_err(|e| e.into())
-    }
-
-    // TODO: Make this a stream of Result<M, Error>
-    fn receive<M: Message>(&self) -> Pin<Box<dyn Stream<Item = M> + Send>> {
-        self.dispatch.lock().receive().boxed()
-    }
-
     fn close(&self, reason: CloseReason) {
         // TODO: I think we must poll_close on the underlying socket
 
@@ -120,16 +76,5 @@ impl PeerInterface for Peer {
         } else {
             log::error!("Peer is already closed");
         }
-    }
-
-    async fn request<R: RequestResponse>(
-        &self,
-        _request: &<R as RequestResponse>::Request,
-    ) -> Result<R::Response, Self::Error> {
-        unimplemented!()
-    }
-
-    fn requests<R: RequestResponse>(&self) -> Box<dyn Stream<Item = R::Request>> {
-        unimplemented!()
     }
 }

@@ -163,17 +163,16 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashSet, pin::Pin};
+    use std::collections::HashSet;
 
-    use futures::{Stream, StreamExt};
+    use futures::StreamExt;
     use thiserror::Error;
     use tokio_stream::wrappers::BroadcastStream;
 
     use super::ObservablePeerMap;
     use crate::{
-        message::Message,
         network::NetworkEvent,
-        peer::{CloseReason, Peer as PeerInterface, RequestResponse, SendError},
+        peer::{CloseReason, Peer as PeerInterface},
     };
     use nimiq_test_log::test;
 
@@ -200,24 +199,7 @@ mod tests {
             self.id
         }
 
-        async fn send<T: Message>(&self, _msg: T) -> Result<(), SendError> {
-            unreachable!();
-        }
-        fn receive<T: Message>(&self) -> Pin<Box<dyn Stream<Item = T> + Send>> {
-            unreachable!();
-        }
         fn close(&self, _ty: CloseReason) {}
-
-        async fn request<R: RequestResponse>(
-            &self,
-            _request: &R::Request,
-        ) -> Result<R::Response, Self::Error> {
-            unreachable!();
-        }
-
-        fn requests<R: RequestResponse>(&self) -> Box<dyn Stream<Item = R::Request>> {
-            unreachable!();
-        }
     }
 
     async fn assert_peer_joined(listener: &mut BroadcastStream<NetworkEvent<Peer>>, id: u32) {

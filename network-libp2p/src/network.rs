@@ -97,10 +97,6 @@ pub(crate) enum NetworkAction {
     NetworkInfo {
         output: oneshot::Sender<NetworkInfo>,
     },
-    ReceiveFromAll {
-        type_id: MessageType,
-        output: mpsc::Sender<(Bytes, Arc<Peer>)>,
-    },
     ReceiveRequests {
         type_id: MessageType,
         output: mpsc::Sender<(Bytes, RequestId, PeerId)>,
@@ -904,9 +900,6 @@ impl Network {
             NetworkAction::NetworkInfo { output } => {
                 output.send(Swarm::network_info(swarm)).ok();
             }
-            NetworkAction::ReceiveFromAll { type_id, output } => {
-                swarm.behaviour_mut().pool.receive_from_all(type_id, output);
-            }
             NetworkAction::ReceiveRequests { type_id, output } => {
                 state.receive_requests.insert(type_id, output);
             }
@@ -1029,52 +1022,6 @@ impl NetworkInterface for Network {
 
     fn subscribe_events(&self) -> BroadcastStream<NetworkEvent<Self::PeerType>> {
         BroadcastStream::new(self.events_tx.subscribe())
-    }
-
-    /// Implements `receive_from_all`, but instead of selecting over all peer message streams, we register a channel in
-    /// the network. The sender is copied to new peers when they're instantiated.
-    fn receive_from_all<'a, T: Message>(&self) -> BoxStream<'a, (T, Arc<Peer>)> {
-        let mut action_tx = self.action_tx.clone();
-
-        // Future to register the channel.
-        let register_future = async move {
-            let (tx, rx) = mpsc::channel(0);
-
-            action_tx
-                .send(NetworkAction::ReceiveFromAll {
-                    type_id: T::TYPE_ID.into(),
-                    output: tx,
-                })
-                .await
-                .expect("Sending action to network task failed.");
-
-            rx
-        };
-
-        // XXX Drive the register future to completion. This is needed because we want the receivers
-        // to be properly set up when this function returns. It should be ok to block here as we're
-        // only calling this during client initialization.
-        // A better way to do this would be make receive_from_all() async.
-        // Look to not block it and add it to a unorderded futures
-        let receive_stream = executor::block_on(register_future);
-
-        receive_stream
-            .filter_map(|(data, peer)| async move {
-                // Map the (data, peer) stream to (message, peer) by deserializing the messages.
-                match <T as Deserialize>::deserialize(&mut data.reader()) {
-                    Ok(message) => Some((message, peer)),
-                    Err(e) => {
-                        log::error!(
-                            "Failed to deserialize {} message from {}: {}",
-                            std::any::type_name::<T>(),
-                            peer.id(),
-                            e
-                        );
-                        None
-                    }
-                }
-            })
-            .boxed()
     }
 
     async fn subscribe<'a, T>(

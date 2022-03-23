@@ -72,7 +72,6 @@ pub mod tests {
 
     use beserial::{Deserialize, Serialize};
     use nimiq_network_interface::{
-        message::Message,
         network::{Network, NetworkEvent, Topic},
         peer::Peer,
     };
@@ -210,37 +209,5 @@ pub mod tests {
             Err(MockNetworkError::AlreadyUnsubscribed(TestTopic::NAME)),
             net1.unsubscribe::<TestTopic>().await
         );
-    }
-
-    #[derive(Clone, Debug, Deserialize, Serialize)]
-    struct TestMessage {
-        id: u32,
-    }
-
-    impl Message for TestMessage {
-        const TYPE_ID: u64 = 42;
-    }
-
-    #[test(tokio::test)]
-    async fn both_peers_can_talk_with_each_other() {
-        let mut hub = MockHub::new();
-        let net1 = hub.new_network();
-        let net2 = hub.new_network();
-        net1.dial_mock(&net2);
-
-        let peer2 = net1.get_peer(net2.peer_id()).unwrap();
-        let peer1 = net2.get_peer(net1.peer_id()).unwrap();
-
-        let mut in1 = peer1.receive::<TestMessage>();
-        let mut in2 = peer2.receive::<TestMessage>();
-
-        peer1.send(TestMessage { id: 1337 }).await.unwrap();
-        peer2.send(TestMessage { id: 420 }).await.unwrap();
-
-        let msg1 = in2.next().await.unwrap();
-        let msg2 = in1.next().await.unwrap();
-
-        assert_eq!(msg1.id, 1337);
-        assert_eq!(msg2.id, 420);
     }
 }
