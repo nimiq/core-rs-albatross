@@ -237,12 +237,13 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
             .chain(self.active_cluster.iter_mut());
         for cluster in epoch_clusters {
             // Check if given epoch_ids and the current cluster potentially overlap.
-            if cluster.first_epoch_number <= epoch_ids.first_epoch_number
+            if cluster.first_epoch_number <= epoch_ids.first_epoch_number + id_index
                 && cluster.first_epoch_number + cluster.epoch_ids.len()
-                    > epoch_ids.first_epoch_number
+                    > epoch_ids.first_epoch_number + id_index
             {
                 // Compare epoch ids in the overlapping region.
-                let start_offset = epoch_ids.first_epoch_number - cluster.first_epoch_number;
+                let start_offset =
+                    epoch_ids.first_epoch_number + id_index - cluster.first_epoch_number;
                 let len = usize::min(
                     cluster.epoch_ids.len() - start_offset,
                     epoch_ids.ids.len() - id_index,
@@ -642,9 +643,9 @@ mod tests {
     #[tokio::test]
     async fn it_can_cluster_epoch_ids() {
         let time = Arc::new(OffsetTime::new());
-        let env1 = VolatileEnvironment::new(10).unwrap();
+        let env = VolatileEnvironment::new(10).unwrap();
         let blockchain = Arc::new(RwLock::new(
-            Blockchain::new(env1, NetworkId::UnitAlbatross, time).unwrap(),
+            Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
         ));
 
         let mut hub = MockHub::default();
@@ -797,9 +798,9 @@ mod tests {
     #[tokio::test]
     async fn it_can_cluster_checkpoint_ids() {
         let time = Arc::new(OffsetTime::new());
-        let env1 = VolatileEnvironment::new(10).unwrap();
+        let env = VolatileEnvironment::new(10).unwrap();
         let blockchain = Arc::new(RwLock::new(
-            Blockchain::new(env1, NetworkId::UnitAlbatross, time).unwrap(),
+            Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
         ));
 
         let mut hub = MockHub::default();
@@ -991,5 +992,71 @@ mod tests {
             },
             false,
         ); // TODO: for a symmetric check, blockchain state would need to change
+    }
+
+    #[tokio::test]
+    async fn it_splits_clusters_correctly() {
+        simple_logger::SimpleLogger::new()
+            .with_level(actual_log::LevelFilter::Trace)
+            .init()
+            .ok();
+
+        let time = Arc::new(OffsetTime::new());
+        let env = VolatileEnvironment::new(10).unwrap();
+        let blockchain = Arc::new(RwLock::new(
+            Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+        ));
+
+        let mut hub = MockHub::default();
+        let net1 = Arc::new(hub.new_network());
+        let net2 = Arc::new(hub.new_network());
+        let net3 = Arc::new(hub.new_network());
+        let net4 = Arc::new(hub.new_network());
+
+        // Three identical chains, second one is shorter.
+        let mut sync = HistorySync::<MockNetwork>::new(
+            Arc::clone(&blockchain),
+            Arc::clone(&net1),
+            net1.subscribe_events(),
+        );
+
+        let epoch_ids1 = generate_epoch_ids(net2.peer_id(), 10, 1, None, false);
+        let epoch_ids2 = generate_epoch_ids(net3.peer_id(), 6, 1, None, false);
+        let epoch_ids3 = generate_epoch_ids(net4.peer_id(), 10, 1, None, false);
+
+        sync.cluster_epoch_ids(epoch_ids1);
+        sync.cluster_epoch_ids(epoch_ids2);
+        sync.cluster_epoch_ids(epoch_ids3);
+
+        assert_eq!(sync.epoch_clusters.len(), 2);
+        assert_eq!(sync.epoch_clusters[0].epoch_ids.len(), 6);
+        assert_eq!(sync.epoch_clusters[0].first_epoch_number, 1);
+        assert_eq!(sync.epoch_clusters[0].batch_set_queue.peers.len(), 3);
+        assert_eq!(sync.epoch_clusters[1].epoch_ids.len(), 4);
+        assert_eq!(sync.epoch_clusters[1].first_epoch_number, 7);
+        assert_eq!(sync.epoch_clusters[1].batch_set_queue.peers.len(), 2);
+
+        // Three identical chains, different lengths and offsets.
+        let mut sync =
+            HistorySync::<MockNetwork>::new(blockchain, Arc::clone(&net1), net1.subscribe_events());
+
+        let epoch_ids1 = generate_epoch_ids(net2.peer_id(), 10, 1, None, false);
+        let epoch_ids2 = generate_epoch_ids(net3.peer_id(), 5, 2, None, false);
+        let epoch_ids3 = generate_epoch_ids(net4.peer_id(), 6, 4, None, false);
+
+        sync.cluster_epoch_ids(epoch_ids1);
+        sync.cluster_epoch_ids(epoch_ids2);
+        sync.cluster_epoch_ids(epoch_ids3);
+
+        assert_eq!(sync.epoch_clusters.len(), 3);
+        assert_eq!(sync.epoch_clusters[0].epoch_ids.len(), 6);
+        assert_eq!(sync.epoch_clusters[0].first_epoch_number, 1);
+        assert_eq!(sync.epoch_clusters[0].batch_set_queue.peers.len(), 3);
+        assert_eq!(sync.epoch_clusters[1].epoch_ids.len(), 3);
+        assert_eq!(sync.epoch_clusters[1].first_epoch_number, 7);
+        assert_eq!(sync.epoch_clusters[1].batch_set_queue.peers.len(), 2);
+        assert_eq!(sync.epoch_clusters[2].epoch_ids.len(), 1);
+        assert_eq!(sync.epoch_clusters[2].first_epoch_number, 10);
+        assert_eq!(sync.epoch_clusters[2].batch_set_queue.peers.len(), 1);
     }
 }
