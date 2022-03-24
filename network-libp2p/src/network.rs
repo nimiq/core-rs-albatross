@@ -150,7 +150,7 @@ struct TaskState {
     dht_puts: HashMap<QueryId, oneshot::Sender<Result<(), NetworkError>>>,
     dht_gets: HashMap<QueryId, oneshot::Sender<Result<Option<Vec<u8>>, NetworkError>>>,
     gossip_topics: HashMap<TopicHash, (mpsc::Sender<(GossipsubMessage, MessageId, PeerId)>, bool)>,
-    is_bootstraped: bool,
+    is_bootstrapped: bool,
     requests: HashMap<
         RequestId,
         oneshot::Sender<(ResponseMessage<Bytes>, RequestId, PeerId, MessageType)>,
@@ -387,12 +387,12 @@ impl Network {
                         .add_peer_address(peer_id, listen_addr.clone());
 
                     // Bootstrap Kademlia if we're performing our first connection
-                    if !state.is_bootstraped {
+                    if !state.is_bootstrapped {
                         log::debug!("Bootstrapping DHT");
                         if swarm.behaviour_mut().dht.bootstrap().is_err() {
                             log::error!("Bootstrapping DHT error: No known peers");
                         }
-                        state.is_bootstraped = true;
+                        state.is_bootstrapped = true;
                     }
                 }
             }
@@ -605,12 +605,12 @@ impl Network {
                                     swarm.behaviour_mut().add_peer_address(peer_id, listen_addr);
 
                                     // Bootstrap Kademlia if we're adding our first address
-                                    if !state.is_bootstraped {
+                                    if !state.is_bootstrapped {
                                         log::debug!("Bootstrapping DHT");
                                         if swarm.behaviour_mut().dht.bootstrap().is_err() {
                                             log::error!("Bootstrapping DHT error: No known peers");
                                         }
-                                        state.is_bootstraped = true;
+                                        state.is_bootstrapped = true;
                                     }
                                 }
                             }

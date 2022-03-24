@@ -193,7 +193,7 @@ impl<N: Network> Consensus<N> {
     }
 
     /// Calculates and sets established state, returns a ConsensusEvent if the state changed.
-    /// Once consensus is established, we can only loose it if we loose all our peers.
+    /// Once consensus is established, we can only lose it if we lose all our peers.
     /// To reach consensus established state, we need at least `minPeers` peers and
     /// one of the following conditions must be true:
     /// - we accepted at least `MIN_BLOCKS_ESTABLISHED` block announcements

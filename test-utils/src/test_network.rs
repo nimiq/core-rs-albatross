@@ -31,7 +31,7 @@ impl TestNetwork for MockNetwork {
     ) -> Arc<MockNetwork> {
         let hub = hub
             .as_mut()
-            .expect("Can't build a Mock Network without a MuckHub");
+            .expect("Can't build a Mock Network without a MockHub");
         Arc::new(hub.new_network_with_address(peer_id))
     }
 

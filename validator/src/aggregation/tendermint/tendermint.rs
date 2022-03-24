@@ -130,7 +130,7 @@ where
                     return Err(TendermintError::AggregationError);
                 }
                 None => {
-                    // create channel foor result propagation
+                    // create channel for result propagation
                     let (sender, aggregate_receiver) =
                         mpsc::unbounded_channel::<AggregationResult<Blake2sHash, MultiSignature>>();
                     // set the current aggregate
