@@ -1,9 +1,9 @@
 use std::hash::{Hash, Hasher};
 
 use async_trait::async_trait;
-use futures::channel::oneshot;
 use libp2p::PeerId;
 use parking_lot::Mutex;
+use tokio::sync::oneshot;
 
 use nimiq_network_interface::peer::{CloseReason, Peer as PeerInterface};
 

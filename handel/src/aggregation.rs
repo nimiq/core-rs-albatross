@@ -1,14 +1,14 @@
 use std::fmt::Debug;
 use std::pin::Pin;
 
-use futures::channel::mpsc::{unbounded, UnboundedSender};
 use futures::future::BoxFuture;
 use futures::stream::BoxStream;
 use futures::task::{Context, Poll};
 use futures::{ready, select, Future, FutureExt, Sink, Stream, StreamExt};
+use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tokio::task::JoinHandle;
 use tokio::time::{interval_at, Instant};
-use tokio_stream::wrappers::IntervalStream;
+use tokio_stream::wrappers::{IntervalStream, UnboundedReceiverStream};
 
 use beserial::{Deserialize, Serialize};
 
@@ -255,8 +255,8 @@ impl<
             for peer_id in peer_ids {
                 if peer_id < self.protocol.partitioner().size() {
                     self.sender
-                        // `unbounded_send` is not a future and thus will not block execution.
-                        .unbounded_send((update_msg.clone(), peer_id))
+                        // `send` is not a future and thus will not block execution.
+                        .send((update_msg.clone(), peer_id))
                         // If an error occurred that means the receiver no longer exists or was closed which should never happen.
                         .expect("Message could not be send to unbounded_channel sender");
                 }
@@ -408,7 +408,7 @@ impl<
             }
 
             let response = (self.level_update.clone(), msg.origin());
-            if let Err(e) = self.sender.unbounded_send(response) {
+            if let Err(e) = self.sender.send(response) {
                 log::warn!(
                     "Failed to send final LevelUpdate to {}: {:?}",
                     msg.origin(),
@@ -448,12 +448,17 @@ impl<
         // Create an unbounded mpsc channel to buffer network messages for the actual aggregation not having to wait for them to get send.
         // A future optimization could be to have this task not simply forward all messages but filter out those which have become obsolete
         // by subsequent messages.
-        let (sender, receiver) = unbounded::<(LevelUpdateMessage<P::Contribution, T>, usize)>();
+        let (sender, receiver) =
+            unbounded_channel::<(LevelUpdateMessage<P::Contribution, T>, usize)>();
 
         // Spawn a task emptying put the receiver of the created mpsc. Note that this task will terminate once all senders are dropped leading
         // to the stream no longer producing any new items. In turn the forward future will resolve terminating the task.
         let network_handle = tokio::spawn(async move {
-            if let Err(err) = receiver.map(Ok).forward(output_sink).await {
+            if let Err(err) = UnboundedReceiverStream::new(receiver)
+                .map(Ok)
+                .forward(output_sink)
+                .await
+            {
                 warn!("Error sending messages: {:?}", err);
             }
         });

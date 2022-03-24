@@ -4,9 +4,7 @@ use async_trait::async_trait;
 use bytes::{Buf, Bytes};
 use futures::executor;
 use futures::{
-    channel::{mpsc, oneshot},
     future::BoxFuture,
-    sink::SinkExt,
     stream::{BoxStream, StreamExt},
     FutureExt,
 };
@@ -31,9 +29,8 @@ use libp2p::{
     tcp, websocket, yamux, Multiaddr, PeerId, Swarm, Transport,
 };
 use log::Instrument;
-use tokio::sync::broadcast;
-
-use tokio_stream::wrappers::BroadcastStream;
+use tokio::sync::{broadcast, mpsc, oneshot};
+use tokio_stream::wrappers::{BroadcastStream, ReceiverStream};
 
 use beserial::{Deserialize, Serialize};
 use nimiq_bls::CompressedPublicKey;
@@ -194,7 +191,7 @@ impl Network {
 
         let (events_tx, _) = broadcast::channel(64);
         let (action_tx, action_rx) = mpsc::channel(64);
-        let (validate_tx, validate_rx) = mpsc::unbounded();
+        let (validate_tx, validate_rx) = mpsc::unbounded_channel();
 
         tokio::spawn(Self::swarm_task(
             swarm,
@@ -303,7 +300,7 @@ impl Network {
         async move {
             loop {
                 tokio::select! {
-                    validate_msg = validate_rx.next() => {
+                    validate_msg = validate_rx.recv() => {
                         if let Some(validate_msg) = validate_msg {
                             let topic = validate_msg.topic;
                             let result: Result<bool, PublishError> = swarm
@@ -327,7 +324,7 @@ impl Network {
                             Self::handle_event(event, &events_tx, &mut swarm, &mut task_state);
                         }
                     },
-                    action = action_rx.next() => {
+                    action = action_rx.recv() => {
                         if let Some(action) = action {
                             Self::perform_action(action, &mut swarm, &mut task_state);
                         }
@@ -1077,7 +1074,7 @@ impl NetworkInterface for Network {
             .await?;
 
         // Receive the mpsc::Receiver, but propagate errors first.
-        let subscribe_rx = rx.await??;
+        let subscribe_rx = ReceiverStream::new(rx.await??);
 
         Ok(Box::pin(subscribe_rx.map(|(msg, msg_id, source)| {
             let item: <T as Topic>::Item = Deserialize::deserialize_from_vec(&msg.data).unwrap();
@@ -1134,7 +1131,8 @@ impl NetworkInterface for Network {
         T: Topic + Sync,
     {
         self.validate_tx
-            .unbounded_send(ValidateMessage::new::<T>(pubsub_id, acceptance))
+            .send(ValidateMessage::new::<T>(pubsub_id, acceptance))
+            .ok()
             .expect("Failed to send reported message validation result");
     }
 
@@ -1274,7 +1272,7 @@ impl NetworkInterface for Network {
     }
 
     fn receive_requests<'a, M: Message>(&self) -> BoxStream<'a, (M, RequestId, PeerId)> {
-        let mut action_tx = self.action_tx.clone();
+        let action_tx = self.action_tx.clone();
 
         // Future to register the channel.
         let register_future = async move {
@@ -1296,7 +1294,7 @@ impl NetworkInterface for Network {
         // to be properly set up when this function returns. It should be ok to block here as we're
         // only calling this during client initialization.
         // A better way to do this would be make receive_from_all() async.
-        let receive_stream = executor::block_on(register_future);
+        let receive_stream = ReceiverStream::new(executor::block_on(register_future));
 
         receive_stream
             .filter_map(|(data, request_id, peer_id)| async move {

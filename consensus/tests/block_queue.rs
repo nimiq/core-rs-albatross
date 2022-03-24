@@ -6,14 +6,14 @@ use std::{
 };
 
 use futures::{
-    channel::mpsc,
-    sink::SinkExt,
     stream::{Stream, StreamExt},
     task::noop_waker_ref,
 };
 use parking_lot::RwLock;
 use pin_project::pin_project;
 use rand::Rng;
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
 
 use nimiq_block::Block;
 use nimiq_block_production::BlockProducer;
@@ -46,8 +46,8 @@ impl<P> MockRequestComponent<P> {
         mpsc::UnboundedReceiver<(Blake2bHash, Vec<Blake2bHash>)>,
         mpsc::UnboundedSender<Vec<Block>>,
     ) {
-        let (tx1, rx1) = mpsc::unbounded();
-        let (tx2, rx2) = mpsc::unbounded();
+        let (tx1, rx1) = mpsc::unbounded_channel();
+        let (tx2, rx2) = mpsc::unbounded_channel();
 
         (
             Self {
@@ -68,7 +68,7 @@ impl<N: Network> RequestComponent<N> for MockRequestComponent<N> {
         target_block_hash: Blake2bHash,
         locators: Vec<Blake2bHash>,
     ) {
-        self.tx.unbounded_send((target_block_hash, locators)).ok(); // ignore error
+        self.tx.send((target_block_hash, locators)).ok(); // ignore error
     }
 
     fn put_peer_into_sync_mode(&mut self, _peer: <<N as Network>::PeerType as Peer>::Id) {
@@ -94,7 +94,7 @@ impl<N: Network> Stream for MockRequestComponent<N> {
     type Item = RequestComponentEvent;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-        match self.project().rx.poll_next(cx) {
+        match self.project().rx.poll_recv(cx) {
             Poll::Ready(Some(blocks)) => {
                 Poll::Ready(Some(RequestComponentEvent::ReceivedBlocks(blocks)))
             }
@@ -114,14 +114,14 @@ async fn send_single_micro_block_to_block_queue() {
     let network = Arc::new(hub.new_network());
     let producer = BlockProducer::new(signing_key(), voting_key());
     let request_component = MockRequestComponent::<MockNetwork>::default();
-    let (mut tx, rx) = mpsc::channel(32);
+    let (tx, rx) = mpsc::channel(32);
 
     let mut block_queue = BlockQueue::with_block_stream(
         Default::default(),
         Arc::clone(&blockchain),
         Arc::clone(&network),
         request_component,
-        rx.boxed(),
+        ReceiverStream::new(rx).boxed(),
     );
 
     // push one micro block to the queue
@@ -168,14 +168,14 @@ async fn send_two_micro_blocks_out_of_order() {
     let producer = BlockProducer::new(signing_key(), voting_key());
     let (request_component, mut mock_ptarc_rx, _mock_ptarc_tx) =
         MockRequestComponent::<MockNetwork>::new();
-    let (mut tx, rx) = mpsc::channel(32);
+    let (tx, rx) = mpsc::channel(32);
 
     let mut block_queue = BlockQueue::with_block_stream(
         Default::default(),
         Arc::clone(&blockchain1),
         network,
         request_component,
-        rx.boxed(),
+        ReceiverStream::new(rx).boxed(),
     );
 
     let bc = blockchain2.upgradable_read();
@@ -224,7 +224,7 @@ async fn send_two_micro_blocks_out_of_order() {
     assert_eq!(blocks[0], &block2);
 
     // Also we should've received a request to fill this gap
-    let (target_block_hash, _locators) = mock_ptarc_rx.next().await.unwrap();
+    let (target_block_hash, _locators) = mock_ptarc_rx.recv().await.unwrap();
     assert_eq!(&target_block_hash, block2.parent_hash());
 
     // now send block1 to fill the gap
@@ -264,14 +264,14 @@ async fn send_micro_blocks_out_of_order() {
     let producer = BlockProducer::new(signing_key(), voting_key());
     let (request_component, _mock_ptarc_rx, _mock_ptarc_tx) =
         MockRequestComponent::<MockNetwork>::new();
-    let (mut tx, rx) = mpsc::channel(32);
+    let (tx, rx) = mpsc::channel(32);
 
     let mut block_queue = BlockQueue::with_block_stream(
         Default::default(),
         Arc::clone(&blockchain1),
         network,
         request_component,
-        rx.boxed(),
+        ReceiverStream::new(rx).boxed(),
     );
 
     let mut rng = rand::thread_rng();
@@ -358,14 +358,14 @@ async fn send_invalid_block() {
     let producer = BlockProducer::new(signing_key(), voting_key());
     let (request_component, mut mock_ptarc_rx, _mock_ptarc_tx) =
         MockRequestComponent::<MockNetwork>::new();
-    let (mut tx, rx) = mpsc::channel(32);
+    let (tx, rx) = mpsc::channel(32);
 
     let mut block_queue = BlockQueue::with_block_stream(
         Default::default(),
         Arc::clone(&blockchain1),
         network,
         request_component,
-        rx.boxed(),
+        ReceiverStream::new(rx).boxed(),
     );
 
     let bc = blockchain2.upgradable_read();
@@ -409,7 +409,7 @@ async fn send_invalid_block() {
     assert_eq!(*block_number, 2);
     assert_eq!(blocks[0], &block2);
 
-    let (target_block_hash, _locators) = mock_ptarc_rx.next().await.unwrap();
+    let (target_block_hash, _locators) = mock_ptarc_rx.recv().await.unwrap();
     assert_eq!(&target_block_hash, block2.parent_hash());
 
     // now send block1 to fill the gap
@@ -450,14 +450,14 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
     let producer = BlockProducer::new(signing_key(), voting_key());
     let (request_component, mut mock_ptarc_rx, mock_ptarc_tx) =
         MockRequestComponent::<MockNetwork>::new();
-    let (mut tx, rx) = mpsc::channel(32);
+    let (tx, rx) = mpsc::channel(32);
 
     let mut block_queue = BlockQueue::with_block_stream(
         Default::default(),
         Arc::clone(&blockchain1),
         network,
         request_component,
-        rx.boxed(),
+        ReceiverStream::new(rx).boxed(),
     );
 
     let bc = blockchain2.upgradable_read();
@@ -507,11 +507,11 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
 
     // Also we should've received a request to fill this gap
     // TODO: Check block locators
-    let (target_block_hash, _locators) = mock_ptarc_rx.next().await.unwrap();
+    let (target_block_hash, _locators) = mock_ptarc_rx.recv().await.unwrap();
     assert_eq!(&target_block_hash, block2.parent_hash());
 
     // Instead of gossiping the block, we'll answer the missing blocks request
-    mock_ptarc_tx.unbounded_send(vec![block1.clone()]).unwrap();
+    mock_ptarc_tx.send(vec![block1.clone()]).unwrap();
 
     // run the block_queue until is has produced two events.
     block_queue.next().await;
@@ -546,7 +546,7 @@ async fn put_peer_back_into_sync_mode() {
     let network = Arc::new(hub.new_network_with_address(1));
     let producer = BlockProducer::new(signing_key(), voting_key());
     let (request_component, _, _) = MockRequestComponent::<MockNetwork>::new();
-    let (mut tx, rx) = mpsc::channel(32);
+    let (tx, rx) = mpsc::channel(32);
 
     let peer_addr = hub.new_address().into();
     let mock_id = MockId::new(peer_addr);
@@ -560,7 +560,7 @@ async fn put_peer_back_into_sync_mode() {
         Arc::clone(&blockchain1),
         network,
         request_component,
-        rx.boxed(),
+        ReceiverStream::new(rx).boxed(),
     );
 
     for _ in 1..11 {

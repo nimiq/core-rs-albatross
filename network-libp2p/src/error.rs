@@ -8,11 +8,11 @@ pub enum NetworkError {
     #[error("Dial error: {0}")]
     Dial(#[from] libp2p::swarm::DialError),
 
-    #[error("Failed to send action to swarm task: {0}")]
-    Send(#[from] futures::channel::mpsc::SendError),
+    #[error("Failed to send action to swarm task")]
+    Send,
 
-    #[error("Network action was cancelled: {0}")]
-    Canceled(#[from] futures::channel::oneshot::Canceled),
+    #[error("Network action was cancelled")]
+    Cancelled,
 
     #[error("Serialization error: {0}")]
     Serialization(#[from] beserial::SerializingError),
@@ -53,6 +53,18 @@ pub enum NetworkError {
     ResponseChannelClosed(
         <MessageCodec as libp2p::request_response::RequestResponseCodec>::Response,
     ),
+}
+
+impl<T> From<tokio::sync::mpsc::error::SendError<T>> for NetworkError {
+    fn from(_: tokio::sync::mpsc::error::SendError<T>) -> Self {
+        NetworkError::Send
+    }
+}
+
+impl From<tokio::sync::oneshot::error::RecvError> for NetworkError {
+    fn from(_: tokio::sync::oneshot::error::RecvError) -> Self {
+        NetworkError::Cancelled
+    }
 }
 
 impl From<libp2p::kad::store::Error> for NetworkError {

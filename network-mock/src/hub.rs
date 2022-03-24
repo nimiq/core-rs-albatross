@@ -4,9 +4,8 @@ use std::{
     sync::{atomic::AtomicBool, Arc},
 };
 
-use futures::channel::{mpsc, oneshot};
 use parking_lot::Mutex;
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, mpsc, oneshot};
 
 use nimiq_network_interface::peer_map::ObservablePeerMap;
 

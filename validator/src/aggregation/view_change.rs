@@ -2,11 +2,12 @@ use std::fmt;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use futures::ready;
 use futures::stream::{BoxStream, Stream, StreamExt};
 use futures::task::{Context, Poll};
 use parking_lot::RwLock;
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use beserial::{Deserialize, Serialize};
 use block::{Message, MultiSignature, SignedViewChange, ViewChange, ViewChangeProof};
@@ -50,7 +51,7 @@ impl InputStreamSwitch {
         input: BoxStream<'static, LevelUpdateMessage<SignedViewChangeMessage, ViewChange>>,
         current_view_change: ViewChange,
     ) -> (Self, UnboundedReceiver<ViewChangeResult>) {
-        let (sender, receiver) = unbounded::<ViewChangeResult>();
+        let (sender, receiver) = unbounded_channel();
 
         let this = Self {
             input,
@@ -81,8 +82,8 @@ impl Stream for InputStreamSwitch {
             if message.tag.new_view_number > self.current_view_change.new_view_number {
                 let result =
                     ViewChangeResult::FutureViewChange(message.update.aggregate, message.tag);
-                if let Err(err) = self.sender.unbounded_send(result) {
-                    error!("Failed to send FutureViewChange result: {:?}", err);
+                if let Err(_) = self.sender.send(result) {
+                    error!("Failed to send FutureViewChange result: receiver is gone");
                 }
             }
         }
@@ -281,8 +282,10 @@ impl ViewChangeAggregation {
                 >::new(network.clone())),
             );
 
-            let mut stream =
-                futures::stream::select(aggregation.map(ViewChangeResult::ViewChange), receiver);
+            let mut stream = futures::stream::select(
+                aggregation.map(ViewChangeResult::ViewChange),
+                UnboundedReceiverStream::new(receiver),
+            );
             while let Some(msg) = stream.next().await {
                 match msg {
                     ViewChangeResult::FutureViewChange(vc, tag) => {

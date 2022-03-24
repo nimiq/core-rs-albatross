@@ -1,7 +1,6 @@
 use std::{collections::VecDeque, sync::Arc};
 
 use futures::{
-    channel::oneshot,
     future::FutureExt,
     task::{Context, Poll, Waker},
 };
@@ -14,6 +13,7 @@ use libp2p::{
     PeerId,
 };
 use thiserror::Error;
+use tokio::sync::oneshot;
 
 use beserial::SerializingError;
 use nimiq_network_interface::peer::CloseReason;

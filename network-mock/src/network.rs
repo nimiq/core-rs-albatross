@@ -6,15 +6,13 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use futures::{
-    channel::{mpsc, oneshot},
     future::{BoxFuture, FutureExt},
     stream::{BoxStream, StreamExt},
-    SinkExt,
 };
 use parking_lot::Mutex;
 use thiserror::Error;
-use tokio::sync::broadcast::Sender;
-use tokio_stream::wrappers::{errors::BroadcastStreamRecvError, BroadcastStream};
+use tokio::sync::{broadcast::Sender, mpsc, oneshot};
+use tokio_stream::wrappers::{errors::BroadcastStreamRecvError, BroadcastStream, ReceiverStream};
 
 use beserial::{Deserialize, Serialize};
 use nimiq_network_interface::{
@@ -406,7 +404,7 @@ impl Network for MockNetwork {
         let sender_id = MockPeerId::from(self.address);
         let (tx, rx) = oneshot::channel::<Vec<u8>>();
 
-        let (mut sender, request_id) = {
+        let (sender, request_id) = {
             let mut hub = self.hub.lock();
 
             let key = RequestKey {
@@ -486,16 +484,17 @@ impl Network for MockNetwork {
             );
         }
 
-        rx.filter_map(|(data, request_id, sender)| async move {
-            match M::deserialize_message(&mut &data[..]) {
-                Ok(message) => Some((message, request_id, sender)),
-                Err(e) => {
-                    log::warn!("Failed to deserialize request: {}", e);
-                    None
+        ReceiverStream::new(rx)
+            .filter_map(|(data, request_id, sender)| async move {
+                match M::deserialize_message(&mut &data[..]) {
+                    Ok(message) => Some((message, request_id, sender)),
+                    Err(e) => {
+                        log::warn!("Failed to deserialize request: {}", e);
+                        None
+                    }
                 }
-            }
-        })
-        .boxed()
+            })
+            .boxed()
     }
 
     async fn respond<'a, M: Message>(

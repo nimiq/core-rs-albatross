@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
-use futures::{channel::mpsc, sink::SinkExt};
 use parking_lot::RwLock;
 use rand::prelude::StdRng;
 use rand::SeedableRng;
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_block::{Block, MicroBlock, MicroBody, MicroHeader};
@@ -69,11 +70,14 @@ async fn send_txn_to_mempool(
     transactions: Vec<Transaction>,
 ) {
     // Create a MPSC channel to directly send transactions to the mempool
-    let (mut txn_stream_tx, txn_stream_rx) = mpsc::channel(64);
+    let (txn_stream_tx, txn_stream_rx) = mpsc::channel(64);
 
     // Subscribe mempool with the mpsc stream created
     mempool
-        .start_executor_with_txn_stream::<MockNetwork>(Box::pin(txn_stream_rx), mock_network)
+        .start_executor_with_txn_stream::<MockNetwork>(
+            Box::pin(ReceiverStream::new(txn_stream_rx)),
+            mock_network,
+        )
         .await;
 
     // Send the transactions
@@ -98,7 +102,7 @@ async fn multiple_start_stop_send(
     transactions: Vec<Transaction>,
 ) {
     // Create a MPSC channel to directly send transactions to the mempool
-    let (mut txn_stream_tx, txn_stream_rx) = mpsc::channel(64);
+    let (txn_stream_tx, txn_stream_rx) = mpsc::channel(64);
 
     // Create mempool and subscribe with a custom txn stream.
     let mempool = Mempool::new(Arc::clone(&blockchain), MempoolConfig::default());
@@ -108,11 +112,14 @@ async fn multiple_start_stop_send(
 
     // Subscribe mempool with the mpsc stream created
     mempool
-        .start_executor_with_txn_stream::<MockNetwork>(Box::pin(txn_stream_rx), mock_network)
+        .start_executor_with_txn_stream::<MockNetwork>(
+            Box::pin(ReceiverStream::new(txn_stream_rx)),
+            mock_network,
+        )
         .await;
 
     // Send the transactions
-    let mut txn_stream_tx1 = txn_stream_tx.clone();
+    let txn_stream_tx1 = txn_stream_tx.clone();
     let mock_id1 = mock_id.clone();
     let txns = transactions.clone();
     tokio::task::spawn(async move {
@@ -163,7 +170,7 @@ async fn multiple_start_stop_send(
 
     // Restart the executor
     // Create a MPSC channel to directly send transactions to the mempool
-    let (mut txn_stream_tx, txn_stream_rx) = mpsc::channel(64);
+    let (txn_stream_tx, txn_stream_rx) = mpsc::channel(64);
 
     // Create mempool and subscribe with a custom txn stream.
     let mempool = Mempool::new(Arc::clone(&blockchain), MempoolConfig::default());
@@ -173,7 +180,10 @@ async fn multiple_start_stop_send(
 
     // Subscribe mempool with the mpsc stream created
     mempool
-        .start_executor_with_txn_stream::<MockNetwork>(Box::pin(txn_stream_rx), mock_network)
+        .start_executor_with_txn_stream::<MockNetwork>(
+            Box::pin(ReceiverStream::new(txn_stream_rx)),
+            mock_network,
+        )
         .await;
 
     // Send the transactions
