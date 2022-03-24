@@ -6,8 +6,6 @@ use thiserror::Error;
 
 use beserial::{Deserialize, Serialize, SerializingError};
 
-pub mod dispatch;
-
 #[derive(Copy, Clone, Debug)]
 pub enum CloseReason {
     Other,
