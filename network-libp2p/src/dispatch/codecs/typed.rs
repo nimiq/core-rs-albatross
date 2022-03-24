@@ -25,8 +25,8 @@ use nimiq_utils::crc::Crc32Computer;
 
 use crate::REQRES_PROTOCOL;
 
-/// Maximum response size in bytes (10 kB)
-const MAX_REQUEST_SIZE: usize = 2 * 1024;
+/// Maximum request size in bytes (5 kB)
+const MAX_REQUEST_SIZE: usize = 5 * 1024;
 /// Maximum response size in bytes (10 MB)
 const MAX_RESPONSE_SIZE: usize = 10 * 1024 * 1024;
 
