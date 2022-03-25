@@ -23,8 +23,10 @@ from pathlib import Path
 
 import argparse
 import json
+import os
 import subprocess
 import sys
+import uuid
 
 parser = argparse.ArgumentParser()
 parser.add_argument('num_validators', metavar='N', type=int,
@@ -35,6 +37,8 @@ parser.add_argument('-s', "--spammer", action="store_true",
                     help="generate configuration files for a spammer")
 parser.add_argument('-a', "--albagen", action="store_true",
                     help="generate configuration files for albagen")
+parser.add_argument("--run-environment", default="unknown",
+                    help="sent to Loki, like \"ci\", \"devnet\", default: \"unknown\"")
 args = parser.parse_args()
 
 output = Path(args.output)
@@ -45,6 +49,32 @@ target = Path.cwd() / "target" / "debug"
 nimiq_address = lambda: subprocess.check_output([str(target / "nimiq-address")], text=True).splitlines()
 nimiq_bls = lambda: subprocess.check_output([str(target / "nimiq-bls")], text=True).splitlines()
 
+def loki_settings_generate():
+    loki_env = os.getenv("NIMIQ_LOKI_URL")
+    loki_labels_env = os.getenv("NIMIQ_LOKI_LABELS")
+    loki_extra_fields_env = os.getenv("NIMIQ_LOKI_EXTRA_FIELDS")
+    if not loki_env:
+        return lambda role: ""
+    run_id = str(uuid.uuid4())
+    loki_labels = {"environment": args.run_environment}
+    loki_extra_fields = {"nimiq_run_id": run_id}
+    if loki_labels_env:
+        loki_labels = dict(x.split("=", 1) for x in loki_labels_env.split(":"))
+    if loki_extra_fields_env:
+        loki_extra_fields = dict(x.split("=", 1) for x in loki_extra_fields_env.split(":"))
+    def loki_settings(node):
+        loki_extra_fields["nimiq_node"] = node
+        result = f"""\
+[log.loki]
+url = "{loki_env}"
+"""
+        if loki_labels:
+            result += "\n[log.loki.labels]\n{}\n".format("\n".join("{!r} = {!r}".format(k, v) for k, v in loki_labels.items()))
+        if loki_extra_fields:
+            result += "\n[log.loki.extra_fields]\n{}\n".format("\n".join("{!r} = {!r}".format(k, v) for k, v in loki_extra_fields.items()))
+        return result + "\n"
+    return loki_settings
+loki_settings = loki_settings_generate()
 
 def create_bls_keypair():
     lines = []
@@ -70,7 +100,7 @@ def create_nimiq_address():
     }
 
 
-def create_seed(path, i):
+def create_seed(path):
     path.mkdir(parents=True, exist_ok=True)
 
     # write config
@@ -92,11 +122,12 @@ path = "{path}"
 level = "trace"
 timestamps = true
 
-[log.tags]
+{loki}[log.tags]
 libp2p_swarm = "debug"
 lock_api = "trace"
 """.format(
             path="temp-state/dev/seed",
+            loki=loki_settings("seed"),
         ))
 
 
@@ -126,7 +157,7 @@ path = "{path}"
 level = "trace"
 timestamps = true
 
-[log.tags]
+{loki}[log.tags]
 libp2p_swarm = "debug"
 lock_api = "trace"
 
@@ -137,6 +168,7 @@ voting_key_file = "{path}/voting_key.dat"
 fee_key_file = "{path}/fee_key.dat"
 """.format(
             path="temp-state/dev/spammer",
+            loki=loki_settings("spammer"),
         ))
     return {
         'address': "NQ40 GCAA U3UX 8BKD GUN0 PG3T 17HA 4X5H TXVE",
@@ -192,7 +224,7 @@ path = "{path}"
 level = "trace"
 timestamps = true
 
-[log.tags]
+{loki}[log.tags]
 libp2p_swarm = "debug"
 lock_api = "trace"
 
@@ -207,6 +239,7 @@ fee_key = "{fee_key}"
 """.format(
             port=str(9101 + i),
             path="temp-state/dev/{}".format(i+1),  # str(path),
+            loki=loki_settings("validator{}".format(i)),
             validator_address=validator_address["address"],
             voting_key=voting_key["private_key"],
             signing_key=signing_key["private_key"],
@@ -232,7 +265,7 @@ for i in range(num_validators):
         validator["voting_key"]["public_key"][0:16]))
 
 # Create seed node configuration
-create_seed(output / "seed", 1)
+create_seed(output / "seed")
 print("Created seed node configuration")
 
 spammers = []

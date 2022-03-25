@@ -21,6 +21,7 @@ CONTINOUS=false
 SPAMMER=false
 RELEASE=false
 MAX_VALIDATORS=4
+RUN_ENVIRONMENT=unknown/devnet.sh
 cargo="cargo run"
 cargo_build="cargo build"
 tpb=150
@@ -115,6 +116,7 @@ OPTIONS:
    -R|--release    If you want to run in release mode
    -v|--validators The number of validators, as a minimum 4 validators are created
    -t|--time       Time in seconds that validators are taken down, by default 10s
+      --run-environment Sent to Loki, like "ci", "devnet", default: "unknown/devnet.sh"
 EOF
 }
 
@@ -163,6 +165,15 @@ while [ ! $# -eq 0 ]; do
                 shift
             else
                 echo '--kill requires a value'
+                exit 1
+            fi
+            ;;
+        --run-environment)
+            if [ "$2" ]; then
+                RUN_ENVIRONMENT="$2"
+                shift
+            else
+                echo '--run-environment requires a value'
                 exit 1
             fi
             ;;
@@ -237,9 +248,9 @@ done
 
 echo "Building config files..."
 if [ "$SPAMMER" = true ] ; then
-    python3 scripts/devnet/python/devnet_create.py $MAX_VALIDATORS -o $configdir -s
+    python3 scripts/devnet/python/devnet_create.py $MAX_VALIDATORS --run-environment "$RUN_ENVIRONMENT" -o $configdir -s
 else
-    python3 scripts/devnet/python/devnet_create.py $MAX_VALIDATORS -o $configdir
+    python3 scripts/devnet/python/devnet_create.py $MAX_VALIDATORS --run-environment "$RUN_ENVIRONMENT" -o $configdir
 fi
 echo "Config files generated in '$configdir'"
 export NIMIQ_OVERRIDE_DEVNET_CONFIG="$PWD/$configdir/dev-albatross.toml"
