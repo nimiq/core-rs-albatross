@@ -55,8 +55,6 @@ nimiq-utils = { path = "../utils", features = [
 
 [dev-dependencies]
 hex = "0.4"
-simple_logger = "2.1.0"
-actual_log = { package = "log", version = "0.4" }
 
 nimiq-block-production = { path = "../block-production" }
 nimiq-bls = { path = "../bls" }

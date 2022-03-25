@@ -553,6 +553,7 @@ mod tests {
     use nimiq_network_mock::{MockHub, MockNetwork, MockPeer, MockPeerId};
     use nimiq_primitives::networks::NetworkId;
     use nimiq_primitives::policy;
+    use nimiq_test_log::test;
     use nimiq_utils::time::OffsetTime;
 
     use crate::messages::Checkpoint;
@@ -640,7 +641,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn it_can_cluster_epoch_ids() {
         let time = Arc::new(OffsetTime::new());
         let env = VolatileEnvironment::new(10).unwrap();
@@ -795,7 +796,7 @@ mod tests {
         ); // TODO: for a symmetric check, blockchain state would need to change
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn it_can_cluster_checkpoint_ids() {
         let time = Arc::new(OffsetTime::new());
         let env = VolatileEnvironment::new(10).unwrap();
@@ -994,13 +995,8 @@ mod tests {
         ); // TODO: for a symmetric check, blockchain state would need to change
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn it_splits_clusters_correctly() {
-        simple_logger::SimpleLogger::new()
-            .with_level(actual_log::LevelFilter::Trace)
-            .init()
-            .ok();
-
         let time = Arc::new(OffsetTime::new());
         let env = VolatileEnvironment::new(10).unwrap();
         let blockchain = Arc::new(RwLock::new(

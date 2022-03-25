@@ -251,6 +251,7 @@ mod tests {
     use nimiq_network_mock::{MockHub, MockNetwork};
     use nimiq_primitives::networks::NetworkId;
     use nimiq_primitives::policy;
+    use nimiq_test_log::test;
     use nimiq_test_utils::blockchain::{produce_macro_blocks_with_txns, signing_key, voting_key};
     use nimiq_utils::time::OffsetTime;
 
@@ -312,13 +313,8 @@ mod tests {
         ));
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn it_terminates_if_there_is_nothing_to_sync() {
-        simple_logger::SimpleLogger::new()
-            .with_level(actual_log::LevelFilter::Trace)
-            .init()
-            .ok();
-
         let mut hub = MockHub::default();
         let net1 = Arc::new(hub.new_network());
         let net2 = Arc::new(hub.new_network());
@@ -341,13 +337,8 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn it_can_sync_a_single_finalized_epoch() {
-        simple_logger::SimpleLogger::new()
-            .with_level(actual_log::LevelFilter::Trace)
-            .init()
-            .ok();
-
         let mut hub = MockHub::default();
         let net1 = Arc::new(hub.new_network());
         let net2 = Arc::new(hub.new_network());
@@ -382,13 +373,8 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn it_can_sync_multiple_finalized_epochs() {
-        simple_logger::SimpleLogger::new()
-            .with_level(actual_log::LevelFilter::Trace)
-            .init()
-            .ok();
-
         let mut hub = MockHub::default();
         let net1 = Arc::new(hub.new_network());
         let net2 = Arc::new(hub.new_network());
@@ -427,13 +413,8 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn it_can_sync_a_single_batch() {
-        simple_logger::SimpleLogger::new()
-            .with_level(actual_log::LevelFilter::Trace)
-            .init()
-            .ok();
-
         let mut hub = MockHub::default();
         let net1 = Arc::new(hub.new_network());
         let net2 = Arc::new(hub.new_network());
@@ -462,13 +443,8 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn it_can_sync_multiple_batches() {
-        simple_logger::SimpleLogger::new()
-            .with_level(actual_log::LevelFilter::Trace)
-            .init()
-            .ok();
-
         let mut hub = MockHub::default();
         let net1 = Arc::new(hub.new_network());
         let net2 = Arc::new(hub.new_network());
@@ -501,13 +477,8 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn it_can_sync_consecutive_batches_from_different_peers() {
-        simple_logger::SimpleLogger::new()
-            .with_level(actual_log::LevelFilter::Trace)
-            .init()
-            .ok();
-
         let mut hub = MockHub::default();
         let net1 = Arc::new(hub.new_network());
         let net2 = Arc::new(hub.new_network());
@@ -596,15 +567,16 @@ mod tests {
 
             let sync = HistorySync::<MockNetwork>::new(
                 Arc::clone(&chain_sync),
+                Arc::clone(&net_sync),
                 net_sync.subscribe_events(),
             );
-
-            net_sync.dial_mock(&net_up2date);
-            net_sync.dial_mock(&net_disconnect);
 
             spawn_request_handlers(&net_sync, &chain_sync);
             spawn_request_handlers(&net_up2date, &chain_up2date);
             spawn_request_handlers(&net_disconnect, &chain_disconnect);
+
+            net_sync.dial_mock(&net_up2date);
+            net_sync.dial_mock(&net_disconnect);
 
             DisconnectDuringSyncStream {
                 sync,
@@ -651,7 +623,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn it_can_disconnect_peer_during_sync() {
         // The to-be-synced peer is connected with an up-to-date one the whole time. An additional up-to-date peer is disconnected (and reconnected).
 
