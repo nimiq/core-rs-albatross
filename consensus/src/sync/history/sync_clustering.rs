@@ -368,7 +368,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
             }
         }
 
-        // Store agent Arc and number of clusters it's in.
+        // Store peer and number of clusters it's in.
         self.peers.insert(sender_peer_id, num_clusters);
 
         // Update cluster counts for all peers in new clusters.
@@ -377,7 +377,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
             for peer in cluster.peers() {
                 let pair = self.peers.get_mut(&peer.peer_id).unwrap_or_else(|| {
                     panic!(
-                        "Agent should be present {:?} cluster {}",
+                        "Peer should be present {:?} cluster {}",
                         peer.peer_id, cluster.id
                     )
                 });
@@ -485,7 +485,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
             let cluster_count = {
                 let pair = self.peers.get_mut(&peer.peer_id).unwrap_or_else(|| {
                     panic!(
-                        "Agent should be present {:?} cluster {}",
+                        "Peer should be present {:?} cluster {}",
                         peer.peer_id, cluster.id
                     )
                 });
@@ -496,7 +496,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
             // If the peer isn't in any more clusters, request more epoch_ids from it.
             // Only do so if the cluster was synced.
             if *cluster_count == 0 {
-                // Always remove agent from agents map. It will be re-added if it returns more
+                // Always remove peer from peers map. It will be re-added if it returns more
                 // epoch_ids and dropped otherwise.
                 self.peers.remove(&peer.peer_id);
 

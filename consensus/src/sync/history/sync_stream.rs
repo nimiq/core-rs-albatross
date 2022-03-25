@@ -23,14 +23,12 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
         while let Poll::Ready(Some(result)) = self.network_event_rx.poll_next_unpin(cx) {
             match result {
                 Ok(NetworkEvent::PeerLeft(peer)) => {
-                    // Delete the ConsensusAgent from the agents map, removing the only "persistent"
-                    // strong reference to it. There might not be an entry for every peer (e.g. if
-                    // it didn't send any epoch ids).
+                    // Remove the peer from all data structures.
                     self.remove_peer(peer.id());
                     self.peers.remove(&peer.id());
                 }
                 Ok(NetworkEvent::PeerJoined(peer)) => {
-                    // Create a ConsensusAgent for the peer that joined and request epoch_ids from it.
+                    // Request epoch_ids from the peer that joined.
                     self.add_peer(peer.id());
                 }
                 Err(_) => return Poll::Ready(None),
