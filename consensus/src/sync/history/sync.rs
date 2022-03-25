@@ -93,6 +93,11 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
         if let Some(cluster) = self.active_cluster.as_mut() {
             cluster.remove_peer(&peer_id);
         }
+        for job in self.job_queue.iter_mut() {
+            if let Job::FinishCluster(ref mut cluster, _) = job {
+                cluster.remove_peer(&peer_id);
+            }
+        }
     }
 }
 
