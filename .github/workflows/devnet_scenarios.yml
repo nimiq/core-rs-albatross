@@ -19,8 +19,8 @@ jobs:
         - MacroBlockProduction
         - Validators90sDown
         - LowViewChangeDelay
-        - EraseState
         - ReleaseFiveValidatorsWithSpammer
+#        - EraseState
         include:
         - test: FourValidatorsReconnect
           devnet_args:
@@ -38,10 +38,10 @@ jobs:
         - test: LowViewChangeDelay
           pre: "sed -i 's/VIEW_CHANGE_DELAY: Duration = Duration::from_secs(10);/VIEW_CHANGE_DELAY: Duration = Duration::from_secs(2);/g' validator/src/validator.rs"
           devnet_args: -k 0 -s 150
-        - test: EraseState
-          devnet_args: -e
         - test: ReleaseFiveValidatorsWithSpammer
           devnet_args: --validators 5 -R -s 500 -k 0
+#        - test: EraseState
+#          devnet_args: -e
 
     runs-on: ubuntu-20.04
 
