@@ -66,9 +66,15 @@ jobs:
     - uses: actions-rs/cargo@v1
       with:
         command: build
-    - name: Executes the test
+    - name: Execute the test
       run: |          
-          bash scripts/devnet/devnet.sh ${{ matrix.devnet_args }}
+          bash scripts/devnet/devnet.sh --run-environment ci ${{ matrix.devnet_args }}
+      env:
+        NIMIQ_LOKI_URL: ${{ secrets.LOKI_URL }}
+        NIMIQ_LOKI_EXTRA_FIELDS: nimiq_ci_name=${{ github.workflow }}:nimiq_ci_run=${{ github.run_number }}:nimiq_test=${{ matrix.test }}
+    - name: Redact Loki URL
+      if: always()
+      run: sed -i 's/url = "[^"]*"/url = "<redacted>"/g' temp-logs/*/conf/*/client.toml
     - name: Archive test results
       if: always()
       uses: actions/upload-artifact@v2
