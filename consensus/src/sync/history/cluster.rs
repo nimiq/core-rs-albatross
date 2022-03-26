@@ -297,10 +297,6 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         self.history_queue.remove_peer(peer_id);
     }
 
-    pub(crate) fn has_peer(&self, peer_id: <<TNetwork as Network>::PeerType as Peer>::Id) -> bool {
-        self.batch_set_queue.has_peer(peer_id)
-    }
-
     pub(crate) fn peers(&self) -> &Vec<SyncQueuePeer<TNetwork::PeerType>> {
         &self.batch_set_queue.peers
     }

@@ -19,11 +19,6 @@ impl ForkProofPool {
         self.fork_proofs.insert(fork_proof)
     }
 
-    /// Checks whether a fork proof is already part of the pool.
-    pub fn contains(&self, fork_proof: &ForkProof) -> bool {
-        self.fork_proofs.contains(fork_proof)
-    }
-
     /// Applies a block to the pool, removing processed fork proofs.
     pub fn apply_block(&mut self, block: &Block) {
         match block {

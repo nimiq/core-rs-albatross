@@ -41,25 +41,20 @@ enum ViewChangeResult {
 struct InputStreamSwitch {
     input: BoxStream<'static, LevelUpdateMessage<SignedViewChangeMessage, ViewChange>>,
     sender: UnboundedSender<ViewChangeResult>,
-    future_view_changes: BitSet,
     current_view_change: ViewChange,
-    identity_registry: Arc<ValidatorRegistry>,
 }
 
 impl InputStreamSwitch {
     fn new(
         input: BoxStream<'static, LevelUpdateMessage<SignedViewChangeMessage, ViewChange>>,
         current_view_change: ViewChange,
-        identity_registry: Arc<ValidatorRegistry>,
     ) -> (Self, UnboundedReceiver<ViewChangeResult>) {
         let (sender, receiver) = unbounded::<ViewChangeResult>();
 
         let this = Self {
             input,
             sender,
-            future_view_changes: BitSet::new(),
             current_view_change,
-            identity_registry,
         };
 
         (this, receiver)
@@ -271,7 +266,6 @@ impl ViewChangeAggregation {
                         .map(move |msg| msg.0),
                 ),
                 view_change.clone(),
-                weights.clone(),
             );
 
             let aggregation = Aggregation::new(

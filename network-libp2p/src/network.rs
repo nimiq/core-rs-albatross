@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
@@ -98,12 +96,6 @@ pub(crate) enum NetworkAction {
     },
     NetworkInfo {
         output: oneshot::Sender<NetworkInfo>,
-    },
-    Validate {
-        message_id: MessageId,
-        source: PeerId,
-        acceptance: MessageAcceptance,
-        output: oneshot::Sender<Result<bool, NetworkError>>,
     },
     ReceiveFromAll {
         type_id: MessageType,
@@ -903,22 +895,6 @@ impl Network {
             }
             NetworkAction::NetworkInfo { output } => {
                 output.send(Swarm::network_info(swarm)).ok();
-            }
-            NetworkAction::Validate {
-                message_id,
-                source,
-                acceptance,
-                output,
-            } => {
-                output
-                    .send(
-                        swarm
-                            .behaviour_mut()
-                            .gossipsub
-                            .report_message_validation_result(&message_id, &source, acceptance)
-                            .map_err(Into::into),
-                    )
-                    .ok();
             }
             NetworkAction::ReceiveFromAll { type_id, output } => {
                 swarm.behaviour_mut().pool.receive_from_all(type_id, output);

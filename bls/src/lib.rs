@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use nimiq_hash::Blake2sHash;
 pub use types::*;
 

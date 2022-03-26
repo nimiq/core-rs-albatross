@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use curve25519_dalek::edwards::{CompressedEdwardsY, EdwardsPoint};
 use curve25519_dalek::scalar::Scalar;
 use sha2::Digest;

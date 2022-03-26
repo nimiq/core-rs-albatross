@@ -250,14 +250,6 @@ where
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
-
-    pub fn num_items_started(&self) -> usize {
-        self.next_incoming_index
-    }
-
-    pub fn num_items_finished(&self) -> usize {
-        self.next_outgoing_index
-    }
 }
 
 impl<TNetwork, TId, TOutput> Stream for SyncQueue<TNetwork, TId, TOutput>

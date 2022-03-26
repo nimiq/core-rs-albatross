@@ -20,6 +20,7 @@ impl MerkleTreeGadget {
     ///                   o     o
     ///                  / \   / \
     ///                 0  1  2  3
+    #[allow(dead_code)]
     pub fn construct(
         cs: ConstraintSystemRef<MNT4Fr>,
         inputs: &[Vec<Boolean<MNT4Fr>>],
