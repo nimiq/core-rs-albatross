@@ -393,7 +393,7 @@ async fn both_peers_can_talk_with_each_other() {
 }
 
 #[test(tokio::test)]
-async fn connections_are_properly_closed() {
+async fn connections_are_properly_closed_events() {
     let (net1, net2) = create_connected_networks().await;
 
     let peer1 = net2.get_peer(*net1.local_peer_id()).unwrap();
@@ -411,9 +411,27 @@ async fn connections_are_properly_closed() {
     let event2 = events2.next().await.unwrap().unwrap();
     assert_peer_left(&event2, net1.local_peer_id());
     log::trace!(event2 = ?event2);
+}
 
-    assert_eq!(net1.get_peers().len(), 0);
-    assert_eq!(net2.get_peers().len(), 0);
+#[test(tokio::test)]
+async fn connections_are_properly_closed_peers() {
+    let (net1, net2) = create_connected_networks().await;
+
+    let peer1 = net2.get_peer(*net1.local_peer_id()).unwrap();
+
+    let mut events2 = net2.subscribe_events();
+
+    let net1_peer_id = *net1.local_peer_id();
+    drop(net1);
+
+    peer1.close(CloseReason::Other);
+    log::debug!("closed peer");
+
+    let event2 = events2.next().await.unwrap().unwrap();
+    assert_peer_left(&event2, &net1_peer_id);
+    log::trace!(event2 = ?event2);
+
+    assert_eq!(net2.get_peers(), &[]);
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
