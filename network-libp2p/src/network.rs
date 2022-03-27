@@ -646,6 +646,7 @@ impl Network {
                                 request: request_data,
                                 channel,
                             } => {
+                                // TODO Add rate limiting (per peer).
                                 let (type_id, request) = request_data;
                                 log::trace!(
                                     "Incoming [Request ID {}] from peer {}: {:?}",
@@ -656,9 +657,16 @@ impl Network {
                                 state.response_channels.insert(request_id, channel);
                                 // Check the message type and check if we have request receivers such that we can send the request
                                 if let Some(sender) = state.receive_requests.get_mut(&type_id) {
-                                    sender
-                                        .start_send((request.freeze(), request_id, peer_id))
-                                        .ok();
+                                    if let Err(e) =
+                                        sender.try_send((request.freeze(), request_id, peer_id))
+                                    {
+                                        log::error!(
+                                            "Failed to dispatch [Request ID {}] from peer {}: {:?}",
+                                            request_id,
+                                            peer_id,
+                                            e,
+                                        );
+                                    }
                                 } else {
                                     log::warn!(
                                         "No receiver found for requests of type ID {}",
@@ -1287,7 +1295,8 @@ impl NetworkInterface for Network {
 
         // Future to register the channel.
         let register_future = async move {
-            let (tx, rx) = mpsc::channel(0);
+            // TODO Make buffer size configurable
+            let (tx, rx) = mpsc::channel(1024);
 
             action_tx
                 .send(NetworkAction::ReceiveRequests {
