@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use futures::StreamExt;
+use futures::{future::join_all, StreamExt};
 use libp2p::{
     core::multiaddr::{multiaddr, Multiaddr},
     gossipsub::GossipsubConfigBuilder,
@@ -198,13 +198,63 @@ async fn test_valid_request_valid_response() {
         ResponseMessage::Response(response) => {
             assert_eq!(response, test_response);
         }
-        ResponseMessage::Error(e) => assert_eq!(
-            e,
-            ResponseError::DeSerializationError,
-            "Response received with error: {:?}",
-            e
-        ),
+        ResponseMessage::Error(e) => assert!(false, "Response received with error: {:?}", e),
     };
+}
+
+// Test that we can send multiple requests and correctly receive the responses given a proper
+// request listener is replying in the peer specified
+#[test(tokio::test(flavor = "multi_thread", worker_threads = 10))]
+async fn test_multiple_valid_requests_valid_responses() {
+    let num_requests = 100;
+    let mut response_futures = vec![];
+    let (net1, net2) = TestNetwork::create_connected_networks().await;
+    let peer_id_net1 = net1.get_local_peer_id();
+    let net1 = Arc::new(net1);
+
+    let test_request = TestRequest { request: 42 };
+    let test_response = TestResponse { response: 43 };
+    let test_response_2 = test_response.clone();
+
+    // Subscribe for receiving requests and respond to them in a future
+    let request_stream = net1.receive_requests::<TestRequest>();
+    let request_listener_future =
+        request_stream.for_each(move |(_request, request_id, _peer_id)| {
+            let test_response = test_response.clone();
+            let net1 = Arc::clone(&net1);
+            async move {
+                let result = net1.respond(request_id, test_response.clone()).await;
+                assert!(result.is_ok());
+            }
+        });
+
+    // Spawn the request listener future
+    tokio::spawn(request_listener_future);
+
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    log::info!("Sending requests...");
+
+    for _ in 0..num_requests {
+        // Send the request and get future for the response
+        let response_future = net2
+            .request::<TestRequest, TestResponse>(test_request.clone(), peer_id_net1)
+            .await
+            .unwrap();
+
+        response_futures.push(response_future);
+    }
+
+    log::info!("Waiting for requests to arrive and check them");
+    let responses = join_all(response_futures).await;
+    for (received_response, _request_id, _peer_id) in responses {
+        match received_response {
+            ResponseMessage::Response(response) => {
+                assert_eq!(response, test_response_2);
+            }
+            ResponseMessage::Error(e) => assert!(false, "Response received with error: {:?}", e),
+        };
+    }
 }
 
 // Test that we can send a request and receive a `InvalidResponse` if the peer replied with
