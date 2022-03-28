@@ -161,6 +161,7 @@ impl StakingContract {
         validator_address: &Address,
     ) -> Option<Validator> {
         let key = StakingContract::get_key_validator(validator_address);
+
         match accounts_tree.get(db_txn, &key) {
             Some(Account::StakingValidator(validator)) => Some(validator),
             None => None,
@@ -402,7 +403,7 @@ impl StakingContract {
                     return false;
                 };
             }
-            IncomingStakingTransactionData::CreateStaker { proof, .. } => {
+            IncomingStakingTransactionData::CreateStaker { proof, delegation } => {
                 // Get the staker address from the proof.
                 let staker_address = proof.compute_signer();
 
@@ -411,6 +412,14 @@ impl StakingContract {
                     warn!("Cannot create staker because staker already exists.");
                     return false;
                 };
+
+                // Verify we have a valid delegation address (if present)
+                if let Some(delegation) = delegation {
+                    let key = StakingContract::get_key_validator(&delegation);
+                    if accounts_tree.get(db_txn, &key) == None {
+                        return false;
+                    }
+                }
             }
             _ => {}
         }

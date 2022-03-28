@@ -45,6 +45,8 @@ pub enum VerifyErr {
     Known,
     /// Transaction is filtered
     Filtered,
+    /// Transaction cannot succeed
+    CannotSucceed,
 }
 
 impl Display for VerifyErr {
@@ -70,6 +72,9 @@ impl Display for VerifyErr {
             }
             VerifyErr::Filtered => {
                 write!(f, "Filtered")
+            }
+            VerifyErr::CannotSucceed => {
+                write!(f, "Cannot succeed")
             }
         }
     }
@@ -241,8 +246,8 @@ pub(crate) async fn verify_tx<'a>(
         // If the recipient is not already in the mempool, then we need to check if the transaction
         // can succeed.
         if !StakingContract::can_create(accounts_tree, &db_txn, data) {
-            log::debug!("Outgoing staking transaction cannot pay fee.");
-            return Err(VerifyErr::NotEnoughFunds);
+            log::debug!("Outgoing staking transaction cannot succeed");
+            return Err(VerifyErr::CannotSucceed);
         }
     }
 

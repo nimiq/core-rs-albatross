@@ -1355,6 +1355,75 @@ async fn mempool_update_create_staker_twice() {
     );
 }
 
+#[test(tokio::test(flavor = "multi_thread", worker_threads = 10))]
+async fn mempool_update_create_staker_non_existant_delegation_addr() {
+    let mut rng = StdRng::seed_from_u64(0);
+    let time = Arc::new(OffsetTime::new());
+    let env = VolatileEnvironment::new(10).unwrap();
+    let mut genesis_builder = GenesisBuilder::default();
+
+    // Generate and sign transactions
+    let balance = 10000000;
+    let num_txns = 10;
+
+    let sender_balances = vec![balance; num_txns as usize];
+
+    // Generate sender accounts
+    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true);
+
+    // Note that we are using generated accounts for the create staker transaction
+    let tx = TransactionBuilder::new_create_staker(
+        &sender_accounts[0].keypair,
+        &sender_accounts[0].keypair,
+        Some(Address::from(&sender_accounts[1].keypair)),
+        100.try_into().unwrap(),
+        0.try_into().unwrap(),
+        1,
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
+
+    let txns = vec![tx];
+
+    // Add validator to genesis, note that the delegation adddress is not in the genesis
+    genesis_builder.with_genesis_validator(
+        Address::from(&SchnorrKeyPair::generate(&mut rng)),
+        signing_key().public,
+        voting_key().public_key,
+        Address::default(),
+    );
+
+    // Generate the genesis and blockchain
+    let genesis_info = genesis_builder.generate(env.clone()).unwrap();
+
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::with_genesis(
+            env.clone(),
+            time,
+            NetworkId::UnitAlbatross,
+            genesis_info.block,
+            genesis_info.accounts,
+        )
+        .unwrap(),
+    ));
+
+    // Create mempool and subscribe with a custom txn stream
+    let mempool = Mempool::new(blockchain.clone(), MempoolConfig::default());
+    let mut hub = MockHub::new();
+    let mock_id = MockId::new(hub.new_address().into());
+    let mock_network = Arc::new(hub.new_network());
+
+    // Send txns to mempool
+    send_txn_to_mempool(&mempool, mock_network, mock_id, txns).await;
+
+    // The transaction should be rejected by the mempool, since the delegation address does not exist
+    assert_eq!(
+        mempool.num_transactions(),
+        0,
+        "Number of txns in the mempools is not what is expected"
+    );
+}
+
 #[tokio::test]
 async fn applies_total_tx_size_limits() {
     let env = VolatileEnvironment::new(10).unwrap();
