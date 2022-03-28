@@ -79,21 +79,30 @@ impl<DepsTy: TendermintOutsideDeps> Tendermint<DepsTy> {
         // Check if it is our turn to propose a value
         if deps.is_our_turn(self.state.round) {
             // create and store proposal in case no valid round exists. Otherwise take the valid value.
-            self.state.current_proposal = if let Some(valid) = self.state.valid.take() {
+            self.state.current_proposal = if self.state.valid.is_some() {
+                let round = self.state.round;
+                let (valid_proposal, valid_proposal_hash, valid_round) = {
+                    let valid = self.state.valid.as_ref().unwrap();
+                    (
+                        valid.proposal.clone(),
+                        valid.proposal_hash.clone(),
+                        valid.round,
+                    )
+                };
+
                 debug!(
                     "Our turn at round {}, broadcasting former valid proposal of round {}",
-                    &self.state.round, valid.round,
+                    &round, &valid_round,
                 );
-                let round = self.state.round;
+
                 self.state
                     .known_proposals
-                    .insert(round, (valid.proposal.clone(), Some(valid.round)));
-                self.state.current_proposal_vr = Some(valid.round);
+                    .insert(round, (valid_proposal.clone(), Some(valid_round)));
+                self.state.current_proposal_vr = Some(valid_round);
                 self.state
                     .own_votes
-                    .insert((round, Step::Prevote), Some(valid.proposal_hash.clone()));
-                let current_proposal = (valid.proposal.clone(), valid.proposal_hash.clone());
-                self.state.valid = Some(valid);
+                    .insert((round, Step::Prevote), Some(valid_proposal_hash.clone()));
+                let current_proposal = (valid_proposal, valid_proposal_hash);
                 Some(Some(current_proposal))
             } else {
                 debug!(
@@ -236,22 +245,23 @@ impl<DepsTy: TendermintOutsideDeps> Tendermint<DepsTy> {
                     ProposalResult::Proposal(proposal, None) => {
                         // a proposal without a valid round can be checked immediately
                         let round = self.state.round;
-                        if let Some(locked) = self.state.locked.take() {
-                            if proposal == locked.proposal {
+                        if self.state.locked.is_some() {
+                            let (is_locked_proposal, locked_proposal_hash) = {
+                                let locked = self.state.locked.as_ref().unwrap();
+                                (locked.proposal == proposal, locked.proposal_hash.clone())
+                            };
+                            if is_locked_proposal {
                                 self.state.current_proposal =
-                                    Some(Some((proposal.clone(), locked.proposal_hash.clone())));
-                                self.state.own_votes.insert(
-                                    (round, Step::Prevote),
-                                    Some(locked.proposal_hash.clone()),
-                                );
+                                    Some(Some((proposal.clone(), locked_proposal_hash.clone())));
+                                self.state
+                                    .own_votes
+                                    .insert((round, Step::Prevote), Some(locked_proposal_hash));
                             } else {
                                 let proposal_hash = deps.hash_proposal(proposal.clone());
                                 self.state.current_proposal =
                                     Some(Some((proposal.clone(), proposal_hash)));
                                 self.state.own_votes.insert((round, Step::Prevote), None);
                             }
-                            // re set locked state
-                            self.state.locked = Some(locked);
                         } else {
                             let proposal_hash = deps.hash_proposal(proposal.clone());
                             self.state.current_proposal =
@@ -318,36 +328,45 @@ impl<DepsTy: TendermintOutsideDeps> Tendermint<DepsTy> {
         match fut.poll_unpin(cx) {
             Poll::Ready(Ok(OutsideDepsFutReturn::Aggregate((deps, aggregate)))) => {
                 let round = self.state.round;
-                let (proposal, proposal_hash) =
-                    self.state.current_proposal.take().unwrap().unwrap();
+                let (proposal, proposal_hash) = self
+                    .state
+                    .current_proposal
+                    .as_ref()
+                    .unwrap()
+                    .as_ref()
+                    .unwrap()
+                    .clone();
+
                 if has_2f1_votes(proposal_hash.clone(), aggregate) {
                     // check the locked state of this node
-                    if let Some(locked) = self.state.locked.take() {
+                    if self.state.locked.is_some() {
+                        let acceptance = {
+                            let locked = self.state.locked.as_ref().unwrap();
+
+                            locked.round <= self.state.current_proposal_vr.unwrap()
+                                || locked.proposal == proposal
+                        };
+
                         // If it is locked, make sure it is allowed to vote for this
-                        if locked.round <= self.state.current_proposal_vr.unwrap()
-                            || locked.proposal == proposal
-                        {
+                        if acceptance {
                             self.state
                                 .own_votes
-                                .insert((round, Step::Prevote), Some(proposal_hash.clone()));
+                                .insert((round, Step::Prevote), Some(proposal_hash));
                         } else {
                             // otherwise vote Nil
                             // retry for another proposal?
                             self.state.own_votes.insert((round, Step::Prevote), None);
                         }
-                        // re set the taken locked state.
-                        self.state.locked = Some(locked);
                     } else {
                         // not locked, vote for the block
                         self.state
                             .own_votes
-                            .insert((round, Step::Prevote), Some(proposal_hash.clone()));
+                            .insert((round, Step::Prevote), Some(proposal_hash));
                     }
                 } else {
                     // proposal does not fullfill prior aggregation requirement, reject
                     self.state.own_votes.insert((round, Step::Prevote), None);
                 }
-                self.state.current_proposal = Some(Some((proposal, proposal_hash)));
                 self.state.step = Step::Prevote;
                 self.state.current_checkpoint = Checkpoint::AggregatePreVote;
                 self.deps = Some(deps);
@@ -402,8 +421,13 @@ impl<DepsTy: TendermintOutsideDeps> Tendermint<DepsTy> {
                 deps,
                 AggregationResult::Aggregation(aggregate),
             )))) => {
-                let current_proposal_hash =
-                    self.state.current_proposal.clone().unwrap().map(|(_, h)| h);
+                let current_proposal_hash = self
+                    .state
+                    .current_proposal
+                    .as_ref()
+                    .unwrap()
+                    .as_ref()
+                    .map(|(_, h)| h.clone());
 
                 let id = (self.state.round, self.state.step);
                 // assume this is the best vote and store it in the state.
@@ -417,18 +441,10 @@ impl<DepsTy: TendermintOutsideDeps> Tendermint<DepsTy> {
 
                 match self.state.step {
                     Step::Prevote => {
-                        return self.process_prevote_aggregation(
-                            deps,
-                            current_proposal_hash,
-                            aggregate,
-                        )
+                        self.process_prevote_aggregation(deps, current_proposal_hash, aggregate)
                     }
                     Step::Precommit => {
-                        return self.process_precommit_aggregation(
-                            deps,
-                            current_proposal_hash,
-                            aggregate,
-                        )
+                        self.process_precommit_aggregation(deps, current_proposal_hash, aggregate)
                     }
                     _ => panic!(
                         "Tendermint::aggregate is not in either Step::Prevote or Step::Precommit"
@@ -461,10 +477,10 @@ impl<DepsTy: TendermintOutsideDeps> Tendermint<DepsTy> {
                 Poll::Ready(Some(TendermintReturn::StateUpdate(self.state.clone())))
             }
             Poll::Ready(Ok(_)) => panic!("Wrong Future Return type"),
-            Poll::Ready(Err(err)) => return Poll::Ready(Some(TendermintReturn::Error(err))),
+            Poll::Ready(Err(err)) => Poll::Ready(Some(TendermintReturn::Error(err))),
             Poll::Pending => {
                 self.fut = Some(fut);
-                return Poll::Pending;
+                Poll::Pending
             }
         }
     }
