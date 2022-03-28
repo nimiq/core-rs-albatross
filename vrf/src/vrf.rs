@@ -13,7 +13,7 @@ use curve25519_dalek::scalar::Scalar;
 use curve25519_dalek::traits::IsIdentity;
 use rand::prelude::*;
 #[cfg(feature = "serde-derive")]
-use serde_big_array::big_array;
+use serde_big_array::BigArray;
 use sha2::{Digest, Sha256, Sha512};
 
 use beserial::{Deserialize, Serialize, SerializingError};
@@ -40,9 +40,6 @@ pub enum VrfUseCase {
     /// Used to randomly distribute the rewards.
     RewardDistribution = 4,
 }
-
-#[cfg(feature = "serde-derive")]
-big_array! { BigArray; }
 
 create_typed_array!(VrfEntropy, u8, 32);
 
