@@ -1,7 +1,6 @@
 use futures::{future, StreamExt};
 use rand::prelude::StdRng;
 use rand::SeedableRng;
-use std::fmt::Display;
 use std::sync::Arc;
 use tokio_stream::wrappers::BroadcastStream;
 
@@ -16,7 +15,7 @@ use nimiq_database::Environment;
 use nimiq_genesis_builder::{GenesisBuilder, GenesisInfo};
 use nimiq_keys::{Address, KeyPair as SchnorrKeyPair, SecureGenerate};
 use nimiq_mempool::config::MempoolConfig;
-use nimiq_network_interface::{network::Network as NetworkInterface, peer::Peer as PeerInterface};
+use nimiq_network_interface::network::Network as NetworkInterface;
 use nimiq_network_mock::MockHub;
 use nimiq_validator::validator::Validator as AbstractValidator;
 use nimiq_validator_network::network_impl::ValidatorNetworkImpl;
@@ -39,7 +38,7 @@ pub async fn build_validator<N: TestNetwork + NetworkInterface>(
 )
 where
     N::Error: Send,
-    <N::PeerType as PeerInterface>::Id: Serialize + Deserialize + Clone,
+    N::PeerId: Deserialize + Serialize,
 {
     let consensus = consensus(peer_id, genesis_info, hub).await;
     let validator_network = Arc::new(ValidatorNetworkImpl::new(Arc::clone(&consensus.network)));
@@ -64,7 +63,7 @@ pub async fn build_validators<N: TestNetwork + NetworkInterface>(
 ) -> Vec<AbstractValidator<N, ValidatorNetworkImpl<N>>>
 where
     N::Error: Send,
-    <N::PeerType as PeerInterface>::Id: Serialize + Deserialize + Clone + Display,
+    N::PeerId: Deserialize + Serialize,
 {
     let num_validators = peer_ids.len();
     // Generate validator key pairs.
@@ -144,7 +143,7 @@ pub fn validator_for_slot<N: TestNetwork + NetworkInterface>(
 ) -> &AbstractValidator<N, ValidatorNetworkImpl<N>>
 where
     N::Error: Send,
-    <N::PeerType as PeerInterface>::Id: Serialize + Deserialize + Clone + Send,
+    N::PeerId: Deserialize + Serialize,
 {
     let consensus = &validators.first().unwrap().consensus;
 
@@ -169,7 +168,7 @@ pub fn pop_validator_for_slot<N: TestNetwork + NetworkInterface>(
 ) -> AbstractValidator<N, ValidatorNetworkImpl<N>>
 where
     N::Error: Send,
-    <N::PeerType as PeerInterface>::Id: Serialize + Deserialize + Clone + Send,
+    N::PeerId: Deserialize + Serialize,
 {
     let consensus = &validators.first().unwrap().consensus;
 

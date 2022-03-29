@@ -14,7 +14,6 @@ use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{
     network::Network,
-    peer::Peer,
     prelude::{RequestError, ResponseMessage},
 };
 
@@ -23,34 +22,28 @@ use crate::messages::{HeadResponse, RequestBlock, RequestHead, ResponseBlock};
 /// Requests the head blocks for a set of peers.
 /// Calculates the number of known/unknown blocks and a vector of unknown blocks.
 pub struct HeadRequests<TNetwork: Network + 'static> {
-    peers: Vec<<<TNetwork as Network>::PeerType as Peer>::Id>,
+    peers: Vec<TNetwork::PeerId>,
     head_hashes: FuturesUnordered<BoxFuture<'static, (usize, Result<Blake2bHash, RequestError>)>>,
     head_blocks: FuturesUnordered<
-        BoxFuture<
-            'static,
-            (
-                Result<Option<Block>, RequestError>,
-                <<TNetwork as Network>::PeerType as Peer>::Id,
-            ),
-        >,
+        BoxFuture<'static, (Result<Option<Block>, RequestError>, TNetwork::PeerId)>,
     >,
     requested_hashes: HashSet<Blake2bHash>,
     blockchain: Arc<RwLock<Blockchain>>,
     network: Arc<TNetwork>,
     num_known_blocks: usize,
     num_unknown_blocks: usize,
-    unknown_blocks: Vec<(Block, <<TNetwork as Network>::PeerType as Peer>::Id)>,
+    unknown_blocks: Vec<(Block, TNetwork::PeerId)>,
 }
 
 pub struct HeadRequestsResult<TNetwork: Network + 'static> {
     pub num_known_blocks: usize,
     pub num_unknown_blocks: usize,
-    pub unknown_blocks: Vec<(Block, <<TNetwork as Network>::PeerType as Peer>::Id)>,
+    pub unknown_blocks: Vec<(Block, TNetwork::PeerId)>,
 }
 
 impl<TNetwork: Network + 'static> HeadRequests<TNetwork> {
     pub fn new(
-        peers: Vec<<<TNetwork as Network>::PeerType as Peer>::Id>,
+        peers: Vec<TNetwork::PeerId>,
         network: Arc<TNetwork>,
         blockchain: Arc<RwLock<Blockchain>>,
     ) -> Self {
@@ -83,7 +76,7 @@ impl<TNetwork: Network + 'static> HeadRequests<TNetwork> {
 
     async fn request_head(
         network: Arc<TNetwork>,
-        peer_id: <<TNetwork as Network>::PeerType as Peer>::Id,
+        peer_id: TNetwork::PeerId,
     ) -> Result<Blake2bHash, RequestError> {
         let result = network
             .request::<RequestHead, HeadResponse>(RequestHead {}, peer_id)
@@ -103,7 +96,7 @@ impl<TNetwork: Network + 'static> HeadRequests<TNetwork> {
 
     async fn request_block(
         network: Arc<TNetwork>,
-        peer_id: <<TNetwork as Network>::PeerType as Peer>::Id,
+        peer_id: TNetwork::PeerId,
         hash: Blake2bHash,
     ) -> Result<Option<Block>, RequestError> {
         let result = network

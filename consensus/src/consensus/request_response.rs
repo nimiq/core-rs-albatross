@@ -6,7 +6,7 @@ use futures::StreamExt;
 use parking_lot::RwLock;
 
 use nimiq_blockchain::Blockchain;
-use nimiq_network_interface::prelude::{Message, Network, Peer};
+use nimiq_network_interface::prelude::{Message, Network};
 
 use crate::messages::handlers::Handle;
 use crate::messages::{
@@ -43,7 +43,7 @@ impl<N: Network> Consensus<N> {
 
     pub(crate) fn request_handler<Req: Handle<Res> + Message, Res: Message>(
         network: &Arc<N>,
-        stream: BoxStream<'static, (Req, N::RequestId, <N::PeerType as Peer>::Id)>,
+        stream: BoxStream<'static, (Req, N::RequestId, N::PeerId)>,
         blockchain: &Arc<RwLock<Blockchain>>,
     ) -> impl Future<Output = ()> {
         let blockchain = Arc::clone(blockchain);

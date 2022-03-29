@@ -9,15 +9,12 @@ use futures::{future::join_all, lock::Mutex, stream::BoxStream, StreamExt};
 
 use beserial::{Deserialize, Serialize};
 use nimiq_bls::{CompressedPublicKey, SecretKey};
+use nimiq_network_interface::message::Message;
 use nimiq_network_interface::network::{MsgAcceptance, Network, Topic};
 use nimiq_network_interface::prelude::NetworkEvent;
-use nimiq_network_interface::{message::Message, peer::Peer};
 
 use super::{MessageStream, NetworkError, ValidatorNetwork};
 use crate::validator_record::{SignedValidatorRecord, ValidatorRecord};
-
-// Helper to get PeerId type from a network
-type PeerId<N> = <<N as Network>::PeerType as Peer>::Id;
 
 #[derive(Clone, Debug)]
 pub struct State<TPeerId> {
@@ -29,16 +26,16 @@ pub struct State<TPeerId> {
 pub struct ValidatorNetworkImpl<N>
 where
     N: Network,
-    <N::PeerType as Peer>::Id: Send + Sync + Serialize + Deserialize,
+    N::PeerId: Serialize + Deserialize,
 {
     network: Arc<N>,
-    state: Mutex<State<PeerId<N>>>,
+    state: Mutex<State<N::PeerId>>,
 }
 
 impl<N> ValidatorNetworkImpl<N>
 where
     N: Network,
-    <N::PeerType as Peer>::Id: Send + Sync + Serialize + Deserialize + Clone,
+    N::PeerId: Serialize + Deserialize,
 {
     pub fn new(network: Arc<N>) -> Self {
         Self {
@@ -50,14 +47,11 @@ where
         }
     }
 
-    async fn dial_peer(
-        &self,
-        peer_id: PeerId<N>,
-    ) -> Result<Arc<N::PeerType>, NetworkError<N::Error>> {
-        let (peers, mut event_stream) = self.network.get_peer_updates();
+    async fn dial_peer(&self, peer_id: N::PeerId) -> Result<(), NetworkError<N::Error>> {
+        let mut event_stream = self.network.subscribe_events();
 
-        if let Some(peer) = peers.into_iter().find(|peer| peer.id() == peer_id) {
-            return Ok(peer);
+        if self.network.has_peer(peer_id) {
+            return Ok(());
         }
 
         self.network.dial_peer(peer_id).await?;
@@ -65,8 +59,8 @@ where
         let future = async move {
             loop {
                 match event_stream.next().await {
-                    Some(Ok(NetworkEvent::PeerJoined(peer))) if peer.id() == peer_id => {
-                        break Ok(peer)
+                    Some(Ok(NetworkEvent::PeerJoined(joined_id))) if joined_id == peer_id => {
+                        break Ok(())
                     }
                     Some(Err(_)) | None => break Err(NetworkError::Offline), // TODO Error type?
                     _ => {}
@@ -83,9 +77,9 @@ where
     async fn resolve_peer_id(
         network: &N,
         public_key: &CompressedPublicKey,
-    ) -> Result<Option<PeerId<N>>, NetworkError<N::Error>> {
+    ) -> Result<Option<N::PeerId>, NetworkError<N::Error>> {
         if let Some(record) = network
-            .dht_get::<_, SignedValidatorRecord<PeerId<N>>>(&public_key)
+            .dht_get::<_, SignedValidatorRecord<N::PeerId>>(&public_key)
             .await?
         {
             if record.verify(&public_key.uncompress().unwrap()) {
@@ -102,7 +96,7 @@ where
     async fn get_validator_peer_id(
         &self,
         validator_id: usize,
-    ) -> Result<PeerId<N>, NetworkError<N::Error>> {
+    ) -> Result<N::PeerId, NetworkError<N::Error>> {
         let mut state = self.state.lock().await;
 
         let public_key = state
@@ -138,7 +132,7 @@ where
 impl<N> ValidatorNetwork for ValidatorNetworkImpl<N>
 where
     N: Network,
-    <N::PeerType as Peer>::Id: Send + Sync + Serialize + Deserialize + Clone,
+    N::PeerId: Serialize + Deserialize,
     N::Error: Send,
 {
     type Error = NetworkError<N::Error>;
@@ -166,14 +160,6 @@ where
         state.validator_peer_id_cache = keep_cached;
     }
 
-    async fn get_validator_peer(
-        &self,
-        validator_id: usize,
-    ) -> Result<Option<Arc<N::PeerType>>, Self::Error> {
-        let peer_id = self.get_validator_peer_id(validator_id).await?;
-        Ok(self.network.get_peer(peer_id))
-    }
-
     async fn send_to<M: Message + Clone>(
         &self,
         validator_ids: &[usize],
@@ -184,9 +170,10 @@ where
             .copied()
             .map(|validator_id| (validator_id, msg.clone()))
             .map(|(validator_id, msg)| async move {
-                let peer = if let Ok(Some(peer)) = self.get_validator_peer(validator_id).await {
+                // previously, there was an `Option<>` here. why?
+                let peer_id = if let Ok(peer_id) = self.get_validator_peer_id(validator_id).await {
                     // The peer was cached so the send is fast tracked
-                    peer
+                    peer_id
                 } else {
                     // The peer could not be retrieved so we update the cache with a fresh lookup
                     let mut state = self.state.lock().await;
@@ -206,12 +193,11 @@ where
                             .insert(public_key.clone(), peer_id);
 
                         // try to get the peer for the peer_id. If it does not exist it should be dialed
-                        if let Some(peer) = self.network.get_peer(peer_id) {
-                            peer
-                        } else {
+                        if !self.network.has_peer(peer_id) {
                             log::debug!("Not connected to validator {} @ {:?}, dialing...", validator_id, peer_id);
-                            self.dial_peer(peer_id).await?
+                            self.dial_peer(peer_id).await?;
                         }
+                        peer_id
                     } else {
                         log::error!(
                             "send_to failed; Could not find peer ID for validator in DHT: public_key = {:?}",
@@ -222,7 +208,7 @@ where
                 };
                 // We don't care about the response. Just do the request to send a message to the peer.
                 // Response type is expected to be the same as the request.
-                let _ = self.network.request::<M, M>(msg.clone(), peer.id()).await.map_err(NetworkError::Request)?;
+                let _ = self.network.request::<M, M>(msg.clone(), peer_id).await.map_err(NetworkError::Request)?;
                 Ok(())
             });
 
@@ -232,7 +218,7 @@ where
             .collect::<Vec<Result<(), Self::Error>>>()
     }
 
-    fn receive<M: Message + Clone>(&self) -> MessageStream<M, PeerId<N>> {
+    fn receive<M: Message + Clone>(&self) -> MessageStream<M, N::PeerId> {
         let network = Arc::clone(&self.network);
         Box::pin(
             network

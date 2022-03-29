@@ -16,14 +16,13 @@ use nimiq_network_interface::network::{MsgAcceptance, NetworkEvent, Topic};
 use nimiq_network_interface::{
     message::{Message, MessageTypeId},
     network::Network as NetworkInterface,
-    peer::{CloseReason, Peer as PeerInterface},
+    peer::CloseReason,
 };
 use nimiq_network_libp2p::{
     discovery::{
         behaviour::DiscoveryConfig,
         peer_contacts::{PeerContact, Protocols, Services},
     },
-    peer::Peer,
     Config, Network,
 };
 use nimiq_test_log::test;
@@ -85,17 +84,17 @@ fn network_config(address: Multiaddr) -> Config {
     }
 }
 
-fn assert_peer_joined(event: &NetworkEvent<Peer>, peer_id: &PeerId) {
-    if let NetworkEvent::PeerJoined(peer) = event {
-        assert_eq!(&peer.id, peer_id);
+fn assert_peer_joined(event: &NetworkEvent<PeerId>, wanted_peer_id: &PeerId) {
+    if let NetworkEvent::PeerJoined(peer_id) = event {
+        assert_eq!(peer_id, wanted_peer_id);
     } else {
         panic!("Event is not a NetworkEvent::PeerJoined: {:?}", event);
     }
 }
 
-fn assert_peer_left(event: &NetworkEvent<Peer>, peer_id: &PeerId) {
-    if let NetworkEvent::PeerLeft(peer) = event {
-        assert_eq!(&peer.id, peer_id);
+fn assert_peer_left(event: &NetworkEvent<PeerId>, wanted_peer_id: &PeerId) {
+    if let NetworkEvent::PeerLeft(peer_id) = event {
+        assert_eq!(peer_id, wanted_peer_id);
     } else {
         panic!("Event is not a NetworkEvent::PeerLeft: {:?}", event);
     }
@@ -200,7 +199,7 @@ async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
     // Connect them
     for peer in 1..n_peers {
         // Dial the previous peer
-        log::debug!("Dialing Peer: {}", peer);
+        log::debug!("Dialing peer: {}", peer);
         networks[peer as usize]
             .dial_address(addresses[(peer - 1) as usize].clone())
             .await
@@ -251,8 +250,8 @@ async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
 
         // Disconnect a random peer
         log::debug!("Disconnecting peer {} from peer {}", close_peer, peer);
-        let current_peer = network1.get_peer(*peer_id2).unwrap();
-        current_peer.close(CloseReason::Other);
+        assert!(network1.has_peer(*peer_id2));
+        network1.disconnect_peer(*peer_id2, CloseReason::Other);
 
         // Assert the peer has left both networks
         let close_event1 = events1.next().await.unwrap().unwrap();
@@ -321,22 +320,22 @@ async fn two_networks_can_connect() {
     assert_eq!(net1.get_peers().len(), 1);
     assert_eq!(net2.get_peers().len(), 1);
 
-    let peer2 = net1.get_peer(*net2.local_peer_id()).unwrap();
-    let peer1 = net2.get_peer(*net1.local_peer_id()).unwrap();
-    assert_eq!(peer2.id(), net2.get_local_peer_id());
-    assert_eq!(peer1.id(), net1.get_local_peer_id());
+    let peer2 = net1.get_peers()[0];
+    let peer1 = net2.get_peers()[0];
+    assert_eq!(peer2, net2.get_local_peer_id());
+    assert_eq!(peer1, net1.get_local_peer_id());
 }
 
 #[test(tokio::test)]
 async fn connections_are_properly_closed_events() {
     let (net1, net2) = create_connected_networks().await;
 
-    let peer1 = net2.get_peer(*net1.local_peer_id()).unwrap();
+    assert!(net2.has_peer(*net1.local_peer_id()));
 
     let mut events1 = net1.subscribe_events();
     let mut events2 = net2.subscribe_events();
 
-    peer1.close(CloseReason::Other);
+    net2.disconnect_peer(*net1.local_peer_id(), CloseReason::Other);
     log::debug!("closed peer");
 
     let event1 = events1.next().await.unwrap().unwrap();
@@ -352,14 +351,14 @@ async fn connections_are_properly_closed_events() {
 async fn connections_are_properly_closed_peers() {
     let (net1, net2) = create_connected_networks().await;
 
-    let peer1 = net2.get_peer(*net1.local_peer_id()).unwrap();
+    assert!(net2.has_peer(*net1.local_peer_id()));
 
     let mut events2 = net2.subscribe_events();
 
     let net1_peer_id = *net1.local_peer_id();
     drop(net1);
 
-    peer1.close(CloseReason::Other);
+    net2.disconnect_peer(net1_peer_id, CloseReason::Other);
     log::debug!("closed peer");
 
     let event2 = events2.next().await.unwrap().unwrap();

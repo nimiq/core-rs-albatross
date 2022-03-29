@@ -13,7 +13,7 @@ use nimiq_blockchain::{
     AbstractBlockchain, Blockchain, ExtendedTransaction, PushError, PushResult, CHUNK_SIZE,
 };
 use nimiq_hash::Blake2bHash;
-use nimiq_network_interface::prelude::{Network, Peer, RequestError, ResponseMessage};
+use nimiq_network_interface::prelude::{Network, RequestError, ResponseMessage};
 use nimiq_primitives::policy;
 use nimiq_utils::math::CeilingDiv;
 
@@ -86,7 +86,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
     pub(crate) fn for_epoch(
         blockchain: Arc<RwLock<Blockchain>>,
         network: Arc<TNetwork>,
-        peers: Vec<SyncQueuePeer<TNetwork::PeerType>>,
+        peers: Vec<SyncQueuePeer<TNetwork::PeerId>>,
         epoch_ids: Vec<Blake2bHash>,
         first_epoch_number: usize,
     ) -> Self {
@@ -103,7 +103,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
     pub(crate) fn for_checkpoint(
         blockchain: Arc<RwLock<Blockchain>>,
         network: Arc<TNetwork>,
-        peers: Vec<SyncQueuePeer<TNetwork::PeerType>>,
+        peers: Vec<SyncQueuePeer<TNetwork::PeerId>>,
         checkpoint_id: Blake2bHash,
         epoch_number: usize,
         block_number: usize,
@@ -121,7 +121,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
     fn new(
         blockchain: Arc<RwLock<Blockchain>>,
         network: Arc<TNetwork>,
-        peers: Vec<SyncQueuePeer<TNetwork::PeerType>>,
+        peers: Vec<SyncQueuePeer<TNetwork::PeerId>>,
         epoch_ids: Vec<Blake2bHash>,
         first_epoch_number: usize,
         first_block_number: usize,
@@ -278,10 +278,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         Ok(())
     }
 
-    pub(crate) fn add_peer(
-        &mut self,
-        peer_id: <<TNetwork as Network>::PeerType as Peer>::Id,
-    ) -> bool {
+    pub(crate) fn add_peer(&mut self, peer_id: TNetwork::PeerId) -> bool {
         // TODO keep only one list of peers
         if !self.batch_set_queue.has_peer(peer_id) {
             self.batch_set_queue.add_peer(peer_id);
@@ -292,12 +289,12 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         false
     }
 
-    pub(crate) fn remove_peer(&mut self, peer_id: &<<TNetwork as Network>::PeerType as Peer>::Id) {
+    pub(crate) fn remove_peer(&mut self, peer_id: &TNetwork::PeerId) {
         self.batch_set_queue.remove_peer(peer_id);
         self.history_queue.remove_peer(peer_id);
     }
 
-    pub(crate) fn peers(&self) -> &Vec<SyncQueuePeer<TNetwork::PeerType>> {
+    pub(crate) fn peers(&self) -> &Vec<SyncQueuePeer<TNetwork::PeerId>> {
         &self.batch_set_queue.peers
     }
 
@@ -374,7 +371,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
 
     pub async fn request_epoch(
         network: Arc<TNetwork>,
-        peer_id: <<TNetwork as Network>::PeerType as Peer>::Id,
+        peer_id: TNetwork::PeerId,
         hash: Blake2bHash,
     ) -> Result<BatchSetInfo, RequestError> {
         let result = network.request(RequestBatchSet { hash }, peer_id).await;
@@ -394,7 +391,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
 
     pub async fn request_history_chunk(
         network: Arc<TNetwork>,
-        peer_id: <<TNetwork as Network>::PeerType as Peer>::Id,
+        peer_id: TNetwork::PeerId,
         epoch_number: u32,
         block_number: u32,
         chunk_index: usize,

@@ -4,14 +4,11 @@ use std::{
     sync::{atomic::AtomicBool, Arc},
 };
 
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 use tokio::sync::{broadcast, mpsc, oneshot};
 
-use nimiq_network_interface::peer_map::ObservablePeerMap;
-
 use crate::network::{MockNetwork, MockRequestId};
-use crate::peer::MockPeer;
-use crate::{MockAddress, MockPeerId};
+use crate::{MockAddress, MockPeerId, ObservableHashMap};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct SenderKey {
@@ -44,7 +41,7 @@ pub(crate) struct MockTopic {
 #[derive(Debug, Default)]
 pub(crate) struct MockHubInner {
     /// Peer maps of all networks.
-    pub peer_maps: HashMap<MockAddress, ObservablePeerMap<MockPeer>>,
+    pub peer_maps: HashMap<MockAddress, Arc<RwLock<ObservableHashMap<MockPeerId, ()>>>>,
 
     /// Senders for direct message sending
     pub network_senders: HashMap<SenderKey, mpsc::Sender<Vec<u8>>>,

@@ -20,7 +20,6 @@ use nimiq_network_libp2p::{
         behaviour::DiscoveryConfig,
         peer_contacts::{PeerContact, Protocols, Services},
     },
-    peer::Peer,
     Config, Network, PeerId,
 };
 use nimiq_test_log::test;
@@ -136,9 +135,9 @@ fn network_config(address: Multiaddr) -> Config {
     }
 }
 
-fn assert_peer_joined(event: &NetworkEvent<Peer>, peer_id: &PeerId) {
-    if let NetworkEvent::PeerJoined(peer) = event {
-        assert_eq!(&peer.id, peer_id);
+fn assert_peer_joined(event: &NetworkEvent<PeerId>, wanted_peer_id: &PeerId) {
+    if let NetworkEvent::PeerJoined(peer_id) = event {
+        assert_eq!(peer_id, wanted_peer_id);
     } else {
         panic!("Event is not a NetworkEvent::PeerJoined: {:?}", event);
     }

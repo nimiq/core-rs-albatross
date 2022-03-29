@@ -23,7 +23,6 @@ use nimiq_consensus::sync::request_component::{RequestComponent, RequestComponen
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::network::Network;
-use nimiq_network_interface::peer::Peer;
 use nimiq_network_mock::{MockHub, MockId, MockNetwork};
 use nimiq_primitives::networks::NetworkId;
 use nimiq_test_log::test;
@@ -71,7 +70,7 @@ impl<N: Network> RequestComponent<N> for MockRequestComponent<N> {
         self.tx.send((target_block_hash, locators)).ok(); // ignore error
     }
 
-    fn put_peer_into_sync_mode(&mut self, _peer: <<N as Network>::PeerType as Peer>::Id) {
+    fn put_peer_into_sync_mode(&mut self, _peer: N::PeerId) {
         self.peer_put_into_sync = true;
     }
 
@@ -79,7 +78,7 @@ impl<N: Network> RequestComponent<N> for MockRequestComponent<N> {
         1
     }
 
-    fn peers(&self) -> Vec<<<N as Network>::PeerType as Peer>::Id> {
+    fn peers(&self) -> Vec<N::PeerId> {
         unimplemented!()
     }
 }

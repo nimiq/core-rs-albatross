@@ -9,23 +9,20 @@ use futures::{
     future::{BoxFuture, FutureExt},
     stream::{BoxStream, StreamExt},
 };
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 use thiserror::Error;
-use tokio::sync::{broadcast::Sender, mpsc, oneshot};
+use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio_stream::wrappers::{errors::BroadcastStreamRecvError, BroadcastStream, ReceiverStream};
 
 use beserial::{Deserialize, Serialize};
 use nimiq_network_interface::{
     message::{Message, RequestError, ResponseError, ResponseMessage},
-    network::Network,
-    network::{MsgAcceptance, NetworkEvent, PubsubId, Topic},
-    peer::Peer,
-    peer_map::ObservablePeerMap,
+    network::{MsgAcceptance, Network, NetworkEvent, PubsubId, SubscribeEvents, Topic},
+    peer::CloseReason,
 };
 
 use crate::hub::{MockHubInner, RequestKey, ResponseSender};
-use crate::peer::MockPeer;
-use crate::{MockAddress, MockPeerId};
+use crate::{observable_hash_map, MockAddress, MockPeerId, ObservableHashMap};
 
 #[derive(Debug, Error, PartialEq)]
 pub enum MockNetworkError {
@@ -70,7 +67,7 @@ impl PubsubId<MockPeerId> for MockId<MockPeerId> {
 #[derive(Debug)]
 pub struct MockNetwork {
     address: MockAddress,
-    peers: ObservablePeerMap<MockPeer>,
+    peers: Arc<RwLock<ObservableHashMap<MockPeerId, ()>>>,
     hub: Arc<Mutex<MockHubInner>>,
     is_connected: Arc<AtomicBool>,
 }
@@ -79,7 +76,7 @@ impl MockNetwork {
     const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
 
     pub(crate) fn new(address: MockAddress, hub: Arc<Mutex<MockHubInner>>) -> Self {
-        let peers = ObservablePeerMap::default();
+        let peers = Arc::new(RwLock::new(ObservableHashMap::new()));
 
         let is_connected = {
             let mut hub = hub.lock();
@@ -122,30 +119,34 @@ impl MockNetwork {
 
         // Insert ourselves into peer's peer list.
         // This also makes sure the other peer actually exists.
-        let is_new = hub
-            .peer_maps
-            .get(&address)
-            .ok_or(MockNetworkError::CantConnect(address))?
-            .insert(MockPeer {
-                network_address: address,
-                peer_id: self.address.into(),
-                hub: Arc::clone(&self.hub),
-            });
+        let is_new;
+        {
+            let mut other_peers = hub
+                .peer_maps
+                .get(&address)
+                .ok_or(MockNetworkError::CantConnect(address))?
+                .write();
+            is_new = !other_peers.contains_key(&self.peer_id());
+            if is_new {
+                other_peers.insert(self.peer_id(), ());
+            }
+        }
 
         if is_new {
-            // Insert peer into out peer list
-            self.peers.insert(MockPeer {
-                network_address: self.address,
-                peer_id: address.into(),
-                hub: Arc::clone(&self.hub),
-            });
-
             // Set is_connected flag for this network
             self.is_connected.store(true, Ordering::SeqCst);
 
-            // Set is_connected flag for other network
-            let is_connected = hub.is_connected.get(&address).unwrap();
-            is_connected.store(true, Ordering::SeqCst);
+            // Are we connecting to someone that is not ourselves?
+            if self.address != address {
+                // Insert peer into our peer list
+                assert!(self.peers.write().insert(address.into(), ()).is_none());
+
+                // Set is_connected flag for other network
+                hub.is_connected
+                    .get(&address)
+                    .unwrap()
+                    .store(true, Ordering::SeqCst);
+            }
         } else {
             log::trace!("Peers are already connected.");
         }
@@ -163,14 +164,17 @@ impl MockNetwork {
     pub fn disconnect(&self) {
         let hub = self.hub.lock();
 
-        for peer in self.peers.remove_all() {
-            let peer_map = hub.peer_maps.get(&peer.id().into()).unwrap_or_else(|| {
+        let mut peers = self.peers.write();
+        let peer_ids: Vec<_> = peers.keys().copied().collect();
+        for peer_id in peer_ids {
+            peers.remove(&peer_id);
+            let mut peer_map = hub.peer_maps.get(&peer_id.into()).unwrap_or_else(|| {
                 panic!(
                     "We're connected to a peer that doesn't have a connection to us: our_peer_id={}, their_peer_id={}",
                     self.address,
-                    peer.id()
-                )
-            });
+                    peer_id,
+                );
+            }).write();
             peer_map.remove(&self.address.into());
         }
 
@@ -187,31 +191,46 @@ impl MockNetwork {
 
 #[async_trait]
 impl Network for MockNetwork {
-    type PeerType = MockPeer;
+    type PeerId = MockPeerId;
     type AddressType = MockAddress;
     type Error = MockNetworkError;
     type PubsubId = MockId<MockPeerId>;
     type RequestId = MockRequestId;
 
-    fn get_peer_updates(&self) -> (Vec<Arc<MockPeer>>, BroadcastStream<NetworkEvent<MockPeer>>) {
-        self.peers.subscribe()
+    fn get_peers(&self) -> Vec<MockPeerId> {
+        self.peers.read().keys().copied().collect()
     }
 
-    fn get_peers(&self) -> Vec<Arc<MockPeer>> {
-        self.peers.get_peers()
+    fn has_peer(&self, peer_id: MockPeerId) -> bool {
+        self.peers.read().get(&peer_id).is_some()
     }
 
-    fn get_peer(&self, peer_id: MockPeerId) -> Option<Arc<MockPeer>> {
-        self.peers.get_peer(&peer_id)
+    fn disconnect_peer(&self, peer_id: MockPeerId, _: CloseReason) {
+        if !self.has_peer(peer_id) {
+            return;
+        }
+
+        let mut hub = self.hub.lock();
+
+        // Drops senders and thus the receiver stream will end
+        hub.network_senders
+            .retain(|k, _| k.network_recipient != peer_id.into());
     }
 
-    fn subscribe_events(&self) -> BroadcastStream<NetworkEvent<MockPeer>> {
-        self.get_peer_updates().1
+    fn subscribe_events(&self) -> SubscribeEvents<MockPeerId> {
+        Box::pin(
+            BroadcastStream::new(self.peers.read().subscribe()).map(|maybe_ev| {
+                maybe_ev.map(|ev| match ev {
+                    observable_hash_map::Event::Add(peer_id) => NetworkEvent::PeerJoined(peer_id),
+                    observable_hash_map::Event::Remove(peer_id) => NetworkEvent::PeerLeft(peer_id),
+                })
+            }),
+        )
     }
 
-    async fn subscribe<'a, T>(
+    async fn subscribe<T>(
         &self,
-    ) -> Result<BoxStream<'a, (T::Item, Self::PubsubId)>, Self::Error>
+    ) -> Result<BoxStream<'static, (T::Item, Self::PubsubId)>, Self::Error>
     where
         T: Topic + Sync,
     {
@@ -227,7 +246,7 @@ impl Network for MockNetwork {
         );
 
         // Add this peer to the topic list
-        let sender: &Sender<(Arc<Vec<u8>>, MockPeerId)> =
+        let sender: &broadcast::Sender<(Arc<Vec<u8>>, MockPeerId)> =
             if let Some(topic) = hub.subscribe(topic_name, self.address) {
                 &topic.sender
             } else {
@@ -266,7 +285,7 @@ impl Network for MockNetwork {
         })))
     }
 
-    async fn unsubscribe<'a, T>(&self) -> Result<(), Self::Error>
+    async fn unsubscribe<T>(&self) -> Result<(), Self::Error>
     where
         T: Topic + Sync,
     {
@@ -376,22 +395,15 @@ impl Network for MockNetwork {
         self.address.into()
     }
 
-    async fn request<'a, Req: Message, Res: Message>(
+    async fn request<Req: Message, Res: Message>(
         &self,
         request: Req,
         peer_id: MockPeerId,
     ) -> Result<
-        BoxFuture<
-            'a,
-            (
-                ResponseMessage<Res>,
-                Self::RequestId,
-                <Self::PeerType as Peer>::Id,
-            ),
-        >,
+        BoxFuture<'static, (ResponseMessage<Res>, Self::RequestId, Self::PeerId)>,
         RequestError,
     > {
-        if self.peers.get_peer(&peer_id).is_none() {
+        if !self.peers.read().contains_key(&peer_id) {
             log::warn!(
                 "Cannot send request {} from {} to {} - peers not connected",
                 std::any::type_name::<Req>(),
@@ -467,9 +479,9 @@ impl Network for MockNetwork {
         Ok(future)
     }
 
-    fn receive_requests<'a, M: Message>(
+    fn receive_requests<M: Message>(
         &self,
-    ) -> BoxStream<'a, (M, Self::RequestId, <Self::PeerType as Peer>::Id)> {
+    ) -> BoxStream<'static, (M, Self::RequestId, Self::PeerId)> {
         let mut hub = self.hub.lock();
         let (tx, rx) = mpsc::channel(16);
 
@@ -497,14 +509,14 @@ impl Network for MockNetwork {
             .boxed()
     }
 
-    async fn respond<'a, M: Message>(
+    async fn respond<M: Message>(
         &self,
         request_id: Self::RequestId,
         response: M,
     ) -> Result<(), Self::Error> {
         let mut hub = self.hub.lock();
         if let Some(responder) = hub.response_senders.remove(&request_id) {
-            if self.peers.get_peer(&responder.peer).is_none() {
+            if !self.peers.read().contains_key(&responder.peer) {
                 return Err(MockNetworkError::NotConnected);
             }
 

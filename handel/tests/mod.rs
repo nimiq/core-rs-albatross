@@ -30,7 +30,6 @@ use nimiq_handel::verifier;
 use nimiq_network_interface::{
     message::{Message, MessageTypeId},
     network::Network,
-    peer::Peer,
 };
 use nimiq_network_mock::{MockHub, MockNetwork};
 use nimiq_test_log::test;
@@ -181,8 +180,8 @@ struct SendingFuture<N: Network> {
 impl<N: Network> SendingFuture<N> {
     pub async fn send<M: Message + Clone + Unpin + std::fmt::Debug>(self, msg: M) {
         let peers = self.network.get_peers();
-        for peer in peers {
-            let _ = self.network.request::<M, M>(msg.clone(), peer.id()).await;
+        for peer_id in peers {
+            let _ = self.network.request::<M, M>(msg.clone(), peer_id).await;
         }
     }
 }

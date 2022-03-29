@@ -3,14 +3,14 @@ extern crate beserial_derive;
 
 mod hub;
 mod network;
-mod peer;
+mod observable_hash_map;
 
 use beserial::{Deserialize, Serialize};
 use derive_more::{Display, From, Into};
 
 pub use hub::MockHub;
 pub use network::{MockId, MockNetwork};
-pub use peer::MockPeer;
+pub use observable_hash_map::ObservableHashMap;
 
 /// The address of a MockNetwork or a peer thereof. Peer IDs are always equal to their respective address, thus these
 /// can be converted between each other.
@@ -68,37 +68,33 @@ pub async fn create_mock_validator_network(n: usize, dial: bool) -> Vec<MockNetw
 #[cfg(test)]
 pub mod tests {
     use futures::{Stream, StreamExt};
-    use tokio_stream::wrappers::BroadcastStream;
 
     use beserial::{Deserialize, Serialize};
-    use nimiq_network_interface::{
-        network::{Network, NetworkEvent, Topic},
-        peer::Peer,
-    };
+    use nimiq_network_interface::network::{Network, NetworkEvent, SubscribeEvents, Topic};
     use nimiq_test_log::test;
 
     use super::network::MockNetworkError;
-    use super::{MockHub, MockPeer, MockPeerId};
+    use super::{MockHub, MockPeerId};
 
     pub async fn assert_peer_joined(
-        events: &mut BroadcastStream<NetworkEvent<MockPeer>>,
-        peer_id: MockPeerId,
+        events: &mut SubscribeEvents<MockPeerId>,
+        expected_peer_id: MockPeerId,
     ) {
-        if let Some(Ok(NetworkEvent::PeerJoined(peer))) = events.next().await {
-            assert_eq!(peer.id(), peer_id);
+        if let Some(Ok(NetworkEvent::PeerJoined(peer_id))) = events.next().await {
+            assert_eq!(peer_id, expected_peer_id);
         } else {
-            panic!("Expected PeerJoined event with id={}", peer_id);
+            panic!("Expected PeerJoined event with id={}", expected_peer_id);
         }
     }
 
     pub async fn assert_peer_left(
-        events: &mut BroadcastStream<NetworkEvent<MockPeer>>,
-        peer_id: MockPeerId,
+        events: &mut SubscribeEvents<MockPeerId>,
+        expected_peer_id: MockPeerId,
     ) {
-        if let Some(Ok(NetworkEvent::PeerLeft(peer))) = events.next().await {
-            assert_eq!(peer.id(), peer_id);
+        if let Some(Ok(NetworkEvent::PeerLeft(peer_id))) = events.next().await {
+            assert_eq!(peer_id, expected_peer_id);
         } else {
-            panic!("Expected PeerLeft event with id={}", peer_id);
+            panic!("Expected PeerLeft event with id={}", expected_peer_id);
         }
     }
 
@@ -115,7 +111,8 @@ pub mod tests {
         net1.dial_mock(&net2);
 
         // event stream starts here
-        let (peers, mut events) = net1.get_peer_updates();
+        let mut events = net1.subscribe_events();
+        let peer_ids = net1.get_peers();
 
         // net1 dials net3
         net1.dial_mock(&net3);
@@ -124,18 +121,14 @@ pub mod tests {
         net4.dial_mock(&net1);
 
         // net1 and net2 already connected
-        assert_eq!(peers.len(), 1);
-        assert_eq!(peers.get(0).unwrap().id(), net2.peer_id());
+        assert_eq!(peer_ids.len(), 1);
+        assert_eq!(peer_ids[0], net2.peer_id());
 
         assert_peer_joined(&mut events, net3.peer_id()).await;
         assert_peer_joined(&mut events, net4.peer_id()).await;
 
         // test get_peers
-        let mut peer_ids = net1
-            .get_peers()
-            .into_iter()
-            .map(|peer| peer.id())
-            .collect::<Vec<MockPeerId>>();
+        let mut peer_ids = net1.get_peers();
         peer_ids.sort();
         let mut expected_peer_ids = vec![net2.peer_id(), net3.peer_id(), net4.peer_id()];
         expected_peer_ids.sort();

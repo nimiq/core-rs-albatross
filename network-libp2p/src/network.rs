@@ -29,6 +29,7 @@ use libp2p::{
     tcp, websocket, yamux, Multiaddr, PeerId, Swarm, Transport,
 };
 use log::Instrument;
+use parking_lot::RwLock;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio_stream::wrappers::{BroadcastStream, ReceiverStream};
 
@@ -39,9 +40,10 @@ use nimiq_network_interface::{
         Message, MessageType, RequestError, ResponseError, ResponseMessage, DEFAULT_RESPONSE,
         DEFAULT_RESPONSE_TYPE_ID,
     },
-    network::{MsgAcceptance, Network as NetworkInterface, NetworkEvent, PubsubId, Topic},
-    peer::{CloseReason, Peer as PeerInterface},
-    peer_map::ObservablePeerMap,
+    network::{
+        MsgAcceptance, Network as NetworkInterface, NetworkEvent, PubsubId, SubscribeEvents, Topic,
+    },
+    peer::CloseReason,
 };
 use nimiq_utils::time::OffsetTime;
 use nimiq_validator_network::validator_record::SignedValidatorRecord;
@@ -50,7 +52,6 @@ use crate::{
     behaviour::{NimiqBehaviour, NimiqEvent, NimiqNetworkBehaviourError, RequestResponseEvent},
     connection_pool::behaviour::ConnectionPoolEvent,
     dispatch::codecs::typed::{IncomingRequest, OutgoingResponse},
-    peer::Peer,
     Config, NetworkError,
 };
 
@@ -168,9 +169,9 @@ impl PubsubId<PeerId> for GossipsubId<PeerId> {
 }
 pub struct Network {
     local_peer_id: PeerId,
-    events_tx: broadcast::Sender<NetworkEvent<Peer>>,
+    connected_peers: Arc<RwLock<HashMap<PeerId, Option<oneshot::Sender<CloseReason>>>>>,
+    events_tx: broadcast::Sender<NetworkEvent<PeerId>>,
     action_tx: mpsc::Sender<NetworkAction>,
-    peers: ObservablePeerMap<Peer>,
     validate_tx: mpsc::UnboundedSender<ValidateMessage<PeerId>>,
 }
 
@@ -184,10 +185,10 @@ impl Network {
     ///  - `config`: The network configuration, containing key pair, and other behavior-specific configuration.
     ///
     pub async fn new(clock: Arc<OffsetTime>, config: Config) -> Self {
-        let peers = ObservablePeerMap::new();
-        let swarm = Self::new_swarm(clock, config, peers.clone());
+        let swarm = Self::new_swarm(clock, config);
 
         let local_peer_id = *Swarm::local_peer_id(&swarm);
+        let connected_peers = Arc::new(RwLock::new(HashMap::new()));
 
         let (events_tx, _) = broadcast::channel(64);
         let (action_tx, action_rx) = mpsc::channel(64);
@@ -198,13 +199,14 @@ impl Network {
             events_tx.clone(),
             action_rx,
             validate_rx,
+            connected_peers.clone(),
         ));
 
         Self {
             local_peer_id,
+            connected_peers,
             events_tx,
             action_tx,
-            peers,
             validate_tx,
         }
     }
@@ -255,16 +257,12 @@ impl Network {
         }
     }
 
-    fn new_swarm(
-        clock: Arc<OffsetTime>,
-        config: Config,
-        peers: ObservablePeerMap<Peer>,
-    ) -> Swarm<NimiqBehaviour> {
+    fn new_swarm(clock: Arc<OffsetTime>, config: Config) -> Swarm<NimiqBehaviour> {
         let local_peer_id = PeerId::from(config.keypair.public());
 
         let transport = Self::new_transport(&config.keypair, config.memory_transport).unwrap();
 
-        let behaviour = NimiqBehaviour::new(config, clock, peers);
+        let behaviour = NimiqBehaviour::new(config, clock);
 
         let limits = ConnectionLimits::default()
             .with_max_pending_incoming(Some(16))
@@ -288,9 +286,10 @@ impl Network {
 
     async fn swarm_task(
         mut swarm: NimiqSwarm,
-        events_tx: broadcast::Sender<NetworkEvent<Peer>>,
+        events_tx: broadcast::Sender<NetworkEvent<PeerId>>,
         mut action_rx: mpsc::Receiver<NetworkAction>,
         mut validate_rx: mpsc::UnboundedReceiver<ValidateMessage<PeerId>>,
+        connected_peers: Arc<RwLock<HashMap<PeerId, Option<oneshot::Sender<CloseReason>>>>>,
     ) {
         let mut task_state = TaskState::default();
 
@@ -321,7 +320,7 @@ impl Network {
                     },
                     event = swarm.next() => {
                         if let Some(event) = event {
-                            Self::handle_event(event, &events_tx, &mut swarm, &mut task_state);
+                            Self::handle_event(event, &events_tx, &mut swarm, &mut task_state, &connected_peers);
                         }
                     },
                     action = action_rx.recv() => {
@@ -342,9 +341,10 @@ impl Network {
 
     fn handle_event(
         event: SwarmEvent<NimiqEvent, NimiqNetworkBehaviourError>,
-        events_tx: &broadcast::Sender<NetworkEvent<Peer>>,
+        events_tx: &broadcast::Sender<NetworkEvent<PeerId>>,
         swarm: &mut NimiqSwarm,
         state: &mut TaskState,
+        connected_peers: &RwLock<HashMap<PeerId, Option<oneshot::Sender<CloseReason>>>>,
     ) {
         match event {
             SwarmEvent::ConnectionEstablished {
@@ -410,20 +410,10 @@ impl Network {
                     log::info!("Connection closed because: {:?}", cause);
                 }
 
-                let behavior = swarm.behaviour_mut();
-
                 // Remove Peer
-                if let Some(peer) = behavior.pool.peers.remove(&peer_id) {
-                    // Remove peer addresses from the DHT if they are present
-                    let mut addresses: Vec<Multiaddr> = vec![];
-                    if let Some(record) = behavior.pool.contacts.read().get(&peer_id) {
-                        addresses.extend::<Vec<Multiaddr>>(record.addresses().cloned().collect());
-                    }
-                    for address in addresses {
-                        behavior.remove_peer_address(peer_id, address);
-                    }
-                    events_tx.send(NetworkEvent::<Peer>::PeerLeft(peer)).ok();
-                }
+                connected_peers.write().remove(&peer_id);
+                swarm.behaviour_mut().remove_peer(peer_id);
+                events_tx.send(NetworkEvent::PeerLeft(peer_id)).ok();
             }
 
             SwarmEvent::IncomingConnection {
@@ -627,8 +617,15 @@ impl Network {
                     }
                     NimiqEvent::Pool(event) => {
                         match event {
-                            ConnectionPoolEvent::PeerJoined { peer } => {
-                                events_tx.send(NetworkEvent::<Peer>::PeerJoined(peer)).ok();
+                            ConnectionPoolEvent::PeerJoined { peer_id, close_tx } => {
+                                if connected_peers
+                                    .write()
+                                    .insert(peer_id, Some(close_tx))
+                                    .is_some()
+                                {
+                                    log::error!(?peer_id, "peer joined but it already exists");
+                                }
+                                events_tx.send(NetworkEvent::PeerJoined(peer_id)).ok();
                             }
                         };
                     }
@@ -1020,44 +1017,47 @@ impl Network {
         }
     }
     pub fn disconnect(&self) {
-        for peer in self.get_peers() {
-            peer.close(CloseReason::Other)
+        for peer_id in self.get_peers() {
+            self.disconnect_peer(peer_id, CloseReason::Other);
         }
     }
 }
 
 #[async_trait]
 impl NetworkInterface for Network {
-    type PeerType = Peer;
+    type PeerId = PeerId;
     type AddressType = Multiaddr;
     type Error = NetworkError;
     type PubsubId = GossipsubId<PeerId>;
     type RequestId = RequestId;
 
-    fn get_peer_updates(
+    fn get_peers(&self) -> Vec<PeerId> {
+        self.connected_peers.read().keys().copied().collect()
+    }
+
+    fn has_peer(&self, peer_id: PeerId) -> bool {
+        self.connected_peers.read().contains_key(&peer_id)
+    }
+
+    fn disconnect_peer(&self, peer_id: PeerId, close_reason: CloseReason) {
+        if let Some(maybe_close_tx) = self.connected_peers.write().get_mut(&peer_id) {
+            if let Some(close_tx) = maybe_close_tx.take() {
+                if let Err(_) = close_tx.send(close_reason) {
+                    log::error!("The receiver for disconnect_peer was already dropped.");
+                }
+            } else {
+                log::error!("Peer is already closed");
+            }
+        }
+    }
+
+    fn subscribe_events(&self) -> SubscribeEvents<PeerId> {
+        Box::pin(BroadcastStream::new(self.events_tx.subscribe()))
+    }
+
+    async fn subscribe<T>(
         &self,
-    ) -> (
-        Vec<Arc<Self::PeerType>>,
-        BroadcastStream<NetworkEvent<Self::PeerType>>,
-    ) {
-        self.peers.subscribe()
-    }
-
-    fn get_peers(&self) -> Vec<Arc<Self::PeerType>> {
-        self.peers.get_peers()
-    }
-
-    fn get_peer(&self, peer_id: PeerId) -> Option<Arc<Self::PeerType>> {
-        self.peers.get_peer(&peer_id)
-    }
-
-    fn subscribe_events(&self) -> BroadcastStream<NetworkEvent<Self::PeerType>> {
-        BroadcastStream::new(self.events_tx.subscribe())
-    }
-
-    async fn subscribe<'a, T>(
-        &self,
-    ) -> Result<BoxStream<'a, (T::Item, Self::PubsubId)>, Self::Error>
+    ) -> Result<BoxStream<'static, (T::Item, Self::PubsubId)>, Self::Error>
     where
         T: Topic + Sync,
     {
@@ -1086,7 +1086,7 @@ impl NetworkInterface for Network {
         })))
     }
 
-    async fn unsubscribe<'a, T>(&self) -> Result<(), Self::Error>
+    async fn unsubscribe<T>(&self) -> Result<(), Self::Error>
     where
         T: Topic + Sync,
     {
@@ -1202,15 +1202,15 @@ impl NetworkInterface for Network {
         output_rx.await?
     }
 
-    fn get_local_peer_id(&self) -> <Self::PeerType as PeerInterface>::Id {
+    fn get_local_peer_id(&self) -> PeerId {
         self.local_peer_id
     }
 
-    async fn request<'a, Req: Message, Res: Message>(
+    async fn request<Req: Message, Res: Message>(
         &self,
         request: Req,
         peer_id: PeerId,
-    ) -> Result<BoxFuture<'a, (ResponseMessage<Res>, RequestId, PeerId)>, RequestError> {
+    ) -> Result<BoxFuture<'static, (ResponseMessage<Res>, RequestId, PeerId)>, RequestError> {
         let (output_tx, output_rx) = oneshot::channel();
         let (response_tx, response_rx) = oneshot::channel();
 
@@ -1271,7 +1271,7 @@ impl NetworkInterface for Network {
         Ok(mapped_future.boxed())
     }
 
-    fn receive_requests<'a, M: Message>(&self) -> BoxStream<'a, (M, RequestId, PeerId)> {
+    fn receive_requests<M: Message>(&self) -> BoxStream<'static, (M, RequestId, PeerId)> {
         let action_tx = self.action_tx.clone();
 
         // Future to register the channel.
@@ -1316,7 +1316,7 @@ impl NetworkInterface for Network {
             .boxed()
     }
 
-    async fn respond<'a, M: Message>(
+    async fn respond<M: Message>(
         &self,
         request_id: RequestId,
         response: M,

@@ -6,26 +6,25 @@ use futures::future::BoxFuture;
 use futures::stream::FuturesUnordered;
 use futures::FutureExt;
 use parking_lot::RwLock;
-use tokio_stream::wrappers::BroadcastStream;
 
 use nimiq_blockchain::Blockchain;
 use nimiq_hash::Blake2bHash;
-use nimiq_network_interface::prelude::{Network, NetworkEvent, Peer};
+use nimiq_network_interface::network::{Network, SubscribeEvents};
 
 use crate::messages::Checkpoint;
 use crate::sync::history::cluster::{SyncCluster, SyncClusterResult};
 use crate::sync::request_component::HistorySyncStream;
 
 #[derive(Clone)]
-pub(crate) struct EpochIds<TPeer: Peer> {
+pub(crate) struct EpochIds<T> {
     pub locator_found: bool,
     pub ids: Vec<Blake2bHash>,
     pub checkpoint: Option<Checkpoint>, // The most recent checkpoint block in the latest epoch.
     pub first_epoch_number: usize,
-    pub sender: TPeer::Id,
+    pub sender: T,
 }
 
-impl<TPeer: Peer> EpochIds<TPeer> {
+impl<T> EpochIds<T> {
     pub(crate) fn get_checkpoint_epoch(&self) -> usize {
         self.first_epoch_number + self.ids.len()
     }
@@ -39,10 +38,10 @@ pub(crate) enum Job<TNetwork: Network> {
 pub struct HistorySync<TNetwork: Network> {
     pub(crate) blockchain: Arc<RwLock<Blockchain>>,
     pub(crate) network: Arc<TNetwork>,
-    pub(crate) network_event_rx: BroadcastStream<NetworkEvent<TNetwork::PeerType>>,
-    pub(crate) peers: HashMap<<<TNetwork as Network>::PeerType as Peer>::Id, usize>,
+    pub(crate) network_event_rx: SubscribeEvents<TNetwork::PeerId>,
+    pub(crate) peers: HashMap<TNetwork::PeerId, usize>,
     pub(crate) epoch_ids_stream:
-        FuturesUnordered<BoxFuture<'static, Option<EpochIds<TNetwork::PeerType>>>>,
+        FuturesUnordered<BoxFuture<'static, Option<EpochIds<TNetwork::PeerId>>>>,
     pub(crate) epoch_clusters: VecDeque<SyncCluster<TNetwork>>,
     pub(crate) checkpoint_clusters: VecDeque<SyncCluster<TNetwork>>,
     pub(crate) active_cluster: Option<SyncCluster<TNetwork>>,
@@ -51,9 +50,9 @@ pub struct HistorySync<TNetwork: Network> {
 }
 
 #[derive(Debug)]
-pub enum HistorySyncReturn<TPeer: Peer> {
-    Good(TPeer::Id),
-    Outdated(TPeer::Id),
+pub enum HistorySyncReturn<T> {
+    Good(T),
+    Outdated(T),
 }
 
 impl<TNetwork: Network> HistorySync<TNetwork> {
@@ -63,7 +62,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
     pub fn new(
         blockchain: Arc<RwLock<Blockchain>>,
         network: Arc<TNetwork>,
-        network_event_rx: BroadcastStream<NetworkEvent<TNetwork::PeerType>>,
+        network_event_rx: SubscribeEvents<TNetwork::PeerId>,
     ) -> Self {
         Self {
             blockchain,
@@ -79,11 +78,11 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
         }
     }
 
-    pub fn peers(&self) -> impl Iterator<Item = &<<TNetwork as Network>::PeerType as Peer>::Id> {
+    pub fn peers(&self) -> impl Iterator<Item = &TNetwork::PeerId> {
         self.peers.keys()
     }
 
-    pub fn remove_peer(&mut self, peer_id: <<TNetwork as Network>::PeerType as Peer>::Id) {
+    pub fn remove_peer(&mut self, peer_id: TNetwork::PeerId) {
         for cluster in self.epoch_clusters.iter_mut() {
             cluster.remove_peer(&peer_id);
         }
@@ -101,8 +100,8 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
     }
 }
 
-impl<TNetwork: Network> HistorySyncStream<TNetwork::PeerType> for HistorySync<TNetwork> {
-    fn add_peer(&self, peer_id: <<TNetwork as Network>::PeerType as Peer>::Id) {
+impl<TNetwork: Network> HistorySyncStream<TNetwork::PeerId> for HistorySync<TNetwork> {
+    fn add_peer(&self, peer_id: TNetwork::PeerId) {
         trace!("Requesting epoch ids for peer: {:?}", peer_id);
         let future = Self::request_epoch_ids(
             Arc::clone(&self.blockchain),

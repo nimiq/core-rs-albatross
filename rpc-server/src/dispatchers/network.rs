@@ -38,8 +38,8 @@ impl NetworkInterface for NetworkDispatcher {
         Ok(self
             .network
             .get_peers()
-            .iter()
-            .map(|peer| peer.id.to_string())
+            .into_iter()
+            .map(|peer_id| peer_id.to_string())
             .collect())
     }
 }

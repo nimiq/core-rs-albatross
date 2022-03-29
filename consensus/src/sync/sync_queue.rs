@@ -12,7 +12,7 @@ use futures::stream::FuturesUnordered;
 use futures::task::{Context, Poll};
 use futures::{ready, Future, Stream, StreamExt};
 
-use nimiq_network_interface::{network::Network, peer::Peer};
+use nimiq_network_interface::network::Network;
 
 #[pin_project]
 #[derive(Debug)]
@@ -66,23 +66,16 @@ impl<TOutput> Ord for QueuedOutput<TOutput> {
     }
 }
 
-pub struct SyncQueuePeer<TPeer: Peer> {
-    pub(crate) peer_id: TPeer::Id,
-}
-
-impl<TPeer: Peer> Clone for SyncQueuePeer<TPeer> {
-    fn clone(&self) -> Self {
-        Self {
-            peer_id: self.peer_id,
-        }
-    }
+#[derive(Clone)]
+pub struct SyncQueuePeer<T> {
+    pub(crate) peer_id: T,
 }
 
 /// The SyncQueue will request a list of ids from a set of peers
 /// and implements an ordered stream over the resulting objects.
 /// The stream returns an error if an id could not be resolved.
 pub struct SyncQueue<TNetwork: Network, TId, TOutput> {
-    pub(crate) peers: Vec<SyncQueuePeer<TNetwork::PeerType>>,
+    pub(crate) peers: Vec<SyncQueuePeer<TNetwork::PeerId>>,
     network: Arc<TNetwork>,
     desired_pending_size: usize,
     ids_to_request: VecDeque<TId>,
@@ -91,11 +84,7 @@ pub struct SyncQueue<TNetwork: Network, TId, TOutput> {
     next_incoming_index: usize,
     next_outgoing_index: usize,
     current_peer_index: usize,
-    request_fn: fn(
-        TId,
-        Arc<TNetwork>,
-        <<TNetwork as Network>::PeerType as Peer>::Id,
-    ) -> BoxFuture<'static, Option<TOutput>>,
+    request_fn: fn(TId, Arc<TNetwork>, TNetwork::PeerId) -> BoxFuture<'static, Option<TOutput>>,
     waker: Option<Waker>,
 }
 
@@ -108,13 +97,9 @@ where
     pub fn new(
         network: Arc<TNetwork>,
         ids: Vec<TId>,
-        peers: Vec<SyncQueuePeer<TNetwork::PeerType>>,
+        peers: Vec<SyncQueuePeer<TNetwork::PeerId>>,
         desired_pending_size: usize,
-        request_fn: fn(
-            TId,
-            Arc<TNetwork>,
-            <<TNetwork as Network>::PeerType as Peer>::Id,
-        ) -> BoxFuture<'static, Option<TOutput>>,
+        request_fn: fn(TId, Arc<TNetwork>, TNetwork::PeerId) -> BoxFuture<'static, Option<TOutput>>,
     ) -> Self {
         log::trace!(
             "Creating SyncQueue for {} with {} ids and {} peers",
@@ -138,10 +123,7 @@ where
         }
     }
 
-    fn get_next_peer(
-        &mut self,
-        start_index: usize,
-    ) -> Option<<<TNetwork as Network>::PeerType as Peer>::Id> {
+    fn get_next_peer(&mut self, start_index: usize) -> Option<TNetwork::PeerId> {
         if !self.peers.is_empty() {
             let index = start_index % self.peers.len();
             // TODO: Maybe check if the peer connection is closed.
@@ -209,15 +191,15 @@ where
         }
     }
 
-    pub fn add_peer(&mut self, peer_id: <<TNetwork as Network>::PeerType as Peer>::Id) {
+    pub fn add_peer(&mut self, peer_id: TNetwork::PeerId) {
         self.peers.push(SyncQueuePeer { peer_id });
     }
 
-    pub fn remove_peer(&mut self, peer_id: &<<TNetwork as Network>::PeerType as Peer>::Id) {
+    pub fn remove_peer(&mut self, peer_id: &TNetwork::PeerId) {
         self.peers.retain(|element| element.peer_id != *peer_id)
     }
 
-    pub fn has_peer(&self, peer_id: <<TNetwork as Network>::PeerType as Peer>::Id) -> bool {
+    pub fn has_peer(&self, peer_id: TNetwork::PeerId) -> bool {
         self.peers.iter().any(|o_peer| o_peer.peer_id == peer_id)
     }
 

@@ -5,7 +5,7 @@ use parking_lot::RwLock;
 
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_hash::Blake2bHash;
-use nimiq_network_interface::prelude::{CloseReason, Network, Peer, RequestError, ResponseMessage};
+use nimiq_network_interface::prelude::{CloseReason, Network, RequestError, ResponseMessage};
 use nimiq_primitives::policy;
 
 use crate::messages::{MacroChain, RequestMacroChain};
@@ -19,8 +19,8 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
     pub(crate) async fn request_epoch_ids(
         blockchain: Arc<RwLock<Blockchain>>,
         network: Arc<TNetwork>,
-        peer_id: <<TNetwork as Network>::PeerType as Peer>::Id,
-    ) -> Option<EpochIds<TNetwork::PeerType>> {
+        peer_id: TNetwork::PeerId,
+    ) -> Option<EpochIds<TNetwork::PeerId>> {
         let (locators, epoch_number) = {
             // Order matters here. The first hash found by the recipient of the request will be
             // used, so they need to be in backwards block height order.
@@ -76,9 +76,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                             "Request macro chain failed: invalid checkpoint block number {}, checkpoint_epoch={}",
                             checkpoint.block_number, checkpoint_epoch
                         );
-                        if let Some(peer) = network.get_peer(peer_id) {
-                            peer.close(CloseReason::Other);
-                        }
+                        network.disconnect_peer(peer_id, CloseReason::Other);
                         return None;
                     }
                 }
@@ -101,9 +99,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
             }
             Err(e) => {
                 log::error!("Request macro chain failed: {:?}", e);
-                if let Some(peer) = network.get_peer(peer_id) {
-                    peer.close(CloseReason::Other);
-                }
+                network.disconnect_peer(peer_id, CloseReason::Other);
                 None
             }
         }
@@ -111,8 +107,8 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
 
     pub(crate) fn cluster_epoch_ids(
         &mut self,
-        mut epoch_ids: EpochIds<TNetwork::PeerType>,
-    ) -> Option<<<TNetwork as Network>::PeerType as Peer>::Id> {
+        mut epoch_ids: EpochIds<TNetwork::PeerId>,
+    ) -> Option<TNetwork::PeerId> {
         // Read our current blockchain state.
         let (our_epoch_id, our_epoch_number, our_block_number) = {
             let blockchain = self.blockchain.read();
@@ -514,7 +510,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
 
     pub async fn request_macro_chain(
         network: Arc<TNetwork>,
-        peer_id: <<TNetwork as Network>::PeerType as Peer>::Id,
+        peer_id: TNetwork::PeerId,
         locators: Vec<Blake2bHash>,
         max_epochs: u16,
     ) -> Result<MacroChain, RequestError> {
@@ -549,8 +545,8 @@ mod tests {
     use nimiq_blockchain::Blockchain;
     use nimiq_database::volatile::VolatileEnvironment;
     use nimiq_hash::Blake2bHash;
-    use nimiq_network_interface::prelude::{Network, Peer};
-    use nimiq_network_mock::{MockHub, MockNetwork, MockPeer, MockPeerId};
+    use nimiq_network_interface::prelude::Network;
+    use nimiq_network_mock::{MockHub, MockNetwork, MockPeerId};
     use nimiq_primitives::networks::NetworkId;
     use nimiq_primitives::policy;
     use nimiq_test_log::test;
@@ -566,7 +562,7 @@ mod tests {
         first_epoch_number: usize,
         diverge_at: Option<usize>,
         add_checkpoint: bool,
-    ) -> EpochIds<MockPeer> {
+    ) -> EpochIds<MockPeerId> {
         let mut ids = vec![];
         for i in first_epoch_number..first_epoch_number + len {
             let mut epoch_id = [0u8; 32];
@@ -612,8 +608,8 @@ mod tests {
     fn run_clustering_test<F>(
         blockchain: &Arc<RwLock<Blockchain>>,
         net: &Arc<MockNetwork>,
-        epoch_ids1: EpochIds<MockPeer>,
-        epoch_ids2: EpochIds<MockPeer>,
+        epoch_ids1: EpochIds<MockPeerId>,
+        epoch_ids2: EpochIds<MockPeerId>,
         test: F,
         symmetric: bool,
     ) where
@@ -657,8 +653,7 @@ mod tests {
 
         net1.dial_mock(&net2);
         net1.dial_mock(&net3);
-        let peers = net1.get_peers();
-        let peer_ids: Vec<_> = peers.into_iter().map(|peer| peer.id()).collect();
+        let peer_ids = net1.get_peers();
 
         // This test tests several aspects of the epoch id clustering.
         // 1) identical epoch ids
@@ -812,8 +807,7 @@ mod tests {
 
         net1.dial_mock(&net2);
         net1.dial_mock(&net3);
-        let peers = net1.get_peers();
-        let peer_ids: Vec<_> = peers.into_iter().map(|peer| peer.id()).collect();
+        let peer_ids = net1.get_peers();
 
         // This test tests several aspects of the checkpoint id clustering.
 

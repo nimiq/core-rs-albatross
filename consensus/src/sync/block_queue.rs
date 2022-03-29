@@ -16,10 +16,7 @@ use nimiq_block::Block;
 use nimiq_blockchain::{AbstractBlockchain, Direction};
 use nimiq_blockchain::{Blockchain, PushError, PushResult};
 use nimiq_hash::Blake2bHash;
-use nimiq_network_interface::{
-    network::{MsgAcceptance, Network, PubsubId, Topic},
-    peer::Peer,
-};
+use nimiq_network_interface::network::{MsgAcceptance, Network, PubsubId, Topic};
 use nimiq_primitives::policy;
 
 use crate::sync::request_component::RequestComponentEvent;
@@ -108,7 +105,7 @@ impl<N: Network> Inner<N> {
         &mut self,
         block: Block,
         mut request_component: Pin<&mut TReq>,
-        peer_id: <N::PeerType as Peer>::Id,
+        peer_id: N::PeerId,
         pubsub_id: Option<<N as Network>::PubsubId>,
     ) {
         let block_number = block.block_number();
@@ -139,8 +136,8 @@ impl<N: Network> Inner<N> {
             );
             self.report_validation_result(pubsub_id, MsgAcceptance::Ignore);
 
-            if let Some(peer) = self.network.get_peer(peer_id) {
-                request_component.put_peer_into_sync_mode(peer.id());
+            if self.network.has_peer(peer_id) {
+                request_component.put_peer_into_sync_mode(peer_id);
             }
         } else if self.buffer.len() >= self.config.buffer_max {
             log::warn!(
@@ -565,7 +562,7 @@ impl<N: Network, TReq: RequestComponent<N>> BlockQueue<N, TReq> {
         self.request_component.num_peers()
     }
 
-    pub fn peers(&self) -> Vec<<<N as Network>::PeerType as Peer>::Id> {
+    pub fn peers(&self) -> Vec<N::PeerId> {
         self.request_component.peers()
     }
 
@@ -573,7 +570,7 @@ impl<N: Network, TReq: RequestComponent<N>> BlockQueue<N, TReq> {
         self.accepted_announcements
     }
 
-    pub fn push_block(&mut self, block: Block, peer_id: <N::PeerType as Peer>::Id) {
+    pub fn push_block(&mut self, block: Block, peer_id: N::PeerId) {
         self.inner
             .on_block_announced(block, Pin::new(&mut self.request_component), peer_id, None);
     }

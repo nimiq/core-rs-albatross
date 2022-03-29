@@ -95,7 +95,7 @@ impl<N: Network> Consensus<N> {
         env: Environment,
         blockchain: Arc<RwLock<Blockchain>>,
         network: Arc<N>,
-        sync_protocol: Pin<Box<dyn HistorySyncStream<N::PeerType>>>,
+        sync_protocol: Pin<Box<dyn HistorySyncStream<N::PeerId>>>,
     ) -> Self {
         Self::with_min_peers(
             env,
@@ -111,7 +111,7 @@ impl<N: Network> Consensus<N> {
         env: Environment,
         blockchain: Arc<RwLock<Blockchain>>,
         network: Arc<N>,
-        sync_protocol: Pin<Box<dyn HistorySyncStream<N::PeerType>>>,
+        sync_protocol: Pin<Box<dyn HistorySyncStream<N::PeerId>>>,
         min_peers: usize,
     ) -> Self {
         let request_component = BlockRequestComponent::new(

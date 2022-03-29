@@ -20,10 +20,7 @@ use database::{Database, Environment, ReadTransaction, WriteTransaction};
 use hash::{Blake2bHash, Hash};
 use keys::{Address, KeyPair as SchnorrKeyPair};
 use mempool::{config::MempoolConfig, mempool::Mempool};
-use network_interface::{
-    network::{Network, PubsubId, Topic},
-    peer::Peer,
-};
+use network_interface::network::{Network, PubsubId, Topic};
 use primitives::coin::Coin;
 use primitives::policy;
 use tendermint_protocol::TendermintReturn;
@@ -734,7 +731,7 @@ type ProposalAndPubsubId<TValidatorNetwork> = (
 
 struct ProposalBuffer<TValidatorNetwork: ValidatorNetwork + 'static> {
     buffer: LinkedHashMap<
-        <<TValidatorNetwork::NetworkType as Network>::PeerType as Peer>::Id,
+        <TValidatorNetwork::NetworkType as Network>::PeerId,
         ProposalAndPubsubId<TValidatorNetwork>,
     >,
     waker: Option<Waker>,

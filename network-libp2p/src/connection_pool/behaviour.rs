@@ -18,12 +18,12 @@ use libp2p::{
 use parking_lot::RwLock;
 use rand::seq::IteratorRandom;
 use rand::thread_rng;
+use tokio::sync::oneshot;
 use tokio::time::Interval;
 
-use nimiq_network_interface::{peer::CloseReason, peer_map::ObservablePeerMap};
+use nimiq_network_interface::peer::CloseReason;
 
 use crate::discovery::peer_contacts::{PeerContactBook, Services};
-use crate::peer::Peer;
 
 use super::handler::{ConnectionPoolHandler, HandlerInEvent, HandlerOutEvent};
 
@@ -152,9 +152,12 @@ impl<T> std::fmt::Display for ConnectionState<T> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub enum ConnectionPoolEvent {
-    PeerJoined { peer: Arc<Peer> },
+    PeerJoined {
+        peer_id: PeerId,
+        close_tx: oneshot::Sender<CloseReason>,
+    },
 }
 
 type PoolNetworkBehaviourAction =
@@ -164,7 +167,6 @@ pub struct ConnectionPoolBehaviour {
     pub contacts: Arc<RwLock<PeerContactBook>>,
     seeds: Vec<Multiaddr>,
 
-    pub peers: ObservablePeerMap<Peer>,
     peer_ids: ConnectionState<PeerId>,
     addresses: ConnectionState<Multiaddr>,
 
@@ -180,11 +182,7 @@ pub struct ConnectionPoolBehaviour {
 }
 
 impl ConnectionPoolBehaviour {
-    pub fn new(
-        contacts: Arc<RwLock<PeerContactBook>>,
-        seeds: Vec<Multiaddr>,
-        peers: ObservablePeerMap<Peer>,
-    ) -> Self {
+    pub fn new(contacts: Arc<RwLock<PeerContactBook>>, seeds: Vec<Multiaddr>) -> Self {
         let limits = ConnectionPoolLimits {
             ip_count: HashMap::new(),
             ipv4_count: 0,
@@ -196,7 +194,6 @@ impl ConnectionPoolBehaviour {
         Self {
             contacts,
             seeds,
-            peers,
             peer_ids: ConnectionState::new(2, config.retry_down_after),
             addresses: ConnectionState::new(4, config.retry_down_after),
             actions: VecDeque::new(),
@@ -535,18 +532,13 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
         event: <<Self::ConnectionHandler as IntoConnectionHandler>::Handler as ConnectionHandler>::OutEvent,
     ) {
         match event {
-            HandlerOutEvent::PeerJoined { peer } => {
-                log::trace!("Peer {:?} joined, inserting it into our map", peer_id);
-
-                if !self.peers.insert(Arc::clone(&peer)) {
-                    log::error!("Peer joined but it already exists ");
-                }
+            HandlerOutEvent::PeerJoined { close_tx } => {
                 self.actions
                     .push_back(NetworkBehaviourAction::GenerateEvent(
-                        ConnectionPoolEvent::PeerJoined { peer },
+                        ConnectionPoolEvent::PeerJoined { peer_id, close_tx },
                     ));
             }
-            HandlerOutEvent::PeerLeft { peer_id, .. } => {
+            HandlerOutEvent::ClosePeerConnection { .. } => {
                 self.actions
                     .push_back(NetworkBehaviourAction::CloseConnection {
                         peer_id,

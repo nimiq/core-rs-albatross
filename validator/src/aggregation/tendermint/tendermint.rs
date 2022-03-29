@@ -38,10 +38,7 @@ pub struct HandelTendermintAdapter<N: ValidatorNetwork> {
     background_task: Option<BackgroundTask<N>>,
 }
 
-impl<N: ValidatorNetwork + 'static> HandelTendermintAdapter<N>
-where
-    <<<N as ValidatorNetwork>::NetworkType as network_interface::network::Network>::PeerType as network_interface::peer::Peer>::Id: 'static,
-{
+impl<N: ValidatorNetwork + 'static> HandelTendermintAdapter<N> {
     pub fn new(
         validator_slot_band: u16,
         active_validators: Validators,

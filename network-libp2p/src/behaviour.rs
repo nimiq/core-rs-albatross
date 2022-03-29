@@ -24,7 +24,6 @@ use libp2p::{
 use parking_lot::RwLock;
 use tokio::time::Interval;
 
-use nimiq_network_interface::peer_map::ObservablePeerMap;
 use nimiq_utils::time::OffsetTime;
 
 use crate::{
@@ -38,7 +37,6 @@ use crate::{
         peer_contacts::PeerContactBook,
     },
     dispatch::codecs::typed::{IncomingRequest, MessageCodec, OutgoingResponse, ReqResProtocol},
-    peer::Peer,
     Config,
 };
 
@@ -125,7 +123,7 @@ pub struct NimiqBehaviour {
 }
 
 impl NimiqBehaviour {
-    pub fn new(config: Config, clock: Arc<OffsetTime>, peers: ObservablePeerMap<Peer>) -> Self {
+    pub fn new(config: Config, clock: Arc<OffsetTime>) -> Self {
         let public_key = config.keypair.public();
         let peer_id = public_key.to_peer_id();
 
@@ -164,7 +162,7 @@ impl NimiqBehaviour {
         let identify = Identify::new(identify_config);
 
         // Connection pool behaviour
-        let pool = ConnectionPoolBehaviour::new(Arc::clone(&contacts), config.seeds, peers);
+        let pool = ConnectionPoolBehaviour::new(Arc::clone(&contacts), config.seeds);
 
         // Request Response behaviour
         let codec = MessageCodec::default();
@@ -214,6 +212,10 @@ impl NimiqBehaviour {
     pub fn add_peer_address(&mut self, peer_id: PeerId, address: Multiaddr) {
         // Add address to the DHT
         self.dht.add_address(&peer_id, address);
+    }
+
+    pub fn remove_peer(&mut self, peer_id: PeerId) {
+        self.dht.remove_peer(&peer_id);
     }
 
     pub fn remove_peer_address(&mut self, peer_id: PeerId, address: Multiaddr) {

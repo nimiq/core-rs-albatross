@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, sync::Arc};
+use std::collections::VecDeque;
 
 use futures::{
     future::FutureExt,
@@ -18,21 +18,18 @@ use tokio::sync::oneshot;
 use beserial::SerializingError;
 use nimiq_network_interface::peer::CloseReason;
 
-use crate::peer::Peer;
-
 #[derive(Clone, Debug)]
 pub enum HandlerInEvent {
     Close { reason: CloseReason },
     PeerConnected { peer_id: PeerId, outbound: bool },
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub enum HandlerOutEvent {
     PeerJoined {
-        peer: Arc<Peer>,
+        close_tx: oneshot::Sender<CloseReason>,
     },
-    PeerLeft {
-        peer_id: PeerId,
+    ClosePeerConnection {
         reason: CloseReason,
     },
 }
@@ -49,8 +46,6 @@ pub enum HandlerError {
 // TODO: Refactor state into enum
 pub struct ConnectionPoolHandler {
     peer_id: Option<PeerId>,
-
-    peer: Option<Arc<Peer>>,
 
     pending_peer_announcement: bool,
 
@@ -69,7 +64,6 @@ impl ConnectionPoolHandler {
     pub fn new() -> Self {
         Self {
             peer_id: None,
-            peer: None,
             pending_peer_announcement: false,
             close_rx: None,
             waker: None,
@@ -121,11 +115,11 @@ impl ConnectionHandler for ConnectionPoolHandler {
 
         match event {
             HandlerInEvent::Close { reason } => {
-                if let Some(peer) = &self.peer {
+                if let Some(peer_id) = &self.peer_id {
                     if self.closing.is_some() {
                         log::trace!("Socket closing pending");
                     } else {
-                        log::debug!("ConnectionPoolHandler: Closing peer: {:?}", peer);
+                        log::debug!("ConnectionPoolHandler: Closing peer: {}", peer_id);
                         self.closing = Some(reason);
                         self.close_rx = None;
                     }
@@ -170,12 +164,12 @@ impl ConnectionHandler for ConnectionPoolHandler {
                 return Poll::Ready(event);
             }
 
-            if let Some(peer) = &self.peer {
+            if let Some(peer_id) = self.peer_id {
                 // Poll the oneshot receiver that signals us when the peer is closed
                 if let Some(close_rx) = &mut self.close_rx {
                     match close_rx.poll_unpin(cx) {
                         Poll::Ready(Ok(reason)) => {
-                            log::debug!("ConnectionPoolHandler: Closing peer: {:?}", peer);
+                            log::debug!("ConnectionPoolHandler: Closing peer: {}", peer_id);
                             self.closing = Some(reason);
                         }
                         Poll::Ready(Err(e)) => panic!("close_rx returned error: {}", e), // Channel was closed without message.
@@ -187,13 +181,12 @@ impl ConnectionHandler for ConnectionPoolHandler {
                 if let Some(reason) = self.closing {
                     log::trace!("Polling socket to close: reason={:?}", reason);
 
-                    let peer_id = peer.id;
                     self.closing = None;
-                    self.peer = None;
+                    self.peer_id = None;
 
                     // Gracefully close the connection
                     return Poll::Ready(ConnectionHandlerEvent::Custom(
-                        HandlerOutEvent::PeerLeft { peer_id, reason },
+                        HandlerOutEvent::ClosePeerConnection { reason },
                     ));
                 }
             }
@@ -203,7 +196,6 @@ impl ConnectionHandler for ConnectionPoolHandler {
                 break;
             }
 
-            assert!(self.peer.is_none());
             assert!(self.close_rx.is_none());
 
             // Take inbound and outbound and create a peer from it.
@@ -213,15 +205,13 @@ impl ConnectionHandler for ConnectionPoolHandler {
             // Create a channel that is used to receive the close signal from the `Peer` struct (when `Peer::close` is called).
             let (close_tx, close_rx) = oneshot::channel();
 
-            let peer = Arc::new(Peer::new(peer_id, close_tx));
-            log::debug!("New peer: {:?}", peer);
+            log::debug!("New peer: {}", peer_id);
 
             self.close_rx = Some(close_rx);
-            self.peer = Some(Arc::clone(&peer));
 
             // Send peer to behaviour
             return Poll::Ready(ConnectionHandlerEvent::Custom(
-                HandlerOutEvent::PeerJoined { peer },
+                HandlerOutEvent::PeerJoined { close_tx },
             ));
         }
 

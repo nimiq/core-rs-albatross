@@ -8,7 +8,7 @@ use tokio::task::spawn_blocking;
 
 use nimiq_block::Block;
 use nimiq_blockchain::Blockchain;
-use nimiq_network_interface::prelude::{Network, NetworkEvent, Peer};
+use nimiq_network_interface::prelude::{Network, NetworkEvent};
 
 use crate::sync::history::cluster::{SyncCluster, SyncClusterResult};
 use crate::sync::history::sync::{HistorySyncReturn, Job};
@@ -19,17 +19,17 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
     fn poll_network_events(
         &mut self,
         cx: &mut Context<'_>,
-    ) -> Poll<Option<HistorySyncReturn<TNetwork::PeerType>>> {
+    ) -> Poll<Option<HistorySyncReturn<TNetwork::PeerId>>> {
         while let Poll::Ready(Some(result)) = self.network_event_rx.poll_next_unpin(cx) {
             match result {
-                Ok(NetworkEvent::PeerLeft(peer)) => {
+                Ok(NetworkEvent::PeerLeft(peer_id)) => {
                     // Remove the peer from all data structures.
-                    self.remove_peer(peer.id());
-                    self.peers.remove(&peer.id());
+                    self.remove_peer(peer_id);
+                    self.peers.remove(&peer_id);
                 }
-                Ok(NetworkEvent::PeerJoined(peer)) => {
+                Ok(NetworkEvent::PeerJoined(peer_id)) => {
                     // Request epoch_ids from the peer that joined.
-                    self.add_peer(peer.id());
+                    self.add_peer(peer_id);
                 }
                 Err(_) => return Poll::Ready(None),
             }
@@ -41,7 +41,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
     fn poll_epoch_ids(
         &mut self,
         cx: &mut Context<'_>,
-    ) -> Poll<Option<HistorySyncReturn<TNetwork::PeerType>>> {
+    ) -> Poll<Option<HistorySyncReturn<TNetwork::PeerId>>> {
         // TODO We might want to not send an epoch_id request in the first place if we're at the
         //  cluster limit.
         while self.epoch_clusters.len() < Self::MAX_CLUSTERS {
@@ -213,7 +213,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
 }
 
 impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
-    type Item = HistorySyncReturn<TNetwork::PeerType>;
+    type Item = HistorySyncReturn<TNetwork::PeerId>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         store_waker!(self, waker, cx);

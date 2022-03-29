@@ -13,7 +13,7 @@ use nimiq_consensus::sync::history::{cluster::SyncCluster, HistorySync, HistoryS
 use nimiq_consensus::sync::request_component::HistorySyncStream;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
-use nimiq_network_interface::{network::Network as NetworkInterface, peer::Peer};
+use nimiq_network_interface::network::Network as NetworkInterface;
 use nimiq_network_libp2p::Network;
 use nimiq_network_mock::MockHub;
 use nimiq_primitives::policy;
@@ -28,14 +28,14 @@ pub struct MockHistorySyncStream<TNetwork: NetworkInterface> {
     _network: Arc<TNetwork>,
 }
 
-impl<TNetwork: NetworkInterface> HistorySyncStream<TNetwork::PeerType>
+impl<TNetwork: NetworkInterface> HistorySyncStream<TNetwork::PeerId>
     for MockHistorySyncStream<TNetwork>
 {
-    fn add_peer(&self, _peer_id: <<TNetwork as NetworkInterface>::PeerType as Peer>::Id) {}
+    fn add_peer(&self, _peer_id: TNetwork::PeerId) {}
 }
 
 impl<TNetwork: NetworkInterface> Stream for MockHistorySyncStream<TNetwork> {
-    type Item = HistorySyncReturn<TNetwork::PeerType>;
+    type Item = HistorySyncReturn<TNetwork::PeerId>;
 
     fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         Poll::Pending
@@ -243,7 +243,7 @@ async fn sync_ingredients() {
 
     // Test ingredients:
     // Request macro chain
-    let peer_id = net2.get_peers()[0].id();
+    let peer_id = net2.get_peers()[0];
     let macro_chain = HistorySync::request_macro_chain(
         Arc::clone(&net2),
         peer_id,
