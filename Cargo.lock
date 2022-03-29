@@ -3269,6 +3269,7 @@ name = "nimiq-test-log"
 version = "0.1.0"
 dependencies = [
  "nimiq-test-log-proc-macro",
+ "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
  "tracing-subscriber 0.3.9",
 ]
 

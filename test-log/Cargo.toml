@@ -5,4 +5,5 @@ edition = "2021"
 
 [dependencies]
 nimiq-test-log-proc-macro = { path = "proc-macro" }
+parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
