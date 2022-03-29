@@ -77,18 +77,11 @@ impl<DepsTy: TendermintOutsideDeps> Tendermint<DepsTy> {
         let mut deps = self.deps.take().unwrap();
 
         // Check if it is our turn to propose a value
-        if deps.is_our_turn(self.state.round) {
+        let round = self.state.round;
+        if deps.is_our_turn(round) {
             // create and store proposal in case no valid round exists. Otherwise take the valid value.
-            self.state.current_proposal = if self.state.valid.is_some() {
-                let round = self.state.round;
-                let (valid_proposal, valid_proposal_hash, valid_round) = {
-                    let valid = self.state.valid.as_ref().unwrap();
-                    (
-                        valid.proposal.clone(),
-                        valid.proposal_hash.clone(),
-                        valid.round,
-                    )
-                };
+            self.state.current_proposal = if let Some(valid) = self.state.valid.as_ref() {
+                let valid_round = valid.round;
 
                 debug!(
                     "Our turn at round {}, broadcasting former valid proposal of round {}",
@@ -97,22 +90,18 @@ impl<DepsTy: TendermintOutsideDeps> Tendermint<DepsTy> {
 
                 self.state
                     .known_proposals
-                    .insert(round, (valid_proposal.clone(), Some(valid_round)));
+                    .insert(round, (valid.proposal.clone(), Some(valid_round)));
                 self.state.current_proposal_vr = Some(valid_round);
                 self.state
                     .own_votes
-                    .insert((round, Step::Prevote), Some(valid_proposal_hash.clone()));
-                let current_proposal = (valid_proposal, valid_proposal_hash);
+                    .insert((round, Step::Prevote), Some(valid.proposal_hash.clone()));
+                let current_proposal = (valid.proposal.clone(), valid.proposal_hash.clone());
                 Some(Some(current_proposal))
             } else {
-                debug!(
-                    "Our turn at round {}, broadcasting fresh proposal",
-                    self.state.round
-                );
-                match deps.get_value(self.state.round) {
+                debug!("Our turn at round {}, broadcasting fresh proposal", round);
+                match deps.get_value(round) {
                     Err(err) => return Poll::Ready(Some(TendermintReturn::Error(err))),
                     Ok(proposal) => {
-                        let round = self.state.round;
                         self.state
                             .known_proposals
                             .insert(round, (proposal.clone(), None));
@@ -144,6 +133,7 @@ impl<DepsTy: TendermintOutsideDeps> Tendermint<DepsTy> {
         assert!(self.deps.is_some() ^ self.fut.is_some());
         assert_eq!(self.state.is_our_turn, Some(true));
         assert!(self.state.current_proposal.is_some());
+        assert!(self.state.current_proposal.as_ref().unwrap().is_some());
         assert!(self.state.current_proof.is_none());
         // redundant but still good to check
         assert!(self.state.known_proposals.contains_key(&self.state.round));
@@ -154,21 +144,13 @@ impl<DepsTy: TendermintOutsideDeps> Tendermint<DepsTy> {
         assert_eq!(self.state.step, Step::Propose);
 
         let mut fut = if let Some(deps) = self.deps.take() {
-            deps.broadcast_proposal(
-                self.state.round,
-                (&self
-                    .state
-                    .current_proposal
-                    .as_ref()
-                    .unwrap()
-                    .as_ref()
-                    .unwrap()
-                    .0)
-                    .clone(), // save as we just created them
-                self.state.current_proposal_vr,
-            )
-            .map(|r| r.map(|r| OutsideDepsFutReturn::BroadcastProposal(r)))
-            .boxed()
+            let proposal = match &self.state.current_proposal {
+                Some(Some((proposal, _))) => proposal.clone(),
+                _ => unreachable!(),
+            };
+            deps.broadcast_proposal(self.state.round, proposal, self.state.current_proposal_vr)
+                .map(|r| r.map(|r| OutsideDepsFutReturn::BroadcastProposal(r)))
+                .boxed()
         } else {
             self.fut.take().unwrap()
         };
@@ -245,17 +227,14 @@ impl<DepsTy: TendermintOutsideDeps> Tendermint<DepsTy> {
                     ProposalResult::Proposal(proposal, None) => {
                         // a proposal without a valid round can be checked immediately
                         let round = self.state.round;
-                        if self.state.locked.is_some() {
-                            let (is_locked_proposal, locked_proposal_hash) = {
-                                let locked = self.state.locked.as_ref().unwrap();
-                                (locked.proposal == proposal, locked.proposal_hash.clone())
-                            };
-                            if is_locked_proposal {
+                        if let Some(locked) = self.state.locked.as_ref() {
+                            if locked.proposal == proposal {
                                 self.state.current_proposal =
-                                    Some(Some((proposal.clone(), locked_proposal_hash.clone())));
-                                self.state
-                                    .own_votes
-                                    .insert((round, Step::Prevote), Some(locked_proposal_hash));
+                                    Some(Some((proposal.clone(), locked.proposal_hash.clone())));
+                                self.state.own_votes.insert(
+                                    (round, Step::Prevote),
+                                    Some(locked.proposal_hash.clone()),
+                                );
                             } else {
                                 let proposal_hash = deps.hash_proposal(proposal.clone());
                                 self.state.current_proposal =
@@ -305,10 +284,8 @@ impl<DepsTy: TendermintOutsideDeps> Tendermint<DepsTy> {
     ) -> Poll<Option<<Self as Stream>::Item>> {
         assert!(self.deps.is_some() ^ self.fut.is_some());
         assert_eq!(self.state.is_our_turn, Some(false));
-        assert!(
-            self.state.current_proposal.is_some()
-                && self.state.current_proposal.as_ref().unwrap().is_some()
-        );
+        assert!(self.state.current_proposal.is_some());
+        assert!(self.state.current_proposal.as_ref().unwrap().is_some());
         assert!(self.state.current_proposal_vr.is_some());
         assert!(self.state.known_proposals.contains_key(&self.state.round));
         assert!(!self
@@ -328,27 +305,16 @@ impl<DepsTy: TendermintOutsideDeps> Tendermint<DepsTy> {
         match fut.poll_unpin(cx) {
             Poll::Ready(Ok(OutsideDepsFutReturn::Aggregate((deps, aggregate)))) => {
                 let round = self.state.round;
-                let (proposal, proposal_hash) = self
-                    .state
-                    .current_proposal
-                    .as_ref()
-                    .unwrap()
-                    .as_ref()
-                    .unwrap()
-                    .clone();
+                let (proposal, proposal_hash) =
+                    self.state.current_proposal.clone().unwrap().unwrap();
 
                 if has_2f1_votes(proposal_hash.clone(), aggregate) {
                     // check the locked state of this node
-                    if self.state.locked.is_some() {
-                        let acceptance = {
-                            let locked = self.state.locked.as_ref().unwrap();
-
-                            locked.round <= self.state.current_proposal_vr.unwrap()
-                                || locked.proposal == proposal
-                        };
-
+                    if let Some(locked) = self.state.locked.as_ref() {
                         // If it is locked, make sure it is allowed to vote for this
-                        if acceptance {
+                        let vote_block = locked.proposal == proposal
+                            || locked.round <= self.state.current_proposal_vr.unwrap();
+                        if vote_block {
                             self.state
                                 .own_votes
                                 .insert((round, Step::Prevote), Some(proposal_hash));
@@ -427,7 +393,7 @@ impl<DepsTy: TendermintOutsideDeps> Tendermint<DepsTy> {
                     .as_ref()
                     .unwrap()
                     .as_ref()
-                    .map(|(_, h)| h.clone());
+                    .map(|(_, hash)| hash.clone());
 
                 let id = (self.state.round, self.state.step);
                 // assume this is the best vote and store it in the state.
