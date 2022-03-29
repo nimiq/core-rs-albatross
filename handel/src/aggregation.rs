@@ -160,7 +160,7 @@ impl<
     }
 
     /// Check if a level was completed TODO: remove contribution parameter as it is not used at all.
-    fn check_completed_level(&self, contribution: P::Contribution, level: usize) {
+    fn check_completed_level(&self, _contribution: P::Contribution, level: usize) {
         let level = self.levels.get(level).unwrap_or_else(|| {
             panic!(
                 "Attempted to check completeness of invalid level: {}",

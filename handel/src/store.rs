@@ -82,7 +82,7 @@ impl<P: Partitioner, C: AggregatableContribution> ReplaceStore<P, C> {
     }
 
     fn check_merge(&self, contribution: &C, contributors: BitSet, level: usize) -> Option<C> {
-        if let Some((best_contribution, identity)) = self.best_contribution.get(&level) {
+        if let Some((_, identity)) = self.best_contribution.get(&level) {
             let best_contributors = identity.as_bitset();
 
             // try to combine
