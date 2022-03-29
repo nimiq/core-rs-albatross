@@ -142,7 +142,7 @@ pub struct MessageCodec {
 }
 
 impl MessageCodec {
-    fn verify(&self, declared_crc: u32, data: &mut BytesMut) -> Result<(), Error> {
+    fn verify(declared_crc: u32, data: &mut BytesMut) -> Result<(), Error> {
         let mut crc_comp = Crc32Computer::default();
 
         // Re-calculate CRC skipping the CRC field (last 4B of the header)
@@ -159,7 +159,6 @@ impl MessageCodec {
     }
 
     fn encode_serialized_message(
-        &mut self,
         type_id: u64,
         message: &BytesMut,
         dst: &mut BytesMut,
@@ -192,6 +191,50 @@ impl MessageCodec {
         crc.serialize(&mut c)?;
 
         Ok(())
+    }
+
+    fn decode_serialized_message(src: &mut BytesMut) -> Result<(MessageType, BytesMut), Error> {
+        // Make a cursor, so we later know how many bytes we read
+        let mut c = Cursor::new(&src);
+
+        let header = Header::deserialize(&mut c)?;
+        // Deserializing the header was successful
+        let header_length = c.position() as usize;
+
+        // Drop the cursor, so we can mut-borrow the `src` buffer again.
+        drop(c);
+
+        // Preliminary header check (we can't verify the checksum yet)
+        header.preliminary_check()?;
+
+        // Now parse the body.
+        if src.len() == header.length as usize {
+            let message_type = header.type_id;
+
+            // Get buffer for whole message
+            let frame_size = header.length as usize;
+            let mut data = src.split_to(frame_size);
+
+            // Verify the message (i.e. checksum)
+            Self::verify(header.checksum, &mut data).map_err(|e| {
+                log::warn!(
+                    "CRC checksum mismatch for message type {}, error: {}",
+                    message_type,
+                    e
+                );
+                e
+            })?;
+
+            // Skip the header to have only the data
+            data.advance(header_length);
+
+            Ok((MessageType::new(message_type), data))
+        } else {
+            log::error!(
+                "Request/response decoding error: Header size doesn't match the buffer size"
+            );
+            Err(Error::Serialize(SerializingError::InvalidEncoding))
+        }
     }
 }
 
@@ -252,7 +295,7 @@ impl Decoder for MessageCodec {
                         let mut data = src.split_to(frame_size);
 
                         // Verify the message (i.e. checksum)
-                        self.verify(header.checksum, &mut data).map_err(|e| {
+                        Self::verify(header.checksum, &mut data).map_err(|e| {
                             log::warn!(
                                 "CRC checksum mismatch for message type {}, error: {}",
                                 message_type,
@@ -347,17 +390,9 @@ impl RequestResponseCodec for MessageCodec {
         T: AsyncRead + Unpin + Send,
     {
         let bytes = upgrade::read_length_prefixed(io, MAX_REQUEST_SIZE).await?;
-        let request = self
-            .decode(&mut bytes[..].into())
+        let (request_id, request_data) = Self::decode_serialized_message(&mut bytes[..].into())
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-        if let Some((request_id, request_data)) = request {
-            Ok((request_id, request_data))
-        } else {
-            Err(io::Error::new(
-                io::ErrorKind::Other,
-                "Fail to decode request",
-            ))
-        }
+        Ok((request_id, request_data))
     }
 
     async fn read_response<T>(
@@ -369,17 +404,9 @@ impl RequestResponseCodec for MessageCodec {
         T: AsyncRead + Unpin + Send,
     {
         let bytes = upgrade::read_length_prefixed(io, MAX_RESPONSE_SIZE).await?;
-        let response = self
-            .decode(&mut bytes[..].into())
+        let (message_type, response_data) = Self::decode_serialized_message(&mut bytes[..].into())
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-        if let Some((message_type, response_data)) = response {
-            Ok((message_type, response_data))
-        } else {
-            Err(io::Error::new(
-                io::ErrorKind::Other,
-                "Fail to decode response",
-            ))
-        }
+        Ok((message_type, response_data))
     }
 
     async fn write_request<T>(
@@ -393,7 +420,7 @@ impl RequestResponseCodec for MessageCodec {
     {
         let (type_id, request) = req;
         let mut buffer = BytesMut::with_capacity(request.len());
-        self.encode_serialized_message(type_id.into(), &request, &mut buffer)
+        Self::encode_serialized_message(type_id.into(), &request, &mut buffer)
             .map_err(|_| io::Error::new(io::ErrorKind::Other, "Fail to encode request"))?;
         upgrade::write_length_prefixed(io, &buffer[..]).await?;
         io.close().await
@@ -410,7 +437,7 @@ impl RequestResponseCodec for MessageCodec {
     {
         let (type_id, response) = res;
         let mut buffer = BytesMut::with_capacity(response.len());
-        self.encode_serialized_message(type_id.into(), &response, &mut buffer)
+        Self::encode_serialized_message(type_id.into(), &response, &mut buffer)
             .map_err(|_| io::Error::new(io::ErrorKind::Other, "Fail to encode response"))?;
         upgrade::write_length_prefixed(io, &buffer[..]).await?;
         io.close().await
