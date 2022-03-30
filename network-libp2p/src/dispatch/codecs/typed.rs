@@ -332,7 +332,7 @@ impl<M: Message> Encoder<&M> for MessageCodec {
     type Error = Error;
 
     fn encode(&mut self, message: &M, dst: &mut BytesMut) -> Result<(), Error> {
-        let mut header = Header::new(M::TYPE_ID);
+        let mut header = Header::new(M::TYPE_ID as u64);
         let message_length = Header::SIZE + message.serialized_size();
         header.length = message_length as u32;
 

@@ -38,7 +38,10 @@ use tokio_stream::wrappers::BroadcastStream;
 use beserial::{Deserialize, Serialize};
 use nimiq_bls::CompressedPublicKey;
 use nimiq_network_interface::{
-    message::{Message, MessageType, RequestError, ResponseError, ResponseMessage},
+    message::{
+        Message, MessageType, RequestError, ResponseError, ResponseMessage, DEFAULT_RESPONSE,
+        DEFAULT_RESPONSE_TYPE_ID,
+    },
     network::{MsgAcceptance, Network as NetworkInterface, NetworkEvent, PubsubId, Topic},
     peer::{CloseReason, Peer as PeerInterface},
     peer_map::ObservablePeerMap,
@@ -650,9 +653,23 @@ impl Network {
                                     peer_id,
                                     request,
                                 );
-                                state.response_channels.insert(request_id, channel);
-                                // Check the message type and check if we have request receivers such that we can send the request
-                                if let Some(sender) = state.receive_requests.get_mut(&type_id) {
+                                // Check if we have a receiver registered for this message type
+                                let sender = {
+                                    if let Some(sender) = state.receive_requests.get_mut(&type_id) {
+                                        // Check if the sender is still alive, if not remove it
+                                        if sender.is_closed() {
+                                            state.receive_requests.remove(&type_id);
+                                            None
+                                        } else {
+                                            Some(sender)
+                                        }
+                                    } else {
+                                        None
+                                    }
+                                };
+                                // If we have a receiver, pass the request. Otherwise send the default response
+                                if let Some(sender) = sender {
+                                    state.response_channels.insert(request_id, channel);
                                     if let Err(e) =
                                         sender.try_send((request.freeze(), request_id, peer_id))
                                     {
@@ -664,10 +681,21 @@ impl Network {
                                         );
                                     }
                                 } else {
-                                    log::warn!(
-                                        "No receiver found for requests of type ID {}",
+                                    log::trace!(
+                                        "No receiver found for requests of type ID {}, replying with default response",
                                         type_id
                                     );
+                                    if let Err((message_type, _)) =
+                                        swarm.behaviour_mut().request_response.send_response(
+                                            channel,
+                                            (DEFAULT_RESPONSE_TYPE_ID, DEFAULT_RESPONSE[..].into()),
+                                        )
+                                    {
+                                        log::error!(
+                                            "Could not send default response for message type {}",
+                                            message_type
+                                        );
+                                    };
                                 }
                             }
                             RequestResponseMessage::Response {
@@ -918,11 +946,17 @@ impl Network {
                 response_channel,
                 output,
             } => {
+                let type_id = request.0;
                 let request_id = swarm
                     .behaviour_mut()
                     .request_response
                     .send_request(&peer_id, request);
-                log::trace!("Request {} was sent to peer {}", request_id, peer_id);
+                log::trace!(
+                    "[Request ID {}] was sent to peer {}, type id {}",
+                    request_id,
+                    peer_id,
+                    type_id
+                );
                 state.requests.insert(request_id, response_channel);
                 output.send(request_id).ok();
             }
@@ -1191,7 +1225,7 @@ impl NetworkInterface for Network {
             .clone()
             .send(NetworkAction::SendRequest {
                 peer_id,
-                request: (Req::TYPE_ID.into(), buf[..].into()),
+                request: ((Req::TYPE_ID as u64).into(), buf[..].into()),
                 response_channel: response_tx,
                 output: output_tx,
             })
@@ -1207,7 +1241,7 @@ impl NetworkInterface for Network {
                     Ok((data, request_id, peer_id, message_type)) => {
                         match data {
                             ResponseMessage::Response(data) => {
-                                if message_type == Res::TYPE_ID.into() {
+                                if message_type == (Res::TYPE_ID as u64).into() {
                                     match <Res as Deserialize>::deserialize(&mut data.reader()) {
                                         Ok(message) => {
                                             (ResponseMessage::Response(message), request_id, peer_id)
@@ -1223,6 +1257,8 @@ impl NetworkInterface for Network {
                                             (ResponseMessage::Error(ResponseError::DeSerializationError), request_id, peer_id)
                                         },
                                     }
+                                } else if message_type == DEFAULT_RESPONSE_TYPE_ID {
+                                    (ResponseMessage::Error(ResponseError::NoReceiver), request_id, peer_id)
                                 } else {
                                     (ResponseMessage::Error(ResponseError::InvalidResponse), request_id, peer_id)
                                 }
@@ -1247,7 +1283,7 @@ impl NetworkInterface for Network {
 
             action_tx
                 .send(NetworkAction::ReceiveRequests {
-                    type_id: M::TYPE_ID.into(),
+                    type_id: (M::TYPE_ID as u64).into(),
                     output: tx,
                 })
                 .await
@@ -1296,7 +1332,7 @@ impl NetworkInterface for Network {
             .clone()
             .send(NetworkAction::SendResponse {
                 request_id,
-                response: (M::TYPE_ID.into(), buf[..].into()),
+                response: ((M::TYPE_ID as u64).into(), buf[..].into()),
                 output: output_tx,
             })
             .await?;

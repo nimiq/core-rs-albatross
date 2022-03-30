@@ -2,6 +2,7 @@ use beserial::{BigEndian, Deserialize, ReadBytesExt, Serialize, SerializingError
 use nimiq_bls::{AggregateSignature, Signature};
 use nimiq_collections::bitset::BitSet;
 use nimiq_handel::contribution::{AggregatableContribution, ContributionError};
+use nimiq_network_interface::prelude::MessageTypeId;
 
 /*
 This does not really belong here, but as there would otherwise be a cyclic dependency it needs to be here for now.
@@ -65,7 +66,7 @@ impl MultiSignature {
 }
 
 impl AggregatableContribution for MultiSignature {
-    const TYPE_ID: u64 = 128;
+    const TYPE_ID: MessageTypeId = MessageTypeId::MultiSignature;
 
     fn contributors(&self) -> BitSet {
         self.signers.clone()

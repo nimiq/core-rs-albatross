@@ -27,7 +27,11 @@ use nimiq_handel::protocol;
 use nimiq_handel::store::ReplaceStore;
 use nimiq_handel::update::LevelUpdateMessage;
 use nimiq_handel::verifier;
-use nimiq_network_interface::{message::Message, network::Network, peer::Peer};
+use nimiq_network_interface::{
+    message::{Message, MessageTypeId},
+    network::Network,
+    peer::Peer,
+};
 use nimiq_network_mock::{MockHub, MockNetwork};
 use nimiq_test_log::test;
 
@@ -39,7 +43,7 @@ pub struct Contribution {
 }
 
 impl AggregatableContribution for Contribution {
-    const TYPE_ID: u64 = 44;
+    const TYPE_ID: MessageTypeId = MessageTypeId::TestMessage;
 
     fn contributors(&self) -> BitSet {
         self.contributors.clone()

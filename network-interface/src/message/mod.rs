@@ -14,12 +14,14 @@ mod crc;
 
 #[derive(Clone, Debug, Error)]
 pub enum RequestError {
+    /// Timeout waiting for the response of this request.
+    /// In this case a receiver was registered for responding these requests
+    /// but the response never arrived before the timeout was hit.
     #[error("Timeout error")]
     Timeout,
+    /// Error sending this request
     #[error("Send error")]
     SendError,
-    #[error("Receive error")]
-    ReceiveError,
     /// Request failed to be serialized
     #[error("Receive error")]
     SerializationError,
@@ -27,6 +29,8 @@ pub enum RequestError {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ResponseError {
+    /// No receiver was found for this request and no response could be obtained
+    NoReceiver,
     /// Received response type doesn't match the expected type
     InvalidResponse,
     /// Response failed to be deserialized
@@ -49,22 +53,68 @@ pub enum ResponseError {
     UnsupportedProtocols,
 }
 
-#[derive(Clone, Debug)]
-pub enum RawResponseMessage {
-    Response(Vec<u8>),
-    Error(ResponseError),
-}
-
 #[derive(Debug)]
 pub enum ResponseMessage<M: std::fmt::Debug> {
     Response(M),
     Error(ResponseError),
 }
 
+pub const DEFAULT_RESPONSE_TYPE_ID: MessageType =
+    MessageType::new(MessageTypeId::DefaultResponse as u64);
+pub const DEFAULT_RESPONSE: [u8; 4] = [0x42, 0x04, 0x40, 0x24];
+
 #[derive(
     Copy, Clone, Debug, From, Into, AsRef, AsMut, Display, Hash, PartialEq, Eq, PartialOrd, Ord,
 )]
 pub struct RequestId(u64);
+
+pub enum MessageTypeId {
+    /// Default response
+    DefaultResponse = 0,
+
+    /// Test Message Type ID
+    TestMessage = 40,
+    /// Test Message Type ID
+    TestMessage2 = 41,
+    /// Test Request Type ID
+    TestRequest = 42,
+    /// Test Response Type ID
+    TestResponse = 43,
+    /// Test Response Type ID
+    TestResponse2 = 45,
+
+    /// Signed View Change Type ID for AggregatableContributions
+    SignedViewChangeMessage = 123,
+    /// Tendermint Contribution Type ID for AggregatableContributions
+    TendermintContribution = 124,
+    /// MultiSignature Type ID for AggregatableContributions
+    MultiSignature = 128,
+
+    /// Request Macro Chain Type ID for Request/Response
+    RequestMacroChain = 200,
+    /// Macro Chain Response Type ID for Request/Response
+    MacroChain = 201,
+    /// Request Batch Set Info Type ID for Request/Response
+    RequestBatchSet = 202,
+    /// Batch Set Info Response Type ID for Request/Response
+    BatchSetInfo = 203,
+    /// Request History Chunk Type ID for Request/Response
+    RequestHistoryChunk = 204,
+    /// History Chunk Response Type ID for Request/Response
+    HistoryChunk = 205,
+    /// Response of a single block Type ID for Request/Response
+    ResponseBlock = 206,
+    /// Request single block Type ID for Request/Response
+    RequestBlock = 207,
+    /// Request Blocks Type ID for Request/Response
+    ResponseBlocks = 208,
+    /// Request Missing Blocks Type ID for Request/Response
+    RequestMissingBlocks = 209,
+    /// Request Head Type ID for Request/Response
+    RequestHead = 210,
+    /// Head Response Type ID for Request/Response
+    HeadResponse = 211,
+}
 
 #[derive(
     Copy, Clone, Debug, From, Into, AsRef, AsMut, Display, Hash, PartialEq, Eq, PartialOrd, Ord,
@@ -94,7 +144,7 @@ const MAGIC: u32 = 0x4204_2042;
 pub trait Message:
     Serialize + Deserialize + Send + Sync + Unpin + std::fmt::Debug + 'static
 {
-    const TYPE_ID: u64;
+    const TYPE_ID: MessageTypeId;
 
     // Does CRC stuff and is called by network
     fn serialize_message<W: WriteBytesExt>(
@@ -102,7 +152,7 @@ pub trait Message:
         writer: &mut W,
     ) -> Result<usize, SerializingError> {
         let mut size = 0;
-        let ty = uvar::from(Self::TYPE_ID);
+        let ty = uvar::from(Self::TYPE_ID as u64);
         let serialized_size = self.serialized_message_size() as u32;
 
         let mut v = Vec::with_capacity(serialized_size as usize);
@@ -129,7 +179,7 @@ pub trait Message:
 
     fn serialized_message_size(&self) -> usize {
         let mut serialized_size = 4 + 4 + 4; // magic + serialized_size + checksum
-        serialized_size += uvar::from(Self::TYPE_ID).serialized_size();
+        serialized_size += uvar::from(Self::TYPE_ID as u64).serialized_size();
         serialized_size += self.serialized_size();
         serialized_size
     }
@@ -144,7 +194,7 @@ pub trait Message:
 
         // Check for correct type.
         let ty: uvar = Deserialize::deserialize(&mut crc32_reader)?;
-        if u64::from(ty) != Self::TYPE_ID {
+        if u64::from(ty) != Self::TYPE_ID as u64 {
             return Err(io::Error::new(io::ErrorKind::InvalidData, "Wrong message type").into());
         }
 

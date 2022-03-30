@@ -2449,6 +2449,7 @@ dependencies = [
  "nimiq-keys",
  "nimiq-macros",
  "nimiq-nano-primitives",
+ "nimiq-network-interface",
  "nimiq-primitives",
  "nimiq-test-log",
  "nimiq-transaction",

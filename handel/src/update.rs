@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use beserial::{Deserialize, Serialize};
-use nimiq_network_interface::message::Message;
+use nimiq_network_interface::{message::Message, prelude::MessageTypeId};
 
 use crate::contribution::AggregatableContribution;
 
@@ -80,5 +80,5 @@ impl<
     // since having a fixed value here would imply that there could be different
     // types using the same type ID which would confuse the network at decoding
     // messages upon receiving them.
-    const TYPE_ID: u64 = C::TYPE_ID;
+    const TYPE_ID: MessageTypeId = C::TYPE_ID;
 }

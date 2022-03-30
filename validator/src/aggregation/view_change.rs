@@ -22,6 +22,7 @@ use handel::protocol::Protocol;
 use handel::store::ReplaceStore;
 use handel::update::{LevelUpdate, LevelUpdateMessage};
 use hash::Blake2sHash;
+use nimiq_network_interface::prelude::MessageTypeId;
 use nimiq_validator_network::ValidatorNetwork;
 use primitives::policy;
 use primitives::slots::Validators;
@@ -105,7 +106,7 @@ pub struct SignedViewChangeMessage {
 }
 
 impl AggregatableContribution for SignedViewChangeMessage {
-    const TYPE_ID: u64 = 123;
+    const TYPE_ID: MessageTypeId = MessageTypeId::SignedViewChangeMessage;
 
     fn contributors(&self) -> BitSet {
         self.view_change.contributors()

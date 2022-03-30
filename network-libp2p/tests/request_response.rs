@@ -13,7 +13,7 @@ use beserial::{Deserialize, Serialize};
 use beserial_derive::{Deserialize, Serialize};
 use nimiq_network_interface::{
     network::Network as NetworkInterface,
-    prelude::{Message, NetworkEvent, ResponseError, ResponseMessage},
+    prelude::{Message, MessageTypeId, NetworkEvent, ResponseError, ResponseMessage},
 };
 use nimiq_network_libp2p::{
     discovery::{
@@ -31,7 +31,7 @@ struct TestRequest {
     request: u64,
 }
 impl Message for TestRequest {
-    const TYPE_ID: u64 = 42;
+    const TYPE_ID: MessageTypeId = MessageTypeId::TestRequest;
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -39,7 +39,7 @@ struct TestResponse {
     response: u64,
 }
 impl Message for TestResponse {
-    const TYPE_ID: u64 = 43;
+    const TYPE_ID: MessageTypeId = MessageTypeId::TestResponse;
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -48,7 +48,7 @@ struct TestResponse2 {
 }
 
 impl Message for TestResponse2 {
-    const TYPE_ID: u64 = 45;
+    const TYPE_ID: MessageTypeId = MessageTypeId::TestResponse2;
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -58,7 +58,7 @@ struct TestResponse3 {
 
 impl Message for TestResponse3 {
     // Intentionally setting another response's Type ID
-    const TYPE_ID: u64 = TestResponse::TYPE_ID;
+    const TYPE_ID: MessageTypeId = TestResponse::TYPE_ID;
 }
 
 #[derive(Clone, Debug)]
@@ -465,6 +465,6 @@ async fn test_valid_request_no_response_no_receiver() {
         ResponseMessage::Response(response) => {
             assert!(false, "Received unexpected valid response: {:?}", response)
         }
-        ResponseMessage::Error(e) => assert_eq!(e, ResponseError::Timeout),
+        ResponseMessage::Error(e) => assert_eq!(e, ResponseError::NoReceiver),
     };
 }

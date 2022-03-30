@@ -30,7 +30,7 @@ pub struct MacroChain {
 }
 
 impl Message for MacroChain {
-    const TYPE_ID: u64 = 201;
+    const TYPE_ID: MessageTypeId = MessageTypeId::MacroChain;
 }
 
 impl Debug for MacroChain {
@@ -59,7 +59,7 @@ pub struct RequestMacroChain {
 }
 
 impl Message for RequestMacroChain {
-    const TYPE_ID: u64 = 200;
+    const TYPE_ID: MessageTypeId = MessageTypeId::RequestMacroChain;
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -68,7 +68,7 @@ pub struct RequestBatchSet {
 }
 
 impl Message for RequestBatchSet {
-    const TYPE_ID: u64 = 202;
+    const TYPE_ID: MessageTypeId = MessageTypeId::RequestBatchSet;
 }
 
 /// This message contains a macro block and the number of extended transactions (transitions)
@@ -80,7 +80,7 @@ pub struct BatchSetInfo {
 }
 
 impl Message for BatchSetInfo {
-    const TYPE_ID: u64 = 203;
+    const TYPE_ID: MessageTypeId = MessageTypeId::BatchSetInfo;
 }
 
 impl Debug for BatchSetInfo {
@@ -106,7 +106,7 @@ pub struct RequestHistoryChunk {
 }
 
 impl Message for RequestHistoryChunk {
-    const TYPE_ID: u64 = 204;
+    const TYPE_ID: MessageTypeId = MessageTypeId::RequestHistoryChunk;
 }
 
 /// This message contains a chunk of the history.
@@ -116,7 +116,7 @@ pub struct HistoryChunk {
 }
 
 impl Message for HistoryChunk {
-    const TYPE_ID: u64 = 205;
+    const TYPE_ID: MessageTypeId = MessageTypeId::HistoryChunk;
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -125,7 +125,7 @@ pub struct ResponseBlock {
 }
 
 impl Message for ResponseBlock {
-    const TYPE_ID: u64 = 206;
+    const TYPE_ID: MessageTypeId = MessageTypeId::ResponseBlock;
 }
 
 impl Debug for ResponseBlock {
@@ -144,7 +144,7 @@ pub struct RequestBlock {
 }
 
 impl Message for RequestBlock {
-    const TYPE_ID: u64 = 207;
+    const TYPE_ID: MessageTypeId = MessageTypeId::RequestBlock;
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -155,7 +155,7 @@ pub struct ResponseBlocks {
 }
 
 impl Message for ResponseBlocks {
-    const TYPE_ID: u64 = 208;
+    const TYPE_ID: MessageTypeId = MessageTypeId::ResponseBlocks;
 }
 
 impl Debug for ResponseBlocks {
@@ -183,14 +183,14 @@ pub struct RequestMissingBlocks {
 }
 
 impl Message for RequestMissingBlocks {
-    const TYPE_ID: u64 = 209;
+    const TYPE_ID: MessageTypeId = MessageTypeId::RequestMissingBlocks;
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestHead {}
 
 impl Message for RequestHead {
-    const TYPE_ID: u64 = 210;
+    const TYPE_ID: MessageTypeId = MessageTypeId::RequestHead;
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -199,5 +199,5 @@ pub struct HeadResponse {
 }
 
 impl Message for HeadResponse {
-    const TYPE_ID: u64 = 211;
+    const TYPE_ID: MessageTypeId = MessageTypeId::HeadResponse;
 }

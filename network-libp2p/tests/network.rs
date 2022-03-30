@@ -14,7 +14,7 @@ use beserial::{Deserialize, Serialize};
 use beserial_derive::{Deserialize, Serialize};
 use nimiq_network_interface::network::{MsgAcceptance, NetworkEvent, Topic};
 use nimiq_network_interface::{
-    message::Message,
+    message::{Message, MessageTypeId},
     network::Network as NetworkInterface,
     peer::{CloseReason, Peer as PeerInterface},
 };
@@ -35,7 +35,7 @@ struct TestMessage {
 }
 
 impl Message for TestMessage {
-    const TYPE_ID: u64 = 42;
+    const TYPE_ID: MessageTypeId = MessageTypeId::TestMessage;
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -45,7 +45,7 @@ struct TestMessage2 {
 }
 
 impl Message for TestMessage2 {
-    const TYPE_ID: u64 = 43;
+    const TYPE_ID: MessageTypeId = MessageTypeId::TestMessage2;
 }
 
 fn network_config(address: Multiaddr) -> Config {

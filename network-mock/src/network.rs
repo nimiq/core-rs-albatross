@@ -411,7 +411,7 @@ impl Network for MockNetwork {
 
             let key = RequestKey {
                 recipient: peer_id.into(),
-                message_type: Req::TYPE_ID,
+                message_type: Req::TYPE_ID as u64,
             };
             let sender = if let Some(sender) = hub.request_senders.get(&key) {
                 sender.clone()
@@ -477,7 +477,7 @@ impl Network for MockNetwork {
 
         let key = RequestKey {
             recipient: self.address,
-            message_type: M::TYPE_ID,
+            message_type: M::TYPE_ID as u64,
         };
         if hub.request_senders.insert(key, tx).is_some() {
             log::warn!(
