@@ -100,7 +100,7 @@ def create_nimiq_address():
     }
 
 
-def create_seed(path):
+def create_seed(path, min_peers):
     path.mkdir(parents=True, exist_ok=True)
 
     # write config
@@ -113,7 +113,7 @@ listen_addresses = [
 
 [consensus]
 network = "dev-albatross"
-min_peers = 1
+min_peers = {min_peers}
 
 [database]
 path = "{path}"
@@ -127,11 +127,12 @@ libp2p_swarm = "debug"
 lock_api = "trace"
 """.format(
             path="temp-state/dev/seed",
+            min_peers=min_peers,
             loki=loki_settings("seed"),
         ))
 
 
-def create_spammer(path):
+def create_spammer(path, min_peers):
     path.mkdir(parents=True, exist_ok=True)
 
     # write config
@@ -148,7 +149,7 @@ seed_nodes = [
 
 [consensus]
 network = "dev-albatross"
-min_peers = 1
+min_peers = {min_peers}
 
 [database]
 path = "{path}"
@@ -168,6 +169,7 @@ voting_key_file = "{path}/voting_key.dat"
 fee_key_file = "{path}/fee_key.dat"
 """.format(
             path="temp-state/dev/spammer",
+            min_peers=min_peers,
             loki=loki_settings("spammer"),
         ))
     return {
@@ -175,7 +177,7 @@ fee_key_file = "{path}/fee_key.dat"
     }
 
 
-def create_validator(path, i):
+def create_validator(path, i, min_peers):
     path.mkdir(parents=True, exist_ok=True)
 
     # create voting (BLS) keypair
@@ -215,7 +217,7 @@ seed_nodes = [
 
 [consensus]
 network = "dev-albatross"
-min_peers = 1
+min_peers = {min_peers}
 
 [database]
 path = "{path}"
@@ -239,6 +241,7 @@ fee_key = "{fee_key}"
 """.format(
             port=str(9101 + i),
             path="temp-state/dev/{}".format(i+1),  # str(path),
+            min_peers=min_peers,
             loki=loki_settings("validator{}".format(i)),
             validator_address=validator_address["address"],
             voting_key=voting_key["private_key"],
@@ -258,20 +261,21 @@ fee_key = "{fee_key}"
 print("Writing devnet to: {}".format(output))
 print("Creating validators...")
 validators = []
+min_peers = min(num_validators, 3)
 for i in range(num_validators):
-    validator = create_validator(output / "validator{:d}".format(i+1), i)
+    validator = create_validator(output / "validator{:d}".format(i+1), i, min_peers)
     validators.append(validator)
     print("Created validator: {}..".format(
         validator["voting_key"]["public_key"][0:16]))
 
 # Create seed node configuration
-create_seed(output / "seed")
+create_seed(output / "seed", min_peers)
 print("Created seed node configuration")
 
 spammers = []
 if args.spammer:
     # Create spammer node configuration
-    spammers.append(create_spammer(output / "spammer"))
+    spammers.append(create_spammer(output / "spammer", min_peers))
     print("Created spammer configuration")
 
 # Genesis configuration
