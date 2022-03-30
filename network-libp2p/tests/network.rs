@@ -174,6 +174,39 @@ async fn create_connected_networks() -> (Network, Network) {
     (net1, net2)
 }
 
+async fn create_double_connected_networks() -> (Network, Network) {
+    log::debug!("creating connected test networks:");
+    let addr1 = multiaddr![Memory(thread_rng().gen::<u64>())];
+    let addr2 = multiaddr![Memory(thread_rng().gen::<u64>())];
+
+    let net1 = Network::new(Arc::new(OffsetTime::new()), network_config(addr1.clone())).await;
+    net1.listen_on(vec![addr1.clone()]).await;
+
+    let net2 = Network::new(Arc::new(OffsetTime::new()), network_config(addr2.clone())).await;
+    net2.listen_on(vec![addr2.clone()]).await;
+
+    log::debug!(address = ?addr1, peer_id = ?net1.get_local_peer_id(), "Network 1");
+    log::debug!(address = ?addr2, peer_id = ?net2.get_local_peer_id(), "Network 2");
+
+    let mut events1 = net1.subscribe_events();
+    let mut events2 = net2.subscribe_events();
+
+    log::debug!("dialing peer 1 from peer 2 and peer 2 from peer 1");
+    assert!(futures::try_join!(net2.dial_address(addr1), net1.dial_address(addr2)).is_ok());
+
+    log::debug!("waiting for join events");
+
+    let event1 = events1.next().await.unwrap().unwrap();
+    log::trace!(event1 = ?event1);
+    assert_peer_joined(&event1, &net2.get_local_peer_id());
+
+    let event2 = events2.next().await.unwrap().unwrap();
+    log::trace!(event2 = ?event2);
+    assert_peer_joined(&event2, &net1.get_local_peer_id());
+
+    (net1, net2)
+}
+
 async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
     let mut networks = Vec::new();
     let mut addresses = Vec::new();
@@ -324,6 +357,18 @@ async fn two_networks_can_connect() {
     let peer1 = net2.get_peers()[0];
     assert_eq!(peer2, net2.get_local_peer_id());
     assert_eq!(peer1, net1.get_local_peer_id());
+}
+
+#[test(tokio::test(flavor = "multi_thread", worker_threads = 2))]
+async fn two_networks_can_connect_double_dial() {
+    let (net1, net2) = create_double_connected_networks().await;
+    assert_eq!(net1.get_peers().len(), 1);
+    assert_eq!(net2.get_peers().len(), 1);
+
+    let peer2 = net1.get_peer(*net2.local_peer_id()).unwrap();
+    let peer1 = net2.get_peer(*net1.local_peer_id()).unwrap();
+    assert_eq!(peer2.id(), net2.get_local_peer_id());
+    assert_eq!(peer1.id(), net1.get_local_peer_id());
 }
 
 #[test(tokio::test)]
