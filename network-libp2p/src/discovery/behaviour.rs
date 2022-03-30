@@ -188,23 +188,27 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         _failed_addresses: Option<&Vec<Multiaddr>>,
         other_established: usize,
     ) {
-        log::trace!("DiscoveryBehaviour::inject_connection_established:");
-        log::trace!("  - peer_id: {:?}", peer_id);
-        log::trace!("  - connection_id: {:?}", connection_id);
-        log::trace!("  - endpoint: {:?}", endpoint);
-
         if other_established == 0 {
+            log::trace!("DiscoveryBehaviour::inject_connection_established:");
+            log::trace!("  - peer_id: {:?}", peer_id);
+            log::trace!("  - connection_id: {:?}", connection_id);
+            log::trace!("  - endpoint: {:?}", endpoint);
+
             // This is the first connection to this peer
             self.connected_peers.insert(*peer_id);
-        }
 
-        if endpoint.is_dialer() {
-            self.events
-                .push_back(NetworkBehaviourAction::NotifyHandler {
-                    peer_id: *peer_id,
-                    handler: NotifyHandler::One(*connection_id),
-                    event: HandlerInEvent::ObservedAddress(endpoint.get_remote_address().clone()),
-                });
+            if endpoint.is_dialer() {
+                self.events
+                    .push_back(NetworkBehaviourAction::NotifyHandler {
+                        peer_id: *peer_id,
+                        handler: NotifyHandler::One(*connection_id),
+                        event: HandlerInEvent::ObservedAddress(
+                            endpoint.get_remote_address().clone(),
+                        ),
+                    });
+            }
+        } else {
+            log::trace!("DiscoveryBehaviour::inject_connection_established: Already have a connection established to peer {:?}", peer_id);
         }
     }
 

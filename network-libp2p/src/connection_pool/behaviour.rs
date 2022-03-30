@@ -365,12 +365,18 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
         failed_addresses: Option<&Vec<Multiaddr>>,
         other_established: usize,
     ) {
-        if other_established == 0 {
-            // This is the first connection to this peer
-            self.peer_ids.mark_connected(*peer_id);
-            self.maintain_peers();
-        }
+        let address = endpoint.get_remote_address();
 
+        log::debug!(
+            "Connection established: peer_id={}, address={}, type: {}",
+            peer_id,
+            address,
+            if endpoint.is_dialer() {
+                "outbound"
+            } else {
+                "inbound"
+            }
+        );
         // Send an event to the handler that tells it if this is an inbound or outbound connection, and the registered
         // messages handlers, that receive from all peers.
         self.actions
@@ -383,92 +389,98 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
                 },
             });
 
-        if let Some(addresses) = failed_addresses {
-            for address in addresses {
-                self.addresses.mark_failed(address.clone());
-            }
-        }
+        if other_established == 0 {
+            // This is the first connection to this peer
+            self.peer_ids.mark_connected(*peer_id);
+            self.maintain_peers();
 
-        let address = endpoint.get_remote_address();
-        log::debug!(
-            "Connection established: peer_id={}, address={}",
-            peer_id,
-            address
-        );
-
-        let ip = match address.iter().next() {
-            Some(Protocol::Ip4(ip)) => {
-                IpNetwork::new_truncate(ip, self.config.ipv4_subnet_mask).unwrap()
-            }
-            Some(Protocol::Ip6(ip)) => {
-                IpNetwork::new_truncate(ip, self.config.ipv6_subnet_mask).unwrap()
-            }
-            _ => return, // TODO: Review if we need to handle additional protocols
-        };
-
-        let mut close_connection = false;
-
-        if self.banned.get(&ip).is_some() {
-            log::debug!("IP is banned, {}", ip);
-            close_connection = true;
-        }
-        if self.config.peer_count_per_ip_max
-            < self
-                .limits
-                .ip_count
-                .get(&ip)
-                .unwrap_or(&0)
-                .saturating_add(1)
-        {
-            log::debug!("Max peer connections per IP limit reached, {}", ip);
-            close_connection = true;
-        }
-        if ip.is_ipv4()
-            && (self.config.peer_count_per_subnet_max < self.limits.ipv4_count.saturating_add(1))
-        {
-            log::debug!("Max peer connections per IPv4 subnet limit reached");
-            close_connection = true;
-        }
-        if ip.is_ipv6()
-            && (self.config.peer_count_per_subnet_max < self.limits.ipv6_count.saturating_add(1))
-        {
-            log::debug!("Max peer connections per IPv6 subnet limit reached");
-            close_connection = true;
-        }
-        if self.config.peer_count_max
-            < self
-                .limits
-                .ipv4_count
-                .saturating_add(self.limits.ipv6_count)
-                .saturating_add(1)
-        {
-            log::debug!("Max peer connections limit reached");
-            close_connection = true;
-        }
-
-        if close_connection {
-            self.actions
-                .push_back(NetworkBehaviourAction::NotifyHandler {
-                    peer_id: *peer_id,
-                    handler: NotifyHandler::Any,
-                    event: HandlerInEvent::Close {
-                        reason: CloseReason::Other,
-                    },
-                });
-        } else {
-            // Increment peer counts per IP
-            let value = self.limits.ip_count.entry(ip).or_insert(0);
-            *value = value.saturating_add(1);
-            match ip {
-                IpNetwork::V4(..) => {
-                    self.limits.ipv4_count = self.limits.ipv4_count.saturating_add(1)
+            if let Some(addresses) = failed_addresses {
+                for address in addresses {
+                    self.addresses.mark_failed(address.clone());
                 }
-                IpNetwork::V6(..) => {
-                    self.limits.ipv6_count = self.limits.ipv6_count.saturating_add(1)
+            }
+
+            let ip = match address.iter().next() {
+                Some(Protocol::Ip4(ip)) => {
+                    IpNetwork::new_truncate(ip, self.config.ipv4_subnet_mask).unwrap()
                 }
+                Some(Protocol::Ip6(ip)) => {
+                    IpNetwork::new_truncate(ip, self.config.ipv6_subnet_mask).unwrap()
+                }
+                _ => return, // TODO: Review if we need to handle additional protocols
             };
 
-            self.addresses.mark_connected(address.clone());
+            let mut close_connection = false;
+
+            if self.banned.get(&ip).is_some() {
+                log::debug!("IP is banned, {}", ip);
+                close_connection = true;
+            }
+            if self.config.peer_count_per_ip_max
+                < self
+                    .limits
+                    .ip_count
+                    .get(&ip)
+                    .unwrap_or(&0)
+                    .saturating_add(1)
+            {
+                log::debug!("Max peer connections per IP limit reached, {}", ip);
+                close_connection = true;
+            }
+            if ip.is_ipv4()
+                && (self.config.peer_count_per_subnet_max
+                    < self.limits.ipv4_count.saturating_add(1))
+            {
+                log::debug!("Max peer connections per IPv4 subnet limit reached");
+                close_connection = true;
+            }
+            if ip.is_ipv6()
+                && (self.config.peer_count_per_subnet_max
+                    < self.limits.ipv6_count.saturating_add(1))
+            {
+                log::debug!("Max peer connections per IPv6 subnet limit reached");
+                close_connection = true;
+            }
+            if self.config.peer_count_max
+                < self
+                    .limits
+                    .ipv4_count
+                    .saturating_add(self.limits.ipv6_count)
+                    .saturating_add(1)
+            {
+                log::debug!("Max peer connections limit reached");
+                close_connection = true;
+            }
+
+            if close_connection {
+                self.actions
+                    .push_back(NetworkBehaviourAction::NotifyHandler {
+                        peer_id: *peer_id,
+                        handler: NotifyHandler::Any,
+                        event: HandlerInEvent::Close {
+                            reason: CloseReason::Other,
+                        },
+                    });
+            } else {
+                // Increment peer counts per IP
+                let value = self.limits.ip_count.entry(ip).or_insert(0);
+                *value = value.saturating_add(1);
+                match ip {
+                    IpNetwork::V4(..) => {
+                        self.limits.ipv4_count = self.limits.ipv4_count.saturating_add(1)
+                    }
+                    IpNetwork::V6(..) => {
+                        self.limits.ipv6_count = self.limits.ipv6_count.saturating_add(1)
+                    }
+                };
+
+                self.addresses.mark_connected(address.clone());
+            }
+        } else {
+            log::debug!(
+                "Already have a connection established to this peer {:?}",
+                peer_id
+            );
         }
     }
 
@@ -480,43 +492,47 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
         _handler: <Self::ConnectionHandler as IntoConnectionHandler>::Handler,
         remaining_established: usize,
     ) {
-        let address = endpoint.get_remote_address();
-
-        let ip = match address.iter().next() {
-            Some(Protocol::Ip4(ip)) => {
-                IpNetwork::new_truncate(ip, self.config.ipv4_subnet_mask).unwrap()
-            }
-            Some(Protocol::Ip6(ip)) => {
-                IpNetwork::new_truncate(ip, self.config.ipv6_subnet_mask).unwrap()
-            }
-            _ => return, // TODO: Review if we need to handle additional protocols
-        };
-
-        // Decrement IP counters
-        let value = self.limits.ip_count.entry(ip).or_insert(1);
-        *value = value.saturating_sub(1);
-        if *self.limits.ip_count.get(&ip).unwrap() == 0 {
-            self.limits.ip_count.remove(&ip);
-        }
-
-        match ip {
-            IpNetwork::V4(..) => self.limits.ipv4_count = self.limits.ipv4_count.saturating_sub(1),
-            IpNetwork::V6(..) => self.limits.ipv6_count = self.limits.ipv6_count.saturating_sub(1),
-        };
-
-        self.addresses.mark_closed(address.clone());
-        // Notify handler about the connection is going to be shut down
-        self.actions
-            .push_back(NetworkBehaviourAction::NotifyHandler {
-                peer_id: *peer_id,
-                handler: NotifyHandler::Any,
-                event: HandlerInEvent::Close {
-                    reason: CloseReason::RemoteClosed,
-                },
-            });
-
+        // Check there are no more remaining connections to this peer
         if remaining_established == 0 {
-            // There are no more remaining connections to this peer
+            let address = endpoint.get_remote_address();
+
+            let ip = match address.iter().next() {
+                Some(Protocol::Ip4(ip)) => {
+                    IpNetwork::new_truncate(ip, self.config.ipv4_subnet_mask).unwrap()
+                }
+                Some(Protocol::Ip6(ip)) => {
+                    IpNetwork::new_truncate(ip, self.config.ipv6_subnet_mask).unwrap()
+                }
+                _ => return, // TODO: Review if we need to handle additional protocols
+            };
+
+            // Decrement IP counters
+            let value = self.limits.ip_count.entry(ip).or_insert(1);
+            *value = value.saturating_sub(1);
+            if *self.limits.ip_count.get(&ip).unwrap() == 0 {
+                self.limits.ip_count.remove(&ip);
+            }
+
+            match ip {
+                IpNetwork::V4(..) => {
+                    self.limits.ipv4_count = self.limits.ipv4_count.saturating_sub(1)
+                }
+                IpNetwork::V6(..) => {
+                    self.limits.ipv6_count = self.limits.ipv6_count.saturating_sub(1)
+                }
+            };
+
+            self.addresses.mark_closed(address.clone());
+            // Notify handler about the connection is going to be shut down
+            self.actions
+                .push_back(NetworkBehaviourAction::NotifyHandler {
+                    peer_id: *peer_id,
+                    handler: NotifyHandler::Any,
+                    event: HandlerInEvent::Close {
+                        reason: CloseReason::RemoteClosed,
+                    },
+                });
+
             self.peer_ids.mark_closed(*peer_id);
             // If the connection was closed for any reason, don't dial the peer again.
             // FIXME We want to be more selective here and only mark peers as down for specific CloseReasons.
