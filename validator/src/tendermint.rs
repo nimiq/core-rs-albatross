@@ -103,7 +103,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
         &self,
         state: &TendermintState<Self::ProposalTy, Self::ProposalHashTy, Self::ProofTy>,
     ) -> bool {
-        self.initial_round() <= state.round
+        state.height == self.block_height
     }
 
     /// States if it is our turn to be the Tendermint proposer or not.
