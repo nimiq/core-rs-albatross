@@ -292,6 +292,7 @@ if [ "$SPAMMER" = true ] ; then
 fi
 
 old_block_number=0
+old_view_number=0
 restarts_count=0
 
 cycles=0
@@ -367,7 +368,7 @@ do
 
     # First collect the last block number from each validator
     for log in $logsdir/*.log; do
-        bn=$({ grep "Accepted block" $log || test $? = 1; } | tail -1 | awk -F# '{print $2}' | cut --delimiter=. --fields 1)
+        bn=$({ grep "Accepted block" $log || test $? = 1; } | tail -1 | awk -F# '{print $2}' | cut -d : -f 1)
         if [ -z "$bn" ]; then
             bns+=(0)
         else
@@ -377,19 +378,26 @@ do
 
     # Obtain the greatest one
     new_block_number=0
-    for n in "${bns[@]}" ; do
-        ((n > new_block_number)) && new_block_number=$n
+    new_view_number=0
+    for bn in "${bns[@]}" ; do
+        block_number=$(echo $bn | cut -d "." -f 1)
+        view_number=$(echo $bn | cut -d "." -f 2)
+        if [ $block_number -gt $new_block_number ] || [ $view_number -gt $new_view_number ] ; then
+            new_block_number=$block_number
+            new_view_number=$view_number
+        fi
     done
 
-    echo "     Latest block number: $new_block_number "
+    echo "     Latest block: #$new_block_number.$new_view_number"
 
-    if [ $new_block_number -le $old_block_number ] ; then
+    if [ $new_block_number -eq $old_block_number ] && [ $new_view_number -eq $old_view_number ] ; then
         echo "   !!!   BLOCKS ARE NOT BEING PRODUCED AFTER $sleep_time SECONDS   !!!"
         echo "CHAIN-STALL" >> temp-state/RESULT.TXT
         fail=true
         break
     fi
     old_block_number=$new_block_number
+    old_view_number=$new_view_number
 done
 
 sleep 30
