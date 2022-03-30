@@ -32,9 +32,11 @@ pub enum Error {
     #[error("RPC server error: {0}")]
     RpcServer(#[from] nimiq_rpc_server::Error),
 
+    #[cfg(feature = "logging")]
     #[error("Logger error: {0}")]
     Logging(#[from] tracing_subscriber::filter::FromEnvError),
 
+    #[cfg(feature = "logging")]
     #[error("Loki logger error: {0}")]
     LoggingLoki(#[from] tracing_loki::Error),
 

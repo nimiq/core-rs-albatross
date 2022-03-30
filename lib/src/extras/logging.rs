@@ -1,18 +1,13 @@
 use std::env;
-use std::fmt;
 use std::fs::{self, File};
 use std::io;
 use std::sync::Arc;
 
-use ansi_term::{Color, Style};
 use file_rotate::{compression::Compression, suffix::AppendCount, ContentLimit, FileRotate};
-use log::{level_filters::LevelFilter, Event, Level, Subscriber};
+use log::{level_filters::LevelFilter, Level, Subscriber};
 use parking_lot::Mutex;
-use tracing_log::NormalizeEvent;
 use tracing_subscriber::filter::Targets;
-use tracing_subscriber::fmt::format::Writer;
-use tracing_subscriber::fmt::time::{FormatTime, SystemTime};
-use tracing_subscriber::fmt::{FmtContext, FormatEvent, FormatFields, FormattedFields};
+use tracing_subscriber::fmt::time::SystemTime;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -22,76 +17,9 @@ use crate::{
     config::{command_line::CommandLine, config_file::LogSettings},
     error::Error,
 };
-
-static NIMIQ_MODULES: &[&str] = &[
-    "beserial",
-    "beserial_derive",
-    "nimiq_account",
-    "nimiq_address",
-    "nimiq_block",
-    "nimiq_block_production",
-    "nimiq_blockchain",
-    "nimiq_bls",
-    "nimiq_bls",
-    "nimiq_client",
-    "nimiq_collections",
-    "nimiq_consensus",
-    "nimiq_database",
-    "nimiq_devnet",
-    "nimiq_genesis",
-    "nimiq_genesis_builder",
-    "nimiq_handel",
-    "nimiq_hash",
-    "nimiq_hash_derive",
-    "nimiq_key_derivation",
-    "nimiq_keys",
-    "nimiq_lib",
-    "nimiq_macros",
-    "nimiq_mempool",
-    "nimiq_mmr",
-    "nimiq_mnemonic",
-    "nimiq_nano_blockchain",
-    "nimiq_nano_primitives",
-    "nimiq_nano_zkp",
-    "nimiq_network_interface",
-    "nimiq_network_libp2p",
-    "nimiq_network_mock",
-    "nimiq_peer_address",
-    "nimiq_primitives",
-    "nimiq_rpc",
-    "nimiq_rpc_client",
-    "nimiq_rpc_interface",
-    "nimiq_rpc_server",
-    "nimiq_signtx",
-    "nimiq_spammer",
-    "nimiq_subscription",
-    "nimiq_tendermint",
-    "nimiq_test_utils",
-    "nimiq_tools",
-    "nimiq_transaction",
-    "nimiq_transaction_builder",
-    "nimiq_trie",
-    "nimiq_utils",
-    "nimiq_validator",
-    "nimiq_validator_network",
-    "nimiq_vrf",
-    "nimiq_wallet",
-];
+use nimiq_log::{Formatting, MaybeSystemTime, TargetsExt};
 
 pub const DEFAULT_LEVEL: LevelFilter = LevelFilter::INFO;
-
-trait TargetsExt {
-    fn with_nimiq_targets(self, level: LevelFilter) -> Self;
-}
-
-impl TargetsExt for Targets {
-    fn with_nimiq_targets(mut self, level: LevelFilter) -> Targets {
-        for &module in NIMIQ_MODULES.iter() {
-            self = self.with_target(module, level);
-        }
-        self
-    }
-}
 
 macro_rules! force_log {
     ($lvl:expr, $($arg:tt)+) => ({
@@ -170,6 +98,8 @@ pub fn initialize_logging(
         .with_nimiq_targets(settings.level.unwrap_or(DEFAULT_LEVEL));
     // Set logging level for specific selected modules
     filter = filter.with_targets(settings.tags);
+    // Set logging level from the environment
+    filter = filter.with_env();
 
     let file = match &settings.file {
         Some(filename) => Some(Arc::new(File::open(filename)?)),
@@ -183,134 +113,8 @@ pub fn initialize_logging(
         })
     };
 
-    struct MaybeSystemTime(bool);
-
-    impl FormatTime for MaybeSystemTime {
-        fn format_time(&self, w: &mut Writer) -> fmt::Result {
-            if self.0 {
-                SystemTime.format_time(w)
-            } else {
-                ().format_time(w)
-            }
-        }
-    }
-
     #[derive(Clone)]
     struct Rotating(Arc<Mutex<FileRotate<AppendCount>>>);
-
-    struct Formatting<T: FormatTime>(T);
-
-    impl<S, N, T: FormatTime> FormatEvent<S, N> for Formatting<T>
-    where
-        S: Subscriber + for<'a> LookupSpan<'a>,
-        N: for<'a> FormatFields<'a> + 'static,
-    {
-        fn format_event(
-            &self,
-            ctx: &FmtContext<'_, S, N>,
-            mut writer: Writer<'_>,
-            event: &Event<'_>,
-        ) -> fmt::Result {
-            let (bold, dim) = if writer.has_ansi_escapes() {
-                (Style::default().bold(), Style::default().dimmed())
-            } else {
-                (Style::default(), Style::default())
-            };
-            write!(&mut writer, "{}", dim.prefix())?;
-            self.0.format_time(&mut writer)?;
-            write!(&mut writer, "{}", dim.suffix())?;
-
-            // Format values from the event's metadata:
-            let normalized_metadata = event.normalized_metadata();
-            let metadata = normalized_metadata
-                .as_ref()
-                .unwrap_or_else(|| event.metadata());
-
-            let color = if writer.has_ansi_escapes() {
-                Style::from(match *metadata.level() {
-                    Level::TRACE => Color::Purple,
-                    Level::DEBUG => Color::Blue,
-                    Level::INFO => Color::Green,
-                    Level::WARN => Color::Yellow,
-                    Level::ERROR => Color::Red,
-                })
-            } else {
-                Style::default()
-            };
-
-            let mut target = metadata.target();
-            // Drop everything except the module name.
-            if let Some(pos) = target.rfind("::") {
-                target = &target[pos + 2..];
-            }
-            // Pretend `target` is ASCII-only
-            const MAX_MODULE_WIDTH: usize = 20;
-            let truncate = target.len() > MAX_MODULE_WIDTH;
-            if truncate {
-                for i in (0..MAX_MODULE_WIDTH).rev() {
-                    if target.is_char_boundary(i) {
-                        target = &target[..i];
-                        break;
-                    }
-                }
-            }
-            let indicator = if truncate {
-                "…"
-            } else if target.len() < MAX_MODULE_WIDTH {
-                " "
-            } else {
-                ""
-            };
-
-            write!(
-                &mut writer,
-                " {}{:5}{} {}{:width$}{}{} | ",
-                color.prefix(),
-                metadata.level(),
-                color.suffix(),
-                dim.prefix(),
-                target,
-                indicator,
-                dim.suffix(),
-                width = MAX_MODULE_WIDTH - 1,
-            )?;
-
-            // Write fields on the event
-            ctx.field_format().format_fields(writer.by_ref(), event)?;
-
-            // Format all the spans in the event's span context.
-            if let Some(scope) = ctx.event_scope() {
-                for span in scope.from_root() {
-                    write!(
-                        writer,
-                        ", {}{}{{{}",
-                        bold.prefix(),
-                        span.name(),
-                        bold.suffix()
-                    )?;
-
-                    // `FormattedFields` is a formatted representation of the span's
-                    // fields, which is stored in its extensions by the `fmt` layer's
-                    // `new_span` method. The fields will have been formatted
-                    // by the same field formatter that's provided to the event
-                    // formatter in the `FmtContext`.
-                    let ext = span.extensions();
-                    let fields = &ext
-                        .get::<FormattedFields<N>>()
-                        .expect("will never be `None`");
-
-                    // Skip formatting the fields if the span had no fields.
-                    if !fields.is_empty() {
-                        write!(writer, "{}{}}}{}", fields, bold.prefix(), bold.suffix())?;
-                    }
-                }
-            }
-
-            writeln!(writer)?;
-
-            Ok(())
-        }
-    }
 
     impl io::Write for Rotating {
         fn write(&mut self, buf: &[u8]) -> io::Result<usize> {

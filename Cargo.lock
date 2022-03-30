@@ -2827,7 +2827,6 @@ dependencies = [
 name = "nimiq-lib"
 version = "0.1.0"
 dependencies = [
- "ansi_term",
  "beserial",
  "clap",
  "console-subscriber",
@@ -2845,6 +2844,7 @@ dependencies = [
  "nimiq-jsonrpc-core",
  "nimiq-jsonrpc-server",
  "nimiq-keys",
+ "nimiq-log",
  "nimiq-mempool",
  "nimiq-network-interface",
  "nimiq-network-libp2p",
@@ -2866,10 +2866,19 @@ dependencies = [
  "tokio",
  "toml",
  "tracing",
- "tracing-log",
  "tracing-loki",
  "tracing-subscriber 0.3.9",
  "url",
+]
+
+[[package]]
+name = "nimiq-log"
+version = "0.1.0"
+dependencies = [
+ "ansi_term",
+ "tracing",
+ "tracing-log",
+ "tracing-subscriber 0.3.9",
 ]
 
 [[package]]
@@ -3269,8 +3278,10 @@ dependencies = [
 name = "nimiq-test-log"
 version = "0.1.0"
 dependencies = [
+ "nimiq-log",
  "nimiq-test-log-proc-macro",
  "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
+ "tracing",
  "tracing-subscriber 0.3.9",
 ]
 

@@ -17,6 +17,7 @@ members = [
   "key-derivation",
   "keys",
   "lib",
+  "log",
   "macros",
   "mempool",
   "mnemonic",
