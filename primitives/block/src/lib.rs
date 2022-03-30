@@ -29,6 +29,8 @@ mod view_change;
 pub enum BlockError {
     #[error("Unsupported version")]
     UnsupportedVersion,
+    #[error("Extra data too large")]
+    ExtraDataTooLarge,
     #[error("Block is from the future")]
     FromTheFuture,
     #[error("Block size exceeded")]

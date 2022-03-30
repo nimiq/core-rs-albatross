@@ -43,6 +43,12 @@ impl Blockchain {
             return Err(PushError::InvalidBlock(BlockError::UnsupportedVersion));
         }
 
+        // Check that the extra data does not exceed the permitted size. This is also checked during deserialization.
+        if header.extra_data().len() > 32 {
+            warn!("Rejecting block {} - too much extra data", header);
+            return Err(PushError::InvalidBlock(BlockError::ExtraDataTooLarge));
+        }
+
         // Check if the block's immediate predecessor is part of the chain.
         let prev_info = blockchain
             .get_chain_info(header.parent_hash(), false, txn_opt)
