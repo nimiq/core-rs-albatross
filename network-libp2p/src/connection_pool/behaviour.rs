@@ -206,6 +206,12 @@ impl ConnectionPoolBehaviour {
         }
     }
 
+    fn wake(&mut self) {
+        if let Some(waker) = &self.waker {
+            waker.wake_by_ref();
+        }
+    }
+
     pub fn maintain_peers(&mut self) {
         log::debug!(
             "Maintaining peers: {} | addresses: {}",
@@ -243,9 +249,7 @@ impl ConnectionPoolBehaviour {
             }
         }
 
-        if let Some(waker) = &self.waker {
-            waker.wake_by_ref();
-        }
+        self.wake();
     }
 
     pub fn start_connecting(&mut self) {
@@ -388,6 +392,7 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
                     outbound: endpoint.is_dialer(),
                 },
             });
+        self.wake();
 
         if other_established == 0 {
             // This is the first connection to this peer
@@ -461,6 +466,7 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
                             reason: CloseReason::Other,
                         },
                     });
+                self.wake();
             } else {
                 // Increment peer counts per IP
                 let value = self.limits.ip_count.entry(ip).or_insert(0);
@@ -532,6 +538,7 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
                         reason: CloseReason::RemoteClosed,
                     },
                 });
+            self.wake();
 
             self.peer_ids.mark_closed(*peer_id);
             // If the connection was closed for any reason, don't dial the peer again.
@@ -562,6 +569,7 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
                     });
             }
         }
+        self.wake();
     }
 
     fn inject_dial_failure(
