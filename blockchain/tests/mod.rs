@@ -1,18 +1,15 @@
 use parking_lot::RwLock;
 use std::sync::Arc;
 
-use beserial::Deserialize;
 use nimiq_block::Block;
 use nimiq_block_production::{test_utils::TemporaryBlockProducer, BlockProducer};
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_blockchain::{ForkEvent, PushResult};
-use nimiq_bls::{KeyPair, SecretKey};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
-use nimiq_keys::{KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey};
 use nimiq_primitives::policy;
 use nimiq_test_log::test;
-use nimiq_test_utils::blockchain::{sign_view_change, SIGNING_KEY, VOTING_KEY};
+use nimiq_test_utils::blockchain::{sign_view_change, signing_key, voting_key};
 use nimiq_utils::time::OffsetTime;
 
 #[test]
@@ -69,12 +66,7 @@ fn it_can_push_consecutive_view_changes() {
     let blockchain = Arc::new(RwLock::new(
         Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
     ));
-    let signing_key = SchnorrKeyPair::from(
-        SchnorrPrivateKey::deserialize_from_vec(&hex::decode(SIGNING_KEY).unwrap()).unwrap(),
-    );
-    let voting_key =
-        KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(VOTING_KEY).unwrap()).unwrap());
-    let producer = BlockProducer::new(signing_key, voting_key);
+    let producer = BlockProducer::new(signing_key(), voting_key());
 
     // Produce a simple micro block and push it
     let micro_block = {
@@ -214,27 +206,8 @@ fn micro_block_works_after_macro_block() {
 
 #[test]
 fn it_can_rebranch_forks() {
-    // Build forks using two producers.
     let temp_producer1 = TemporaryBlockProducer::new();
     let temp_producer2 = TemporaryBlockProducer::new();
-
-    // Case 1: easy rebranch
-    // [0] - [0] - [0] - [0]
-    //          \- [0]
-    let block = temp_producer1.next_block(0, vec![]);
-    temp_producer2.push(block).unwrap();
-
-    let fork1 = temp_producer1.next_block(0, vec![0x48]);
-    let fork2 = temp_producer2.next_block(0, vec![]);
-
-    let better = temp_producer1.next_block(0, vec![]);
-
-    // Check that each one accepts other fork.
-    assert_eq!(temp_producer1.push(fork2), Ok(PushResult::Forked));
-    assert_eq!(temp_producer2.push(fork1), Ok(PushResult::Forked));
-
-    // Check that producer 2 rebranches.
-    assert_eq!(temp_producer2.push(better), Ok(PushResult::Rebranched));
 
     // Case 2: more difficult rebranch
     //              a     b     c     d
@@ -267,30 +240,6 @@ fn it_can_rebranch_forks() {
 
     assert_eq!(temp_producer1.push(fork2d), Ok(PushResult::Extended));
     assert_eq!(temp_producer2.push(fork1d), Ok(PushResult::Ignored));
-}
-
-#[test]
-fn it_cant_rebranch_across_epochs() {
-    // Build forks using two producers.
-    let temp_producer1 = TemporaryBlockProducer::new();
-    let temp_producer2 = TemporaryBlockProducer::new();
-
-    // The number in [_] represents the epoch number
-    //              a
-    // [0] - [0] - [0]
-    //          \- [0] - ... - [0] - [1]
-
-    let ancestor = temp_producer1.next_block(0, vec![]);
-    temp_producer2.push(ancestor).unwrap();
-
-    // progress the chain across an epoch boundary.
-    for _ in 0..policy::BLOCKS_PER_EPOCH {
-        temp_producer1.next_block(0, vec![]);
-    }
-
-    let fork = temp_producer2.next_block(1, vec![]);
-    // Pushing a block from a previous batch/epoch is atm cought before checking if it's a fork or known block
-    assert_eq!(temp_producer1.push(fork), Ok(PushResult::Ignored));
 }
 
 #[test]
