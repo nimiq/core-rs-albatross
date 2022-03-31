@@ -11,21 +11,18 @@ use libp2p::{
     core::{connection::ConnectionId, multiaddr::Protocol, ConnectedPoint},
     swarm::{
         dial_opts::DialOpts, CloseConnection, ConnectionHandler, DialError, IntoConnectionHandler,
-        NetworkBehaviour, NetworkBehaviourAction, NotifyHandler, PollParameters,
+        NetworkBehaviour, NetworkBehaviourAction, PollParameters,
     },
     Multiaddr, PeerId,
 };
 use parking_lot::RwLock;
 use rand::seq::IteratorRandom;
 use rand::thread_rng;
-use tokio::sync::oneshot;
 use tokio::time::Interval;
-
-use nimiq_network_interface::peer::CloseReason;
 
 use crate::discovery::peer_contacts::{PeerContactBook, Services};
 
-use super::handler::{ConnectionPoolHandler, HandlerInEvent, HandlerOutEvent};
+use super::handler::ConnectionPoolHandler;
 
 #[derive(Clone, Debug)]
 struct ConnectionPoolLimits {
@@ -154,10 +151,7 @@ impl<T> std::fmt::Display for ConnectionState<T> {
 
 #[derive(Debug)]
 pub enum ConnectionPoolEvent {
-    PeerJoined {
-        peer_id: PeerId,
-        close_tx: oneshot::Sender<CloseReason>,
-    },
+    PeerJoined { peer_id: PeerId },
 }
 
 type PoolNetworkBehaviourAction =
@@ -207,8 +201,8 @@ impl ConnectionPoolBehaviour {
     }
 
     fn wake(&mut self) {
-        if let Some(waker) = &self.waker {
-            waker.wake_by_ref();
+        if let Some(waker) = self.waker.take() {
+            waker.wake();
         }
     }
 
@@ -350,7 +344,7 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
     type OutEvent = ConnectionPoolEvent;
 
     fn new_handler(&mut self) -> Self::ConnectionHandler {
-        ConnectionPoolHandler::new()
+        ConnectionPoolHandler::default()
     }
 
     fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
@@ -381,46 +375,45 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
                 "inbound"
             }
         );
-        // Send an event to the handler that tells it if this is an inbound or outbound connection, and the registered
-        // messages handlers, that receive from all peers.
-        self.actions
-            .push_back(NetworkBehaviourAction::NotifyHandler {
-                peer_id: *peer_id,
-                handler: NotifyHandler::One(*connection_id),
-                event: HandlerInEvent::PeerConnected {
-                    peer_id: *peer_id,
-                    outbound: endpoint.is_dialer(),
-                },
-            });
-        self.wake();
 
-        if other_established == 0 {
-            // This is the first connection to this peer
-            self.peer_ids.mark_connected(*peer_id);
-            self.maintain_peers();
-
-            if let Some(addresses) = failed_addresses {
-                for address in addresses {
-                    self.addresses.mark_failed(address.clone());
-                }
+        // Mark failed addresses as such.
+        if let Some(addresses) = failed_addresses {
+            for address in addresses {
+                self.addresses.mark_failed(address.clone());
             }
+        }
 
-            let ip = match address.iter().next() {
-                Some(Protocol::Ip4(ip)) => {
-                    IpNetwork::new_truncate(ip, self.config.ipv4_subnet_mask).unwrap()
-                }
-                Some(Protocol::Ip6(ip)) => {
-                    IpNetwork::new_truncate(ip, self.config.ipv6_subnet_mask).unwrap()
-                }
-                _ => return, // TODO: Review if we need to handle additional protocols
-            };
+        // Ignore connection if another connection to this peer already exists.
+        // TODO Do we still want to subject it to the IP limit checks?
+        if other_established > 0 {
+            log::debug!(
+                "Already have {} connections established to this peer {:?}",
+                other_established,
+                peer_id,
+            );
+            return;
+        }
 
+        // Get IP from multiaddress if it exists.
+        let ip = match address.iter().next() {
+            Some(Protocol::Ip4(ip)) => {
+                IpNetwork::new_truncate(ip, self.config.ipv4_subnet_mask).ok()
+            }
+            Some(Protocol::Ip6(ip)) => {
+                IpNetwork::new_truncate(ip, self.config.ipv6_subnet_mask).ok()
+            }
+            _ => None,
+        };
+
+        // If we have an IP, check connection limits per IP/subnet.
+        if let Some(ip) = ip {
             let mut close_connection = false;
 
             if self.banned.get(&ip).is_some() {
                 log::debug!("IP is banned, {}", ip);
                 close_connection = true;
             }
+
             if self.config.peer_count_per_ip_max
                 < self
                     .limits
@@ -432,6 +425,7 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
                 log::debug!("Max peer connections per IP limit reached, {}", ip);
                 close_connection = true;
             }
+
             if ip.is_ipv4()
                 && (self.config.peer_count_per_subnet_max
                     < self.limits.ipv4_count.saturating_add(1))
@@ -439,6 +433,7 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
                 log::debug!("Max peer connections per IPv4 subnet limit reached");
                 close_connection = true;
             }
+
             if ip.is_ipv6()
                 && (self.config.peer_count_per_subnet_max
                     < self.limits.ipv6_count.saturating_add(1))
@@ -446,6 +441,7 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
                 log::debug!("Max peer connections per IPv6 subnet limit reached");
                 close_connection = true;
             }
+
             if self.config.peer_count_max
                 < self
                     .limits
@@ -459,35 +455,38 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
 
             if close_connection {
                 self.actions
-                    .push_back(NetworkBehaviourAction::NotifyHandler {
+                    .push_back(NetworkBehaviourAction::CloseConnection {
                         peer_id: *peer_id,
-                        handler: NotifyHandler::Any,
-                        event: HandlerInEvent::Close {
-                            reason: CloseReason::Other,
-                        },
+                        connection: CloseConnection::One(*connection_id),
                     });
                 self.wake();
-            } else {
-                // Increment peer counts per IP
-                let value = self.limits.ip_count.entry(ip).or_insert(0);
-                *value = value.saturating_add(1);
-                match ip {
-                    IpNetwork::V4(..) => {
-                        self.limits.ipv4_count = self.limits.ipv4_count.saturating_add(1)
-                    }
-                    IpNetwork::V6(..) => {
-                        self.limits.ipv6_count = self.limits.ipv6_count.saturating_add(1)
-                    }
-                };
-
-                self.addresses.mark_connected(address.clone());
+                return;
             }
-        } else {
-            log::debug!(
-                "Already have a connection established to this peer {:?}",
-                peer_id
-            );
+
+            // Increment peer counts per IP
+            let value = self.limits.ip_count.entry(ip).or_insert(0);
+            *value = value.saturating_add(1);
+            match ip {
+                IpNetwork::V4(..) => {
+                    self.limits.ipv4_count = self.limits.ipv4_count.saturating_add(1)
+                }
+                IpNetwork::V6(..) => {
+                    self.limits.ipv6_count = self.limits.ipv6_count.saturating_add(1)
+                }
+            };
         }
+
+        // Peer is connected, mark it as such.
+        self.peer_ids.mark_connected(*peer_id);
+        self.addresses.mark_connected(address.clone());
+
+        self.actions
+            .push_back(NetworkBehaviourAction::GenerateEvent(
+                ConnectionPoolEvent::PeerJoined { peer_id: *peer_id },
+            ));
+        self.wake();
+
+        self.maintain_peers();
     }
 
     fn inject_connection_closed(
@@ -499,77 +498,49 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
         remaining_established: usize,
     ) {
         // Check there are no more remaining connections to this peer
-        if remaining_established == 0 {
-            let address = endpoint.get_remote_address();
-
-            let ip = match address.iter().next() {
-                Some(Protocol::Ip4(ip)) => {
-                    IpNetwork::new_truncate(ip, self.config.ipv4_subnet_mask).unwrap()
-                }
-                Some(Protocol::Ip6(ip)) => {
-                    IpNetwork::new_truncate(ip, self.config.ipv6_subnet_mask).unwrap()
-                }
-                _ => return, // TODO: Review if we need to handle additional protocols
-            };
-
-            // Decrement IP counters
-            let value = self.limits.ip_count.entry(ip).or_insert(1);
-            *value = value.saturating_sub(1);
-            if *self.limits.ip_count.get(&ip).unwrap() == 0 {
-                self.limits.ip_count.remove(&ip);
-            }
-
-            match ip {
-                IpNetwork::V4(..) => {
-                    self.limits.ipv4_count = self.limits.ipv4_count.saturating_sub(1)
-                }
-                IpNetwork::V6(..) => {
-                    self.limits.ipv6_count = self.limits.ipv6_count.saturating_sub(1)
-                }
-            };
-
-            self.addresses.mark_closed(address.clone());
-            // Notify handler about the connection is going to be shut down
-            self.actions
-                .push_back(NetworkBehaviourAction::NotifyHandler {
-                    peer_id: *peer_id,
-                    handler: NotifyHandler::Any,
-                    event: HandlerInEvent::Close {
-                        reason: CloseReason::RemoteClosed,
-                    },
-                });
-            self.wake();
-
-            self.peer_ids.mark_closed(*peer_id);
-            // If the connection was closed for any reason, don't dial the peer again.
-            // FIXME We want to be more selective here and only mark peers as down for specific CloseReasons.
-            self.peer_ids.mark_down(*peer_id);
-            self.maintain_peers();
+        if remaining_established > 0 {
+            return;
         }
+
+        let address = endpoint.get_remote_address();
+
+        let ip = match address.iter().next() {
+            Some(Protocol::Ip4(ip)) => {
+                IpNetwork::new_truncate(ip, self.config.ipv4_subnet_mask).unwrap()
+            }
+            Some(Protocol::Ip6(ip)) => {
+                IpNetwork::new_truncate(ip, self.config.ipv6_subnet_mask).unwrap()
+            }
+            _ => return, // TODO: Review if we need to handle additional protocols
+        };
+
+        // Decrement IP counters
+        let value = self.limits.ip_count.entry(ip).or_insert(1);
+        *value = value.saturating_sub(1);
+        if *self.limits.ip_count.get(&ip).unwrap() == 0 {
+            self.limits.ip_count.remove(&ip);
+        }
+
+        match ip {
+            IpNetwork::V4(..) => self.limits.ipv4_count = self.limits.ipv4_count.saturating_sub(1),
+            IpNetwork::V6(..) => self.limits.ipv6_count = self.limits.ipv6_count.saturating_sub(1),
+        };
+
+        self.addresses.mark_closed(address.clone());
+        self.peer_ids.mark_closed(*peer_id);
+        // If the connection was closed for any reason, don't dial the peer again.
+        // FIXME We want to be more selective here and only mark peers as down for specific CloseReasons.
+        self.peer_ids.mark_down(*peer_id);
+
+        self.maintain_peers();
     }
 
     fn inject_event(
         &mut self,
-        peer_id: PeerId,
+        _peer_id: PeerId,
         _connection: ConnectionId,
-        event: <<Self::ConnectionHandler as IntoConnectionHandler>::Handler as ConnectionHandler>::OutEvent,
+        _event: <<Self::ConnectionHandler as IntoConnectionHandler>::Handler as ConnectionHandler>::OutEvent,
     ) {
-        match event {
-            HandlerOutEvent::PeerJoined { close_tx } => {
-                self.actions
-                    .push_back(NetworkBehaviourAction::GenerateEvent(
-                        ConnectionPoolEvent::PeerJoined { peer_id, close_tx },
-                    ));
-            }
-            HandlerOutEvent::ClosePeerConnection { .. } => {
-                self.actions
-                    .push_back(NetworkBehaviourAction::CloseConnection {
-                        peer_id,
-                        connection: CloseConnection::All,
-                    });
-            }
-        }
-        self.wake();
     }
 
     fn inject_dial_failure(

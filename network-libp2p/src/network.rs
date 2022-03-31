@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
@@ -172,7 +173,7 @@ impl PubsubId<PeerId> for GossipsubId<PeerId> {
 }
 pub struct Network {
     local_peer_id: PeerId,
-    connected_peers: Arc<RwLock<HashMap<PeerId, Option<oneshot::Sender<CloseReason>>>>>,
+    connected_peers: Arc<RwLock<HashSet<PeerId>>>,
     events_tx: broadcast::Sender<NetworkEvent<PeerId>>,
     action_tx: mpsc::Sender<NetworkAction>,
     validate_tx: mpsc::UnboundedSender<ValidateMessage<PeerId>>,
@@ -191,7 +192,7 @@ impl Network {
         let swarm = Self::new_swarm(clock, config);
 
         let local_peer_id = *Swarm::local_peer_id(&swarm);
-        let connected_peers = Arc::new(RwLock::new(HashMap::new()));
+        let connected_peers = Arc::new(RwLock::new(HashSet::new()));
 
         let (events_tx, _) = broadcast::channel(64);
         let (action_tx, action_rx) = mpsc::channel(64);
@@ -202,7 +203,7 @@ impl Network {
             events_tx.clone(),
             action_rx,
             validate_rx,
-            connected_peers.clone(),
+            Arc::clone(&connected_peers),
         ));
 
         Self {
@@ -292,7 +293,7 @@ impl Network {
         events_tx: broadcast::Sender<NetworkEvent<PeerId>>,
         mut action_rx: mpsc::Receiver<NetworkAction>,
         mut validate_rx: mpsc::UnboundedReceiver<ValidateMessage<PeerId>>,
-        connected_peers: Arc<RwLock<HashMap<PeerId, Option<oneshot::Sender<CloseReason>>>>>,
+        connected_peers: Arc<RwLock<HashSet<PeerId>>>,
     ) {
         let mut task_state = TaskState::default();
 
@@ -347,7 +348,7 @@ impl Network {
         events_tx: &broadcast::Sender<NetworkEvent<PeerId>>,
         swarm: &mut NimiqSwarm,
         state: &mut TaskState,
-        connected_peers: &RwLock<HashMap<PeerId, Option<oneshot::Sender<CloseReason>>>>,
+        connected_peers: &RwLock<HashSet<PeerId>>,
     ) {
         match event {
             SwarmEvent::ConnectionEstablished {
@@ -356,7 +357,7 @@ impl Network {
                 num_established,
                 concurrent_dial_errors,
             } => {
-                log::info!(
+                log::debug!(
                     "Connection established with peer {}, {:?}, connections established: {:?}",
                     peer_id,
                     endpoint,
@@ -403,7 +404,7 @@ impl Network {
                 cause,
             } => {
                 log::info!(
-                    "Connection closed with peer {}, {:?}, connections established: {:?}",
+                    "Connection closed with peer {}, {:?}, connections remaining: {:?}",
                     peer_id,
                     endpoint,
                     num_established
@@ -414,9 +415,11 @@ impl Network {
                 }
 
                 // Remove Peer
-                connected_peers.write().remove(&peer_id);
-                swarm.behaviour_mut().remove_peer(peer_id);
-                events_tx.send(NetworkEvent::PeerLeft(peer_id)).ok();
+                if num_established == 0 {
+                    connected_peers.write().remove(&peer_id);
+                    swarm.behaviour_mut().remove_peer(peer_id);
+                    events_tx.send(NetworkEvent::PeerLeft(peer_id)).ok();
+                }
             }
 
             SwarmEvent::IncomingConnection {
@@ -620,15 +623,13 @@ impl Network {
                     }
                     NimiqEvent::Pool(event) => {
                         match event {
-                            ConnectionPoolEvent::PeerJoined { peer_id, close_tx } => {
-                                if connected_peers
-                                    .write()
-                                    .insert(peer_id, Some(close_tx))
-                                    .is_some()
-                                {
-                                    log::error!(?peer_id, "peer joined but it already exists");
+                            ConnectionPoolEvent::PeerJoined { peer_id } => {
+                                if connected_peers.write().insert(peer_id) {
+                                    log::info!(?peer_id, "Peer joined");
+                                    events_tx.send(NetworkEvent::PeerJoined(peer_id)).ok();
+                                } else {
+                                    log::error!(?peer_id, "Peer joined but it already exists");
                                 }
-                                events_tx.send(NetworkEvent::PeerJoined(peer_id)).ok();
                             }
                         };
                     }
@@ -1040,11 +1041,11 @@ impl NetworkInterface for Network {
     type RequestId = RequestId;
 
     fn get_peers(&self) -> Vec<PeerId> {
-        self.connected_peers.read().keys().copied().collect()
+        self.connected_peers.read().iter().copied().collect()
     }
 
     fn has_peer(&self, peer_id: PeerId) -> bool {
-        self.connected_peers.read().contains_key(&peer_id)
+        self.connected_peers.read().contains(&peer_id)
     }
 
     async fn disconnect_peer(&self, peer_id: PeerId, _close_reason: CloseReason) {
