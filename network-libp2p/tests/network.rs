@@ -365,10 +365,10 @@ async fn two_networks_can_connect_double_dial() {
     assert_eq!(net1.get_peers().len(), 1);
     assert_eq!(net2.get_peers().len(), 1);
 
-    let peer2 = net1.get_peer(*net2.local_peer_id()).unwrap();
-    let peer1 = net2.get_peer(*net1.local_peer_id()).unwrap();
-    assert_eq!(peer2.id(), net2.get_local_peer_id());
-    assert_eq!(peer1.id(), net1.get_local_peer_id());
+    let peer2 = net1.get_peers()[0];
+    let peer1 = net2.get_peers()[0];
+    assert_eq!(peer2, net2.get_local_peer_id());
+    assert_eq!(peer1, net1.get_local_peer_id());
 }
 
 #[test(tokio::test)]
