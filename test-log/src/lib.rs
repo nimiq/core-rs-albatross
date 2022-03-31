@@ -18,6 +18,7 @@ pub fn initialize() {
                 Targets::new()
                     .with_default(LevelFilter::INFO)
                     .with_nimiq_targets(LevelFilter::DEBUG)
+                    .with_target("r1cs", LevelFilter::WARN)
                     .with_env(),
             )
             .init();
