@@ -102,10 +102,6 @@ pub(crate) enum NetworkAction {
         type_id: MessageType,
         output: mpsc::Sender<(Bytes, RequestId, PeerId)>,
     },
-    ListenOn {
-        listen_addresses: Vec<Multiaddr>,
-    },
-    StartConnecting,
     SendRequest {
         peer_id: PeerId,
         request: IncomingRequest,
@@ -116,6 +112,13 @@ pub(crate) enum NetworkAction {
         request_id: RequestId,
         response: OutgoingResponse,
         output: oneshot::Sender<Result<(), NetworkError>>,
+    },
+    ListenOn {
+        listen_addresses: Vec<Multiaddr>,
+    },
+    StartConnecting,
+    DisconnectPeer {
+        peer_id: PeerId,
     },
 }
 
@@ -925,15 +928,6 @@ impl Network {
             NetworkAction::ReceiveRequests { type_id, output } => {
                 state.receive_requests.insert(type_id, output);
             }
-            NetworkAction::ListenOn { listen_addresses } => {
-                for listen_address in listen_addresses {
-                    Swarm::listen_on(swarm, listen_address)
-                        .expect("Failed to listen on provided address");
-                }
-            }
-            NetworkAction::StartConnecting => {
-                swarm.behaviour_mut().pool.start_connecting();
-            }
             NetworkAction::SendRequest {
                 peer_id,
                 request,
@@ -977,6 +971,20 @@ impl Network {
                     output.send(Err(NetworkError::UnknownRequestId)).ok();
                 }
             }
+            NetworkAction::ListenOn { listen_addresses } => {
+                for listen_address in listen_addresses {
+                    Swarm::listen_on(swarm, listen_address)
+                        .expect("Failed to listen on provided address");
+                }
+            }
+            NetworkAction::StartConnecting => {
+                swarm.behaviour_mut().pool.start_connecting();
+            }
+            NetworkAction::DisconnectPeer { peer_id } => {
+                if swarm.disconnect_peer_id(peer_id).is_err() {
+                    log::warn!(?peer_id, "Peer already closed");
+                }
+            }
         }
     }
 
@@ -1016,9 +1024,9 @@ impl Network {
             OutboundFailure::UnsupportedProtocols => ResponseError::UnsupportedProtocols,
         }
     }
-    pub fn disconnect(&self) {
+    pub async fn disconnect(&self) {
         for peer_id in self.get_peers() {
-            self.disconnect_peer(peer_id, CloseReason::Other);
+            self.disconnect_peer(peer_id, CloseReason::Other).await;
         }
     }
 }
@@ -1039,16 +1047,11 @@ impl NetworkInterface for Network {
         self.connected_peers.read().contains_key(&peer_id)
     }
 
-    fn disconnect_peer(&self, peer_id: PeerId, close_reason: CloseReason) {
-        if let Some(maybe_close_tx) = self.connected_peers.write().get_mut(&peer_id) {
-            if let Some(close_tx) = maybe_close_tx.take() {
-                if let Err(_) = close_tx.send(close_reason) {
-                    log::error!("The receiver for disconnect_peer was already dropped.");
-                }
-            } else {
-                log::error!("Peer is already closed");
-            }
-        }
+    async fn disconnect_peer(&self, peer_id: PeerId, _close_reason: CloseReason) {
+        self.action_tx
+            .send(NetworkAction::DisconnectPeer { peer_id })
+            .await
+            .ok();
     }
 
     fn subscribe_events(&self) -> SubscribeEvents<PeerId> {

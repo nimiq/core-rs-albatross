@@ -205,7 +205,7 @@ impl Network for MockNetwork {
         self.peers.read().get(&peer_id).is_some()
     }
 
-    fn disconnect_peer(&self, peer_id: MockPeerId, _: CloseReason) {
+    async fn disconnect_peer(&self, peer_id: MockPeerId, _: CloseReason) {
         if !self.has_peer(peer_id) {
             return;
         }

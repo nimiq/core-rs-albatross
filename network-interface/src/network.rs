@@ -52,7 +52,7 @@ pub trait Network: Send + Sync + 'static {
 
     fn get_peers(&self) -> Vec<Self::PeerId>;
     fn has_peer(&self, peer_id: Self::PeerId) -> bool;
-    fn disconnect_peer(&self, peer_id: Self::PeerId, close_reason: CloseReason);
+    async fn disconnect_peer(&self, peer_id: Self::PeerId, close_reason: CloseReason);
 
     fn subscribe_events(&self) -> SubscribeEvents<Self::PeerId>;
 

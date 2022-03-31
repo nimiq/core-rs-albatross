@@ -284,7 +284,9 @@ async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
         // Disconnect a random peer
         log::debug!("Disconnecting peer {} from peer {}", close_peer, peer);
         assert!(network1.has_peer(*peer_id2));
-        network1.disconnect_peer(*peer_id2, CloseReason::Other);
+        network1
+            .disconnect_peer(*peer_id2, CloseReason::Other)
+            .await;
 
         // Assert the peer has left both networks
         let close_event1 = events1.next().await.unwrap().unwrap();
@@ -380,7 +382,8 @@ async fn connections_are_properly_closed_events() {
     let mut events1 = net1.subscribe_events();
     let mut events2 = net2.subscribe_events();
 
-    net2.disconnect_peer(*net1.local_peer_id(), CloseReason::Other);
+    net2.disconnect_peer(*net1.local_peer_id(), CloseReason::Other)
+        .await;
     log::debug!("closed peer");
 
     let event1 = events1.next().await.unwrap().unwrap();
@@ -403,7 +406,7 @@ async fn connections_are_properly_closed_peers() {
     let net1_peer_id = *net1.local_peer_id();
     drop(net1);
 
-    net2.disconnect_peer(net1_peer_id, CloseReason::Other);
+    net2.disconnect_peer(net1_peer_id, CloseReason::Other).await;
     log::debug!("closed peer");
 
     let event2 = events2.next().await.unwrap().unwrap();
