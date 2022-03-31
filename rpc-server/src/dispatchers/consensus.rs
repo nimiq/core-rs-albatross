@@ -937,7 +937,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Error> {
         let raw_tx = self
-            .create_reactivate_validator_transaction(
+            .create_inactivate_validator_transaction(
                 sender_wallet,
                 validator_address,
                 signing_secret_key,
