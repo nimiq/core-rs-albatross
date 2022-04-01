@@ -22,7 +22,7 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 anyhow = "1.0"
-clap = { version = "3.0", features = ["derive"] }
+clap = { version = "3.1", features = ["derive"] }
 dotenv = "0.15"
 futures = "0.3"
 tokio = { version = "1.16", features = [
