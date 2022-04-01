@@ -57,6 +57,32 @@ fn it_serializes_and_deserializes_box() {
 }
 
 #[test]
+fn it_serializes_and_deserializes_option() {
+    let b = Some(1337);
+    let serialized = Serialize::serialize_to_vec(&b);
+    let deserialized: Option<i32> = Deserialize::deserialize_from_vec(&serialized).unwrap();
+    assert_eq!(deserialized, b);
+
+    let c: Option<i32> = None;
+    let serialized = Serialize::serialize_to_vec(&c);
+    let deserialized: Option<i32> = Deserialize::deserialize_from_vec(&serialized).unwrap();
+    assert_eq!(deserialized, c);
+}
+
+#[test]
+fn it_serializes_and_deserializes_result() {
+    let b = Ok(1337);
+    let serialized = Serialize::serialize_to_vec(&b);
+    let deserialized: Result<i32, ()> = Deserialize::deserialize_from_vec(&serialized).unwrap();
+    assert_eq!(deserialized, b);
+
+    let c: Result<i32, ()> = Err(());
+    let serialized = Serialize::serialize_to_vec(&c);
+    let deserialized: Result<i32, ()> = Deserialize::deserialize_from_vec(&serialized).unwrap();
+    assert_eq!(deserialized, c);
+}
+
+#[test]
 fn it_serializes_and_deserializes_vec() {
     let vec = vec![1, 4, 7, 4, 3, 6, 9, 9, 4];
     let serialized = SerializeWithLength::serialize_to_vec::<u8>(&vec);

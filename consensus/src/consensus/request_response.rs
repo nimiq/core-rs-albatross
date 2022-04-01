@@ -6,7 +6,7 @@ use futures::StreamExt;
 use parking_lot::RwLock;
 
 use nimiq_blockchain::Blockchain;
-use nimiq_network_interface::prelude::{Message, Network};
+use nimiq_network_interface::prelude::{Network, Request};
 
 use crate::messages::handlers::Handle;
 use crate::messages::{
@@ -41,7 +41,7 @@ impl<N: Network> Consensus<N> {
         tokio::spawn(Self::request_handler(network, stream, blockchain));
     }
 
-    pub(crate) fn request_handler<Req: Handle<Res> + Message, Res: Message>(
+    pub(crate) fn request_handler<Req: Handle<<Req as Request>::Response> + Request>(
         network: &Arc<N>,
         stream: BoxStream<'static, (Req, N::RequestId, N::PeerId)>,
         blockchain: &Arc<RwLock<Blockchain>>,
@@ -64,8 +64,9 @@ impl<N: Network> Consensus<N> {
                                 trace!("[{:?}] {:?} {:#?}", request_id, peer_id, msg);
 
                                 // Try to send the response, logging to debug if it fails
-                                if let Err(err) =
-                                    network.respond(request_id, msg.handle(&blockchain)).await
+                                if let Err(err) = network
+                                    .respond::<Req>(request_id, msg.handle(&blockchain))
+                                    .await
                                 {
                                     log::debug!(
                                         "[{:?}] Failed to send {} response: {:?}",

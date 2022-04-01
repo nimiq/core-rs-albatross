@@ -13,7 +13,7 @@ use beserial::{Deserialize, Serialize};
 use beserial_derive::{Deserialize, Serialize};
 use nimiq_network_interface::{
     network::Network as NetworkInterface,
-    prelude::{Message, MessageTypeId, NetworkEvent, ResponseError, ResponseMessage},
+    prelude::{InboundRequestError, NetworkEvent, OutboundRequestError, Request, RequestError},
 };
 use nimiq_network_libp2p::{
     discovery::{
@@ -29,16 +29,23 @@ use nimiq_utils::time::OffsetTime;
 struct TestRequest {
     request: u64,
 }
-impl Message for TestRequest {
-    const TYPE_ID: MessageTypeId = MessageTypeId::TestRequest;
+impl Request for TestRequest {
+    const TYPE_ID: u16 = 42;
+    type Response = TestResponse;
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 struct TestResponse {
     response: u64,
 }
-impl Message for TestResponse {
-    const TYPE_ID: MessageTypeId = MessageTypeId::TestResponse;
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+struct TestRequest2 {
+    request: u64,
+}
+impl Request for TestRequest2 {
+    const TYPE_ID: u16 = 42;
+    type Response = TestResponse2;
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -46,18 +53,18 @@ struct TestResponse2 {
     response: u64,
 }
 
-impl Message for TestResponse2 {
-    const TYPE_ID: MessageTypeId = MessageTypeId::TestResponse2;
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+struct TestRequest3 {
+    request: u64,
+}
+impl Request for TestRequest3 {
+    const TYPE_ID: u16 = 42;
+    type Response = TestResponse3;
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 struct TestResponse3 {
     response: u32,
-}
-
-impl Message for TestResponse3 {
-    // Intentionally setting another response's Type ID
-    const TYPE_ID: MessageTypeId = TestResponse::TYPE_ID;
 }
 
 #[derive(Clone, Debug)]
@@ -143,6 +150,31 @@ fn assert_peer_joined(event: &NetworkEvent<PeerId>, wanted_peer_id: &PeerId) {
     }
 }
 
+/// Listens to requests of type `ExpReq` and if `response` is `Some` then it
+/// replies to the request using the `Req` type.
+async fn respond_requests<Req: Request, ExpReq: Request + std::cmp::PartialEq>(
+    network: Arc<Network>,
+    response: Option<<Req as Request>::Response>,
+    expected_request: ExpReq,
+) {
+    // Subscribe for receiving requests
+    let mut requests = network.receive_requests::<ExpReq>();
+    log::info!("Waiting for Request message...");
+    let (received_request, request_id, peer_id) = requests.next().await.unwrap();
+    log::info!(
+        "Received request {:?} from peer {:?}: {:?}",
+        request_id,
+        peer_id,
+        received_request
+    );
+    assert_eq!(expected_request, received_request);
+
+    // Respond the request if there is any
+    if let Some(response) = response {
+        assert!(network.respond::<Req>(request_id, response).await.is_ok());
+    }
+}
+
 // Test that we can send a request and correctly receive the response given a proper
 // request listener is replying in the peer specified
 #[test(tokio::test)]
@@ -152,52 +184,35 @@ async fn test_valid_request_valid_response() {
     let test_request = TestRequest { request: 42 };
     let test_response = TestResponse { response: 43 };
 
+    let net1 = Arc::new(net1);
+
     // Subscribe for receiving requests
-    let mut requests = net1.receive_requests::<TestRequest>();
+    tokio::spawn({
+        let net1 = Arc::clone(&net1);
+        let test_request = test_request.clone();
+        let test_response = test_response.clone();
+        async move {
+            respond_requests::<TestRequest, TestRequest>(net1, Some(test_response), test_request)
+                .await
+        }
+    });
 
     tokio::time::sleep(Duration::from_secs(1)).await;
 
     log::info!("Sending request...");
 
     // Send the request and get future for the response
-    let response = net2
-        .request::<TestRequest, TestResponse>(test_request.clone(), net1.get_local_peer_id())
-        .await
-        .unwrap();
-
-    log::info!("Waiting for Request message...");
-    let (received_request, request_id, peer_id) = requests.next().await.unwrap();
-    log::info!(
-        "Received request {:?} from peer {:?}: {:?}",
-        request_id,
-        peer_id,
-        received_request
-    );
-
-    assert_eq!(received_request, test_request);
-
-    // Respond the request
-    assert!(net1
-        .respond(request_id, test_response.clone())
-        .await
-        .is_ok());
-
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    let response = net2.request::<TestRequest>(test_request, net1.get_local_peer_id());
 
     // Check the received response
-    let (received_response, request_id, peer_id) = response.await;
-    log::info!(
-        "Received response {:?} from peer {:?}: {:?}",
-        request_id,
-        peer_id,
-        received_response
-    );
+    let received_response = response.await;
+    log::info!("Received response {:?}", received_response);
 
     match received_response {
-        ResponseMessage::Response(response) => {
+        Ok(response) => {
             assert_eq!(response, test_response);
         }
-        ResponseMessage::Error(e) => assert!(false, "Response received with error: {:?}", e),
+        Err(e) => assert!(false, "Response received with error: {:?}", e),
     };
 }
 
@@ -206,10 +221,10 @@ async fn test_valid_request_valid_response() {
 #[test(tokio::test(flavor = "multi_thread", worker_threads = 10))]
 async fn test_multiple_valid_requests_valid_responses() {
     let num_requests = 100;
-    let mut response_futures = vec![];
     let (net1, net2) = TestNetwork::create_connected_networks().await;
     let peer_id_net1 = net1.get_local_peer_id();
     let net1 = Arc::new(net1);
+    let mut response_futures = vec![];
 
     let test_request = TestRequest { request: 42 };
     let test_response = TestResponse { response: 43 };
@@ -222,7 +237,9 @@ async fn test_multiple_valid_requests_valid_responses() {
             let test_response = test_response.clone();
             let net1 = Arc::clone(&net1);
             async move {
-                let result = net1.respond(request_id, test_response.clone()).await;
+                let result = net1
+                    .respond::<TestRequest>(request_id, test_response.clone())
+                    .await;
                 assert!(result.is_ok());
             }
         });
@@ -236,87 +253,20 @@ async fn test_multiple_valid_requests_valid_responses() {
 
     for _ in 0..num_requests {
         // Send the request and get future for the response
-        let response_future = net2
-            .request::<TestRequest, TestResponse>(test_request.clone(), peer_id_net1)
-            .await
-            .unwrap();
-
+        let response_future = net2.request::<TestRequest>(test_request.clone(), peer_id_net1);
         response_futures.push(response_future);
     }
 
     log::info!("Waiting for requests to arrive and check them");
     let responses = join_all(response_futures).await;
-    for (received_response, _request_id, _peer_id) in responses {
+    for received_response in responses {
         match received_response {
-            ResponseMessage::Response(response) => {
+            Ok(response) => {
                 assert_eq!(response, test_response_2);
             }
-            ResponseMessage::Error(e) => assert!(false, "Response received with error: {:?}", e),
+            Err(e) => assert!(false, "Response received with error: {:?}", e),
         };
     }
-}
-
-// Test that we can send a request and receive a `InvalidResponse` if the peer replied with
-// a message type ID that doesn't match the one we are expecting
-#[test(tokio::test)]
-async fn test_valid_request_incorrect_response_type() {
-    let (net1, net2) = TestNetwork::create_connected_networks().await;
-
-    let test_request = TestRequest { request: 42 };
-    let incorrect_response = TestResponse2 { response: 43 };
-
-    // Subscribe for receiving requests
-    let mut requests = net1.receive_requests::<TestRequest>();
-
-    tokio::time::sleep(Duration::from_secs(1)).await;
-
-    log::info!("Sending request...");
-
-    // Send the request and get future for the response
-    let response = net2
-        .request::<TestRequest, TestResponse>(test_request.clone(), net1.get_local_peer_id())
-        .await
-        .unwrap();
-
-    log::info!("Waiting for Request message...");
-    let (received_request, request_id, peer_id) = requests.next().await.unwrap();
-    log::info!(
-        "Received request {:?} from peer {:?}: {:?}",
-        request_id,
-        peer_id,
-        received_request
-    );
-
-    assert_eq!(received_request, test_request);
-
-    // Respond the request
-    assert!(net1
-        .respond(request_id, incorrect_response.clone())
-        .await
-        .is_ok());
-
-    tokio::time::sleep(Duration::from_secs(1)).await;
-
-    // Check the received response
-    let (received_response, request_id, peer_id) = response.await;
-    log::info!(
-        "Received response {:?} from peer {:?}: {:?}",
-        request_id,
-        peer_id,
-        received_response
-    );
-
-    match received_response {
-        ResponseMessage::Response(response) => {
-            assert!(false, "Received unexpected valid response: {:?}", response);
-        }
-        ResponseMessage::Error(e) => assert_eq!(
-            e,
-            ResponseError::InvalidResponse,
-            "Response received with error: {:?}",
-            e
-        ),
-    };
 }
 
 // Test that we can send a request and receive a `DeSerializationError` if the peer replied with
@@ -328,54 +278,41 @@ async fn test_valid_request_incorrect_response() {
     let test_request = TestRequest { request: 42 };
     let incorrect_response = TestResponse3 { response: 43 };
 
+    let net1 = Arc::new(net1);
+
     // Subscribe for receiving requests
-    let mut requests = net1.receive_requests::<TestRequest>();
+    tokio::spawn({
+        let net1 = Arc::clone(&net1);
+        let test_request = test_request.clone();
+        let incorrect_response = incorrect_response.clone();
+        async move {
+            respond_requests::<TestRequest3, TestRequest>(
+                net1,
+                Some(incorrect_response),
+                test_request,
+            )
+            .await
+        }
+    });
 
     tokio::time::sleep(Duration::from_secs(1)).await;
 
     log::info!("Sending request...");
 
     // Send the request and get future for the response
-    let response = net2
-        .request::<TestRequest, TestResponse>(test_request.clone(), net1.get_local_peer_id())
-        .await
-        .unwrap();
-
-    log::info!("Waiting for Request message...");
-    let (received_request, request_id, peer_id) = requests.next().await.unwrap();
-    log::info!(
-        "Received request {:?} from peer {:?}: {:?}",
-        request_id,
-        peer_id,
-        received_request
-    );
-
-    assert_eq!(received_request, test_request);
-
-    // Respond the request
-    assert!(net1
-        .respond(request_id, incorrect_response.clone())
-        .await
-        .is_ok());
-
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    let response = net2.request::<TestRequest>(test_request.clone(), net1.get_local_peer_id());
 
     // Check the received response
-    let (received_response, request_id, peer_id) = response.await;
-    log::info!(
-        "Received response {:?} from peer {:?}: {:?}",
-        request_id,
-        peer_id,
-        received_response
-    );
+    let received_response = response.await;
+    log::info!("Received response {:?}", received_response);
 
     match received_response {
-        ResponseMessage::Response(response) => {
+        Ok(response) => {
             assert!(false, "Received unexpected valid response: {:?}", response);
         }
-        ResponseMessage::Error(e) => assert_eq!(
+        Err(e) => assert_eq!(
             e,
-            ResponseError::DeSerializationError,
+            RequestError::InboundRequest(InboundRequestError::DeSerializationError),
             "Response received with error: {:?}",
             e
         ),
@@ -390,45 +327,35 @@ async fn test_valid_request_no_response() {
 
     let test_request = TestRequest { request: 42 };
 
-    // Subscribe for receiving requests
-    let mut requests = net1.receive_requests::<TestRequest>();
+    let net1 = Arc::new(net1);
+
+    // Subscribe for receiving requests and don't let the function to respond to the request
+    // (pass `None` to the response parameter)
+    tokio::spawn({
+        let net1 = Arc::clone(&net1);
+        let test_request = test_request.clone();
+        async move { respond_requests::<TestRequest, TestRequest>(net1, None, test_request).await }
+    });
 
     tokio::time::sleep(Duration::from_secs(1)).await;
 
     log::info!("Sending request...");
 
     // Send the request and get future for the response
-    let response = net2
-        .request::<TestRequest, TestResponse>(test_request.clone(), net1.get_local_peer_id())
-        .await
-        .unwrap();
+    let response = net2.request::<TestRequest>(test_request.clone(), net1.get_local_peer_id());
 
-    log::info!("Waiting for Request message...");
-    let (received_request, request_id, peer_id) = requests.next().await.unwrap();
-    log::info!(
-        "Received request {:?} from peer {:?}: {:?}",
-        request_id,
-        peer_id,
-        received_request
-    );
-
-    assert_eq!(received_request, test_request);
-
-    // Don't respond the request: It should timeout and send the error to the request
-    // Check the received response
-    let (received_response, request_id, peer_id) = response.await;
-    log::info!(
-        "Received response {:?} from peer {:?}: {:?}",
-        request_id,
-        peer_id,
-        received_response
-    );
+    // Since the request wasn't responded, it should timeout and send the error to the request
+    let received_response = response.await;
+    log::info!("Received response {:?}", received_response);
 
     match received_response {
-        ResponseMessage::Response(response) => {
+        Ok(response) => {
             assert!(false, "Received unexpected valid response: {:?}", response)
         }
-        ResponseMessage::Error(e) => assert_eq!(e, ResponseError::Timeout),
+        Err(e) => assert_eq!(
+            e,
+            RequestError::OutboundRequest(OutboundRequestError::Timeout)
+        ),
     };
 }
 
@@ -445,25 +372,20 @@ async fn test_valid_request_no_response_no_receiver() {
     log::info!("Sending request...");
 
     // Send the request and get future for the response
-    let response = net2
-        .request::<TestRequest, TestResponse>(test_request.clone(), net1.get_local_peer_id())
-        .await
-        .unwrap();
+    let received_response = net2
+        .request::<TestRequest>(test_request.clone(), net1.get_local_peer_id())
+        .await;
+    log::info!("Received response: {:?}", received_response);
 
     // Don't respond the request: It should timeout and send the error to the request
     // Check the received response
-    let (received_response, request_id, peer_id) = response.await;
-    log::info!(
-        "Received response {:?} from peer {:?}: {:?}",
-        request_id,
-        peer_id,
-        received_response
-    );
-
     match received_response {
-        ResponseMessage::Response(response) => {
+        Ok(response) => {
             assert!(false, "Received unexpected valid response: {:?}", response)
         }
-        ResponseMessage::Error(e) => assert_eq!(e, ResponseError::NoReceiver),
+        Err(e) => assert_eq!(
+            e,
+            RequestError::InboundRequest(InboundRequestError::NoReceiver)
+        ),
     };
 }

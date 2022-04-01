@@ -4,7 +4,7 @@ use beserial::{Deserialize, Serialize};
 use nimiq_block::{Block, MacroBlock};
 use nimiq_blockchain::HistoryTreeChunk;
 use nimiq_hash::Blake2bHash;
-use nimiq_network_interface::message::*;
+use nimiq_network_interface::request::Request;
 
 pub(crate) mod handlers;
 
@@ -27,10 +27,6 @@ pub struct MacroChain {
     #[beserial(len_type(u16))]
     pub epochs: Option<Vec<Blake2bHash>>,
     pub checkpoint: Option<Checkpoint>,
-}
-
-impl Message for MacroChain {
-    const TYPE_ID: MessageTypeId = MessageTypeId::MacroChain;
 }
 
 impl Debug for MacroChain {
@@ -58,8 +54,9 @@ pub struct RequestMacroChain {
     pub max_epochs: u16,
 }
 
-impl Message for RequestMacroChain {
-    const TYPE_ID: MessageTypeId = MessageTypeId::RequestMacroChain;
+impl Request for RequestMacroChain {
+    const TYPE_ID: u16 = 200;
+    type Response = MacroChain;
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -67,8 +64,9 @@ pub struct RequestBatchSet {
     pub hash: Blake2bHash,
 }
 
-impl Message for RequestBatchSet {
-    const TYPE_ID: MessageTypeId = MessageTypeId::RequestBatchSet;
+impl Request for RequestBatchSet {
+    const TYPE_ID: u16 = 202;
+    type Response = BatchSetInfo;
 }
 
 /// This message contains a macro block and the number of extended transactions (transitions)
@@ -77,10 +75,6 @@ impl Message for RequestBatchSet {
 pub struct BatchSetInfo {
     pub block: Option<MacroBlock>,
     pub history_len: u32,
-}
-
-impl Message for BatchSetInfo {
-    const TYPE_ID: MessageTypeId = MessageTypeId::BatchSetInfo;
 }
 
 impl Debug for BatchSetInfo {
@@ -105,8 +99,9 @@ pub struct RequestHistoryChunk {
     pub chunk_index: u64,
 }
 
-impl Message for RequestHistoryChunk {
-    const TYPE_ID: MessageTypeId = MessageTypeId::RequestHistoryChunk;
+impl Request for RequestHistoryChunk {
+    const TYPE_ID: u16 = 204;
+    type Response = HistoryChunk;
 }
 
 /// This message contains a chunk of the history.
@@ -115,36 +110,14 @@ pub struct HistoryChunk {
     pub chunk: Option<HistoryTreeChunk>,
 }
 
-impl Message for HistoryChunk {
-    const TYPE_ID: MessageTypeId = MessageTypeId::HistoryChunk;
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-pub struct ResponseBlock {
-    pub block: Option<Block>,
-}
-
-impl Message for ResponseBlock {
-    const TYPE_ID: MessageTypeId = MessageTypeId::ResponseBlock;
-}
-
-impl Debug for ResponseBlock {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        let mut dbg = f.debug_struct("ResponseBlock");
-        if let Some(block) = &self.block {
-            dbg.field("hash", &block.hash());
-            dbg.field("header", &block.header());
-        }
-        dbg.finish()
-    }
-}
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestBlock {
     pub hash: Blake2bHash,
 }
 
-impl Message for RequestBlock {
-    const TYPE_ID: MessageTypeId = MessageTypeId::RequestBlock;
+impl Request for RequestBlock {
+    const TYPE_ID: u16 = 207;
+    type Response = Option<Block>;
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -152,10 +125,6 @@ pub struct ResponseBlocks {
     // TODO: Set to sensible limit (2 * BATCH_SIZE for example).
     #[beserial(len_type(u16, limit = 256))]
     pub blocks: Option<Vec<Block>>,
-}
-
-impl Message for ResponseBlocks {
-    const TYPE_ID: MessageTypeId = MessageTypeId::ResponseBlocks;
 }
 
 impl Debug for ResponseBlocks {
@@ -182,22 +151,15 @@ pub struct RequestMissingBlocks {
     pub locators: Vec<Blake2bHash>,
 }
 
-impl Message for RequestMissingBlocks {
-    const TYPE_ID: MessageTypeId = MessageTypeId::RequestMissingBlocks;
+impl Request for RequestMissingBlocks {
+    const TYPE_ID: u16 = 209;
+    type Response = ResponseBlocks;
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestHead {}
 
-impl Message for RequestHead {
-    const TYPE_ID: MessageTypeId = MessageTypeId::RequestHead;
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct HeadResponse {
-    pub hash: Blake2bHash,
-}
-
-impl Message for HeadResponse {
-    const TYPE_ID: MessageTypeId = MessageTypeId::HeadResponse;
+impl Request for RequestHead {
+    const TYPE_ID: u16 = 210;
+    type Response = Blake2bHash;
 }

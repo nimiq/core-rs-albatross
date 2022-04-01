@@ -12,12 +12,9 @@ use parking_lot::RwLock;
 use nimiq_block::Block;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_hash::Blake2bHash;
-use nimiq_network_interface::{
-    network::Network,
-    prelude::{RequestError, ResponseMessage},
-};
+use nimiq_network_interface::{network::Network, prelude::RequestError};
 
-use crate::messages::{HeadResponse, RequestBlock, RequestHead, ResponseBlock};
+use crate::messages::{RequestBlock, RequestHead};
 
 /// Requests the head blocks for a set of peers.
 /// Calculates the number of known/unknown blocks and a vector of unknown blocks.
@@ -78,20 +75,9 @@ impl<TNetwork: Network + 'static> HeadRequests<TNetwork> {
         network: Arc<TNetwork>,
         peer_id: TNetwork::PeerId,
     ) -> Result<Blake2bHash, RequestError> {
-        let result = network
-            .request::<RequestHead, HeadResponse>(RequestHead {}, peer_id)
-            .await;
-
-        match result {
-            Ok(future) => {
-                let (response_message, _request_id, _peer_id) = future.await;
-                match response_message {
-                    ResponseMessage::Response(head) => Ok(head.hash),
-                    ResponseMessage::Error(_) => Err(RequestError::Timeout),
-                }
-            }
-            Err(_) => Err(RequestError::SendError),
-        }
+        network
+            .request::<RequestHead>(RequestHead {}, peer_id)
+            .await
     }
 
     async fn request_block(
@@ -99,20 +85,9 @@ impl<TNetwork: Network + 'static> HeadRequests<TNetwork> {
         peer_id: TNetwork::PeerId,
         hash: Blake2bHash,
     ) -> Result<Option<Block>, RequestError> {
-        let result = network
-            .request::<RequestBlock, ResponseBlock>(RequestBlock { hash }, peer_id)
-            .await;
-
-        match result {
-            Ok(future) => {
-                let (response_message, _request_id, _peer_id) = future.await;
-                match response_message {
-                    ResponseMessage::Response(block) => Ok(block.block),
-                    ResponseMessage::Error(_) => Err(RequestError::Timeout),
-                }
-            }
-            Err(_) => Err(RequestError::SendError),
-        }
+        network
+            .request::<RequestBlock>(RequestBlock { hash }, peer_id)
+            .await
     }
 }
 

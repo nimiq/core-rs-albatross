@@ -645,6 +645,84 @@ impl<T: SerializeWithLength> SerializeWithLength for Option<T> {
     }
 }
 
+// Result
+
+impl<T: Deserialize, E: Deserialize> Deserialize for Result<T, E> {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+        let is_ok: u8 = Deserialize::deserialize(reader)?;
+        match is_ok {
+            0 => Ok(Ok(Deserialize::deserialize(reader)?)),
+            1 => Ok(Err(Deserialize::deserialize(reader)?)),
+            _ => Err(SerializingError::InvalidValue),
+        }
+    }
+}
+
+impl<T: DeserializeWithLength, E: DeserializeWithLength> DeserializeWithLength for Result<T, E> {
+    fn deserialize_with_limit<D: Deserialize + ToPrimitive, R: ReadBytesExt>(
+        reader: &mut R,
+        limit: Option<usize>,
+    ) -> Result<Self, SerializingError> {
+        let is_ok: u8 = Deserialize::deserialize(reader)?;
+        match is_ok {
+            0 => Ok(Ok(DeserializeWithLength::deserialize_with_limit::<D, R>(
+                reader, limit,
+            )?)),
+            1 => Ok(Err(DeserializeWithLength::deserialize_with_limit::<D, R>(
+                reader, limit,
+            )?)),
+            _ => Err(SerializingError::InvalidValue),
+        }
+    }
+}
+
+impl<T: Serialize, E: Serialize> Serialize for Result<T, E> {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+        match self {
+            Ok(one) => {
+                0u8.serialize(writer)?;
+                Ok(one.serialize(writer)? + 1)
+            }
+            Err(one) => {
+                1u8.serialize(writer)?;
+                Ok(one.serialize(writer)? + 1)
+            }
+        }
+    }
+
+    fn serialized_size(&self) -> usize {
+        match self {
+            Ok(one) => 1 + Serialize::serialized_size(one),
+            Err(one) => 1 + Serialize::serialized_size(one),
+        }
+    }
+}
+
+impl<T: SerializeWithLength, E: SerializeWithLength> SerializeWithLength for Result<T, E> {
+    fn serialize<S: Serialize + FromPrimitive, W: WriteBytesExt>(
+        &self,
+        writer: &mut W,
+    ) -> Result<usize, SerializingError> {
+        match self {
+            Ok(one) => {
+                0u8.serialize(writer)?;
+                Ok(SerializeWithLength::serialize::<S, W>(one, writer)? + 1)
+            }
+            Err(one) => {
+                1u8.serialize(writer)?;
+                Ok(SerializeWithLength::serialize::<S, W>(one, writer)? + 1)
+            }
+        }
+    }
+
+    fn serialized_size<S: Serialize + FromPrimitive>(&self) -> usize {
+        match self {
+            Ok(one) => 1 + SerializeWithLength::serialized_size::<S>(one),
+            Err(one) => 1 + SerializeWithLength::serialized_size::<S>(one),
+        }
+    }
+}
+
 // Tuples
 impl<T: Serialize, V: Serialize> Serialize for (T, V) {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {

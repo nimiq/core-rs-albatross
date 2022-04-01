@@ -10,10 +10,10 @@ use nimiq_block::Block;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{
     network::{Network, NetworkEvent, SubscribeEvents},
-    prelude::{RequestError, ResponseMessage},
+    prelude::RequestError,
 };
 
-use crate::messages::{RequestMissingBlocks, ResponseBlocks};
+use crate::messages::RequestMissingBlocks;
 use crate::sync::history::HistorySyncReturn;
 use crate::sync::sync_queue::SyncQueue;
 
@@ -123,8 +123,8 @@ impl<TNetwork: Network + 'static> BlockRequestComponent<TNetwork> {
         target_block_hash: Blake2bHash,
         locators: Vec<Blake2bHash>,
     ) -> Result<Option<Vec<Block>>, RequestError> {
-        let result = network
-            .request::<RequestMissingBlocks, ResponseBlocks>(
+        let response_message = network
+            .request::<RequestMissingBlocks>(
                 RequestMissingBlocks {
                     locators,
                     target_hash: target_block_hash,
@@ -132,15 +132,9 @@ impl<TNetwork: Network + 'static> BlockRequestComponent<TNetwork> {
                 peer_id,
             )
             .await;
-        match result {
-            Ok(future) => {
-                let (response_message, _request_id, _peer_id) = future.await;
-                match response_message {
-                    ResponseMessage::Response(blocks) => Ok(blocks.blocks),
-                    ResponseMessage::Error(_) => Err(RequestError::Timeout),
-                }
-            }
-            Err(_) => Err(RequestError::SendError),
+        match response_message {
+            Ok(blocks) => Ok(blocks.blocks),
+            Err(e) => Err(e),
         }
     }
 }

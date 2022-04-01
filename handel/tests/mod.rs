@@ -17,20 +17,18 @@ use beserial::{Deserialize, Serialize};
 use identity::Identity;
 use nimiq_bls::PublicKey;
 use nimiq_collections::bitset::BitSet;
-use nimiq_handel::aggregation::Aggregation;
-use nimiq_handel::config::Config;
-use nimiq_handel::contribution::{AggregatableContribution, ContributionError};
-use nimiq_handel::evaluator;
-use nimiq_handel::identity;
-use nimiq_handel::partitioner::BinomialPartitioner;
-use nimiq_handel::protocol;
-use nimiq_handel::store::ReplaceStore;
-use nimiq_handel::update::LevelUpdateMessage;
-use nimiq_handel::verifier;
-use nimiq_network_interface::{
-    message::{Message, MessageTypeId},
-    network::Network,
+use nimiq_handel::{
+    aggregation::Aggregation,
+    config::Config,
+    contribution::{AggregatableContribution, ContributionError},
+    evaluator, identity,
+    partitioner::BinomialPartitioner,
+    protocol,
+    store::ReplaceStore,
+    update::LevelUpdateMessage,
+    verifier,
 };
+use nimiq_network_interface::{network::Network, request::Request};
 use nimiq_network_mock::{MockHub, MockNetwork};
 use nimiq_test_log::test;
 
@@ -42,7 +40,7 @@ pub struct Contribution {
 }
 
 impl AggregatableContribution for Contribution {
-    const TYPE_ID: MessageTypeId = MessageTypeId::TestMessage;
+    const TYPE_ID: u16 = 44;
 
     fn contributors(&self) -> BitSet {
         self.contributors.clone()
@@ -178,16 +176,24 @@ struct SendingFuture<N: Network> {
 }
 
 impl<N: Network> SendingFuture<N> {
-    pub async fn send<M: Message + Clone + Unpin + std::fmt::Debug>(self, msg: M) {
+    pub async fn send<M: Request + Clone + Unpin + std::fmt::Debug>(self, msg: M) {
         let peers = self.network.get_peers();
         for peer_id in peers {
-            let _ = self.network.request::<M, M>(msg.clone(), peer_id).await;
+            // We don't care about the response: spawn the request and intentionally
+            // dismiss the request
+            tokio::spawn({
+                let network = Arc::clone(&self.network);
+                let msg = msg.clone();
+                async move {
+                    let _ = network.request::<M>(msg, peer_id).await;
+                }
+            });
         }
     }
 }
 
 /// Implementation of a simple Sink Wrapper for the NetworkInterface's Network trait
-pub struct NetworkSink<M: Message + Unpin, N: Network> {
+pub struct NetworkSink<M: Request + Unpin, N: Network> {
     /// The network this sink is sending its messages over
     network: Arc<N>,
     /// The currently executed future of sending an item.
@@ -196,7 +202,7 @@ pub struct NetworkSink<M: Message + Unpin, N: Network> {
     phantom: PhantomData<M>,
 }
 
-impl<M: Message + Unpin, N: Network> NetworkSink<M, N> {
+impl<M: Request + Unpin, N: Network> NetworkSink<M, N> {
     pub fn new(network: Arc<N>) -> Self {
         Self {
             network,
@@ -206,7 +212,7 @@ impl<M: Message + Unpin, N: Network> NetworkSink<M, N> {
     }
 }
 
-impl<M: Message + Clone + Unpin + std::fmt::Debug, N: Network> Sink<(M, usize)>
+impl<M: Request + Clone + Unpin + std::fmt::Debug, N: Network> Sink<(M, usize)>
     for NetworkSink<M, N>
 {
     type Error = ();
@@ -370,7 +376,7 @@ async fn it_can_aggregate() {
                 }
             }
             Ok(None) => panic!("Aggregate returned a None value, which should be unreachable!()"),
-            Err(_) => panic!("Aggregatig took too long"),
+            Err(_) => panic!("Aggregate took too long"),
         }
     }
 

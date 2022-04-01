@@ -240,7 +240,12 @@ async fn validator_can_catch_up() {
     // (only a subset of the validators will accept it as it send as level 1 message)
     for network in &networks {
         for peer_id in network.get_peers() {
-            let _ = network.request::<LevelUpdateMessage<SignedViewChangeMessage, ViewChange>, LevelUpdateMessage<SignedViewChangeMessage, ViewChange>>(vc.clone(), peer_id).await;
+            let _ = network
+                .request::<LevelUpdateMessage<SignedViewChangeMessage, ViewChange>>(
+                    vc.clone(),
+                    peer_id,
+                )
+                .await;
         }
     }
 

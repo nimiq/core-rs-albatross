@@ -14,11 +14,7 @@ use tokio::time::timeout;
 use beserial::{Deserialize, Serialize};
 use beserial_derive::{Deserialize, Serialize};
 use nimiq_network_interface::network::{MsgAcceptance, NetworkEvent, Topic};
-use nimiq_network_interface::{
-    message::{Message, MessageTypeId},
-    network::Network as NetworkInterface,
-    peer::CloseReason,
-};
+use nimiq_network_interface::{network::Network as NetworkInterface, peer::CloseReason};
 use nimiq_network_libp2p::{
     discovery::{
         behaviour::DiscoveryConfig,
@@ -28,25 +24,6 @@ use nimiq_network_libp2p::{
 };
 use nimiq_test_log::test;
 use nimiq_utils::time::OffsetTime;
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-struct TestMessage {
-    id: u32,
-}
-
-impl Message for TestMessage {
-    const TYPE_ID: MessageTypeId = MessageTypeId::TestMessage;
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-struct TestMessage2 {
-    #[beserial(len_type(u8))]
-    x: String,
-}
-
-impl Message for TestMessage2 {
-    const TYPE_ID: MessageTypeId = MessageTypeId::TestMessage2;
-}
 
 fn network_config(address: Multiaddr) -> Config {
     let keypair = Keypair::generate_ed25519();

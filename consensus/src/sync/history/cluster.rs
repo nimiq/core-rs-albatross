@@ -13,7 +13,7 @@ use nimiq_blockchain::{
     AbstractBlockchain, Blockchain, ExtendedTransaction, PushError, PushResult, CHUNK_SIZE,
 };
 use nimiq_hash::Blake2bHash;
-use nimiq_network_interface::prelude::{Network, RequestError, ResponseMessage};
+use nimiq_network_interface::prelude::{Network, RequestError};
 use nimiq_primitives::policy;
 use nimiq_utils::math::CeilingDiv;
 
@@ -374,19 +374,8 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         peer_id: TNetwork::PeerId,
         hash: Blake2bHash,
     ) -> Result<BatchSetInfo, RequestError> {
-        let result = network.request(RequestBatchSet { hash }, peer_id).await;
-
         // TODO verify that hash of returned epoch matches the one we requested
-        match result {
-            Ok(future) => {
-                let (response_message, _request_id, _peer_id) = future.await;
-                match response_message {
-                    ResponseMessage::Response(batch_set_info) => Ok(batch_set_info),
-                    ResponseMessage::Error(_) => Err(RequestError::Timeout),
-                }
-            }
-            Err(_) => Err(RequestError::SendError),
-        }
+        network.request(RequestBatchSet { hash }, peer_id).await
     }
 
     pub async fn request_history_chunk(
@@ -396,7 +385,8 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         block_number: u32,
         chunk_index: usize,
     ) -> Result<HistoryChunk, RequestError> {
-        let result = network
+        // TODO filter empty chunks here?
+        network
             .request(
                 RequestHistoryChunk {
                     epoch_number,
@@ -405,20 +395,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
                 },
                 peer_id,
             )
-            .await;
-
-        // TODO filter empty chunks here?
-
-        match result {
-            Ok(future) => {
-                let (response_message, _request_id, _peer_id) = future.await;
-                match response_message {
-                    ResponseMessage::Response(history_chunk) => Ok(history_chunk),
-                    ResponseMessage::Error(_) => Err(RequestError::Timeout),
-                }
-            }
-            Err(_) => Err(RequestError::SendError),
-        }
+            .await
     }
 }
 

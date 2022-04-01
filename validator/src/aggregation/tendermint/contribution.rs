@@ -6,7 +6,6 @@ use nimiq_block::{MultiSignature, TendermintVote};
 use nimiq_bls::{AggregateSignature, SecretKey};
 use nimiq_collections::bitset::BitSet;
 use nimiq_handel::contribution::{AggregatableContribution, ContributionError};
-use nimiq_network_interface::prelude::MessageTypeId;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct TendermintContribution {
@@ -50,7 +49,7 @@ impl TendermintContribution {
 }
 
 impl AggregatableContribution for TendermintContribution {
-    const TYPE_ID: MessageTypeId = MessageTypeId::TendermintContribution;
+    const TYPE_ID: u16 = 124;
 
     /// Combines two TendermintContributions Every different proposal is represented as its own multisignature.
     /// When combining non existing keys must be inserted while the mutlisignatures of existing keys are combined.

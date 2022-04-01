@@ -113,10 +113,9 @@ impl Handle<HistoryChunk> for RequestHistoryChunk {
     }
 }
 
-impl Handle<ResponseBlock> for RequestBlock {
-    fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> ResponseBlock {
-        let block = blockchain.read().get_block(&self.hash, true, None);
-        ResponseBlock { block }
+impl Handle<<RequestBlock as Request>::Response> for RequestBlock {
+    fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> Option<Block> {
+        blockchain.read().get_block(&self.hash, true, None)
     }
 }
 
@@ -168,9 +167,8 @@ impl Handle<ResponseBlocks> for RequestMissingBlocks {
     }
 }
 
-impl Handle<HeadResponse> for RequestHead {
-    fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> HeadResponse {
-        let hash = blockchain.read().head_hash();
-        HeadResponse { hash }
+impl Handle<<RequestHead as Request>::Response> for RequestHead {
+    fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> Blake2bHash {
+        blockchain.read().head_hash()
     }
 }

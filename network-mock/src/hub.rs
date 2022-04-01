@@ -14,13 +14,13 @@ use crate::{MockAddress, MockPeerId, ObservableHashMap};
 pub(crate) struct SenderKey {
     pub network_recipient: MockAddress,
     pub sender_peer: MockPeerId,
-    pub message_type: u64,
+    pub message_type: u16,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct RequestKey {
     pub recipient: MockAddress,
-    pub message_type: u64,
+    pub message_type: u16,
 }
 
 #[derive(Debug)]
