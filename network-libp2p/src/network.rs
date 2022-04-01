@@ -37,14 +37,13 @@ use tokio_stream::wrappers::{BroadcastStream, ReceiverStream};
 use beserial::{Deserialize, Serialize};
 use nimiq_bls::CompressedPublicKey;
 use nimiq_network_interface::{
-    message::{
-        Message, MessageType, RequestError, ResponseError, ResponseMessage, DEFAULT_RESPONSE,
-        DEFAULT_RESPONSE_TYPE_ID,
-    },
     network::{
         MsgAcceptance, Network as NetworkInterface, NetworkEvent, PubsubId, SubscribeEvents, Topic,
     },
     peer::CloseReason,
+    request::{
+        peek_type, InboundRequestError, OutboundRequestError, Request, RequestError, RequestType,
+    },
 };
 use nimiq_utils::time::OffsetTime;
 use nimiq_validator_network::validator_record::SignedValidatorRecord;
@@ -100,13 +99,14 @@ pub(crate) enum NetworkAction {
         output: oneshot::Sender<NetworkInfo>,
     },
     ReceiveRequests {
-        type_id: MessageType,
+        type_id: RequestType,
         output: mpsc::Sender<(Bytes, RequestId, PeerId)>,
     },
     SendRequest {
         peer_id: PeerId,
         request: IncomingRequest,
-        response_channel: oneshot::Sender<(ResponseMessage<Bytes>, RequestId, PeerId, MessageType)>,
+        request_type_id: RequestType,
+        response_channel: oneshot::Sender<(Result<Bytes, RequestError>, RequestId, PeerId)>,
         output: oneshot::Sender<RequestId>,
     },
     SendResponse {
@@ -152,12 +152,9 @@ struct TaskState {
     dht_gets: HashMap<QueryId, oneshot::Sender<Result<Option<Vec<u8>>, NetworkError>>>,
     gossip_topics: HashMap<TopicHash, (mpsc::Sender<(GossipsubMessage, MessageId, PeerId)>, bool)>,
     is_bootstrapped: bool,
-    requests: HashMap<
-        RequestId,
-        oneshot::Sender<(ResponseMessage<Bytes>, RequestId, PeerId, MessageType)>,
-    >,
+    requests: HashMap<RequestId, oneshot::Sender<(Result<Bytes, RequestError>, RequestId, PeerId)>>,
     response_channels: HashMap<RequestId, ResponseChannel<OutgoingResponse>>,
-    receive_requests: HashMap<MessageType, mpsc::Sender<(Bytes, RequestId, PeerId)>>,
+    receive_requests: HashMap<RequestType, mpsc::Sender<(Bytes, RequestId, PeerId)>>,
 }
 
 #[derive(Clone, Debug)]
@@ -640,60 +637,69 @@ impl Network {
                         } => match message {
                             RequestResponseMessage::Request {
                                 request_id,
-                                request: request_data,
+                                request,
                                 channel,
                             } => {
                                 // TODO Add rate limiting (per peer).
-                                let (type_id, request) = request_data;
-                                log::trace!(
-                                    "Incoming [Request ID {}] from peer {}: {:?}",
-                                    request_id,
-                                    peer_id,
-                                    request,
-                                );
-                                // Check if we have a receiver registered for this message type
-                                let sender = {
-                                    if let Some(sender) = state.receive_requests.get_mut(&type_id) {
-                                        // Check if the sender is still alive, if not remove it
-                                        if sender.is_closed() {
-                                            state.receive_requests.remove(&type_id);
-                                            None
+                                if let Ok(type_id) = peek_type(&request) {
+                                    log::trace!(
+                                        "Incoming [Request ID {}] from peer {}: {:?}",
+                                        request_id,
+                                        peer_id,
+                                        request,
+                                    );
+                                    // Check if we have a receiver registered for this message type
+                                    let sender = {
+                                        if let Some(sender) =
+                                            state.receive_requests.get_mut(&type_id)
+                                        {
+                                            // Check if the sender is still alive, if not remove it
+                                            if sender.is_closed() {
+                                                state.receive_requests.remove(&type_id);
+                                                None
+                                            } else {
+                                                Some(sender)
+                                            }
                                         } else {
-                                            Some(sender)
+                                            None
                                         }
-                                    } else {
-                                        None
-                                    }
-                                };
-                                // If we have a receiver, pass the request. Otherwise send the default response
-                                if let Some(sender) = sender {
-                                    state.response_channels.insert(request_id, channel);
-                                    if let Err(e) =
-                                        sender.try_send((request.freeze(), request_id, peer_id))
-                                    {
-                                        log::error!(
+                                    };
+                                    // If we have a receiver, pass the request. Otherwise send a default empty response
+                                    if let Some(sender) = sender {
+                                        state.response_channels.insert(request_id, channel);
+                                        if let Err(e) =
+                                            sender.try_send((request.into(), request_id, peer_id))
+                                        {
+                                            log::error!(
                                             "Failed to dispatch [Request ID {}] from peer {}: {:?}",
                                             request_id,
                                             peer_id,
                                             e,
                                         );
+                                        }
+                                    } else {
+                                        log::trace!(
+                                        "No receiver found for requests of type ID {}, replying with a 'None'",
+                                        type_id
+                                        );
+                                        if swarm
+                                            .behaviour_mut()
+                                            .request_response
+                                            .send_response(channel, None::<()>.serialize_to_vec())
+                                            .is_err()
+                                        {
+                                            log::error!(
+                                                "[Request ID {}] Could not send default response for request type {}",
+                                                request_id,
+                                                type_id
+                                            );
+                                        };
                                     }
                                 } else {
-                                    log::trace!(
-                                        "No receiver found for requests of type ID {}, replying with default response",
-                                        type_id
+                                    log::error!(
+                                        "[Request ID {}] Could not parse request type ID",
+                                        request_id
                                     );
-                                    if let Err((message_type, _)) =
-                                        swarm.behaviour_mut().request_response.send_response(
-                                            channel,
-                                            (DEFAULT_RESPONSE_TYPE_ID, DEFAULT_RESPONSE[..].into()),
-                                        )
-                                    {
-                                        log::error!(
-                                            "Could not send default response for message type {}",
-                                            message_type
-                                        );
-                                    };
                                 }
                             }
                             RequestResponseMessage::Response {
@@ -705,15 +711,9 @@ impl Network {
                                     request_id,
                                     peer_id,
                                 );
-                                let (message_type, response) = response;
                                 if let Some(channel) = state.requests.remove(&request_id) {
                                     channel
-                                        .send((
-                                            ResponseMessage::Response(response.freeze()),
-                                            request_id,
-                                            peer_id,
-                                            message_type,
-                                        ))
+                                        .send((Ok(response.into()), request_id, peer_id))
                                         .ok();
                                 } else {
                                     log::error!(
@@ -736,20 +736,10 @@ impl Network {
                             );
                             if let Some(channel) = state.requests.remove(&request_id) {
                                 channel
-                                    .send((
-                                        ResponseMessage::<Bytes>::Error(Self::to_response_error(
-                                            error,
-                                        )),
-                                        request_id,
-                                        peer,
-                                        0.into(),
-                                    ))
+                                    .send((Err(Self::to_response_error(error)), request_id, peer))
                                     .ok();
                             } else {
-                                log::error!(
-                                    "No such request ID found: [Request ID {}]",
-                                    request_id
-                                );
+                                log::error!("[Request ID {}] No such request ID found", request_id);
                             }
                         }
                         RequestResponseEvent::InboundFailure {
@@ -932,10 +922,10 @@ impl Network {
             NetworkAction::SendRequest {
                 peer_id,
                 request,
+                request_type_id,
                 response_channel,
                 output,
             } => {
-                let type_id = request.0;
                 let request_id = swarm
                     .behaviour_mut()
                     .request_response
@@ -944,7 +934,7 @@ impl Network {
                     "[Request ID {}] was sent to peer {}, type id {}",
                     request_id,
                     peer_id,
-                    type_id
+                    request_type_id,
                 );
                 state.requests.insert(request_id, response_channel);
                 output.send(request_id).ok();
@@ -1017,12 +1007,20 @@ impl Network {
             .ok();
     }
 
-    fn to_response_error(error: OutboundFailure) -> ResponseError {
+    fn to_response_error(error: OutboundFailure) -> RequestError {
         match error {
-            OutboundFailure::ConnectionClosed => ResponseError::ConnectionClosed,
-            OutboundFailure::DialFailure => ResponseError::DialFailure,
-            OutboundFailure::Timeout => ResponseError::Timeout,
-            OutboundFailure::UnsupportedProtocols => ResponseError::UnsupportedProtocols,
+            OutboundFailure::ConnectionClosed => {
+                RequestError::OutboundRequest(OutboundRequestError::ConnectionClosed)
+            }
+            OutboundFailure::DialFailure => {
+                RequestError::OutboundRequest(OutboundRequestError::DialFailure)
+            }
+            OutboundFailure::Timeout => {
+                RequestError::OutboundRequest(OutboundRequestError::Timeout)
+            }
+            OutboundFailure::UnsupportedProtocols => {
+                RequestError::OutboundRequest(OutboundRequestError::UnsupportedProtocols)
+            }
         }
     }
     pub async fn disconnect(&self) {
@@ -1210,62 +1208,63 @@ impl NetworkInterface for Network {
         self.local_peer_id
     }
 
-    async fn request<Req: Message, Res: Message>(
+    async fn request<Req: Request, Res: Serialize + Deserialize + Send>(
         &self,
         request: Req,
         peer_id: PeerId,
-    ) -> Result<BoxFuture<'static, (ResponseMessage<Res>, RequestId, PeerId)>, RequestError> {
+    ) -> Result<BoxFuture<'static, (Result<Res, RequestError>, RequestId, PeerId)>, RequestError>
+    {
         let (output_tx, output_rx) = oneshot::channel();
         let (response_tx, response_rx) = oneshot::channel();
 
         let mut buf = vec![];
         request
-            .serialize(&mut buf)
-            .map_err(|_| RequestError::SerializationError)?;
+            .serialize_request(&mut buf)
+            .map_err(|_| RequestError::OutboundRequest(OutboundRequestError::SerializationError))?;
 
         self.action_tx
             .clone()
             .send(NetworkAction::SendRequest {
                 peer_id,
-                request: ((Req::TYPE_ID as u64).into(), buf[..].into()),
+                request: buf[..].into(),
+                request_type_id: Req::TYPE_ID.into(),
                 response_channel: response_tx,
                 output: output_tx,
             })
             .await
-            .map_err(|_| RequestError::SendError)?;
+            .map_err(|_| RequestError::OutboundRequest(OutboundRequestError::SendError))?;
 
-        let request_id = output_rx.await.map_err(|_| RequestError::SendError)?;
+        let request_id = output_rx
+            .await
+            .map_err(|_| RequestError::OutboundRequest(OutboundRequestError::SendError))?;
 
         let mapped_future = response_rx.map(move |data| {
             async move {
                 match data {
-                    Err(_) => (ResponseMessage::Error(ResponseError::SenderFutureDropped), request_id, peer_id),
-                    Ok((data, request_id, peer_id, message_type)) => {
+                    Err(_) => (Err(RequestError::OutboundRequest(OutboundRequestError::NoReceiver)), request_id, peer_id),
+                    Ok((data, request_id, peer_id)) => {
                         match data {
-                            ResponseMessage::Response(data) => {
-                                if message_type == (Res::TYPE_ID as u64).into() {
-                                    match <Res as Deserialize>::deserialize(&mut data.reader()) {
-                                        Ok(message) => {
-                                            (ResponseMessage::Response(message), request_id, peer_id)
-                                        },
-                                        Err(e) => {
-                                            log::error!(
-                                                "Failed to deserialize request ID {} of type {} message from {}: {}",
-                                                request_id,
-                                                std::any::type_name::<Res>(),
-                                                peer_id,
-                                                e
-                                                );
-                                            (ResponseMessage::Error(ResponseError::DeSerializationError), request_id, peer_id)
-                                        },
+                            Ok(data) => {
+                                if let Ok(message) = <Option::<Res> as Deserialize>::deserialize(&mut data.reader()) {
+                                    // Check if there was an actual response from the application or a default response from
+                                    // the network. If the network replied with the default response, it was because there wasn't a
+                                    // receiver for the request
+                                    if let Some(message) = message {
+                                        (Ok(message), request_id, peer_id)
+                                    } else {
+                                        (Err(RequestError::OutboundRequest(OutboundRequestError::NoReceiver)), request_id, peer_id)
                                     }
-                                } else if message_type == DEFAULT_RESPONSE_TYPE_ID {
-                                    (ResponseMessage::Error(ResponseError::NoReceiver), request_id, peer_id)
                                 } else {
-                                    (ResponseMessage::Error(ResponseError::InvalidResponse), request_id, peer_id)
+                                    log::error!(
+                                        "Failed to deserialize request ID {} of type {} message from {}",
+                                        request_id,
+                                        std::any::type_name::<Res>(),
+                                        peer_id,
+                                        );
+                                    (Err(RequestError::InboundRequest(InboundRequestError::DeSerializationError)), request_id, peer_id)
                                 }
                             },
-                            ResponseMessage::Error(e) => (ResponseMessage::Error(e), request_id, peer_id),
+                            Err(e) => (Err(e), request_id, peer_id),
                         }
                     }
                 }
@@ -1275,7 +1274,7 @@ impl NetworkInterface for Network {
         Ok(mapped_future.boxed())
     }
 
-    fn receive_requests<M: Message>(&self) -> BoxStream<'static, (M, RequestId, PeerId)> {
+    fn receive_requests<Req: Request>(&self) -> BoxStream<'static, (Req, RequestId, PeerId)> {
         let action_tx = self.action_tx.clone();
 
         // Future to register the channel.
@@ -1285,7 +1284,7 @@ impl NetworkInterface for Network {
 
             action_tx
                 .send(NetworkAction::ReceiveRequests {
-                    type_id: (M::TYPE_ID as u64).into(),
+                    type_id: Req::TYPE_ID.into(),
                     output: tx,
                 })
                 .await
@@ -1303,13 +1302,13 @@ impl NetworkInterface for Network {
         receive_stream
             .filter_map(|(data, request_id, peer_id)| async move {
                 // Map the (data, peer) stream to (message, peer) by deserializing the messages.
-                match <M as Deserialize>::deserialize(&mut data.reader()) {
+                match Req::deserialize_request(&mut data.reader()) {
                     Ok(message) => Some((message, request_id, peer_id)),
                     Err(e) => {
                         log::error!(
                             "Failed to deserialize request ID {} of type {} message from {}: {}",
                             request_id,
-                            std::any::type_name::<M>(),
+                            std::any::type_name::<Req>(),
                             peer_id,
                             e
                         );
@@ -1320,21 +1319,27 @@ impl NetworkInterface for Network {
             .boxed()
     }
 
-    async fn respond<M: Message>(
+    async fn respond<Res: Serialize + Deserialize + Send>(
         &self,
         request_id: RequestId,
-        response: M,
+        response: Res,
     ) -> Result<(), Self::Error> {
         let (output_tx, output_rx) = oneshot::channel();
 
         let mut buf = vec![];
+
+        // Encapsulate it in an `Option` to differentiate between
+        // default responses and actual responses from the application.
+        // When there is no listener to requests, the network responds
+        // with a None.
+        let response = Some(response);
         response.serialize(&mut buf)?;
 
         self.action_tx
             .clone()
             .send(NetworkAction::SendResponse {
                 request_id,
-                response: ((M::TYPE_ID as u64).into(), buf[..].into()),
+                response: buf,
                 output: output_tx,
             })
             .await?;

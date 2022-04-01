@@ -1,12 +1,13 @@
 use std::future::Future;
 use std::sync::Arc;
 
+use beserial::{Deserialize, Serialize};
 use futures::stream::BoxStream;
 use futures::StreamExt;
 use parking_lot::RwLock;
 
 use nimiq_blockchain::Blockchain;
-use nimiq_network_interface::prelude::{Message, Network};
+use nimiq_network_interface::prelude::{Network, Request};
 
 use crate::messages::handlers::Handle;
 use crate::messages::{
@@ -41,7 +42,10 @@ impl<N: Network> Consensus<N> {
         tokio::spawn(Self::request_handler(network, stream, blockchain));
     }
 
-    pub(crate) fn request_handler<Req: Handle<Res> + Message, Res: Message>(
+    pub(crate) fn request_handler<
+        Req: Handle<Res> + Request,
+        Res: Serialize + Deserialize + Send,
+    >(
         network: &Arc<N>,
         stream: BoxStream<'static, (Req, N::RequestId, N::PeerId)>,
         blockchain: &Arc<RwLock<Blockchain>>,

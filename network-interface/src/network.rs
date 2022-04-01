@@ -8,8 +8,8 @@ use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 use beserial::{Deserialize, Serialize};
 
 use crate::{
-    message::{Message, RequestError, ResponseMessage},
     peer::*,
+    request::{Request, RequestError},
 };
 
 #[derive(Clone, Debug)]
@@ -90,22 +90,22 @@ pub trait Network: Send + Sync + 'static {
 
     fn get_local_peer_id(&self) -> Self::PeerId;
 
-    async fn request<Req: Message, Res: Message>(
+    async fn request<Req: Request, Res: Deserialize + Serialize + Send>(
         &self,
         request: Req,
         peer_id: Self::PeerId,
     ) -> Result<
-        BoxFuture<'static, (ResponseMessage<Res>, Self::RequestId, Self::PeerId)>,
+        BoxFuture<'static, (Result<Res, RequestError>, Self::RequestId, Self::PeerId)>,
         RequestError,
     >;
 
-    fn receive_requests<M: Message>(
+    fn receive_requests<Req: Request>(
         &self,
-    ) -> BoxStream<'static, (M, Self::RequestId, Self::PeerId)>;
+    ) -> BoxStream<'static, (Req, Self::RequestId, Self::PeerId)>;
 
-    async fn respond<M: Message>(
+    async fn respond<Res: Deserialize + Serialize + Send>(
         &self,
         request_id: Self::RequestId,
-        response: M,
+        response: Res,
     ) -> Result<(), Self::Error>;
 }

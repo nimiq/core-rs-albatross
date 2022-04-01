@@ -15,9 +15,7 @@ use beserial::{Deserialize, Serialize};
 use beserial_derive::{Deserialize, Serialize};
 use nimiq_network_interface::network::{MsgAcceptance, NetworkEvent, Topic};
 use nimiq_network_interface::{
-    message::{Message, MessageTypeId},
-    network::Network as NetworkInterface,
-    peer::CloseReason,
+    network::Network as NetworkInterface, peer::CloseReason, request::Request,
 };
 use nimiq_network_libp2p::{
     discovery::{
@@ -34,8 +32,8 @@ struct TestMessage {
     id: u32,
 }
 
-impl Message for TestMessage {
-    const TYPE_ID: MessageTypeId = MessageTypeId::TestMessage;
+impl Request for TestMessage {
+    const TYPE_ID: u16 = 42;
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -44,8 +42,8 @@ struct TestMessage2 {
     x: String,
 }
 
-impl Message for TestMessage2 {
-    const TYPE_ID: MessageTypeId = MessageTypeId::TestMessage2;
+impl Request for TestMessage2 {
+    const TYPE_ID: u16 = 43;
 }
 
 fn network_config(address: Multiaddr) -> Config {

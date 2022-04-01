@@ -6,7 +6,7 @@ use futures::future::{BoxFuture, FutureExt};
 use futures::sink::Sink;
 use futures::task::{Context, Poll};
 
-use nimiq_network_interface::message::Message;
+use nimiq_network_interface::request::Request;
 use nimiq_validator_network::ValidatorNetwork;
 
 // TODO:
@@ -18,7 +18,7 @@ struct SendingFuture<N: ValidatorNetwork> {
 }
 
 impl<N: ValidatorNetwork> SendingFuture<N> {
-    pub async fn send<M: Message + Clone + Unpin + std::fmt::Debug>(self, msg: (M, usize)) {
+    pub async fn send<M: Request + Clone + Unpin + std::fmt::Debug>(self, msg: (M, usize)) {
         let result = self.network.send_to(&[msg.1], msg.0).await;
         if let Some(Err(err)) = result.get(0) {
             debug!("Sending msg to validator #{} failed: {:?}", &msg.1, err);
@@ -27,7 +27,7 @@ impl<N: ValidatorNetwork> SendingFuture<N> {
 }
 
 /// Implementation of a simple Sink Wrapper for the NetworkInterface's Network trait
-pub struct NetworkSink<M: Message + Unpin, N: ValidatorNetwork> {
+pub struct NetworkSink<M: Request + Unpin, N: ValidatorNetwork> {
     /// The network this sink is sending its messages over
     network: Arc<N>,
     /// The currently executed future of sending an item.
@@ -36,7 +36,7 @@ pub struct NetworkSink<M: Message + Unpin, N: ValidatorNetwork> {
     phantom: PhantomData<M>,
 }
 
-impl<M: Message + Unpin, N: ValidatorNetwork> NetworkSink<M, N> {
+impl<M: Request + Unpin, N: ValidatorNetwork> NetworkSink<M, N> {
     pub fn new(network: Arc<N>) -> Self {
         Self {
             network,
@@ -46,7 +46,7 @@ impl<M: Message + Unpin, N: ValidatorNetwork> NetworkSink<M, N> {
     }
 }
 
-impl<M: Message + Clone + Unpin + std::fmt::Debug, N: ValidatorNetwork + 'static> Sink<(M, usize)>
+impl<M: Request + Clone + Unpin + std::fmt::Debug, N: ValidatorNetwork + 'static> Sink<(M, usize)>
     for NetworkSink<M, N>
 {
     type Error = ();

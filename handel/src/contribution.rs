@@ -1,7 +1,6 @@
 use thiserror::Error;
 
 use collections::bitset::BitSet;
-use nimiq_network_interface::prelude::MessageTypeId;
 
 #[derive(Clone, Debug, Error)]
 pub enum ContributionError {
@@ -22,7 +21,7 @@ pub trait AggregatableContribution:
     ///
     /// This value must be unique not only within this trait but within all
     /// implementations of the `Message` trait.
-    const TYPE_ID: MessageTypeId;
+    const TYPE_ID: u16;
 
     /// A BitSet signaling which contributors have contributed in this Contribution
     fn contributors(&self) -> BitSet;

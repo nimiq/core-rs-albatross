@@ -13,7 +13,7 @@ use nimiq_blockchain::{
     AbstractBlockchain, Blockchain, ExtendedTransaction, PushError, PushResult, CHUNK_SIZE,
 };
 use nimiq_hash::Blake2bHash;
-use nimiq_network_interface::prelude::{Network, RequestError, ResponseMessage};
+use nimiq_network_interface::prelude::{Network, RequestError};
 use nimiq_primitives::policy;
 use nimiq_utils::math::CeilingDiv;
 
@@ -379,13 +379,10 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         // TODO verify that hash of returned epoch matches the one we requested
         match result {
             Ok(future) => {
-                let (response_message, _request_id, _peer_id) = future.await;
-                match response_message {
-                    ResponseMessage::Response(batch_set_info) => Ok(batch_set_info),
-                    ResponseMessage::Error(_) => Err(RequestError::Timeout),
-                }
+                let (response, _request_id, _peer_id) = future.await;
+                response
             }
-            Err(_) => Err(RequestError::SendError),
+            Err(e) => Err(e),
         }
     }
 
@@ -411,13 +408,10 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
 
         match result {
             Ok(future) => {
-                let (response_message, _request_id, _peer_id) = future.await;
-                match response_message {
-                    ResponseMessage::Response(history_chunk) => Ok(history_chunk),
-                    ResponseMessage::Error(_) => Err(RequestError::Timeout),
-                }
+                let (response, _request_id, _peer_id) = future.await;
+                response
             }
-            Err(_) => Err(RequestError::SendError),
+            Err(e) => Err(e),
         }
     }
 }

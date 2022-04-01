@@ -9,9 +9,11 @@ use futures::{future::join_all, lock::Mutex, stream::BoxStream, StreamExt};
 
 use beserial::{Deserialize, Serialize};
 use nimiq_bls::{CompressedPublicKey, SecretKey};
-use nimiq_network_interface::message::Message;
-use nimiq_network_interface::network::{MsgAcceptance, Network, Topic};
-use nimiq_network_interface::prelude::NetworkEvent;
+use nimiq_network_interface::{
+    network::{MsgAcceptance, Network, Topic},
+    prelude::NetworkEvent,
+    request::Request,
+};
 
 use super::{MessageStream, NetworkError, ValidatorNetwork};
 use crate::validator_record::{SignedValidatorRecord, ValidatorRecord};
@@ -160,10 +162,10 @@ where
         state.validator_peer_id_cache = keep_cached;
     }
 
-    async fn send_to<M: Message + Clone>(
+    async fn send_to<Req: Request + Clone>(
         &self,
         validator_ids: &[usize],
-        msg: M,
+        msg: Req,
     ) -> Vec<Result<(), Self::Error>> {
         let futures = validator_ids
             .iter()
@@ -207,8 +209,7 @@ where
                     }
                 };
                 // We don't care about the response. Just do the request to send a message to the peer.
-                // Response type is expected to be the same as the request.
-                let _ = self.network.request::<M, M>(msg.clone(), peer_id).await.map_err(NetworkError::Request)?;
+                let _ = self.network.request::<Req, ()>(msg.clone(), peer_id).await.map_err(NetworkError::Request)?;
                 Ok(())
             });
 
@@ -218,11 +219,11 @@ where
             .collect::<Vec<Result<(), Self::Error>>>()
     }
 
-    fn receive<M: Message + Clone>(&self) -> MessageStream<M, N::PeerId> {
+    fn receive<Req: Request + Clone>(&self) -> MessageStream<Req, N::PeerId> {
         let network = Arc::clone(&self.network);
         Box::pin(
             network
-                .receive_requests::<M>()
+                .receive_requests::<Req>()
                 .map(move |(message, _request_id, peer_id)| (message, peer_id)),
         )
     }
@@ -244,7 +245,7 @@ where
         Ok(self.network.subscribe::<TTopic>().await?)
     }
 
-    fn cache<M: Message>(&self, _buffer_size: usize, _lifetime: Duration) {
+    fn cache<Req: Request>(&self, _buffer_size: usize, _lifetime: Duration) {
         unimplemented!()
     }
 

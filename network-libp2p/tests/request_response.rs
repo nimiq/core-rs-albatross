@@ -13,7 +13,7 @@ use beserial::{Deserialize, Serialize};
 use beserial_derive::{Deserialize, Serialize};
 use nimiq_network_interface::{
     network::Network as NetworkInterface,
-    prelude::{Message, MessageTypeId, NetworkEvent, ResponseError, ResponseMessage},
+    prelude::{InboundRequestError, NetworkEvent, OutboundRequestError, Request, RequestError},
 };
 use nimiq_network_libp2p::{
     discovery::{
@@ -29,16 +29,13 @@ use nimiq_utils::time::OffsetTime;
 struct TestRequest {
     request: u64,
 }
-impl Message for TestRequest {
-    const TYPE_ID: MessageTypeId = MessageTypeId::TestRequest;
+impl Request for TestRequest {
+    const TYPE_ID: u16 = 42;
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 struct TestResponse {
     response: u64,
-}
-impl Message for TestResponse {
-    const TYPE_ID: MessageTypeId = MessageTypeId::TestResponse;
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -46,18 +43,9 @@ struct TestResponse2 {
     response: u64,
 }
 
-impl Message for TestResponse2 {
-    const TYPE_ID: MessageTypeId = MessageTypeId::TestResponse2;
-}
-
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 struct TestResponse3 {
     response: u32,
-}
-
-impl Message for TestResponse3 {
-    // Intentionally setting another response's Type ID
-    const TYPE_ID: MessageTypeId = TestResponse::TYPE_ID;
 }
 
 #[derive(Clone, Debug)]
@@ -194,10 +182,10 @@ async fn test_valid_request_valid_response() {
     );
 
     match received_response {
-        ResponseMessage::Response(response) => {
+        Ok(response) => {
             assert_eq!(response, test_response);
         }
-        ResponseMessage::Error(e) => assert!(false, "Response received with error: {:?}", e),
+        Err(e) => assert!(false, "Response received with error: {:?}", e),
     };
 }
 
@@ -248,75 +236,12 @@ async fn test_multiple_valid_requests_valid_responses() {
     let responses = join_all(response_futures).await;
     for (received_response, _request_id, _peer_id) in responses {
         match received_response {
-            ResponseMessage::Response(response) => {
+            Ok(response) => {
                 assert_eq!(response, test_response_2);
             }
-            ResponseMessage::Error(e) => assert!(false, "Response received with error: {:?}", e),
+            Err(e) => assert!(false, "Response received with error: {:?}", e),
         };
     }
-}
-
-// Test that we can send a request and receive a `InvalidResponse` if the peer replied with
-// a message type ID that doesn't match the one we are expecting
-#[test(tokio::test)]
-async fn test_valid_request_incorrect_response_type() {
-    let (net1, net2) = TestNetwork::create_connected_networks().await;
-
-    let test_request = TestRequest { request: 42 };
-    let incorrect_response = TestResponse2 { response: 43 };
-
-    // Subscribe for receiving requests
-    let mut requests = net1.receive_requests::<TestRequest>();
-
-    tokio::time::sleep(Duration::from_secs(1)).await;
-
-    log::info!("Sending request...");
-
-    // Send the request and get future for the response
-    let response = net2
-        .request::<TestRequest, TestResponse>(test_request.clone(), net1.get_local_peer_id())
-        .await
-        .unwrap();
-
-    log::info!("Waiting for Request message...");
-    let (received_request, request_id, peer_id) = requests.next().await.unwrap();
-    log::info!(
-        "Received request {:?} from peer {:?}: {:?}",
-        request_id,
-        peer_id,
-        received_request
-    );
-
-    assert_eq!(received_request, test_request);
-
-    // Respond the request
-    assert!(net1
-        .respond(request_id, incorrect_response.clone())
-        .await
-        .is_ok());
-
-    tokio::time::sleep(Duration::from_secs(1)).await;
-
-    // Check the received response
-    let (received_response, request_id, peer_id) = response.await;
-    log::info!(
-        "Received response {:?} from peer {:?}: {:?}",
-        request_id,
-        peer_id,
-        received_response
-    );
-
-    match received_response {
-        ResponseMessage::Response(response) => {
-            assert!(false, "Received unexpected valid response: {:?}", response);
-        }
-        ResponseMessage::Error(e) => assert_eq!(
-            e,
-            ResponseError::InvalidResponse,
-            "Response received with error: {:?}",
-            e
-        ),
-    };
 }
 
 // Test that we can send a request and receive a `DeSerializationError` if the peer replied with
@@ -370,12 +295,12 @@ async fn test_valid_request_incorrect_response() {
     );
 
     match received_response {
-        ResponseMessage::Response(response) => {
+        Ok(response) => {
             assert!(false, "Received unexpected valid response: {:?}", response);
         }
-        ResponseMessage::Error(e) => assert_eq!(
+        Err(e) => assert_eq!(
             e,
-            ResponseError::DeSerializationError,
+            RequestError::InboundRequest(InboundRequestError::DeSerializationError),
             "Response received with error: {:?}",
             e
         ),
@@ -425,10 +350,13 @@ async fn test_valid_request_no_response() {
     );
 
     match received_response {
-        ResponseMessage::Response(response) => {
+        Ok(response) => {
             assert!(false, "Received unexpected valid response: {:?}", response)
         }
-        ResponseMessage::Error(e) => assert_eq!(e, ResponseError::Timeout),
+        Err(e) => assert_eq!(
+            e,
+            RequestError::OutboundRequest(OutboundRequestError::Timeout)
+        ),
     };
 }
 
@@ -461,9 +389,12 @@ async fn test_valid_request_no_response_no_receiver() {
     );
 
     match received_response {
-        ResponseMessage::Response(response) => {
+        Ok(response) => {
             assert!(false, "Received unexpected valid response: {:?}", response)
         }
-        ResponseMessage::Error(e) => assert_eq!(e, ResponseError::NoReceiver),
+        Err(e) => assert_eq!(
+            e,
+            RequestError::OutboundRequest(OutboundRequestError::NoReceiver)
+        ),
     };
 }

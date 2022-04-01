@@ -12,10 +12,7 @@ use parking_lot::RwLock;
 use nimiq_block::Block;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_hash::Blake2bHash;
-use nimiq_network_interface::{
-    network::Network,
-    prelude::{RequestError, ResponseMessage},
-};
+use nimiq_network_interface::{network::Network, prelude::RequestError};
 
 use crate::messages::{HeadResponse, RequestBlock, RequestHead, ResponseBlock};
 
@@ -86,11 +83,11 @@ impl<TNetwork: Network + 'static> HeadRequests<TNetwork> {
             Ok(future) => {
                 let (response_message, _request_id, _peer_id) = future.await;
                 match response_message {
-                    ResponseMessage::Response(head) => Ok(head.hash),
-                    ResponseMessage::Error(_) => Err(RequestError::Timeout),
+                    Ok(head) => Ok(head.hash),
+                    Err(e) => Err(e),
                 }
             }
-            Err(_) => Err(RequestError::SendError),
+            Err(e) => Err(e),
         }
     }
 
@@ -107,11 +104,11 @@ impl<TNetwork: Network + 'static> HeadRequests<TNetwork> {
             Ok(future) => {
                 let (response_message, _request_id, _peer_id) = future.await;
                 match response_message {
-                    ResponseMessage::Response(block) => Ok(block.block),
-                    ResponseMessage::Error(_) => Err(RequestError::Timeout),
+                    Ok(block) => Ok(block.block),
+                    Err(e) => Err(e),
                 }
             }
-            Err(_) => Err(RequestError::SendError),
+            Err(e) => Err(e),
         }
     }
 }

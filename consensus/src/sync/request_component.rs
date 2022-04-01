@@ -10,7 +10,7 @@ use nimiq_block::Block;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{
     network::{Network, NetworkEvent, SubscribeEvents},
-    prelude::{RequestError, ResponseMessage},
+    prelude::RequestError,
 };
 
 use crate::messages::{RequestMissingBlocks, ResponseBlocks};
@@ -136,11 +136,11 @@ impl<TNetwork: Network + 'static> BlockRequestComponent<TNetwork> {
             Ok(future) => {
                 let (response_message, _request_id, _peer_id) = future.await;
                 match response_message {
-                    ResponseMessage::Response(blocks) => Ok(blocks.blocks),
-                    ResponseMessage::Error(_) => Err(RequestError::Timeout),
+                    Ok(blocks) => Ok(blocks.blocks),
+                    Err(e) => Err(e),
                 }
             }
-            Err(_) => Err(RequestError::SendError),
+            Err(e) => Err(e),
         }
     }
 }

@@ -5,7 +5,7 @@ use parking_lot::RwLock;
 
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_hash::Blake2bHash;
-use nimiq_network_interface::prelude::{CloseReason, Network, RequestError, ResponseMessage};
+use nimiq_network_interface::prelude::{CloseReason, Network, RequestError};
 use nimiq_primitives::policy;
 
 use crate::messages::{MacroChain, RequestMacroChain};
@@ -525,13 +525,10 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
             .await;
         match result {
             Ok(future) => {
-                let (response_message, _request_id, _peer_id) = future.await;
-                match response_message {
-                    ResponseMessage::Response(block_hashes) => Ok(block_hashes),
-                    ResponseMessage::Error(_) => Err(RequestError::Timeout),
-                }
+                let (response, _request_id, _peer_id) = future.await;
+                response
             }
-            Err(_) => Err(RequestError::SendError),
+            Err(e) => Err(e),
         }
     }
 }
