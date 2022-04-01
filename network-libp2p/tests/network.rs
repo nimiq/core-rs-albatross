@@ -210,6 +210,7 @@ async fn create_double_connected_networks() -> (Network, Network) {
 async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
     let mut networks = Vec::new();
     let mut addresses = Vec::new();
+    let mut events = Vec::new();
     let mut rng = rand::thread_rng();
 
     // Create all the networks and addresses
@@ -225,7 +226,9 @@ async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
         let network = Network::new(Arc::new(OffsetTime::new()), network_config(addr.clone())).await;
         network.listen_on(vec![addr.clone()]).await;
 
-        log::debug!(address = ?addr, peer_id = ?network.get_local_peer_id(), "Network {}",peer);
+        log::debug!(address = ?addr, peer_id = ?network.get_local_peer_id(), "Network {}", peer);
+
+        events.push(network.subscribe_events());
         networks.push(network);
     }
 
@@ -239,8 +242,11 @@ async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
             .unwrap();
     }
 
-    let timeout = tokio::time::Duration::from_secs((n_peers * 2).try_into().unwrap());
-    tokio::time::sleep(timeout).await;
+    // Wait for all PeerJoined events
+    futures::stream::select_all(events)
+        .take(n_peers * (n_peers - 1))
+        .for_each(|_| async {})
+        .await;
 
     // Verify that each network has all the other peers connected
     for peer in 0..n_peers {
