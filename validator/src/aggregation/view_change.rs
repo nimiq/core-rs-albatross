@@ -82,7 +82,7 @@ impl Stream for InputStreamSwitch {
             if message.tag.new_view_number > self.current_view_change.new_view_number {
                 let result =
                     ViewChangeResult::FutureViewChange(message.update.aggregate, message.tag);
-                if let Err(_) = self.sender.send(result) {
+                if self.sender.send(result).is_err() {
                     error!("Failed to send FutureViewChange result: receiver is gone");
                 }
             }
