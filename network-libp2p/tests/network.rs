@@ -9,6 +9,7 @@ use libp2p::{
     PeerId,
 };
 use rand::{thread_rng, Rng};
+use tokio::time::timeout;
 
 use beserial::{Deserialize, Serialize};
 use beserial_derive::{Deserialize, Serialize};
@@ -215,9 +216,7 @@ async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
 
     // Create all the networks and addresses
     for peer in 0..n_peers {
-        let addr: Multiaddr = format!("/ip4/127.0.0.1/tcp/{}/ws", 9000 + peer)
-            .parse()
-            .unwrap();
+        let addr = multiaddr![Memory(thread_rng().gen::<u64>())];
 
         log::debug!("Creating network: {}", peer);
 
@@ -243,10 +242,17 @@ async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
     }
 
     // Wait for all PeerJoined events
-    futures::stream::select_all(events)
+    let all_joined = futures::stream::select_all(events)
         .take(n_peers * (n_peers - 1))
-        .for_each(|_| async {})
-        .await;
+        .for_each(|event| async move {
+            match event {
+                Ok(NetworkEvent::PeerJoined(_)) => {}
+                _ => panic!("Unexpected NetworkEvent: {:?}", event),
+            };
+        });
+    if timeout(Duration::from_secs(120), all_joined).await.is_err() {
+        log::warn!("Timeout triggered while waiting for peers to join");
+    };
 
     // Verify that each network has all the other peers connected
     for peer in 0..n_peers {
