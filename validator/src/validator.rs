@@ -667,17 +667,28 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Future
         }
 
         // Process blockchain updates.
-        let mut received_event = false;
+        let mut received_event: Option<Blake2bHash> = None;
         while let Poll::Ready(Some(event)) = self.blockchain_event_rx.poll_next_unpin(cx) {
             let consensus_established = self.consensus.is_established();
             trace!(consensus_established, "blockchain event {:?}", event);
             if consensus_established {
+                let latest_hash = event.get_newest_hash();
                 self.on_blockchain_event(event);
-                received_event = true;
+                received_event = Some(latest_hash);
             }
         }
-        if received_event {
-            self.init_block_producer();
+        if let Some(event) = received_event {
+            // Check if the processed event corresponds to the head hash
+            if self.consensus.blockchain.read().head_hash() == event {
+                // if so init the next block producer.
+                self.init_block_producer();
+            } else {
+                // if not then the block producers need to be reset as they are now out of date.
+                // No new block producer should be initialized, as the state is not adequately updated yet.
+                self.micro_producer = None;
+                self.macro_producer = None;
+                log::debug!("Bypassed initializing block producer for obsolete block.")
+            }
         }
 
         // Process fork events.
