@@ -42,7 +42,8 @@ use nimiq_network_interface::{
     },
     peer::CloseReason,
     request::{
-        peek_type, InboundRequestError, OutboundRequestError, Request, RequestError, RequestType,
+        peek_auto_reply, peek_type, InboundRequestError, OutboundRequestError, Request,
+        RequestError, RequestType,
     },
 };
 use nimiq_utils::time::OffsetTime;
@@ -634,95 +635,124 @@ impl Network {
                         RequestResponseEvent::Message {
                             peer: peer_id,
                             message,
-                        } => match message {
-                            RequestResponseMessage::Request {
-                                request_id,
-                                request,
-                                channel,
-                            } => {
-                                // TODO Add rate limiting (per peer).
-                                if let Ok(type_id) = peek_type(&request) {
+                        } => {
+                            match message {
+                                RequestResponseMessage::Request {
+                                    request_id,
+                                    request,
+                                    channel,
+                                } => {
+                                    // TODO Add rate limiting (per peer).
                                     log::trace!(
                                         "Incoming [Request ID {}] from peer {}: {:?}",
                                         request_id,
                                         peer_id,
                                         request,
                                     );
-                                    // Check if we have a receiver registered for this message type
-                                    let sender = {
-                                        if let Some(sender) =
-                                            state.receive_requests.get_mut(&type_id)
-                                        {
-                                            // Check if the sender is still alive, if not remove it
-                                            if sender.is_closed() {
-                                                state.receive_requests.remove(&type_id);
-                                                None
+                                    if let Ok(type_id) = peek_type(&request) {
+                                        if let Ok(auto_reply) = peek_auto_reply(&request) {
+                                            // Check if we have a receiver registered for this message type
+                                            let sender = {
+                                                if let Some(sender) =
+                                                    state.receive_requests.get_mut(&type_id)
+                                                {
+                                                    // Check if the sender is still alive, if not remove it
+                                                    if sender.is_closed() {
+                                                        state.receive_requests.remove(&type_id);
+                                                        None
+                                                    } else {
+                                                        Some(sender)
+                                                    }
+                                                } else {
+                                                    None
+                                                }
+                                            };
+                                            // If we have a receiver, pass the request.
+                                            if let Some(sender) = sender {
+                                                if let Err(e) = sender.try_send((
+                                                    request.into(),
+                                                    request_id,
+                                                    peer_id,
+                                                )) {
+                                                    log::error!(
+                                                        "Failed to dispatch [Request ID {}] of type {} from peer {}: {:?}",
+                                                        request_id,
+                                                        type_id,
+                                                        peer_id,
+                                                        e,
+                                                    );
+                                                }
+                                            } else if !auto_reply {
+                                                // Log that we don't have a receiver only if auto reply is not set
+                                                // because otherwise it is expected that sometimes the receiver may
+                                                // be already dropped
+                                                log::error!(
+                                                    "No receiver found for requests of type ID {}",
+                                                    type_id
+                                                );
+                                            }
+                                            // If we don't have the auto reply set, we need to store the response
+                                            // channel for the application to reply later, otherwise, send the
+                                            // default empty response.
+                                            if !auto_reply {
+                                                state.response_channels.insert(request_id, channel);
                                             } else {
-                                                Some(sender)
+                                                log::trace!(
+                                                    "[Request ID {}] Auto replying for type ID {}",
+                                                    request_id,
+                                                    type_id
+                                                );
+                                                if swarm
+                                                    .behaviour_mut()
+                                                    .request_response
+                                                    .send_response(
+                                                        channel,
+                                                        None::<()>.serialize_to_vec(),
+                                                    )
+                                                    .is_err()
+                                                {
+                                                    log::error!(
+                                                        "[Request ID {}] Could not send default response for request type {}",
+                                                        request_id,
+                                                        type_id
+                                                    );
+                                                }
                                             }
                                         } else {
-                                            None
-                                        }
-                                    };
-                                    // If we have a receiver, pass the request. Otherwise send a default empty response
-                                    if let Some(sender) = sender {
-                                        state.response_channels.insert(request_id, channel);
-                                        if let Err(e) =
-                                            sender.try_send((request.into(), request_id, peer_id))
-                                        {
                                             log::error!(
-                                            "Failed to dispatch [Request ID {}] from peer {}: {:?}",
-                                            request_id,
-                                            peer_id,
-                                            e,
-                                        );
+                                                "[Request ID {}] Could not parse auto reply field",
+                                                request_id
+                                            );
                                         }
                                     } else {
-                                        log::trace!(
-                                        "No receiver found for requests of type ID {}, replying with a 'None'",
-                                        type_id
+                                        log::error!(
+                                            "[Request ID {}] Could not parse request type ID",
+                                            request_id
                                         );
-                                        if swarm
-                                            .behaviour_mut()
-                                            .request_response
-                                            .send_response(channel, None::<()>.serialize_to_vec())
-                                            .is_err()
-                                        {
-                                            log::error!(
-                                                "[Request ID {}] Could not send default response for request type {}",
-                                                request_id,
-                                                type_id
-                                            );
-                                        };
                                     }
-                                } else {
-                                    log::error!(
-                                        "[Request ID {}] Could not parse request type ID",
-                                        request_id
-                                    );
                                 }
-                            }
-                            RequestResponseMessage::Response {
-                                request_id,
-                                response,
-                            } => {
-                                log::trace!(
-                                    "[Request ID {}] Incoming response from peer {}",
+                                RequestResponseMessage::Response {
                                     request_id,
-                                    peer_id,
-                                );
-                                if let Some(channel) = state.requests.remove(&request_id) {
-                                    channel
-                                        .send((Ok(response.into()), request_id, peer_id))
-                                        .ok();
-                                } else {
-                                    log::error!(
-                                        "No such request ID found: [Request ID {}]",
-                                        request_id
+                                    response,
+                                } => {
+                                    log::trace!(
+                                        "[Request ID {}] Incoming response from peer {}",
+                                        request_id,
+                                        peer_id,
                                     );
+                                    if let Some(channel) = state.requests.remove(&request_id) {
+                                        channel
+                                            .send((Ok(response.into()), request_id, peer_id))
+                                            .ok();
+                                    } else {
+                                        log::error!(
+                                            "No such request ID found: [Request ID {}]",
+                                            request_id
+                                        );
+                                    }
                                 }
                             }
-                        },
+                        }
                         RequestResponseEvent::OutboundFailure {
                             peer,
                             request_id,

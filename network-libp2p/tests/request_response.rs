@@ -34,6 +34,15 @@ impl Request for TestRequest {
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+struct TestRequest2 {
+    request: u64,
+}
+impl Request for TestRequest2 {
+    const TYPE_ID: u16 = 42;
+    const AUTO_REPLY: bool = true;
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 struct TestResponse {
     response: u64,
 }
@@ -360,13 +369,13 @@ async fn test_valid_request_no_response() {
     };
 }
 
-// Test that we can send a request and receive a timeout response if no response is sent
-// given that no receiver is registered for the requests being sent
+// Test that we can send a request and get a `NoReceiver` error if the network
+// replied with the default response for a request with the `AUTO_REPLY` set as true.
 #[test(tokio::test)]
-async fn test_valid_request_no_response_no_receiver() {
+async fn test_valid_request_default_response_no_receiver() {
     let (net1, net2) = TestNetwork::create_connected_networks().await;
 
-    let test_request = TestRequest { request: 42 };
+    let test_request = TestRequest2 { request: 42 };
 
     tokio::time::sleep(Duration::from_secs(1)).await;
 
@@ -374,11 +383,11 @@ async fn test_valid_request_no_response_no_receiver() {
 
     // Send the request and get future for the response
     let response = net2
-        .request::<TestRequest, TestResponse>(test_request.clone(), net1.get_local_peer_id())
+        .request::<TestRequest2, TestResponse>(test_request.clone(), net1.get_local_peer_id())
         .await
         .unwrap();
 
-    // Don't respond the request: It should timeout and send the error to the request
+    // Don't respond the request: The network should send the default response
     // Check the received response
     let (received_response, request_id, peer_id) = response.await;
     log::info!(

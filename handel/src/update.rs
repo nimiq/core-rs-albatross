@@ -81,4 +81,5 @@ impl<
     // types using the same type ID which would confuse the network at decoding
     // messages upon receiving them.
     const TYPE_ID: u16 = C::TYPE_ID;
+    const AUTO_REPLY: bool = true;
 }

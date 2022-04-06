@@ -1,6 +1,7 @@
 pub mod crc;
 
 use std::io;
+use std::io::{Cursor, Seek, SeekFrom};
 
 use derive_more::{AsMut, AsRef, Display, From, Into};
 use thiserror::Error;
@@ -80,11 +81,23 @@ pub struct RequestId(u64);
 pub trait Request:
     Serialize + Deserialize + Send + Sync + Unpin + std::fmt::Debug + 'static
 {
+    /// Response Type ID.
+    /// This Type ID should be unique across all the requests
+    /// as this identifies the type that this request should be
+    /// deserialize to.
     const TYPE_ID: u16;
+    /// Auto reply setting.
+    /// This lets the network know that whenever a request of this
+    /// type is received, the network must send a response
+    /// since the receiver may be either dropped or not actively
+    /// listening for the request.
+    /// Defaults to false.
+    const AUTO_REPLY: bool = false;
 
     /// Serializes a request.
     /// A serialized request is composed of:
     /// - A 2 bytes (u16) for the Type ID of the request
+    /// - A bytes (bool) for the Auto Reply of the request
     /// - Serialized content of the inner type.
     fn serialize_request<W: WriteBytesExt>(
         &self,
@@ -94,6 +107,7 @@ pub trait Request:
         let serialized_size = self.serialized_request_size();
         let mut v = Vec::with_capacity(serialized_size);
         size += Self::TYPE_ID.serialize(&mut v)?;
+        size += Self::AUTO_REPLY.serialize(&mut v)?;
         size += self.serialize(&mut v)?;
 
         writer.write_all(v.as_slice())?;
@@ -103,10 +117,12 @@ pub trait Request:
     /// Computes the size in bytes of a serialized request.
     /// A serialized request is composed of:
     /// - A 2 bytes (u16) for the Type ID of the request
+    /// - A bytes (bool) for the Auto Reply of the request
     /// - Serialized content of the inner type.
     fn serialized_request_size(&self) -> usize {
         let mut serialized_size = 0;
         serialized_size += Self::TYPE_ID.serialized_size();
+        serialized_size += Self::AUTO_REPLY.serialized_size();
         serialized_size += self.serialized_size();
         serialized_size
     }
@@ -114,6 +130,7 @@ pub trait Request:
     /// Deserializes a request
     /// A serialized request is composed of:
     /// - A 2 bytes (u16) for the Type ID of the request
+    /// - A byte (bool) for the Auto Reply of the request
     /// - Serialized content of the inner type.
     fn deserialize_request<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         // Check for correct type.
@@ -122,6 +139,10 @@ pub trait Request:
             return Err(io::Error::new(io::ErrorKind::InvalidData, "Wrong message type").into());
         }
 
+        let ar: bool = Deserialize::deserialize(reader)?;
+        if ar != Self::AUTO_REPLY {
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "Wrong auto reply").into());
+        }
         let message: Self = Deserialize::deserialize(reader)?;
 
         Ok(message)
@@ -132,4 +153,15 @@ pub fn peek_type(buffer: &[u8]) -> Result<RequestType, SerializingError> {
     let ty = u16::deserialize_from_vec(buffer)?;
 
     Ok(ty.into())
+}
+
+pub fn peek_auto_reply(buffer: &[u8]) -> Result<bool, SerializingError> {
+    let mut c = Cursor::new(buffer);
+
+    // skip 2 bytes of message type
+    c.seek(SeekFrom::Start(2))?;
+
+    let ar = bool::deserialize(&mut c)?;
+
+    Ok(ar)
 }
