@@ -46,7 +46,7 @@ jobs:
     - uses: actions-rs/toolchain@v1
       with:
         profile: minimal
-        toolchain: nightly-2022-03-13
+        toolchain: stable
         override: true
         components: llvm-tools-preview
     - name: Install cargo-llvm-cov
@@ -63,7 +63,10 @@ jobs:
       uses: actions-rs/cargo@v1
       with:
         command: llvm-cov
-        args: --all-features --doctests
+        # Fixme: --doctest is not supported in stable. See:
+        # https://github.com/taiki-e/cargo-llvm-cov/tree/7448e48b438797efb446a98ebd8ff22d3fae5ebe#known-limitations
+        #args: --all-features --doctests
+        args: --all-features
     - name: Generate coverage report
       uses: actions-rs/cargo@v1
       with:
