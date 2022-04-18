@@ -220,7 +220,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
 
     fn init(&mut self) {
         self.init_epoch();
-        self.init_block_producer();
+        self.init_block_producer(None);
     }
 
     fn init_epoch(&mut self) {
@@ -294,12 +294,22 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         });
     }
 
-    fn init_block_producer(&mut self) {
+    fn init_block_producer(&mut self, event: Option<Blake2bHash>) {
         if !self.is_active() {
             return;
         }
 
         let blockchain = self.consensus.blockchain.read();
+
+        if let Some(event) = event {
+            if blockchain.head_hash() != event {
+                log::debug!("Bypassed initializing block producer for obsolete block.");
+                self.micro_producer = None;
+                self.macro_producer = None;
+                return;
+            }
+        }
+
         let head = blockchain.head();
         let next_block_number = head.block_number() + 1;
         let next_view_number = head.next_view_number();
@@ -677,18 +687,9 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Future
                 received_event = Some(latest_hash);
             }
         }
+
         if let Some(event) = received_event {
-            // Check if the processed event corresponds to the head hash
-            if self.consensus.blockchain.read().head_hash() == event {
-                // if so init the next block producer.
-                self.init_block_producer();
-            } else {
-                // if not then the block producers need to be reset as they are now out of date.
-                // No new block producer should be initialized, as the state is not adequately updated yet.
-                self.micro_producer = None;
-                self.macro_producer = None;
-                log::debug!("Bypassed initializing block producer for obsolete block.")
-            }
+            self.init_block_producer(Some(event));
         }
 
         // Process fork events.
