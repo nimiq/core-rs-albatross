@@ -5,7 +5,7 @@
 //! The mempool is the element inside the validator in charge of obtaining and
 //! processing transactions. The validator will use the mempool to collect
 //! transactions that should be included in a block.
-
+#[macro_use]
 extern crate log;
 
 /// Mempool config module

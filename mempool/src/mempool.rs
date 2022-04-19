@@ -419,11 +419,10 @@ impl Mempool {
                     if pending_balance <= sender_balance {
                         mempool_state.put(tx);
                     } else {
-                        log::debug!(
-                            "Tx {} from reverted block #{}.{} was dropped because of insufficient funds",
-                            tx_hash,
-                            block.block_number(),
-                            block.view_number()
+                        debug!(
+                            block_number = block.block_number(),
+                            view_number = block.view_number(),
+                            "Tx from reverted block was dropped because of insufficient funds tx_hash={}", tx_hash
                         );
                     }
                 }
@@ -475,10 +474,10 @@ impl Mempool {
             tx_vec.push(tx);
         }
 
-        log::debug!(
-            "Returning {} transactions from mempool ({} remaining)",
-            tx_vec.len(),
-            mempool_state_upgraded.transactions.len()
+        debug!(
+            returned_txs = tx_vec.len(),
+            remaining_txs = mempool_state_upgraded.transactions.len(),
+            "Returned transactions from mempool"
         );
 
         tx_vec

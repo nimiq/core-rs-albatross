@@ -142,7 +142,10 @@ pub(crate) async fn verify_tx<'a>(
     let block_height = blockchain.block_number() + 1;
 
     if !transaction.is_valid_at(block_height) {
-        log::debug!("Transaction invalid at block {}", block_height);
+        debug!(
+            block_height = block_height,
+            "Mempool-verify tx invalid at this block height"
+        );
         return Err(VerifyErr::InvalidBlockHeight);
     }
 

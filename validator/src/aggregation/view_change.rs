@@ -250,8 +250,9 @@ impl ViewChangeAggregation {
             };
 
             warn!(
-                "Starting view change {}.{}",
-                &view_change.block_number, &view_change.new_view_number,
+                block_number = &view_change.block_number,
+                new_view_number = &view_change.new_view_number,
+                "Starting view change"
             );
 
             let protocol = ViewChangeAggregationProtocol::new(
@@ -337,7 +338,7 @@ impl ViewChangeAggregation {
                                 let view_change_proof = ViewChangeProof {
                                     sig: vc.view_change,
                                 };
-                                trace!("View Change complete: {:?}", &view_change_proof);
+                                trace!("View change completed, proof={:?}", &view_change_proof);
 
                                 // return the ViewChangeProof
                                 return (view_change, view_change_proof);
