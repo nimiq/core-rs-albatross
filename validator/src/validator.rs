@@ -1,3 +1,4 @@
+use std::error::Error;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
@@ -259,6 +260,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             "This is our validator address: {}",
             self.validator_address()
         );
+
         for (i, validator) in validators.iter().enumerate() {
             log::trace!(
                 "Matching against this current validator: {}",
@@ -315,10 +317,10 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         let next_view_number = head.next_view_number();
         let block_producer = BlockProducer::new(self.signing_key(), self.voting_key());
 
-        log::debug!(
-            "Initializing block producer for #{}.{}",
-            next_block_number,
-            next_view_number,
+        debug!(
+            next_block_number = next_block_number,
+            next_view_number = next_view_number,
+            "Initializing block producer"
         );
 
         self.macro_producer = None;
@@ -460,13 +462,13 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                     {
                         if block_copy.is_election_block() {
                             info!(
-                                "Publishing Election MacroBlock #{}",
-                                &block_copy.header.block_number
+                                block_number = &block_copy.header.block_number,
+                                "Publishing Election MacroBlock"
                             );
                         } else {
                             info!(
-                                "Publishing Checkpoint MacroBlock #{}",
-                                &block_copy.header.block_number
+                                block_number = &block_copy.header.block_number,
+                                "Publishing Checkpoint MacroBlock"
                             );
                         }
 
@@ -474,13 +476,17 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                         let network = Arc::clone(&self.network);
                         tokio::spawn(async move {
                             let block_number = block_copy.header.block_number;
-                            trace!("Publishing macro block #{}", block_number);
+                            trace!(block_number = block_number, "Publishing macro block");
 
                             if let Err(e) = network
                                 .publish::<BlockTopic>(Block::Macro(block_copy))
                                 .await
                             {
-                                warn!("Failed to publish block #{}: {:?}", block_number, e);
+                                warn!(
+                                    block_number = block_number,
+                                    error = &e as &dyn Error,
+                                    "Failed to publish macro block"
+                                );
                             }
                         });
                     }
@@ -527,11 +533,15 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                         let network = self.network.clone();
                         tokio::spawn(async move {
                             let block_number = block.header.block_number;
-                            trace!("Publishing micro block #{}", block_number);
+                            trace!(block_number = block_number, "Publishing micro block");
 
                             if let Err(e) = network.publish::<BlockTopic>(Block::Micro(block)).await
                             {
-                                warn!("Failed to publish block #{}: {:?}", block_number, e);
+                                warn!(
+                                    block_number = block_number,
+                                    error = &e as &dyn Error,
+                                    "Failed to publish micro block"
+                                );
                             }
                         });
                     }

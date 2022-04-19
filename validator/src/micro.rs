@@ -99,21 +99,23 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
                 Some(None)
             } else if self.is_our_turn(&*blockchain) {
                 info!(
-                    "[{}] Our turn at #{}:{}, producing micro block",
-                    self.validator_slot_band, self.block_number, self.view_number
+                    slot_band = self.validator_slot_band,
+                    block_number = self.block_number,
+                    view_number = self.view_number,
+                    "Our turn producing micro block"
                 );
 
                 let block = self.produce_micro_block(&*blockchain);
 
                 debug!(
-                    "Produced micro block #{}.{} with {} transactions",
-                    block.header.block_number,
-                    block.header.view_number,
-                    block
+                    block_number = block.header.block_number,
+                    view_number = block.header.view_number,
+                    transactions = block
                         .body
                         .as_ref()
                         .map(|body| body.transactions.len())
-                        .unwrap_or(0)
+                        .unwrap_or(0),
+                    "Produced micro block"
                 );
 
                 let block1 = block.clone();
@@ -142,13 +144,18 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         }
 
         debug!(
-            "[{}] Not our turn at #{}:{}, waiting for micro block",
-            self.validator_slot_band, self.block_number, self.view_number
+            slot_band = self.validator_slot_band,
+            block_number = self.block_number,
+            view_number = self.view_number,
+            "Not our turn, waiting for micro block"
         );
+
         time::sleep(self.view_change_delay).await;
+
         info!(
-            "No micro block received within timeout at #{}:{}, starting view change",
-            self.block_number, self.view_number
+            block_number = self.block_number,
+            view_number = self.view_number,
+            "No micro block received within timeout, starting view change"
         );
 
         // Acquire a blockchain read lock and check if the state still matches to fetch active validators.
@@ -166,9 +173,12 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
 
         let (view_change, view_change_proof) = self.change_view(active_validators.unwrap()).await;
         info!(
-            "View change completed for #{}:{}, new view is {}",
-            self.block_number, self.view_number, view_change.new_view_number
+            block_number = self.block_number,
+            view_number = self.view_number,
+            new_view_number = view_change.new_view_number,
+            "View change completed"
         );
+
         let event = ProduceMicroBlockEvent::ViewChange(view_change, view_change_proof);
         (Some(event), self)
     }
