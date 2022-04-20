@@ -231,6 +231,12 @@ impl Mempool {
                 break;
             } else {
                 // Remove the transaction from the mempool.
+                trace!(
+                    reason = "TX is old and it is no longer valid at block height",
+                    block_height = block_height,
+                    "Mempool-update removing tx {} from mempool",
+                    tx_hash
+                );
                 mempool_state.remove(&tx_hash);
             }
         }
@@ -252,6 +258,11 @@ impl Mempool {
                     // Check if we already know this transaction. If yes, a known transaction was
                     // mined so we need to remove it from the mempool.
                     if mempool_state.contains(&tx_hash) {
+                        trace!(
+                            reason = "TX was already mined",
+                            "Mempool-update removing tx {} from mempool",
+                            tx_hash
+                        );
                         mempool_state.remove(&tx_hash);
                         continue;
                     }
@@ -273,10 +284,11 @@ impl Mempool {
                                 }
                             }) {
                                 None => {
-                                    log::debug!(
-                                        "There is no account for this sender in the blockchain {}",
-                                        tx.sender.to_user_friendly_address()
-                                    );
+                                    trace!(
+                                    reason = "The sender was pruned/removed",
+                                    "Mempool-update removing all tx from sender {} from mempool",
+                                    tx.sender
+                                );
                                     // The account from this sender was pruned/removed, so we need to delete all txns sent from this address
                                     mempool_state.remove_sender_txns(&tx.sender);
                                     continue;
@@ -312,6 +324,11 @@ impl Mempool {
                                 .collect();
 
                             for hash in txs_to_remove {
+                                trace!(
+                                    reason = "Sender no longer has funds to pay for tx",
+                                    "Mempool-update removing tx {} from mempool",
+                                    hash
+                                );
                                 mempool_state.remove(hash);
                             }
                         }
@@ -338,6 +355,12 @@ impl Mempool {
                         };
 
                         if let Some(transaction) = transaction {
+                            trace!(
+                                reason = "Staking sender already in mempool",
+                                staking_type = "outgoing",
+                                "Mempool-update removing tx {} from mempool",
+                                transaction.hash::<Blake2bHash>()
+                            );
                             txs_to_remove.push(transaction.hash());
                         }
                     }
@@ -362,6 +385,12 @@ impl Mempool {
                         };
 
                         if let Some(transaction) = transaction {
+                            trace!(
+                                reason = "Staking recipient already in mempool",
+                                staking_type = "incoming",
+                                "Mempool-update removing tx {} from mempool",
+                                transaction.hash::<Blake2bHash>()
+                            );
                             txs_to_remove.push(transaction.hash());
                         }
                     }

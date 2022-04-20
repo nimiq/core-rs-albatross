@@ -199,6 +199,12 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
             self.validator_slot_band,
         );
 
+        debug!(
+            round = round,
+            valid_round = valid_round,
+            "Broadcasting tendermint proposal"
+        );
+
         // Broadcast the signed proposal to the network.
         if let Err(err) = self.network.publish::<ProposalTopic>(signed_proposal).await {
             error!("Publishing proposal failed: {:?}", err);
@@ -236,10 +242,10 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
             );
 
             debug!(
-                "Awaiting proposal for {}.{}, expected producer: {}, timeout: {:?}",
-                blockchain.block_number() + 1,
-                &round,
-                &proposer_slot_band,
+                block_number = blockchain.block_number() + 1,
+                round = &round,
+                slot_band = &proposer_slot_band,
+                "Awaiting proposal timeout={:?}",
                 &timeout
             );
 
@@ -442,9 +448,12 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintInterface<TValidat
                 // Check if the proposal comes from the correct validator and the signature of the
                 // proposal is valid. If not, keep awaiting.
                 debug!(
-                    "Received Proposal for block #{}.{} from validator {} ",
-                    &msg.message.value.block_number, &msg.message.round, &msg.signer_idx,
+                    block_number = &msg.message.value.block_number,
+                    round = &msg.message.round,
+                    validator_idx = &msg.signer_idx,
+                    "Received Tendermint Proposal "
                 );
+
                 if validator_slot_band == msg.signer_idx {
                     if msg.verify(validator_key) {
                         return (msg.message, id);
