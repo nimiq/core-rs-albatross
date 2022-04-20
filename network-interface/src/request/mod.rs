@@ -63,7 +63,7 @@ pub enum OutboundRequestError {
 }
 
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, Error, PartialEq)]
+#[derive(Clone, Copy, Debug, Error, PartialEq, Serialize, Deserialize)]
 pub enum InboundRequestError {
     /// Response failed to be deserialized
     #[error("Response failed to be deserialized")]
@@ -77,29 +77,6 @@ pub enum InboundRequestError {
     /// The request timed out before a response could have been sent.
     #[error("Request timed out")]
     Timeout = 4,
-}
-
-impl Serialize for InboundRequestError {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        (*self as u8).serialize(writer)
-    }
-
-    fn serialized_size(&self) -> usize {
-        1
-    }
-}
-
-impl Deserialize for InboundRequestError {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        let value: u8 = Deserialize::deserialize(reader)?;
-        match value {
-            1 => Ok(Self::DeSerializationError),
-            2 => Ok(Self::NoReceiver),
-            3 => Ok(Self::SenderFutureDropped),
-            4 => Ok(Self::Timeout),
-            _ => Err(SerializingError::InvalidValue),
-        }
-    }
 }
 
 #[derive(
@@ -122,12 +99,8 @@ pub trait Request:
         writer: &mut W,
     ) -> Result<usize, SerializingError> {
         let mut size = 0;
-        let serialized_size = self.serialized_request_size();
-        let mut v = Vec::with_capacity(serialized_size);
-        size += Self::TYPE_ID.serialize(&mut v)?;
-        size += self.serialize(&mut v)?;
-
-        writer.write_all(v.as_slice())?;
+        size += Self::TYPE_ID.serialize(writer)?;
+        size += self.serialize(writer)?;
         Ok(size)
     }
 
@@ -136,10 +109,10 @@ pub trait Request:
     /// - A 2 bytes (u16) for the Type ID of the request
     /// - Serialized content of the inner type.
     fn serialized_request_size(&self) -> usize {
-        let mut serialized_size = 0;
-        serialized_size += Self::TYPE_ID.serialized_size();
-        serialized_size += self.serialized_size();
-        serialized_size
+        let mut size = 0;
+        size += Self::TYPE_ID.serialized_size();
+        size += self.serialized_size();
+        size
     }
 
     /// Deserializes a request

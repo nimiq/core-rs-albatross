@@ -34,6 +34,7 @@ tokio-stream = { version = "0.1", features = ["default", "sync"] }
 log = { package = "tracing", version = "0.1", features = ["log"] }
 
 beserial = { path = "../beserial" }
+beserial_derive = { path = "../beserial/beserial_derive" }
 nimiq-utils = { path = "../utils", features = ["crc"] }
 
 [dev-dependencies]

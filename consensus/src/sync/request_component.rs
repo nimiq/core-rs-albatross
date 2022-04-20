@@ -123,7 +123,7 @@ impl<TNetwork: Network + 'static> BlockRequestComponent<TNetwork> {
         target_block_hash: Blake2bHash,
         locators: Vec<Blake2bHash>,
     ) -> Result<Option<Vec<Block>>, RequestError> {
-        let response_message = network
+        network
             .request::<RequestMissingBlocks>(
                 RequestMissingBlocks {
                     locators,
@@ -131,11 +131,8 @@ impl<TNetwork: Network + 'static> BlockRequestComponent<TNetwork> {
                 },
                 peer_id,
             )
-            .await;
-        match response_message {
-            Ok(blocks) => Ok(blocks.blocks),
-            Err(e) => Err(e),
-        }
+            .await
+            .map(|response| response.blocks)
     }
 }
 

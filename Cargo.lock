@@ -3076,6 +3076,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "beserial",
+ "beserial_derive",
  "derive_more",
  "futures",
  "nimiq-test-log",
