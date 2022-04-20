@@ -4,28 +4,32 @@
 
     # Usage
 
-    1. Run `devnet_create.py NUM_VALIDATORS [-o, --output output_dir] [-s, --spammer]`. This will create keys and configurations for multiple validator nodes.
-    2. Copy genesis config from `/tmp/nimiq-devnet-RANDOM/dev-albatross.toml` to `core-rs/genesis/src/genesis/dev-albatross.toml`.
+    1. Run `devnet_create.py NUM_VALIDATORS [-o, --output output_dir]
+       [-s, --spammer]`. This will create keys and configurations for multiple
+       validator nodes.
+    2. Copy genesis config from `/tmp/nimiq-devnet-RANDOM/dev-albatross.toml`
+       to `core-rs/genesis/src/genesis/dev-albatross.toml`.
     3. Build core-rs: `cargo build`
     4. Run seed node. Run a node (not as validator) at `127.0.0.1:8443`
-    5. Run `devnet_run.py PATH` (with `PATH=/tmp/nimiq-devnet-RANDOM`). This will start the validators.
+    5. Run `devnet_run.py PATH` (with `PATH=/tmp/nimiq-devnet-RANDOM`). This
+       will start the validators.
 
     # Notes
 
-    - The path to the `core-rs/target/debug` source code must be set in `devnet_create.py` and `devnet_run.py` in the `TARGET` variable.
-    - Logs files of the validators are in in `/tmp/nimiq-devnet-RANDOM/validatorNUM/nimiq-client.log`
+    - The path to the `core-rs/target/debug` source code must be set in
+      `devnet_create.py` and `devnet_run.py` in the `TARGET` variable.
+    - Logs files of the validators are in in
+      `/tmp/nimiq-devnet-RANDOM/validatorNUM/nimiq-client.log`
 
 """
 
 
-from binascii import unhexlify
 from pathlib import Path
 
 import argparse
 import json
 import os
 import subprocess
-import sys
 import uuid
 
 parser = argparse.ArgumentParser()
@@ -38,7 +42,8 @@ parser.add_argument('-s', "--spammer", action="store_true",
 parser.add_argument('-a', "--albagen", action="store_true",
                     help="generate configuration files for albagen")
 parser.add_argument("--run-environment", default="unknown",
-                    help="sent to Loki, like \"ci\", \"devnet\", default: \"unknown\"")
+                    help="sent to Loki, like \"ci\", \"devnet\", default: "
+                         "\"unknown\"")
 args = parser.parse_args()
 
 output = Path(args.output)
@@ -46,8 +51,14 @@ output = Path(args.output)
 num_validators = args.num_validators
 target = Path.cwd() / "target" / "debug"
 
-nimiq_address = lambda: subprocess.check_output([str(target / "nimiq-address")], text=True).splitlines()
-nimiq_bls = lambda: subprocess.check_output([str(target / "nimiq-bls")], text=True).splitlines()
+
+def nimiq_address(): return subprocess.check_output(
+    [str(target / "nimiq-address")], text=True).splitlines()
+
+
+def nimiq_bls(): return subprocess.check_output(
+    [str(target / "nimiq-bls")], text=True).splitlines()
+
 
 def loki_settings_generate():
     loki_env = os.getenv("NIMIQ_LOKI_URL")
@@ -59,9 +70,12 @@ def loki_settings_generate():
     loki_labels = {"environment": args.run_environment}
     loki_extra_fields = {"nimiq_run_id": run_id}
     if loki_labels_env:
-        loki_labels = dict(x.split("=", 1) for x in loki_labels_env.split(":"))
+        loki_labels.update(dict(x.split("=", 1)
+                           for x in loki_labels_env.split(":")))
     if loki_extra_fields_env:
-        loki_extra_fields = dict(x.split("=", 1) for x in loki_extra_fields_env.split(":"))
+        loki_extra_fields.update(dict(x.split("=", 1)
+                                 for x in loki_extra_fields_env.split(":")))
+
     def loki_settings(node):
         loki_extra_fields["nimiq_node"] = node
         result = f"""\
@@ -69,19 +83,26 @@ def loki_settings_generate():
 url = "{loki_env}"
 """
         if loki_labels:
-            result += "\n[log.loki.labels]\n{}\n".format("\n".join("{!r} = {!r}".format(k, v) for k, v in loki_labels.items()))
+            result += "\n[log.loki.labels]\n{}\n".format(
+                "\n".join("{!r} = {!r}".format(k, v)
+                          for k, v in loki_labels.items()))
         if loki_extra_fields:
-            result += "\n[log.loki.extra_fields]\n{}\n".format("\n".join("{!r} = {!r}".format(k, v) for k, v in loki_extra_fields.items()))
+            result += "\n[log.loki.extra_fields]\n{}\n".format(
+                "\n".join("{!r} = {!r}".format(k, v)
+                          for k, v in loki_extra_fields.items()))
         return result + "\n"
     return loki_settings
+
+
 loki_settings = loki_settings_generate()
+
 
 def create_bls_keypair():
     lines = []
-    for l in nimiq_bls():
-        l = l.strip()
-        if l and not l.startswith("#"):
-            lines.append(l)
+    for line in nimiq_bls():
+        line = line.strip()
+        if line and not line.startswith("#"):
+            lines.append(line)
     return {
         "public_key": lines[0],
         "private_key": lines[1]
@@ -108,7 +129,7 @@ def create_seed(path, min_peers):
         f.write("""[network]
 peer_key_file = "{path}/peer_key.dat"
 listen_addresses = [
-	"/ip4/127.0.0.1/tcp/9100/ws",
+    "/ip4/127.0.0.1/tcp/9100/ws",
 ]
 
 [consensus]
@@ -140,10 +161,10 @@ def create_spammer(path, min_peers):
         f.write("""[network]
 peer_key_file = "{path}/peer_key.dat"
 listen_addresses = [
-	"/ip4/127.0.0.1/tcp/9999/ws",
+    "/ip4/127.0.0.1/tcp/9999/ws",
 ]
 seed_nodes = [
-	{{ address = "/ip4/127.0.0.1/tcp/9101/ws" }} ,
+    {{ address = "/ip4/127.0.0.1/tcp/9101/ws" }} ,
     {{ address = "/ip4/127.0.0.1/tcp/9102/ws" }}
 ]
 
@@ -209,10 +230,10 @@ fee_key: "{fee_key}"
         f.write("""[network]
 peer_key_file = "{path}/peer_key.dat"
 listen_addresses = [
-	"/ip4/127.0.0.1/tcp/{port}/ws",
+    "/ip4/127.0.0.1/tcp/{port}/ws",
 ]
 seed_nodes = [
-	{{ address = "/ip4/127.0.0.1/tcp/9100/ws" }}
+    {{ address = "/ip4/127.0.0.1/tcp/9100/ws" }}
 ]
 
 [consensus]
@@ -263,7 +284,8 @@ print("Creating validators...")
 validators = []
 min_peers = min(num_validators, 3)
 for i in range(num_validators):
-    validator = create_validator(output / "validator{:d}".format(i+1), i, min_peers)
+    validator = create_validator(
+        output / "validator{:d}".format(i+1), i, min_peers)
     validators.append(validator)
     print("Created validator: {}..".format(
         validator["voting_key"]["public_key"][0:16]))
