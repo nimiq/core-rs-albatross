@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use log::info;
 pub use nimiq::{
     client::{Client, Consensus},
     config::command_line::CommandLine,
@@ -91,14 +92,14 @@ async fn main_inner() -> Result<(), Error> {
                 Ok(network_info) => {
                     let head = client.blockchain_head().clone();
 
-                    log::info!(
-                        "Consensus established: {:?} - Head: #{}.{}- {}, Peers: {}",
-                        consensus.is_established(),
-                        head.block_number(),
-                        head.view_number(),
+                    info!(
+                        block_number = head.block_number(),
+                        view_number = head.view_number(),
+                        num_peers = network_info.num_peers(),
+                        status = consensus.is_established(),
+                        "Consensus status, head={}",
                         head.hash(),
-                        network_info.num_peers()
-                    );
+                    )
                 }
                 Err(err) => {
                     log::error!("Error retrieving NetworkInfo: {:?}", err);

@@ -6,6 +6,7 @@ use clap::Parser;
 use futures::StreamExt;
 #[cfg(feature = "metrics")]
 use lazy_static::lazy_static;
+use log::info;
 #[cfg(feature = "metrics")]
 use prometheus::{IntGauge, Registry};
 use rand::distributions::WeightedIndex;
@@ -361,14 +362,18 @@ async fn main_inner() -> Result<(), Error> {
                 let tx_count = block.transactions().map(|txs| txs.len()).unwrap_or(0);
                 let mempool_count = mempool.num_transactions();
 
-                log::info!(
-                    "Blockchain extended to #{}.{}",
-                    block.block_number(),
-                    block.view_number()
+                info!(
+                    block_number = block.block_number(),
+                    view_number = block.view_number(),
+                    "Blockchain extended"
                 );
+
                 if consensus.is_established() {
-                    log::info!("\t- block contains: {} tx", tx_count);
-                    log::info!("\t- mempool contains: {} tx", mempool_count);
+                    info!(
+                        tx_count = tx_count,
+                        mempool_count = mempool_count,
+                        "Transactions statistics"
+                    );
                 }
 
                 state.write().unwrap().current_block_number = block.block_number();
@@ -412,11 +417,13 @@ async fn main_inner() -> Result<(), Error> {
                         tps as i64,
                     )
                     .await;
-
-                    log::info!("Average over the last {} blocks:", rolling_window);
-                    log::info!("\t- block time: {:?}", av_block_time);
-                    log::info!("\t- tx per block: {:?}", av_tx);
-                    log::info!("\t- tx per second: {:?}", tps);
+                    info!(
+                        blocks_window = rolling_window,
+                        block_time = av_block_time.as_secs_f32(),
+                        tpb = av_tx,
+                        tps = tps,
+                        "Statistics collected"
+                    );
 
                     tx_count_total -= oldest_block.tx_count;
                     if oldest_block.is_micro {
