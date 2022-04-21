@@ -60,13 +60,12 @@ def nimiq_bls(): return subprocess.check_output(
     [str(target / "nimiq-bls")], text=True).splitlines()
 
 
-def loki_settings_generate():
+def loki_settings_generate(run_id):
     loki_env = os.getenv("NIMIQ_LOKI_URL")
     loki_labels_env = os.getenv("NIMIQ_LOKI_LABELS")
     loki_extra_fields_env = os.getenv("NIMIQ_LOKI_EXTRA_FIELDS")
     if not loki_env:
         return lambda role: ""
-    run_id = str(uuid.uuid4())
     loki_labels = {"environment": args.run_environment}
     loki_extra_fields = {"nimiq_run_id": run_id}
     if loki_labels_env:
@@ -94,7 +93,12 @@ url = "{loki_env}"
     return loki_settings
 
 
-loki_settings = loki_settings_generate()
+run_id = str(uuid.uuid4())
+loki_settings = loki_settings_generate(run_id)
+
+# Write the run ID to a file
+with (output / "run_id.info").open("wt") as f:
+    f.write("{}\n".format(run_id))
 
 
 def create_bls_keypair():

@@ -66,6 +66,10 @@ jobs:
     - uses: actions-rs/cargo@v1
       with:
         command: build
+    - name: Retrieve initial timestamp
+      id: initial_ts
+      run: |
+         echo "::set-output name=INITIAL_TS::$(date +%s%N | cut -b1-13)"
     - name: Execute the test
       run: |          
           bash scripts/devnet/devnet.sh --run-environment ci ${{ matrix.devnet_args }}
@@ -91,6 +95,17 @@ jobs:
             echo "::set-output name=FAIL_REASON::other"
           fi
       id: reason
+    - name: Retrieve final timestamp and Run ID
+      if: always()
+      id: final_ts_run_id
+      run: |
+         echo "::set-output name=FINAL_TS::$(date +%s%N | cut -b1-13)"
+         echo "::set-output name=RUN_ID::$(cat temp-logs/*/conf/run_id.info)"
+    - name: Build Grafana dashboard link
+      if: always()
+      id: grafana_url
+      run: |
+         echo "::set-output name=GRAFANA_URL::http://localhost:3001/d/YbjdvlU7z/nimiq-test?orgId=1&var-env=ci&var-run_id=${{steps.final_ts_run_id.outputs.RUN_ID}}&from=${{steps.initial_ts.outputs.INITIAL_TS}}&to=${{steps.final_ts_run_id.outputs.FINAL_TS}}"
     - name: Report potential deadlocks to slack
       if: always() && contains(steps.reason.outputs.FAIL_REASON, 'DEADLOCK')
       uses: ravsamhq/notify-slack-action@v1
@@ -125,6 +140,6 @@ jobs:
           status: ${{ job.status }}
           notify_when: 'failure'
           notification_title: '${{ matrix.test }} failed because of ${{ steps.reason.outputs.FAIL_REASON }}'
-          footer: '<{run_url}|View Run>'
+          footer: '<{run_url}|View Run> | <{${{steps.grafana_url.outputs.GRAFANA_URL}}}|Grafana dashboard>'
       env:
           SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
