@@ -191,7 +191,7 @@ fee_key_file = "{path}/fee_key.dat"
 """.format(
             path="temp-state/dev/spammer",
             min_peers=min_peers,
-            loki=loki_settings("spammer"),
+            loki=loki_settings("spammer1"),
         ))
     return {
         'address': "NQ40 GCAA U3UX 8BKD GUN0 PG3T 17HA 4X5H TXVE",
