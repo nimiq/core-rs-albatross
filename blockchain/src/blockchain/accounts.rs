@@ -133,8 +133,9 @@ impl Blockchain {
         );
 
         debug!(
-            "Reverting block #{}.{}",
-            &micro_block.header.block_number, &micro_block.header.view_number
+            block_number = &micro_block.header.block_number,
+            view_number = &micro_block.header.view_number,
+            "Reverting block"
         );
 
         // Get the body of the block.

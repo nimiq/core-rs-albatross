@@ -110,8 +110,8 @@ impl Blockchain {
                     .expect("Couldn't calculate slot owner!");
 
                 debug!(
-                    "Slash inherent: view change: {}",
-                    proposer_slot.validator.address
+                    address = %proposer_slot.validator.address,
+                    "Slash inherent from view change"
                 );
 
                 // Create the SlashedSlot struct.
@@ -263,8 +263,9 @@ impl Blockchain {
                 inherents.push(inherent);
             } else {
                 debug!(
-                    "{} can't accept epoch reward {}",
-                    inherent.target, inherent.value
+                    targed_address = %inherent.target,
+                    reward = %inherent.value,
+                    "Can't accept epoch reward"
                 );
                 burned_reward += reward;
             }

@@ -114,13 +114,13 @@ impl ChainOrdering {
             }
 
             info!(
-                "New block is on {:?} chain with fork at #{} (current #{}.{}, new block #{}.{})",
-                chain_order,
-                current_height - 1,
-                blockchain.block_number(),
-                blockchain.view_number(),
-                block.block_number(),
-                block.view_number()
+                fork_block_number = current_height - 1,
+                current_block_number = blockchain.block_number(),
+                current_view_number = blockchain.view_number(),
+                new_block_number = block.block_number(),
+                new_view_number = block.view_number(),
+                "New block in {:?} chain",
+                chain_order
             );
         }
 
