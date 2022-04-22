@@ -65,10 +65,10 @@ pub struct TendermintState<
     pub known_proposals: BTreeMap<u32, (ProposalTy, Option<u32>)>,
 
     // All received messages since this heights tendermint aggregations started.
-    // used to replay all messages in case a node goes down.
+    // Used to replay all messages in case a node goes down.
     // pub messages: Vec<MessageTy>
 
-    // aAll results of all past aggregtions, for future reference. In the state mostly for testing purposes
+    // All results of all past aggregations, for future reference. In the state mostly for testing purposes
     // Currently unused. Will be made use of once tendermint knows of intermediate aggregation  results
     #[beserial(len_type(u16))]
     pub best_votes: BTreeMap<(u32, Step), Aggregate<ProposalHashTy, ProofTy>>,

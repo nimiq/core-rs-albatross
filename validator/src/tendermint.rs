@@ -451,7 +451,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintInterface<TValidat
                     block_number = &msg.message.value.block_number,
                     round = &msg.message.round,
                     validator_idx = &msg.signer_idx,
-                    "Received Tendermint Proposal "
+                    "Received Tendermint Proposal"
                 );
 
                 if validator_slot_band == msg.signer_idx {
