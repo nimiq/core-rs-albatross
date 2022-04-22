@@ -140,6 +140,6 @@ jobs:
           status: ${{ job.status }}
           notify_when: 'failure'
           notification_title: '${{ matrix.test }} failed because of ${{ steps.reason.outputs.FAIL_REASON }}'
-          footer: '<{run_url}|View Run> | <{${{steps.grafana_url.outputs.GRAFANA_URL}}}|Grafana dashboard>'
+          footer: '<{run_url}|View Run> | <${{steps.grafana_url.outputs.GRAFANA_URL}}|Grafana dashboard>'
       env:
           SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
