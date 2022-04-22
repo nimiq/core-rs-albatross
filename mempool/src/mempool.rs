@@ -258,11 +258,6 @@ impl Mempool {
                     // Check if we already know this transaction. If yes, a known transaction was
                     // mined so we need to remove it from the mempool.
                     if mempool_state.contains(&tx_hash) {
-                        trace!(
-                            reason = "TX was already mined",
-                            "Mempool-update removing tx {} from mempool",
-                            tx_hash
-                        );
                         mempool_state.remove(&tx_hash);
                         continue;
                     }

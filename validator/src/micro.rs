@@ -102,20 +102,26 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
                     slot_band = self.validator_slot_band,
                     block_number = self.block_number,
                     view_number = self.view_number,
-                    "Our turn producing micro block"
+                    "Our turn producing micro block #{}:{}",
+                    self.block_number,
+                    self.view_number,
                 );
 
                 let block = self.produce_micro_block(&*blockchain);
+                let transactions = block
+                    .body
+                    .as_ref()
+                    .map(|body| body.transactions.len())
+                    .unwrap_or(0);
 
                 debug!(
                     block_number = block.header.block_number,
                     view_number = block.header.view_number,
-                    transactions = block
-                        .body
-                        .as_ref()
-                        .map(|body| body.transactions.len())
-                        .unwrap_or(0),
-                    "Produced micro block"
+                    transactions = transactions,
+                    "Produced micro block #{}.{} with {} transactions",
+                    block.header.block_number,
+                    block.header.view_number,
+                    transactions
                 );
 
                 let block1 = block.clone();
@@ -147,7 +153,9 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
             slot_band = self.validator_slot_band,
             block_number = self.block_number,
             view_number = self.view_number,
-            "Not our turn, waiting for micro block"
+            "Not our turn, waiting for micro block, at #{}:{}",
+            self.block_number,
+            self.view_number,
         );
 
         time::sleep(self.view_change_delay).await;
