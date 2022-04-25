@@ -4,7 +4,7 @@ use beserial::{Deserialize, Serialize};
 
 use crate::{
     utils::{Checkpoint, Step},
-    AggregationResult, ProofTrait, ProposalHashTrait, ProposalTrait,
+    AggregationResult, ProofTrait, ProposalCacheTrait, ProposalHashTrait, ProposalTrait,
 };
 
 /// necessary for serialization/deserialization derivation
@@ -38,6 +38,7 @@ pub struct ExtendedProposal<ProposalTy: ProposalTrait, ProposalHashTy: ProposalH
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct TendermintState<
     ProposalTy: ProposalTrait,
+    ProposalCacheTy: ProposalCacheTrait,
     ProposalHashTy: ProposalHashTrait,
     ProofTy: ProofTrait,
 > {
@@ -52,6 +53,9 @@ pub struct TendermintState<
     pub current_proposal: Option<Option<(ProposalTy, ProposalHashTy)>>,
     pub current_proposal_vr: Option<u32>,
     pub current_proof: Option<ProofTy>,
+
+    pub proposal_cache: Option<ProposalCacheTy>,
+    pub vr_proposal_cache: Option<ProposalCacheTy>,
 
     // Map over all votes this node did in the past for this block height.
     // Necessary in case it would ever need to re-request an old aggregation,
@@ -74,8 +78,12 @@ pub struct TendermintState<
     pub best_votes: BTreeMap<(u32, Step), Aggregate<ProposalHashTy, ProofTy>>,
 }
 
-impl<ProposalTy: ProposalTrait, ProposalHashTy: ProposalHashTrait, ProofTy: ProofTrait>
-    TendermintState<ProposalTy, ProposalHashTy, ProofTy>
+impl<
+        ProposalTy: ProposalTrait,
+        ProposalCacheTy: ProposalCacheTrait,
+        ProposalHashTy: ProposalHashTrait,
+        ProofTy: ProofTrait,
+    > TendermintState<ProposalTy, ProposalCacheTy, ProposalHashTy, ProofTy>
 {
     pub fn new(height: u32, initial_round: u32) -> Self {
         Self {
@@ -89,6 +97,8 @@ impl<ProposalTy: ProposalTrait, ProposalHashTy: ProposalHashTrait, ProofTy: Proo
             current_proposal: None,
             current_proposal_vr: None,
             current_proof: None,
+            proposal_cache: None,
+            vr_proposal_cache: None,
             own_votes: BTreeMap::new(),
             known_proposals: BTreeMap::new(),
             best_votes: BTreeMap::new(),

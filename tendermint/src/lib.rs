@@ -28,6 +28,15 @@ impl<T: Clone + Debug + PartialEq + Deserialize + Serialize + Unpin + Send + Syn
 {
 }
 
+pub trait ProposalCacheTrait:
+    Clone + Debug + Deserialize + Serialize + Unpin + Send + Sync + 'static
+{
+}
+impl<T: Clone + Debug + Deserialize + Serialize + Unpin + Send + Sync + 'static> ProposalCacheTrait
+    for T
+{
+}
+
 pub trait ProposalHashTrait:
     Clone + Debug + PartialEq + Ord + Deserialize + Serialize + Unpin + Send + 'static
 {

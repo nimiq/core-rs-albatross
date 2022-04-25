@@ -12,7 +12,12 @@ use crate::{
 
 // to not store each future individually even though there can only ever be one.
 pub enum OutsideDepsFutReturn<DepsTy: TendermintOutsideDeps> {
-    AwaitProposal((DepsTy, ProposalResult<DepsTy::ProposalTy>)),
+    AwaitProposal(
+        (
+            DepsTy,
+            ProposalResult<DepsTy::ProposalTy, DepsTy::ProposalCacheTy>,
+        ),
+    ),
     BroadcastProposal(DepsTy),
     Aggregate(
         (
@@ -28,7 +33,12 @@ pub enum OutsideDepsFutReturn<DepsTy: TendermintOutsideDeps> {
 /// TendermintOutSideDeps option are mutually exclusive.
 pub struct Tendermint<DepsTy: TendermintOutsideDeps> {
     deps: Option<DepsTy>,
-    state: TendermintState<DepsTy::ProposalTy, DepsTy::ProposalHashTy, DepsTy::ProofTy>,
+    state: TendermintState<
+        DepsTy::ProposalTy,
+        DepsTy::ProposalCacheTy,
+        DepsTy::ProposalHashTy,
+        DepsTy::ProofTy,
+    >,
 
     fut: Option<BoxFuture<'static, Result<OutsideDepsFutReturn<DepsTy>, TendermintError>>>,
 }
@@ -37,7 +47,12 @@ impl<DepsTy: TendermintOutsideDeps> Tendermint<DepsTy> {
     pub fn new(
         deps: DepsTy,
         state_opt: Option<
-            TendermintState<DepsTy::ProposalTy, DepsTy::ProposalHashTy, DepsTy::ProofTy>,
+            TendermintState<
+                DepsTy::ProposalTy,
+                DepsTy::ProposalCacheTy,
+                DepsTy::ProposalHashTy,
+                DepsTy::ProofTy,
+            >,
         >,
     ) -> Self {
         if let Some(state) = state_opt {
@@ -92,6 +107,7 @@ impl<DepsTy: TendermintOutsideDeps> Tendermint<DepsTy> {
                     .known_proposals
                     .insert(round, (valid.proposal.clone(), Some(valid_round)));
                 self.state.current_proposal_vr = Some(valid_round);
+                self.state.proposal_cache = self.state.vr_proposal_cache.clone();
                 self.state
                     .own_votes
                     .insert((round, Step::Prevote), Some(valid.proposal_hash.clone()));
@@ -101,11 +117,13 @@ impl<DepsTy: TendermintOutsideDeps> Tendermint<DepsTy> {
                 debug!("Our turn at round {}, broadcasting fresh proposal", round);
                 match deps.get_value(round) {
                     Err(err) => return Poll::Ready(Some(TendermintReturn::Error(err))),
-                    Ok(proposal) => {
+                    Ok((proposal, proposal_cache)) => {
                         self.state
                             .known_proposals
                             .insert(round, (proposal.clone(), None));
-                        let proposal_hash = deps.hash_proposal(proposal.clone());
+                        let proposal_hash =
+                            deps.hash_proposal(proposal.clone(), proposal_cache.clone());
+                        self.state.proposal_cache = Some(proposal_cache);
                         self.state
                             .own_votes
                             .insert((round, Step::Prevote), Some(proposal_hash.clone()));
@@ -198,15 +216,17 @@ impl<DepsTy: TendermintOutsideDeps> Tendermint<DepsTy> {
         match fut.poll_unpin(cx) {
             Poll::Ready(Ok(OutsideDepsFutReturn::AwaitProposal((deps, ret)))) => {
                 match ret {
-                    ProposalResult::Proposal(proposal, Some(valid_round)) => {
+                    ProposalResult::Proposal((proposal, proposal_cache), Some(valid_round)) => {
                         let round = self.state.round;
                         // if a node presents a valid_round alognside the proposal, we must verify it
                         // first some sanity checks
                         if valid_round >= deps.initial_round() && valid_round < round {
-                            let proposal_hash = deps.hash_proposal(proposal.clone());
+                            let proposal_hash =
+                                deps.hash_proposal(proposal.clone(), proposal_cache.clone());
                             self.state.current_proposal_vr = Some(valid_round);
                             self.state.current_proposal =
                                 Some(Some((proposal.clone(), proposal_hash)));
+                            self.state.proposal_cache = Some(proposal_cache);
                             // we must check if the valid round referenced has 2f+1 votes for this proposal in the Prevote step
                             self.state.current_checkpoint = Checkpoint::VerifyValidRound;
                         } else {
@@ -224,7 +244,7 @@ impl<DepsTy: TendermintOutsideDeps> Tendermint<DepsTy> {
                         // yield state
                         Poll::Ready(Some(TendermintReturn::StateUpdate(self.state.clone())))
                     }
-                    ProposalResult::Proposal(proposal, None) => {
+                    ProposalResult::Proposal((proposal, proposal_cache), None) => {
                         // a proposal without a valid round can be checked immediately
                         let round = self.state.round;
                         if let Some(locked) = self.state.locked.as_ref() {
@@ -236,19 +256,23 @@ impl<DepsTy: TendermintOutsideDeps> Tendermint<DepsTy> {
                                     Some(locked.proposal_hash.clone()),
                                 );
                             } else {
-                                let proposal_hash = deps.hash_proposal(proposal.clone());
+                                let proposal_hash =
+                                    deps.hash_proposal(proposal.clone(), proposal_cache.clone());
                                 self.state.current_proposal =
                                     Some(Some((proposal.clone(), proposal_hash)));
                                 self.state.own_votes.insert((round, Step::Prevote), None);
                             }
                         } else {
-                            let proposal_hash = deps.hash_proposal(proposal.clone());
+                            let proposal_hash =
+                                deps.hash_proposal(proposal.clone(), proposal_cache.clone());
                             self.state.current_proposal =
                                 Some(Some((proposal.clone(), proposal_hash.clone())));
                             self.state
                                 .own_votes
                                 .insert((round, Step::Prevote), Some(proposal_hash));
                         }
+                        // The proposal cache must be updated regardless of vote, as this node might unlock itself.
+                        self.state.proposal_cache = Some(proposal_cache);
                         self.state.known_proposals.insert(round, (proposal, None));
                         self.state.step = Step::Prevote;
                         self.state.current_checkpoint = Checkpoint::AggregatePreVote;
@@ -476,6 +500,8 @@ impl<DepsTy: TendermintOutsideDeps> Tendermint<DepsTy> {
                     // This node must lock itself on the proposal as it is going to precommit on it
                     self.state.locked = Some(extended_proposal.clone());
                     self.state.valid = Some(extended_proposal);
+                    // additioally keep track of the proposal_cached for the VR
+                    self.state.vr_proposal_cache = self.state.proposal_cache.clone();
                     // TODO: Once intermediate aggregation result are received from all aggregations
                     // the self.state.valid field can potentially be updated when receiving 2f+1 prevotes
                     // even though the node has already voted Nil for the precommit.
@@ -533,6 +559,7 @@ impl<DepsTy: TendermintOutsideDeps> Tendermint<DepsTy> {
                     match deps.assemble_block(
                         self.state.round,
                         self.state.current_proposal.take().unwrap().unwrap().0,
+                        self.state.proposal_cache.take(),
                         proof,
                     ) {
                         Ok(block) => TendermintReturn::Result(block),

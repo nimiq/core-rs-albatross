@@ -37,6 +37,9 @@ impl SerializeContent for TestProposal {
 
 impl Hash for TestProposal {}
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TestProposalCache(u32);
+
 // We use this struct to mimic a validator. It determines which messages a single validator sees.
 #[derive(Clone)]
 pub struct TestValidator {
@@ -67,6 +70,8 @@ pub struct TestValidator {
 impl TendermintOutsideDeps for TestValidator {
     // The proposal type is obviously our TestProposal type.
     type ProposalTy = TestProposal;
+    // The proposalCacheTy is going to be TestProposalCache
+    type ProposalCacheTy = TestProposalCache;
     // Any hash function, doesn't matter which.
     type ProposalHashTy = Blake2bHash;
     // We never verify the proofs inside Tendermint so we can just use the empty type.
@@ -86,7 +91,12 @@ impl TendermintOutsideDeps for TestValidator {
     // We never call this on tests. Needs to be implemented if we want to use it.
     fn verify_state(
         &self,
-        _state: &TendermintState<Self::ProposalTy, Self::ProposalHashTy, Self::ProofTy>,
+        _state: &TendermintState<
+            Self::ProposalTy,
+            Self::ProposalCacheTy,
+            Self::ProposalHashTy,
+            Self::ProofTy,
+        >,
     ) -> bool {
         true
     }
@@ -97,16 +107,25 @@ impl TendermintOutsideDeps for TestValidator {
 
     // When it is our turn to propose, the proposal message in `proposal_rounds` is used instead to
     // give us the value that we will propose.
-    fn get_value(&mut self, round: u32) -> Result<Self::ProposalTy, TendermintError> {
-        Ok(self.proposal_rounds[round as usize].1)
+    fn get_value(
+        &mut self,
+        round: u32,
+    ) -> Result<(Self::ProposalTy, Self::ProposalCacheTy), TendermintError> {
+        Ok((
+            self.proposal_rounds[round as usize].1,
+            TestProposalCache(self.proposal_rounds[round as usize].1 .0),
+        ))
     }
 
     fn assemble_block(
         &self,
         _round: u32,
         proposal: Self::ProposalTy,
+        proposal_cache: Option<Self::ProposalCacheTy>,
         _proof: Self::ProofTy,
     ) -> Result<Self::ResultTy, TendermintError> {
+        assert!(proposal_cache.is_some());
+        assert_eq!(proposal.0, proposal_cache.unwrap().0);
         Ok(proposal)
     }
 
@@ -122,16 +141,25 @@ impl TendermintOutsideDeps for TestValidator {
     async fn await_proposal(
         self,
         round: u32,
-    ) -> Result<(Self, ProposalResult<Self::ProposalTy>), TendermintError> {
+    ) -> Result<
+        (
+            Self,
+            ProposalResult<Self::ProposalTy, Self::ProposalCacheTy>,
+        ),
+        TendermintError,
+    > {
         if self.proposal_rounds[round as usize].0 {
             // If the timeout flag is set, return timeout.
             Ok((self, ProposalResult::Timeout))
         } else {
-            // Otherwise, return the proposal.
             let proposal = ProposalResult::Proposal(
-                self.proposal_rounds[round as usize].1,
+                (
+                    self.proposal_rounds[round as usize].1,
+                    TestProposalCache(self.proposal_rounds[round as usize].1 .0),
+                ),
                 self.proposal_rounds[round as usize].2,
             );
+
             Ok((self, proposal))
         }
     }
@@ -216,7 +244,11 @@ impl TendermintOutsideDeps for TestValidator {
         }
     }
 
-    fn hash_proposal(&self, proposal: Self::ProposalTy) -> Self::ProposalHashTy {
+    fn hash_proposal(
+        &self,
+        proposal: Self::ProposalTy,
+        _proposal_cache: Self::ProposalCacheTy,
+    ) -> Self::ProposalHashTy {
         proposal.hash()
     }
 
@@ -234,6 +266,7 @@ async fn tendermint_loop(
     state_opt: Option<
         TendermintState<
             <TestValidator as TendermintOutsideDeps>::ProposalTy,
+            <TestValidator as TendermintOutsideDeps>::ProposalCacheTy,
             <TestValidator as TendermintOutsideDeps>::ProposalHashTy,
             <TestValidator as TendermintOutsideDeps>::ProofTy,
         >,
@@ -638,4 +671,69 @@ async fn past_proposal() {
     assert!(tendermint_loop(validator, None, TestProposal(0, 2))
         .await
         .is_ok());
+}
+
+#[test(tokio::test)]
+async fn it_can_assemble_block_from_state() {
+    let val = TestValidator {
+        proposer_round: 99,
+        proposal_rounds: vec![(false, TestProposal(0, 0), None)],
+        agg_prevote_rounds: vec![(false, SLOTS, 0, 0)],
+        agg_precommit_rounds: vec![(false, SLOTS, 0, 0)],
+        get_agg_rounds: vec![(false, SLOTS, 0, 0)],
+    };
+
+    // First, make the validator lock itself on a value but then drop the instance. Keep the state.
+    let prev_state = if let Ok(mut tendermint) = Tendermint::new(val.clone(), None) {
+        // Poll the first instance until it results in an AggregatePreCommit state
+        loop {
+            if let Some(ret) = tendermint.next().await {
+                match ret {
+                    TendermintReturn::Error(err) => {
+                        println!("Error: {:?}", err);
+                        unreachable!();
+                    }
+                    TendermintReturn::Result(res) => {
+                        println!("Result: {:?}", res);
+                        unreachable!();
+                    }
+                    TendermintReturn::StateUpdate(state) => {
+                        if state.current_checkpoint == Checkpoint::AggregatePreCommit {
+                            // make sure the node is locked.
+                            assert!(state.locked.is_some());
+                            let locked = state.locked.as_ref().unwrap();
+                            assert_eq!(state.round, 0);
+                            assert_eq!(locked.proposal.0, 0);
+                            assert_eq!(locked.proposal.1, 0);
+                            break state;
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        panic!("Could not create Tendermint instance.");
+    };
+
+    // Second, recreate the validator with the locked state and drive it to completion.
+    if let Ok(mut tendermint) = Tendermint::new(val.clone(), Some(prev_state)) {
+        // Poll the new instance once, which must create the block.
+        if let Some(ret) = tendermint.next().await {
+            match ret {
+                TendermintReturn::Error(err) => {
+                    println!("Error: {:?}", err);
+                    unreachable!();
+                }
+                TendermintReturn::Result(res) => {
+                    assert_eq!(res.0, val.proposal_rounds[0].1 .0);
+                    assert_eq!(res.1, val.proposal_rounds[0].1 .1);
+                }
+                TendermintReturn::StateUpdate(_state) => {
+                    unreachable!();
+                }
+            }
+        }
+    } else {
+        panic!("Could not create Tendermint instance.");
+    }
 }

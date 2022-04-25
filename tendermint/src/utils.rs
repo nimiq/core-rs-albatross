@@ -1,5 +1,7 @@
 use crate::state::TendermintState;
-use crate::{ProofTrait, ProposalHashTrait, ProposalTrait, TendermintOutsideDeps};
+use crate::{
+    ProofTrait, ProposalCacheTrait, ProposalHashTrait, ProposalTrait, TendermintOutsideDeps,
+};
 use beserial::{Deserialize, Serialize};
 use nimiq_block::TendermintStep;
 use nimiq_primitives::policy::TWO_F_PLUS_ONE;
@@ -48,10 +50,10 @@ pub enum VoteDecision {
 
 /// Represents the results we can get when waiting for a proposal message.
 #[derive(Clone, Debug)]
-pub enum ProposalResult<ProposalTy: ProposalTrait> {
+pub enum ProposalResult<ProposalTy: ProposalTrait, ProposalCacheTy: ProposalCacheTrait> {
     // Means we have received a proposal message. The first field is the actual proposal, the second
     // one is the valid round of the proposer (being None is equal to the -1 used in the protocol).
-    Proposal(ProposalTy, Option<u32>),
+    Proposal((ProposalTy, ProposalCacheTy), Option<u32>),
     // Means that we have timed out while waiting for the proposal message.
     Timeout,
 }
@@ -90,7 +92,14 @@ pub enum TendermintReturn<DepsTy: TendermintOutsideDeps> {
     Result(DepsTy::ResultTy),
     // This just sends our current state. It is useful in case we go down for some reason and need
     // to start from the point where we left off.
-    StateUpdate(TendermintState<DepsTy::ProposalTy, DepsTy::ProposalHashTy, DepsTy::ProofTy>),
+    StateUpdate(
+        TendermintState<
+            DepsTy::ProposalTy,
+            DepsTy::ProposalCacheTy,
+            DepsTy::ProposalHashTy,
+            DepsTy::ProofTy,
+        >,
+    ),
     // Just means that we encountered an error.
     Error(TendermintError),
 }

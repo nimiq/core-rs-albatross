@@ -21,6 +21,7 @@ use crate::tendermint::TendermintInterface;
 pub(crate) struct PersistedMacroState<TValidatorNetwork: ValidatorNetwork + 'static>(
     pub  TendermintState<
         <TendermintInterface<TValidatorNetwork> as TendermintOutsideDeps>::ProposalTy,
+        <TendermintInterface<TValidatorNetwork> as TendermintOutsideDeps>::ProposalCacheTy,
         <TendermintInterface<TValidatorNetwork> as TendermintOutsideDeps>::ProposalHashTy,
         <TendermintInterface<TValidatorNetwork> as TendermintOutsideDeps>::ProofTy,
     >,

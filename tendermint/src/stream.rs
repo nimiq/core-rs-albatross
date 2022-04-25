@@ -34,7 +34,12 @@ impl<DepsTy: TendermintOutsideDeps> TendermintStreamWrapper<DepsTy> {
         mut deps: DepsTy,
         // An optional input for the TendermintState.
         state_opt: Option<
-            TendermintState<DepsTy::ProposalTy, DepsTy::ProposalHashTy, DepsTy::ProofTy>,
+            TendermintState<
+                DepsTy::ProposalTy,
+                DepsTy::ProposalCacheTy,
+                DepsTy::ProposalHashTy,
+                DepsTy::ProofTy,
+            >,
         >,
     ) -> Result<Self, DepsTy> {
         debug!(

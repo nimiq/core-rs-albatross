@@ -1,6 +1,6 @@
 use crate::state::TendermintState;
 use crate::utils::{AggregationResult, ProposalResult, Step, TendermintError};
-use crate::{ProofTrait, ProposalHashTrait, ProposalTrait, ResultTrait};
+use crate::{ProofTrait, ProposalCacheTrait, ProposalHashTrait, ProposalTrait, ResultTrait};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 
@@ -10,6 +10,7 @@ use futures::future::BoxFuture;
 pub trait TendermintOutsideDeps: Send + Unpin + Sized + 'static {
     type ProposalTy: ProposalTrait;
     type ProposalHashTy: ProposalHashTrait;
+    type ProposalCacheTy: ProposalCacheTrait;
     type ProofTy: ProofTrait;
     type ResultTy: ResultTrait;
 
@@ -23,7 +24,12 @@ pub trait TendermintOutsideDeps: Send + Unpin + Sized + 'static {
     /// using a previous state.
     fn verify_state(
         &self,
-        state: &TendermintState<Self::ProposalTy, Self::ProposalHashTy, Self::ProofTy>,
+        state: &TendermintState<
+            Self::ProposalTy,
+            Self::ProposalCacheTy,
+            Self::ProposalHashTy,
+            Self::ProofTy,
+        >,
     ) -> bool;
 
     /// Checks if it our turn to propose for the given round.
@@ -31,13 +37,17 @@ pub trait TendermintOutsideDeps: Send + Unpin + Sized + 'static {
 
     /// Produces a proposal for the given round. It is used when it is our turn to propose. The
     /// proposal is guaranteed to be valid.
-    fn get_value(&mut self, round: u32) -> Result<Self::ProposalTy, TendermintError>;
+    fn get_value(
+        &mut self,
+        round: u32,
+    ) -> Result<(Self::ProposalTy, Self::ProposalCacheTy), TendermintError>;
 
     /// Takes a proposal and a proof (2f+1 precommits) and returns a completed block.
     fn assemble_block(
         &self,
         round: u32,
         proposal: Self::ProposalTy,
+        proposal_cache: Option<Self::ProposalCacheTy>,
         proof: Self::ProofTy,
     ) -> Result<Self::ResultTy, TendermintError>;
 
@@ -57,7 +67,13 @@ pub trait TendermintOutsideDeps: Send + Unpin + Sized + 'static {
     async fn await_proposal(
         self,
         round: u32,
-    ) -> Result<(Self, ProposalResult<Self::ProposalTy>), TendermintError>;
+    ) -> Result<
+        (
+            Self,
+            ProposalResult<Self::ProposalTy, Self::ProposalCacheTy>,
+        ),
+        TendermintError,
+    >;
 
     /// Broadcasts a vote (either prevote or precommit) for a given round and proposal. It then
     /// returns an aggregation of the 2f+1 votes received from other nodes for this round (and
@@ -83,7 +99,11 @@ pub trait TendermintOutsideDeps: Send + Unpin + Sized + 'static {
 
     // Calculates the hash of a given proposal. We have it into a separate function so that
     // we can support arbitrary hashing schemes.
-    fn hash_proposal(&self, proposal: Self::ProposalTy) -> Self::ProposalHashTy;
+    fn hash_proposal(
+        &self,
+        proposal: Self::ProposalTy,
+        proposal_cache: Self::ProposalCacheTy,
+    ) -> Self::ProposalHashTy;
 
     fn get_background_task(&mut self) -> BoxFuture<'static, ()>;
 }

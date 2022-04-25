@@ -56,12 +56,6 @@ pub struct TendermintInterface<TValidatorNetwork: ValidatorNetwork> {
     pub blockchain: Arc<RwLock<Blockchain>>,
     // The aggregation adapter allows Tendermint to use Handel functions and networking.
     pub aggregation_adapter: HandelTendermintAdapter<TValidatorNetwork>,
-    // Just a field to temporarily store a block body. Since the body of a macro block is completely
-    // deterministic, our Tendermint proposal only contains the block header. If the validator needs
-    // the body, it is supposed for him to calculate it from the header and his current state.
-    // However, calculating the body is an expensive operation. To avoid having to calculate the
-    // body several times, we can cache it here.
-    pub cache_body: Option<MacroBody>,
 
     proposal_stream: BoxStream<
         'static,
@@ -79,6 +73,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
     for TendermintInterface<TValidatorNetwork>
 {
     type ProposalTy = MacroHeader;
+    type ProposalCacheTy = MacroBody;
     type ProposalHashTy = Blake2sHash;
     type ProofTy = MultiSignature;
     type ResultTy = MacroBlock;
@@ -102,7 +97,12 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
     /// will get rid of it in the future.
     fn verify_state(
         &self,
-        state: &TendermintState<Self::ProposalTy, Self::ProposalHashTy, Self::ProofTy>,
+        state: &TendermintState<
+            Self::ProposalTy,
+            Self::ProposalCacheTy,
+            Self::ProposalHashTy,
+            Self::ProofTy,
+        >,
     ) -> bool {
         state.height == self.block_height
     }
@@ -123,7 +123,10 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
     }
 
     /// Produces a proposal. Evidently, used when we are the proposer.
-    fn get_value(&mut self, round: u32) -> Result<Self::ProposalTy, TendermintError> {
+    fn get_value(
+        &mut self,
+        round: u32,
+    ) -> Result<(Self::ProposalTy, Self::ProposalCacheTy), TendermintError> {
         let blockchain = self.blockchain.read();
 
         // Call the block producer to produce the next macro block (minus the justification, of course).
@@ -134,12 +137,11 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
             vec![],
         );
 
-        // Cache the block body for future use.
         // Always `Some(…)` because the above function always sets it to `Some(…)`.
-        self.cache_body = Some(block.body.expect("produced blocks always have a body"));
+        let body = block.body.expect("produced blocks always have a body");
 
-        // Return the block header as the proposal.
-        Ok(block.header)
+        // Return the block header and body as the proposal.
+        Ok((block.header, body))
     }
 
     /// Assembles a block from a proposal and a proof.
@@ -147,11 +149,12 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
         &self,
         round: u32,
         proposal: Self::ProposalTy,
+        proposal_cache: Option<Self::ProposalCacheTy>,
         proof: Self::ProofTy,
     ) -> Result<Self::ResultTy, TendermintError> {
         // Get the body from the cache. If there is no body cached it is recreated as a fallback.
         // However that operation is rather expensive annd should be avoided.
-        let body = self.cache_body.clone().or_else(|| {
+        let body = proposal_cache.or_else(|| {
             // Even though this fallback exist, it is unperformant to not cache the body.
             // Print a warning instead of failing.
             log::warn!("MacroBody was not cached. Recreating the body.");
@@ -252,7 +255,13 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
     async fn await_proposal(
         mut self,
         round: u32,
-    ) -> Result<(Self, ProposalResult<Self::ProposalTy>), TendermintError> {
+    ) -> Result<
+        (
+            Self,
+            ProposalResult<Self::ProposalTy, Self::ProposalCacheTy>,
+        ),
+        TendermintError,
+    > {
         let (timeout, proposer_slot_band, proposer_voting_key, proposer_signing_key) = {
             let blockchain = self.blockchain.read();
 
@@ -308,7 +317,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
             }
         };
 
-        let (acceptance, valid_round, header) = {
+        let (acceptance, valid_round, header, body) = {
             let blockchain = self.blockchain.read();
 
             // Get the header and valid round from the proposal.
@@ -345,7 +354,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
             .is_err()
             {
                 debug!("Tendermint - await_proposal: Invalid block header");
-                (MsgAcceptance::Reject, valid_round, None)
+                (MsgAcceptance::Reject, valid_round, None, None)
             } else {
                 // Get a write transaction to the database.
                 let mut txn = blockchain.write_transaction();
@@ -368,7 +377,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
                     .is_err()
                 {
                     debug!("Tendermint - await_proposal: Can't update state");
-                    (MsgAcceptance::Reject, valid_round, None)
+                    (MsgAcceptance::Reject, valid_round, None, None)
                 } else {
                     // Check the validity of the block against our state. If it is invalid, we return a proposal
                     // timeout. This also returns the block body that matches the block header
@@ -376,19 +385,20 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
                     let block_state = blockchain.verify_block_state(state, &block, Some(&txn));
 
                     match block_state {
-                        Ok(body) => {
-                            // Cache the body that we calculated.
-                            self.cache_body = Some(body.expect(
+                        Ok(body) => (
+                            MsgAcceptance::Accept,
+                            valid_round,
+                            Some(header),
+                            Some(body.expect(
                                 "verify_block_state returns a body for blocks without one",
-                            ));
-                            (MsgAcceptance::Accept, valid_round, Some(header))
-                        }
+                            )),
+                        ),
                         Err(err) => {
                             debug!(
                                 "Tendermint - await_proposal: Invalid block state: {:?}",
                                 err
                             );
-                            (MsgAcceptance::Reject, valid_round, None)
+                            (MsgAcceptance::Reject, valid_round, None, None)
                         }
                     }
                 }
@@ -402,7 +412,10 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
         // Regardless of broadcast result, process proposal if it exists. Timeout otherwise.
         if let Some(header) = header {
             // Return the proposal.
-            Ok((self, ProposalResult::Proposal(header, valid_round)))
+            Ok((
+                self,
+                ProposalResult::Proposal((header, body.expect("Body must exist")), valid_round),
+            ))
         } else {
             Ok((self, ProposalResult::Timeout))
         }
@@ -438,12 +451,16 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
 
     /// Calculates the nano_zkp_hash used as the proposal hash, but for performance reasons we fetch
     /// the pk_tree_root from the already cached block body.
-    fn hash_proposal(&self, proposal: Self::ProposalTy) -> Self::ProposalHashTy {
+    fn hash_proposal(
+        &self,
+        proposal: Self::ProposalTy,
+        proposal_cache: Self::ProposalCacheTy,
+    ) -> Self::ProposalHashTy {
         // Calculate the header hash.
         let mut message = proposal.hash::<Blake2bHash>().serialize_to_vec();
 
         // Fetch the pk_tree_root.
-        let pk_tree_root = self.cache_body.as_ref().unwrap().pk_tree_root.clone();
+        let pk_tree_root = proposal_cache.pk_tree_root;
 
         // If it is Some, add its contents to the message.
         if let Some(mut bytes) = pk_tree_root {
@@ -541,7 +558,6 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintInterface<TValidat
             current_validators: active_validators,
             blockchain,
             aggregation_adapter,
-            cache_body: None,
             proposal_stream,
             initial_round,
         }
