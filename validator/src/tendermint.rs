@@ -8,6 +8,7 @@ use futures::{
     future::{BoxFuture, FutureExt},
     stream::{BoxStream, StreamExt},
 };
+use nimiq_primitives::policy;
 use parking_lot::RwLock;
 
 use block::{
@@ -148,8 +149,37 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
         proposal: Self::ProposalTy,
         proof: Self::ProofTy,
     ) -> Result<Self::ResultTy, TendermintError> {
-        // Get the body from our cache.
-        let body = self.cache_body.clone();
+        // Get the body from the cache. If there is no body cached it is recreated as a fallback.
+        // However that operation is rather expensive annd should be avoided.
+        let body = self.cache_body.clone().or_else(|| {
+            // Even though this fallback exist, it is unperformant to not cache the body.
+            // Print a warning instead of failing.
+            log::warn!("MacroBody was not cached. Recreating the body.");
+
+            // Aquire a blockchain read lock
+            let blockchain = self.blockchain.read();
+
+            // The staking contract is holding the relevant informations
+            let staking_contract = blockchain.get_staking_contract();
+
+            // Compute the data for the MacroBody
+            let lost_reward_set = staking_contract.previous_lost_rewards();
+            let disabled_set = staking_contract.previous_disabled_slots();
+            let validators = if policy::is_election_block_at(proposal.block_number) {
+                Some(blockchain.next_validators(&proposal.seed))
+            } else {
+                None
+            };
+            let pk_tree_root = validators.as_ref().map(MacroBlock::pk_tree_root);
+
+            // Assemble the MacroBody
+            Some(MacroBody {
+                validators,
+                pk_tree_root,
+                lost_reward_set,
+                disabled_set,
+            })
+        });
 
         // Check that we have the correct body for our header.
         match &body {
