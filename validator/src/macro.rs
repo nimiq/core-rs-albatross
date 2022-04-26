@@ -17,6 +17,7 @@ use nimiq_validator_network::ValidatorNetwork;
 use nimiq_vrf::VrfSeed;
 
 use crate::tendermint::TendermintInterface;
+
 pub(crate) struct PersistedMacroState<TValidatorNetwork: ValidatorNetwork + 'static>(
     pub  TendermintState<
         <TendermintInterface<TValidatorNetwork> as TendermintOutsideDeps>::ProposalTy,
@@ -24,6 +25,15 @@ pub(crate) struct PersistedMacroState<TValidatorNetwork: ValidatorNetwork + 'sta
         <TendermintInterface<TValidatorNetwork> as TendermintOutsideDeps>::ProofTy,
     >,
 );
+
+// Don't know why this is necessary. #[derive(Clone)] does not work.
+impl<TValidatorNetwork: ValidatorNetwork + 'static> Clone
+    for PersistedMacroState<TValidatorNetwork>
+{
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
 
 impl<TValidatorNetwork: ValidatorNetwork> IntoDatabaseValue
     for PersistedMacroState<TValidatorNetwork>

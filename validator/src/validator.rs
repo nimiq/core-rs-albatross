@@ -342,7 +342,9 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                     head.seed().clone(),
                     next_block_number,
                     next_view_number,
-                    self.macro_state.take(),
+                    // This cannot be .take() as there is a chance init_epoch is called multiple times without
+                    // poll_macro being called creating a new macro_state that is Some(...).
+                    self.macro_state.clone(),
                     proposal_stream,
                 ));
             }
