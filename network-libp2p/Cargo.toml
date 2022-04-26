@@ -39,7 +39,7 @@ libp2p = { version = "0.44", default-features = false, features = [
 log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
 pin-project = "1.0"
-pin-project-lite = "0.2.0"
+pin-project-lite = "0.2.9"
 rand = "0.8"
 serde = { version = "1.0", features = ["derive"], optional = true }
 thiserror = "1.0"
