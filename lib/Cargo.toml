@@ -33,6 +33,7 @@ rand = "0.8"
 serde = "1.0"
 serde_derive = "1.0"
 serde_json = { version = "1.0", features = ["preserve_order"], optional = true }
+signal-hook = { version = "0.3", optional = true }
 strum_macros = "0.24"
 toml = "0.5"
 url = { version = "2.2", features = ["serde"] }
@@ -70,6 +71,7 @@ nimiq-test-log = { path = "../test-log" }
 deadlock = []
 default = []
 launcher = []
+signal-handling = ["signal-hook"]
 logging = ["console-subscriber", "nimiq-log", "serde_json", "tokio", "tracing-loki", "tracing-subscriber"]
 panic = ["log-panics"]
 rpc-server = ["validator", "nimiq-rpc-server", "nimiq-wallet"]

@@ -11,6 +11,7 @@ pub use nimiq::{
         deadlock::initialize_deadlock_detection,
         logging::{initialize_logging, log_error_cause_chain},
         panic::initialize_panic_reporting,
+        signal_handling::initialize_signal_handler,
     },
 };
 
@@ -31,6 +32,9 @@ async fn main_inner() -> Result<(), Error> {
 
     // Initialize panic hook.
     initialize_panic_reporting();
+
+    // Initialize signal handler
+    initialize_signal_handler();
 
     // Create config builder and apply command line and config file.
     // You usually want the command line to override config settings, so the order is important.
