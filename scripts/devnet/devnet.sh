@@ -32,11 +32,11 @@ trap cleanup_exit INT
 function cleanup_exit() {
     echo "Killing all validators..."
     for pid in ${vpids[@]}; do
-        kill $pid || true
+        kill -2 $pid || true
     done
     echo "Killing seed/spammer..."
     for pid in ${spids[@]}; do
-        kill $pid || true
+        kill -2 $pid || true
     done
     echo "Done."
 
@@ -313,7 +313,7 @@ do
             kindexes+=($index)
             echo "  Killing validator: $(($index + 1 ))"
 
-            kill ${vpids[$index]}
+            kill -2 ${vpids[$index]}
             sleep 1
 
             if [ "$ERASE" = true ] ; then

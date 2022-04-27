@@ -31,6 +31,7 @@ features = [
     "rpc-server",
     "deadlock",
     "logging",
+    "signal-handling",
     "wallet",
     "panic",
 ]

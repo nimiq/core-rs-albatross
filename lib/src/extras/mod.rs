@@ -6,6 +6,8 @@ pub mod logging;
 pub mod panic;
 #[cfg(feature = "rpc-server")]
 pub mod rpc_server;
+#[cfg(feature = "signal-handling")]
+pub mod signal_handling;
 
 #[cfg(feature = "launcher")]
 pub mod launcher;
