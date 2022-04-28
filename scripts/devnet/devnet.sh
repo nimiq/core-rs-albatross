@@ -24,6 +24,7 @@ MAX_VALIDATORS=4
 RUN_ENVIRONMENT=unknown/devnet.sh
 cargo="cargo run"
 cargo_build="cargo build"
+devnet_create="scripts/devnet/python/devnet_create.py"
 tpb=150
 vkill=1
 down_time=10
@@ -224,6 +225,7 @@ rm -rf temp-state/*
 if [ "$RELEASE" = true ] ; then
     cargo+=" --release"
     cargo_build+=" --release"
+    devnet_create+=" --release"
 fi
 
 if [ "$METRICS" = true ] ; then
@@ -248,9 +250,9 @@ done
 
 echo "Building config files..."
 if [ "$SPAMMER" = true ] ; then
-    python3 scripts/devnet/python/devnet_create.py $MAX_VALIDATORS --run-environment "$RUN_ENVIRONMENT" -o $configdir -s
+    python3 $devnet_create $MAX_VALIDATORS --run-environment "$RUN_ENVIRONMENT" -o $configdir -s
 else
-    python3 scripts/devnet/python/devnet_create.py $MAX_VALIDATORS --run-environment "$RUN_ENVIRONMENT" -o $configdir
+    python3 $devnet_create $MAX_VALIDATORS --run-environment "$RUN_ENVIRONMENT" -o $configdir
 fi
 echo "Config files generated in '$configdir'"
 export NIMIQ_OVERRIDE_DEVNET_CONFIG="$PWD/$configdir/dev-albatross.toml"

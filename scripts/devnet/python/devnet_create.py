@@ -37,6 +37,7 @@ parser.add_argument('num_validators', metavar='N', type=int,
                     help="number of validators to generate")
 parser.add_argument('-o', "--output", metavar='DIR', type=str,
                     help="output directory", default="/tmp/nimiq-devnet")
+parser.add_argument('--release', action='store_true')
 parser.add_argument('-s', "--spammer", action="store_true",
                     help="generate configuration files for a spammer")
 parser.add_argument('-a', "--albagen", action="store_true",
@@ -49,7 +50,11 @@ args = parser.parse_args()
 output = Path(args.output)
 
 num_validators = args.num_validators
+
 target = Path.cwd() / "target" / "debug"
+
+if args.release:
+    target = Path.cwd() / "target" / "release"
 
 
 def nimiq_address(): return subprocess.check_output(
