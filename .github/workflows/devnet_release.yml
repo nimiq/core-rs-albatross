@@ -1,4 +1,4 @@
-name: Devnet Scenarios
+name: Devnet Release Scenarios
 
 on:
   schedule:
@@ -18,24 +18,27 @@ jobs:
         - MacroBlockProduction
         - Validators90sDown
         - LowViewChangeDelay
+        - FiveValidatorsWithSpammer
 
         include:
         - test: FourValidatorsReconnect
-          devnet_args:
+          devnet_args: -R
         - test: MultipleValidatorsDown
-          devnet_args: -k 2
+          devnet_args: -k 2 -R
         - test: FourValidatorsReconnectRmDatabase
-          devnet_args: -d
+          devnet_args: -d -R
         - test: FourValidatorsReconnectSpammer
-          devnet_args: -s 500
+          devnet_args: -s 500 -R
         - test: MacroBlockProduction
           pre: "sed -i 's/BLOCKS_PER_BATCH: u32 = 32;/BLOCKS_PER_BATCH: u32 = 2;/g' primitives/src/policy.rs"
-          devnet_args: -k 0 -s 150
+          devnet_args: -k 0 -s 150 -R
         - test: Validators90sDown
-          devnet_args: -s 500 -t 90
+          devnet_args: -s 500 -t 90 -R
         - test: LowViewChangeDelay
           pre: "sed -i 's/VIEW_CHANGE_DELAY: Duration = Duration::from_secs(10);/VIEW_CHANGE_DELAY: Duration = Duration::from_secs(2);/g' validator/src/validator.rs"
-          devnet_args: -k 0 -s 150
+          devnet_args: -k 0 -s 150 -R
+        - test: FiveValidatorsWithSpammer
+          devnet_args: --validators 5 -R -s 500 -k 0
 
     runs-on: ubuntu-20.04
 
@@ -60,12 +63,13 @@ jobs:
     - uses: actions-rs/cargo@v1
       with:
         command: build
+        args: --release
     - name: Retrieve initial timestamp
       id: initial_ts
       run: |
          echo "::set-output name=INITIAL_TS::$(date +%s%N | cut -b1-13)"
     - name: Execute the test
-      run: |          
+      run: |
           bash scripts/devnet/devnet.sh --run-environment ci ${{ matrix.devnet_args }}
       env:
         NIMIQ_LOKI_URL: ${{ secrets.LOKI_URL }}
