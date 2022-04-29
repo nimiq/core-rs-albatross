@@ -24,7 +24,7 @@ lazy_static = { version = "1.4", optional = true }
 log = { package = "tracing", version = "0.1", features = ["log"] }
 prometheus = { version = "0.13", features = ["process"], optional = true }
 rand = "0.8.5"
-tokio = { version = "1.16", features = ["rt-multi-thread", "time", "tracing"] }
+tokio = { version = "1.18", features = ["rt-multi-thread", "time", "tracing"] }
 warp = { version = "0.3.2", optional = true }
 toml = "0.5"
 serde = "1.0.136"

@@ -23,7 +23,7 @@ beserial_derive = { path = "../beserial/beserial_derive" }
 futures = "0.3"
 thiserror = "1.0"
 log = { package = "tracing", version = "0.1", features = ["log"] }
-tokio = "1.16"
+tokio = "1.18"
 
 nimiq-network-interface = { path = "../network-interface" }
 nimiq-bls = { path = "../bls" }
