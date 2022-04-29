@@ -27,15 +27,15 @@ jobs:
         - test: FourValidatorsReconnectRmDatabase
           devnet_args: -d
         - test: FourValidatorsReconnectSpammer
-          devnet_args: -s 500
+          devnet_args: -s 50
         - test: MacroBlockProduction
           pre: "sed -i 's/BLOCKS_PER_BATCH: u32 = 32;/BLOCKS_PER_BATCH: u32 = 2;/g' primitives/src/policy.rs"
-          devnet_args: -k 0 -s 150
+          devnet_args: -k 0 -s 15
         - test: Validators90sDown
-          devnet_args: -s 500 -t 90
+          devnet_args: -s 50 -t 90
         - test: LowViewChangeDelay
           pre: "sed -i 's/VIEW_CHANGE_DELAY: Duration = Duration::from_secs(10);/VIEW_CHANGE_DELAY: Duration = Duration::from_secs(2);/g' validator/src/validator.rs"
-          devnet_args: -k 0 -s 150
+          devnet_args: -k 0 -s 15
 
     runs-on: ubuntu-20.04
 
