@@ -100,7 +100,7 @@ impl TestNetwork {
         let net = Network::new(clock, network_config(address.clone())).await;
         net.listen_on(vec![address.clone()]).await;
 
-        log::debug!(address = ?address, peer_id = ?net.get_local_peer_id(), "creating node");
+        log::debug!(address = %address, peer_id = %net.get_local_peer_id(), "Creating node");
 
         if let Some(dial_address) = self.addresses.first() {
             let mut events = net.subscribe_events();
@@ -108,9 +108,9 @@ impl TestNetwork {
             log::debug!(address = ?dial_address, "dialing peer");
             net.dial_address(dial_address.clone()).await.unwrap();
 
-            log::debug!("waiting for join event");
+            log::debug!("Waiting for join event");
             let event = events.next().await;
-            log::trace!(event = ?event);
+            log::trace!(?event);
         }
 
         self.addresses.push(address);
@@ -120,7 +120,7 @@ impl TestNetwork {
 }
 
 async fn create_connected_networks() -> (Network, Network) {
-    log::debug!("creating connected test networks:");
+    log::debug!("creating connected test networks");
     let addr1 = multiaddr![Memory(thread_rng().gen::<u64>())];
     let addr2 = multiaddr![Memory(thread_rng().gen::<u64>())];
 
@@ -130,30 +130,30 @@ async fn create_connected_networks() -> (Network, Network) {
     let net2 = Network::new(Arc::new(OffsetTime::new()), network_config(addr2.clone())).await;
     net2.listen_on(vec![addr2.clone()]).await;
 
-    log::debug!(address = ?addr1, peer_id = ?net1.get_local_peer_id(), "Network 1");
-    log::debug!(address = ?addr2, peer_id = ?net2.get_local_peer_id(), "Network 2");
+    log::debug!(address = %addr1, peer_id = %net1.get_local_peer_id(), "Network 1");
+    log::debug!(address = %addr2, peer_id = %net2.get_local_peer_id(), "Network 2");
 
     let mut events1 = net1.subscribe_events();
     let mut events2 = net2.subscribe_events();
 
-    log::debug!("dialing peer 1 from peer 2...");
+    log::debug!("Dialing peer 1 from peer 2...");
     net2.dial_address(addr1).await.unwrap();
 
-    log::debug!("waiting for join events");
+    log::debug!("Waiting for join events");
 
     let event1 = events1.next().await.unwrap().unwrap();
-    log::trace!(event1 = ?event1);
+    log::trace!(event = ?event1, "Event 1");
     assert_peer_joined(&event1, &net2.get_local_peer_id());
 
     let event2 = events2.next().await.unwrap().unwrap();
-    log::trace!(event2 = ?event2);
+    log::trace!(event = ?event2, "Event 2");
     assert_peer_joined(&event2, &net1.get_local_peer_id());
 
     (net1, net2)
 }
 
 async fn create_double_connected_networks() -> (Network, Network) {
-    log::debug!("creating connected test networks:");
+    log::debug!("Creating connected test networks");
     let addr1 = multiaddr![Memory(thread_rng().gen::<u64>())];
     let addr2 = multiaddr![Memory(thread_rng().gen::<u64>())];
 
@@ -163,23 +163,23 @@ async fn create_double_connected_networks() -> (Network, Network) {
     let net2 = Network::new(Arc::new(OffsetTime::new()), network_config(addr2.clone())).await;
     net2.listen_on(vec![addr2.clone()]).await;
 
-    log::debug!(address = ?addr1, peer_id = ?net1.get_local_peer_id(), "Network 1");
-    log::debug!(address = ?addr2, peer_id = ?net2.get_local_peer_id(), "Network 2");
+    log::debug!(address = %addr1, peer_id = %net1.get_local_peer_id(), "Network 1");
+    log::debug!(address = %addr2, peer_id = %net2.get_local_peer_id(), "Network 2");
 
     let mut events1 = net1.subscribe_events();
     let mut events2 = net2.subscribe_events();
 
-    log::debug!("dialing peer 1 from peer 2 and peer 2 from peer 1");
+    log::debug!("Dialing peer 1 from peer 2 and peer 2 from peer 1");
     assert!(futures::try_join!(net2.dial_address(addr1), net1.dial_address(addr2)).is_ok());
 
-    log::debug!("waiting for join events");
+    log::debug!("Waiting for join events");
 
     let event1 = events1.next().await.unwrap().unwrap();
-    log::trace!(event1 = ?event1);
+    log::trace!(event = ?event1, "Event 1");
     assert_peer_joined(&event1, &net2.get_local_peer_id());
 
     let event2 = events2.next().await.unwrap().unwrap();
-    log::trace!(event2 = ?event2);
+    log::trace!(event = ?event2, "Event 2");
     assert_peer_joined(&event2, &net1.get_local_peer_id());
 
     (net1, net2)
@@ -195,14 +195,14 @@ async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
     for peer in 0..n_peers {
         let addr = multiaddr![Memory(thread_rng().gen::<u64>())];
 
-        log::debug!("Creating network: {}", peer);
+        log::debug!(index = peer, "Creating network");
 
         addresses.push(addr.clone());
 
         let network = Network::new(Arc::new(OffsetTime::new()), network_config(addr.clone())).await;
         network.listen_on(vec![addr.clone()]).await;
 
-        log::debug!(address = ?addr, peer_id = ?network.get_local_peer_id(), "Network {}", peer);
+        log::debug!(address = %addr, peer_id = %network.get_local_peer_id(), "Network {}", peer);
 
         events.push(network.subscribe_events());
         networks.push(network);
@@ -211,7 +211,7 @@ async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
     // Connect them
     for peer in 1..n_peers {
         // Dial the previous peer
-        log::debug!("Dialing peer: {}", peer);
+        log::debug!(index = peer, "Dialing peer");
         networks[peer as usize]
             .dial_address(addresses[(peer - 1) as usize].clone())
             .await
@@ -271,7 +271,7 @@ async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
         );
 
         // Disconnect a random peer
-        log::debug!("Disconnecting peer {} from peer {}", close_peer, peer);
+        log::debug!(peer_id = %peer, remote_peer_id = %close_peer, "Disconnecting peer from remote peer");
         assert!(network1.has_peer(*peer_id2));
         network1
             .disconnect_peer(*peer_id2, CloseReason::Other)
@@ -301,7 +301,7 @@ async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
         // Now reconnect the peer
         events1 = network1.subscribe_events();
         events2 = network2.subscribe_events();
-        log::debug!("Reconnecting peer: {}", close_peer);
+        log::debug!(peer_id = close_peer, "Reconnecting to peer");
         network1
             .dial_address(addresses[close_peer as usize].clone())
             .await
@@ -373,15 +373,15 @@ async fn connections_are_properly_closed_events() {
 
     net2.disconnect_peer(*net1.local_peer_id(), CloseReason::Other)
         .await;
-    log::debug!("closed peer");
+    log::debug!("Closed peer");
 
     let event1 = events1.next().await.unwrap().unwrap();
     assert_peer_left(&event1, net2.local_peer_id());
-    log::trace!(event1 = ?event1);
+    log::trace!(event = ?event1, "Event 1");
 
     let event2 = events2.next().await.unwrap().unwrap();
     assert_peer_left(&event2, net1.local_peer_id());
-    log::trace!(event2 = ?event2);
+    log::trace!(event = ?event2, "Event 2");
 }
 
 #[test(tokio::test)]
@@ -396,11 +396,11 @@ async fn connections_are_properly_closed_peers() {
     drop(net1);
 
     net2.disconnect_peer(net1_peer_id, CloseReason::Other).await;
-    log::debug!("closed peer");
+    log::debug!("Closed peer");
 
     let event2 = events2.next().await.unwrap().unwrap();
     assert_peer_left(&event2, &net1_peer_id);
-    log::trace!(event2 = ?event2);
+    log::trace!(event = ?event2, "Event 2");
 
     assert_eq!(net2.get_peers(), &[]);
 }
@@ -465,9 +465,9 @@ async fn test_gossipsub() {
         .await
         .unwrap();
 
-    log::info!("Waiting for Gossipsub message...");
+    log::info!("Waiting for Gossipsub message");
     let (received_message, message_id) = messages.next().await.unwrap();
-    log::info!("Received Gossipsub message: {:?}", received_message);
+    log::info!(message = ?received_message, "Received Gossipsub message");
 
     assert_eq!(received_message, test_message);
 

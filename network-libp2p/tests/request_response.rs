@@ -72,7 +72,7 @@ struct TestNetwork {}
 
 impl TestNetwork {
     async fn create_connected_networks() -> (Network, Network) {
-        log::debug!("creating connected test networks:");
+        log::debug!("Creating connected test networks");
         let addr1 = multiaddr![Memory(thread_rng().gen::<u64>())];
         let addr2 = multiaddr![Memory(thread_rng().gen::<u64>())];
 
@@ -82,23 +82,23 @@ impl TestNetwork {
         let net2 = Network::new(Arc::new(OffsetTime::new()), network_config(addr2.clone())).await;
         net2.listen_on(vec![addr2.clone()]).await;
 
-        log::debug!(address = ?addr1, peer_id = ?net1.get_local_peer_id(), "Network 1");
-        log::debug!(address = ?addr2, peer_id = ?net2.get_local_peer_id(), "Network 2");
+        log::debug!(address = %addr1, peer_id = %net1.get_local_peer_id(), "Network 1");
+        log::debug!(address = %addr2, peer_id = %net2.get_local_peer_id(), "Network 2");
 
         let mut events1 = net1.subscribe_events();
         let mut events2 = net2.subscribe_events();
 
-        log::debug!("dialing peer 1 from peer 2...");
+        log::debug!("Dialing peer 1 from peer 2");
         net2.dial_address(addr1).await.unwrap();
 
-        log::debug!("waiting for join events");
+        log::debug!("Waiting for join events");
 
         let event1 = events1.next().await.unwrap().unwrap();
-        log::trace!(event1 = ?event1);
+        log::trace!(event = ?event1, "Event 1");
         assert_peer_joined(&event1, &net2.get_local_peer_id());
 
         let event2 = events2.next().await.unwrap().unwrap();
-        log::trace!(event2 = ?event2);
+        log::trace!(event = ?event2, "Event 2");
         assert_peer_joined(&event2, &net1.get_local_peer_id());
 
         (net1, net2)
@@ -159,13 +159,13 @@ async fn respond_requests<Req: Request, ExpReq: Request + std::cmp::PartialEq>(
 ) {
     // Subscribe for receiving requests
     let mut requests = network.receive_requests::<ExpReq>();
-    log::info!("Waiting for Request message...");
+    log::info!("Waiting for Request message");
     let (received_request, request_id, peer_id) = requests.next().await.unwrap();
     log::info!(
-        "Received request {:?} from peer {:?}: {:?}",
-        request_id,
-        peer_id,
-        received_request
+        %request_id,
+        %peer_id,
+        request = ?received_request,
+        "Received request"
     );
     assert_eq!(expected_request, received_request);
 
@@ -199,14 +199,14 @@ async fn test_valid_request_valid_response() {
 
     tokio::time::sleep(Duration::from_secs(1)).await;
 
-    log::info!("Sending request...");
+    log::info!("Sending request");
 
     // Send the request and get future for the response
     let response = net2.request::<TestRequest>(test_request, net1.get_local_peer_id());
 
     // Check the received response
     let received_response = response.await;
-    log::info!("Received response {:?}", received_response);
+    log::info!(response = ?received_response, "Received response");
 
     match received_response {
         Ok(response) => {
@@ -249,7 +249,7 @@ async fn test_multiple_valid_requests_valid_responses() {
 
     tokio::time::sleep(Duration::from_secs(1)).await;
 
-    log::info!("Sending requests...");
+    log::info!("Sending requests");
 
     for _ in 0..num_requests {
         // Send the request and get future for the response
@@ -297,14 +297,14 @@ async fn test_valid_request_incorrect_response() {
 
     tokio::time::sleep(Duration::from_secs(1)).await;
 
-    log::info!("Sending request...");
+    log::info!("Sending request");
 
     // Send the request and get future for the response
     let response = net2.request::<TestRequest>(test_request.clone(), net1.get_local_peer_id());
 
     // Check the received response
     let received_response = response.await;
-    log::info!("Received response {:?}", received_response);
+    log::info!(response = ?received_response, "Received response");
 
     match received_response {
         Ok(response) => {
@@ -339,14 +339,14 @@ async fn test_valid_request_no_response() {
 
     tokio::time::sleep(Duration::from_secs(1)).await;
 
-    log::info!("Sending request...");
+    log::info!("Sending request");
 
     // Send the request and get future for the response
     let response = net2.request::<TestRequest>(test_request.clone(), net1.get_local_peer_id());
 
     // Since the request wasn't responded, it should timeout and send the error to the request
     let received_response = response.await;
-    log::info!("Received response {:?}", received_response);
+    log::info!(response = ?received_response, "Received response");
 
     match received_response {
         Ok(response) => {
@@ -369,13 +369,13 @@ async fn test_valid_request_no_response_no_receiver() {
 
     tokio::time::sleep(Duration::from_secs(1)).await;
 
-    log::info!("Sending request...");
+    log::info!("Sending request");
 
     // Send the request and get future for the response
     let received_response = net2
         .request::<TestRequest>(test_request.clone(), net1.get_local_peer_id())
         .await;
-    log::info!("Received response: {:?}", received_response);
+    log::info!(response = ?received_response, "Received response");
 
     // Don't respond the request: It should timeout and send the error to the request
     // Check the received response

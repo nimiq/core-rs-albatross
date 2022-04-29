@@ -428,7 +428,7 @@ impl PeerContactBook {
         let info = PeerContactInfo::from(contact);
         let peer_id = info.peer_id;
 
-        log::debug!("Adding peer contact: {:?}", peer_id);
+        debug!(%peer_id, "Adding peer contact");
 
         self.peer_contacts.insert(peer_id, Arc::new(info));
     }
@@ -490,15 +490,15 @@ impl PeerContactBook {
             if let Some(score) = gossipsub.peer_score(contact.0) {
                 contact.1.set_score(score);
             } else {
-                log::debug!("No score for peer {}", contact.0);
+                debug!(peer_id = %contact.0, "No score for peer");
             }
         }
     }
 
     pub fn add_own_addresses<I: IntoIterator<Item = Multiaddr>>(&mut self, addresses: I) {
-        log::debug!(
-            "Addresses observed for us: {:#?}",
-            addresses.into_iter().collect::<Vec<Multiaddr>>()
+        debug!(
+            addresses = ?addresses.into_iter().collect::<Vec<Multiaddr>>(),
+            "Addresses observed for us",
         );
         // TODO: We could add these observed addresses to our advertised addresses (with restrictions).
     }
@@ -524,7 +524,7 @@ impl PeerContactBook {
                 .iter()
                 .filter_map(|(peer_id, peer_contact)| {
                     if peer_contact.exceeds_age(&self.config, unix_time) {
-                        log::debug!("Removing peer contact because of old age: {:?}", peer_id);
+                        debug!(%peer_id, "Removing peer contact because of old age");
                         Some(peer_id)
                     } else {
                         None

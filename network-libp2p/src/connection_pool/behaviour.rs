@@ -207,10 +207,10 @@ impl ConnectionPoolBehaviour {
     }
 
     pub fn maintain_peers(&mut self) {
-        log::debug!(
-            "Maintaining peers: {} | addresses: {}",
-            self.peer_ids,
-            self.addresses
+        debug!(
+            peer_ids = %self.peer_ids,
+            addresses = %self.addresses,
+            "Maintaining peers"
         );
 
         // Try to maintain at least `peer_count_desired` connections.
@@ -220,7 +220,7 @@ impl ConnectionPoolBehaviour {
         {
             // Dial peers from the contact book.
             for peer_id in self.choose_peers_to_dial() {
-                log::debug!("Dialing peer {}", peer_id);
+                debug!(%peer_id, "Dialing peer");
                 self.peer_ids.mark_dialing(peer_id);
                 let handler = self.new_handler();
                 self.actions.push_back(NetworkBehaviourAction::Dial {
@@ -233,7 +233,7 @@ impl ConnectionPoolBehaviour {
 
             // Dial seeds.
             for address in self.choose_seeds_to_dial() {
-                log::debug!("Dialing seed {}", address);
+                debug!(%address, "Dialing seed");
                 self.addresses.mark_dialing(address.clone());
                 let handler = self.new_handler();
                 self.actions.push_back(NetworkBehaviourAction::Dial {
@@ -292,7 +292,7 @@ impl ConnectionPoolBehaviour {
     }
 
     fn housekeeping(&mut self) {
-        log::trace!("Doing housekeeping in connection pool.");
+        trace!("Doing housekeeping in connection pool");
 
         // Disconnect peers that have negative scores.
         let contacts = self.contacts.read();
@@ -300,7 +300,7 @@ impl ConnectionPoolBehaviour {
             let peer_score = contacts.get(peer_id).map(|e| e.get_score());
             if let Some(score) = peer_score {
                 if score < 0.0 {
-                    log::info!("Peer {:?} has a negative score: {}", peer_id, score);
+                    info!(%peer_id, score, "Peer has a negative score");
                 }
             }
         }
@@ -324,17 +324,17 @@ impl ConnectionPoolBehaviour {
             .insert(ip, SystemTime::now() + Duration::from_secs(60 * 10)) // 10 minutes
             .is_none()
         {
-            log::debug!("{:?} added to banned set of peers", ip);
+            debug!(%ip, "IP added to banned set of peers");
         } else {
-            log::debug!("{:?} already part of banned set of peers", ip);
+            debug!(%ip, "IP already part of banned set of peers");
         }
     }
 
     pub fn _unban_ip(&mut self, ip: IpNetwork) {
         if self.banned.remove(&ip).is_some() {
-            log::debug!("{:?} removed from banned set of peers", ip);
+            debug!(%ip, "IP removed from banned set of peers");
         } else {
-            log::debug!("{:?} was not part of banned set of peers", ip);
+            debug!(%ip, "IP was not part of banned set of peers");
         }
     }
 }
@@ -365,15 +365,11 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
     ) {
         let address = endpoint.get_remote_address();
 
-        log::debug!(
-            "Connection established: peer_id={}, address={}, type: {}",
-            peer_id,
-            address,
-            if endpoint.is_dialer() {
-                "outbound"
-            } else {
-                "inbound"
-            }
+        debug!(
+            %peer_id,
+            %address,
+            ?endpoint,
+            "Connection established",
         );
 
         // Mark failed addresses as such.
@@ -386,10 +382,10 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
         // Ignore connection if another connection to this peer already exists.
         // TODO Do we still want to subject it to the IP limit checks?
         if other_established > 0 {
-            log::debug!(
-                "Already have {} connections established to this peer {:?}",
-                other_established,
-                peer_id,
+            debug!(
+                %peer_id,
+                connections = other_established,
+                "Already have connections established to this peer",
             );
             return;
         }
@@ -410,7 +406,7 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
             let mut close_connection = false;
 
             if self.banned.get(&ip).is_some() {
-                log::debug!("IP is banned, {}", ip);
+                debug!(%ip, "IP is banned");
                 close_connection = true;
             }
 
@@ -422,7 +418,7 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
                     .unwrap_or(&0)
                     .saturating_add(1)
             {
-                log::debug!("Max peer connections per IP limit reached, {}", ip);
+                debug!(%ip, "Max peer connections per IP limit reached");
                 close_connection = true;
             }
 
@@ -430,7 +426,7 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
                 && (self.config.peer_count_per_subnet_max
                     < self.limits.ipv4_count.saturating_add(1))
             {
-                log::debug!("Max peer connections per IPv4 subnet limit reached");
+                debug!("Max peer connections per IPv4 subnet limit reached");
                 close_connection = true;
             }
 
@@ -438,7 +434,7 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
                 && (self.config.peer_count_per_subnet_max
                     < self.limits.ipv6_count.saturating_add(1))
             {
-                log::debug!("Max peer connections per IPv6 subnet limit reached");
+                debug!("Max peer connections per IPv6 subnet limit reached");
                 close_connection = true;
             }
 
@@ -449,7 +445,7 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
                     .saturating_add(self.limits.ipv6_count)
                     .saturating_add(1)
             {
-                log::debug!("Max peer connections limit reached");
+                debug!("Max peer connections limit reached");
                 close_connection = true;
             }
 
@@ -565,7 +561,7 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
                     None => return,
                 };
 
-                log::debug!("Failed to dial peer {}: {:?}", peer_id, error);
+                debug!(%peer_id, %error, "Failed to dial peer");
                 self.peer_ids.mark_failed(peer_id);
                 self.maintain_peers();
             }

@@ -146,7 +146,7 @@ where
                     // An error occured.
                     Poll::Ready(Err(e)) => {
                         return {
-                            log::error!("Inner AsyncRead returned an error: {}", e);
+                            error!(error = %e, "Inner AsyncRead returned an error");
                             Poll::Ready(Some(Err(e.into())))
                         }
                     }

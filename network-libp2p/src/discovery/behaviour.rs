@@ -161,7 +161,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
             .map(|addresses_opt| addresses_opt.addresses().cloned().collect())
             .unwrap_or_default();
 
-        log::debug!("addresses_of_peer({}) = {:#?}", peer_id, addresses);
+        debug!(%peer_id, ?addresses, "addresses_of_peer");
 
         addresses
     }
@@ -189,10 +189,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         other_established: usize,
     ) {
         if other_established == 0 {
-            log::trace!("DiscoveryBehaviour::inject_connection_established:");
-            log::trace!("  - peer_id: {:?}", peer_id);
-            log::trace!("  - connection_id: {:?}", connection_id);
-            log::trace!("  - endpoint: {:?}", endpoint);
+            trace!(%peer_id, ?connection_id, ?endpoint, "DiscoveryBehaviour::inject_connection_established:");
 
             // This is the first connection to this peer
             self.connected_peers.insert(*peer_id);
@@ -208,12 +205,12 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                     });
             }
         } else {
-            log::trace!("DiscoveryBehaviour::inject_connection_established: Already have a connection established to peer {:?}", peer_id);
+            trace!(%peer_id, "DiscoveryBehaviour::inject_connection_established: Already have a connection established to peer");
         }
     }
 
     fn inject_event(&mut self, peer_id: PeerId, _connection: ConnectionId, event: HandlerOutEvent) {
-        log::trace!("inject_event: peer_id={}: {:?}", peer_id, event);
+        trace!(%peer_id, ?event, "inject_event");
 
         match event {
             HandlerOutEvent::PeerExchangeEstablished { peer_contact } => {
@@ -249,7 +246,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         // Poll house-keeping timer
         match self.house_keeping_timer.poll_next_unpin(cx) {
             Poll::Ready(Some(_)) => {
-                log::debug!("Doing house-keeping in peer address book.");
+                debug!("Doing house-keeping in peer address book");
                 let mut peer_address_book = self.peer_contact_book.write();
                 peer_address_book.update_own_contact(&self.keypair);
                 peer_address_book.house_keeping();

@@ -42,7 +42,7 @@ impl TestNode {
         let base_transport = MemoryTransport::default();
         let address = multiaddr![Memory(thread_rng().gen::<u64>())];
 
-        log::info!("Peer: id={}, address={}", peer_id, address);
+        log::info!(%peer_id, %address);
 
         let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
             .into_authentic(&keypair)
@@ -130,7 +130,7 @@ fn test_peers_in_contact_book(
 ) {
     for peer_contact in peer_contacts {
         let peer_id = peer_contact.public_key().clone().to_peer_id();
-        log::info!("Checking if peer ID is in peer contact book: {}", peer_id);
+        log::info!(%peer_id, "Checking if peer ID is in peer contact book");
         let peer_contact_in_book = peer_contact_book.get(&peer_id).expect("Peer ID not found");
         assert_eq!(
             peer_contact,
@@ -178,7 +178,7 @@ pub async fn test_exchanging_peers() {
     let mut t = 0;
     futures::stream::select(node1.swarm, node2.swarm)
         .take_while(move |e| {
-            log::info!("Swarm event: {:?}", e);
+            log::info!(event = ?e, "Swarm event");
 
             if let SwarmEvent::Behaviour(DiscoveryEvent::Update) = e {
                 t += 1;
@@ -193,9 +193,9 @@ pub async fn test_exchanging_peers() {
     all_peer_contacts.append(&mut node1_peer_contacts);
     all_peer_contacts.append(&mut node2_peer_contacts);
 
-    log::info!("Checking peer 1 contact book.");
+    log::info!("Checking peer 1 contact book");
     test_peers_in_contact_book(&peer_contact_book1.read(), &all_peer_contacts);
-    log::info!("Checking peer 2 contact book.");
+    log::info!("Checking peer 2 contact book");
     test_peers_in_contact_book(&peer_contact_book2.read(), &all_peer_contacts);
 }
 
@@ -225,7 +225,7 @@ pub async fn test_dialing_peer_from_contacts() {
     if let Some(SwarmEvent::Behaviour(DiscoveryEvent::Established { peer_id })) =
         node1.swarm.next().await
     {
-        log::info!("Established PEX with {}", peer_id);
+        log::info!(%peer_id, "Established PEX with peer");
         assert_eq!(peer2_id, peer_id);
     }
 }

@@ -213,7 +213,7 @@ impl DiscoveryHandler {
     /// waker to continue polling.
     fn check_connected(&mut self) {
         if self.inbound.is_some() && self.outbound.is_some() {
-            log::debug!("Inbound and outbound connected. Performing handshake");
+            debug!("Inbound and outbound connected. Performing handshake");
 
             self.state = HandlerState::SendHandshake;
 
@@ -284,7 +284,7 @@ impl ConnectionHandler for DiscoveryHandler {
         _info: Self::OutboundOpenInfo,
         error: ConnectionHandlerUpgrErr<SerializingError>,
     ) {
-        log::error!("inject_dial_upgrade_error: {:?}", error);
+        error!(%error, "inject_dial_upgrade_error");
     }
 
     fn connection_keep_alive(&self) -> KeepAlive {

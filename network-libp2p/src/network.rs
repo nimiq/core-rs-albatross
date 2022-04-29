@@ -294,7 +294,7 @@ impl Network {
         let mut task_state = TaskState::default();
 
         let peer_id = Swarm::local_peer_id(&swarm);
-        let task_span = log::trace_span!("swarm task", peer_id=?peer_id);
+        let task_span = trace_span!("swarm task", peer_id=?peer_id);
 
         async move {
             loop {
@@ -313,8 +313,8 @@ impl Network {
 
                             match result {
                                 Ok(true) => {}, // success
-                                Ok(false) => log::debug!("Validation took too long: the {} message is no longer in the message cache", topic),
-                                Err(e) => log::error!("Network error while relaying {} message: {}", topic, e),
+                                Ok(false) => debug!(topic, "Validation took too long: message is no longer in the message cache"),
+                                Err(e) => error!(topic, error = %e, "Network error while relaying message"),
                             }
                         }
                     },
@@ -353,20 +353,20 @@ impl Network {
                 num_established,
                 concurrent_dial_errors,
             } => {
-                log::debug!(
-                    "Connection established with peer {}, {:?}, connections established: {:?}",
-                    peer_id,
-                    endpoint,
-                    num_established
+                debug!(
+                    %peer_id,
+                    ?endpoint,
+                    connections = num_established,
+                    "Connection established",
                 );
 
                 if let Some(dial_errors) = concurrent_dial_errors {
                     for (addr, error) in dial_errors {
-                        log::debug!(
-                            "Failed to reach address: {}, peer_id={:?}, error={:?}",
-                            addr,
-                            peer_id,
-                            error
+                        debug!(
+                            %peer_id,
+                            address = %addr,
+                            %error,
+                            "Failed to reach address",
                         );
                         swarm.behaviour_mut().remove_peer_address(peer_id, addr);
                     }
@@ -376,7 +376,7 @@ impl Network {
                 if endpoint.is_dialer() {
                     let listen_addr = endpoint.get_remote_address();
 
-                    log::debug!("Saving peer {} listen address: {:?}", peer_id, listen_addr);
+                    debug!(%peer_id, address = %listen_addr, "Saving peer");
 
                     swarm
                         .behaviour_mut()
@@ -384,9 +384,9 @@ impl Network {
 
                     // Bootstrap Kademlia if we're performing our first connection
                     if !state.is_bootstrapped {
-                        log::debug!("Bootstrapping DHT");
+                        debug!("Bootstrapping DHT");
                         if swarm.behaviour_mut().dht.bootstrap().is_err() {
-                            log::error!("Bootstrapping DHT error: No known peers");
+                            error!("Bootstrapping DHT error: No known peers");
                         }
                         state.is_bootstrapped = true;
                     }
@@ -399,15 +399,15 @@ impl Network {
                 num_established,
                 cause,
             } => {
-                log::info!(
-                    "Connection closed with peer {}, {:?}, connections remaining: {:?}",
-                    peer_id,
-                    endpoint,
-                    num_established
+                info!(
+                    %peer_id,
+                    ?endpoint,
+                    connections = num_established,
+                    "Connection closed with peer",
                 );
 
                 if let Some(cause) = cause {
-                    log::info!("Connection closed because: {:?}", cause);
+                    info!(%cause, "Connection closed because");
                 }
 
                 // Remove Peer
@@ -422,10 +422,10 @@ impl Network {
                 local_addr,
                 send_back_addr,
             } => {
-                log::debug!(
-                    "Incoming connection from address {:?} to listen address {:?}",
-                    send_back_addr,
-                    local_addr
+                debug!(
+                    address = %send_back_addr,
+                    listen_address = %local_addr,
+                    "Incoming connection",
                 );
             }
 
@@ -434,17 +434,17 @@ impl Network {
                 send_back_addr,
                 error,
             } => {
-                log::debug!(
-                    "Incoming connection error from address {:?} to listen address {:?}: {:?}",
-                    send_back_addr,
-                    local_addr,
-                    error
+                debug!(
+                    address = %send_back_addr,
+                    listen_address = %local_addr,
+                    %error,
+                    "Incoming connection error",
                 );
             }
 
             SwarmEvent::Dialing(peer_id) => {
                 // This event is only triggered if the network behaviour performs the dial
-                log::debug!("Dialing peer {}", peer_id);
+                debug!(%peer_id, "Dialing peer");
             }
 
             SwarmEvent::Behaviour(event) => {
@@ -463,7 +463,7 @@ impl Network {
                                             );
                                             output.send(result).ok();
                                         } else {
-                                            log::warn!(query_id = ?id, "GetRecord query result for unknown query ID");
+                                            warn!(query_id = ?id, "GetRecord query result for unknown query ID");
                                         }
                                     }
                                     QueryResult::PutRecord(result) => {
@@ -473,14 +473,14 @@ impl Network {
                                                 .send(result.map(|_| ()).map_err(Into::into))
                                                 .ok();
                                         } else {
-                                            log::warn!(query_id = ?id, "PutRecord query result for unknown query ID");
+                                            warn!(query_id = ?id, "PutRecord query result for unknown query ID");
                                         }
                                     }
                                     QueryResult::Bootstrap(result) => match result {
                                         Ok(result) => {
-                                            log::debug!(result = ?result, "DHT bootstrap successful")
+                                            debug!(?result, "DHT bootstrap successful")
                                         }
-                                        Err(e) => log::error!("DHT bootstrap error: {:?}", e),
+                                        Err(e) => error!(error = %e, "DHT bootstrap error"),
                                     },
                                     _ => {}
                                 }
@@ -516,17 +516,17 @@ impl Network {
                                                 {
                                                     return;
                                                 } else {
-                                                    log::error!("Could not store record in DHT record store");
+                                                    error!("Could not store record in DHT record store");
                                                     return;
                                                 };
                                             } else {
-                                                log::warn!("DHT record signature verification failed. Record public key: {:?}", pk);
+                                                warn!(public_key = %pk, "DHT record signature verification failed. Record public key");
                                                 return;
                                             }
                                         }
                                     }
                                 }
-                                log::warn!(
+                                warn!(
                                     "DHT record verification failed: Invalid public key received"
                                 );
                             }
@@ -558,34 +558,34 @@ impl Network {
                                 if let Err(e) =
                                     output.try_send((message, message_id, propagation_source))
                                 {
-                                    log::error!(
-                                        "Failed to dispatch gossipsub '{}' message: {:?}",
-                                        topic.as_str(),
-                                        e
+                                    error!(
+                                        %topic,
+                                        error = %e,
+                                        "Failed to dispatch gossipsub message",
                                     )
                                 }
                             } else {
-                                log::warn!(topic = ?message.topic, "unknown topic hash");
+                                warn!(topic = %message.topic, "unknown topic hash");
                             }
                         }
                         GossipsubEvent::Subscribed { peer_id, topic } => {
-                            log::debug!(peer_id = ?peer_id, topic = ?topic, "peer subscribed to topic");
+                            debug!(%peer_id, %topic, "peer subscribed to topic");
                         }
                         GossipsubEvent::Unsubscribed { peer_id, topic } => {
-                            log::debug!(peer_id = ?peer_id, topic = ?topic, "peer unsubscribed");
+                            debug!(%peer_id, %topic, "peer unsubscribed");
                         }
                         GossipsubEvent::GossipsubNotSupported { peer_id } => {
-                            log::debug!(peer_id = ?peer_id, "gossipsub not supported");
+                            debug!(%peer_id, "gossipsub not supported");
                         }
                     },
                     NimiqEvent::Identify(event) => {
                         match event {
                             IdentifyEvent::Received { peer_id, info } => {
-                                log::debug!(
-                                    "Received identity from peer {} at address {:?}: {:?}",
-                                    peer_id,
-                                    info.observed_addr,
-                                    info
+                                debug!(
+                                    %peer_id,
+                                    address = %info.observed_addr,
+                                    info = ?info,
+                                    "Received identity",
                                 );
 
                                 // Save identified peer listen addresses
@@ -594,25 +594,25 @@ impl Network {
 
                                     // Bootstrap Kademlia if we're adding our first address
                                     if !state.is_bootstrapped {
-                                        log::debug!("Bootstrapping DHT");
+                                        debug!("Bootstrapping DHT");
                                         if swarm.behaviour_mut().dht.bootstrap().is_err() {
-                                            log::error!("Bootstrapping DHT error: No known peers");
+                                            error!("Bootstrapping DHT error: No known peers");
                                         }
                                         state.is_bootstrapped = true;
                                     }
                                 }
                             }
                             IdentifyEvent::Pushed { peer_id } => {
-                                log::trace!("Pushed identity to peer {}", peer_id);
+                                trace!(%peer_id, "Pushed identity to peer");
                             }
                             IdentifyEvent::Sent { peer_id } => {
-                                log::trace!("Sent identity to peer {}", peer_id);
+                                trace!(%peer_id, "Sent identity to peer");
                             }
                             IdentifyEvent::Error { peer_id, error } => {
-                                log::error!(
-                                    "Error while identifying remote peer {}: {:?}",
-                                    peer_id,
-                                    error
+                                error!(
+                                    %peer_id,
+                                    %error,
+                                    "Error while identifying remote peer",
                                 );
                             }
                         }
@@ -621,10 +621,10 @@ impl Network {
                         match event {
                             ConnectionPoolEvent::PeerJoined { peer_id } => {
                                 if connected_peers.write().insert(peer_id) {
-                                    log::info!(?peer_id, "Peer joined");
+                                    info!(%peer_id, "Peer joined");
                                     events_tx.send(NetworkEvent::PeerJoined(peer_id)).ok();
                                 } else {
-                                    log::error!(?peer_id, "Peer joined but it already exists");
+                                    error!(%peer_id, "Peer joined but it already exists");
                                 }
                             }
                         };
@@ -641,11 +641,11 @@ impl Network {
                             } => {
                                 // TODO Add rate limiting (per peer).
                                 if let Ok(type_id) = peek_type(&request) {
-                                    log::trace!(
-                                        "Incoming [Request ID {}] from peer {}: {:?}",
-                                        request_id,
-                                        peer_id,
-                                        request,
+                                    trace!(
+                                        %request_id,
+                                        %peer_id,
+                                        %type_id,
+                                        "Incoming request from peer"
                                     );
                                     // Check if we have a receiver registered for this message type
                                     let sender = {
@@ -669,17 +669,20 @@ impl Network {
                                         if let Err(e) =
                                             sender.try_send((request.into(), request_id, peer_id))
                                         {
-                                            log::error!(
-                                            "Failed to dispatch [Request ID {}] from peer {}: {:?}",
-                                            request_id,
-                                            peer_id,
-                                            e,
-                                        );
+                                            error!(
+                                                %request_id,
+                                                %peer_id,
+                                                %type_id,
+                                                error = %e,
+                                                "Failed to dispatch request from peer",
+                                            );
                                         }
                                     } else {
-                                        log::trace!(
-                                        "No receiver found for requests of type ID {}, replying with a 'NoReceiver' error",
-                                        type_id
+                                        trace!(
+                                            %request_id,
+                                            %peer_id,
+                                            %type_id,
+                                            "No receiver found for requests of this type, replying with a 'NoReceiver' error",
                                         );
                                         let err: Result<(), InboundRequestError> =
                                             Err(InboundRequestError::NoReceiver);
@@ -689,17 +692,19 @@ impl Network {
                                             .send_response(channel, err.serialize_to_vec())
                                             .is_err()
                                         {
-                                            log::error!(
-                                                "[Request ID {}] Could not send default response for request type {}",
-                                                request_id,
-                                                type_id
+                                            error!(
+                                                %request_id,
+                                                %peer_id,
+                                                %type_id,
+                                                "Could not send default response",
                                             );
                                         };
                                     }
                                 } else {
-                                    log::error!(
-                                        "[Request ID {}] Could not parse request type ID",
-                                        request_id
+                                    error!(
+                                        %request_id,
+                                        %peer_id,
+                                        "Could not parse request type",
                                     );
                                 }
                             }
@@ -707,17 +712,17 @@ impl Network {
                                 request_id,
                                 response,
                             } => {
-                                log::trace!(
-                                    "[Request ID {}] Incoming response from peer {}",
-                                    request_id,
-                                    peer_id,
+                                trace!(
+                                    %request_id,
+                                    %peer_id,
+                                    "Incoming response from peer",
                                 );
                                 if let Some(channel) = state.requests.remove(&request_id) {
                                     channel.send(Ok(response.into())).ok();
                                 } else {
-                                    log::error!(
-                                        "No such request ID found: [Request ID {}]",
-                                        request_id
+                                    error!(
+                                        %request_id,
+                                        "No such request ID found",
                                     );
                                 }
                             }
@@ -727,16 +732,19 @@ impl Network {
                             request_id,
                             error,
                         } => {
-                            log::error!(
-                                "[Request ID {}] sent to peer {} failed, error: {:?}",
-                                request_id,
-                                peer,
-                                error,
+                            error!(
+                                %request_id,
+                                peer_id = %peer,
+                                %error,
+                                "Failed to send request to peer",
                             );
                             if let Some(channel) = state.requests.remove(&request_id) {
                                 channel.send(Err(Self::to_response_error(error))).ok();
                             } else {
-                                log::error!("[Request ID {}] No such request ID found", request_id);
+                                error!(
+                                    %request_id,
+                                    "No such request ID found"
+                                );
                             }
                         }
                         RequestResponseEvent::InboundFailure {
@@ -744,18 +752,18 @@ impl Network {
                             request_id,
                             error,
                         } => {
-                            log::error!(
-                                "Response to [Request ID {}] from peer {} failed, error: {:?}",
-                                request_id,
-                                peer,
-                                error,
+                            error!(
+                                %request_id,
+                                peer_id = %peer,
+                                %error,
+                                "Response to request sent from peer failed",
                             );
                         }
                         RequestResponseEvent::ResponseSent { peer, request_id } => {
-                            log::trace!(
-                                "Response to [Request ID {}] sent to peer: {}",
-                                request_id,
-                                peer
+                            trace!(
+                                %request_id,
+                                peer_id = %peer,
+                                "Response sent to peer",
                             );
                         }
                     },
@@ -767,7 +775,7 @@ impl Network {
 
     fn perform_action(action: NetworkAction, swarm: &mut NimiqSwarm, state: &mut TaskState) {
         // FIXME implement compact debug format for NetworkAction
-        // log::trace!(action = ?action, "performing action");
+        // trace!(?action, "performing action");
 
         match action {
             NetworkAction::Dial { peer_id, output } => {
@@ -927,11 +935,11 @@ impl Network {
                     .behaviour_mut()
                     .request_response
                     .send_request(&peer_id, request);
-                log::trace!(
-                    "[Request ID {}] was sent to peer {}, type id {}",
-                    request_id,
-                    peer_id,
-                    request_type_id,
+                trace!(
+                    %request_id,
+                    %peer_id,
+                    type_id = %request_type_id,
+                    "Request was sent to peer",
                 );
                 state.requests.insert(request_id, response_channel);
                 output.send(request_id).ok();
@@ -949,13 +957,14 @@ impl Network {
                             .send_response(response_channel, response)
                             .map_err(NetworkError::ResponseChannelClosed),
                     ) {
-                        log::error!(
-                            "Response was sent but the action channel was dropped: {:?}",
-                            e
+                        error!(
+                            %request_id,
+                            error = ?e,
+                            "Response was sent but the action channel was dropped",
                         );
                     };
                 } else {
-                    log::error!("Tried to respond to a non existing request");
+                    error!(%request_id, "Tried to respond to a non existing request");
                     output.send(Err(NetworkError::UnknownRequestId)).ok();
                 }
             }
@@ -970,7 +979,7 @@ impl Network {
             }
             NetworkAction::DisconnectPeer { peer_id } => {
                 if swarm.disconnect_peer_id(peer_id).is_err() {
-                    log::warn!(?peer_id, "Peer already closed");
+                    warn!(%peer_id, "Peer already closed");
                 }
             }
         }
@@ -991,7 +1000,7 @@ impl Network {
             .clone()
             .send(NetworkAction::ListenOn { listen_addresses })
             .await
-            .map_err(|e| log::error!("Failed to send NetworkAction::ListenOnAddress: {:?}", e))
+            .map_err(|e| error!(error = %e, "Failed to send NetworkAction::ListenOnAddress"))
             .ok();
     }
 
@@ -1000,7 +1009,7 @@ impl Network {
             .clone()
             .send(NetworkAction::StartConnecting)
             .await
-            .map_err(|e| log::error!("Failed to send NetworkAction::StartConnecting: {:?}", e))
+            .map_err(|e| error!(error = %e, "Failed to send NetworkAction::StartConnecting"))
             .ok();
     }
 
@@ -1260,11 +1269,11 @@ impl NetworkInterface for Network {
                             Err(e) => Err(RequestError::InboundRequest(e)),
                         }
                     } else {
-                        log::error!(
-                            "Failed to deserialize request ID {} of type {} message from {}",
-                            request_id,
-                            std::any::type_name::<<Req as Request>::Response>(),
-                            peer_id,
+                        error!(
+                            %request_id,
+                            %peer_id,
+                            type_id = std::any::type_name::<<Req as Request>::Response>(),
+                            "Failed to deserialize response from peer",
                             );
                         Err(RequestError::InboundRequest(
                             InboundRequestError::DeSerializationError,
@@ -1310,12 +1319,12 @@ impl NetworkInterface for Network {
                 match Req::deserialize_request(&mut data.reader()) {
                     Ok(message) => Some((message, request_id, peer_id)),
                     Err(e) => {
-                        log::error!(
-                            "Failed to deserialize request ID {} of type {} message from {}: {}",
-                            request_id,
-                            std::any::type_name::<Req>(),
-                            peer_id,
-                            e
+                        error!(
+                            %request_id,
+                            %peer_id,
+                            type_id = std::any::type_name::<Req>(),
+                            error = %e,
+                            "Failed to deserialize request from peer",
                         );
                         None
                     }

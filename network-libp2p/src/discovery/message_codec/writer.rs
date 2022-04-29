@@ -23,7 +23,7 @@ where
     if buffer.remaining() > 0 {
         match Pin::new(inner).poll_write(cx, buffer.chunk()) {
             Poll::Ready(Ok(0)) => {
-                log::warn!("MessageWriter: write_from_buf: Unexpected EOF.");
+                warn!("MessageWriter: write_from_buf: Unexpected EOF.");
                 Poll::Ready(Err(SerializingError::from(std::io::Error::from(
                     std::io::ErrorKind::UnexpectedEof,
                 ))))
@@ -91,7 +91,7 @@ where
         let self_projected = self.project();
 
         if !self_projected.buffer.is_empty() {
-            log::warn!("MessageWriter: Trying to send while buffer is not empty.");
+            warn!("MessageWriter: Trying to send while buffer is not empty");
             return Err(SerializingError::from(std::io::Error::from(
                 std::io::ErrorKind::WouldBlock,
             )));
