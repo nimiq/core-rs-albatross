@@ -25,7 +25,12 @@ impl VolatileEnvironment {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(max_dbs: u32) -> Result<Environment, Error> {
         let temp_dir = TempDir::new().map_err(Error::CreateDirectory)?;
-        let env = MdbxEnvironment::new_mdbx_environment(temp_dir.path(), 0, max_dbs, None)?;
+        let env = MdbxEnvironment::new_mdbx_environment(
+            temp_dir.path(),
+            1024 * 1024 * 1024 * 1024,
+            max_dbs,
+            None,
+        )?;
         Ok(Environment::Volatile(VolatileEnvironment {
             temp_dir: Arc::new(temp_dir),
             env,
@@ -34,8 +39,12 @@ impl VolatileEnvironment {
 
     pub fn with_max_readers(max_dbs: u32, max_readers: u32) -> Result<Environment, Error> {
         let temp_dir = TempDir::new().map_err(Error::CreateDirectory)?;
-        let env =
-            MdbxEnvironment::new_mdbx_environment(temp_dir.path(), 0, max_dbs, Some(max_readers))?;
+        let env = MdbxEnvironment::new_mdbx_environment(
+            temp_dir.path(),
+            1024 * 1024 * 1024 * 1024,
+            max_dbs,
+            Some(max_readers),
+        )?;
         Ok(Environment::Volatile(VolatileEnvironment {
             temp_dir: Arc::new(temp_dir),
             env,
