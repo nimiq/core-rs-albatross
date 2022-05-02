@@ -70,7 +70,7 @@ pub struct SyncCluster<TNetwork: Network> {
     pub first_block_number: usize,
 
     pub(crate) batch_set_queue: SyncQueue<TNetwork, Blake2bHash, BatchSetInfo>,
-    history_queue: SyncQueue<TNetwork, (u32, u32, usize), (u32, HistoryChunk)>,
+    history_queue: SyncQueue<TNetwork, (u32, u32, usize), (u32, usize, HistoryChunk)>,
 
     pending_batch_sets: VecDeque<PendingBatchSet>,
     num_epochs_finished: usize,
@@ -161,7 +161,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
                     )
                     .await
                     .ok()
-                    .map(|chunk| (epoch_number, chunk));
+                    .map(|chunk| (epoch_number, chunk_index, chunk));
                 }
                 .boxed()
             },
@@ -236,6 +236,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
     fn on_history_chunk_received(
         &mut self,
         epoch_number: u32,
+        chunk_index: usize,
         history_chunk: HistoryChunk,
     ) -> Result<(), SyncClusterResult> {
         // Find epoch in pending_epochs.
@@ -254,10 +255,17 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         // Verify chunk.
         let chunk = history_chunk.chunk.expect("History chunk missing");
         if !chunk
-            .verify(epoch.block.header.history_root.clone(), epoch.history.len())
+            .verify(
+                epoch.block.header.history_root.clone(),
+                chunk_index * CHUNK_SIZE,
+            )
             .unwrap_or(false)
         {
-            log::debug!("History Chunk failed to verify");
+            log::warn!(
+                "History Chunk failed to verify (chunk {} of epoch {})",
+                chunk_index,
+                epoch_number
+            );
             return Err(SyncClusterResult::Error);
         }
 
@@ -439,8 +447,10 @@ impl<TNetwork: Network + 'static> Stream for SyncCluster<TNetwork> {
 
         while let Poll::Ready(Some(result)) = self.history_queue.poll_next_unpin(cx) {
             match result {
-                Ok((epoch_number, history_chunk)) => {
-                    if let Err(e) = self.on_history_chunk_received(epoch_number, history_chunk) {
+                Ok((epoch_number, chunk_index, history_chunk)) => {
+                    if let Err(e) =
+                        self.on_history_chunk_received(epoch_number, chunk_index, history_chunk)
+                    {
                         return Poll::Ready(Some(Err(e)));
                     }
 
