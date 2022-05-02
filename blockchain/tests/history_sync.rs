@@ -164,7 +164,7 @@ fn history_sync_works_with_micro_blocks() {
 
     // Produce the blocks.
     let producer = BlockProducer::new(signing_key(), voting_key());
-    produce_macro_blocks(&producer, &blockchain, num_macro_blocks);
+    produce_macro_blocks_with_txns(&producer, &blockchain, num_macro_blocks, 5, 0);
 
     let blockchain = blockchain.read();
 
