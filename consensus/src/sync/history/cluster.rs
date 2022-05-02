@@ -215,7 +215,8 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         if blockchain.epoch_number() == epoch_number {
             let num_known_txs = blockchain
                 .history_store
-                .num_final_epoch_transactions(epoch_number, None);
+                .get_final_epoch_transactions(epoch_number, None)
+                .len();
             start_index = num_known_txs / CHUNK_SIZE;
             pending_batch_set.history_offset = start_index * CHUNK_SIZE;
         }

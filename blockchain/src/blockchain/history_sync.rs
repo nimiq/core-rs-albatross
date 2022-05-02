@@ -114,7 +114,25 @@ impl Blockchain {
         }
 
         // Check the history root.
-        let wanted_history_root = HistoryStore::root_from_ext_txs(history)
+        // The given history might be incomplete if we already know parts of it.
+        // Reconstruct the full history to compute the root hash if necessary.
+        let last_macro_block = policy::last_macro_block(this.block_number());
+        let mut known_history = this.history_store.get_final_epoch_transactions(
+            policy::epoch_at(this.block_number() + 1),
+            Some(&read_txn),
+        );
+        let first_new_ext_tx = history
+            .iter()
+            .position(|ext_tx| ext_tx.block_number > last_macro_block)
+            .unwrap_or(history.len());
+        let full_history = if first_new_ext_tx < known_history.len() {
+            known_history.extend_from_slice(&history[first_new_ext_tx..]);
+            known_history.as_slice()
+        } else {
+            history
+        };
+
+        let wanted_history_root = HistoryStore::root_from_ext_txs(full_history)
             .ok_or(PushError::InvalidBlock(BlockError::InvalidHistoryRoot))?;
 
         if *block.history_root() != wanted_history_root {
@@ -181,23 +199,20 @@ impl Blockchain {
         // Get the block hash.
         let block_hash = block.hash();
 
-        // Calculate the cumulative transaction fees for the current batch. This is necessary to
+        // Calculate the cumulative transaction fees for the given batch. This is necessary to
         // create the chain info for the block.
         let mut cum_tx_fees = Coin::ZERO;
-
         let current_batch = policy::batch_at(block.block_number());
-
         for i in (0..history.len()).rev() {
             if policy::batch_at(history[i].block_number) != current_batch {
                 break;
             }
-
             if let ExtTxData::Basic(tx) = &history[i].data {
                 cum_tx_fees += tx.fee;
             }
         }
 
-        // Create the chain info for the current block and store it.
+        // Create the chain info for the given block and store it.
         let chain_info = ChainInfo {
             on_main_chain: true,
             main_chain_successor: None,

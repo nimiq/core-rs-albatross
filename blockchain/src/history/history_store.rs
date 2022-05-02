@@ -462,11 +462,11 @@ impl HistoryStore {
     }
 
     /// Gets the number of all finalized extended transactions for a given epoch.
-    pub fn num_final_epoch_transactions(
+    pub fn get_final_epoch_transactions(
         &self,
         epoch_number: u32,
         txn_option: Option<&Transaction>,
-    ) -> usize {
+    ) -> Vec<ExtendedTransaction> {
         let read_txn: ReadTransaction;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -486,7 +486,7 @@ impl HistoryStore {
         // Return early if there are no leaves in the HistoryTree for the given epoch.
         let num_leaves = tree.num_leaves();
         if num_leaves == 0 {
-            return 0;
+            return vec![];
         }
 
         // Find the number of the last macro stored for the given epoch.
@@ -495,7 +495,7 @@ impl HistoryStore {
         let last_macro_block = policy::last_macro_block(last_tx.block_number);
 
         // Count the extended transactions up to the last macro block.
-        let mut num_txs = 0;
+        let mut ext_txs = Vec::new();
 
         for i in 0..tree.num_leaves() {
             let leaf_hash = tree.get_leaf(i).unwrap();
@@ -503,10 +503,10 @@ impl HistoryStore {
             if ext_tx.block_number > last_macro_block {
                 break;
             }
-            num_txs += 1;
+            ext_txs.push(ext_tx);
         }
 
-        num_txs
+        ext_txs
     }
 
     /// Gets all non-finalized extended transactions for a given epoch.
