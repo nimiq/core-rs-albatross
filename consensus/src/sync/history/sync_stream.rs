@@ -266,6 +266,14 @@ mod tests {
     }
 
     fn copy_chain(from: &RwLock<Blockchain>, to: &RwLock<Blockchain>) {
+        copy_chain_with_limit(from, to, usize::MAX);
+    }
+
+    fn copy_chain_with_limit(
+        from: &RwLock<Blockchain>,
+        to: &RwLock<Blockchain>,
+        num_blocks_max: usize,
+    ) {
         let chain_info =
             from.read()
                 .chain_store
@@ -275,6 +283,7 @@ mod tests {
             _ => panic!("Chains have diverged"),
         };
 
+        let mut num_blocks = 0;
         while let Some(hash) = block_hash {
             let chain_info = from
                 .read()
@@ -285,6 +294,11 @@ mod tests {
 
             Blockchain::push(to.upgradable_read(), chain_info.head).expect("Failed to push block");
             block_hash = chain_info.main_chain_successor;
+
+            num_blocks += 1;
+            if num_blocks >= num_blocks_max {
+                return;
+            }
         }
 
         assert_eq!(from.read().head(), to.read().head());
@@ -457,6 +471,44 @@ mod tests {
             chain2.read().block_number(),
             num_batches as u32 * policy::BLOCKS_PER_BATCH
         );
+
+        let mut sync = HistorySync::<MockNetwork>::new(
+            Arc::clone(&chain1),
+            Arc::clone(&net1),
+            net1.subscribe_events(),
+        );
+
+        spawn_request_handlers(&net2, &chain2);
+        net1.dial_mock(&net2);
+
+        match sync.next().await {
+            Some(HistorySyncReturn::Good(_)) => {
+                assert_eq!(chain1.read().head(), chain2.read().head());
+            }
+            _ => panic!("Unexpected HistorySyncReturn"),
+        }
+    }
+
+    #[test(tokio::test)]
+    async fn it_can_sync_a_partial_epoch() {
+        let mut hub = MockHub::default();
+        let net1 = Arc::new(hub.new_network());
+        let net2 = Arc::new(hub.new_network());
+
+        let chain1 = blockchain();
+        let chain2 = blockchain();
+
+        let num_batches = 2usize;
+        let producer = BlockProducer::new(signing_key(), voting_key());
+        produce_macro_blocks_with_txns(&producer, &chain2, num_batches, 50, 0);
+        assert_eq!(
+            chain2.read().block_number(),
+            num_batches as u32 * policy::BLOCKS_PER_BATCH
+        );
+
+        let num_blocks = policy::BLOCKS_PER_BATCH + policy::BLOCKS_PER_BATCH / 2;
+        copy_chain_with_limit(&*chain2, &*chain1, num_blocks as usize);
+        assert_eq!(chain1.read().block_number(), num_blocks);
 
         let mut sync = HistorySync::<MockNetwork>::new(
             Arc::clone(&chain1),
