@@ -22,7 +22,7 @@ nimiq-primitives = { path = "../primitives", features = ["policy"] }
 
 [dev-dependencies]
 nimiq-test-log = { path = "../test-log" }
-tokio = { version = "1.16", features = [
+tokio = { version = "1.18", features = [
     "macros",
     "rt-multi-thread",
     "tracing",

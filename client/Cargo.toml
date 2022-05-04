@@ -20,7 +20,7 @@ maintenance = { status = "experimental" }
 [dependencies]
 futures = "0.3"
 log = { package = "tracing", version = "0.1", features = ["log"] }
-tokio = { version = "1.16", features = ["rt-multi-thread", "time", "tracing"] }
+tokio = { version = "1.18", features = ["rt-multi-thread", "time", "tracing"] }
 
 [dependencies.nimiq]
 package = "nimiq-lib"

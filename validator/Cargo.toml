@@ -20,7 +20,7 @@ linked-hash-map = "0.5.4"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
 rand = "0.8"
-tokio = { version = "1.16", features = ["rt", "time", "tracing"] }
+tokio = { version = "1.18", features = ["rt", "time", "tracing"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 
 beserial = { path = "../beserial" }
@@ -55,7 +55,7 @@ nimiq-vrf = { path = "../vrf" }
 
 [dev-dependencies]
 hex = "0.4"
-tokio = { version = "1.16", features = ["rt", "test-util", "time", "tracing"] }
+tokio = { version = "1.18", features = ["rt", "test-util", "time", "tracing"] }
 tracing-core = "0.1"
 tracing-subscriber = "0.3"
 
