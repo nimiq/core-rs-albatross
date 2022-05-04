@@ -28,7 +28,7 @@ parking_lot = { git = "https://github.com/styppo/parking_lot.git", optional = tr
 regex = { version = "1.5", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 strum_macros = "0.24"
-thiserror = { version = "1.0.20", optional = true }
+thiserror = { version = "1.0.31", optional = true }
 
 beserial = { path = "../beserial" }
 beserial_derive = { path = "../beserial/beserial_derive" }

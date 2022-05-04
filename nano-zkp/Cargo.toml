@@ -11,7 +11,7 @@ categories = ["cryptography::cryptocurrencies"]
 keywords = ["nimiq", "cryptocurrency", "blockchain"]
 
 [dependencies]
-thiserror = "1.0.23"
+thiserror = "1.0.31"
 rand = { version = "0.8", features = ["small_rng"] }
 
 ark-crypto-primitives = "0.3"
