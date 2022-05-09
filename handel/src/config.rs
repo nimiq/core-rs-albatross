@@ -19,9 +19,9 @@ impl Default for Config {
     fn default() -> Self {
         Config {
             update_count: 1,
-            update_interval: Duration::from_millis(200),
+            update_interval: Duration::from_millis(500),
             timeout: Duration::from_millis(400),
-            peer_count: 16,
+            peer_count: 2,
         }
     }
 }
