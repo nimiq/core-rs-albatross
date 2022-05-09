@@ -117,7 +117,7 @@ impl<N: ValidatorNetwork + 'static> BackgroundTask<N> {
 
         // Better or not, we need to check if it is actionable for tendermint, and if it is and
         // there is a current_aggregate sink present, we send it as well.
-        let mut lock = self.current_aggregate.write();
+        let lock = self.current_aggregate.read();
 
         // If there is a current ongoing aggregation it is retrieved
         let current_aggregation = match lock.as_ref() {
@@ -168,7 +168,6 @@ impl<N: ValidatorNetwork + 'static> BackgroundTask<N> {
                 .collect();
 
             // Send the result.
-            let current_aggregation = lock.take().unwrap();
             if let Err(err) = current_aggregation
                 .sender
                 .send(AggregationResult::Aggregation(result))

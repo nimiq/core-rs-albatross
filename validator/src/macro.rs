@@ -96,17 +96,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> ProduceMacroBlock<TValidator
             initial_round,
         );
 
-        let state_opt = state.map(|s| s.0).filter(|s| {
-            let up_to_date = s.height == block_height;
-            if !up_to_date {
-                log::info!(
-                    state_height = s.height,
-                    block_height,
-                    "got outdated persisted state, this should only happen on unclean restarts"
-                );
-            }
-            up_to_date
-        });
+        let state_opt = state.map(|s| s.0).filter(|s| s.height == block_height);
 
         // create the Tendermint instance, which implements Stream
 

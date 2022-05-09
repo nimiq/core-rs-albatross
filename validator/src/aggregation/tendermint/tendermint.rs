@@ -231,6 +231,8 @@ impl<N: ValidatorNetwork + 'static> HandelTendermintAdapter<N> {
                     }
 
                     debug!("Aggregations returned a NewRound({})", round);
+                    // clear out current_aggregation before returning a result
+                    self.current_aggregate.write().take();
                     return Ok(result);
                 }
 
@@ -253,7 +255,8 @@ impl<N: ValidatorNetwork + 'static> HandelTendermintAdapter<N> {
                                         TendermintError::AggregationError
                                     })?;
                             }
-                            // trace!("Tendermint: {}-{:?}: A proposal has > 2f+1", &round, &step);
+                            // clear out current_aggregation before returning a result
+                            self.current_aggregate.write().take();
                             return Ok(result);
                         }
 
@@ -277,11 +280,8 @@ impl<N: ValidatorNetwork + 'static> HandelTendermintAdapter<N> {
                                     TendermintError::AggregationError
                                 })?;
                         }
-                        // trace!(
-                        //     "Tendermint: {}-{:?}: All other proposals have > 2f + 1 votes",
-                        //     &round,
-                        //     &step
-                        // );
+                        // clear out current_aggregation before returning a result
+                        self.current_aggregate.write().take();
                         return Ok(result);
                     }
 
@@ -297,13 +297,13 @@ impl<N: ValidatorNetwork + 'static> HandelTendermintAdapter<N> {
                                     TendermintError::AggregationError
                                 })?;
                         }
-                        // trace!("Tendermint: {}-{:?}: Everybody signed", &round, &step);
+                        // clear out current_aggregation before returning a result
+                        self.current_aggregate.write().take();
                         return Ok(result);
                     }
                 }
             }
 
-            debug!("Tendermint: {}-{:?}: timeout triggered", &round, &step);
             // if the result is not immediately actionable wait for a new (and better) result to check again.
             // Only wait for a set period of time, if it elapses the current (best) result is returned (likely resulting in a subsequent Nil vote/commit).
             match time::timeout_at(deadline, aggregate_receiver.recv()).await {
@@ -320,6 +320,8 @@ impl<N: ValidatorNetwork + 'static> HandelTendermintAdapter<N> {
                                 TendermintError::AggregationError
                             })?;
                     }
+                    // clear out current_aggregation before returning a result
+                    self.current_aggregate.write().take();
                     return Ok(result);
                 }
             }
