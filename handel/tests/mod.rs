@@ -383,6 +383,9 @@ async fn it_can_aggregate() {
     drop(aggregation);
     net.disconnect();
 
+    // give the other aggregations time to complete themselves
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
     // after we have the final aggregate create a new instance and have it (without any other instances)
     // return a fully aggregated contribution and terminate.
     // Same as before
