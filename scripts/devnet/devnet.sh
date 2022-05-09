@@ -28,6 +28,7 @@ devnet_create="scripts/devnet/python/devnet_create.py"
 tpb=150
 vkill=1
 down_time=10
+batch_size=32
 trap cleanup_exit INT
 
 function cleanup_exit() {
@@ -117,6 +118,7 @@ OPTIONS:
    -R|--release    If you want to run in release mode
    -v|--validators The number of validators, as a minimum 4 validators are created
    -t|--time       Time in seconds that validators are taken down, by default 10s
+   -b|--batch      Blocks per batch to properly detect the best chain, by default 32
       --run-environment Sent to Loki, like "ci", "devnet", default: "unknown/devnet.sh"
 EOF
 }
@@ -166,6 +168,15 @@ while [ ! $# -eq 0 ]; do
                 shift
             else
                 echo '--kill requires a value'
+                exit 1
+            fi
+            ;;
+        -b | --batch)
+            if [ "$2" ]; then
+                batch_size=$2
+                shift
+            else
+                echo '--batch requires a value'
                 exit 1
             fi
             ;;
@@ -372,7 +383,7 @@ do
     for log in $logsdir/*.log; do
         bn=$({ grep "Accepted block" $log || test $? = 1; } | tail -1 | awk -F# '{print $2}' | cut -d : -f 1)
         if [ -z "$bn" ]; then
-            bns+=(0)
+            bns+=(0.0)
         else
             bns+=($bn)
         fi
@@ -384,7 +395,16 @@ do
     for bn in "${bns[@]}" ; do
         block_number=$(echo $bn | cut -d "." -f 1)
         view_number=$(echo $bn | cut -d "." -f 2)
-        if [ $block_number -gt $new_block_number ] || [ $view_number -gt $new_view_number ] ; then
+
+        # First we need to detect if the blocks being compared correspond to the same batch
+        batch_number1=$((block_number/$batch_size))
+        batch_number2=$((new_block_number/$batch_size))
+
+        # If they are in the same batch, the greatest view number wins
+        if [ $batch_number1 -eq $batch_number2 ] && [ $view_number -gt $new_view_number ] ; then
+            new_block_number=$block_number
+            new_view_number=$view_number
+        elif [ $block_number -gt $new_block_number ] ; then
             new_block_number=$block_number
             new_view_number=$view_number
         fi

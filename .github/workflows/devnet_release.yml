@@ -31,7 +31,7 @@ jobs:
           devnet_args: -s 500 -R
         - test: MacroBlockProduction
           pre: "sed -i 's/BLOCKS_PER_BATCH: u32 = 32;/BLOCKS_PER_BATCH: u32 = 2;/g' primitives/src/policy.rs"
-          devnet_args: -k 0 -s 150 -R
+          devnet_args: -k 0 -s 150 -R -b 2
         - test: Validators90sDown
           devnet_args: -s 500 -t 90 -R
         - test: LowViewChangeDelay
