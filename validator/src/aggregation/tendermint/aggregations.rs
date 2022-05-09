@@ -237,7 +237,10 @@ impl<N: ValidatorNetwork + 'static> Stream for TendermintAggregations<N> {
 
         // after that return whatever combined_aggregation_streams returns
         match self.combined_aggregation_streams.poll_next_unpin(cx) {
-            Poll::Pending => Poll::Pending,
+            Poll::Pending => {
+                store_waker!(self, waker, cx);
+                Poll::Pending
+            }
             Poll::Ready(None) => {
                 // In case the Selectisempty it will return Poll::Ready(None).
                 // Since the task will not be woken up by just adding a new stream to SelectAll
