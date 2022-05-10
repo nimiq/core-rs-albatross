@@ -267,16 +267,18 @@ impl<
     /// Send updates for every level to every peer accordingly.
     fn automatic_update(&mut self) {
         for level in self.levels.iter().skip(1) {
-            // Get the current best aggregate from store (no clone() needed as that already happens within the store)
-            // freeing the lock as soon as possible for the todo aggregating to continue.
-            let aggregate = {
-                let store = self.protocol.store();
-                let store = store.read();
-                store.combined(level.id - 1)
-            };
-            // For an existing aggregate for this level send it around to the respective peers.
-            if let Some(aggregate) = aggregate {
-                self.send_update(aggregate, level, self.config.update_count);
+            if level.active() {
+                // Get the current best aggregate from store (no clone() needed as that already happens within the store)
+                // freeing the lock as soon as possible for the todo aggregating to continue.
+                let aggregate = {
+                    let store = self.protocol.store();
+                    let store = store.read();
+                    store.combined(level.id - 1)
+                };
+                // For an existing aggregate for this level send it around to the respective peers.
+                if let Some(aggregate) = aggregate {
+                    self.send_update(aggregate, level, self.config.update_count);
+                }
             }
         }
     }
