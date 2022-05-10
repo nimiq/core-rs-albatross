@@ -45,10 +45,10 @@ pub trait PubsubId<PeerId>: Clone + Send + Sync {
 #[async_trait]
 pub trait Network: Send + Sync + 'static {
     type PeerId: Copy + Debug + Display + Eq + Hash + Send + Sync + Unpin + 'static;
-    type AddressType: Debug + Display;
+    type AddressType: Debug + Display + 'static;
     type Error: std::error::Error;
     type PubsubId: PubsubId<Self::PeerId>;
-    type RequestId: Debug + Copy + Clone + PartialEq + Eq + Send + Sync;
+    type RequestId: Copy + Debug + Display + Eq + Send + Sync + 'static;
 
     fn get_peers(&self) -> Vec<Self::PeerId>;
     fn has_peer(&self, peer_id: Self::PeerId) -> bool;

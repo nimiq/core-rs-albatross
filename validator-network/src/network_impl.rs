@@ -235,7 +235,9 @@ where
                 .then(move |(message, request_id, peer_id)| {
                     let network = Arc::clone(&network);
                     async move {
-                        let _ = network.respond::<Req>(request_id, ()).await;
+                        if let Err(error) = network.respond::<Req>(request_id, ()).await {
+                            log::error!(%request_id, %peer_id, %error, "error sending response");
+                        }
                         (message, peer_id)
                     }
                 }),
