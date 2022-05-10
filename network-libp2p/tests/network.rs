@@ -286,18 +286,6 @@ async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
         assert_peer_left(&close_event2, peer_id1);
         drop(events2);
 
-        // Verify that the networks lost a connection
-        assert_eq!(network1.get_peers().len(), n_peers - 2);
-        assert_eq!(network2.get_peers().len(), n_peers - 2);
-        assert_eq!(
-            network1.network_info().await.unwrap().num_peers(),
-            n_peers - 2
-        );
-        assert_eq!(
-            network2.network_info().await.unwrap().num_peers(),
-            n_peers - 2
-        );
-
         // Now reconnect the peer
         events1 = network1.subscribe_events();
         events2 = network2.subscribe_events();
