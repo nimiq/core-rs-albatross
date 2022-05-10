@@ -645,7 +645,8 @@ impl Network {
                                         %request_id,
                                         %peer_id,
                                         %type_id,
-                                        "Incoming request from peer"
+                                        message = &*base64::encode(&request),
+                                        "Incoming request from peer",
                                     );
                                     // Check if we have a receiver registered for this message type
                                     let sender = {
@@ -704,6 +705,7 @@ impl Network {
                                     error!(
                                         %request_id,
                                         %peer_id,
+                                        message = &*base64::encode(&request),
                                         "Could not parse request type",
                                     );
                                 }

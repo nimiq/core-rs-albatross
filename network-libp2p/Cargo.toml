@@ -18,6 +18,7 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 async-trait = "0.1"
+base64 = "0.13"
 bitflags = "1.2"
 bytes = "1.0"
 derive_more = "0.99"

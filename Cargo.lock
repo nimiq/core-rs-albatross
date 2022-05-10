@@ -3094,6 +3094,7 @@ name = "nimiq-network-libp2p"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "base64 0.13.0",
  "beserial",
  "beserial_derive",
  "bitflags",
