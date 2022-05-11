@@ -1,5 +1,3 @@
-pub mod crc;
-
 use std::io;
 
 use derive_more::{AsMut, AsRef, Display, From, Into};

@@ -48,10 +48,7 @@ nimiq-test-log = { path = "../test-log" }
 
 [features]
 crc = []
-otp = ["beserial", "clear_on_drop", "nimiq-hash", "rand"]
 key-store = ["beserial", "log", "thiserror"]
-iterators = []
-# locking = ["futures", "parking_lot"]
 merkle = [
     "beserial",
     "beserial_derive",
@@ -59,44 +56,27 @@ merkle = [
     "nimiq-collections/bitset",
     "nimiq-hash",
 ]
-mutable-once = []
 observer = ["log", "tokio"]
+otp = ["beserial", "clear_on_drop", "nimiq-hash", "rand"]
 time = ["atomic"]
-# timers = ["futures", "log", "parking_lot", "tokio"]
-unique-ptr = []
 tagged-signing = ["beserial", "beserial_derive", "hex"]
-throttled-queue = ["nimiq-collections"]
-rate-limit = []
-unique-id = []
+math = []
+key-rng = ["rand", "rand_core"]
+serde-derive = ["serde"]
+
 # Compiles this package with all features.
 all = [
-    "crc",
-    "iterators",
     "key-store",
     "math",
     "merkle",
-    "mutable-once",
     "observer",
     "otp",
-    "rate-limit",
-    "throttled-queue",
     "time",
-    "unique-id",
-    "unique-ptr",
 ]
 # Compiles this package with the features needed for the nimiq client.
 full-nimiq = [
-    "log",
-    "crc",
-    "iterators",
     "key-store",
     "merkle",
-    "mutable-once",
     "observer",
     "time",
-    "unique-ptr",
 ]
-math = []
-key-rng = ["rand", "rand_core"]
-hash-rng = ["nimiq-hash", "rand_core"]
-serde-derive = ["serde"]

@@ -31,7 +31,7 @@ nimiq-macros = { path = "../../macros" }
 nimiq-primitives = { path = "..", features = ["coin", "policy", "serde-derive", "slots"] }
 nimiq-transaction = { path = "../transaction", features = ["serde-derive"] }
 nimiq-trie = { path = "../trie" }
-nimiq-utils = { path = "../../utils", features = ["hash-rng"] }
+nimiq-utils = { path = "../../utils", features = ["key-rng"] }
 nimiq-vrf = { path = "../../vrf" }
 
 [dev-dependencies]

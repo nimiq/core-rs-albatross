@@ -44,13 +44,10 @@ nimiq-primitives = { path = "../primitives", features = ["policy"] }
 nimiq-subscription = { path = "../primitives/subscription" }
 nimiq-transaction = { path = "../primitives/transaction" }
 nimiq-utils = { path = "../utils", features = [
-    "time",
     "observer",
-    "mutable-once",
-    "throttled-queue",
-    "rate-limit",
-    "merkle",
     "math",
+    "merkle",
+    "time",
 ] }
 
 [dev-dependencies]

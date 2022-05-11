@@ -32,7 +32,7 @@ nimiq-hash_derive = { path = "../hash/hash_derive" }
 nimiq-keys = { path = "../keys" }
 nimiq-macros = { path = "../macros" }
 nimiq-primitives = { path = "../primitives", features = ["coin", "networks"] }
-nimiq-utils = { path = "../utils", features = ["observer", "crc", "time"] }
+nimiq-utils = { path = "../utils", features = ["observer", "time"] }
 
 [dev-dependencies]
 nimiq-test-log = { path = "../test-log" }

@@ -34,7 +34,7 @@ nimiq-keys = { path = "../keys" }
 nimiq-primitives = { path = "../primitives", features = ["coin", "networks"] }
 nimiq-network-interface = { path = "../network-interface" }
 nimiq-transaction = { path = "../primitives/transaction" }
-nimiq-utils = { path = "../utils", features = ["observer", "mutable-once"] }
+nimiq-utils = { path = "../utils", features = ["observer"] }
 
 [dev-dependencies]
 hex = "0.4"

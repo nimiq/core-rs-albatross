@@ -39,7 +39,7 @@ nimiq-peer-address = { path = "../peer-address" }
 nimiq-primitives = { path = "../primitives", features = ["coin", "networks"] }
 nimiq-transaction = { path = "../primitives/transaction" }
 nimiq-trie = { path = "../primitives/trie" }
-nimiq-utils = { path = "../utils", features = ["observer", "crc", "time"] }
+nimiq-utils = { path = "../utils", features = ["observer", "time"] }
 
 [build-dependencies]
 log = { package = "tracing", version = "0.1", features = ["log"] }

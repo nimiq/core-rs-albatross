@@ -46,9 +46,6 @@ nimiq-transaction-builder = { path = "../transaction-builder" }
 nimiq-utils = { path = "../utils", features = [
     "observer",
     "time",
-    "mutable-once",
-    "throttled-queue",
-    "rate-limit",
 ] }
 nimiq-validator-network = { path = "../validator-network" }
 nimiq-vrf = { path = "../vrf" }

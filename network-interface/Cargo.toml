@@ -35,7 +35,6 @@ log = { package = "tracing", version = "0.1", features = ["log"] }
 
 beserial = { path = "../beserial" }
 beserial_derive = { path = "../beserial/beserial_derive" }
-nimiq-utils = { path = "../utils", features = ["crc"] }
 
 [dev-dependencies]
 nimiq-test-log = { path = "../test-log" }
