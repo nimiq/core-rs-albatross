@@ -329,7 +329,10 @@ impl Transaction {
 
     pub fn is_valid_at(&self, block_height: u32) -> bool {
         let window = policy::TRANSACTION_VALIDITY_WINDOW;
-        block_height >= self.validity_start_height
+        block_height
+            >= self
+                .validity_start_height
+                .saturating_sub(policy::BLOCKS_PER_BATCH)
             && block_height < self.validity_start_height + window
     }
 
