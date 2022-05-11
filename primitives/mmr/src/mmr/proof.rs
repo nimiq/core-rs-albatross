@@ -23,9 +23,9 @@ impl<H: Merge> Proof<H> {
 }
 
 impl<H: Merge + Clone> Proof<H> {
-    /// `leaves` is a vector of tuples, where the first position is the index of the leaf
+    /// `leaves` is a slice of tuples, where the first position is the index of the leaf
     /// and the second position is the un-hashed item.
-    pub fn calculate_root<T>(&self, leaves: &[(usize, T)]) -> Result<H, Error>
+    pub fn calculate_root<T>(&self, leaves: &[(usize, &T)]) -> Result<H, Error>
     where
         T: Hash<H>,
     {
@@ -59,7 +59,7 @@ impl<H: Merge + Clone> Proof<H> {
         let mut proof_iter = self.nodes.iter();
 
         let mut peaks_hashes = vec![];
-        let mut prev_i = 0; // Index into the `leaves` Vec.
+        let mut prev_i = 0; // Index into the `leaves` slice.
         for peak in PeakIterator::new(self.mmr_size) {
             // Find all positions belonging to this peak.
             let peak_positions = &leaves[prev_i..];
@@ -161,7 +161,7 @@ impl<H: Merge + Clone> Proof<H> {
 
 impl<H: Merge + Clone + Eq> Proof<H> {
     /// Verifies a Merkle proof given the root of the MMR and the leaves that are to be proven.
-    pub fn verify<T>(&self, root: &H, leaves: &[(usize, T)]) -> Result<bool, Error>
+    pub fn verify<T>(&self, root: &H, leaves: &[(usize, &T)]) -> Result<bool, Error>
     where
         T: Hash<H>,
     {
@@ -185,9 +185,9 @@ pub struct RangeProof<H> {
 }
 
 impl<H: Merge + Clone> RangeProof<H> {
-    /// `leaves` is a vector of tuples, where the first position is the index of the leaf
+    /// `leaves` is a slice of tuples, where the first position is the index of the leaf
     /// and the second position is the un-hashed item.
-    pub fn calculate_root<T>(&self, leaves: &[(usize, T)]) -> Result<H, Error>
+    pub fn calculate_root<T>(&self, leaves: &[(usize, &T)]) -> Result<H, Error>
     where
         T: Hash<H>,
     {
@@ -198,11 +198,7 @@ impl<H: Merge + Clone> RangeProof<H> {
     }
 
     /// `leaf_index` is the number of leaves preceding this proof.
-    pub fn calculate_root_with_start<T>(
-        &self,
-        leaf_index: usize,
-        leaves: Vec<T>,
-    ) -> Result<H, Error>
+    pub fn calculate_root_with_start<T>(&self, leaf_index: usize, leaves: &[T]) -> Result<H, Error>
     where
         T: Hash<H>,
     {
@@ -215,11 +211,11 @@ impl<H: Merge + Clone> RangeProof<H> {
     }
 
     #[inline]
-    fn convert_leaves_with_start<T>(
+    fn convert_leaves_with_start<'a, T>(
         &self,
         leaf_index: usize,
-        leaves: Vec<T>,
-    ) -> Result<Vec<(usize, T)>, Error>
+        leaves: &'a [T],
+    ) -> Result<Vec<(usize, &'a T)>, Error>
     where
         T: Hash<H>,
     {
@@ -230,7 +226,7 @@ impl<H: Merge + Clone> RangeProof<H> {
         }
 
         Ok(leaves
-            .into_iter()
+            .iter()
             .enumerate()
             .map(|(i, t)| (leaf_index + i, t))
             .collect())
@@ -238,9 +234,9 @@ impl<H: Merge + Clone> RangeProof<H> {
 }
 
 impl<H: Merge + Clone + Eq> RangeProof<H> {
-    /// `leaves` is a vector of tuples, where the first position is the index
+    /// `leaves` is a slice of tuples, where the first position is the index
     /// and the second position is the un-hashed item.
-    pub fn verify<T>(&self, root: &H, leaves: &[(usize, T)]) -> Result<bool, Error>
+    pub fn verify<T>(&self, root: &H, leaves: &[(usize, &T)]) -> Result<bool, Error>
     where
         T: Hash<H>,
     {
@@ -255,7 +251,7 @@ impl<H: Merge + Clone + Eq> RangeProof<H> {
         &self,
         root: &H,
         leaf_index: usize,
-        leaves: Vec<T>,
+        leaves: &[T],
     ) -> Result<bool, Error>
     where
         T: Hash<H>,
@@ -314,7 +310,7 @@ mod tests {
                 );
             }
 
-            let tree_leaves: Vec<_> = to_prove.iter().map(|&i| (i, leaves[i])).collect();
+            let tree_leaves: Vec<_> = to_prove.iter().map(|&i| (i, &leaves[i])).collect();
             assert_eq!(
                 proof.verify(&mmr.get_root().unwrap(), &tree_leaves),
                 Ok(true)
@@ -463,19 +459,25 @@ mod tests {
          */
         let proof = mmr.prove(&[1], None).unwrap();
         // Proof for wrong position.
-        assert_eq!(proof.verify(&mmr.get_root().unwrap(), &[(0, 2)]), Ok(false));
+        assert_eq!(
+            proof.verify(&mmr.get_root().unwrap(), &[(0, &2)]),
+            Ok(false)
+        );
         // Proof for wrong value.
-        assert_eq!(proof.verify(&mmr.get_root().unwrap(), &[(1, 2)]), Ok(false));
+        assert_eq!(
+            proof.verify(&mmr.get_root().unwrap(), &[(1, &2)]),
+            Ok(false)
+        );
 
         // Proof for less values.
         assert_eq!(
-            proof.verify(&mmr.get_root().unwrap(), &[(0, 2), (1, 3)]),
+            proof.verify(&mmr.get_root().unwrap(), &[(0, &2), (1, &3)]),
             Err(Error::InvalidProof)
         );
 
         // Proof for non-leaves.
         assert_eq!(
-            proof.verify(&mmr.get_root().unwrap(), &[(2, 0)]),
+            proof.verify(&mmr.get_root().unwrap(), &[(2, &0)]),
             Err(Error::ProveInvalidLeaves)
         );
     }
@@ -516,7 +518,7 @@ mod tests {
                 );
             }
 
-            let tree_leaves: Vec<_> = to_prove.clone().map(|i| (i, leaves[i])).collect();
+            let tree_leaves: Vec<_> = to_prove.clone().map(|i| (i, &leaves[i])).collect();
             assert_eq!(
                 proof.verify(&mmr.get_root().unwrap(), &tree_leaves),
                 if assume_previous {
@@ -530,7 +532,7 @@ mod tests {
                 proof.verify_with_start(
                     &mmr.get_root().unwrap(),
                     *to_prove.start(),
-                    leaves[to_prove].to_vec()
+                    &leaves[to_prove],
                 ),
                 if assume_previous {
                     Err(Error::IncompleteProof)
@@ -721,35 +723,41 @@ mod tests {
          */
         let proof = mmr.prove_range(1..=1, Some(mmr.len()), false).unwrap();
         // Proof for wrong position.
-        assert_eq!(proof.verify(&mmr.get_root().unwrap(), &[(0, 2)]), Ok(false));
         assert_eq!(
-            proof.verify_with_start(&mmr.get_root().unwrap(), 0, vec![2]),
+            proof.verify(&mmr.get_root().unwrap(), &[(0, &2)]),
+            Ok(false)
+        );
+        assert_eq!(
+            proof.verify_with_start(&mmr.get_root().unwrap(), 0, &[2]),
             Ok(false)
         );
         // Proof for wrong value.
-        assert_eq!(proof.verify(&mmr.get_root().unwrap(), &[(1, 2)]), Ok(false));
         assert_eq!(
-            proof.verify_with_start(&mmr.get_root().unwrap(), 1, vec![2]),
+            proof.verify(&mmr.get_root().unwrap(), &[(1, &2)]),
+            Ok(false)
+        );
+        assert_eq!(
+            proof.verify_with_start(&mmr.get_root().unwrap(), 1, &[2]),
             Ok(false)
         );
 
         // Proof for less values.
         assert_eq!(
-            proof.verify(&mmr.get_root().unwrap(), &[(0, 2), (1, 3)]),
+            proof.verify(&mmr.get_root().unwrap(), &[(0, &2), (1, &3)]),
             Err(Error::InvalidProof)
         );
         assert_eq!(
-            proof.verify_with_start(&mmr.get_root().unwrap(), 0, vec![2, 3]),
+            proof.verify_with_start(&mmr.get_root().unwrap(), 0, &[2, 3]),
             Err(Error::InvalidProof)
         );
 
         // Proof for non-leaves.
         assert_eq!(
-            proof.verify(&mmr.get_root().unwrap(), &[(2, 0)]),
+            proof.verify(&mmr.get_root().unwrap(), &[(2, &0)]),
             Err(Error::ProveInvalidLeaves)
         );
         assert_eq!(
-            proof.verify_with_start(&mmr.get_root().unwrap(), 2, vec![0]),
+            proof.verify_with_start(&mmr.get_root().unwrap(), 2, &[0]),
             Err(Error::ProveInvalidLeaves)
         );
     }

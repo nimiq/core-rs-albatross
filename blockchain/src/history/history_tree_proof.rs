@@ -19,13 +19,12 @@ impl HistoryTreeProof {
     /// Verifies the Merkle proof. It will return None if the verification encounters an error.
     pub fn verify(&self, expected_root: Blake2bHash) -> Option<bool> {
         assert_eq!(self.history.len(), self.positions.len());
-
-        let mut zipped = vec![];
-
-        for i in 0..self.positions.len() {
-            zipped.push((self.positions[i], self.history[i].clone()));
-        }
-
+        let zipped: Vec<_> = self
+            .positions
+            .iter()
+            .copied()
+            .zip(self.history.iter())
+            .collect();
         self.proof.verify(&expected_root, &zipped).ok()
     }
 }

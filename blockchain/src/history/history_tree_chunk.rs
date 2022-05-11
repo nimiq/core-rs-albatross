@@ -36,9 +36,8 @@ impl Debug for HistoryTreeChunk {
 impl HistoryTreeChunk {
     /// Tries to verify
     pub fn verify(&self, expected_root: Blake2bHash, leaf_index: usize) -> Option<bool> {
-        // TODO: Modify MMR library so that we do not need to clone here.
         self.proof
-            .verify_with_start(&expected_root, leaf_index, self.history.clone())
+            .verify_with_start(&expected_root, leaf_index, &self.history)
             .ok()
     }
 }
