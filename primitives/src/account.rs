@@ -1,4 +1,4 @@
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryFrom;
 
 use strum_macros::Display;
 use thiserror::Error;
@@ -20,14 +20,6 @@ pub enum AccountType {
     StakingValidator = 4,
     StakingValidatorsStaker = 5,
     StakingStaker = 6,
-}
-
-impl AccountType {
-    #[deprecated]
-    /// Deprecated: Use `TryFrom`
-    pub fn from_int(x: u8) -> Option<AccountType> {
-        x.try_into().ok()
-    }
 }
 
 #[derive(Debug, Error)]

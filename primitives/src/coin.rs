@@ -44,26 +44,23 @@ impl Coin {
 
     #[inline]
     pub fn checked_add(self, rhs: Coin) -> Option<Coin> {
-        match self.0.checked_add(rhs.0) {
-            Some(val) => Coin::try_from(val).ok(),
-            None => None,
-        }
+        self.0
+            .checked_add(rhs.0)
+            .and_then(|val| Coin::try_from(val).ok())
     }
 
     #[inline]
     pub fn checked_sub(self, rhs: Coin) -> Option<Coin> {
-        match self.0.checked_sub(rhs.0) {
-            Some(val) => Coin::try_from(val).ok(),
-            None => None,
-        }
+        self.0
+            .checked_sub(rhs.0)
+            .and_then(|val| Coin::try_from(val).ok())
     }
 
     #[inline]
     pub fn checked_mul(self, times: u64) -> Option<Coin> {
-        match self.0.checked_mul(times) {
-            Some(val) => Coin::try_from(val).ok(),
-            None => None,
-        }
+        self.0
+            .checked_mul(times)
+            .and_then(|val| Coin::try_from(val).ok())
     }
 }
 
