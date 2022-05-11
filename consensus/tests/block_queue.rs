@@ -67,7 +67,12 @@ impl<N: Network> RequestComponent<N> for MockRequestComponent<N> {
         target_block_hash: Blake2bHash,
         locators: Vec<Blake2bHash>,
     ) {
-        self.tx.send((target_block_hash, locators)).ok(); // ignore error
+        if self.tx.send((target_block_hash, locators)).is_err() {
+            log::error!(
+                error = "receiver hung up",
+                "error requesting missing blocks",
+            );
+        }
     }
 
     fn put_peer_into_sync_mode(&mut self, _peer: N::PeerId) {

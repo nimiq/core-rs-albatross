@@ -414,7 +414,9 @@ impl Network {
                 if num_established == 0 {
                     connected_peers.write().remove(&peer_id);
                     swarm.behaviour_mut().remove_peer(peer_id);
-                    events_tx.send(NetworkEvent::PeerLeft(peer_id)).ok();
+                    if let Err(error) = events_tx.send(NetworkEvent::PeerLeft(peer_id)) {
+                        error!(%error, "could not send peer left event to channel");
+                    }
                 }
             }
 
@@ -461,7 +463,9 @@ impl Network {
                                                     records.pop().map(|r| r.record.value)
                                                 },
                                             );
-                                            output.send(result).ok();
+                                            if output.send(result).is_err() {
+                                                error!(query_id = ?id, error = "receiver hung up", "could not send get record query result to channel");
+                                            }
                                         } else {
                                             warn!(query_id = ?id, "GetRecord query result for unknown query ID");
                                         }
@@ -469,9 +473,12 @@ impl Network {
                                     QueryResult::PutRecord(result) => {
                                         // dht_put resolved
                                         if let Some(output) = state.dht_puts.remove(&id) {
-                                            output
+                                            if output
                                                 .send(result.map(|_| ()).map_err(Into::into))
-                                                .ok();
+                                                .is_err()
+                                            {
+                                                error!(query_id = ?id, error = "receiver hung up", "could not send put record query result to channel");
+                                            }
                                         } else {
                                             warn!(query_id = ?id, "PutRecord query result for unknown query ID");
                                         }
@@ -543,7 +550,7 @@ impl Network {
                             if let Some(topic_info) = state.gossip_topics.get_mut(&message.topic) {
                                 let (output, validate) = topic_info;
                                 if !&*validate {
-                                    swarm
+                                    if let Err(error) = swarm
                                         .behaviour_mut()
                                         .gossipsub
                                         .report_message_validation_result(
@@ -551,16 +558,18 @@ impl Network {
                                             &propagation_source,
                                             MessageAcceptance::Accept,
                                         )
-                                        .ok();
+                                    {
+                                        error!(%message_id, %error, "could not send message validation result to channel");
+                                    }
                                 }
 
                                 let topic = message.topic.clone();
-                                if let Err(e) =
+                                if let Err(error) =
                                     output.try_send((message, message_id, propagation_source))
                                 {
                                     error!(
                                         %topic,
-                                        error = %e,
+                                        %error,
                                         "Failed to dispatch gossipsub message",
                                     )
                                 }
@@ -622,7 +631,11 @@ impl Network {
                             ConnectionPoolEvent::PeerJoined { peer_id } => {
                                 if connected_peers.write().insert(peer_id) {
                                     info!(%peer_id, "Peer joined");
-                                    events_tx.send(NetworkEvent::PeerJoined(peer_id)).ok();
+                                    if let Err(error) =
+                                        events_tx.send(NetworkEvent::PeerJoined(peer_id))
+                                    {
+                                        error!(%peer_id, %error, "could not send peer joined event to channel");
+                                    }
                                 } else {
                                     error!(%peer_id, "Peer joined but it already exists");
                                 }
@@ -720,7 +733,9 @@ impl Network {
                                     "Incoming response from peer",
                                 );
                                 if let Some(channel) = state.requests.remove(&request_id) {
-                                    channel.send(Ok(response.into())).ok();
+                                    if channel.send(Ok(response.into())).is_err() {
+                                        error!(%request_id, %peer_id, error = "receiver hung up", "could not send response to channel");
+                                    }
                                 } else {
                                     error!(
                                         %request_id,
@@ -730,21 +745,24 @@ impl Network {
                             }
                         },
                         RequestResponseEvent::OutboundFailure {
-                            peer,
+                            peer: peer_id,
                             request_id,
                             error,
                         } => {
                             error!(
                                 %request_id,
-                                peer_id = %peer,
+                                %peer_id,
                                 %error,
                                 "Failed to send request to peer",
                             );
                             if let Some(channel) = state.requests.remove(&request_id) {
-                                channel.send(Err(Self::to_response_error(error))).ok();
+                                if channel.send(Err(Self::to_response_error(error))).is_err() {
+                                    error!(%request_id, %peer_id, error = "receiver hung up", "could not send outbound failure to channel");
+                                }
                             } else {
                                 error!(
                                     %request_id,
+                                    %peer_id,
                                     "No such request ID found"
                                 );
                             }
@@ -781,19 +799,25 @@ impl Network {
 
         match action {
             NetworkAction::Dial { peer_id, output } => {
-                output
+                if output
                     .send(
                         Swarm::dial(swarm, DialOpts::peer_id(peer_id).build()).map_err(Into::into),
                     )
-                    .ok();
+                    .is_err()
+                {
+                    error!(%peer_id, error = "receiver hung up", "could not send dial to channel");
+                }
             }
             NetworkAction::DialAddress { address, output } => {
-                output
+                if output
                     .send(
                         Swarm::dial(swarm, DialOpts::unknown_peer_id().address(address).build())
                             .map_err(Into::into),
                     )
-                    .ok();
+                    .is_err()
+                {
+                    error!(error = "receiver hung up", "could not send dial to channel");
+                }
             }
             NetworkAction::DhtGet { key, output } => {
                 let query_id = swarm
@@ -818,7 +842,12 @@ impl Network {
                         state.dht_puts.insert(query_id, output);
                     }
                     Err(e) => {
-                        output.send(Err(e.into())).ok();
+                        if output.send(Err(e.into())).is_err() {
+                            error!(
+                                error = "receiver hung up",
+                                "could not send dht put error to channel",
+                            );
+                        }
                     }
                 }
             }
@@ -842,26 +871,40 @@ impl Network {
                             .gossipsub
                             .set_topic_params(topic, TopicScoreParams::default())
                         {
-                            Ok(_) => output.send(Ok(rx)).ok(),
-                            Err(e) => output
-                                .send(Err(NetworkError::TopicScoreParams {
-                                    topic_name,
-                                    error: e,
-                                }))
-                                .ok(),
+                            Ok(_) => {
+                                if output.send(Ok(rx)).is_err() {
+                                    error!(%topic_name, error = "receiver hung up", "could not send subscribe result to channel");
+                                }
+                            }
+                            Err(e) => {
+                                if output
+                                    .send(Err(NetworkError::TopicScoreParams {
+                                        topic_name,
+                                        error: e,
+                                    }))
+                                    .is_err()
+                                {
+                                    error!(%topic_name, error = "receiver hung up", "could not send subscribe error to channel");
+                                }
+                            }
                         };
                     }
 
                     // Apparently we're already subscribed.
                     Ok(false) => {
-                        output
+                        if output
                             .send(Err(NetworkError::AlreadySubscribed { topic_name }))
-                            .ok();
+                            .is_err()
+                        {
+                            error!(%topic_name, error = "receiver hung up", "could not send subscribe already subscribed error to channel");
+                        }
                     }
 
                     // Subscribe failed. Send back error.
                     Err(e) => {
-                        output.send(Err(e.into())).ok();
+                        if output.send(Err(e.into())).is_err() {
+                            error!(%topic_name, error = "receiver hung up", "could not send subscribe error2 to channel");
+                        }
                     }
                 }
             }
@@ -873,29 +916,37 @@ impl Network {
                         // Unsubscription. Remove the topic from the subscription table.
                         Ok(true) => {
                             drop(state.gossip_topics.remove(&topic.hash()).unwrap().0);
-
-                            output.send(Ok(())).ok();
+                            if output.send(Ok(())).is_err() {
+                                error!(%topic_name, error = "receiver hung up", "could not send unsubscribe result to channel");
+                            }
                         }
 
                         // Apparently we're already unsubscribed.
                         Ok(false) => {
                             drop(state.gossip_topics.remove(&topic.hash()).unwrap().0);
-
-                            output
+                            if output
                                 .send(Err(NetworkError::AlreadyUnsubscribed { topic_name }))
-                                .ok();
+                                .is_err()
+                            {
+                                error!(%topic_name, error = "receiver hung up", "could not send unsubscribe already unsubscribed error to channel");
+                            }
                         }
 
                         // Unsubscribe failed. Send back error.
                         Err(e) => {
-                            output.send(Err(e.into())).ok();
+                            if output.send(Err(e.into())).is_err() {
+                                error!(%topic_name, error = "receiver hung up", "could not send unsubscribe error to channel");
+                            }
                         }
                     }
                 } else {
                     // If the topic wasn't in the topics list, we're not subscribed to it.
-                    output
+                    if output
                         .send(Err(NetworkError::AlreadyUnsubscribed { topic_name }))
-                        .ok();
+                        .is_err()
+                    {
+                        error!(%topic_name, error = "receiver hung up", "could not send unsubscribe already unsubscribed2 error to channel");
+                    }
                 }
             }
             NetworkAction::Publish {
@@ -905,7 +956,7 @@ impl Network {
             } => {
                 let topic = IdentTopic::new(topic_name);
 
-                output
+                if output
                     .send(
                         swarm
                             .behaviour_mut()
@@ -918,10 +969,18 @@ impl Network {
                             })
                             .map_err(Into::into),
                     )
-                    .ok();
+                    .is_err()
+                {
+                    error!(%topic_name, error = "receiver hung up", "could not send publish result to channel");
+                }
             }
             NetworkAction::NetworkInfo { output } => {
-                output.send(Swarm::network_info(swarm)).ok();
+                if output.send(Swarm::network_info(swarm)).is_err() {
+                    error!(
+                        error = "receiver hung up",
+                        "could not send network info result to channel",
+                    );
+                }
             }
             NetworkAction::ReceiveRequests { type_id, output } => {
                 state.receive_requests.insert(type_id, output);
@@ -944,7 +1003,9 @@ impl Network {
                     "Request was sent to peer",
                 );
                 state.requests.insert(request_id, response_channel);
-                output.send(request_id).ok();
+                if output.send(request_id).is_err() {
+                    error!(%peer_id, %request_type_id, error = "receiver hung up", "could not send send request result to channel");
+                }
             }
             NetworkAction::SendResponse {
                 request_id,
@@ -952,22 +1013,27 @@ impl Network {
                 output,
             } => {
                 if let Some(response_channel) = state.response_channels.remove(&request_id) {
-                    if let Err(e) = output.send(
-                        swarm
-                            .behaviour_mut()
-                            .request_response
-                            .send_response(response_channel, response)
-                            .map_err(NetworkError::ResponseChannelClosed),
-                    ) {
+                    if output
+                        .send(
+                            swarm
+                                .behaviour_mut()
+                                .request_response
+                                .send_response(response_channel, response)
+                                .map_err(NetworkError::ResponseChannelClosed),
+                        )
+                        .is_err()
+                    {
                         error!(
                             %request_id,
-                            error = ?e,
+                            error = "receiver hung up",
                             "Response was sent but the action channel was dropped",
                         );
                     };
                 } else {
                     error!(%request_id, "Tried to respond to a non existing request");
-                    output.send(Err(NetworkError::UnknownRequestId)).ok();
+                    if output.send(Err(NetworkError::UnknownRequestId)).is_err() {
+                        error!(%request_id, error = "receiver hung up", "could not send unknown request ID to channel");
+                    }
                 }
             }
             NetworkAction::ListenOn { listen_addresses } => {
@@ -998,21 +1064,25 @@ impl Network {
     }
 
     pub async fn listen_on(&self, listen_addresses: Vec<Multiaddr>) {
-        self.action_tx
+        if let Err(error) = self
+            .action_tx
             .clone()
             .send(NetworkAction::ListenOn { listen_addresses })
             .await
-            .map_err(|e| error!(error = %e, "Failed to send NetworkAction::ListenOnAddress"))
-            .ok();
+        {
+            error!(%error, "Failed to send NetworkAction::ListenOnAddress");
+        }
     }
 
     pub async fn start_connecting(&self) {
-        self.action_tx
+        if let Err(error) = self
+            .action_tx
             .clone()
             .send(NetworkAction::StartConnecting)
             .await
-            .map_err(|e| error!(error = %e, "Failed to send NetworkAction::StartConnecting"))
-            .ok();
+        {
+            error!(%error, "Failed to send NetworkAction::StartConnecting");
+        }
     }
 
     fn to_response_error(error: OutboundFailure) -> RequestError {
@@ -1055,10 +1125,13 @@ impl NetworkInterface for Network {
     }
 
     async fn disconnect_peer(&self, peer_id: PeerId, _close_reason: CloseReason) {
-        self.action_tx
+        if let Err(error) = self
+            .action_tx
             .send(NetworkAction::DisconnectPeer { peer_id })
             .await
-            .ok();
+        {
+            error!(%peer_id, %error, "could not send disconnect action to channel");
+        }
     }
 
     fn subscribe_events(&self) -> SubscribeEvents<PeerId> {
@@ -1143,7 +1216,7 @@ impl NetworkInterface for Network {
         self.validate_tx
             .send(ValidateMessage::new::<T>(pubsub_id, acceptance))
             .ok()
-            .expect("Failed to send reported message validation result");
+            .expect("Failed to send reported message validation result: receiver hung up");
     }
 
     async fn dht_get<K, V>(&self, k: &K) -> Result<Option<V>, Self::Error>

@@ -189,7 +189,8 @@ impl<N: Network> Consensus<N> {
         // Also stop any other checks.
         self.head_requests = None;
         self.head_requests_time = None;
-        self.events.send(ConsensusEvent::Established).ok();
+        // We don't care if anyone is listening.
+        let _ = self.events.send(ConsensusEvent::Established);
     }
 
     /// Calculates and sets established state, returns a ConsensusEvent if the state changed.
@@ -319,7 +320,9 @@ impl<N: Network> Future for Consensus<N> {
 
         // Check consensus established state on changes.
         if let Some(event) = self.check_established(None) {
-            self.events.send(event).ok(); // Ignore result.
+            if let Err(error) = self.events.send(event) {
+                error!(%error, "Could not send established event")
+            }
         }
 
         // 2. Poll any head requests if active.
@@ -335,7 +338,9 @@ impl<N: Network> Future for Consensus<N> {
 
                 // Update established state using the result.
                 if let Some(event) = self.check_established(Some(result)) {
-                    self.events.send(event).ok(); // Ignore result.
+                    if let Err(error) = self.events.send(event) {
+                        error!(%error, "Could not send established event after handling head requests");
+                    }
                 }
             }
         }
@@ -345,9 +350,9 @@ impl<N: Network> Future for Consensus<N> {
         // was potentially awoken by the delays waker, but even then all there is to do is set up a new timer such
         // that it will wake this task again after another time frame has elapsed. No interval was used as that
         // would periodically wake the task even though it might have just executed
-        let _ = self.next_execution_timer.take();
         let mut timer = Box::pin(tokio::time::sleep(Self::CONSENSUS_POLL_TIMER));
-        let _ = timer.poll_unpin(cx);
+        // If the sleep wasn't pending anymore, it didn't register us with the waker, but we need that.
+        assert!(timer.poll_unpin(cx) == Poll::Pending);
         self.next_execution_timer = Some(timer);
 
         // 4. Advance consensus and catch-up through head requests.

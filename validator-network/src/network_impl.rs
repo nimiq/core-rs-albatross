@@ -212,7 +212,9 @@ where
                 tokio::spawn({
                     let network = Arc::clone(&self.network);
                     async move{
-                    let _ = network.request::<Req>(msg.clone(), peer_id).await;
+                    if let Err(error) = network.request::<Req>(msg.clone(), peer_id).await {
+                        log::error!(%peer_id, %error, "could not send request");
+                    }
                 }});
                 Ok(())
             });

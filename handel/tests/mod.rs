@@ -182,7 +182,9 @@ impl<N: Network> SendingFuture<N> {
                 let network = Arc::clone(&self.network);
                 let msg = msg.clone();
                 async move {
-                    let _ = network.request::<M>(msg, peer_id).await;
+                    if let Err(error) = network.request::<M>(msg, peer_id).await {
+                        log::error!(%peer_id, %error, "error sending request");
+                    }
                 }
             });
         }

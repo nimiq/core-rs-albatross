@@ -144,7 +144,7 @@ fn micro_block_works_after_macro_block() {
 
     // apply an entire batch including macro block on view_number/round_number zero
     for _ in 0..policy::BLOCKS_PER_BATCH {
-        let _ = temp_producer.next_block(0, vec![]);
+        temp_producer.next_block(0, vec![]);
     }
     // make sure we are at the beginning of the batch and all block were applied
     assert_eq!(
@@ -176,7 +176,7 @@ fn micro_block_works_after_macro_block() {
 
     // apply the rest of the batch including macro block on view_number/round_number one
     for _ in 0..policy::BLOCKS_PER_BATCH - 1 {
-        let _ = temp_producer.next_block(2, vec![]);
+        temp_producer.next_block(2, vec![]);
     }
     // make sure we are at the beginning of the batch
     assert_eq!(
