@@ -1,12 +1,11 @@
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
-
-use atomic::{Atomic, Ordering};
 
 /// Time with fixed offset from wall-clock, in milliseconds
 #[derive(Debug, Default)]
 pub struct OffsetTime {
-    offset: Atomic<i64>,
+    offset: AtomicI64,
 }
 
 impl OffsetTime {
@@ -16,7 +15,7 @@ impl OffsetTime {
 
     pub fn with_offset(offset: i64) -> Self {
         OffsetTime {
-            offset: Atomic::new(offset),
+            offset: AtomicI64::new(offset),
         }
     }
 

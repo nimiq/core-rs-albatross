@@ -39,8 +39,6 @@ nimiq-utils = { path = "../utils", features = ["math", "observer", "time"] }
 nimiq-vrf = { path = "../vrf" }
 
 [dev-dependencies]
-atomic = "0.5"
-
 nimiq-block-production = { path = "../block-production", features = ["test-utils"] }
 nimiq-nano-primitives = { path= "../nano-primitives" }
 nimiq-test-log = { path = "../test-log" }

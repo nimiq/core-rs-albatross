@@ -2557,7 +2557,6 @@ dependencies = [
 name = "nimiq-blockchain"
 version = "0.1.0"
 dependencies = [
- "atomic",
  "beserial",
  "beserial_derive",
  "hex",
@@ -2687,7 +2686,6 @@ dependencies = [
 name = "nimiq-genesis"
 version = "0.1.0"
 dependencies = [
- "atomic",
  "beserial",
  "beserial_derive",
  "bitflags",
@@ -3146,7 +3144,6 @@ dependencies = [
 name = "nimiq-peer-address"
 version = "0.1.0"
 dependencies = [
- "atomic",
  "beserial",
  "beserial_derive",
  "bitflags",
@@ -3477,7 +3474,6 @@ dependencies = [
 name = "nimiq-utils"
 version = "0.1.0"
 dependencies = [
- "atomic",
  "beserial",
  "beserial_derive",
  "clear_on_drop",
