@@ -3,7 +3,7 @@ use futures::lock::Mutex;
 use futures::stream::BoxStream;
 use keyed_priority_queue::KeyedPriorityQueue;
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
-use std::cmp::Ordering;
+use std::cmp::{Ordering, Reverse};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -585,7 +585,7 @@ pub(crate) struct MempoolState {
 
     // Transactions ordered by validity_start_height (oldest to newest).
     // This ordering is used to evict expired transactions from the mempool.
-    pub(crate) oldest_transactions: KeyedPriorityQueue<Blake2bHash, u32>,
+    pub(crate) oldest_transactions: KeyedPriorityQueue<Blake2bHash, Reverse<u32>>,
 
     // The pending balance per sender.
     pub(crate) state_by_sender: HashMap<Address, SenderPendingState>,
@@ -647,7 +647,7 @@ impl MempoolState {
         self.tx_counter += 1;
 
         self.oldest_transactions
-            .push(tx_hash.clone(), tx.validity_start_height);
+            .push(tx_hash.clone(), Reverse(tx.validity_start_height));
 
         match self.state_by_sender.get_mut(&tx.sender) {
             None => {
