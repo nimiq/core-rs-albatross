@@ -22,7 +22,6 @@ hex = { version = "0.4", optional = true }
 itertools = { version = "0.10", optional = true }
 lazy_static = { version = "1.2", optional = true }
 log = { package = "tracing", version = "0.1", features = ["log"] }
-num-bigint = { version = "0.4.2", optional = true }
 num-traits = { version = "0.2", optional = true }
 parking_lot = { git = "https://github.com/styppo/parking_lot.git", optional = true }
 regex = { version = "1.5", optional = true }
@@ -45,6 +44,6 @@ account = ["hex", "thiserror"]
 all = ["account", "coin", "networks", "policy", "slots"]
 coin = ["hex", "lazy_static", "num-traits", "regex", "thiserror"]
 networks = ["thiserror"]
-policy = ["lazy_static", "num-bigint", "nimiq-keys", "num-traits", "parking_lot"]
+policy = ["lazy_static", "nimiq-keys", "num-traits", "parking_lot"]
 serde-derive = ["serde"]
 slots = ["beserial/bitvec", "itertools", "nimiq-bls", "nimiq-keys", "nimiq-utils", "policy"]
