@@ -82,7 +82,7 @@ jobs:
         verbose: true
 
   clippy:
-    if: github.event_name != "push" || github.event.pusher.name != "dependabot[bot]"
+    if: github.event_name != 'push' || github.event.pusher.name != 'dependabot[bot]'
     runs-on: ubuntu-20.04
 
     steps:
