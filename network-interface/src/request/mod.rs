@@ -77,11 +77,6 @@ pub enum InboundRequestError {
     Timeout = 4,
 }
 
-#[derive(
-    Copy, Clone, Debug, From, Into, AsRef, AsMut, Display, Hash, PartialEq, Eq, PartialOrd, Ord,
-)]
-pub struct RequestId(u64);
-
 pub trait Request:
     Serialize + Deserialize + Send + Sync + Unpin + std::fmt::Debug + 'static
 {
