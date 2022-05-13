@@ -8,7 +8,7 @@ use tokio::task::spawn_blocking;
 
 use nimiq_block::Block;
 use nimiq_blockchain::Blockchain;
-use nimiq_network_interface::prelude::{Network, NetworkEvent};
+use nimiq_network_interface::network::{Network, NetworkEvent};
 
 use crate::sync::history::cluster::{SyncCluster, SyncClusterResult};
 use crate::sync::history::sync::{HistorySyncReturn, Job};
@@ -245,7 +245,7 @@ mod tests {
 
     use nimiq_blockchain::{AbstractBlockchain, Blockchain};
     use nimiq_database::volatile::VolatileEnvironment;
-    use nimiq_network_interface::prelude::Network;
+    use nimiq_network_interface::network::Network;
     use nimiq_network_mock::{MockHub, MockNetwork};
     use nimiq_primitives::networks::NetworkId;
     use nimiq_primitives::policy;

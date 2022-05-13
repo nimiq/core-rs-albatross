@@ -1,5 +1,5 @@
 use ark_mnt6_753::G2Projective;
-use rayon::prelude::*;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 use nimiq_bls::utils::bytes_to_bits;
 use nimiq_primitives::policy::SLOTS;

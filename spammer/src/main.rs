@@ -9,9 +9,10 @@ use lazy_static::lazy_static;
 use log::info;
 #[cfg(feature = "metrics")]
 use prometheus::{IntGauge, Registry};
-use rand::distributions::WeightedIndex;
-use rand::prelude::*;
-use rand::thread_rng;
+use rand::{
+    distributions::{Distribution, WeightedIndex},
+    thread_rng, Rng,
+};
 
 use serde::Deserialize;
 

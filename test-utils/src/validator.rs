@@ -1,6 +1,5 @@
 use futures::{future, StreamExt};
-use rand::prelude::StdRng;
-use rand::SeedableRng;
+use rand::{rngs::StdRng, SeedableRng};
 use std::sync::Arc;
 use tokio_stream::wrappers::BroadcastStream;
 

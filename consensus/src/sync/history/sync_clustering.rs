@@ -5,7 +5,7 @@ use parking_lot::RwLock;
 
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_hash::Blake2bHash;
-use nimiq_network_interface::prelude::{CloseReason, Network, RequestError};
+use nimiq_network_interface::{network::Network, peer::CloseReason, request::RequestError};
 use nimiq_primitives::policy;
 
 use crate::messages::{MacroChain, RequestMacroChain};
@@ -535,7 +535,7 @@ mod tests {
     use nimiq_blockchain::Blockchain;
     use nimiq_database::volatile::VolatileEnvironment;
     use nimiq_hash::Blake2bHash;
-    use nimiq_network_interface::prelude::Network;
+    use nimiq_network_interface::network::Network;
     use nimiq_network_mock::{MockHub, MockNetwork, MockPeerId};
     use nimiq_primitives::networks::NetworkId;
     use nimiq_primitives::policy;

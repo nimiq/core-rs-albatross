@@ -10,8 +10,7 @@ use futures::{future::join_all, lock::Mutex, stream::BoxStream, StreamExt};
 use beserial::{Deserialize, Serialize};
 use nimiq_bls::{CompressedPublicKey, SecretKey};
 use nimiq_network_interface::{
-    network::{MsgAcceptance, Network, Topic},
-    prelude::NetworkEvent,
+    network::{MsgAcceptance, Network, NetworkEvent, Topic},
     request::Request,
 };
 

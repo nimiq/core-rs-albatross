@@ -6,7 +6,7 @@ use futures::StreamExt;
 use parking_lot::RwLock;
 
 use nimiq_blockchain::Blockchain;
-use nimiq_network_interface::prelude::{Network, Request};
+use nimiq_network_interface::{network::Network, request::Request};
 
 use crate::messages::handlers::Handle;
 use crate::messages::{

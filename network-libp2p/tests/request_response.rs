@@ -12,8 +12,8 @@ use rand::{thread_rng, Rng};
 use beserial::{Deserialize, Serialize};
 use beserial_derive::{Deserialize, Serialize};
 use nimiq_network_interface::{
-    network::Network as NetworkInterface,
-    prelude::{InboundRequestError, NetworkEvent, OutboundRequestError, Request, RequestError},
+    network::{Network as NetworkInterface, NetworkEvent},
+    request::{InboundRequestError, OutboundRequestError, Request, RequestError},
 };
 use nimiq_network_libp2p::{
     discovery::{

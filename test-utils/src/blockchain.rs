@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use parking_lot::RwLock;
-use rand::{prelude::StdRng, RngCore, SeedableRng};
+use rand::{rngs::StdRng, RngCore, SeedableRng};
 
 use beserial::Deserialize;
 use nimiq_block::{

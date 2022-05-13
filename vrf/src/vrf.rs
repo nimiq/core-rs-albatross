@@ -4,14 +4,13 @@ use std::fmt;
 use std::hash::Hash;
 use std::io::Write;
 
-use log::debug;
-
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use curve25519_dalek::constants;
 use curve25519_dalek::edwards::{CompressedEdwardsY, EdwardsPoint};
 use curve25519_dalek::scalar::Scalar;
 use curve25519_dalek::traits::IsIdentity;
-use rand::prelude::*;
+use log::debug;
+use rand::RngCore;
 #[cfg(feature = "serde-derive")]
 use serde_big_array::BigArray;
 use sha2::{Digest, Sha256, Sha512};

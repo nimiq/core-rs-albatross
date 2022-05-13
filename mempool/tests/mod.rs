@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use parking_lot::RwLock;
-use rand::prelude::StdRng;
+use rand::rngs::StdRng;
 use rand::SeedableRng;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;

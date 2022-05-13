@@ -10,7 +10,7 @@ use nimiq_block::Block;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{
     network::{Network, NetworkEvent, SubscribeEvents},
-    prelude::RequestError,
+    request::RequestError,
 };
 
 use crate::messages::RequestMissingBlocks;

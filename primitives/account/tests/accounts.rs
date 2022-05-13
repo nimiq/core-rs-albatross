@@ -1,5 +1,4 @@
-use rand::prelude::StdRng;
-use rand::SeedableRng;
+use rand::{rngs::StdRng, SeedableRng};
 use std::convert::TryFrom;
 use std::time::Instant;
 use tempfile::tempdir;

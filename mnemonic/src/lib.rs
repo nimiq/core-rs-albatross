@@ -6,11 +6,7 @@ use std::fmt;
 use std::str;
 use std::str::FromStr;
 
-use bitvec::{
-    field::BitField,
-    prelude::{BitSlice, BitVec, Msb0},
-    view::BitView,
-};
+use bitvec::{field::BitField, order::Msb0, slice::BitSlice, vec::BitVec, view::BitView};
 use unicode_normalization::UnicodeNormalization;
 
 use hash::pbkdf2::{compute_pbkdf2_sha512, Pbkdf2Error};

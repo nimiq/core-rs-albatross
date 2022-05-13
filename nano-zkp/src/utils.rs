@@ -8,9 +8,7 @@ use ark_r1cs_std::prelude::{Boolean, ToBitsGadget};
 use ark_relations::r1cs::SynthesisError;
 use ark_std::ops::MulAssign;
 use ark_std::UniformRand;
-use rand::prelude::SliceRandom;
-use rand::rngs::SmallRng;
-use rand::{RngCore, SeedableRng};
+use rand::{rngs::SmallRng, seq::SliceRandom, RngCore, SeedableRng};
 
 use nimiq_nano_primitives::{pk_tree_construct, state_commitment, MacroBlock};
 use nimiq_primitives::policy::{BLOCKS_PER_EPOCH, SLOTS, TWO_F_PLUS_ONE};

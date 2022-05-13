@@ -1,8 +1,4 @@
-use bitvec::{
-    field::BitField,
-    prelude::{BitSlice, BitVec, Msb0},
-    view::BitView,
-};
+use bitvec::{field::BitField, order::Msb0, slice::BitSlice, vec::BitVec, view::BitView};
 use num_traits::{FromPrimitive, ToPrimitive};
 
 use crate::{
@@ -101,8 +97,6 @@ impl DeserializeWithLength for BitVec<u8, Msb0> {
 
 #[cfg(test)]
 mod tests {
-    use bitvec::prelude::Msb0;
-
     use super::*;
 
     fn reserialize(bits: &BitSlice<u8, Msb0>, raw: &[u8]) {

@@ -13,7 +13,7 @@ use nimiq_blockchain::{
     AbstractBlockchain, Blockchain, ExtendedTransaction, PushError, PushResult, CHUNK_SIZE,
 };
 use nimiq_hash::Blake2bHash;
-use nimiq_network_interface::prelude::{Network, RequestError};
+use nimiq_network_interface::{network::Network, request::RequestError};
 use nimiq_primitives::policy;
 use nimiq_utils::math::CeilingDiv;
 
