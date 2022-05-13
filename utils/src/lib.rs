@@ -1,7 +1,3 @@
-#[cfg(feature = "beserial_derive")]
-#[macro_use]
-extern crate beserial_derive;
-
 #[cfg(feature = "crc")]
 pub mod crc;
 #[cfg(feature = "key-store")]

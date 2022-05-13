@@ -1,8 +1,8 @@
 use beserial::{Serialize, SerializingError, WriteBytesExt};
-use hash::{Blake2bHash, Sha256Hash};
-use keys::KeyPair;
-use transaction::account::htlc_contract::{AnyHash, HashAlgorithm, ProofType};
-use transaction::{SignatureProof, Transaction};
+use nimiq_hash::{Blake2bHash, Sha256Hash};
+use nimiq_keys::KeyPair;
+use nimiq_transaction::account::htlc_contract::{AnyHash, HashAlgorithm, ProofType};
+use nimiq_transaction::{SignatureProof, Transaction};
 
 /// The `HtlcProof` represents a serializable form of all possible proof types
 /// for a transaction from a HTLC contract.

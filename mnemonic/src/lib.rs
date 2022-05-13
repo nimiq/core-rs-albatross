@@ -1,7 +1,3 @@
-extern crate nimiq_hash as hash;
-extern crate nimiq_macros as macros;
-extern crate nimiq_utils as utils;
-
 use std::fmt;
 use std::str;
 use std::str::FromStr;
@@ -9,10 +5,10 @@ use std::str::FromStr;
 use bitvec::{field::BitField, order::Msb0, slice::BitSlice, vec::BitVec, view::BitView};
 use unicode_normalization::UnicodeNormalization;
 
-use hash::pbkdf2::{compute_pbkdf2_sha512, Pbkdf2Error};
-use hash::{HashOutput, Hasher, Sha256Hasher};
-use macros::{add_hex_io_fns_typed_arr, create_typed_array};
-use utils::crc::Crc8Computer;
+use nimiq_hash::pbkdf2::{compute_pbkdf2_sha512, Pbkdf2Error};
+use nimiq_hash::{HashOutput, Hasher, Sha256Hasher};
+use nimiq_macros::{add_hex_io_fns_typed_arr, create_typed_array};
+use nimiq_utils::crc::Crc8Computer;
 
 #[cfg(feature = "key-derivation")]
 pub mod key_derivation;

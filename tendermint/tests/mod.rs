@@ -1,6 +1,3 @@
-#[macro_use]
-extern crate beserial_derive;
-
 use async_trait::async_trait;
 use beserial::{Deserialize, Serialize};
 use futures::{FutureExt, StreamExt};

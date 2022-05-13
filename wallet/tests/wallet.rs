@@ -1,16 +1,11 @@
-extern crate beserial;
-extern crate nimiq_keys as keys;
-extern crate nimiq_primitives as primitives;
-extern crate nimiq_wallet as wallet;
-
 use lazy_static::lazy_static;
 
 use beserial::{Deserialize, Serialize};
-use keys::{Address, KeyPair, PrivateKey};
+use nimiq_keys::{Address, KeyPair, PrivateKey};
+use nimiq_primitives::coin::Coin;
+use nimiq_primitives::networks::NetworkId;
 use nimiq_test_log::test;
-use primitives::coin::Coin;
-use primitives::networks::NetworkId;
-use wallet::WalletAccount;
+use nimiq_wallet::WalletAccount;
 
 lazy_static! {
     /// This is an example for using doc comment attributes

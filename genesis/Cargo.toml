@@ -23,8 +23,7 @@ hex = "0.4"
 lazy_static = "1.2"
 url = "2.2"
 
-beserial = { path = "../beserial", features = ["net"] }
-beserial_derive = { path = "../beserial/beserial_derive" }
+beserial = { path = "../beserial", features = ["derive", "net"] }
 nimiq-account = { path = "../primitives/account" }
 nimiq-block = { path = "../primitives/block" }
 nimiq-bls = { path = "../bls" }

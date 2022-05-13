@@ -23,6 +23,7 @@ use nimiq_handel::{
     aggregation::Aggregation, config::Config, contribution::AggregatableContribution,
     identity::WeightRegistry, update::LevelUpdate,
 };
+use nimiq_macros::store_waker;
 use nimiq_primitives::policy;
 use nimiq_validator_network::ValidatorNetwork;
 

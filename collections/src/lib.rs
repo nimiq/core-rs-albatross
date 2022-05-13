@@ -1,7 +1,4 @@
 #[cfg(feature = "bitset")]
-extern crate beserial;
-
-#[cfg(feature = "bitset")]
 pub use self::bitset::BitSet;
 pub use self::limit_hash_set::LimitHashSet;
 pub use self::linked_list::LinkedList;

@@ -3,8 +3,11 @@ use std::hash::BuildHasher;
 use std::ops::Deref;
 use std::sync::Arc;
 
+#[cfg(feature = "derive")]
+pub use beserial_derive::{Deserialize, Serialize};
 pub use byteorder::{BigEndian, ByteOrder, ReadBytesExt, WriteBytesExt};
 pub use num_traits::{FromPrimitive, ToPrimitive};
+
 use thiserror::Error;
 
 pub use crate::types::uvar;

@@ -28,8 +28,7 @@ thiserror = "1.0"
 tokio = { version = "1.18", features = ["full"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 
-beserial = { path = "../beserial" }
-beserial_derive = { path = "../beserial/beserial_derive" }
+beserial = { path = "../beserial", features = ["derive"] }
 nimiq-block = { path = "../primitives/block" }
 nimiq-blockchain = { path = "../blockchain" }
 nimiq-collections = { path = "../collections" }

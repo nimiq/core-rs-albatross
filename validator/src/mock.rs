@@ -2,11 +2,11 @@ use failure::_core::pin::Pin;
 use futures::task::{Context, Poll};
 use futures::Future;
 
-use block::{MacroBlock, SignedViewChange, ViewChangeProof};
-use network::Network;
-use network_interface::network::Network as NetworkInterface;
+use nimiq_block::{MacroBlock, SignedViewChange, ViewChangeProof};
+use nimiq_network::Network;
+use nimiq_network_interface::network::Network as NetworkInterface;
 use nimiq_network_mock::MockNetwork;
-use primitives::slot::ValidatorSlots;
+use nimiq_primitives::slot::ValidatorSlots;
 
 pub trait ValidatorNetwork: NetworkInterface {}
 impl ValidatorNetwork for Network {}

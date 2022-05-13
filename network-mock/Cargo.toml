@@ -33,8 +33,7 @@ tokio = { version = "1.18", features = [
 ] }
 tokio-stream = "0.1"
 
-beserial = { path = "../beserial" }
-beserial_derive = { path = "../beserial/beserial_derive" }
+beserial = { path = "../beserial", features = ["derive"] }
 nimiq-network-interface = { path = "../network-interface" }
 
 [dev-dependencies]

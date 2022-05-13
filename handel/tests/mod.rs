@@ -1,6 +1,3 @@
-#[macro_use]
-extern crate beserial_derive;
-
 use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::Arc;

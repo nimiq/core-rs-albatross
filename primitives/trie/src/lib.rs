@@ -1,6 +1,3 @@
-#[macro_use]
-extern crate beserial_derive;
-
 pub mod error;
 pub mod key_nibbles;
 pub mod trie;

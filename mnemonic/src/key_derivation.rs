@@ -1,4 +1,4 @@
-use hash::pbkdf2::Pbkdf2Error;
+use nimiq_hash::pbkdf2::Pbkdf2Error;
 use nimiq_key_derivation::ExtendedPrivateKey;
 
 use crate::Mnemonic;

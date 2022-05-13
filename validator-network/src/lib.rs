@@ -1,6 +1,3 @@
-#[macro_use]
-extern crate beserial_derive;
-
 pub mod error;
 pub mod network_impl;
 pub mod validator_record;

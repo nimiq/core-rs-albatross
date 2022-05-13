@@ -1,10 +1,13 @@
 use core::pin::Pin;
 use core::task::{Context, Poll};
 use std::collections::HashSet;
+use std::fmt;
 use std::sync::Arc;
 use std::task::Waker;
 
 use futures::stream::{BoxStream, Stream, StreamExt};
+
+use nimiq_macros::store_waker;
 
 use crate::contribution::AggregatableContribution;
 use crate::evaluator::Evaluator;
@@ -19,8 +22,8 @@ pub(crate) struct TodoItem<C: AggregatableContribution> {
     pub level: usize,
 }
 
-impl<C: AggregatableContribution> std::fmt::Debug for TodoItem<C> {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl<C: AggregatableContribution> fmt::Debug for TodoItem<C> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut dbg = f.debug_struct("TodoItem");
         dbg.field("level", &self.level);
         dbg.field("signers", &self.contribution.contributors());

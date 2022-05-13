@@ -1,14 +1,14 @@
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
-use handel::update::LevelUpdateMessage;
-use hash::Blake2sHash;
-use nimiq_validator_network::ValidatorNetwork;
 use tokio::sync::mpsc;
 
 use nimiq_block::{MultiSignature, TendermintIdentifier, TendermintStep};
 use nimiq_handel::update::LevelUpdate;
+use nimiq_handel::update::LevelUpdateMessage;
+use nimiq_hash::Blake2sHash;
 use nimiq_tendermint::AggregationResult;
+use nimiq_validator_network::ValidatorNetwork;
 
 use crate::aggregation::network_sink::NetworkSink;
 

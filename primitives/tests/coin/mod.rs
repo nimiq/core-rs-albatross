@@ -4,8 +4,8 @@ use std::str::FromStr;
 use lazy_static::lazy_static;
 
 use beserial::{Deserialize, Serialize, SerializingError};
+use nimiq_primitives::coin::Coin;
 use nimiq_test_log::test;
-use primitives::coin::Coin;
 
 struct NonFailingTest {
     data: &'static str,

@@ -24,6 +24,7 @@ use libp2p::{
 use parking_lot::RwLock;
 use tokio::time::Interval;
 
+use nimiq_macros::store_waker;
 use nimiq_utils::time::OffsetTime;
 
 use crate::{

@@ -1,4 +1,5 @@
 use beserial::{Deserialize, Serialize};
+use bitflags::bitflags;
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 #[repr(u8)]

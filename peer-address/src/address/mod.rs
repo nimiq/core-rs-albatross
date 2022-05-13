@@ -1,5 +1,6 @@
 use nimiq_hash::{Blake2bHash, Blake2bHasher, Hasher};
 use nimiq_keys::PublicKey;
+use nimiq_macros::{add_hex_io_fns_typed_arr, create_typed_array};
 
 pub use self::net_address::*;
 pub use self::peer_address::*;

@@ -10,7 +10,7 @@ use beserial::{
     Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
     SerializingError, WriteBytesExt,
 };
-use keys::{PublicKey, Signature};
+use nimiq_keys::{PublicKey, Signature};
 
 use crate::address::{NetAddress, PeerId, PeerUri};
 use crate::protocol::Protocol;

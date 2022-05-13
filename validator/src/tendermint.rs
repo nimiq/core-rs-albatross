@@ -11,26 +11,26 @@ use futures::{
 use nimiq_primitives::policy;
 use parking_lot::RwLock;
 
-use block::{
+use nimiq_block::{
     Block, BlockHeader, MacroBlock, MacroBody, MacroHeader, MultiSignature,
     SignedTendermintProposal, TendermintProof, TendermintProposal,
 };
-use block_production::BlockProducer;
-use blockchain::{AbstractBlockchain, Blockchain};
-use bls::PublicKey;
-use hash::{Blake2bHash, Blake2sHash, Hash};
+use nimiq_block_production::BlockProducer;
+use nimiq_blockchain::{AbstractBlockchain, Blockchain};
+use nimiq_bls::PublicKey;
+use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_network_interface::network::MsgAcceptance;
-use nimiq_validator_network::ValidatorNetwork;
-use primitives::{
+use nimiq_primitives::{
     policy::{TENDERMINT_TIMEOUT_DELTA, TENDERMINT_TIMEOUT_INIT},
     slots::Validators,
 };
-use tendermint_protocol::{
+use nimiq_tendermint::{
     AggregationResult, ProposalResult, Step, TendermintError, TendermintOutsideDeps,
     TendermintState,
 };
-use utils::time::OffsetTime;
-use vrf::VrfSeed;
+use nimiq_utils::time::OffsetTime;
+use nimiq_validator_network::ValidatorNetwork;
+use nimiq_vrf::VrfSeed;
 
 use crate::aggregation::tendermint::HandelTendermintAdapter;
 use crate::validator::ProposalTopic;

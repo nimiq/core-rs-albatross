@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use collections::bitset::BitSet;
+use nimiq_collections::bitset::BitSet;
 
 #[derive(Clone, Debug, Error)]
 pub enum ContributionError {

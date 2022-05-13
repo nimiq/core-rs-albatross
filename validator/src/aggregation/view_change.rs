@@ -10,22 +10,22 @@ use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use beserial::{Deserialize, Serialize};
-use block::{Message, MultiSignature, SignedViewChange, ViewChange, ViewChangeProof};
-use bls::AggregatePublicKey;
-use collections::BitSet;
-use handel::aggregation::Aggregation;
-use handel::config::Config;
-use handel::contribution::{AggregatableContribution, ContributionError};
-use handel::evaluator::WeightedVote;
-use handel::identity::WeightRegistry;
-use handel::partitioner::BinomialPartitioner;
-use handel::protocol::Protocol;
-use handel::store::ReplaceStore;
-use handel::update::{LevelUpdate, LevelUpdateMessage};
-use hash::Blake2sHash;
+use nimiq_block::{Message, MultiSignature, SignedViewChange, ViewChange, ViewChangeProof};
+use nimiq_bls::{AggregatePublicKey, AggregateSignature, KeyPair};
+use nimiq_collections::BitSet;
+use nimiq_handel::aggregation::Aggregation;
+use nimiq_handel::config::Config;
+use nimiq_handel::contribution::{AggregatableContribution, ContributionError};
+use nimiq_handel::evaluator::WeightedVote;
+use nimiq_handel::identity::WeightRegistry;
+use nimiq_handel::partitioner::BinomialPartitioner;
+use nimiq_handel::protocol::Protocol;
+use nimiq_handel::store::ReplaceStore;
+use nimiq_handel::update::{LevelUpdate, LevelUpdateMessage};
+use nimiq_hash::Blake2sHash;
+use nimiq_primitives::policy;
+use nimiq_primitives::slots::Validators;
 use nimiq_validator_network::ValidatorNetwork;
-use primitives::policy;
-use primitives::slots::Validators;
 
 use super::network_sink::NetworkSink;
 use super::registry::ValidatorRegistry;
@@ -206,7 +206,7 @@ impl ViewChangeAggregation {
     pub async fn start<N: ValidatorNetwork + 'static>(
         mut view_change: ViewChange,
         mut previous_proof: Option<MultiSignature>,
-        voting_key: bls::KeyPair,
+        voting_key: KeyPair,
         // TODO: This seems to be a SlotBand. Change this to a proper Validator ID.
         validator_id: u16,
         active_validators: Validators,
@@ -234,7 +234,7 @@ impl ViewChangeAggregation {
                 validator_id,
             );
 
-            let signature = bls::AggregateSignature::from_signatures(&[signed_view_change
+            let signature = AggregateSignature::from_signatures(&[signed_view_change
                 .signature
                 .multiply(slots.len() as u16)]);
 

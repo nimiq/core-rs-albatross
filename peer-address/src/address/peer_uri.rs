@@ -5,7 +5,7 @@ use hex::FromHex;
 use thiserror::Error;
 use url::Url;
 
-use keys::PublicKey;
+use nimiq_keys::PublicKey;
 
 use crate::address::{NetAddress, PeerAddress, PeerAddressType, PeerId};
 use crate::protocol::Protocol;
@@ -38,7 +38,7 @@ pub enum PeerUriError {
     #[error("Invalid peer ID")]
     InvalidPeerId,
     #[error("Invalid public key {0}")]
-    InvalidPublicKey(#[from] keys::ParseError),
+    InvalidPublicKey(#[from] nimiq_keys::ParseError),
     #[error("Seed node is missing the public key")]
     SeedNodeMissingPublicKey,
     #[error("The only allowed protocols for seed nodes are Wss and Ws")]

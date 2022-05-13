@@ -8,7 +8,7 @@ use std::str::FromStr;
 use hex::FromHex;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
-use hash::{Hash, SerializeContent};
+use nimiq_hash::{Hash, SerializeContent};
 
 use crate::errors::{KeysError, ParseError};
 use crate::{PrivateKey, Signature};

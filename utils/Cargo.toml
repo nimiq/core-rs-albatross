@@ -33,14 +33,12 @@ tokio = { package = "tokio", version = "1.18", features = [
 ], optional = true }
 tokio-stream = "0.1"
 
-beserial = { path = "../beserial", optional = true }
-beserial_derive = { path = "../beserial/beserial_derive", optional = true }
+beserial = { path = "../beserial", features = ["derive"], optional = true }
 nimiq-collections = { path = "../collections", optional = true }
 nimiq-database = { path = "../database" }
 nimiq-hash = { path = "../hash", optional = true }
 
 [dev-dependencies]
-beserial_derive = { path = "../beserial/beserial_derive" }
 nimiq-keys = { path = "../keys" }
 nimiq-test-log = { path = "../test-log" }
 
@@ -49,7 +47,6 @@ crc = []
 key-store = ["beserial", "log", "thiserror"]
 merkle = [
     "beserial",
-    "beserial_derive",
     "math",
     "nimiq-collections/bitset",
     "nimiq-hash",
@@ -57,7 +54,7 @@ merkle = [
 observer = ["log", "tokio"]
 otp = ["beserial", "clear_on_drop", "nimiq-hash", "rand"]
 time = []
-tagged-signing = ["beserial", "beserial_derive", "hex"]
+tagged-signing = ["beserial", "hex"]
 math = []
 key-rng = ["rand", "rand_core"]
 serde-derive = ["serde"]

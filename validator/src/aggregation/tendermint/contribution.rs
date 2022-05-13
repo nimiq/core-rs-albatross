@@ -1,11 +1,11 @@
 use std::collections::BTreeMap;
 
 use beserial::{Deserialize, Serialize};
-use hash::Blake2sHash;
 use nimiq_block::{MultiSignature, TendermintVote};
 use nimiq_bls::{AggregateSignature, SecretKey};
 use nimiq_collections::bitset::BitSet;
 use nimiq_handel::contribution::{AggregatableContribution, ContributionError};
+use nimiq_hash::Blake2sHash;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct TendermintContribution {

@@ -1,7 +1,5 @@
 #![recursion_limit = "128"]
 
-extern crate proc_macro;
-
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, DeriveInput};

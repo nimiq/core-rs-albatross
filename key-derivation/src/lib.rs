@@ -1,16 +1,13 @@
-extern crate nimiq_hash as hash;
-extern crate nimiq_keys as keys;
-
 use std::borrow::Cow;
 
 use byteorder::{BigEndian, WriteBytesExt};
 use regex::Regex;
 
 use beserial::Serialize;
-use hash::hmac::*;
-use hash::Sha512Hash;
-use keys::Address;
-use keys::{PrivateKey, PublicKey};
+use nimiq_hash::hmac::*;
+use nimiq_hash::Sha512Hash;
+use nimiq_keys::Address;
+use nimiq_keys::{PrivateKey, PublicKey};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ExtendedPrivateKey {

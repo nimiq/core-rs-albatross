@@ -1,4 +1,4 @@
-use primitives::account::AccountType;
+use nimiq_primitives::account::AccountType;
 
 use crate::account::basic_account::BasicAccountVerifier;
 use crate::account::htlc_contract::HashedTimeLockedContractVerifier;

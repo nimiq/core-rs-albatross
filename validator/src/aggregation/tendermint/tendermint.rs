@@ -4,10 +4,10 @@ use futures::{future, StreamExt};
 use parking_lot::RwLock;
 use tokio::{sync::mpsc, time};
 
-use bls::SecretKey;
-use hash::Blake2sHash;
 use nimiq_block::{MultiSignature, TendermintIdentifier, TendermintStep, TendermintVote};
+use nimiq_bls::SecretKey;
 use nimiq_handel::{identity::WeightRegistry, update::LevelUpdateMessage};
+use nimiq_hash::Blake2sHash;
 use nimiq_primitives::{policy, slots::Validators};
 use nimiq_tendermint::{AggregationResult, TendermintError};
 use nimiq_validator_network::ValidatorNetwork;

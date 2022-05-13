@@ -1,6 +1,6 @@
 use url::Url;
 
-use keys::PublicKey;
+use nimiq_keys::PublicKey;
 
 #[derive(Clone, Debug)]
 pub struct SeedList {

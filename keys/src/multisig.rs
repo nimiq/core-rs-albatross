@@ -11,7 +11,7 @@ use curve25519_dalek::traits::Identity;
 use rand::Rng;
 use sha2::{self, Digest, Sha512};
 
-use utils::key_rng::{CryptoRng, RngCore, SecureGenerate};
+use nimiq_utils::key_rng::{CryptoRng, RngCore, SecureGenerate};
 
 use crate::{KeyPair, PublicKey, Signature};
 

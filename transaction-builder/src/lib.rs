@@ -1,26 +1,15 @@
-extern crate nimiq_bls as bls;
-extern crate nimiq_genesis as genesis;
-extern crate nimiq_hash as hash;
-extern crate nimiq_keys as keys;
-extern crate nimiq_primitives as primitives;
-extern crate nimiq_transaction as transaction;
-extern crate nimiq_utils as utils;
-
 use thiserror::Error;
 
-use bls::KeyPair as BlsKeyPair;
-
-use keys::{Address, KeyPair, PublicKey};
-use primitives::account::AccountType;
-use primitives::coin::Coin;
-use primitives::networks::NetworkId;
-use transaction::{SignatureProof, Transaction};
+use nimiq_bls::KeyPair as BlsKeyPair;
+use nimiq_hash::Blake2bHash;
+use nimiq_keys::{Address, KeyPair, PublicKey};
+use nimiq_primitives::policy::{STAKING_CONTRACT_ADDRESS, VALIDATOR_DEPOSIT};
+use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId};
+use nimiq_transaction::account::htlc_contract::{AnyHash, HashAlgorithm};
+use nimiq_transaction::{SignatureProof, Transaction};
 
 pub use crate::proof::TransactionProofBuilder;
 pub use crate::recipient::Recipient;
-use hash::Blake2bHash;
-use primitives::policy::{STAKING_CONTRACT_ADDRESS, VALIDATOR_DEPOSIT};
-use transaction::account::htlc_contract::{AnyHash, HashAlgorithm};
 
 pub mod proof;
 pub mod recipient;

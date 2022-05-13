@@ -1,13 +1,13 @@
 use std::io;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError};
-use database::{FromDatabaseValue, IntoDatabaseValue};
-use keys::{Address, KeyPair, PublicKey, SecureGenerate, Signature};
+use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Hash, HashOutput, Sha256Hash};
+use nimiq_keys::{Address, KeyPair, PublicKey, SecureGenerate, Signature};
+use nimiq_primitives::coin::Coin;
+use nimiq_primitives::networks::NetworkId;
+use nimiq_transaction::{SignatureProof, Transaction};
 use nimiq_utils::otp::Verify;
-use primitives::coin::Coin;
-use primitives::networks::NetworkId;
-use transaction::{SignatureProof, Transaction};
 
 pub const NIMIQ_SIGN_MESSAGE_PREFIX: &[u8] = b"\x16Nimiq Signed Message:\n";
 

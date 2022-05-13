@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use futures::task::{Context, Poll};
 use futures::{FutureExt, Stream, StreamExt};
+use lazy_static::lazy_static;
 use parking_lot::RwLock;
 
 use nimiq_block::MacroBlock;

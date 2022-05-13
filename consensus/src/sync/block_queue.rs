@@ -6,6 +6,7 @@ use std::{
 };
 
 use futures::future::BoxFuture;
+use futures::ready;
 use futures::stream::{BoxStream, Stream, StreamExt};
 use futures::FutureExt;
 use parking_lot::RwLock;
@@ -16,6 +17,7 @@ use nimiq_block::Block;
 use nimiq_blockchain::{AbstractBlockchain, Direction};
 use nimiq_blockchain::{Blockchain, PushError, PushResult};
 use nimiq_hash::Blake2bHash;
+use nimiq_macros::store_waker;
 use nimiq_network_interface::network::{MsgAcceptance, Network, PubsubId, Topic};
 use nimiq_primitives::policy;
 

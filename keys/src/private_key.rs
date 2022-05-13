@@ -4,11 +4,11 @@ use std::io;
 use std::str::FromStr;
 
 use hex::FromHex;
+use rand_core::{CryptoRng, RngCore};
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
-use hash::{Hash, SerializeContent};
-use rand_core::{CryptoRng, RngCore};
-use utils::key_rng::SecureGenerate;
+use nimiq_hash::{Hash, SerializeContent};
+use nimiq_utils::key_rng::SecureGenerate;
 
 use crate::errors::{KeysError, ParseError};
 

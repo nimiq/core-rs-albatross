@@ -1,6 +1,3 @@
-#[macro_use]
-extern crate beserial_derive;
-
 use beserial::{uvar, Deserialize, Serialize, SerializingError};
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]

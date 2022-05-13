@@ -1,10 +1,5 @@
 #[macro_use]
 extern crate log;
-#[macro_use]
-extern crate beserial_derive;
-extern crate beserial;
-
-use std::fmt::Debug;
 
 pub(crate) mod outside_deps;
 pub(crate) mod state;
@@ -17,7 +12,10 @@ pub use state::TendermintState;
 pub use stream::TendermintStreamWrapper as Tendermint;
 pub use utils::*;
 
+use std::fmt::Debug;
+
 use beserial::{Deserialize, Serialize};
+
 // Poor man's trait aliases:
 pub trait ProposalTrait:
     Clone + Debug + PartialEq + Deserialize + Serialize + Unpin + Send + Sync + 'static

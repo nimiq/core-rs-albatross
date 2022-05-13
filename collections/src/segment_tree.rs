@@ -1,5 +1,3 @@
-extern crate num_traits;
-
 use std::ops::*;
 
 use num_traits::identities::Zero;

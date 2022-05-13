@@ -12,7 +12,6 @@ use rand::{thread_rng, Rng};
 use tokio::time::timeout;
 
 use beserial::{Deserialize, Serialize};
-use beserial_derive::{Deserialize, Serialize};
 use nimiq_network_interface::network::{MsgAcceptance, NetworkEvent, Topic};
 use nimiq_network_interface::{network::Network as NetworkInterface, peer::CloseReason};
 use nimiq_network_libp2p::{

@@ -1,10 +1,4 @@
-#[macro_use]
-extern crate beserial_derive;
-extern crate nimiq_hash as hash;
-extern crate nimiq_macros as macros;
-extern crate nimiq_utils as utils;
-
-pub use utils::key_rng::{SecureGenerate, SecureRng};
+pub use nimiq_utils::key_rng::{SecureGenerate, SecureRng};
 
 pub use self::address::*;
 pub use self::errors::*;

@@ -5,18 +5,19 @@ use std::path::Path;
 use hex::FromHex;
 use lazy_static::lazy_static;
 
-use account::Account;
-use account::AccountsList;
 use beserial::{Deserialize, Serialize};
-use hash::Blake2bHash;
-use keys::PublicKey;
+use nimiq_account::Account;
+use nimiq_account::AccountsList;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis_builder::{GenesisBuilder, GenesisBuilderError, GenesisInfo};
+use nimiq_hash::Blake2bHash;
+use nimiq_keys::PublicKey;
+use nimiq_peer_address::address::seed_list::SeedList;
+use nimiq_peer_address::address::{NetAddress, PeerAddress, PeerAddressType, PeerId};
+use nimiq_peer_address::services::ServiceFlags;
 use nimiq_trie::key_nibbles::KeyNibbles;
-use peer_address::address::seed_list::SeedList;
-use peer_address::address::{NetAddress, PeerAddress, PeerAddressType, PeerId};
-use peer_address::services::ServiceFlags;
-pub use primitives::networks::NetworkId;
+
+pub use nimiq_primitives::networks::NetworkId;
 
 #[derive(Clone, Debug)]
 struct GenesisData {

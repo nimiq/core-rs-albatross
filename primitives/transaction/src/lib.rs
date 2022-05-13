@@ -1,14 +1,5 @@
 #[macro_use]
-extern crate beserial_derive;
-#[macro_use]
 extern crate log;
-extern crate nimiq_bls as bls;
-extern crate nimiq_hash as hash;
-extern crate nimiq_keys as keys;
-extern crate nimiq_macros as macros;
-extern crate nimiq_primitives as primitives;
-extern crate nimiq_utils as utils;
-extern crate strum_macros;
 
 use std::cmp::{Ord, Ordering};
 use std::convert::TryFrom;
@@ -16,6 +7,7 @@ use std::io;
 use std::sync::Arc;
 
 use bitflags::bitflags;
+use num_traits::SaturatingAdd;
 use thiserror::Error;
 
 use beserial::{
@@ -25,12 +17,11 @@ use beserial::{
 use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
 use nimiq_keys::Address;
 use nimiq_keys::{PublicKey, Signature};
+use nimiq_primitives::account::AccountType;
+use nimiq_primitives::coin::Coin;
+use nimiq_primitives::networks::NetworkId;
+use nimiq_primitives::policy;
 use nimiq_utils::merkle::{Blake2bMerklePath, Blake2bMerkleProof};
-use num_traits::SaturatingAdd;
-use primitives::account::AccountType;
-use primitives::coin::Coin;
-use primitives::networks::NetworkId;
-use primitives::policy;
 
 use crate::account::AccountTransactionVerification;
 

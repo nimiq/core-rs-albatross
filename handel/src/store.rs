@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use collections::bitset::BitSet;
+use nimiq_collections::bitset::BitSet;
 
 use crate::partitioner::Partitioner;
 use crate::{contribution::AggregatableContribution, identity::Identity};

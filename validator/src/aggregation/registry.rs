@@ -1,10 +1,10 @@
 use std::collections::HashSet;
 
-use bls::PublicKey;
-use collections::BitSet;
-use handel::identity::{Identity, IdentityRegistry, WeightRegistry};
-use primitives::policy;
-use primitives::slots::Validators;
+use nimiq_bls::PublicKey;
+use nimiq_collections::BitSet;
+use nimiq_handel::identity::{Identity, IdentityRegistry, WeightRegistry};
+use nimiq_primitives::policy;
+use nimiq_primitives::slots::Validators;
 
 /// Implementation for Handel registry using a `Validators` list.
 #[derive(Debug)]

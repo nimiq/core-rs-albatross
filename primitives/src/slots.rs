@@ -1,5 +1,3 @@
-extern crate itertools;
-
 use std::cmp::max;
 ///! # Slot allocation primitives
 ///!

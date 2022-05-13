@@ -8,16 +8,14 @@ use futures::{ready, FutureExt, Stream};
 use parking_lot::RwLock;
 use tokio::time;
 
-use block::{Block, ForkProof, MicroBlock, ViewChange, ViewChangeProof};
-use block_production::BlockProducer;
-use blockchain::{AbstractBlockchain, Blockchain, PushResult};
-use mempool::mempool::Mempool;
-
+use nimiq_block::{Block, ForkProof, MicroBlock, ViewChange, ViewChangeProof};
+use nimiq_block_production::BlockProducer;
+use nimiq_blockchain::{AbstractBlockchain, Blockchain, PushResult};
+use nimiq_mempool::mempool::Mempool;
 use nimiq_primitives::slots::Validators;
-
+use nimiq_utils::time::systemtime_to_timestamp;
 use nimiq_validator_network::ValidatorNetwork;
-use utils::time::systemtime_to_timestamp;
-use vrf::VrfSeed;
+use nimiq_vrf::VrfSeed;
 
 use crate::aggregation::view_change::ViewChangeAggregation;
 

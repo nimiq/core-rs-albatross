@@ -508,6 +508,7 @@ checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
 name = "beserial"
 version = "0.1.0"
 dependencies = [
+ "beserial_derive",
  "bitvec",
  "byteorder",
  "libp2p",
@@ -2469,7 +2470,6 @@ name = "nimiq-account"
 version = "0.1.0"
 dependencies = [
  "beserial",
- "beserial_derive",
  "hex",
  "lazy_static",
  "nimiq-bls",
@@ -2500,7 +2500,6 @@ name = "nimiq-block"
 version = "0.1.0"
 dependencies = [
  "beserial",
- "beserial_derive",
  "bitflags",
  "hex",
  "nimiq-bls",
@@ -2557,7 +2556,6 @@ name = "nimiq-blockchain"
 version = "0.1.0"
 dependencies = [
  "beserial",
- "beserial_derive",
  "hex",
  "nimiq-account",
  "nimiq-block",
@@ -2636,7 +2634,6 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "beserial",
- "beserial_derive",
  "futures",
  "hex",
  "lazy_static",
@@ -2686,7 +2683,6 @@ name = "nimiq-genesis"
 version = "0.1.0"
 dependencies = [
  "beserial",
- "beserial_derive",
  "bitflags",
  "hex",
  "lazy_static",
@@ -2738,7 +2734,6 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "beserial",
- "beserial_derive",
  "futures",
  "lazy_static",
  "nimiq-bls",
@@ -2866,7 +2861,6 @@ name = "nimiq-keys"
 version = "0.1.0"
 dependencies = [
  "beserial",
- "beserial_derive",
  "curve25519-dalek 3.2.1",
  "data-encoding",
  "ed25519-zebra",
@@ -3074,7 +3068,6 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "beserial",
- "beserial_derive",
  "derive_more",
  "futures",
  "nimiq-test-log",
@@ -3092,7 +3085,6 @@ dependencies = [
  "async-trait",
  "base64 0.13.0",
  "beserial",
- "beserial_derive",
  "bitflags",
  "bytes",
  "derive_more",
@@ -3127,7 +3119,6 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "beserial",
- "beserial_derive",
  "derive_more",
  "futures",
  "nimiq-network-interface",
@@ -3144,7 +3135,6 @@ name = "nimiq-peer-address"
 version = "0.1.0"
 dependencies = [
  "beserial",
- "beserial_derive",
  "bitflags",
  "hex",
  "lazy_static",
@@ -3166,7 +3156,6 @@ name = "nimiq-primitives"
 version = "0.1.0"
 dependencies = [
  "beserial",
- "beserial_derive",
  "bitvec",
  "hex",
  "itertools",
@@ -3303,7 +3292,6 @@ name = "nimiq-subscription"
 version = "0.1.0"
 dependencies = [
  "beserial",
- "beserial_derive",
  "bitflags",
  "hex",
  "nimiq-bls",
@@ -3322,7 +3310,6 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "beserial",
- "beserial_derive",
  "futures",
  "nimiq-block",
  "nimiq-hash",
@@ -3416,7 +3403,6 @@ name = "nimiq-transaction"
 version = "0.1.0"
 dependencies = [
  "beserial",
- "beserial_derive",
  "bitflags",
  "hex",
  "nimiq-bls",
@@ -3458,7 +3444,6 @@ name = "nimiq-trie"
 version = "0.1.0"
 dependencies = [
  "beserial",
- "beserial_derive",
  "hex",
  "nimiq-database",
  "nimiq-hash",
@@ -3473,7 +3458,6 @@ name = "nimiq-utils"
 version = "0.1.0"
 dependencies = [
  "beserial",
- "beserial_derive",
  "clear_on_drop",
  "futures",
  "hex",
@@ -3499,7 +3483,6 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "beserial",
- "beserial_derive",
  "futures",
  "hex",
  "lazy_static",
@@ -3545,7 +3528,6 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "beserial",
- "beserial_derive",
  "futures",
  "nimiq-bls",
  "nimiq-network-interface",
@@ -3580,7 +3562,6 @@ name = "nimiq-wallet"
 version = "0.1.0"
 dependencies = [
  "beserial",
- "beserial_derive",
  "hex",
  "lazy_static",
  "nimiq-database",

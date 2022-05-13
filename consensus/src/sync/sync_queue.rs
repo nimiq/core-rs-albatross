@@ -11,7 +11,9 @@ use futures::future::BoxFuture;
 use futures::stream::FuturesUnordered;
 use futures::task::{Context, Poll};
 use futures::{ready, Future, Stream, StreamExt};
+use pin_project::pin_project;
 
+use nimiq_macros::store_waker;
 use nimiq_network_interface::network::Network;
 
 #[pin_project]

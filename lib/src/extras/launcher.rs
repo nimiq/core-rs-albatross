@@ -1,6 +1,3 @@
-#[cfg(feature = "panic")]
-extern crate log_panics;
-
 use url::Url;
 
 /// # ToDo

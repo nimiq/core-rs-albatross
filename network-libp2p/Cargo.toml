@@ -50,8 +50,7 @@ tokio-util = { version = "0.7", features = ["codec"] }
 tracing-attributes = "0.1"
 wasm-timer = "0.2"
 
-beserial = { path = "../beserial", features = ["libp2p"] }
-beserial_derive = { path = "../beserial/beserial_derive" }
+beserial = { path = "../beserial", features = ["derive", "libp2p"] }
 nimiq-bls = { path = "../bls" }
 nimiq-macros = { path = "../macros" }
 nimiq-network-interface = { path = "../network-interface" }

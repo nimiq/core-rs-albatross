@@ -77,8 +77,6 @@
 //! # }
 //! ```
 
-extern crate proc_macro;
-
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::{parse_macro_input, Data, DeriveInput, Ident, Index, Meta, Path};

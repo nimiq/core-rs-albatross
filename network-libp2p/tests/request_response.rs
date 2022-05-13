@@ -10,7 +10,6 @@ use libp2p::{
 use rand::{thread_rng, Rng};
 
 use beserial::{Deserialize, Serialize};
-use beserial_derive::{Deserialize, Serialize};
 use nimiq_network_interface::{
     network::{Network as NetworkInterface, NetworkEvent},
     request::{InboundRequestError, OutboundRequestError, Request, RequestError},

@@ -1,6 +1,6 @@
 use log::error;
 
-use primitives::account::AccountType;
+use nimiq_primitives::account::AccountType;
 
 use crate::account::AccountTransactionVerification;
 use crate::{Transaction, TransactionError, TransactionFlags};

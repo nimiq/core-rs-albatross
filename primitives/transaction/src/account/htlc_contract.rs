@@ -2,10 +2,10 @@ use log::error;
 use strum_macros::Display;
 
 use beserial::{Deserialize, Serialize};
-use hash::{Blake2bHasher, Hasher, Sha256Hasher};
-use keys::Address;
-use macros::{add_hex_io_fns_typed_arr, create_typed_array};
-use primitives::account::AccountType;
+use nimiq_hash::{Blake2bHasher, Hasher, Sha256Hasher};
+use nimiq_keys::Address;
+use nimiq_macros::{add_hex_io_fns_typed_arr, create_typed_array};
+use nimiq_primitives::account::AccountType;
 
 use crate::account::AccountTransactionVerification;
 use crate::SignatureProof;

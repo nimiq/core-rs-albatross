@@ -1,7 +1,7 @@
 use log::error;
 
 use beserial::Deserialize;
-use primitives::account::AccountType;
+use nimiq_primitives::account::AccountType;
 
 use crate::account::AccountTransactionVerification;
 use crate::SignatureProof;

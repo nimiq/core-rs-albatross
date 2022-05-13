@@ -1,6 +1,6 @@
-use database::cursor::ReadCursor;
-use database::{Database, Environment, ReadTransaction, Transaction, WriteTransaction};
-use keys::Address;
+use nimiq_database::cursor::ReadCursor;
+use nimiq_database::{Database, Environment, ReadTransaction, Transaction, WriteTransaction};
+use nimiq_keys::Address;
 use nimiq_utils::otp::Locked;
 
 use crate::wallet_account::WalletAccount;

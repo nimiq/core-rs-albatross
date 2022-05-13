@@ -1,15 +1,9 @@
-#[macro_use]
-extern crate beserial_derive;
-extern crate nimiq_keys as keys;
-extern crate nimiq_primitives as primitives;
-extern crate nimiq_transaction as transaction;
-
 use std::collections::HashSet;
 
 use beserial::{Deserialize, Serialize};
-use keys::Address;
-use primitives::coin::Coin;
-use transaction::Transaction;
+use nimiq_keys::Address;
+use nimiq_primitives::coin::Coin;
+use nimiq_transaction::Transaction;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[repr(u8)]

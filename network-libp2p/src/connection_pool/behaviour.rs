@@ -20,6 +20,8 @@ use rand::seq::IteratorRandom;
 use rand::thread_rng;
 use tokio::time::Interval;
 
+use nimiq_macros::store_waker;
+
 use crate::discovery::peer_contacts::{PeerContactBook, Services};
 
 use super::handler::ConnectionPoolHandler;

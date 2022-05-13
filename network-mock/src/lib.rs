@@ -1,6 +1,3 @@
-#[macro_use]
-extern crate beserial_derive;
-
 mod hub;
 mod network;
 mod observable_hash_map;

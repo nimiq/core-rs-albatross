@@ -1,5 +1,5 @@
-use bls::PublicKey;
-use collections::bitset::BitSet;
+use nimiq_bls::PublicKey;
+use nimiq_collections::bitset::BitSet;
 
 use crate::contribution::AggregatableContribution;
 

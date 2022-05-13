@@ -1,6 +1,7 @@
+use std::borrow::Cow;
 use std::char;
 use std::convert::From;
-use std::fmt::{self, Debug, Display, Formatter};
+use std::fmt;
 use std::io;
 use std::iter::Iterator;
 use std::str::FromStr;
@@ -8,13 +9,12 @@ use std::str::FromStr;
 use hex::FromHex;
 use thiserror::Error;
 
-use hash::{hash_typed_array, Blake2bHash, Blake2bHasher, Hasher};
-use macros::create_typed_array;
+use nimiq_database::{AsDatabaseBytes, FromDatabaseValue};
+use nimiq_hash::{hash_typed_array, Blake2bHash, Blake2bHasher, Hasher};
+use nimiq_macros::create_typed_array;
 
 use crate::key_pair::KeyPair;
 use crate::PublicKey;
-use nimiq_database::{AsDatabaseBytes, FromDatabaseValue};
-use std::borrow::Cow;
 
 create_typed_array!(Address, u8, 20);
 hash_typed_array!(Address);
@@ -183,13 +183,13 @@ impl FromStr for Address {
     }
 }
 
-impl Display for Address {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+impl fmt::Display for Address {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.to_user_friendly_address())
     }
 }
 
-impl Debug for Address {
+impl fmt::Debug for Address {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("Address").field(&self.to_hex()).finish()
     }

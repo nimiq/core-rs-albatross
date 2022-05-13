@@ -1,7 +1,7 @@
-use bls::{CompressedSignature, KeyPair as BlsKeyPair};
-use hash::Blake2bHash;
-use keys::{Address, PublicKey as SchnorrPublicKey};
-use transaction::account::staking_contract::IncomingStakingTransactionData;
+use nimiq_bls::{CompressedSignature, KeyPair as BlsKeyPair};
+use nimiq_hash::Blake2bHash;
+use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
+use nimiq_transaction::account::staking_contract::IncomingStakingTransactionData;
 
 use crate::recipient::Recipient;
 

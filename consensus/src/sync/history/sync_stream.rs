@@ -8,6 +8,7 @@ use tokio::task::spawn_blocking;
 
 use nimiq_block::Block;
 use nimiq_blockchain::Blockchain;
+use nimiq_macros::store_waker;
 use nimiq_network_interface::network::{Network, NetworkEvent};
 
 use crate::sync::history::cluster::{SyncCluster, SyncClusterResult};

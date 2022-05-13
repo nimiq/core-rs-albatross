@@ -19,8 +19,7 @@ hex = "0.4"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 serde = { version = "1.0", features = ["derive"], optional = true }
 
-beserial = { path = "../../beserial" }
-beserial_derive = { path = "../../beserial/beserial_derive" }
+beserial = { path = "../../beserial", features = ["derive"] }
 nimiq-bls = { path = "../../bls", features = ["beserial"]}
 nimiq-collections = { path = "../../collections", features = ["bitset"] }
 nimiq-database = { path = "../../database" }

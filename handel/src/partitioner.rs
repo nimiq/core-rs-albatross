@@ -2,11 +2,9 @@ use std::ops::RangeInclusive;
 
 use thiserror::Error;
 
-use utils::math::log2;
+use nimiq_utils::math::log2;
 
 use crate::contribution::AggregatableContribution;
-
-// use nimiq_collections::bitset::BitSet;
 
 /// Errors that can happen during partitioning
 #[derive(Clone, Debug, Error, PartialEq)]
