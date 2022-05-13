@@ -6,7 +6,7 @@ use rand::SeedableRng;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
-use beserial::{Deserialize, Serialize};
+use beserial::Deserialize;
 use nimiq_block::{Block, MicroBlock, MicroBody, MicroHeader};
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{Blockchain, PushResult};
@@ -32,7 +32,6 @@ use nimiq_transaction_builder::TransactionBuilder;
 use nimiq_utils::time::OffsetTime;
 use nimiq_vrf::VrfSeed;
 
-const BASIC_TRANSACTION: &str = "000222666efadc937148a6d61589ce6d4aeecca97fda4c32348d294eab582f14a0754d1260f15bea0e8fb07ab18f45301483599e34000000000000c350000000000000008a00019640023fecb82d3aef4be76853d5c5b263754b7d495d9838f6ae5df60cf3addd3512a82988db0056059c7a52ae15285983ef0db8229ae446c004559147686d28f0a30a";
 const NUM_TXNS_START_STOP: usize = 100;
 
 pub const ACCOUNT_SECRET_KEY: &str =
@@ -341,22 +340,54 @@ async fn valid_tx_not_in_blockchain() {
 
 #[test(tokio::test)]
 async fn push_tx_with_wrong_signature() {
+    // Generate and sign transaction from an address
+    let mut rng = StdRng::seed_from_u64(0);
+    let sender_balances = vec![10000; 1];
+    let recipient_balances = vec![0; 1];
+    let mut genesis_builder = GenesisBuilder::default();
+
+    // Generate recipient accounts
+    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, false);
+    // Generate sender accounts
+    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true);
+
+    // Generate transactions
+    let mempool_transaction = TestTransaction {
+        fee: 0,
+        value: 10,
+        recipient: recipient_accounts[0].clone(),
+        sender: sender_accounts[0].clone(),
+    };
+
+    let (mut txns, txns_len) = generate_transactions(vec![mempool_transaction], true);
+    log::debug!("Done generating transactions and accounts");
+    txns[0].proof = hex::decode("0222666efadc937148a6d61589ce6d4aeecca97fda4c32348d294eab582f14a0003fecb82d3aef4be76853d5c5b263754b7d495d9838f6ae5df60cf3addd3512a82988db0056059c7a52ae15285983ef0db8229ae446c004559147686d28f0a30b").unwrap();
+
     let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
 
-    // Create an empty blockchain
+    // Add a validator
+    genesis_builder.with_genesis_validator(
+        Address::from(&SchnorrKeyPair::generate(&mut rng)),
+        SchnorrPublicKey::from([0u8; 32]),
+        BlsKeyPair::generate(&mut rng).public_key,
+        Address::default(),
+    );
+
+    let genesis_info = genesis_builder.generate(env.clone()).unwrap();
+
     let blockchain = Arc::new(RwLock::new(
-        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+        Blockchain::with_genesis(
+            env.clone(),
+            time,
+            NetworkId::UnitAlbatross,
+            genesis_info.block,
+            genesis_info.accounts,
+        )
+        .unwrap(),
     ));
 
-    // Build transaction with invalid signature from serialized data
-    let serialized_txn: Vec<u8> = hex::decode(BASIC_TRANSACTION).unwrap();
-    let mut txn: Transaction = Deserialize::deserialize(&mut &serialized_txn[..]).unwrap();
-    // last char a (valid) -> b
-    txn.proof = hex::decode("0222666efadc937148a6d61589ce6d4aeecca97fda4c32348d294eab582f14a0003fecb82d3aef4be76853d5c5b263754b7d495d9838f6ae5df60cf3addd3512a82988db0056059c7a52ae15285983ef0db8229ae446c004559147686d28f0a30b").unwrap();
-    let txn_len = txn.serialized_size();
-    let txns = vec![txn; 2];
-    let txns = send_get_mempool_txns(blockchain, txns, txn_len * 2).await;
+    let txns = send_get_mempool_txns(blockchain, txns, txns_len).await;
 
     // Expect no transactions in the mempool
     assert_eq!(txns.len(), 0);

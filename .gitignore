@@ -1,5 +1,5 @@
 /cov
-/target
+target
 **/*.rs.bk
 /.idea
 *.iml
