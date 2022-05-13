@@ -2609,7 +2609,7 @@ dependencies = [
 name = "nimiq-client"
 version = "0.1.0"
 dependencies = [
- "futures",
+ "futures-util",
  "nimiq-lib",
  "tokio",
  "tokio-metrics",
@@ -2635,7 +2635,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "beserial",
- "futures",
+ "futures-util",
  "hex",
  "lazy_static",
  "nimiq-block",
@@ -2735,7 +2735,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "beserial",
- "futures",
+ "futures-util",
  "lazy_static",
  "nimiq-bls",
  "nimiq-collections",
@@ -2947,7 +2947,7 @@ name = "nimiq-mempool"
 version = "0.1.0"
 dependencies = [
  "beserial",
- "futures",
+ "futures-util",
  "hex",
  "keyed_priority_queue",
  "nimiq-account",
@@ -3090,7 +3090,7 @@ dependencies = [
  "async-trait",
  "beserial",
  "derive_more",
- "futures",
+ "futures-util",
  "nimiq-test-log",
  "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
  "thiserror",
@@ -3109,7 +3109,7 @@ dependencies = [
  "bitflags",
  "bytes",
  "derive_more",
- "futures",
+ "futures-util",
  "hex",
  "ip_network",
  "libp2p",
@@ -3141,7 +3141,7 @@ dependencies = [
  "async-trait",
  "beserial",
  "derive_more",
- "futures",
+ "futures-util",
  "nimiq-network-interface",
  "nimiq-test-log",
  "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
@@ -3201,7 +3201,7 @@ dependencies = [
  "anyhow",
  "clap",
  "dotenv",
- "futures",
+ "futures-util",
  "nimiq-account",
  "nimiq-bls",
  "nimiq-hash",
@@ -3222,7 +3222,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "beserial",
- "futures",
+ "futures-util",
  "hex",
  "nimiq-account",
  "nimiq-block",
@@ -3248,7 +3248,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "beserial",
- "futures",
+ "futures-util",
  "hex",
  "nimiq-account",
  "nimiq-block",
@@ -3289,7 +3289,7 @@ name = "nimiq-spammer"
 version = "0.1.0"
 dependencies = [
  "clap",
- "futures",
+ "futures-util",
  "nimiq-block",
  "nimiq-blockchain",
  "nimiq-keys",
@@ -3329,7 +3329,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "beserial",
- "futures",
+ "futures-util",
  "nimiq-block",
  "nimiq-hash",
  "nimiq-primitives",
@@ -3366,7 +3366,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "beserial",
- "futures",
+ "futures-util",
  "hex",
  "nimiq-block",
  "nimiq-block-production",
@@ -3478,7 +3478,7 @@ version = "0.1.0"
 dependencies = [
  "beserial",
  "clear_on_drop",
- "futures",
+ "futures-util",
  "hex",
  "libp2p",
  "nimiq-collections",
@@ -3502,7 +3502,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "beserial",
- "futures",
+ "futures-util",
  "hex",
  "lazy_static",
  "linked-hash-map",
@@ -3548,7 +3548,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "beserial",
- "futures",
+ "futures-util",
  "nimiq-bls",
  "nimiq-network-interface",
  "nimiq-utils",

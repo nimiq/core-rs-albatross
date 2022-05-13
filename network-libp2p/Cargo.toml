@@ -22,7 +22,7 @@ base64 = "0.13"
 bitflags = "1.2"
 bytes = "1.0"
 derive_more = "0.99"
-futures = "0.3"
+futures = { package = "futures-util", version = "0.3" }
 hex = "0.4"
 ip_network = "0.4"
 libp2p = { version = "0.44", default-features = false, features = [

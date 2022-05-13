@@ -10,7 +10,7 @@ license = "Apache-2.0"
 
 [dependencies]
 async-trait = "0.1"
-futures = "0.3"
+futures = { package = "futures-util", version = "0.3" }
 log = { package = "tracing", version = "0.1", features = ["log"] }
 thiserror = "1.0"
 

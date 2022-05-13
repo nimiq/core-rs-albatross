@@ -24,7 +24,7 @@ maintenance = { status = "experimental" }
 anyhow = "1.0"
 clap = { version = "3.1", features = ["derive"] }
 dotenv = "0.15"
-futures = "0.3"
+futures = { package = "futures-util", version = "0.3" }
 tokio = { version = "1.18", features = [
     "macros",
     "rt-multi-thread",

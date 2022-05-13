@@ -11,7 +11,7 @@ use std::{
     io::{self},
 };
 
-use futures::prelude::*;
+use futures::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use libp2p::core::{upgrade, ProtocolName};
 use libp2p::request_response::RequestResponseCodec;
 

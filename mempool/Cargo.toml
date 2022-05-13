@@ -19,7 +19,7 @@ maintenance = { status = "experimental" }
 [dependencies]
 log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
-futures = "0.3"
+futures = { package = "futures-util", version = "0.3" }
 keyed_priority_queue = "0.4"
 tokio = { version = "1.18", features = ["full", "tracing"] }
 tokio-metrics = "0.1"
