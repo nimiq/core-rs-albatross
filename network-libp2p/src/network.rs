@@ -1,12 +1,12 @@
-use std::collections::HashSet;
-use std::{collections::HashMap, sync::Arc};
+use std::collections::{HashMap, HashSet};
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::task::{Context, Poll};
 
 use async_trait::async_trait;
 use bytes::{Buf, Bytes};
-use futures::{
-    executor,
-    stream::{BoxStream, StreamExt},
-};
+use futures::{ready, stream::BoxStream, Stream, StreamExt};
 use libp2p::core::transport::MemoryTransport;
 use libp2p::{
     core,
@@ -1369,10 +1369,34 @@ impl NetworkInterface for Network {
     }
 
     fn receive_requests<Req: Request>(&self) -> BoxStream<'static, (Req, RequestId, PeerId)> {
-        let action_tx = self.action_tx.clone();
+        enum ReceiveStream {
+            WaitingForRegister(
+                Pin<Box<dyn Future<Output = mpsc::Receiver<(Bytes, RequestId, PeerId)>> + Send>>,
+            ),
+            Registered(mpsc::Receiver<(Bytes, RequestId, PeerId)>),
+        }
 
-        // Future to register the channel.
-        let register_future = async move {
+        impl Stream for ReceiveStream {
+            type Item = (Bytes, RequestId, PeerId);
+            fn poll_next(
+                self: Pin<&mut Self>,
+                cx: &mut Context<'_>,
+            ) -> Poll<Option<(Bytes, RequestId, PeerId)>> {
+                let self_ = self.get_mut();
+                loop {
+                    use ReceiveStream::*;
+                    match self_ {
+                        WaitingForRegister(fut) => *self_ = Registered(ready!(Pin::new(fut).poll(cx))),
+                        Registered(stream) => return stream.poll_recv(cx),
+                    }
+                }
+            }
+            // The default size_hint is the best we can do, we can never say if
+            // there are going to be more requests or none at all.
+        }
+
+        let action_tx = self.action_tx.clone();
+        ReceiveStream::WaitingForRegister(Box::pin(async move {
             // TODO Make buffer size configurable
             let (tx, rx) = mpsc::channel(1024);
 
@@ -1385,32 +1409,24 @@ impl NetworkInterface for Network {
                 .expect("Sending action to network task failed.");
 
             rx
-        };
-
-        // XXX Drive the register future to completion. This is needed because we want the receivers
-        // to be properly set up when this function returns. It should be ok to block here as we're
-        // only calling this during client initialization.
-        // A better way to do this would be make receive_from_all() async.
-        let receive_stream = ReceiverStream::new(executor::block_on(register_future));
-
-        receive_stream
-            .filter_map(|(data, request_id, peer_id)| async move {
-                // Map the (data, peer) stream to (message, peer) by deserializing the messages.
-                match Req::deserialize_request(&mut data.reader()) {
-                    Ok(message) => Some((message, request_id, peer_id)),
-                    Err(e) => {
-                        error!(
-                            %request_id,
-                            %peer_id,
-                            type_id = std::any::type_name::<Req>(),
-                            error = %e,
-                            "Failed to deserialize request from peer",
-                        );
-                        None
-                    }
+        }))
+        .filter_map(|(data, request_id, peer_id)| async move {
+            // Map the (data, peer) stream to (message, peer) by deserializing the messages.
+            match Req::deserialize_request(&mut data.reader()) {
+                Ok(message) => Some((message, request_id, peer_id)),
+                Err(e) => {
+                    error!(
+                        %request_id,
+                        %peer_id,
+                        type_id = std::any::type_name::<Req>(),
+                        error = %e,
+                        "Failed to deserialize request from peer",
+                    );
+                    None
                 }
-            })
-            .boxed()
+            }
+        })
+        .boxed()
     }
 
     async fn respond<Req: Request>(
