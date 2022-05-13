@@ -128,8 +128,8 @@ bind = "127.0.0.1"
 
 # Port to use to create a listening socket for the metrics server.
 # Possible values: any valid port number
-# Default: 8649
-port = 8649
+# Default: 9100
+port = 9100
 
 # Declare a username and password required to access the metrics server.
 # Default: none

@@ -569,7 +569,7 @@ pub struct RpcServerConfig {
 pub struct MetricsServerConfig {
     /// Bind the server to the specified ip and port.
     ///
-    /// Default: `127.0.0.1:8649`
+    /// Default: `127.0.0.1:9100`
     ///
     pub addr: SocketAddr,
 

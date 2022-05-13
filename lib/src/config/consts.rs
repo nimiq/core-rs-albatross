@@ -10,7 +10,7 @@ pub const REVERSE_PROXY_DEFAULT_PORT: u16 = 8444;
 pub const RPC_DEFAULT_PORT: u16 = 8648;
 
 /// The default port for the metrics server
-pub const METRICS_DEFAULT_PORT: u16 = 8649;
+pub const METRICS_DEFAULT_PORT: u16 = 9100;
 
 /// Returns the default bind, i.e. localhost
 pub fn default_bind() -> IpAddr {
