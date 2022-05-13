@@ -1,13 +1,12 @@
+use std::fmt::Formatter;
 use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::{fmt::Formatter, time::Duration};
+use std::task::{Context, Poll};
+use std::time::Duration;
 
 use async_trait::async_trait;
-use futures::future::BoxFuture;
-use futures::sink::Sink;
-use futures::stream::StreamExt;
-use futures::task::{Context, Poll};
+use futures::{future::BoxFuture, stream::StreamExt, Sink};
 use parking_lot::RwLock;
 
 use beserial::{Deserialize, Serialize};

@@ -1,8 +1,8 @@
 use std::pin::Pin;
 use std::sync::Arc;
+use std::task::{Context, Poll};
 use std::time::Duration;
 
-use futures::task::{Context, Poll};
 use futures::{Stream, StreamExt};
 use parking_lot::RwLock;
 

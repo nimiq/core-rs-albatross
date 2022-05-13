@@ -3,14 +3,12 @@ use std::cmp::Ordering;
 use std::collections::binary_heap::PeekMut;
 use std::collections::{BinaryHeap, VecDeque};
 use std::fmt::Debug;
+use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::task::Waker;
+use std::task::{Context, Poll, Waker};
 
-use futures::future::BoxFuture;
-use futures::stream::FuturesUnordered;
-use futures::task::{Context, Poll};
-use futures::{ready, Future, Stream, StreamExt};
+use futures::{future::BoxFuture, ready, stream::FuturesUnordered, Stream, StreamExt};
 use pin_project::pin_project;
 
 use nimiq_macros::store_waker;

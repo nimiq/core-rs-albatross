@@ -1,9 +1,8 @@
 use std::pin::Pin;
 use std::sync::Arc;
+use std::task::{Context, Poll};
 
-use futures::stream::Stream;
-use futures::task::{Context, Poll};
-use futures::{FutureExt, StreamExt};
+use futures::{FutureExt, Stream, StreamExt};
 use tokio::task::spawn_blocking;
 
 use nimiq_block::Block;

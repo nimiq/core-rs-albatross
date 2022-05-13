@@ -2,7 +2,7 @@ use std::pin::Pin;
 use std::sync::{Arc, Weak};
 use std::task::{Context, Poll};
 
-use futures::stream::Stream;
+use futures::Stream;
 use parking_lot::RwLock;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;

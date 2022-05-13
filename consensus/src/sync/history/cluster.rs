@@ -3,8 +3,8 @@ use std::fmt::Formatter;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::task::{Context, Poll};
 
-use futures::task::{Context, Poll};
 use futures::{FutureExt, Stream, StreamExt};
 use lazy_static::lazy_static;
 use parking_lot::RwLock;

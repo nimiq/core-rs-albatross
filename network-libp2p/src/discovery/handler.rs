@@ -1,13 +1,11 @@
 use std::{
     pin::Pin,
     sync::Arc,
+    task::{Context, Poll, Waker},
     time::{Duration, Instant},
 };
 
-use futures::{
-    task::{Context, Poll, Waker},
-    Sink, SinkExt, StreamExt,
-};
+use futures::{Sink, SinkExt, StreamExt};
 use libp2p::{
     identity::Keypair,
     swarm::{

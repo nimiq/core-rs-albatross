@@ -1,13 +1,11 @@
 use std::{
     collections::{HashSet, VecDeque},
     sync::Arc,
+    task::{Context, Poll},
     time::Duration,
 };
 
-use futures::{
-    task::{Context, Poll},
-    StreamExt,
-};
+use futures::StreamExt;
 use libp2p::{
     core::connection::{ConnectedPoint, ConnectionId},
     identity::Keypair,

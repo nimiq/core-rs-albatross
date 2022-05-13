@@ -6,10 +6,8 @@
 //! message, extracting the type ID and performing consistency checks.
 //!
 
-use std::{
-    fmt::Debug,
-    io::{self},
-};
+use std::fmt::Debug;
+use std::io;
 
 use futures::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use libp2p::core::{upgrade, ProtocolName};

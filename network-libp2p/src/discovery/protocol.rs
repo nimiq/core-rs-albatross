@@ -1,7 +1,4 @@
-use futures::{
-    future,
-    io::{AsyncRead, AsyncWrite},
-};
+use futures::{future, AsyncRead, AsyncWrite};
 use libp2p::{core::UpgradeInfo, identity::Keypair, InboundUpgrade, Multiaddr, OutboundUpgrade};
 use rand::{thread_rng, RngCore};
 

@@ -5,7 +5,7 @@ use std::fmt;
 use std::sync::Arc;
 use std::task::Waker;
 
-use futures::stream::{BoxStream, Stream, StreamExt};
+use futures::{stream::BoxStream, Stream, StreamExt};
 
 use nimiq_macros::store_waker;
 

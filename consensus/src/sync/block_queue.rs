@@ -5,10 +5,7 @@ use std::{
     task::{Context, Poll, Waker},
 };
 
-use futures::future::BoxFuture;
-use futures::ready;
-use futures::stream::{BoxStream, Stream, StreamExt};
-use futures::FutureExt;
+use futures::{future::BoxFuture, ready, stream::BoxStream, FutureExt, Stream, StreamExt};
 use parking_lot::RwLock;
 use pin_project::pin_project;
 use tokio::task::spawn_blocking;

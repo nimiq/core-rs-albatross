@@ -1,10 +1,11 @@
+use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 
-use futures::task::{Context, Poll};
-use futures::{Future, FutureExt, StreamExt};
+use futures::{FutureExt, StreamExt};
 use parking_lot::RwLock;
 use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
 use tokio::time::Sleep;

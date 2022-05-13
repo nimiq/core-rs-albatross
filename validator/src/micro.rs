@@ -1,10 +1,9 @@
 use std::pin::Pin;
 use std::sync::Arc;
+use std::task::{Context, Poll};
 use std::time::{Duration, SystemTime};
 
-use futures::future::BoxFuture;
-use futures::task::{Context, Poll};
-use futures::{ready, FutureExt, Stream};
+use futures::{future::BoxFuture, ready, FutureExt, Stream};
 use parking_lot::RwLock;
 use tokio::time;
 

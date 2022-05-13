@@ -1,6 +1,6 @@
 use anyhow::{bail, Error};
 use clap::Parser;
-use futures::stream::StreamExt;
+use futures::StreamExt;
 use url::Url;
 
 use nimiq_jsonrpc_client::{websocket::WebsocketClient, ArcClient};

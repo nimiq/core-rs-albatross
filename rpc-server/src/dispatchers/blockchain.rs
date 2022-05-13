@@ -1,7 +1,7 @@
 use std::{collections::HashMap, ops::Deref, sync::Arc};
 
 use async_trait::async_trait;
-use futures::stream::{BoxStream, StreamExt};
+use futures::{stream::BoxStream, StreamExt};
 use parking_lot::RwLock;
 
 use nimiq_account::StakingContract;

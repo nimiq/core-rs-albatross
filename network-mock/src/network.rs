@@ -5,7 +5,7 @@ use std::sync::{
 use std::time::Duration;
 
 use async_trait::async_trait;
-use futures::stream::{BoxStream, StreamExt};
+use futures::{stream::BoxStream, StreamExt};
 use parking_lot::{Mutex, RwLock};
 use thiserror::Error;
 use tokio::sync::{broadcast, mpsc, oneshot};

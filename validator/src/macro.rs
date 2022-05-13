@@ -1,9 +1,9 @@
 use std::io;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::task::{Context, Poll};
 
-use futures::stream::{BoxStream, Stream, StreamExt};
-use futures::task::{Context, Poll};
+use futures::{stream::BoxStream, Stream, StreamExt};
 use parking_lot::RwLock;
 
 use beserial::{Deserialize, Serialize};

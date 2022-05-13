@@ -1,4 +1,3 @@
-use futures::task::{Context, Poll};
 use libp2p::{
     core::upgrade::{DeniedUpgrade, InboundUpgrade, OutboundUpgrade},
     swarm::{
@@ -6,6 +5,7 @@ use libp2p::{
         NegotiatedSubstream, SubstreamProtocol,
     },
 };
+use std::task::{Context, Poll};
 use thiserror::Error;
 
 #[derive(Default)]

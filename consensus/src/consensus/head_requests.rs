@@ -1,12 +1,13 @@
 use std::collections::HashSet;
+use std::future::Future;
 use std::mem;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::task::{Context, Poll};
 
 use futures::future::BoxFuture;
 use futures::stream::FuturesUnordered;
-use futures::task::{Context, Poll};
-use futures::{Future, FutureExt, StreamExt};
+use futures::{FutureExt, StreamExt};
 use parking_lot::RwLock;
 
 use nimiq_block::Block;

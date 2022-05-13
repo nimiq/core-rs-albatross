@@ -35,7 +35,7 @@ impl<T> TokioAdapter<T> {
     }
 }
 
-impl<T> futures::io::AsyncRead for TokioAdapter<T>
+impl<T> futures::AsyncRead for TokioAdapter<T>
 where
     T: tokio::io::AsyncRead,
 {
@@ -54,7 +54,7 @@ where
     }
 }
 
-impl<T> futures::io::AsyncWrite for TokioAdapter<T>
+impl<T> futures::AsyncWrite for TokioAdapter<T>
 where
     T: tokio::io::AsyncWrite,
 {
@@ -77,7 +77,7 @@ where
 
 impl<T> tokio::io::AsyncRead for TokioAdapter<T>
 where
-    T: futures::io::AsyncRead,
+    T: futures::AsyncRead,
 {
     fn poll_read(
         self: Pin<&mut Self>,
@@ -86,7 +86,7 @@ where
     ) -> Poll<io::Result<()>> {
         // TODO: It's not optimal to initialize the buffer
         let buffer = buf.initialize_unfilled();
-        let n = ready!(futures::io::AsyncRead::poll_read(
+        let n = ready!(futures::AsyncRead::poll_read(
             self.project().inner,
             cx,
             buffer
@@ -98,21 +98,21 @@ where
 
 impl<T> tokio::io::AsyncWrite for TokioAdapter<T>
 where
-    T: futures::io::AsyncWrite,
+    T: futures::AsyncWrite,
 {
     fn poll_write(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<io::Result<usize>> {
-        futures::io::AsyncWrite::poll_write(self.project().inner, cx, buf)
+        futures::AsyncWrite::poll_write(self.project().inner, cx, buf)
     }
 
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        futures::io::AsyncWrite::poll_flush(self.project().inner, cx)
+        futures::AsyncWrite::poll_flush(self.project().inner, cx)
     }
 
     fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        futures::io::AsyncWrite::poll_close(self.project().inner, cx)
+        futures::AsyncWrite::poll_close(self.project().inner, cx)
     }
 }

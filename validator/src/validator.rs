@@ -1,12 +1,11 @@
 use std::error::Error;
+use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::task::{Context, Poll, Waker};
 use std::time::Duration;
 
-use futures::{
-    task::{Context, Poll, Waker},
-    Future, Stream, StreamExt,
-};
+use futures::{Stream, StreamExt};
 use linked_hash_map::LinkedHashMap;
 use parking_lot::RwLock;
 use tokio_metrics::TaskMonitor;

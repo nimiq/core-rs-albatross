@@ -1,10 +1,10 @@
+use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU32, Ordering as AtomicOrdering};
 use std::sync::Arc;
+use std::task::{Context, Poll};
 
-use futures::ready;
-use futures::task::{Context, Poll};
-use futures::{stream::BoxStream, Future, StreamExt};
+use futures::{ready, stream::BoxStream, StreamExt};
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 
 use nimiq_blockchain::Blockchain;

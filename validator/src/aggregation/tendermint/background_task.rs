@@ -1,8 +1,9 @@
 use std::collections::BTreeMap;
+use std::future::Future;
 use std::sync::Arc;
 use std::task::Poll;
 
-use futures::{ready, Future, StreamExt};
+use futures::{ready, StreamExt};
 use parking_lot::RwLock;
 
 use nimiq_block::TendermintStep;

@@ -2,9 +2,7 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::task::Waker;
 
-use futures::future::BoxFuture;
-use futures::stream::FuturesUnordered;
-use futures::FutureExt;
+use futures::{future::BoxFuture, stream::FuturesUnordered, FutureExt};
 use parking_lot::RwLock;
 
 use nimiq_blockchain::Blockchain;

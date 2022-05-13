@@ -5,10 +5,8 @@ use crate::outside_deps::TendermintOutsideDeps;
 use crate::state::TendermintState;
 use crate::tendermint::Tendermint;
 use crate::utils::{StreamResult, TendermintReturn};
-use futures::{
-    future::FutureExt,
-    stream::{BoxStream, SelectAll, Stream, StreamExt},
-};
+use futures::stream::{BoxStream, SelectAll};
+use futures::{FutureExt, Stream, StreamExt};
 
 /// This is the main struct of the Tendermint crate. It implements Stream which,
 /// when called repeatedly, yields state updates, errors and results produced by the Tendermint

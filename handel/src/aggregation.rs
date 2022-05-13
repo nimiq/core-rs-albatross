@@ -1,10 +1,11 @@
 use std::fmt::Debug;
+use std::future::Future;
 use std::pin::Pin;
+use std::task::{Context, Poll};
 
-use futures::future::BoxFuture;
-use futures::stream::BoxStream;
-use futures::task::{Context, Poll};
-use futures::{ready, select, Future, FutureExt, Sink, Stream, StreamExt};
+use futures::{
+    future::BoxFuture, ready, select, stream::BoxStream, FutureExt, Sink, Stream, StreamExt,
+};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tokio::task::JoinHandle;
 use tokio::time::{interval_at, Instant};

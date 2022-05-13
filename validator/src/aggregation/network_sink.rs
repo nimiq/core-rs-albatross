@@ -1,10 +1,9 @@
 use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::task::{Context, Poll};
 
-use futures::future::{BoxFuture, FutureExt};
-use futures::sink::Sink;
-use futures::task::{Context, Poll};
+use futures::{future::BoxFuture, FutureExt, Sink};
 
 use nimiq_network_interface::request::Request;
 use nimiq_validator_network::ValidatorNetwork;

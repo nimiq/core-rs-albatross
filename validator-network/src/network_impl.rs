@@ -30,6 +30,7 @@ where
     N::PeerId: Serialize + Deserialize,
 {
     network: Arc<N>,
+    // TODO: check if this should be a parking_lot::Mutex
     state: Mutex<State<N::PeerId>>,
 }
 

@@ -1,6 +1,6 @@
-use failure::_core::pin::Pin;
-use futures::task::{Context, Poll};
-use futures::Future;
+use std::future::::Future;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 
 use nimiq_block::{MacroBlock, SignedViewChange, ViewChangeProof};
 use nimiq_network::Network;

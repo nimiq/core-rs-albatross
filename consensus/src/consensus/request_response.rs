@@ -1,8 +1,7 @@
 use std::future::Future;
 use std::sync::Arc;
 
-use futures::stream::BoxStream;
-use futures::StreamExt;
+use futures::{stream::BoxStream, StreamExt};
 use parking_lot::RwLock;
 
 use nimiq_blockchain::Blockchain;

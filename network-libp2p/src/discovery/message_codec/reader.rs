@@ -1,10 +1,9 @@
-use std::{marker::PhantomData, pin::Pin};
+use std::marker::PhantomData;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 
 use bytes::{Buf, BytesMut};
-use futures::{
-    task::{Context, Poll},
-    AsyncRead, Stream,
-};
+use futures::{AsyncRead, Stream};
 use pin_project::pin_project;
 
 use beserial::{Deserialize, SerializingError};

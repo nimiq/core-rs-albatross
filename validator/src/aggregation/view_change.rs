@@ -1,10 +1,9 @@
 use std::fmt;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::task::{Context, Poll};
 
-use futures::ready;
-use futures::stream::{BoxStream, Stream, StreamExt};
-use futures::task::{Context, Poll};
+use futures::{ready, stream::select, stream::BoxStream, Stream, StreamExt};
 use parking_lot::RwLock;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -282,7 +281,7 @@ impl ViewChangeAggregation {
                 >::new(network.clone())),
             );
 
-            let mut stream = futures::stream::select(
+            let mut stream = select(
                 aggregation.map(ViewChangeResult::ViewChange),
                 UnboundedReceiverStream::new(receiver),
             );

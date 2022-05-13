@@ -4,10 +4,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use beserial::Serialize;
-use futures::{
-    future::{BoxFuture, FutureExt},
-    stream::{BoxStream, StreamExt},
-};
+use futures::{future::BoxFuture, stream::BoxStream, FutureExt, StreamExt};
 use nimiq_primitives::policy;
 use parking_lot::RwLock;
 

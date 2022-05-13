@@ -5,10 +5,7 @@ use std::{
     task::{Context, Poll},
 };
 
-use futures::{
-    stream::{Stream, StreamExt},
-    task::noop_waker_ref,
-};
+use futures::{task::noop_waker_ref, Stream, StreamExt};
 use parking_lot::RwLock;
 use pin_project::pin_project;
 use rand::Rng;

@@ -1,9 +1,9 @@
 use std::collections::{HashMap, HashSet};
 use std::pin::Pin;
 use std::sync::Arc;
+use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 
-use futures::task::{Context, Poll};
 use futures::{FutureExt, Stream, StreamExt};
 
 use nimiq_block::Block;
