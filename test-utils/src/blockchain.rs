@@ -125,6 +125,33 @@ pub fn produce_macro_blocks_with_txns(
     }
 }
 
+/// Create the next micro block with default parameters.
+pub fn next_micro_block(producer: &BlockProducer, blockchain: &Arc<RwLock<Blockchain>>) -> Block {
+    let blockchain = blockchain.upgradable_read();
+    let view_number = blockchain.view_number();
+    let block = producer.next_micro_block(
+        &blockchain,
+        blockchain.head().timestamp() + 500,
+        view_number,
+        None,
+        vec![],
+        vec![],
+        vec![0x42],
+    );
+    Block::Micro(block)
+}
+
+/// Creates and pushes a single micro block to the chain.
+pub fn push_micro_block(producer: &BlockProducer, blockchain: &Arc<RwLock<Blockchain>>) -> Block {
+    let block = next_micro_block(producer, blockchain);
+    let blockchain = blockchain.upgradable_read();
+    assert_eq!(
+        Blockchain::push(blockchain, block.clone()),
+        Ok(PushResult::Extended)
+    );
+    block
+}
+
 /// Fill batch with micro blocks.
 pub fn fill_micro_blocks(producer: &BlockProducer, blockchain: &Arc<RwLock<Blockchain>>) {
     let init_height = blockchain.read().block_number();
@@ -133,22 +160,8 @@ pub fn fill_micro_blocks(producer: &BlockProducer, blockchain: &Arc<RwLock<Block
 
     let macro_block_number = init_height + policy::BLOCKS_PER_BATCH;
 
-    for i in (init_height + 1)..macro_block_number {
-        let blockchain = blockchain.upgradable_read();
-        let last_micro_block = producer.next_micro_block(
-            &blockchain,
-            blockchain.time.now() + i as u64 * 1000,
-            0,
-            None,
-            vec![],
-            vec![],
-            vec![0x42],
-        );
-
-        assert_eq!(
-            Blockchain::push(blockchain, Block::Micro(last_micro_block)),
-            Ok(PushResult::Extended)
-        );
+    for _ in (init_height + 1)..macro_block_number {
+        push_micro_block(producer, blockchain);
     }
 
     assert_eq!(blockchain.read().block_number(), macro_block_number - 1);

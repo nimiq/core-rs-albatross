@@ -109,9 +109,14 @@ impl<N: Network, TReq: RequestComponent<N>> Inner<N, TReq> {
         peer_id: N::PeerId,
         pubsub_id: Option<<N as Network>::PubsubId>,
     ) {
+        // Ignore blocks that we already know.
         let blockchain = self.blockchain.read();
-        let head_height = blockchain.block_number();
+        if blockchain.contains(&block.hash(), true) {
+            return;
+        }
+
         let parent_known = blockchain.contains(block.parent_hash(), true);
+        let head_height = blockchain.block_number();
         drop(blockchain);
 
         // Check if a macro block boundary was passed. If so prune the block buffer.
@@ -159,9 +164,14 @@ impl<N: Network, TReq: RequestComponent<N>> Inner<N, TReq> {
     }
 
     fn buffer_and_request_missing_blocks(&mut self, block: Block, pubsub_id: Option<N::PubsubId>) {
-        let parent_hash = block.parent_hash().clone();
+        // Make sure that block_number is positive as we subtract from it later on.
         let block_number = block.block_number();
+        if block_number == 0 {
+            return;
+        }
+
         let view_number = block.view_number();
+        let parent_hash = block.parent_hash().clone();
 
         // Insert block into buffer. If we already know the block, we're done.
         let block_known = self.insert_block_into_buffer(block, pubsub_id);
@@ -650,11 +660,7 @@ impl<N: Network, TReq: RequestComponent<N>> Stream for BlockQueue<N, TReq> {
                 Poll::Ready(Some((block, pubsub_id))) => {
                     // Ignore all block announcements until there is at least one synced peer.
                     if num_peers > 0 {
-                        log::debug!(
-                            "Received block #{}.{} via gossipsub",
-                            block.block_number(),
-                            block.view_number()
-                        );
+                        log::debug!(%block, "Received block via gossipsub");
                         this.inner.on_block_announced(
                             block,
                             pubsub_id.propagation_source(),

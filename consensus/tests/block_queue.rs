@@ -14,7 +14,7 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use nimiq_block::Block;
 use nimiq_block_production::BlockProducer;
-use nimiq_blockchain::{AbstractBlockchain, Blockchain};
+use nimiq_blockchain::{AbstractBlockchain, Blockchain, Direction};
 use nimiq_consensus::sync::block_queue::{BlockQueue, BlockQueueConfig};
 use nimiq_consensus::sync::request_component::{RequestComponent, RequestComponentEvent};
 use nimiq_database::volatile::VolatileEnvironment;
@@ -23,7 +23,9 @@ use nimiq_network_interface::network::Network;
 use nimiq_network_mock::{MockHub, MockId, MockNetwork};
 use nimiq_primitives::networks::NetworkId;
 use nimiq_test_log::test;
-use nimiq_test_utils::blockchain::{signing_key, voting_key};
+use nimiq_test_utils::blockchain::{
+    next_micro_block, produce_macro_blocks, push_micro_block, signing_key, voting_key,
+};
 use nimiq_utils::time::OffsetTime;
 
 #[pin_project]
@@ -104,43 +106,37 @@ impl<N: Network> Stream for MockRequestComponent<N> {
     }
 }
 
-#[test(tokio::test)]
-async fn send_single_micro_block_to_block_queue() {
+fn blockchain() -> Arc<RwLock<Blockchain>> {
     let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(RwLock::new(
+    Arc::new(RwLock::new(
         Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
-    ));
+    ))
+}
+
+#[test(tokio::test)]
+async fn send_single_micro_block_to_block_queue() {
+    let blockchain = blockchain();
+
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
-    let producer = BlockProducer::new(signing_key(), voting_key());
     let request_component = MockRequestComponent::<MockNetwork>::default();
-    let (tx, rx) = mpsc::channel(32);
+    let (block_tx, block_rx) = mpsc::channel(32);
 
     let mut block_queue = BlockQueue::with_block_stream(
         Default::default(),
         Arc::clone(&blockchain),
         Arc::clone(&network),
         request_component,
-        ReceiverStream::new(rx).boxed(),
+        ReceiverStream::new(block_rx).boxed(),
     );
 
     // push one micro block to the queue
-    let block = {
-        let bc = blockchain.read();
-        Block::Micro(producer.next_micro_block(
-            &bc,
-            bc.time.now(),
-            0,
-            None,
-            vec![],
-            vec![],
-            vec![0x42],
-        ))
-    };
+    let producer = BlockProducer::new(signing_key(), voting_key());
+    let block = next_micro_block(&producer, &blockchain);
 
     let mock_id = MockId::new(hub.new_address().into());
-    tx.send((block, mock_id)).await.unwrap();
+    block_tx.send((block, mock_id)).await.unwrap();
 
     assert_eq!(blockchain.read().block_number(), 0);
 
@@ -154,62 +150,34 @@ async fn send_single_micro_block_to_block_queue() {
 
 #[test(tokio::test)]
 async fn send_two_micro_blocks_out_of_order() {
-    let env1 = VolatileEnvironment::new(10).unwrap();
-    let time1 = Arc::new(OffsetTime::new());
-    let env2 = VolatileEnvironment::new(10).unwrap();
-    let time2 = Arc::new(OffsetTime::new());
-    let blockchain1 = Arc::new(RwLock::new(
-        Blockchain::new(env1, NetworkId::UnitAlbatross, time1).unwrap(),
-    ));
-    let blockchain2 = Arc::new(RwLock::new(
-        Blockchain::new(env2, NetworkId::UnitAlbatross, time2).unwrap(),
-    ));
+    let blockchain1 = blockchain();
+    let blockchain2 = blockchain();
+
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
-    let producer = BlockProducer::new(signing_key(), voting_key());
-    let (request_component, mut mock_ptarc_rx, _mock_ptarc_tx) =
+    let (request_component, mut missing_blocks_request_rx, _) =
         MockRequestComponent::<MockNetwork>::new();
-    let (tx, rx) = mpsc::channel(32);
+    let (block_tx, block_rx) = mpsc::channel(32);
 
     let mut block_queue = BlockQueue::with_block_stream(
         Default::default(),
         Arc::clone(&blockchain1),
         network,
         request_component,
-        ReceiverStream::new(rx).boxed(),
+        ReceiverStream::new(block_rx).boxed(),
     );
 
-    let bc = blockchain2.upgradable_read();
-    let block1 = Block::Micro(producer.next_micro_block(
-        &bc,
-        bc.time.now(),
-        0,
-        None,
-        vec![],
-        vec![],
-        vec![0x42],
-    ));
-    // push it, so the producer actually produces a block at height 2
-    // this also consumes bc
-    Blockchain::push(bc, block1.clone()).unwrap();
-
-    let block2 = {
-        let bc = blockchain2.read();
-        Block::Micro(producer.next_micro_block(
-            &bc,
-            bc.time.now() + 1000,
-            0,
-            None,
-            vec![],
-            vec![],
-            vec![0x42],
-        ))
-    };
+    let producer = BlockProducer::new(signing_key(), voting_key());
+    let block1 = push_micro_block(&producer, &blockchain2);
+    let block2 = next_micro_block(&producer, &blockchain2);
 
     let mock_id = MockId::new(hub.new_address().into());
 
     // send block2 first
-    tx.send((block2.clone(), mock_id.clone())).await.unwrap();
+    block_tx
+        .send((block2.clone(), mock_id.clone()))
+        .await
+        .unwrap();
 
     assert_eq!(blockchain1.read().block_number(), 0);
 
@@ -225,11 +193,11 @@ async fn send_two_micro_blocks_out_of_order() {
     assert_eq!(blocks[0], &block2);
 
     // Also we should've received a request to fill this gap
-    let (target_block_hash, _locators) = mock_ptarc_rx.recv().await.unwrap();
+    let (target_block_hash, _) = missing_blocks_request_rx.recv().await.unwrap();
     assert_eq!(&target_block_hash, block2.parent_hash());
 
     // now send block1 to fill the gap
-    tx.send((block1.clone(), mock_id)).await.unwrap();
+    block_tx.send((block1.clone(), mock_id)).await.unwrap();
 
     // run the block_queue until is has produced two events.
     block_queue.next().await;
@@ -250,53 +218,31 @@ async fn send_two_micro_blocks_out_of_order() {
 
 #[test(tokio::test)]
 async fn send_micro_blocks_out_of_order() {
-    let env1 = VolatileEnvironment::new(10).unwrap();
-    let time1 = Arc::new(OffsetTime::new());
-    let env2 = VolatileEnvironment::new(10).unwrap();
-    let time2 = Arc::new(OffsetTime::new());
-    let blockchain1 = Arc::new(RwLock::new(
-        Blockchain::new(env1, NetworkId::UnitAlbatross, time1).unwrap(),
-    ));
-    let blockchain2 = Arc::new(RwLock::new(
-        Blockchain::new(env2, NetworkId::UnitAlbatross, time2).unwrap(),
-    ));
+    let blockchain1 = blockchain();
+    let blockchain2 = blockchain();
+
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
-    let producer = BlockProducer::new(signing_key(), voting_key());
-    let (request_component, _mock_ptarc_rx, _mock_ptarc_tx) =
-        MockRequestComponent::<MockNetwork>::new();
-    let (tx, rx) = mpsc::channel(32);
+    let request_component = MockRequestComponent::<MockNetwork>::default();
+    let (block_tx, block_rx) = mpsc::channel(32);
 
     let mut block_queue = BlockQueue::with_block_stream(
         Default::default(),
         Arc::clone(&blockchain1),
         network,
         request_component,
-        ReceiverStream::new(rx).boxed(),
+        ReceiverStream::new(block_rx).boxed(),
     );
 
     let mut rng = rand::thread_rng();
     let mut ordered_blocks = Vec::new();
 
     let mock_id = MockId::new(hub.new_address().into());
-
+    let producer = BlockProducer::new(signing_key(), voting_key());
     let n_blocks = rng.gen_range(2..15);
 
-    for n in 0..n_blocks {
-        let bc = blockchain2.upgradable_read();
-        let block = Block::Micro(producer.next_micro_block(
-            &bc,
-            bc.time.now() + n * 1000,
-            0,
-            None,
-            vec![],
-            vec![],
-            vec![0x42],
-        ));
-
-        // push it, so the producer actually produces a block
-        Blockchain::push(bc, block.clone()).unwrap();
-
+    for _ in 0..n_blocks {
+        let block = push_micro_block(&producer, &blockchain2);
         ordered_blocks.push(block);
     }
 
@@ -305,7 +251,8 @@ async fn send_micro_blocks_out_of_order() {
     while blocks.len() > 1 {
         let index = rng.gen_range(1..blocks.len());
 
-        tx.send((blocks.remove(index).clone(), mock_id.clone()))
+        block_tx
+            .send((blocks.remove(index).clone(), mock_id.clone()))
             .await
             .unwrap();
 
@@ -317,11 +264,10 @@ async fn send_micro_blocks_out_of_order() {
     assert_eq!(blockchain1.read().block_number(), 0);
 
     // Obtain the buffered blocks
-
     assert_eq!(block_queue.buffered_blocks().count() as u64, n_blocks - 1);
 
     // now send block1 to fill the gap
-    tx.send((blocks[0].clone(), mock_id)).await.unwrap();
+    block_tx.send((blocks[0].clone(), mock_id)).await.unwrap();
 
     for _ in 0..n_blocks {
         block_queue.next().await;
@@ -344,58 +290,40 @@ async fn send_micro_blocks_out_of_order() {
 
 #[test(tokio::test)]
 async fn send_invalid_block() {
-    let env1 = VolatileEnvironment::new(10).unwrap();
-    let time1 = Arc::new(OffsetTime::new());
-    let env2 = VolatileEnvironment::new(10).unwrap();
-    let time2 = Arc::new(OffsetTime::new());
-    let blockchain1 = Arc::new(RwLock::new(
-        Blockchain::new(env1, NetworkId::UnitAlbatross, time1).unwrap(),
-    ));
-    let blockchain2 = Arc::new(RwLock::new(
-        Blockchain::new(env2, NetworkId::UnitAlbatross, time2).unwrap(),
-    ));
+    let blockchain1 = blockchain();
+    let blockchain2 = blockchain();
+
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
-    let producer = BlockProducer::new(signing_key(), voting_key());
-    let (request_component, mut mock_ptarc_rx, _mock_ptarc_tx) =
+    let (request_component, mut missing_blocks_request_rx, _) =
         MockRequestComponent::<MockNetwork>::new();
-    let (tx, rx) = mpsc::channel(32);
+    let (block_tx, block_rx) = mpsc::channel(32);
 
     let mut block_queue = BlockQueue::with_block_stream(
         Default::default(),
         Arc::clone(&blockchain1),
         network,
         request_component,
-        ReceiverStream::new(rx).boxed(),
+        ReceiverStream::new(block_rx).boxed(),
     );
 
-    let bc = blockchain2.upgradable_read();
-    let timestamp = bc.time.now();
-    let block1 = Block::Micro(producer.next_micro_block(
-        &bc,
-        timestamp + 100000,
-        0,
-        None,
-        vec![],
-        vec![],
-        vec![0x42],
-    ));
-    // this also consumes bc
-    Blockchain::push(bc, block1.clone()).unwrap();
+    let producer = BlockProducer::new(signing_key(), voting_key());
+    let block1 = push_micro_block(&producer, &blockchain2);
 
     // Block2's timestamp is less than Block1's timestamp, so Block 2 will be rejected by the blockchain
     let block2 = {
-        let bc = blockchain2.read();
-        let mut micro_block =
-            producer.next_micro_block(&bc, timestamp, 0, None, vec![], vec![], vec![0x42]);
-        micro_block.header.timestamp = timestamp;
-        Block::Micro(micro_block)
+        let mut block = next_micro_block(&producer, &blockchain2).unwrap_micro();
+        block.header.timestamp = block1.timestamp() - 5;
+        Block::Micro(block)
     };
 
     let mock_id = MockId::new(hub.new_address().into());
 
     // send block2 first
-    tx.send((block2.clone(), mock_id.clone())).await.unwrap();
+    block_tx
+        .send((block2.clone(), mock_id.clone()))
+        .await
+        .unwrap();
 
     assert_eq!(blockchain1.read().block_number(), 0);
 
@@ -410,11 +338,11 @@ async fn send_invalid_block() {
     assert_eq!(*block_number, 2);
     assert_eq!(blocks[0], &block2);
 
-    let (target_block_hash, _locators) = mock_ptarc_rx.recv().await.unwrap();
+    let (target_block_hash, _locators) = missing_blocks_request_rx.recv().await.unwrap();
     assert_eq!(&target_block_hash, block2.parent_hash());
 
     // now send block1 to fill the gap
-    tx.send((block1.clone(), mock_id)).await.unwrap();
+    block_tx.send((block1.clone(), mock_id)).await.unwrap();
 
     // run the block_queue until is has produced two events.
     // The second block will be rejected due to an Invalid Sucessor event
@@ -436,62 +364,31 @@ async fn send_invalid_block() {
 
 #[test(tokio::test)]
 async fn send_block_with_gap_and_respond_to_missing_request() {
-    let env1 = VolatileEnvironment::new(10).unwrap();
-    let time1 = Arc::new(OffsetTime::new());
-    let env2 = VolatileEnvironment::new(10).unwrap();
-    let time2 = Arc::new(OffsetTime::new());
-    let blockchain1 = Arc::new(RwLock::new(
-        Blockchain::new(env1, NetworkId::UnitAlbatross, time1).unwrap(),
-    ));
-    let blockchain2 = Arc::new(RwLock::new(
-        Blockchain::new(env2, NetworkId::UnitAlbatross, time2).unwrap(),
-    ));
+    let blockchain1 = blockchain();
+    let blockchain2 = blockchain();
+
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network_with_address(1));
-    let producer = BlockProducer::new(signing_key(), voting_key());
-    let (request_component, mut mock_ptarc_rx, mock_ptarc_tx) =
+    let (request_component, mut missing_block_request_rx, missing_blocks_request_tx) =
         MockRequestComponent::<MockNetwork>::new();
-    let (tx, rx) = mpsc::channel(32);
+    let (block_tx, block_rx) = mpsc::channel(32);
 
     let mut block_queue = BlockQueue::with_block_stream(
         Default::default(),
         Arc::clone(&blockchain1),
         network,
         request_component,
-        ReceiverStream::new(rx).boxed(),
+        ReceiverStream::new(block_rx).boxed(),
     );
 
-    let bc = blockchain2.upgradable_read();
-    let block1 = Block::Micro(producer.next_micro_block(
-        &bc,
-        bc.time.now(),
-        0,
-        None,
-        vec![],
-        vec![],
-        vec![0x42],
-    ));
-    // push it, so the producer actually produces a block at height 2
-    // also consumes bc
-    Blockchain::push(bc, block1.clone()).unwrap();
-
-    let block2 = {
-        let bc = blockchain2.read();
-        Block::Micro(producer.next_micro_block(
-            &bc,
-            bc.time.now() + 1000,
-            0,
-            None,
-            vec![],
-            vec![],
-            vec![0x42],
-        ))
-    };
+    let producer = BlockProducer::new(signing_key(), voting_key());
+    let block1 = push_micro_block(&producer, &blockchain2);
+    let block2 = next_micro_block(&producer, &blockchain2);
 
     let mock_id = MockId::new(hub.new_address().into());
 
     // send block2 first
-    tx.send((block2.clone(), mock_id)).await.unwrap();
+    block_tx.send((block2.clone(), mock_id)).await.unwrap();
 
     assert_eq!(blockchain1.read().block_number(), 0);
 
@@ -508,11 +405,13 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
 
     // Also we should've received a request to fill this gap
     // TODO: Check block locators
-    let (target_block_hash, _locators) = mock_ptarc_rx.recv().await.unwrap();
+    let (target_block_hash, _) = missing_block_request_rx.recv().await.unwrap();
     assert_eq!(&target_block_hash, block2.parent_hash());
 
     // Instead of gossiping the block, we'll answer the missing blocks request
-    mock_ptarc_tx.send(vec![block1.clone()]).unwrap();
+    missing_blocks_request_tx
+        .send(vec![block1.clone()])
+        .unwrap();
 
     // run the block_queue until is has produced two events.
     block_queue.next().await;
@@ -532,22 +431,127 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
 }
 
 #[test(tokio::test)]
-async fn put_peer_back_into_sync_mode() {
-    let env1 = VolatileEnvironment::new(10).unwrap();
-    let time1 = Arc::new(OffsetTime::new());
-    let env2 = VolatileEnvironment::new(10).unwrap();
-    let time2 = Arc::new(OffsetTime::new());
-    let blockchain1 = Arc::new(RwLock::new(
-        Blockchain::new(env1, NetworkId::UnitAlbatross, time1).unwrap(),
-    ));
-    let blockchain2 = Arc::new(RwLock::new(
-        Blockchain::new(env2, NetworkId::UnitAlbatross, time2).unwrap(),
-    ));
+async fn request_missing_blocks_across_macro_block() {
+    let blockchain1 = blockchain();
+    let blockchain2 = blockchain();
+
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network_with_address(1));
+    let (request_component, mut missing_block_request_rx, missing_blocks_request_tx) =
+        MockRequestComponent::<MockNetwork>::new();
+    let (block_tx, block_rx) = mpsc::channel(32);
+
+    let mut block_queue = BlockQueue::with_block_stream(
+        Default::default(),
+        Arc::clone(&blockchain1),
+        network,
+        request_component,
+        ReceiverStream::new(block_rx).boxed(),
+    );
+
     let producer = BlockProducer::new(signing_key(), voting_key());
-    let (request_component, _, _) = MockRequestComponent::<MockNetwork>::new();
-    let (tx, rx) = mpsc::channel(32);
+    produce_macro_blocks(&producer, &blockchain2, 1);
+    let block1 = push_micro_block(&producer, &blockchain2);
+    let block2 = next_micro_block(&producer, &blockchain2);
+
+    let mock_id = MockId::new(hub.new_address().into());
+
+    // send block2 first
+    block_tx.send((block2.clone(), mock_id)).await.unwrap();
+
+    assert_eq!(blockchain1.read().block_number(), 0);
+
+    // run the block_queue one iteration, i.e. until it processed one block
+    let _ = block_queue.poll_next_unpin(&mut Context::from_waker(noop_waker_ref()));
+
+    // this block should be buffered now
+    assert_eq!(blockchain1.read().block_number(), 0);
+    let blocks = block_queue.buffered_blocks().collect::<Vec<_>>();
+    assert_eq!(blocks.len(), 1);
+    let (block_number, blocks) = blocks.get(0).unwrap();
+    assert_eq!(*block_number, block2.block_number());
+    assert_eq!(blocks[0], &block2);
+
+    // Also we should've received a request to fill the first gap.
+    // TODO: Check block locators
+    let (target_block_hash, _) = missing_block_request_rx.recv().await.unwrap();
+    assert_eq!(&target_block_hash, block2.parent_hash());
+
+    // Instead of gossiping the block, we'll answer the missing blocks request
+    let macro_head = Block::Macro(blockchain2.read().macro_head());
+    missing_blocks_request_tx
+        .send(vec![macro_head.clone(), block1.clone()])
+        .unwrap();
+
+    // Run the block_queue one iteration, i.e. until it processed one block
+    let _ = block_queue.poll_next_unpin(&mut Context::from_waker(noop_waker_ref()));
+
+    // The blocks from the first missing blocks request should be buffered now
+    assert_eq!(blockchain1.read().block_number(), 0);
+    let blocks = block_queue.buffered_blocks().collect::<Vec<_>>();
+    assert_eq!(blocks.len(), 3);
+    let (block_number, blocks) = blocks.get(0).unwrap();
+    assert_eq!(*block_number, macro_head.block_number());
+    assert_eq!(blocks[0], &macro_head);
+
+    // Also we should've received a request to fill the second gap.
+    // TODO: Check block locators
+    let (target_block_hash, _) = missing_block_request_rx.recv().await.unwrap();
+    assert_eq!(&target_block_hash, macro_head.parent_hash());
+
+    // Respond to second missing blocks request.
+    let target_block = blockchain2
+        .read()
+        .get_block(&target_block_hash, true, None)
+        .unwrap();
+    let mut blocks = blockchain2.read().get_blocks(
+        &target_block_hash,
+        macro_head.block_number() - 2,
+        true,
+        Direction::Backward,
+    );
+    blocks.reverse();
+    blocks.push(target_block);
+    missing_blocks_request_tx.send(blocks).unwrap();
+
+    // Run the block_queue until is has produced four events:
+    //   - ReceivedMissingBlocks (1-31)
+    //   - AcceptedBufferedBlock (32)
+    //   - AcceptedBufferedBlock (33)
+    //   - AcceptedBufferedBlock (34)
+    block_queue.next().await;
+    block_queue.next().await;
+    block_queue.next().await;
+    block_queue.next().await;
+
+    // Now all blocks should've been pushed to the blockchain.
+    assert_eq!(blockchain1.read().block_number(), block2.block_number());
+    assert!(block_queue.buffered_blocks().next().is_none());
+    assert_eq!(
+        blockchain1
+            .read()
+            .get_block_at(block1.block_number(), true, None)
+            .unwrap(),
+        block1
+    );
+    assert_eq!(
+        blockchain1
+            .read()
+            .get_block_at(block2.block_number(), true, None)
+            .unwrap(),
+        block2
+    );
+}
+
+#[test(tokio::test)]
+async fn put_peer_back_into_sync_mode() {
+    let blockchain1 = blockchain();
+    let blockchain2 = blockchain();
+
+    let mut hub = MockHub::new();
+    let network = Arc::new(hub.new_network_with_address(1));
+    let request_component = MockRequestComponent::<MockNetwork>::default();
+    let (block_tx, block_rx) = mpsc::channel(32);
 
     let peer_addr = hub.new_address().into();
     let mock_id = MockId::new(peer_addr);
@@ -561,37 +565,16 @@ async fn put_peer_back_into_sync_mode() {
         Arc::clone(&blockchain1),
         network,
         request_component,
-        ReceiverStream::new(rx).boxed(),
+        ReceiverStream::new(block_rx).boxed(),
     );
 
+    let producer = BlockProducer::new(signing_key(), voting_key());
     for _ in 1..11 {
-        let bc = blockchain2.upgradable_read();
-        let block = Block::Micro(producer.next_micro_block(
-            &bc,
-            bc.time.now(),
-            0,
-            None,
-            vec![],
-            vec![],
-            vec![0x42],
-        ));
-        Blockchain::push(bc, block).unwrap();
+        push_micro_block(&producer, &blockchain2);
     }
 
-    let block = {
-        let bc = blockchain2.read();
-        Block::Micro(producer.next_micro_block(
-            &bc,
-            bc.time.now(),
-            0,
-            None,
-            vec![],
-            vec![],
-            vec![0x42],
-        ))
-    };
-
-    tx.send((block, mock_id)).await.unwrap();
+    let block = next_micro_block(&producer, &blockchain2);
+    block_tx.send((block, mock_id)).await.unwrap();
 
     // run the block_queue one iteration, i.e. until it processed one block
     let _ = block_queue.poll_next_unpin(&mut Context::from_waker(noop_waker_ref()));
