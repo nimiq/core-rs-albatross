@@ -113,6 +113,31 @@ username = "super"
 password = "secret"
 
 
+##############################################################################
+#
+# Metrics-server configuration.
+# If the section header is uncommented, the server is enabled.
+#
+##############################################################################
+
+[metrics-server]
+
+# Bind the metrics server to the specified IP
+# Default: 127.0.0.1
+bind = "127.0.0.1"
+
+# Port to use to create a listening socket for the metrics server.
+# Possible values: any valid port number
+# Default: 8649
+port = 8649
+
+# Declare a username and password required to access the metrics server.
+# Default: none
+username = "super"
+
+# Default: none
+password = "secret"
+
 
 ##############################################################################
 #

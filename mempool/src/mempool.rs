@@ -24,6 +24,7 @@ use nimiq_transaction::Transaction;
 use crate::config::MempoolConfig;
 use crate::executor::MempoolExecutor;
 use crate::filter::{MempoolFilter, MempoolRules};
+use crate::mempool_metrics::MempoolMetrics;
 use crate::verify::{verify_tx, VerifyErr};
 
 /// Transaction topic for the Mempool to request transactions from the network
@@ -72,6 +73,7 @@ impl Mempool {
             total_size_limit: config.size_limit,
             total_size: 0,
             tx_counter: 0,
+            metrics: Default::default(),
         };
 
         let state = Arc::new(RwLock::new(state));
@@ -237,7 +239,7 @@ impl Mempool {
                     "Mempool-update removing tx {} from mempool",
                     tx_hash
                 );
-                mempool_state.remove(&tx_hash);
+                mempool_state.remove(&tx_hash, EvictionReason::Expired);
             }
         }
 
@@ -258,7 +260,7 @@ impl Mempool {
                     // Check if we already know this transaction. If yes, a known transaction was
                     // mined so we need to remove it from the mempool.
                     if mempool_state.contains(&tx_hash) {
-                        mempool_state.remove(&tx_hash);
+                        mempool_state.remove(&tx_hash, EvictionReason::AlreadyIncluded);
                         continue;
                     }
 
@@ -324,7 +326,7 @@ impl Mempool {
                                     "Mempool-update removing tx {} from mempool",
                                     hash
                                 );
-                                mempool_state.remove(hash);
+                                mempool_state.remove(hash, EvictionReason::Invalid);
                             }
                         }
                     }
@@ -391,7 +393,7 @@ impl Mempool {
                     }
 
                     for tx in txs_to_remove {
-                        mempool_state.remove(&tx);
+                        mempool_state.remove(&tx, EvictionReason::Invalid);
                     }
                 }
             }
@@ -492,7 +494,7 @@ impl Mempool {
             }
 
             // Remove the transaction from the mempool.
-            mempool_state_upgraded.remove(&tx_hash);
+            mempool_state_upgraded.remove(&tx_hash, EvictionReason::BlockBuilding);
 
             // Push the transaction to our output vector.
             tx_vec.push(tx);
@@ -559,6 +561,11 @@ impl Mempool {
     pub fn get_transactions(&self) -> Vec<Transaction> {
         self.state.read().transactions.values().cloned().collect()
     }
+
+    /// Returns the current metrics
+    pub fn metrics(&self) -> MempoolMetrics {
+        self.state.read().metrics.clone()
+    }
 }
 
 impl TransactionVerificationCache for Mempool {
@@ -610,6 +617,8 @@ pub(crate) struct MempoolState {
 
     // Counter that increases for every added transaction, to order them for removal.
     pub(crate) tx_counter: u64,
+
+    pub(crate) metrics: MempoolMetrics,
 }
 
 impl MempoolState {
@@ -723,13 +732,17 @@ impl MempoolState {
         self.total_size += tx.serialized_size();
         while self.total_size > self.total_size_limit {
             let (tx_hash, _) = self.worst_transactions.pop().unwrap();
-            self.remove(&tx_hash);
+            self.remove(&tx_hash, EvictionReason::TooFull);
         }
 
         true
     }
 
-    pub(crate) fn remove(&mut self, tx_hash: &Blake2bHash) -> Option<Transaction> {
+    pub(crate) fn remove(
+        &mut self,
+        tx_hash: &Blake2bHash,
+        reason: EvictionReason,
+    ) -> Option<Transaction> {
         let tx = self.transactions.remove(tx_hash)?;
 
         self.best_transactions.remove(tx_hash);
@@ -748,6 +761,8 @@ impl MempoolState {
         self.remove_from_staking_state(&tx);
 
         self.total_size -= tx.serialized_size();
+
+        self.metrics.note_evicted(reason);
 
         Some(tx)
     }
@@ -809,6 +824,14 @@ impl MempoolState {
             }
         }
     }
+}
+
+pub(crate) enum EvictionReason {
+    BlockBuilding,
+    Expired,
+    AlreadyIncluded,
+    Invalid,
+    TooFull,
 }
 
 pub(crate) struct SenderPendingState {

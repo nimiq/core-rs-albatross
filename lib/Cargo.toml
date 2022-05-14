@@ -54,6 +54,7 @@ nimiq-jsonrpc-server = { git = "https://github.com/nimiq/jsonrpc.git" }
 nimiq-keys = { path = "../keys" }
 nimiq-log = { path = "../log", optional = true }
 nimiq-mempool = { path = "../mempool" }
+nimiq-metrics-server = { path = "../metrics-server" }
 nimiq-network-libp2p = { path = "../network-libp2p" }
 nimiq-network-interface = { path = "../network-interface" }
 nimiq-peer-address = { path = "../peer-address" }
@@ -73,6 +74,7 @@ default = []
 launcher = []
 signal-handling = ["signal-hook"]
 logging = ["console-subscriber", "nimiq-log", "serde_json", "tokio", "tracing-loki", "tracing-subscriber"]
+metrics-server = []
 panic = ["log-panics"]
 rpc-server = ["validator", "nimiq-rpc-server", "nimiq-wallet"]
 validator = ["nimiq-validator", "nimiq-validator-network", "nimiq-bls", "nimiq-rpc-server"]

@@ -1967,7 +1967,7 @@ dependencies = [
  "libp2p-core",
  "libp2p-swarm",
  "log",
- "prometheus-client",
+ "prometheus-client 0.15.1",
  "prost 0.9.0",
  "prost-build",
  "rand 0.7.3",
@@ -2035,7 +2035,7 @@ dependencies = [
  "libp2p-kad",
  "libp2p-ping",
  "libp2p-swarm",
- "prometheus-client",
+ "prometheus-client 0.15.1",
 ]
 
 [[package]]
@@ -2900,6 +2900,7 @@ dependencies = [
  "nimiq-keys",
  "nimiq-log",
  "nimiq-mempool",
+ "nimiq-metrics-server",
  "nimiq-network-interface",
  "nimiq-network-libp2p",
  "nimiq-peer-address",
@@ -2972,6 +2973,23 @@ dependencies = [
  "rand 0.8.5",
  "tokio",
  "tokio-stream",
+ "tracing",
+]
+
+[[package]]
+name = "nimiq-metrics-server"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "hyper",
+ "nimiq-blockchain",
+ "nimiq-consensus",
+ "nimiq-mempool",
+ "nimiq-network-interface",
+ "nimiq-network-libp2p",
+ "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
+ "prometheus-client 0.16.0",
+ "tokio",
  "tracing",
 ]
 
@@ -4016,6 +4034,18 @@ name = "prometheus-client"
 version = "0.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c9a896938cc6018c64f279888b8c7559d3725210d5db9a3a1ee6bc7188d51d34"
+dependencies = [
+ "dtoa",
+ "itoa",
+ "owning_ref",
+ "prometheus-client-derive-text-encode",
+]
+
+[[package]]
+name = "prometheus-client"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac1abe0255c04d15f571427a2d1e00099016506cf3297b53853acd2b7eb87825"
 dependencies = [
  "dtoa",
  "itoa",

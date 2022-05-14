@@ -268,8 +268,13 @@ voting_key_file = "{path}/voting_key.dat"
 voting_key = "{voting_key}"
 fee_key_file = "{path}/fee_key.dat"
 fee_key = "{fee_key}"
+
+[metrics-server]
+bind = "127.0.0.1"
+port = {metrics_port}
 """.format(
             port=str(9101 + i),
+            metrics_port=str(9201 + i),
             path="temp-state/dev/{}".format(i+1),  # str(path),
             min_peers=min_peers,
             loki=loki_settings("validator{}".format(i+1)),

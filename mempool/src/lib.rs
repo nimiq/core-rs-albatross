@@ -16,5 +16,7 @@ pub mod executor;
 pub mod filter;
 /// Main mempool module
 pub mod mempool;
+/// Mempool metrics
+mod mempool_metrics;
 /// Verify transaction module
 pub mod verify;

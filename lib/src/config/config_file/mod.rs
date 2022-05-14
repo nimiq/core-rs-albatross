@@ -289,6 +289,7 @@ pub struct MetricsServerSettings {
     #[serde(default)]
     pub bind: Option<address::NetAddress>,
     pub port: Option<u16>,
+    pub username: Option<String>,
     pub password: Option<String>,
 }
 

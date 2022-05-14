@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use log::info;
@@ -46,9 +47,9 @@ async fn main_inner() -> Result<(), Error> {
     let config = builder.build()?;
     log::debug!("Final configuration: {:#?}", config);
 
-    // Clone config for RPC and metrics server
+    // Clone config for RPC
     let rpc_config = config.rpc_server.clone();
-    // let _metrics_config = config.metrics_server.clone();
+    let metrics_config = config.metrics_server.clone();
 
     // Create client from config.
     log::info!("Initializing client");
@@ -69,6 +70,17 @@ async fn main_inner() -> Result<(), Error> {
     log::info!("Spawning consensus");
     tokio::spawn(consensus);
     let consensus = client.consensus_proxy();
+
+    // Start metrics server
+    if let Some(metrics_config) = metrics_config {
+        nimiq::extras::metrics_server::start_metrics_server(
+            metrics_config.addr,
+            Arc::clone(&consensus.blockchain),
+            client.mempool(),
+            client.consensus_proxy(),
+            client.network(),
+        );
+    }
 
     // Start validator
     if let Some(validator) = client.validator() {

@@ -1,15 +1,14 @@
 [package]
-name = "nimiq-client"
+name = "nimiq-metrics-server"
 version = "0.1.0"
 authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
+license = "Apache-2.0"
 edition = "2021"
-description = "Nimiq's Rust client"
+description = "Prometheus metrics server for the Nimiq Rust implementation"
 homepage = "https://nimiq.com"
 repository = "https://github.com/nimiq/core-rs-albatross"
-license = "Apache-2.0"
 categories = ["cryptography::cryptocurrencies"]
 keywords = ["nimiq", "cryptocurrency", "blockchain"]
-exclude = ["db", "peer_key.dat"]
 
 [badges]
 travis-ci = { repository = "nimiq/core-rs", branch = "master" }
@@ -18,21 +17,20 @@ is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
-futures = "0.3"
+prometheus-client = "0.16.0"
+hyper = "0.14.18"
 log = { package = "tracing", version = "0.1", features = ["log"] }
-tokio = { version = "1.18", features = ["rt-multi-thread", "time", "tracing"] }
+futures = "0.3"
+tokio = { version = "1.18", features = [
+    "macros",
+    "rt-multi-thread",
+    "tracing",
+] }
+parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
 
-[dependencies.nimiq]
-package = "nimiq-lib"
-path = "../lib"
-version = "0.1"
-features = [
-    "validator",
-    "rpc-server",
-    "deadlock",
-    "logging",
-    "metrics-server",
-    "signal-handling",
-    "wallet",
-    "panic",
-]
+
+nimiq-blockchain = { path = "../blockchain", features=["metrics"] }
+nimiq-mempool = { path = "../mempool" }
+nimiq-consensus = { path = "../consensus" }
+nimiq-network-interface = { path = "../network-interface" }
+nimiq-network-libp2p = { path = "../network-libp2p" }

@@ -1,5 +1,6 @@
 #[cfg(feature = "rpc-server")]
 use std::net::IpAddr;
+use std::net::SocketAddr;
 use std::{
     path::{Path, PathBuf},
     string::ToString,
@@ -22,6 +23,7 @@ use nimiq_utils::key_rng::SecureGenerate;
 
 #[cfg(feature = "rpc-server")]
 use crate::config::consts;
+use crate::config::consts::default_bind;
 use crate::{
     client::Client,
     config::{
@@ -561,6 +563,21 @@ pub struct RpcServerConfig {
     pub credentials: Option<Credentials>,
 }
 
+#[cfg(feature = "metrics-server")]
+#[derive(Debug, Clone, Builder)]
+#[builder(setter(into))]
+pub struct MetricsServerConfig {
+    /// Bind the server to the specified ip and port.
+    ///
+    /// Default: `127.0.0.1:8649`
+    ///
+    pub addr: SocketAddr,
+
+    /// If specified, require HTTP basic auth with these credentials
+    #[builder(setter(strip_option))]
+    pub credentials: Option<Credentials>,
+}
+
 /// Client configuration
 ///
 /// # ToDo
@@ -616,6 +633,10 @@ pub struct ClientConfig {
     #[cfg(feature = "rpc-server")]
     #[builder(default)]
     pub rpc_server: Option<RpcServerConfig>,
+
+    #[cfg(feature = "metrics-server")]
+    #[builder(default)]
+    pub metrics_server: Option<MetricsServerConfig>,
 }
 
 impl ClientConfig {
@@ -788,7 +809,7 @@ impl ClientConfigBuilder {
                     (None, None) => None,
                     _ => {
                         return Err(Error::config_error(
-                            "Either both username and password have to be set or none.",
+                            "RTP: Either both username and password have to be set or none.",
                         ))
                     }
                 };
@@ -801,6 +822,33 @@ impl ClientConfigBuilder {
                     allowed_methods: Some(rpc_config.methods.clone()),
                     credentials,
                 }));
+            }
+        }
+
+        // Configure metrics server
+        #[cfg(feature = "metrics-server")]
+        {
+            if let Some(metrics_config) = &config_file.metrics_server {
+                let ip = metrics_config
+                    .bind
+                    .as_ref()
+                    .and_then(|addr| addr.into_ip_address());
+
+                let addr = SocketAddr::new(
+                    ip.unwrap_or_else(default_bind),
+                    metrics_config.port.unwrap_or(consts::METRICS_DEFAULT_PORT),
+                );
+
+                let credentials =
+                    match (&metrics_config.username, &metrics_config.password) {
+                        (Some(u), Some(p)) => Some(Credentials::new(u.clone(), p.clone())),
+                        (None, None) => None,
+                        _ => return Err(Error::config_error(
+                            "Metrics: Either both username and password have to be set or none.",
+                        )),
+                    };
+
+                self.metrics_server = Some(Some(MetricsServerConfig { addr, credentials }));
             }
         }
 

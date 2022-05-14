@@ -1101,6 +1101,11 @@ impl Network {
             }
         }
     }
+
+    pub fn peer_count(&self) -> usize {
+        self.connected_peers.read().len()
+    }
+
     pub async fn disconnect(&self) {
         for peer_id in self.get_peers() {
             self.disconnect_peer(peer_id, CloseReason::Other).await;

@@ -1,30 +1,41 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
-
 use crate::{PushError, PushResult};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 #[derive(Default)]
 pub struct BlockchainMetrics {
-    block_invalid_count: AtomicUsize,
-    block_orphan_count: AtomicUsize,
-    block_known_count: AtomicUsize,
-    block_extended_count: AtomicUsize,
-    block_rebranched_count: AtomicUsize,
-    block_forked_count: AtomicUsize,
-    block_ignored_count: AtomicUsize,
+    block_invalid_count: AtomicU64,
+    block_orphan_count: u64,
+    block_known_count: u64,
+    block_extended_count: u64,
+    block_rebranched_count: u64,
+    block_forked_count: u64,
+    block_ignored_count: u64,
 }
 
 impl BlockchainMetrics {
     #[inline]
-    pub fn note<BE>(&self, push_result: Result<PushResult, PushError>) {
+    pub fn note<BE>(&mut self, push_result: Result<PushResult, PushError>) {
         match push_result {
-            Ok(PushResult::Known) => self.note_known_block(),
-            Ok(PushResult::Extended) => self.note_extended_block(),
-            Ok(PushResult::Rebranched) => self.note_rebranched_block(),
-            Ok(PushResult::Forked) => self.note_forked_block(),
-            Ok(PushResult::Ignored) => self.note_ignored_block(),
-            Err(PushError::Orphan) => self.note_orphan_block(),
+            Ok(PushResult::Known) => {
+                self.block_known_count = self.block_known_count.wrapping_add(1)
+            }
+            Ok(PushResult::Extended) => {
+                self.block_extended_count = self.block_extended_count.wrapping_add(1);
+            }
+            Ok(PushResult::Rebranched) => {
+                self.block_rebranched_count = self.block_rebranched_count.wrapping_add(1);
+            }
+            Ok(PushResult::Forked) => {
+                self.block_forked_count = self.block_forked_count.wrapping_add(1);
+            }
+            Ok(PushResult::Ignored) => {
+                self.block_ignored_count = self.block_ignored_count.wrapping_add(1);
+            }
+            Err(PushError::Orphan) => {
+                self.block_orphan_count = self.block_orphan_count.wrapping_add(1);
+            }
             Err(_) => self.note_invalid_block(),
-        }
+        };
     }
 
     #[inline]
@@ -33,67 +44,37 @@ impl BlockchainMetrics {
     }
 
     #[inline]
-    pub fn block_invalid_count(&self) -> usize {
+    pub fn block_invalid_count(&self) -> u64 {
         self.block_invalid_count.load(Ordering::Acquire)
     }
 
     #[inline]
-    pub fn note_orphan_block(&self) {
-        self.block_orphan_count.fetch_add(1, Ordering::Release);
+    pub fn block_orphan_count(&self) -> u64 {
+        self.block_orphan_count
     }
 
     #[inline]
-    pub fn block_orphan_count(&self) -> usize {
-        self.block_orphan_count.load(Ordering::Acquire)
+    pub fn block_known_count(&self) -> u64 {
+        self.block_known_count
     }
 
     #[inline]
-    pub fn note_known_block(&self) {
-        self.block_known_count.fetch_add(1, Ordering::Release);
+    pub fn block_extended_count(&self) -> u64 {
+        self.block_extended_count
     }
 
     #[inline]
-    pub fn block_known_count(&self) -> usize {
-        self.block_known_count.load(Ordering::Acquire)
+    pub fn block_rebranched_count(&self) -> u64 {
+        self.block_rebranched_count
     }
 
     #[inline]
-    pub fn note_extended_block(&self) {
-        self.block_extended_count.fetch_add(1, Ordering::Release);
+    pub fn block_ignored_count(&self) -> u64 {
+        self.block_ignored_count
     }
 
     #[inline]
-    pub fn block_extended_count(&self) -> usize {
-        self.block_extended_count.load(Ordering::Acquire)
-    }
-
-    #[inline]
-    pub fn note_rebranched_block(&self) {
-        self.block_rebranched_count.fetch_add(1, Ordering::Release);
-    }
-
-    #[inline]
-    pub fn block_rebranched_count(&self) -> usize {
-        self.block_rebranched_count.load(Ordering::Acquire)
-    }
-
-    #[inline]
-    pub fn note_ignored_block(&self) {
-        self.block_ignored_count.fetch_add(1, Ordering::Release);
-    }
-
-    #[inline]
-    pub fn block_ignored_count(&self) -> usize {
-        self.block_ignored_count.load(Ordering::Acquire)
-    }
-
-    #[inline]
-    pub fn note_forked_block(&self) {
-        self.block_forked_count.fetch_add(1, Ordering::Release);
-    }
-
-    #[inline]
-    pub fn block_forked_count(&self) -> usize {
-        self.block_forked_count.load(Ordering::Acquire)
+    pub fn block_forked_count(&self) -> u64 {
+        self.block_forked_count
     }
 }
