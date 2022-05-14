@@ -596,5 +596,5 @@ async fn put_peer_back_into_sync_mode() {
     // run the block_queue one iteration, i.e. until it processed one block
     let _ = block_queue.poll_next_unpin(&mut Context::from_waker(noop_waker_ref()));
 
-    assert!(block_queue.request_component.peer_put_into_sync);
+    assert!(block_queue.request_component().peer_put_into_sync);
 }
