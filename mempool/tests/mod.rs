@@ -21,10 +21,10 @@ use nimiq_keys::{
 use nimiq_mempool::config::MempoolConfig;
 use nimiq_mempool::mempool::Mempool;
 use nimiq_network_mock::{MockHub, MockId, MockNetwork, MockPeerId};
-use nimiq_primitives::networks::NetworkId;
+use nimiq_primitives::{networks::NetworkId, policy};
 use nimiq_test_log::test;
 use nimiq_test_utils::{
-    blockchain::{signing_key, voting_key},
+    blockchain::{produce_macro_blocks_with_txns, signing_key, voting_key},
     test_transaction::{generate_accounts, generate_transactions, TestTransaction},
 };
 use nimiq_transaction::Transaction;
@@ -966,6 +966,125 @@ async fn mempool_update() {
             i
         );
     }
+}
+
+#[test(tokio::test(flavor = "multi_thread", worker_threads = 10))]
+#[ignore]
+// The purpose of this test is to verify that aged transactions, that is,
+// transactions that are stored in the mempool for which the validity
+// window is already expired, are properly pruned from the mempool.
+// The test is marked as ignored because it takes some time to build a chain
+// that produces more than TRANSACTION_VALIDITY_WINDOW blocks, however, one
+// can easily change this parameter to some low number for testing purposes.
+async fn mempool_update_aged_transaction() {
+    let mut rng = StdRng::seed_from_u64(0);
+    let time = Arc::new(OffsetTime::new());
+    let env = VolatileEnvironment::new(10).unwrap();
+    let mut genesis_builder = GenesisBuilder::default();
+
+    // Generate and sign transactions
+    let balance = 100;
+    let num_txns = 30;
+    let mut mempool_transactions = vec![];
+    let sender_balances = vec![balance; num_txns as usize];
+    let recipient_balances = vec![0; num_txns as usize];
+
+    // Generate recipient accounts
+    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, false);
+    // Generate sender accounts
+    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true);
+
+    // Generate transactions
+    for i in 0..num_txns {
+        let mempool_transaction = TestTransaction {
+            fee: 0 as u64,
+            value: 60,
+            recipient: recipient_accounts[i as usize].clone(),
+            sender: sender_accounts[i as usize].clone(),
+        };
+        mempool_transactions.push(mempool_transaction);
+    }
+    let (txns, _) = generate_transactions(mempool_transactions, true);
+    log::debug!("Done generating transactions and accounts");
+
+    // Build empty blocks just to advance the chain
+
+    let mut adopted_micro_blocks = vec![];
+
+    adopted_micro_blocks.push((Blake2bHash::default(), create_dummy_micro_block(None)));
+
+    log::debug!("Done generating adopted micro block");
+
+    // Add validator to genesis
+    genesis_builder.with_genesis_validator(
+        Address::from(&SchnorrKeyPair::generate(&mut rng)),
+        signing_key().public,
+        voting_key().public_key,
+        Address::default(),
+    );
+
+    // Generate the genesis and blockchain
+    let genesis_info = genesis_builder.generate(env.clone()).unwrap();
+
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::with_genesis(
+            env.clone(),
+            time,
+            NetworkId::UnitAlbatross,
+            genesis_info.block,
+            genesis_info.accounts,
+        )
+        .unwrap(),
+    ));
+
+    // Create mempool and subscribe with a custom txn stream
+    let mempool = Mempool::new(blockchain.clone(), MempoolConfig::default());
+    let mut hub = MockHub::new();
+    let mock_id = MockId::new(hub.new_address().into());
+    let mock_network = Arc::new(hub.new_network());
+
+    // Send txns to mempool
+    send_txn_to_mempool(&mempool, mock_network, mock_id, txns).await;
+
+    assert_eq!(
+        mempool.num_transactions(),
+        30,
+        "Number of txns in the mempools is not what is expected"
+    );
+
+    // We need a block producer to produce blocks
+    let producer = BlockProducer::new(signing_key(), voting_key());
+
+    let macro_blocks_to_be_produced =
+        policy::TRANSACTION_VALIDITY_WINDOW / policy::BLOCKS_PER_BATCH;
+
+    // Now we produce blocks past the transaction validity window
+    produce_macro_blocks_with_txns(
+        &producer,
+        &blockchain,
+        (macro_blocks_to_be_produced + 1).try_into().unwrap(),
+        0,
+        0,
+    );
+
+    // Call mempool update, this should prune all the old transactions
+    mempool.mempool_update(&[].to_vec(), &[].to_vec());
+
+    assert_eq!(
+        mempool.num_transactions(),
+        0,
+        "Number of txns in the mempools is not what is expected"
+    );
+
+    // Get txns from mempool
+    let updated_txns = mempool.get_transactions_for_block(10_000);
+
+    // Should obtain 0 txns, as they are no longer valid due to aging
+    assert_eq!(
+        updated_txns.len(),
+        0,
+        "Number of txns is not what is expected"
+    );
 }
 
 #[test(tokio::test(flavor = "multi_thread", worker_threads = 10))]
