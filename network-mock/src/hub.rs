@@ -7,6 +7,8 @@ use std::{
 use parking_lot::{Mutex, RwLock};
 use tokio::sync::{broadcast, mpsc, oneshot};
 
+use nimiq_network_interface::request::RequestType;
+
 use crate::network::{MockNetwork, MockRequestId};
 use crate::{MockAddress, MockPeerId, ObservableHashMap};
 
@@ -20,7 +22,7 @@ pub(crate) struct SenderKey {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct RequestKey {
     pub recipient: MockAddress,
-    pub message_type: u16,
+    pub message_type: RequestType,
 }
 
 #[derive(Debug)]

@@ -10,7 +10,7 @@ use futures::{stream::BoxStream, Stream};
 use nimiq_bls::{CompressedPublicKey, SecretKey};
 use nimiq_network_interface::{
     network::{MsgAcceptance, Network, PubsubId, Topic},
-    request::Request,
+    request::Message,
 };
 
 pub use crate::error::NetworkError;
@@ -32,16 +32,16 @@ pub trait ValidatorNetwork: Send + Sync {
 
     /// must make a reasonable effort to establish a connection to the peer denoted with `validator_address`
     /// before returning a connection not established error.
-    async fn send_to<Req: Request + Clone>(
+    async fn send_to<M: Message + Clone>(
         &self,
         validator_ids: &[usize],
-        msg: Req,
+        msg: M,
     ) -> Vec<Result<(), Self::Error>>;
 
     /// Will receive from all connected peers
-    fn receive<Req>(&self) -> MessageStream<Req, <Self::NetworkType as Network>::PeerId>
+    fn receive<M>(&self) -> MessageStream<M, <Self::NetworkType as Network>::PeerId>
     where
-        Req: Request<Response = ()> + Clone;
+        M: Message + Clone;
 
     async fn publish<TTopic: Topic + Sync>(&self, item: TTopic::Item) -> Result<(), Self::Error>;
 
@@ -52,7 +52,7 @@ pub trait ValidatorNetwork: Send + Sync {
     /// registers a cache for the specified message type.
     /// Incoming messages of this type should be held in a FIFO queue of total size `buffer_size`, each with a lifetime of `lifetime`
     /// `lifetime` or `buffer_size` of 0 should disable the cache.
-    fn cache<Req: Request>(&self, buffer_size: usize, lifetime: Duration);
+    fn cache<M: Message>(&self, buffer_size: usize, lifetime: Duration);
 
     async fn set_public_key(
         &self,

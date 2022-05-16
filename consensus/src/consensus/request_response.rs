@@ -40,7 +40,7 @@ impl<N: Network> Consensus<N> {
         tokio::spawn(Self::request_handler(network, stream, blockchain));
     }
 
-    pub(crate) fn request_handler<Req: Handle<<Req as Request>::Response> + Request>(
+    pub(crate) fn request_handler<Req: Handle<Req::Response> + Request>(
         network: &Arc<N>,
         stream: BoxStream<'static, (Req, N::RequestId, N::PeerId)>,
         blockchain: &Arc<RwLock<Blockchain>>,

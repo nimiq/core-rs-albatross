@@ -15,7 +15,10 @@ use beserial::{Deserialize, Serialize};
 use nimiq_network_interface::{
     network::{MsgAcceptance, Network, NetworkEvent, PubsubId, SubscribeEvents, Topic},
     peer::CloseReason,
-    request::{InboundRequestError, OutboundRequestError, Request, RequestError},
+    request::{
+        InboundRequestError, Message, OutboundRequestError, Request, RequestCommon, RequestError,
+        RequestKind, RequestType,
+    },
 };
 
 use crate::hub::{MockHubInner, RequestKey, ResponseSender};
@@ -155,6 +158,127 @@ impl MockNetwork {
     /// other network doesn't exist in our hub).
     pub fn dial_mock(&self, other: &Self) {
         self.dial_mock_address(other.address).unwrap();
+    }
+
+    async fn request_impl<Req: RequestCommon>(
+        &self,
+        request: Req,
+        peer_id: MockPeerId,
+    ) -> Result<Req::Response, RequestError> {
+        if !self.peers.read().contains_key(&peer_id) {
+            log::warn!(
+                "Cannot send request {} from {} to {} - peers not connected",
+                std::any::type_name::<Req>(),
+                self.address,
+                peer_id,
+            );
+            return Err(RequestError::OutboundRequest(
+                OutboundRequestError::SendError,
+            ));
+        }
+
+        let sender_id = MockPeerId::from(self.address);
+        let (tx, rx) = oneshot::channel::<Vec<u8>>();
+
+        let (sender, request_id) = {
+            let mut hub = self.hub.lock();
+
+            let key = RequestKey {
+                recipient: peer_id.into(),
+                message_type: RequestType::from_request::<Req>(),
+            };
+            let sender = if let Some(sender) = hub.request_senders.get(&key) {
+                sender.clone()
+            } else {
+                log::warn!("No request sender: {:?}", key);
+                return Err(RequestError::OutboundRequest(
+                    OutboundRequestError::SendError,
+                ));
+            };
+
+            let request_id = hub.next_request_id;
+            if Req::Kind::EXPECT_RESPONSE {
+                hub.response_senders.insert(
+                    request_id,
+                    ResponseSender {
+                        peer: self.address.into(),
+                        sender: tx,
+                    },
+                );
+            } else {
+                let response: Result<(), InboundRequestError> = Ok(());
+                tx.send(response.serialize_to_vec()).unwrap();
+            }
+            hub.next_request_id += 1;
+
+            (sender, request_id)
+        };
+
+        let mut data = Vec::with_capacity(request.serialized_request_size());
+        request.serialize_request(&mut data).unwrap();
+
+        let request = (data, request_id, sender_id);
+        if let Err(e) = sender.send(request).await {
+            log::warn!(
+                "Cannot send request {} from {} to {} - {:?}",
+                std::any::type_name::<Req>(),
+                self.address,
+                peer_id,
+                e
+            );
+            self.hub.lock().response_senders.remove(&request_id);
+            return Err(RequestError::OutboundRequest(
+                OutboundRequestError::SendError,
+            ));
+        }
+
+        let hub = Arc::clone(&self.hub);
+        let result = tokio::time::timeout(MockNetwork::REQUEST_TIMEOUT, rx).await;
+        match result {
+            Ok(Ok(data)) => match Req::Response::deserialize(&mut &data[..]) {
+                Ok(message) => Ok(message),
+                Err(_) => Err(RequestError::InboundRequest(
+                    InboundRequestError::DeSerializationError,
+                )),
+            },
+            Ok(Err(_)) => Err(RequestError::InboundRequest(
+                InboundRequestError::SenderFutureDropped,
+            )),
+            Err(_) => {
+                hub.lock().response_senders.remove(&request_id);
+                Err(RequestError::InboundRequest(InboundRequestError::Timeout))
+            }
+        }
+    }
+
+    fn receive_requests_impl<Req: RequestCommon>(
+        &self,
+    ) -> BoxStream<'static, (Req, MockRequestId, MockPeerId)> {
+        let mut hub = self.hub.lock();
+        let (tx, rx) = mpsc::channel(16);
+
+        let key = RequestKey {
+            recipient: self.address,
+            message_type: RequestType::from_request::<Req>(),
+        };
+        if hub.request_senders.insert(key, tx).is_some() {
+            log::warn!(
+                "Replacing existing request sender for {}",
+                std::any::type_name::<Req>()
+            );
+        }
+
+        ReceiverStream::new(rx)
+            .filter_map(|(data, request_id, sender)| async move {
+                match Req::deserialize_request(&mut &data[..]) {
+                    Ok(message) => Some((message, request_id, sender)),
+                    Err(e) => {
+                        log::warn!("Failed to deserialize request: {}", e);
+                        None
+                    }
+                }
+            })
+            .boxed()
     }
 
     /// Disconnect from all peers
@@ -392,126 +516,38 @@ impl Network for MockNetwork {
         self.address.into()
     }
 
+    async fn message<M: Message>(
+        &self,
+        message: M,
+        peer_id: MockPeerId,
+    ) -> Result<(), RequestError> {
+        self.request_impl(message, peer_id).await
+    }
+
     async fn request<Req: Request>(
         &self,
         request: Req,
         peer_id: MockPeerId,
-    ) -> Result<<Req as Request>::Response, RequestError> {
-        if !self.peers.read().contains_key(&peer_id) {
-            log::warn!(
-                "Cannot send request {} from {} to {} - peers not connected",
-                std::any::type_name::<Req>(),
-                self.address,
-                peer_id,
-            );
-            return Err(RequestError::OutboundRequest(
-                OutboundRequestError::SendError,
-            ));
-        }
+    ) -> Result<Req::Response, RequestError> {
+        self.request_impl(request, peer_id).await
+    }
 
-        let sender_id = MockPeerId::from(self.address);
-        let (tx, rx) = oneshot::channel::<Vec<u8>>();
-
-        let (sender, request_id) = {
-            let mut hub = self.hub.lock();
-
-            let key = RequestKey {
-                recipient: peer_id.into(),
-                message_type: Req::TYPE_ID,
-            };
-            let sender = if let Some(sender) = hub.request_senders.get(&key) {
-                sender.clone()
-            } else {
-                log::warn!("No request sender: {:?}", key);
-                return Err(RequestError::OutboundRequest(
-                    OutboundRequestError::SendError,
-                ));
-            };
-
-            let request_id = hub.next_request_id;
-            hub.response_senders.insert(
-                request_id,
-                ResponseSender {
-                    peer: self.address.into(),
-                    sender: tx,
-                },
-            );
-            hub.next_request_id += 1;
-
-            (sender, request_id)
-        };
-
-        let mut data = Vec::with_capacity(request.serialized_request_size());
-        request.serialize_request(&mut data).unwrap();
-
-        let request = (data, request_id, sender_id);
-        if let Err(e) = sender.send(request).await {
-            log::warn!(
-                "Cannot send request {} from {} to {} - {:?}",
-                std::any::type_name::<Req>(),
-                self.address,
-                peer_id,
-                e
-            );
-            self.hub.lock().response_senders.remove(&request_id);
-            return Err(RequestError::OutboundRequest(
-                OutboundRequestError::SendError,
-            ));
-        }
-
-        let hub = Arc::clone(&self.hub);
-        let result = tokio::time::timeout(MockNetwork::REQUEST_TIMEOUT, rx).await;
-        match result {
-            Ok(Ok(data)) => match <Req as Request>::Response::deserialize(&mut &data[..]) {
-                Ok(message) => Ok(message),
-                Err(_) => Err(RequestError::InboundRequest(
-                    InboundRequestError::DeSerializationError,
-                )),
-            },
-            Ok(Err(_)) => Err(RequestError::InboundRequest(
-                InboundRequestError::SenderFutureDropped,
-            )),
-            Err(_) => {
-                hub.lock().response_senders.remove(&request_id);
-                Err(RequestError::InboundRequest(InboundRequestError::Timeout))
-            }
-        }
+    fn receive_messages<M: Message>(&self) -> BoxStream<'static, (M, Self::PeerId)> {
+        self.receive_requests_impl()
+            .map(|(message, _, sender)| (message, sender))
+            .boxed()
     }
 
     fn receive_requests<Req: Request>(
         &self,
     ) -> BoxStream<'static, (Req, Self::RequestId, Self::PeerId)> {
-        let mut hub = self.hub.lock();
-        let (tx, rx) = mpsc::channel(16);
-
-        let key = RequestKey {
-            recipient: self.address,
-            message_type: Req::TYPE_ID as u16,
-        };
-        if hub.request_senders.insert(key, tx).is_some() {
-            log::warn!(
-                "Replacing existing request sender for {}",
-                std::any::type_name::<Req>()
-            );
-        }
-
-        ReceiverStream::new(rx)
-            .filter_map(|(data, request_id, sender)| async move {
-                match Req::deserialize_request(&mut &data[..]) {
-                    Ok(message) => Some((message, request_id, sender)),
-                    Err(e) => {
-                        log::warn!("Failed to deserialize request: {}", e);
-                        None
-                    }
-                }
-            })
-            .boxed()
+        self.receive_requests_impl()
     }
 
     async fn respond<Req: Request>(
         &self,
         request_id: Self::RequestId,
-        response: <Req as Request>::Response,
+        response: Req::Response,
     ) -> Result<(), Self::Error> {
         let mut hub = self.hub.lock();
         if let Some(responder) = hub.response_senders.remove(&request_id) {

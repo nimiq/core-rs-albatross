@@ -1,18 +1,42 @@
+use std::fmt;
 use std::io;
 
-use derive_more::{AsMut, AsRef, Display, From, Into};
 use thiserror::Error;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 
-#[derive(
-    Copy, Clone, Debug, From, Into, AsRef, AsMut, Display, Hash, PartialEq, Eq, PartialOrd, Ord,
-)]
+#[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct RequestType(u16);
 
+impl fmt::Display for RequestType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}{}",
+            self.type_id(),
+            if self.requires_response() { 'r' } else { 'm' },
+        )
+    }
+}
+
 impl RequestType {
-    pub const fn new(x: u16) -> Self {
-        Self(x)
+    const fn new(type_id: u16, requires_response: bool) -> RequestType {
+        RequestType((type_id << 1) | requires_response as u16)
+    }
+    pub fn from_request<R: RequestCommon>() -> RequestType {
+        RequestType::new(R::TYPE_ID, R::Kind::EXPECT_RESPONSE)
+    }
+    pub const fn request(type_id: u16) -> RequestType {
+        RequestType::new(type_id, true)
+    }
+    pub const fn message(type_id: u16) -> RequestType {
+        RequestType::new(type_id, false)
+    }
+    pub const fn type_id(self) -> u16 {
+        self.0 >> 1
+    }
+    pub const fn requires_response(self) -> bool {
+        self.0 & 1 != 0
     }
 }
 
@@ -20,10 +44,10 @@ impl RequestType {
 #[derive(Clone, Debug, Error, PartialEq)]
 pub enum RequestError {
     /// Outbound request error
-    #[error("Outbound error")]
+    #[error("Outbound error: {0}")]
     OutboundRequest(OutboundRequestError),
     /// Inbound request error
-    #[error("Inbound error")]
+    #[error("Inbound error: {0}")]
     InboundRequest(InboundRequestError),
 }
 
@@ -77,11 +101,26 @@ pub enum InboundRequestError {
     Timeout = 4,
 }
 
-pub trait Request:
+pub trait RequestKind {
+    const EXPECT_RESPONSE: bool;
+}
+
+pub struct RequestMarker;
+pub struct MessageMarker;
+
+impl RequestKind for RequestMarker {
+    const EXPECT_RESPONSE: bool = true;
+}
+impl RequestKind for MessageMarker {
+    const EXPECT_RESPONSE: bool = false;
+}
+
+pub trait RequestCommon:
     Serialize + Deserialize + Send + Sync + Unpin + std::fmt::Debug + 'static
 {
-    type Response: Deserialize + Serialize + Send;
+    type Kind: RequestKind;
     const TYPE_ID: u16;
+    type Response: Deserialize + Serialize + Send;
 
     /// Serializes a request.
     /// A serialized request is composed of:
@@ -92,7 +131,7 @@ pub trait Request:
         writer: &mut W,
     ) -> Result<usize, SerializingError> {
         let mut size = 0;
-        size += Self::TYPE_ID.serialize(writer)?;
+        size += RequestType::from_request::<Self>().0.serialize(writer)?;
         size += self.serialize(writer)?;
         Ok(size)
     }
@@ -103,7 +142,7 @@ pub trait Request:
     /// - Serialized content of the inner type.
     fn serialized_request_size(&self) -> usize {
         let mut size = 0;
-        size += Self::TYPE_ID.serialized_size();
+        size += RequestType::from_request::<Self>().0.serialized_size();
         size += self.serialized_size();
         size
     }
@@ -115,7 +154,7 @@ pub trait Request:
     fn deserialize_request<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         // Check for correct type.
         let ty: u16 = Deserialize::deserialize(reader)?;
-        if ty != Self::TYPE_ID {
+        if ty != RequestType::from_request::<Self>().0 {
             return Err(io::Error::new(io::ErrorKind::InvalidData, "Wrong message type").into());
         }
 
@@ -125,8 +164,13 @@ pub trait Request:
     }
 }
 
+pub trait Request: RequestCommon<Kind = RequestMarker> {}
+pub trait Message: RequestCommon<Kind = MessageMarker, Response = ()> {}
+
+impl<T: RequestCommon<Kind = RequestMarker>> Request for T {}
+impl<T: RequestCommon<Kind = MessageMarker, Response = ()>> Message for T {}
+
 pub fn peek_type(buffer: &[u8]) -> Result<RequestType, SerializingError> {
     let ty = u16::deserialize_from_vec(buffer)?;
-
-    Ok(ty.into())
+    Ok(RequestType(ty))
 }

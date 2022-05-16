@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use beserial::{Deserialize, Serialize};
-use nimiq_network_interface::request::Request;
+use nimiq_network_interface::request::{MessageMarker, RequestCommon};
 
 use crate::contribution::AggregatableContribution;
 
@@ -74,11 +74,12 @@ pub struct LevelUpdateMessage<
 impl<
         C: AggregatableContribution + 'static,
         T: Clone + Debug + Serialize + Deserialize + Send + Sync + Unpin + 'static,
-    > Request for LevelUpdateMessage<C, T>
+    > RequestCommon for LevelUpdateMessage<C, T>
 {
-    // The Type ID to use will come from the AggregatableContribution implementation
+    type Kind = MessageMarker;
+    // The type to use will come from the AggregatableContribution implementation
     // since having a fixed value here would imply that there could be different
-    // types using the same type ID which would confuse the network at decoding
+    // types using the same type, which would confuse the network at decoding
     // messages upon receiving them.
     const TYPE_ID: u16 = C::TYPE_ID;
     type Response = ();

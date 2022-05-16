@@ -11,7 +11,7 @@ use beserial::{Deserialize, Serialize};
 use nimiq_bls::{CompressedPublicKey, SecretKey};
 use nimiq_network_interface::{
     network::{MsgAcceptance, Network, NetworkEvent, Topic},
-    request::Request,
+    request::Message,
 };
 
 use super::{MessageStream, NetworkError, ValidatorNetwork};
@@ -162,10 +162,10 @@ where
         state.validator_peer_id_cache = keep_cached;
     }
 
-    async fn send_to<Req: Request + Clone>(
+    async fn send_to<M: Message + Clone>(
         &self,
         validator_ids: &[usize],
-        msg: Req,
+        msg: M,
     ) -> Vec<Result<(), Self::Error>> {
         let futures = validator_ids
             .iter()
@@ -213,9 +213,9 @@ where
                 tokio::spawn({
                     let network = Arc::clone(&self.network);
                     async move{
-                    if let Err(error) = network.request::<Req>(msg.clone(), peer_id).await {
-                        log::error!(%peer_id, %error, "could not send request");
-                    }
+                        if let Err(error) = network.message(msg.clone(), peer_id).await {
+                            log::error!(%peer_id, %error, "could not send request");
+                        }
                 }});
                 Ok(())
             });
@@ -226,24 +226,11 @@ where
             .collect::<Vec<Result<(), Self::Error>>>()
     }
 
-    fn receive<Req>(&self) -> MessageStream<Req, N::PeerId>
+    fn receive<M>(&self) -> MessageStream<M, N::PeerId>
     where
-        Req: Request<Response = ()> + Clone,
+        M: Message + Clone,
     {
-        let network = Arc::clone(&self.network);
-        Box::pin(
-            network
-                .receive_requests::<Req>()
-                .then(move |(message, request_id, peer_id)| {
-                    let network = Arc::clone(&network);
-                    async move {
-                        if let Err(error) = network.respond::<Req>(request_id, ()).await {
-                            log::error!(%request_id, %peer_id, %error, "error sending response");
-                        }
-                        (message, peer_id)
-                    }
-                }),
-        )
+        self.network.receive_messages()
     }
 
     async fn publish<TTopic>(&self, item: TTopic::Item) -> Result<(), Self::Error>
@@ -263,7 +250,7 @@ where
         Ok(self.network.subscribe::<TTopic>().await?)
     }
 
-    fn cache<Req: Request>(&self, _buffer_size: usize, _lifetime: Duration) {
+    fn cache<M: Message>(&self, _buffer_size: usize, _lifetime: Duration) {
         unimplemented!()
     }
 

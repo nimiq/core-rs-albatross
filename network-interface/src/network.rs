@@ -9,7 +9,7 @@ use beserial::{Deserialize, Serialize};
 
 use crate::{
     peer::*,
-    request::{Request, RequestError},
+    request::{Message, Request, RequestError},
 };
 
 #[derive(Clone, Debug)]
@@ -90,11 +90,19 @@ pub trait Network: Send + Sync + 'static {
 
     fn get_local_peer_id(&self) -> Self::PeerId;
 
+    async fn message<M: Message>(
+        &self,
+        request: M,
+        peer_id: Self::PeerId,
+    ) -> Result<(), RequestError>;
+
     async fn request<Req: Request>(
         &self,
         request: Req,
         peer_id: Self::PeerId,
-    ) -> Result<<Req as Request>::Response, RequestError>;
+    ) -> Result<Req::Response, RequestError>;
+
+    fn receive_messages<M: Message>(&self) -> BoxStream<'static, (M, Self::PeerId)>;
 
     fn receive_requests<Req: Request>(
         &self,
@@ -103,6 +111,6 @@ pub trait Network: Send + Sync + 'static {
     async fn respond<Req: Request>(
         &self,
         request_id: Self::RequestId,
-        response: <Req as Request>::Response,
+        response: Req::Response,
     ) -> Result<(), Self::Error>;
 }

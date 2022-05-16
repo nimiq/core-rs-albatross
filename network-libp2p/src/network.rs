@@ -40,7 +40,8 @@ use nimiq_network_interface::{
     },
     peer::CloseReason,
     request::{
-        peek_type, InboundRequestError, OutboundRequestError, Request, RequestError, RequestType,
+        peek_type, InboundRequestError, Message, OutboundRequestError, Request, RequestCommon,
+        RequestError, RequestType,
     },
 };
 use nimiq_utils::time::OffsetTime;
@@ -662,24 +663,39 @@ impl Network {
                                         "Incoming request from peer",
                                     );
                                     // Check if we have a receiver registered for this message type
-                                    let sender = {
-                                        if let Some(sender) =
-                                            state.receive_requests.get_mut(&type_id)
-                                        {
-                                            // Check if the sender is still alive, if not remove it
-                                            if sender.is_closed() {
-                                                state.receive_requests.remove(&type_id);
-                                                None
-                                            } else {
-                                                Some(sender)
-                                            }
-                                        } else {
+                                    let sender = match state.receive_requests.get_mut(&type_id) {
+                                        // Check if the sender is still alive, if not remove it
+                                        Some(sender) if !sender.is_closed() => Some(sender),
+                                        Some(_) => {
+                                            state.receive_requests.remove(&type_id);
                                             None
                                         }
+                                        None => None,
                                     };
                                     // If we have a receiver, pass the request. Otherwise send a default empty response
                                     if let Some(sender) = sender {
-                                        state.response_channels.insert(request_id, channel);
+                                        if type_id.requires_response() {
+                                            state.response_channels.insert(request_id, channel);
+                                        } else {
+                                            // Respond on behalf of the actual
+                                            // receiver because the actual
+                                            // receiver isn't interested in
+                                            // responding.
+                                            let response: Result<(), InboundRequestError> = Ok(());
+                                            if swarm
+                                                .behaviour_mut()
+                                                .request_response
+                                                .send_response(channel, response.serialize_to_vec())
+                                                .is_err()
+                                            {
+                                                error!(
+                                                    %request_id,
+                                                    %peer_id,
+                                                    %type_id,
+                                                    "Could not send auto response",
+                                                );
+                                            }
+                                        }
                                         if let Err(e) =
                                             sender.try_send((request.into(), request_id, peer_id))
                                         {
@@ -1085,6 +1101,144 @@ impl Network {
         }
     }
 
+    async fn request_impl<Req: RequestCommon>(
+        &self,
+        request: Req,
+        peer_id: PeerId,
+    ) -> Result<Req::Response, RequestError> {
+        let (output_tx, output_rx) = oneshot::channel();
+        let (response_tx, response_rx) = oneshot::channel();
+
+        let mut buf = vec![];
+        if request.serialize_request(&mut buf).is_err() {
+            return Err(RequestError::OutboundRequest(
+                OutboundRequestError::SerializationError,
+            ));
+        }
+
+        if self
+            .action_tx
+            .clone()
+            .send(NetworkAction::SendRequest {
+                peer_id,
+                request: buf[..].into(),
+                request_type_id: RequestType::from_request::<Req>(),
+                response_channel: response_tx,
+                output: output_tx,
+            })
+            .await
+            .is_err()
+        {
+            return Err(RequestError::OutboundRequest(
+                OutboundRequestError::SendError,
+            ));
+        }
+
+        if let Ok(request_id) = output_rx.await {
+            let result = response_rx.await;
+            match result {
+                Err(_) => Err(RequestError::OutboundRequest(
+                    OutboundRequestError::SenderFutureDropped,
+                )),
+                Ok(result) => {
+                    let data = result?;
+                    if let Ok(message) =
+                        <Result<Req::Response, InboundRequestError> as Deserialize>::deserialize(
+                            &mut data.reader(),
+                        )
+                    {
+                        // Check if there was an actual response from the application or a default response from
+                        // the network. If the network replied with the default response, it was because there wasn't a
+                        // receiver for the request
+                        match message {
+                            Ok(message) => Ok(message),
+                            Err(e) => Err(RequestError::InboundRequest(e)),
+                        }
+                    } else {
+                        error!(
+                        %request_id,
+                        %peer_id,
+                        type_id = std::any::type_name::<Req::Response>(),
+                        "Failed to deserialize response from peer",
+                        );
+                        Err(RequestError::InboundRequest(
+                            InboundRequestError::DeSerializationError,
+                        ))
+                    }
+                }
+            }
+        } else {
+            Err(RequestError::OutboundRequest(
+                OutboundRequestError::SendError,
+            ))
+        }
+    }
+
+    fn receive_requests_impl<Req: RequestCommon>(
+        &self,
+    ) -> BoxStream<'static, (Req, RequestId, PeerId)> {
+        enum ReceiveStream {
+            WaitingForRegister(
+                Pin<Box<dyn Future<Output = mpsc::Receiver<(Bytes, RequestId, PeerId)>> + Send>>,
+            ),
+            Registered(mpsc::Receiver<(Bytes, RequestId, PeerId)>),
+        }
+
+        impl Stream for ReceiveStream {
+            type Item = (Bytes, RequestId, PeerId);
+            fn poll_next(
+                self: Pin<&mut Self>,
+                cx: &mut Context<'_>,
+            ) -> Poll<Option<(Bytes, RequestId, PeerId)>> {
+                let self_ = self.get_mut();
+                loop {
+                    use ReceiveStream::*;
+                    match self_ {
+                        WaitingForRegister(fut) => {
+                            *self_ = Registered(ready!(Pin::new(fut).poll(cx)))
+                        }
+                        Registered(stream) => return stream.poll_recv(cx),
+                    }
+                }
+            }
+            // The default size_hint is the best we can do, we can never say if
+            // there are going to be more requests or none at all.
+        }
+
+        let action_tx = self.action_tx.clone();
+        ReceiveStream::WaitingForRegister(Box::pin(async move {
+            // TODO Make buffer size configurable
+            let (tx, rx) = mpsc::channel(1024);
+
+            action_tx
+                .send(NetworkAction::ReceiveRequests {
+                    type_id: RequestType::from_request::<Req>(),
+                    output: tx,
+                })
+                .await
+                .expect("Sending action to network task failed.");
+
+            rx
+        }))
+        .filter_map(|(data, request_id, peer_id)| async move {
+            // Map the (data, peer) stream to (message, peer) by deserializing the messages.
+            match Req::deserialize_request(&mut data.reader()) {
+                Ok(message) => Some((message, request_id, peer_id)),
+                Err(e) => {
+                    error!(
+                        %request_id,
+                        %peer_id,
+                        type_id = std::any::type_name::<Req>(),
+                        error = %e,
+                        "Failed to deserialize request from peer",
+                    );
+                    None
+                }
+            }
+        })
+        .boxed()
+    }
+
     fn to_response_error(error: OutboundFailure) -> RequestError {
         match error {
             OutboundFailure::ConnectionClosed => {
@@ -1294,145 +1448,32 @@ impl NetworkInterface for Network {
         self.local_peer_id
     }
 
+    async fn message<M: Message>(&self, message: M, peer_id: PeerId) -> Result<(), RequestError> {
+        self.request_impl(message, peer_id).await
+    }
+
     async fn request<Req: Request>(
         &self,
         request: Req,
         peer_id: PeerId,
-    ) -> Result<<Req as Request>::Response, RequestError> {
-        let (output_tx, output_rx) = oneshot::channel();
-        let (response_tx, response_rx) = oneshot::channel();
+    ) -> Result<Req::Response, RequestError> {
+        self.request_impl(request, peer_id).await
+    }
 
-        let mut buf = vec![];
-        if request.serialize_request(&mut buf).is_err() {
-            return Err(RequestError::OutboundRequest(
-                OutboundRequestError::SerializationError,
-            ));
-        }
-
-        if self
-            .action_tx
-            .clone()
-            .send(NetworkAction::SendRequest {
-                peer_id,
-                request: buf[..].into(),
-                request_type_id: Req::TYPE_ID.into(),
-                response_channel: response_tx,
-                output: output_tx,
-            })
-            .await
-            .is_err()
-        {
-            return Err(RequestError::OutboundRequest(
-                OutboundRequestError::SendError,
-            ));
-        }
-
-        if let Ok(request_id) = output_rx.await {
-            let result = response_rx.await;
-            match result {
-                Err(_) => Err(RequestError::OutboundRequest(
-                    OutboundRequestError::SenderFutureDropped,
-                )),
-                Ok(result) => {
-                    let data = result?;
-                    if let Ok(message) = <Result<
-                        <Req as Request>::Response,
-                        InboundRequestError,
-                    > as Deserialize>::deserialize(
-                        &mut data.reader()
-                    ) {
-                        // Check if there was an actual response from the application or a default response from
-                        // the network. If the network replied with the default response, it was because there wasn't a
-                        // receiver for the request
-                        match message {
-                            Ok(message) => Ok(message),
-                            Err(e) => Err(RequestError::InboundRequest(e)),
-                        }
-                    } else {
-                        error!(
-                            %request_id,
-                            %peer_id,
-                            type_id = std::any::type_name::<<Req as Request>::Response>(),
-                            "Failed to deserialize response from peer",
-                            );
-                        Err(RequestError::InboundRequest(
-                            InboundRequestError::DeSerializationError,
-                        ))
-                    }
-                }
-            }
-        } else {
-            Err(RequestError::OutboundRequest(
-                OutboundRequestError::SendError,
-            ))
-        }
+    fn receive_messages<M: Message>(&self) -> BoxStream<'static, (M, PeerId)> {
+        self.receive_requests_impl()
+            .map(|(request, _, sender)| (request, sender))
+            .boxed()
     }
 
     fn receive_requests<Req: Request>(&self) -> BoxStream<'static, (Req, RequestId, PeerId)> {
-        enum ReceiveStream {
-            WaitingForRegister(
-                Pin<Box<dyn Future<Output = mpsc::Receiver<(Bytes, RequestId, PeerId)>> + Send>>,
-            ),
-            Registered(mpsc::Receiver<(Bytes, RequestId, PeerId)>),
-        }
-
-        impl Stream for ReceiveStream {
-            type Item = (Bytes, RequestId, PeerId);
-            fn poll_next(
-                self: Pin<&mut Self>,
-                cx: &mut Context<'_>,
-            ) -> Poll<Option<(Bytes, RequestId, PeerId)>> {
-                let self_ = self.get_mut();
-                loop {
-                    use ReceiveStream::*;
-                    match self_ {
-                        WaitingForRegister(fut) => *self_ = Registered(ready!(Pin::new(fut).poll(cx))),
-                        Registered(stream) => return stream.poll_recv(cx),
-                    }
-                }
-            }
-            // The default size_hint is the best we can do, we can never say if
-            // there are going to be more requests or none at all.
-        }
-
-        let action_tx = self.action_tx.clone();
-        ReceiveStream::WaitingForRegister(Box::pin(async move {
-            // TODO Make buffer size configurable
-            let (tx, rx) = mpsc::channel(1024);
-
-            action_tx
-                .send(NetworkAction::ReceiveRequests {
-                    type_id: Req::TYPE_ID.into(),
-                    output: tx,
-                })
-                .await
-                .expect("Sending action to network task failed.");
-
-            rx
-        }))
-        .filter_map(|(data, request_id, peer_id)| async move {
-            // Map the (data, peer) stream to (message, peer) by deserializing the messages.
-            match Req::deserialize_request(&mut data.reader()) {
-                Ok(message) => Some((message, request_id, peer_id)),
-                Err(e) => {
-                    error!(
-                        %request_id,
-                        %peer_id,
-                        type_id = std::any::type_name::<Req>(),
-                        error = %e,
-                        "Failed to deserialize request from peer",
-                    );
-                    None
-                }
-            }
-        })
-        .boxed()
+        self.receive_requests_impl()
     }
 
     async fn respond<Req: Request>(
         &self,
         request_id: RequestId,
-        response: <Req as Request>::Response,
+        response: Req::Response,
     ) -> Result<(), Self::Error> {
         let (output_tx, output_rx) = oneshot::channel();
 
@@ -1440,7 +1481,7 @@ impl NetworkInterface for Network {
 
         // Encapsulate it in a `Result` to signal the network that this
         // was a successful response from the application.
-        let response: Result<<Req as Request>::Response, InboundRequestError> = Ok(response);
+        let response: Result<Req::Response, InboundRequestError> = Ok(response);
         response.serialize(&mut buf)?;
 
         self.action_tx

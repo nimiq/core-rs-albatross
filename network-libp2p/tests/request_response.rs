@@ -12,7 +12,10 @@ use rand::{thread_rng, Rng};
 use beserial::{Deserialize, Serialize};
 use nimiq_network_interface::{
     network::{Network as NetworkInterface, NetworkEvent},
-    request::{InboundRequestError, OutboundRequestError, Request, RequestError},
+    request::{
+        InboundRequestError, OutboundRequestError, Request, RequestCommon, RequestError,
+        RequestMarker,
+    },
 };
 use nimiq_network_libp2p::{
     discovery::{
@@ -28,7 +31,8 @@ use nimiq_utils::time::OffsetTime;
 struct TestRequest {
     request: u64,
 }
-impl Request for TestRequest {
+impl RequestCommon for TestRequest {
+    type Kind = RequestMarker;
     const TYPE_ID: u16 = 42;
     type Response = TestResponse;
 }
@@ -42,7 +46,8 @@ struct TestResponse {
 struct TestRequest2 {
     request: u64,
 }
-impl Request for TestRequest2 {
+impl RequestCommon for TestRequest2 {
+    type Kind = RequestMarker;
     const TYPE_ID: u16 = 42;
     type Response = TestResponse2;
 }
@@ -56,7 +61,8 @@ struct TestResponse2 {
 struct TestRequest3 {
     request: u64,
 }
-impl Request for TestRequest3 {
+impl RequestCommon for TestRequest3 {
+    type Kind = RequestMarker;
     const TYPE_ID: u16 = 42;
     type Response = TestResponse3;
 }
@@ -153,7 +159,7 @@ fn assert_peer_joined(event: &NetworkEvent<PeerId>, wanted_peer_id: &PeerId) {
 /// replies to the request using the `Req` type.
 async fn respond_requests<Req: Request, ExpReq: Request + std::cmp::PartialEq>(
     network: Arc<Network>,
-    response: Option<<Req as Request>::Response>,
+    response: Option<Req::Response>,
     expected_request: ExpReq,
 ) {
     // Subscribe for receiving requests

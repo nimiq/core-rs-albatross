@@ -241,7 +241,7 @@ async fn validator_can_catch_up() {
     for network in &networks {
         for peer_id in network.get_peers() {
             network
-                .request::<LevelUpdateMessage<SignedViewChangeMessage, ViewChange>>(
+                .message::<LevelUpdateMessage<SignedViewChangeMessage, ViewChange>>(
                     vc.clone(),
                     peer_id,
                 )

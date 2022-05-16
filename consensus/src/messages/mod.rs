@@ -4,7 +4,7 @@ use beserial::{Deserialize, Serialize};
 use nimiq_block::{Block, MacroBlock};
 use nimiq_blockchain::HistoryTreeChunk;
 use nimiq_hash::Blake2bHash;
-use nimiq_network_interface::request::Request;
+use nimiq_network_interface::request::{RequestCommon, RequestMarker};
 
 pub(crate) mod handlers;
 
@@ -54,7 +54,8 @@ pub struct RequestMacroChain {
     pub max_epochs: u16,
 }
 
-impl Request for RequestMacroChain {
+impl RequestCommon for RequestMacroChain {
+    type Kind = RequestMarker;
     const TYPE_ID: u16 = 200;
     type Response = MacroChain;
 }
@@ -64,7 +65,8 @@ pub struct RequestBatchSet {
     pub hash: Blake2bHash,
 }
 
-impl Request for RequestBatchSet {
+impl RequestCommon for RequestBatchSet {
+    type Kind = RequestMarker;
     const TYPE_ID: u16 = 202;
     type Response = BatchSetInfo;
 }
@@ -99,7 +101,8 @@ pub struct RequestHistoryChunk {
     pub chunk_index: u64,
 }
 
-impl Request for RequestHistoryChunk {
+impl RequestCommon for RequestHistoryChunk {
+    type Kind = RequestMarker;
     const TYPE_ID: u16 = 204;
     type Response = HistoryChunk;
 }
@@ -115,7 +118,8 @@ pub struct RequestBlock {
     pub hash: Blake2bHash,
 }
 
-impl Request for RequestBlock {
+impl RequestCommon for RequestBlock {
+    type Kind = RequestMarker;
     const TYPE_ID: u16 = 207;
     type Response = Option<Block>;
 }
@@ -151,7 +155,8 @@ pub struct RequestMissingBlocks {
     pub locators: Vec<Blake2bHash>,
 }
 
-impl Request for RequestMissingBlocks {
+impl RequestCommon for RequestMissingBlocks {
+    type Kind = RequestMarker;
     const TYPE_ID: u16 = 209;
     type Response = ResponseBlocks;
 }
@@ -159,7 +164,8 @@ impl Request for RequestMissingBlocks {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestHead {}
 
-impl Request for RequestHead {
+impl RequestCommon for RequestHead {
+    type Kind = RequestMarker;
     const TYPE_ID: u16 = 210;
     type Response = Blake2bHash;
 }

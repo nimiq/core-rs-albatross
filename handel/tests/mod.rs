@@ -24,7 +24,7 @@ use nimiq_handel::{
     update::LevelUpdateMessage,
     verifier,
 };
-use nimiq_network_interface::{network::Network, request::Request};
+use nimiq_network_interface::{network::Network, request::Message};
 use nimiq_network_mock::{MockHub, MockNetwork};
 use nimiq_test_log::test;
 
@@ -172,7 +172,7 @@ struct SendingFuture<N: Network> {
 }
 
 impl<N: Network> SendingFuture<N> {
-    pub async fn send<M: Request + Clone + Unpin + std::fmt::Debug>(self, msg: M) {
+    pub async fn send<M: Message + Clone + Unpin + std::fmt::Debug>(self, msg: M) {
         let peers = self.network.get_peers();
         for peer_id in peers {
             // We don't care about the response: spawn the request and intentionally
@@ -181,7 +181,7 @@ impl<N: Network> SendingFuture<N> {
                 let network = Arc::clone(&self.network);
                 let msg = msg.clone();
                 async move {
-                    if let Err(error) = network.request::<M>(msg, peer_id).await {
+                    if let Err(error) = network.message::<M>(msg, peer_id).await {
                         log::error!(%peer_id, %error, "error sending request");
                     }
                 }
@@ -191,7 +191,7 @@ impl<N: Network> SendingFuture<N> {
 }
 
 /// Implementation of a simple Sink Wrapper for the NetworkInterface's Network trait
-pub struct NetworkSink<M: Request + Unpin, N: Network> {
+pub struct NetworkSink<M: Message + Unpin, N: Network> {
     /// The network this sink is sending its messages over
     network: Arc<N>,
     /// The currently executed future of sending an item.
@@ -200,7 +200,7 @@ pub struct NetworkSink<M: Request + Unpin, N: Network> {
     phantom: PhantomData<M>,
 }
 
-impl<M: Request + Unpin, N: Network> NetworkSink<M, N> {
+impl<M: Message + Unpin, N: Network> NetworkSink<M, N> {
     pub fn new(network: Arc<N>) -> Self {
         Self {
             network,
@@ -210,7 +210,7 @@ impl<M: Request + Unpin, N: Network> NetworkSink<M, N> {
     }
 }
 
-impl<M: Request + Clone + Unpin + std::fmt::Debug, N: Network> Sink<(M, usize)>
+impl<M: Message + Clone + Unpin + std::fmt::Debug, N: Network> Sink<(M, usize)>
     for NetworkSink<M, N>
 {
     type Error = ();
@@ -308,7 +308,7 @@ async fn it_can_aggregate() {
             config.clone(),
             contribution,
             Box::pin(
-                net.receive_requests::<LevelUpdateMessage<Contribution, u8>>()
+                net.receive_messages::<LevelUpdateMessage<Contribution, u8>>()
                     .map(move |msg| msg.0.update),
             ),
             Box::new(NetworkSink {
@@ -349,7 +349,7 @@ async fn it_can_aggregate() {
         config.clone(),
         contribution,
         Box::pin(
-            net.receive_requests::<LevelUpdateMessage<Contribution, u8>>()
+            net.receive_messages::<LevelUpdateMessage<Contribution, u8>>()
                 .map(move |msg| msg.0.update),
         ),
         Box::new(NetworkSink {
@@ -406,7 +406,7 @@ async fn it_can_aggregate() {
         config.clone(),
         contribution,
         Box::pin(
-            net.receive_requests::<LevelUpdateMessage<Contribution, u8>>()
+            net.receive_messages::<LevelUpdateMessage<Contribution, u8>>()
                 .map(move |msg| msg.0.update),
         ),
         Box::new(NetworkSink {
