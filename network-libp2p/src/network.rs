@@ -658,7 +658,7 @@ impl Network {
                                         %request_id,
                                         %peer_id,
                                         %type_id,
-                                        message = &*base64::encode(&request),
+                                        content = &*base64::encode(&request),
                                         "Incoming request from peer",
                                     );
                                     // Check if we have a receiver registered for this message type
@@ -718,7 +718,7 @@ impl Network {
                                     error!(
                                         %request_id,
                                         %peer_id,
-                                        message = &*base64::encode(&request),
+                                        content = &*base64::encode(&request),
                                         "Could not parse request type",
                                     );
                                 }
