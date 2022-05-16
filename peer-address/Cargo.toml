@@ -24,12 +24,9 @@ lazy_static = "1.2"
 url = "2.2"
 
 beserial = { path = "../beserial", features = ["derive", "net"] }
-nimiq-bls = { path = "../bls" }
 nimiq-hash = { path = "../hash" }
-nimiq-hash_derive = { path = "../hash/hash_derive" }
 nimiq-keys = { path = "../keys" }
 nimiq-macros = { path = "../macros" }
-nimiq-primitives = { path = "../primitives", features = ["coin", "networks"] }
 nimiq-utils = { path = "../utils", features = ["observer", "time"] }
 
 [dev-dependencies]

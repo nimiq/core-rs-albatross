@@ -31,8 +31,6 @@ tokio = { version = "1.18", features = [
 ] }
 tokio-stream = { version = "0.1", features = ["default", "sync"] }
 
-log = { package = "tracing", version = "0.1", features = ["log"] }
-
 beserial = { path = "../beserial", features = ["derive"] }
 
 [dev-dependencies]

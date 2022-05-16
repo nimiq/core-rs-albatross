@@ -40,7 +40,6 @@ nimiq-macros = { path = "../macros" }
 nimiq-mempool = { path = "../mempool" }
 nimiq-network-interface = { path = "../network-interface" }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }
-nimiq-subscription = { path = "../primitives/subscription" }
 nimiq-transaction = { path = "../primitives/transaction" }
 nimiq-utils = { path = "../utils", features = [
     "observer",

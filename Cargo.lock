@@ -2654,7 +2654,6 @@ dependencies = [
  "nimiq-network-libp2p",
  "nimiq-network-mock",
  "nimiq-primitives",
- "nimiq-subscription",
  "nimiq-test-log",
  "nimiq-test-utils",
  "nimiq-transaction",
@@ -3096,7 +3095,6 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-stream",
- "tracing",
 ]
 
 [[package]]
@@ -3159,13 +3157,10 @@ dependencies = [
  "bitflags",
  "hex",
  "lazy_static",
- "nimiq-bls",
  "nimiq-genesis-builder",
  "nimiq-hash",
- "nimiq-hash_derive",
  "nimiq-keys",
  "nimiq-macros",
- "nimiq-primitives",
  "nimiq-test-log",
  "nimiq-utils",
  "thiserror",
@@ -3444,9 +3439,7 @@ version = "0.1.0"
 dependencies = [
  "beserial",
  "hex",
- "nimiq-account",
  "nimiq-bls",
- "nimiq-genesis",
  "nimiq-hash",
  "nimiq-keys",
  "nimiq-primitives",
@@ -3586,7 +3579,6 @@ dependencies = [
  "lazy_static",
  "nimiq-database",
  "nimiq-hash",
- "nimiq-key-derivation",
  "nimiq-keys",
  "nimiq-primitives",
  "nimiq-test-log",
