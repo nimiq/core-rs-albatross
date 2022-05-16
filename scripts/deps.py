@@ -1,3 +1,4 @@
+from collections import defaultdict
 import re
 import functools
 import operator
@@ -433,17 +434,21 @@ def analyze_versions(crate_data):
         },
     }
     """
-    dependencies = {}
-    versions = {}
+    def get_major(semver):
+        if semver is None:
+            return None
+        digits = semver.lstrip("^").split(".")
+        if digits[0] != "0":
+            return digits[0]
+        else:
+            return "0.{}".format(digits[1])
+    dependencies = defaultdict(dict)
+    versions = defaultdict(set)
     # Fill datastructure first.
     for data in crate_data:
         for dependency in data['dependencies'] + data['dev-dependencies']:
-            if dependency['name'] not in dependencies:
-                dependencies[dependency['name']] = {}
-                versions[dependency['name']] = set()
-            dependencies[dependency['name']
-                         ][data['name']] = dependency['version']
-            versions[dependency['name']].add(dependency['version'])
+            dependencies[dependency['name']][data['name']] = get_major(dependency['version'])
+            versions[dependency['name']].add(get_major(dependency['version']))
 
     for (dependency, version_set) in versions.items():
         if len(version_set) == 1:
@@ -493,14 +498,15 @@ if __name__ == '__main__':
     path = sys.argv[2] if len(sys.argv) > 2 else '.'
 
     if cmd == 'versions':
-        print(
-            'The following dependencies have inconsistent versions throughout the crates.')
         crates = map(lambda x: x[1], find_crates(path))
         versions = analyze_versions(crates)
+        if versions:
+            print(
+                'The following dependencies have inconsistent versions throughout the crates.')
         for (dependency, versions) in versions.items():
             print('[{}]'.format(dependency))
             for (crate, version) in versions.items():
-                print('    {} uses "{}"'.format(crate, version))
+                print('    {} uses {}'.format(crate, version))
             print()
     elif cmd == 'unused':
         print('The estimation is that the following packages are unused.')
