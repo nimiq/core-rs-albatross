@@ -41,9 +41,12 @@ struct NextProduceMicroBlockEvent<TValidatorNetwork> {
     view_change_proof: Option<ViewChangeProof>,
     view_change: Option<ViewChange>,
     view_change_delay: Duration,
+    empty_block_delay: Duration,
 }
 
 impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<TValidatorNetwork> {
+    const CHECK_MEMPOOL_DELAY: Duration = Duration::from_millis(100);
+
     // Ignoring clippy warning because there wouldn't be much to be gained by refactoring this,
     // except making clippy happy
     #[allow(clippy::too_many_arguments)]
@@ -60,6 +63,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         view_change_proof: Option<ViewChangeProof>,
         view_change: Option<ViewChange>,
         view_change_delay: Duration,
+        empty_block_delay: Duration,
     ) -> Self {
         Self {
             blockchain,
@@ -74,6 +78,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
             view_change_proof,
             view_change,
             view_change_delay,
+            empty_block_delay,
         }
     }
 
@@ -89,60 +94,76 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
                 && self.view_number >= head.next_view_number()
         };
 
-        // Acquire blockchain.upgradable_read() to prevent further changes to the blockchain while
-        // we're constructing the block. Check if we're still in the correct state, abort otherwise.
-        let return_value = {
-            let blockchain = self.blockchain.upgradable_read();
-            if !in_current_state(&blockchain.head()) {
-                Some(None)
-            } else if self.is_our_turn(&*blockchain) {
-                info!(
-                    slot_band = self.validator_slot_band,
-                    block_number = self.block_number,
-                    view_number = self.view_number,
-                    "Our turn producing micro block #{}:{}",
-                    self.block_number,
-                    self.view_number,
-                );
+        // If there are no transactions to include, we want to wait a bit before producing the
+        // micro block to reduce the number of unnecessary empty blocks. Set the deadline at which
+        // we're going to produce the block even if it is empty.
+        let deadline = SystemTime::now() + self.empty_block_delay;
 
-                let block = self.produce_micro_block(&*blockchain);
-                let transactions = block
-                    .body
-                    .as_ref()
-                    .map(|body| body.transactions.len())
-                    .unwrap_or(0);
+        let return_value = loop {
+            // Acquire blockchain.upgradable_read() to prevent further changes to the blockchain while
+            // we're constructing the block. Check if we're still in the correct state, abort otherwise.
+            {
+                let blockchain = self.blockchain.upgradable_read();
+                if !in_current_state(&blockchain.head()) {
+                    break Some(None);
+                } else if self.is_our_turn(&*blockchain) {
+                    info!(
+                        slot_band = self.validator_slot_band,
+                        block_number = self.block_number,
+                        view_number = self.view_number,
+                        "Our turn producing micro block #{}:{}",
+                        self.block_number,
+                        self.view_number,
+                    );
 
-                debug!(
-                    block_number = block.header.block_number,
-                    view_number = block.header.view_number,
-                    transactions = transactions,
-                    "Produced micro block #{}.{} with {} transactions",
-                    block.header.block_number,
-                    block.header.view_number,
-                    transactions
-                );
+                    let block = self.produce_micro_block(&*blockchain);
+                    let num_transactions = block
+                        .body
+                        .as_ref()
+                        .map(|body| body.transactions.len())
+                        .unwrap_or(0);
 
-                let block1 = block.clone();
+                    // Publish block immediately if it contains transactions or the block production
+                    // deadline has passed.
+                    if num_transactions > 0 || SystemTime::now() >= deadline {
+                        debug!(
+                            block_number = block.header.block_number,
+                            view_number = block.header.view_number,
+                            transactions = num_transactions,
+                            "Produced micro block #{}.{} with {} transactions",
+                            block.header.block_number,
+                            block.header.view_number,
+                            num_transactions
+                        );
 
-                // Use a trusted push since these blocks were generated by this validator
-                let result = if cfg!(feature = "trusted_push") {
-                    Blockchain::trusted_push(blockchain, Block::Micro(block))
+                        let block1 = block.clone();
+
+                        // Use a trusted push since these blocks were generated by this validator
+                        let result = if cfg!(feature = "trusted_push") {
+                            Blockchain::trusted_push(blockchain, Block::Micro(block))
+                        } else {
+                            Blockchain::push(blockchain, Block::Micro(block))
+                        };
+
+                        if let Err(e) = &result {
+                            error!("Failed to push our own block onto the chain: {:?}", e);
+                        }
+
+                        let event = result
+                            .map(move |result| ProduceMicroBlockEvent::MicroBlock(block1, result))
+                            .ok();
+                        break Some(event);
+                    }
                 } else {
-                    Blockchain::push(blockchain, Block::Micro(block))
-                };
-
-                if let Err(e) = &result {
-                    error!("Failed to push our own block onto the chain: {:?}", e);
+                    break None;
                 }
-
-                let event = result
-                    .map(move |result| ProduceMicroBlockEvent::MicroBlock(block1, result))
-                    .ok();
-                Some(event)
-            } else {
-                None
             }
+
+            // We have dropped the blockchain lock.
+            // Wait a bit before trying to produce a block again.
+            time::sleep(Self::CHECK_MEMPOOL_DELAY).await;
         };
+
         if let Some(event) = return_value {
             return (event, self);
         }
@@ -297,6 +318,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> ProduceMicroBlock<TValidator
         view_change_proof: Option<ViewChangeProof>,
         view_change: Option<ViewChange>,
         view_change_delay: Duration,
+        empty_block_delay: Duration,
     ) -> Self {
         let next_event = NextProduceMicroBlockEvent::new(
             blockchain,
@@ -311,6 +333,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> ProduceMicroBlock<TValidator
             view_change_proof,
             view_change,
             view_change_delay,
+            empty_block_delay,
         )
         .next()
         .boxed();

@@ -133,6 +133,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
     const MACRO_STATE_DB_NAME: &'static str = "ValidatorState";
     const MACRO_STATE_KEY: &'static str = "validatorState";
     const VIEW_CHANGE_DELAY: Duration = Duration::from_secs(10);
+    const EMPTY_BLOCK_DELAY: Duration = Duration::from_secs(1);
     const FORK_PROOFS_MAX_SIZE: usize = 1_000; // bytes
 
     pub fn new(
@@ -377,6 +378,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                     self.micro_state.view_change_proof.clone(),
                     self.micro_state.view_change.clone(),
                     Self::VIEW_CHANGE_DELAY,
+                    Self::EMPTY_BLOCK_DELAY,
                 ));
             }
         }
