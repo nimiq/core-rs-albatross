@@ -108,23 +108,24 @@ Please take a look at the [`client.example.toml`](lib/src/config/config_file/cli
 
 ### Devnet
 
-The development network is currently in release-candidate phase [rc2](https://github.com/nimiq/core-rs-albatross/releases/tag/v0.1.0-rc.2).
-Its main purpose is to invite all developers to exercise and test the Nimiq 2.0 client, filing and reporting any
-[issues](https://github.com/nimiq/core-rs-albatross/issues/new) through our GitHub repository.
+The development network is currently in release-candidate phase where we are giving RPC access to interested developers.
+Its main purpose is to invite all developers to exercise and test the Nimiq 2.0 RPC functionality (to see how it fits for
+their app use cases), and we invite them to file and report any [issues](https://github.com/nimiq/core-rs-albatross/issues/new)
+through our GitHub repository.
 
-Clients can connect to the Devnet via the seed node located at
+[ARPL](https://github.com/sisou/arpl) is the recommended command line tool to connect to the devnet RPC, like this:
 
 ```
-/dns4/seed1.v2.nimiq-testnet.com/tcp/8443/ws
+arpl -u "https://seed1.v2.nimiq-testnet.com:8648/?secret=<TOKEN>" status
 ```
+
+Using the TOKEN that will be given after requesting developer access from a team member through our social media channels.
 
 And get funds to experiment with it (for example, by becoming a validator) using the [Devnet Faucet](http://faucet.v2.nimiq-testnet.com/):
 
 ```
 curl -X POST -H "Content-Type: application/x-www-form-urlencoded" -d "address=NQXX XXXX XXXX XXXX XXXX XXXX XXXX XXXX XXXX"  http://faucet.v2.nimiq-testnet.com/tapit
 ```
-
-For a full list of supported and non-supported functionality, please refer to the [Nimiq 2.0 Devnet project](https://github.com/nimiq/core-rs-albatross/projects).
 
 ## Contributing
 
