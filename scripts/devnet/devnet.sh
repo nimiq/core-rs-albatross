@@ -240,8 +240,7 @@ if [ "$RELEASE" = true ] ; then
 fi
 
 if [ "$METRICS" = true ] ; then
-    cargo+=" --features nimiq-spammer/metrics"
-    cargo_build+=" --features nimiq-spammer/metrics"
+    export RUSTFLAGS="--cfg tokio_unstable"
 fi
 
 echo "Number of validators: $MAX_VALIDATORS"
@@ -260,11 +259,17 @@ do
 done
 
 echo "Building config files..."
+devnet_command="python3 $devnet_create $MAX_VALIDATORS --run-environment $RUN_ENVIRONMENT -o $configdir"
 if [ "$SPAMMER" = true ] ; then
-    python3 $devnet_create $MAX_VALIDATORS --run-environment "$RUN_ENVIRONMENT" -o $configdir -s
-else
-    python3 $devnet_create $MAX_VALIDATORS --run-environment "$RUN_ENVIRONMENT" -o $configdir
+    devnet_command="$devnet_command -s"
 fi
+if [ "$METRICS" = true ] ; then
+    devnet_command="$devnet_command -m"
+fi
+
+# Execute the devnet command
+$devnet_command
+
 echo "Config files generated in '$configdir'"
 export NIMIQ_OVERRIDE_DEVNET_CONFIG="$PWD/$configdir/dev-albatross.toml"
 echo "Overriding genesis with '$NIMIQ_OVERRIDE_DEVNET_CONFIG' ..."

@@ -40,6 +40,8 @@ parser.add_argument('-o', "--output", metavar='DIR', type=str,
 parser.add_argument('--release', action='store_true')
 parser.add_argument('-s', "--spammer", action="store_true",
                     help="generate configuration files for a spammer")
+parser.add_argument('-m', "--metrics", action="store_true",
+                    help="adds configuration to enable metrics")
 parser.add_argument('-a', "--albagen", action="store_true",
                     help="generate configuration files for albagen")
 parser.add_argument("--run-environment", default="unknown",
@@ -130,12 +132,10 @@ def create_nimiq_address():
     }
 
 
-def create_seed(path, min_peers):
+def create_seed(path, min_peers, enable_metrics):
     path.mkdir(parents=True, exist_ok=True)
 
-    # write config
-    with (path / "client.toml").open("wt") as f:
-        f.write("""[network]
+    config_str = """[network]
 peer_key_file = "{path}/peer_key.dat"
 listen_addresses = [
     "/ip4/127.0.0.1/tcp/9100/ws",
@@ -156,18 +156,27 @@ timestamps = true
 libp2p_swarm = "debug"
 lock_api = "trace"
 """.format(
-            path="temp-state/dev/seed",
-            min_peers=min_peers,
-            loki=loki_settings("seed"),
-        ))
+        path="temp-state/dev/seed",
+        min_peers=min_peers,
+        loki=loki_settings("seed"),
+    )
 
-
-def create_spammer(path, min_peers):
-    path.mkdir(parents=True, exist_ok=True)
+    if enable_metrics:
+        config_str += """
+[metrics-server]
+bind="127.0.0.1"
+port = 9500
+"""
 
     # write config
     with (path / "client.toml").open("wt") as f:
-        f.write("""[network]
+        f.write(config_str)
+
+
+def create_spammer(path, min_peers, enable_metrics):
+    path.mkdir(parents=True, exist_ok=True)
+
+    config_str = """[network]
 peer_key_file = "{path}/peer_key.dat"
 listen_addresses = [
     "/ip4/127.0.0.1/tcp/9999/ws",
@@ -198,16 +207,27 @@ signing_key_file = "{path}/signing_key.dat"
 voting_key_file = "{path}/voting_key.dat"
 fee_key_file = "{path}/fee_key.dat"
 """.format(
-            path="temp-state/dev/spammer",
-            min_peers=min_peers,
-            loki=loki_settings("spammer1"),
-        ))
+        path="temp-state/dev/spammer",
+        min_peers=min_peers,
+        loki=loki_settings("spammer1"),
+    )
+
+    if enable_metrics:
+        config_str += """
+[metrics-server]
+bind="127.0.0.1"
+port = 9501
+"""
+
+    # write config
+    with (path / "client.toml").open("wt") as f:
+        f.write(config_str)
     return {
         'address': "NQ40 GCAA U3UX 8BKD GUN0 PG3T 17HA 4X5H TXVE",
     }
 
 
-def create_validator(path, i, min_peers):
+def create_validator(path, i, min_peers, enable_metrics):
     path.mkdir(parents=True, exist_ok=True)
 
     # create voting (BLS) keypair
@@ -234,9 +254,7 @@ fee_key: "{fee_key}"
             fee_key=reward_address["private_key"]
         ))
 
-    # write config
-    with (path / "client.toml").open("wt") as f:
-        f.write("""[network]
+    config_str = """[network]
 peer_key_file = "{path}/peer_key.dat"
 listen_addresses = [
     "/ip4/127.0.0.1/tcp/{port}/ws",
@@ -268,21 +286,27 @@ voting_key_file = "{path}/voting_key.dat"
 voting_key = "{voting_key}"
 fee_key_file = "{path}/fee_key.dat"
 fee_key = "{fee_key}"
-
-[metrics-server]
-bind = "127.0.0.1"
-port = {metrics_port}
 """.format(
-            port=str(9101 + i),
-            metrics_port=str(9201 + i),
-            path="temp-state/dev/{}".format(i+1),  # str(path),
-            min_peers=min_peers,
-            loki=loki_settings("validator{}".format(i+1)),
-            validator_address=validator_address["address"],
-            voting_key=voting_key["private_key"],
-            signing_key=signing_key["private_key"],
-            fee_key=reward_address["private_key"]
-        ))
+        port=str(9101 + i),
+        path="temp-state/dev/{}".format(i+1),  # str(path),
+        min_peers=min_peers,
+        loki=loki_settings("validator{}".format(i+1)),
+        validator_address=validator_address["address"],
+        voting_key=voting_key["private_key"],
+        signing_key=signing_key["private_key"],
+        fee_key=reward_address["private_key"]
+    )
+
+    if enable_metrics:
+        config_str += """
+[metrics-server]
+bind="127.0.0.1"
+port = {metrics_port}
+""".format(metrics_port=str(9601 + i))
+
+    # write config
+    with (path / "client.toml").open("wt") as f:
+        f.write(config_str)
 
     return {
         "voting_key": voting_key,
@@ -299,19 +323,20 @@ validators = []
 min_peers = min(num_validators, 3)
 for i in range(num_validators):
     validator = create_validator(
-        output / "validator{:d}".format(i+1), i, min_peers)
+        output / "validator{:d}".format(i+1), i, min_peers, args.metrics)
     validators.append(validator)
     print("Created validator: {}..".format(
         validator["voting_key"]["public_key"][0:16]))
 
 # Create seed node configuration
-create_seed(output / "seed", min_peers)
+create_seed(output / "seed", min_peers, args.metrics)
 print("Created seed node configuration")
 
 spammers = []
 if args.spammer:
     # Create spammer node configuration
-    spammers.append(create_spammer(output / "spammer", min_peers))
+    spammers.append(create_spammer(
+        output / "spammer", min_peers, args.metrics))
     print("Created spammer configuration")
 
 # Genesis configuration
