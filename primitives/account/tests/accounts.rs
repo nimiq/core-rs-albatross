@@ -12,6 +12,7 @@ use nimiq_genesis_builder::GenesisBuilder;
 use nimiq_keys::{Address, KeyPair, PublicKey, SecureGenerate};
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
+use nimiq_primitives::policy;
 use nimiq_test_log::test;
 use nimiq_test_utils::test_transaction::{
     generate_accounts, generate_transactions, TestTransaction,
@@ -524,4 +525,248 @@ fn accounts_performance() {
         duration.as_millis(),
         num_txns as f64 / (duration.as_millis() as f64 / 1000_f64),
     );
+}
+
+#[test]
+fn accounts_performance_history_sync_batches_single_sender() {
+    let num_batches = 5;
+
+    let (env, num_txns) = if VOLATILE_ENV {
+        let num_txns = 25;
+        let env = VolatileEnvironment::new(10).unwrap();
+
+        (env, num_txns)
+    } else {
+        let num_txns = 100;
+        let tmp_dir = tempdir().expect("Could not create temporal directory");
+        let tmp_dir = tmp_dir.path().to_str().unwrap();
+        log::debug!("Creating a non volatile environment in {}", tmp_dir);
+        let env = MdbxEnvironment::new(tmp_dir, 1024 * 1024 * 1024 * 1024, 21).unwrap();
+        (env, num_txns)
+    };
+
+    let total_txns = num_batches * policy::BLOCKS_PER_BATCH * num_txns;
+
+    // Generate and sign transaction from an address
+    let mut rng = StdRng::seed_from_u64(0);
+
+    let sender_balances = vec![100_000_000_000; 1];
+    let recipient_balances = vec![0; total_txns as usize];
+    let mut genesis_builder = GenesisBuilder::default();
+    let rewards = vec![];
+
+    // Generate accounts
+    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, false);
+    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true);
+
+    let total_blocks = num_batches * policy::BLOCKS_PER_BATCH;
+
+    let mut block_transactions = vec![];
+
+    let mut txn_index = 0;
+
+    for _block in 0..total_blocks {
+        // Generate a new set of txns for each block
+        let mut mempool_transactions = vec![];
+        for _i in 0..num_txns {
+            let mempool_transaction = TestTransaction {
+                fee: 0 as u64,
+                value: 1,
+                recipient: recipient_accounts[txn_index as usize].clone(),
+                sender: sender_accounts[0].clone(),
+            };
+            mempool_transactions.push(mempool_transaction);
+            txn_index += 1;
+        }
+        let (txns, _) = generate_transactions(mempool_transactions.clone(), false);
+        block_transactions.push(txns);
+    }
+
+    log::debug!("Done generating {} transactions and accounts", txn_index);
+
+    // Add validator to genesis
+    genesis_builder.with_genesis_validator(
+        Address::from(&KeyPair::generate(&mut rng)),
+        PublicKey::from([0u8; 32]),
+        BLSKeyPair::generate(&mut rng).public_key,
+        Address::default(),
+    );
+
+    let genesis_info = genesis_builder.generate(env.clone()).unwrap();
+    let length = genesis_info.accounts.len();
+    let accounts = Accounts::new(env.clone());
+    let mut txn = WriteTransaction::new(&env);
+    let start = Instant::now();
+    accounts.init(&mut txn, genesis_info.accounts);
+    let duration = start.elapsed();
+    log::debug!(
+        "Time elapsed after account init: {} ms, Accounts per second {}",
+        duration.as_millis(),
+        length as f64 / (duration.as_millis() as f64 / 1000_f64),
+    );
+    let start = Instant::now();
+    txn.commit();
+    let duration = start.elapsed();
+    log::debug!(
+        "Time elapsed after account init's txn commit: {} ms, Accounts per second {}",
+        duration.as_millis(),
+        num_txns as f64 / (duration.as_millis() as f64 / 1000_f64),
+    );
+
+    log::debug!("Done adding accounts to genesis");
+
+    let mut block_index = 0;
+
+    for batch in 0..num_batches {
+        let mut txn = WriteTransaction::new(&env);
+
+        let batch_start = Instant::now();
+
+        for _blocks in 0..policy::BLOCKS_PER_BATCH {
+            let result = accounts.commit_batch(
+                &mut txn,
+                &block_transactions[block_index as usize],
+                &rewards[..],
+                block_index,
+                1,
+            );
+            match result {
+                Ok(_) => assert!(true),
+                Err(err) => assert!(false, "Received {}", err),
+            };
+            block_index += 1;
+        }
+
+        accounts.finalize_batch(&mut txn);
+        txn.commit();
+
+        let batch_duration = batch_start.elapsed();
+
+        log::debug!(
+            "Processed batch {}, duration {}ms",
+            batch,
+            batch_duration.as_millis()
+        );
+    }
+}
+
+#[test]
+fn accounts_performance_history_sync_batches_many_to_many() {
+    let num_batches = 5;
+
+    let (env, num_txns) = if VOLATILE_ENV {
+        let num_txns = 25;
+        let env = VolatileEnvironment::new(10).unwrap();
+
+        (env, num_txns)
+    } else {
+        let num_txns = 100;
+        let tmp_dir = tempdir().expect("Could not create temporal directory");
+        let tmp_dir = tmp_dir.path().to_str().unwrap();
+        log::debug!("Creating a non volatile environment in {}", tmp_dir);
+        let env = MdbxEnvironment::new(tmp_dir, 1024 * 1024 * 1024 * 1024, 21).unwrap();
+        (env, num_txns)
+    };
+
+    let total_txns = num_batches * policy::BLOCKS_PER_BATCH * num_txns;
+
+    // Generate and sign transaction from an address
+    let mut rng = StdRng::seed_from_u64(0);
+
+    let sender_balances = vec![100_000_000_000; total_txns as usize];
+    let recipient_balances = vec![10; total_txns as usize];
+    let mut genesis_builder = GenesisBuilder::default();
+    let rewards = vec![];
+
+    // Generate accounts
+    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, true);
+    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true);
+
+    let total_blocks = num_batches * policy::BLOCKS_PER_BATCH;
+
+    let mut block_transactions = vec![];
+
+    let mut txn_index = 0;
+
+    for _block in 0..total_blocks {
+        // Generate transactions
+        let mut mempool_transactions = vec![];
+        for _i in 0..num_txns {
+            let mempool_transaction = TestTransaction {
+                fee: 0 as u64,
+                value: 1,
+                recipient: recipient_accounts[txn_index as usize].clone(),
+                sender: sender_accounts[txn_index as usize].clone(),
+            };
+            mempool_transactions.push(mempool_transaction);
+            txn_index += 1;
+        }
+        let (txns, _) = generate_transactions(mempool_transactions.clone(), false);
+        block_transactions.push(txns);
+    }
+
+    log::debug!("Done generating {} transactions and accounts", txn_index);
+
+    // Add validator to genesis
+    genesis_builder.with_genesis_validator(
+        Address::from(&KeyPair::generate(&mut rng)),
+        PublicKey::from([0u8; 32]),
+        BLSKeyPair::generate(&mut rng).public_key,
+        Address::default(),
+    );
+
+    let genesis_info = genesis_builder.generate(env.clone()).unwrap();
+    let length = genesis_info.accounts.len();
+    let accounts = Accounts::new(env.clone());
+    let mut txn = WriteTransaction::new(&env);
+    let start = Instant::now();
+    accounts.init(&mut txn, genesis_info.accounts);
+    let duration = start.elapsed();
+    log::debug!(
+        "Time elapsed after account init: {} ms, Accounts per second {}",
+        duration.as_millis(),
+        length as f64 / (duration.as_millis() as f64 / 1000_f64),
+    );
+    let start = Instant::now();
+    txn.commit();
+    let duration = start.elapsed();
+    log::debug!(
+        "Time elapsed after account init's txn commit: {} ms, Accounts per second {}",
+        duration.as_millis(),
+        num_txns as f64 / (duration.as_millis() as f64 / 1000_f64),
+    );
+
+    let mut block_index = 0;
+
+    for batch in 0..num_batches {
+        let mut txn = WriteTransaction::new(&env);
+
+        let batch_start = Instant::now();
+
+        for _blocks in 0..policy::BLOCKS_PER_BATCH {
+            let result = accounts.commit_batch(
+                &mut txn,
+                &block_transactions[block_index as usize],
+                &rewards[..],
+                block_index,
+                1,
+            );
+            match result {
+                Ok(_) => assert!(true),
+                Err(err) => assert!(false, "Received {}", err),
+            };
+            block_index += 1;
+        }
+
+        accounts.finalize_batch(&mut txn);
+        txn.commit();
+
+        let batch_duration = batch_start.elapsed();
+
+        log::debug!(
+            "Processed batch {}, duration {}ms",
+            batch,
+            batch_duration.as_millis(),
+        );
+    }
 }
