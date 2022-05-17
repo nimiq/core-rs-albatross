@@ -45,6 +45,11 @@ pub trait BlockchainInterface {
         view_number: Option<u32>,
     ) -> Result<Slot, Self::Error>;
 
+    async fn get_transaction_by_hash(
+        &mut self,
+        hash: Blake2bHash,
+    ) -> Result<Transaction, Self::Error>;
+
     async fn get_transactions_by_block_number(
         &mut self,
         block_number: u32,
