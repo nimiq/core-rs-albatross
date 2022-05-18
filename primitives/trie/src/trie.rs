@@ -1,4 +1,5 @@
 use std::marker::PhantomData;
+use std::mem;
 
 use log::error;
 
@@ -96,7 +97,10 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
     pub fn get_chunk(&self, txn: &Transaction, start: &KeyNibbles, size: usize) -> Vec<A> {
         let chunk = self.get_trie_chunk(txn, start, size);
 
-        chunk.iter().map(|node| node.value().unwrap()).collect()
+        chunk
+            .into_iter()
+            .map(|node| node.into_value().unwrap())
+            .collect()
     }
 
     /// Insert a value into the Merkle Radix Trie at the given key. If the key already exists then
@@ -365,8 +369,9 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
                     // If there's a child, then we update the pointer node and the root path, and
                     // continue down the trie.
                     Ok(child_key) => {
-                        root_path.push(pointer_node.clone());
-                        pointer_node = txn.get(&self.db, &child_key).unwrap();
+                        let old_pointer_node =
+                            mem::replace(&mut pointer_node, txn.get(&self.db, &child_key).unwrap());
+                        root_path.push(old_pointer_node);
                     }
                 }
             }
@@ -389,11 +394,14 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
             // Go up the root path until we get to a node that is a prefix to our current key.
             // Add the nodes you remove to the proof.
             while !pointer_node.key().is_prefix_of(cur_key) {
-                proof_nodes.push(pointer_node.clone());
+                let old_pointer_node = mem::replace(
+                    &mut pointer_node,
+                    root_path
+                        .pop()
+                        .expect("Root path must contain at least the root node!"),
+                );
 
-                pointer_node = root_path
-                    .pop()
-                    .expect("Root path must contain at least the root node!");
+                proof_nodes.push(old_pointer_node);
             }
         }
 

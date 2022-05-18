@@ -24,25 +24,25 @@ use crate::trie_node::TrieNode;
 /// If any of the given keys doesn't exist this function just returns None.
 /// The exclusion (non-inclusion) of keys in the Merkle Radix Trie could also be proven, but it
 /// requires some light refactoring to the way proofs work.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TrieProof<A: Serialize + Deserialize + Clone> {
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TrieProof<A: Serialize + Deserialize> {
     #[beserial(len_type(u16))]
     pub nodes: Vec<TrieNode<A>>,
 }
 
-impl<A: Serialize + Deserialize + Clone> TrieProof<A> {
+impl<A: Serialize + Deserialize> TrieProof<A> {
     pub fn new(nodes: Vec<TrieNode<A>>) -> TrieProof<A> {
         TrieProof { nodes }
     }
 
     /// Returns all of the leaf nodes in the proof. These are the nodes that we are proving
     /// inclusion in the trie.
-    pub fn leaf_nodes(&self) -> Vec<TrieNode<A>> {
+    pub fn leaf_nodes(&self) -> Vec<&TrieNode<A>> {
         let mut leaf_nodes = Vec::new();
 
         for node in &self.nodes {
             if node.is_leaf() {
-                leaf_nodes.push(node.clone());
+                leaf_nodes.push(node);
             }
         }
 
@@ -62,7 +62,7 @@ impl<A: Serialize + Deserialize + Clone> TrieProof<A> {
         }
 
         // We'll use this vector to temporarily store child nodes before they are verified.
-        let mut children: Vec<TrieNode<A>> = Vec::new();
+        let mut children: Vec<&TrieNode<A>> = Vec::new();
 
         // Check that the proof is a valid trie.
         for node in &self.nodes {
@@ -106,7 +106,7 @@ impl<A: Serialize + Deserialize + Clone> TrieProof<A> {
             }
 
             // Put the current node into the children and move to the next node in the proof.
-            children.push(node.clone());
+            children.push(node);
         }
 
         if children.len() != 1 {
