@@ -1,5 +1,7 @@
 use std::marker::PhantomData;
 use std::mem;
+use std::sync::atomic;
+use std::sync::atomic::AtomicU64;
 
 use log::error;
 
@@ -23,6 +25,7 @@ use crate::trie_proof::TrieProof;
 #[derive(Debug)]
 pub struct MerkleRadixTrie<A: Serialize + Deserialize + Clone> {
     db: Database,
+    num_leaves: AtomicU64,
     _value: PhantomData<A>,
 }
 
@@ -33,17 +36,14 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
 
         let tree = MerkleRadixTrie {
             db,
+            num_leaves: AtomicU64::new(0),
             _value: PhantomData,
         };
 
         let mut txn = WriteTransaction::new(&env);
-
         if tree.get_root(&txn).is_none() {
-            let root = KeyNibbles::root();
-
-            txn.put_reserve(&tree.db, &root, &TrieNode::<A>::new_branch(root.clone()));
+            txn.put_reserve(&tree.db, &KeyNibbles::ROOT, &TrieNode::<A>::new_root());
         }
-
         txn.commit();
 
         tree
@@ -54,8 +54,12 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
         self.get_root(txn).unwrap().hash()
     }
 
+    pub fn num_leaves(&self) -> u64 {
+        self.num_leaves.load(atomic::Ordering::Acquire)
+    }
+
     /// Returns the number of leaf nodes in the Merkle Radix Trie. It will traverse the entire tree.
-    pub fn size(&self, txn: &Transaction) -> usize {
+    pub fn count_leaves(&self, txn: &Transaction) -> u64 {
         let mut size = 0;
 
         let mut stack = vec![self
@@ -63,32 +67,31 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
             .expect("The Merkle Radix Trie didn't have a root node!")];
 
         while let Some(item) = stack.pop() {
-            match item {
-                TrieNode::BranchNode { children, key } => {
+            match item.children().ok() {
+                Some(children) => {
                     for child in children.iter().flatten().rev() {
-                        let combined = &key + &child.suffix;
+                        let combined = item.key() + &child.suffix;
 
                         stack.push(txn.get(&self.db, &combined)
                                 .expect("Failed to find the child of a Merkle Radix Trie node. The database must be corrupt!"));
                     }
                 }
-                TrieNode::LeafNode { .. } => {
+                None => {
+                    // Leaf node.
                     size += 1;
                 }
             }
         }
+
+        assert_eq!(self.num_leaves(), size);
 
         size
     }
 
     /// Get the value at the given key. If there's no leaf node at the given key then it returns None.
     pub fn get(&self, txn: &Transaction, key: &KeyNibbles) -> Option<A> {
-        let node = txn.get(&self.db, key)?;
-
-        match node {
-            TrieNode::BranchNode { .. } => None,
-            TrieNode::LeafNode { value, .. } => Some(value),
-        }
+        let node: TrieNode<A> = txn.get(&self.db, key)?;
+        node.into_value().ok()
     }
 
     /// Returns a chunk of the Merkle Radix Trie that starts at the key `start` (which might or not
@@ -113,6 +116,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
 
         // And initialize the root path.
         let mut root_path: Vec<TrieNode<A>> = vec![];
+        let added;
 
         // Go down the trie until you find where to put the new value.
         loop {
@@ -133,6 +137,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
 
                 // Push the parent node into the root path.
                 root_path.push(new_parent);
+                added = 1;
 
                 break;
             }
@@ -152,6 +157,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
 
                 // Push the node into the root path.
                 root_path.push(cur_node);
+                added = 0;
 
                 break;
             }
@@ -170,6 +176,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
 
                     // Push the parent node into the root path.
                     root_path.push(cur_node);
+                    added = 1;
 
                     break;
                 }
@@ -183,7 +190,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
         }
 
         // Update the keys and hashes of the nodes that we modified.
-        self.update_keys(txn, root_path);
+        self.update_keys(txn, root_path, added);
     }
 
     /// Removes the value in the Merkle Radix Trie at the given key. If the key doesn't exist
@@ -245,7 +252,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
             parent_node = parent_node.remove_child(&child_key).unwrap();
 
             // Get the root address and the number of children of the node.
-            let root_address = KeyNibbles::root();
+            let root_address = KeyNibbles::ROOT;
             let num_children = parent_node.iter_children().count();
 
             // If the node has only a single child (and it isn't the root node), merge it with the
@@ -263,7 +270,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
                 root_path.push(only_child);
 
                 // Update the keys and hashes of the rest of the root path.
-                self.update_keys(txn, root_path);
+                self.update_keys(txn, root_path, -1);
 
                 return;
             }
@@ -275,7 +282,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
 
                 root_path.push(parent_node);
 
-                self.update_keys(txn, root_path);
+                self.update_keys(txn, root_path, -1);
 
                 return;
             }
@@ -426,17 +433,43 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
     }
 
     pub fn update_root(&self, txn: &mut WriteTransaction) {
-        self.update_hashes(txn, &KeyNibbles::root());
+        self.update_hashes(txn, &KeyNibbles::ROOT);
     }
 
     /// Returns the root node, if there is one.
     fn get_root(&self, txn: &Transaction) -> Option<TrieNode<A>> {
-        txn.get(&self.db, &KeyNibbles::root())
+        txn.get(&self.db, &KeyNibbles::ROOT)
     }
 
     /// Updates the keys for a chain of nodes and marks those nodes as dirty. It assumes that the
     /// path starts at the root node and that each consecutive node is a child of the previous node.
-    fn update_keys(&self, txn: &mut WriteTransaction, mut root_path: Vec<TrieNode<A>>) {
+    fn update_keys(&self, txn: &mut WriteTransaction, mut root_path: Vec<TrieNode<A>>, added: i8) {
+        {
+            // Save it directly if the root node doesn't have to be updated for other reasons.
+            let only_root_needs_update = root_path.len() == 1;
+            let root = root_path.first_mut().expect("Root path must not be empty");
+            if added != 0 {
+                if let TrieNode::RootNode {
+                    ref mut num_leaves, ..
+                } = root
+                {
+                    if added >= 0 {
+                        *num_leaves += added as u64;
+                    } else {
+                        *num_leaves -= (-added) as u64;
+                    }
+                    self.num_leaves
+                        .store(*num_leaves, atomic::Ordering::Release);
+                } else {
+                    panic!("Root path must start with a root node");
+                }
+                if only_root_needs_update {
+                    txn.put_reserve(&self.db, root.key(), root);
+                    return;
+                }
+            }
+        }
+
         // Get the first node in the path.
         let mut child_node = root_path.pop().expect("Root path must not be empty!");
 
@@ -447,6 +480,10 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
                 // Mark this node as dirty by storing the default hash.
                 .put_child(child_node.key(), Blake2bHash::default())
                 .unwrap();
+            assert_eq!(
+                root_path.is_empty(),
+                matches!(parent_node, TrieNode::RootNode { .. })
+            );
             txn.put_reserve(&self.db, parent_node.key(), &parent_node);
 
             child_node = parent_node;
@@ -487,10 +524,10 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
             .expect("The Merkle Radix Trie didn't have a root node!")];
 
         while let Some(item) = stack.pop() {
-            match item {
-                TrieNode::BranchNode { children, key } => {
+            match item.children().ok() {
+                Some(children) => {
                     for child in children.iter().flatten().rev() {
-                        let combined = &key + &child.suffix;
+                        let combined = item.key() + &child.suffix;
 
                         if combined.is_prefix_of(start) || *start <= combined {
                             stack.push(txn.get(&self.db, &combined)
@@ -498,8 +535,8 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
                         }
                     }
                 }
-                TrieNode::LeafNode { ref key, .. } => {
-                    if start.len() < key.len() || start <= key {
+                None => {
+                    if start.len() < item.key().len() || start <= item.key() {
                         chunk.push(item);
                     }
                     if chunk.len() >= size {
@@ -529,38 +566,38 @@ mod tests {
         let trie = MerkleRadixTrie::new(env.clone(), "database");
         let mut txn = WriteTransaction::new(&env);
 
-        assert_eq!(trie.size(&txn), 0);
+        assert_eq!(trie.count_leaves(&txn), 0);
 
         trie.put(&mut txn, &key_1, 80085);
         trie.put(&mut txn, &key_2, 999);
         trie.put(&mut txn, &key_3, 1337);
 
-        assert_eq!(trie.size(&txn), 3);
+        assert_eq!(trie.count_leaves(&txn), 3);
         assert_eq!(trie.get(&txn, &key_1), Some(80085));
         assert_eq!(trie.get(&txn, &key_2), Some(999));
         assert_eq!(trie.get(&txn, &key_3), Some(1337));
         assert_eq!(trie.get(&txn, &key_4), None);
 
         trie.remove(&mut txn, &key_4);
-        assert_eq!(trie.size(&txn), 3);
+        assert_eq!(trie.count_leaves(&txn), 3);
         assert_eq!(trie.get(&txn, &key_1), Some(80085));
         assert_eq!(trie.get(&txn, &key_2), Some(999));
         assert_eq!(trie.get(&txn, &key_3), Some(1337));
 
         trie.remove(&mut txn, &key_1);
-        assert_eq!(trie.size(&txn), 2);
+        assert_eq!(trie.count_leaves(&txn), 2);
         assert_eq!(trie.get(&txn, &key_1), None);
         assert_eq!(trie.get(&txn, &key_2), Some(999));
         assert_eq!(trie.get(&txn, &key_3), Some(1337));
 
         trie.remove(&mut txn, &key_2);
-        assert_eq!(trie.size(&txn), 1);
+        assert_eq!(trie.count_leaves(&txn), 1);
         assert_eq!(trie.get(&txn, &key_1), None);
         assert_eq!(trie.get(&txn, &key_2), None);
         assert_eq!(trie.get(&txn, &key_3), Some(1337));
 
         trie.remove(&mut txn, &key_3);
-        assert_eq!(trie.size(&txn), 0);
+        assert_eq!(trie.count_leaves(&txn), 0);
         assert_eq!(trie.get(&txn, &key_1), None);
         assert_eq!(trie.get(&txn, &key_2), None);
         assert_eq!(trie.get(&txn, &key_3), None);
@@ -629,17 +666,15 @@ mod tests {
         trie.put(&mut txn, &key_3, 7);
         trie.update_root(&mut txn);
 
-        let chunk = trie
-            .get_chunk_proof(&txn, &KeyNibbles::root(), 100)
-            .unwrap();
+        let chunk = trie.get_chunk_proof(&txn, &KeyNibbles::ROOT, 100).unwrap();
         assert_eq!(chunk.nodes.len(), 6);
         assert_eq!(chunk.verify(&trie.root_hash(&txn)), true);
 
-        let chunk = trie.get_chunk_proof(&txn, &KeyNibbles::root(), 3).unwrap();
+        let chunk = trie.get_chunk_proof(&txn, &KeyNibbles::ROOT, 3).unwrap();
         assert_eq!(chunk.nodes.len(), 6);
         assert_eq!(chunk.verify(&trie.root_hash(&txn)), true);
 
-        let chunk = trie.get_chunk_proof(&txn, &KeyNibbles::root(), 2).unwrap();
+        let chunk = trie.get_chunk_proof(&txn, &KeyNibbles::ROOT, 2).unwrap();
         assert_eq!(chunk.nodes.len(), 5);
         assert_eq!(chunk.verify(&trie.root_hash(&txn)), true);
 
