@@ -22,14 +22,13 @@ pub struct KeyNibbles {
 
 impl KeyNibbles {
     const MAX_BYTES: usize = 62;
-    /// Create the root (empty) key.
-    pub fn root() -> KeyNibbles {
-        KeyNibbles {
-            bytes: [0; KeyNibbles::MAX_BYTES],
-            bytes_length: 0,
-            length: 0,
-        }
-    }
+
+    /// The root (empty) key.
+    pub const ROOT: KeyNibbles = KeyNibbles {
+        bytes: [0; KeyNibbles::MAX_BYTES],
+        bytes_length: 0,
+        length: 0,
+    };
 
     /// Returns the length of the key in nibbles.
     pub fn len(&self) -> usize {
@@ -126,7 +125,7 @@ impl KeyNibbles {
                 start,
                 end
             );
-            return KeyNibbles::root();
+            return KeyNibbles::ROOT;
         }
 
         // Calculate the end nibble index (it can't exceed the key length).
@@ -205,7 +204,7 @@ impl From<&[u8]> for KeyNibbles {
                 v.len(),
                 KeyNibbles::MAX_BYTES,
             );
-            return KeyNibbles::root();
+            return KeyNibbles::ROOT;
         }
         let mut new_bytes = [0; KeyNibbles::MAX_BYTES];
         new_bytes[..v.len()].copy_from_slice(v);

@@ -74,9 +74,9 @@ impl Blockchain {
     }
 
     /// Returns the number of accounts in the Accounts Tree. An account id defined as any leaf node
-    /// in the tree. This method will traverse the entire tree, so it may be a bit slow.
-    pub fn get_number_accounts(&self) -> usize {
-        self.state.accounts.size(None)
+    /// in the tree.
+    pub fn get_number_accounts(&self) -> u64 {
+        self.state.accounts.size()
     }
 
     pub fn get_account(&self, address: &Address) -> Option<Account> {

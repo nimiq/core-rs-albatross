@@ -17,9 +17,13 @@ use crate::key_nibbles::KeyNibbles;
 /// different hexadecimal character.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
 pub enum TrieNode<A: Serialize + Deserialize> {
+    RootNode {
+        children: TrieNodeChildren,
+        num_leaves: u64,
+    },
     BranchNode {
         key: KeyNibbles,
-        children: [Option<TrieNodeChild>; 16],
+        children: TrieNodeChildren,
     },
     LeafNode {
         key: KeyNibbles,
@@ -32,8 +36,12 @@ pub enum TrieNode<A: Serialize + Deserialize> {
 #[repr(u8)]
 pub enum TrieNodeType {
     BranchNode = 0x00,
+    RootNode = 0x01,
     LeafNode = 0xff,
 }
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub struct TrieNodeChildren([Option<TrieNodeChild>; 16]);
 
 /// A struct representing the child of a node. It just contains the child's suffix (the part of the
 /// child's key that is different from its parent) and its hash.
@@ -43,14 +51,22 @@ pub struct TrieNodeChild {
     pub hash: Blake2bHash,
 }
 
-pub const NO_CHILDREN: [Option<TrieNodeChild>; 16] = [
+pub const NO_CHILDREN: TrieNodeChildren = TrieNodeChildren([
     None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
-];
+]);
 
 impl<A: Serialize + Deserialize> TrieNode<A> {
     /// Creates a new leaf node.
     pub fn new_leaf(key: KeyNibbles, value: A) -> Self {
         TrieNode::LeafNode { key, value }
+    }
+
+    /// Creates an empty root node
+    pub fn new_root() -> Self {
+        TrieNode::RootNode {
+            children: NO_CHILDREN,
+            num_leaves: 0,
+        }
     }
 
     /// Creates a new empty branch node.
@@ -64,23 +80,22 @@ impl<A: Serialize + Deserialize> TrieNode<A> {
     /// Checks if the node is a leaf node.
     pub fn is_leaf(&self) -> bool {
         match self {
-            TrieNode::BranchNode { .. } => false,
             TrieNode::LeafNode { .. } => true,
+            TrieNode::RootNode { .. } => false,
+            TrieNode::BranchNode { .. } => false,
         }
     }
 
     /// Checks if the node is a branch node.
     pub fn is_branch(&self) -> bool {
-        match self {
-            TrieNode::LeafNode { .. } => false,
-            TrieNode::BranchNode { .. } => true,
-        }
+        !self.is_leaf()
     }
 
     /// Returns the type of a node.
     pub fn ty(&self) -> TrieNodeType {
         match self {
             TrieNode::LeafNode { .. } => TrieNodeType::LeafNode,
+            TrieNode::RootNode { .. } => TrieNodeType::RootNode,
             TrieNode::BranchNode { .. } => TrieNodeType::BranchNode,
         }
     }
@@ -89,7 +104,31 @@ impl<A: Serialize + Deserialize> TrieNode<A> {
     pub fn key(&self) -> &KeyNibbles {
         match self {
             TrieNode::LeafNode { ref key, .. } => key,
+            TrieNode::RootNode { .. } => &KeyNibbles::ROOT,
             TrieNode::BranchNode { ref key, .. } => key,
+        }
+    }
+
+    pub fn children(&self) -> Result<&[Option<TrieNodeChild>; 16], MerkleRadixTrieError> {
+        match self {
+            TrieNode::RootNode { ref children, .. } | TrieNode::BranchNode { ref children, .. } => {
+                Ok(&children.0)
+            }
+            TrieNode::LeafNode { .. } => Err(MerkleRadixTrieError::LeavesHaveNoChildren),
+        }
+    }
+
+    pub fn children_mut(
+        &mut self,
+    ) -> Result<&mut [Option<TrieNodeChild>; 16], MerkleRadixTrieError> {
+        match self {
+            TrieNode::RootNode {
+                ref mut children, ..
+            }
+            | TrieNode::BranchNode {
+                ref mut children, ..
+            } => Ok(&mut children.0),
+            TrieNode::LeafNode { .. } => Err(MerkleRadixTrieError::LeavesHaveNoChildren),
         }
     }
 
@@ -97,7 +136,22 @@ impl<A: Serialize + Deserialize> TrieNode<A> {
     pub fn value(&self) -> Result<&A, MerkleRadixTrieError> {
         match self {
             TrieNode::LeafNode { ref value, .. } => Ok(value),
-            TrieNode::BranchNode { .. } => {
+            TrieNode::RootNode { .. } | TrieNode::BranchNode { .. } => {
+                error!(
+                    "Node with key {} is a branch node and so it can't have a value!",
+                    self.key()
+                );
+
+                Err(MerkleRadixTrieError::BranchesHaveNoValue)
+            }
+        }
+    }
+
+    /// Returns the value of a node, if it is a leaf node.
+    pub fn value_mut(&mut self) -> Result<&mut A, MerkleRadixTrieError> {
+        match self {
+            TrieNode::LeafNode { ref mut value, .. } => Ok(value),
+            TrieNode::RootNode { .. } | TrieNode::BranchNode { .. } => {
                 error!(
                     "Node with key {} is a branch node and so it can't have a value!",
                     self.key()
@@ -112,7 +166,7 @@ impl<A: Serialize + Deserialize> TrieNode<A> {
     pub fn into_value(self) -> Result<A, MerkleRadixTrieError> {
         match self {
             TrieNode::LeafNode { value, .. } => Ok(value),
-            TrieNode::BranchNode { .. } => {
+            TrieNode::RootNode { .. } | TrieNode::BranchNode { .. } => {
                 error!(
                     "Node with key {} is a branch node and so it can't have a value!",
                     self.key()
@@ -148,21 +202,10 @@ impl<A: Serialize + Deserialize> TrieNode<A> {
         &self,
         child_prefix: &KeyNibbles,
     ) -> Result<&Blake2bHash, MerkleRadixTrieError> {
-        match self {
-            TrieNode::LeafNode { .. } => {
-                error!(
-                    "Node with key {} is a leaf node and so it doesn't have any children!",
-                    self.key()
-                );
-                Err(MerkleRadixTrieError::LeavesHaveNoChildren)
-            }
-            TrieNode::BranchNode { children, .. } => {
-                if let Some(child) = &children[self.get_child_index(child_prefix)?] {
-                    return Ok(&child.hash);
-                }
-                Err(MerkleRadixTrieError::ChildDoesNotExist)
-            }
+        if let Some(child) = &self.children()?[self.get_child_index(child_prefix)?] {
+            return Ok(&child.hash);
         }
+        Err(MerkleRadixTrieError::ChildDoesNotExist)
     }
 
     /// Returns the key of the current node's child with the given prefix.
@@ -170,21 +213,10 @@ impl<A: Serialize + Deserialize> TrieNode<A> {
         &self,
         child_prefix: &KeyNibbles,
     ) -> Result<KeyNibbles, MerkleRadixTrieError> {
-        match self {
-            TrieNode::LeafNode { .. } => {
-                error!(
-                    "Node with key {} is a leaf node and so it doesn't have any children!",
-                    self.key()
-                );
-                Err(MerkleRadixTrieError::LeavesHaveNoChildren)
-            }
-            TrieNode::BranchNode { ref children, .. } => {
-                if let Some(ref child) = children[self.get_child_index(child_prefix)?] {
-                    return Ok(self.key() + &child.suffix);
-                }
-                Err(MerkleRadixTrieError::ChildDoesNotExist)
-            }
+        if let Some(ref child) = self.children()?[self.get_child_index(child_prefix)?] {
+            return Ok(self.key() + &child.suffix);
         }
+        Err(MerkleRadixTrieError::ChildDoesNotExist)
     }
 
     /// Add a child, with the given key and hash, to the current node. If successful, it returns the
@@ -195,27 +227,11 @@ impl<A: Serialize + Deserialize> TrieNode<A> {
         child_hash: Blake2bHash,
     ) -> Result<Self, MerkleRadixTrieError> {
         let child_index = self.get_child_index(child_key)?;
-
         let suffix = child_key.suffix(self.key().len() as u8);
-
-        match self {
-            TrieNode::LeafNode { .. } => {
-                error!(
-                    "Node with key {} is a leaf node and so it can't have any children!",
-                    self.key()
-                );
-                return Err(MerkleRadixTrieError::LeavesHaveNoChildren);
-            }
-            TrieNode::BranchNode {
-                ref mut children, ..
-            } => {
-                children[child_index] = Some(TrieNodeChild {
-                    suffix,
-                    hash: child_hash,
-                });
-            }
-        };
-
+        self.children_mut()?[child_index] = Some(TrieNodeChild {
+            suffix,
+            hash: child_hash,
+        });
         Ok(self)
     }
 
@@ -223,41 +239,14 @@ impl<A: Serialize + Deserialize> TrieNode<A> {
     /// modified node.
     pub fn remove_child(mut self, child_key: &KeyNibbles) -> Result<Self, MerkleRadixTrieError> {
         let child_index = self.get_child_index(child_key)?;
-
-        match self {
-            TrieNode::LeafNode { .. } => {
-                error!(
-                    "Node with key {} is a leaf node and so it can't have any children!",
-                    self.key()
-                );
-                return Err(MerkleRadixTrieError::LeavesHaveNoChildren);
-            }
-            TrieNode::BranchNode {
-                ref mut children, ..
-            } => {
-                children[child_index] = None;
-            }
-        };
-
+        self.children_mut()?[child_index] = None;
         Ok(self)
     }
 
     /// Adds, or overwrites, the value at the given node. If successful, it returns the modified
     /// node.
     pub fn put_value(mut self, new_value: A) -> Result<Self, MerkleRadixTrieError> {
-        match &mut self {
-            TrieNode::LeafNode { ref mut value, .. } => {
-                *value = new_value;
-            }
-            TrieNode::BranchNode { .. } => {
-                error!(
-                    "Node with key {} is a branch node and so it can't have a value!",
-                    self.key()
-                );
-                return Err(MerkleRadixTrieError::BranchesHaveNoValue);
-            }
-        };
-
+        *self.value_mut()? = new_value;
         Ok(self)
     }
 
@@ -270,25 +259,68 @@ impl<A: Serialize + Deserialize> TrieNode<A> {
     }
 }
 
+impl Serialize for TrieNodeChildren {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+        let mut size = 0;
+        let child_count: u8 = self
+            .0
+            .iter()
+            .fold(0, |acc, child| acc + if child.is_none() { 0 } else { 1 });
+        size += Serialize::serialize(&child_count, writer)?;
+        for child in self.0.iter().flatten() {
+            size += Serialize::serialize(&child, writer)?;
+        }
+        Ok(size)
+    }
+
+    fn serialized_size(&self) -> usize {
+        let mut size = /*count*/ 1;
+        for child in self.0.iter().flatten() {
+            size += Serialize::serialized_size(&child);
+        }
+        size
+    }
+}
+
+impl Deserialize for TrieNodeChildren {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+        let child_count: u8 = Deserialize::deserialize(reader)?;
+        let mut children = NO_CHILDREN;
+        for _ in 0..child_count {
+            let child: TrieNodeChild = Deserialize::deserialize(reader)?;
+            if let Some(i) = child.suffix.get(0) {
+                children.0[i] = Some(child);
+            } else {
+                return Err(io::Error::from(io::ErrorKind::InvalidData).into());
+            }
+        }
+        Ok(children)
+    }
+}
+
 impl<A: Serialize + Deserialize> Serialize for TrieNode<A> {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let mut size: usize = 0;
         size += Serialize::serialize(&self.ty(), writer)?;
-        size += Serialize::serialize(self.key(), writer)?;
 
         match self {
-            TrieNode::LeafNode { ref value, .. } => {
+            TrieNode::LeafNode { ref key, ref value } => {
+                size += Serialize::serialize(key, writer)?;
                 size += Serialize::serialize(value, writer)?;
             }
-            TrieNode::BranchNode { ref children, .. } => {
-                let child_count: u8 = children
-                    .iter()
-                    .fold(0, |acc, child| acc + if child.is_none() { 0 } else { 1 });
-                Serialize::serialize(&child_count, writer)?;
-
-                for child in children.iter().flatten() {
-                    size += Serialize::serialize(&child, writer)?;
-                }
+            TrieNode::RootNode {
+                ref children,
+                num_leaves,
+            } => {
+                size += Serialize::serialize(children, writer)?;
+                size += Serialize::serialize(num_leaves, writer)?;
+            }
+            TrieNode::BranchNode {
+                ref key,
+                ref children,
+            } => {
+                size += Serialize::serialize(key, writer)?;
+                size += Serialize::serialize(children, writer)?;
             }
         }
 
@@ -298,18 +330,24 @@ impl<A: Serialize + Deserialize> Serialize for TrieNode<A> {
     fn serialized_size(&self) -> usize {
         let mut size = /*type*/ 1;
 
-        size += Serialize::serialized_size(self.key());
-
         match self {
-            TrieNode::LeafNode { ref value, .. } => {
+            TrieNode::LeafNode { ref key, ref value } => {
+                size += Serialize::serialized_size(key);
                 size += Serialize::serialized_size(value);
             }
-            TrieNode::BranchNode { ref children, .. } => {
-                size += /*count*/ 1;
-
-                for child in children.iter().flatten() {
-                    size += Serialize::serialized_size(&child);
-                }
+            TrieNode::RootNode {
+                ref children,
+                num_leaves,
+            } => {
+                size += Serialize::serialized_size(children);
+                size += Serialize::serialized_size(num_leaves);
+            }
+            TrieNode::BranchNode {
+                ref key,
+                ref children,
+            } => {
+                size += Serialize::serialized_size(key);
+                size += Serialize::serialized_size(children);
             }
         }
 
@@ -321,35 +359,26 @@ impl<A: Serialize + Deserialize> Deserialize for TrieNode<A> {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let node_type: TrieNodeType = Deserialize::deserialize(reader)?;
 
-        let prefix: KeyNibbles = Deserialize::deserialize(reader)?;
-
-        match node_type {
+        Ok(match node_type {
             TrieNodeType::LeafNode => {
+                let key: KeyNibbles = Deserialize::deserialize(reader)?;
                 let value: A = Deserialize::deserialize(reader)?;
-
-                Ok(TrieNode::new_leaf(prefix, value))
+                TrieNode::LeafNode { key, value }
+            }
+            TrieNodeType::RootNode => {
+                let children: TrieNodeChildren = Deserialize::deserialize(reader)?;
+                let num_leaves: u64 = Deserialize::deserialize(reader)?;
+                TrieNode::RootNode {
+                    children,
+                    num_leaves,
+                }
             }
             TrieNodeType::BranchNode => {
-                let child_count: u8 = Deserialize::deserialize(reader)?;
-
-                let mut children = NO_CHILDREN;
-
-                for _ in 0..child_count {
-                    let child: TrieNodeChild = Deserialize::deserialize(reader)?;
-
-                    if let Some(i) = child.suffix.get(0) {
-                        children[i] = Some(child);
-                    } else {
-                        return Err(io::Error::from(io::ErrorKind::InvalidData).into());
-                    }
-                }
-
-                Ok(TrieNode::BranchNode {
-                    key: prefix,
-                    children,
-                })
+                let key: KeyNibbles = Deserialize::deserialize(reader)?;
+                let children: TrieNodeChildren = Deserialize::deserialize(reader)?;
+                TrieNode::BranchNode { key, children }
             }
-        }
+        })
     }
 }
 
@@ -382,26 +411,20 @@ impl<A: Serialize + Deserialize> FromDatabaseValue for TrieNode<A> {
 }
 
 #[allow(clippy::type_complexity)]
-type AccountsTreeNodeIter<'a> = Option<
-    iter::FilterMap<
-        slice::Iter<'a, Option<TrieNodeChild>>,
-        fn(&Option<TrieNodeChild>) -> Option<&TrieNodeChild>,
-    >,
+type AccountsTrieNodeIter<'a> = iter::FilterMap<
+    slice::Iter<'a, Option<TrieNodeChild>>,
+    fn(&Option<TrieNodeChild>) -> Option<&TrieNodeChild>,
 >;
 
 pub struct Iter<'a> {
-    it: AccountsTreeNodeIter<'a>,
+    it: AccountsTrieNodeIter<'a>,
 }
 
 impl<'a> iter::Iterator for Iter<'a> {
     type Item = &'a TrieNodeChild;
 
     fn next(&mut self) -> Option<&'a TrieNodeChild> {
-        if let Some(ref mut it) = self.it {
-            return it.next();
-        }
-
-        None
+        self.it.next()
     }
 }
 
@@ -410,32 +433,34 @@ impl<'a, A: Serialize + Deserialize> iter::IntoIterator for &'a TrieNode<A> {
     type IntoIter = Iter<'a>;
 
     fn into_iter(self) -> Iter<'a> {
-        match self {
-            TrieNode::LeafNode { .. } => Iter { it: None },
-            TrieNode::BranchNode { ref children, .. } => Iter {
-                it: Some(children.iter().filter_map(Option::as_ref)),
-            },
+        fn to_slice<T>(array: &[T; 16]) -> &[T] {
+            array
+        }
+        Iter {
+            it: self
+                .children()
+                .map(to_slice)
+                .unwrap_or(&[])
+                .iter()
+                .filter_map(Option::as_ref),
         }
     }
 }
 
-type AccountsTreeNodeChildFilterMap<'a> = iter::FilterMap<
+type AccountsTrieNodeChildFilterMap<'a> = iter::FilterMap<
     slice::IterMut<'a, Option<TrieNodeChild>>,
     fn(&mut Option<TrieNodeChild>) -> Option<&mut TrieNodeChild>,
 >;
 
 pub struct IterMut<'a> {
-    it: Option<AccountsTreeNodeChildFilterMap<'a>>,
+    it: AccountsTrieNodeChildFilterMap<'a>,
 }
 
 impl<'a> iter::Iterator for IterMut<'a> {
     type Item = &'a mut TrieNodeChild;
 
     fn next(&mut self) -> Option<&'a mut TrieNodeChild> {
-        if let Some(ref mut it) = self.it {
-            return it.next();
-        }
-        None
+        self.it.next()
     }
 }
 
@@ -444,13 +469,16 @@ impl<'a, A: Serialize + Deserialize> iter::IntoIterator for &'a mut TrieNode<A> 
     type IntoIter = IterMut<'a>;
 
     fn into_iter(self) -> IterMut<'a> {
-        match self {
-            TrieNode::LeafNode { .. } => IterMut { it: None },
-            TrieNode::BranchNode {
-                ref mut children, ..
-            } => IterMut {
-                it: Some(children.iter_mut().filter_map(Option::as_mut)),
-            },
+        fn to_slice<T>(array: &mut [T; 16]) -> &mut [T] {
+            array
+        }
+        IterMut {
+            it: self
+                .children_mut()
+                .map(to_slice)
+                .unwrap_or(&mut [])
+                .iter_mut()
+                .filter_map(Option::as_mut),
         }
     }
 }
