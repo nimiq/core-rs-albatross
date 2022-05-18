@@ -28,7 +28,7 @@ impl Blockchain {
                 // Initialize a vector to store the inherents
                 let inherents = self.create_macro_block_inherents(state, &macro_block.header);
 
-                // Commit block to AccountsTree and create the receipts.
+                // Commit block to AccountsTrie and create the receipts.
                 let receipts = accounts.commit(
                     txn,
                     &[],
@@ -77,7 +77,7 @@ impl Blockchain {
                 let inherents =
                     self.create_slash_inherents(&body.fork_proofs, &view_changes, Some(txn));
 
-                // Commit block to AccountsTree and create the receipts.
+                // Commit block to AccountsTrie and create the receipts.
                 let receipts = accounts.commit(
                     txn,
                     &body.transactions,
@@ -158,7 +158,7 @@ impl Blockchain {
             .get_receipts(micro_block.header.block_number, Some(txn))
             .expect("Failed to revert - missing receipts");
 
-        // Revert the block from AccountsTree.
+        // Revert the block from AccountsTrie.
         if let Err(e) = accounts.revert(
             txn,
             &body.transactions,

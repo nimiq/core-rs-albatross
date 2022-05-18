@@ -367,7 +367,7 @@ impl<A: Serialize + Deserialize + Clone> FromDatabaseValue for TrieNode<A> {
 }
 
 #[allow(clippy::type_complexity)]
-type AccountsTreeNodeIter<'a> = Option<
+type AccountsTrieNodeIter<'a> = Option<
     iter::FilterMap<
         slice::Iter<'a, Option<TrieNodeChild>>,
         fn(&Option<TrieNodeChild>) -> Option<&TrieNodeChild>,
@@ -375,7 +375,7 @@ type AccountsTreeNodeIter<'a> = Option<
 >;
 
 pub struct Iter<'a> {
-    it: AccountsTreeNodeIter<'a>,
+    it: AccountsTrieNodeIter<'a>,
 }
 
 impl<'a> iter::Iterator for Iter<'a> {
@@ -404,13 +404,13 @@ impl<'a, A: Serialize + Deserialize + Clone> iter::IntoIterator for &'a TrieNode
     }
 }
 
-type AccountsTreeNodeChildFilterMap<'a> = iter::FilterMap<
+type AccountsTrieNodeChildFilterMap<'a> = iter::FilterMap<
     slice::IterMut<'a, Option<TrieNodeChild>>,
     fn(&mut Option<TrieNodeChild>) -> Option<&mut TrieNodeChild>,
 >;
 
 pub struct IterMut<'a> {
-    it: Option<AccountsTreeNodeChildFilterMap<'a>>,
+    it: Option<AccountsTrieNodeChildFilterMap<'a>>,
 }
 
 impl<'a> iter::Iterator for IterMut<'a> {

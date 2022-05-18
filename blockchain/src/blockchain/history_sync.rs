@@ -295,7 +295,7 @@ impl Blockchain {
 
         // Update the accounts tree, one block at a time.
         for i in 0..block_numbers.len() {
-            // Commit block to AccountsTree and create the receipts.
+            // Commit block to AccountsTrie and create the receipts.
             let receipts = this.state.accounts.commit_batch(
                 &mut txn,
                 &block_transactions[i],

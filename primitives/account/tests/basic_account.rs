@@ -44,7 +44,7 @@ fn it_does_not_allow_creation() {
 #[test]
 fn basic_transfer_works() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTree");
+    let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTrie");
     let mut db_txn = WriteTransaction::new(&env);
 
     init_tree(&accounts_tree, &mut db_txn);
@@ -132,7 +132,7 @@ fn basic_transfer_works() {
 #[test]
 fn create_and_prune_works() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTree");
+    let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTrie");
     let mut db_txn = WriteTransaction::new(&env);
 
     init_tree(&accounts_tree, &mut db_txn);

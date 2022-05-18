@@ -349,7 +349,7 @@ impl Blockchain {
             "Found common ancestor",
         );
 
-        // Revert AccountsTree & TransactionCache to the common ancestor state.
+        // Revert AccountsTrie & TransactionCache to the common ancestor state.
         let mut revert_chain: Vec<(Blake2bHash, ChainInfo)> = vec![];
         let mut ancestor = current;
 
@@ -573,7 +573,7 @@ impl Blockchain {
             }
         }
 
-        // Commit block to AccountsTree.
+        // Commit block to AccountsTrie.
         if let Err(e) = self.commit_accounts(state, block, prev_entropy, first_view_number, txn) {
             warn!(%block, reason = "commit failed", error = &e as &dyn Error, "Rejecting block");
             #[cfg(feature = "metrics")]
