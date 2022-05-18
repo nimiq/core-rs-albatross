@@ -27,9 +27,10 @@ tokio = { version = "1.18", features = [
     "rt-multi-thread",
     "tracing",
 ] }
+tokio-metrics = "0.1"
 
 nimiq-blockchain = { path = "../blockchain", features=["metrics"] }
-nimiq-mempool = { path = "../mempool" }
 nimiq-consensus = { path = "../consensus" }
+nimiq-mempool = { path = "../mempool" }
 nimiq-network-interface = { path = "../network-interface" }
 nimiq-network-libp2p = { path = "../network-libp2p" }

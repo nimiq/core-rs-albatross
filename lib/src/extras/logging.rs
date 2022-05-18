@@ -1,6 +1,8 @@
 use std::env;
 use std::fs::{self, File};
 use std::io;
+#[cfg(tokio_unstable)]
+use std::net::ToSocketAddrs;
 use std::sync::Arc;
 
 use file_rotate::{compression::Compression, suffix::AppendCount, ContentLimit, FileRotate};

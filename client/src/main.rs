@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use log::info;
+
 pub use nimiq::{
     client::{Client, Consensus},
     config::command_line::CommandLine,
@@ -11,6 +12,7 @@ pub use nimiq::{
     extras::{
         deadlock::initialize_deadlock_detection,
         logging::{initialize_logging, log_error_cause_chain},
+        metrics_server::NimiqTaskMonitor,
         panic::initialize_panic_reporting,
         signal_handling::initialize_signal_handler,
     },
@@ -47,9 +49,10 @@ async fn main_inner() -> Result<(), Error> {
     let config = builder.build()?;
     log::debug!("Final configuration: {:#?}", config);
 
-    // Clone config for RPC
+    // Clone config for RPC and metrics server
     let rpc_config = config.rpc_server.clone();
     let metrics_config = config.metrics_server.clone();
+    let metrics_enabled = metrics_config.is_some();
 
     // Create client from config.
     log::info!("Initializing client");
@@ -64,12 +67,47 @@ async fn main_inner() -> Result<(), Error> {
         tokio::spawn(async move { rpc_server.run().await });
     }
 
+    // Vector for task monitors (Tokio task metrics)
+    let mut nimiq_task_metric = vec![];
+
     // Start consensus.
     let consensus = client.consensus().unwrap();
 
     log::info!("Spawning consensus");
-    tokio::spawn(consensus);
+    if metrics_enabled {
+        let con_metrics_monitor = tokio_metrics::TaskMonitor::new();
+        let instr_con = con_metrics_monitor.instrument(consensus);
+        tokio::spawn(instr_con);
+        nimiq_task_metric.push(NimiqTaskMonitor {
+            name: "consensus".to_string(),
+            monitor: con_metrics_monitor,
+        });
+    } else {
+        tokio::spawn(consensus);
+    }
     let consensus = client.consensus_proxy();
+
+    // Start validator
+    let val_metric_monitor = tokio_metrics::TaskMonitor::new();
+    if let Some(validator) = client.validator() {
+        log::info!("Spawning validator");
+        if metrics_enabled {
+            let mp_metrics_monitor = validator.get_mempool_monitor();
+            let inst_validator = val_metric_monitor.instrument(validator);
+            tokio::spawn(inst_validator);
+            nimiq_task_metric.push(NimiqTaskMonitor {
+                name: "mempool".to_string(),
+                monitor: mp_metrics_monitor,
+            });
+            nimiq_task_metric.push(NimiqTaskMonitor {
+                name: "validator".to_string(),
+                monitor: val_metric_monitor,
+            });
+        } else {
+            log::info!("Spawning validator");
+            tokio::spawn(validator);
+        }
+    }
 
     // Start metrics server
     if let Some(metrics_config) = metrics_config {
@@ -79,13 +117,8 @@ async fn main_inner() -> Result<(), Error> {
             client.mempool(),
             client.consensus_proxy(),
             client.network(),
+            &nimiq_task_metric,
         );
-    }
-
-    // Start validator
-    if let Some(validator) = client.validator() {
-        log::info!("Spawning validator");
-        tokio::spawn(validator);
     }
 
     // Create the "monitor" future which never completes to keep the client alive.
@@ -100,6 +133,7 @@ async fn main_inner() -> Result<(), Error> {
 
     // Run periodically
     let mut interval = tokio::time::interval(Duration::from_secs(statistics_interval));
+
     loop {
         interval.tick().await;
 

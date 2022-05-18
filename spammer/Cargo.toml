@@ -20,12 +20,10 @@ maintenance = { status = "experimental" }
 [dependencies]
 clap = { version = "3.1", features = ["derive"] }
 futures = "0.3"
-lazy_static = { version = "1.4", optional = true }
 log = { package = "tracing", version = "0.1", features = ["log"] }
-prometheus = { version = "0.13", features = ["process"], optional = true }
 rand = "0.8.5"
 tokio = { version = "1.18", features = ["rt-multi-thread", "time", "tracing"] }
-warp = { version = "0.3.2", optional = true }
+tokio-metrics = { version = "0.1" }
 toml = "0.5"
 serde = "1.0.137"
 nimiq-block = { path = "../primitives/block" }
@@ -40,7 +38,4 @@ nimiq-transaction-builder = { path = "../transaction-builder" }
 package = "nimiq-lib"
 path = "../lib"
 version = "0.1"
-features = ["deadlock", "logging", "panic", "rpc-server", "signal-handling", "validator", "wallet"]
-
-[features]
-metrics = ["lazy_static", "prometheus", "warp"]
+features = ["deadlock", "logging", "metrics-server", "panic", "rpc-server", "signal-handling", "validator", "wallet"]

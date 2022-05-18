@@ -4,11 +4,7 @@ use std::str::FromStr;
 
 use clap::Parser;
 use futures::StreamExt;
-#[cfg(feature = "metrics")]
-use lazy_static::lazy_static;
 use log::info;
-#[cfg(feature = "metrics")]
-use prometheus::{IntGauge, Registry};
 use rand::{
     distributions::{Distribution, WeightedIndex},
     thread_rng, Rng,
@@ -17,8 +13,6 @@ use rand::{
 use serde::Deserialize;
 
 use std::sync::{Arc, RwLock};
-#[cfg(feature = "metrics")]
-use warp::{Filter, Rejection, Reply};
 
 use nimiq::client::ConsensusProxy;
 pub use nimiq::{
@@ -42,17 +36,6 @@ use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_transaction::Transaction;
 use nimiq_transaction_builder::TransactionBuilder;
-
-#[cfg(feature = "metrics")]
-lazy_static! {
-    pub static ref REGISTRY: Registry = Registry::new();
-    pub static ref BLOCK_NUMBER: IntGauge =
-        IntGauge::new("block_number", "Block Number").expect("metric couldn't be created");
-    pub static ref TPS: IntGauge = IntGauge::new("spammer_tps", "Spammer transactions per second")
-        .expect("metric couldn't be created");
-    pub static ref BLOCK_TIME: IntGauge = IntGauge::new("block_time", "Spammer average block time")
-        .expect("metric couldn't be created");
-}
 
 #[derive(Debug, Parser)]
 pub struct SpammerCommandLine {
@@ -81,20 +64,20 @@ pub struct SpammerCommandLine {
 }
 
 pub struct SpammerAccounts {
-    //KeyPair associated with the account
+    // KeyPair associated with the account
     key_pair: KeyPair,
-    //Current balance for that account
+    // Current balance for that account
     balance: Coin,
-    //The block number where the txn was sent
+    // The block number where the txn was sent
     block_number: u32,
 }
 
 pub struct SpammerContracts {
-    //KeyPair associated with the contract owner
+    // KeyPair associated with the contract owner
     key_pair: KeyPair,
-    //The block number where the contract was created
+    // The block number where the contract was created
     block_number: u32,
-    //Contract address
+    // Contract address
     address: Address,
 }
 
@@ -144,65 +127,6 @@ enum SpamType {
 const UNIT_KEY: &str = "6c9320ac201caf1f8eaa5b05f5d67a9e77826f3f6be266a0ecccc20416dc6587";
 const DEV_KEY: &str = "1ef7aad365c195462ed04c275d47189d5362bbfe36b5e93ce7ba2f3add5f439b";
 
-#[cfg(feature = "metrics")]
-async fn metrics_handler() -> Result<impl Reply, Rejection> {
-    use prometheus::Encoder;
-    let encoder = prometheus::TextEncoder::new();
-
-    let mut buffer = Vec::new();
-    if let Err(e) = encoder.encode(&REGISTRY.gather(), &mut buffer) {
-        eprintln!("could not encode custom metrics: {}", e);
-    };
-    let mut res = match String::from_utf8(buffer.clone()) {
-        Ok(v) => v,
-        Err(e) => {
-            eprintln!("custom metrics could not be from_utf8'd: {}", e);
-            String::default()
-        }
-    };
-    buffer.clear();
-
-    let mut buffer = Vec::new();
-    if let Err(e) = encoder.encode(&prometheus::gather(), &mut buffer) {
-        eprintln!("could not encode prometheus metrics: {}", e);
-    };
-    let res_custom = match String::from_utf8(buffer.clone()) {
-        Ok(v) => v,
-        Err(e) => {
-            eprintln!("prometheus metrics could not be from_utf8'd: {}", e);
-            String::default()
-        }
-    };
-    buffer.clear();
-
-    res.push_str(&res_custom);
-    Ok(res)
-}
-
-#[cfg(feature = "metrics")]
-async fn register_custom_metrics() {
-    REGISTRY
-        .register(Box::new(TPS.clone()))
-        .expect("collector couldn't be registered");
-    REGISTRY
-        .register(Box::new(BLOCK_TIME.clone()))
-        .expect("collector couldn't registered");
-    REGISTRY
-        .register(Box::new(BLOCK_NUMBER.clone()))
-        .expect("collector couldn't be registered");
-
-    let metrics_route = warp::path!("metrics").and_then(metrics_handler);
-
-    warp::serve(metrics_route).run(([0, 0, 0, 0], 9501)).await;
-}
-
-#[cfg(feature = "metrics")]
-async fn update_metric_counters(block_number: i64, block_time: i64, spammer_tps: i64) {
-    TPS.set(spammer_tps);
-    BLOCK_TIME.set(block_time);
-    BLOCK_NUMBER.set(block_number);
-}
-
 async fn main_inner() -> Result<(), Error> {
     // Initialize deadlock detection
     initialize_deadlock_detection();
@@ -239,10 +163,6 @@ async fn main_inner() -> Result<(), Error> {
     // Initialize signal handler
     initialize_signal_handler();
 
-    // Register metrics
-    #[cfg(feature = "metrics")]
-    tokio::spawn(register_custom_metrics());
-
     // Create config builder and apply command line and config file.
     // You usually want the command line to override config settings, so the order is important.
     let mut builder = ClientConfig::builder();
@@ -255,6 +175,7 @@ async fn main_inner() -> Result<(), Error> {
 
     // Clone config for RPC and metrics server
     let rpc_config = config.rpc_server.clone();
+    let metrics_config = config.metrics_server.clone();
 
     // Get the private key used to sign the transactions (the associated address must have funds).
     let validator_settings = &config_file
@@ -297,6 +218,19 @@ async fn main_inner() -> Result<(), Error> {
     log::info!("Spawning consensus");
     tokio::spawn(consensus);
     let consensus = client.consensus_proxy();
+
+    // Initialize metrics server
+    if let Some(metrics_config) = metrics_config {
+        use nimiq::extras::metrics_server::start_metrics_server;
+        let _ = start_metrics_server(
+            metrics_config.addr,
+            Arc::clone(&consensus.blockchain),
+            client.mempool(),
+            client.consensus_proxy(),
+            client.network(),
+            &[],
+        );
+    }
 
     // Start Spammer
     let mempool = if let Some(validator) = client.validator() {
@@ -417,13 +351,6 @@ async fn main_inner() -> Result<(), Error> {
 
                     let tps = tx_count_total as f32 / diff.as_secs_f32();
 
-                    #[cfg(feature = "metrics")]
-                    update_metric_counters(
-                        block.block_number() as i64,
-                        av_block_time.as_millis().try_into().unwrap(),
-                        tps as i64,
-                    )
-                    .await;
                     info!(
                         blocks_window = rolling_window,
                         block_time = av_block_time.as_secs_f32(),

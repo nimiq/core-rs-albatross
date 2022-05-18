@@ -22,7 +22,10 @@ parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
 futures = "0.3"
 keyed_priority_queue = "0.4"
 tokio = { version = "1.18", features = ["full", "tracing"] }
+tokio-metrics = "0.1"
 tokio-stream = { version = "0.1", features = ["sync"] }
+
+
 beserial = { path = "../beserial" }
 nimiq-account = { path = "../primitives/account" }
 nimiq-block = { path = "../primitives/block" }

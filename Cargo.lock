@@ -2612,6 +2612,7 @@ dependencies = [
  "futures",
  "nimiq-lib",
  "tokio",
+ "tokio-metrics",
  "tracing",
 ]
 
@@ -2840,7 +2841,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tokio",
- "warp 0.3.1",
+ "warp",
 ]
 
 [[package]]
@@ -2972,6 +2973,7 @@ dependencies = [
  "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
  "rand 0.8.5",
  "tokio",
+ "tokio-metrics",
  "tokio-stream",
  "tracing",
 ]
@@ -2990,6 +2992,7 @@ dependencies = [
  "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
  "prometheus-client 0.16.0",
  "tokio",
+ "tokio-metrics",
  "tracing",
 ]
 
@@ -3287,7 +3290,6 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "futures",
- "lazy_static",
  "nimiq-block",
  "nimiq-blockchain",
  "nimiq-keys",
@@ -3296,13 +3298,12 @@ dependencies = [
  "nimiq-primitives",
  "nimiq-transaction",
  "nimiq-transaction-builder",
- "prometheus",
  "rand 0.8.5",
  "serde",
  "tokio",
+ "tokio-metrics",
  "toml",
  "tracing",
- "warp 0.3.2",
 ]
 
 [[package]]
@@ -3534,6 +3535,7 @@ dependencies = [
  "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
  "rand 0.8.5",
  "tokio",
+ "tokio-metrics",
  "tokio-stream",
  "tracing",
  "tracing-core",
@@ -3999,37 +4001,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "procfs"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95e344cafeaeefe487300c361654bcfc85db3ac53619eeccced29f5ea18c4c70"
-dependencies = [
- "bitflags",
- "byteorder",
- "flate2",
- "hex",
- "lazy_static",
- "libc",
-]
-
-[[package]]
-name = "prometheus"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b7f64969ffd5dd8f39bd57a68ac53c163a095ed9d0fb707146da1b27025a3504"
-dependencies = [
- "cfg-if",
- "fnv",
- "lazy_static",
- "libc",
- "memchr",
- "parking_lot 0.11.2",
- "procfs",
- "protobuf",
- "thiserror",
-]
-
-[[package]]
 name = "prometheus-client"
 version = "0.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4149,12 +4120,6 @@ dependencies = [
  "bytes",
  "prost 0.10.0",
 ]
-
-[[package]]
-name = "protobuf"
-version = "2.27.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf7e6d18738ecd0902d30d1ad232c9125985a3422929b16c65517b38adc14f96"
 
 [[package]]
 name = "quick-error"
@@ -5017,6 +4982,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "tokio-metrics"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bcb585a0069b53171684e22d5255984ec30d1c7304fd0a4a9a603ffd8c765cdd"
+dependencies = [
+ "futures-util",
+ "pin-project-lite 0.2.9",
+ "tokio",
+]
+
+[[package]]
 name = "tokio-native-tls"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5518,36 +5494,6 @@ source = "git+https://github.com/vlvrd/warp.git?branch=sergio/auth#45ac5ae52c072
 dependencies = [
  "bytes",
  "futures",
- "headers",
- "http",
- "hyper",
- "log",
- "mime",
- "mime_guess",
- "multipart",
- "percent-encoding",
- "pin-project 1.0.10",
- "scoped-tls",
- "serde",
- "serde_json",
- "serde_urlencoded",
- "tokio",
- "tokio-stream",
- "tokio-tungstenite",
- "tokio-util 0.6.9",
- "tower-service",
- "tracing",
-]
-
-[[package]]
-name = "warp"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3cef4e1e9114a4b7f1ac799f16ce71c14de5778500c5450ec6b7b920c55b587e"
-dependencies = [
- "bytes",
- "futures-channel",
- "futures-util",
  "headers",
  "http",
  "hyper",

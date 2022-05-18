@@ -6,6 +6,7 @@ use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 use std::cmp::{Ordering, Reverse};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+use tokio_metrics::TaskMonitor;
 
 use beserial::Serialize;
 use nimiq_account::{Account, BasicAccount};
@@ -93,7 +94,7 @@ impl Mempool {
     ///
     /// Once this function is called, the mempool executor is spawned.
     /// The executor will subscribe to the transaction topic from the the network.
-    pub async fn start_executor<N: Network>(&self, network: Arc<N>) {
+    pub async fn start_executor<N: Network>(&self, network: Arc<N>, monitor: TaskMonitor) {
         let mut executor_handle = self.executor_handle.lock().await;
 
         if executor_handle.is_some() {
@@ -114,7 +115,9 @@ impl Mempool {
 
         // Start the executor and obtain its handle
         let (abort_handle, abort_registration) = AbortHandle::new_pair();
-        tokio::spawn(Abortable::new(mempool_executor, abort_registration));
+        let instrumented_future =
+            monitor.instrument(Abortable::new(mempool_executor, abort_registration));
+        tokio::spawn(instrumented_future);
 
         // Set the executor handle
         *executor_handle = Some(abort_handle);
