@@ -19,7 +19,7 @@ use crate::key_nibbles::KeyNibbles;
 pub enum TrieNode<A: Serialize + Deserialize + Clone> {
     BranchNode {
         key: KeyNibbles,
-        children: Box<[Option<TrieNodeChild>; 16]>,
+        children: [Option<TrieNodeChild>; 16],
     },
     LeafNode {
         key: KeyNibbles,
@@ -57,7 +57,7 @@ impl<A: Serialize + Deserialize + Clone> TrieNode<A> {
     pub fn new_branch(key: KeyNibbles) -> Self {
         TrieNode::BranchNode {
             key,
-            children: Box::new(NO_CHILDREN),
+            children: NO_CHILDREN,
         }
     }
 
@@ -331,7 +331,7 @@ impl<A: Serialize + Deserialize + Clone> Deserialize for TrieNode<A> {
 
                 Ok(TrieNode::BranchNode {
                     key: prefix,
-                    children: Box::new(children),
+                    children,
                 })
             }
         }
