@@ -116,7 +116,7 @@ impl<A: Serialize + Deserialize> TrieProof<A> {
 
         let root = children.pop().unwrap();
 
-        if root.key() != &KeyNibbles::root() {
+        if root.key() != &KeyNibbles::ROOT {
             error!(
                 "The root node doesn't have the correct key! It has key {}.",
                 root.key()
