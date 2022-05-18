@@ -98,6 +98,8 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         // micro block to reduce the number of unnecessary empty blocks. Set the deadline at which
         // we're going to produce the block even if it is empty.
         let deadline = SystemTime::now() + self.empty_block_delay;
+        let mut delay = Duration::default();
+        let mut logged = false;
 
         let return_value = loop {
             // Acquire blockchain.upgradable_read() to prevent further changes to the blockchain while
@@ -107,14 +109,17 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
                 if !in_current_state(&blockchain.head()) {
                     break Some(None);
                 } else if self.is_our_turn(&*blockchain) {
-                    info!(
-                        slot_band = self.validator_slot_band,
-                        block_number = self.block_number,
-                        view_number = self.view_number,
-                        "Our turn producing micro block #{}:{}",
-                        self.block_number,
-                        self.view_number,
-                    );
+                    if !logged {
+                        info!(
+                            block_number = self.block_number,
+                            view_number = self.view_number,
+                            slot_band = self.validator_slot_band,
+                            "Our turn, producing micro block #{}.{}",
+                            self.block_number,
+                            self.view_number,
+                        );
+                        logged = true;
+                    }
 
                     let block = self.produce_micro_block(&*blockchain);
                     let num_transactions = block
@@ -129,10 +134,10 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
                         debug!(
                             block_number = block.header.block_number,
                             view_number = block.header.view_number,
-                            transactions = num_transactions,
-                            "Produced micro block #{}.{} with {} transactions",
-                            block.header.block_number,
-                            block.header.view_number,
+                            num_transactions,
+                            ?delay,
+                            "Produced micro block {} with {} transactions",
+                            block,
                             num_transactions
                         );
 
@@ -161,6 +166,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
 
             // We have dropped the blockchain lock.
             // Wait a bit before trying to produce a block again.
+            delay += Self::CHECK_MEMPOOL_DELAY;
             time::sleep(Self::CHECK_MEMPOOL_DELAY).await;
         };
 
@@ -169,10 +175,10 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         }
 
         debug!(
-            slot_band = self.validator_slot_band,
             block_number = self.block_number,
             view_number = self.view_number,
-            "Not our turn, waiting for micro block, at #{}:{}",
+            slot_band = self.validator_slot_band,
+            "Not our turn, waiting for micro block #{}.{}",
             self.block_number,
             self.view_number,
         );
