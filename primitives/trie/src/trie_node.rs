@@ -16,7 +16,7 @@ use crate::key_nibbles::KeyNibbles;
 /// up to 16 children, since we represent the keys in hexadecimal form, each child represents a
 /// different hexadecimal character.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
-pub enum TrieNode<A: Serialize + Deserialize + Clone> {
+pub enum TrieNode<A: Serialize + Deserialize> {
     BranchNode {
         key: KeyNibbles,
         children: [Option<TrieNodeChild>; 16],
@@ -47,7 +47,7 @@ pub const NO_CHILDREN: [Option<TrieNodeChild>; 16] = [
     None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
 ];
 
-impl<A: Serialize + Deserialize + Clone> TrieNode<A> {
+impl<A: Serialize + Deserialize> TrieNode<A> {
     /// Creates a new leaf node.
     pub fn new_leaf(key: KeyNibbles, value: A) -> Self {
         TrieNode::LeafNode { key, value }
@@ -94,9 +94,24 @@ impl<A: Serialize + Deserialize + Clone> TrieNode<A> {
     }
 
     /// Returns the value of a node, if it is a leaf node.
-    pub fn value(&self) -> Result<A, MerkleRadixTrieError> {
+    pub fn value(&self) -> Result<&A, MerkleRadixTrieError> {
         match self {
-            TrieNode::LeafNode { value, .. } => Ok(value.clone()),
+            TrieNode::LeafNode { ref value, .. } => Ok(value),
+            TrieNode::BranchNode { .. } => {
+                error!(
+                    "Node with key {} is a branch node and so it can't have a value!",
+                    self.key()
+                );
+
+                Err(MerkleRadixTrieError::BranchesHaveNoValue)
+            }
+        }
+    }
+
+    /// Returns the value of a node, if it is a leaf node.
+    pub fn into_value(self) -> Result<A, MerkleRadixTrieError> {
+        match self {
+            TrieNode::LeafNode { value, .. } => Ok(value),
             TrieNode::BranchNode { .. } => {
                 error!(
                     "Node with key {} is a branch node and so it can't have a value!",
@@ -255,7 +270,7 @@ impl<A: Serialize + Deserialize + Clone> TrieNode<A> {
     }
 }
 
-impl<A: Serialize + Deserialize + Clone> Serialize for TrieNode<A> {
+impl<A: Serialize + Deserialize> Serialize for TrieNode<A> {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let mut size: usize = 0;
         size += Serialize::serialize(&self.ty(), writer)?;
@@ -302,7 +317,7 @@ impl<A: Serialize + Deserialize + Clone> Serialize for TrieNode<A> {
     }
 }
 
-impl<A: Serialize + Deserialize + Clone> Deserialize for TrieNode<A> {
+impl<A: Serialize + Deserialize> Deserialize for TrieNode<A> {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let node_type: TrieNodeType = Deserialize::deserialize(reader)?;
 
@@ -338,15 +353,15 @@ impl<A: Serialize + Deserialize + Clone> Deserialize for TrieNode<A> {
     }
 }
 
-impl<A: Serialize + Deserialize + Clone> SerializeContent for TrieNode<A> {
+impl<A: Serialize + Deserialize> SerializeContent for TrieNode<A> {
     fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
         Ok(self.serialize(writer)?)
     }
 }
 
-impl<A: Serialize + Deserialize + Clone> Hash for TrieNode<A> {}
+impl<A: Serialize + Deserialize> Hash for TrieNode<A> {}
 
-impl<A: Serialize + Deserialize + Clone> IntoDatabaseValue for TrieNode<A> {
+impl<A: Serialize + Deserialize> IntoDatabaseValue for TrieNode<A> {
     fn database_byte_size(&self) -> usize {
         self.serialized_size()
     }
@@ -356,7 +371,7 @@ impl<A: Serialize + Deserialize + Clone> IntoDatabaseValue for TrieNode<A> {
     }
 }
 
-impl<A: Serialize + Deserialize + Clone> FromDatabaseValue for TrieNode<A> {
+impl<A: Serialize + Deserialize> FromDatabaseValue for TrieNode<A> {
     fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
     where
         Self: Sized,
@@ -390,7 +405,7 @@ impl<'a> iter::Iterator for Iter<'a> {
     }
 }
 
-impl<'a, A: Serialize + Deserialize + Clone> iter::IntoIterator for &'a TrieNode<A> {
+impl<'a, A: Serialize + Deserialize> iter::IntoIterator for &'a TrieNode<A> {
     type Item = &'a TrieNodeChild;
     type IntoIter = Iter<'a>;
 
@@ -424,7 +439,7 @@ impl<'a> iter::Iterator for IterMut<'a> {
     }
 }
 
-impl<'a, A: Serialize + Deserialize + Clone> iter::IntoIterator for &'a mut TrieNode<A> {
+impl<'a, A: Serialize + Deserialize> iter::IntoIterator for &'a mut TrieNode<A> {
     type Item = &'a mut TrieNodeChild;
     type IntoIter = IterMut<'a>;
 
