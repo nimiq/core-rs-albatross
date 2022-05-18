@@ -51,8 +51,6 @@ pub fn generate_transactions(
     let mut txns_len = 0;
     let mut txns: Vec<Transaction> = vec![];
 
-    log::debug!("Generating transactions and accounts");
-
     for mempool_transaction in mempool_transactions {
         // Generate transactions
         let mut txn = Transaction::new_basic(
