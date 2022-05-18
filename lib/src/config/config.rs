@@ -21,7 +21,7 @@ use nimiq_utils::file_store::FileStore;
 #[cfg(feature = "validator")]
 use nimiq_utils::key_rng::SecureGenerate;
 
-#[cfg(feature = "rpc-server")]
+#[cfg(any(feature = "rpc-server", feature = "metrics-server"))]
 use crate::config::consts;
 use crate::config::consts::default_bind;
 use crate::{

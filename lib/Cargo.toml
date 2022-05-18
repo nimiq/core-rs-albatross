@@ -72,7 +72,7 @@ nimiq-test-log = { path = "../test-log" }
 deadlock = []
 default = []
 launcher = []
-signal-handling = ["signal-hook"]
+signal-handling = ["signal-hook", "tokio"]
 logging = ["console-subscriber", "nimiq-log", "serde_json", "tokio", "tracing-loki", "tracing-subscriber"]
 metrics-server = []
 panic = ["log-panics"]

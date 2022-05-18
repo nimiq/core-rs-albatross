@@ -17,17 +17,16 @@ is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
-prometheus-client = "0.16.0"
-hyper = "0.14.18"
-log = { package = "tracing", version = "0.1", features = ["log"] }
 futures = "0.3"
+hyper = { version = "0.14.18", features = ["server", "tcp", "http2"] }
+log = { package = "tracing", version = "0.1", features = ["log"] }
+parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
+prometheus-client = "0.16.0"
 tokio = { version = "1.18", features = [
     "macros",
     "rt-multi-thread",
     "tracing",
 ] }
-parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
-
 
 nimiq-blockchain = { path = "../blockchain", features=["metrics"] }
 nimiq-mempool = { path = "../mempool" }
