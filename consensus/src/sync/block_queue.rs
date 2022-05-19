@@ -241,20 +241,22 @@ impl<N: Network, TReq: RequestComponent<N>> Inner<N, TReq> {
             "Requesting missing blocks",
         );
 
-        // Get block locators.
+        // Get block locators. The blocks returned by `get_blocks` do *not* include the start block.
+        // FIXME We don't want to send the full batch as locators here.
         let block_locators = blockchain
             .chain_store
             .get_blocks(
                 &head_hash,
-                // FIXME We don't want to send the full batch as locators here.
-                head_height - macro_height + 1,
+                head_height - macro_height,
                 false,
                 Direction::Backward,
                 None,
             )
             .into_iter()
-            .map(|block| block.hash())
-            .collect::<Vec<Blake2bHash>>();
+            .map(|block| block.hash());
+
+        // Prepend our current head hash.
+        let block_locators = vec![head_hash].into_iter().chain(block_locators).collect();
 
         // FIXME Send missing blocks request to the peer that announced the block (first).
         self.request_component
