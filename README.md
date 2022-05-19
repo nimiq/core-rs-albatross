@@ -124,7 +124,7 @@ Using the TOKEN that will be given after requesting developer access from a team
 And get funds to experiment with it (for example, by becoming a validator) using the [Devnet Faucet](http://faucet.v2.nimiq-testnet.com/):
 
 ```
-curl -X POST -H "Content-Type: application/x-www-form-urlencoded" -d "address=NQXX XXXX XXXX XXXX XXXX XXXX XXXX XXXX XXXX"  http://faucet.v2.nimiq-testnet.com/tapit
+curl -X POST -H "Content-Type: application/x-www-form-urlencoded" -d "address=NQXX XXXX XXXX XXXX XXXX XXXX XXXX XXXX XXXX" https://faucet.v2.nimiq-testnet.com/tapit
 ```
 
 ## Contributing
