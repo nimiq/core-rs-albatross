@@ -2940,6 +2940,9 @@ dependencies = [
 [[package]]
 name = "nimiq-macros"
 version = "0.1.1"
+dependencies = [
+ "hex",
+]
 
 [[package]]
 name = "nimiq-mempool"
@@ -3091,9 +3094,7 @@ dependencies = [
  "derive_more",
  "futures-util",
  "nimiq-test-log",
- "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
  "thiserror",
- "tokio",
  "tokio-stream",
 ]
 

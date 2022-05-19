@@ -1,3 +1,6 @@
+#[doc(hidden)]
+pub extern crate hex;
+
 #[macro_export]
 macro_rules! create_typed_array {
     ($name: ident, $t: ty, $len: expr) => {
@@ -85,31 +88,31 @@ macro_rules! add_hex_io_fns_typed_arr {
     ($name: ident, $len: expr) => {
         impl ::std::fmt::Display for $name {
             fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-                f.write_str(&::hex::encode(&self.0))
+                f.write_str(&::nimiq_macros::hex::encode(&self.0))
             }
         }
 
         impl $name {
             pub fn to_hex(&self) -> String {
-                ::hex::encode(&self.0)
+                ::nimiq_macros::hex::encode(&self.0)
             }
 
             pub fn to_short_str(&self) -> String {
-                ::hex::encode(&self.0[0..5])
+                ::nimiq_macros::hex::encode(&self.0[0..5])
             }
         }
 
         impl ::std::str::FromStr for $name {
-            type Err = ::hex::FromHexError;
+            type Err = ::nimiq_macros::hex::FromHexError;
 
             fn from_str(s: &str) -> Result<Self, Self::Err> {
-                use hex::FromHex;
+                use ::nimiq_macros::hex::FromHex;
 
                 let vec = Vec::from_hex(s)?;
                 if vec.len() == $len {
                     Ok($name::from(&vec[..]))
                 } else {
-                    Err(::hex::FromHexError::InvalidStringLength)
+                    Err(::nimiq_macros::hex::FromHexError::InvalidStringLength)
                 }
             }
         }
@@ -122,7 +125,7 @@ macro_rules! add_hex_io_fns_typed_arr {
 
         impl ::std::fmt::Debug for $name {
             fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-                f.write_str(&::hex::encode(&self.0))
+                f.write_str(&::nimiq_macros::hex::encode(&self.0))
             }
         }
     };

@@ -20,15 +20,7 @@ maintenance = { status = "experimental" }
 async-trait = "0.1"
 derive_more = "0.99"
 futures = { package = "futures-util", version = "0.3" }
-parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
 thiserror = "1.0"
-tokio = { version = "1.18", features = [
-    "macros",
-    "rt",
-    "sync",
-    "time",
-    "tracing",
-] }
 tokio-stream = { version = "0.1", features = ["default", "sync"] }
 
 beserial = { path = "../beserial", features = ["derive"] }

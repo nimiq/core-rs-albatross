@@ -13,8 +13,6 @@ travis-ci = { repository = "nimiq/core-rs", branch = "master" }
 maintenance = { status = "experimental" }
 
 [dependencies]
-hex = "0.4"
-
 beserial = { path = "../beserial", features = ["derive"] }
 nimiq-database = { path = "../database" }
 nimiq-hash = { path = "../hash" }
@@ -24,5 +22,6 @@ nimiq-transaction = { path = "../primitives/transaction" }
 nimiq-utils = { path = "../utils", features = ["otp"]}
 
 [dev-dependencies]
+hex = "0.4"
 lazy_static = "1.3"
 nimiq-test-log = { path = "../test-log" }
