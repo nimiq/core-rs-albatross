@@ -21,6 +21,7 @@ log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
 futures = { package = "futures-util", version = "0.3" }
 keyed_priority_queue = "0.4"
+linked-hash-map = "0.5.4"
 tokio = { version = "1.18", features = ["full", "tracing"] }
 tokio-metrics = "0.1"
 tokio-stream = { version = "0.1", features = ["sync"] }
@@ -30,7 +31,6 @@ beserial = { path = "../beserial" }
 nimiq-account = { path = "../primitives/account" }
 nimiq-block = { path = "../primitives/block" }
 nimiq-blockchain = { path = "../blockchain" }
-nimiq-collections = { path = "../collections" }
 nimiq-database = { path = "../database" }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }

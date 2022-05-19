@@ -1,4 +1,4 @@
-use nimiq_collections::LimitHashSet;
+use linked_hash_map::LinkedHashMap;
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::coin::Coin;
 use nimiq_transaction::{Transaction, TransactionFlags};
@@ -6,7 +6,8 @@ use nimiq_transaction::{Transaction, TransactionFlags};
 /// Struct defining a Mempool filter
 #[derive(Debug)]
 pub struct MempoolFilter {
-    pub(crate) blacklist: LimitHashSet<Blake2bHash>,
+    pub(crate) blacklist: LinkedHashMap<Blake2bHash, ()>,
+    pub(crate) blacklist_limit: usize,
     pub(crate) rules: MempoolRules,
 }
 
@@ -17,14 +18,18 @@ impl MempoolFilter {
     /// Creates a new MempoolFilter
     pub fn new(rules: MempoolRules, blacklist_limit: usize) -> Self {
         MempoolFilter {
-            blacklist: LimitHashSet::new(blacklist_limit),
+            blacklist: LinkedHashMap::new(),
+            blacklist_limit,
             rules,
         }
     }
 
     /// Blacklists a new transaction given its hash
     pub fn blacklist(&mut self, hash: Blake2bHash) -> &mut Self {
-        self.blacklist.insert(hash);
+        while self.blacklist.len() >= self.blacklist_limit {
+            self.blacklist.pop_front();
+        }
+        self.blacklist.insert(hash, ());
         self
     }
 
@@ -36,7 +41,7 @@ impl MempoolFilter {
 
     /// Checks whether a transaction is blacklisted
     pub fn blacklisted(&self, hash: &Blake2bHash) -> bool {
-        self.blacklist.contains(hash)
+        self.blacklist.contains_key(hash)
     }
 
     /// Checks whether a transaction is accepted according to the general Mempool filter rules

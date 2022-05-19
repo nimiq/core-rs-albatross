@@ -31,7 +31,6 @@ tokio-stream = { version = "0.1", features = ["sync"] }
 beserial = { path = "../beserial", features = ["derive"] }
 nimiq-block = { path = "../primitives/block" }
 nimiq-blockchain = { path = "../blockchain" }
-nimiq-collections = { path = "../collections" }
 nimiq-database = { path = "../database" }
 nimiq-genesis = { path = "../genesis" }
 nimiq-hash = { path = "../hash" }

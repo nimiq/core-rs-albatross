@@ -48,3 +48,35 @@ fn it_accepts_and_rejects_transactions() {
     tx.fee = Coin::try_from(1).unwrap();
     assert!(f.accepts_transaction(&tx));
 }
+
+#[test]
+fn it_has_a_limit() {
+    let s = MempoolRules::default();
+    let mut f = MempoolFilter::new(s, 1);
+
+    let hash1: Blake2bHash = "hash1".hash();
+    let hash2: Blake2bHash = "hash2".hash();
+
+    assert!(!f.blacklisted(&hash1));
+    assert!(!f.blacklisted(&hash2));
+
+    f.blacklist(hash1.clone());
+
+    assert!(f.blacklisted(&hash1));
+    assert!(!f.blacklisted(&hash2));
+
+    f.blacklist(hash2.clone());
+
+    assert!(!f.blacklisted(&hash1));
+    assert!(f.blacklisted(&hash2));
+
+    f.remove(&hash1);
+
+    assert!(!f.blacklisted(&hash1));
+    assert!(f.blacklisted(&hash2));
+
+    f.remove(&hash2);
+
+    assert!(!f.blacklisted(&hash1));
+    assert!(!f.blacklisted(&hash2));
+}

@@ -19,7 +19,7 @@ tokio-stream = "0.1"
 
 beserial = { path = "../beserial", features = ["derive"] }
 nimiq-bls = { path = "../bls" }
-nimiq-collections = { path = "../collections", features = ["bitset"] }
+nimiq-collections = { path = "../collections" }
 nimiq-hash = { path = "../hash" }
 nimiq-macros = { path = "../macros" }
 nimiq-utils = { path = "../utils", features = [

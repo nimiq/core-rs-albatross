@@ -390,7 +390,6 @@ impl FromIterator<usize> for BitSet {
     }
 }
 
-#[cfg(feature = "serde-derive")]
 mod serde_derive {
     use std::fmt;
 

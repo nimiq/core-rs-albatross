@@ -21,7 +21,7 @@ serde = { version = "1.0", features = ["derive"], optional = true }
 
 beserial = { path = "../../beserial", features = ["derive"] }
 nimiq-bls = { path = "../../bls", features = ["beserial"]}
-nimiq-collections = { path = "../../collections", features = ["bitset"] }
+nimiq-collections = { path = "../../collections" }
 nimiq-database = { path = "../../database" }
 nimiq-handel = { path = "../../handel" }
 nimiq-hash = { path = "../../hash" }
@@ -40,4 +40,4 @@ nimiq-test-log = { path = "../../test-log" }
 num-traits = "0.2"
 
 [features]
-serde-derive = ["serde", "nimiq-collections/serde-derive", "nimiq-bls/serde-derive"]
+serde-derive = ["serde", "nimiq-bls/serde-derive"]

@@ -29,7 +29,7 @@ nimiq-account = { path = "../primitives/account", features = ["serde-derive"] }
 nimiq-block = { path = "../primitives/block", features = ["serde-derive"] }
 nimiq-blockchain = { path = "../blockchain" }
 nimiq-bls = { path = "../bls", features = ["serde-derive"] }
-nimiq-collections = { path = "../collections", features = ["serde-derive", "bitset"] }
+nimiq-collections = { path = "../collections" }
 nimiq-hash = { path = "../hash", features = ["serde-derive"] }
 nimiq-jsonrpc-core = { git = "https://github.com/nimiq/jsonrpc.git" }
 nimiq-jsonrpc-derive = { git = "https://github.com/nimiq/jsonrpc.git" }

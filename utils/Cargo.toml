@@ -48,7 +48,7 @@ key-store = ["beserial", "log", "thiserror"]
 merkle = [
     "beserial",
     "math",
-    "nimiq-collections/bitset",
+    "nimiq-collections",
     "nimiq-hash",
 ]
 observer = ["log", "tokio"]

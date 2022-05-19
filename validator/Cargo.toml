@@ -30,7 +30,7 @@ nimiq-block = { path = "../primitives/block" }
 nimiq-block-production = { path = "../block-production" }
 nimiq-blockchain = { path = "../blockchain" }
 nimiq-bls = { path = "../bls" }
-nimiq-collections = { path = "../collections", features = ["bitset"] }
+nimiq-collections = { path = "../collections" }
 nimiq-consensus = { path = "../consensus" }
 nimiq-database = { path = "../database" }
 nimiq-genesis = { path = "../genesis" }

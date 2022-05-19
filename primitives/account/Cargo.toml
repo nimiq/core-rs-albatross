@@ -22,7 +22,7 @@ thiserror = "1.0"
 
 beserial = { path = "../../beserial", features = ["derive"] }
 nimiq-bls = { path = "../../bls" }
-nimiq-collections = { path = "../../collections", features = ["bitset"] }
+nimiq-collections = { path = "../../collections" }
 nimiq-database = { path = "../../database" }
 nimiq-hash = { path = "../../hash" }
 nimiq-keys = { path = "../../keys", features = ["serde-derive"] }

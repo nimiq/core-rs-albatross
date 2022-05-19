@@ -17,17 +17,13 @@ is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
-itertools = { version = "0.10", optional = true }
+itertools = "0.10"
 num-traits = "0.2"
-serde = { version = "1.0", features = ["derive"], optional = true }
+serde = { version = "1.0", features = ["derive"] }
 
-beserial = { path = "../beserial", optional = true }
+beserial = { path = "../beserial" }
 
 [dev-dependencies]
 hex = "0.4"
 nimiq-test-log = { path = "../test-log" }
 rand = "0.8"
-
-[features]
-bitset = ["itertools", "beserial"]
-serde-derive = ["serde"]
