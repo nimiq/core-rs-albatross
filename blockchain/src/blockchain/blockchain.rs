@@ -45,7 +45,7 @@ pub struct Blockchain {
     pub tx_verification_cache: Arc<dyn TransactionVerificationCache>,
     // The metrics for the blockchain. Needed for analysis.
     #[cfg(feature = "metrics")]
-    pub(crate) metrics: BlockchainMetrics,
+    pub(crate) metrics: Arc<BlockchainMetrics>,
     // The coin supply at the genesis block. This is needed to calculate the rewards.
     pub(crate) genesis_supply: Coin,
     // The timestamp at the genesis block. This is needed to calculate the rewards.
@@ -209,7 +209,7 @@ impl Blockchain {
             },
             tx_verification_cache: Arc::new(DEFAULT_TX_VERIFICATION_CACHE),
             #[cfg(feature = "metrics")]
-            metrics: BlockchainMetrics::default(),
+            metrics: Arc::new(BlockchainMetrics::default()),
             genesis_supply,
             genesis_timestamp,
         })
@@ -265,7 +265,7 @@ impl Blockchain {
             },
             tx_verification_cache: Arc::new(DEFAULT_TX_VERIFICATION_CACHE),
             #[cfg(feature = "metrics")]
-            metrics: BlockchainMetrics::default(),
+            metrics: Arc::new(BlockchainMetrics::default()),
             genesis_supply,
             genesis_timestamp,
         })

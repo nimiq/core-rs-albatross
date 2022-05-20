@@ -6,6 +6,7 @@ use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 use std::cmp::{Ordering, Reverse};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+#[cfg(feature = "metrics")]
 use tokio_metrics::TaskMonitor;
 
 use beserial::Serialize;
@@ -25,6 +26,7 @@ use nimiq_transaction::Transaction;
 use crate::config::MempoolConfig;
 use crate::executor::MempoolExecutor;
 use crate::filter::{MempoolFilter, MempoolRules};
+#[cfg(feature = "metrics")]
 use crate::mempool_metrics::MempoolMetrics;
 use crate::verify::{verify_tx, VerifyErr};
 
@@ -74,6 +76,7 @@ impl Mempool {
             total_size_limit: config.size_limit,
             total_size: 0,
             tx_counter: 0,
+            #[cfg(feature = "metrics")]
             metrics: Default::default(),
         };
 
@@ -566,7 +569,8 @@ impl Mempool {
     }
 
     /// Returns the current metrics
-    pub fn metrics(&self) -> MempoolMetrics {
+    #[cfg(feature = "metrics")]
+    pub fn metrics(&self) -> Arc<MempoolMetrics> {
         self.state.read().metrics.clone()
     }
 }
@@ -621,7 +625,8 @@ pub(crate) struct MempoolState {
     // Counter that increases for every added transaction, to order them for removal.
     pub(crate) tx_counter: u64,
 
-    pub(crate) metrics: MempoolMetrics,
+    #[cfg(feature = "metrics")]
+    pub(crate) metrics: Arc<MempoolMetrics>,
 }
 
 impl MempoolState {
@@ -765,6 +770,7 @@ impl MempoolState {
 
         self.total_size -= tx.serialized_size();
 
+        #[cfg(feature = "metrics")]
         self.metrics.note_evicted(reason);
 
         Some(tx)

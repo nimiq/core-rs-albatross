@@ -208,7 +208,7 @@ async fn main_inner() -> Result<(), Error> {
     }
 
     // Start consensus.
-    let consensus = client.consensus().unwrap();
+    let consensus = client.take_consensus().unwrap();
 
     let mut bc_events = {
         let mut bc = consensus.blockchain.write();
@@ -233,7 +233,7 @@ async fn main_inner() -> Result<(), Error> {
     }
 
     // Start Spammer
-    let mempool = if let Some(validator) = client.validator() {
+    let mempool = if let Some(validator) = client.take_validator() {
         log::info!("Spawning spammer");
         let mempool = std::sync::Arc::clone(&validator.mempool);
         tokio::spawn(validator);

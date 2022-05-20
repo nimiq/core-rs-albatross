@@ -19,6 +19,7 @@ thiserror = "1.0"
 hex = "0.4"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
+prometheus-client = { version = "0.16.0", optional = true}
 rand = "0.8"
 
 beserial = { path = "../beserial", features = ["derive"] }
@@ -46,4 +47,4 @@ nimiq-test-log = { path = "../test-log" }
 nimiq-test-utils = { path= "../test-utils" }
 
 [features]
-metrics = []
+metrics = ["prometheus-client"]

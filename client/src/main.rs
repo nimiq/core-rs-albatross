@@ -71,7 +71,7 @@ async fn main_inner() -> Result<(), Error> {
     let mut nimiq_task_metric = vec![];
 
     // Start consensus.
-    let consensus = client.consensus().unwrap();
+    let consensus = client.take_consensus().unwrap();
 
     log::info!("Spawning consensus");
     if metrics_enabled {
@@ -86,10 +86,11 @@ async fn main_inner() -> Result<(), Error> {
         tokio::spawn(consensus);
     }
     let consensus = client.consensus_proxy();
+    let mempool = client.mempool();
 
     // Start validator
     let val_metric_monitor = tokio_metrics::TaskMonitor::new();
-    if let Some(validator) = client.validator() {
+    if let Some(validator) = client.take_validator() {
         log::info!("Spawning validator");
         if metrics_enabled {
             let mp_metrics_monitor = validator.get_mempool_monitor();
@@ -114,7 +115,7 @@ async fn main_inner() -> Result<(), Error> {
         nimiq::extras::metrics_server::start_metrics_server(
             metrics_config.addr,
             Arc::clone(&consensus.blockchain),
-            client.mempool(),
+            mempool,
             client.consensus_proxy(),
             client.network(),
             &nimiq_task_metric,

@@ -12,7 +12,9 @@ impl BlockMetrics {
     pub fn register(registry: &mut Registry, blockchain: Arc<RwLock<Blockchain>>) {
         BlockMetrics::register_staking(registry, blockchain.clone());
         BlockMetrics::register_chain(registry, blockchain.clone());
-        BlockMetrics::register_block_stats(registry, blockchain);
+
+        let sub_registry = registry.sub_registry_with_prefix("blockchain");
+        blockchain.read().metrics().register(sub_registry);
     }
 
     fn register_staking(registry: &mut Registry, blockchain: Arc<RwLock<Blockchain>>) {
@@ -43,44 +45,5 @@ impl BlockMetrics {
             blockchain.read().view_number()
         })));
         sub_registry.register("view_number", "View number of latest block", closure);
-    }
-
-    fn register_block_stats(registry: &mut Registry, blockchain: Arc<RwLock<Blockchain>>) {
-        let sub_registry = registry.sub_registry_with_prefix("blocks");
-
-        let bc = blockchain.clone();
-        let closure = Box::new(NumericClosureMetric::new_counter(Box::new(move || {
-            bc.read().metrics().block_extended_count() as u32
-        })));
-        sub_registry.register("blocks_extended", "Count of block extends", closure);
-
-        let bc = blockchain.clone();
-        let closure = Box::new(NumericClosureMetric::new_counter(Box::new(move || {
-            bc.read().metrics().block_known_count() as u32
-        })));
-        sub_registry.register("known_count", "Count of block knowns", closure);
-
-        let bc = blockchain.clone();
-        let closure = Box::new(NumericClosureMetric::new_counter(Box::new(move || {
-            bc.read().metrics().block_forked_count() as u32
-        })));
-        sub_registry.register("forked_count", "Count of block forks", closure);
-
-        let bc = blockchain.clone();
-        let closure = Box::new(NumericClosureMetric::new_counter(Box::new(move || {
-            bc.read().metrics().block_ignored_count() as u32
-        })));
-        sub_registry.register("ignored_count", "Count of block ignores", closure);
-
-        let bc = blockchain.clone();
-        let closure = Box::new(NumericClosureMetric::new_counter(Box::new(move || {
-            bc.read().metrics().block_rebranched_count() as u32
-        })));
-        sub_registry.register("rebranched_count", "Count of block rebranchs", closure);
-
-        let closure = Box::new(NumericClosureMetric::new_counter(Box::new(move || {
-            blockchain.read().metrics().block_orphan_count() as u32
-        })));
-        sub_registry.register("orphan_count", "Count of block orphans", closure);
     }
 }

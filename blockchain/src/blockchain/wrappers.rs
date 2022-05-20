@@ -5,6 +5,7 @@ use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::policy;
 use nimiq_utils::observer::{Listener, ListenerHandle};
+use std::sync::Arc;
 
 use crate::blockchain_state::BlockchainState;
 #[cfg(feature = "metrics")]
@@ -132,7 +133,7 @@ impl Blockchain {
     }
 
     #[cfg(feature = "metrics")]
-    pub fn metrics(&self) -> &BlockchainMetrics {
-        &self.metrics
+    pub fn metrics(&self) -> Arc<BlockchainMetrics> {
+        self.metrics.clone()
     }
 }

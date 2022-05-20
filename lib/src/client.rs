@@ -236,7 +236,7 @@ impl Client {
         ClientInner::from_config(config).await
     }
 
-    pub fn consensus(&mut self) -> Option<Consensus> {
+    pub fn take_consensus(&mut self) -> Option<Consensus> {
         self.consensus.take()
     }
 
@@ -267,7 +267,7 @@ impl Client {
 
     /// Returns a reference to the *Validator* or `None`.
     #[cfg(feature = "validator")]
-    pub fn validator(&mut self) -> Option<Validator> {
+    pub fn take_validator(&mut self) -> Option<Validator> {
         self.validator.take()
     }
 

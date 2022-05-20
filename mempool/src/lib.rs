@@ -17,6 +17,7 @@ pub mod filter;
 /// Main mempool module
 pub mod mempool;
 /// Mempool metrics
+#[cfg(feature = "metrics")]
 mod mempool_metrics;
 /// Verify transaction module
 pub mod verify;

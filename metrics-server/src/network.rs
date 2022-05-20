@@ -10,6 +10,8 @@ impl NetworkMetrics {
     pub fn register(registry: &mut Registry, network: Arc<Network>) {
         let sub_registry = registry.sub_registry_with_prefix("network");
 
+        network.metrics().register(sub_registry);
+
         let closure = Box::new(NumericClosureMetric::new_gauge(Box::new(move || {
             network.peer_count() as u32
         })));

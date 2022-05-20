@@ -1,80 +1,121 @@
 use crate::{PushError, PushResult};
-use std::sync::atomic::{AtomicU64, Ordering};
+use nimiq_block::Block;
+use nimiq_block::BlockBody::Micro;
+use nimiq_hash::Blake2bHash;
+use prometheus_client::encoding::text::Encode;
+use prometheus_client::metrics::counter::Counter;
+use prometheus_client::metrics::family::Family;
+use prometheus_client::registry::Registry;
 
 #[derive(Default)]
 pub struct BlockchainMetrics {
-    block_invalid_count: AtomicU64,
-    block_orphan_count: u64,
-    block_known_count: u64,
-    block_extended_count: u64,
-    block_rebranched_count: u64,
-    block_forked_count: u64,
-    block_ignored_count: u64,
+    block_push_counts: Family<PushResultLabels, Counter>,
+    transactions_counts: Family<TransactionProcessedLabels, Counter>,
+}
+
+#[derive(Clone, Hash, PartialEq, Eq, Encode)]
+struct PushResultLabels {
+    push_result: BlockPushResult,
+}
+
+#[derive(Clone, Hash, PartialEq, Eq, Encode)]
+enum BlockPushResult {
+    Known,
+    Extended,
+    Rebranched,
+    Forked,
+    Ignored,
+    Orphan,
+    Invalid,
+}
+
+#[derive(Clone, Hash, PartialEq, Eq, Encode)]
+struct TransactionProcessedLabels {
+    ty: TransactionProcessed,
+}
+
+#[derive(Clone, Hash, PartialEq, Eq, Encode)]
+enum TransactionProcessed {
+    Applied,
+    Reverted,
 }
 
 impl BlockchainMetrics {
+    pub fn register(&self, registry: &mut Registry) {
+        registry.register(
+            "block_push_counts",
+            "Count of block push results",
+            Box::new(self.block_push_counts.clone()),
+        );
+
+        registry.register(
+            "transaction_counts",
+            "Count of transactions applied/reverted",
+            Box::new(self.transactions_counts.clone()),
+        );
+    }
+
     #[inline]
-    pub fn note<BE>(&mut self, push_result: Result<PushResult, PushError>) {
-        match push_result {
-            Ok(PushResult::Known) => {
-                self.block_known_count = self.block_known_count.wrapping_add(1)
+    pub fn note_push_result(&self, push_result: &Result<PushResult, PushError>) {
+        let push_result = match push_result {
+            Ok(PushResult::Known) => BlockPushResult::Known,
+            Ok(PushResult::Extended) => BlockPushResult::Extended,
+            Ok(PushResult::Rebranched) => BlockPushResult::Rebranched,
+            Ok(PushResult::Forked) => BlockPushResult::Forked,
+            Ok(PushResult::Ignored) => BlockPushResult::Ignored,
+            Err(PushError::Orphan) => BlockPushResult::Orphan,
+            Err(_) => {
+                self.note_invalid_block();
+                return;
             }
-            Ok(PushResult::Extended) => {
-                self.block_extended_count = self.block_extended_count.wrapping_add(1);
-            }
-            Ok(PushResult::Rebranched) => {
-                self.block_rebranched_count = self.block_rebranched_count.wrapping_add(1);
-            }
-            Ok(PushResult::Forked) => {
-                self.block_forked_count = self.block_forked_count.wrapping_add(1);
-            }
-            Ok(PushResult::Ignored) => {
-                self.block_ignored_count = self.block_ignored_count.wrapping_add(1);
-            }
-            Err(PushError::Orphan) => {
-                self.block_orphan_count = self.block_orphan_count.wrapping_add(1);
-            }
-            Err(_) => self.note_invalid_block(),
         };
+        self.block_push_counts
+            .get_or_create(&PushResultLabels { push_result })
+            .inc();
     }
 
     #[inline]
     pub fn note_invalid_block(&self) {
-        self.block_invalid_count.fetch_add(1, Ordering::Release);
+        self.block_push_counts
+            .get_or_create(&PushResultLabels {
+                push_result: BlockPushResult::Invalid,
+            })
+            .inc();
     }
 
     #[inline]
-    pub fn block_invalid_count(&self) -> u64 {
-        self.block_invalid_count.load(Ordering::Acquire)
+    pub fn note_extend(&self, tx_count: usize) {
+        self.transactions_counts
+            .get_or_create(&TransactionProcessedLabels {
+                ty: TransactionProcessed::Applied,
+            })
+            .inc_by(tx_count as u64);
     }
 
     #[inline]
-    pub fn block_orphan_count(&self) -> u64 {
-        self.block_orphan_count
-    }
+    pub fn note_rebranch(
+        &self,
+        reverted_blocks: &Vec<(Blake2bHash, Block)>,
+        adopted_blocks: &Vec<(Blake2bHash, Block)>,
+    ) {
+        for (_, micro_block) in reverted_blocks {
+            if let Some(Micro(micro_body)) = micro_block.body() {
+                self.transactions_counts
+                    .get_or_create(&TransactionProcessedLabels {
+                        ty: TransactionProcessed::Reverted,
+                    })
+                    .inc_by(micro_body.transactions.len() as u64);
+            }
+        }
 
-    #[inline]
-    pub fn block_known_count(&self) -> u64 {
-        self.block_known_count
-    }
-
-    #[inline]
-    pub fn block_extended_count(&self) -> u64 {
-        self.block_extended_count
-    }
-
-    #[inline]
-    pub fn block_rebranched_count(&self) -> u64 {
-        self.block_rebranched_count
-    }
-
-    #[inline]
-    pub fn block_ignored_count(&self) -> u64 {
-        self.block_ignored_count
-    }
-
-    #[inline]
-    pub fn block_forked_count(&self) -> u64 {
-        self.block_forked_count
+        for (_, micro_block) in adopted_blocks {
+            if let Some(Micro(micro_body)) = micro_block.body() {
+                self.transactions_counts
+                    .get_or_create(&TransactionProcessedLabels {
+                        ty: TransactionProcessed::Applied,
+                    })
+                    .inc_by(micro_body.transactions.len() as u64);
+            }
+        }
     }
 }

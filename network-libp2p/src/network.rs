@@ -3,6 +3,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
+use std::time::Instant;
 
 use async_trait::async_trait;
 use bytes::{Buf, Bytes};
@@ -47,6 +48,8 @@ use nimiq_network_interface::{
 use nimiq_utils::time::OffsetTime;
 use nimiq_validator_network::validator_record::SignedValidatorRecord;
 
+#[cfg(feature = "metrics")]
+use crate::network_metrics::NetworkMetrics;
 use crate::{
     behaviour::{NimiqBehaviour, NimiqEvent, NimiqNetworkBehaviourError, RequestResponseEvent},
     connection_pool::behaviour::ConnectionPoolEvent,
@@ -153,6 +156,8 @@ struct TaskState {
     gossip_topics: HashMap<TopicHash, (mpsc::Sender<(GossipsubMessage, MessageId, PeerId)>, bool)>,
     is_bootstrapped: bool,
     requests: HashMap<RequestId, oneshot::Sender<Result<Bytes, RequestError>>>,
+    #[cfg(feature = "metrics")]
+    requests_initiated: HashMap<RequestId, Instant>,
     response_channels: HashMap<RequestId, ResponseChannel<OutgoingResponse>>,
     receive_requests: HashMap<RequestType, mpsc::Sender<(Bytes, RequestId, PeerId)>>,
 }
@@ -174,6 +179,8 @@ pub struct Network {
     events_tx: broadcast::Sender<NetworkEvent<PeerId>>,
     action_tx: mpsc::Sender<NetworkAction>,
     validate_tx: mpsc::UnboundedSender<ValidateMessage<PeerId>>,
+    #[cfg(feature = "metrics")]
+    metrics: Arc<NetworkMetrics>,
 }
 
 impl Network {
@@ -195,12 +202,17 @@ impl Network {
         let (action_tx, action_rx) = mpsc::channel(64);
         let (validate_tx, validate_rx) = mpsc::unbounded_channel();
 
+        #[cfg(feature = "metrics")]
+        let metrics = Arc::new(NetworkMetrics::default());
+
         tokio::spawn(Self::swarm_task(
             swarm,
             events_tx.clone(),
             action_rx,
             validate_rx,
             Arc::clone(&connected_peers),
+            #[cfg(feature = "metrics")]
+            metrics.clone(),
         ));
 
         Self {
@@ -209,6 +221,8 @@ impl Network {
             events_tx,
             action_tx,
             validate_tx,
+            #[cfg(feature = "metrics")]
+            metrics,
         }
     }
 
@@ -291,6 +305,7 @@ impl Network {
         mut action_rx: mpsc::Receiver<NetworkAction>,
         mut validate_rx: mpsc::UnboundedReceiver<ValidateMessage<PeerId>>,
         connected_peers: Arc<RwLock<HashSet<PeerId>>>,
+        #[cfg(feature = "metrics")] metrics: Arc<NetworkMetrics>,
     ) {
         let mut task_state = TaskState::default();
 
@@ -321,7 +336,7 @@ impl Network {
                     },
                     event = swarm.next() => {
                         if let Some(event) = event {
-                            Self::handle_event(event, &events_tx, &mut swarm, &mut task_state, &connected_peers);
+                            Self::handle_event(event, &events_tx, &mut swarm, &mut task_state, &connected_peers, #[cfg( feature = "metrics")] &metrics);
                         }
                     },
                     action = action_rx.recv() => {
@@ -346,6 +361,7 @@ impl Network {
         swarm: &mut NimiqSwarm,
         state: &mut TaskState,
         connected_peers: &RwLock<HashSet<PeerId>>,
+        #[cfg(feature = "metrics")] metrics: &Arc<NetworkMetrics>,
     ) {
         match event {
             SwarmEvent::ConnectionEstablished {
@@ -548,7 +564,8 @@ impl Network {
                             message_id,
                             message,
                         } => {
-                            if let Some(topic_info) = state.gossip_topics.get_mut(&message.topic) {
+                            let topic = message.topic.clone();
+                            if let Some(topic_info) = state.gossip_topics.get_mut(&topic) {
                                 let (output, validate) = topic_info;
                                 if !&*validate {
                                     if let Err(error) = swarm
@@ -564,7 +581,6 @@ impl Network {
                                     }
                                 }
 
-                                let topic = message.topic.clone();
                                 if let Err(error) =
                                     output.try_send((message, message_id, propagation_source))
                                 {
@@ -577,6 +593,8 @@ impl Network {
                             } else {
                                 warn!(topic = %message.topic, "unknown topic hash");
                             }
+                            #[cfg(feature = "metrics")]
+                            metrics.note_received_pubsub_message(&topic);
                         }
                         GossipsubEvent::Subscribed { peer_id, topic } => {
                             debug!(%peer_id, %topic, "peer subscribed to topic");
@@ -751,6 +769,13 @@ impl Network {
                                 if let Some(channel) = state.requests.remove(&request_id) {
                                     if channel.send(Ok(response.into())).is_err() {
                                         error!(%request_id, %peer_id, error = "receiver hung up", "could not send response to channel");
+                                    }
+
+                                    #[cfg(feature = "metrics")]
+                                    if let Some(instant) =
+                                        state.requests_initiated.remove(&request_id)
+                                    {
+                                        metrics.note_response_time(instant.elapsed());
                                     }
                                 } else {
                                     error!(
@@ -1019,6 +1044,8 @@ impl Network {
                     "Request was sent to peer",
                 );
                 state.requests.insert(request_id, response_channel);
+                #[cfg(feature = "metrics")]
+                state.requests_initiated.insert(request_id, Instant::now());
                 if output.send(request_id).is_err() {
                     error!(%peer_id, %request_type_id, error = "receiver hung up", "could not send send request result to channel");
                 }
@@ -1265,6 +1292,11 @@ impl Network {
             self.disconnect_peer(peer_id, CloseReason::Other).await;
         }
     }
+
+    #[cfg(feature = "metrics")]
+    pub fn metrics(&self) -> Arc<NetworkMetrics> {
+        self.metrics.clone()
+    }
 }
 
 #[async_trait]
@@ -1364,6 +1396,10 @@ impl NetworkInterface for Network {
             .await?;
 
         output_rx.await??;
+
+        #[cfg(feature = "metrics")]
+        self.metrics
+            .note_published_pubsub_message(<T as Topic>::NAME);
 
         Ok(())
     }

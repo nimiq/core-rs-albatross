@@ -207,7 +207,7 @@ impl Blockchain {
         this: RwLockUpgradableReadGuard<Self>,
         block: Block,
     ) -> Result<PushResult, PushError> {
-        Self::do_push(this, block, false)
+        Self::push_wrapperfn(this, block, false)
     }
 
     // To retain the option of having already taken a lock before this call the self was exchanged.
@@ -222,7 +222,25 @@ impl Blockchain {
         this: RwLockUpgradableReadGuard<Self>,
         block: Block,
     ) -> Result<PushResult, PushError> {
-        Self::do_push(this, block, true)
+        Self::push_wrapperfn(this, block, true)
+    }
+
+    fn push_wrapperfn(
+        this: RwLockUpgradableReadGuard<Self>,
+        block: Block,
+        trust: bool,
+    ) -> Result<PushResult, PushError> {
+        #[cfg(not(feature = "metrics"))]
+        {
+            Self::do_push(this, block, trust)
+        }
+        #[cfg(feature = "metrics")]
+        {
+            let metrics = this.metrics.clone();
+            let res = Self::do_push(this, block, trust);
+            metrics.note_push_result(&res);
+            res
+        }
     }
 
     /// Extends the current main chain.
@@ -292,9 +310,11 @@ impl Blockchain {
         // Downgrade the lock again as the notify listeners might want to acquire read access themselves.
         let this = RwLockWriteGuard::downgrade_to_upgradable(this);
 
+        let num_transactions = this.state.main_chain.head.num_transactions();
+        this.metrics.note_extend(num_transactions);
         debug!(
             block = %this.state.main_chain.head,
-            num_transactions = this.state.main_chain.head.num_transactions(),
+            num_transactions,
             kind = "extend",
             "Accepted block",
         );
@@ -538,6 +558,8 @@ impl Blockchain {
             num_adopted_blocks = adopted_blocks.len(),
             "Rebranched",
         );
+        this.metrics
+            .note_rebranch(&reverted_blocks, &adopted_blocks);
 
         let event = BlockchainEvent::Rebranched(reverted_blocks, adopted_blocks);
         this.notifier.notify(event);

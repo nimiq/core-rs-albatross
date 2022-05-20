@@ -1,45 +1,46 @@
 use crate::mempool::EvictionReason;
+use prometheus_client::encoding::text::Encode;
+use prometheus_client::metrics::counter::Counter;
+use prometheus_client::metrics::family::Family;
+use prometheus_client::registry::Registry;
 
 #[derive(Default, Clone)]
 pub struct MempoolMetrics {
-    expired_tx: u64,
-    already_included_tx: u64,
-    invalid_tx: u64,
-    too_full_tx: u64,
+    evicted_tx: Family<RemovedReasonLabel, Counter>,
+}
+
+#[derive(Clone, Hash, PartialEq, Eq, Encode)]
+struct RemovedReasonLabel {
+    reason: TxRemovedReason,
+}
+
+#[derive(Clone, Hash, PartialEq, Eq, Encode)]
+enum TxRemovedReason {
+    Expired,
+    AlreadyIncludedTx,
+    Invalid,
+    TooFull,
 }
 
 impl MempoolMetrics {
-    pub(crate) fn note_evicted(&mut self, reason: EvictionReason) {
-        match reason {
-            EvictionReason::Expired => {
-                self.expired_tx = self.expired_tx.wrapping_add(1);
-            }
-            EvictionReason::AlreadyIncluded => {
-                self.already_included_tx = self.already_included_tx.wrapping_add(1);
-            }
-            EvictionReason::Invalid => {
-                self.invalid_tx = self.invalid_tx.wrapping_add(1);
-            }
-            EvictionReason::TooFull => {
-                self.too_full_tx = self.too_full_tx.wrapping_add(1);
-            }
-            _ => {}
-        }
+    pub fn register(&self, registry: &mut Registry) {
+        registry.register(
+            "removed_tx_count",
+            "Number of transactions removed from mempool",
+            Box::new(self.evicted_tx.clone()),
+        );
     }
 
-    pub fn expired_tx_count(&self) -> u64 {
-        self.expired_tx
-    }
-
-    pub fn already_included_tx_count(&self) -> u64 {
-        self.already_included_tx
-    }
-
-    pub fn invalid_tx_count(&self) -> u64 {
-        self.invalid_tx
-    }
-
-    pub fn too_full_tx_count(&self) -> u64 {
-        self.too_full_tx
+    pub(crate) fn note_evicted(&self, reason: EvictionReason) {
+        let reason = match reason {
+            EvictionReason::Expired => TxRemovedReason::Expired,
+            EvictionReason::AlreadyIncluded => TxRemovedReason::AlreadyIncludedTx,
+            EvictionReason::Invalid => TxRemovedReason::Invalid,
+            EvictionReason::TooFull => TxRemovedReason::TooFull,
+            _ => return,
+        };
+        self.evicted_tx
+            .get_or_create(&RemovedReasonLabel { reason })
+            .inc();
     }
 }
