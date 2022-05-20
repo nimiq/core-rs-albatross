@@ -11,6 +11,7 @@ pub struct BlockMetrics {}
 impl BlockMetrics {
     pub fn register(registry: &mut Registry, blockchain: Arc<RwLock<Blockchain>>) {
         BlockMetrics::register_staking(registry, blockchain.clone());
+        BlockMetrics::register_accounts_trie(registry, blockchain.clone());
         BlockMetrics::register_chain(registry, blockchain.clone());
 
         let sub_registry = registry.sub_registry_with_prefix("blockchain");
@@ -30,6 +31,21 @@ impl BlockMetrics {
             blockchain.read().get_staking_contract().parked_set.len() as u32
         })));
         sub_registry.register("parked_validators", "Number of parked validators", closure);
+    }
+
+    fn register_accounts_trie(registry: &mut Registry, blockchain: Arc<RwLock<Blockchain>>) {
+        let sub_registry = registry.sub_registry_with_prefix("accounts_trie");
+
+        let bc = blockchain.clone();
+        let closure = Box::new(NumericClosureMetric::new_gauge(Box::new(move || {
+            bc.read().state.accounts.size()
+        })));
+        sub_registry.register("accounts", "Number of accounts", closure);
+
+        let closure = Box::new(NumericClosureMetric::new_gauge(Box::new(move || {
+            blockchain.read().state.accounts.num_branches()
+        })));
+        sub_registry.register("num_branches", "Number of branch nodes", closure);
     }
 
     fn register_chain(registry: &mut Registry, blockchain: Arc<RwLock<Blockchain>>) {
