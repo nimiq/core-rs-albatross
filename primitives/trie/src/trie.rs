@@ -25,6 +25,7 @@ use crate::trie_proof::TrieProof;
 #[derive(Debug)]
 pub struct MerkleRadixTrie<A: Serialize + Deserialize + Clone> {
     db: Database,
+    num_branches: AtomicU64,
     num_leaves: AtomicU64,
     _value: PhantomData<A>,
 }
@@ -36,6 +37,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
 
         let tree = MerkleRadixTrie {
             db,
+            num_branches: AtomicU64::new(1),
             num_leaves: AtomicU64::new(0),
             _value: PhantomData,
         };
@@ -54,13 +56,20 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
         self.get_root(txn).unwrap().hash()
     }
 
+    /// Returns the number of branch nodes in the Merkle Radix Trie.
+    pub fn num_branches(&self) -> u64 {
+        self.num_branches.load(atomic::Ordering::Acquire)
+    }
+
+    /// Returns the number of leaf nodes in the Merkle Radix Trie.
     pub fn num_leaves(&self) -> u64 {
         self.num_leaves.load(atomic::Ordering::Acquire)
     }
 
-    /// Returns the number of leaf nodes in the Merkle Radix Trie. It will traverse the entire tree.
-    pub fn count_leaves(&self, txn: &Transaction) -> u64 {
-        let mut size = 0;
+    #[cfg(test)]
+    fn count_branches_and_leaves(&self, txn: &Transaction) -> (u64, u64) {
+        let mut num_branches = 0;
+        let mut num_leaves = 0;
 
         let mut stack = vec![self
             .get_root(txn)
@@ -75,17 +84,19 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
                         stack.push(txn.get(&self.db, &combined)
                                 .expect("Failed to find the child of a Merkle Radix Trie node. The database must be corrupt!"));
                     }
+                    num_branches += 1;
                 }
                 None => {
                     // Leaf node.
-                    size += 1;
+                    num_leaves += 1;
                 }
             }
         }
 
-        assert_eq!(self.num_leaves(), size);
+        assert_eq!(self.num_branches(), num_branches);
+        assert_eq!(self.num_leaves(), num_leaves);
 
-        size
+        (num_branches, num_leaves)
     }
 
     /// Get the value at the given key. If there's no leaf node at the given key then it returns None.
@@ -116,7 +127,8 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
 
         // And initialize the root path.
         let mut root_path: Vec<TrieNode<A>> = vec![];
-        let added;
+        let added_branches;
+        let added_leaves;
 
         // Go down the trie until you find where to put the new value.
         loop {
@@ -137,7 +149,8 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
 
                 // Push the parent node into the root path.
                 root_path.push(new_parent);
-                added = 1;
+                added_branches = 1;
+                added_leaves = 1;
 
                 break;
             }
@@ -157,7 +170,8 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
 
                 // Push the node into the root path.
                 root_path.push(cur_node);
-                added = 0;
+                added_branches = 0;
+                added_leaves = 0;
 
                 break;
             }
@@ -176,7 +190,8 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
 
                     // Push the parent node into the root path.
                     root_path.push(cur_node);
-                    added = 1;
+                    added_branches = 0;
+                    added_leaves = 1;
 
                     break;
                 }
@@ -190,7 +205,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
         }
 
         // Update the keys and hashes of the nodes that we modified.
-        self.update_keys(txn, root_path, added);
+        self.update_keys(txn, root_path, added_branches, added_leaves);
     }
 
     /// Removes the value in the Merkle Radix Trie at the given key. If the key doesn't exist
@@ -270,7 +285,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
                 root_path.push(only_child);
 
                 // Update the keys and hashes of the rest of the root path.
-                self.update_keys(txn, root_path, -1);
+                self.update_keys(txn, root_path, -1, -1);
 
                 return;
             }
@@ -282,7 +297,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
 
                 root_path.push(parent_node);
 
-                self.update_keys(txn, root_path, -1);
+                self.update_keys(txn, root_path, 0, -1);
 
                 return;
             }
@@ -443,21 +458,36 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
 
     /// Updates the keys for a chain of nodes and marks those nodes as dirty. It assumes that the
     /// path starts at the root node and that each consecutive node is a child of the previous node.
-    fn update_keys(&self, txn: &mut WriteTransaction, mut root_path: Vec<TrieNode<A>>, added: i8) {
+    fn update_keys(
+        &self,
+        txn: &mut WriteTransaction,
+        mut root_path: Vec<TrieNode<A>>,
+        added_branches: i8,
+        added_leaves: i8,
+    ) {
         {
             // Save it directly if the root node doesn't have to be updated for other reasons.
             let only_root_needs_update = root_path.len() == 1;
             let root = root_path.first_mut().expect("Root path must not be empty");
-            if added != 0 {
+            if added_branches != 0 || added_leaves != 0 {
                 if let TrieNode::RootNode {
-                    ref mut num_leaves, ..
+                    ref mut num_branches,
+                    ref mut num_leaves,
+                    ..
                 } = root
                 {
-                    if added >= 0 {
-                        *num_leaves += added as u64;
+                    if added_branches >= 0 {
+                        *num_branches += added_branches as u64;
                     } else {
-                        *num_leaves -= (-added) as u64;
+                        *num_branches -= (-added_branches) as u64;
                     }
+                    if added_leaves >= 0 {
+                        *num_leaves += added_leaves as u64;
+                    } else {
+                        *num_leaves -= (-added_leaves) as u64;
+                    }
+                    self.num_branches
+                        .store(*num_branches, atomic::Ordering::Release);
                     self.num_leaves
                         .store(*num_leaves, atomic::Ordering::Release);
                 } else {
@@ -570,38 +600,38 @@ mod tests {
         let trie = MerkleRadixTrie::new(env.clone(), "database");
         let mut txn = WriteTransaction::new(&env);
 
-        assert_eq!(trie.count_leaves(&txn), 0);
+        assert_eq!(trie.count_branches_and_leaves(&txn), (1, 0));
 
         trie.put(&mut txn, &key_1, 80085);
         trie.put(&mut txn, &key_2, 999);
         trie.put(&mut txn, &key_3, 1337);
 
-        assert_eq!(trie.count_leaves(&txn), 3);
+        assert_eq!(trie.count_branches_and_leaves(&txn), (3, 3));
         assert_eq!(trie.get(&txn, &key_1), Some(80085));
         assert_eq!(trie.get(&txn, &key_2), Some(999));
         assert_eq!(trie.get(&txn, &key_3), Some(1337));
         assert_eq!(trie.get(&txn, &key_4), None);
 
         trie.remove(&mut txn, &key_4);
-        assert_eq!(trie.count_leaves(&txn), 3);
+        assert_eq!(trie.count_branches_and_leaves(&txn), (3, 3));
         assert_eq!(trie.get(&txn, &key_1), Some(80085));
         assert_eq!(trie.get(&txn, &key_2), Some(999));
         assert_eq!(trie.get(&txn, &key_3), Some(1337));
 
         trie.remove(&mut txn, &key_1);
-        assert_eq!(trie.count_leaves(&txn), 2);
+        assert_eq!(trie.count_branches_and_leaves(&txn), (2, 2));
         assert_eq!(trie.get(&txn, &key_1), None);
         assert_eq!(trie.get(&txn, &key_2), Some(999));
         assert_eq!(trie.get(&txn, &key_3), Some(1337));
 
         trie.remove(&mut txn, &key_2);
-        assert_eq!(trie.count_leaves(&txn), 1);
+        assert_eq!(trie.count_branches_and_leaves(&txn), (1, 1));
         assert_eq!(trie.get(&txn, &key_1), None);
         assert_eq!(trie.get(&txn, &key_2), None);
         assert_eq!(trie.get(&txn, &key_3), Some(1337));
 
         trie.remove(&mut txn, &key_3);
-        assert_eq!(trie.count_leaves(&txn), 0);
+        assert_eq!(trie.count_branches_and_leaves(&txn), (1, 0));
         assert_eq!(trie.get(&txn, &key_1), None);
         assert_eq!(trie.get(&txn, &key_2), None);
         assert_eq!(trie.get(&txn, &key_3), None);
