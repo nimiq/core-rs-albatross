@@ -19,6 +19,7 @@ use crate::key_nibbles::KeyNibbles;
 pub enum TrieNode<A: Serialize + Deserialize> {
     RootNode {
         children: TrieNodeChildren,
+        num_branches: u64,
         num_leaves: u64,
     },
     BranchNode {
@@ -65,6 +66,7 @@ impl<A: Serialize + Deserialize> TrieNode<A> {
     pub fn new_root() -> Self {
         TrieNode::RootNode {
             children: NO_CHILDREN,
+            num_branches: 1,
             num_leaves: 0,
         }
     }
@@ -310,9 +312,11 @@ impl<A: Serialize + Deserialize> Serialize for TrieNode<A> {
             }
             TrieNode::RootNode {
                 ref children,
+                num_branches,
                 num_leaves,
             } => {
                 size += Serialize::serialize(children, writer)?;
+                size += Serialize::serialize(num_branches, writer)?;
                 size += Serialize::serialize(num_leaves, writer)?;
             }
             TrieNode::BranchNode {
@@ -337,9 +341,11 @@ impl<A: Serialize + Deserialize> Serialize for TrieNode<A> {
             }
             TrieNode::RootNode {
                 ref children,
+                num_branches,
                 num_leaves,
             } => {
                 size += Serialize::serialized_size(children);
+                size += Serialize::serialized_size(num_branches);
                 size += Serialize::serialized_size(num_leaves);
             }
             TrieNode::BranchNode {
@@ -367,9 +373,11 @@ impl<A: Serialize + Deserialize> Deserialize for TrieNode<A> {
             }
             TrieNodeType::RootNode => {
                 let children: TrieNodeChildren = Deserialize::deserialize(reader)?;
+                let num_branches: u64 = Deserialize::deserialize(reader)?;
                 let num_leaves: u64 = Deserialize::deserialize(reader)?;
                 TrieNode::RootNode {
                     children,
+                    num_branches,
                     num_leaves,
                 }
             }
