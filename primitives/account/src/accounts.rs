@@ -51,6 +51,11 @@ impl Accounts {
         self.tree.num_leaves()
     }
 
+    /// Returns the number of branch nodes in the Accounts Trie.
+    pub fn num_branches(&self) -> u64 {
+        self.tree.num_branches()
+    }
+
     pub fn get(&self, key: &KeyNibbles, txn_option: Option<&DBTransaction>) -> Option<Account> {
         match txn_option {
             Some(txn) => self.tree.get(txn, key),
