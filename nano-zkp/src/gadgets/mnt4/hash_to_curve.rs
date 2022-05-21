@@ -81,18 +81,33 @@ impl HashToCurve {
         let mut x_bits = vec![Boolean::constant(false); 16];
         x_bits.extend_from_slice(&hash_bits[16..768]);
 
-        // Calculate the increment nonce and the resulting G1 hash point.
-        let (nonce_bits, g1) = Self::try_and_increment(
-            x_bits.iter().map(|i| i.value().unwrap()).collect(),
-            y_bit.value()?,
-        );
+        let mut g1_option = None;
 
         // Allocate the nonce bits and convert to a field element.
-        let nonce_bits_var = Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(nonce_bits))?;
+        let nonce_bits_var = Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || {
+            let x_bits = x_bits
+                .iter()
+                .map(|i| i.value())
+                .collect::<Result<_, SynthesisError>>();
+            let y = y_bit.value();
+
+            // We need to always return a vector of the correct size for the setup to succeed (otherwise Vec::new_witness fails with an AssignmentMissing error).
+            let (x_bits, y) = match (x_bits, y) {
+                (Ok(x_bits), Ok(y)) => (x_bits, y),
+                (..) => return Ok(vec![false; 8]),
+            };
+
+            // Calculate the increment nonce and the resulting G1 hash point.
+            let (nonce_bits, g1) = Self::try_and_increment(x_bits, y);
+            g1_option = Some(g1);
+            Ok(nonce_bits)
+        })?;
         let nonce = Boolean::le_bits_to_fp_var(&nonce_bits_var)?;
 
         // Allocate the G1 hash point.
-        let g1_var = G1Var::new_witness(cs.clone(), || Ok(g1))?;
+        let g1_var = G1Var::new_witness(cs.clone(), || {
+            g1_option.ok_or(SynthesisError::AssignmentMissing)
+        })?;
 
         // Convert the x-coordinate bits into a field element.
         x_bits.reverse();
@@ -118,6 +133,7 @@ impl HashToCurve {
     }
 
     /// Returns the nonce i (as a vector of big endian bits), such that (x + i) is a valid x coordinate for G1.
+    /// The nonce i is always a u8, i.e., consists of 8 bits.
     fn try_and_increment(x_bits: Vec<bool>, y: bool) -> (Vec<bool>, G1Affine) {
         // Prepare the bits to transform into field element.
         let mut bytes = vec![];

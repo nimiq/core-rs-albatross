@@ -76,3 +76,7 @@ opt-level = 3
 
 [profile.release]
 lto = "thin"
+
+[profile.release-with-debug]
+inherits = "release"
+debug = true
