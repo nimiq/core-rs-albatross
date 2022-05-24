@@ -1,4 +1,5 @@
 use std::convert::TryFrom;
+use std::fmt;
 use std::str::FromStr;
 
 use hex::FromHex;
@@ -31,6 +32,17 @@ impl Signature {
     #[inline]
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, KeysError> {
         Ok(Signature(ed25519_zebra::Signature::try_from(bytes)?))
+    }
+
+    #[inline]
+    pub fn to_hex(&self) -> String {
+        hex::encode(self.as_bytes())
+    }
+}
+
+impl fmt::Display for Signature {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        f.write_str(&self.to_hex())
     }
 }
 
@@ -97,6 +109,8 @@ impl FromStr for Signature {
 
 #[cfg(feature = "serde-derive")]
 mod serde_derive {
+    use std::borrow::Cow;
+
     use serde::{
         de::{Deserialize, Deserializer, Error},
         ser::{Serialize, Serializer},
@@ -109,7 +123,7 @@ mod serde_derive {
         where
             S: Serializer,
         {
-            serializer.serialize_bytes(&self.as_bytes())
+            serializer.serialize_str(&self.to_hex())
         }
     }
 
@@ -118,7 +132,7 @@ mod serde_derive {
         where
             D: Deserializer<'de>,
         {
-            let data: &'de str = Deserialize::deserialize(deserializer)?;
+            let data: Cow<'de, str> = Deserialize::deserialize(deserializer)?;
             data.parse().map_err(Error::custom)
         }
     }
