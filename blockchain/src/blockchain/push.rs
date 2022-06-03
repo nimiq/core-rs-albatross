@@ -311,6 +311,7 @@ impl Blockchain {
         let this = RwLockWriteGuard::downgrade_to_upgradable(this);
 
         let num_transactions = this.state.main_chain.head.num_transactions();
+        #[cfg(feature = "metrics")]
         this.metrics.note_extend(num_transactions);
         debug!(
             block = %this.state.main_chain.head,
@@ -558,6 +559,7 @@ impl Blockchain {
             num_adopted_blocks = adopted_blocks.len(),
             "Rebranched",
         );
+        #[cfg(feature = "metrics")]
         this.metrics
             .note_rebranch(&reverted_blocks, &adopted_blocks);
 

@@ -30,4 +30,4 @@ nimiq-test-log = { path = "../test-log" }
 rand = "0.8"
 
 [features]
-serde-derive = ["serde", "nimiq-primitives/serde-derive"]
+serde-derive = ["serde", "nimiq-primitives/serde-derive", "nimiq-transaction/serde-derive"]

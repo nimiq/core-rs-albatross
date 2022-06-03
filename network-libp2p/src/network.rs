@@ -3,6 +3,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
+#[cfg(feature = "metrics")]
 use std::time::Instant;
 
 use async_trait::async_trait;

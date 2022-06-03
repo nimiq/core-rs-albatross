@@ -6,7 +6,6 @@ use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 use std::cmp::{Ordering, Reverse};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-#[cfg(feature = "metrics")]
 use tokio_metrics::TaskMonitor;
 
 use beserial::Serialize;

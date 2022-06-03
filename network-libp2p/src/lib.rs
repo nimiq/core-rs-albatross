@@ -8,6 +8,7 @@ pub mod discovery;
 pub mod dispatch;
 mod error;
 mod network;
+#[cfg(feature = "metrics")]
 mod network_metrics;
 
 pub const REQRES_PROTOCOL: &[u8] = b"/nimiq/reqres/0.0.1";

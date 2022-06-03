@@ -5,6 +5,7 @@ use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::policy;
 use nimiq_utils::observer::{Listener, ListenerHandle};
+#[cfg(feature = "metrics")]
 use std::sync::Arc;
 
 use crate::blockchain_state::BlockchainState;

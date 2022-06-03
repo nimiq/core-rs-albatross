@@ -29,8 +29,8 @@ tokio = { version = "1.18", features = [
 ] }
 tokio-metrics = "0.1"
 
-nimiq-blockchain = { path = "../blockchain", features=["metrics"] }
+nimiq-blockchain = { path = "../blockchain", features = ["metrics"] }
 nimiq-consensus = { path = "../consensus" }
-nimiq-mempool = { path = "../mempool" }
+nimiq-mempool = { path = "../mempool", features = ["metrics"] }
 nimiq-network-interface = { path = "../network-interface" }
-nimiq-network-libp2p = { path = "../network-libp2p" }
+nimiq-network-libp2p = { path = "../network-libp2p", features = ["metrics"] }
