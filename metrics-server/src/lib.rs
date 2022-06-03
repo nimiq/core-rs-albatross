@@ -54,10 +54,6 @@ impl<T: Encode + Sized> NumericClosureMetric<T> {
         }
     }
 
-    pub fn new_counter(lambda: Box<dyn Fn() -> T + Sync + Send>) -> NumericClosureMetric<T> {
-        NumericClosureMetric::new(MetricType::Counter, lambda)
-    }
-
     pub fn new_gauge(lambda: Box<dyn Fn() -> T + Sync + Send>) -> NumericClosureMetric<T> {
         NumericClosureMetric::new(MetricType::Gauge, lambda)
     }
