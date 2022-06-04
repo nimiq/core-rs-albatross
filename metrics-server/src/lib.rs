@@ -112,8 +112,8 @@ pub fn start_metrics_server<TNetwork: Network>(
         let mut tokio_rt_metrics = TokioRuntimeMetrics::new();
         tokio_rt_metrics.register(nimiq_registry);
         let tokio_rt_metrics = Arc::new(RwLock::new(tokio_rt_metrics));
-        // Spawn Tokio runtime metrics updater
 
+        // Spawn Tokio runtime metrics updater
         tokio::spawn(TokioRuntimeMetrics::update_metric_values(
             tokio_rt_metrics,
             tokio_rt_monitor,

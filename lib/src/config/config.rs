@@ -1,5 +1,6 @@
 #[cfg(feature = "rpc-server")]
 use std::net::IpAddr;
+#[cfg(feature = "metrics-server")]
 use std::net::SocketAddr;
 use std::{
     path::{Path, PathBuf},
@@ -13,6 +14,7 @@ use beserial::Deserialize;
 #[cfg(feature = "validator")]
 use nimiq_bls::{KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
 use nimiq_database::{mdbx::MdbxEnvironment, volatile::VolatileEnvironment, Environment};
+#[cfg(feature = "validator")]
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_mempool::{config::MempoolConfig, filter::MempoolRules};
 use nimiq_network_libp2p::{Keypair as IdentityKeypair, Multiaddr};
@@ -23,6 +25,7 @@ use nimiq_utils::key_rng::SecureGenerate;
 
 #[cfg(any(feature = "rpc-server", feature = "metrics-server"))]
 use crate::config::consts;
+#[cfg(feature = "metrics-server")]
 use crate::config::consts::default_bind;
 use crate::{
     client::Client,

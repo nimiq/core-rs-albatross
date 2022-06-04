@@ -10,6 +10,7 @@ use nimiq_consensus::{
 };
 use nimiq_database::Environment;
 use nimiq_genesis::NetworkInfo;
+#[cfg(feature = "validator")]
 use nimiq_mempool::mempool::Mempool;
 use nimiq_network_interface::network::Network as NetworkInterface;
 use nimiq_network_libp2p::{

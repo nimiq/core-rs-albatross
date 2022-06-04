@@ -8,6 +8,7 @@ use std::time::Duration;
 use futures::{Stream, StreamExt};
 use linked_hash_map::LinkedHashMap;
 use parking_lot::RwLock;
+#[cfg(feature = "metrics")]
 use tokio_metrics::TaskMonitor;
 use tokio_stream::wrappers::BroadcastStream;
 
@@ -125,6 +126,7 @@ pub struct Validator<TNetwork: Network, TValidatorNetwork: ValidatorNetwork + 's
 
     pub mempool: Arc<Mempool>,
     mempool_state: MempoolState,
+    #[cfg(feature = "metrics")]
     mempool_monitor: TaskMonitor,
 }
 
@@ -207,6 +209,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
 
             mempool: Arc::clone(&mempool),
             mempool_state,
+            #[cfg(feature = "metrics")]
             mempool_monitor: TaskMonitor::new(),
         };
         this.init();
@@ -223,6 +226,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         this
     }
 
+    #[cfg(feature = "metrics")]
     pub fn get_mempool_monitor(&self) -> TaskMonitor {
         self.mempool_monitor.clone()
     }
@@ -677,10 +681,17 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Future
                     if let MempoolState::Inactive = self.mempool_state {
                         let mempool = Arc::clone(&self.mempool);
                         let network = Arc::clone(&self.consensus.network);
+                        #[cfg(not(feature = "metrics"))]
+                        tokio::spawn({
+                            async move {
+                                mempool.start_executor(network, None).await;
+                            }
+                        });
+                        #[cfg(feature = "metrics")]
                         tokio::spawn({
                             let mempool_monitor = self.mempool_monitor.clone();
                             async move {
-                                mempool.start_executor(network, mempool_monitor).await;
+                                mempool.start_executor(network, Some(mempool_monitor)).await;
                             }
                         });
                         self.mempool_state = MempoolState::Active;

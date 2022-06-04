@@ -65,5 +65,5 @@ nimiq-test-log = { path = "../test-log" }
 nimiq-test-utils = { path = "../test-utils" }
 
 [features]
-metrics = []
+metrics = ["nimiq-mempool/metrics"]
 trusted_push = []
