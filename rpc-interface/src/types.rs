@@ -694,6 +694,28 @@ impl Validator {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct BlockchainState<T> {
+    pub block_number: u32,
+    pub block_hash: Blake2bHash,
+    pub value: T,
+}
+
+impl<T> BlockchainState<T> {
+    pub fn from_value(
+        block_number: u32,
+        block_hash: Blake2bHash,
+        value: T,
+    ) -> Self {
+        BlockchainState {
+            block_number,
+            block_hash,
+            value,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MempoolInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub _0: Option<u32>,

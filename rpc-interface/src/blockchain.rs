@@ -8,7 +8,7 @@ use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
 
 use crate::types::{
-    Account, Block, Inherent, ParkedSet, SlashedSlots, Slot, Staker, Transaction, Validator,
+    Account, Block, Inherent, ParkedSet, SlashedSlots, Slot, Staker, Transaction, Validator, BlockchainState,
 };
 
 #[nimiq_jsonrpc_derive::proxy(name = "BlockchainProxy", rename_all = "camelCase")]
@@ -97,10 +97,12 @@ pub trait BlockchainInterface {
         &mut self,
         address: Address,
         include_stakers: Option<bool>,
-    ) -> Result<Validator, Self::Error>;
+    ) -> Result<BlockchainState<Validator>, Self::Error>;
 
-    async fn get_staker_by_address(&mut self, address: Address) -> Result<Staker, Self::Error>;
+    async fn get_staker_by_address(&mut self, address: Address) -> Result<BlockchainState<Staker>, Self::Error>;
 
     #[stream]
-    async fn head_subscribe(&mut self) -> Result<BoxStream<'static, Blake2bHash>, Self::Error>;
+    async fn head_subscribe(&mut self, include_transactions: Option<bool>) -> Result<BoxStream<'static, Result<Block, Blake2bHash>>, Self::Error>;
+    #[stream]
+    async fn head_hash_subscribe(&mut self) -> Result<BoxStream<'static, Blake2bHash>, Self::Error>;
 }

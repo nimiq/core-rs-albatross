@@ -9,7 +9,7 @@ use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainEvent};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::{coin::Coin, policy};
-use nimiq_rpc_interface::types::{ParkedSet, Validator};
+use nimiq_rpc_interface::types::{BlockchainState, ParkedSet, Validator};
 use nimiq_rpc_interface::{
     blockchain::BlockchainInterface,
     types::{Account, Block, Inherent, SlashedSlots, Slot, Staker, Transaction},
@@ -25,6 +25,23 @@ impl BlockchainDispatcher {
     pub fn new(blockchain: Arc<RwLock<Blockchain>>) -> Self {
         Self { blockchain }
     }
+}
+
+fn get_block_by_hash(
+    blockchain: &Blockchain,
+    hash: &Blake2bHash,
+    include_transactions: Option<bool>,
+) -> Result<Block, Error> {
+    blockchain
+        .get_block(hash, true, None)
+        .map(|block| {
+            Block::from_block(
+                blockchain.deref(),
+                block,
+                include_transactions.unwrap_or(false),
+            )
+        })
+        .ok_or_else(|| Error::BlockNotFound(hash.clone().into()))
 }
 
 #[nimiq_jsonrpc_derive::service(rename_all = "camelCase")]
@@ -56,16 +73,7 @@ impl BlockchainInterface for BlockchainDispatcher {
     ) -> Result<Block, Error> {
         let blockchain = self.blockchain.read();
 
-        blockchain
-            .get_block(&hash, true, None)
-            .map(|block| {
-                Block::from_block(
-                    blockchain.deref(),
-                    block,
-                    include_transactions.unwrap_or(false),
-                )
-            })
-            .ok_or_else(|| Error::BlockNotFound(hash.into()))
+        get_block_by_hash(blockchain.deref(), &hash, include_transactions)
     }
 
     /// Tries to fetch a block given its number. It has an option to include the transactions in the
@@ -468,7 +476,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         &mut self,
         address: Address,
         include_stakers: Option<bool>,
-    ) -> Result<Validator, Error> {
+    ) -> Result<BlockchainState<Validator>, Error> {
         let blockchain = self.blockchain.read();
 
         let accounts_tree = &blockchain.state().accounts.tree;
@@ -497,26 +505,59 @@ impl BlockchainInterface for BlockchainDispatcher {
             stakers = Some(stakers_map);
         }
 
-        Ok(Validator::from_validator(&validator.unwrap(), stakers))
+        let block_number = blockchain.block_number();
+        let block_hash = blockchain.head_hash();
+        Ok(BlockchainState::from_value(
+            block_number,
+            block_hash,
+            Validator::from_validator(&validator.unwrap(), stakers),
+        ))
     }
 
     /// Tries to fetch a staker information given its address.
-    async fn get_staker_by_address(&mut self, address: Address) -> Result<Staker, Error> {
+    async fn get_staker_by_address(
+        &mut self,
+        address: Address,
+    ) -> Result<BlockchainState<Staker>, Error> {
         let blockchain = self.blockchain.read();
 
         let accounts_tree = &blockchain.state().accounts.tree;
         let db_txn = blockchain.read_transaction();
         let staker = StakingContract::get_staker(accounts_tree, &db_txn, &address);
 
+        let block_number = blockchain.block_number();
+        let block_hash = blockchain.head_hash();
+
         match staker {
-            Some(s) => Ok(Staker::from_staker(&s)),
+            Some(s) => Ok(BlockchainState::from_value(
+                block_number,
+                block_hash,
+                Staker::from_staker(&s),
+            )),
             None => Err(Error::StakerNotFound(address)),
         }
     }
 
-    /// Subscribes to blockchain events.
+    /// Subscribes to blockchain events (retrieves the full block).
     #[stream]
-    async fn head_subscribe(&mut self) -> Result<BoxStream<'static, Blake2bHash>, Error> {
+    async fn head_subscribe(
+        &mut self,
+        include_transactions: Option<bool>,
+    ) -> Result<BoxStream<'static, Result<Block, Blake2bHash>>, Error> {
+        let blockchain = Arc::clone(&self.blockchain);
+        let stream = self.head_hash_subscribe().await?;
+
+        Ok(stream
+            .map(move |hash| {
+                let blockchain_rg = blockchain.read();
+                get_block_by_hash(blockchain_rg.deref(), &hash, include_transactions).map_err(|_| hash)
+            })
+            .boxed())
+    }
+
+    /// Subscribes to blockchain events (only retrieves the blockhash).
+    #[stream]
+    async fn head_hash_subscribe(&mut self) -> Result<BoxStream<'static, Blake2bHash>, Error> {
         let stream = self.blockchain.write().notifier.as_stream();
         Ok(stream
             .map(|event| match event {

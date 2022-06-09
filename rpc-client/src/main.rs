@@ -195,16 +195,19 @@ impl Command {
             }
 
             Command::Follow { block: show_block } => {
-                let mut stream = client.blockchain.head_subscribe().await?;
+                if show_block {
+                    let mut stream = client.blockchain.head_subscribe(Some(false)).await?;
 
-                while let Some(block_hash) = stream.next().await {
-                    if show_block {
-                        let block = client
-                            .blockchain
-                            .get_block_by_hash(block_hash, Some(false))
-                            .await;
-                        println!("{:#?}", block);
-                    } else {
+                    while let Some(block) = stream.next().await {
+                        match block {
+                            Ok(block) => println!("{:#?}", block),
+                            Err(hash) => println!("Missing block {}", hash),
+                        }
+                    }
+                } else {
+                    let mut stream = client.blockchain.head_hash_subscribe().await?;
+
+                    while let Some(block_hash) = stream.next().await {
                         println!("{}", block_hash);
                     }
                 }
