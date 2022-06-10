@@ -240,9 +240,20 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
             systemtime_to_timestamp(SystemTime::now()),
         );
 
-        let transactions = self
+        // First we try to fill the block with control transactions
+        let mut block_available_bytes = MicroBlock::get_available_bytes(self.fork_proofs.len());
+
+        let (mut transactions, txn_size) = self
             .mempool
-            .get_transactions_for_block(MicroBlock::get_available_bytes(self.fork_proofs.len()));
+            .get_control_transactions_for_block(block_available_bytes);
+
+        block_available_bytes -= txn_size;
+
+        let (mut regular_transactions, _) = self
+            .mempool
+            .get_transactions_for_block(block_available_bytes);
+
+        transactions.append(&mut regular_transactions);
 
         self.block_producer.next_micro_block(
             blockchain,

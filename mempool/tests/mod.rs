@@ -59,7 +59,8 @@ async fn send_get_mempool_txns(
     send_txn_to_mempool(&mempool, mock_network, mock_id, transactions).await;
 
     // Get the transactions from the mempool
-    mempool.get_transactions_for_block(txn_len)
+    let (mempool_txns, _) = mempool.get_transactions_for_block(txn_len);
+    mempool_txns
 }
 
 async fn send_txn_to_mempool(
@@ -94,6 +95,40 @@ async fn send_txn_to_mempool(
     let timeout = tokio::time::Duration::from_secs(1);
     tokio::time::sleep(timeout).await;
     mempool.stop_executor_without_unsubscribe().await;
+}
+
+async fn send_control_txn_to_mempool(
+    mempool: &Mempool,
+    mock_network: Arc<MockNetwork>,
+    mock_id: MockId<MockPeerId>,
+    transactions: Vec<Transaction>,
+) {
+    // Create a MPSC channel to directly send transactions to the mempool
+    let (txn_stream_tx, txn_stream_rx) = mpsc::channel(64);
+
+    // Subscribe mempool with the mpsc stream created
+    mempool
+        .start_control_executor_with_txn_stream::<MockNetwork>(
+            Box::pin(ReceiverStream::new(txn_stream_rx)),
+            mock_network,
+        )
+        .await;
+
+    // Send the transactions
+    tokio::task::spawn(async move {
+        for txn in transactions {
+            txn_stream_tx
+                .send((txn.clone(), mock_id.clone()))
+                .await
+                .unwrap();
+        }
+    })
+    .await
+    .expect("Send failed");
+
+    let timeout = tokio::time::Duration::from_secs(1);
+    tokio::time::sleep(timeout).await;
+    mempool.stop_control_executor_without_unsubscribe().await;
 }
 
 async fn multiple_start_stop_send(
@@ -137,7 +172,7 @@ async fn multiple_start_stop_send(
     mempool.stop_executor_without_unsubscribe().await;
 
     // Get the transactions from the mempool
-    let obtained_txns = mempool.get_transactions_for_block(usize::MAX);
+    let (obtained_txns, _) = mempool.get_transactions_for_block(usize::MAX);
 
     // We should obtain the same amount of transactions
     assert_eq!(obtained_txns.len(), NUM_TXNS_START_STOP);
@@ -162,7 +197,7 @@ async fn multiple_start_stop_send(
     mempool.stop_executor_without_unsubscribe().await;
 
     // We should not obtain any, since the executor should not be running.
-    let obtained_txns = mempool.get_transactions_for_block(usize::MAX);
+    let (obtained_txns, _) = mempool.get_transactions_for_block(usize::MAX);
 
     // We should obtain 0 transactions
     assert_eq!(obtained_txns.len(), 0_usize);
@@ -203,7 +238,7 @@ async fn multiple_start_stop_send(
     mempool.stop_executor_without_unsubscribe().await;
 
     // Get the transactions from the mempool
-    let obtained_txns = mempool.get_transactions_for_block(usize::MAX);
+    let (obtained_txns, _) = mempool.get_transactions_for_block(usize::MAX);
 
     // We should obtain same number of txns
     assert_eq!(obtained_txns.len(), NUM_TXNS_START_STOP);
@@ -934,7 +969,7 @@ async fn mempool_update() {
     mempool.mempool_update(&adopted_micro_blocks[..], &reverted_micro_blocks[..]);
 
     // Get txns from mempool
-    let updated_txns = mempool.get_transactions_for_block(10_000);
+    let (updated_txns, _) = mempool.get_transactions_for_block(10_000);
 
     // Expect at least the original 30 transactions plus or minus:
     // - minus 5 from the adopted blocks since 5/10 transactions were in the mempool and they need to be dropped.
@@ -1077,7 +1112,7 @@ async fn mempool_update_aged_transaction() {
     );
 
     // Get txns from mempool
-    let updated_txns = mempool.get_transactions_for_block(10_000);
+    let (updated_txns, _) = mempool.get_transactions_for_block(10_000);
 
     // Should obtain 0 txns, as they are no longer valid due to aging
     assert_eq!(
@@ -1212,7 +1247,7 @@ async fn mempool_update_not_enough_balance() {
     mempool.mempool_update(&adopted_micro_blocks[..], &[].to_vec());
 
     // Get txns from mempool
-    let updated_txns = mempool.get_transactions_for_block(10_000);
+    let (updated_txns, _) = mempool.get_transactions_for_block(10_000);
 
     // Expect only 20 transations because in the adopted blocks we included 10 txns that would cause the senders
     // to not have enough balance to pay for all txns already in the mempool
@@ -1369,7 +1404,7 @@ async fn mempool_update_pruned_account() {
     mempool.mempool_update(&adopted_micro_blocks[..], &[].to_vec());
 
     // Get txns from mempool
-    let updated_txns = mempool.get_transactions_for_block(10_000);
+    let (updated_txns, _) = mempool.get_transactions_for_block(10_000);
 
     assert_eq!(
         updated_txns.len(),
@@ -1454,7 +1489,7 @@ async fn mempool_update_create_staker_twice() {
     let mock_network = Arc::new(hub.new_network());
 
     // Send txns to mempool
-    send_txn_to_mempool(&mempool, mock_network, mock_id, txns).await;
+    send_control_txn_to_mempool(&mempool, mock_network, mock_id, txns).await;
 
     assert_eq!(
         mempool.num_transactions(),
@@ -1488,7 +1523,7 @@ async fn mempool_update_create_staker_twice() {
     mempool.mempool_update(&adopted_micro_blocks[..], &[].to_vec());
 
     // Get txns from mempool
-    let updated_txns = mempool.get_transactions_for_block(10_000);
+    let (updated_txns, _) = mempool.get_control_transactions_for_block(10_000);
 
     assert_eq!(
         updated_txns.len(),
@@ -1512,6 +1547,203 @@ async fn mempool_update_create_staker_twice() {
     assert_eq!(
         Blockchain::push(bc, Block::Micro(block)),
         Ok(PushResult::Extended)
+    );
+}
+
+#[test(tokio::test(flavor = "multi_thread", worker_threads = 10))]
+async fn mempool_basic_control_tx() {
+    let time = Arc::new(OffsetTime::new());
+    let env = VolatileEnvironment::new(10).unwrap();
+
+    let key_pair = ed25519_key_pair(ACCOUNT_SECRET_KEY);
+    let address = Address::from_any_str(STAKER_ADDRESS).unwrap();
+
+    // This is the transaction produced in the block
+    let tx = TransactionBuilder::new_create_staker(
+        &key_pair,
+        &key_pair,
+        Some(address.clone()),
+        100_000_000.try_into().unwrap(),
+        100.try_into().unwrap(),
+        1,
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
+
+    let txns = vec![tx];
+
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+    ));
+
+    // Create mempool and subscribe with a custom txn stream.
+    let mempool = Mempool::new(blockchain.clone(), MempoolConfig::default());
+    let mut hub = MockHub::new();
+    let mock_id = MockId::new(hub.new_address().into());
+    let mock_network = Arc::new(hub.new_network());
+
+    // Send txns to mempool
+    send_control_txn_to_mempool(&mempool, mock_network, mock_id, txns).await;
+
+    assert_eq!(
+        mempool.num_transactions(),
+        1,
+        "Number of txns in mempool is not what is expected"
+    );
+
+    // Get regular txns from mempool
+    let (updated_txns, _) = mempool.get_transactions_for_block(10_000);
+
+    //We should obtain 0 regular txns since we only have 1 control tx in the mempool
+    assert_eq!(
+        updated_txns.len(),
+        0,
+        "Number of txns is not what is expected"
+    );
+
+    // Get control txns from mempool
+    let (updated_txns, _) = mempool.get_control_transactions_for_block(10_000);
+
+    //Now we should obtain one control transaction
+    assert_eq!(
+        updated_txns.len(),
+        1,
+        "Number of txns is not what is expected"
+    );
+
+    //Now the mempool should have 0 total txns
+    assert_eq!(
+        mempool.num_transactions(),
+        0,
+        "Number of txns in mempool is not what is expected"
+    );
+}
+
+#[test(tokio::test(flavor = "multi_thread", worker_threads = 10))]
+async fn mempool_regular_and_control_tx() {
+    let mut rng = StdRng::seed_from_u64(0);
+    let balance = 100_000_000;
+    let num_txns = 4;
+    let mut mempool_transactions = vec![];
+    let sender_balances = vec![balance + num_txns * 3; 1];
+    let recipient_balances = vec![0; num_txns as usize];
+    let mut genesis_builder = GenesisBuilder::default();
+
+    // Generate recipient accounts
+    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, false);
+    // Generate sender accounts
+    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true);
+
+    // Generate transactions
+    for i in 0..num_txns {
+        let mempool_transaction = TestTransaction {
+            fee: (i + 1) as u64,
+            value: 1,
+            recipient: recipient_accounts[i as usize].clone(),
+            sender: sender_accounts[0].clone(),
+        };
+        mempool_transactions.push(mempool_transaction);
+    }
+    let (txns, _) = generate_transactions(mempool_transactions, true);
+    log::debug!("Done generating transactions and accounts");
+
+    let time = Arc::new(OffsetTime::new());
+    let env = VolatileEnvironment::new(10).unwrap();
+
+    // Add a validator to genesis
+    genesis_builder.with_genesis_validator(
+        Address::from(&SchnorrKeyPair::generate(&mut rng)),
+        SchnorrPublicKey::from([0u8; 32]),
+        BlsKeyPair::generate(&mut rng).public_key,
+        Address::default(),
+    );
+
+    let genesis_info = genesis_builder.generate(env.clone()).unwrap();
+
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::with_genesis(
+            env.clone(),
+            time,
+            NetworkId::UnitAlbatross,
+            genesis_info.block,
+            genesis_info.accounts,
+        )
+        .unwrap(),
+    ));
+
+    // Create mempool and subscribe with a custom txn stream.
+    let mempool = Mempool::new(blockchain.clone(), MempoolConfig::default());
+    let mut hub = MockHub::new();
+    let mock_id = MockId::new(hub.new_address().into());
+    let mock_network = Arc::new(hub.new_network());
+
+    // This is the transaction produced in the block
+    let control_tx = TransactionBuilder::new_create_staker(
+        &sender_accounts[0].keypair,
+        &sender_accounts[0].keypair,
+        None,
+        100.try_into().unwrap(),
+        1.try_into().unwrap(),
+        1,
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
+
+    let control_txns = vec![control_tx];
+
+    // Send txns to mempool
+    send_control_txn_to_mempool(
+        &mempool,
+        mock_network.clone(),
+        mock_id.clone(),
+        control_txns,
+    )
+    .await;
+
+    assert_eq!(
+        mempool.num_transactions(),
+        1,
+        "Number of txns in mempool is not what is expected"
+    );
+
+    // Get regular txns from mempool
+    let (updated_txns, _) = mempool.get_transactions_for_block(10_000);
+
+    //We should obtain 0 regular txns since we only have control txns in the mempool
+    assert_eq!(
+        updated_txns.len(),
+        0,
+        "Number of txns is not what is expected"
+    );
+
+    //Send regular txns to mempool
+    send_txn_to_mempool(&mempool, mock_network, mock_id, txns).await;
+
+    // Get control txns from mempool
+    let (updated_txns, _) = mempool.get_control_transactions_for_block(10_000);
+
+    //Now we should obtain one control transaction
+    assert_eq!(
+        updated_txns.len(),
+        1,
+        "Number of txns is not what is expected"
+    );
+
+    // Get regular txns from mempool
+    let (updated_txns, _) = mempool.get_transactions_for_block(10_000);
+
+    //Now we should obtain all regular txns
+    assert_eq!(
+        updated_txns.len(),
+        num_txns as usize,
+        "Number of txns is not what is expected"
+    );
+
+    //Now the mempool should have 0 total txns
+    assert_eq!(
+        mempool.num_transactions(),
+        0,
+        "Number of txns in mempool is not what is expected"
     );
 }
 
@@ -1574,7 +1806,7 @@ async fn mempool_update_create_staker_non_existant_delegation_addr() {
     let mock_network = Arc::new(hub.new_network());
 
     // Send txns to mempool
-    send_txn_to_mempool(&mempool, mock_network, mock_id, txns).await;
+    send_control_txn_to_mempool(&mempool, mock_network, mock_id, txns).await;
 
     // The transaction should be rejected by the mempool, since the delegation address does not exist
     assert_eq!(
@@ -1646,7 +1878,7 @@ async fn applies_total_tx_size_limits() {
         mempool.add_transaction(tx).await.unwrap();
     }
 
-    let mempool_txns = mempool.get_transactions_for_block(txns_len);
+    let (mempool_txns, _) = mempool.get_transactions_for_block(txns_len);
 
     // We expect that the tx with the lowest fee did not stay in the mempool
     for tx in &mempool_txns {

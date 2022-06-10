@@ -6,6 +6,7 @@ use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 
 use futures::{FutureExt, StreamExt};
+use nimiq_primitives::account::AccountType;
 use parking_lot::RwLock;
 use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
 use tokio::time::Sleep;
@@ -13,7 +14,7 @@ use tokio_stream::wrappers::BroadcastStream;
 
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_database::Environment;
-use nimiq_mempool::mempool::TransactionTopic;
+use nimiq_mempool::mempool::{ControlTransactionTopic, TransactionTopic};
 use nimiq_network_interface::network::Network;
 use nimiq_transaction::Transaction;
 
@@ -42,6 +43,9 @@ impl<N: Network> Clone for ConsensusProxy<N> {
 
 impl<N: Network> ConsensusProxy<N> {
     pub async fn send_transaction(&self, tx: Transaction) -> Result<(), N::Error> {
+        if tx.sender_type == AccountType::Staking || tx.recipient_type == AccountType::Staking {
+            return self.network.publish::<ControlTransactionTopic>(tx).await;
+        }
         self.network.publish::<TransactionTopic>(tx).await
     }
 

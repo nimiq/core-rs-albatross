@@ -128,6 +128,8 @@ pub struct Validator<TNetwork: Network, TValidatorNetwork: ValidatorNetwork + 's
     mempool_state: MempoolState,
     #[cfg(feature = "metrics")]
     mempool_monitor: TaskMonitor,
+    #[cfg(feature = "metrics")]
+    control_mempool_monitor: TaskMonitor,
 }
 
 impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
@@ -211,6 +213,8 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             mempool_state,
             #[cfg(feature = "metrics")]
             mempool_monitor: TaskMonitor::new(),
+            #[cfg(feature = "metrics")]
+            control_mempool_monitor: TaskMonitor::new(),
         };
         this.init();
 
@@ -229,6 +233,11 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
     #[cfg(feature = "metrics")]
     pub fn get_mempool_monitor(&self) -> TaskMonitor {
         self.mempool_monitor.clone()
+    }
+
+    #[cfg(feature = "metrics")]
+    pub fn get_control_mempool_monitor(&self) -> TaskMonitor {
+        self.control_mempool_monitor.clone()
     }
 
     fn init(&mut self) {
@@ -684,14 +693,21 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Future
                         #[cfg(not(feature = "metrics"))]
                         tokio::spawn({
                             async move {
-                                mempool.start_executor(network, None).await;
+                                mempool.start_executors(network, None, None).await;
                             }
                         });
                         #[cfg(feature = "metrics")]
                         tokio::spawn({
                             let mempool_monitor = self.mempool_monitor.clone();
+                            let ctrl_mempool_monitor = self.control_mempool_monitor.clone();
                             async move {
-                                mempool.start_executor(network, Some(mempool_monitor)).await;
+                                mempool
+                                    .start_executors(
+                                        network,
+                                        Some(mempool_monitor),
+                                        Some(ctrl_mempool_monitor),
+                                    )
+                                    .await;
                             }
                         });
                         self.mempool_state = MempoolState::Active;
@@ -702,7 +718,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Future
                         let mempool = Arc::clone(&self.mempool);
                         let network = Arc::clone(&self.consensus.network);
                         tokio::spawn(async move {
-                            mempool.stop_executor(network).await;
+                            mempool.stop_executors(network).await;
                         });
                         self.mempool_state = MempoolState::Inactive;
                     }
