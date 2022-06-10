@@ -3225,6 +3225,7 @@ dependencies = [
  "nimiq-transaction",
  "nimiq-vrf",
  "serde",
+ "serde_json",
  "serde_with",
  "thiserror",
 ]

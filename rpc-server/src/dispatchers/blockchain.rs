@@ -1,7 +1,7 @@
 use std::{collections::HashMap, ops::Deref, sync::Arc};
 
 use async_trait::async_trait;
-use futures::{stream::BoxStream, StreamExt};
+use futures::{stream::BoxStream, StreamExt, future};
 use parking_lot::RwLock;
 
 use nimiq_account::StakingContract;
@@ -27,6 +27,9 @@ impl BlockchainDispatcher {
     }
 }
 
+/// Tries to fetch a block given its hash. It has an option to include the transactions in the
+/// block, which defaults to false.
+/// This function requeires the read lock acquisition prior to its execution
 fn get_block_by_hash(
     blockchain: &Blockchain,
     hash: &Blake2bHash,
@@ -42,6 +45,49 @@ fn get_block_by_hash(
             )
         })
         .ok_or_else(|| Error::BlockNotFound(hash.clone().into()))
+}
+
+/// Tries to fetch a validator information given its address. It has an option to include a map
+/// containing the addresses and stakes of all the stakers that are delegating to the validator.
+/// This function requeires the read lock acquisition prior to its execution
+fn get_validator_by_address(
+    blockchain: &Blockchain,
+    address: &Address,
+    include_stakers: Option<bool>,
+) -> Result<BlockchainState<Validator>, Error> {
+    let accounts_tree = &blockchain.state().accounts.tree;
+    let db_txn = blockchain.read_transaction();
+    let validator = StakingContract::get_validator(accounts_tree, &db_txn, address);
+
+    if validator.is_none() {
+        return Err(Error::ValidatorNotFound(address.clone()));
+    }
+
+    let mut stakers = None;
+
+    if include_stakers == Some(true) {
+        let staker_addresses =
+            StakingContract::get_validator_stakers(accounts_tree, &db_txn, address);
+
+        let mut stakers_map = HashMap::new();
+
+        for address in staker_addresses {
+            let staker = StakingContract::get_staker(accounts_tree, &db_txn, &address).unwrap();
+            if !staker.balance.is_zero() {
+                stakers_map.insert(address, staker.balance);
+            }
+        }
+
+        stakers = Some(stakers_map);
+    }
+
+    let block_number = blockchain.block_number();
+    let block_hash = blockchain.head_hash();
+    Ok(BlockchainState::from_value(
+        block_number,
+        block_hash,
+        Validator::from_validator(&validator.unwrap(), stakers),
+    ))
 }
 
 #[nimiq_jsonrpc_derive::service(rename_all = "camelCase")]
@@ -479,39 +525,7 @@ impl BlockchainInterface for BlockchainDispatcher {
     ) -> Result<BlockchainState<Validator>, Error> {
         let blockchain = self.blockchain.read();
 
-        let accounts_tree = &blockchain.state().accounts.tree;
-        let db_txn = blockchain.read_transaction();
-        let validator = StakingContract::get_validator(accounts_tree, &db_txn, &address);
-
-        if validator.is_none() {
-            return Err(Error::ValidatorNotFound(address));
-        }
-
-        let mut stakers = None;
-
-        if include_stakers == Some(true) {
-            let staker_addresses =
-                StakingContract::get_validator_stakers(accounts_tree, &db_txn, &address);
-
-            let mut stakers_map = HashMap::new();
-
-            for address in staker_addresses {
-                let staker = StakingContract::get_staker(accounts_tree, &db_txn, &address).unwrap();
-                if !staker.balance.is_zero() {
-                    stakers_map.insert(address, staker.balance);
-                }
-            }
-
-            stakers = Some(stakers_map);
-        }
-
-        let block_number = blockchain.block_number();
-        let block_hash = blockchain.head_hash();
-        Ok(BlockchainState::from_value(
-            block_number,
-            block_hash,
-            Validator::from_validator(&validator.unwrap(), stakers),
-        ))
+        get_validator_by_address(blockchain.deref(), &address, include_stakers)
     }
 
     /// Tries to fetch a staker information given its address.
@@ -538,7 +552,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         }
     }
 
-    /// Subscribes to blockchain events (retrieves the full block).
+    /// Subscribes to new block events (retrieves the full block).
     #[stream]
     async fn head_subscribe(
         &mut self,
@@ -550,12 +564,13 @@ impl BlockchainInterface for BlockchainDispatcher {
         Ok(stream
             .map(move |hash| {
                 let blockchain_rg = blockchain.read();
-                get_block_by_hash(blockchain_rg.deref(), &hash, include_transactions).map_err(|_| hash)
+                get_block_by_hash(blockchain_rg.deref(), &hash, include_transactions)
+                    .map_err(|_| hash)
             })
             .boxed())
     }
 
-    /// Subscribes to blockchain events (only retrieves the blockhash).
+    /// Subscribes to new block events (only retrieves the blockhash).
     #[stream]
     async fn head_hash_subscribe(&mut self) -> Result<BoxStream<'static, Blake2bHash>, Error> {
         let stream = self.blockchain.write().notifier.as_stream();
@@ -567,6 +582,29 @@ impl BlockchainInterface for BlockchainDispatcher {
                 BlockchainEvent::Rebranched(_, new_branch) => {
                     new_branch.into_iter().last().unwrap().0
                 }
+            })
+            .boxed())
+    }
+
+    /// Subscribes to pre epoch validators events.
+    #[stream]
+    async fn election_validator_subscribe(
+        &mut self,
+        address: Address,
+    ) -> Result<BoxStream<'static, Result<BlockchainState<Validator>, Blake2bHash>>, Error> {
+        let blockchain = Arc::clone(&self.blockchain);
+        let stream = self.blockchain.write().notifier.as_stream();
+
+        Ok(stream
+            .filter_map(move |event| {
+                let blockchain_rg = blockchain.read();
+                let result = match event {
+                    BlockchainEvent::EpochFinalized(hash) => {
+                        Some(get_validator_by_address(&blockchain_rg, &address, Some(false)).map_err(|_| hash))
+                    }
+                    _ => None
+                };
+                future::ready(result)
             })
             .boxed())
     }

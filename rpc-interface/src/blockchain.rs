@@ -105,4 +105,6 @@ pub trait BlockchainInterface {
     async fn head_subscribe(&mut self, include_transactions: Option<bool>) -> Result<BoxStream<'static, Result<Block, Blake2bHash>>, Self::Error>;
     #[stream]
     async fn head_hash_subscribe(&mut self) -> Result<BoxStream<'static, Blake2bHash>, Self::Error>;
+    #[stream]
+    async fn election_validator_subscribe(&mut self, address: Address) -> Result<BoxStream<'static, Result<BlockchainState<Validator>, Blake2bHash>>, Self::Error>;
 }

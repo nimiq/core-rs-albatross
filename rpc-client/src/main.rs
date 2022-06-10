@@ -46,7 +46,7 @@ enum Command {
     Stakes {},
 
     /// Follow the head of the blockchain.
-    Follow {
+    FollowHead {
         /// Show the full block instead of only the hash.
         #[clap(short)]
         block: bool,
@@ -194,7 +194,7 @@ impl Command {
                 println!("{:#?}", stakes);
             }
 
-            Command::Follow { block: show_block } => {
+            Command::FollowHead { block: show_block } => {
                 if show_block {
                     let mut stream = client.blockchain.head_subscribe(Some(false)).await?;
 

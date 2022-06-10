@@ -38,3 +38,6 @@ nimiq-keys = { path = "../keys", features = ["serde-derive"] }
 nimiq-primitives = { path = "../primitives", features = ["coin", "account", "serde-derive"] }
 nimiq-transaction = { path = "../primitives/transaction", features = ["serde-derive"] }
 nimiq-vrf = { path = "../vrf", features = ["serde-derive"] }
+
+[dev-dependencies]
+serde_json = "1.0"
