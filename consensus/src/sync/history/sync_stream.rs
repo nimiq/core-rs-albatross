@@ -1,12 +1,8 @@
 use std::pin::Pin;
-use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use futures::{FutureExt, Stream, StreamExt};
-use tokio::task::spawn_blocking;
 
-use nimiq_block::Block;
-use nimiq_blockchain::Blockchain;
 use nimiq_macros::store_waker;
 use nimiq_network_interface::network::{Network, NetworkEvent};
 
@@ -92,32 +88,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                 };
 
                 match result {
-                    Some(Ok(batch_set)) => {
-                        let hash = batch_set.block.hash();
-                        let blockchain = Arc::clone(&self.blockchain);
-                        let future = async move {
-                            debug!(
-                                "Processing epoch #{} ({} history items)",
-                                batch_set.block.epoch_number(),
-                                batch_set.history.len()
-                            );
-                            let result = spawn_blocking(move || {
-                                Blockchain::push_history_sync(
-                                    blockchain.upgradable_read(),
-                                    Block::Macro(batch_set.block),
-                                    &batch_set.history,
-                                )
-                            })
-                            .await
-                            .expect("blockchain.push_history_sync() should not panic");
-
-                            if let Err(e) = &result {
-                                log::warn!("Failed to push epoch: {:?}", e);
-                            }
-                            result.into()
-                        }
-                        .boxed();
-
+                    Some(Ok((hash, future))) => {
                         self.job_queue
                             .push_back(Job::PushBatchSet(cluster.id, hash, future));
                     }

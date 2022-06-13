@@ -60,6 +60,10 @@ pub enum PushResult {
 
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum PushError {
+    #[error("Already known")]
+    AlreadyKnown,
+    #[error("Invalid history chunk")]
+    InvalidHistoryChunk,
     #[error("Orphan block")]
     Orphan,
     #[error("Invalid zk proof")]
