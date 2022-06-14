@@ -1,6 +1,7 @@
 use std::error::Error;
 use std::ops::Deref;
 
+use nimiq_account::BlockLog;
 use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
 
 use nimiq_block::{Block, ForkProof};
@@ -256,16 +257,20 @@ impl Blockchain {
         let is_macro_block = policy::is_macro_block_at(block_number);
         let is_election_block = policy::is_election_block_at(block_number);
 
-        if let Err(e) = this.check_and_commit(
+        let block_info = this.check_and_commit(
             &this.state,
             &chain_info.head,
             prev_info.head.seed().entropy(),
             prev_info.head.next_view_number(),
             &mut txn,
-        ) {
-            txn.abort();
-            return Err(e);
-        }
+        );
+        let block_log = match block_info {
+            Ok(block_info) => block_info,
+            Err(e) => {
+                txn.abort();
+                return Err(e);
+            }
+        };
 
         chain_info.on_main_chain = true;
         prev_info.main_chain_successor = Some(chain_info.head.hash());
@@ -329,6 +334,8 @@ impl Blockchain {
             this.notifier.notify(BlockchainEvent::Extended(block_hash));
         }
 
+        this.log_notifier.notify(block_log);
+
         Ok(PushResult::Extended)
     }
 
@@ -388,6 +395,7 @@ impl Blockchain {
         let mut write_txn = this.write_transaction();
 
         current = (this.state.head_hash.clone(), this.state.main_chain.clone());
+        let mut block_logs = Vec::new();
 
         while current.0 != ancestor.0 {
             match current.1.head {
@@ -404,13 +412,13 @@ impl Blockchain {
                         .get_chain_info(&prev_hash, true, Some(&write_txn))
                         .expect("Corrupted store: Failed to find main chain predecessor while rebranching");
 
-                    this.revert_accounts(
+                    block_logs.push(this.revert_accounts(
                         &this.state.accounts,
                         &mut write_txn,
                         micro_block,
                         prev_info.head.seed().entropy(),
                         prev_info.head.next_view_number(),
-                    )?;
+                    )?);
 
                     assert_eq!(
                         prev_info.head.state_root(),
@@ -432,36 +440,40 @@ impl Blockchain {
         let mut fork_iter = fork_chain.iter().rev();
 
         while let Some(fork_block) = fork_iter.next() {
-            if let Err(e) = this.check_and_commit(
+            let block_log = this.check_and_commit(
                 &this.state,
                 &fork_block.1.head,
                 prev_entropy,
                 prev_view_number,
                 &mut write_txn,
-            ) {
-                warn!(
-                    block = %target_block,
-                    reason = "failed to apply for block while rebranching",
-                    fork_block = %fork_block.1.head,
-                    error = &e as &dyn Error,
-                    "Rejecting block",
-                );
-                write_txn.abort();
+            );
+            let block_log = match block_log {
+                Ok(block_info) => block_info,
+                Err(e) => {
+                    warn!(
+                        block = %target_block,
+                        reason = "failed to apply for block while rebranching",
+                        fork_block = %fork_block.1.head,
+                        error = &e as &dyn Error,
+                        "Rejecting block",
+                    );
+                    write_txn.abort();
 
-                // Delete invalid fork blocks from store.
-                let mut write_txn = this.write_transaction();
-                for block in vec![fork_block].into_iter().chain(fork_iter) {
-                    this.chain_store.remove_chain_info(
-                        &mut write_txn,
-                        &block.0,
-                        fork_block.1.head.block_number(),
-                    )
+                    // Delete invalid fork blocks from store.
+                    let mut write_txn = this.write_transaction();
+                    for block in vec![fork_block].into_iter().chain(fork_iter) {
+                        this.chain_store.remove_chain_info(
+                            &mut write_txn,
+                            &block.0,
+                            fork_block.1.head.block_number(),
+                        )
+                    }
+                    write_txn.commit();
+
+                    return Err(PushError::InvalidFork);
                 }
-                write_txn.commit();
-
-                return Err(PushError::InvalidFork);
-            }
-
+            };
+            block_logs.push(block_log);
             prev_entropy = fork_block.1.head.seed().entropy();
             prev_view_number = fork_block.1.head.next_view_number();
         }
@@ -566,6 +578,8 @@ impl Blockchain {
         let event = BlockchainEvent::Rebranched(reverted_blocks, adopted_blocks);
         this.notifier.notify(event);
 
+        this.log_notifier.notify_vec(block_logs);
+
         Ok(PushResult::Rebranched)
     }
 
@@ -576,7 +590,7 @@ impl Blockchain {
         prev_entropy: VrfEntropy,
         first_view_number: u32,
         txn: &mut WriteTransaction,
-    ) -> Result<(), PushError> {
+    ) -> Result<BlockLog, PushError> {
         // Check transactions against replay attacks. This is only necessary for micro blocks.
         if block.is_micro() {
             let transactions = block.transactions();
@@ -598,7 +612,8 @@ impl Blockchain {
         }
 
         // Commit block to AccountsTree.
-        if let Err(e) = self.commit_accounts(state, block, prev_entropy, first_view_number, txn) {
+        let block_log = self.commit_accounts(state, block, prev_entropy, first_view_number, txn);
+        if let Err(e) = block_log {
             warn!(%block, reason = "commit failed", error = &e as &dyn Error, "Rejecting block");
             #[cfg(feature = "metrics")]
             self.metrics.note_invalid_block();
@@ -611,6 +626,6 @@ impl Blockchain {
             return Err(e);
         }
 
-        Ok(())
+        block_log
     }
 }

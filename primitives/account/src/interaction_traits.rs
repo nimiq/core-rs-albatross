@@ -1,7 +1,7 @@
 use nimiq_database::WriteTransaction;
 use nimiq_transaction::Transaction;
 
-use crate::{AccountError, AccountsTrie, Inherent};
+use crate::{AccountError, AccountsTrie, Inherent, logs::AccountInfo, Log};
 
 pub trait AccountTransactionInteraction: Sized {
     fn create(
@@ -10,7 +10,7 @@ pub trait AccountTransactionInteraction: Sized {
         transaction: &Transaction,
         block_height: u32,
         block_time: u64,
-    ) -> Result<(), AccountError>;
+    ) -> Result<AccountInfo, AccountError>;
 
     fn commit_incoming_transaction(
         accounts_tree: &AccountsTrie,
@@ -18,7 +18,7 @@ pub trait AccountTransactionInteraction: Sized {
         transaction: &Transaction,
         block_height: u32,
         block_time: u64,
-    ) -> Result<Option<Vec<u8>>, AccountError>;
+    ) -> Result<AccountInfo, AccountError>;
 
     fn revert_incoming_transaction(
         accounts_tree: &AccountsTrie,
@@ -27,7 +27,7 @@ pub trait AccountTransactionInteraction: Sized {
         block_height: u32,
         block_time: u64,
         receipt: Option<&Vec<u8>>,
-    ) -> Result<(), AccountError>;
+    ) -> Result<Vec<Log>, AccountError>;
 
     fn commit_outgoing_transaction(
         accounts_tree: &AccountsTrie,
@@ -35,7 +35,7 @@ pub trait AccountTransactionInteraction: Sized {
         transaction: &Transaction,
         block_height: u32,
         block_time: u64,
-    ) -> Result<Option<Vec<u8>>, AccountError>;
+    ) -> Result<AccountInfo, AccountError>;
 
     fn revert_outgoing_transaction(
         accounts_tree: &AccountsTrie,
@@ -44,7 +44,7 @@ pub trait AccountTransactionInteraction: Sized {
         block_height: u32,
         block_time: u64,
         receipt: Option<&Vec<u8>>,
-    ) -> Result<(), AccountError>;
+    ) -> Result<Vec<Log>, AccountError>;
 }
 
 pub trait AccountInherentInteraction: Sized {
@@ -54,7 +54,7 @@ pub trait AccountInherentInteraction: Sized {
         inherent: &Inherent,
         block_height: u32,
         block_time: u64,
-    ) -> Result<Option<Vec<u8>>, AccountError>;
+    ) -> Result<AccountInfo, AccountError>;
 
     fn revert_inherent(
         accounts_tree: &AccountsTrie,
@@ -63,5 +63,5 @@ pub trait AccountInherentInteraction: Sized {
         block_height: u32,
         block_time: u64,
         receipt: Option<&Vec<u8>>,
-    ) -> Result<(), AccountError>;
+    ) -> Result<Vec<Log>, AccountError>;
 }

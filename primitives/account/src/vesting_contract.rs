@@ -9,6 +9,7 @@ use nimiq_trie::key_nibbles::KeyNibbles;
 
 use crate::inherent::Inherent;
 use crate::interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction};
+use crate::logs::{AccountInfo, Log};
 use crate::{Account, AccountError, AccountsTrie};
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
@@ -73,7 +74,7 @@ impl AccountTransactionInteraction for VestingContract {
         transaction: &Transaction,
         _block_height: u32,
         _block_time: u64,
-    ) -> Result<(), AccountError> {
+    ) -> Result<AccountInfo, AccountError> {
         let data = CreationTransactionData::parse(transaction)?;
 
         let contract_key = KeyNibbles::from(&transaction.contract_creation_address());
@@ -92,9 +93,17 @@ impl AccountTransactionInteraction for VestingContract {
             data.total_amount,
         );
 
-        accounts_tree.put(db_txn, &contract_key, Account::Vesting(contract));
+        accounts_tree.put(db_txn, &contract_key, Account::Vesting(contract.clone()));
 
-        Ok(())
+        let logs = vec![Log::VestingCreate {
+            contract_address: transaction.recipient.clone(),
+            owner: contract.owner,
+            start_time: contract.start_time,
+            time_step: contract.time_step,
+            step_amount: contract.step_amount,
+            total_amount: contract.total_amount,
+        }];
+        Ok(AccountInfo::new(None, logs))
     }
 
     fn commit_incoming_transaction(
@@ -103,7 +112,7 @@ impl AccountTransactionInteraction for VestingContract {
         _transaction: &Transaction,
         _block_height: u32,
         _block_time: u64,
-    ) -> Result<Option<Vec<u8>>, AccountError> {
+    ) -> Result<AccountInfo, AccountError> {
         Err(AccountError::InvalidForRecipient)
     }
 
@@ -114,7 +123,7 @@ impl AccountTransactionInteraction for VestingContract {
         _block_height: u32,
         _block_time: u64,
         _receipt: Option<&Vec<u8>>,
-    ) -> Result<(), AccountError> {
+    ) -> Result<Vec<Log>, AccountError> {
         Err(AccountError::InvalidForRecipient)
     }
 
@@ -124,7 +133,7 @@ impl AccountTransactionInteraction for VestingContract {
         transaction: &Transaction,
         _block_height: u32,
         block_time: u64,
-    ) -> Result<Option<Vec<u8>>, AccountError> {
+    ) -> Result<AccountInfo, AccountError> {
         let key = KeyNibbles::from(&transaction.sender);
 
         let account = accounts_tree
@@ -177,8 +186,18 @@ impl AccountTransactionInteraction for VestingContract {
 
             None
         };
-
-        Ok(receipt)
+        let logs = vec![
+            Log::PayFee {
+                from: transaction.sender.clone(),
+                fee: transaction.fee,
+            },
+            Log::Transfer {
+                from: transaction.sender.clone(),
+                to: transaction.recipient.clone(),
+                amount: transaction.value,
+            },
+        ];
+        Ok(AccountInfo::new(receipt, logs))
     }
 
     fn revert_outgoing_transaction(
@@ -188,7 +207,7 @@ impl AccountTransactionInteraction for VestingContract {
         _block_height: u32,
         _block_time: u64,
         receipt: Option<&Vec<u8>>,
-    ) -> Result<(), AccountError> {
+    ) -> Result<Vec<Log>, AccountError> {
         let key = KeyNibbles::from(&transaction.sender);
 
         let vesting = match receipt {
@@ -224,7 +243,17 @@ impl AccountTransactionInteraction for VestingContract {
             Account::Vesting(vesting.change_balance(new_balance)),
         );
 
-        Ok(())
+        Ok(vec![
+            Log::PayFee {
+                from: transaction.sender.clone(),
+                fee: transaction.fee,
+            },
+            Log::Transfer {
+                from: transaction.sender.clone(),
+                to: transaction.recipient.clone(),
+                amount: transaction.value,
+            },
+        ])
     }
 }
 
@@ -235,7 +264,7 @@ impl AccountInherentInteraction for VestingContract {
         _inherent: &Inherent,
         _block_height: u32,
         _block_time: u64,
-    ) -> Result<Option<Vec<u8>>, AccountError> {
+    ) -> Result<AccountInfo, AccountError> {
         Err(AccountError::InvalidInherent)
     }
 
@@ -246,7 +275,7 @@ impl AccountInherentInteraction for VestingContract {
         _block_height: u32,
         _block_time: u64,
         _receipt: Option<&Vec<u8>>,
-    ) -> Result<(), AccountError> {
+    ) -> Result<Vec<Log>, AccountError> {
         Err(AccountError::InvalidInherent)
     }
 }

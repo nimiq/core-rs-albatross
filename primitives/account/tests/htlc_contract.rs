@@ -493,7 +493,7 @@ fn it_can_apply_and_revert_valid_transaction() {
         Account::HTLC(start_contract.clone()),
     );
 
-    let receipt = HashedTimeLockedContract::commit_outgoing_transaction(
+    let account_info = HashedTimeLockedContract::commit_outgoing_transaction(
         &accounts_tree,
         &mut db_txn,
         &tx,
@@ -513,7 +513,7 @@ fn it_can_apply_and_revert_valid_transaction() {
         &tx,
         1,
         1,
-        receipt.as_ref(),
+        account_info.receipt.as_ref(),
     )
     .unwrap();
 
@@ -539,7 +539,7 @@ fn it_can_apply_and_revert_valid_transaction() {
         Account::HTLC(start_contract.clone()),
     );
 
-    let receipt = HashedTimeLockedContract::commit_outgoing_transaction(
+    let account_info = HashedTimeLockedContract::commit_outgoing_transaction(
         &accounts_tree,
         &mut db_txn,
         &tx,
@@ -559,7 +559,7 @@ fn it_can_apply_and_revert_valid_transaction() {
         &tx,
         1,
         1,
-        receipt.as_ref(),
+        account_info.receipt.as_ref(),
     )
     .unwrap();
 
@@ -582,7 +582,7 @@ fn it_can_apply_and_revert_valid_transaction() {
         Account::HTLC(start_contract.clone()),
     );
 
-    let receipt = HashedTimeLockedContract::commit_outgoing_transaction(
+    let account_info = HashedTimeLockedContract::commit_outgoing_transaction(
         &accounts_tree,
         &mut db_txn,
         &tx,
@@ -602,7 +602,7 @@ fn it_can_apply_and_revert_valid_transaction() {
         &tx,
         1,
         1,
-        receipt.as_ref(),
+        account_info.receipt.as_ref(),
     )
     .unwrap();
 

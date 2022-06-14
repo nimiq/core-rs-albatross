@@ -9,6 +9,9 @@ use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
 /// those inherents/transactions.
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub struct DefaultReceipt;
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct SlashReceipt {
     pub newly_parked: bool,
     pub newly_disabled: bool,

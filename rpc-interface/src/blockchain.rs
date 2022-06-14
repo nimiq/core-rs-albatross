@@ -3,12 +3,13 @@ use std::collections::HashMap;
 use async_trait::async_trait;
 use futures::stream::BoxStream;
 
+use nimiq_account::BlockLog;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
 
 use crate::types::{
-    Account, Block, Inherent, ParkedSet, SlashedSlots, Slot, Staker, Transaction, Validator, BlockchainState,
+    Account, Block, Inherent, ParkedSet, SlashedSlots, Slot, Staker, Transaction, Validator, BlockchainState, LogType,
 };
 
 #[nimiq_jsonrpc_derive::proxy(name = "BlockchainProxy", rename_all = "camelCase")]
@@ -107,4 +108,10 @@ pub trait BlockchainInterface {
     async fn head_hash_subscribe(&mut self) -> Result<BoxStream<'static, Blake2bHash>, Self::Error>;
     #[stream]
     async fn election_validator_subscribe(&mut self, address: Address) -> Result<BoxStream<'static, Result<BlockchainState<Validator>, Blake2bHash>>, Self::Error>;
+    #[stream]
+    async fn logs_subscribe(&mut self) -> Result<BoxStream<'static, BlockLog>, Self::Error>;
+    #[stream]
+    async fn logs_by_addresses_subscribe(&mut self, addresses: Vec<Address>) -> Result<BoxStream<'static, BlockLog>, Self::Error>;
+    #[stream]
+    async fn logs_by_type_subscribe(&mut self, logs_types: Vec<LogType>) -> Result<BoxStream<'static, BlockLog>, Self::Error>;
 }

@@ -3,6 +3,7 @@ use nimiq_database::WriteTransaction;
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
 
+use crate::logs::{Log, OperationInfo};
 use crate::staking_contract::receipts::StakerReceipt;
 use crate::{Account, AccountError, AccountsTrie, StakingContract};
 
@@ -35,7 +36,7 @@ impl StakingContract {
         staker_address: &Address,
         value: Coin,
         delegation: Option<Address>,
-    ) -> Result<(), AccountError> {
+    ) -> Result<Vec<Log>, AccountError> {
         // See if the staker already exists.
         if StakingContract::get_staker(accounts_tree, db_txn, staker_address).is_some() {
             return Err(AccountError::AlreadyExistentAddress {
@@ -54,6 +55,13 @@ impl StakingContract {
             balance: value,
             delegation: delegation.clone(),
         };
+
+        // Build the return logs
+        let logs = vec![Log::CreateStaker {
+            staker_address: staker_address.clone(),
+            validator_address: delegation.clone(),
+            value,
+        }];
 
         // If we are staking for a validator, we need to update it.
         if let Some(validator_address) = delegation {
@@ -109,7 +117,7 @@ impl StakingContract {
             Account::StakingStaker(staker),
         );
 
-        Ok(())
+        Ok(logs)
     }
 
     /// Reverts a create staker transaction.
@@ -118,7 +126,7 @@ impl StakingContract {
         db_txn: &mut WriteTransaction,
         staker_address: &Address,
         value: Coin,
-    ) -> Result<(), AccountError> {
+    ) -> Result<Vec<Log>, AccountError> {
         // Get the staker and check if it exists.
         let staker = match StakingContract::get_staker(accounts_tree, db_txn, staker_address) {
             None => {
@@ -143,7 +151,7 @@ impl StakingContract {
         staking_contract.balance = Account::balance_sub(staking_contract.balance, staker.balance)?;
 
         // If we are staking for a validator, we need to update it.
-        if let Some(validator_address) = staker.delegation {
+        if let Some(validator_address) = staker.delegation.clone() {
             // Get the validator.
             let mut validator =
                 match StakingContract::get_validator(accounts_tree, db_txn, &validator_address) {
@@ -192,7 +200,11 @@ impl StakingContract {
         // Remove the staker entry.
         accounts_tree.remove(db_txn, &StakingContract::get_key_staker(staker_address));
 
-        Ok(())
+        Ok(vec![Log::CreateStaker {
+            staker_address: staker_address.clone(),
+            validator_address: staker.delegation,
+            value,
+        }])
     }
 
     /// Adds stake to a staker. It will be directly added to the staker's balance. Anyone can
@@ -203,7 +215,7 @@ impl StakingContract {
         db_txn: &mut WriteTransaction,
         staker_address: &Address,
         value: Coin,
-    ) -> Result<(), AccountError> {
+    ) -> Result<Vec<Log>, AccountError> {
         // Get the staker and check if it exists.
         let mut staker = match StakingContract::get_staker(accounts_tree, db_txn, staker_address) {
             None => {
@@ -225,6 +237,13 @@ impl StakingContract {
         let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
 
         staking_contract.balance = Account::balance_add(staking_contract.balance, value)?;
+
+        // Build the return logs
+        let logs = vec![Log::Stake {
+            staker_address: staker_address.clone(),
+            validator_address: staker.delegation.clone(),
+            value,
+        }];
 
         // If we are staking for a validator, we need to update it too.
         if let Some(validator_address) = &staker.delegation {
@@ -271,7 +290,7 @@ impl StakingContract {
             Account::StakingStaker(staker),
         );
 
-        Ok(())
+        Ok(logs)
     }
 
     /// Reverts a stake transaction.
@@ -280,7 +299,7 @@ impl StakingContract {
         db_txn: &mut WriteTransaction,
         staker_address: &Address,
         value: Coin,
-    ) -> Result<(), AccountError> {
+    ) -> Result<Vec<Log>, AccountError> {
         // Get the staker, check if it exists and update it.
         let mut staker = match StakingContract::get_staker(accounts_tree, db_txn, staker_address) {
             None => {
@@ -344,11 +363,15 @@ impl StakingContract {
             accounts_tree.put(
                 db_txn,
                 &StakingContract::get_key_staker(staker_address),
-                Account::StakingStaker(staker),
+                Account::StakingStaker(staker.clone()),
             );
         }
 
-        Ok(())
+        Ok(vec![Log::Stake {
+            staker_address: staker_address.clone(),
+            validator_address: staker.delegation,
+            value,
+        }])
     }
 
     /// Updates the staker details. Right now you can only update the delegation.
@@ -357,16 +380,19 @@ impl StakingContract {
         db_txn: &mut WriteTransaction,
         staker_address: &Address,
         delegation: Option<Address>,
-    ) -> Result<StakerReceipt, AccountError> {
+    ) -> Result<OperationInfo<StakerReceipt>, AccountError> {
         // Get the staker and check if it exists.
         let mut staker = match StakingContract::get_staker(accounts_tree, db_txn, staker_address) {
             None => {
                 error!("Tried to update a staker that doesn't exist!");
 
-                return Ok(StakerReceipt {
-                    no_op: true,
-                    delegation: None,
-                });
+                return Ok(OperationInfo::with_receipt(
+                    StakerReceipt {
+                        no_op: true,
+                        delegation: None,
+                    },
+                    vec![],
+                ));
             }
             Some(x) => x,
         };
@@ -381,20 +407,29 @@ impl StakingContract {
             {
                 error!("Tried to delegate to a validator that doesn't exist!");
 
-                return Ok(StakerReceipt {
-                    no_op: true,
-                    delegation: None,
-                });
+                return Ok(OperationInfo::with_receipt(
+                    StakerReceipt {
+                        no_op: true,
+                        delegation: None,
+                    },
+                    vec![],
+                ));
             }
         }
 
         // All checks passed, not allowed to fail from here on!
 
-        // Create the receipt.
+        // Create the receipt and logs.
         let receipt = StakerReceipt {
             no_op: false,
             delegation: staker.delegation.clone(),
         };
+
+        let logs = vec![Log::UpdateStaker {
+            staker_address: staker_address.clone(),
+            old_validator_address: staker.delegation.clone(),
+            new_validator_address: delegation.clone(),
+        }];
 
         // If we were staking for a validator, we remove ourselves from it.
         if let Some(old_validator_address) = &staker.delegation {
@@ -476,8 +511,7 @@ impl StakingContract {
             &StakingContract::get_key_staking_contract(),
             Account::Staking(staking_contract),
         );
-
-        Ok(receipt)
+        Ok(OperationInfo::with_receipt(receipt, logs))
     }
 
     /// Reverts updating staker details.
@@ -486,12 +520,7 @@ impl StakingContract {
         db_txn: &mut WriteTransaction,
         staker_address: &Address,
         receipt: StakerReceipt,
-    ) -> Result<(), AccountError> {
-        // If it was a no-op, we end right here.
-        if receipt.no_op {
-            return Ok(());
-        }
-
+    ) -> Result<Vec<Log>, AccountError> {
         // Get the staking contract main.
         let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
 
@@ -503,6 +532,17 @@ impl StakingContract {
                 });
             }
             Some(x) => x,
+        };
+
+        // If it was a no-op, we end right here.
+        if receipt.no_op {
+            return Ok(vec![]);
+        }
+
+        let log = Log::UpdateStaker {
+            staker_address: staker_address.clone(),
+            old_validator_address: receipt.delegation.clone(),
+            new_validator_address: staker.delegation.clone(),
         };
 
         // Remove ourselves from the current delegation, if it exists.
@@ -600,7 +640,7 @@ impl StakingContract {
             Account::Staking(staking_contract),
         );
 
-        Ok(())
+        Ok(vec![log])
     }
 
     /// Removes coins from a staker's balance. If the entire staker's balance is unstaked then the
@@ -610,7 +650,7 @@ impl StakingContract {
         db_txn: &mut WriteTransaction,
         staker_address: &Address,
         value: Coin,
-    ) -> Result<Option<StakerReceipt>, AccountError> {
+    ) -> Result<OperationInfo<StakerReceipt>, AccountError> {
         // Get the staking contract.
         let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
 
@@ -683,18 +723,32 @@ impl StakingContract {
         if staker.balance.is_zero() {
             accounts_tree.remove(db_txn, &StakingContract::get_key_staker(&staker.address));
 
-            Ok(Some(StakerReceipt {
-                no_op: false,
-                delegation: staker.delegation,
-            }))
+            Ok(OperationInfo::new(
+                Some(StakerReceipt {
+                    no_op: false,
+                    delegation: staker.delegation.clone(),
+                }),
+                vec![Log::Unstake {
+                    staker_address: staker_address.clone(),
+                    validator_address: staker.delegation,
+                    value,
+                }],
+            ))
         } else {
             accounts_tree.put(
                 db_txn,
                 &StakingContract::get_key_staker(staker_address),
-                Account::StakingStaker(staker),
+                Account::StakingStaker(staker.clone()),
             );
 
-            Ok(None)
+            Ok(OperationInfo::new(
+                None,
+                vec![Log::Unstake {
+                    staker_address: staker_address.clone(),
+                    validator_address: staker.delegation,
+                    value,
+                }],
+            ))
         }
     }
 
@@ -705,7 +759,7 @@ impl StakingContract {
         staker_address: &Address,
         value: Coin,
         receipt_opt: Option<StakerReceipt>,
-    ) -> Result<(), AccountError> {
+    ) -> Result<Vec<Log>, AccountError> {
         let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
 
         let staker = match receipt_opt {
@@ -770,7 +824,7 @@ impl StakingContract {
         accounts_tree.put(
             db_txn,
             &StakingContract::get_key_staker(staker_address),
-            Account::StakingStaker(staker),
+            Account::StakingStaker(staker.clone()),
         );
 
         staking_contract.balance = Account::balance_add(staking_contract.balance, value)?;
@@ -781,6 +835,10 @@ impl StakingContract {
             Account::Staking(staking_contract),
         );
 
-        Ok(())
+        Ok(vec![Log::Unstake {
+            staker_address: staker_address.clone(),
+            validator_address: staker.delegation,
+            value,
+        }])
     }
 }

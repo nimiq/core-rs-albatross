@@ -2,7 +2,7 @@ use std::convert::TryInto;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_account::{
-    Account, AccountError, AccountTransactionInteraction, AccountsTrie, BasicAccount,
+    Account, AccountError, AccountTransactionInteraction, AccountsTrie, BasicAccount, Log,
 };
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_database::WriteTransaction;
@@ -57,15 +57,29 @@ fn basic_transfer_works() {
     // Works in the normal case.
     let tx = make_signed_transaction(100, address_recipient.clone());
 
-    assert_eq!(
-        BasicAccount::commit_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 1, 2),
-        Ok(None)
-    );
+    let account_info =
+        BasicAccount::commit_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 1, 2).unwrap();
+    assert_eq!(account_info.receipt, None);
 
     assert_eq!(
-        BasicAccount::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 1, 2),
-        Ok(None)
+        account_info.logs,
+        vec![
+            Log::PayFee {
+                from: tx.sender.clone(),
+                fee: tx.fee,
+            },
+            Log::Transfer {
+                from: tx.sender.clone(),
+                to: tx.recipient.clone(),
+                amount: tx.value,
+            },
+        ],
     );
+
+    let account_info =
+        BasicAccount::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 1, 2).unwrap();
+    assert_eq!(account_info.receipt, None);
+    assert_eq!(account_info.logs.is_empty(), true);
 
     assert_eq!(
         accounts_tree.get(&db_txn, &key_sender).unwrap().balance(),
@@ -107,12 +121,22 @@ fn basic_transfer_works() {
 
     assert_eq!(
         BasicAccount::revert_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 1, 2, None),
-        Ok(())
+        Ok(vec![
+            Log::PayFee {
+                from: tx.sender.clone(),
+                fee: tx.fee,
+            },
+            Log::Transfer {
+                from: tx.sender.clone(),
+                to: tx.recipient.clone(),
+                amount: tx.value,
+            },
+        ])
     );
-
     assert_eq!(
-        BasicAccount::revert_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 1, 2, None),
-        Ok(())
+        BasicAccount::revert_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 1, 2, None)
+            .map(|logs| logs.is_empty()),
+        Ok(true)
     );
 
     assert_eq!(
@@ -145,15 +169,28 @@ fn create_and_prune_works() {
     // Can create a new account and prune an empty account.
     let tx = make_signed_transaction(999, address_recipient);
 
+    let account_info =
+        BasicAccount::commit_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 1, 2).unwrap();
+    assert_eq!(account_info.receipt, None);
     assert_eq!(
-        BasicAccount::commit_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 1, 2),
-        Ok(None)
+        account_info.logs,
+        vec![
+            Log::PayFee {
+                from: tx.sender.clone(),
+                fee: tx.fee,
+            },
+            Log::Transfer {
+                from: tx.sender.clone(),
+                to: tx.recipient.clone(),
+                amount: tx.value,
+            },
+        ]
     );
 
-    assert_eq!(
-        BasicAccount::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 1, 2),
-        Ok(None)
-    );
+    let account_info =
+        BasicAccount::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 1, 2).unwrap();
+    assert_eq!(account_info.receipt, None);
+    assert_eq!(account_info.logs.is_empty(), true);
 
     assert_eq!(accounts_tree.get(&db_txn, &key_sender), None);
 
@@ -166,15 +203,28 @@ fn create_and_prune_works() {
     );
 
     // Can revert transaction.
+    let logs =
+        BasicAccount::revert_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 1, 2, None)
+            .unwrap();
     assert_eq!(
-        BasicAccount::revert_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 1, 2, None),
-        Ok(())
+        logs,
+        vec![
+            Log::PayFee {
+                from: tx.sender.clone(),
+                fee: tx.fee,
+            },
+            Log::Transfer {
+                from: tx.sender.clone(),
+                to: tx.recipient.clone(),
+                amount: tx.value,
+            },
+        ]
     );
 
-    assert_eq!(
-        BasicAccount::revert_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 1, 2, None),
-        Ok(())
-    );
+    let logs =
+        BasicAccount::revert_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 1, 2, None)
+            .unwrap();
+    assert_eq!(logs.is_empty(), true);
 
     assert_eq!(
         accounts_tree.get(&db_txn, &key_sender).unwrap().balance(),

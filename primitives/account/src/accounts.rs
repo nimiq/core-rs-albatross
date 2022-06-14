@@ -1,14 +1,15 @@
 use nimiq_database::{
     Environment, ReadTransaction, Transaction as DBTransaction, WriteTransaction,
 };
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_transaction::{Transaction, TransactionFlags};
 use nimiq_trie::key_nibbles::KeyNibbles;
 use nimiq_trie::trie::MerkleRadixTrie;
 
 use crate::{
+    logs::{BatchInfo, TransactionLog},
     Account, AccountError, AccountInherentInteraction, AccountTransactionInteraction, Inherent,
-    Receipt, Receipts,
+    Log, Receipt, Receipts,
 };
 
 /// An alias for the accounts tree.
@@ -92,7 +93,7 @@ impl Accounts {
         inherents: &[Inherent],
         block_height: u32,
         timestamp: u64,
-    ) -> Result<Receipts, AccountError> {
+    ) -> Result<BatchInfo, AccountError> {
         let result = self.commit_batch(txn, transactions, inherents, block_height, timestamp);
         self.tree.update_root(txn);
         result
@@ -105,27 +106,22 @@ impl Accounts {
         inherents: &[Inherent],
         block_height: u32,
         timestamp: u64,
-    ) -> Result<Receipts, AccountError> {
-        let mut receipts = Vec::new();
-
+    ) -> Result<BatchInfo, AccountError> {
         let pre_inherents: Vec<Inherent> = inherents
             .iter()
             .filter(|i| i.is_pre_transactions())
             .cloned()
             .collect();
 
-        receipts.append(&mut self.commit_inherents(
-            txn,
-            &pre_inherents,
-            block_height,
-            timestamp,
-        )?);
+        let mut pre_inherents_info =
+            self.commit_inherents(txn, &pre_inherents, block_height, timestamp)?;
 
-        receipts.append(&mut self.commit_senders(txn, transactions, block_height, timestamp)?);
+        let mut senders_info = self.commit_senders(txn, transactions, block_height, timestamp)?;
 
-        receipts.append(&mut self.commit_recipients(txn, transactions, block_height, timestamp)?);
+        let mut recipients_info =
+            self.commit_recipients(txn, transactions, block_height, timestamp)?;
 
-        self.create_contracts(txn, transactions, block_height, timestamp)?;
+        let mut create_info = self.create_contracts(txn, transactions, block_height, timestamp)?;
 
         let post_inherents: Vec<Inherent> = inherents
             .iter()
@@ -133,14 +129,37 @@ impl Accounts {
             .cloned()
             .collect();
 
-        receipts.append(&mut self.commit_inherents(
-            txn,
-            &post_inherents,
-            block_height,
-            timestamp,
-        )?);
+        let mut post_inherents_info =
+            self.commit_inherents(txn, &post_inherents, block_height, timestamp)?;
 
-        Ok(Receipts::from(receipts))
+        Self::prepare_logs(
+            &mut senders_info.tx_logs,
+            &mut recipients_info.tx_logs,
+            &mut create_info.tx_logs,
+        );
+
+        pre_inherents_info
+            .receipts
+            .append(&mut senders_info.receipts);
+        pre_inherents_info
+            .receipts
+            .append(&mut recipients_info.receipts);
+        pre_inherents_info
+            .receipts
+            .append(&mut create_info.receipts);
+        pre_inherents_info
+            .receipts
+            .append(&mut post_inherents_info.receipts);
+
+        pre_inherents_info
+            .inherent_logs
+            .append(&mut post_inherents_info.inherent_logs);
+
+        Ok(BatchInfo::new(
+            pre_inherents_info.receipts,
+            senders_info.tx_logs,
+            pre_inherents_info.inherent_logs,
+        ))
     }
 
     pub fn revert(
@@ -151,8 +170,8 @@ impl Accounts {
         block_height: u32,
         timestamp: u64,
         receipts: &Receipts,
-    ) -> Result<(), AccountError> {
-        self.revert_batch(
+    ) -> Result<BatchInfo, AccountError> {
+        let logs = self.revert_batch(
             txn,
             transactions,
             inherents,
@@ -161,7 +180,7 @@ impl Accounts {
             receipts,
         )?;
         self.tree.update_root(txn);
-        Ok(())
+        Ok(logs)
     }
 
     pub fn revert_batch(
@@ -172,7 +191,7 @@ impl Accounts {
         block_height: u32,
         timestamp: u64,
         receipts: &Receipts,
-    ) -> Result<(), AccountError> {
+    ) -> Result<BatchInfo, AccountError> {
         let (
             sender_receipts,
             recipient_receipts,
@@ -180,7 +199,7 @@ impl Accounts {
             post_tx_inherent_receipts,
         ) = Self::prepare_receipts(receipts);
 
-        self.revert_inherents(
+        let mut logs_inherent = self.revert_inherents(
             txn,
             inherents,
             block_height,
@@ -188,9 +207,10 @@ impl Accounts {
             post_tx_inherent_receipts,
         )?;
 
-        self.revert_contracts(txn, transactions, block_height, timestamp)?;
+        let mut logs_contracts =
+            self.revert_contracts(txn, transactions, block_height, timestamp)?;
 
-        self.revert_recipients(
+        let mut logs_recipients = self.revert_recipients(
             txn,
             transactions,
             block_height,
@@ -198,17 +218,21 @@ impl Accounts {
             recipient_receipts,
         )?;
 
-        self.revert_senders(txn, transactions, block_height, timestamp, sender_receipts)?;
+        let mut logs_senders =
+            self.revert_senders(txn, transactions, block_height, timestamp, sender_receipts)?;
 
-        self.revert_inherents(
+        logs_inherent.append(&mut self.revert_inherents(
             txn,
             inherents,
             block_height,
             timestamp,
             pre_tx_inherent_receipts,
-        )?;
+        )?);
 
-        Ok(())
+        //TODO build batchinfo with results of previous reverts
+        Self::prepare_logs(&mut logs_senders, &mut logs_recipients, &mut logs_contracts);
+
+        Ok(BatchInfo::new(Vec::new(), logs_senders, logs_inherent))
     }
 
     pub fn finalize_batch(&self, txn: &mut WriteTransaction) {
@@ -221,8 +245,9 @@ impl Accounts {
         transactions: &[Transaction],
         block_height: u32,
         timestamp: u64,
-    ) -> Result<Vec<Receipt>, AccountError> {
+    ) -> Result<BatchInfo, AccountError> {
         let mut receipts = Vec::new();
+        let mut logs = Vec::new();
 
         for (index, transaction) in transactions.iter().enumerate() {
             let data = Account::commit_outgoing_transaction(
@@ -236,11 +261,13 @@ impl Accounts {
             receipts.push(Receipt::Transaction {
                 index: index as u16,
                 sender: true,
-                data,
+                data: data.receipt,
             });
+
+            logs.push(TransactionLog::new(transaction.hash(), data.logs));
         }
 
-        Ok(receipts)
+        Ok(BatchInfo::new(receipts, logs, Vec::new()))
     }
 
     fn revert_senders(
@@ -250,7 +277,8 @@ impl Accounts {
         block_height: u32,
         timestamp: u64,
         receipts: Vec<Receipt>,
-    ) -> Result<(), AccountError> {
+    ) -> Result<Vec<TransactionLog>, AccountError> {
+        let mut tx_logs = Vec::new();
         for receipt in receipts {
             match receipt {
                 Receipt::Transaction {
@@ -260,22 +288,26 @@ impl Accounts {
                 } => {
                     assert!(sender);
 
-                    Account::revert_outgoing_transaction(
+                    let logs = Account::revert_outgoing_transaction(
                         &self.tree,
                         txn,
                         &transactions[index as usize],
                         block_height,
                         timestamp,
                         data.as_ref(),
-                    )?
+                    )?;
+                    tx_logs.push(TransactionLog::new(
+                        transactions[index as usize].hash(),
+                        logs,
+                    ));
                 }
                 _ => {
                     unreachable!()
                 }
-            }
+            };
         }
 
-        Ok(())
+        Ok(tx_logs)
     }
 
     fn commit_recipients(
@@ -284,8 +316,9 @@ impl Accounts {
         transactions: &[Transaction],
         block_height: u32,
         timestamp: u64,
-    ) -> Result<Vec<Receipt>, AccountError> {
+    ) -> Result<BatchInfo, AccountError> {
         let mut receipts = Vec::new();
+        let mut logs = Vec::new();
 
         for (index, transaction) in transactions.iter().enumerate() {
             // If this is a contract creation transaction, skip it.
@@ -296,7 +329,7 @@ impl Accounts {
                 continue;
             }
 
-            let data = Account::commit_incoming_transaction(
+            let account_info = Account::commit_incoming_transaction(
                 &self.tree,
                 txn,
                 transaction,
@@ -307,11 +340,13 @@ impl Accounts {
             receipts.push(Receipt::Transaction {
                 index: index as u16,
                 sender: false,
-                data,
+                data: account_info.receipt,
             });
+
+            logs.push(TransactionLog::new(transaction.hash(), account_info.logs));
         }
 
-        Ok(receipts)
+        Ok(BatchInfo::new(receipts, logs, Vec::new()))
     }
 
     fn revert_recipients(
@@ -321,7 +356,8 @@ impl Accounts {
         block_height: u32,
         timestamp: u64,
         receipts: Vec<Receipt>,
-    ) -> Result<(), AccountError> {
+    ) -> Result<Vec<TransactionLog>, AccountError> {
+        let mut tx_logs = Vec::new();
         for receipt in receipts {
             match receipt {
                 Receipt::Transaction {
@@ -331,22 +367,26 @@ impl Accounts {
                 } => {
                     assert!(!sender);
 
-                    Account::revert_incoming_transaction(
+                    let logs = Account::revert_incoming_transaction(
                         &self.tree,
                         txn,
                         &transactions[index as usize],
                         block_height,
                         timestamp,
                         data.as_ref(),
-                    )?
+                    )?;
+                    tx_logs.push(TransactionLog::new(
+                        transactions[index as usize].hash(),
+                        logs,
+                    ));
                 }
                 _ => {
                     unreachable!()
                 }
-            }
+            };
         }
 
-        Ok(())
+        Ok(tx_logs)
     }
 
     fn create_contracts(
@@ -355,16 +395,20 @@ impl Accounts {
         transactions: &[Transaction],
         block_height: u32,
         timestamp: u64,
-    ) -> Result<(), AccountError> {
+    ) -> Result<BatchInfo, AccountError> {
+        let mut tx_logs = Vec::new();
+
         for transaction in transactions {
             if transaction
                 .flags
                 .contains(TransactionFlags::CONTRACT_CREATION)
             {
-                Account::create(&self.tree, txn, transaction, block_height, timestamp)?
+                let account_info =
+                    Account::create(&self.tree, txn, transaction, block_height, timestamp)?;
+                tx_logs.push(TransactionLog::new(transaction.hash(), account_info.logs));
             }
         }
-        Ok(())
+        Ok(BatchInfo::new(Vec::new(), tx_logs, Vec::new()))
     }
 
     fn revert_contracts(
@@ -373,7 +417,8 @@ impl Accounts {
         transactions: &[Transaction],
         _block_height: u32,
         _timestamp: u64,
-    ) -> Result<(), AccountError> {
+    ) -> Result<Vec<TransactionLog>, AccountError> {
+        let mut tx_logs = Vec::new();
         for transaction in transactions.iter().rev() {
             if transaction
                 .flags
@@ -381,10 +426,16 @@ impl Accounts {
             {
                 self.tree
                     .remove(txn, &KeyNibbles::from(&transaction.recipient));
+                tx_logs.push(TransactionLog::new(
+                    transaction.hash(),
+                    vec![Log::RevertContract {
+                        contract_address: transaction.recipient.clone(),
+                    }],
+                ));
             }
         }
 
-        Ok(())
+        Ok(tx_logs)
     }
 
     fn commit_inherents(
@@ -393,21 +444,24 @@ impl Accounts {
         inherents: &[Inherent],
         block_height: u32,
         timestamp: u64,
-    ) -> Result<Vec<Receipt>, AccountError> {
+    ) -> Result<BatchInfo, AccountError> {
         let mut receipts = Vec::new();
+        let mut logs = Vec::new();
 
         for (index, inherent) in inherents.iter().enumerate() {
-            let data =
+            let mut account_info =
                 Account::commit_inherent(&self.tree, txn, inherent, block_height, timestamp)?;
 
             receipts.push(Receipt::Inherent {
                 index: index as u16,
                 pre_transactions: inherent.is_pre_transactions(),
-                data,
+                data: account_info.receipt,
             });
+
+            logs.append(&mut account_info.logs);
         }
 
-        Ok(receipts)
+        Ok(BatchInfo::new(receipts, Vec::new(), logs))
     }
 
     fn revert_inherents(
@@ -417,9 +471,11 @@ impl Accounts {
         block_height: u32,
         timestamp: u64,
         receipts: Vec<Receipt>,
-    ) -> Result<(), AccountError> {
+    ) -> Result<Vec<Log>, AccountError> {
+        let mut inherent_logs = Vec::new();
+
         for receipt in receipts {
-            match receipt {
+            inherent_logs.append(&mut match receipt {
                 Receipt::Inherent { index, data, .. } => Account::revert_inherent(
                     &self.tree,
                     txn,
@@ -431,10 +487,10 @@ impl Accounts {
                 _ => {
                     unreachable!()
                 }
-            }
+            });
         }
 
-        Ok(())
+        Ok(inherent_logs)
     }
 
     fn prepare_receipts(
@@ -484,5 +540,36 @@ impl Accounts {
             pre_tx_inherent_receipts,
             post_tx_inherent_receipts,
         )
+    }
+
+    // Merge the log transactions from senders, receiptients and create_contracts.
+    // The final result is moved to the senders_logs, leaving the other vectors empty.
+    fn prepare_logs(
+        senders_logs: &mut Vec<TransactionLog>,
+        recipients_logs: &mut Vec<TransactionLog>,
+        create_logs: &mut Vec<TransactionLog>,
+    ) {
+        // The senders has all transaction log entries. We iterate over it and add the remaing logs to the sender_logs respective tx_log.
+        let mut tx_logs_recipients = recipients_logs.iter_mut().peekable();
+        let mut tx_logs_create = create_logs.iter_mut().peekable();
+
+        for tx_log_sender in senders_logs.iter_mut() {
+            if let Some(tx_log) = tx_logs_recipients.peek_mut() {
+                if tx_log.tx_hash == tx_log_sender.tx_hash {
+                    tx_log_sender.logs.append(&mut tx_log.logs);
+                    tx_logs_recipients.next();
+                    continue;
+                }
+            }
+
+            if let Some(tx_log) = tx_logs_create.peek_mut() {
+                if tx_log.tx_hash == tx_log_sender.tx_hash {
+                    tx_log_sender.logs.append(&mut tx_log.logs);
+                    tx_logs_create.next();
+                }
+            }
+        }
+
+        //assert tx_logs_recipients and tx_log_sender are over (?)
     }
 }

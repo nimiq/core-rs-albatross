@@ -120,6 +120,12 @@ impl<E> Notifier<E> {
     pub fn notify(&self, event: E) {
         self.state.read().notify(event);
     }
+
+    pub fn notify_vec(&self, events: Vec<E>) {
+        for event in events {
+            self.notify(event);
+        }
+    }
 }
 
 impl<E: Clone + Send + 'static> Notifier<E> {

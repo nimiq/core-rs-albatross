@@ -51,6 +51,8 @@ enum Command {
         #[clap(short)]
         block: bool,
     },
+    /// Follow a validator state upon election blocks.
+    FollowValidator { address: Address },
 
     /// Show wallet accounts and their balances.
     #[clap(flatten)]
@@ -209,6 +211,19 @@ impl Command {
 
                     while let Some(block_hash) = stream.next().await {
                         println!("{}", block_hash);
+                    }
+                }
+            }
+
+            Command::FollowValidator { address } => {
+                let mut stream = client
+                    .blockchain
+                    .election_validator_subscribe(address)
+                    .await?;
+                while let Some(validator) = stream.next().await {
+                    match validator {
+                        Ok(v) => println!("{:#?}", v),
+                        Err(hash) => println!("Missing block {}", hash),
                     }
                 }
             }

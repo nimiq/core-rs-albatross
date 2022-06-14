@@ -1,4 +1,5 @@
 use nimiq_account::Accounts;
+use nimiq_account::BlockLog;
 use nimiq_block::{Block, MicroBlock, ViewChanges};
 use nimiq_database::WriteTransaction;
 use nimiq_primitives::policy;
@@ -18,7 +19,7 @@ impl Blockchain {
         prev_entropy: VrfEntropy,
         first_view_number: u32,
         txn: &mut WriteTransaction,
-    ) -> Result<(), PushError> {
+    ) -> Result<BlockLog, PushError> {
         // Get the accounts from the state.
         let accounts = &state.accounts;
 
@@ -29,7 +30,7 @@ impl Blockchain {
                 let inherents = self.create_macro_block_inherents(state, &macro_block.header);
 
                 // Commit block to AccountsTree and create the receipts.
-                let receipts = accounts.commit(
+                let batch_info = accounts.commit(
                     txn,
                     &[],
                     &inherents,
@@ -38,7 +39,7 @@ impl Blockchain {
                 );
 
                 // Check if the receipts contain an error.
-                if let Err(e) = receipts {
+                if let Err(e) = batch_info {
                     return Err(PushError::AccountsError(e));
                 }
 
@@ -60,6 +61,14 @@ impl Blockchain {
                     policy::epoch_at(macro_block.header.block_number),
                     &ext_txs,
                 );
+
+                let batch_info = batch_info.unwrap();
+                Ok(BlockLog::AppliedBlockLog {
+                    inherent_logs: batch_info.inherent_logs,
+                    block_hash: macro_block.hash(),
+                    block_number: macro_block.header.block_number,
+                    tx_logs: batch_info.tx_logs,
+                })
             }
             Block::Micro(ref micro_block) => {
                 // Get the body of the block.
@@ -78,21 +87,23 @@ impl Blockchain {
                     self.create_slash_inherents(&body.fork_proofs, &view_changes, Some(txn));
 
                 // Commit block to AccountsTree and create the receipts.
-                let receipts = accounts.commit(
+                let batch_info = accounts.commit(
                     txn,
                     &body.transactions,
                     &inherents,
                     micro_block.header.block_number,
                     micro_block.header.timestamp,
                 );
-
-                // Check if the receipts contain an error.
-                if let Err(e) = receipts {
-                    return Err(PushError::AccountsError(e));
-                }
+                let batch_info = match batch_info {
+                    Ok(batch_info) => batch_info,
+                    Err(e) => {
+                        // Check if the receipts contain an error.
+                        return Err(PushError::AccountsError(e));
+                    }
+                };
 
                 // Store receipts.
-                let receipts = receipts.unwrap();
+                let receipts = batch_info.receipts.into();
                 self.chain_store
                     .put_receipts(txn, micro_block.header.block_number, &receipts);
 
@@ -110,10 +121,15 @@ impl Blockchain {
                     policy::epoch_at(micro_block.header.block_number),
                     &ext_txs,
                 );
+
+                Ok(BlockLog::AppliedBlockLog {
+                    inherent_logs: batch_info.inherent_logs,
+                    block_hash: micro_block.hash(),
+                    block_number: micro_block.header.block_number,
+                    tx_logs: batch_info.tx_logs,
+                })
             }
         }
-
-        Ok(())
     }
 
     /// Reverts the accounts given a block. This only applies to micro blocks, since macro blocks
@@ -125,7 +141,7 @@ impl Blockchain {
         micro_block: &MicroBlock,
         prev_entropy: VrfEntropy,
         prev_view_number: u32,
-    ) -> Result<(), PushError> {
+    ) -> Result<BlockLog, PushError> {
         assert_eq!(
             micro_block.header.state_root,
             accounts.get_root(Some(txn)),
@@ -159,16 +175,20 @@ impl Blockchain {
             .expect("Failed to revert - missing receipts");
 
         // Revert the block from AccountsTree.
-        if let Err(e) = accounts.revert(
+        let batch_info = accounts.revert(
             txn,
             &body.transactions,
             &inherents,
             micro_block.header.block_number,
             micro_block.header.timestamp,
             &receipts,
-        ) {
-            panic!("Failed to revert - {:?}", e);
-        }
+        );
+        let batch_info = match batch_info {
+            Ok(batch_info) => batch_info,
+            Err(e) => {
+                panic!("Failed to revert - {:?}", e);
+            }
+        };
 
         // Remove the transactions from the History tree. For this you only need to calculate the
         // number of transactions that you want to remove.
@@ -180,6 +200,11 @@ impl Blockchain {
             num_txs,
         );
 
-        Ok(())
+        Ok(BlockLog::RevertBlockLog {
+            inherent_logs: batch_info.inherent_logs,
+            block_hash: micro_block.hash(),
+            block_number: micro_block.header.block_number,
+            tx_logs: batch_info.tx_logs,
+        })
     }
 }

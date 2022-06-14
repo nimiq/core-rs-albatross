@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::{DeserializeFromStr, SerializeDisplay};
 
 use beserial::Serialize as BeSerialize;
+use nimiq_account::{Log, TransactionLog};
 use nimiq_block::{MultiSignature, ViewChangeProof};
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_bls::CompressedPublicKey;
@@ -701,17 +702,110 @@ pub struct BlockchainState<T> {
 }
 
 impl<T> BlockchainState<T> {
-    pub fn from_value(
-        block_number: u32,
-        block_hash: Blake2bHash,
-        value: T,
-    ) -> Self {
+    pub fn from_value(block_number: u32, block_hash: Blake2bHash, value: T) -> Self {
         BlockchainState {
             block_number,
             block_hash,
             value,
         }
     }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum LogType {
+    PayFee,
+    Transfer,
+    HTLCCreate,
+    HTLCTimeoutResolve,
+    HTLCRegularTransfer,
+    HTLCEarlyResolve,
+    VestingCreate,
+    CreateValidator,
+    UpdateValidator,
+    InactivateValidator,
+    ReactivateValidator,
+    UnparkValidator,
+    CreateStaker,
+    Stake,
+    UpdateStaker,
+    DeleteValidator,
+    Unstake,
+    PayoutReward,
+    Park,
+    Slash,
+    RevertContract,
+}
+
+impl LogType {
+    pub fn with_log(log: &Log) -> Self {
+        match log {
+            Log::PayFee { .. } => Self::PayFee,
+            Log::Transfer { .. } => Self::Transfer,
+            Log::HTLCCreate { .. } => Self::HTLCCreate,
+            Log::HTLCTimeoutResolve { .. } => Self::HTLCTimeoutResolve,
+            Log::HTLCRegularTransfer { .. } => Self::HTLCRegularTransfer,
+            Log::HTLCEarlyResolve { .. } => Self::HTLCEarlyResolve,
+            Log::VestingCreate { .. } => Self::VestingCreate,
+            Log::CreateValidator { .. } => Self::CreateValidator,
+            Log::UpdateValidator { .. } => Self::UpdateValidator,
+            Log::InactivateValidator { .. } => Self::InactivateValidator,
+            Log::ReactivateValidator { .. } => Self::ReactivateValidator,
+            Log::UnparkValidator { .. } => Self::UnparkValidator,
+            Log::CreateStaker { .. } => Self::CreateStaker,
+            Log::Stake { .. } => Self::Stake,
+            Log::UpdateStaker { .. } => Self::UpdateStaker,
+            Log::DeleteValidator { .. } => Self::DeleteValidator,
+            Log::Unstake { .. } => Self::Unstake,
+            Log::PayoutReward { .. } => Self::PayoutReward,
+            Log::Park { .. } => Self::Park,
+            Log::Slash { .. } => Self::Slash,
+            Log::RevertContract { .. } => Self::RevertContract,
+        }
+    }
+}
+
+pub fn contains_log_type(log: &Log, log_types: &Vec<LogType>) -> bool {
+    for log_type in log_types.into_iter() {
+        if log_type.eq(&LogType::with_log(log)) {
+            return true;
+        }
+    }
+    false
+}
+
+pub fn is_log_related_to_addresses(log: &Log, addresses: &Vec<Address>) -> bool {
+    for address in addresses.into_iter() {
+        if log.is_related_to_address(&address) {
+            return true;
+        }
+    }
+    false
+}
+
+pub fn tx_logs_contains_any_log_type(tx_log: &TransactionLog, log_types: &Vec<LogType>) -> bool {
+    tx_log.logs.iter().any(|log| {
+        for log_type in log_types.iter() {
+            if log_type.eq(&LogType::with_log(log)) {
+                return true;
+            }
+        }
+        false
+    })
+}
+
+pub fn is_tx_logs_related_to_any_addresses(
+    tx_log: &TransactionLog,
+    addresses: &Vec<Address>,
+) -> bool {
+    tx_log.logs.iter().any(|log| {
+        for address in addresses.iter() {
+            if log.is_related_to_address(address) {
+                return true;
+            }
+        }
+        false
+    })
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

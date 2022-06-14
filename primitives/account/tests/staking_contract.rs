@@ -190,6 +190,7 @@ fn create_validator_works() {
 
     let voting_keypair = bls_key_pair(VALIDATOR_VOTING_SECRET_KEY);
 
+    let reward_address = Address::from([3u8; 20]);
     // Works in the valid case.
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::CreateValidator {
@@ -198,7 +199,7 @@ fn create_validator_works() {
             proof_of_knowledge: voting_keypair
                 .sign(&voting_key.serialize_to_vec())
                 .compress(),
-            reward_address: Address::from([3u8; 20]),
+            reward_address: reward_address.clone(),
             signal_data: None,
             proof: SignatureProof::default(),
         },
@@ -206,9 +207,16 @@ fn create_validator_works() {
         &cold_keypair,
     );
 
+    let account_info =
+        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0)
+            .unwrap();
+    assert_eq!(account_info.receipt, None);
     assert_eq!(
-        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
-        Ok(None)
+        account_info.logs,
+        vec![Log::CreateValidator {
+            validator_address: validator_address.clone(),
+            reward_address: reward_address.clone(),
+        }]
     );
 
     let validator =
@@ -247,9 +255,15 @@ fn create_validator_works() {
     );
 
     // Can revert the transaction.
+    let logs =
+        StakingContract::revert_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0, None)
+            .unwrap();
     assert_eq!(
-        StakingContract::revert_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0, None),
-        Ok(())
+        logs,
+        vec![Log::CreateValidator {
+            validator_address: validator_address.clone(),
+            reward_address: validator.reward_address,
+        }]
     );
 
     assert_eq!(
@@ -281,12 +295,13 @@ fn update_validator_works() {
 
     let new_voting_keypair = BlsKeyPair::generate_default_csprng();
 
+    let new_reward_address = Some(Address::from([77u8; 20]));
     // Works in the valid case.
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::UpdateValidator {
             new_signing_key: Some(PublicKey::from([88u8; 32])),
             new_voting_key: Some(new_voting_keypair.public_key.compress()),
-            new_reward_address: Some(Address::from([77u8; 20])),
+            new_reward_address: new_reward_address.clone(),
             new_signal_data: Some(Some(Blake2bHash::default())),
             new_proof_of_knowledge: Some(
                 new_voting_keypair
@@ -316,10 +331,17 @@ fn update_validator_works() {
     }
     .serialize_to_vec();
 
-    assert_eq!(
-        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
-        Ok(Some(receipt.clone()))
-    );
+    let logs = vec![Log::UpdateValidator {
+        validator_address: validator_address.clone(),
+        old_reward_address: old_reward_address.clone(),
+        new_reward_address: new_reward_address.clone(),
+    }];
+    let account_info =
+        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0)
+            .unwrap();
+
+    assert_eq!(account_info.receipt, Some(receipt.clone()));
+    assert_eq!(account_info.logs, logs.clone());
 
     let validator =
         StakingContract::get_validator(&accounts_tree, &db_txn, &validator_address).unwrap();
@@ -340,16 +362,22 @@ fn update_validator_works() {
     assert_eq!(validator.inactivity_flag, None);
 
     // Can revert the transaction.
+    let logs = StakingContract::revert_incoming_transaction(
+        &accounts_tree,
+        &mut db_txn,
+        &tx,
+        2,
+        0,
+        Some(&receipt),
+    )
+    .unwrap();
     assert_eq!(
-        StakingContract::revert_incoming_transaction(
-            &accounts_tree,
-            &mut db_txn,
-            &tx,
-            2,
-            0,
-            Some(&receipt)
-        ),
-        Ok(())
+        logs,
+        vec![Log::UpdateValidator {
+            validator_address: validator_address.clone(),
+            old_reward_address: old_reward_address.clone(),
+            new_reward_address: new_reward_address,
+        }]
     );
 
     let validator =
@@ -396,10 +424,11 @@ fn update_validator_works() {
     }
     .serialize_to_vec();
 
-    assert_eq!(
-        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
-        Ok(Some(no_op_receipt))
-    );
+    let account_info =
+        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0)
+            .unwrap();
+    assert_eq!(account_info.receipt, Some(no_op_receipt));
+    assert_eq!(account_info.logs.is_empty(), true);
 }
 
 #[test]
@@ -451,9 +480,15 @@ fn inactivate_validator_works() {
     }
     .serialize_to_vec();
 
+    let account_info =
+        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0)
+            .unwrap();
+    assert_eq!(account_info.receipt, Some(receipt.clone()));
     assert_eq!(
-        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
-        Ok(Some(receipt.clone()))
+        account_info.logs,
+        vec![Log::InactivateValidator {
+            validator_address: validator_address.clone()
+        }]
     );
 
     let validator =
@@ -494,10 +529,11 @@ fn inactivate_validator_works() {
     }
     .serialize_to_vec();
 
-    assert_eq!(
-        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
-        Ok(Some(no_op_receipt.clone()))
-    );
+    let account_info =
+        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0)
+            .unwrap();
+    assert_eq!(account_info.receipt, Some(no_op_receipt.clone()));
+    assert_eq!(account_info.logs.is_empty(), true);
 
     // Try with a wrong signature.
     let tx = make_signed_incoming_transaction(
@@ -509,22 +545,28 @@ fn inactivate_validator_works() {
         &cold_keypair,
     );
 
-    assert_eq!(
-        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
-        Ok(Some(no_op_receipt.clone()))
-    );
+    let account_info =
+        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0)
+            .unwrap();
+    assert_eq!(account_info.receipt, Some(no_op_receipt.clone()));
+    assert_eq!(account_info.logs.is_empty(), true);
 
     // Can revert the transaction.
+    let logs = StakingContract::revert_incoming_transaction(
+        &accounts_tree,
+        &mut db_txn,
+        &tx,
+        2,
+        0,
+        Some(&receipt),
+    )
+    .unwrap();
+
     assert_eq!(
-        StakingContract::revert_incoming_transaction(
-            &accounts_tree,
-            &mut db_txn,
-            &tx,
-            2,
-            0,
-            Some(&receipt)
-        ),
-        Ok(())
+        logs,
+        vec![Log::InactivateValidator {
+            validator_address: validator_address.clone()
+        }]
     );
 
     let validator =
@@ -561,10 +603,12 @@ fn inactivate_validator_works() {
         &signing_keypair,
     );
 
-    assert_eq!(
-        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
-        Ok(Some(no_op_receipt))
-    );
+    let account_info =
+        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0)
+            .unwrap();
+    assert_eq!(account_info.receipt, Some(no_op_receipt));
+
+    assert_eq!(account_info.logs.is_empty(), true);
 }
 
 #[test]
@@ -615,9 +659,15 @@ fn reactivate_validator_works() {
     }
     .serialize_to_vec();
 
+    let account_info =
+        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0)
+            .unwrap();
+    assert_eq!(account_info.receipt, Some(receipt.clone()));
     assert_eq!(
-        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
-        Ok(Some(receipt.clone()))
+        account_info.logs,
+        vec![Log::ReactivateValidator {
+            validator_address: validator_address.clone()
+        }]
     );
 
     let validator =
@@ -658,10 +708,11 @@ fn reactivate_validator_works() {
     }
     .serialize_to_vec();
 
-    assert_eq!(
-        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
-        Ok(Some(no_op_receipt.clone()))
-    );
+    let account_info =
+        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0)
+            .unwrap();
+    assert_eq!(account_info.receipt, Some(no_op_receipt.clone()));
+    assert_eq!(account_info.logs.is_empty(), true);
 
     // Try with a wrong signature.
     let tx = make_signed_incoming_transaction(
@@ -673,22 +724,27 @@ fn reactivate_validator_works() {
         &cold_keypair,
     );
 
-    assert_eq!(
-        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
-        Ok(Some(no_op_receipt.clone()))
-    );
+    let account_info =
+        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0)
+            .unwrap();
+    assert_eq!(account_info.receipt, Some(no_op_receipt.clone()));
+    assert_eq!(account_info.logs.is_empty(), true);
 
     // Can revert the transaction.
+    let logs = StakingContract::revert_incoming_transaction(
+        &accounts_tree,
+        &mut db_txn,
+        &tx,
+        2,
+        0,
+        Some(&receipt),
+    )
+    .unwrap();
     assert_eq!(
-        StakingContract::revert_incoming_transaction(
-            &accounts_tree,
-            &mut db_txn,
-            &tx,
-            2,
-            0,
-            Some(&receipt)
-        ),
-        Ok(())
+        logs,
+        vec![Log::ReactivateValidator {
+            validator_address: validator_address.clone()
+        }]
     );
 
     let validator =
@@ -724,10 +780,11 @@ fn reactivate_validator_works() {
         &cold_keypair,
     );
 
-    assert_eq!(
-        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
-        Ok(Some(no_op_receipt))
-    );
+    let account_info =
+        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0)
+            .unwrap();
+    assert_eq!(account_info.receipt, Some(no_op_receipt));
+    assert_eq!(account_info.logs.is_empty(), true);
 }
 
 #[test]
@@ -786,9 +843,15 @@ fn unpark_validator_works() {
     }
     .serialize_to_vec();
 
+    let account_info =
+        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0)
+            .unwrap();
+    assert_eq!(account_info.receipt, Some(receipt.clone()));
     assert_eq!(
-        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
-        Ok(Some(receipt.clone()))
+        account_info.logs,
+        vec![Log::UnparkValidator {
+            validator_address: validator_address.clone()
+        }]
     );
 
     let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &db_txn);
@@ -819,10 +882,11 @@ fn unpark_validator_works() {
     }
     .serialize_to_vec();
 
-    assert_eq!(
-        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
-        Ok(Some(no_op_receipt.clone()))
-    );
+    let account_info =
+        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0)
+            .unwrap();
+    assert_eq!(account_info.receipt, Some(no_op_receipt.clone()));
+    assert_eq!(account_info.logs.is_empty(), true);
 
     // Try with a wrong signature.
     let tx = make_signed_incoming_transaction(
@@ -834,22 +898,26 @@ fn unpark_validator_works() {
         &cold_keypair,
     );
 
-    assert_eq!(
-        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
-        Ok(Some(no_op_receipt.clone()))
-    );
+    let account_info =
+        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0)
+            .unwrap();
+    assert_eq!(account_info.receipt, Some(no_op_receipt.clone()));
+    assert_eq!(account_info.logs.is_empty(), true);
 
-    // Can revert the transaction.
+    let logs = StakingContract::revert_incoming_transaction(
+        &accounts_tree,
+        &mut db_txn,
+        &tx,
+        2,
+        0,
+        Some(&receipt),
+    )
+    .unwrap();
     assert_eq!(
-        StakingContract::revert_incoming_transaction(
-            &accounts_tree,
-            &mut db_txn,
-            &tx,
-            2,
-            0,
-            Some(&receipt)
-        ),
-        Ok(())
+        logs,
+        vec![Log::UnparkValidator {
+            validator_address: validator_address.clone()
+        }]
     );
 
     let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &db_txn);
@@ -874,10 +942,11 @@ fn unpark_validator_works() {
         &cold_keypair,
     );
 
-    assert_eq!(
-        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
-        Ok(Some(no_op_receipt))
-    );
+    let account_info =
+        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0)
+            .unwrap();
+    assert_eq!(account_info.receipt, Some(no_op_receipt));
+    assert_eq!(account_info.logs.is_empty(), true);
 }
 
 #[test]
@@ -942,15 +1011,32 @@ fn delete_validator_works() {
     }
     .serialize_to_vec();
 
+    let account_info = StakingContract::commit_outgoing_transaction(
+        &accounts_tree,
+        &mut db_txn,
+        &tx,
+        next_election_block + BLOCKS_PER_BATCH + 1,
+        0,
+    )
+    .unwrap();
+    assert_eq!(account_info.receipt, Some(receipt.clone()));
     assert_eq!(
-        StakingContract::commit_outgoing_transaction(
-            &accounts_tree,
-            &mut db_txn,
-            &tx,
-            next_election_block + BLOCKS_PER_BATCH + 1,
-            0
-        ),
-        Ok(Some(receipt.clone()))
+        account_info.logs,
+        vec![
+            Log::PayFee {
+                from: tx.sender.clone(),
+                fee: tx.fee,
+            },
+            Log::Transfer {
+                from: tx.sender.clone(),
+                to: tx.recipient.clone(),
+                amount: tx.value,
+            },
+            Log::DeleteValidator {
+                validator_address: validator_address.clone(),
+                reward_address: reward_address.clone(),
+            }
+        ]
     );
 
     assert_eq!(
@@ -978,16 +1064,32 @@ fn delete_validator_works() {
     );
 
     // Can revert the transaction.
+    let logs = StakingContract::revert_outgoing_transaction(
+        &accounts_tree,
+        &mut db_txn,
+        &tx,
+        next_election_block + 1,
+        0,
+        Some(&receipt),
+    )
+    .unwrap();
     assert_eq!(
-        StakingContract::revert_outgoing_transaction(
-            &accounts_tree,
-            &mut db_txn,
-            &tx,
-            next_election_block + 1,
-            0,
-            Some(&receipt)
-        ),
-        Ok(())
+        logs,
+        vec![
+            Log::PayFee {
+                from: tx.sender.clone(),
+                fee: tx.fee,
+            },
+            Log::Transfer {
+                from: tx.sender.clone(),
+                to: tx.recipient.clone(),
+                amount: tx.value,
+            },
+            Log::DeleteValidator {
+                validator_address: validator_address.clone(),
+                reward_address: reward_address.clone(),
+            }
+        ]
     );
 
     let validator = StakingContract::get_validator(
@@ -1053,9 +1155,17 @@ fn create_staker_works() {
         &staker_keypair,
     );
 
+    let account_info =
+        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0)
+            .unwrap();
+    assert_eq!(account_info.receipt, None);
     assert_eq!(
-        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
-        Ok(None)
+        account_info.logs,
+        vec![Log::CreateStaker {
+            staker_address: staker_address.clone(),
+            validator_address: Some(validator_address.clone()),
+            value: tx.value,
+        }]
     );
 
     let staker = StakingContract::get_staker(&accounts_tree, &db_txn, &staker_address).unwrap();
@@ -1102,9 +1212,16 @@ fn create_staker_works() {
     );
 
     // Can revert the transaction.
+    let logs =
+        StakingContract::revert_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0, None)
+            .unwrap();
     assert_eq!(
-        StakingContract::revert_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0, None),
-        Ok(())
+        logs,
+        vec![Log::CreateStaker {
+            staker_address: staker_address.clone(),
+            validator_address: Some(validator_address.clone()),
+            value: tx.value,
+        }]
     );
 
     assert_eq!(
@@ -1165,9 +1282,17 @@ fn stake_works() {
         &staker_keypair,
     );
 
+    let account_info =
+        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0)
+            .unwrap();
+    assert_eq!(account_info.receipt, None);
     assert_eq!(
-        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
-        Ok(None)
+        account_info.logs,
+        vec![Log::Stake {
+            staker_address: staker_address.clone(),
+            validator_address: Some(validator_address.clone()),
+            value: tx.value,
+        }]
     );
 
     let staker = StakingContract::get_staker(&accounts_tree, &db_txn, &staker_address).unwrap();
@@ -1197,9 +1322,16 @@ fn stake_works() {
     );
 
     // Can revert the transaction.
+    let logs =
+        StakingContract::revert_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0, None)
+            .unwrap();
     assert_eq!(
-        StakingContract::revert_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0, None),
-        Ok(())
+        logs,
+        vec![Log::Stake {
+            staker_address: staker_address.clone(),
+            validator_address: Some(validator_address.clone()),
+            value: tx.value,
+        }]
     );
 
     let staker = StakingContract::get_staker(&accounts_tree, &db_txn, &staker_address).unwrap();
@@ -1278,9 +1410,17 @@ fn update_staker_works() {
     }
     .serialize_to_vec();
 
+    let account_info =
+        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0)
+            .unwrap();
+    assert_eq!(account_info.receipt, Some(receipt));
     assert_eq!(
-        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
-        Ok(Some(receipt))
+        account_info.logs,
+        vec![Log::UpdateStaker {
+            staker_address: staker_address.clone(),
+            old_validator_address: Some(validator_address.clone()),
+            new_validator_address: Some(other_validator_address.clone()),
+        }]
     );
 
     let staker = StakingContract::get_staker(&accounts_tree, &db_txn, &staker_address).unwrap();
@@ -1345,10 +1485,11 @@ fn update_staker_works() {
     }
     .serialize_to_vec();
 
-    assert_eq!(
-        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
-        Ok(Some(no_op_receipt.clone()))
-    );
+    let account_info =
+        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0)
+            .unwrap();
+    assert_eq!(account_info.receipt, Some(no_op_receipt.clone()));
+    assert_eq!(account_info.logs.is_empty(), true);
 
     // Works when changing to no validator.
     let tx = make_signed_incoming_transaction(
@@ -1366,9 +1507,17 @@ fn update_staker_works() {
     }
     .serialize_to_vec();
 
+    let account_info =
+        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0)
+            .unwrap();
+    assert_eq!(account_info.receipt, Some(receipt.clone()));
     assert_eq!(
-        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
-        Ok(Some(receipt.clone()))
+        account_info.logs,
+        vec![Log::UpdateStaker {
+            staker_address: staker_address.clone(),
+            old_validator_address: Some(other_validator_address.clone()),
+            new_validator_address: None,
+        }]
     );
 
     let staker = StakingContract::get_staker(&accounts_tree, &db_txn, &staker_address).unwrap();
@@ -1396,16 +1545,22 @@ fn update_staker_works() {
     );
 
     // Can revert the transaction.
+    let logs = StakingContract::revert_incoming_transaction(
+        &accounts_tree,
+        &mut db_txn,
+        &tx,
+        2,
+        0,
+        Some(&receipt),
+    )
+    .unwrap();
     assert_eq!(
-        StakingContract::revert_incoming_transaction(
-            &accounts_tree,
-            &mut db_txn,
-            &tx,
-            2,
-            0,
-            Some(&receipt)
-        ),
-        Ok(())
+        logs,
+        vec![Log::UpdateStaker {
+            staker_address: staker_address.clone(),
+            old_validator_address: Some(other_validator_address.clone()),
+            new_validator_address: None,
+        }]
     );
 
     let validator =
@@ -1446,10 +1601,11 @@ fn update_staker_works() {
         &keypair,
     );
 
-    assert_eq!(
-        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
-        Ok(Some(no_op_receipt))
-    );
+    let account_info =
+        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0)
+            .unwrap();
+    assert_eq!(account_info.receipt, Some(no_op_receipt.clone()));
+    assert_eq!(account_info.logs.is_empty(), true);
 }
 
 #[test]
@@ -1478,9 +1634,28 @@ fn unstake_works() {
 
     let validator_address = Address::from_any_str(VALIDATOR_ADDRESS).unwrap();
 
+    let account_info =
+        StakingContract::commit_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 1, 0)
+            .unwrap();
+    assert_eq!(account_info.receipt, None);
     assert_eq!(
-        StakingContract::commit_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 1, 0),
-        Ok(None)
+        account_info.logs,
+        vec![
+            Log::PayFee {
+                from: tx.sender.clone(),
+                fee: tx.fee,
+            },
+            Log::Transfer {
+                from: tx.sender.clone(),
+                to: tx.recipient.clone(),
+                amount: tx.value,
+            },
+            Log::Unstake {
+                staker_address: staker_address.clone(),
+                validator_address: Some(validator_address.clone()),
+                value: Coin::from_u64_unchecked(100_000_000),
+            }
+        ]
     );
 
     let staker = StakingContract::get_staker(&accounts_tree, &db_txn, &staker_address).unwrap();
@@ -1530,9 +1705,28 @@ fn unstake_works() {
     }
     .serialize_to_vec();
 
+    let account_info =
+        StakingContract::commit_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0)
+            .unwrap();
+    assert_eq!(account_info.receipt, Some(receipt.clone()));
     assert_eq!(
-        StakingContract::commit_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
-        Ok(Some(receipt.clone()))
+        account_info.logs,
+        vec![
+            Log::PayFee {
+                from: tx.sender.clone(),
+                fee: tx.fee,
+            },
+            Log::Transfer {
+                from: tx.sender.clone(),
+                to: tx.recipient.clone(),
+                amount: tx.value,
+            },
+            Log::Unstake {
+                staker_address: staker_address.clone(),
+                validator_address: Some(validator_address.clone()),
+                value: Coin::from_u64_unchecked(50_000_000),
+            }
+        ]
     );
 
     assert_eq!(
@@ -1569,16 +1763,33 @@ fn unstake_works() {
     );
 
     // Can revert the transaction.
+    let logs = StakingContract::revert_outgoing_transaction(
+        &accounts_tree,
+        &mut db_txn,
+        &tx,
+        2,
+        0,
+        Some(&receipt),
+    )
+    .unwrap();
     assert_eq!(
-        StakingContract::revert_outgoing_transaction(
-            &accounts_tree,
-            &mut db_txn,
-            &tx,
-            2,
-            0,
-            Some(&receipt)
-        ),
-        Ok(())
+        logs,
+        vec![
+            Log::PayFee {
+                from: tx.sender.clone(),
+                fee: tx.fee,
+            },
+            Log::Transfer {
+                from: tx.sender.clone(),
+                to: tx.recipient.clone(),
+                amount: tx.value,
+            },
+            Log::Unstake {
+                staker_address: staker_address.clone(),
+                validator_address: Some(validator_address.clone()),
+                value: Coin::from_u64_unchecked(50_000_000),
+            }
+        ]
     );
 
     let staker = StakingContract::get_staker(&accounts_tree, &db_txn, &staker_address).unwrap();
@@ -1707,9 +1918,23 @@ fn slash_inherents_work() {
     }
     .serialize_to_vec();
 
+    let account_info =
+        StakingContract::commit_inherent(&accounts_tree, &mut db_txn, &inherent, 1, 0).unwrap();
+    assert_eq!(account_info.receipt, Some(receipt.clone()));
     assert_eq!(
-        StakingContract::commit_inherent(&accounts_tree, &mut db_txn, &inherent, 1, 0),
-        Ok(Some(receipt.clone()))
+        account_info.logs,
+        vec![
+            Log::Slash {
+                validator_address: slot.validator_address.clone(),
+                event_block: slot.event_block,
+                slot: slot.slot,
+                newly_disabled: true,
+            },
+            Log::Park {
+                validator_address: slot.validator_address.clone(),
+                event_block: slot.event_block,
+            },
+        ]
     );
 
     let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &db_txn);
@@ -1739,6 +1964,7 @@ fn slash_inherents_work() {
         Some(&receipt),
         &validator_address,
         slot.slot,
+        slot.event_block,
     );
 
     // Works in current epoch, previous batch case.
@@ -1749,15 +1975,29 @@ fn slash_inherents_work() {
     }
     .serialize_to_vec();
 
+    let account_info = StakingContract::commit_inherent(
+        &accounts_tree,
+        &mut db_txn,
+        &inherent,
+        1 + BLOCKS_PER_BATCH,
+        0,
+    )
+    .unwrap();
+    assert_eq!(account_info.receipt, Some(receipt.clone()));
     assert_eq!(
-        StakingContract::commit_inherent(
-            &accounts_tree,
-            &mut db_txn,
-            &inherent,
-            1 + BLOCKS_PER_BATCH,
-            0
-        ),
-        Ok(Some(receipt.clone()))
+        account_info.logs,
+        vec![
+            Log::Slash {
+                validator_address: slot.validator_address.clone(),
+                event_block: slot.event_block,
+                slot: slot.slot,
+                newly_disabled: true,
+            },
+            Log::Park {
+                validator_address: slot.validator_address.clone(),
+                event_block: slot.event_block,
+            },
+        ]
     );
 
     let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &db_txn);
@@ -1787,6 +2027,7 @@ fn slash_inherents_work() {
         Some(&receipt),
         &validator_address,
         slot.slot,
+        1 + BLOCKS_PER_BATCH,
     );
 
     // Works in previous epoch, previous batch case.
@@ -1797,15 +2038,29 @@ fn slash_inherents_work() {
     }
     .serialize_to_vec();
 
+    let account_info = StakingContract::commit_inherent(
+        &accounts_tree,
+        &mut db_txn,
+        &inherent,
+        1 + BLOCKS_PER_EPOCH,
+        0,
+    )
+    .unwrap();
+    assert_eq!(account_info.receipt, Some(receipt.clone()));
     assert_eq!(
-        StakingContract::commit_inherent(
-            &accounts_tree,
-            &mut db_txn,
-            &inherent,
-            1 + BLOCKS_PER_EPOCH,
-            0
-        ),
-        Ok(Some(receipt.clone()))
+        account_info.logs,
+        vec![
+            Log::Slash {
+                validator_address: slot.validator_address.clone(),
+                event_block: slot.event_block,
+                slot: slot.slot,
+                newly_disabled: false,
+            },
+            Log::Park {
+                validator_address: slot.validator_address,
+                event_block: slot.event_block,
+            },
+        ]
     );
 
     let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &db_txn);
@@ -1834,6 +2089,7 @@ fn slash_inherents_work() {
         Some(&receipt),
         &validator_address,
         slot.slot,
+        129,
     );
 }
 
@@ -1880,10 +2136,10 @@ fn finalize_batch_inherents_work() {
         data: vec![],
     };
 
-    assert_eq!(
-        StakingContract::commit_inherent(&accounts_tree, &mut db_txn, &inherent, 1, 0),
-        Ok(None)
-    );
+    let account_info =
+        StakingContract::commit_inherent(&accounts_tree, &mut db_txn, &inherent, 1, 0).unwrap();
+    assert_eq!(account_info.receipt, None);
+    assert_eq!(account_info.logs.is_empty(), true);
 
     let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &db_txn);
 
@@ -1956,9 +2212,14 @@ fn finalize_epoch_inherents_work() {
         data: vec![],
     };
 
+    let account_info =
+        StakingContract::commit_inherent(&accounts_tree, &mut db_txn, &inherent, 1, 0).unwrap();
+    assert_eq!(account_info.receipt, None);
     assert_eq!(
-        StakingContract::commit_inherent(&accounts_tree, &mut db_txn, &inherent, 1, 0),
-        Ok(None)
+        account_info.logs,
+        vec![Log::InactivateValidator {
+            validator_address: validator_address.clone(),
+        }]
     );
 
     let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &db_txn);
@@ -2160,10 +2421,24 @@ fn revert_slash_inherent(
     receipt: Option<&Vec<u8>>,
     validator_address: &Address,
     slot: u16,
+    event_block: u32,
 ) {
+    println!("=== {:?}", event_block);
     assert_eq!(
-        StakingContract::revert_inherent(accounts_tree, db_txn, inherent, block_height, 0, receipt),
-        Ok(())
+        StakingContract::revert_inherent(accounts_tree, db_txn, inherent, block_height, 0, receipt)
+            .map(|logs| logs),
+        Ok(vec![
+            Log::Slash {
+                validator_address: validator_address.clone(),
+                event_block: event_block,
+                slot: slot,
+                newly_disabled: true,
+            },
+            Log::Park {
+                validator_address: validator_address.clone(),
+                event_block: event_block,
+            },
+        ])
     );
 
     let staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use nimiq_account::{Account, Accounts};
+use nimiq_account::{Account, Accounts, BlockLog};
 use nimiq_block::Block;
 use nimiq_database::{Environment, ReadTransaction, WriteTransaction};
 use nimiq_genesis::NetworkInfo;
@@ -35,6 +35,8 @@ pub struct Blockchain {
     pub notifier: Notifier<BlockchainEvent>,
     // The fork notifier processes fork events.
     pub fork_notifier: Notifier<ForkEvent>,
+    // The log notifier processes all events regarding accounts changes.
+    pub log_notifier: Notifier<BlockLog>,
     // The chain store is a database containing all of the chain infos, blocks and receipts.
     pub chain_store: ChainStore,
     // The history store is a database containing all of the history trees and transactions.
@@ -194,6 +196,7 @@ impl Blockchain {
             time,
             notifier: Notifier::new(),
             fork_notifier: Notifier::new(),
+            log_notifier: Notifier::new(), 
             chain_store,
             history_store,
             state: BlockchainState {
@@ -250,6 +253,7 @@ impl Blockchain {
             time,
             notifier: Notifier::new(),
             fork_notifier: Notifier::new(),
+            log_notifier: Notifier::new(), 
             chain_store,
             history_store,
             state: BlockchainState {

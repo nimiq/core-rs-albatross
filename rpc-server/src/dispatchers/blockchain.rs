@@ -1,18 +1,21 @@
 use std::{collections::HashMap, ops::Deref, sync::Arc};
 
 use async_trait::async_trait;
-use futures::{stream::BoxStream, StreamExt, future};
+use futures::{future, stream::BoxStream, StreamExt};
 use parking_lot::RwLock;
 
-use nimiq_account::StakingContract;
+use nimiq_account::{BlockLog, StakingContract};
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainEvent};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::{coin::Coin, policy};
-use nimiq_rpc_interface::types::{BlockchainState, ParkedSet, Validator};
+use nimiq_rpc_interface::types::{
+    contains_log_type, is_log_related_to_addresses, is_tx_logs_related_to_any_addresses,
+    tx_logs_contains_any_log_type, BlockchainState, ParkedSet, Validator,
+};
 use nimiq_rpc_interface::{
     blockchain::BlockchainInterface,
-    types::{Account, Block, Inherent, SlashedSlots, Slot, Staker, Transaction},
+    types::{Account, Block, Inherent, LogType, SlashedSlots, Slot, Staker, Transaction},
 };
 
 use crate::error::Error;
@@ -597,12 +600,137 @@ impl BlockchainInterface for BlockchainDispatcher {
 
         Ok(stream
             .filter_map(move |event| {
-                let blockchain_rg = blockchain.read();
                 let result = match event {
                     BlockchainEvent::EpochFinalized(hash) => {
-                        Some(get_validator_by_address(&blockchain_rg, &address, Some(false)).map_err(|_| hash))
+                        let blockchain_rg = blockchain.read();
+                        Some(
+                            get_validator_by_address(&blockchain_rg, &address, Some(false))
+                                .map_err(|_| hash),
+                        )
                     }
-                    _ => None
+                    _ => None,
+                };
+                future::ready(result)
+            })
+            .boxed())
+    }
+
+    /// Subscribes to log events.
+    #[stream]
+    async fn logs_subscribe(&mut self) -> Result<BoxStream<'static, BlockLog>, Self::Error> {
+        let stream = self.blockchain.write().log_notifier.as_stream();
+
+        Ok(stream.boxed())
+    }
+
+    /// Subscribes to log events related to a given list of addresses.
+    #[stream]
+    async fn logs_by_addresses_subscribe(
+        &mut self,
+        addresses: Vec<Address>,
+    ) -> Result<BoxStream<'static, BlockLog>, Self::Error> {
+        let stream = self.logs_subscribe().await?;
+
+        Ok(stream
+            .filter_map(move |event| {
+                let result = match event {
+                    BlockLog::AppliedBlockLog {
+                        mut inherent_logs,
+                        block_hash,
+                        block_number,
+                        mut tx_logs,
+                    } => {
+                        let mut block_log = None;
+                        inherent_logs.retain(|log| is_log_related_to_addresses(&log, &addresses));
+                        tx_logs.retain(|tx_log| {
+                            is_tx_logs_related_to_any_addresses(&tx_log, &addresses)
+                        });
+                        if !inherent_logs.is_empty() || !tx_logs.is_empty() {
+                            block_log = Some(BlockLog::AppliedBlockLog {
+                                inherent_logs,
+                                block_hash,
+                                block_number,
+                                tx_logs,
+                            });
+                        }
+                        block_log
+                    }
+                    BlockLog::RevertBlockLog {
+                        mut inherent_logs,
+                        block_hash,
+                        block_number,
+                        mut tx_logs,
+                    } => {
+                        let mut block_log = None;
+                        inherent_logs.retain(|log| is_log_related_to_addresses(&log, &addresses));
+                        tx_logs.retain(|tx_log| {
+                            is_tx_logs_related_to_any_addresses(&tx_log, &addresses)
+                        });
+                        if !inherent_logs.is_empty() || !tx_logs.is_empty() {
+                            block_log = Some(BlockLog::AppliedBlockLog {
+                                inherent_logs,
+                                block_hash,
+                                block_number,
+                                tx_logs,
+                            });
+                        }
+                        block_log
+                    }
+                };
+                future::ready(result)
+            })
+            .boxed())
+    }
+
+    /// Subscribes to log events related to a given list of addresses.
+    #[stream]
+    async fn logs_by_type_subscribe(
+        &mut self,
+        log_types: Vec<LogType>,
+    ) -> Result<BoxStream<'static, BlockLog>, Self::Error> {
+        let stream = self.logs_subscribe().await?;
+
+        Ok(stream
+            .filter_map(move |event| {
+                let result = match event {
+                    BlockLog::AppliedBlockLog {
+                        mut inherent_logs,
+                        block_hash,
+                        block_number,
+                        mut tx_logs,
+                    } => {
+                        let mut block_log = None;
+                        inherent_logs.retain(|log| contains_log_type(&log, &log_types));
+                        tx_logs.retain(|tx_log| tx_logs_contains_any_log_type(&tx_log, &log_types));
+                        if !inherent_logs.is_empty() || !tx_logs.is_empty() {
+                            block_log = Some(BlockLog::AppliedBlockLog {
+                                inherent_logs,
+                                block_hash,
+                                block_number,
+                                tx_logs,
+                            });
+                        }
+                        block_log
+                    }
+                    BlockLog::RevertBlockLog {
+                        mut inherent_logs,
+                        block_hash,
+                        block_number,
+                        mut tx_logs,
+                    } => {
+                        let mut block_log = None;
+                        inherent_logs.retain(|log| contains_log_type(&log, &log_types));
+                        tx_logs.retain(|tx_log| tx_logs_contains_any_log_type(&tx_log, &log_types));
+                        if !inherent_logs.is_empty() || !tx_logs.is_empty() {
+                            block_log = Some(BlockLog::AppliedBlockLog {
+                                inherent_logs,
+                                block_hash,
+                                block_number,
+                                tx_logs,
+                            });
+                        }
+                        block_log
+                    }
                 };
                 future::ready(result)
             })

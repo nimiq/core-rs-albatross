@@ -13,6 +13,7 @@ use nimiq_trie::key_nibbles::KeyNibbles;
 
 use crate::inherent::Inherent;
 use crate::interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction};
+use crate::logs::{AccountInfo, Log};
 use crate::{Account, AccountError, AccountsTrie};
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
@@ -73,7 +74,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         transaction: &Transaction,
         _block_height: u32,
         _block_time: u64,
-    ) -> Result<(), AccountError> {
+    ) -> Result<AccountInfo, AccountError> {
         let data = CreationTransactionData::parse(transaction)?;
 
         let contract_key = KeyNibbles::from(&transaction.contract_creation_address());
@@ -85,18 +86,28 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
 
         let contract = HashedTimeLockedContract::new(
             previous_balance + transaction.value,
-            data.sender,
-            data.recipient,
+            data.sender.clone(),
+            data.recipient.clone(),
             data.hash_algorithm,
-            data.hash_root,
+            data.hash_root.clone(),
             data.hash_count,
             data.timeout,
             transaction.value,
         );
 
-        accounts_tree.put(db_txn, &contract_key, Account::HTLC(contract));
+        accounts_tree.put(db_txn, &contract_key, Account::HTLC(contract.clone()));
+        let logs = vec![Log::HTLCCreate {
+            contract_address: transaction.recipient.clone(),
+            sender: contract.sender,
+            recipient: contract.recipient,
+            hash_algorithm: contract.hash_algorithm,
+            hash_root: contract.hash_root,
+            hash_count: contract.hash_count,
+            timeout: contract.timeout,
+            total_amount: transaction.value,
+        }];
 
-        Ok(())
+        Ok(AccountInfo::new(None, logs))
     }
 
     fn commit_incoming_transaction(
@@ -105,7 +116,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         _transaction: &Transaction,
         _block_height: u32,
         _block_time: u64,
-    ) -> Result<Option<Vec<u8>>, AccountError> {
+    ) -> Result<AccountInfo, AccountError> {
         Err(AccountError::InvalidForRecipient)
     }
 
@@ -116,7 +127,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         _block_height: u32,
         _block_time: u64,
         _receipt: Option<&Vec<u8>>,
-    ) -> Result<(), AccountError> {
+    ) -> Result<Vec<Log>, AccountError> {
         Err(AccountError::InvalidForRecipient)
     }
 
@@ -126,7 +137,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         transaction: &Transaction,
         _block_height: u32,
         block_time: u64,
-    ) -> Result<Option<Vec<u8>>, AccountError> {
+    ) -> Result<AccountInfo, AccountError> {
         let key = KeyNibbles::from(&transaction.sender);
 
         let account = accounts_tree
@@ -151,6 +162,18 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
 
         let proof_type: ProofType = Deserialize::deserialize(proof_buf)?;
 
+        let mut logs = vec![
+            Log::PayFee {
+                from: transaction.sender.clone(),
+                fee: transaction.fee,
+            },
+            Log::Transfer {
+                from: transaction.sender.clone(),
+                to: transaction.recipient.clone(),
+                amount: transaction.value,
+            },
+        ];
+
         match proof_type {
             ProofType::RegularTransfer => {
                 // Check that the contract has not expired yet.
@@ -172,7 +195,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
                 }
 
                 // Ignore pre_image.
-                let _pre_image: AnyHash = Deserialize::deserialize(proof_buf)?;
+                let pre_image: AnyHash = Deserialize::deserialize(proof_buf)?;
 
                 // Check that the transaction is signed by the authorized recipient.
                 let signature_proof: SignatureProof = Deserialize::deserialize(proof_buf)?;
@@ -196,6 +219,12 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
                         needed: min_cap,
                     });
                 }
+
+                logs.push(Log::HTLCRegularTransfer {
+                    contract_address: transaction.sender.clone(),
+                    pre_image,
+                    hash_depth,
+                });
             }
             ProofType::EarlyResolve => {
                 // Check that the transaction is signed by both parties.
@@ -209,6 +238,10 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
                 {
                     return Err(AccountError::InvalidSignature);
                 }
+
+                logs.push(Log::HTLCEarlyResolve {
+                    contract_address: transaction.sender.clone(),
+                });
             }
             ProofType::TimeoutResolve => {
                 // Check that the contract has expired.
@@ -226,6 +259,10 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
                 if !signature_proof.is_signed_by(&htlc.sender) {
                     return Err(AccountError::InvalidSignature);
                 }
+
+                logs.push(Log::HTLCTimeoutResolve {
+                    contract_address: transaction.sender.clone(),
+                });
             }
         }
 
@@ -244,7 +281,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
             None
         };
 
-        Ok(receipt)
+        Ok(AccountInfo::new(receipt, logs))
     }
 
     fn revert_outgoing_transaction(
@@ -254,7 +291,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         _block_height: u32,
         _block_time: u64,
         receipt: Option<&Vec<u8>>,
-    ) -> Result<(), AccountError> {
+    ) -> Result<Vec<Log>, AccountError> {
         let key = KeyNibbles::from(&transaction.sender);
 
         let htlc = match receipt {
@@ -290,7 +327,40 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
             Account::HTLC(htlc.change_balance(new_balance)),
         );
 
-        Ok(())
+        // Build the revert logs
+        let mut logs = vec![
+            Log::PayFee {
+                from: transaction.sender.clone(),
+                fee: transaction.fee,
+            },
+            Log::Transfer {
+                from: transaction.sender.clone(),
+                to: transaction.recipient.clone(),
+                amount: transaction.value,
+            },
+        ];
+
+        let proof_buf = &mut &transaction.proof[..];
+        let proof_type: ProofType = Deserialize::deserialize(proof_buf)?;
+
+        logs.push(match proof_type {
+            ProofType::RegularTransfer => {
+                let pre_image: AnyHash = Deserialize::deserialize(proof_buf)?;
+                let hash_depth: u8 = Deserialize::deserialize(proof_buf)?;
+                Log::HTLCRegularTransfer {
+                    contract_address: htlc.sender,
+                    pre_image,
+                    hash_depth,
+                }
+            }
+            ProofType::EarlyResolve => Log::HTLCEarlyResolve {
+                contract_address: htlc.sender,
+            },
+            ProofType::TimeoutResolve => Log::HTLCTimeoutResolve {
+                contract_address: htlc.sender,
+            },
+        });
+        Ok(logs)
     }
 }
 
@@ -301,7 +371,7 @@ impl AccountInherentInteraction for HashedTimeLockedContract {
         _inherent: &Inherent,
         _block_height: u32,
         _block_time: u64,
-    ) -> Result<Option<Vec<u8>>, AccountError> {
+    ) -> Result<AccountInfo, AccountError> {
         Err(AccountError::InvalidInherent)
     }
 
@@ -312,7 +382,7 @@ impl AccountInherentInteraction for HashedTimeLockedContract {
         _block_height: u32,
         _block_time: u64,
         _receipt: Option<&Vec<u8>>,
-    ) -> Result<(), AccountError> {
+    ) -> Result<Vec<Log>, AccountError> {
         Err(AccountError::InvalidInherent)
     }
 }

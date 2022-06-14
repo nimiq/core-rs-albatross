@@ -1,9 +1,10 @@
+use nimiq_hash::Hash;
 use rand::{rngs::StdRng, SeedableRng};
 use std::convert::TryFrom;
 use std::time::Instant;
 use tempfile::tempdir;
 
-use nimiq_account::{Accounts, Inherent, InherentType};
+use nimiq_account::{Accounts, BatchInfo, Inherent, InherentType, Log, TransactionLog};
 use nimiq_account::{Receipt, Receipts};
 use nimiq_bls::KeyPair as BLSKeyPair;
 use nimiq_database::WriteTransaction;
@@ -45,6 +46,13 @@ fn it_can_commit_and_revert_a_block_body() {
         data: None,
     }];
 
+    let mut tx_logs = Vec::new();
+
+    let inherent_logs = vec![Log::PayoutReward {
+        to: reward.target.clone(),
+        value: reward.value,
+    }];
+
     assert_eq!(
         accounts.get(&KeyNibbles::from(&address_validator), None),
         None
@@ -54,7 +62,11 @@ fn it_can_commit_and_revert_a_block_body() {
 
     assert_eq!(
         accounts.commit(&mut txn, &[], &[reward.clone()], 1, 1),
-        Ok(Receipts::from(receipts.clone()))
+        Ok(BatchInfo::new(
+            receipts.clone(),
+            tx_logs.clone(),
+            inherent_logs.clone()
+        ))
     );
 
     txn.commit();
@@ -78,7 +90,7 @@ fn it_can_commit_and_revert_a_block_body() {
         NetworkId::Main,
     );
 
-    let transactions = vec![tx];
+    let transactions = vec![tx.clone()];
 
     receipts.insert(
         0,
@@ -98,6 +110,21 @@ fn it_can_commit_and_revert_a_block_body() {
         },
     );
 
+    tx_logs.push(TransactionLog::new(
+        tx.hash(),
+        vec![
+            Log::PayFee {
+                from: tx.sender.clone(),
+                fee: tx.fee,
+            },
+            Log::Transfer {
+                from: tx.sender.clone(),
+                to: tx.recipient.clone(),
+                amount: tx.value,
+            },
+        ],
+    ));
+
     assert_eq!(
         accounts.get(&KeyNibbles::from(&address_recipient), None),
         None
@@ -107,7 +134,11 @@ fn it_can_commit_and_revert_a_block_body() {
 
     assert_eq!(
         accounts.commit(&mut txn, &transactions, &[reward.clone()], 2, 2),
-        Ok(Receipts::from(receipts.clone()))
+        Ok(BatchInfo::new(
+            receipts.clone(),
+            tx_logs.clone(),
+            inherent_logs.clone(),
+        ))
     );
 
     txn.commit();
@@ -139,9 +170,9 @@ fn it_can_commit_and_revert_a_block_body() {
             &[reward],
             2,
             2,
-            &Receipts::from(receipts)
+            &Receipts::from(receipts.clone())
         ),
-        Ok(())
+        Ok(BatchInfo::new(vec![], tx_logs, inherent_logs))
     );
 
     txn.commit();

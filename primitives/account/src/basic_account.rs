@@ -1,3 +1,5 @@
+use std::vec;
+
 use beserial::{Deserialize, Serialize};
 use nimiq_database::WriteTransaction;
 use nimiq_primitives::account::AccountType;
@@ -7,6 +9,7 @@ use nimiq_trie::key_nibbles::KeyNibbles;
 
 use crate::inherent::{Inherent, InherentType};
 use crate::interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction};
+use crate::logs::{AccountInfo, Log};
 use crate::{Account, AccountError, AccountsTrie};
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
@@ -22,7 +25,7 @@ impl AccountTransactionInteraction for BasicAccount {
         _transaction: &Transaction,
         _block_height: u32,
         _block_time: u64,
-    ) -> Result<(), AccountError> {
+    ) -> Result<AccountInfo, AccountError> {
         Err(AccountError::InvalidForRecipient)
     }
 
@@ -32,7 +35,7 @@ impl AccountTransactionInteraction for BasicAccount {
         transaction: &Transaction,
         _block_height: u32,
         _block_time: u64,
-    ) -> Result<Option<Vec<u8>>, AccountError> {
+    ) -> Result<AccountInfo, AccountError> {
         let key = KeyNibbles::from(&transaction.recipient);
 
         let leaf = accounts_tree.get(db_txn, &key);
@@ -59,7 +62,7 @@ impl AccountTransactionInteraction for BasicAccount {
             }),
         );
 
-        Ok(None)
+        Ok(AccountInfo::new(None, Vec::new()))
     }
 
     fn revert_incoming_transaction(
@@ -69,7 +72,7 @@ impl AccountTransactionInteraction for BasicAccount {
         _block_height: u32,
         _block_time: u64,
         receipt: Option<&Vec<u8>>,
-    ) -> Result<(), AccountError> {
+    ) -> Result<Vec<Log>, AccountError> {
         if receipt.is_some() {
             return Err(AccountError::InvalidReceipt);
         }
@@ -96,7 +99,7 @@ impl AccountTransactionInteraction for BasicAccount {
             );
         }
 
-        Ok(())
+        Ok(Vec::new())
     }
 
     fn commit_outgoing_transaction(
@@ -105,7 +108,7 @@ impl AccountTransactionInteraction for BasicAccount {
         transaction: &Transaction,
         _block_height: u32,
         _block_time: u64,
-    ) -> Result<Option<Vec<u8>>, AccountError> {
+    ) -> Result<AccountInfo, AccountError> {
         let key = KeyNibbles::from(&transaction.sender);
 
         let account = accounts_tree
@@ -144,7 +147,18 @@ impl AccountTransactionInteraction for BasicAccount {
             );
         }
 
-        Ok(None)
+        let logs = vec![
+            Log::PayFee {
+                from: transaction.sender.clone(),
+                fee: transaction.fee,
+            },
+            Log::Transfer {
+                from: transaction.sender.clone(),
+                to: transaction.recipient.clone(),
+                amount: transaction.value,
+            },
+        ];
+        Ok(AccountInfo::new(None, logs))
     }
 
     fn revert_outgoing_transaction(
@@ -154,7 +168,7 @@ impl AccountTransactionInteraction for BasicAccount {
         _block_height: u32,
         _block_time: u64,
         receipt: Option<&Vec<u8>>,
-    ) -> Result<(), AccountError> {
+    ) -> Result<Vec<Log>, AccountError> {
         if receipt.is_some() {
             return Err(AccountError::InvalidReceipt);
         }
@@ -169,10 +183,20 @@ impl AccountTransactionInteraction for BasicAccount {
         };
 
         let new_balance = Account::balance_add(current_balance, transaction.total_value())?;
-
+        let logs = vec![
+            Log::PayFee {
+                from: transaction.sender.clone(),
+                fee: transaction.fee,
+            },
+            Log::Transfer {
+                from: transaction.sender.clone(),
+                to: transaction.recipient.clone(),
+                amount: transaction.value,
+            },
+        ];
         // If the new balance is zero, it means this account didnt exist before, so we don't need to create it.
         if new_balance == Coin::ZERO {
-            return Ok(());
+            return Ok(logs);
         }
 
         accounts_tree.put(
@@ -183,7 +207,7 @@ impl AccountTransactionInteraction for BasicAccount {
             }),
         );
 
-        Ok(())
+        Ok(logs)
     }
 }
 
@@ -194,7 +218,7 @@ impl AccountInherentInteraction for BasicAccount {
         inherent: &Inherent,
         _block_height: u32,
         _block_time: u64,
-    ) -> Result<Option<Vec<u8>>, AccountError> {
+    ) -> Result<AccountInfo, AccountError> {
         if inherent.ty != InherentType::Reward {
             return Err(AccountError::InvalidInherent);
         }
@@ -218,7 +242,11 @@ impl AccountInherentInteraction for BasicAccount {
             }),
         );
 
-        Ok(None)
+        let logs = vec![Log::PayoutReward {
+            to: inherent.target.clone(),
+            value: inherent.value,
+        }];
+        Ok(AccountInfo::new(None, logs))
     }
 
     fn revert_inherent(
@@ -228,7 +256,7 @@ impl AccountInherentInteraction for BasicAccount {
         _block_height: u32,
         _block_time: u64,
         receipt: Option<&Vec<u8>>,
-    ) -> Result<(), AccountError> {
+    ) -> Result<Vec<Log>, AccountError> {
         if receipt.is_some() {
             return Err(AccountError::InvalidReceipt);
         }
@@ -255,6 +283,9 @@ impl AccountInherentInteraction for BasicAccount {
             }),
         );
 
-        Ok(())
+        Ok(vec![Log::PayoutReward {
+            to: inherent.target.clone(),
+            value: inherent.value,
+        }])
     }
 }

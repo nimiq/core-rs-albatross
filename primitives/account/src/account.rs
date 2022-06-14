@@ -8,10 +8,11 @@ use nimiq_transaction::Transaction;
 use nimiq_trie::key_nibbles::KeyNibbles;
 
 use crate::interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction};
+use crate::logs::AccountInfo;
 use crate::staking_contract::{Staker, Validator};
 use crate::{
     AccountError, AccountsTrie, BasicAccount, HashedTimeLockedContract, Inherent, StakingContract,
-    VestingContract,
+    VestingContract, Log,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -81,7 +82,7 @@ impl AccountTransactionInteraction for Account {
         transaction: &Transaction,
         block_height: u32,
         block_time: u64,
-    ) -> Result<(), AccountError> {
+    ) -> Result<AccountInfo, AccountError> {
         match transaction.recipient_type {
             AccountType::Vesting => VestingContract::create(
                 accounts_tree,
@@ -107,7 +108,7 @@ impl AccountTransactionInteraction for Account {
         transaction: &Transaction,
         block_height: u32,
         block_time: u64,
-    ) -> Result<Option<Vec<u8>>, AccountError> {
+    ) -> Result<AccountInfo, AccountError> {
         match transaction.recipient_type {
             AccountType::Basic => BasicAccount::commit_incoming_transaction(
                 accounts_tree,
@@ -148,7 +149,7 @@ impl AccountTransactionInteraction for Account {
         block_height: u32,
         block_time: u64,
         receipt: Option<&Vec<u8>>,
-    ) -> Result<(), AccountError> {
+    ) -> Result<Vec<Log>, AccountError> {
         match transaction.recipient_type {
             AccountType::Basic => BasicAccount::revert_incoming_transaction(
                 accounts_tree,
@@ -192,7 +193,7 @@ impl AccountTransactionInteraction for Account {
         transaction: &Transaction,
         block_height: u32,
         block_time: u64,
-    ) -> Result<Option<Vec<u8>>, AccountError> {
+    ) -> Result<AccountInfo, AccountError> {
         match transaction.sender_type {
             AccountType::Basic => BasicAccount::commit_outgoing_transaction(
                 accounts_tree,
@@ -233,7 +234,7 @@ impl AccountTransactionInteraction for Account {
         block_height: u32,
         block_time: u64,
         receipt: Option<&Vec<u8>>,
-    ) -> Result<(), AccountError> {
+    ) -> Result<Vec<Log>, AccountError> {
         match transaction.sender_type {
             AccountType::Basic => BasicAccount::revert_outgoing_transaction(
                 accounts_tree,
@@ -279,7 +280,7 @@ impl AccountInherentInteraction for Account {
         inherent: &Inherent,
         block_height: u32,
         block_time: u64,
-    ) -> Result<Option<Vec<u8>>, AccountError> {
+    ) -> Result<AccountInfo, AccountError> {
         // If the inherent target is the staking contract then we forward it to the staking contract
         // right here.
         if STAKING_CONTRACT_ADDRESS == inherent.target {
@@ -315,7 +316,7 @@ impl AccountInherentInteraction for Account {
         block_height: u32,
         block_time: u64,
         receipt: Option<&Vec<u8>>,
-    ) -> Result<(), AccountError> {
+    ) -> Result<Vec<Log>, AccountError> {
         // If the inherent target is the staking contract then we forward it to the staking contract
         // right here.
         if STAKING_CONTRACT_ADDRESS == inherent.target {
