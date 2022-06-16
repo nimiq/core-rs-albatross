@@ -19,7 +19,7 @@ maintenance = { status = "experimental" }
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = { version = "3.1", features = ["derive"] }
+clap = { version = "3.2", features = ["derive"] }
 console-subscriber = { version = "0.1", features = ["parking_lot"], optional = true }
 derive_builder = "0.11"
 directories = "4.0"
