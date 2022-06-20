@@ -696,11 +696,13 @@ impl ClientConfigBuilder {
     pub fn mempool(
         &mut self,
         size_limit: usize,
+        control_size_limit: usize,
         filter_rules: MempoolRules,
         filter_limit: usize,
     ) -> &mut Self {
         self.mempool = Some(MempoolConfig {
             size_limit,
+            control_size_limit,
             filter_rules,
             filter_limit,
         });

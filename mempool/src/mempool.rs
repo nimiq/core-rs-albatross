@@ -73,7 +73,10 @@ pub struct Mempool {
 
 impl Mempool {
     /// Default total size limit of transactions in the mempool (bytes)
-    pub const DEFAULT_SIZE_LIMIT: usize = 12000000;
+    pub const DEFAULT_SIZE_LIMIT: usize = 12_000_000;
+
+    /// Default total size limit of control transactions in the mempool (bytes)
+    pub const DEFAULT_CONTROL_SIZE_LIMIT: usize = 6_000_000;
 
     /// Creates a new mempool
     pub fn new(blockchain: Arc<RwLock<Blockchain>>, config: MempoolConfig) -> Self {
