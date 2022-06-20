@@ -382,6 +382,7 @@ pub struct DatabaseSettings {
 pub struct MempoolSettings {
     pub filter: Option<MempoolFilterSettings>,
     pub size_limit: Option<usize>,
+    pub control_size_limit: Option<usize>,
     pub blacklist_limit: Option<usize>,
 }
 
@@ -427,6 +428,9 @@ impl From<MempoolSettings> for MempoolConfig {
     fn from(mempool: MempoolSettings) -> Self {
         Self {
             size_limit: mempool.size_limit.unwrap_or(Mempool::DEFAULT_SIZE_LIMIT),
+            control_size_limit: mempool
+                .control_size_limit
+                .unwrap_or(Mempool::DEFAULT_CONTROL_SIZE_LIMIT),
             filter_limit: mempool
                 .blacklist_limit
                 .unwrap_or(MempoolFilter::DEFAULT_BLACKLIST_SIZE),
