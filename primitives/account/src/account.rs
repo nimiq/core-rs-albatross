@@ -11,8 +11,8 @@ use crate::interaction_traits::{AccountInherentInteraction, AccountTransactionIn
 use crate::logs::AccountInfo;
 use crate::staking_contract::{Staker, Validator};
 use crate::{
-    AccountError, AccountsTrie, BasicAccount, HashedTimeLockedContract, Inherent, StakingContract,
-    VestingContract, Log,
+    AccountError, AccountsTrie, BasicAccount, HashedTimeLockedContract, Inherent, Log,
+    StakingContract, VestingContract,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]

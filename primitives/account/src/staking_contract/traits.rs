@@ -568,7 +568,7 @@ impl AccountInherentInteraction for StakingContract {
                 if newly_parked {
                     logs.push(Log::Park {
                         validator_address: slot.validator_address,
-                        event_block: slot.event_block,
+                        event_block: block_height,
                     });
                 }
             }
@@ -718,7 +718,7 @@ impl AccountInherentInteraction for StakingContract {
                         0,
                         Log::Slash {
                             validator_address: slot.validator_address,
-                            event_block: block_height,
+                            event_block: slot.event_block,
                             slot: slot.slot,
                             newly_disabled: true,
                         },

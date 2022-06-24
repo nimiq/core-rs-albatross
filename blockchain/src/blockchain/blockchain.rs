@@ -196,7 +196,7 @@ impl Blockchain {
             time,
             notifier: Notifier::new(),
             fork_notifier: Notifier::new(),
-            log_notifier: Notifier::new(), 
+            log_notifier: Notifier::new(),
             chain_store,
             history_store,
             state: BlockchainState {
@@ -253,7 +253,7 @@ impl Blockchain {
             time,
             notifier: Notifier::new(),
             fork_notifier: Notifier::new(),
-            log_notifier: Notifier::new(), 
+            log_notifier: Notifier::new(),
             chain_store,
             history_store,
             state: BlockchainState {

@@ -1989,13 +1989,13 @@ fn slash_inherents_work() {
         vec![
             Log::Slash {
                 validator_address: slot.validator_address.clone(),
-                event_block: slot.event_block,
+                event_block: 1,
                 slot: slot.slot,
                 newly_disabled: true,
             },
             Log::Park {
                 validator_address: slot.validator_address.clone(),
-                event_block: slot.event_block,
+                event_block: 1 + BLOCKS_PER_BATCH,
             },
         ]
     );
@@ -2027,7 +2027,7 @@ fn slash_inherents_work() {
         Some(&receipt),
         &validator_address,
         slot.slot,
-        1 + BLOCKS_PER_BATCH,
+        1,
     );
 
     // Works in previous epoch, previous batch case.
@@ -2058,7 +2058,7 @@ fn slash_inherents_work() {
             },
             Log::Park {
                 validator_address: slot.validator_address,
-                event_block: slot.event_block,
+                event_block: 1 + BLOCKS_PER_EPOCH,
             },
         ]
     );
@@ -2089,7 +2089,7 @@ fn slash_inherents_work() {
         Some(&receipt),
         &validator_address,
         slot.slot,
-        129,
+        1,
     );
 }
 
@@ -2436,7 +2436,7 @@ fn revert_slash_inherent(
             },
             Log::Park {
                 validator_address: validator_address.clone(),
-                event_block: event_block,
+                event_block: block_height,
             },
         ])
     );

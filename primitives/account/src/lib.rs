@@ -22,7 +22,7 @@ mod error;
 mod htlc_contract;
 mod inherent;
 mod interaction_traits;
+mod logs;
 mod receipts;
 mod staking_contract;
 mod vesting_contract;
-mod logs;

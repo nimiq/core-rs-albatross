@@ -54,6 +54,9 @@ enum Command {
     /// Follow a validator state upon election blocks.
     FollowValidator { address: Address },
 
+    /// Follow the logs of the blockchain.
+    FollowLogs {},
+
     /// Show wallet accounts and their balances.
     #[clap(flatten)]
     Account(AccountCommand),
@@ -225,6 +228,13 @@ impl Command {
                         Ok(v) => println!("{:#?}", v),
                         Err(hash) => println!("Missing block {}", hash),
                     }
+                }
+            }
+
+            Command::FollowLogs {} => {
+                let mut stream = client.blockchain.logs_subscribe().await?;
+                while let Some(blocklog) = stream.next().await {
+                    println!("{:#?}", blocklog);
                 }
             }
 

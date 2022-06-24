@@ -1,7 +1,7 @@
 use nimiq_database::WriteTransaction;
 use nimiq_transaction::Transaction;
 
-use crate::{AccountError, AccountsTrie, Inherent, logs::AccountInfo, Log};
+use crate::{logs::AccountInfo, AccountError, AccountsTrie, Inherent, Log};
 
 pub trait AccountTransactionInteraction: Sized {
     fn create(
