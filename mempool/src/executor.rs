@@ -15,6 +15,7 @@ use nimiq_transaction::Transaction;
 
 use crate::filter::MempoolFilter;
 use crate::mempool_state::MempoolState;
+use crate::mempool_transactions::TxPriority;
 use crate::verify::{verify_tx, VerifyErr};
 
 const CONCURRENT_VERIF_TASKS: u32 = 1000;
@@ -98,7 +99,8 @@ impl<N: Network, T: Topic + Unpin + Sync> Future for MempoolExecutor<N, T> {
 
                     match verify_tx_ret {
                         Ok(mempool_state_lock) => {
-                            RwLockUpgradableReadGuard::upgrade(mempool_state_lock).put(&tx);
+                            RwLockUpgradableReadGuard::upgrade(mempool_state_lock)
+                                .put(&tx, TxPriority::MediumPriority);
                             MsgAcceptance::Accept
                         }
                         // Reject the message if signature verification fails or transaction is invalid

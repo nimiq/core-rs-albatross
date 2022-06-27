@@ -10,6 +10,11 @@ pub trait MempoolInterface {
 
     async fn push_transaction(&mut self, raw_tx: String) -> Result<Blake2bHash, Self::Error>;
 
+    async fn push_high_priority_transaction(
+        &mut self,
+        raw_tx: String,
+    ) -> Result<Blake2bHash, Self::Error>;
+
     async fn mempool_content(
         &mut self,
         include_transactions: bool,

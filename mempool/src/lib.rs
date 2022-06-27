@@ -7,10 +7,6 @@
 //! transactions that should be included in a block.
 #[macro_use]
 extern crate log;
-
-/// Mempool transaction module
-mod mempool_transactions;
-
 /// Mempool state module
 mod mempool_state;
 
@@ -18,6 +14,7 @@ mod mempool_state;
 pub mod config;
 /// Mempool executor module
 pub mod executor;
+
 /// Mempool filter module
 pub mod filter;
 /// Main mempool module
@@ -25,5 +22,7 @@ pub mod mempool;
 /// Mempool metrics
 #[cfg(feature = "metrics")]
 mod mempool_metrics;
+/// Mempool transaction module
+pub mod mempool_transactions;
 /// Verify transaction module
 pub mod verify;

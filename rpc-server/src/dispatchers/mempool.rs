@@ -6,6 +6,7 @@ use beserial::Deserialize;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_mempool::mempool::Mempool;
 
+use nimiq_mempool::mempool_transactions::TxPriority;
 use nimiq_rpc_interface::mempool::MempoolInterface;
 use nimiq_rpc_interface::types::{HashOrTx, MempoolInfo};
 
@@ -33,7 +34,26 @@ impl MempoolInterface for MempoolDispatcher {
             Deserialize::deserialize_from_vec(&hex::decode(&raw_tx)?)?;
         let txid = tx.hash::<Blake2bHash>();
 
-        match self.mempool.add_transaction(tx).await {
+        match self.mempool.add_transaction(tx, None).await {
+            Ok(_) => Ok(txid),
+            Err(e) => Err(Error::MempoolError(e)),
+        }
+    }
+
+    /// Pushes the given serialized transaction to the local mempool with high priority
+    async fn push_high_priority_transaction(
+        &mut self,
+        raw_tx: String,
+    ) -> Result<Blake2bHash, Self::Error> {
+        let tx: nimiq_transaction::Transaction =
+            Deserialize::deserialize_from_vec(&hex::decode(&raw_tx)?)?;
+        let txid = tx.hash::<Blake2bHash>();
+
+        match self
+            .mempool
+            .add_transaction(tx, Some(TxPriority::HighPriority))
+            .await
+        {
             Ok(_) => Ok(txid),
             Err(e) => Err(Error::MempoolError(e)),
         }

@@ -424,7 +424,7 @@ async fn spam(
             let consensus1 = consensus.clone();
             let mp = std::sync::Arc::clone(&mempool);
             tokio::spawn(async move {
-                if let Err(e) = mp.add_transaction(tx.clone()).await {
+                if let Err(e) = mp.add_transaction(tx.clone(), None).await {
                     log::warn!("Mempool rejected transaction: {:?} - {:#?}", e, tx);
                 }
                 if let Err(e) = consensus1.send_transaction(tx).await {
