@@ -667,7 +667,7 @@ impl BlockchainInterface for BlockchainDispatcher {
                             is_tx_logs_related_to_any_addresses(&tx_log, &addresses)
                         });
                         if !inherent_logs.is_empty() || !tx_logs.is_empty() {
-                            block_log = Some(BlockLog::AppliedBlockLog {
+                            block_log = Some(BlockLog::RevertBlockLog {
                                 inherent_logs,
                                 block_hash,
                                 block_number,
