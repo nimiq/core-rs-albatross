@@ -8,7 +8,7 @@ FROM $RUST_IMAGE AS builder
 
 # Fetch dependencies.
 RUN apt-get update \
-    && apt-get --no-install-recommends -y install libssl-dev pkg-config clang\
+    && apt-get --no-install-recommends -y install libssl-dev pkg-config clang protobuf-compiler\
     && rm -rf /var/lib/apt/lists/*
 
 # Copy sources.
