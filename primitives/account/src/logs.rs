@@ -7,7 +7,7 @@ use nimiq_transaction::account::htlc_contract::{AnyHash, HashAlgorithm};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", tag = "type")]
 pub enum Log {
     // Used together with all transactions (inherents are excluded).
     PayFee {
@@ -251,7 +251,7 @@ impl TransactionLog {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", tag = "type")]
 pub enum BlockLog {
     AppliedBlockLog {
         inherent_logs: Vec<Log>,
