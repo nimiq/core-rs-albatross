@@ -12,10 +12,7 @@ use nimiq_transaction::account::htlc_contract::{AnyHash, HashAlgorithm};
 pub enum Log {
     // Used together with all transactions (inherents are excluded).
     #[serde(rename_all = "camelCase")]
-    PayFee {
-        from: Address,
-        fee: Coin,
-    },
+    PayFee { from: Address, fee: Coin },
 
     // Basic account associated event.
     // Used also for every event of HTLCs, Vesting Contracts that implies a control change of the coins.
@@ -39,9 +36,7 @@ pub enum Log {
     },
 
     #[serde(rename_all = "camelCase")]
-    HTLCTimeoutResolve {
-        contract_address: Address,
-    },
+    HTLCTimeoutResolve { contract_address: Address },
 
     #[serde(rename_all = "camelCase")]
     HTLCRegularTransfer {
@@ -51,9 +46,7 @@ pub enum Log {
     },
 
     #[serde(rename_all = "camelCase")]
-    HTLCEarlyResolve {
-        contract_address: Address,
-    },
+    HTLCEarlyResolve { contract_address: Address },
 
     #[serde(rename_all = "camelCase")]
     VestingCreate {
@@ -79,19 +72,13 @@ pub enum Log {
     },
 
     #[serde(rename_all = "camelCase")]
-    InactivateValidator {
-        validator_address: Address,
-    },
+    InactivateValidator { validator_address: Address },
 
     #[serde(rename_all = "camelCase")]
-    ReactivateValidator {
-        validator_address: Address,
-    },
+    ReactivateValidator { validator_address: Address },
 
     #[serde(rename_all = "camelCase")]
-    UnparkValidator {
-        validator_address: Address,
-    },
+    UnparkValidator { validator_address: Address },
 
     #[serde(rename_all = "camelCase")]
     CreateStaker {
@@ -128,10 +115,7 @@ pub enum Log {
     },
 
     #[serde(rename_all = "camelCase")]
-    PayoutReward {
-        to: Address,
-        value: Coin,
-    },
+    PayoutReward { to: Address, value: Coin },
 
     #[serde(rename_all = "camelCase")]
     Park {
@@ -148,9 +132,7 @@ pub enum Log {
     },
 
     #[serde(rename_all = "camelCase")]
-    RevertContract {
-        contract_address: Address,
-    },
+    RevertContract { contract_address: Address },
 }
 
 impl Log {

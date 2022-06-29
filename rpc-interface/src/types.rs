@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::{DeserializeFromStr, SerializeDisplay};
 
 use beserial::Serialize as BeSerialize;
-use nimiq_account::{Log, TransactionLog};
+use nimiq_account::Log;
 use nimiq_block::{MultiSignature, ViewChangeProof};
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_bls::CompressedPublicKey;
@@ -766,47 +766,68 @@ impl LogType {
     }
 }
 
-pub fn contains_log_type(log: &Log, log_types: &Vec<LogType>) -> bool {
-    for log_type in log_types.into_iter() {
-        if log_type.eq(&LogType::with_log(log)) {
-            return true;
-        }
+impl Display for LogType {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "+{}", self.to_string())
     }
-    false
 }
 
-pub fn is_log_related_to_addresses(log: &Log, addresses: &Vec<Address>) -> bool {
-    for address in addresses.into_iter() {
-        if log.is_related_to_address(&address) {
-            return true;
+impl FromStr for LogType {
+    type Err = Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim() {
+            "PayFee" => Ok(LogType::PayFee),
+            "Transfer" => Ok(LogType::Transfer),
+            "HTLCCreate" => Ok(LogType::HTLCCreate),
+            "HTLCTimeoutResolve" => Ok(LogType::HTLCTimeoutResolve),
+            "HTLCRegularTransfer" => Ok(LogType::HTLCRegularTransfer),
+            "HTLCEarlyResolve" => Ok(LogType::HTLCEarlyResolve),
+            "VestingCreate" => Ok(LogType::VestingCreate),
+            "CreateValidator" => Ok(LogType::CreateValidator),
+            "UpdateValidator" => Ok(LogType::UpdateValidator),
+            "InactivateValidator" => Ok(LogType::InactivateValidator),
+            "ReactivateValidator" => Ok(LogType::ReactivateValidator),
+            "UnparkValidator" => Ok(LogType::UnparkValidator),
+            "CreateStaker" => Ok(LogType::CreateStaker),
+            "Stake" => Ok(LogType::Stake),
+            "UpdateStaker" => Ok(LogType::UpdateStaker),
+            "DeleteValidator" => Ok(LogType::DeleteValidator),
+            "Unstake" => Ok(LogType::Unstake),
+            "PayoutReward" => Ok(LogType::PayoutReward),
+            "Park" => Ok(LogType::Park),
+            "Slash" => Ok(LogType::Slash),
+            "RevertContract" => Ok(LogType::RevertContract),
+            _ => Err(Error::InvalidLogType(s.to_owned())),
         }
     }
-    false
 }
 
-pub fn tx_logs_contains_any_log_type(tx_log: &TransactionLog, log_types: &Vec<LogType>) -> bool {
-    tx_log.logs.iter().any(|log| {
-        for log_type in log_types.iter() {
+pub fn is_log_type_and_related_to_addresses(
+    log: &Log,
+    addresses: &Vec<Address>,
+    log_types: &Vec<LogType>,
+) -> bool {
+    if addresses.is_empty() {
+        for log_type in log_types.into_iter() {
             if log_type.eq(&LogType::with_log(log)) {
                 return true;
             }
         }
-        false
-    })
-}
-
-pub fn is_tx_logs_related_to_any_addresses(
-    tx_log: &TransactionLog,
-    addresses: &Vec<Address>,
-) -> bool {
-    tx_log.logs.iter().any(|log| {
-        for address in addresses.iter() {
-            if log.is_related_to_address(address) {
-                return true;
+    } else {
+        for address in addresses.into_iter() {
+            if log.is_related_to_address(&address) {
+                if log_types.is_empty() {
+                    return true;
+                }
+                for log_type in log_types.into_iter() {
+                    if log_type.eq(&LogType::with_log(log)) {
+                        return true;
+                    }
+                }
             }
         }
-        false
-    })
+    }
+    false
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

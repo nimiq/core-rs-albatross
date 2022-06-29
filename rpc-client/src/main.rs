@@ -11,7 +11,7 @@ use nimiq_rpc_interface::{
     blockchain::{BlockchainInterface, BlockchainProxy},
     consensus::{ConsensusInterface, ConsensusProxy},
     mempool::MempoolProxy,
-    types::{BlockNumberOrHash, ValidityStartHeight},
+    types::{BlockNumberOrHash, LogType, ValidityStartHeight},
     wallet::{WalletInterface, WalletProxy},
 };
 
@@ -54,8 +54,14 @@ enum Command {
     /// Follow a validator state upon election blocks.
     FollowValidator { address: Address },
 
-    /// Follow the logs of the blockchain.
-    FollowLogs {},
+    /// Follow the logs associated with the specified addresses and of any of the log types given. If no addresses or logtypes are provided it fetches all logs.
+    FollowLogsOfAddressesAndTypes {
+        #[clap(short = 'a', long, multiple_values = true)]
+        addresses: Vec<Address>,
+
+        #[clap(short = 'l', long, multiple_values = true)]
+        log_types: Vec<LogType>,
+    },
 
     /// Show wallet accounts and their balances.
     #[clap(flatten)]
@@ -204,10 +210,7 @@ impl Command {
                     let mut stream = client.blockchain.head_subscribe(Some(false)).await?;
 
                     while let Some(block) = stream.next().await {
-                        match block {
-                            Ok(block) => println!("{:#?}", block),
-                            Err(hash) => println!("Missing block {}", hash),
-                        }
+                        println!("{:#?}", block);
                     }
                 } else {
                     let mut stream = client.blockchain.head_hash_subscribe().await?;
@@ -224,15 +227,23 @@ impl Command {
                     .election_validator_subscribe(address)
                     .await?;
                 while let Some(validator) = stream.next().await {
-                    match validator {
-                        Ok(v) => println!("{:#?}", v),
-                        Err(hash) => println!("Missing block {}", hash),
-                    }
+                    println!("{:#?}", validator);
                 }
             }
 
-            Command::FollowLogs {} => {
-                let mut stream = client.blockchain.logs_subscribe().await?;
+            Command::FollowLogsOfAddressesAndTypes {
+                addresses,
+                log_types,
+            } => {
+                let mut stream;
+                if addresses.is_empty() && log_types.is_empty() {
+                    stream = client.blockchain.logs_subscribe().await?;
+                } else {
+                    stream = client
+                        .blockchain
+                        .logs_by_type_and_addresses_subscribe(addresses, log_types)
+                        .await?;
+                }
                 while let Some(blocklog) = stream.next().await {
                     println!("{:#?}", blocklog);
                 }
@@ -435,7 +446,7 @@ async fn run_app(opt: Opt) -> Result<(), Error> {
     };
 
     let client = Client::new(url, credentials).await?;
-
+    println!("command: {:?}", opt.command);
     opt.command.run(client).await?;
 
     Ok(())

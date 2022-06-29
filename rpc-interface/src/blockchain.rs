@@ -126,13 +126,9 @@ pub trait BlockchainInterface {
     async fn logs_subscribe(&mut self) -> Result<BoxStream<'static, BlockLog>, Self::Error>;
 
     #[stream]
-    async fn logs_by_addresses_subscribe(
+    async fn logs_by_type_and_addresses_subscribe(
         &mut self,
         addresses: Vec<Address>,
-    ) -> Result<BoxStream<'static, BlockLog>, Self::Error>;
-    #[stream]
-    async fn logs_by_type_subscribe(
-        &mut self,
         log_types: Vec<LogType>,
     ) -> Result<BoxStream<'static, BlockLog>, Self::Error>;
 }

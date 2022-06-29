@@ -4,14 +4,13 @@ use async_trait::async_trait;
 use futures::{future, stream::BoxStream, StreamExt};
 use parking_lot::RwLock;
 
-use nimiq_account::{BlockLog, StakingContract};
+use nimiq_account::{BlockLog, StakingContract, TransactionLog};
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainEvent};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::{coin::Coin, policy};
 use nimiq_rpc_interface::types::{
-    contains_log_type, is_log_related_to_addresses, is_tx_logs_related_to_any_addresses,
-    tx_logs_contains_any_log_type, BlockchainState, ParkedSet, Validator,
+    is_log_type_and_related_to_addresses, BlockchainState, ParkedSet, Validator,
 };
 use nimiq_rpc_interface::{
     blockchain::BlockchainInterface,
@@ -622,71 +621,11 @@ impl BlockchainInterface for BlockchainDispatcher {
         Ok(stream.boxed())
     }
 
-    /// Subscribes to log events related to a given list of addresses.
+    /// Subscribes to log events related to a given list of addresses and of any of the log types provided.
     #[stream]
-    async fn logs_by_addresses_subscribe(
+    async fn logs_by_type_and_addresses_subscribe(
         &mut self,
         addresses: Vec<Address>,
-    ) -> Result<BoxStream<'static, BlockLog>, Self::Error> {
-        let stream = self.logs_subscribe().await?;
-
-        Ok(stream
-            .filter_map(move |event| {
-                let result = match event {
-                    BlockLog::AppliedBlock {
-                        mut inherent_logs,
-                        block_hash,
-                        block_number,
-                        timestamp,
-                        mut tx_logs,
-                    } => {
-                        let mut block_log = None;
-                        inherent_logs.retain(|log| is_log_related_to_addresses(&log, &addresses));
-                        tx_logs.retain(|tx_log| {
-                            is_tx_logs_related_to_any_addresses(&tx_log, &addresses)
-                        });
-                        if !inherent_logs.is_empty() || !tx_logs.is_empty() {
-                            block_log = Some(BlockLog::AppliedBlock {
-                                inherent_logs,
-                                block_hash,
-                                block_number,
-                                timestamp,
-                                tx_logs,
-                            });
-                        }
-                        block_log
-                    }
-                    BlockLog::RevertedBlock {
-                        mut inherent_logs,
-                        block_hash,
-                        block_number,
-                        mut tx_logs,
-                    } => {
-                        let mut block_log = None;
-                        inherent_logs.retain(|log| is_log_related_to_addresses(&log, &addresses));
-                        tx_logs.retain(|tx_log| {
-                            is_tx_logs_related_to_any_addresses(&tx_log, &addresses)
-                        });
-                        if !inherent_logs.is_empty() || !tx_logs.is_empty() {
-                            block_log = Some(BlockLog::RevertedBlock {
-                                inherent_logs,
-                                block_hash,
-                                block_number,
-                                tx_logs,
-                            });
-                        }
-                        block_log
-                    }
-                };
-                future::ready(result)
-            })
-            .boxed())
-    }
-
-    /// Subscribes to log events related to a given list of addresses.
-    #[stream]
-    async fn logs_by_type_subscribe(
-        &mut self,
         log_types: Vec<LogType>,
     ) -> Result<BoxStream<'static, BlockLog>, Self::Error> {
         let stream = self.logs_subscribe().await?;
@@ -699,11 +638,27 @@ impl BlockchainInterface for BlockchainDispatcher {
                         block_hash,
                         block_number,
                         timestamp,
-                        mut tx_logs,
+                        tx_logs,
                     } => {
+                        inherent_logs.retain(|log| {
+                            is_log_type_and_related_to_addresses(&log, &addresses, &log_types)
+                        });
+                        let tx_logs: Vec<TransactionLog> = tx_logs
+                            .into_iter()
+                            .filter_map(|mut tx_log| {
+                                tx_log.logs.retain(|log| {
+                                    is_log_type_and_related_to_addresses(
+                                        log, &addresses, &log_types,
+                                    )
+                                });
+                                if tx_log.logs.is_empty() {
+                                    None
+                                } else {
+                                    Some(tx_log)
+                                }
+                            })
+                            .collect();
                         let mut block_log = None;
-                        inherent_logs.retain(|log| contains_log_type(&log, &log_types));
-                        tx_logs.retain(|tx_log| tx_logs_contains_any_log_type(&tx_log, &log_types));
                         if !inherent_logs.is_empty() || !tx_logs.is_empty() {
                             block_log = Some(BlockLog::AppliedBlock {
                                 inherent_logs,
@@ -719,11 +674,28 @@ impl BlockchainInterface for BlockchainDispatcher {
                         mut inherent_logs,
                         block_hash,
                         block_number,
-                        mut tx_logs,
+                        tx_logs,
                     } => {
+                        inherent_logs.retain(|log| {
+                            is_log_type_and_related_to_addresses(&log, &addresses, &log_types)
+                        });
+                        let tx_logs: Vec<TransactionLog> = tx_logs
+                            .into_iter()
+                            .filter_map(|mut tx_log| {
+                                tx_log.logs.retain(|log| {
+                                    is_log_type_and_related_to_addresses(
+                                        log, &addresses, &log_types,
+                                    )
+                                });
+                                if tx_log.logs.is_empty() {
+                                    None
+                                } else {
+                                    Some(tx_log)
+                                }
+                            })
+                            .collect();
+
                         let mut block_log = None;
-                        inherent_logs.retain(|log| contains_log_type(&log, &log_types));
-                        tx_logs.retain(|tx_log| tx_logs_contains_any_log_type(&tx_log, &log_types));
                         if !inherent_logs.is_empty() || !tx_logs.is_empty() {
                             block_log = Some(BlockLog::RevertedBlock {
                                 inherent_logs,
