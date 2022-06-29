@@ -560,15 +560,16 @@ impl BlockchainInterface for BlockchainDispatcher {
     async fn head_subscribe(
         &mut self,
         include_transactions: Option<bool>,
-    ) -> Result<BoxStream<'static, Result<Block, Blake2bHash>>, Error> {
+    ) -> Result<BoxStream<'static, Block>, Error> {
         let blockchain = Arc::clone(&self.blockchain);
         let stream = self.head_hash_subscribe().await?;
 
         Ok(stream
-            .map(move |hash| {
+            .filter_map(move |hash| {
                 let blockchain_rg = blockchain.read();
-                get_block_by_hash(blockchain_rg.deref(), &hash, include_transactions)
-                    .map_err(|_| hash)
+                let result = get_block_by_hash(blockchain_rg.deref(), &hash, include_transactions)
+                    .map_or_else(|_| None, |b| Some(b));
+                future::ready(result)
             })
             .boxed())
     }
@@ -594,19 +595,17 @@ impl BlockchainInterface for BlockchainDispatcher {
     async fn election_validator_subscribe(
         &mut self,
         address: Address,
-    ) -> Result<BoxStream<'static, Result<BlockchainState<Validator>, Blake2bHash>>, Error> {
+    ) -> Result<BoxStream<'static, BlockchainState<Validator>>, Error> {
         let blockchain = Arc::clone(&self.blockchain);
         let stream = self.blockchain.write().notifier.as_stream();
 
         Ok(stream
             .filter_map(move |event| {
                 let result = match event {
-                    BlockchainEvent::EpochFinalized(hash) => {
+                    BlockchainEvent::EpochFinalized(..) => {
                         let blockchain_rg = blockchain.read();
-                        Some(
-                            get_validator_by_address(&blockchain_rg, &address, Some(false))
-                                .map_err(|_| hash),
-                        )
+                        get_validator_by_address(&blockchain_rg, &address, Some(false))
+                            .map_or_else(|_| None, |v| Some(v))
                     }
                     _ => None,
                 };
