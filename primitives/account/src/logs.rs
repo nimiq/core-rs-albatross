@@ -282,6 +282,7 @@ pub enum BlockLog {
         inherent_logs: Vec<Log>,
         block_hash: Blake2bHash,
         block_number: u32,
+        timestamp: u64,
         #[serde(rename = "transactions")]
         tx_logs: Vec<TransactionLog>,
     },

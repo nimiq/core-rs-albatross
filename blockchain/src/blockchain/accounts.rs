@@ -67,6 +67,7 @@ impl Blockchain {
                     inherent_logs: batch_info.inherent_logs,
                     block_hash: macro_block.hash(),
                     block_number: macro_block.header.block_number,
+                    timestamp: macro_block.header.timestamp,
                     tx_logs: batch_info.tx_logs,
                 })
             }
@@ -126,6 +127,7 @@ impl Blockchain {
                     inherent_logs: batch_info.inherent_logs,
                     block_hash: micro_block.hash(),
                     block_number: micro_block.header.block_number,
+                    timestamp: micro_block.header.timestamp,
                     tx_logs: batch_info.tx_logs,
                 })
             }

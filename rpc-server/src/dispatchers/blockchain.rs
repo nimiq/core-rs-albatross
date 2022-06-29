@@ -638,6 +638,7 @@ impl BlockchainInterface for BlockchainDispatcher {
                         mut inherent_logs,
                         block_hash,
                         block_number,
+                        timestamp,
                         mut tx_logs,
                     } => {
                         let mut block_log = None;
@@ -650,6 +651,7 @@ impl BlockchainInterface for BlockchainDispatcher {
                                 inherent_logs,
                                 block_hash,
                                 block_number,
+                                timestamp,
                                 tx_logs,
                             });
                         }
@@ -697,6 +699,7 @@ impl BlockchainInterface for BlockchainDispatcher {
                         mut inherent_logs,
                         block_hash,
                         block_number,
+                        timestamp,
                         mut tx_logs,
                     } => {
                         let mut block_log = None;
@@ -707,6 +710,7 @@ impl BlockchainInterface for BlockchainDispatcher {
                                 inherent_logs,
                                 block_hash,
                                 block_number,
+                                timestamp,
                                 tx_logs,
                             });
                         }
