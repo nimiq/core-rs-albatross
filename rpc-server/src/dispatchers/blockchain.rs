@@ -634,7 +634,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         Ok(stream
             .filter_map(move |event| {
                 let result = match event {
-                    BlockLog::AppliedBlockLog {
+                    BlockLog::AppliedBlock {
                         mut inherent_logs,
                         block_hash,
                         block_number,
@@ -646,7 +646,7 @@ impl BlockchainInterface for BlockchainDispatcher {
                             is_tx_logs_related_to_any_addresses(&tx_log, &addresses)
                         });
                         if !inherent_logs.is_empty() || !tx_logs.is_empty() {
-                            block_log = Some(BlockLog::AppliedBlockLog {
+                            block_log = Some(BlockLog::AppliedBlock {
                                 inherent_logs,
                                 block_hash,
                                 block_number,
@@ -655,7 +655,7 @@ impl BlockchainInterface for BlockchainDispatcher {
                         }
                         block_log
                     }
-                    BlockLog::RevertBlockLog {
+                    BlockLog::RevertedBlock {
                         mut inherent_logs,
                         block_hash,
                         block_number,
@@ -667,7 +667,7 @@ impl BlockchainInterface for BlockchainDispatcher {
                             is_tx_logs_related_to_any_addresses(&tx_log, &addresses)
                         });
                         if !inherent_logs.is_empty() || !tx_logs.is_empty() {
-                            block_log = Some(BlockLog::RevertBlockLog {
+                            block_log = Some(BlockLog::RevertedBlock {
                                 inherent_logs,
                                 block_hash,
                                 block_number,
@@ -693,7 +693,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         Ok(stream
             .filter_map(move |event| {
                 let result = match event {
-                    BlockLog::AppliedBlockLog {
+                    BlockLog::AppliedBlock {
                         mut inherent_logs,
                         block_hash,
                         block_number,
@@ -703,7 +703,7 @@ impl BlockchainInterface for BlockchainDispatcher {
                         inherent_logs.retain(|log| contains_log_type(&log, &log_types));
                         tx_logs.retain(|tx_log| tx_logs_contains_any_log_type(&tx_log, &log_types));
                         if !inherent_logs.is_empty() || !tx_logs.is_empty() {
-                            block_log = Some(BlockLog::AppliedBlockLog {
+                            block_log = Some(BlockLog::AppliedBlock {
                                 inherent_logs,
                                 block_hash,
                                 block_number,
@@ -712,7 +712,7 @@ impl BlockchainInterface for BlockchainDispatcher {
                         }
                         block_log
                     }
-                    BlockLog::RevertBlockLog {
+                    BlockLog::RevertedBlock {
                         mut inherent_logs,
                         block_hash,
                         block_number,
@@ -722,7 +722,7 @@ impl BlockchainInterface for BlockchainDispatcher {
                         inherent_logs.retain(|log| contains_log_type(&log, &log_types));
                         tx_logs.retain(|tx_log| tx_logs_contains_any_log_type(&tx_log, &log_types));
                         if !inherent_logs.is_empty() || !tx_logs.is_empty() {
-                            block_log = Some(BlockLog::RevertBlockLog {
+                            block_log = Some(BlockLog::RevertedBlock {
                                 inherent_logs,
                                 block_hash,
                                 block_number,

@@ -63,7 +63,7 @@ impl Blockchain {
                 );
 
                 let batch_info = batch_info.unwrap();
-                Ok(BlockLog::AppliedBlockLog {
+                Ok(BlockLog::AppliedBlock {
                     inherent_logs: batch_info.inherent_logs,
                     block_hash: macro_block.hash(),
                     block_number: macro_block.header.block_number,
@@ -122,7 +122,7 @@ impl Blockchain {
                     &ext_txs,
                 );
 
-                Ok(BlockLog::AppliedBlockLog {
+                Ok(BlockLog::AppliedBlock {
                     inherent_logs: batch_info.inherent_logs,
                     block_hash: micro_block.hash(),
                     block_number: micro_block.header.block_number,
@@ -200,7 +200,7 @@ impl Blockchain {
             num_txs,
         );
 
-        Ok(BlockLog::RevertBlockLog {
+        Ok(BlockLog::RevertedBlock {
             inherent_logs: batch_info.inherent_logs,
             block_hash: micro_block.hash(),
             block_number: micro_block.header.block_number,

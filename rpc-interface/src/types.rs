@@ -698,6 +698,7 @@ impl Validator {
 pub struct BlockchainState<T> {
     pub block_number: u32,
     pub block_hash: Blake2bHash,
+    #[serde(flatten)]
     pub value: T,
 }
 
