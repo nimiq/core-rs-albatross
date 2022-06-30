@@ -117,13 +117,10 @@ pub trait BlockchainInterface {
         -> Result<BoxStream<'static, Blake2bHash>, Self::Error>;
 
     #[stream]
-    async fn election_validator_subscribe(
+    async fn validator_election_subscribe(
         &mut self,
         address: Address,
     ) -> Result<BoxStream<'static, BlockchainState<Validator>>, Self::Error>;
-
-    #[stream]
-    async fn logs_subscribe(&mut self) -> Result<BoxStream<'static, BlockLog>, Self::Error>;
 
     #[stream]
     async fn logs_by_type_and_addresses_subscribe(

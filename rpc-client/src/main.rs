@@ -54,7 +54,8 @@ enum Command {
     /// Follow a validator state upon election blocks.
     FollowValidator { address: Address },
 
-    /// Follow the logs associated with the specified addresses and of any of the log types given. If no addresses or logtypes are provided it fetches all logs.
+    /// Follow the logs associated with the specified addresses and of any of the log types given.
+    /// If no addresses or no logtypes are provided it fetches all logs.
     FollowLogsOfAddressesAndTypes {
         #[clap(short = 'a', long, multiple_values = true)]
         addresses: Vec<Address>,
@@ -224,7 +225,7 @@ impl Command {
             Command::FollowValidator { address } => {
                 let mut stream = client
                     .blockchain
-                    .election_validator_subscribe(address)
+                    .validator_election_subscribe(address)
                     .await?;
                 while let Some(validator) = stream.next().await {
                     println!("{:#?}", validator);
@@ -235,15 +236,11 @@ impl Command {
                 addresses,
                 log_types,
             } => {
-                let mut stream;
-                if addresses.is_empty() && log_types.is_empty() {
-                    stream = client.blockchain.logs_subscribe().await?;
-                } else {
-                    stream = client
-                        .blockchain
-                        .logs_by_type_and_addresses_subscribe(addresses, log_types)
-                        .await?;
-                }
+                let mut stream = client
+                    .blockchain
+                    .logs_by_type_and_addresses_subscribe(addresses, log_types)
+                    .await?;
+
                 while let Some(blocklog) = stream.next().await {
                     println!("{:#?}", blocklog);
                 }
@@ -446,7 +443,7 @@ async fn run_app(opt: Opt) -> Result<(), Error> {
     };
 
     let client = Client::new(url, credentials).await?;
-    println!("command: {:?}", opt.command);
+
     opt.command.run(client).await?;
 
     Ok(())

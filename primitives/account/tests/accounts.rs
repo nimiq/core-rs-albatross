@@ -480,7 +480,7 @@ fn accounts_performance() {
     let address_validator = Address::from([1u8; Address::SIZE]);
     let reward = Inherent {
         ty: InherentType::Reward,
-        target: address_validator.clone(),
+        target: address_validator,
         value: Coin::from_u64_unchecked(10000),
         data: vec![],
     };

@@ -79,7 +79,7 @@ fn basic_transfer_works() {
     let account_info =
         BasicAccount::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 1, 2).unwrap();
     assert_eq!(account_info.receipt, None);
-    assert_eq!(account_info.logs.is_empty(), true);
+    assert!(account_info.logs.is_empty());
 
     assert_eq!(
         accounts_tree.get(&db_txn, &key_sender).unwrap().balance(),
@@ -190,7 +190,7 @@ fn create_and_prune_works() {
     let account_info =
         BasicAccount::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 1, 2).unwrap();
     assert_eq!(account_info.receipt, None);
-    assert_eq!(account_info.logs.is_empty(), true);
+    assert!(account_info.logs.is_empty());
 
     assert_eq!(accounts_tree.get(&db_txn, &key_sender), None);
 
@@ -224,7 +224,7 @@ fn create_and_prune_works() {
     let logs =
         BasicAccount::revert_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 1, 2, None)
             .unwrap();
-    assert_eq!(logs.is_empty(), true);
+    assert!(logs.is_empty());
 
     assert_eq!(
         accounts_tree.get(&db_txn, &key_sender).unwrap().balance(),

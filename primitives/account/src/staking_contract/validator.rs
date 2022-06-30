@@ -15,7 +15,7 @@ use crate::staking_contract::receipts::{
     DeleteValidatorReceipt, InactivateValidatorReceipt, ReactivateValidatorReceipt,
     UnparkValidatorReceipt, UpdateValidatorReceipt,
 };
-use crate::{Account, AccountError, AccountsTrie, StakingContract};
+use crate::{Account, AccountError, AccountsTrie, Receipt, StakingContract};
 
 /// Struct representing a validator in the staking contract.
 /// Actions concerning a validator are:
@@ -74,6 +74,7 @@ impl StakingContract {
     /// Creates a new validator. The initial stake is always equal to the validator deposit
     /// and can only be retrieved by deleting the validator.
     /// This function is public to fill the genesis staking contract.
+    /// The OperationInfo has always receipt = None, thus the type instationtion of the generic type to Receipt is irrelevant.
     pub fn create_validator(
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
@@ -82,7 +83,7 @@ impl StakingContract {
         voting_key: BlsPublicKey,
         reward_address: Address,
         signal_data: Option<Blake2bHash>,
-    ) -> Result<(), AccountError> {
+    ) -> Result<OperationInfo<Receipt>, AccountError> {
         // Get the deposit value.
         let deposit = Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT);
 
@@ -107,7 +108,7 @@ impl StakingContract {
             address: validator_address.clone(),
             signing_key,
             voting_key,
-            reward_address,
+            reward_address: reward_address.clone(),
             signal_data,
             balance: deposit,
             num_stakers: 0,
@@ -127,7 +128,13 @@ impl StakingContract {
             Account::StakingValidator(validator),
         );
 
-        Ok(())
+        Ok(OperationInfo {
+            receipt: None,
+            logs: vec![Log::CreateValidator {
+                validator_address: validator_address.clone(),
+                reward_address,
+            }],
+        })
     }
 
     /// Reverts creating a new validator entry.
@@ -135,7 +142,8 @@ impl StakingContract {
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         validator_address: &Address,
-    ) -> Result<(), AccountError> {
+        reward_address: Address,
+    ) -> Result<Vec<Log>, AccountError> {
         // Get the deposit value.
         let deposit = Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT);
 
@@ -165,7 +173,10 @@ impl StakingContract {
             &StakingContract::get_key_validator(validator_address),
         );
 
-        Ok(())
+        Ok(vec![Log::CreateValidator {
+            validator_address: validator_address.clone(),
+            reward_address,
+        }])
     }
 
     /// Updates some of the validator details (signing key, voting key, reward address and/or signal data).
@@ -246,6 +257,10 @@ impl StakingContract {
         validator_address: &Address,
         receipt: UpdateValidatorReceipt,
     ) -> Result<Vec<Log>, AccountError> {
+        // If it was a no-op, we end right here.
+        if receipt.no_op {
+            return Ok(vec![]);
+        }
         // Get the validator.
         let mut validator =
             match StakingContract::get_validator(accounts_tree, db_txn, validator_address) {
@@ -256,10 +271,6 @@ impl StakingContract {
                     });
                 }
             };
-        // If it was a no-op, we end right here.
-        if receipt.no_op {
-            return Ok(vec![]);
-        }
 
         let log = Log::UpdateValidator {
             validator_address: validator_address.clone(),

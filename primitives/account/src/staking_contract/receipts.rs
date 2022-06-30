@@ -7,10 +7,6 @@ use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
 
 /// A collection of receipts for inherents/transactions. This is necessary to be able to revert
 /// those inherents/transactions.
-
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub struct DefaultReceipt;
-
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct SlashReceipt {
     pub newly_parked: bool,

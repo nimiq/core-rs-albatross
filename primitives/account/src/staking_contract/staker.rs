@@ -5,7 +5,7 @@ use nimiq_primitives::coin::Coin;
 
 use crate::logs::{Log, OperationInfo};
 use crate::staking_contract::receipts::StakerReceipt;
-use crate::{Account, AccountError, AccountsTrie, StakingContract};
+use crate::{Account, AccountError, AccountsTrie, Receipt, StakingContract};
 
 /// Struct representing a staker in the staking contract.
 /// Actions concerning a staker are:
@@ -30,13 +30,14 @@ pub struct Staker {
 
 impl StakingContract {
     /// Creates a new staker. This function is public to fill the genesis staking contract.
+    /// The OperationInfo has always receipt = None, thus the type instationtion of the generic type to Receipt is irrelevant.
     pub fn create_staker(
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         staker_address: &Address,
         value: Coin,
         delegation: Option<Address>,
-    ) -> Result<Vec<Log>, AccountError> {
+    ) -> Result<OperationInfo<Receipt>, AccountError> {
         // See if the staker already exists.
         if StakingContract::get_staker(accounts_tree, db_txn, staker_address).is_some() {
             return Err(AccountError::AlreadyExistentAddress {
@@ -117,7 +118,10 @@ impl StakingContract {
             Account::StakingStaker(staker),
         );
 
-        Ok(logs)
+        Ok(OperationInfo {
+            receipt: None,
+            logs,
+        })
     }
 
     /// Reverts a create staker transaction.
@@ -210,12 +214,13 @@ impl StakingContract {
     /// Adds stake to a staker. It will be directly added to the staker's balance. Anyone can
     /// stake for a staker.
     /// If a staker at the address doesn't exist, one will be created.
+    /// The OperationInfo has always receipt = None, thus the type instationtion of the generic type to Receipt is irrelevant.
     pub(crate) fn stake(
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         staker_address: &Address,
         value: Coin,
-    ) -> Result<Vec<Log>, AccountError> {
+    ) -> Result<OperationInfo<Receipt>, AccountError> {
         // Get the staker and check if it exists.
         let mut staker = match StakingContract::get_staker(accounts_tree, db_txn, staker_address) {
             None => {
@@ -290,7 +295,10 @@ impl StakingContract {
             Account::StakingStaker(staker),
         );
 
-        Ok(logs)
+        Ok(OperationInfo {
+            receipt: None,
+            logs,
+        })
     }
 
     /// Reverts a stake transaction.
@@ -521,6 +529,11 @@ impl StakingContract {
         staker_address: &Address,
         receipt: StakerReceipt,
     ) -> Result<Vec<Log>, AccountError> {
+        // If it was a no-op, we end right here.
+        if receipt.no_op {
+            return Ok(vec![]);
+        }
+
         // Get the staking contract main.
         let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
 
@@ -533,11 +546,6 @@ impl StakingContract {
             }
             Some(x) => x,
         };
-
-        // If it was a no-op, we end right here.
-        if receipt.no_op {
-            return Ok(vec![]);
-        }
 
         let log = Log::UpdateStaker {
             staker_address: staker_address.clone(),
@@ -645,6 +653,7 @@ impl StakingContract {
 
     /// Removes coins from a staker's balance. If the entire staker's balance is unstaked then the
     /// staker is deleted.
+    /// The OperationInfo has always receipt = None, thus the type instationtion of the generic type to Receipt is irrelevant.
     pub(crate) fn unstake(
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
@@ -723,17 +732,17 @@ impl StakingContract {
         if staker.balance.is_zero() {
             accounts_tree.remove(db_txn, &StakingContract::get_key_staker(&staker.address));
 
-            Ok(OperationInfo::new(
-                Some(StakerReceipt {
+            Ok(OperationInfo {
+                receipt: Some(StakerReceipt {
                     no_op: false,
                     delegation: staker.delegation.clone(),
                 }),
-                vec![Log::Unstake {
+                logs: vec![Log::Unstake {
                     staker_address: staker_address.clone(),
                     validator_address: staker.delegation,
                     value,
                 }],
-            ))
+            })
         } else {
             accounts_tree.put(
                 db_txn,
@@ -741,14 +750,14 @@ impl StakingContract {
                 Account::StakingStaker(staker.clone()),
             );
 
-            Ok(OperationInfo::new(
-                None,
-                vec![Log::Unstake {
+            Ok(OperationInfo {
+                receipt: None,
+                logs: vec![Log::Unstake {
                     staker_address: staker_address.clone(),
                     validator_address: staker.delegation,
                     value,
                 }],
-            ))
+            })
         }
     }
 

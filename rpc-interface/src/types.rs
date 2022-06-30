@@ -703,7 +703,7 @@ pub struct BlockchainState<T> {
 }
 
 impl<T> BlockchainState<T> {
-    pub fn from_value(block_number: u32, block_hash: Blake2bHash, value: T) -> Self {
+    pub fn new(block_number: u32, block_hash: Blake2bHash, value: T) -> Self {
         BlockchainState {
             block_number,
             block_hash,
@@ -766,12 +766,6 @@ impl LogType {
     }
 }
 
-impl Display for LogType {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "+{}", self.to_string())
-    }
-}
-
 impl FromStr for LogType {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -802,24 +796,31 @@ impl FromStr for LogType {
     }
 }
 
-pub fn is_log_type_and_related_to_addresses(
+/// Checks if a given log is related to any of the addresses provided and if it is of any of the log types provided.
+/// If no addresses and log_types are provided it will return false.
+/// If the vec of addresses is empty, compares only to the log_types (meaning it will not care about the addresses
+/// the log is related to), and vice_versa.
+pub fn is_of_log_type_and_related_to_addresses(
     log: &Log,
     addresses: &Vec<Address>,
     log_types: &Vec<LogType>,
 ) -> bool {
+    // If addresses are empty, it tries to find a matchinf log_type and early return. Otherwise, it will finish and return false.
     if addresses.is_empty() {
-        for log_type in log_types.into_iter() {
+        for log_type in log_types {
             if log_type.eq(&LogType::with_log(log)) {
                 return true;
             }
         }
     } else {
-        for address in addresses.into_iter() {
-            if log.is_related_to_address(&address) {
+        // Iterates over the addresses (and the log_types if those exist).
+        for address in addresses {
+            if log.is_related_to_address(address) {
                 if log_types.is_empty() {
                     return true;
                 }
-                for log_type in log_types.into_iter() {
+                // If there are log_types to compare with, it tries to find a match and early return.
+                for log_type in log_types {
                     if log_type.eq(&LogType::with_log(log)) {
                         return true;
                     }
@@ -827,6 +828,7 @@ pub fn is_log_type_and_related_to_addresses(
             }
         }
     }
+    // It iterated over all the existing vecs and found no match.
     false
 }
 

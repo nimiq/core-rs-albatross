@@ -107,58 +107,49 @@ impl Accounts {
         block_height: u32,
         timestamp: u64,
     ) -> Result<BatchInfo, AccountError> {
+        // Fetches all pre inherents to commit.
         let pre_inherents: Vec<Inherent> = inherents
             .iter()
             .filter(|i| i.is_pre_transactions())
             .cloned()
             .collect();
+        let mut batch_info = self.commit_inherents(txn, &pre_inherents, block_height, timestamp)?;
 
-        let mut pre_inherents_info =
-            self.commit_inherents(txn, &pre_inherents, block_height, timestamp)?;
-
+        // Commits all senders, recipients and create contracts and appends all receipts to batch_info.
         let mut senders_info = self.commit_senders(txn, transactions, block_height, timestamp)?;
+        batch_info.receipts.append(&mut senders_info.receipts);
 
         let mut recipients_info =
             self.commit_recipients(txn, transactions, block_height, timestamp)?;
+        batch_info.receipts.append(&mut recipients_info.receipts);
 
         let mut create_info = self.create_contracts(txn, transactions, block_height, timestamp)?;
+        batch_info.receipts.append(&mut create_info.receipts);
 
+        // Fetches all pos inherents to commit.
         let post_inherents: Vec<Inherent> = inherents
             .iter()
             .filter(|i| !i.is_pre_transactions())
             .cloned()
             .collect();
-
         let mut post_inherents_info =
             self.commit_inherents(txn, &post_inherents, block_height, timestamp)?;
 
-        Self::prepare_logs(
-            &mut senders_info.tx_logs,
-            &mut recipients_info.tx_logs,
-            &mut create_info.tx_logs,
-        );
-
-        pre_inherents_info
-            .receipts
-            .append(&mut senders_info.receipts);
-        pre_inherents_info
-            .receipts
-            .append(&mut recipients_info.receipts);
-        pre_inherents_info
-            .receipts
-            .append(&mut create_info.receipts);
-        pre_inherents_info
+        // Appends newly generated inherents logs and receipts.
+        batch_info
             .receipts
             .append(&mut post_inherents_info.receipts);
 
-        pre_inherents_info
+        batch_info
             .inherent_logs
             .append(&mut post_inherents_info.inherent_logs);
 
-        Ok(BatchInfo::new(
-            pre_inherents_info.receipts,
-            senders_info.tx_logs,
-            pre_inherents_info.inherent_logs,
+        // Merges all tx_logs into batch_info.
+        Ok(Self::check_merge_tx_logs(
+            batch_info,
+            &mut senders_info.tx_logs,
+            &mut recipients_info.tx_logs,
+            &mut create_info.tx_logs,
         ))
     }
 
@@ -192,6 +183,7 @@ impl Accounts {
         timestamp: u64,
         receipts: &Receipts,
     ) -> Result<BatchInfo, AccountError> {
+        // Organizes the receipts by the different types of inherents (pre or post) and transactions (senders or recipients) receipts.
         let (
             sender_receipts,
             recipient_receipts,
@@ -199,7 +191,8 @@ impl Accounts {
             post_tx_inherent_receipts,
         ) = Self::prepare_receipts(receipts);
 
-        let mut logs_inherent = self.revert_inherents(
+        // Reverts transactions in the inverse order of the commit.
+        let logs_inherent = self.revert_inherents(
             txn,
             inherents,
             block_height,
@@ -207,10 +200,13 @@ impl Accounts {
             post_tx_inherent_receipts,
         )?;
 
-        let mut logs_contracts =
+        // Complete batch_info for the revert. This batch_info has the receipts always empty, since there is nothing else to revert.
+        let mut batch_info = BatchInfo::new(Vec::new(), Vec::new(), logs_inherent);
+
+        let mut contracts_logs =
             self.revert_contracts(txn, transactions, block_height, timestamp)?;
 
-        let mut logs_recipients = self.revert_recipients(
+        let mut recipients_logs = self.revert_recipients(
             txn,
             transactions,
             block_height,
@@ -218,10 +214,11 @@ impl Accounts {
             recipient_receipts,
         )?;
 
-        let mut logs_senders =
+        let mut senders_logs =
             self.revert_senders(txn, transactions, block_height, timestamp, sender_receipts)?;
 
-        logs_inherent.append(&mut self.revert_inherents(
+        // Gathers all the inherent_logs into the batch_info return object.
+        batch_info.inherent_logs.append(&mut self.revert_inherents(
             txn,
             inherents,
             block_height,
@@ -229,10 +226,13 @@ impl Accounts {
             pre_tx_inherent_receipts,
         )?);
 
-        //TODO build batchinfo with results of previous reverts
-        Self::prepare_logs(&mut logs_senders, &mut logs_recipients, &mut logs_contracts);
-
-        Ok(BatchInfo::new(Vec::new(), logs_senders, logs_inherent))
+        // Merges all tx_logs into batch_info.
+        Ok(Self::check_merge_tx_logs(
+            batch_info,
+            &mut senders_logs,
+            &mut recipients_logs,
+            &mut contracts_logs,
+        ))
     }
 
     pub fn finalize_batch(&self, txn: &mut WriteTransaction) {
@@ -542,14 +542,15 @@ impl Accounts {
         )
     }
 
-    // Merge the log transactions from senders, receiptients and create_contracts.
-    // The final result is moved to the senders_logs, leaving the other vectors empty.
-    fn prepare_logs(
-        senders_logs: &mut Vec<TransactionLog>,
-        recipients_logs: &mut Vec<TransactionLog>,
-        create_logs: &mut Vec<TransactionLog>,
-    ) {
-        // The senders has all transaction log entries. We iterate over it and add the remaing logs to the sender_logs respective tx_log.
+    /// Merge the log transactions from senders, receiptients and create_contracts and returns logs organized by Transaction logs.
+    /// The final result is moved to the senders_logs and returned, leaving the other vectors empty.
+    fn check_merge_tx_logs(
+        mut batch_info: BatchInfo,
+        senders_logs: &mut [TransactionLog],
+        recipients_logs: &mut [TransactionLog],
+        create_logs: &mut [TransactionLog],
+    ) -> BatchInfo {
+        // The senders has all transaction log entries. We iterate over it and append the remaing logs to the respective tx_log of sender_logs.
         let mut tx_logs_recipients = recipients_logs.iter_mut().peekable();
         let mut tx_logs_create = create_logs.iter_mut().peekable();
 
@@ -558,6 +559,7 @@ impl Accounts {
                 if tx_log.tx_hash == tx_log_sender.tx_hash {
                     tx_log_sender.logs.append(&mut tx_log.logs);
                     tx_logs_recipients.next();
+                    // The transactions are wither a create or anything else (mutually exclusive), thus we can avoid comparing to the tx_create.
                     continue;
                 }
             }
@@ -570,6 +572,12 @@ impl Accounts {
             }
         }
 
-        //assert tx_logs_recipients and tx_log_sender are over (?)
+        // All receipient and create tx_logs should have a matching tx_log from the senders.
+        // Therefore, all tx_logs of these two vecs are now expected to be appended and moved to the senders_logs.
+        assert_eq!(None, tx_logs_recipients.peek());
+        assert_eq!(None, tx_logs_create.peek());
+
+        batch_info.tx_logs = senders_logs.to_vec();
+        batch_info
     }
 }

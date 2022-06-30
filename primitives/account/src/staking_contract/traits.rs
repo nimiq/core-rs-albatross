@@ -77,21 +77,16 @@ impl AccountTransactionInteraction for StakingContract {
                 // Get the validator address from the proof.
                 let validator_address = proof.compute_signer();
 
-                StakingContract::create_validator(
+                Ok(StakingContract::create_validator(
                     accounts_tree,
                     db_txn,
                     &validator_address,
                     signing_key,
                     voting_key,
-                    reward_address.clone(),
-                    signal_data,
-                )?;
-                let logs = vec![Log::CreateValidator {
-                    validator_address,
                     reward_address,
-                }];
-
-                Ok(AccountInfo::new(None, logs))
+                    signal_data,
+                )?
+                .into())
             }
             IncomingStakingTransactionData::UpdateValidator {
                 new_signing_key,
@@ -165,25 +160,22 @@ impl AccountTransactionInteraction for StakingContract {
                 // Get the staker address from the proof.
                 let staker_address = proof.compute_signer();
 
-                let logs = StakingContract::create_staker(
+                Ok(StakingContract::create_staker(
                     accounts_tree,
                     db_txn,
                     &staker_address,
                     transaction.value,
                     delegation,
-                )?;
-
-                Ok(AccountInfo::new(None, logs))
+                )?
+                .into())
             }
-            IncomingStakingTransactionData::Stake { staker_address } => {
-                let logs = StakingContract::stake(
-                    accounts_tree,
-                    db_txn,
-                    &staker_address,
-                    transaction.value,
-                )?;
-                Ok(AccountInfo::new(None, logs))
-            }
+            IncomingStakingTransactionData::Stake { staker_address } => Ok(StakingContract::stake(
+                accounts_tree,
+                db_txn,
+                &staker_address,
+                transaction.value,
+            )?
+            .into()),
             IncomingStakingTransactionData::UpdateStaker {
                 new_delegation,
                 proof,
@@ -222,15 +214,12 @@ impl AccountTransactionInteraction for StakingContract {
                 // Get the validator address from the proof.
                 let validator_address = proof.compute_signer();
 
-                StakingContract::revert_create_validator(
+                Ok(StakingContract::revert_create_validator(
                     accounts_tree,
                     db_txn,
                     &validator_address,
-                )?;
-                Ok(vec![Log::CreateValidator {
-                    validator_address,
                     reward_address,
-                }])
+                )?)
             }
             IncomingStakingTransactionData::UpdateValidator { proof, .. } => {
                 // Get the validator address from the proof.
@@ -342,34 +331,34 @@ impl AccountTransactionInteraction for StakingContract {
         // Parse transaction data.
         let data = OutgoingStakingTransactionProof::parse(transaction)?;
 
-        let mut acc_info: AccountInfo;
-
-        match data {
+        let mut acc_info: AccountInfo = match data {
             OutgoingStakingTransactionProof::DeleteValidator { proof } => {
                 // Get the validator address from the proof.
                 let validator_address = proof.compute_signer();
 
-                acc_info = StakingContract::delete_validator(
+                StakingContract::delete_validator(
                     accounts_tree,
                     db_txn,
                     &validator_address,
                     block_height,
                 )?
-                .into();
+                .into()
             }
             OutgoingStakingTransactionProof::Unstake { proof } => {
                 // Get the staker address from the proof.
                 let staker_address = proof.compute_signer();
 
-                acc_info = StakingContract::unstake(
+                StakingContract::unstake(
                     accounts_tree,
                     db_txn,
                     &staker_address,
                     transaction.total_value(),
                 )?
-                .into();
+                .into()
             }
         };
+
+        // Ordering matters here for testing purposes. The vec will be very small, therefore the performance hit is irrelevant.
         acc_info.logs.insert(
             0,
             Log::Transfer {
@@ -714,6 +703,8 @@ impl AccountInherentInteraction for StakingContract {
                             .current_lost_rewards
                             .remove(slot.slot as usize);
                     }
+
+                    // Ordering matters here for testing purposes. The vec will be very small, therefore the performance hit is irrelevant.
                     logs.insert(
                         0,
                         Log::Slash {
