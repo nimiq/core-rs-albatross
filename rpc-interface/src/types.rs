@@ -7,6 +7,7 @@ use std::{
     str::FromStr,
 };
 
+use clap::ArgEnum;
 use serde::{Deserialize, Serialize};
 use serde_with::{DeserializeFromStr, SerializeDisplay};
 
@@ -712,7 +713,7 @@ impl<T> BlockchainState<T> {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, ArgEnum)]
 #[serde(rename_all = "camelCase")]
 pub enum LogType {
     PayFee,

@@ -556,12 +556,12 @@ impl BlockchainInterface for BlockchainDispatcher {
 
     /// Subscribes to new block events (retrieves the full block).
     #[stream]
-    async fn head_subscribe(
+    async fn subscribe_for_head_block(
         &mut self,
         include_transactions: Option<bool>,
     ) -> Result<BoxStream<'static, Block>, Error> {
         let blockchain = Arc::clone(&self.blockchain);
-        let stream = self.head_hash_subscribe().await?;
+        let stream = self.subscribe_for_head_block_hash().await?;
 
         // Uses the stream to receive hashes of blocks and then requests the actual block.
         // If the block was reverted in between these steps, the stream won't emmit any event.
@@ -577,7 +577,9 @@ impl BlockchainInterface for BlockchainDispatcher {
 
     /// Subscribes to new block events (only retrieves the blockhash).
     #[stream]
-    async fn head_hash_subscribe(&mut self) -> Result<BoxStream<'static, Blake2bHash>, Error> {
+    async fn subscribe_for_head_block_hash(
+        &mut self,
+    ) -> Result<BoxStream<'static, Blake2bHash>, Error> {
         let stream = self.blockchain.write().notifier.as_stream();
         Ok(stream
             .map(|event| match event {
@@ -593,7 +595,7 @@ impl BlockchainInterface for BlockchainDispatcher {
 
     /// Subscribes to pre epoch validators events.
     #[stream]
-    async fn validator_election_subscribe(
+    async fn subscribe_for_validator_election_by_address(
         &mut self,
         address: Address,
     ) -> Result<BoxStream<'static, BlockchainState<Validator>>, Error> {
@@ -619,7 +621,7 @@ impl BlockchainInterface for BlockchainDispatcher {
     /// If addresses is empty it does not filter by address. If log_types is empty it won't filter by log types.
     /// Thus the behavior is to assume all addresses or log_types are to be provided if the corresponding vec is empty.
     #[stream]
-    async fn logs_by_type_and_addresses_subscribe(
+    async fn subscribe_for_logs_by_addresses_and_types(
         &mut self,
         addresses: Vec<Address>,
         log_types: Vec<LogType>,
@@ -660,19 +662,19 @@ impl BlockchainInterface for BlockchainDispatcher {
                                 })
                                 .collect();
 
-                            // If this block has no transaction logs or inherent logs of interest, we return None
+                            // If this block has no transaction logs or inherent logs of interest, we return None. Otherwise, we return the filtered BlockLog.
                             // This way the stream only emmits an event if a block has at least one log fulfilling the specified criteria.
-                            let mut block_log = None;
                             if !inherent_logs.is_empty() || !tx_logs.is_empty() {
-                                block_log = Some(BlockLog::AppliedBlock {
+                                Some(BlockLog::AppliedBlock {
                                     inherent_logs,
                                     block_hash,
                                     block_number,
                                     timestamp,
                                     tx_logs,
-                                });
+                                })
+                            } else {
+                                None
                             }
-                            block_log
                         }
                         BlockLog::RevertedBlock {
                             mut inherent_logs,
@@ -700,16 +702,16 @@ impl BlockchainInterface for BlockchainDispatcher {
                                 })
                                 .collect();
 
-                            let mut block_log = None;
                             if !inherent_logs.is_empty() || !tx_logs.is_empty() {
-                                block_log = Some(BlockLog::RevertedBlock {
+                                Some(BlockLog::RevertedBlock {
                                     inherent_logs,
                                     block_hash,
                                     block_number,
                                     tx_logs,
-                                });
+                                })
+                            } else {
+                                None
                             }
-                            block_log
                         }
                     };
                     future::ready(result)

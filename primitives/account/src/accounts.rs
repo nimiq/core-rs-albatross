@@ -147,9 +147,9 @@ impl Accounts {
         // Merges all tx_logs into batch_info.
         Ok(Self::check_merge_tx_logs(
             batch_info,
-            &mut senders_info.tx_logs,
-            &mut recipients_info.tx_logs,
-            &mut create_info.tx_logs,
+            senders_info.tx_logs,
+            recipients_info.tx_logs,
+            create_info.tx_logs,
         ))
     }
 
@@ -203,10 +203,9 @@ impl Accounts {
         // Complete batch_info for the revert. This batch_info has the receipts always empty, since there is nothing else to revert.
         let mut batch_info = BatchInfo::new(Vec::new(), Vec::new(), logs_inherent);
 
-        let mut contracts_logs =
-            self.revert_contracts(txn, transactions, block_height, timestamp)?;
+        let contracts_logs = self.revert_contracts(txn, transactions, block_height, timestamp)?;
 
-        let mut recipients_logs = self.revert_recipients(
+        let recipients_logs = self.revert_recipients(
             txn,
             transactions,
             block_height,
@@ -214,7 +213,7 @@ impl Accounts {
             recipient_receipts,
         )?;
 
-        let mut senders_logs =
+        let senders_logs =
             self.revert_senders(txn, transactions, block_height, timestamp, sender_receipts)?;
 
         // Gathers all the inherent_logs into the batch_info return object.
@@ -229,9 +228,9 @@ impl Accounts {
         // Merges all tx_logs into batch_info.
         Ok(Self::check_merge_tx_logs(
             batch_info,
-            &mut senders_logs,
-            &mut recipients_logs,
-            &mut contracts_logs,
+            senders_logs,
+            recipients_logs,
+            contracts_logs,
         ))
     }
 
@@ -542,13 +541,14 @@ impl Accounts {
         )
     }
 
-    /// Merge the log transactions from senders, receiptients and create_contracts and returns logs organized by Transaction logs.
-    /// The final result is moved to the senders_logs and returned, leaving the other vectors empty.
+    /// Merges the log transactions from senders, receiptients and create_contracts and returns batch_info containing the merged tx_logs.
+    /// This means that the batch_info inherent_logs and receipts are preserved and returned by this method.
+    /// The batch_info provided as argument is expected to have its tx_logs vec empty, otherwise its content will get overwritten.
     fn check_merge_tx_logs(
         mut batch_info: BatchInfo,
-        senders_logs: &mut [TransactionLog],
-        recipients_logs: &mut [TransactionLog],
-        create_logs: &mut [TransactionLog],
+        mut senders_logs: Vec<TransactionLog>,
+        mut recipients_logs: Vec<TransactionLog>,
+        mut create_logs: Vec<TransactionLog>,
     ) -> BatchInfo {
         // The senders has all transaction log entries. We iterate over it and append the remaing logs to the respective tx_log of sender_logs.
         let mut tx_logs_recipients = recipients_logs.iter_mut().peekable();
@@ -573,9 +573,9 @@ impl Accounts {
         }
 
         // All receipient and create tx_logs should have a matching tx_log from the senders.
-        // Therefore, all tx_logs of these two vecs are now expected to be appended and moved to the senders_logs.
-        assert_eq!(None, tx_logs_recipients.peek());
-        assert_eq!(None, tx_logs_create.peek());
+        // Therefore, all tx_logs of these two vecs are now expected to be processed and appended senders_logs tx_logs.
+        assert_eq!(None, tx_logs_recipients.peek(), "recipients tx_logs were not fully processed. Possible cause is a ordering difference compared to senders_logs tx_logs");
+        assert_eq!(None, tx_logs_create.peek(), "create tx_logs were not fully processed. Possible cause is a ordering difference compared to senders_logs tx_logs");
 
         batch_info.tx_logs = senders_logs.to_vec();
         batch_info

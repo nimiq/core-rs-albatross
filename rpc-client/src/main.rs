@@ -60,7 +60,8 @@ enum Command {
         #[clap(short = 'a', long, multiple_values = true)]
         addresses: Vec<Address>,
 
-        #[clap(short = 'l', long, multiple_values = true)]
+        /// Possible values are:
+        #[clap(short = 'l', long, arg_enum, multiple_values = true)]
         log_types: Vec<LogType>,
     },
 
@@ -79,19 +80,23 @@ enum AccountCommand {
         #[clap(short, long)]
         short: bool,
     },
+
     New {
         #[clap(short = 'P', long)]
         password: Option<String>,
     },
+
     Import {
         #[clap(short = 'P', long)]
         password: Option<String>,
 
         key_data: String,
     },
+
     Lock {
         address: Address,
     },
+
     Unlock {
         #[clap(short = 'P', long)]
         password: Option<String>,
@@ -117,9 +122,11 @@ enum TransactionCommand {
         /// The amount of NIM to send to the recipient.
         value: Coin,
 
+        /// The associated transaction fee to be payed by the sender. If absent it defaults to 0 NIM.
         #[clap(short, long, default_value = "0")]
         fee: Coin,
 
+        /// The block height for the unstake to be applied. If absent it defaults to the current block height at time of processing.
         #[clap(short, long, default_value_t)]
         validity_start_height: ValidityStartHeight,
 
@@ -133,14 +140,19 @@ enum TransactionCommand {
         /// The stake will be sent from this wallet.
         wallet: Address,
 
+        /// Destination address for the stake.
         staker_address: Address,
 
         /// The amount of NIM to stake.
         value: Coin,
 
+        /// The associated transaction fee to be payed by the sender wallet. If absent it defaults to 0 NIM.
         #[clap(short, long, default_value = "0")]
         fee: Coin,
 
+        /// The block height from which on the unstake could be applied. The maximum amount of blocks the transaction is valid for
+        /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
+        /// If absent it defaults to the current block height at time of processing.
         #[clap(short, long, default_value_t)]
         validity_start_height: ValidityStartHeight,
 
@@ -156,11 +168,15 @@ enum TransactionCommand {
         /// The recipients of the previously staked coins.
         recipient: Address,
 
+        /// The amount of NIM to unstake.
         value: Coin,
 
+        /// The associated transaction fee to be payed from the funds being unstaked. If absent it defaults to 0 NIM.
         #[clap(short, long, default_value = "0")]
         fee: Coin,
 
+        /// The block height from which on the unstake could be applied. The maximum amount of blocks the transaction is valid for is specified in `TRANSACTION_VALIDITY_WINDOW`.
+        /// If absent it defaults to the current block height at time of processing.
         #[clap(short, long, default_value_t)]
         validity_start_height: ValidityStartHeight,
 
@@ -208,13 +224,16 @@ impl Command {
 
             Command::FollowHead { block: show_block } => {
                 if show_block {
-                    let mut stream = client.blockchain.head_subscribe(Some(false)).await?;
+                    let mut stream = client
+                        .blockchain
+                        .subscribe_for_head_block(Some(false))
+                        .await?;
 
                     while let Some(block) = stream.next().await {
                         println!("{:#?}", block);
                     }
                 } else {
-                    let mut stream = client.blockchain.head_hash_subscribe().await?;
+                    let mut stream = client.blockchain.subscribe_for_head_block_hash().await?;
 
                     while let Some(block_hash) = stream.next().await {
                         println!("{}", block_hash);
@@ -225,7 +244,7 @@ impl Command {
             Command::FollowValidator { address } => {
                 let mut stream = client
                     .blockchain
-                    .validator_election_subscribe(address)
+                    .subscribe_for_validator_election_by_address(address)
                     .await?;
                 while let Some(validator) = stream.next().await {
                     println!("{:#?}", validator);
@@ -238,7 +257,7 @@ impl Command {
             } => {
                 let mut stream = client
                     .blockchain
-                    .logs_by_type_and_addresses_subscribe(addresses, log_types)
+                    .subscribe_for_logs_by_addresses_and_types(addresses, log_types)
                     .await?;
 
                 while let Some(blocklog) = stream.next().await {

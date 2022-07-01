@@ -3209,6 +3209,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "beserial",
+ "clap",
  "futures-util",
  "hex",
  "nimiq-account",
