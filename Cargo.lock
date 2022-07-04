@@ -811,7 +811,7 @@ dependencies = [
  "tonic",
  "tracing",
  "tracing-core",
- "tracing-subscriber 0.3.11",
+ "tracing-subscriber 0.3.14",
 ]
 
 [[package]]
@@ -2690,7 +2690,7 @@ dependencies = [
  "nimiq-trie",
  "nimiq-utils",
  "tracing",
- "tracing-subscriber 0.3.11",
+ "tracing-subscriber 0.3.14",
  "url",
 ]
 
@@ -2714,7 +2714,7 @@ dependencies = [
  "time 0.3.11",
  "toml",
  "tracing",
- "tracing-subscriber 0.3.11",
+ "tracing-subscriber 0.3.14",
 ]
 
 [[package]]
@@ -2912,7 +2912,7 @@ dependencies = [
  "toml",
  "tracing",
  "tracing-loki",
- "tracing-subscriber 0.3.11",
+ "tracing-subscriber 0.3.14",
  "url",
 ]
 
@@ -2923,7 +2923,7 @@ dependencies = [
  "ansi_term",
  "tracing",
  "tracing-log",
- "tracing-subscriber 0.3.11",
+ "tracing-subscriber 0.3.14",
 ]
 
 [[package]]
@@ -3199,7 +3199,7 @@ dependencies = [
  "nimiq-rpc-interface",
  "nimiq-transaction",
  "tokio",
- "tracing-subscriber 0.3.11",
+ "tracing-subscriber 0.3.14",
  "url",
 ]
 
@@ -3334,7 +3334,7 @@ dependencies = [
  "nimiq-test-log-proc-macro",
  "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
  "tracing",
- "tracing-subscriber 0.3.11",
+ "tracing-subscriber 0.3.14",
 ]
 
 [[package]]
@@ -3524,7 +3524,7 @@ dependencies = [
  "tokio-stream",
  "tracing",
  "tracing-core",
- "tracing-subscriber 0.3.11",
+ "tracing-subscriber 0.3.14",
 ]
 
 [[package]]
@@ -5185,7 +5185,7 @@ dependencies = [
  "tracing-core",
  "tracing-log",
  "tracing-serde",
- "tracing-subscriber 0.3.11",
+ "tracing-subscriber 0.3.14",
  "url",
 ]
 
@@ -5210,13 +5210,13 @@ dependencies = [
 
 [[package]]
 name = "tracing-subscriber"
-version = "0.3.11"
+version = "0.3.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4bc28f93baff38037f64e6f43d34cfa1605f27a49c34e8a04c5e78b0babf2596"
+checksum = "3a713421342a5a666b7577783721d3117f1b69a393df803ee17bb73b1e122a59"
 dependencies = [
  "ansi_term",
- "lazy_static",
  "matchers",
+ "once_cell",
  "parking_lot 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "regex",
  "sharded-slab",
