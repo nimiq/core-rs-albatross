@@ -25,7 +25,7 @@ impl OffsetTime {
 
     pub fn now(&self) -> u64 {
         let offset = self.offset.load(Ordering::Relaxed);
-        let abs_offset = offset.abs() as u64;
+        let abs_offset = offset.unsigned_abs();
         let system_time = if offset > 0 {
             SystemTime::now() + Duration::from_millis(abs_offset)
         } else {

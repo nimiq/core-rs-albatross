@@ -222,7 +222,7 @@ async fn main_inner() -> Result<(), Error> {
     // Initialize metrics server
     if let Some(metrics_config) = metrics_config {
         use nimiq::extras::metrics_server::start_metrics_server;
-        let _ = start_metrics_server(
+        start_metrics_server(
             metrics_config.addr,
             Arc::clone(&consensus.blockchain),
             client.mempool(),

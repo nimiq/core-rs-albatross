@@ -270,7 +270,7 @@ impl<'txn> ReadCursor for VolatileCursor<'txn> {
 
 pub struct VolatileWriteCursor<'txn>(MdbxWriteCursor<'txn>);
 
-impl<'txn, 'db> ReadCursor for VolatileWriteCursor<'txn> {
+impl<'txn> ReadCursor for VolatileWriteCursor<'txn> {
     fn first<K, V>(&mut self) -> Option<(K, V)>
     where
         K: FromDatabaseValue,

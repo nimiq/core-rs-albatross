@@ -349,7 +349,7 @@ macro_rules! gen_cursor_match {
     };
 }
 
-impl<'txn, 'db> ReadCursor for Cursor<'txn> {
+impl<'txn> ReadCursor for Cursor<'txn> {
     fn first<K, V>(&mut self) -> Option<(K, V)>
     where
         K: FromDatabaseValue,
@@ -465,7 +465,7 @@ impl<'txn, 'db> ReadCursor for Cursor<'txn> {
     }
 }
 
-impl<'txn, 'db> ReadCursor for WriteCursor<'txn> {
+impl<'txn> ReadCursor for WriteCursor<'txn> {
     fn first<K, V>(&mut self) -> Option<(K, V)>
     where
         K: FromDatabaseValue,
@@ -581,7 +581,7 @@ impl<'txn, 'db> ReadCursor for WriteCursor<'txn> {
     }
 }
 
-impl<'txn, 'db> WriteCursorTrait for WriteCursor<'txn> {
+impl<'txn> WriteCursorTrait for WriteCursor<'txn> {
     fn remove(&mut self) {
         gen_cursor_match!(self, remove, WriteCursor)
     }

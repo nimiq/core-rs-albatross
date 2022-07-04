@@ -330,7 +330,7 @@ pub struct RawWriteLmdbCursor<'txn> {
     cursor: libmdbx::Cursor<'txn, RW>,
 }
 
-impl<'txn, 'db> RawReadCursor for RawMDBXCursor<'txn> {
+impl<'txn> RawReadCursor for RawMDBXCursor<'txn> {
     fn first<K, V>(&mut self) -> Option<(K, V)>
     where
         K: FromDatabaseValue,
@@ -685,7 +685,7 @@ impl<'txn, 'db> RawReadCursor for RawMDBXCursor<'txn> {
     }
 }
 
-impl<'txn, 'db> RawReadCursor for RawWriteLmdbCursor<'txn> {
+impl<'txn> RawReadCursor for RawWriteLmdbCursor<'txn> {
     fn first<K, V>(&mut self) -> Option<(K, V)>
     where
         K: FromDatabaseValue,
@@ -874,7 +874,7 @@ pub struct MdbxWriteCursor<'txn> {
 
 impl_read_cursor_from_raw!(MdbxWriteCursor<'txn>, raw);
 
-impl<'txn, 'db> WriteCursorTrait for MdbxWriteCursor<'txn> {
+impl<'txn> WriteCursorTrait for MdbxWriteCursor<'txn> {
     fn remove(&mut self) {
         self.raw.cursor.del(WriteFlags::empty()).unwrap();
     }

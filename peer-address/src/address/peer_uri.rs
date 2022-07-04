@@ -83,7 +83,7 @@ pub struct PeerUri {
     public_key: Option<String>,
 }
 
-impl<'a> FromStr for PeerUri {
+impl FromStr for PeerUri {
     type Err = PeerUriError;
 
     fn from_str(s: &str) -> Result<Self, PeerUriError> {
@@ -92,7 +92,7 @@ impl<'a> FromStr for PeerUri {
     }
 }
 
-impl<'a> fmt::Display for PeerUri {
+impl fmt::Display for PeerUri {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.protocol {
             Protocol::Dumb | Protocol::Rtc => {
