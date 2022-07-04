@@ -714,14 +714,14 @@ impl<T> BlockchainState<T> {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, ArgEnum)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "kebab-case")]
 pub enum LogType {
     PayFee,
     Transfer,
-    HTLCCreate,
-    HTLCTimeoutResolve,
-    HTLCRegularTransfer,
-    HTLCEarlyResolve,
+    HtlcCreate,
+    HtlcTimeoutResolve,
+    HtlcRegularTransfer,
+    HtlcEarlyResolve,
     VestingCreate,
     CreateValidator,
     UpdateValidator,
@@ -744,10 +744,10 @@ impl LogType {
         match log {
             Log::PayFee { .. } => Self::PayFee,
             Log::Transfer { .. } => Self::Transfer,
-            Log::HTLCCreate { .. } => Self::HTLCCreate,
-            Log::HTLCTimeoutResolve { .. } => Self::HTLCTimeoutResolve,
-            Log::HTLCRegularTransfer { .. } => Self::HTLCRegularTransfer,
-            Log::HTLCEarlyResolve { .. } => Self::HTLCEarlyResolve,
+            Log::HTLCCreate { .. } => Self::HtlcCreate,
+            Log::HTLCTimeoutResolve { .. } => Self::HtlcTimeoutResolve,
+            Log::HTLCRegularTransfer { .. } => Self::HtlcRegularTransfer,
+            Log::HTLCEarlyResolve { .. } => Self::HtlcEarlyResolve,
             Log::VestingCreate { .. } => Self::VestingCreate,
             Log::CreateValidator { .. } => Self::CreateValidator,
             Log::UpdateValidator { .. } => Self::UpdateValidator,
@@ -763,36 +763,6 @@ impl LogType {
             Log::Park { .. } => Self::Park,
             Log::Slash { .. } => Self::Slash,
             Log::RevertContract { .. } => Self::RevertContract,
-        }
-    }
-}
-
-impl FromStr for LogType {
-    type Err = Error;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim() {
-            "PayFee" => Ok(LogType::PayFee),
-            "Transfer" => Ok(LogType::Transfer),
-            "HTLCCreate" => Ok(LogType::HTLCCreate),
-            "HTLCTimeoutResolve" => Ok(LogType::HTLCTimeoutResolve),
-            "HTLCRegularTransfer" => Ok(LogType::HTLCRegularTransfer),
-            "HTLCEarlyResolve" => Ok(LogType::HTLCEarlyResolve),
-            "VestingCreate" => Ok(LogType::VestingCreate),
-            "CreateValidator" => Ok(LogType::CreateValidator),
-            "UpdateValidator" => Ok(LogType::UpdateValidator),
-            "InactivateValidator" => Ok(LogType::InactivateValidator),
-            "ReactivateValidator" => Ok(LogType::ReactivateValidator),
-            "UnparkValidator" => Ok(LogType::UnparkValidator),
-            "CreateStaker" => Ok(LogType::CreateStaker),
-            "Stake" => Ok(LogType::Stake),
-            "UpdateStaker" => Ok(LogType::UpdateStaker),
-            "DeleteValidator" => Ok(LogType::DeleteValidator),
-            "Unstake" => Ok(LogType::Unstake),
-            "PayoutReward" => Ok(LogType::PayoutReward),
-            "Park" => Ok(LogType::Park),
-            "Slash" => Ok(LogType::Slash),
-            "RevertContract" => Ok(LogType::RevertContract),
-            _ => Err(Error::InvalidLogType(s.to_owned())),
         }
     }
 }
