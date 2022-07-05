@@ -67,10 +67,18 @@ struct ProduceMicroBlockState {
     view_change: Option<ViewChange>,
 }
 
-/// Validator parking state
-struct ParkingState {
-    park_tx_hash: Blake2bHash,
-    park_tx_validity_window_start: u32,
+/// Validator inactivity and parking state
+enum ValidatorState {
+    /// Validator parking state
+    ParkingState {
+        park_tx_hash: Blake2bHash,
+        park_tx_validity_window_start: u32,
+    },
+    /// Validator inactive state
+    InactivityState {
+        inactive_tx_hash: Blake2bHash,
+        inactive_tx_validity_window_start: u32,
+    },
 }
 
 enum MempoolState {
@@ -116,7 +124,7 @@ pub struct Validator<TNetwork: Network, TValidatorNetwork: ValidatorNetwork + 's
 
     epoch_state: Option<ActiveEpochState>,
     blockchain_state: BlockchainState,
-    parking_state: Option<ParkingState>,
+    validator_state: Option<ValidatorState>,
 
     macro_producer: Option<ProduceMacroBlock<TValidatorNetwork>>,
     macro_state: Option<PersistedMacroState<TValidatorNetwork>>,
@@ -201,7 +209,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
 
             epoch_state: None,
             blockchain_state,
-            parking_state: None,
+            validator_state: None,
 
             macro_producer: None,
             macro_state,
@@ -255,22 +263,30 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         let blockchain = self.consensus.blockchain.read();
 
         // Check if the transaction was sent
-        if let Some(parking_state) = &self.parking_state {
+        if let Some(validator_state) = &self.validator_state {
+            let (tx_hash, tx_validity_window_start) = match validator_state {
+                ValidatorState::ParkingState {
+                    park_tx_hash,
+                    park_tx_validity_window_start,
+                } => (park_tx_hash, park_tx_validity_window_start),
+                ValidatorState::InactivityState {
+                    inactive_tx_hash,
+                    inactive_tx_validity_window_start,
+                } => (inactive_tx_hash, inactive_tx_validity_window_start),
+            };
             // Check that the transaction was sent in the validity window
             let staking_state = self.get_staking_state(&*blockchain);
             if staking_state == ValidatorStakingState::Parked
-                && blockchain.block_number()
-                    >= parking_state.park_tx_validity_window_start + policy::BLOCKS_PER_EPOCH
-                && !blockchain.tx_in_validity_window(
-                    &parking_state.park_tx_hash,
-                    parking_state.park_tx_validity_window_start,
-                    None,
-                )
+                || staking_state == ValidatorStakingState::Inactive
             {
-                // If we are parked and no transaction has been seen in the expected validity window
-                // after an epoch, reset our parking state
-                log::debug!("Resetting state to re-send un-park transactions since we are parked and validity window doesn't contain the transaction sent");
-                self.parking_state = None;
+                if blockchain.block_number() >= tx_validity_window_start + policy::BLOCKS_PER_EPOCH
+                    && !blockchain.tx_in_validity_window(&tx_hash, *tx_validity_window_start, None)
+                {
+                    // If we are parked and no transaction has been seen in the expected validity window
+                    // after an epoch, reset our parking state
+                    log::debug!("Resetting state to re-send un-park/activate transactions since we are parked/inactive and validity window doesn't contain the transaction sent");
+                    self.validator_state = None;
+                }
             }
         }
 
@@ -614,7 +630,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         }
     }
 
-    fn unpark(&self, blockchain: &Blockchain) -> ParkingState {
+    fn unpark(&self, blockchain: &Blockchain) -> ValidatorState {
         // TODO: Get the last view change height instead of the current height
         let validity_start_height = blockchain.block_number();
 
@@ -641,9 +657,38 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             }
         });
 
-        ParkingState {
+        ValidatorState::ParkingState {
             park_tx_hash: tx_hash,
             park_tx_validity_window_start: validity_start_height,
+        }
+    }
+
+    fn reactivate(&self, blockchain: &Blockchain) -> ValidatorState {
+        // TODO: Get the last view change height instead of the current height
+        let validity_start_height = blockchain.block_number();
+
+        let unpark_transaction = TransactionBuilder::new_reactivate_validator(
+            &self.fee_key(),
+            self.validator_address(),
+            &self.signing_key(),
+            Coin::ZERO,
+            validity_start_height,
+            blockchain.network_id(),
+        )
+        .unwrap(); // TODO: Handle transaction creation error
+        let tx_hash = unpark_transaction.hash();
+
+        let cn = self.consensus.clone();
+        tokio::spawn(async move {
+            debug!("Sending reactivate transaction");
+            if cn.send_transaction(unpark_transaction).await.is_err() {
+                error!("Failed to send reactivate transaction");
+            }
+        });
+
+        ValidatorState::InactivityState {
+            inactive_tx_hash: tx_hash,
+            inactive_tx_validity_window_start: validity_start_height,
         }
     }
 
@@ -771,19 +816,42 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Future
             let blockchain = self.consensus.blockchain.read();
             match self.get_staking_state(&*blockchain) {
                 ValidatorStakingState::Parked => {
-                    if self.parking_state.is_none() {
+                    if self.validator_state.is_none() {
                         let parking_state = self.unpark(&*blockchain);
                         drop(blockchain);
-                        self.parking_state = Some(parking_state);
+                        self.validator_state = Some(parking_state);
+                    } else if let ValidatorState::InactivityState { .. } =
+                        self.validator_state.as_ref().unwrap()
+                    {
+                        assert!(
+                            true,
+                            "The validator is Parked, but the current state is set to inactive."
+                        );
                     }
                 }
                 ValidatorStakingState::Active => {
                     drop(blockchain);
-                    if self.parking_state.is_some() {
-                        self.parking_state = None;
+                    if self.validator_state.is_some() {
+                        self.validator_state = None;
                     }
                 }
-                _ => {}
+                ValidatorStakingState::Inactive => {
+                    if self.validator_state.is_none() {
+                        // TODO check if retire transaction was submitted and if yes, do nothing
+
+                        let inactivity_state = self.reactivate(&*blockchain);
+                        drop(blockchain);
+                        self.validator_state = Some(inactivity_state);
+                    } else if let ValidatorState::ParkingState { .. } =
+                        self.validator_state.as_ref().unwrap()
+                    {
+                        assert!(
+                            true,
+                            "The validator is Inactive, but the current state is set to parked."
+                        );
+                    }
+                }
+                ValidatorStakingState::NoStake => {}
             }
         }
 
