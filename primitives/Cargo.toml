@@ -24,7 +24,7 @@ lazy_static = { version = "1.2", optional = true }
 log = { package = "tracing", version = "0.1", features = ["log"] }
 num-traits = { version = "0.2", optional = true }
 parking_lot = { git = "https://github.com/styppo/parking_lot.git", optional = true }
-regex = { version = "1.5", optional = true }
+regex = { version = "1.6", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 strum_macros = "0.24"
 thiserror = { version = "1.0.31", optional = true }
