@@ -19,7 +19,7 @@ maintenance = { status = "experimental" }
 [dependencies]
 beserial_derive = { path = "beserial_derive", version = "0.1.0", optional = true }
 bitvec = { version = "1.0", optional = true }
-libp2p = { version = "0.45", default-features = false, optional = true }
+libp2p = { version = "0.46", default-features = false, optional = true }
 byteorder = "1.2"
 thiserror = "1.0"
 num-traits = "0.2"

@@ -235,7 +235,7 @@ impl Network {
             // Memory transport primary for testing
             // TODO: Use websocket over the memory transport
             let transport = websocket::WsConfig::new(dns::TokioDnsConfig::system(
-                tcp::TokioTcpConfig::new().nodelay(true),
+                tcp::TokioTcpTransport::new(tcp::GenTcpConfig::default().nodelay(true)),
             )?)
             .or_transport(MemoryTransport::default());
 
@@ -254,7 +254,7 @@ impl Network {
                 .boxed())
         } else {
             let transport = websocket::WsConfig::new(dns::TokioDnsConfig::system(
-                tcp::TokioTcpConfig::new().nodelay(true),
+                tcp::TokioTcpTransport::new(tcp::GenTcpConfig::default().nodelay(true)),
             )?);
 
             let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
