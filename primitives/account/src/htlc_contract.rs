@@ -261,11 +261,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
                 from: transaction.sender.clone(),
                 fee: transaction.fee,
             },
-            Log::Transfer {
-                from: transaction.sender.clone(),
-                to: transaction.recipient.clone(),
-                amount: transaction.value,
-            },
+            Log::transfer_from_transaction(transaction),
         ];
 
         match proof_type {
@@ -359,11 +355,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
                 from: transaction.sender.clone(),
                 fee: transaction.fee,
             },
-            Log::Transfer {
-                from: transaction.sender.clone(),
-                to: transaction.recipient.clone(),
-                amount: transaction.value,
-            },
+            Log::transfer_from_transaction(transaction),
         ];
 
         let proof_buf = &mut &transaction.proof[..];

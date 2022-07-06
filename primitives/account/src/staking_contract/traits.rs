@@ -338,10 +338,10 @@ impl AccountTransactionInteraction for StakingContract {
             return Err(AccountError::InvalidForSender);
         }
 
-        // Parse transaction data.
-        let data = OutgoingStakingTransactionProof::parse(transaction)?;
+        // Parse transaction proof.
+        let proof = OutgoingStakingTransactionProof::parse(transaction)?;
 
-        let mut acc_info: AccountInfo = match data {
+        let mut acc_info: AccountInfo = match proof {
             OutgoingStakingTransactionProof::DeleteValidator { proof } => {
                 // Get the validator address from the proof.
                 let validator_address = proof.compute_signer();
@@ -370,14 +370,9 @@ impl AccountTransactionInteraction for StakingContract {
         };
 
         // Ordering matters here for testing purposes. The vec will be very small, therefore the performance hit is irrelevant.
-        acc_info.logs.insert(
-            0,
-            Log::Transfer {
-                from: transaction.sender.clone(),
-                to: transaction.recipient.clone(),
-                amount: transaction.value,
-            },
-        );
+        acc_info
+            .logs
+            .insert(0, Log::transfer_from_transaction(transaction));
         acc_info.logs.insert(
             0,
             Log::PayFee {
@@ -404,11 +399,7 @@ impl AccountTransactionInteraction for StakingContract {
                 from: transaction.sender.clone(),
                 fee: transaction.fee,
             },
-            Log::Transfer {
-                from: transaction.sender.clone(),
-                to: transaction.recipient.clone(),
-                amount: transaction.value,
-            },
+            Log::transfer_from_transaction(transaction),
         ];
         match data {
             OutgoingStakingTransactionProof::DeleteValidator { proof } => {

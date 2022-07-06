@@ -153,11 +153,7 @@ impl AccountTransactionInteraction for BasicAccount {
                 from: transaction.sender.clone(),
                 fee: transaction.fee,
             },
-            Log::Transfer {
-                from: transaction.sender.clone(),
-                to: transaction.recipient.clone(),
-                amount: transaction.value,
-            },
+            Log::transfer_from_transaction(transaction),
         ];
         Ok(AccountInfo::new(None, logs))
     }
@@ -189,11 +185,7 @@ impl AccountTransactionInteraction for BasicAccount {
                 from: transaction.sender.clone(),
                 fee: transaction.fee,
             },
-            Log::Transfer {
-                from: transaction.sender.clone(),
-                to: transaction.recipient.clone(),
-                amount: transaction.value,
-            },
+            Log::transfer_from_transaction(transaction),
         ];
         // If the new balance is zero, it means this account didnt exist before, so we don't need to create it.
         if new_balance == Coin::ZERO {

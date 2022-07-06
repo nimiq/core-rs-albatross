@@ -126,6 +126,7 @@ fn it_can_commit_and_revert_a_block_body() {
                 from: tx.sender.clone(),
                 to: tx.recipient.clone(),
                 amount: tx.value,
+                data: None,
             },
         ],
     ));

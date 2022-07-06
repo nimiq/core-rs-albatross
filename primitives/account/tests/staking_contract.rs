@@ -1032,6 +1032,7 @@ fn delete_validator_works() {
                 from: tx.sender.clone(),
                 to: tx.recipient.clone(),
                 amount: tx.value,
+                data: None,
             },
             Log::DeleteValidator {
                 validator_address: validator_address.clone(),
@@ -1085,6 +1086,7 @@ fn delete_validator_works() {
                 from: tx.sender.clone(),
                 to: tx.recipient.clone(),
                 amount: tx.value,
+                data: None,
             },
             Log::DeleteValidator {
                 validator_address: validator_address.clone(),
@@ -1661,6 +1663,7 @@ fn unstake_works() {
                 from: tx.sender.clone(),
                 to: tx.recipient.clone(),
                 amount: tx.value,
+                data: None,
             },
             Log::Unstake {
                 staker_address: staker_address.clone(),
@@ -1734,6 +1737,7 @@ fn unstake_works() {
                 from: tx.sender.clone(),
                 to: tx.recipient.clone(),
                 amount: tx.value,
+                data: None,
             },
             Log::Unstake {
                 staker_address: staker_address.clone(),
@@ -1797,6 +1801,7 @@ fn unstake_works() {
                 from: tx.sender.clone(),
                 to: tx.recipient.clone(),
                 amount: tx.value,
+                data: None,
             },
             Log::Unstake {
                 staker_address: staker_address.clone(),

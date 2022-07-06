@@ -72,6 +72,7 @@ fn basic_transfer_works() {
                 from: tx.sender.clone(),
                 to: tx.recipient.clone(),
                 amount: tx.value,
+                data: None,
             },
         ],
     );
@@ -130,6 +131,7 @@ fn basic_transfer_works() {
                 from: tx.sender.clone(),
                 to: tx.recipient.clone(),
                 amount: tx.value,
+                data: None,
             },
         ])
     );
@@ -183,6 +185,7 @@ fn create_and_prune_works() {
                 from: tx.sender.clone(),
                 to: tx.recipient.clone(),
                 amount: tx.value,
+                data: None,
             },
         ]
     );
@@ -217,6 +220,7 @@ fn create_and_prune_works() {
                 from: tx.sender.clone(),
                 to: tx.recipient.clone(),
                 amount: tx.value,
+                data: None,
             },
         ]
     );

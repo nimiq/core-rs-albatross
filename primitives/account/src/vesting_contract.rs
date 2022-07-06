@@ -192,11 +192,7 @@ impl AccountTransactionInteraction for VestingContract {
                 from: transaction.sender.clone(),
                 fee: transaction.fee,
             },
-            Log::Transfer {
-                from: transaction.sender.clone(),
-                to: transaction.recipient.clone(),
-                amount: transaction.value,
-            },
+            Log::transfer_from_transaction(transaction),
         ];
         Ok(AccountInfo::new(receipt, logs))
     }
@@ -249,11 +245,7 @@ impl AccountTransactionInteraction for VestingContract {
                 from: transaction.sender.clone(),
                 fee: transaction.fee,
             },
-            Log::Transfer {
-                from: transaction.sender.clone(),
-                to: transaction.recipient.clone(),
-                amount: transaction.value,
-            },
+            Log::transfer_from_transaction(transaction),
         ])
     }
     fn commit_failed_transaction(

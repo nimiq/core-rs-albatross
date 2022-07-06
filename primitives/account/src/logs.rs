@@ -2,8 +2,12 @@ use crate::Receipt;
 use beserial::Serialize as BeSerialize;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
+use nimiq_primitives::account::AccountType;
 use nimiq_primitives::coin::Coin;
-use nimiq_transaction::account::htlc_contract::{AnyHash, HashAlgorithm};
+use nimiq_transaction::{
+    account::htlc_contract::{AnyHash, HashAlgorithm},
+    Transaction,
+};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
@@ -24,6 +28,8 @@ pub enum Log {
         from: Address,
         to: Address,
         amount: Coin,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        data: Option<Vec<u8>>,
     },
 
     #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
@@ -146,6 +152,21 @@ pub enum Log {
 }
 
 impl Log {
+    pub fn transfer_from_transaction(transaction: &Transaction) -> Self {
+        Log::Transfer {
+            from: transaction.sender.clone(),
+            to: transaction.recipient.clone(),
+            amount: transaction.value,
+            data: if !transaction.data.is_empty()
+                && transaction.recipient_type == AccountType::Basic
+            {
+                Some(transaction.data.clone())
+            } else {
+                None
+            },
+        }
+    }
+
     pub fn is_related_to_address(&self, address: &Address) -> bool {
         match self {
             Log::PayFee { from, .. } => from == address,
