@@ -213,6 +213,7 @@ impl Blockchain {
         let mut block_timestamps = vec![];
         let mut block_transactions = vec![];
         let mut block_inherents = vec![];
+        let mut network_ids = vec![];
         let mut prev = 0;
 
         for ext_tx in history.iter().skip(first_new_ext_tx) {
@@ -221,6 +222,7 @@ impl Blockchain {
                 block_timestamps.push(ext_tx.block_time);
                 block_transactions.push(vec![]);
                 block_inherents.push(vec![]);
+                network_ids.push(ext_tx.network_id);
                 prev = ext_tx.block_number;
             }
 
@@ -272,6 +274,7 @@ impl Blockchain {
                 &block_inherents[i],
                 block_numbers[i],
                 block_timestamps[i],
+                network_ids[i],
             );
 
             // Check if the receipts contain an error.

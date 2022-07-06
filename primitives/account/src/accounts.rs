@@ -2,6 +2,9 @@ use nimiq_database::{
     Environment, ReadTransaction, Transaction as DBTransaction, WriteTransaction,
 };
 use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_primitives::coin::Coin;
+use nimiq_primitives::networks::NetworkId;
+use nimiq_primitives::policy::Policy;
 use nimiq_transaction::{ExecutedTransaction, Transaction, TransactionFlags};
 use nimiq_trie::key_nibbles::KeyNibbles;
 use nimiq_trie::trie::MerkleRadixTrie;
@@ -9,7 +12,7 @@ use nimiq_trie::trie::MerkleRadixTrie;
 use crate::{
     logs::{BatchInfo, TransactionLog},
     Account, AccountError, AccountInherentInteraction, AccountTransactionInteraction, Inherent,
-    Log, Receipt, Receipts, RevertTransactionLogs, TransactionInfo,
+    InherentType, Log, Receipt, Receipts, RevertTransactionLogs, TransactionInfo,
 };
 
 /// An alias for the accounts tree.
@@ -74,12 +77,18 @@ impl Accounts {
         inherents: &[Inherent],
         block_height: u32,
         timestamp: u64,
+        network_id: NetworkId,
     ) -> Result<(Blake2bHash, Vec<ExecutedTransaction>), AccountError> {
         let mut txn = WriteTransaction::new(&self.env);
 
-        let (_, executed_txns) =
-            self.commit(&mut txn, transactions, inherents, block_height, timestamp)?;
-
+        let (_, executed_txns) = self.commit(
+            &mut txn,
+            transactions,
+            inherents,
+            block_height,
+            timestamp,
+            network_id,
+        )?;
         let hash = self.get_root(Some(&txn));
 
         txn.abort();
@@ -172,8 +181,16 @@ impl Accounts {
         inherents: &[Inherent],
         block_height: u32,
         timestamp: u64,
+        network_id: NetworkId,
     ) -> Result<(BatchInfo, Vec<ExecutedTransaction>), AccountError> {
-        let result = self.commit_batch(txn, transactions, inherents, block_height, timestamp);
+        let result = self.commit_batch(
+            txn,
+            transactions,
+            inherents,
+            block_height,
+            timestamp,
+            network_id,
+        );
         self.tree.update_root(txn);
         result
     }
@@ -185,6 +202,7 @@ impl Accounts {
         inherents: &[Inherent],
         block_height: u32,
         timestamp: u64,
+        network_id: NetworkId,
     ) -> Result<(BatchInfo, Vec<ExecutedTransaction>), AccountError> {
         // Fetches all pre inherents to commit.
         let pre_inherents: Vec<Inherent> = inherents
@@ -192,7 +210,8 @@ impl Accounts {
             .filter(|i| i.is_pre_transactions())
             .cloned()
             .collect();
-        let mut batch_info = self.commit_inherents(txn, &pre_inherents, block_height, timestamp)?;
+        let mut batch_info =
+            self.commit_inherents(txn, &pre_inherents, block_height, timestamp, network_id)?;
 
         let mut executed_txns = Vec::new();
 
@@ -302,7 +321,7 @@ impl Accounts {
             .cloned()
             .collect();
         let mut post_inherents_info =
-            self.commit_inherents(txn, &post_inherents, block_height, timestamp)?;
+            self.commit_inherents(txn, &post_inherents, block_height, timestamp, network_id)?;
 
         // Appends newly generated inherents logs and receipts.
         batch_info
@@ -312,6 +331,8 @@ impl Accounts {
         batch_info
             .inherent_logs
             .append(&mut post_inherents_info.inherent_logs);
+
+        batch_info.tx_logs.append(&mut post_inherents_info.tx_logs);
 
         // Merges all tx_logs into batch_info.
         Ok((
@@ -434,6 +455,7 @@ impl Accounts {
         block_height: u32,
         timestamp: u64,
         receipts: &Receipts,
+        network_id: NetworkId,
     ) -> Result<BatchInfo, AccountError> {
         let logs = self.revert_batch(
             txn,
@@ -442,6 +464,7 @@ impl Accounts {
             block_height,
             timestamp,
             receipts,
+            network_id,
         )?;
         self.tree.update_root(txn);
         Ok(logs)
@@ -455,6 +478,7 @@ impl Accounts {
         block_height: u32,
         timestamp: u64,
         receipts: &Receipts,
+        network_id: NetworkId,
     ) -> Result<BatchInfo, AccountError> {
         // Organizes the receipts by the different types of inherents (pre or post) and transactions (senders or recipients) receipts.
         let (
@@ -465,16 +489,17 @@ impl Accounts {
         ) = Self::prepare_receipts(receipts);
 
         // Reverts transactions in the inverse order of the commit.
-        let logs_inherent = self.revert_inherents(
+        // Complete batch_info for the revert.
+        // This batch_info has the receipts always empty, since there is nothing else to revert.
+        let mut batch_info = self.revert_inherents(
             txn,
             inherents,
             block_height,
             timestamp,
             post_tx_inherent_receipts,
+            network_id,
         )?;
 
-        // Complete batch_info for the revert. This batch_info has the receipts always empty, since there is nothing else to revert.
-        let mut batch_info = BatchInfo::new(Vec::new(), Vec::new(), logs_inherent);
         let mut recipients_logs = Vec::new();
         let mut senders_logs = Vec::new();
         let mut contracts_logs = Vec::new();
@@ -565,13 +590,20 @@ impl Accounts {
         }
 
         // Gathers all the inherent_logs into the batch_info return object.
-        batch_info.inherent_logs.append(&mut self.revert_inherents(
+        let mut post_batch_info = self.revert_inherents(
             txn,
             inherents,
             block_height,
             timestamp,
             pre_tx_inherent_receipts,
-        )?);
+            network_id,
+        )?;
+
+        batch_info
+            .inherent_logs
+            .append(&mut post_batch_info.inherent_logs);
+
+        batch_info.tx_logs.append(&mut post_batch_info.tx_logs);
 
         // Merges all tx_logs into batch_info.
         Ok(Self::check_merge_tx_logs(
@@ -592,9 +624,11 @@ impl Accounts {
         inherents: &[Inherent],
         block_height: u32,
         timestamp: u64,
+        network_id: NetworkId,
     ) -> Result<BatchInfo, AccountError> {
         let mut receipts = Vec::new();
-        let mut logs = Vec::new();
+        let mut inherent_logs = Vec::new();
+        let mut tx_logs = Vec::new();
 
         for (index, inherent) in inherents.iter().enumerate() {
             let mut account_info =
@@ -606,10 +640,23 @@ impl Accounts {
                 data: account_info.receipt,
             });
 
-            logs.append(&mut account_info.logs);
+            if inherent.ty == InherentType::Reward {
+                let transaction = Transaction::new_basic(
+                    Policy::COINBASE_ADDRESS,
+                    inherent.target.clone(),
+                    inherent.value,
+                    Coin::ZERO,
+                    block_height,
+                    network_id,
+                );
+
+                tx_logs.push(TransactionLog::new(transaction.hash(), account_info.logs));
+            } else {
+                inherent_logs.append(&mut account_info.logs);
+            }
         }
 
-        Ok(BatchInfo::new(receipts, Vec::new(), logs))
+        Ok(BatchInfo::new(receipts, tx_logs, inherent_logs))
     }
 
     fn revert_inherents(
@@ -619,26 +666,47 @@ impl Accounts {
         block_height: u32,
         timestamp: u64,
         receipts: Vec<Receipt>,
-    ) -> Result<Vec<Log>, AccountError> {
+        network_id: NetworkId,
+    ) -> Result<BatchInfo, AccountError> {
         let mut inherent_logs = Vec::new();
+        let mut tx_logs = Vec::new();
 
         for receipt in receipts {
-            inherent_logs.append(&mut match receipt {
-                Receipt::Inherent { index, data, .. } => Account::revert_inherent(
-                    &self.tree,
-                    txn,
-                    &inherents[index as usize],
-                    block_height,
-                    timestamp,
-                    data.as_ref(),
-                )?,
+            match receipt {
+                Receipt::Inherent { index, data, .. } => {
+                    let inherent = &inherents[index as usize];
+
+                    let mut logs = Account::revert_inherent(
+                        &self.tree,
+                        txn,
+                        inherent,
+                        block_height,
+                        timestamp,
+                        data.as_ref(),
+                    )?;
+
+                    if inherent.ty == InherentType::Reward {
+                        let transaction = Transaction::new_basic(
+                            Policy::COINBASE_ADDRESS,
+                            inherent.target.clone(),
+                            inherent.value,
+                            Coin::ZERO,
+                            block_height,
+                            network_id,
+                        );
+
+                        tx_logs.push(TransactionLog::new(transaction.hash(), logs));
+                    } else {
+                        inherent_logs.append(&mut logs);
+                    }
+                }
                 _ => {
                     unreachable!()
                 }
-            });
+            }
         }
 
-        Ok(inherent_logs)
+        Ok(BatchInfo::new(vec![], tx_logs, inherent_logs))
     }
 
     fn prepare_receipts(
@@ -726,7 +794,15 @@ impl Accounts {
         assert_eq!(None, tx_logs_recipients.peek(), "recipients tx_logs were not fully processed. Possible cause is a ordering difference compared to senders_logs tx_logs");
         assert_eq!(None, tx_logs_create.peek(), "create tx_logs were not fully processed. Possible cause is a ordering difference compared to senders_logs tx_logs");
 
-        batch_info.tx_logs = senders_logs.to_vec();
+        // Micro blocks can contain transactions, but no reward inherents. Macro blocks in turn have reward inherents,
+        // but no transactions. Thus either the tx_logs (reward inherents converted to transactions) or the
+        // senders_logs (regular transactions) must be empty.
+        if batch_info.tx_logs.is_empty() {
+            // If the tx_logs are empty, overwrite them with the senders_logs
+            batch_info.tx_logs = senders_logs
+        } else if !senders_logs.is_empty() {
+            unreachable!("Block contains both regular transactions and reward inherents");
+        }
         batch_info
     }
 }

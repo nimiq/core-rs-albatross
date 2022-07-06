@@ -69,7 +69,13 @@ pub fn next_micro_block(
     let (state_root, executed_txns) = blockchain
         .state()
         .accounts
-        .exercise_transactions(&transactions, &inherents, block_number, timestamp)
+        .exercise_transactions(
+            &transactions,
+            &inherents,
+            block_number,
+            timestamp,
+            blockchain.network_id,
+        )
         .expect("Failed to compute accounts hash during block production");
 
     let ext_txs = ExtendedTransaction::from(
@@ -156,7 +162,13 @@ pub fn next_skip_block(
         let (state_root, _) = blockchain
             .state()
             .accounts
-            .exercise_transactions(&[], &inherents, block_number, timestamp)
+            .exercise_transactions(
+                &[],
+                &inherents,
+                block_number,
+                timestamp,
+                blockchain.network_id,
+            )
             .expect("Failed to compute accounts hash during block production");
         state_root
     });
@@ -255,7 +267,13 @@ fn next_macro_block_proposal(
 
     let (root, _) = state
         .accounts
-        .exercise_transactions(&[], &inherents, block_number, timestamp)
+        .exercise_transactions(
+            &[],
+            &inherents,
+            block_number,
+            timestamp,
+            blockchain.network_id,
+        )
         .expect("Failed to compute accounts hash during block production.");
 
     header.state_root = root;

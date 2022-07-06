@@ -66,7 +66,14 @@ fn it_can_commit_and_revert_a_block_body() {
     let mut txn = WriteTransaction::new(&env);
 
     let (batch_info, _) = accounts
-        .commit(&mut txn, &[], &[reward.clone()], 1, 1)
+        .commit(
+            &mut txn,
+            &[],
+            &[reward.clone()],
+            1,
+            1,
+            NetworkId::UnitAlbatross,
+        )
         .unwrap();
 
     assert_eq!(
@@ -138,7 +145,14 @@ fn it_can_commit_and_revert_a_block_body() {
     let mut txn = WriteTransaction::new(&env);
 
     let (batch_info, executed_txns) = accounts
-        .commit(&mut txn, &transactions, &[reward.clone()], 2, 2)
+        .commit(
+            &mut txn,
+            &transactions,
+            &[reward.clone()],
+            2,
+            2,
+            NetworkId::UnitAlbatross,
+        )
         .unwrap();
 
     assert_eq!(
@@ -175,7 +189,8 @@ fn it_can_commit_and_revert_a_block_body() {
             &[reward],
             2,
             2,
-            &Receipts::from(receipts.clone())
+            &Receipts::from(receipts.clone()),
+            NetworkId::UnitAlbatross,
         ),
         Ok(BatchInfo::new(vec![], tx_logs, inherent_logs))
     );
@@ -227,7 +242,9 @@ fn it_correctly_rewards_validators() {
 
     let mut txn = WriteTransaction::new(&env);
 
-    assert!(accounts.commit(&mut txn, &[], &[reward], 1, 1).is_ok());
+    assert!(accounts
+        .commit(&mut txn, &[], &[reward], 1, 1, NetworkId::UnitAlbatross)
+        .is_ok());
 
     txn.commit();
 
@@ -282,7 +299,14 @@ fn it_correctly_rewards_validators() {
     let mut txn = WriteTransaction::new(&env);
 
     assert!(accounts
-        .commit(&mut txn, &vec![tx1, tx2], &[reward], 2, 2)
+        .commit(
+            &mut txn,
+            &vec![tx1, tx2],
+            &[reward],
+            2,
+            2,
+            NetworkId::UnitAlbatross
+        )
         .is_ok());
 
     txn.commit();
@@ -361,7 +385,14 @@ fn it_checks_for_sufficient_funds() {
         let mut txn = WriteTransaction::new(&env);
 
         assert!(accounts
-            .commit(&mut txn, &[tx.clone()], &[reward.clone()], 1, 1)
+            .commit(
+                &mut txn,
+                &[tx.clone()],
+                &[reward.clone()],
+                1,
+                1,
+                NetworkId::UnitAlbatross
+            )
             .is_err());
     }
 
@@ -379,7 +410,14 @@ fn it_checks_for_sufficient_funds() {
     let mut txn = WriteTransaction::new(&env);
 
     assert!(accounts
-        .commit(&mut txn, &[], &[reward.clone()], 1, 1)
+        .commit(
+            &mut txn,
+            &[],
+            &[reward.clone()],
+            1,
+            1,
+            NetworkId::UnitAlbatross
+        )
         .is_ok());
 
     txn.commit();
@@ -408,7 +446,14 @@ fn it_checks_for_sufficient_funds() {
         let mut txn = WriteTransaction::new(&env);
 
         let (_, executed_txns) = accounts
-            .commit(&mut txn, &[tx.clone()], &[reward.clone()], 2, 2)
+            .commit(
+                &mut txn,
+                &[tx.clone()],
+                &[reward.clone()],
+                2,
+                2,
+                NetworkId::UnitAlbatross,
+            )
             .unwrap();
 
         assert_eq!(executed_txns, vec![ExecutedTransaction::Err(tx.clone())]);
@@ -440,7 +485,14 @@ fn it_checks_for_sufficient_funds() {
         let mut txn = WriteTransaction::new(&env);
 
         let (_, executed_txns) = accounts
-            .commit(&mut txn, &vec![tx.clone(), tx2.clone()], &[reward], 2, 2)
+            .commit(
+                &mut txn,
+                &vec![tx.clone(), tx2.clone()],
+                &[reward],
+                2,
+                2,
+                NetworkId::UnitAlbatross,
+            )
             .unwrap();
 
         assert_eq!(
@@ -551,7 +603,14 @@ fn accounts_performance() {
 
     let mut txn = WriteTransaction::new(&env);
     let start = Instant::now();
-    let result = accounts.commit(&mut txn, &txns[..], &rewards[..], 1, 1);
+    let result = accounts.commit(
+        &mut txn,
+        &txns[..],
+        &rewards[..],
+        1,
+        1,
+        NetworkId::UnitAlbatross,
+    );
     match result {
         Ok(_) => assert!(true),
         Err(err) => assert!(false, "Received {}", err),
@@ -674,6 +733,7 @@ fn accounts_performance_history_sync_batches_single_sender() {
                 &rewards[..],
                 block_index,
                 1,
+                NetworkId::UnitAlbatross,
             );
             match result {
                 Ok(_) => assert!(true),
@@ -795,6 +855,7 @@ fn accounts_performance_history_sync_batches_many_to_many() {
                 &rewards[..],
                 block_index,
                 1,
+                NetworkId::UnitAlbatross,
             );
             match result {
                 Ok(_) => assert!(true),
@@ -877,7 +938,14 @@ fn it_commits_valid_and_failing_txns() {
     tx.proof = signature_proof.serialize_to_vec();
 
     let (_, executed_txns) = accounts
-        .commit(&mut db_txn, &vec![tx.clone()], &[], 1, 200)
+        .commit(
+            &mut db_txn,
+            &vec![tx.clone()],
+            &[],
+            1,
+            200,
+            NetworkId::UnitAlbatross,
+        )
         .unwrap();
 
     assert_eq!(executed_txns, vec![ExecutedTransaction::Err(tx.clone())]);
@@ -920,7 +988,14 @@ fn it_commits_valid_and_failing_txns() {
     tx.proof = signature_proof.serialize_to_vec();
 
     let (_, executed_txns) = accounts
-        .commit(&mut db_txn, &vec![tx.clone()], &[], 1, 200)
+        .commit(
+            &mut db_txn,
+            &vec![tx.clone()],
+            &[],
+            1,
+            200,
+            NetworkId::UnitAlbatross,
+        )
         .unwrap();
 
     assert_eq!(executed_txns, vec![ExecutedTransaction::Err(tx.clone())]);

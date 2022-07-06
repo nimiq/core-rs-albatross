@@ -32,6 +32,7 @@ impl Blockchain {
                     &inherents,
                     macro_block.header.block_number,
                     macro_block.header.timestamp,
+                    self.network_id,
                 );
 
                 // Check if the receipts contain an error.
@@ -93,6 +94,7 @@ impl Blockchain {
                     &inherents,
                     micro_block.header.block_number,
                     micro_block.header.timestamp,
+                    self.network_id,
                 );
                 let (batch_info, executed_txns) = match batch_info {
                     Ok(batch_info) => batch_info,
@@ -193,6 +195,7 @@ impl Blockchain {
                     micro_block.header.block_number,
                     micro_block.header.timestamp,
                     &receipts,
+                    self.network_id,
                 );
                 let batch_info = match batch_info {
                     Ok(batch_info) => batch_info,

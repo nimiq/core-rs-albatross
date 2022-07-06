@@ -87,6 +87,7 @@ fn it_can_create_batch_finalization_inherents() {
             &[slash_inherent],
             Policy::blocks_per_batch() + 1,
             0,
+            NetworkId::UnitAlbatross,
         )
         .is_ok());
     txn.commit();
