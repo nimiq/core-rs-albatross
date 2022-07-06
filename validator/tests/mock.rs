@@ -46,6 +46,7 @@ async fn one_validator_can_create_micro_blocks() {
     let (validator, mut consensus1) = build_validator::<Network>(
         0,
         Address::from(&validator_key),
+        false,
         signing_key,
         voting_key,
         fee_key,
