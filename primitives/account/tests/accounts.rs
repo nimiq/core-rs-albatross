@@ -51,12 +51,23 @@ fn it_can_commit_and_revert_a_block_body() {
         data: None,
     }];
 
-    let mut tx_logs = Vec::new();
-
-    let inherent_logs = vec![Log::PayoutReward {
-        to: reward.target.clone(),
-        value: reward.value,
+    let mut tx_logs = vec![TransactionLog {
+        tx_hash: Transaction::new_basic(
+            Policy::COINBASE_ADDRESS,
+            reward.target.clone(),
+            reward.value,
+            Coin::ZERO,
+            1,
+            NetworkId::UnitAlbatross,
+        )
+        .hash(),
+        logs: vec![Log::PayoutReward {
+            to: reward.target.clone(),
+            value: reward.value,
+        }],
     }];
+
+    let inherent_logs = Vec::new();
 
     assert_eq!(
         accounts.get(&KeyNibbles::from(&address_validator), None),
@@ -149,8 +160,8 @@ fn it_can_commit_and_revert_a_block_body() {
             &mut txn,
             &transactions,
             &[reward.clone()],
-            2,
-            2,
+            1,
+            1,
             NetworkId::UnitAlbatross,
         )
         .unwrap();
@@ -187,8 +198,8 @@ fn it_can_commit_and_revert_a_block_body() {
             &mut txn,
             &executed_txns,
             &[reward],
-            2,
-            2,
+            1,
+            1,
             &Receipts::from(receipts.clone()),
             NetworkId::UnitAlbatross,
         ),

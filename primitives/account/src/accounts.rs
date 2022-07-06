@@ -801,7 +801,8 @@ impl Accounts {
             // If the tx_logs are empty, overwrite them with the senders_logs
             batch_info.tx_logs = senders_logs
         } else if !senders_logs.is_empty() {
-            unreachable!("Block contains both regular transactions and reward inherents");
+            warn!("Block contains both regular transactions and reward inherents");
+            batch_info.tx_logs.append(&mut senders_logs);
         }
         batch_info
     }
