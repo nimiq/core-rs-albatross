@@ -88,13 +88,7 @@ pub fn next_micro_block(
             .expect("Failed to compute accounts hash during block production")
     });
 
-    let ext_txs = ExtendedTransaction::from(
-        blockchain.network_id,
-        block_number,
-        timestamp,
-        transactions,
-        inherents,
-    );
+    let ext_txs = ExtendedTransaction::from(None, block_number, timestamp, transactions, inherents);
 
     let mut txn = blockchain.write_transaction();
 
@@ -202,13 +196,7 @@ fn next_macro_block_proposal(
         .get_root_with(&[], &inherents, block_number, timestamp)
         .expect("Failed to compute accounts hash during block production.");
 
-    let ext_txs = ExtendedTransaction::from(
-        blockchain.network_id,
-        block_number,
-        timestamp,
-        vec![],
-        inherents,
-    );
+    let ext_txs = ExtendedTransaction::from(None, block_number, timestamp, vec![], inherents);
 
     let mut txn = blockchain.write_transaction();
 

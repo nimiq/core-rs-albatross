@@ -85,7 +85,7 @@ impl BlockProducer {
 
         // Calculate the extended transactions from the transactions and the inherents.
         let ext_txs = ExtendedTransaction::from(
-            blockchain.network_id,
+            None,
             block_number,
             timestamp,
             transactions.clone(),
@@ -201,13 +201,7 @@ impl BlockProducer {
             .expect("Failed to compute accounts hash during block production.");
 
         // Calculate the extended transactions from the transactions and the inherents.
-        let ext_txs = ExtendedTransaction::from(
-            blockchain.network_id,
-            block_number,
-            timestamp,
-            vec![],
-            inherents,
-        );
+        let ext_txs = ExtendedTransaction::from(None, block_number, timestamp, vec![], inherents);
 
         // Store the extended transactions into the history tree and calculate the history root.
         let mut txn = blockchain.write_transaction();

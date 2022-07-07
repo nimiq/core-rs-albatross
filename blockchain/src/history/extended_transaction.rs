@@ -8,6 +8,7 @@ use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_mmr::hash::Hash as MMRHash;
 use nimiq_primitives::coin::Coin;
+use nimiq_primitives::globals::NETWORK_ID;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_primitives::policy::COINBASE_ADDRESS;
 use nimiq_transaction::Transaction as BlockchainTransaction;
@@ -49,8 +50,7 @@ impl ExtendedTransaction {
     /// number and a block timestamp) into a vector of extended transactions.
     /// We only want to store slash and reward inherents, so we ignore the other inherent types.
     pub fn from(
-        // TODO: Make into an Option<NetworkId>
-        network_id: NetworkId,
+        network_id: Option<NetworkId>,
         block_number: u32,
         block_time: u64,
         transactions: Vec<BlockchainTransaction>,
@@ -60,7 +60,8 @@ impl ExtendedTransaction {
 
         for transaction in transactions {
             ext_txs.push(ExtendedTransaction {
-                network_id,
+                network_id: network_id
+                    .unwrap_or_else(|| *NETWORK_ID.get().expect("Network ID not set")),
                 block_number,
                 block_time,
                 data: ExtTxData::Basic(transaction),
@@ -70,7 +71,8 @@ impl ExtendedTransaction {
         for inherent in inherents {
             if inherent.ty == InherentType::Slash || inherent.ty == InherentType::Reward {
                 ext_txs.push(ExtendedTransaction {
-                    network_id,
+                    network_id: network_id
+                        .unwrap_or_else(|| *NETWORK_ID.get().expect("Network ID not set")),
                     block_number,
                     block_time,
                     data: ExtTxData::Inherent(inherent),
