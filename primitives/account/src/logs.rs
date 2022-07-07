@@ -8,7 +8,10 @@ use nimiq_transaction::account::htlc_contract::{AnyHash, HashAlgorithm};
 #[derive(Debug, PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 // Renaming affects only the struct names and thus their tag, the "type" field.
-#[cfg_attr(feature = "serde-derive", serde(rename_all = "kebab-case", tag = "type"))]
+#[cfg_attr(
+    feature = "serde-derive",
+    serde(rename_all = "kebab-case", tag = "type")
+)]
 pub enum Log {
     // Used together with all transactions (inherents are excluded).
     #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
@@ -257,7 +260,10 @@ impl TransactionLog {
 #[derive(Debug, PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 // Renaming affects only the struct names and thus their tag, the "type" field.
-#[cfg_attr(feature = "serde-derive", serde(rename_all = "kebab-case", tag = "type"))]
+#[cfg_attr(
+    feature = "serde-derive",
+    serde(rename_all = "kebab-case", tag = "type")
+)]
 pub enum BlockLog {
     #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
     AppliedBlock {
