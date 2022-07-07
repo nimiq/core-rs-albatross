@@ -8,22 +8,22 @@ use nimiq_transaction::account::htlc_contract::{AnyHash, HashAlgorithm};
 #[derive(Debug, PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 // Renaming affects only the struct names and thus their tag, the "type" field.
-#[serde(rename_all = "kebab-case", tag = "type")]
+#[cfg_attr(feature = "serde-derive", serde(rename_all = "kebab-case", tag = "type"))]
 pub enum Log {
     // Used together with all transactions (inherents are excluded).
-    #[serde(rename_all = "camelCase")]
+    #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
     PayFee { from: Address, fee: Coin },
 
     // Basic account associated event.
     // Used also for every event of HTLCs, Vesting Contracts that implies a control change of the coins.
-    #[serde(rename_all = "camelCase")]
+    #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
     Transfer {
         from: Address,
         to: Address,
         amount: Coin,
     },
 
-    #[serde(rename_all = "camelCase")]
+    #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
     HTLCCreate {
         contract_address: Address,
         sender: Address,
@@ -35,20 +35,20 @@ pub enum Log {
         total_amount: Coin,
     },
 
-    #[serde(rename_all = "camelCase")]
+    #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
     HTLCTimeoutResolve { contract_address: Address },
 
-    #[serde(rename_all = "camelCase")]
+    #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
     HTLCRegularTransfer {
         contract_address: Address,
         pre_image: AnyHash,
         hash_depth: u8,
     },
 
-    #[serde(rename_all = "camelCase")]
+    #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
     HTLCEarlyResolve { contract_address: Address },
 
-    #[serde(rename_all = "camelCase")]
+    #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
     VestingCreate {
         contract_address: Address,
         owner: Address,
@@ -58,72 +58,72 @@ pub enum Log {
         total_amount: Coin,
     },
 
-    #[serde(rename_all = "camelCase")]
+    #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
     CreateValidator {
         validator_address: Address,
         reward_address: Address,
     },
 
-    #[serde(rename_all = "camelCase")]
+    #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
     UpdateValidator {
         validator_address: Address,
         old_reward_address: Address,
         new_reward_address: Option<Address>,
     },
 
-    #[serde(rename_all = "camelCase")]
+    #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
     InactivateValidator { validator_address: Address },
 
-    #[serde(rename_all = "camelCase")]
+    #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
     ReactivateValidator { validator_address: Address },
 
-    #[serde(rename_all = "camelCase")]
+    #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
     UnparkValidator { validator_address: Address },
 
-    #[serde(rename_all = "camelCase")]
+    #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
     CreateStaker {
         staker_address: Address,
         validator_address: Option<Address>,
         value: Coin,
     },
 
-    #[serde(rename_all = "camelCase")]
+    #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
     Stake {
         staker_address: Address,
         validator_address: Option<Address>,
         value: Coin,
     },
 
-    #[serde(rename_all = "camelCase")]
+    #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
     UpdateStaker {
         staker_address: Address,
         old_validator_address: Option<Address>,
         new_validator_address: Option<Address>,
     },
 
-    #[serde(rename_all = "camelCase")]
+    #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
     DeleteValidator {
         validator_address: Address,
         reward_address: Address,
     },
 
-    #[serde(rename_all = "camelCase")]
+    #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
     Unstake {
         staker_address: Address,
         validator_address: Option<Address>,
         value: Coin,
     },
 
-    #[serde(rename_all = "camelCase")]
+    #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
     PayoutReward { to: Address, value: Coin },
 
-    #[serde(rename_all = "camelCase")]
+    #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
     Park {
         validator_address: Address,
         event_block: u32,
     },
 
-    #[serde(rename_all = "camelCase")]
+    #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
     Slash {
         validator_address: Address,
         event_block: u32,
@@ -131,7 +131,7 @@ pub enum Log {
         newly_disabled: bool,
     },
 
-    #[serde(rename_all = "camelCase")]
+    #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
     RevertContract { contract_address: Address },
 }
 
@@ -241,9 +241,9 @@ impl Log {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
-#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
 pub struct TransactionLog {
-    #[serde(rename = "hash")]
+    #[cfg_attr(feature = "serde-derive", serde(rename = "hash"))]
     pub tx_hash: Blake2bHash,
     pub logs: Vec<Log>,
 }
@@ -257,26 +257,26 @@ impl TransactionLog {
 #[derive(Debug, PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 // Renaming affects only the struct names and thus their tag, the "type" field.
-#[serde(rename_all = "kebab-case", tag = "type")]
+#[cfg_attr(feature = "serde-derive", serde(rename_all = "kebab-case", tag = "type"))]
 pub enum BlockLog {
-    #[serde(rename_all = "camelCase")]
+    #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
     AppliedBlock {
-        #[serde(rename = "inherents")]
+        #[cfg_attr(feature = "serde-derive", serde(rename = "inherents"))]
         inherent_logs: Vec<Log>,
         block_hash: Blake2bHash,
         block_number: u32,
         timestamp: u64,
-        #[serde(rename = "transactions")]
+        #[cfg_attr(feature = "serde-derive", serde(rename = "transactions"))]
         tx_logs: Vec<TransactionLog>,
     },
 
-    #[serde(rename_all = "camelCase")]
+    #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
     RevertedBlock {
-        #[serde(rename = "inherents")]
+        #[cfg_attr(feature = "serde-derive", serde(rename = "inherents"))]
         inherent_logs: Vec<Log>,
         block_hash: Blake2bHash,
         block_number: u32,
-        #[serde(rename = "transactions")]
+        #[cfg_attr(feature = "serde-derive", serde(rename = "transactions"))]
         tx_logs: Vec<TransactionLog>,
     },
 }
