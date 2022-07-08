@@ -152,7 +152,7 @@ pub enum Log {
 }
 
 impl Log {
-    pub fn transfer_from_transaction(transaction: &Transaction) -> Self {
+    pub fn transfer_log_from_transaction(transaction: &Transaction) -> Self {
         Log::Transfer {
             from: transaction.sender.clone(),
             to: transaction.recipient.clone(),

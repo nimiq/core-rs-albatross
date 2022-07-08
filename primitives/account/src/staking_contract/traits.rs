@@ -372,7 +372,7 @@ impl AccountTransactionInteraction for StakingContract {
         // Ordering matters here for testing purposes. The vec will be very small, therefore the performance hit is irrelevant.
         acc_info
             .logs
-            .insert(0, Log::transfer_from_transaction(transaction));
+            .insert(0, Log::transfer_log_from_transaction(transaction));
         acc_info.logs.insert(
             0,
             Log::PayFee {
@@ -399,7 +399,7 @@ impl AccountTransactionInteraction for StakingContract {
                 from: transaction.sender.clone(),
                 fee: transaction.fee,
             },
-            Log::transfer_from_transaction(transaction),
+            Log::transfer_log_from_transaction(transaction),
         ];
         match data {
             OutgoingStakingTransactionProof::DeleteValidator { proof } => {
