@@ -49,10 +49,10 @@ pub const TWO_F_PLUS_ONE: u16 = (2 * SLOTS + 3 - 1) / 3;
 pub const F_PLUS_ONE: u16 = (SLOTS + 3 - 1) / 3;
 
 /// Length of a batch including the macro block
-pub const BLOCKS_PER_BATCH: u32 = 32; // TODO Set
+pub const BLOCKS_PER_BATCH: u32 = 60; // TODO Set
 
 /// How many batches constitute an epoch
-pub const BATCHES_PER_EPOCH: u16 = 4; // TODO Set
+pub const BATCHES_PER_EPOCH: u16 = 360; // TODO Set
 
 /// Length of epoch including election macro block
 pub const BLOCKS_PER_EPOCH: u32 = BLOCKS_PER_BATCH * BATCHES_PER_EPOCH as u32;
