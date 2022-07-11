@@ -243,6 +243,14 @@ impl MempoolState {
             }
         }
     }
+
+    /// Retrieves all expired transaction hashes from both the `regular_transactions` and `control_transactions` Vectors
+    pub fn get_expired_txns(&mut self, block_height: u32) -> Vec<Blake2bHash> {
+        let mut expired_txns = self.control_transactions.get_expired_txns(block_height);
+        expired_txns.append(&mut self.regular_transactions.get_expired_txns(block_height));
+
+        expired_txns
+    }
 }
 
 #[derive(Clone)]

@@ -319,19 +319,9 @@ impl Mempool {
         let block_height = blockchain.block_number() + 1;
 
         // First remove the transactions that are no longer valid due to age.
-        let expired_regular_txns = mempool_state
-            .regular_transactions
-            .get_expired_txns(block_height);
+        let expired_txns = mempool_state.get_expired_txns(block_height);
 
-        for tx_hash in expired_regular_txns {
-            mempool_state.remove(&tx_hash, EvictionReason::Expired);
-        }
-
-        let expired_control_txns = mempool_state
-            .control_transactions
-            .get_expired_txns(block_height);
-
-        for tx_hash in expired_control_txns {
+        for tx_hash in expired_txns {
             mempool_state.remove(&tx_hash, EvictionReason::Expired);
         }
 
