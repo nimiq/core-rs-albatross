@@ -8,6 +8,12 @@
 #[macro_use]
 extern crate log;
 
+/// Mempool transaction module
+mod mempool_transactions;
+
+/// Mempool state module
+mod mempool_state;
+
 /// Mempool config module
 pub mod config;
 /// Mempool executor module

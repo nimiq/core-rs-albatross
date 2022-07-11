@@ -17,7 +17,7 @@ use nimiq_transaction::account::staking_contract::{
 use nimiq_transaction::Transaction;
 
 use crate::filter::MempoolFilter;
-use crate::mempool::MempoolState;
+use crate::mempool_state::MempoolState;
 
 /// Return codes for transaction signature verification
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]

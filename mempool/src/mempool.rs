@@ -1,10 +1,8 @@
 use futures::future::{AbortHandle, Abortable};
-use futures::lock::Mutex;
+use futures::lock::{Mutex, MutexGuard};
 use futures::stream::BoxStream;
-use keyed_priority_queue::KeyedPriorityQueue;
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
-use std::cmp::{Ordering, Reverse};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio_metrics::TaskMonitor;
 
@@ -13,7 +11,6 @@ use nimiq_account::{Account, BasicAccount};
 use nimiq_block::Block;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, TransactionVerificationCache};
 use nimiq_hash::{Blake2bHash, Hash};
-use nimiq_keys::Address;
 use nimiq_network_interface::network::{Network, Topic};
 use nimiq_primitives::account::AccountType;
 use nimiq_primitives::coin::Coin;
@@ -23,10 +20,12 @@ use nimiq_transaction::account::staking_contract::{
 use nimiq_transaction::Transaction;
 
 use crate::config::MempoolConfig;
-use crate::executor::{ControlMempoolExecutor, MempoolExecutor};
+use crate::executor::MempoolExecutor;
 use crate::filter::{MempoolFilter, MempoolRules};
 #[cfg(feature = "metrics")]
 use crate::mempool_metrics::MempoolMetrics;
+use crate::mempool_state::{EvictionReason, MempoolState};
+use crate::mempool_transactions::MempoolTransactions;
 use crate::verify::{verify_tx, VerifyErr};
 
 /// Transaction topic for the Mempool to request transactions from the network
@@ -106,6 +105,46 @@ impl Mempool {
         }
     }
 
+    /// Start the `MempoolExecutor` for `Topic` `T` and instrument a monitor for the task if given.
+    /// An `AbortHandle` will be stored in `handle`.
+    fn start_executor<N: Network, T: Topic + Unpin + Send + Sync + 'static>(
+        &self,
+        network: Arc<N>,
+        monitor: Option<TaskMonitor>,
+        mut handle: MutexGuard<'_, Option<AbortHandle>>,
+        txn_stream: BoxStream<'static, (Transaction, <N as Network>::PubsubId)>,
+    ) {
+        if handle.is_some() {
+            // If we already have an executor running, don't do anything
+            return;
+        }
+
+        // Create the executor for the Topic T
+        let executor = MempoolExecutor::<N, T>::new(
+            Arc::clone(&self.blockchain),
+            Arc::clone(&self.state),
+            Arc::clone(&self.filter),
+            Arc::clone(&network),
+            txn_stream,
+        );
+
+        // Create the AbortHandle
+        let (abort_handle, abort_registration) = AbortHandle::new_pair();
+
+        // Create the abortable future using the executor and the abort registration
+        let future = Abortable::new(executor, abort_registration);
+
+        // if a monitor was given, instrument the spawned task
+        if let Some(monitor) = monitor {
+            tokio::spawn(monitor.instrument(future));
+        } else {
+            tokio::spawn(future);
+        }
+
+        // Set the executor handle
+        *handle = Some(abort_handle);
+    }
+
     /// Starts the mempool executors
     ///
     /// Once this function is called, the mempool executors are spawned.
@@ -116,8 +155,8 @@ impl Mempool {
         monitor: Option<TaskMonitor>,
         control_monitor: Option<TaskMonitor>,
     ) {
-        let mut executor_handle = self.executor_handle.lock().await;
-        let mut control_executor_handle = self.control_executor_handle.lock().await;
+        let executor_handle = self.executor_handle.lock().await;
+        let control_executor_handle = self.control_executor_handle.lock().await;
 
         if executor_handle.is_some() && control_executor_handle.is_some() {
             // If we already have both executors running dont do anything
@@ -127,26 +166,12 @@ impl Mempool {
         // Subscribe to the network TX topic
         let txn_stream = network.subscribe::<TransactionTopic>().await.unwrap();
 
-        let mempool_executor = MempoolExecutor::new(
-            Arc::clone(&self.blockchain),
-            Arc::clone(&self.state),
-            Arc::clone(&self.filter),
+        self.start_executor::<N, TransactionTopic>(
             Arc::clone(&network),
+            monitor,
+            executor_handle,
             txn_stream,
         );
-
-        // Start the executor and obtain its handle
-        let (abort_handle, abort_registration) = AbortHandle::new_pair();
-
-        let future = Abortable::new(mempool_executor, abort_registration);
-        if let Some(monitor) = monitor {
-            tokio::spawn(monitor.instrument(future));
-        } else {
-            tokio::spawn(future);
-        }
-
-        // Set the executor handle
-        *executor_handle = Some(abort_handle);
 
         // Subscribe to the control transaction topic
         let txn_stream = network
@@ -154,27 +179,12 @@ impl Mempool {
             .await
             .unwrap();
 
-        let control_mempool_executor = ControlMempoolExecutor::new(
-            Arc::clone(&self.blockchain),
-            Arc::clone(&self.state),
-            Arc::clone(&self.filter),
-            Arc::clone(&network),
+        self.start_executor::<N, ControlTransactionTopic>(
+            network,
+            control_monitor,
+            control_executor_handle,
             txn_stream,
         );
-
-        // Start the executor and obtain its handle
-        let (abort_handle, abort_registration) = AbortHandle::new_pair();
-
-        let future = Abortable::new(control_mempool_executor, abort_registration);
-
-        if let Some(monitor) = control_monitor {
-            tokio::spawn(monitor.instrument(future));
-        } else {
-            tokio::spawn(future);
-        }
-
-        // Set the control mempool executor handle
-        *control_executor_handle = Some(abort_handle);
     }
 
     /// Starts the mempool executor with a custom transaction stream
@@ -187,27 +197,12 @@ impl Mempool {
         txn_stream: BoxStream<'static, (Transaction, <N as Network>::PubsubId)>,
         network: Arc<N>,
     ) {
-        let mut executor_handle = self.executor_handle.lock().await;
-
-        if executor_handle.is_some() {
-            // If we already have an executor running, don't do anything
-            return;
-        }
-
-        let mempool_executor = MempoolExecutor::<N>::new(
-            Arc::clone(&self.blockchain),
-            Arc::clone(&self.state),
-            Arc::clone(&self.filter),
-            Arc::clone(&network),
+        self.start_executor::<N, TransactionTopic>(
+            network,
+            None,
+            self.executor_handle.lock().await,
             txn_stream,
-        );
-
-        // Start the executor and obtain its handle
-        let (abort_handle, abort_registration) = AbortHandle::new_pair();
-        tokio::spawn(Abortable::new(mempool_executor, abort_registration));
-
-        // Set the executor handle
-        *executor_handle = Some(abort_handle);
+        )
     }
 
     /// Starts the control mempool executor with a custom transaction stream
@@ -220,27 +215,12 @@ impl Mempool {
         txn_stream: BoxStream<'static, (Transaction, <N as Network>::PubsubId)>,
         network: Arc<N>,
     ) {
-        let mut control_executor_handle = self.control_executor_handle.lock().await;
-
-        if control_executor_handle.is_some() {
-            // If we already have an executor running, don't do anything
-            return;
-        }
-
-        let mempool_executor = ControlMempoolExecutor::<N>::new(
-            Arc::clone(&self.blockchain),
-            Arc::clone(&self.state),
-            Arc::clone(&self.filter),
-            Arc::clone(&network),
+        self.start_executor::<N, ControlTransactionTopic>(
+            network,
+            None,
+            self.control_executor_handle.lock().await,
             txn_stream,
-        );
-
-        // Start the executor and obtain its handle
-        let (abort_handle, abort_registration) = AbortHandle::new_pair();
-        tokio::spawn(Abortable::new(mempool_executor, abort_registration));
-
-        // Set the executor handle
-        *control_executor_handle = Some(abort_handle);
+        )
     }
 
     /// Stops the mempool executors
@@ -339,19 +319,9 @@ impl Mempool {
         let block_height = blockchain.block_number() + 1;
 
         // First remove the transactions that are no longer valid due to age.
-        let expired_regular_txns = mempool_state
-            .regular_transactions
-            .get_expired_txns(block_height);
+        let expired_txns = mempool_state.get_expired_txns(block_height);
 
-        for tx_hash in expired_regular_txns {
-            mempool_state.remove(&tx_hash, EvictionReason::Expired);
-        }
-
-        let expired_control_txns = mempool_state
-            .control_transactions
-            .get_expired_txns(block_height);
-
-        for tx_hash in expired_control_txns {
+        for tx_hash in expired_txns {
             mempool_state.remove(&tx_hash, EvictionReason::Expired);
         }
 
@@ -777,440 +747,5 @@ impl TransactionVerificationCache for Mempool {
         } else {
             false
         }
-    }
-}
-
-// This is a container where all mempool transactions are stored.
-// It provides simple functions to insert/delete/get transactions
-// And mantains internal structures to keep track of the best/worst transactions
-pub(crate) struct MempoolTransactions {
-    // A hashmap containing the transactions indexed by their hash.
-    pub(crate) transactions: HashMap<Blake2bHash, Transaction>,
-
-    // Transactions ordered by fee per byte (highest to lowest) and insertion order (oldest to newest).
-    // This is the ordering in which transactions are included in blocks by the validator.
-    pub(crate) best_transactions: KeyedPriorityQueue<Blake2bHash, BestTxOrder>,
-
-    // Transactions ordered by fee per byte (lowest to highest) and insertion order (newest to oldest).
-    // This is the ordering used to evict transactions from the mempool when it becomes full.
-    pub(crate) worst_transactions: KeyedPriorityQueue<Blake2bHash, WorstTxOrder>,
-
-    // Transactions ordered by validity_start_height (oldest to newest).
-    // This ordering is used to evict expired transactions from the mempool.
-    pub(crate) oldest_transactions: KeyedPriorityQueue<Blake2bHash, Reverse<u32>>,
-
-    // Maximum allowed total size (in bytes) of all transactions in the mempool.
-    pub(crate) total_size_limit: usize,
-
-    // Total size (in bytes) of the transactions currently in mempool.
-    pub(crate) total_size: usize,
-
-    // Counter that increases for every added transaction, to order them for removal.
-    pub(crate) tx_counter: u64,
-}
-
-impl MempoolTransactions {
-    pub fn new(size_limit: usize) -> Self {
-        Self {
-            transactions: HashMap::new(),
-            best_transactions: KeyedPriorityQueue::new(),
-            worst_transactions: KeyedPriorityQueue::new(),
-            oldest_transactions: KeyedPriorityQueue::new(),
-            total_size_limit: size_limit,
-            total_size: 0,
-            tx_counter: 0,
-        }
-    }
-
-    pub fn contains_key(&self, hash: &Blake2bHash) -> bool {
-        self.transactions.contains_key(hash)
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.transactions.is_empty()
-    }
-
-    // This function is used to remove the transactions that are no longer valid at a given block height
-    pub fn get_expired_txns(&mut self, block_height: u32) -> Vec<Blake2bHash> {
-        let mut expired_txns = vec![];
-        loop {
-            // Get the hash of the oldest transaction.
-            let tx_hash = match self.oldest_transactions.peek() {
-                None => {
-                    break;
-                }
-                Some((tx_hash, _)) => tx_hash.clone(),
-            };
-
-            // Get a reference to the transaction.
-            let tx = self.get(&tx_hash).unwrap();
-
-            // Check if it is still valid.
-            if tx.is_valid_at(block_height) {
-                // No need to process more transactions, since we arrived to the oldest one that is valid
-                break;
-            } else {
-                // Remove the transaction from the oldest struct to continue collecting expired txns.
-                self.oldest_transactions.remove(&tx_hash);
-                expired_txns.push(tx_hash);
-            }
-        }
-        expired_txns
-    }
-
-    pub fn get(&self, hash: &Blake2bHash) -> Option<&Transaction> {
-        self.transactions.get(hash)
-    }
-
-    pub(crate) fn insert(&mut self, tx: &Transaction) -> bool {
-        let tx_hash = tx.hash();
-
-        if self.transactions.contains_key(&tx_hash) {
-            return false;
-        }
-
-        self.transactions.insert(tx_hash.clone(), tx.clone());
-
-        self.best_transactions.push(
-            tx_hash.clone(),
-            BestTxOrder {
-                fee_per_byte: tx.fee_per_byte(),
-                insertion_order: self.tx_counter,
-            },
-        );
-        self.worst_transactions.push(
-            tx_hash.clone(),
-            WorstTxOrder {
-                fee_per_byte: tx.fee_per_byte(),
-                insertion_order: self.tx_counter,
-            },
-        );
-
-        self.tx_counter += 1;
-
-        self.oldest_transactions
-            .push(tx_hash, Reverse(tx.validity_start_height));
-
-        // Update total tx size
-        self.total_size += tx.serialized_size();
-
-        true
-    }
-
-    pub(crate) fn delete(&mut self, tx_hash: &Blake2bHash) -> Option<Transaction> {
-        let tx = self.transactions.remove(tx_hash)?;
-
-        self.best_transactions.remove(tx_hash);
-        self.worst_transactions.remove(tx_hash);
-        self.oldest_transactions.remove(tx_hash);
-
-        self.total_size -= tx.serialized_size();
-
-        Some(tx)
-    }
-}
-
-pub(crate) struct MempoolState {
-    // Container where the regular transactions are stored
-    pub(crate) regular_transactions: MempoolTransactions,
-
-    // Container where the control transactions are stored
-    pub(crate) control_transactions: MempoolTransactions,
-
-    // The pending balance per sender.
-    pub(crate) state_by_sender: HashMap<Address, SenderPendingState>,
-
-    // The sets of all senders of staking transactions. For simplicity, each validator/staker can
-    // only have one outgoing staking transaction in the mempool. This makes sure that the outgoing
-    // staking transaction can actually pay its fee.
-    pub(crate) outgoing_validators: HashMap<Address, Transaction>,
-    pub(crate) outgoing_stakers: HashMap<Address, Transaction>,
-
-    // The sets of all recipients of creation staking transactions. For simplicity, each
-    // validator/staker can only have one creation staking transaction in the mempool. This makes
-    // sure that the creation staking transactions do not interfere with one another.
-    pub(crate) creating_validators: HashMap<Address, Transaction>,
-    pub(crate) creating_stakers: HashMap<Address, Transaction>,
-
-    #[cfg(feature = "metrics")]
-    pub(crate) metrics: Arc<MempoolMetrics>,
-}
-
-impl MempoolState {
-    pub fn contains(&self, hash: &Blake2bHash) -> bool {
-        self.regular_transactions.contains_key(hash) || self.control_transactions.contains_key(hash)
-    }
-
-    pub fn get(&self, hash: &Blake2bHash) -> Option<&Transaction> {
-        if let Some(transaction) = self.regular_transactions.get(hash) {
-            Some(transaction)
-        } else if let Some(transaction) = self.control_transactions.get(hash) {
-            Some(transaction)
-        } else {
-            None
-        }
-    }
-
-    pub(crate) fn put(&mut self, tx: &Transaction) -> bool {
-        let tx_hash = tx.hash();
-
-        if self.regular_transactions.contains_key(&tx_hash)
-            || self.control_transactions.contains_key(&tx_hash)
-        {
-            return false;
-        }
-
-        // If we are adding a stacking transaction we insert it into the control txns container
-        // Staking txns are control txns
-        if tx.sender_type == AccountType::Staking || tx.recipient_type == AccountType::Staking {
-            self.control_transactions.insert(tx);
-        } else {
-            self.regular_transactions.insert(tx);
-        }
-
-        // Update the per sender state
-        match self.state_by_sender.get_mut(&tx.sender) {
-            None => {
-                let mut txns = HashSet::new();
-                txns.insert(tx_hash);
-
-                self.state_by_sender.insert(
-                    tx.sender.clone(),
-                    SenderPendingState {
-                        total: tx.total_value(),
-                        txns,
-                    },
-                );
-            }
-            Some(sender_state) => {
-                sender_state.total += tx.total_value();
-                sender_state.txns.insert(tx_hash);
-            }
-        }
-
-        // If it is an outgoing staking transaction then we have additional work.
-        if tx.sender_type == AccountType::Staking {
-            // Parse transaction data.
-            let data = OutgoingStakingTransactionProof::parse(tx)
-                .expect("The proof should have already been parsed before, so this cannot panic!");
-
-            // Insert the sender address in the correct set.
-            match data {
-                OutgoingStakingTransactionProof::DeleteValidator { proof } => {
-                    assert_eq!(
-                        self.outgoing_validators
-                            .insert(proof.compute_signer(), tx.clone()),
-                        None
-                    );
-                }
-                OutgoingStakingTransactionProof::Unstake { proof } => {
-                    assert_eq!(
-                        self.outgoing_stakers
-                            .insert(proof.compute_signer(), tx.clone()),
-                        None
-                    );
-                }
-            }
-        }
-
-        // If it is an incoming staking transaction then we have additional work.
-        if tx.recipient_type == AccountType::Staking {
-            // Parse transaction data.
-            let data = IncomingStakingTransactionData::parse(tx)
-                .expect("The data should have already been parsed before, so this cannot panic!");
-
-            // Insert the recipient address in the correct set, if it is a creation transaction.
-            match data {
-                IncomingStakingTransactionData::CreateValidator { proof, .. } => {
-                    assert_eq!(
-                        self.creating_validators
-                            .insert(proof.compute_signer(), tx.clone()),
-                        None
-                    );
-                }
-                IncomingStakingTransactionData::CreateStaker { proof, .. } => {
-                    assert_eq!(
-                        self.creating_stakers
-                            .insert(proof.compute_signer(), tx.clone()),
-                        None
-                    );
-                }
-                _ => {}
-            }
-        }
-        // After inserting the new txn, check if we need to remove txns
-        while self.regular_transactions.total_size > self.regular_transactions.total_size_limit {
-            let (tx_hash, _) = self.regular_transactions.worst_transactions.pop().unwrap();
-            self.remove(&tx_hash, EvictionReason::TooFull);
-        }
-
-        while self.control_transactions.total_size > self.control_transactions.total_size_limit {
-            let (tx_hash, _) = self.control_transactions.worst_transactions.pop().unwrap();
-            self.remove(&tx_hash, EvictionReason::TooFull);
-        }
-
-        true
-    }
-
-    pub(crate) fn remove(
-        &mut self,
-        tx_hash: &Blake2bHash,
-        reason: EvictionReason,
-    ) -> Option<Transaction> {
-        if let Some(tx) = self
-            .regular_transactions
-            .delete(tx_hash)
-            .or_else(|| self.control_transactions.delete(tx_hash))
-        {
-            let sender_state = self.state_by_sender.get_mut(&tx.sender).unwrap();
-
-            sender_state.total -= tx.total_value();
-            sender_state.txns.remove(tx_hash);
-
-            if sender_state.txns.is_empty() {
-                self.state_by_sender.remove(&tx.sender);
-            }
-
-            self.remove_from_staking_state(&tx);
-
-            #[cfg(feature = "metrics")]
-            self.metrics.note_evicted(reason);
-
-            Some(tx)
-        } else {
-            None
-        }
-    }
-
-    // Removes all the transactions sent by some specific address
-    pub(crate) fn remove_sender_txns(&mut self, sender_address: &Address) {
-        if let Some(sender_state) = &self.state_by_sender.remove(sender_address) {
-            for tx_hash in &sender_state.txns {
-                if let Some(tx) = self
-                    .regular_transactions
-                    .delete(tx_hash)
-                    .or_else(|| self.control_transactions.delete(tx_hash))
-                {
-                    self.remove_from_staking_state(&tx);
-                }
-            }
-        }
-    }
-
-    // Internal helper function that takes care of removing staking transactions from the mempool state
-    fn remove_from_staking_state(&mut self, tx: &Transaction) {
-        // If it is an outgoing staking transaction then we have additional work.
-        if tx.sender_type == AccountType::Staking {
-            // Parse transaction data.
-            let data = OutgoingStakingTransactionProof::parse(tx)
-                .expect("The proof should have already been parsed before, so this cannot panic!");
-
-            // Remove the sender address from the correct set.
-            match data {
-                OutgoingStakingTransactionProof::DeleteValidator { proof } => {
-                    assert_ne!(
-                        self.outgoing_validators.remove(&proof.compute_signer()),
-                        None
-                    );
-                }
-                OutgoingStakingTransactionProof::Unstake { proof } => {
-                    assert_ne!(self.outgoing_stakers.remove(&proof.compute_signer()), None);
-                }
-            }
-        }
-
-        // If it is an incoming staking transaction then we have additional work.
-        if tx.recipient_type == AccountType::Staking {
-            // Parse transaction data.
-            let data = IncomingStakingTransactionData::parse(tx)
-                .expect("The data should have already been parsed before, so this cannot panic!");
-
-            // Remove the recipient address from the correct set, if it is a creation transaction.
-            match data {
-                IncomingStakingTransactionData::CreateValidator { proof, .. } => {
-                    assert_ne!(
-                        self.creating_validators.remove(&proof.compute_signer()),
-                        None
-                    );
-                }
-                IncomingStakingTransactionData::CreateStaker { proof, .. } => {
-                    assert_ne!(self.creating_stakers.remove(&proof.compute_signer()), None);
-                }
-                _ => {}
-            }
-        }
-    }
-}
-
-#[derive(Clone)]
-pub(crate) enum EvictionReason {
-    BlockBuilding,
-    Expired,
-    AlreadyIncluded,
-    Invalid,
-    TooFull,
-}
-
-pub(crate) struct SenderPendingState {
-    // The sum of the txns that are currently stored in the mempool for this sender
-    pub(crate) total: Coin,
-
-    // Transaction hashes for this sender.
-    pub(crate) txns: HashSet<Blake2bHash>,
-}
-
-/// Ordering in which transactions removed from the mempool to be included in blocks.
-/// This is stored on a max-heap, so the greater transaction comes first.
-/// Compares by fee per byte (higher first), then by insertion order (lower i.e. older first).
-// TODO: Maybe use this wrapper to do more fine ordering. For example, we might prefer small size
-//       transactions over large size transactions (assuming they have the same fee per byte). Or
-//       we might prefer basic transactions over staking contract transactions, etc, etc.
-#[derive(PartialEq)]
-pub struct BestTxOrder {
-    fee_per_byte: f64,
-    insertion_order: u64,
-}
-
-impl Eq for BestTxOrder {}
-
-impl PartialOrd for BestTxOrder {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for BestTxOrder {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.fee_per_byte
-            .partial_cmp(&other.fee_per_byte)
-            .expect("fees can't be NaN")
-            .then(self.insertion_order.cmp(&other.insertion_order).reverse())
-    }
-}
-
-/// Ordering in which transactions are evicted when the mempool is full.
-/// This is stored on a max-heap, so the greater transaction comes first.
-/// Compares by fee per byte (lower first), then by insertion order (higher i.e. newer first).
-#[derive(PartialEq)]
-pub struct WorstTxOrder {
-    fee_per_byte: f64,
-    insertion_order: u64,
-}
-
-impl Eq for WorstTxOrder {}
-
-impl PartialOrd for WorstTxOrder {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for WorstTxOrder {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.fee_per_byte
-            .partial_cmp(&other.fee_per_byte)
-            .expect("fees can't be NaN")
-            .reverse()
-            .then(self.insertion_order.cmp(&other.insertion_order))
     }
 }
