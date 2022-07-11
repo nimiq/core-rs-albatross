@@ -1,5 +1,5 @@
 use futures::future::{AbortHandle, Abortable};
-use futures::lock::Mutex;
+use futures::lock::{Mutex, MutexGuard};
 use futures::stream::BoxStream;
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 use std::collections::HashMap;
@@ -105,6 +105,46 @@ impl Mempool {
         }
     }
 
+    /// Start the `MempoolExecutor` for `Topic` `T` and instrument a monitor for the task if given.
+    /// An `AbortHandle` will be stored in `handle`.
+    fn start_executor<N: Network, T: Topic + Unpin + Send + Sync + 'static>(
+        &self,
+        network: Arc<N>,
+        monitor: Option<TaskMonitor>,
+        mut handle: MutexGuard<'_, Option<AbortHandle>>,
+        txn_stream: BoxStream<'static, (Transaction, <N as Network>::PubsubId)>,
+    ) {
+        if handle.is_some() {
+            // If we already have an executor running, don't do anything
+            return;
+        }
+
+        // Create the executor for the Topic T
+        let executor = MempoolExecutor::<N, T>::new(
+            Arc::clone(&self.blockchain),
+            Arc::clone(&self.state),
+            Arc::clone(&self.filter),
+            Arc::clone(&network),
+            txn_stream,
+        );
+
+        // Create the AbortHandle
+        let (abort_handle, abort_registration) = AbortHandle::new_pair();
+
+        // Create the abortable future using the executor and the abort registration
+        let future = Abortable::new(executor, abort_registration);
+
+        // if a monitor was given, instrument the spawned task
+        if let Some(monitor) = monitor {
+            tokio::spawn(monitor.instrument(future));
+        } else {
+            tokio::spawn(future);
+        }
+
+        // Set the executor handle
+        *handle = Some(abort_handle);
+    }
+
     /// Starts the mempool executors
     ///
     /// Once this function is called, the mempool executors are spawned.
@@ -115,8 +155,8 @@ impl Mempool {
         monitor: Option<TaskMonitor>,
         control_monitor: Option<TaskMonitor>,
     ) {
-        let mut executor_handle = self.executor_handle.lock().await;
-        let mut control_executor_handle = self.control_executor_handle.lock().await;
+        let executor_handle = self.executor_handle.lock().await;
+        let control_executor_handle = self.control_executor_handle.lock().await;
 
         if executor_handle.is_some() && control_executor_handle.is_some() {
             // If we already have both executors running dont do anything
@@ -126,26 +166,12 @@ impl Mempool {
         // Subscribe to the network TX topic
         let txn_stream = network.subscribe::<TransactionTopic>().await.unwrap();
 
-        let mempool_executor = MempoolExecutor::<N, TransactionTopic>::new(
-            Arc::clone(&self.blockchain),
-            Arc::clone(&self.state),
-            Arc::clone(&self.filter),
+        self.start_executor::<N, TransactionTopic>(
             Arc::clone(&network),
+            monitor,
+            executor_handle,
             txn_stream,
         );
-
-        // Start the executor and obtain its handle
-        let (abort_handle, abort_registration) = AbortHandle::new_pair();
-
-        let future = Abortable::new(mempool_executor, abort_registration);
-        if let Some(monitor) = monitor {
-            tokio::spawn(monitor.instrument(future));
-        } else {
-            tokio::spawn(future);
-        }
-
-        // Set the executor handle
-        *executor_handle = Some(abort_handle);
 
         // Subscribe to the control transaction topic
         let txn_stream = network
@@ -153,27 +179,12 @@ impl Mempool {
             .await
             .unwrap();
 
-        let control_mempool_executor = MempoolExecutor::<N, ControlTransactionTopic>::new(
-            Arc::clone(&self.blockchain),
-            Arc::clone(&self.state),
-            Arc::clone(&self.filter),
-            Arc::clone(&network),
+        self.start_executor::<N, ControlTransactionTopic>(
+            network,
+            control_monitor,
+            control_executor_handle,
             txn_stream,
         );
-
-        // Start the executor and obtain its handle
-        let (abort_handle, abort_registration) = AbortHandle::new_pair();
-
-        let future = Abortable::new(control_mempool_executor, abort_registration);
-
-        if let Some(monitor) = control_monitor {
-            tokio::spawn(monitor.instrument(future));
-        } else {
-            tokio::spawn(future);
-        }
-
-        // Set the control mempool executor handle
-        *control_executor_handle = Some(abort_handle);
     }
 
     /// Starts the mempool executor with a custom transaction stream
@@ -186,27 +197,12 @@ impl Mempool {
         txn_stream: BoxStream<'static, (Transaction, <N as Network>::PubsubId)>,
         network: Arc<N>,
     ) {
-        let mut executor_handle = self.executor_handle.lock().await;
-
-        if executor_handle.is_some() {
-            // If we already have an executor running, don't do anything
-            return;
-        }
-
-        let mempool_executor = MempoolExecutor::<N, TransactionTopic>::new(
-            Arc::clone(&self.blockchain),
-            Arc::clone(&self.state),
-            Arc::clone(&self.filter),
-            Arc::clone(&network),
+        self.start_executor::<N, TransactionTopic>(
+            network,
+            None,
+            self.executor_handle.lock().await,
             txn_stream,
-        );
-
-        // Start the executor and obtain its handle
-        let (abort_handle, abort_registration) = AbortHandle::new_pair();
-        tokio::spawn(Abortable::new(mempool_executor, abort_registration));
-
-        // Set the executor handle
-        *executor_handle = Some(abort_handle);
+        )
     }
 
     /// Starts the control mempool executor with a custom transaction stream
@@ -219,27 +215,12 @@ impl Mempool {
         txn_stream: BoxStream<'static, (Transaction, <N as Network>::PubsubId)>,
         network: Arc<N>,
     ) {
-        let mut control_executor_handle = self.control_executor_handle.lock().await;
-
-        if control_executor_handle.is_some() {
-            // If we already have an executor running, don't do anything
-            return;
-        }
-
-        let mempool_executor = MempoolExecutor::<N, ControlTransactionTopic>::new(
-            Arc::clone(&self.blockchain),
-            Arc::clone(&self.state),
-            Arc::clone(&self.filter),
-            Arc::clone(&network),
+        self.start_executor::<N, ControlTransactionTopic>(
+            network,
+            None,
+            self.control_executor_handle.lock().await,
             txn_stream,
-        );
-
-        // Start the executor and obtain its handle
-        let (abort_handle, abort_registration) = AbortHandle::new_pair();
-        tokio::spawn(Abortable::new(mempool_executor, abort_registration));
-
-        // Set the executor handle
-        *control_executor_handle = Some(abort_handle);
+        )
     }
 
     /// Stops the mempool executors
