@@ -13,7 +13,8 @@ use nimiq_primitives::networks::NetworkId;
 use nimiq_transaction::Transaction;
 
 use crate::filter::MempoolFilter;
-use crate::mempool::{ControlTransactionTopic, MempoolState, TransactionTopic};
+use crate::mempool::{ControlTransactionTopic, TransactionTopic};
+use crate::mempool_state::MempoolState;
 use crate::verify::{verify_tx, VerifyErr};
 
 const CONCURRENT_VERIF_TASKS: u32 = 1000;

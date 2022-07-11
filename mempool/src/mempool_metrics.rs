@@ -1,4 +1,4 @@
-use crate::mempool::EvictionReason;
+use crate::mempool_state::EvictionReason;
 use prometheus_client::encoding::text::Encode;
 use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;
