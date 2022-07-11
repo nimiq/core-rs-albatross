@@ -20,7 +20,7 @@ use nimiq_transaction::account::staking_contract::{
 use nimiq_transaction::Transaction;
 
 use crate::config::MempoolConfig;
-use crate::executor::{ControlMempoolExecutor, MempoolExecutor};
+use crate::executor::MempoolExecutor;
 use crate::filter::{MempoolFilter, MempoolRules};
 #[cfg(feature = "metrics")]
 use crate::mempool_metrics::MempoolMetrics;
@@ -126,7 +126,7 @@ impl Mempool {
         // Subscribe to the network TX topic
         let txn_stream = network.subscribe::<TransactionTopic>().await.unwrap();
 
-        let mempool_executor = MempoolExecutor::new(
+        let mempool_executor = MempoolExecutor::<N, TransactionTopic>::new(
             Arc::clone(&self.blockchain),
             Arc::clone(&self.state),
             Arc::clone(&self.filter),
@@ -153,7 +153,7 @@ impl Mempool {
             .await
             .unwrap();
 
-        let control_mempool_executor = ControlMempoolExecutor::new(
+        let control_mempool_executor = MempoolExecutor::<N, ControlTransactionTopic>::new(
             Arc::clone(&self.blockchain),
             Arc::clone(&self.state),
             Arc::clone(&self.filter),
@@ -193,7 +193,7 @@ impl Mempool {
             return;
         }
 
-        let mempool_executor = MempoolExecutor::<N>::new(
+        let mempool_executor = MempoolExecutor::<N, TransactionTopic>::new(
             Arc::clone(&self.blockchain),
             Arc::clone(&self.state),
             Arc::clone(&self.filter),
@@ -226,7 +226,7 @@ impl Mempool {
             return;
         }
 
-        let mempool_executor = ControlMempoolExecutor::<N>::new(
+        let mempool_executor = MempoolExecutor::<N, ControlTransactionTopic>::new(
             Arc::clone(&self.blockchain),
             Arc::clone(&self.state),
             Arc::clone(&self.filter),
