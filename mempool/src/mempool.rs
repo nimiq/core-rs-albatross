@@ -2,7 +2,7 @@ use futures::future::{AbortHandle, Abortable};
 use futures::lock::{Mutex, MutexGuard};
 use futures::stream::BoxStream;
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
-use std::collections::HashMap;
+use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
 use tokio_metrics::TaskMonitor;
 
@@ -25,7 +25,6 @@ use crate::filter::{MempoolFilter, MempoolRules};
 #[cfg(feature = "metrics")]
 use crate::mempool_metrics::MempoolMetrics;
 use crate::mempool_state::{EvictionReason, MempoolState};
-use crate::mempool_transactions::MempoolTransactions;
 use crate::verify::{verify_tx, VerifyErr};
 
 /// Transaction topic for the Mempool to request transactions from the network
@@ -68,6 +67,9 @@ pub struct Mempool {
 
     /// Mempool executor handle used to stop the control mempool executor
     pub(crate) control_executor_handle: Mutex<Option<AbortHandle>>,
+
+    /// Total number of ongoing verification tasks
+    verification_tasks: Arc<AtomicU32>,
 }
 
 impl Mempool {
@@ -79,19 +81,10 @@ impl Mempool {
 
     /// Creates a new mempool
     pub fn new(blockchain: Arc<RwLock<Blockchain>>, config: MempoolConfig) -> Self {
-        let state = MempoolState {
-            regular_transactions: MempoolTransactions::new(config.size_limit),
-            control_transactions: MempoolTransactions::new(config.size_limit),
-            state_by_sender: HashMap::new(),
-            outgoing_validators: HashMap::new(),
-            outgoing_stakers: HashMap::new(),
-            creating_validators: HashMap::new(),
-            creating_stakers: HashMap::new(),
-            #[cfg(feature = "metrics")]
-            metrics: Default::default(),
-        };
-
-        let state = Arc::new(RwLock::new(state));
+        let state = Arc::new(RwLock::new(MempoolState::new(
+            config.size_limit,
+            config.control_size_limit,
+        )));
 
         Self {
             blockchain: Arc::clone(&blockchain),
@@ -102,6 +95,7 @@ impl Mempool {
             ))),
             executor_handle: Mutex::new(None),
             control_executor_handle: Mutex::new(None),
+            verification_tasks: Arc::new(AtomicU32::new(0)),
         }
     }
 
@@ -126,6 +120,7 @@ impl Mempool {
             Arc::clone(&self.filter),
             Arc::clone(&network),
             txn_stream,
+            Arc::clone(&self.verification_tasks),
         );
 
         // Create the AbortHandle
@@ -720,16 +715,16 @@ impl Mempool {
             + state.control_transactions.transactions.len()
     }
 
-    /// Gets all transactions in the mempool.
+    /// Gets all transactions in the mempool (control txns come first)
     pub fn get_transactions(&self) -> Vec<Transaction> {
         let state = self.state.read();
 
         state
-            .regular_transactions
+            .control_transactions
             .transactions
             .values()
             .cloned()
-            .chain(state.control_transactions.transactions.values().cloned())
+            .chain(state.regular_transactions.transactions.values().cloned())
             .collect()
     }
 

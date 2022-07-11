@@ -3,6 +3,9 @@ use std::{
     sync::Arc,
 };
 
+#[cfg(feature = "metrics")]
+use crate::mempool_metrics::MempoolMetrics;
+use crate::mempool_transactions::MempoolTransactions;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
 use nimiq_primitives::{account::AccountType, coin::Coin};
@@ -10,8 +13,6 @@ use nimiq_transaction::{
     account::staking_contract::{IncomingStakingTransactionData, OutgoingStakingTransactionProof},
     Transaction,
 };
-
-use crate::{mempool_metrics::MempoolMetrics, mempool_transactions::MempoolTransactions};
 
 pub(crate) struct MempoolState {
     // Container where the regular transactions are stored
@@ -40,6 +41,20 @@ pub(crate) struct MempoolState {
 }
 
 impl MempoolState {
+    pub fn new(regular_txns_limit: usize, control_txns_limit: usize) -> Self {
+        MempoolState {
+            regular_transactions: MempoolTransactions::new(regular_txns_limit),
+            control_transactions: MempoolTransactions::new(control_txns_limit),
+            state_by_sender: HashMap::new(),
+            outgoing_validators: HashMap::new(),
+            outgoing_stakers: HashMap::new(),
+            creating_validators: HashMap::new(),
+            creating_stakers: HashMap::new(),
+            #[cfg(feature = "metrics")]
+            metrics: Default::default(),
+        }
+    }
+
     pub fn contains(&self, hash: &Blake2bHash) -> bool {
         self.regular_transactions.contains_key(hash) || self.control_transactions.contains_key(hash)
     }

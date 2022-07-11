@@ -52,6 +52,7 @@ impl<N: Network, T: Topic + Unpin + Sync> MempoolExecutor<N, T> {
         filter: Arc<RwLock<MempoolFilter>>,
         network: Arc<N>,
         txn_stream: BoxStream<'static, (Transaction, <N as Network>::PubsubId)>,
+        verification_tasks: Arc<AtomicU32>,
     ) -> Self {
         Self {
             blockchain: blockchain.clone(),
@@ -59,7 +60,7 @@ impl<N: Network, T: Topic + Unpin + Sync> MempoolExecutor<N, T> {
             filter,
             network,
             network_id: Arc::new(blockchain.read().network_id),
-            verification_tasks: Arc::new(AtomicU32::new(0)),
+            verification_tasks,
             txn_stream,
             _phantom: PhantomData,
         }
