@@ -1,6 +1,7 @@
 use std::error::Error;
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::task::{Context, Poll, Waker};
 use std::time::Duration;
@@ -90,6 +91,7 @@ pub struct ValidatorProxy {
     pub signing_key: Arc<RwLock<SchnorrKeyPair>>,
     pub voting_key: Arc<RwLock<BlsKeyPair>>,
     pub fee_key: Arc<RwLock<SchnorrKeyPair>>,
+    pub automatic_activate: Arc<AtomicBool>,
 }
 
 impl Clone for ValidatorProxy {
@@ -99,6 +101,7 @@ impl Clone for ValidatorProxy {
             signing_key: Arc::clone(&self.signing_key),
             voting_key: Arc::clone(&self.voting_key),
             fee_key: Arc::clone(&self.fee_key),
+            automatic_activate: Arc::clone(&self.automatic_activate),
         }
     }
 }
@@ -124,7 +127,7 @@ pub struct Validator<TNetwork: Network, TValidatorNetwork: ValidatorNetwork + 's
     epoch_state: Option<ActiveEpochState>,
     blockchain_state: BlockchainState,
     validator_state: Option<ValidatorState>,
-    automatic_activate: bool,
+    automatic_activate: Arc<AtomicBool>,
 
     macro_producer: Option<ProduceMacroBlock<TValidatorNetwork>>,
     macro_state: Option<PersistedMacroState<TValidatorNetwork>>,
@@ -189,6 +192,8 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
 
         let mempool = Arc::new(Mempool::new(consensus.blockchain.clone(), mempool_config));
         let mempool_state = MempoolState::Inactive;
+
+        let automatic_activate = Arc::new(AtomicBool::new(automatic_activate));
 
         let mut this = Self {
             consensus: consensus.proxy(),
@@ -714,13 +719,19 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
     pub fn fee_key(&self) -> SchnorrKeyPair {
         self.fee_key.read().clone()
     }
-
+    /*
+       pub fn set_automatic_reactivate(&self, automatic_reactivate: bool) {
+           self.automatic_activate
+               .store(automatic_reactivate, Ordering::Release);
+       }
+    */
     pub fn proxy(&self) -> ValidatorProxy {
         ValidatorProxy {
             validator_address: Arc::clone(&self.validator_address),
             signing_key: Arc::clone(&self.signing_key),
             voting_key: Arc::clone(&self.voting_key),
             fee_key: Arc::clone(&self.fee_key),
+            automatic_activate: Arc::clone(&self.automatic_activate),
         }
     }
 }
@@ -832,7 +843,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Future
                 ValidatorStakingState::Inactive => match self.validator_state {
                     Some(ValidatorState::InactivityState { .. }) => {}
                     _ => {
-                        if self.automatic_activate {
+                        if self.automatic_activate.load(Ordering::Acquire) {
                             let inactivity_state = self.reactivate(&*blockchain);
                             drop(blockchain);
                             self.validator_state = Some(inactivity_state);

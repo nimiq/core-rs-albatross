@@ -1,3 +1,5 @@
+use std::sync::atomic::Ordering;
+
 use async_trait::async_trait;
 use beserial::Serialize;
 
@@ -43,5 +45,15 @@ impl ValidatorInterface for ValidatorDispatcher {
                 .secret_key
                 .serialize_to_vec(),
         ))
+    }
+
+    async fn set_automatic_activation(
+        &mut self,
+        automatic_activation: bool,
+    ) -> Result<bool, Self::Error> {
+        self.validator
+            .automatic_activate
+            .store(automatic_activation, Ordering::Release);
+        Ok(automatic_activation)
     }
 }
