@@ -61,6 +61,8 @@ pub enum BlockError {
     ExpiredTransaction,
     #[error("Transactions incorrectly ordered")]
     TransactionsNotOrdered,
+    #[error("Transactions execution result mismatch")]
+    TransactionExecutionMismatch,
 
     #[error("Duplicate receipt in block")]
     DuplicateReceipt,

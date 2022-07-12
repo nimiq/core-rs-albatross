@@ -82,7 +82,7 @@ impl BlockProducer {
         let inherents = blockchain.create_slash_inherents(&fork_proofs, skip_block_info, None);
 
         // Update the state and calculate the state root.
-        let state_root = blockchain
+        let (state_root, executed_txns) = blockchain
             .state()
             .accounts
             .get_root_with(&transactions, &inherents, block_number, timestamp)
@@ -93,7 +93,7 @@ impl BlockProducer {
             blockchain.network_id,
             block_number,
             timestamp,
-            transactions.clone(),
+            executed_txns.clone(),
             inherents,
         );
 
@@ -113,7 +113,7 @@ impl BlockProducer {
         // Create the micro block body.
         let body = MicroBody {
             fork_proofs,
-            transactions,
+            transactions: executed_txns,
         };
 
         // Create the micro block header.
@@ -201,10 +201,12 @@ impl BlockProducer {
         let inherents: Vec<Inherent> = blockchain.create_macro_block_inherents(state, &header);
 
         // Update the state and add the state root to the header.
-        header.state_root = state
+        let (root, _) = state
             .accounts
             .get_root_with(&[], &inherents, block_number, timestamp)
             .expect("Failed to compute accounts hash during block production.");
+
+        header.state_root = root;
 
         // Calculate the extended transactions from the transactions and the inherents.
         let ext_txs = ExtendedTransaction::from(

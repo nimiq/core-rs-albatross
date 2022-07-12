@@ -1,9 +1,17 @@
 use nimiq_database::WriteTransaction;
+use nimiq_primitives::coin::Coin;
 use nimiq_transaction::Transaction;
 
 use crate::{logs::AccountInfo, AccountError, AccountsTrie, Inherent, Log};
 
 pub trait AccountTransactionInteraction: Sized {
+    fn can_pay_fee(
+        &self,
+        transaction: &Transaction,
+        current_balance: Coin,
+        block_time: u64,
+    ) -> bool;
+
     fn create(
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
@@ -43,6 +51,19 @@ pub trait AccountTransactionInteraction: Sized {
         transaction: &Transaction,
         block_height: u32,
         block_time: u64,
+        receipt: Option<&Vec<u8>>,
+    ) -> Result<Vec<Log>, AccountError>;
+
+    fn commit_failed_transaction(
+        accounts_tree: &AccountsTrie,
+        db_txn: &mut WriteTransaction,
+        transaction: &Transaction,
+    ) -> Result<AccountInfo, AccountError>;
+
+    fn revert_failed_transaction(
+        accounts_tree: &AccountsTrie,
+        db_txn: &mut WriteTransaction,
+        transaction: &Transaction,
         receipt: Option<&Vec<u8>>,
     ) -> Result<Vec<Log>, AccountError>;
 }

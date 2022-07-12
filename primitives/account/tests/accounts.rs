@@ -1,16 +1,21 @@
+use beserial::{Deserialize, Serialize};
 use nimiq_hash::Hash;
+use nimiq_primitives::account::AccountType;
 use rand::{rngs::StdRng, SeedableRng};
 use std::convert::TryFrom;
 use std::time::Instant;
 use tempfile::tempdir;
 
-use nimiq_account::{Accounts, BatchInfo, Inherent, InherentType, Log, TransactionLog};
+use nimiq_account::{
+    Account, Accounts, BasicAccount, BatchInfo, Inherent, InherentType, Log, TransactionLog,
+    VestingContract,
+};
 use nimiq_account::{Receipt, Receipts};
 use nimiq_bls::KeyPair as BLSKeyPair;
 use nimiq_database::WriteTransaction;
 use nimiq_database::{mdbx::MdbxEnvironment, volatile::VolatileEnvironment};
 use nimiq_genesis_builder::GenesisBuilder;
-use nimiq_keys::{Address, KeyPair, PublicKey, SecureGenerate};
+use nimiq_keys::{Address, KeyPair, PrivateKey, PublicKey, SecureGenerate};
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_primitives::policy;
@@ -18,7 +23,7 @@ use nimiq_test_log::test;
 use nimiq_test_utils::test_transaction::{
     generate_accounts, generate_transactions, TestTransaction,
 };
-use nimiq_transaction::Transaction;
+use nimiq_transaction::{ExecutedTransaction, SignatureProof, Transaction};
 use nimiq_trie::key_nibbles::KeyNibbles;
 
 const VOLATILE_ENV: bool = true;
@@ -60,13 +65,13 @@ fn it_can_commit_and_revert_a_block_body() {
 
     let mut txn = WriteTransaction::new(&env);
 
+    let (batch_info, _) = accounts
+        .commit(&mut txn, &[], &[reward.clone()], 1, 1)
+        .unwrap();
+
     assert_eq!(
-        accounts.commit(&mut txn, &[], &[reward.clone()], 1, 1),
-        Ok(BatchInfo::new(
-            receipts.clone(),
-            tx_logs.clone(),
-            inherent_logs.clone()
-        ))
+        batch_info,
+        BatchInfo::new(receipts.clone(), tx_logs.clone(), inherent_logs.clone())
     );
 
     txn.commit();
@@ -132,13 +137,13 @@ fn it_can_commit_and_revert_a_block_body() {
 
     let mut txn = WriteTransaction::new(&env);
 
+    let (batch_info, executed_txns) = accounts
+        .commit(&mut txn, &transactions, &[reward.clone()], 2, 2)
+        .unwrap();
+
     assert_eq!(
-        accounts.commit(&mut txn, &transactions, &[reward.clone()], 2, 2),
-        Ok(BatchInfo::new(
-            receipts.clone(),
-            tx_logs.clone(),
-            inherent_logs.clone(),
-        ))
+        batch_info,
+        BatchInfo::new(receipts.clone(), tx_logs.clone(), inherent_logs.clone(),)
     );
 
     txn.commit();
@@ -166,7 +171,7 @@ fn it_can_commit_and_revert_a_block_body() {
     assert_eq!(
         accounts.revert(
             &mut txn,
-            &transactions,
+            &executed_txns,
             &[reward],
             2,
             2,
@@ -350,9 +355,8 @@ fn it_checks_for_sufficient_funds() {
         None
     );
 
-    // Fails as address_sender does not have any funds.
-    // Note: When the commit errors, we want to bracket the txn creation and the commit attempt.
-    // Otherwise when we try to commit again, the test will get stuck.
+    // Fails as sender address does not exist!
+    // Note this kind of transaction would be rejected by the mempool
     {
         let mut txn = WriteTransaction::new(&env);
 
@@ -403,9 +407,11 @@ fn it_checks_for_sufficient_funds() {
     {
         let mut txn = WriteTransaction::new(&env);
 
-        assert!(accounts
+        let (_, executed_txns) = accounts
             .commit(&mut txn, &[tx.clone()], &[reward.clone()], 2, 2)
-            .is_err());
+            .unwrap();
+
+        assert_eq!(executed_txns, vec![ExecutedTransaction::Err(tx.clone())]);
     }
 
     assert_eq!(
@@ -433,9 +439,17 @@ fn it_checks_for_sufficient_funds() {
     {
         let mut txn = WriteTransaction::new(&env);
 
-        assert!(accounts
-            .commit(&mut txn, &vec![tx, tx2], &[reward], 2, 2)
-            .is_err());
+        let (_, executed_txns) = accounts
+            .commit(&mut txn, &vec![tx.clone(), tx2.clone()], &[reward], 2, 2)
+            .unwrap();
+
+        assert_eq!(
+            executed_txns,
+            vec![
+                ExecutedTransaction::Ok(tx.clone()),
+                ExecutedTransaction::Err(tx2.clone())
+            ]
+        );
     }
 
     assert_eq!(
@@ -800,4 +814,125 @@ fn accounts_performance_history_sync_batches_many_to_many() {
             batch_duration.as_millis(),
         );
     }
+}
+
+#[test]
+fn it_commits_valid_and_failing_txns() {
+    let priv_key: PrivateKey = Deserialize::deserialize_from_vec(
+        &hex::decode("9d5bd02379e7e45cf515c788048f5cf3c454ffabd3e83bd1d7667716c325c3c0").unwrap(),
+    )
+    .unwrap();
+
+    let key_pair = KeyPair::from(priv_key);
+
+    let env = VolatileEnvironment::new(10).unwrap();
+    let accounts = Accounts::new(env.clone());
+
+    let mut db_txn = WriteTransaction::new(&env);
+
+    // We need to populate the acccounts trie with different testing accounts
+    let key_1 = KeyNibbles::from(&Address::from(&key_pair.public));
+
+    // Basic account where fees are deducted for failing txns
+    accounts.tree.put(
+        &mut db_txn,
+        &key_1,
+        Account::Basic(BasicAccount {
+            balance: Coin::from_u64_unchecked(1000),
+        }),
+    );
+
+    // Vesting Contract
+    let start_contract = VestingContract {
+        balance: 1000.try_into().unwrap(),
+        owner: Address::from(&key_pair.public),
+        start_time: 0,
+        time_step: 100,
+        step_amount: 100.try_into().unwrap(),
+        total_amount: 1000.try_into().unwrap(),
+    };
+
+    accounts.tree.put(
+        &mut db_txn,
+        &KeyNibbles::from(&[1u8; 20][..]),
+        Account::Vesting(start_contract),
+    );
+
+    db_txn.commit();
+
+    let mut db_txn = WriteTransaction::new(&env);
+    // Create a transaction that tries to move more funds than available
+    let mut tx = Transaction::new_basic(
+        Address::from([1u8; 20]),
+        Address::from([2u8; 20]),
+        2000.try_into().unwrap(),
+        200.try_into().unwrap(),
+        1,
+        NetworkId::Dummy,
+    );
+    tx.sender_type = AccountType::Vesting;
+
+    let signature = key_pair.sign(&tx.serialize_content()[..]);
+    let signature_proof = SignatureProof::from(key_pair.public, signature);
+    tx.proof = signature_proof.serialize_to_vec();
+
+    let (_, executed_txns) = accounts
+        .commit(&mut db_txn, &vec![tx.clone()], &[], 1, 200)
+        .unwrap();
+
+    assert_eq!(executed_txns, vec![ExecutedTransaction::Err(tx.clone())]);
+
+    db_txn.commit();
+
+    // We should deduct the fee from the vesting contract balance
+    assert_eq!(
+        accounts
+            .get(&KeyNibbles::from(&[1u8; 20][..]), None)
+            .unwrap()
+            .balance(),
+        Coin::from_u64_unchecked(800)
+    );
+
+    //The fee should not be deducted from the sender
+    assert_eq!(
+        accounts
+            .get(&KeyNibbles::from(&Address::from(&key_pair.public)), None)
+            .unwrap()
+            .balance(),
+        Coin::from_u64_unchecked(1000)
+    );
+
+    // Now send a transaction from the basic account that should fail (value exceeds the account balance but fee can be paid)
+    let mut tx = Transaction::new_basic(
+        Address::from(&key_pair.public),
+        Address::from([2u8; 20]),
+        2000.try_into().unwrap(),
+        200.try_into().unwrap(),
+        1,
+        NetworkId::Dummy,
+    );
+    tx.sender_type = AccountType::Basic;
+
+    let mut db_txn = WriteTransaction::new(&env);
+
+    let signature = key_pair.sign(&tx.serialize_content()[..]);
+    let signature_proof = SignatureProof::from(key_pair.public, signature);
+    tx.proof = signature_proof.serialize_to_vec();
+
+    let (_, executed_txns) = accounts
+        .commit(&mut db_txn, &vec![tx.clone()], &[], 1, 200)
+        .unwrap();
+
+    assert_eq!(executed_txns, vec![ExecutedTransaction::Err(tx.clone())]);
+
+    db_txn.commit();
+
+    //The fee should be deducted from the sender
+    assert_eq!(
+        accounts
+            .get(&KeyNibbles::from(&Address::from(&key_pair.public)), None)
+            .unwrap()
+            .balance(),
+        Coin::from_u64_unchecked(800)
+    );
 }

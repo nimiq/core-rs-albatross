@@ -7,6 +7,7 @@ use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
 use nimiq_hash_derive::SerializeContent;
 use nimiq_keys::Signature;
 use nimiq_primitives::policy;
+use nimiq_transaction::ExecutedTransaction;
 use nimiq_transaction::Transaction;
 use nimiq_vrf::VrfSeed;
 
@@ -75,7 +76,17 @@ pub struct MicroBody {
     pub fork_proofs: Vec<ForkProof>,
     /// A vector containing the transactions for this block. It might be empty.
     #[beserial(len_type(u16))]
-    pub transactions: Vec<Transaction>,
+    pub transactions: Vec<ExecutedTransaction>,
+}
+
+impl MicroBody {
+    pub fn get_raw_transactions(&self) -> Vec<Transaction> {
+        // Extract the transactions from the block
+        self.transactions
+            .iter()
+            .map(|txn| txn.get_raw_transaction().clone())
+            .collect()
+    }
 }
 
 impl MicroBlock {

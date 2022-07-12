@@ -15,7 +15,7 @@ use nimiq_rpc_interface::types::{
 };
 use nimiq_rpc_interface::{
     blockchain::BlockchainInterface,
-    types::{Account, Block, Inherent, LogType, SlashedSlots, Slot, Staker, Transaction},
+    types::{Account, Block, ExecutedTransaction, Inherent, LogType, SlashedSlots, Slot, Staker},
 };
 
 use crate::error::Error;
@@ -199,7 +199,7 @@ impl BlockchainInterface for BlockchainDispatcher {
     async fn get_transaction_by_hash(
         &mut self,
         hash: Blake2bHash,
-    ) -> Result<Transaction, Self::Error> {
+    ) -> Result<ExecutedTransaction, Error> {
         let blockchain = self.blockchain.read();
 
         // Get all the extended transactions that correspond to this hash.
@@ -222,7 +222,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         let timestamp = extended_tx.block_time;
 
         return match extended_tx.into_transaction() {
-            Ok(tx) => Ok(Transaction::from_blockchain(
+            Ok(tx) => Ok(ExecutedTransaction::from_blockchain(
                 tx,
                 block_number,
                 timestamp,
@@ -237,7 +237,7 @@ impl BlockchainInterface for BlockchainDispatcher {
     async fn get_transactions_by_block_number(
         &mut self,
         block_number: u32,
-    ) -> Result<Vec<Transaction>, Self::Error> {
+    ) -> Result<Vec<ExecutedTransaction>, Error> {
         let blockchain = self.blockchain.read();
 
         // Get all the extended transactions that correspond to this block.
@@ -255,7 +255,7 @@ impl BlockchainInterface for BlockchainDispatcher {
 
         for ext_tx in extended_tx_vec {
             if let Ok(tx) = ext_tx.into_transaction() {
-                transactions.push(Transaction::from_blockchain(
+                transactions.push(ExecutedTransaction::from_blockchain(
                     tx,
                     block_number,
                     timestamp,
@@ -305,7 +305,7 @@ impl BlockchainInterface for BlockchainDispatcher {
     async fn get_transactions_by_batch_number(
         &mut self,
         batch_number: u32,
-    ) -> Result<Vec<Transaction>, Self::Error> {
+    ) -> Result<Vec<ExecutedTransaction>, Self::Error> {
         let blockchain = self.blockchain.read();
 
         // Calculate the numbers for the micro blocks in the batch.
@@ -326,7 +326,7 @@ impl BlockchainInterface for BlockchainDispatcher {
             // reward inherents.
             for ext_tx in ext_txs {
                 if let Ok(tx) = ext_tx.into_transaction() {
-                    transactions.push(Transaction::from_blockchain(
+                    transactions.push(ExecutedTransaction::from_blockchain(
                         tx,
                         i,
                         timestamp,
@@ -419,7 +419,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         &mut self,
         address: Address,
         max: Option<u16>,
-    ) -> Result<Vec<Transaction>, Self::Error> {
+    ) -> Result<Vec<ExecutedTransaction>, Error> {
         let blockchain = self.blockchain.read();
 
         // Get the transaction hashes for this address.
@@ -451,7 +451,7 @@ impl BlockchainInterface for BlockchainDispatcher {
             let timestamp = extended_tx.block_time;
 
             if let Ok(tx) = extended_tx.into_transaction() {
-                txs.push(Transaction::from_blockchain(
+                txs.push(ExecutedTransaction::from_blockchain(
                     tx,
                     block_number,
                     timestamp,

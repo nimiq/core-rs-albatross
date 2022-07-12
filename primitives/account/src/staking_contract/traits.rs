@@ -436,6 +436,96 @@ impl AccountTransactionInteraction for StakingContract {
 
         Ok(logs)
     }
+    /// Commits an outgoing transaction to the accounts trie.
+    fn commit_failed_transaction(
+        accounts_tree: &AccountsTrie,
+        db_txn: &mut WriteTransaction,
+        transaction: &Transaction,
+    ) -> Result<AccountInfo, AccountError> {
+        // Check that the address is that of the Staking contract.
+        if transaction.sender != policy::STAKING_CONTRACT_ADDRESS {
+            return Err(AccountError::InvalidForSender);
+        }
+
+        // Parse transaction data.
+        let data = OutgoingStakingTransactionProof::parse(transaction)?;
+
+        let mut acc_info: AccountInfo = match data {
+            OutgoingStakingTransactionProof::DeleteValidator { proof: _ } => {
+                // TODO: We need to implement the ability to pay the fee for this kind of transaction from a third party.
+                return Err(AccountError::InvalidForSender);
+            }
+            OutgoingStakingTransactionProof::Unstake { proof } => {
+                // Get the staker address from the proof.
+                let staker_address = proof.compute_signer();
+
+                // This is similar to an unstake operation except that what we deduct from the stake is the fee
+                StakingContract::unstake(accounts_tree, db_txn, &staker_address, transaction.fee)?
+                    .into()
+            }
+        };
+
+        acc_info.logs.insert(
+            0,
+            Log::PayFee {
+                from: transaction.sender.clone(),
+                fee: transaction.fee,
+            },
+        );
+        Ok(acc_info)
+    }
+    /// Reverts the commit of an incoming transaction to the accounts trie.
+    fn revert_failed_transaction(
+        accounts_tree: &AccountsTrie,
+        db_txn: &mut WriteTransaction,
+        transaction: &Transaction,
+        _receipt: Option<&Vec<u8>>,
+    ) -> Result<Vec<Log>, AccountError> {
+        // Check that the address is that of the Staking contract.
+        if transaction.sender != policy::STAKING_CONTRACT_ADDRESS {
+            return Err(AccountError::InvalidForSender);
+        }
+
+        // Parse transaction data.
+        let data = OutgoingStakingTransactionProof::parse(transaction)?;
+
+        let mut acc_info: AccountInfo = match data {
+            OutgoingStakingTransactionProof::DeleteValidator { proof: _ } => {
+                //TODO Pending implementation
+                return Err(AccountError::InvalidForSender);
+            }
+            OutgoingStakingTransactionProof::Unstake { proof } => {
+                // Get the staker address from the proof.
+                let staker_address = proof.compute_signer();
+
+                // This is similar to a stake operation where we add the fee
+                StakingContract::stake(accounts_tree, db_txn, &staker_address, transaction.fee)?
+                    .into()
+            }
+        };
+
+        acc_info.logs.insert(
+            0,
+            Log::PayFee {
+                from: transaction.sender.clone(),
+                fee: transaction.fee,
+            },
+        );
+        Ok(acc_info.logs)
+    }
+
+    fn can_pay_fee(
+        &self,
+        _transaction: &Transaction,
+        _current_balance: Coin,
+        _block_time: u64,
+    ) -> bool {
+        // TODO Implementation missing: we need to support the ability to pay the fee from a third party for outgoing stacking transactions
+        // When that is ready, we can use this function to verify if the third party can actually pay the fee
+        // For now we just return true, to be consistant with the current implementation
+
+        true
+    }
 }
 
 impl AccountInherentInteraction for StakingContract {

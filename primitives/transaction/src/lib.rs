@@ -122,6 +122,60 @@ impl Default for SignatureProof {
         }
     }
 }
+/// A wrapper around the Transaction struct that encodes the result of executing such transaction
+#[derive(Clone, Eq, Debug, Serialize, Deserialize)]
+#[repr(u8)]
+pub enum ExecutedTransaction {
+    /// A sucessfull executed transaction
+    Ok(Transaction),
+    /// A failed transaction (only fees are deducted)
+    Err(Transaction),
+}
+
+impl ExecutedTransaction {
+    //Obtains the underlaying transaction, regardless of execution result
+    pub fn get_raw_transaction(&self) -> &Transaction {
+        match self {
+            ExecutedTransaction::Ok(txn) => txn,
+            ExecutedTransaction::Err(txn) => txn,
+        }
+    }
+    pub fn failed(&self) -> bool {
+        match self {
+            ExecutedTransaction::Ok(_) => false,
+            ExecutedTransaction::Err(_) => true,
+        }
+    }
+
+    pub fn succeed(&self) -> bool {
+        match self {
+            ExecutedTransaction::Ok(_) => true,
+            ExecutedTransaction::Err(_) => false,
+        }
+    }
+
+    pub fn get_hash(&self) -> Blake2bHash {
+        match self {
+            ExecutedTransaction::Ok(txn) => txn.hash(),
+            ExecutedTransaction::Err(txn) => txn.hash(),
+        }
+    }
+}
+
+impl PartialEq for ExecutedTransaction {
+    fn eq(&self, other: &Self) -> bool {
+        match self {
+            ExecutedTransaction::Ok(txn) => match other {
+                ExecutedTransaction::Ok(other_txn) => txn == other_txn,
+                ExecutedTransaction::Err(_) => false,
+            },
+            ExecutedTransaction::Err(txn) => match other {
+                ExecutedTransaction::Ok(_) => false,
+                ExecutedTransaction::Err(other_txn) => txn == other_txn,
+            },
+        }
+    }
+}
 
 #[derive(Clone, Eq, Debug)]
 #[repr(C)]

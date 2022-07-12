@@ -357,7 +357,7 @@ impl Blockchain {
                 // Verify transactions.
                 let mut previous_tx: Option<&Transaction> = None;
 
-                for tx in &body.transactions {
+                for tx in &body.get_raw_transactions() {
                     // Ensure transactions are ordered and unique.
                     if let Some(previous) = previous_tx {
                         match previous.cmp(tx) {

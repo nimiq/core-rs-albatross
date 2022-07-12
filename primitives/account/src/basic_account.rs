@@ -74,6 +74,7 @@ impl AccountTransactionInteraction for BasicAccount {
         receipt: Option<&Vec<u8>>,
     ) -> Result<Vec<Log>, AccountError> {
         if receipt.is_some() {
+            log::error!(" Received a receipt {:?}, and was expecting none", receipt);
             return Err(AccountError::InvalidReceipt);
         }
 
@@ -208,6 +209,105 @@ impl AccountTransactionInteraction for BasicAccount {
         );
 
         Ok(logs)
+    }
+
+    fn commit_failed_transaction(
+        accounts_tree: &AccountsTrie,
+        db_txn: &mut WriteTransaction,
+        transaction: &Transaction,
+    ) -> Result<AccountInfo, AccountError> {
+        let key = KeyNibbles::from(&transaction.sender);
+
+        let account = accounts_tree
+            .get(db_txn, &key)
+            .or_else(|| {
+                if transaction.total_value() != Coin::ZERO {
+                    None
+                } else {
+                    Some(Account::Basic(BasicAccount {
+                        balance: Coin::ZERO,
+                    }))
+                }
+            })
+            .ok_or(AccountError::NonExistentAddress {
+                address: transaction.sender.clone(),
+            })?;
+
+        if account.account_type() != AccountType::Basic {
+            return Err(AccountError::TypeMismatch {
+                expected: AccountType::Basic,
+                got: account.account_type(),
+            });
+        }
+
+        let new_balance = Account::balance_sub(account.balance(), transaction.fee)?;
+
+        if new_balance.is_zero() {
+            accounts_tree.remove(db_txn, &key);
+        } else {
+            accounts_tree.put(
+                db_txn,
+                &key,
+                Account::Basic(BasicAccount {
+                    balance: new_balance,
+                }),
+            );
+        }
+
+        let logs = vec![Log::PayFee {
+            from: transaction.sender.clone(),
+            fee: transaction.fee,
+        }];
+        Ok(AccountInfo::new(None, logs))
+    }
+
+    fn revert_failed_transaction(
+        accounts_tree: &AccountsTrie,
+        db_txn: &mut WriteTransaction,
+        transaction: &Transaction,
+        receipt: Option<&Vec<u8>>,
+    ) -> Result<Vec<Log>, AccountError> {
+        if receipt.is_some() {
+            return Err(AccountError::InvalidReceipt);
+        }
+
+        let key = KeyNibbles::from(&transaction.sender);
+
+        let leaf = accounts_tree.get(db_txn, &key);
+
+        let current_balance = match leaf {
+            None => Coin::ZERO,
+            Some(account) => account.balance(),
+        };
+
+        let new_balance = Account::balance_add(current_balance, transaction.fee)?;
+        let logs = vec![Log::PayFee {
+            from: transaction.sender.clone(),
+            fee: transaction.fee,
+        }];
+        // If the new balance is zero, it means this account didnt exist before, so we don't need to create it.
+        if new_balance == Coin::ZERO {
+            return Ok(logs);
+        }
+
+        accounts_tree.put(
+            db_txn,
+            &key,
+            Account::Basic(BasicAccount {
+                balance: new_balance,
+            }),
+        );
+
+        Ok(logs)
+    }
+
+    fn can_pay_fee(
+        &self,
+        _transaction: &Transaction,
+        mempool_balance: Coin,
+        _block_time: u64,
+    ) -> bool {
+        Account::balance_sub(self.balance, mempool_balance).is_ok()
     }
 }
 

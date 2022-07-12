@@ -10,7 +10,7 @@ use nimiq_hash_derive::SerializeContent;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy;
 use nimiq_primitives::slots::Validators;
-use nimiq_transaction::Transaction;
+use nimiq_transaction::ExecutedTransaction;
 use nimiq_vrf::VrfSeed;
 
 use crate::macro_block::{MacroBlock, MacroHeader};
@@ -180,7 +180,7 @@ impl Block {
 
     /// Returns a reference to the transactions of the block. If the block is a Macro block it just
     /// returns None, since Macro blocks don't contain any transactions.
-    pub fn transactions(&self) -> Option<&Vec<Transaction>> {
+    pub fn transactions(&self) -> Option<&Vec<ExecutedTransaction>> {
         match self {
             Block::Macro(_) => None,
             Block::Micro(ref block) => block.body.as_ref().map(|ex| &ex.transactions),
@@ -189,7 +189,7 @@ impl Block {
 
     /// Returns a mutable reference to the transactions of the block. If the block is a Macro block
     /// it just returns None, since Macro blocks don't contain any transactions.
-    pub fn transactions_mut(&mut self) -> Option<&mut Vec<Transaction>> {
+    pub fn transactions_mut(&mut self) -> Option<&mut Vec<ExecutedTransaction>> {
         match self {
             Block::Macro(_) => None,
             Block::Micro(ref mut block) => block.body.as_mut().map(|ex| &mut ex.transactions),
@@ -210,7 +210,12 @@ impl Block {
             Block::Micro(ref block) => block
                 .body
                 .as_ref()
-                .map(|ex| ex.transactions.iter().map(|tx| tx.fee).sum())
+                .map(|ex| {
+                    ex.transactions
+                        .iter()
+                        .map(|tx| tx.get_raw_transaction().fee)
+                        .sum()
+                })
                 .unwrap_or(Coin::ZERO),
         }
     }
@@ -252,7 +257,7 @@ impl Block {
     }
 
     /// Unwraps the block and returns the underlying transactions. This only works with Micro blocks.
-    pub fn unwrap_transactions(self) -> Vec<Transaction> {
+    pub fn unwrap_transactions(self) -> Vec<ExecutedTransaction> {
         self.unwrap_micro().body.unwrap().transactions
     }
 

@@ -256,6 +256,130 @@ impl AccountTransactionInteraction for VestingContract {
             },
         ])
     }
+    fn commit_failed_transaction(
+        accounts_tree: &AccountsTrie,
+        db_txn: &mut WriteTransaction,
+        transaction: &Transaction,
+    ) -> Result<AccountInfo, AccountError> {
+        let key = KeyNibbles::from(&transaction.sender);
+
+        let account = accounts_tree
+            .get(db_txn, &key)
+            .ok_or(AccountError::NonExistentAddress {
+                address: transaction.sender.clone(),
+            })?;
+
+        let vesting = match account {
+            Account::Vesting(ref value) => value,
+            _ => {
+                return Err(AccountError::TypeMismatch {
+                    expected: AccountType::Vesting,
+                    got: account.account_type(),
+                })
+            }
+        };
+
+        // Note that in this type of transactions the fee is paid (deducted) from the contract balance
+        let new_balance = Account::balance_sub(account.balance(), transaction.fee)?;
+
+        // Store the account or prune if necessary.
+        let receipt = if new_balance.is_zero() {
+            accounts_tree.remove(db_txn, &key);
+
+            Some(VestingReceipt::from(vesting.clone()).serialize_to_vec())
+        } else {
+            accounts_tree.put(
+                db_txn,
+                &key,
+                Account::Vesting(vesting.change_balance(new_balance)),
+            );
+
+            None
+        };
+        let logs = vec![Log::PayFee {
+            from: transaction.sender.clone(),
+            fee: transaction.fee,
+        }];
+        Ok(AccountInfo::new(receipt, logs))
+    }
+    fn revert_failed_transaction(
+        accounts_tree: &AccountsTrie,
+        db_txn: &mut WriteTransaction,
+        transaction: &Transaction,
+        receipt: Option<&Vec<u8>>,
+    ) -> Result<Vec<Log>, AccountError> {
+        let key = KeyNibbles::from(&transaction.sender);
+
+        let vesting = match receipt {
+            None => {
+                let account =
+                    accounts_tree
+                        .get(db_txn, &key)
+                        .ok_or(AccountError::NonExistentAddress {
+                            address: transaction.sender.clone(),
+                        })?;
+
+                if let Account::Vesting(contract) = account {
+                    contract
+                } else {
+                    return Err(AccountError::TypeMismatch {
+                        expected: AccountType::Vesting,
+                        got: account.account_type(),
+                    });
+                }
+            }
+            Some(r) => {
+                let receipt: VestingReceipt = Deserialize::deserialize_from_vec(r)?;
+
+                VestingContract::from(receipt)
+            }
+        };
+
+        let new_balance = Account::balance_add(vesting.balance, transaction.fee)?;
+
+        accounts_tree.put(
+            db_txn,
+            &key,
+            Account::Vesting(vesting.change_balance(new_balance)),
+        );
+
+        Ok(vec![Log::PayFee {
+            from: transaction.sender.clone(),
+            fee: transaction.fee,
+        }])
+    }
+
+    fn can_pay_fee(
+        &self,
+        transaction: &Transaction,
+        mempool_balance: Coin,
+        block_time: u64,
+    ) -> bool {
+        let new_balance = match Account::balance_sub(self.balance, mempool_balance) {
+            Ok(new_balance) => new_balance,
+            Err(_) => return false,
+        };
+
+        // Check vesting min cap.
+        let min_cap = self.min_cap(block_time);
+
+        if new_balance < min_cap {
+            return false;
+        }
+
+        // Check transaction signer is contract owner.
+        let signature_proof: SignatureProof =
+            match Deserialize::deserialize(&mut &transaction.proof[..]) {
+                Ok(proof) => proof,
+                Err(_) => return false,
+            };
+
+        if !signature_proof.is_signed_by(&self.owner) {
+            return false;
+        }
+
+        true
+    }
 }
 
 impl AccountInherentInteraction for VestingContract {

@@ -74,7 +74,8 @@ pub fn generate_transactions(
             txn.proof = signature_proof.serialize_to_vec();
         }
         txns.push(txn.clone());
-        txns_len += txn.serialized_size();
+        //Adjust for executed txns len
+        txns_len += 1 + txn.serialized_size();
     }
     (txns, txns_len)
 }

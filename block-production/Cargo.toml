@@ -40,8 +40,10 @@ nimiq-utils = { path = "../utils"}
 nimiq-test-log = { path = "../test-log" }
 # This adds a circular dev-dependency which is fine but breaks VS code rust-analyzer.
 # See https://github.com/rust-analyzer/rust-analyzer/issues/2414
+nimiq-genesis-builder = { path = "../genesis-builder" }
 nimiq-test-utils = { path = "../test-utils" }
 nimiq-transaction-builder = { path = "../transaction-builder" }
+nimiq-trie = { path = "../primitives/trie" }
 nimiq-keys = { path = "../keys" }
 tempfile = "3.3"
 rand = "0.8"

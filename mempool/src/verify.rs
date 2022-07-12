@@ -47,6 +47,8 @@ pub enum VerifyErr {
     Filtered,
     /// Transaction cannot succeed
     CannotSucceed,
+    /// Fee can not be paid
+    CantPayFee,
 }
 
 impl Display for VerifyErr {
@@ -75,6 +77,9 @@ impl Display for VerifyErr {
             }
             VerifyErr::CannotSucceed => {
                 write!(f, "Cannot succeed")
+            }
+            VerifyErr::CantPayFee => {
+                write!(f, "Cant pay fee")
             }
         }
     }
@@ -255,9 +260,6 @@ pub(crate) async fn verify_tx<'a>(
         }
     }
 
-    // 9. Drop the blockchain lock since it is no longer needed
-    drop(blockchain);
-
     let blockchain_sender_balance = sender_account.balance();
     let blockchain_recipient_balance = recipient_account.balance();
 
@@ -273,6 +275,19 @@ pub(crate) async fn verify_tx<'a>(
         // We found the recipient in the mempool. Subtract the mempool balance from the recipient balance
         recipient_current_balance -= recipient_state.total;
     }
+
+    // The sender must be able to at least pay the fee (in case the tx fails), assumming all pending txns in the mempool for this sender are included in a block
+    if !sender_account.can_fee_be_paid(
+        transaction,
+        sender_current_balance + transaction.fee,
+        blockchain.timestamp(),
+    ) {
+        // If the fee cannot be paid for this transaction, we reject it.
+        return Err(VerifyErr::CantPayFee);
+    }
+
+    // 9. Drop the blockchain lock since it is no longer needed
+    drop(blockchain);
 
     // Calculate the new balance assuming we add this transaction to the mempool
     let sender_in_fly_balance = transaction.total_value() + sender_current_balance;

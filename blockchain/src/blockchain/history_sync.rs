@@ -1,5 +1,6 @@
 use std::error::Error;
 
+use nimiq_transaction::Transaction;
 use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
 
 use nimiq_block::{Block, BlockError, TendermintProof};
@@ -208,7 +209,7 @@ impl Blockchain {
                 break;
             }
             if let ExtTxData::Basic(tx) = &history[i].data {
-                cum_tx_fees += tx.fee;
+                cum_tx_fees += tx.get_raw_transaction().fee;
             }
         }
 
@@ -295,10 +296,16 @@ impl Blockchain {
 
         // Update the accounts tree, one block at a time.
         for i in 0..block_numbers.len() {
+            // Extract the transactions from the block
+            let txns: Vec<Transaction> = block_transactions[i]
+                .iter()
+                .map(|txn| txn.get_raw_transaction().clone())
+                .collect();
+
             // Commit block to AccountsTree and create the receipts.
             let receipts = this.state.accounts.commit_batch(
                 &mut txn,
-                &block_transactions[i],
+                &txns,
                 &block_inherents[i],
                 block_numbers[i],
                 block_timestamps[i],

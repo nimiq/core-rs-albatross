@@ -204,6 +204,7 @@ impl HistoryStore {
 
             match &ext_tx.data {
                 ExtTxData::Basic(tx) => {
+                    let tx = tx.get_raw_transaction();
                     affected_addresses.insert(tx.sender.clone());
                     affected_addresses.insert(tx.recipient.clone());
                 }
@@ -813,6 +814,8 @@ impl HistoryStore {
 
         match &ext_tx.data {
             ExtTxData::Basic(tx) => {
+                let tx = tx.get_raw_transaction();
+
                 let index_tx_sender = self.get_last_tx_index_for_address(&tx.sender, Some(txn)) + 1;
 
                 txn.put(
@@ -974,7 +977,7 @@ mod tests {
     use nimiq_primitives::coin::Coin;
     use nimiq_primitives::networks::NetworkId;
     use nimiq_test_log::test;
-    use nimiq_transaction::Transaction as BlockchainTransaction;
+    use nimiq_transaction::{ExecutedTransaction, Transaction as BlockchainTransaction};
 
     use crate::ExtTxData;
 
@@ -1052,6 +1055,7 @@ mod tests {
         assert_eq!(
             history_store.get_ext_tx_by_hash(&ext_txs[0].tx_hash(), Some(&txn))[0]
                 .unwrap_basic()
+                .get_raw_transaction()
                 .value,
             Coin::from_u64_unchecked(0),
         );
@@ -1066,6 +1070,7 @@ mod tests {
         assert_eq!(
             history_store.get_ext_tx_by_hash(&ext_txs[3].tx_hash(), Some(&txn))[0]
                 .unwrap_basic()
+                .get_raw_transaction()
                 .value,
             Coin::from_u64_unchecked(3),
         );
@@ -1091,11 +1096,17 @@ mod tests {
 
         assert!(!query_0[0].is_inherent());
         assert_eq!(query_0[0].block_number, 0);
-        assert_eq!(query_0[0].unwrap_basic().value, Coin::from_u64_unchecked(0));
+        assert_eq!(
+            query_0[0].unwrap_basic().get_raw_transaction().value,
+            Coin::from_u64_unchecked(0)
+        );
 
         assert!(!query_0[1].is_inherent());
         assert_eq!(query_0[1].block_number, 0);
-        assert_eq!(query_0[1].unwrap_basic().value, Coin::from_u64_unchecked(1));
+        assert_eq!(
+            query_0[1].unwrap_basic().get_raw_transaction().value,
+            Coin::from_u64_unchecked(1)
+        );
 
         assert!(query_0[2].is_inherent());
         assert_eq!(query_0[2].block_number, 0);
@@ -1108,7 +1119,10 @@ mod tests {
 
         assert!(!query_1[0].is_inherent());
         assert_eq!(query_1[0].block_number, 1);
-        assert_eq!(query_1[0].unwrap_basic().value, Coin::from_u64_unchecked(3));
+        assert_eq!(
+            query_1[0].unwrap_basic().get_raw_transaction().value,
+            Coin::from_u64_unchecked(3)
+        );
 
         assert!(query_1[1].is_inherent());
         assert_eq!(query_1[1].block_number, 1);
@@ -1121,11 +1135,17 @@ mod tests {
 
         assert!(!query_2[0].is_inherent());
         assert_eq!(query_2[0].block_number, 2);
-        assert_eq!(query_2[0].unwrap_basic().value, Coin::from_u64_unchecked(5));
+        assert_eq!(
+            query_2[0].unwrap_basic().get_raw_transaction().value,
+            Coin::from_u64_unchecked(5)
+        );
 
         assert!(!query_2[1].is_inherent());
         assert_eq!(query_2[1].block_number, 2);
-        assert_eq!(query_2[1].unwrap_basic().value, Coin::from_u64_unchecked(6));
+        assert_eq!(
+            query_2[1].unwrap_basic().get_raw_transaction().value,
+            Coin::from_u64_unchecked(6)
+        );
 
         assert!(query_2[2].is_inherent());
         assert_eq!(query_2[2].block_number, 2);
@@ -1144,13 +1164,19 @@ mod tests {
 
         assert!(!query_0[0].is_inherent());
         assert_eq!(query_0[0].block_number, 0);
-        assert_eq!(query_0[0].unwrap_basic().value, Coin::from_u64_unchecked(0));
+        assert_eq!(
+            query_0[0].unwrap_basic().get_raw_transaction().value,
+            Coin::from_u64_unchecked(0)
+        );
 
         let query_1 = history_store.get_block_transactions(1, Some(&txn));
 
         assert!(!query_1[0].is_inherent());
         assert_eq!(query_1[0].block_number, 1);
-        assert_eq!(query_1[0].unwrap_basic().value, Coin::from_u64_unchecked(3));
+        assert_eq!(
+            query_1[0].unwrap_basic().get_raw_transaction().value,
+            Coin::from_u64_unchecked(3)
+        );
 
         assert!(query_1[1].is_inherent());
         assert_eq!(query_1[1].block_number, 1);
@@ -1183,11 +1209,17 @@ mod tests {
 
         assert!(!query[0].is_inherent());
         assert_eq!(query[0].block_number, 0);
-        assert_eq!(query[0].unwrap_basic().value, Coin::from_u64_unchecked(0));
+        assert_eq!(
+            query[0].unwrap_basic().get_raw_transaction().value,
+            Coin::from_u64_unchecked(0)
+        );
 
         assert!(!query[1].is_inherent());
         assert_eq!(query[1].block_number, 0);
-        assert_eq!(query[1].unwrap_basic().value, Coin::from_u64_unchecked(1));
+        assert_eq!(
+            query[1].unwrap_basic().get_raw_transaction().value,
+            Coin::from_u64_unchecked(1)
+        );
 
         assert!(query[2].is_inherent());
         assert_eq!(query[2].block_number, 0);
@@ -1200,7 +1232,10 @@ mod tests {
 
         assert!(!query[0].is_inherent());
         assert_eq!(query[0].block_number, 1);
-        assert_eq!(query[0].unwrap_basic().value, Coin::from_u64_unchecked(3));
+        assert_eq!(
+            query[0].unwrap_basic().get_raw_transaction().value,
+            Coin::from_u64_unchecked(3)
+        );
 
         assert!(query[1].is_inherent());
         assert_eq!(query[1].block_number, 1);
@@ -1211,11 +1246,17 @@ mod tests {
 
         assert!(!query[2].is_inherent());
         assert_eq!(query[2].block_number, 2);
-        assert_eq!(query[2].unwrap_basic().value, Coin::from_u64_unchecked(5));
+        assert_eq!(
+            query[2].unwrap_basic().get_raw_transaction().value,
+            Coin::from_u64_unchecked(5)
+        );
 
         assert!(!query[3].is_inherent());
         assert_eq!(query[3].block_number, 2);
-        assert_eq!(query[3].unwrap_basic().value, Coin::from_u64_unchecked(6));
+        assert_eq!(
+            query[3].unwrap_basic().get_raw_transaction().value,
+            Coin::from_u64_unchecked(6)
+        );
 
         assert!(query[4].is_inherent());
         assert_eq!(query[4].block_number, 2);
@@ -1232,11 +1273,17 @@ mod tests {
 
         assert!(!query[0].is_inherent());
         assert_eq!(query[0].block_number, 0);
-        assert_eq!(query[0].unwrap_basic().value, Coin::from_u64_unchecked(0));
+        assert_eq!(
+            query[0].unwrap_basic().get_raw_transaction().value,
+            Coin::from_u64_unchecked(0)
+        );
 
         assert!(!query[1].is_inherent());
         assert_eq!(query[1].block_number, 0);
-        assert_eq!(query[1].unwrap_basic().value, Coin::from_u64_unchecked(1));
+        assert_eq!(
+            query[1].unwrap_basic().get_raw_transaction().value,
+            Coin::from_u64_unchecked(1)
+        );
 
         assert!(query[2].is_inherent());
         assert_eq!(query[2].block_number, 0);
@@ -1249,7 +1296,10 @@ mod tests {
 
         assert!(!query[0].is_inherent());
         assert_eq!(query[0].block_number, 1);
-        assert_eq!(query[0].unwrap_basic().value, Coin::from_u64_unchecked(3));
+        assert_eq!(
+            query[0].unwrap_basic().get_raw_transaction().value,
+            Coin::from_u64_unchecked(3)
+        );
 
         assert!(query[1].is_inherent());
         assert_eq!(query[1].block_number, 1);
@@ -1494,7 +1544,7 @@ mod tests {
             network_id: NetworkId::UnitAlbatross,
             block_number: block,
             block_time: 0,
-            data: ExtTxData::Basic(BlockchainTransaction::new_basic(
+            data: ExtTxData::Basic(ExecutedTransaction::Ok(BlockchainTransaction::new_basic(
                 Address::from_user_friendly_address("NQ09 VF5Y 1PKV MRM4 5LE1 55KV P6R2 GXYJ XYQF")
                     .unwrap(),
                 Address::burn_address(),
@@ -1502,7 +1552,7 @@ mod tests {
                 Coin::from_u64_unchecked(0),
                 0,
                 NetworkId::Dummy,
-            )),
+            ))),
         }
     }
 

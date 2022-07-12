@@ -350,6 +350,7 @@ impl Mempool {
         for (_, block) in adopted_blocks {
             if let Some(transactions) = block.transactions() {
                 for tx in transactions {
+                    let tx = tx.get_raw_transaction();
                     let tx_hash = tx.hash();
 
                     // Check if we already know this transaction. If yes, a known transaction was
@@ -405,6 +406,17 @@ impl Mempool {
                                 .iter()
                                 .filter(|hash| {
                                     let old_tx = mempool_state.get(hash).unwrap();
+
+                                    // The sender must be able to at least pay the fee (in case the tx fails)
+                                    // (Assuming that all pending txns in the mempool for this sender are included in a block)
+                                    if !sender_account.can_fee_be_paid(
+                                        old_tx,
+                                        new_total + old_tx.fee,
+                                        blockchain.timestamp(),
+                                    ) {
+                                        // If the fee cannot be paid for this transaction, we filter it
+                                        return true;
+                                    }
 
                                     if old_tx.total_value() + new_total <= sender_balance {
                                         new_total += old_tx.total_value();
@@ -503,6 +515,7 @@ impl Mempool {
 
             if let Some(transactions) = block.transactions() {
                 for tx in transactions {
+                    let tx = &tx.get_raw_transaction();
                     let tx_hash = tx.hash();
 
                     // Check if we already know this transaction. If yes, skip ahead.
@@ -587,7 +600,8 @@ impl Mempool {
 
             // Calculate size. If we can't fit the transaction in the block, then we stop here.
             // TODO: We can optimize this. There might be a smaller transaction that still fits.
-            let next_size = size + tx.serialized_size();
+            // We need to account for one extra byte per transaction to encode its final execution status
+            let next_size = size + 1 + tx.serialized_size();
 
             if next_size > max_bytes {
                 break;
@@ -652,7 +666,8 @@ impl Mempool {
 
             // Calculate size. If we can't fit the transaction in the block, then we stop here.
             // TODO: We can optimize this. There might be a smaller transaction that still fits.
-            let next_size = size + tx.serialized_size();
+            // We need to account for one extra byte per transaction to encode its final execution status
+            let next_size = size + 1 + tx.serialized_size();
 
             if next_size > max_bytes {
                 break;

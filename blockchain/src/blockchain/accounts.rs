@@ -1,13 +1,11 @@
-use nimiq_account::Accounts;
-use nimiq_account::BlockLog;
-use nimiq_block::Block;
-use nimiq_block::SkipBlockInfo;
-use nimiq_database::WriteTransaction;
-use nimiq_primitives::policy;
-
 use crate::blockchain_state::BlockchainState;
 use crate::history::ExtendedTransaction;
 use crate::{Blockchain, PushError};
+use nimiq_account::Accounts;
+use nimiq_account::BlockLog;
+use nimiq_block::{Block, SkipBlockInfo,BlockError::TransactionExecutionMismatch};
+use nimiq_database::WriteTransaction;
+use nimiq_primitives::policy;
 
 /// Implements methods to handle the accounts.
 impl Blockchain {
@@ -60,7 +58,7 @@ impl Blockchain {
                     &ext_txs,
                 );
 
-                let batch_info = batch_info.unwrap();
+                let (batch_info, _) = batch_info.unwrap();
                 Ok(BlockLog::AppliedBlock {
                     inherent_logs: batch_info.inherent_logs,
                     block_hash: macro_block.hash(),
@@ -89,18 +87,25 @@ impl Blockchain {
                 // Commit block to AccountsTree and create the receipts.
                 let batch_info = accounts.commit(
                     txn,
-                    &body.transactions,
+                    &body.get_raw_transactions(),
                     &inherents,
                     micro_block.header.block_number,
                     micro_block.header.timestamp,
                 );
-                let batch_info = match batch_info {
+                let (batch_info, executed_txns) = match batch_info {
                     Ok(batch_info) => batch_info,
                     Err(e) => {
                         // Check if the receipts contain an error.
                         return Err(PushError::AccountsError(e));
                     }
                 };
+
+                // Check the executed transactions result obtained from the accounts commit against the ones in the block
+                for (index, executed_txn) in executed_txns.iter().enumerate() {
+                    if *executed_txn != body.transactions[index] {
+                        return Err(PushError::InvalidBlock(TransactionExecutionMismatch));
+                    }
+                }
 
                 // Store receipts.
                 let receipts = batch_info.receipts.into();

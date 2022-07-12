@@ -136,6 +136,13 @@ pub enum Log {
 
     #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
     RevertContract { contract_address: Address },
+
+    #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
+    FailedTransaction {
+        from: Address,
+        to: Address,
+        failure_reason: String,
+    },
 }
 
 impl Log {
@@ -238,6 +245,7 @@ impl Log {
                 validator_address, ..
             } => validator_address == address,
             Log::RevertContract { contract_address } => contract_address == address,
+            Log::FailedTransaction { from, to, .. } => from == address || to == address,
         }
     }
 }
@@ -295,6 +303,49 @@ impl BlockLog {
         }
     }
 }
+// This structure stores the info/data associated to a sucessful transaction that was commited
+pub struct TransactionInfo {
+    pub sender_info: Option<AccountInfo>,
+    pub recipient_info: Option<AccountInfo>,
+    pub create_info: Option<AccountInfo>,
+}
+
+impl TransactionInfo {
+    pub fn new() -> Self {
+        Self {
+            sender_info: None,
+            recipient_info: None,
+            create_info: None,
+        }
+    }
+}
+impl Default for TransactionInfo {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+pub struct RevertTransactionLogs {
+    pub contract_log: Vec<Log>,
+    pub recipient_log: Vec<Log>,
+    pub sender_log: Vec<Log>,
+}
+
+impl RevertTransactionLogs {
+    pub fn new() -> Self {
+        Self {
+            contract_log: Vec::new(),
+            recipient_log: Vec::new(),
+            sender_log: Vec::new(),
+        }
+    }
+}
+
+impl Default for RevertTransactionLogs {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 // Account Info is used as a return type of transactions to the blockchain and stores the logs and receipt associated with the transaction
 #[derive(Debug, PartialEq, Eq)]
@@ -325,6 +376,7 @@ impl<T: BeSerialize> From<OperationInfo<T>> for AccountInfo {
 
 // Batch Info is used as a return type of multiple transactions or batches applied to the blockchain.
 // It stores the transaction logs, inherent logs and receipts associated with the multiple transactions of the batch.
+// Along with the result of applying each individual transaction
 #[derive(Default, Eq, PartialEq, Debug)]
 pub struct BatchInfo {
     pub receipts: Vec<Receipt>,

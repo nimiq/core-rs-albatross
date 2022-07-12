@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use nimiq_primitives::coin::Coin;
 use parking_lot::RwLock;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
@@ -9,7 +10,7 @@ use tokio_stream::wrappers::ReceiverStream;
 use beserial::{Deserialize, Serialize};
 use nimiq_block::{Block, MicroBlock, MicroBody, MicroHeader};
 use nimiq_block_production::BlockProducer;
-use nimiq_blockchain::{Blockchain, PushResult};
+use nimiq_blockchain::{AbstractBlockchain, Blockchain, PushResult};
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis_builder::GenesisBuilder;
@@ -27,8 +28,9 @@ use nimiq_test_utils::{
     blockchain::{produce_macro_blocks_with_txns, signing_key, voting_key},
     test_transaction::{generate_accounts, generate_transactions, TestTransaction},
 };
-use nimiq_transaction::Transaction;
+use nimiq_transaction::{ExecutedTransaction, Transaction};
 use nimiq_transaction_builder::TransactionBuilder;
+use nimiq_trie::key_nibbles::KeyNibbles;
 use nimiq_utils::time::OffsetTime;
 use nimiq_vrf::VrfSeed;
 
@@ -260,15 +262,20 @@ fn create_dummy_micro_block(transactions: Option<Vec<Transaction>>) -> Block {
         body_root: Blake2bHash::default(),
         history_root: Blake2bHash::default(),
     };
+    let mut executed_txns: Vec<ExecutedTransaction> = Vec::new();
 
-    let micro_body = transactions.map(|txns| MicroBody {
+    if let Some(txns) = transactions {
+        executed_txns = (txns.iter().map(|txn| ExecutedTransaction::Ok(txn.clone()))).collect()
+    }
+
+    let micro_body = MicroBody {
         fork_proofs: vec![],
-        transactions: txns,
-    });
+        transactions: executed_txns,
+    };
 
     let micro_block = MicroBlock {
         header: micro_header,
-        body: micro_body,
+        body: Some(micro_body),
         justification: None,
     };
     Block::Micro(micro_block)
@@ -1855,8 +1862,9 @@ async fn applies_total_tx_size_limits() {
     ));
 
     // Create mempool with total size limit just below the total one of the generated transactions
+    // Need to account for the executed txn size
     let mempool_config = MempoolConfig {
-        size_limit: txns_len - 1,
+        size_limit: txns_len - (1 + txns[1].serialized_size()),
         ..Default::default()
     };
     let mempool = Mempool::new(blockchain, mempool_config);
@@ -1875,4 +1883,94 @@ async fn applies_total_tx_size_limits() {
         assert_ne!(tx.hash::<Blake2bHash>(), worst_tx);
     }
     assert_eq!(mempool_txns.len(), (num_txns - 1) as usize);
+}
+
+#[tokio::test]
+async fn it_can_reject_invalid_vesting_contract_transaction() {
+    let time = Arc::new(OffsetTime::new());
+    let env = VolatileEnvironment::new(10).unwrap();
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+    ));
+    let producer = BlockProducer::new(signing_key(), voting_key());
+
+    // Create mempool and subscribe with a custom txn stream
+    let mempool = Mempool::new(blockchain.clone(), MempoolConfig::default());
+    let mut hub = MockHub::new();
+    let mock_id = MockId::new(hub.new_address().into());
+    let mock_network = Arc::new(hub.new_network());
+
+    // #1.0: Micro block that creates a vesting contract
+    let bc = blockchain.upgradable_read();
+
+    let key_pair = ed25519_key_pair(ACCOUNT_SECRET_KEY);
+    let address = Address::from_any_str(STAKER_ADDRESS).unwrap();
+
+    let tx = TransactionBuilder::new_create_vesting(
+        &key_pair,
+        Address::from(&key_pair.public),
+        bc.time.now() + 100000000000000,
+        100000000000000,
+        100,
+        Coin::from_u64_unchecked(1000),
+        Coin::from_u64_unchecked(100),
+        1,
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
+
+    let transactions = vec![tx.clone()];
+
+    let block = producer.next_micro_block(
+        &bc,
+        bc.time.now(),
+        0,
+        None,
+        vec![],
+        transactions,
+        vec![0x41],
+    );
+    assert_eq!(
+        Blockchain::push(bc, Block::Micro(block)),
+        Ok(PushResult::Extended)
+    );
+    assert_eq!(blockchain.read().block_number(), 1);
+
+    // Now we need to verify the contract was created and it has the right balance
+    let bc = blockchain.read();
+    let accounts = &bc.state.accounts;
+
+    assert_eq!(
+        accounts
+            .get(&KeyNibbles::from(&tx.contract_creation_address()), None)
+            .unwrap()
+            .balance(),
+        Coin::from_u64_unchecked(1000)
+    );
+
+    drop(bc);
+
+    //Now we create a redeem funds transaction that will be rejected
+    let redeem_tx = TransactionBuilder::new_redeem_vesting(
+        &key_pair,
+        tx.contract_creation_address(),
+        address,
+        Coin::from_u64_unchecked(100),
+        Coin::from_u64_unchecked(100),
+        1,
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
+
+    let transactions = vec![redeem_tx.clone()];
+
+    // Send txns to mempool
+    send_txn_to_mempool(&mempool, mock_network, mock_id, transactions).await;
+
+    // The transaction should be rejected by the mempool, since the contract doesnt have enough vested funds
+    assert_eq!(
+        mempool.num_transactions(),
+        0,
+        "Number of txns in the mempools is not what is expected"
+    );
 }

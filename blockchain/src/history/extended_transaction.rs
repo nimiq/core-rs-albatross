@@ -10,6 +10,7 @@ use nimiq_mmr::hash::Hash as MMRHash;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_primitives::policy::COINBASE_ADDRESS;
+use nimiq_transaction::ExecutedTransaction;
 use nimiq_transaction::Transaction as BlockchainTransaction;
 
 /// A single struct that stores information that represents any possible transaction (basic
@@ -52,7 +53,7 @@ impl ExtendedTransaction {
         network_id: NetworkId,
         block_number: u32,
         block_time: u64,
-        transactions: Vec<BlockchainTransaction>,
+        transactions: Vec<ExecutedTransaction>,
         inherents: Vec<Inherent>,
     ) -> Vec<ExtendedTransaction> {
         let mut ext_txs = vec![];
@@ -82,7 +83,7 @@ impl ExtendedTransaction {
 
     /// Convert a set of extended transactions into a vector of inherents and a vector of basic
     /// transactions.
-    pub fn to(ext_txs: Vec<ExtendedTransaction>) -> (Vec<BlockchainTransaction>, Vec<Inherent>) {
+    pub fn to(ext_txs: Vec<ExtendedTransaction>) -> (Vec<ExecutedTransaction>, Vec<Inherent>) {
         let mut transactions = vec![];
         let mut inherents = vec![];
 
@@ -104,8 +105,8 @@ impl ExtendedTransaction {
         }
     }
 
-    /// Unwraps the extended transaction and returns a reference to the underlying basic transaction.
-    pub fn unwrap_basic(&self) -> &BlockchainTransaction {
+    /// Unwraps the extended transaction and returns a reference to the underlying executed transaction.
+    pub fn unwrap_basic(&self) -> &ExecutedTransaction {
         if let ExtTxData::Basic(ref tx) = self.data {
             tx
         } else {
@@ -128,10 +129,10 @@ impl ExtendedTransaction {
     /// their transaction hash.
     pub fn tx_hash(&self) -> Blake2bHash {
         match &self.data {
-            ExtTxData::Basic(tx) => tx.hash(),
+            ExtTxData::Basic(tx) => tx.get_hash(),
             ExtTxData::Inherent(v) => {
                 if v.ty == InherentType::Reward {
-                    self.clone().into_transaction().unwrap().hash()
+                    self.clone().into_transaction().unwrap().get_hash()
                 } else {
                     v.hash()
                 }
@@ -141,19 +142,21 @@ impl ExtendedTransaction {
 
     /// Tries to convert an extended transaction into a regular transaction. This will work for all
     /// extended transactions that wrap over regular transactions and reward inherents.
-    pub fn into_transaction(self) -> Result<BlockchainTransaction, IntoTransactionError> {
+    pub fn into_transaction(self) -> Result<ExecutedTransaction, IntoTransactionError> {
         match self.data {
             ExtTxData::Basic(tx) => Ok(tx),
             ExtTxData::Inherent(x) => {
                 if x.ty == InherentType::Reward {
-                    Ok(BlockchainTransaction::new_basic(
+                    let txn = BlockchainTransaction::new_basic(
                         COINBASE_ADDRESS,
                         x.target,
                         x.value,
                         Coin::ZERO,
                         self.block_number,
                         self.network_id,
-                    ))
+                    );
+
+                    Ok(ExecutedTransaction::Ok(txn))
                 } else {
                     Err(IntoTransactionError::NoBasicTransactionMapping)
                 }
@@ -234,7 +237,7 @@ impl FromDatabaseValue for ExtendedTransaction {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ExtTxData {
     // A basic transaction. It simply contains the transaction as contained in the block.
-    Basic(BlockchainTransaction),
+    Basic(ExecutedTransaction),
     // An inherent transaction. It simply contains the transaction as contained in the block.
     Inherent(Inherent),
 }

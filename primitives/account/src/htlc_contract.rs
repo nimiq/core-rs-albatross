@@ -66,6 +66,96 @@ impl HashedTimeLockedContract {
             total_amount: self.total_amount,
         }
     }
+
+    pub fn can_change_balance(
+        &self,
+        proof: Vec<u8>,
+        new_balance: Coin,
+        block_time: u64,
+    ) -> Result<bool, AccountError> {
+        let proof_buf = &mut &proof[..];
+        let proof_type: ProofType = Deserialize::deserialize(proof_buf)?;
+
+        match proof_type {
+            ProofType::RegularTransfer => {
+                // Check that the contract has not expired yet.
+                if self.timeout < block_time {
+                    warn!("HTLC has expired: {} < {}", self.timeout, block_time);
+                    return Err(AccountError::InvalidForSender);
+                }
+
+                // Check that the provided hash_root is correct.
+                let hash_algorithm: HashAlgorithm = Deserialize::deserialize(proof_buf)?;
+
+                let hash_depth: u8 = Deserialize::deserialize(proof_buf)?;
+
+                let hash_root: AnyHash = Deserialize::deserialize(proof_buf)?;
+
+                if hash_algorithm != self.hash_algorithm || hash_root != self.hash_root {
+                    warn!("HTLC hash mismatch");
+                    return Err(AccountError::InvalidForSender);
+                }
+
+                // Ignore pre_image.
+                let _pre_image: AnyHash = Deserialize::deserialize(proof_buf)?;
+
+                // Check that the transaction is signed by the authorized recipient.
+                let signature_proof: SignatureProof = Deserialize::deserialize(proof_buf)?;
+
+                if !signature_proof.is_signed_by(&self.recipient) {
+                    return Err(AccountError::InvalidSignature);
+                }
+
+                // Check min cap.
+                let cap_ratio = 1f64 - (f64::from(hash_depth) / f64::from(self.hash_count));
+
+                let min_cap = Coin::try_from(
+                    (cap_ratio * u64::from(self.total_amount) as f64)
+                        .floor()
+                        .max(0f64) as u64,
+                )?;
+
+                if new_balance < min_cap {
+                    return Err(AccountError::InsufficientFunds {
+                        balance: new_balance,
+                        needed: min_cap,
+                    });
+                }
+            }
+            ProofType::EarlyResolve => {
+                // Check that the transaction is signed by both parties.
+                let signature_proof_recipient: SignatureProof =
+                    Deserialize::deserialize(proof_buf)?;
+
+                let signature_proof_sender: SignatureProof = Deserialize::deserialize(proof_buf)?;
+
+                if !signature_proof_recipient.is_signed_by(&self.recipient)
+                    || !signature_proof_sender.is_signed_by(&self.sender)
+                {
+                    return Err(AccountError::InvalidSignature);
+                }
+            }
+            ProofType::TimeoutResolve => {
+                // Check that the contract has expired.
+                if self.timeout >= block_time {
+                    warn!(
+                        "HTLC has not yet expired: {} >= {}",
+                        self.timeout, block_time
+                    );
+                    return Err(AccountError::InvalidForSender);
+                }
+
+                // Check that the transaction is signed by the original sender.
+                let signature_proof: SignatureProof = Deserialize::deserialize(proof_buf)?;
+
+                if !signature_proof.is_signed_by(&self.sender) {
+                    return Err(AccountError::InvalidSignature);
+                }
+            }
+        };
+
+        Ok(true)
+    }
 }
 
 impl AccountTransactionInteraction for HashedTimeLockedContract {
@@ -159,10 +249,13 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
 
         let new_balance = Account::balance_sub(account.balance(), transaction.total_value())?;
 
+        htlc.can_change_balance(transaction.proof.clone(), new_balance, block_time)?;
+
         let proof_buf = &mut &transaction.proof[..];
 
         let proof_type: ProofType = Deserialize::deserialize(proof_buf)?;
 
+        // Create the contract logs
         let mut logs = vec![
             Log::PayFee {
                 from: transaction.sender.clone(),
@@ -177,49 +270,9 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
 
         match proof_type {
             ProofType::RegularTransfer => {
-                // Check that the contract has not expired yet.
-                if htlc.timeout < block_time {
-                    warn!("HTLC has expired: {} < {}", htlc.timeout, block_time);
-                    return Err(AccountError::InvalidForSender);
-                }
-
-                // Check that the provided hash_root is correct.
-                let hash_algorithm: HashAlgorithm = Deserialize::deserialize(proof_buf)?;
-
-                let hash_depth: u8 = Deserialize::deserialize(proof_buf)?;
-
-                let hash_root: AnyHash = Deserialize::deserialize(proof_buf)?;
-
-                if hash_algorithm != htlc.hash_algorithm || hash_root != htlc.hash_root {
-                    warn!("HTLC hash mismatch");
-                    return Err(AccountError::InvalidForSender);
-                }
-
                 // Ignore pre_image.
                 let pre_image: AnyHash = Deserialize::deserialize(proof_buf)?;
-
-                // Check that the transaction is signed by the authorized recipient.
-                let signature_proof: SignatureProof = Deserialize::deserialize(proof_buf)?;
-
-                if !signature_proof.is_signed_by(&htlc.recipient) {
-                    return Err(AccountError::InvalidSignature);
-                }
-
-                // Check min cap.
-                let cap_ratio = 1f64 - (f64::from(hash_depth) / f64::from(htlc.hash_count));
-
-                let min_cap = Coin::try_from(
-                    (cap_ratio * u64::from(htlc.total_amount) as f64)
-                        .floor()
-                        .max(0f64) as u64,
-                )?;
-
-                if new_balance < min_cap {
-                    return Err(AccountError::InsufficientFunds {
-                        balance: new_balance,
-                        needed: min_cap,
-                    });
-                }
+                let hash_depth: u8 = Deserialize::deserialize(proof_buf)?;
 
                 logs.push(Log::HTLCRegularTransfer {
                     contract_address: transaction.sender.clone(),
@@ -228,39 +281,11 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
                 });
             }
             ProofType::EarlyResolve => {
-                // Check that the transaction is signed by both parties.
-                let signature_proof_recipient: SignatureProof =
-                    Deserialize::deserialize(proof_buf)?;
-
-                let signature_proof_sender: SignatureProof = Deserialize::deserialize(proof_buf)?;
-
-                if !signature_proof_recipient.is_signed_by(&htlc.recipient)
-                    || !signature_proof_sender.is_signed_by(&htlc.sender)
-                {
-                    return Err(AccountError::InvalidSignature);
-                }
-
                 logs.push(Log::HTLCEarlyResolve {
                     contract_address: transaction.sender.clone(),
                 });
             }
             ProofType::TimeoutResolve => {
-                // Check that the contract has expired.
-                if htlc.timeout >= block_time {
-                    warn!(
-                        "HTLC has not yet expired: {} >= {}",
-                        htlc.timeout, block_time
-                    );
-                    return Err(AccountError::InvalidForSender);
-                }
-
-                // Check that the transaction is signed by the original sender.
-                let signature_proof: SignatureProof = Deserialize::deserialize(proof_buf)?;
-
-                if !signature_proof.is_signed_by(&htlc.sender) {
-                    return Err(AccountError::InvalidSignature);
-                }
-
                 logs.push(Log::HTLCTimeoutResolve {
                     contract_address: transaction.sender.clone(),
                 });
@@ -362,6 +387,122 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
             },
         });
         Ok(logs)
+    }
+
+    fn commit_failed_transaction(
+        accounts_tree: &AccountsTrie,
+        db_txn: &mut WriteTransaction,
+        transaction: &Transaction,
+    ) -> Result<AccountInfo, AccountError> {
+        let key = KeyNibbles::from(&transaction.sender);
+
+        let account = accounts_tree
+            .get(db_txn, &key)
+            .ok_or(AccountError::NonExistentAddress {
+                address: transaction.sender.clone(),
+            })?;
+
+        let htlc = match account {
+            Account::HTLC(ref value) => value,
+            _ => {
+                return Err(AccountError::TypeMismatch {
+                    expected: AccountType::HTLC,
+                    got: account.account_type(),
+                })
+            }
+        };
+
+        // Note that in this type of transactions the fee is paid (deducted) from the contract balance
+        let new_balance = Account::balance_sub(account.balance(), transaction.fee)?;
+
+        let logs = vec![Log::PayFee {
+            from: transaction.sender.clone(),
+            fee: transaction.fee,
+        }];
+
+        // Store the account or prune if necessary.
+        let receipt = if new_balance.is_zero() {
+            accounts_tree.remove(db_txn, &key);
+
+            Some(HTLCReceipt::from(htlc.clone()).serialize_to_vec())
+        } else {
+            accounts_tree.put(
+                db_txn,
+                &key,
+                Account::HTLC(htlc.change_balance(new_balance)),
+            );
+
+            None
+        };
+
+        Ok(AccountInfo::new(receipt, logs))
+    }
+
+    fn revert_failed_transaction(
+        accounts_tree: &AccountsTrie,
+        db_txn: &mut WriteTransaction,
+        transaction: &Transaction,
+        receipt: Option<&Vec<u8>>,
+    ) -> Result<Vec<Log>, AccountError> {
+        let key = KeyNibbles::from(&transaction.sender);
+
+        let htlc = match receipt {
+            None => {
+                let account =
+                    accounts_tree
+                        .get(db_txn, &key)
+                        .ok_or(AccountError::NonExistentAddress {
+                            address: transaction.sender.clone(),
+                        })?;
+
+                if let Account::HTLC(contract) = account {
+                    contract
+                } else {
+                    return Err(AccountError::TypeMismatch {
+                        expected: AccountType::HTLC,
+                        got: account.account_type(),
+                    });
+                }
+            }
+            Some(r) => {
+                let receipt: HTLCReceipt = Deserialize::deserialize_from_vec(r)?;
+
+                HashedTimeLockedContract::from(receipt)
+            }
+        };
+
+        let new_balance = Account::balance_add(htlc.balance, transaction.fee)?;
+
+        accounts_tree.put(
+            db_txn,
+            &key,
+            Account::HTLC(htlc.change_balance(new_balance)),
+        );
+
+        // Build the revert logs
+        let logs = vec![Log::PayFee {
+            from: transaction.sender.clone(),
+            fee: transaction.fee,
+        }];
+
+        Ok(logs)
+    }
+
+    fn can_pay_fee(
+        &self,
+        transaction: &Transaction,
+        mempool_balance: Coin,
+        block_time: u64,
+    ) -> bool {
+        let new_balance = match Account::balance_sub(self.balance, mempool_balance) {
+            Ok(new_balance) => new_balance,
+            Err(_) => {
+                return false;
+            }
+        };
+
+        self.can_change_balance(transaction.proof.clone(), new_balance, block_time)
+            .is_ok()
     }
 }
 

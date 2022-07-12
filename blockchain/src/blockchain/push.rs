@@ -585,7 +585,7 @@ impl Blockchain {
 
             if let Some(tx_vec) = transactions {
                 for transaction in tx_vec {
-                    let tx_hash = transaction.hash();
+                    let tx_hash = transaction.get_raw_transaction().hash();
                     if self.contains_tx_in_validity_window(&tx_hash, Some(txn)) {
                         warn!(
                             %block,

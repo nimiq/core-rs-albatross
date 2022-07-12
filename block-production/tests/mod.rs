@@ -1,3 +1,4 @@
+use nimiq_transaction::ExecutedTransaction;
 use parking_lot::RwLock;
 use std::convert::TryInto;
 use std::sync::Arc;
@@ -10,7 +11,9 @@ use nimiq_blockchain::{AbstractBlockchain, Blockchain, PushResult};
 use nimiq_database::{mdbx::MdbxEnvironment, volatile::VolatileEnvironment};
 use nimiq_genesis::NetworkId;
 use nimiq_hash::{Blake2bHash, Hash};
-use nimiq_keys::{Address, KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey};
+use nimiq_keys::{
+    Address, KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey, SecureGenerate,
+};
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy;
 use nimiq_test_log::test;
@@ -18,13 +21,15 @@ use nimiq_test_utils::blockchain::{
     fill_micro_blocks, fill_micro_blocks_with_txns, sign_macro_block, signing_key, voting_key,
 };
 use nimiq_transaction_builder::TransactionBuilder;
+use nimiq_trie::key_nibbles::KeyNibbles;
 use nimiq_utils::time::OffsetTime;
 
 const ADDRESS: &str = "NQ20TSB0DFSMUH9C15GQGAGJTTE4D3MA859E";
 
 pub const ACCOUNT_SECRET_KEY: &str =
     "6c9320ac201caf1f8eaa5b05f5d67a9e77826f3f6be266a0ecccc20416dc6587";
-
+pub const VALIDATOR_SIGNING_KEY: &str =
+    "041580cc67e66e9e08b68fd9e4c9deb68737168fbe7488de2638c2e906c2f5ad";
 const STAKER_ADDRESS: &str = "NQ20TSB0DFSMUH9C15GQGAGJTTE4D3MA859E";
 
 const VOLATILE_ENV: bool = true;
@@ -374,6 +379,583 @@ fn it_can_revert_create_staker_transaction() {
     let result = bc.revert_blocks(3, &mut txn);
 
     assert_eq!(result, Ok(()));
+}
+
+#[test]
+fn it_can_revert_failed_transactions() {
+    let time = Arc::new(OffsetTime::new());
+    let env = VolatileEnvironment::new(10).unwrap();
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+    ));
+    let producer = BlockProducer::new(signing_key(), voting_key());
+
+    // These values will be used at the end of the test
+    let initial_root = blockchain.read().state().accounts.get_root(None);
+    let initial_history = blockchain
+        .read()
+        .history_store
+        .get_history_tree_root(0, None);
+
+    // #1.0: Empty view-changed micro block
+    let view_change = sign_view_change(blockchain.read().head().seed().clone(), 1, 1);
+    let bc = blockchain.upgradable_read();
+
+    let block = producer.next_micro_block(
+        &bc,
+        bc.time.now(),
+        1,
+        Some(view_change),
+        vec![],
+        vec![],
+        vec![0x41],
+    );
+    assert_eq!(
+        Blockchain::push(bc, Block::Micro(block)),
+        Ok(PushResult::Extended)
+    );
+    assert_eq!(blockchain.read().block_number(), 1);
+    assert_eq!(blockchain.read().next_view_number(), 1);
+
+    let bc = blockchain.upgradable_read();
+
+    // One empty block
+    let block = producer.next_micro_block(
+        &bc,
+        bc.time.now() + 2000,
+        1,
+        None,
+        vec![],
+        vec![],
+        vec![0x41],
+    );
+
+    assert_eq!(
+        Blockchain::push(bc, Block::Micro(block)),
+        Ok(PushResult::Extended)
+    );
+
+    assert_eq!(blockchain.read().block_number(), 2);
+    assert_eq!(blockchain.read().next_view_number(), 1);
+
+    // One block with stacking transactions
+
+    let mut transactions = vec![];
+    let key_pair = ed25519_key_pair(ACCOUNT_SECRET_KEY);
+    let address = Address::from_any_str(STAKER_ADDRESS).unwrap();
+
+    let tx_valid = TransactionBuilder::new_create_staker(
+        &key_pair,
+        &key_pair.clone(),
+        Some(address.clone()),
+        100_000_000.try_into().unwrap(),
+        200.try_into().unwrap(),
+        1,
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
+
+    transactions.push(tx_valid.clone());
+
+    //We will send a second create staker transaction, this sould fail, as the same staker cannot be created twice
+    let tx_failed = TransactionBuilder::new_create_staker(
+        &key_pair,
+        &key_pair,
+        Some(address),
+        100_000_000.try_into().unwrap(),
+        100.try_into().unwrap(),
+        1,
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
+
+    transactions.push(tx_failed.clone());
+
+    let bc = blockchain.upgradable_read();
+
+    // Block with stacking transactions
+    let block = producer.next_micro_block(
+        &bc,
+        bc.time.now() + 2000,
+        1,
+        None,
+        vec![],
+        transactions,
+        vec![0x41],
+    );
+
+    assert_eq!(
+        Blockchain::push(bc, Block::Micro(block.clone())),
+        Ok(PushResult::Extended)
+    );
+
+    let block_transactions = block.body.unwrap().transactions;
+
+    assert_eq!(block_transactions[0], ExecutedTransaction::Ok(tx_valid));
+    assert_eq!(block_transactions[1], ExecutedTransaction::Err(tx_failed));
+
+    let bc = &blockchain.read();
+
+    let accounts = &bc.state.accounts;
+
+    // We need to check that the fee was deducted from the sender account for both transactions
+    assert_eq!(
+        accounts
+            .get(&KeyNibbles::from(&Address::from(&key_pair.public)), None)
+            .unwrap()
+            .balance(),
+        Coin::from_u64_unchecked(999899999700)
+    );
+
+    assert_eq!(bc.block_number(), 3);
+    assert_eq!(bc.next_view_number(), 1);
+
+    let mut txn = bc.write_transaction();
+    let result = bc.revert_blocks(3, &mut txn);
+
+    txn.commit();
+
+    let final_root = bc.state().accounts.get_root(None);
+    let final_history = bc.history_store.get_history_tree_root(0, None);
+
+    // Verify that the state after reverting the blocks is equal to the initial state.
+    assert_eq!(initial_root, final_root);
+    assert_eq!(initial_history, final_history);
+
+    assert!(result.is_ok());
+}
+
+#[test]
+fn it_can_revert_failed_vesting_contract_transaction() {
+    let time = Arc::new(OffsetTime::new());
+    let env = VolatileEnvironment::new(10).unwrap();
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+    ));
+    let producer = BlockProducer::new(signing_key(), voting_key());
+
+    // #1.0: Micro block that creates a vesting contract
+    let view_change = sign_view_change(blockchain.read().head().seed().clone(), 1, 1);
+    let bc = blockchain.upgradable_read();
+
+    let key_pair = ed25519_key_pair(ACCOUNT_SECRET_KEY);
+    let address = Address::from_any_str(STAKER_ADDRESS).unwrap();
+
+    let tx = TransactionBuilder::new_create_vesting(
+        &key_pair,
+        Address::from(&key_pair.public),
+        1,
+        1,
+        1,
+        Coin::from_u64_unchecked(1000),
+        Coin::from_u64_unchecked(100),
+        1,
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
+
+    let transactions = vec![tx.clone()];
+
+    let block = producer.next_micro_block(
+        &bc,
+        bc.time.now(),
+        1,
+        Some(view_change),
+        vec![],
+        transactions,
+        vec![0x41],
+    );
+    assert_eq!(
+        Blockchain::push(bc, Block::Micro(block)),
+        Ok(PushResult::Extended)
+    );
+    assert_eq!(blockchain.read().block_number(), 1);
+    assert_eq!(blockchain.read().next_view_number(), 1);
+
+    // Now we need to verify the contract was created and it has the right balance
+    let bc = blockchain.read();
+    let accounts = &bc.state.accounts;
+
+    assert_eq!(
+        accounts
+            .get(&KeyNibbles::from(&tx.contract_creation_address()), None)
+            .unwrap()
+            .balance(),
+        Coin::from_u64_unchecked(1000)
+    );
+
+    // We verify the value + fee was properly deducted from the accounts balance
+    assert_eq!(
+        accounts
+            .get(&KeyNibbles::from(&Address::from(&key_pair.public)), None)
+            .unwrap()
+            .balance(),
+        Coin::from_u64_unchecked(999999998900)
+    );
+
+    drop(bc);
+
+    // These values will be used at the end of the test
+    let initial_root = blockchain.read().state().accounts.get_root(None);
+    let initial_history = blockchain
+        .read()
+        .history_store
+        .get_history_tree_root(0, None);
+
+    let bc = blockchain.upgradable_read();
+
+    //Now we create a redeem funds transaction that will fail
+    let redeem_tx = TransactionBuilder::new_redeem_vesting(
+        &key_pair,
+        tx.contract_creation_address(),
+        address,
+        Coin::from_u64_unchecked(2000),
+        Coin::from_u64_unchecked(100),
+        1,
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
+
+    let transactions = vec![redeem_tx.clone()];
+
+    // Block with redeem funds transaction
+    let block = producer.next_micro_block(
+        &bc,
+        bc.time.now() + 2000,
+        1,
+        None,
+        vec![],
+        transactions,
+        vec![0x41],
+    );
+
+    assert_eq!(
+        Blockchain::push(bc, Block::Micro(block.clone())),
+        Ok(PushResult::Extended)
+    );
+
+    assert_eq!(blockchain.read().block_number(), 2);
+    assert_eq!(blockchain.read().next_view_number(), 1);
+
+    let block_transactions = block.body.unwrap().transactions;
+
+    assert_eq!(block_transactions[0], ExecutedTransaction::Err(redeem_tx));
+
+    let bc = &blockchain.read();
+
+    let accounts = &bc.state.accounts;
+
+    // We need to check that the fee was deducted from the contract balance for the failed transaction
+    assert_eq!(
+        accounts
+            .get(&KeyNibbles::from(&tx.contract_creation_address()), None)
+            .unwrap()
+            .balance(),
+        Coin::from_u64_unchecked(900)
+    );
+
+    // The sender balance should not have changed
+    assert_eq!(
+        accounts
+            .get(&KeyNibbles::from(&Address::from(&key_pair.public)), None)
+            .unwrap()
+            .balance(),
+        Coin::from_u64_unchecked(999999998900)
+    );
+
+    let mut txn = bc.write_transaction();
+    let result = bc.revert_blocks(1, &mut txn);
+
+    txn.commit();
+
+    // We need to check that the contract balance has the initial funds after reverting the block
+    assert_eq!(
+        accounts
+            .get(&KeyNibbles::from(&tx.contract_creation_address()), None)
+            .unwrap()
+            .balance(),
+        Coin::from_u64_unchecked(1000)
+    );
+
+    let final_root = bc.state().accounts.get_root(None);
+    let final_history = bc.history_store.get_history_tree_root(0, None);
+
+    // Verify that the state after reverting the blocks is equal to the initial state.
+    assert_eq!(initial_root, final_root);
+    assert_eq!(initial_history, final_history);
+
+    assert!(result.is_ok());
+}
+
+#[test]
+fn it_can_revert_reactivate_transaction() {
+    let time = Arc::new(OffsetTime::new());
+    let env = VolatileEnvironment::new(10).unwrap();
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+    ));
+    let producer = BlockProducer::new(signing_key(), voting_key());
+
+    // One block with stacking transactions
+    let mut transactions = vec![];
+    let key_pair = ed25519_key_pair(ACCOUNT_SECRET_KEY);
+    let address =
+        Address::from_user_friendly_address("NQ20 TSB0 DFSM UH9C 15GQ GAGJ TTE4 D3MA 859E")
+            .unwrap();
+    let signing_key_pair = ed25519_key_pair(VALIDATOR_SIGNING_KEY);
+
+    let tx = TransactionBuilder::new_inactivate_validator(
+        &key_pair,
+        address.clone(),
+        &signing_key_pair,
+        100.try_into().unwrap(),
+        1,
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
+
+    transactions.push(tx);
+
+    let bc = blockchain.upgradable_read();
+
+    // Block with stacking transactions
+    let block = producer.next_micro_block(
+        &bc,
+        bc.time.now(),
+        0,
+        None,
+        vec![],
+        transactions,
+        vec![0x41],
+    );
+
+    assert_eq!(
+        Blockchain::push(bc, Block::Micro(block)),
+        Ok(PushResult::Extended)
+    );
+
+    assert_eq!(blockchain.read().block_number(), 1);
+
+    //Now create the reactivate transaction
+
+    let mut transactions = vec![];
+    let tx = TransactionBuilder::new_reactivate_validator(
+        &key_pair,
+        address,
+        &signing_key_pair,
+        100.try_into().unwrap(),
+        1,
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
+
+    transactions.push(tx);
+
+    let bc = blockchain.upgradable_read();
+
+    // Block with stacking transactions
+    let block = producer.next_micro_block(
+        &bc,
+        bc.time.now(),
+        0,
+        None,
+        vec![],
+        transactions,
+        vec![0x41],
+    );
+
+    assert_eq!(
+        Blockchain::push(bc, Block::Micro(block)),
+        Ok(PushResult::Extended)
+    );
+
+    assert_eq!(blockchain.read().block_number(), 2);
+
+    let bc = blockchain.upgradable_read();
+
+    let mut txn = bc.write_transaction();
+    // Revert the reactivate transaction
+    let result = bc.revert_blocks(2, &mut txn);
+
+    assert!(result.is_ok());
+}
+
+#[test]
+fn it_can_revert_unpark_transaction() {
+    let time = Arc::new(OffsetTime::new());
+    let env = VolatileEnvironment::new(10).unwrap();
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+    ));
+    let producer = BlockProducer::new(signing_key(), voting_key());
+
+    // One block with stacking transactions
+    let mut transactions = vec![];
+    let key_pair = ed25519_key_pair(ACCOUNT_SECRET_KEY);
+    let address =
+        Address::from_user_friendly_address("NQ20 TSB0 DFSM UH9C 15GQ GAGJ TTE4 D3MA 859E")
+            .unwrap();
+    let signing_key_pair = ed25519_key_pair(VALIDATOR_SIGNING_KEY);
+
+    let tx = TransactionBuilder::new_unpark_validator(
+        &key_pair,
+        address.clone(),
+        &signing_key_pair,
+        100.try_into().unwrap(),
+        1,
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
+
+    transactions.push(tx);
+
+    let bc = blockchain.upgradable_read();
+
+    // Block with stacking transactions
+    let block = producer.next_micro_block(
+        &bc,
+        bc.time.now(),
+        0,
+        None,
+        vec![],
+        transactions,
+        vec![0x41],
+    );
+
+    assert_eq!(
+        Blockchain::push(bc, Block::Micro(block)),
+        Ok(PushResult::Extended)
+    );
+
+    assert_eq!(blockchain.read().block_number(), 1);
+
+    //Now create the reactivate transaction
+
+    let mut transactions = vec![];
+    let tx = TransactionBuilder::new_reactivate_validator(
+        &key_pair,
+        address,
+        &signing_key_pair,
+        10.try_into().unwrap(),
+        1,
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
+
+    transactions.push(tx);
+
+    let bc = blockchain.upgradable_read();
+
+    // Block with stacking transactions
+    let block = producer.next_micro_block(
+        &bc,
+        bc.time.now(),
+        0,
+        None,
+        vec![],
+        transactions,
+        vec![0x41],
+    );
+
+    assert_eq!(
+        Blockchain::push(bc, Block::Micro(block)),
+        Ok(PushResult::Extended)
+    );
+
+    assert_eq!(blockchain.read().block_number(), 2);
+
+    let bc = blockchain.upgradable_read();
+
+    let mut txn = bc.write_transaction();
+    // Revert the reactivate transaction
+    let result = bc.revert_blocks(2, &mut txn);
+
+    assert!(result.is_ok());
+}
+
+#[test]
+fn it_can_revert_basic_and_create_contracts_txns() {
+    let time = Arc::new(OffsetTime::new());
+    let env = VolatileEnvironment::new(10).unwrap();
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+    ));
+    let producer = BlockProducer::new(signing_key(), voting_key());
+
+    // One block with stacking transactions
+    let mut transactions = vec![];
+    let key_pair = ed25519_key_pair(ACCOUNT_SECRET_KEY);
+
+    let keypair = SchnorrKeyPair::generate_default_csprng();
+    let address = Address::from(&keypair.public);
+
+    let tx = TransactionBuilder::new_basic(
+        &key_pair,
+        address.clone(),
+        100.try_into().unwrap(),
+        Coin::ZERO,
+        1,
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
+
+    transactions.push(tx);
+
+    let tx = TransactionBuilder::new_create_vesting(
+        &key_pair,
+        Address::from(&key_pair.public),
+        1,
+        1,
+        1,
+        Coin::from_u64_unchecked(1000),
+        Coin::from_u64_unchecked(100),
+        1,
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
+
+    transactions.push(tx);
+
+    let keypair = SchnorrKeyPair::generate_default_csprng();
+    let address = Address::from(&keypair.public);
+
+    let tx = TransactionBuilder::new_basic(
+        &key_pair,
+        address.clone(),
+        100.try_into().unwrap(),
+        Coin::ZERO,
+        1,
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
+
+    transactions.push(tx);
+
+    let bc = blockchain.upgradable_read();
+
+    // Block with txns
+    let block = producer.next_micro_block(
+        &bc,
+        bc.time.now(),
+        0,
+        None,
+        vec![],
+        transactions,
+        vec![0x41],
+    );
+
+    assert_eq!(
+        Blockchain::push(bc, Block::Micro(block)),
+        Ok(PushResult::Extended)
+    );
+
+    let bc = blockchain.upgradable_read();
+
+    let mut txn = bc.write_transaction();
+    // Revert the reactivate transaction
+    let result = bc.revert_blocks(1, &mut txn);
+
+    assert!(result.is_ok());
 }
 
 fn ed25519_key_pair(secret_key: &str) -> SchnorrKeyPair {

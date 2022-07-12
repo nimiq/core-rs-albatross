@@ -73,6 +73,16 @@ impl Account {
             }),
         }
     }
+
+    // This function is used by the mempool to check if a fee is payable for a particular transaction, according to the current balance for that account in the mempool
+    pub fn can_fee_be_paid(
+        &self,
+        transaction: &Transaction,
+        mempool_balance: Coin,
+        block_time: u64,
+    ) -> bool {
+        AccountTransactionInteraction::can_pay_fee(self, transaction, mempool_balance, block_time)
+    }
 }
 
 impl AccountTransactionInteraction for Account {
@@ -269,6 +279,88 @@ impl AccountTransactionInteraction for Account {
                 receipt,
             ),
             _ => Err(AccountError::InvalidForSender),
+        }
+    }
+    fn commit_failed_transaction(
+        accounts_tree: &AccountsTrie,
+        db_txn: &mut WriteTransaction,
+        transaction: &Transaction,
+    ) -> Result<AccountInfo, AccountError> {
+        // Commiting a failed transaction is based upon the sender type: the fee needs to be paid from the sender accounr
+        match transaction.sender_type {
+            AccountType::Basic => {
+                BasicAccount::commit_failed_transaction(accounts_tree, db_txn, transaction)
+            }
+            AccountType::Vesting => {
+                VestingContract::commit_failed_transaction(accounts_tree, db_txn, transaction)
+            }
+            AccountType::HTLC => HashedTimeLockedContract::commit_failed_transaction(
+                accounts_tree,
+                db_txn,
+                transaction,
+            ),
+            AccountType::Staking => {
+                StakingContract::commit_failed_transaction(accounts_tree, db_txn, transaction)
+            }
+            _ => Err(AccountError::InvalidForRecipient),
+        }
+    }
+    fn revert_failed_transaction(
+        accounts_tree: &AccountsTrie,
+        db_txn: &mut WriteTransaction,
+        transaction: &Transaction,
+
+        receipt: Option<&Vec<u8>>,
+    ) -> Result<Vec<Log>, AccountError> {
+        match transaction.sender_type {
+            AccountType::Basic => {
+                BasicAccount::revert_failed_transaction(accounts_tree, db_txn, transaction, receipt)
+            }
+            AccountType::Vesting => VestingContract::revert_failed_transaction(
+                accounts_tree,
+                db_txn,
+                transaction,
+                receipt,
+            ),
+            AccountType::HTLC => HashedTimeLockedContract::revert_failed_transaction(
+                accounts_tree,
+                db_txn,
+                transaction,
+                receipt,
+            ),
+            AccountType::Staking => StakingContract::revert_failed_transaction(
+                accounts_tree,
+                db_txn,
+                transaction,
+                receipt,
+            ),
+            _ => Err(AccountError::InvalidForSender),
+        }
+    }
+
+    fn can_pay_fee(
+        &self,
+        transaction: &Transaction,
+        current_balance: Coin,
+        block_time: u64,
+    ) -> bool {
+        match &self {
+            Account::Basic(account) => {
+                BasicAccount::can_pay_fee(account, transaction, current_balance, block_time)
+            }
+            Account::Vesting(account) => {
+                VestingContract::can_pay_fee(account, transaction, current_balance, block_time)
+            }
+            Account::HTLC(account) => HashedTimeLockedContract::can_pay_fee(
+                account,
+                transaction,
+                current_balance,
+                block_time,
+            ),
+            Account::Staking(account) => {
+                StakingContract::can_pay_fee(account, transaction, current_balance, block_time)
+            }
+            _ => false,
         }
     }
 }

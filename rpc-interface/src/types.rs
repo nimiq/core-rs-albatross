@@ -168,7 +168,7 @@ pub struct Block {
     pub history_hash: Blake2bHash,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    transactions: Option<Vec<Transaction>>,
+    transactions: Option<Vec<ExecutedTransaction>>,
 
     #[serde(flatten)]
     pub additional_fields: BlockAdditionalFields,
@@ -238,7 +238,7 @@ impl Block {
                     for ext_tx in ext_txs {
                         if ext_tx.is_inherent() {
                             if let Ok(tx) = ext_tx.into_transaction() {
-                                txs.push(Transaction::from_blockchain(
+                                txs.push(ExecutedTransaction::from_blockchain(
                                     tx,
                                     block_number,
                                     timestamp,
@@ -297,7 +297,9 @@ impl Block {
                                     .clone()
                                     .into_iter()
                                     .map(|tx| {
-                                        Transaction::from_blockchain(
+                                        // We obtain an internal executed transaction
+                                        // We need to grab the internal transaction and map it to the RPC transaction structure
+                                        ExecutedTransaction::from_blockchain(
                                             tx,
                                             block_number,
                                             timestamp,
@@ -447,6 +449,37 @@ impl From<nimiq_block::ForkProof> for ForkProof {
         Self {
             block_number: fork_proof.header1.block_number,
             hashes,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExecutedTransaction {
+    #[serde(flatten)]
+    transaction: Transaction,
+    execution_result: bool,
+}
+
+impl ExecutedTransaction {
+    pub fn from_blockchain(
+        transaction: nimiq_transaction::ExecutedTransaction,
+        block_number: u32,
+        timestamp: u64,
+        head_height: u32,
+    ) -> Self {
+        // We obtain an internal executed transaction
+        // We need to grab the internal transaction and map it to the RPC transaction structure
+        match transaction {
+            nimiq_transaction::ExecutedTransaction::Ok(tx) => ExecutedTransaction {
+                transaction: Transaction::from_blockchain(tx, block_number, timestamp, head_height),
+                execution_result: true,
+            },
+
+            nimiq_transaction::ExecutedTransaction::Err(tx) => ExecutedTransaction {
+                transaction: Transaction::from_blockchain(tx, block_number, timestamp, head_height),
+                execution_result: false,
+            },
         }
     }
 }
@@ -757,6 +790,7 @@ pub enum LogType {
     Park,
     Slash,
     RevertContract,
+    FailedTransaction,
 }
 
 impl LogType {
@@ -783,6 +817,7 @@ impl LogType {
             Log::Park { .. } => Self::Park,
             Log::Slash { .. } => Self::Slash,
             Log::RevertContract { .. } => Self::RevertContract,
+            Log::FailedTransaction { .. } => Self::FailedTransaction,
         }
     }
 }

@@ -316,12 +316,9 @@ fn it_validates_state_root() {
         ..Default::default()
     };
 
-    push_micro_after_micro(
-        &config.clone(),
-        &Err(PushError::InvalidBlock(BlockError::AccountsHashMismatch)),
-    );
+    push_micro_after_micro(&config.clone(), &Ok(PushResult::Extended));
 
-    push_rebranch(config.clone(), &Err(PushError::InvalidFork));
+    push_rebranch(config.clone(), &Ok(PushResult::Rebranched));
 
     push_rebranch_across_epochs(config.clone());
 }

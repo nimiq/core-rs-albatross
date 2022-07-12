@@ -66,19 +66,17 @@ pub fn next_micro_block(
 
     let inherents = blockchain.create_slash_inherents(&config.fork_proofs, None, None);
 
-    let state_root = config.state_root.clone().unwrap_or_else(|| {
-        blockchain
-            .state()
-            .accounts
-            .get_root_with(&transactions, &inherents, block_number, timestamp)
-            .expect("Failed to compute accounts hash during block production")
-    });
+    let (state_root, executed_txns) = blockchain
+        .state()
+        .accounts
+        .get_root_with(&transactions, &inherents, block_number, timestamp)
+        .expect("Failed to compute accounts hash during block production");
 
     let ext_txs = ExtendedTransaction::from(
         blockchain.network_id,
         block_number,
         timestamp,
-        transactions,
+        executed_txns.clone(),
         inherents,
     );
 
@@ -95,7 +93,7 @@ pub fn next_micro_block(
 
     let body = MicroBody {
         fork_proofs: config.fork_proofs.clone(),
-        transactions: config.transactions.clone(),
+        transactions: executed_txns,
     };
 
     let header = MicroHeader {
@@ -252,10 +250,12 @@ fn next_macro_block_proposal(
 
     let inherents: Vec<Inherent> = blockchain.create_macro_block_inherents(state, &header);
 
-    header.state_root = state
+    let (root, _) = state
         .accounts
         .get_root_with(&[], &inherents, block_number, timestamp)
         .expect("Failed to compute accounts hash during block production.");
+
+    header.state_root = root;
 
     let ext_txs = ExtendedTransaction::from(
         blockchain.network_id,

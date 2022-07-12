@@ -6,8 +6,8 @@ use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 
 use crate::types::{
-    Account, Block, BlockchainState, Inherent, LogType, ParkedSet, SlashedSlots, Slot, Staker,
-    Transaction, Validator,
+    Account, Block, BlockchainState, ExecutedTransaction, Inherent, LogType, ParkedSet,
+    SlashedSlots, Slot, Staker, Validator,
 };
 
 #[nimiq_jsonrpc_derive::proxy(name = "BlockchainProxy", rename_all = "camelCase")]
@@ -47,12 +47,12 @@ pub trait BlockchainInterface {
     async fn get_transaction_by_hash(
         &mut self,
         hash: Blake2bHash,
-    ) -> Result<Transaction, Self::Error>;
+    ) -> Result<ExecutedTransaction, Self::Error>;
 
     async fn get_transactions_by_block_number(
         &mut self,
         block_number: u32,
-    ) -> Result<Vec<Transaction>, Self::Error>;
+    ) -> Result<Vec<ExecutedTransaction>, Self::Error>;
 
     async fn get_inherents_by_block_number(
         &mut self,
@@ -62,7 +62,7 @@ pub trait BlockchainInterface {
     async fn get_transactions_by_batch_number(
         &mut self,
         batch_number: u32,
-    ) -> Result<Vec<Transaction>, Self::Error>;
+    ) -> Result<Vec<ExecutedTransaction>, Self::Error>;
 
     async fn get_inherents_by_batch_number(
         &mut self,
@@ -80,7 +80,7 @@ pub trait BlockchainInterface {
         &mut self,
         address: Address,
         max: Option<u16>,
-    ) -> Result<Vec<Transaction>, Self::Error>;
+    ) -> Result<Vec<ExecutedTransaction>, Self::Error>;
 
     async fn get_account_by_address(&mut self, address: Address) -> Result<Account, Self::Error>;
 
