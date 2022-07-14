@@ -5,7 +5,7 @@ use num_traits::identities::Zero;
 
 use nimiq_bls::Signature;
 use nimiq_hash::{Blake2sHash, Hash, HashOutput};
-use nimiq_primitives::policy::SLOTS;
+use nimiq_primitives::policy::Policy;
 
 /// A struct representing an election macro block in Albatross.
 #[derive(Clone)]
@@ -30,7 +30,7 @@ impl MacroBlock {
             round_number,
             header_hash,
             signature: G1Projective::zero(),
-            signer_bitmap: vec![false; SLOTS as usize],
+            signer_bitmap: vec![false; Policy::SLOTS as usize],
         }
     }
 
@@ -92,7 +92,7 @@ impl Default for MacroBlock {
             round_number: 0,
             header_hash: [0; 32],
             signature: G1Projective::prime_subgroup_generator(),
-            signer_bitmap: vec![true; SLOTS as usize],
+            signer_bitmap: vec![true; Policy::SLOTS as usize],
         }
     }
 }
@@ -104,7 +104,7 @@ mod tests {
     use nimiq_bls::{AggregateSignature, KeyPair};
     use nimiq_collections::BitSet;
     use nimiq_keys::{Address, PublicKey as SchnorrPK};
-    use nimiq_primitives::policy::SLOTS;
+    use nimiq_primitives::policy::Policy;
     use nimiq_primitives::slots::{Validator, Validators};
     use nimiq_test_log::test;
     use nimiq_utils::key_rng::SecureGenerate;
@@ -119,7 +119,7 @@ mod tests {
         let mut validator_vec = vec![];
         let mut validator_keys = vec![];
 
-        for i in 0..SLOTS {
+        for i in 0..Policy::SLOTS {
             let key_pair = KeyPair::generate(&mut rng);
 
             let val = Validator::new(
@@ -167,7 +167,7 @@ mod tests {
         // Create the TendermintProof using our signature.
         let agg_sig = AggregateSignature::from_signatures(&[Signature::from(nano_block.signature)]);
 
-        let mut bitset = BitSet::with_capacity(SLOTS as usize);
+        let mut bitset = BitSet::with_capacity(Policy::SLOTS as usize);
 
         for (i, b) in nano_block.signer_bitmap.iter().enumerate() {
             if *b {

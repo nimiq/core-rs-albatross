@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use nimiq_block::{Block, MacroHeader};
 use nimiq_blockchain::ChainInfo;
 use nimiq_hash::Blake2bHash;
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 
 /// A struct that stores the blocks for the blockchain.
 #[derive(Debug, Default)]
@@ -94,7 +94,7 @@ impl ChainStore {
     /// Adds an election block header to the ChainStore.
     pub fn put_election(&mut self, header: MacroHeader) {
         self.election_db
-            .insert(policy::epoch_at(header.block_number), header);
+            .insert(Policy::epoch_at(header.block_number), header);
     }
 
     /// Clears the ChainStore of all blocks (except the election blocks). This can be used at the

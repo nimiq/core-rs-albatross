@@ -7,7 +7,7 @@ use nimiq_blockchain::{AbstractBlockchain, Blockchain, ExtendedTransaction};
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::KeyPair as SchnorrKeyPair;
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 use nimiq_transaction::Transaction;
 use rand::{CryptoRng, Rng, RngCore};
 
@@ -130,7 +130,7 @@ impl BlockProducer {
 
         let (history_root, _) = blockchain
             .history_store
-            .add_to_history(&mut txn, policy::epoch_at(block_number), &ext_txs)
+            .add_to_history(&mut txn, Policy::epoch_at(block_number), &ext_txs)
             .expect("Failed to compute history root during block production.");
 
         // Not strictly necessary to drop the lock here, but sign as well as compress might be somewhat expensive
@@ -146,7 +146,7 @@ impl BlockProducer {
 
         // Create the micro block header.
         let header = MicroHeader {
-            version: policy::VERSION,
+            version: Policy::VERSION,
             block_number,
             timestamp,
             parent_hash,
@@ -239,7 +239,7 @@ impl BlockProducer {
         // We need several fields of this header in order to calculate the transactions and the
         // state.
         let mut header = MacroHeader {
-            version: policy::VERSION,
+            version: Policy::VERSION,
             block_number,
             round,
             timestamp,
@@ -279,7 +279,7 @@ impl BlockProducer {
 
         header.history_root = blockchain
             .history_store
-            .add_to_history(&mut txn, policy::epoch_at(block_number), &ext_txs)
+            .add_to_history(&mut txn, Policy::epoch_at(block_number), &ext_txs)
             .expect("Failed to compute history root during block production.")
             .0;
 
@@ -298,7 +298,7 @@ impl BlockProducer {
         let lost_reward_set = blockchain.get_staking_contract().previous_lost_rewards();
 
         // If this is an election block, calculate the validator set for the next epoch.
-        let validators = if policy::is_election_block_at(blockchain.block_number() + 1) {
+        let validators = if Policy::is_election_block_at(blockchain.block_number() + 1) {
             Some(blockchain.next_validators(&header.seed))
         } else {
             None

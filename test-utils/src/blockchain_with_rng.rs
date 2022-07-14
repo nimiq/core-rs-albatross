@@ -7,7 +7,7 @@ use rand::Rng;
 use nimiq_block::Block;
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, PushResult};
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 
 use crate::blockchain::sign_macro_block;
 
@@ -87,9 +87,9 @@ pub fn fill_micro_blocks_with_rng<R: Rng + CryptoRng>(
 ) {
     let init_height = blockchain.read().block_number();
 
-    assert!(policy::is_macro_block_at(init_height));
+    assert!(Policy::is_macro_block_at(init_height));
 
-    let macro_block_number = init_height + policy::BLOCKS_PER_BATCH;
+    let macro_block_number = init_height + Policy::blocks_per_batch();
 
     for _ in (init_height + 1)..macro_block_number {
         push_micro_block_with_rng(producer, blockchain, rng);

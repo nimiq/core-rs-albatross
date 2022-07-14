@@ -4,7 +4,7 @@ use beserial::{Deserialize, Serialize};
 use nimiq_bls::AggregatePublicKey;
 use nimiq_hash::{Hash, SerializeContent};
 use nimiq_hash_derive::SerializeContent;
-use nimiq_primitives::policy::TWO_F_PLUS_ONE;
+use nimiq_primitives::policy::Policy;
 use nimiq_primitives::slots::Validators;
 use nimiq_vrf::VrfEntropy;
 
@@ -45,7 +45,7 @@ impl SkipBlockProof {
     /// the skip block itself is valid.
     pub fn verify(&self, skip_block: &SkipBlockInfo, validators: &Validators) -> bool {
         // Check if there are enough votes.
-        if self.sig.signers.len() < TWO_F_PLUS_ONE as usize {
+        if self.sig.signers.len() < Policy::TWO_F_PLUS_ONE as usize {
             error!(
                 "SkipBlockProof verification failed: Not enough slots signed the skip block message."
             );

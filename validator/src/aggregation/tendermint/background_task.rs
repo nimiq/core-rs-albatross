@@ -9,7 +9,7 @@ use parking_lot::RwLock;
 use nimiq_block::TendermintStep;
 use nimiq_handel::contribution::AggregatableContribution;
 use nimiq_handel::identity::WeightRegistry;
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 use nimiq_tendermint::AggregationResult;
 use nimiq_validator_network::ValidatorNetwork;
 
@@ -141,7 +141,7 @@ impl<N: ValidatorNetwork + 'static> BackgroundTask<N> {
         // better results but will, if nothing better is made available also return this aggregate.
         if current_aggregation.round == round
             && current_aggregation.step == step
-            && self.signature_weight(&contribution) >= policy::TWO_F_PLUS_ONE as usize
+            && self.signature_weight(&contribution) >= Policy::TWO_F_PLUS_ONE as usize
         {
             trace!(
                 "Completed round for {}-{:?}: {:?}",

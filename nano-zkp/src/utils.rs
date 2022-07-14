@@ -11,7 +11,7 @@ use ark_std::UniformRand;
 use rand::{rngs::SmallRng, seq::SliceRandom, RngCore, SeedableRng};
 
 use nimiq_nano_primitives::{pk_tree_construct, state_commitment, MacroBlock};
-use nimiq_primitives::policy::{BLOCKS_PER_EPOCH, SLOTS, TWO_F_PLUS_ONE};
+use nimiq_primitives::policy::Policy;
 
 /// Takes a vector of booleans and converts it into a vector of field elements, which is the way we
 /// represent inputs to circuits (natively).
@@ -175,7 +175,7 @@ pub fn create_test_blocks(
     let mut initial_sks = vec![];
     let mut initial_pks = vec![];
 
-    for _ in 0..SLOTS {
+    for _ in 0..Policy::SLOTS {
         let sk = MNT6Fr::rand(&mut rng);
         let mut pk = G2MNT6::prime_subgroup_generator();
         pk.mul_assign(sk);
@@ -188,9 +188,12 @@ pub fn create_test_blocks(
     rng.fill_bytes(&mut initial_header_hash);
 
     // Create a random signer bitmap.
-    let mut signer_bitmap = vec![true; TWO_F_PLUS_ONE as usize];
+    let mut signer_bitmap = vec![true; Policy::TWO_F_PLUS_ONE as usize];
 
-    signer_bitmap.append(&mut vec![false; (SLOTS - TWO_F_PLUS_ONE) as usize]);
+    signer_bitmap.append(&mut vec![
+        false;
+        (Policy::SLOTS - Policy::TWO_F_PLUS_ONE) as usize
+    ]);
 
     signer_bitmap.shuffle(&mut rng);
 
@@ -201,7 +204,7 @@ pub fn create_test_blocks(
     let mut final_sks = vec![];
     let mut final_pks = vec![];
 
-    for _ in 0..SLOTS {
+    for _ in 0..Policy::SLOTS {
         let sk = MNT6Fr::rand(&mut rng);
         let mut pk = G2MNT6::prime_subgroup_generator();
         pk.mul_assign(sk);
@@ -219,10 +222,13 @@ pub fn create_test_blocks(
     let final_pk_tree_root = pk_tree_construct(final_pks.clone());
 
     // Create the macro block.
-    let mut block =
-        MacroBlock::without_signatures(BLOCKS_PER_EPOCH * (index as u32 + 1), 0, final_header_hash);
+    let mut block = MacroBlock::without_signatures(
+        Policy::blocks_per_epoch() * (index as u32 + 1),
+        0,
+        final_header_hash,
+    );
 
-    for i in 0..SLOTS as usize {
+    for i in 0..Policy::SLOTS as usize {
         if signer_bitmap[i] {
             block.sign(&initial_sks[i], i, &final_pk_tree_root);
         }

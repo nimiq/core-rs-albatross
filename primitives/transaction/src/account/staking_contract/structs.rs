@@ -5,7 +5,7 @@ use nimiq_bls::{CompressedPublicKey as BlsPublicKey, CompressedSignature as BlsS
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
 use nimiq_primitives::coin::Coin;
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 
 use crate::SignatureProof;
 use crate::{Transaction, TransactionError};
@@ -142,7 +142,7 @@ impl IncomingStakingTransactionData {
                 ..
             } => {
                 // Validators must be created with exactly the validator deposit amount.
-                if transaction.value != Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT) {
+                if transaction.value != Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT) {
                     error!("Validator stake value different from VALIDATOR_DEPOSIT. The offending transaction is the following:\n{:?}", transaction);
                     return Err(TransactionError::InvalidValue);
                 }

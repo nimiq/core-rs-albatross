@@ -3,7 +3,7 @@ use thiserror::Error;
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::{Address, KeyPair, PublicKey};
-use nimiq_primitives::policy::{STAKING_CONTRACT_ADDRESS, VALIDATOR_DEPOSIT};
+use nimiq_primitives::policy::Policy;
 use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId};
 use nimiq_transaction::account::htlc_contract::{AnyHash, HashAlgorithm};
 use nimiq_transaction::{SignatureProof, Transaction};
@@ -1082,7 +1082,7 @@ impl TransactionBuilder {
         match key_pair {
             None => {
                 builder
-                    .with_sender(STAKING_CONTRACT_ADDRESS)
+                    .with_sender(Policy::STAKING_CONTRACT_ADDRESS)
                     .with_sender_type(AccountType::Staking);
             }
             Some(key) => {
@@ -1140,7 +1140,7 @@ impl TransactionBuilder {
 
         let mut builder = Self::new();
         builder
-            .with_sender(STAKING_CONTRACT_ADDRESS)
+            .with_sender(Policy::STAKING_CONTRACT_ADDRESS)
             .with_sender_type(AccountType::Staking)
             .with_recipient(recipient)
             .with_value(value)
@@ -1196,7 +1196,7 @@ impl TransactionBuilder {
         builder
             .with_sender(Address::from(key_pair))
             .with_recipient(recipient.generate().unwrap())
-            .with_value(Coin::from_u64_unchecked(VALIDATOR_DEPOSIT))
+            .with_value(Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT))
             .with_fee(fee)
             .with_validity_start_height(validity_start_height)
             .with_network_id(network_id);
@@ -1464,7 +1464,7 @@ impl TransactionBuilder {
 
         let mut builder = Self::new();
         builder
-            .with_sender(STAKING_CONTRACT_ADDRESS)
+            .with_sender(Policy::STAKING_CONTRACT_ADDRESS)
             .with_sender_type(AccountType::Staking)
             .with_recipient(recipient)
             .with_value(value)

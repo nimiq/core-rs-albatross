@@ -18,7 +18,7 @@ use nimiq_nano_primitives::{merkle_tree_prove, serialize_g1_mnt6, serialize_g2_m
 use nimiq_nano_primitives::{
     pk_tree_construct, state_commitment, vk_commitment, MacroBlock, PK_TREE_BREADTH, PK_TREE_DEPTH,
 };
-use nimiq_primitives::policy::{BLOCKS_PER_EPOCH, SLOTS};
+use nimiq_primitives::policy::Policy;
 
 use crate::circuits::mnt4::{
     MacroBlockCircuit, MergerCircuit, PKTreeLeafCircuit as LeafMNT4, PKTreeNodeCircuit as NodeMNT4,
@@ -312,8 +312,8 @@ impl NanoZKP {
         // Calculate the aggregate public key commitment.
         let mut agg_pk = G2MNT6::zero();
 
-        for i in position * SLOTS as usize / PK_TREE_BREADTH
-            ..(position + 1) * SLOTS as usize / PK_TREE_BREADTH
+        for i in position * Policy::SLOTS as usize / PK_TREE_BREADTH
+            ..(position + 1) * Policy::SLOTS as usize / PK_TREE_BREADTH
         {
             if signer_bitmap[i] {
                 agg_pk += pks[i];
@@ -327,8 +327,8 @@ impl NanoZKP {
         let agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(&hash));
 
         // Get the relevant chunk of the signer's bitmap.
-        let signer_bitmap_chunk = &signer_bitmap[position * SLOTS as usize / PK_TREE_BREADTH
-            ..(position + 1) * SLOTS as usize / PK_TREE_BREADTH];
+        let signer_bitmap_chunk = &signer_bitmap[position * Policy::SLOTS as usize / PK_TREE_BREADTH
+            ..(position + 1) * Policy::SLOTS as usize / PK_TREE_BREADTH];
 
         // Calculate inputs.
         let mut pk_tree_root = pack_inputs(bytes_to_bits(pk_tree_root));
@@ -341,8 +341,8 @@ impl NanoZKP {
 
         // Create the circuit.
         let circuit = LeafMNT4::new(
-            pks[position * SLOTS as usize / PK_TREE_BREADTH
-                ..(position + 1) * SLOTS as usize / PK_TREE_BREADTH]
+            pks[position * Policy::SLOTS as usize / PK_TREE_BREADTH
+                ..(position + 1) * Policy::SLOTS as usize / PK_TREE_BREADTH]
                 .to_vec(),
             pk_tree_nodes.to_vec(),
             pk_tree_root.clone(),
@@ -430,8 +430,8 @@ impl NanoZKP {
         // Calculate the left aggregate public key commitment.
         let mut agg_pk = G2MNT6::zero();
 
-        for i in left_position * SLOTS as usize / 2_usize.pow((tree_level + 1) as u32)
-            ..(left_position + 1) * SLOTS as usize / 2_usize.pow((tree_level + 1) as u32)
+        for i in left_position * Policy::SLOTS as usize / 2_usize.pow((tree_level + 1) as u32)
+            ..(left_position + 1) * Policy::SLOTS as usize / 2_usize.pow((tree_level + 1) as u32)
         {
             if signer_bitmap[i] {
                 agg_pk += pks[i];
@@ -447,8 +447,8 @@ impl NanoZKP {
         // Calculate the right aggregate public key commitment.
         let mut agg_pk = G2MNT6::zero();
 
-        for i in right_position * SLOTS as usize / 2_usize.pow((tree_level + 1) as u32)
-            ..(right_position + 1) * SLOTS as usize / 2_usize.pow((tree_level + 1) as u32)
+        for i in right_position * Policy::SLOTS as usize / 2_usize.pow((tree_level + 1) as u32)
+            ..(right_position + 1) * Policy::SLOTS as usize / 2_usize.pow((tree_level + 1) as u32)
         {
             if signer_bitmap[i] {
                 agg_pk += pks[i];
@@ -462,9 +462,9 @@ impl NanoZKP {
         let right_agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(&hash));
 
         // Get the relevant chunk of the signer's bitmap.
-        let signer_bitmap_chunk = &signer_bitmap[position * SLOTS as usize
+        let signer_bitmap_chunk = &signer_bitmap[position * Policy::SLOTS as usize
             / 2_usize.pow(tree_level as u32)
-            ..(position + 1) * SLOTS as usize / 2_usize.pow(tree_level as u32)];
+            ..(position + 1) * Policy::SLOTS as usize / 2_usize.pow(tree_level as u32)];
 
         // Calculate inputs.
         let mut pk_tree_root = pack_inputs(bytes_to_bits(pk_tree_root));
@@ -571,8 +571,8 @@ impl NanoZKP {
         for i in position * 4..(position + 1) * 4 {
             let mut agg_pk = G2MNT6::zero();
 
-            for j in i * SLOTS as usize / 2_usize.pow((tree_level + 2) as u32)
-                ..(i + 1) * SLOTS as usize / 2_usize.pow((tree_level + 2) as u32)
+            for j in i * Policy::SLOTS as usize / 2_usize.pow((tree_level + 2) as u32)
+                ..(i + 1) * Policy::SLOTS as usize / 2_usize.pow((tree_level + 2) as u32)
             {
                 if signer_bitmap[j] {
                     agg_pk += pks[j];
@@ -596,9 +596,9 @@ impl NanoZKP {
         let agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(&hash));
 
         // Get the relevant chunk of the signer's bitmap.
-        let signer_bitmap_chunk = &signer_bitmap[position * SLOTS as usize
+        let signer_bitmap_chunk = &signer_bitmap[position * Policy::SLOTS as usize
             / 2_usize.pow(tree_level as u32)
-            ..(position + 1) * SLOTS as usize / 2_usize.pow(tree_level as u32)];
+            ..(position + 1) * Policy::SLOTS as usize / 2_usize.pow(tree_level as u32)];
 
         // Calculate inputs.
         let mut pk_tree_root = pack_inputs(bytes_to_bits(pk_tree_root));
@@ -692,7 +692,7 @@ impl NanoZKP {
             let mut agg_pk = G2MNT6::zero();
 
             #[allow(clippy::needless_range_loop)]
-            for j in i * SLOTS as usize / 2..(i + 1) * SLOTS as usize / 2 {
+            for j in i * Policy::SLOTS as usize / 2..(i + 1) * Policy::SLOTS as usize / 2 {
                 if block.signer_bitmap[j] {
                     agg_pk += initial_pks[j];
                 }
@@ -703,7 +703,7 @@ impl NanoZKP {
 
         // Calculate the inputs.
         let mut initial_state_commitment = pack_inputs(bytes_to_bits(&state_commitment(
-            block.block_number - BLOCKS_PER_EPOCH,
+            block.block_number - Policy::blocks_per_epoch(),
             initial_header_hash,
             initial_pks.to_vec(),
         )));
@@ -786,7 +786,7 @@ impl NanoZKP {
 
         // Calculate the inputs.
         let mut initial_state_commitment = pack_inputs(bytes_to_bits(&state_commitment(
-            block.block_number - BLOCKS_PER_EPOCH,
+            block.block_number - Policy::blocks_per_epoch(),
             initial_header_hash,
             initial_pks.to_vec(),
         )));
@@ -869,7 +869,7 @@ impl NanoZKP {
 
         // Get the intermediate state commitment.
         let intermediate_state_commitment = state_commitment(
-            block.block_number - BLOCKS_PER_EPOCH,
+            block.block_number - Policy::blocks_per_epoch(),
             initial_header_hash,
             initial_pks.to_vec(),
         );
@@ -981,7 +981,7 @@ impl NanoZKP {
         // Calculate the inputs.
         let initial_state_comm_bytes = match genesis_data {
             None => state_commitment(
-                block.block_number - BLOCKS_PER_EPOCH,
+                block.block_number - Policy::blocks_per_epoch(),
                 initial_header_hash,
                 initial_pks.to_vec(),
             ),

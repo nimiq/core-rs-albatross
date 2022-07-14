@@ -8,7 +8,7 @@ use nimiq_collections::bitset::BitSet;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, SerializeContent};
 use nimiq_nano_primitives::pk_tree_construct;
 use nimiq_nano_primitives::MacroBlock as ZKPMacroBlock;
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 use nimiq_primitives::slots::Validators;
 use nimiq_vrf::VrfSeed;
 
@@ -96,7 +96,7 @@ impl<'a> TryFrom<&'a MacroBlock> for ZKPMacroBlock {
                     .sig
                     .signers
                     .iter_bits()
-                    .take(policy::SLOTS as usize)
+                    .take(Policy::SLOTS as usize)
                     .collect(),
             })
         } else {
@@ -168,7 +168,7 @@ impl MacroBlock {
 
     /// Returns whether or not this macro block is an election block.
     pub fn is_election_block(&self) -> bool {
-        policy::is_election_block_at(self.header.block_number)
+        Policy::is_election_block_at(self.header.block_number)
     }
 
     /// Returns a copy of the validator slots. Only returns Some if it is an election block.
@@ -188,7 +188,7 @@ impl MacroBlock {
 
     /// Returns the epoch number of this macro block.
     pub fn epoch_number(&self) -> u32 {
-        policy::epoch_at(self.header.block_number)
+        Policy::epoch_at(self.header.block_number)
     }
 }
 

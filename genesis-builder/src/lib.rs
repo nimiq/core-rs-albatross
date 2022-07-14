@@ -6,7 +6,7 @@ use std::fs::{read_to_string, OpenOptions};
 use std::io::Error as IoError;
 use std::path::Path;
 
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 use thiserror::Error;
 use time::OffsetDateTime;
 use toml::de::Error as TomlError;
@@ -291,7 +291,7 @@ impl GenesisBuilder {
         StakingContract::create(&accounts.tree, txn);
 
         // Get the deposit value.
-        let deposit = Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT);
+        let deposit = Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT);
 
         for validator in &self.validators {
             StakingContract::create_validator(

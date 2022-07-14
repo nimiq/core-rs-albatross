@@ -10,7 +10,7 @@ use nimiq_block::Block;
 use nimiq_genesis::NetworkInfo;
 use nimiq_nano_primitives::state_commitment;
 use nimiq_network_interface::network::Network;
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 use parking_lot::lock_api::RwLockUpgradableReadGuard;
 use parking_lot::{RwLock, RwLockWriteGuard};
 
@@ -83,7 +83,8 @@ impl<N: Network> ZKProver<N> {
             blockchain_rg
                 .get_macro_blocks(
                     &zkp_state.read().latest_header_hash,
-                    (blockchain_election_height - current_state_height) / policy::BLOCKS_PER_EPOCH,
+                    (blockchain_election_height - current_state_height)
+                        / Policy::blocks_per_epoch(),
                     true,
                     Direction::Forward,
                     true,
@@ -116,10 +117,11 @@ impl<N: Network> ZKProver<N> {
                 let keys_path2 = keys_path.clone();
                 assert!(
                     zkp_state.latest_block_number
-                        >= block.block_number() - policy::BLOCKS_PER_EPOCH,
+                        >= block.block_number() - Policy::blocks_per_epoch(),
                     "The current state should never lag behind more than one epoch"
                 );
-                if zkp_state.latest_block_number == block.block_number() - policy::BLOCKS_PER_EPOCH
+                if zkp_state.latest_block_number
+                    == block.block_number() - Policy::blocks_per_epoch()
                 {
                     launch_generate_new_proof(
                         recv,

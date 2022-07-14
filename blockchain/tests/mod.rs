@@ -7,7 +7,7 @@ use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_blockchain::{ForkEvent, PushResult};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 use nimiq_test_log::test;
 use nimiq_test_utils::blockchain::{signing_key, voting_key};
 use nimiq_utils::time::OffsetTime;
@@ -135,13 +135,13 @@ fn micro_block_works_after_macro_block() {
     let temp_producer = TemporaryBlockProducer::new();
 
     // apply an entire batch including macro block on view_number/round_number zero
-    for _ in 0..policy::BLOCKS_PER_BATCH {
+    for _ in 0..Policy::blocks_per_batch() {
         temp_producer.next_block(vec![], false);
     }
     // make sure we are at the beginning of the batch and all block were applied
     assert_eq!(
         temp_producer.blockchain.read().block_number(),
-        policy::BLOCKS_PER_BATCH
+        Policy::blocks_per_batch()
     );
 
     // Test if a micro block can be rebranched immediately after
@@ -155,24 +155,24 @@ fn micro_block_works_after_macro_block() {
     // make sure this was an extend
     assert_eq!(
         temp_producer.blockchain.read().block_number(),
-        policy::BLOCKS_PER_BATCH + 1
+        Policy::blocks_per_batch() + 1
     );
     // and rebranch it to block the chain with only one skip block
     temp_producer.push(rebranch).unwrap();
     // make sure this was a rebranch
     assert_eq!(
         temp_producer.blockchain.read().block_number(),
-        policy::BLOCKS_PER_BATCH + 1
+        Policy::blocks_per_batch() + 1
     );
 
     // apply the rest of the batch including macro block on view_number/round_number one
-    for _ in 0..policy::BLOCKS_PER_BATCH - 1 {
+    for _ in 0..Policy::blocks_per_batch() - 1 {
         temp_producer.next_block(vec![], false);
     }
     // make sure we are at the beginning of the batch
     assert_eq!(
         temp_producer.blockchain.read().block_number(),
-        policy::BLOCKS_PER_BATCH * 2
+        Policy::blocks_per_batch() * 2
     );
 
     // Test if a micro block can be rebranched immediately after
@@ -189,7 +189,7 @@ fn micro_block_works_after_macro_block() {
 
     assert_eq!(
         temp_producer.blockchain.read().block_number(),
-        policy::BLOCKS_PER_BATCH * 2 + 1
+        Policy::blocks_per_batch() * 2 + 1
     );
 }
 
@@ -274,7 +274,7 @@ fn it_can_rebranch_to_inferior_macro_block() {
     assert_eq!(producer2.push(inferior), Ok(PushResult::Ignored));
 
     // Complete a batch
-    for _ in 1..policy::BLOCKS_PER_BATCH - 1 {
+    for _ in 1..Policy::blocks_per_batch() - 1 {
         let inferior = producer1.next_block(vec![], false);
         producer2.next_block(vec![], false);
         assert_eq!(producer2.push(inferior), Ok(PushResult::Ignored));

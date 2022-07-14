@@ -19,7 +19,7 @@ use nimiq_blockchain::{
 };
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{network::Network, request::RequestError};
-use nimiq_primitives::{policy, slots::Validators};
+use nimiq_primitives::{policy::Policy, slots::Validators};
 use nimiq_utils::math::CeilingDiv;
 
 use crate::messages::{BatchSetInfo, HistoryChunk, RequestBatchSet, RequestHistoryChunk};
@@ -123,7 +123,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
             peers,
             epoch_ids,
             first_epoch_number,
-            first_epoch_number * policy::BLOCKS_PER_EPOCH as usize,
+            first_epoch_number * Policy::blocks_per_epoch() as usize,
         )
     }
 
@@ -781,7 +781,7 @@ impl<TNetwork: Network + 'static> std::fmt::Debug for SyncCluster<TNetwork> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut dbg = f.debug_struct("SyncCluster");
         dbg.field("id", &self.id);
-        if policy::is_election_block_at(self.first_block_number as u32) {
+        if Policy::is_election_block_at(self.first_block_number as u32) {
             // Epoch cluster
             let last_epoch_number =
                 self.first_epoch_number + self.epoch_ids.len().saturating_sub(1);

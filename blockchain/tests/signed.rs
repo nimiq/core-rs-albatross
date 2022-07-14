@@ -11,8 +11,10 @@ use nimiq_collections::bitset::BitSet;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
 use nimiq_keys::{Address, PublicKey};
-use nimiq_primitives::policy;
-use nimiq_primitives::slots::{Validator, Validators};
+use nimiq_primitives::{
+    policy::Policy,
+    slots::{Validator, Validators},
+};
 use nimiq_test_log::test;
 use nimiq_utils::time::OffsetTime;
 use nimiq_vrf::VrfEntropy;
@@ -42,10 +44,10 @@ fn test_skip_block_single_signature() {
         0,
     )
     .signature
-    .multiply(policy::SLOTS)]);
+    .multiply(Policy::SLOTS)]);
     // SkipBlockProof is just a MultiSignature, but for ease of getting there an individual Signature is created first.
     let mut signers = BitSet::new();
-    for i in 0..policy::SLOTS {
+    for i in 0..Policy::SLOTS {
         signers.insert(i as usize);
     }
 
@@ -58,7 +60,7 @@ fn test_skip_block_single_signature() {
         Address::default(),
         LazyPublicKey::from(key_pair.public_key),
         PublicKey::from([0u8; 32]),
-        (0, policy::SLOTS),
+        (0, Policy::SLOTS),
     )]);
 
     assert!(skip_block_proof.verify(&skip_block_info, &validators));
@@ -98,11 +100,11 @@ fn test_replay() {
     let signature = AggregateSignature::from_signatures(&[key_pair
         .secret_key
         .sign(&vote)
-        .multiply(policy::SLOTS)]);
+        .multiply(Policy::SLOTS)]);
 
     // create and populate signers BitSet.
     let mut signers = BitSet::new();
-    for i in 0..policy::SLOTS {
+    for i in 0..Policy::SLOTS {
         signers.insert(i as usize);
     }
 
@@ -128,11 +130,11 @@ fn test_replay() {
     let signature = AggregateSignature::from_signatures(&[key_pair
         .secret_key
         .sign(&vote)
-        .multiply(policy::SLOTS)]);
+        .multiply(Policy::SLOTS)]);
 
     // create and populate signers BitSet.
     let mut signers = BitSet::new();
-    for i in 0..policy::SLOTS {
+    for i in 0..Policy::SLOTS {
         signers.insert(i as usize);
     }
 

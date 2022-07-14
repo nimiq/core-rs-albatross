@@ -4,7 +4,7 @@ use std::io;
 use beserial::{Deserialize, Serialize};
 use nimiq_hash::{Blake2bHash, Hash, HashOutput, SerializeContent};
 use nimiq_keys::{PublicKey as SchnorrPublicKey, Signature as SchnorrSignature};
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 use nimiq_vrf::VrfSeed;
 
 use crate::MicroHeader;
@@ -66,9 +66,9 @@ impl ForkProof {
     /// Check if a fork proof is valid at a given block height. Fork proofs are only during the
     /// batch when the fork was created and during batch immediately after.
     pub fn is_valid_at(&self, block_number: u32) -> bool {
-        let given_batch = policy::batch_at(block_number);
+        let given_batch = Policy::batch_at(block_number);
 
-        let proof_batch = policy::batch_at(self.header1.block_number);
+        let proof_batch = Policy::batch_at(self.header1.block_number);
 
         proof_batch == given_batch || proof_batch + 1 == given_batch
     }

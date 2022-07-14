@@ -4,7 +4,7 @@ use nimiq_block::{ForkProof, MacroHeader, SkipBlockInfo};
 use nimiq_database as db;
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 use nimiq_primitives::slots::SlashedSlot;
 use nimiq_vrf::{AliasMethod, VrfUseCase};
 
@@ -27,7 +27,7 @@ impl Blockchain {
         inherents.append(&mut self.finalize_previous_batch(state, header));
 
         // If this block is an election block, we also need to finalize the epoch.
-        if policy::is_election_block_at(header.block_number) {
+        if Policy::is_election_block_at(header.block_number) {
             // On election the previous epoch needs to be finalized.
             // We can rely on `state` here, since we cannot revert macro blocks.
             inherents.push(self.finalize_previous_epoch());
@@ -139,13 +139,13 @@ impl Blockchain {
         let staking_contract = self.get_staking_contract();
 
         // Special case for first batch: Batch 0 is finalized by definition.
-        if policy::batch_at(macro_header.block_number) - 1 == 0 {
+        if Policy::batch_at(macro_header.block_number) - 1 == 0 {
             return vec![];
         }
 
         // Get validator slots
         // NOTE: Fields `current_slots` and `previous_slots` are expected to always be set.
-        let validator_slots = if policy::first_batch_of_epoch(macro_header.block_number) {
+        let validator_slots = if Policy::first_batch_of_epoch(macro_header.block_number) {
             state
                 .previous_slots
                 .as_ref()
@@ -178,8 +178,8 @@ impl Blockchain {
         let reward_pot = block_reward + tx_fees;
 
         // Distribute reward between all slots and calculate the remainder
-        let slot_reward = reward_pot / policy::SLOTS as u64;
-        let remainder = reward_pot % policy::SLOTS as u64;
+        let slot_reward = reward_pot / Policy::SLOTS as u64;
+        let remainder = reward_pot % Policy::SLOTS as u64;
 
         // The first slot number of the current validator
         let mut first_slot_number = 0;

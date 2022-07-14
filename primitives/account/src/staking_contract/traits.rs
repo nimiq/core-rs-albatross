@@ -4,9 +4,7 @@ use beserial::{Deserialize, Serialize};
 use nimiq_collections::BitSet;
 use nimiq_database::WriteTransaction;
 use nimiq_keys::Address;
-use nimiq_primitives::coin::Coin;
-use nimiq_primitives::policy;
-use nimiq_primitives::slots::SlashedSlot;
+use nimiq_primitives::{coin::Coin, policy::Policy, slots::SlashedSlot};
 use nimiq_transaction::account::staking_contract::{
     IncomingStakingTransactionData, OutgoingStakingTransactionProof,
 };
@@ -62,7 +60,7 @@ impl AccountTransactionInteraction for StakingContract {
         _block_time: u64,
     ) -> Result<AccountInfo, AccountError> {
         // Check that the address is that of the Staking contract.
-        if transaction.recipient != policy::STAKING_CONTRACT_ADDRESS {
+        if transaction.recipient != Policy::STAKING_CONTRACT_ADDRESS {
             return Err(AccountError::InvalidForRecipient);
         }
 
@@ -81,7 +79,7 @@ impl AccountTransactionInteraction for StakingContract {
                 let validator_address = proof.compute_signer();
 
                 // Get the deposit value.
-                let deposit = Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT);
+                let deposit = Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT);
 
                 // Verify the transaction was formed properly
                 if transaction.value != deposit {
@@ -336,7 +334,7 @@ impl AccountTransactionInteraction for StakingContract {
         _block_time: u64,
     ) -> Result<AccountInfo, AccountError> {
         // Check that the address is that of the Staking contract.
-        if transaction.sender != policy::STAKING_CONTRACT_ADDRESS {
+        if transaction.sender != Policy::STAKING_CONTRACT_ADDRESS {
             return Err(AccountError::InvalidForSender);
         }
 
@@ -457,7 +455,7 @@ impl AccountTransactionInteraction for StakingContract {
         block_height: u32,
     ) -> Result<AccountInfo, AccountError> {
         // Check that the address is that of the Staking contract.
-        if transaction.sender != policy::STAKING_CONTRACT_ADDRESS {
+        if transaction.sender != Policy::STAKING_CONTRACT_ADDRESS {
             return Err(AccountError::InvalidForSender);
         }
 
@@ -557,7 +555,7 @@ impl AccountTransactionInteraction for StakingContract {
         receipt: Option<&Vec<u8>>,
     ) -> Result<Vec<Log>, AccountError> {
         // Check that the address is that of the Staking contract.
-        if transaction.sender != policy::STAKING_CONTRACT_ADDRESS {
+        if transaction.sender != Policy::STAKING_CONTRACT_ADDRESS {
             return Err(AccountError::InvalidForSender);
         }
 
@@ -734,7 +732,7 @@ impl AccountInherentInteraction for StakingContract {
                 let newly_disabled;
                 let newly_lost_rewards;
 
-                if policy::epoch_at(slot.event_block) < policy::epoch_at(block_height) {
+                if Policy::epoch_at(slot.event_block) < Policy::epoch_at(block_height) {
                     newly_lost_rewards = !staking_contract
                         .previous_lost_rewards
                         .contains(slot.slot as usize);
@@ -744,7 +742,7 @@ impl AccountInherentInteraction for StakingContract {
                         .insert(slot.slot as usize);
 
                     newly_disabled = false;
-                } else if policy::batch_at(slot.event_block) < policy::batch_at(block_height) {
+                } else if Policy::batch_at(slot.event_block) < Policy::batch_at(block_height) {
                     newly_lost_rewards = !staking_contract
                         .previous_lost_rewards
                         .contains(slot.slot as usize);
@@ -910,7 +908,7 @@ impl AccountInherentInteraction for StakingContract {
                 // - current_lost_rewards
                 // - current_disabled_slots
                 if receipt.newly_disabled {
-                    if policy::epoch_at(slot.event_block) < policy::epoch_at(block_height) {
+                    if Policy::epoch_at(slot.event_block) < Policy::epoch_at(block_height) {
                         // Nothing to do.
                     } else {
                         let is_empty = {
@@ -929,8 +927,8 @@ impl AccountInherentInteraction for StakingContract {
                     }
                 }
                 if receipt.newly_lost_rewards {
-                    if policy::epoch_at(slot.event_block) < policy::epoch_at(block_height)
-                        || policy::batch_at(slot.event_block) < policy::batch_at(block_height)
+                    if Policy::epoch_at(slot.event_block) < Policy::epoch_at(block_height)
+                        || Policy::batch_at(slot.event_block) < Policy::batch_at(block_height)
                     {
                         staking_contract
                             .previous_lost_rewards

@@ -22,7 +22,7 @@ use nimiq_genesis::NetworkId;
 use nimiq_network_interface::network::Network as NetworkInterface;
 use nimiq_network_libp2p::Network;
 use nimiq_network_mock::MockHub;
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 use nimiq_test_utils::{
     blockchain::{produce_macro_blocks, signing_key, voting_key},
     test_network::TestNetwork,
@@ -63,7 +63,7 @@ async fn peers_can_sync() {
 
     // The minimum number of macro blocks necessary so that we have one election block and one
     // checkpoint block to push.
-    let num_macro_blocks = (policy::BATCHES_PER_EPOCH + 1) as usize;
+    let num_macro_blocks = (Policy::batches_per_epoch() + 1) as usize;
 
     // Produce the blocks.
     produce_macro_blocks(&producer, &blockchain1, num_macro_blocks);
@@ -235,7 +235,7 @@ async fn sync_ingredients() {
 
     // The minimum number of macro blocks necessary so that we have one election block and one
     // checkpoint block to push.
-    let num_macro_blocks = (policy::BATCHES_PER_EPOCH + 1) as usize;
+    let num_macro_blocks = (Policy::batches_per_epoch() + 1) as usize;
 
     // Produce the blocks.
     produce_macro_blocks(&producer, &blockchain1, num_macro_blocks);

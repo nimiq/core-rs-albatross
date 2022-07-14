@@ -27,7 +27,7 @@ use nimiq_bls::lazy::LazyPublicKey as LazyBlsPublicKey;
 use nimiq_bls::PublicKey as BlsPublicKey;
 use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
 
-use crate::policy::SLOTS;
+use crate::policy::Policy;
 
 /// A validator that owns some slots.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -109,7 +109,7 @@ impl Validators {
 
     /// Calculates the slot band of the validator that owns the given slot.
     pub fn get_band_from_slot(&self, slot: u16) -> u16 {
-        assert!(slot < SLOTS);
+        assert!(slot < Policy::SLOTS);
 
         let mut pivot = self.num_validators() / 2;
         let mut last_pivot = 0usize;

@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use nimiq_bls::PublicKey;
 use nimiq_collections::BitSet;
 use nimiq_handel::identity::{Identity, IdentityRegistry, WeightRegistry};
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 use nimiq_primitives::slots::Validators;
 
 /// Implementation for Handel registry using a `Validators` list.
@@ -83,7 +83,7 @@ impl IdentityRegistry for ValidatorRegistry {
 
 impl WeightRegistry for ValidatorRegistry {
     fn weight(&self, id: usize) -> Option<usize> {
-        if (0..policy::SLOTS).contains(&(id as u16)) {
+        if (0..Policy::SLOTS).contains(&(id as u16)) {
             Some(1)
         } else {
             None

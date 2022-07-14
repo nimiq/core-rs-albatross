@@ -7,7 +7,7 @@ use nimiq_hash::{Blake2bHasher, Hasher};
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 use nimiq_primitives::slots::SlashedSlot;
 use nimiq_test_log::test;
 use nimiq_utils::time::OffsetTime;
@@ -85,7 +85,7 @@ fn it_can_create_batch_finalization_inherents() {
             &mut txn,
             &[],
             &[slash_inherent],
-            policy::BLOCKS_PER_BATCH + 1,
+            Policy::blocks_per_batch() + 1,
             0,
         )
         .is_ok());
@@ -93,7 +93,7 @@ fn it_can_create_batch_finalization_inherents() {
 
     let inherents = blockchain.finalize_previous_batch(blockchain.state(), &macro_header);
     assert_eq!(inherents.len(), 3);
-    let one_slot_reward = 875 / policy::SLOTS as u64;
+    let one_slot_reward = 875 / Policy::SLOTS as u64;
     let mut got_reward = false;
     let mut got_slash = false;
     let mut got_finalize_batch = false;

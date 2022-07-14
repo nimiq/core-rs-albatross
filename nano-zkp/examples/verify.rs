@@ -8,7 +8,7 @@ use ark_serialize::CanonicalDeserialize;
 
 use nimiq_nano_zkp::utils::create_test_blocks;
 use nimiq_nano_zkp::NanoZKP;
-use nimiq_primitives::policy::BLOCKS_PER_EPOCH;
+use nimiq_primitives::policy::Policy;
 
 /// Verifies a proof for a chain of election blocks. The random parameters generation uses always
 /// the same seed, so it will always generate the same data (validators, signatures, etc).
@@ -48,7 +48,7 @@ fn main() {
         0,
         initial_header_hash,
         initial_pks,
-        BLOCKS_PER_EPOCH * number_epochs as u32,
+        Policy::blocks_per_epoch() * number_epochs as u32,
         final_header_hash,
         final_pks,
         proof,

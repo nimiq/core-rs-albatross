@@ -24,7 +24,7 @@ use nimiq_handel::{
     identity::WeightRegistry, update::LevelUpdate,
 };
 use nimiq_macros::store_waker;
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 use nimiq_validator_network::ValidatorNetwork;
 
 use crate::aggregation::{
@@ -217,7 +217,7 @@ impl<N: ValidatorNetwork + 'static> Stream for TendermintAggregations<N> {
                         if let Some(weight) =
                             self.validator_registry.signers_weight(&future_contributors)
                         {
-                            if weight >= policy::F_PLUS_ONE as usize {
+                            if weight >= Policy::F_PLUS_ONE as usize {
                                 return Poll::Ready(Some(TendermintAggregationEvent::NewRound(
                                     message.tag.round_number,
                                 )));

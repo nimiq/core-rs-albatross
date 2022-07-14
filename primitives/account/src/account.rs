@@ -3,7 +3,7 @@ use nimiq_database::WriteTransaction;
 use nimiq_keys::Address;
 use nimiq_primitives::account::AccountType;
 use nimiq_primitives::coin::Coin;
-use nimiq_primitives::policy::STAKING_CONTRACT_ADDRESS;
+use nimiq_primitives::policy::Policy;
 use nimiq_transaction::Transaction;
 use nimiq_trie::key_nibbles::KeyNibbles;
 
@@ -390,7 +390,7 @@ impl AccountInherentInteraction for Account {
     ) -> Result<AccountInfo, AccountError> {
         // If the inherent target is the staking contract then we forward it to the staking contract
         // right here.
-        if STAKING_CONTRACT_ADDRESS == inherent.target {
+        if Policy::STAKING_CONTRACT_ADDRESS == inherent.target {
             return StakingContract::commit_inherent(
                 accounts_tree,
                 db_txn,
@@ -426,7 +426,7 @@ impl AccountInherentInteraction for Account {
     ) -> Result<Vec<Log>, AccountError> {
         // If the inherent target is the staking contract then we forward it to the staking contract
         // right here.
-        if STAKING_CONTRACT_ADDRESS == inherent.target {
+        if Policy::STAKING_CONTRACT_ADDRESS == inherent.target {
             return StakingContract::revert_inherent(
                 accounts_tree,
                 db_txn,

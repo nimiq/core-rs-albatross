@@ -11,9 +11,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use nimiq_network_interface::network::Network;
-use nimiq_network_mock::MockHub;
-use nimiq_network_mock::MockNetwork;
-use nimiq_primitives::policy;
+use nimiq_network_mock::{MockHub, MockNetwork};
+use nimiq_primitives::policy::Policy;
 use nimiq_zkp_component::proof_utils::ProofStore;
 use nimiq_zkp_component::types::ZKProofTopic;
 
@@ -82,7 +81,7 @@ async fn loads_valid_zkp_state_from_db() {
     produce_macro_blocks_with_rng(
         &producer,
         &blockchain,
-        policy::BATCHES_PER_EPOCH as usize,
+        Policy::batches_per_epoch() as usize,
         &mut get_base_seed(),
     );
 
@@ -104,7 +103,7 @@ async fn loads_valid_zkp_state_from_db() {
     let zkp_proxy = zkp_prover.proxy();
     assert_eq!(
         zkp_proxy.get_zkp_state().latest_block_number,
-        policy::BLOCKS_PER_EPOCH,
+        Policy::blocks_per_epoch(),
         "The load of the zkp state should have worked"
     );
 }
@@ -120,7 +119,7 @@ async fn does_not_load_invalid_zkp_state_from_db() {
 
     let proof_store = ProofStore::new(env);
     let new_proof = ZKProof {
-        block_number: policy::BLOCKS_PER_EPOCH,
+        block_number: Policy::blocks_per_epoch(),
         proof: None,
     };
 
@@ -178,7 +177,7 @@ async fn can_produce_two_consecutive_valid_zk_proofs() {
     produce_macro_blocks_with_rng(
         &producer,
         &blockchain,
-        policy::BATCHES_PER_EPOCH as usize,
+        Policy::batches_per_epoch() as usize,
         &mut get_base_seed(),
     );
 
@@ -194,7 +193,7 @@ async fn can_produce_two_consecutive_valid_zk_proofs() {
     produce_macro_blocks_with_rng(
         &producer,
         &blockchain,
-        policy::BATCHES_PER_EPOCH as usize,
+        Policy::batches_per_epoch() as usize,
         &mut get_base_seed(),
     );
 

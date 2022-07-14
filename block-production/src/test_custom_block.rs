@@ -9,7 +9,7 @@ use nimiq_blockchain::{AbstractBlockchain, Blockchain, ExtendedTransaction};
 use nimiq_bls::AggregateSignature;
 use nimiq_collections::BitSet;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 use nimiq_transaction::Transaction;
 use nimiq_vrf::VrfSeed;
 
@@ -85,7 +85,7 @@ pub fn next_micro_block(
     let history_root = config.history_root.clone().unwrap_or_else(|| {
         blockchain
             .history_store
-            .add_to_history(&mut txn, policy::epoch_at(block_number), &ext_txs)
+            .add_to_history(&mut txn, Policy::epoch_at(block_number), &ext_txs)
             .expect("Failed to compute history root during block production.")
             .0
     });
@@ -98,7 +98,7 @@ pub fn next_micro_block(
     };
 
     let header = MicroHeader {
-        version: config.version.unwrap_or(policy::VERSION),
+        version: config.version.unwrap_or(Policy::VERSION),
         block_number,
         timestamp,
         parent_hash,
@@ -134,7 +134,7 @@ pub fn next_skip_block(
     let timestamp = if config.timestamp_offset != 0 {
         (blockchain.head().timestamp() as i64 + config.timestamp_offset) as u64
     } else {
-        blockchain.head().timestamp() + policy::BLOCK_PRODUCER_TIMEOUT
+        blockchain.head().timestamp() + Policy::BLOCK_PRODUCER_TIMEOUT
     };
 
     let parent_hash = config
@@ -174,7 +174,7 @@ pub fn next_skip_block(
     let history_root = config.history_root.clone().unwrap_or_else(|| {
         blockchain
             .history_store
-            .add_to_history(&mut txn, policy::epoch_at(block_number), &ext_txs)
+            .add_to_history(&mut txn, Policy::epoch_at(block_number), &ext_txs)
             .expect("Failed to compute history root during block production.")
             .0
     });
@@ -187,7 +187,7 @@ pub fn next_skip_block(
     };
 
     let header = MicroHeader {
-        version: config.version.unwrap_or(policy::VERSION),
+        version: config.version.unwrap_or(Policy::VERSION),
         block_number,
         timestamp,
         parent_hash,
@@ -236,7 +236,7 @@ fn next_macro_block_proposal(
         .unwrap_or_else(|| blockchain.head().seed().sign_next(signing_key));
 
     let mut header = MacroHeader {
-        version: config.version.unwrap_or(policy::VERSION),
+        version: config.version.unwrap_or(Policy::VERSION),
         block_number,
         round: 0,
         timestamp,
@@ -272,7 +272,7 @@ fn next_macro_block_proposal(
 
     header.history_root = blockchain
         .history_store
-        .add_to_history(&mut txn, policy::epoch_at(block_number), &ext_txs)
+        .add_to_history(&mut txn, Policy::epoch_at(block_number), &ext_txs)
         .expect("Failed to compute history root during block production.")
         .0;
 
@@ -282,7 +282,7 @@ fn next_macro_block_proposal(
 
     let lost_reward_set = blockchain.get_staking_contract().previous_lost_rewards();
 
-    let validators = if policy::is_election_block_at(blockchain.block_number() + 1) {
+    let validators = if Policy::is_election_block_at(blockchain.block_number() + 1) {
         Some(blockchain.next_validators(&header.seed))
     } else {
         None
@@ -325,10 +325,10 @@ pub fn finalize_macro_block(
     let signature = AggregateSignature::from_signatures(&[voting_key
         .secret_key
         .sign(&vote)
-        .multiply(policy::SLOTS)]);
+        .multiply(Policy::SLOTS)]);
 
     let mut signers = BitSet::new();
-    for i in 0..policy::SLOTS {
+    for i in 0..Policy::SLOTS {
         signers.insert(i as usize);
     }
 
@@ -356,14 +356,14 @@ pub fn next_macro_block(
 ) -> Block {
     let height = blockchain.block_number() + 1;
 
-    assert!(policy::is_macro_block_at(height));
+    assert!(Policy::is_macro_block_at(height));
 
     let macro_block_proposal = next_macro_block_proposal(signing_key, blockchain, config);
 
     let block_hash = macro_block_proposal.nano_zkp_hash(true);
 
     let validators =
-        blockchain.get_validators_for_epoch(policy::epoch_at(blockchain.block_number() + 1), None);
+        blockchain.get_validators_for_epoch(Policy::epoch_at(blockchain.block_number() + 1), None);
     assert!(validators.is_some());
 
     Block::Macro(finalize_macro_block(
@@ -401,9 +401,9 @@ fn create_skip_block_proof(
         SignedSkipBlockInfo::from_message(skip_block_info, &voting_key_pair.secret_key, 0);
 
     let signature =
-        AggregateSignature::from_signatures(&[skip_block_info.signature.multiply(policy::SLOTS)]);
+        AggregateSignature::from_signatures(&[skip_block_info.signature.multiply(Policy::SLOTS)]);
     let mut signers = BitSet::new();
-    for i in 0..policy::SLOTS {
+    for i in 0..Policy::SLOTS {
         signers.insert(i as usize);
     }
 

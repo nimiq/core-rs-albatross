@@ -6,7 +6,7 @@ use nimiq_block::MacroBlock;
 use nimiq_bls::lazy::LazyPublicKey;
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_keys::{Address, KeyPair as SchnorrKeyPair, SecureGenerate};
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 use nimiq_primitives::slots::{Validators, ValidatorsBuilder};
 use nimiq_test_utils::zkp_test_data::get_base_seed;
 
@@ -18,7 +18,7 @@ fn generate_uncompressed_validators() -> Validators {
     let mut rng = get_base_seed();
     let mut validators = ValidatorsBuilder::new();
 
-    for _ in 0..policy::SLOTS {
+    for _ in 0..Policy::SLOTS {
         let keypair = SchnorrKeyPair::generate(&mut rng);
         let address = Address::from(&keypair.public);
         let bls_keypair = BlsKeyPair::generate(&mut rng);

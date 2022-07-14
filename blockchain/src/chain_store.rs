@@ -5,7 +5,7 @@ use nimiq_database::{
     Database, DatabaseFlags, Environment, ReadTransaction, Transaction, WriteTransaction,
 };
 use nimiq_hash::Blake2bHash;
-use nimiq_primitives::policy::{self, epoch_at};
+use nimiq_primitives::policy::Policy;
 
 use crate::chain_info::ChainInfo;
 use crate::Direction;
@@ -181,7 +181,7 @@ impl ChainStore {
         };
 
         let block = self.get_block_at(block_height, false, Some(txn))?;
-        let epoch_number = policy::epoch_at(block_height);
+        let epoch_number = Policy::epoch_at(block_height);
 
         // Seek to the first block at the given height.
         let mut blocks = vec![block.hash()];
@@ -191,12 +191,13 @@ impl ChainStore {
         let mut last_block_number = block_height;
 
         // Iterate until we find all blocks at the same epoch.
-        while epoch_at(last_block_number) == epoch_number && last_block_number != first_block_number
+        while Policy::epoch_at(last_block_number) == epoch_number
+            && last_block_number != first_block_number
         {
             match cursor.prev_no_duplicate::<u32, Blake2bHash>() {
                 Some((block_number, hash)) => {
-                    if policy::is_macro_block_at(block_number)
-                        && epoch_at(block_number) == epoch_number
+                    if Policy::is_macro_block_at(block_number)
+                        && Policy::epoch_at(block_number) == epoch_number
                     {
                         if let Some(chain_info) = self.get_chain_info(&hash, false, Some(txn)) {
                             if !chain_info.prunable {
@@ -481,17 +482,17 @@ impl ChainStore {
         };
 
         let mut next_macro_block = if election_blocks_only {
-            policy::election_block_after(block.header.block_number)
+            Policy::election_block_after(block.header.block_number)
         } else {
-            policy::macro_block_after(block.header.block_number)
+            Policy::macro_block_after(block.header.block_number)
         };
         while (blocks.len() as u32) < count {
             let block_opt = self.get_block_at(next_macro_block, include_body, Some(txn));
             if let Some(Block::Macro(block)) = block_opt {
                 next_macro_block = if election_blocks_only {
-                    policy::election_block_after(block.header.block_number)
+                    Policy::election_block_after(block.header.block_number)
                 } else {
-                    policy::macro_block_after(block.header.block_number)
+                    Policy::macro_block_after(block.header.block_number)
                 };
                 blocks.push(Block::Macro(block));
             } else {
@@ -508,7 +509,7 @@ impl ChainStore {
             return;
         }
 
-        for height in policy::first_block_of(epoch_number)..policy::election_block_of(epoch_number)
+        for height in Policy::first_block_of(epoch_number)..Policy::election_block_of(epoch_number)
         {
             if let Some(hash) = txn.get::<u32, Blake2bHash>(&self.height_idx, &height) {
                 // If we detect a block whose prunable flag is set to false, we don't prune it

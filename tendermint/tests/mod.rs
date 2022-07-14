@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use beserial::{Deserialize, Serialize};
 use futures::{future, future::BoxFuture, FutureExt, StreamExt};
 use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
-use nimiq_primitives::policy::{SLOTS, TWO_F_PLUS_ONE};
+use nimiq_primitives::policy::Policy;
 use nimiq_tendermint::*;
 use nimiq_test_log::test;
 use std::collections::BTreeMap;
@@ -323,28 +323,28 @@ async fn it_can_reenter_from_state() {
             (false, TestProposal(0, 5), None), // irrelevant the node should propose (1,3)
         ],
         agg_prevote_rounds: vec![
-            (false, 0, 0, SLOTS),
-            (true, 0, 0, SLOTS),
-            (false, 0, 0, SLOTS),
-            (false, 0, SLOTS, 0),
-            (false, 0, SLOTS, 0),
-            (false, 0, SLOTS, 0),
+            (false, 0, 0, Policy::SLOTS),
+            (true, 0, 0, Policy::SLOTS),
+            (false, 0, 0, Policy::SLOTS),
+            (false, 0, Policy::SLOTS, 0),
+            (false, 0, Policy::SLOTS, 0),
+            (false, 0, Policy::SLOTS, 0),
         ],
         agg_precommit_rounds: vec![
-            (false, 0, 0, SLOTS),
-            (false, 0, 0, SLOTS),
-            (true, 0, 0, SLOTS),
-            (false, 0, 0, SLOTS),
-            (false, 0, 0, SLOTS),
-            (false, 0, SLOTS, 0),
+            (false, 0, 0, Policy::SLOTS),
+            (false, 0, 0, Policy::SLOTS),
+            (true, 0, 0, Policy::SLOTS),
+            (false, 0, 0, Policy::SLOTS),
+            (false, 0, 0, Policy::SLOTS),
+            (false, 0, Policy::SLOTS, 0),
         ],
         get_agg_rounds: vec![
-            (false, 0, 0, SLOTS),
-            (false, 0, 0, SLOTS),
-            (false, 0, SLOTS, 0),
-            (false, 0, SLOTS, 0),
-            (false, 0, 0, SLOTS),
-            (false, 0, 0, SLOTS),
+            (false, 0, 0, Policy::SLOTS),
+            (false, 0, 0, Policy::SLOTS),
+            (false, 0, Policy::SLOTS, 0),
+            (false, 0, Policy::SLOTS, 0),
+            (false, 0, 0, Policy::SLOTS),
+            (false, 0, 0, Policy::SLOTS),
         ],
     };
 
@@ -426,9 +426,9 @@ async fn it_does_not_unlock() {
             (false, TestProposal(0, 0), None),
             (true, TestProposal(1, 1), None),
         ],
-        agg_prevote_rounds: vec![(false, SLOTS, 0, 0), (false, 0, SLOTS, 0)],
-        agg_precommit_rounds: vec![(false, 0, 0, SLOTS), (false, 0, 0, SLOTS)],
-        get_agg_rounds: vec![(false, SLOTS, 0, 0), (false, 0, SLOTS, 0)],
+        agg_prevote_rounds: vec![(false, Policy::SLOTS, 0, 0), (false, 0, Policy::SLOTS, 0)],
+        agg_precommit_rounds: vec![(false, 0, 0, Policy::SLOTS), (false, 0, 0, Policy::SLOTS)],
+        get_agg_rounds: vec![(false, Policy::SLOTS, 0, 0), (false, 0, Policy::SLOTS, 0)],
     };
 
     if let Ok(mut tendermint) = Tendermint::new(val, None) {
@@ -496,8 +496,8 @@ async fn everything_works() {
     let proposer = TestValidator {
         proposer_round: 0,
         proposal_rounds: vec![(false, TestProposal(0, 0), None)],
-        agg_prevote_rounds: vec![(false, SLOTS, 0, 0)],
-        agg_precommit_rounds: vec![(false, SLOTS, 0, 0)],
+        agg_prevote_rounds: vec![(false, Policy::SLOTS, 0, 0)],
+        agg_precommit_rounds: vec![(false, Policy::SLOTS, 0, 0)],
         get_agg_rounds: vec![],
     };
 
@@ -509,8 +509,8 @@ async fn everything_works() {
     let validator = TestValidator {
         proposer_round: 99,
         proposal_rounds: vec![(false, TestProposal(0, 0), None)],
-        agg_prevote_rounds: vec![(false, SLOTS, 0, 0)],
-        agg_precommit_rounds: vec![(false, SLOTS, 0, 0)],
+        agg_prevote_rounds: vec![(false, Policy::SLOTS, 0, 0)],
+        agg_precommit_rounds: vec![(false, Policy::SLOTS, 0, 0)],
         get_agg_rounds: vec![],
     };
 
@@ -528,8 +528,8 @@ async fn no_proposal() {
             (true, TestProposal(0, 0), None),
             (false, TestProposal(0, 1), None),
         ],
-        agg_prevote_rounds: vec![(false, 0, 0, SLOTS), (false, SLOTS, 0, 0)],
-        agg_precommit_rounds: vec![(false, 0, 0, SLOTS), (false, SLOTS, 0, 0)],
+        agg_prevote_rounds: vec![(false, 0, 0, Policy::SLOTS), (false, Policy::SLOTS, 0, 0)],
+        agg_precommit_rounds: vec![(false, 0, 0, Policy::SLOTS), (false, Policy::SLOTS, 0, 0)],
         get_agg_rounds: vec![],
     };
 
@@ -550,8 +550,8 @@ async fn all_timeouts() {
             (true, TestProposal(0, 0), None),
             (false, TestProposal(0, 1), None),
         ],
-        agg_prevote_rounds: vec![(false, 0, 0, 0), (false, SLOTS, 0, 0)],
-        agg_precommit_rounds: vec![(false, 0, 0, 0), (false, SLOTS, 0, 0)],
+        agg_prevote_rounds: vec![(false, 0, 0, 0), (false, Policy::SLOTS, 0, 0)],
+        agg_precommit_rounds: vec![(false, 0, 0, 0), (false, Policy::SLOTS, 0, 0)],
         get_agg_rounds: vec![],
     };
 
@@ -569,8 +569,11 @@ async fn not_enough_prevotes() {
             (false, TestProposal(0, 0), None),
             (false, TestProposal(0, 1), None),
         ],
-        agg_prevote_rounds: vec![(false, TWO_F_PLUS_ONE - 1, 0, 0), (false, SLOTS, 0, 0)],
-        agg_precommit_rounds: vec![(false, 0, 0, SLOTS), (false, SLOTS, 0, 0)],
+        agg_prevote_rounds: vec![
+            (false, Policy::TWO_F_PLUS_ONE - 1, 0, 0),
+            (false, Policy::SLOTS, 0, 0),
+        ],
+        agg_precommit_rounds: vec![(false, 0, 0, Policy::SLOTS), (false, Policy::SLOTS, 0, 0)],
         get_agg_rounds: vec![],
     };
 
@@ -588,8 +591,11 @@ async fn not_enough_precommits() {
             (false, TestProposal(0, 0), None),
             (false, TestProposal(0, 1), None),
         ],
-        agg_prevote_rounds: vec![(false, SLOTS, 0, 0), (false, SLOTS, 0, 0)],
-        agg_precommit_rounds: vec![(false, TWO_F_PLUS_ONE - 1, 0, 0), (false, SLOTS, 0, 0)],
+        agg_prevote_rounds: vec![(false, Policy::SLOTS, 0, 0), (false, Policy::SLOTS, 0, 0)],
+        agg_precommit_rounds: vec![
+            (false, Policy::TWO_F_PLUS_ONE - 1, 0, 0),
+            (false, Policy::SLOTS, 0, 0),
+        ],
         get_agg_rounds: vec![],
     };
 
@@ -610,8 +616,8 @@ async fn locks_and_rebroadcasts() {
             // what it has stored.
             (false, TestProposal(0, 1), None),
         ],
-        agg_prevote_rounds: vec![(false, SLOTS, 0, 0), (false, SLOTS, 0, 0)],
-        agg_precommit_rounds: vec![(false, 0, 0, 0), (false, SLOTS, 0, 0)],
+        agg_prevote_rounds: vec![(false, Policy::SLOTS, 0, 0), (false, Policy::SLOTS, 0, 0)],
+        agg_precommit_rounds: vec![(false, 0, 0, 0), (false, Policy::SLOTS, 0, 0)],
         get_agg_rounds: vec![],
     };
 
@@ -630,8 +636,8 @@ async fn locks_and_unlocks() {
             (false, TestProposal(0, 0), None),
             (false, TestProposal(1, 1), None),
         ],
-        agg_prevote_rounds: vec![(false, SLOTS, 0, 0), (false, 0, SLOTS, 0)],
-        agg_precommit_rounds: vec![(false, 0, 0, 0), (false, 0, SLOTS, 0)],
+        agg_prevote_rounds: vec![(false, Policy::SLOTS, 0, 0), (false, 0, Policy::SLOTS, 0)],
+        agg_precommit_rounds: vec![(false, 0, 0, 0), (false, 0, Policy::SLOTS, 0)],
         get_agg_rounds: vec![],
     };
 
@@ -648,7 +654,7 @@ async fn forced_commit() {
         proposer_round: 99,
         proposal_rounds: vec![(false, TestProposal(0, 0), None)],
         agg_prevote_rounds: vec![(false, 0, 0, 0)],
-        agg_precommit_rounds: vec![(false, SLOTS, 0, 0)],
+        agg_precommit_rounds: vec![(false, Policy::SLOTS, 0, 0)],
         get_agg_rounds: vec![],
     };
 
@@ -668,9 +674,17 @@ async fn past_proposal() {
             (false, TestProposal(1, 1), None),
             (false, TestProposal(0, 2), Some(0)),
         ],
-        agg_prevote_rounds: vec![(false, 0, 0, 0), (false, 0, 0, SLOTS), (false, SLOTS, 0, 0)],
-        agg_precommit_rounds: vec![(false, 0, 0, 0), (false, 0, 0, SLOTS), (false, SLOTS, 0, 0)],
-        get_agg_rounds: vec![(false, SLOTS, 0, 0)],
+        agg_prevote_rounds: vec![
+            (false, 0, 0, 0),
+            (false, 0, 0, Policy::SLOTS),
+            (false, Policy::SLOTS, 0, 0),
+        ],
+        agg_precommit_rounds: vec![
+            (false, 0, 0, 0),
+            (false, 0, 0, Policy::SLOTS),
+            (false, Policy::SLOTS, 0, 0),
+        ],
+        get_agg_rounds: vec![(false, Policy::SLOTS, 0, 0)],
     };
 
     assert!(tendermint_loop(validator, None, TestProposal(0, 2))
@@ -683,9 +697,9 @@ async fn it_can_assemble_block_from_state() {
     let val = TestValidator {
         proposer_round: 99,
         proposal_rounds: vec![(false, TestProposal(0, 0), None)],
-        agg_prevote_rounds: vec![(false, SLOTS, 0, 0)],
-        agg_precommit_rounds: vec![(false, SLOTS, 0, 0)],
-        get_agg_rounds: vec![(false, SLOTS, 0, 0)],
+        agg_prevote_rounds: vec![(false, Policy::SLOTS, 0, 0)],
+        agg_precommit_rounds: vec![(false, Policy::SLOTS, 0, 0)],
+        get_agg_rounds: vec![(false, Policy::SLOTS, 0, 0)],
     };
 
     // First, make the validator lock itself on a value but then drop the instance. Keep the state.

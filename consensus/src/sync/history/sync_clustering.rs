@@ -6,7 +6,7 @@ use parking_lot::RwLock;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{network::Network, peer::CloseReason, request::RequestError};
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 
 use crate::messages::{MacroChain, RequestMacroChain};
 use crate::sync::history::cluster::{SyncCluster, SyncClusterResult};
@@ -67,9 +67,9 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                 //  * is a non-election macro block
                 if let Some(checkpoint) = &macro_chain.checkpoint {
                     let checkpoint_epoch = epoch_number + epoch_ids.len() as u32 + 1;
-                    if policy::epoch_at(checkpoint.block_number) != checkpoint_epoch
-                        || !policy::is_macro_block_at(checkpoint.block_number)
-                        || policy::is_election_block_at(checkpoint.block_number)
+                    if Policy::epoch_at(checkpoint.block_number) != checkpoint_epoch
+                        || !Policy::is_macro_block_at(checkpoint.block_number)
+                        || Policy::is_election_block_at(checkpoint.block_number)
                     {
                         // Peer provided an invalid checkpoint block number, close connection.
                         log::error!(
@@ -554,7 +554,7 @@ mod tests {
     use nimiq_network_interface::network::Network;
     use nimiq_network_mock::{MockHub, MockNetwork, MockPeerId};
     use nimiq_primitives::networks::NetworkId;
-    use nimiq_primitives::policy;
+    use nimiq_primitives::policy::Policy;
     use nimiq_test_log::test;
     use nimiq_utils::time::OffsetTime;
 
@@ -592,8 +592,8 @@ mod tests {
                 checkpoint_id[9] = 1;
             }
 
-            let block_number = (first_epoch_number + len) as u32 * policy::BLOCKS_PER_EPOCH
-                + policy::BLOCKS_PER_BATCH;
+            let block_number = (first_epoch_number + len) as u32 * Policy::blocks_per_epoch()
+                + Policy::blocks_per_batch();
             Some(Checkpoint {
                 hash: Blake2bHash::from(checkpoint_id),
                 block_number,

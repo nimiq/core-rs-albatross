@@ -7,8 +7,7 @@ use nimiq_bls::{CompressedPublicKey as BlsPublicKey, CompressedPublicKey};
 use nimiq_database::WriteTransaction;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
-use nimiq_primitives::coin::Coin;
-use nimiq_primitives::policy;
+use nimiq_primitives::{coin::Coin, policy::Policy};
 
 use crate::logs::{Log, OperationInfo};
 use crate::staking_contract::receipts::{
@@ -150,7 +149,7 @@ impl StakingContract {
         reward_address: Address,
     ) -> Result<Vec<Log>, AccountError> {
         // Get the deposit value.
-        let deposit = Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT);
+        let deposit = Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT);
 
         // See if the validator does not exist.
         if StakingContract::get_validator(accounts_tree, db_txn, validator_address).is_none() {
@@ -749,10 +748,10 @@ impl StakingContract {
                 return Err(AccountError::InvalidForSender);
             }
             Some(_time) => {
-                //  This check was removed because of the nature of the failed delete validator transaction
-                // (which can delete the validator if the deposit is consumed, regardles of the inactivity state)
+                // This check was removed because of the nature of the failed delete validator transaction
+                // (which can delete the validator if the deposit is consumed, regardless of the inactivity state)
                 // However, if slashing is implemented, then this strategy needs to be revisited.
-                //if block_height <= policy::election_block_after(time) + policy::BLOCKS_PER_BATCH {
+                // if block_height <= policy::election_block_after(time) + policy::BLOCKS_PER_BATCH {
                 //    return Err(AccountError::InvalidForSender);
                 //}
             }
@@ -901,10 +900,10 @@ impl StakingContract {
             voting_key: receipt.voting_key,
             reward_address: receipt.reward_address,
             signal_data: receipt.signal_data,
-            balance: Coin::from_u64_unchecked(balance + policy::VALIDATOR_DEPOSIT),
+            balance: Coin::from_u64_unchecked(balance + Policy::VALIDATOR_DEPOSIT),
             num_stakers,
             inactivity_flag: Some(receipt.retire_time),
-            deposit: Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT),
+            deposit: Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT),
         };
 
         accounts_tree.put(
@@ -916,7 +915,7 @@ impl StakingContract {
         // Get the staking contract main and update it.
         let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
 
-        let deposit = Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT);
+        let deposit = Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT);
 
         staking_contract.balance = Account::balance_add(staking_contract.balance, deposit)?;
 

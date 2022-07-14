@@ -16,7 +16,7 @@ use nimiq_keys::{
     Address, KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey, SecureGenerate,
 };
 use nimiq_primitives::coin::Coin;
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 use nimiq_test_log::test;
 use nimiq_test_utils::blockchain::{
     fill_micro_blocks, fill_micro_blocks_with_txns, sign_macro_block, signing_key, voting_key,
@@ -160,7 +160,7 @@ fn it_can_produce_election_blocks() {
     let producer = BlockProducer::new(signing_key(), voting_key());
 
     // push micro and macro blocks until the 3rd epoch is reached
-    while policy::epoch_at(blockchain.read().block_number()) < 2 {
+    while Policy::epoch_at(blockchain.read().block_number()) < 2 {
         fill_micro_blocks(&producer, &blockchain);
 
         let bc = blockchain.upgradable_read();
@@ -854,7 +854,7 @@ fn it_can_consume_all_validator_deposit() {
         address.clone(),
         &key_pair,
         Coin::from_u64_unchecked(100),
-        Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT),
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT),
         1,
         NetworkId::UnitAlbatross,
     )
@@ -893,7 +893,7 @@ fn it_can_consume_all_validator_deposit() {
 
         assert_eq!(
             validator.deposit,
-            Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT - 100)
+            Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT - 100)
         );
     }
 
@@ -903,8 +903,8 @@ fn it_can_consume_all_validator_deposit() {
     let invalid_tx = TransactionBuilder::new_delete_validator(
         address.clone(),
         &key_pair,
-        Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT - 100),
-        Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT),
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT - 100),
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT),
         1,
         NetworkId::UnitAlbatross,
     )
@@ -985,7 +985,7 @@ fn it_can_revert_failed_delete_validator() {
         address.clone(),
         &key_pair,
         Coin::from_u64_unchecked(100),
-        Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT),
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT),
         1,
         NetworkId::UnitAlbatross,
     )
@@ -1024,7 +1024,7 @@ fn it_can_revert_failed_delete_validator() {
 
         assert_eq!(
             validator.deposit,
-            Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT - 100)
+            Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT - 100)
         );
         //Now the validator should be inactive because of the failing txn..
         assert_eq!(validator.inactivity_flag, Some(1));
@@ -1049,7 +1049,7 @@ fn it_can_revert_failed_delete_validator() {
 
     assert_eq!(
         validator.deposit,
-        Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT)
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT)
     );
 }
 

@@ -63,7 +63,7 @@ mod tests {
     use nimiq_bls::pedersen::pedersen_generators;
     use nimiq_bls::utils::bytes_to_bits;
     use nimiq_nano_primitives::{pk_tree_construct, state_commitment};
-    use nimiq_primitives::policy::SLOTS;
+    use nimiq_primitives::policy::Policy;
     use nimiq_test_log::test;
 
     use super::*;
@@ -78,7 +78,7 @@ mod tests {
 
         // Create random keys.
         let g2_point = G2Projective::rand(rng);
-        let public_keys = vec![g2_point; SLOTS as usize];
+        let public_keys = vec![g2_point; Policy::SLOTS as usize];
 
         // Create random block number.
         let block_number = u32::rand(rng);

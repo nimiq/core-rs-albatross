@@ -1,7 +1,6 @@
 use beserial::Serialize;
 use nimiq_keys::Address;
-use nimiq_primitives::account::AccountType;
-use nimiq_primitives::policy::STAKING_CONTRACT_ADDRESS;
+use nimiq_primitives::{account::AccountType, policy::Policy};
 use nimiq_transaction::account::htlc_contract::CreationTransactionData as HtlcCreationData;
 use nimiq_transaction::account::staking_contract::IncomingStakingTransactionData;
 use nimiq_transaction::account::vesting_contract::CreationTransactionData as VestingCreationData;
@@ -208,7 +207,7 @@ impl Recipient {
     pub fn address(&self) -> Option<Address> {
         match self {
             Recipient::Basic { address, .. } => Some(address.clone()),
-            Recipient::Staking { .. } => Some(STAKING_CONTRACT_ADDRESS),
+            Recipient::Staking { .. } => Some(Policy::STAKING_CONTRACT_ADDRESS),
             _ => None,
         }
     }

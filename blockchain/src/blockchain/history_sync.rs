@@ -9,7 +9,7 @@ use nimiq_block::{Block, BlockError};
 use nimiq_database::WriteTransaction;
 use nimiq_keys::PublicKey;
 use nimiq_primitives::coin::Coin;
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 use nimiq_transaction::Transaction;
 
 use crate::chain_info::ChainInfo;
@@ -162,10 +162,10 @@ impl Blockchain {
         // Calculate the cumulative transaction fees for the given batch. This is necessary to
         // create the chain info for the block.
         let mut cum_tx_fees = Coin::ZERO;
-        let current_batch = policy::batch_at(block.block_number());
+        let current_batch = Policy::batch_at(block.block_number());
         let mut cum_ext_tx_size = 0u64;
         for i in (0..history.len()).rev() {
-            if policy::batch_at(history[i].block_number) != current_batch {
+            if Policy::batch_at(history[i].block_number) != current_batch {
                 break;
             }
             if let ExtTxData::Basic(tx) = &history[i].data {
@@ -234,7 +234,7 @@ impl Blockchain {
         // to the macro blocks. This is necessary because the History Store doesn't store those inherents
         // so we need to add them again in order to correctly sync.
         for (i, block_number) in block_numbers.iter().enumerate() {
-            if policy::is_macro_block_at(*block_number) {
+            if Policy::is_macro_block_at(*block_number) {
                 let finalize_batch = Inherent {
                     ty: InherentType::FinalizeBatch,
                     target: this.staking_contract_address(),
@@ -244,7 +244,7 @@ impl Blockchain {
 
                 block_inherents.get_mut(i).unwrap().push(finalize_batch);
 
-                if policy::is_election_block_at(*block_number) {
+                if Policy::is_election_block_at(*block_number) {
                     let finalize_epoch = Inherent {
                         ty: InherentType::FinalizeEpoch,
                         target: this.staking_contract_address(),
@@ -397,7 +397,7 @@ impl Blockchain {
         txn: &mut WriteTransaction,
     ) -> usize {
         // Find the index of the first extended transaction in the current batch.
-        let last_macro_block = policy::last_macro_block(self.block_number());
+        let last_macro_block = Policy::last_macro_block(self.block_number());
         let mut first_new_ext_tx = history
             .iter()
             .position(|ext_tx| ext_tx.block_number > last_macro_block)

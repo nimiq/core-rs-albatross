@@ -5,7 +5,6 @@ use std::time::Duration;
 use async_trait::async_trait;
 use beserial::Serialize;
 use futures::{future::BoxFuture, stream::BoxStream, FutureExt, StreamExt};
-use nimiq_primitives::policy;
 use parking_lot::RwLock;
 
 use nimiq_block::{
@@ -17,10 +16,7 @@ use nimiq_blockchain::{AbstractBlockchain, Blockchain, NextBlock};
 use nimiq_bls::PublicKey;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_network_interface::network::MsgAcceptance;
-use nimiq_primitives::{
-    policy::{TENDERMINT_TIMEOUT_DELTA, TENDERMINT_TIMEOUT_INIT},
-    slots::Validators,
-};
+use nimiq_primitives::{policy::Policy, slots::Validators};
 use nimiq_tendermint::{
     AggregationResult, ProposalResult, Step, TendermintError, TendermintOutsideDeps,
     TendermintState,
@@ -165,7 +161,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
             // Compute the data for the MacroBody
             let lost_reward_set = staking_contract.previous_lost_rewards();
             let disabled_set = staking_contract.previous_disabled_slots();
-            let validators = if policy::is_election_block_at(proposal.block_number) {
+            let validators = if Policy::is_election_block_at(proposal.block_number) {
                 Some(blockchain.next_validators(&proposal.seed))
             } else {
                 None
@@ -274,7 +270,8 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
 
             // Calculate the timeout duration.
             let timeout = Duration::from_millis(
-                TENDERMINT_TIMEOUT_INIT + round as u64 * TENDERMINT_TIMEOUT_DELTA,
+                Policy::tendermint_timeout_init()
+                    + round as u64 * Policy::tendermint_timeout_delta(),
             );
 
             debug!(

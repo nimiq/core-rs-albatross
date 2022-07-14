@@ -9,7 +9,7 @@ use nimiq_block::{
 use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::coin::Coin;
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 
 /// Struct that, for each block, keeps information relative to the chain the block is on.
 #[derive(Clone, Debug)]
@@ -48,7 +48,7 @@ impl ChainInfo {
 
         // Reset the transaction fee accumulator if this is the first block of a batch. Otherwise,
         // just add the transactions fees of this block to the accumulator.
-        let cum_tx_fees = if policy::is_macro_block_at(prev_info.head.block_number()) {
+        let cum_tx_fees = if Policy::is_macro_block_at(prev_info.head.block_number()) {
             block.sum_transaction_fees()
         } else {
             prev_info.cum_tx_fees + block.sum_transaction_fees()
@@ -72,13 +72,13 @@ impl ChainInfo {
         // was an election macro block or it was a checkpoint macro block and such checkpoint macro
         // block was not pruned.
         // Also set prunable to `false` if we exceeded the policy::HISTORY_CHUNKS_MAX_SIZE
-        if policy::is_election_block_at(prev_info.head.block_number())
-            || (policy::is_macro_block_at(prev_info.head.block_number()) && !prev_info.prunable)
+        if Policy::is_election_block_at(prev_info.head.block_number())
+            || (Policy::is_macro_block_at(prev_info.head.block_number()) && !prev_info.prunable)
         {
             self.cum_ext_tx_size = block_ext_tx_size;
             self.prunable = true;
-        } else if policy::is_macro_block_at(self.head.block_number())
-            && prev_info.cum_ext_tx_size + block_ext_tx_size > policy::HISTORY_CHUNKS_MAX_SIZE
+        } else if Policy::is_macro_block_at(self.head.block_number())
+            && prev_info.cum_ext_tx_size + block_ext_tx_size > Policy::HISTORY_CHUNKS_MAX_SIZE
         {
             self.cum_ext_tx_size = prev_info.cum_ext_tx_size + block_ext_tx_size;
             self.prunable = false;

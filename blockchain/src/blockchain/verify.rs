@@ -8,7 +8,7 @@ use nimiq_block::{
 use nimiq_database::Transaction as DBtx;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::PublicKey as SchnorrPublicKey;
-use nimiq_primitives::{policy, slots::Validators};
+use nimiq_primitives::{policy::Policy, slots::Validators};
 use nimiq_transaction::Transaction;
 
 use crate::blockchain_state::BlockchainState;
@@ -33,11 +33,11 @@ impl Blockchain {
         expected_election_hash: &Blake2bHash,
     ) -> Result<(), PushError> {
         // Check the version
-        if header.version() != policy::VERSION {
+        if header.version() != Policy::VERSION {
             warn!(
                 header = %header,
                 obtained_version = header.version(),
-                expected_version = policy::VERSION,
+                expected_version = Policy::VERSION,
                 reason = "wrong version",
                 "Rejecting block"
             );
@@ -105,12 +105,12 @@ impl Blockchain {
                 // Check that skip blocks has the expected timestamp
                 if skip_block
                     && header.timestamp()
-                        != prev_info.head.timestamp() + policy::BLOCK_PRODUCER_TIMEOUT
+                        != prev_info.head.timestamp() + Policy::BLOCK_PRODUCER_TIMEOUT
                 {
                     warn!(
                         header = %header,
                         obtained_timestamp = header.timestamp(),
-                        expected_timestamp   = prev_info.head.timestamp() + policy::BLOCK_PRODUCER_TIMEOUT,
+                        expected_timestamp   = prev_info.head.timestamp() + Policy::BLOCK_PRODUCER_TIMEOUT,
                         reason = "Unexpected timestamp for a skip block",
                         "Rejecting block"
                     );
@@ -123,12 +123,12 @@ impl Blockchain {
                 // to the allowed maximum drift. Basically, we check that the block isn't from the future.
                 // Both times are given in Unix time standard in millisecond precision.
                 let timestamp_diff = header.timestamp().saturating_sub(blockchain.now());
-                if timestamp_diff > policy::TIMESTAMP_MAX_DRIFT {
+                if timestamp_diff > Policy::TIMESTAMP_MAX_DRIFT {
                     warn!(
                         header = %header,
                         block_timestamp = header.timestamp(),
                         obtained_timestamp_diff = timestamp_diff,
-                        max_timestamp_drift     = policy::TIMESTAMP_MAX_DRIFT,
+                        max_timestamp_drift     = Policy::TIMESTAMP_MAX_DRIFT,
                         reason = "Block timestamp exceeds allowed maximum drift",
                         "Rejecting block"
                     );
@@ -308,11 +308,11 @@ impl Blockchain {
             BlockBody::Micro(body) => {
                 // Check the size of the body.
                 let body_size = body.serialized_size();
-                if body_size > policy::MAX_SIZE_MICRO_BODY {
+                if body_size > Policy::MAX_SIZE_MICRO_BODY {
                     warn!(
                         %header,
                         body_size = body_size,
-                        max_size  = policy::MAX_SIZE_MICRO_BODY,
+                        max_size  = Policy::MAX_SIZE_MICRO_BODY,
                         reason = "Micro Body size exceeds maximum size",
                         "Rejecting block"
                     );
@@ -439,7 +439,7 @@ impl Blockchain {
 
                 // In case of an election block make sure it contains validators and pk_tree_root,
                 // if it is not an election block make sure it doesn't contain either.
-                let is_election = policy::is_election_block_at(header.block_number());
+                let is_election = Policy::is_election_block_at(header.block_number());
 
                 if is_election != body.validators.is_some() {
                     return Err(PushError::InvalidBlock(BlockError::InvalidValidators));

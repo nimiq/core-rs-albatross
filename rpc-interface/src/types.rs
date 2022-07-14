@@ -19,7 +19,7 @@ use nimiq_collections::BitSet;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::{Address, PublicKey};
 use nimiq_primitives::coin::Coin;
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 use nimiq_primitives::slots::Validators;
 use nimiq_transaction::account::htlc_contract::AnyHash;
 use nimiq_transaction::account::htlc_contract::HashAlgorithm as HTLCContractHashAlgorithm;
@@ -215,8 +215,8 @@ impl Block {
         let block_number = block.block_number();
         let timestamp = block.timestamp();
         let size = block.serialized_size() as u32;
-        let batch = policy::batch_at(block_number);
-        let epoch = policy::epoch_at(block_number);
+        let batch = Policy::batch_at(block_number);
+        let epoch = Policy::epoch_at(block_number);
 
         match block {
             nimiq_block::Block::Macro(macro_block) => {
@@ -269,7 +269,7 @@ impl Block {
                     history_hash: macro_block.header.history_root,
                     transactions,
                     additional_fields: BlockAdditionalFields::Macro {
-                        is_election_block: policy::is_election_block_at(block_number),
+                        is_election_block: Policy::is_election_block_at(block_number),
                         parent_election_hash: macro_block.header.parent_election_hash,
                         slots,
                         lost_reward_set,

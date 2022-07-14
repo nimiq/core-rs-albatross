@@ -2,7 +2,7 @@ use std::convert::TryInto;
 
 use nimiq_block::MacroHeader;
 use nimiq_primitives::coin::Coin;
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 
 /// Parses the genesis supply and timestamp from the genesis block. We require both values to
 /// calculate the block rewards.
@@ -41,10 +41,10 @@ pub fn block_reward_for_batch(
 
     let genesis_supply_u64 = u64::from(genesis_supply);
 
-    let prev_supply = policy::supply_at(genesis_supply_u64, genesis_timestamp, previous_timestamp);
+    let prev_supply = Policy::supply_at(genesis_supply_u64, genesis_timestamp, previous_timestamp);
 
     let current_supply =
-        policy::supply_at(genesis_supply_u64, genesis_timestamp, current_timestamp);
+        Policy::supply_at(genesis_supply_u64, genesis_timestamp, current_timestamp);
 
     Coin::from_u64_unchecked(current_supply - prev_supply)
 }

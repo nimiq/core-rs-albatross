@@ -14,10 +14,7 @@ use nimiq_keys::{Address, KeyPair, PrivateKey, PublicKey};
 use nimiq_primitives::account::AccountType;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
-use nimiq_primitives::policy;
-use nimiq_primitives::policy::{
-    BLOCKS_PER_BATCH, BLOCKS_PER_EPOCH, STAKING_CONTRACT_ADDRESS, VALIDATOR_DEPOSIT,
-};
+use nimiq_primitives::policy::Policy;
 use nimiq_primitives::slots::SlashedSlot;
 use nimiq_test_log::test;
 use nimiq_transaction::account::staking_contract::{
@@ -145,7 +142,7 @@ fn can_get_it() {
 
     assert_eq!(
         staking_contract.balance,
-        Coin::from_u64_unchecked(150_000_000 + VALIDATOR_DEPOSIT)
+        Coin::from_u64_unchecked(150_000_000 + Policy::VALIDATOR_DEPOSIT)
     );
 
     let validator = StakingContract::get_validator(
@@ -157,7 +154,7 @@ fn can_get_it() {
 
     assert_eq!(
         validator.balance,
-        Coin::from_u64_unchecked(150_000_000 + VALIDATOR_DEPOSIT)
+        Coin::from_u64_unchecked(150_000_000 + Policy::VALIDATOR_DEPOSIT)
     );
 
     let staker = StakingContract::get_staker(
@@ -203,7 +200,7 @@ fn create_validator_works() {
             signal_data: None,
             proof: SignatureProof::default(),
         },
-        VALIDATOR_DEPOSIT,
+        Policy::VALIDATOR_DEPOSIT,
         &cold_keypair,
     );
 
@@ -229,7 +226,7 @@ fn create_validator_works() {
     assert_eq!(validator.signal_data, None);
     assert_eq!(
         validator.balance,
-        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT)
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT)
     );
     assert_eq!(validator.num_stakers, 0);
     assert_eq!(validator.inactivity_flag, None);
@@ -238,12 +235,12 @@ fn create_validator_works() {
 
     assert_eq!(
         staking_contract.balance,
-        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT)
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT)
     );
 
     assert_eq!(
         staking_contract.active_validators.get(&validator_address),
-        Some(&Coin::from_u64_unchecked(VALIDATOR_DEPOSIT))
+        Some(&Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT))
     );
 
     // Doesn't work when the validator already exists.
@@ -356,7 +353,7 @@ fn update_validator_works() {
     assert_eq!(validator.signal_data, Some(Blake2bHash::default()));
     assert_eq!(
         validator.balance,
-        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 150_000_000)
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 150_000_000)
     );
     assert_eq!(validator.num_stakers, 1);
     assert_eq!(validator.inactivity_flag, None);
@@ -390,7 +387,7 @@ fn update_validator_works() {
     assert_eq!(validator.signal_data, None);
     assert_eq!(
         validator.balance,
-        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 150_000_000)
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 150_000_000)
     );
     assert_eq!(validator.num_stakers, 1);
     assert_eq!(validator.inactivity_flag, None);
@@ -501,7 +498,7 @@ fn inactivate_validator_works() {
     assert_eq!(validator.signal_data, None);
     assert_eq!(
         validator.balance,
-        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 150_000_000)
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 150_000_000)
     );
     assert_eq!(validator.num_stakers, 1);
     assert_eq!(validator.inactivity_flag, Some(2));
@@ -579,7 +576,7 @@ fn inactivate_validator_works() {
     assert_eq!(validator.signal_data, None);
     assert_eq!(
         validator.balance,
-        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 150_000_000)
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 150_000_000)
     );
     assert_eq!(validator.num_stakers, 1);
     assert_eq!(validator.inactivity_flag, None);
@@ -680,7 +677,7 @@ fn reactivate_validator_works() {
     assert_eq!(validator.signal_data, None);
     assert_eq!(
         validator.balance,
-        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 150_000_000)
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 150_000_000)
     );
     assert_eq!(validator.num_stakers, 1);
     assert_eq!(validator.inactivity_flag, None);
@@ -689,7 +686,9 @@ fn reactivate_validator_works() {
 
     assert_eq!(
         staking_contract.active_validators.get(&validator_address),
-        Some(&Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 150_000_000))
+        Some(&Coin::from_u64_unchecked(
+            Policy::VALIDATOR_DEPOSIT + 150_000_000
+        ))
     );
 
     // Try with an already active validator.
@@ -757,7 +756,7 @@ fn reactivate_validator_works() {
     assert_eq!(validator.signal_data, None);
     assert_eq!(
         validator.balance,
-        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 150_000_000)
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 150_000_000)
     );
     assert_eq!(validator.num_stakers, 1);
     assert_eq!(validator.inactivity_flag, Some(2));
@@ -979,7 +978,7 @@ fn delete_validator_works() {
         .unwrap();
 
     // Doesn't work until the next election block.
-    let next_election_block = policy::election_block_after(2);
+    let next_election_block = Policy::election_block_after(2);
 
     //for h in 2..=next_election_block {
     // This check was removed by the failing txn change, it is now possible to delete a validator
@@ -1017,7 +1016,7 @@ fn delete_validator_works() {
         &accounts_tree,
         &mut db_txn,
         &tx,
-        next_election_block + BLOCKS_PER_BATCH + 1,
+        next_election_block + Policy::blocks_per_batch() + 1,
         0,
     )
     .unwrap();
@@ -1108,7 +1107,7 @@ fn delete_validator_works() {
     assert_eq!(validator.signal_data, None);
     assert_eq!(
         validator.balance,
-        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 150_000_000)
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 150_000_000)
     );
     assert_eq!(validator.num_stakers, 1);
     assert_eq!(validator.inactivity_flag, Some(2));
@@ -1129,7 +1128,7 @@ fn delete_validator_works() {
 
     assert_eq!(
         staking_contract.balance,
-        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 150_000_000)
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 150_000_000)
     );
 }
 
@@ -1181,7 +1180,7 @@ fn create_staker_works() {
 
     assert_eq!(
         validator.balance,
-        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 150_000_000)
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 150_000_000)
     );
     assert_eq!(validator.num_stakers, 1);
 
@@ -1197,12 +1196,14 @@ fn create_staker_works() {
 
     assert_eq!(
         staking_contract.balance,
-        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 150_000_000)
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 150_000_000)
     );
 
     assert_eq!(
         staking_contract.active_validators.get(&validator_address),
-        Some(&Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 150_000_000))
+        Some(&Coin::from_u64_unchecked(
+            Policy::VALIDATOR_DEPOSIT + 150_000_000
+        ))
     );
 
     // Doesn't work when the staker already exists.
@@ -1236,7 +1237,7 @@ fn create_staker_works() {
 
     assert_eq!(
         validator.balance,
-        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT)
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT)
     );
     assert_eq!(validator.num_stakers, 0);
 
@@ -1252,12 +1253,12 @@ fn create_staker_works() {
 
     assert_eq!(
         staking_contract.balance,
-        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT)
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT)
     );
 
     assert_eq!(
         staking_contract.active_validators.get(&validator_address),
-        Some(&Coin::from_u64_unchecked(VALIDATOR_DEPOSIT))
+        Some(&Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT))
     );
 }
 
@@ -1308,19 +1309,21 @@ fn stake_works() {
 
     assert_eq!(
         validator.balance,
-        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 300_000_000)
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 300_000_000)
     );
 
     let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &db_txn);
 
     assert_eq!(
         staking_contract.balance,
-        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 300_000_000)
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 300_000_000)
     );
 
     assert_eq!(
         staking_contract.active_validators.get(&validator_address),
-        Some(&Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 300_000_000))
+        Some(&Coin::from_u64_unchecked(
+            Policy::VALIDATOR_DEPOSIT + 300_000_000
+        ))
     );
 
     // Can revert the transaction.
@@ -1347,19 +1350,21 @@ fn stake_works() {
 
     assert_eq!(
         validator.balance,
-        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 150_000_000)
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 150_000_000)
     );
 
     let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &db_txn);
 
     assert_eq!(
         staking_contract.balance,
-        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 150_000_000)
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 150_000_000)
     );
 
     assert_eq!(
         staking_contract.active_validators.get(&validator_address),
-        Some(&Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 150_000_000))
+        Some(&Coin::from_u64_unchecked(
+            Policy::VALIDATOR_DEPOSIT + 150_000_000
+        ))
     );
 }
 
@@ -1393,7 +1398,7 @@ fn update_staker_works() {
         voting_key,
         other_validator_address.clone(),
         None,
-        Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT),
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT),
     )
     .unwrap();
 
@@ -1437,7 +1442,7 @@ fn update_staker_works() {
 
     assert_eq!(
         old_validator.balance,
-        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT)
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT)
     );
     assert_eq!(old_validator.num_stakers, 0);
 
@@ -1446,7 +1451,7 @@ fn update_staker_works() {
 
     assert_eq!(
         new_validator.balance,
-        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 150_000_000)
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 150_000_000)
     );
     assert_eq!(new_validator.num_stakers, 1);
 
@@ -1462,14 +1467,16 @@ fn update_staker_works() {
 
     assert_eq!(
         staking_contract.active_validators.get(&validator_address),
-        Some(&Coin::from_u64_unchecked(VALIDATOR_DEPOSIT))
+        Some(&Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT))
     );
 
     assert_eq!(
         staking_contract
             .active_validators
             .get(&other_validator_address),
-        Some(&Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 150_000_000))
+        Some(&Coin::from_u64_unchecked(
+            Policy::VALIDATOR_DEPOSIT + 150_000_000
+        ))
     );
 
     // Doesn't work when the staker doesn't exist.
@@ -1534,7 +1541,7 @@ fn update_staker_works() {
 
     assert_eq!(
         other_validator.balance,
-        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT)
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT)
     );
     assert_eq!(other_validator.num_stakers, 0);
 
@@ -1544,7 +1551,7 @@ fn update_staker_works() {
         staking_contract
             .active_validators
             .get(&other_validator_address),
-        Some(&Coin::from_u64_unchecked(VALIDATOR_DEPOSIT))
+        Some(&Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT))
     );
 
     // Can revert the transaction.
@@ -1571,7 +1578,7 @@ fn update_staker_works() {
 
     assert_eq!(
         validator.balance,
-        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 150_000_000)
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 150_000_000)
     );
     assert_eq!(validator.num_stakers, 1);
 
@@ -1589,7 +1596,9 @@ fn update_staker_works() {
         staking_contract
             .active_validators
             .get(&other_validator_address),
-        Some(&Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 150_000_000))
+        Some(&Coin::from_u64_unchecked(
+            Policy::VALIDATOR_DEPOSIT + 150_000_000
+        ))
     );
 
     // Works when the staker doesn't exist.
@@ -1672,7 +1681,7 @@ fn unstake_works() {
 
     assert_eq!(
         validator.balance,
-        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 50_000_000)
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 50_000_000)
     );
     assert_eq!(validator.num_stakers, 1);
     assert_eq!(
@@ -1687,12 +1696,14 @@ fn unstake_works() {
 
     assert_eq!(
         staking_contract.balance,
-        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 50_000_000)
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 50_000_000)
     );
 
     assert_eq!(
         staking_contract.active_validators.get(&validator_address),
-        Some(&Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 50_000_000))
+        Some(&Coin::from_u64_unchecked(
+            Policy::VALIDATOR_DEPOSIT + 50_000_000
+        ))
     );
 
     // Works when removing the entire balance.
@@ -1742,7 +1753,7 @@ fn unstake_works() {
 
     assert_eq!(
         validator.balance,
-        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT)
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT)
     );
     assert_eq!(validator.num_stakers, 0);
     assert_eq!(
@@ -1757,12 +1768,12 @@ fn unstake_works() {
 
     assert_eq!(
         staking_contract.balance,
-        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT)
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT)
     );
 
     assert_eq!(
         staking_contract.active_validators.get(&validator_address),
-        Some(&Coin::from_u64_unchecked(VALIDATOR_DEPOSIT))
+        Some(&Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT))
     );
 
     // Can revert the transaction.
@@ -1806,7 +1817,7 @@ fn unstake_works() {
 
     assert_eq!(
         validator.balance,
-        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 50_000_000)
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 50_000_000)
     );
     assert_eq!(validator.num_stakers, 1);
     assert_eq!(
@@ -1821,12 +1832,14 @@ fn unstake_works() {
 
     assert_eq!(
         staking_contract.balance,
-        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 50_000_000)
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 50_000_000)
     );
 
     assert_eq!(
         staking_contract.active_validators.get(&validator_address),
-        Some(&Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 50_000_000))
+        Some(&Coin::from_u64_unchecked(
+            Policy::VALIDATOR_DEPOSIT + 50_000_000
+        ))
     );
 }
 
@@ -1982,7 +1995,7 @@ fn slash_inherents_work() {
         &accounts_tree,
         &mut db_txn,
         &inherent,
-        1 + BLOCKS_PER_BATCH,
+        1 + Policy::blocks_per_batch(),
         0,
     )
     .unwrap();
@@ -1998,7 +2011,7 @@ fn slash_inherents_work() {
             },
             Log::Park {
                 validator_address: slot.validator_address.clone(),
-                event_block: 1 + BLOCKS_PER_BATCH,
+                event_block: 1 + Policy::blocks_per_batch(),
             },
         ]
     );
@@ -2026,7 +2039,7 @@ fn slash_inherents_work() {
         &accounts_tree,
         &mut db_txn,
         &inherent,
-        1 + BLOCKS_PER_BATCH,
+        1 + Policy::blocks_per_batch(),
         Some(&receipt),
         &validator_address,
         slot.slot,
@@ -2045,7 +2058,7 @@ fn slash_inherents_work() {
         &accounts_tree,
         &mut db_txn,
         &inherent,
-        1 + BLOCKS_PER_EPOCH,
+        1 + Policy::blocks_per_epoch(),
         0,
     )
     .unwrap();
@@ -2061,7 +2074,7 @@ fn slash_inherents_work() {
             },
             Log::Park {
                 validator_address: slot.validator_address,
-                event_block: 1 + BLOCKS_PER_EPOCH,
+                event_block: 1 + Policy::blocks_per_epoch(),
             },
         ]
     );
@@ -2088,7 +2101,7 @@ fn slash_inherents_work() {
         &accounts_tree,
         &mut db_txn,
         &inherent,
-        1 + BLOCKS_PER_EPOCH,
+        1 + Policy::blocks_per_epoch(),
         Some(&receipt),
         &validator_address,
         slot.slot,
@@ -2288,7 +2301,7 @@ fn make_sample_contract(
         voting_key,
         cold_address.clone(),
         None,
-        Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT),
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT),
     )
     .unwrap();
 
@@ -2311,7 +2324,7 @@ fn make_incoming_transaction(data: IncomingStakingTransactionData, value: u64) -
         | IncomingStakingTransactionData::Stake { .. } => Transaction::new_extended(
             Address::from_any_str(STAKER_ADDRESS).unwrap(),
             AccountType::Basic,
-            STAKING_CONTRACT_ADDRESS,
+            Policy::STAKING_CONTRACT_ADDRESS,
             AccountType::Staking,
             value.try_into().unwrap(),
             100.try_into().unwrap(),
@@ -2322,7 +2335,7 @@ fn make_incoming_transaction(data: IncomingStakingTransactionData, value: u64) -
         _ => Transaction::new_signalling(
             Address::from_any_str(STAKER_ADDRESS).unwrap(),
             AccountType::Basic,
-            STAKING_CONTRACT_ADDRESS,
+            Policy::STAKING_CONTRACT_ADDRESS,
             AccountType::Staking,
             value.try_into().unwrap(),
             100.try_into().unwrap(),
@@ -2365,11 +2378,11 @@ fn make_signed_incoming_transaction(
 
 fn make_delete_validator_transaction() -> Transaction {
     let mut tx = Transaction::new_extended(
-        STAKING_CONTRACT_ADDRESS,
+        Policy::STAKING_CONTRACT_ADDRESS,
         AccountType::Staking,
         Address::from_any_str(STAKER_ADDRESS).unwrap(),
         AccountType::Basic,
-        (VALIDATOR_DEPOSIT - 100).try_into().unwrap(),
+        (Policy::VALIDATOR_DEPOSIT - 100).try_into().unwrap(),
         100.try_into().unwrap(),
         vec![],
         1,
@@ -2392,7 +2405,7 @@ fn make_delete_validator_transaction() -> Transaction {
 
 fn make_unstake_transaction(value: u64) -> Transaction {
     let mut tx = Transaction::new_extended(
-        STAKING_CONTRACT_ADDRESS,
+        Policy::STAKING_CONTRACT_ADDRESS,
         AccountType::Staking,
         Address::from_any_str(STAKER_ADDRESS).unwrap(),
         AccountType::Basic,

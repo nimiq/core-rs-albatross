@@ -7,7 +7,7 @@ use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
 use nimiq_block::{Block, ForkProof};
 use nimiq_database::WriteTransaction;
 use nimiq_hash::{Blake2bHash, Hash};
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 
 use crate::blockchain_state::BlockchainState;
 use crate::chain_info::ChainInfo;
@@ -31,7 +31,7 @@ impl Blockchain {
     ) -> Result<PushResult, PushError> {
         // Ignore all blocks that precede (or are at the same height) as the most recent accepted
         // macro block.
-        let last_macro_block = policy::last_macro_block(this.block_number());
+        let last_macro_block = Policy::last_macro_block(this.block_number());
         if block.block_number() <= last_macro_block {
             debug!(
                 block_no = block.block_number(),
@@ -273,8 +273,8 @@ impl Blockchain {
         let mut txn = this.write_transaction();
 
         let block_number = this.block_number() + 1;
-        let is_macro_block = policy::is_macro_block_at(block_number);
-        let is_election_block = policy::is_election_block_at(block_number);
+        let is_macro_block = Policy::is_macro_block_at(block_number);
+        let is_election_block = Policy::is_election_block_at(block_number);
 
         let block_info = this.check_and_commit(&this.state, &chain_info.head, &mut txn);
         let block_log = match block_info {
@@ -297,7 +297,7 @@ impl Blockchain {
 
         if is_election_block {
             this.chain_store.prune_epoch(
-                policy::epoch_at(block_number).saturating_sub(MAX_EPOCHS_STORED),
+                Policy::epoch_at(block_number).saturating_sub(MAX_EPOCHS_STORED),
                 &mut txn,
             );
         }
@@ -520,7 +520,7 @@ impl Blockchain {
             this.state.macro_info = new_head_info.clone();
             this.state.macro_head_hash = new_head_hash.clone();
 
-            if policy::is_election_block_at(new_head_info.head.block_number()) {
+            if Policy::is_election_block_at(new_head_info.head.block_number()) {
                 this.state.election_head = macro_block.clone();
                 this.state.election_head_hash = new_head_hash.clone();
 

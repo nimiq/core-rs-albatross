@@ -22,7 +22,7 @@ use nimiq_keys::{
 use nimiq_mempool::mempool::Mempool;
 use nimiq_mempool::{config::MempoolConfig, mempool_transactions::TxPriority};
 use nimiq_network_mock::{MockHub, MockId, MockNetwork, MockPeerId};
-use nimiq_primitives::{networks::NetworkId, policy};
+use nimiq_primitives::{networks::NetworkId, policy::Policy};
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     blockchain::{produce_macro_blocks_with_txns, signing_key, voting_key},
@@ -1102,7 +1102,7 @@ async fn mempool_update_aged_transaction() {
     let producer = BlockProducer::new(signing_key(), voting_key());
 
     let macro_blocks_to_be_produced =
-        policy::TRANSACTION_VALIDITY_WINDOW / policy::BLOCKS_PER_BATCH;
+        Policy::TRANSACTION_VALIDITY_WINDOW / Policy::blocks_per_batch();
 
     // Now we produce blocks past the transaction validity window
     produce_macro_blocks_with_txns(

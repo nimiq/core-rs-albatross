@@ -12,7 +12,7 @@ use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisE
 
 use nimiq_bls::pedersen::pedersen_generators;
 use nimiq_nano_primitives::MacroBlock;
-use nimiq_primitives::policy::BLOCKS_PER_EPOCH;
+use nimiq_primitives::policy::Policy;
 
 use crate::gadgets::mnt4::{
     MacroBlockGadget, PedersenHashGadget, SerializeGadget, StateCommitmentGadget,
@@ -78,7 +78,8 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
     /// This function generates the constraints for the circuit.
     fn generate_constraints(self, cs: ConstraintSystemRef<MNT4Fr>) -> Result<(), SynthesisError> {
         // Allocate all the constants.
-        let epoch_length_var = UInt32::<MNT4Fr>::new_constant(cs.clone(), BLOCKS_PER_EPOCH)?;
+        let epoch_length_var =
+            UInt32::<MNT4Fr>::new_constant(cs.clone(), Policy::blocks_per_epoch())?;
 
         let pedersen_generators_var =
             Vec::<G1Var>::new_constant(cs.clone(), pedersen_generators(5))?;
@@ -104,11 +105,9 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
 
         let block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(&self.block))?;
 
-        let initial_block_number_var =
-            UInt32::new_witness(
-                cs.clone(),
-                || Ok(self.block.block_number - BLOCKS_PER_EPOCH),
-            )?;
+        let initial_block_number_var = UInt32::new_witness(cs.clone(), || {
+            Ok(self.block.block_number - Policy::blocks_per_epoch())
+        })?;
 
         // Allocate all the inputs.
         let initial_state_commitment_var =

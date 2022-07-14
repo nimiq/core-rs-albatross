@@ -7,7 +7,7 @@ use nimiq_genesis::NetworkInfo;
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 use nimiq_primitives::slots::Validators;
 use nimiq_utils::observer::Notifier;
 use nimiq_utils::time::OffsetTime;
@@ -144,7 +144,7 @@ impl Blockchain {
         // Load macro chain from store.
         let macro_chain_info = chain_store
             .get_chain_info_at(
-                policy::last_macro_block(main_chain.head.block_number()),
+                Policy::last_macro_block(main_chain.head.block_number()),
                 true,
                 None,
             )
@@ -160,7 +160,7 @@ impl Blockchain {
         // Load election macro chain from store.
         let election_chain_info = chain_store
             .get_chain_info_at(
-                policy::last_election_block(main_chain.head.block_number()),
+                Policy::last_election_block(main_chain.head.block_number()),
                 true,
                 None,
             )

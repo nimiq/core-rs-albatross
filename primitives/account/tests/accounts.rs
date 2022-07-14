@@ -18,7 +18,7 @@ use nimiq_genesis_builder::GenesisBuilder;
 use nimiq_keys::{Address, KeyPair, PrivateKey, PublicKey, SecureGenerate};
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 use nimiq_test_log::test;
 use nimiq_test_utils::test_transaction::{
     generate_accounts, generate_transactions, TestTransaction,
@@ -590,7 +590,7 @@ fn accounts_performance_history_sync_batches_single_sender() {
         (env, num_txns)
     };
 
-    let total_txns = num_batches * policy::BLOCKS_PER_BATCH * num_txns;
+    let total_txns = num_batches * Policy::blocks_per_batch() * num_txns;
 
     // Generate and sign transaction from an address
     let mut rng = StdRng::seed_from_u64(0);
@@ -604,7 +604,7 @@ fn accounts_performance_history_sync_batches_single_sender() {
     let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, false);
     let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true);
 
-    let total_blocks = num_batches * policy::BLOCKS_PER_BATCH;
+    let total_blocks = num_batches * Policy::blocks_per_batch();
 
     let mut block_transactions = vec![];
 
@@ -667,7 +667,7 @@ fn accounts_performance_history_sync_batches_single_sender() {
 
         let batch_start = Instant::now();
 
-        for _blocks in 0..policy::BLOCKS_PER_BATCH {
+        for _blocks in 0..Policy::blocks_per_batch() {
             let result = accounts.commit_batch(
                 &mut txn,
                 &block_transactions[block_index as usize],
@@ -713,7 +713,7 @@ fn accounts_performance_history_sync_batches_many_to_many() {
         (env, num_txns)
     };
 
-    let total_txns = num_batches * policy::BLOCKS_PER_BATCH * num_txns;
+    let total_txns = num_batches * Policy::blocks_per_batch() * num_txns;
 
     // Generate and sign transaction from an address
     let mut rng = StdRng::seed_from_u64(0);
@@ -727,7 +727,7 @@ fn accounts_performance_history_sync_batches_many_to_many() {
     let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, true);
     let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true);
 
-    let total_blocks = num_batches * policy::BLOCKS_PER_BATCH;
+    let total_blocks = num_batches * Policy::blocks_per_batch();
 
     let mut block_transactions = vec![];
 
@@ -788,7 +788,7 @@ fn accounts_performance_history_sync_batches_many_to_many() {
 
         let batch_start = Instant::now();
 
-        for _blocks in 0..policy::BLOCKS_PER_BATCH {
+        for _blocks in 0..Policy::blocks_per_batch() {
             let result = accounts.commit_batch(
                 &mut txn,
                 &block_transactions[block_index as usize],

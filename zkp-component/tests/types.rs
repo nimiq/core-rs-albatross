@@ -5,7 +5,7 @@ use beserial::{Deserialize, Serialize};
 use nimiq_block::MacroBlock;
 use nimiq_database::{AsDatabaseBytes, FromDatabaseValue};
 use nimiq_hash::Blake2bHash;
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 use nimiq_test_utils::zkp_test_data::KEYS_PATH;
 use nimiq_zkp_component::types::{ProofInput, ZKPState, ZKProof};
 
@@ -52,7 +52,7 @@ fn it_serializes_and_deserializes_zkp_state() {
     let state = ZKPState {
         latest_pks: vec![Default::default(); 512],
         latest_header_hash: Blake2bHash::default(),
-        latest_block_number: policy::BLOCKS_PER_EPOCH,
+        latest_block_number: Policy::blocks_per_epoch(),
         latest_proof: Some(Proof::default()),
     };
     let serialized = Serialize::serialize_to_vec(&state);

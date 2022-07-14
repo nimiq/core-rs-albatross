@@ -11,7 +11,7 @@ use nimiq_nano_zkp::NanoZKP;
 use nimiq_network_interface::network::Network;
 use nimiq_network_mock::MockHub;
 use nimiq_primitives::networks::NetworkId;
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 use nimiq_test_log::test;
 use nimiq_test_utils::blockchain::{signing_key, voting_key};
 use nimiq_test_utils::blockchain_with_rng::produce_macro_blocks_with_rng;
@@ -98,13 +98,13 @@ async fn peers_reply_with_valid_proof() {
     produce_macro_blocks_with_rng(
         &producer,
         &blockchain2,
-        policy::BATCHES_PER_EPOCH as usize,
+        Policy::batches_per_epoch() as usize,
         &mut get_base_seed(),
     );
     produce_macro_blocks_with_rng(
         &producer,
         &blockchain3,
-        policy::BATCHES_PER_EPOCH as usize,
+        Policy::batches_per_epoch() as usize,
         &mut get_base_seed(),
     );
 
@@ -173,13 +173,13 @@ async fn peers_reply_with_valid_proof_and_election_block() {
     produce_macro_blocks_with_rng(
         &producer,
         &blockchain2,
-        policy::BATCHES_PER_EPOCH as usize,
+        Policy::batches_per_epoch() as usize,
         &mut get_base_seed(),
     );
     produce_macro_blocks_with_rng(
         &producer,
         &blockchain3,
-        policy::BATCHES_PER_EPOCH as usize,
+        Policy::batches_per_epoch() as usize,
         &mut get_base_seed(),
     );
 

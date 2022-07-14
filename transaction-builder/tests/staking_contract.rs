@@ -7,7 +7,7 @@ use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::account::AccountType;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
-use nimiq_primitives::policy::{STAKING_CONTRACT_ADDRESS, VALIDATOR_DEPOSIT};
+use nimiq_primitives::policy::Policy;
 use nimiq_test_log::test;
 use nimiq_transaction::account::staking_contract::{
     IncomingStakingTransactionData, OutgoingStakingTransactionProof,
@@ -168,7 +168,7 @@ fn it_can_create_validator_transactions() {
             signal_data: Some(Blake2bHash::default()),
             proof: Default::default(),
         },
-        VALIDATOR_DEPOSIT,
+        Policy::VALIDATOR_DEPOSIT,
         &key_pair,
     );
 
@@ -283,13 +283,13 @@ fn it_can_create_validator_transactions() {
     assert_eq!(tx, tx2);
 
     // Delete
-    let tx = make_delete_transaction(&key_pair, VALIDATOR_DEPOSIT - 100);
+    let tx = make_delete_transaction(&key_pair, Policy::VALIDATOR_DEPOSIT - 100);
 
     let tx2 = TransactionBuilder::new_delete_validator(
         address,
         &key_pair,
         100.try_into().unwrap(),
-        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT - 100),
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT - 100),
         1,
         NetworkId::Dummy,
     )
@@ -305,7 +305,7 @@ fn make_incoming_transaction(data: IncomingStakingTransactionData, value: u64) -
         | IncomingStakingTransactionData::CreateValidator { .. } => Transaction::new_extended(
             Address::from_any_str(ADDRESS).unwrap(),
             AccountType::Basic,
-            STAKING_CONTRACT_ADDRESS,
+            Policy::STAKING_CONTRACT_ADDRESS,
             AccountType::Staking,
             value.try_into().unwrap(),
             100.try_into().unwrap(),
@@ -316,7 +316,7 @@ fn make_incoming_transaction(data: IncomingStakingTransactionData, value: u64) -
         _ => Transaction::new_signalling(
             Address::from_any_str(ADDRESS).unwrap(),
             AccountType::Basic,
-            STAKING_CONTRACT_ADDRESS,
+            Policy::STAKING_CONTRACT_ADDRESS,
             AccountType::Staking,
             value.try_into().unwrap(),
             100.try_into().unwrap(),
@@ -346,7 +346,7 @@ fn make_signed_incoming_transaction(
 
 fn make_unstake_transaction(key_pair: &KeyPair, value: u64) -> Transaction {
     let mut tx = Transaction::new_extended(
-        STAKING_CONTRACT_ADDRESS,
+        Policy::STAKING_CONTRACT_ADDRESS,
         AccountType::Staking,
         Address::from_any_str(ADDRESS).unwrap(),
         AccountType::Basic,
@@ -366,7 +366,7 @@ fn make_unstake_transaction(key_pair: &KeyPair, value: u64) -> Transaction {
 //TODO update this function with a more proper interface
 fn make_delete_transaction(key_pair: &KeyPair, value: u64) -> Transaction {
     let mut tx = Transaction::new_extended(
-        STAKING_CONTRACT_ADDRESS,
+        Policy::STAKING_CONTRACT_ADDRESS,
         AccountType::Staking,
         Address::from_any_str(ADDRESS).unwrap(),
         AccountType::Basic,
@@ -385,9 +385,9 @@ fn make_delete_transaction(key_pair: &KeyPair, value: u64) -> Transaction {
 
 fn make_self_transaction(data: IncomingStakingTransactionData, key_pair: &KeyPair) -> Transaction {
     let mut tx = Transaction::new_signalling(
-        STAKING_CONTRACT_ADDRESS,
+        Policy::STAKING_CONTRACT_ADDRESS,
         AccountType::Staking,
-        STAKING_CONTRACT_ADDRESS,
+        Policy::STAKING_CONTRACT_ADDRESS,
         AccountType::Staking,
         0.try_into().unwrap(),
         100.try_into().unwrap(),

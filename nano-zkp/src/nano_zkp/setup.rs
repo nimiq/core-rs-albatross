@@ -12,7 +12,7 @@ use rand::{CryptoRng, Rng};
 
 use nimiq_bls::utils::bytes_to_bits;
 use nimiq_nano_primitives::{MacroBlock, PK_TREE_BREADTH, PK_TREE_DEPTH};
-use nimiq_primitives::policy::SLOTS;
+use nimiq_primitives::policy::Policy;
 
 use crate::circuits::mnt4::{
     MacroBlockCircuit, MergerCircuit, PKTreeLeafCircuit as LeafMNT4, PKTreeNodeCircuit as NodeMNT4,
@@ -88,7 +88,7 @@ impl NanoZKP {
         name: &str,
     ) -> Result<(), NanoZKPError> {
         // Create dummy inputs.
-        let pks = vec![G2MNT6::rand(rng); SLOTS as usize / PK_TREE_BREADTH];
+        let pks = vec![G2MNT6::rand(rng); Policy::SLOTS as usize / PK_TREE_BREADTH];
 
         let pk_tree_nodes = vec![G1MNT6::rand(rng); PK_TREE_DEPTH];
 
@@ -272,7 +272,7 @@ impl NanoZKP {
 
         let signature = G1MNT6::rand(rng);
 
-        let mut bytes = [0u8; SLOTS as usize / 8];
+        let mut bytes = [0u8; Policy::SLOTS as usize / 8];
         rng.fill_bytes(&mut bytes);
         let signer_bitmap = bytes_to_bits(&bytes);
 

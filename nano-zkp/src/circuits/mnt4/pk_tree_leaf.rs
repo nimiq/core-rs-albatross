@@ -6,7 +6,7 @@ use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisE
 
 use nimiq_bls::pedersen::pedersen_generators;
 use nimiq_nano_primitives::{PK_TREE_BREADTH, PK_TREE_DEPTH};
-use nimiq_primitives::policy::SLOTS;
+use nimiq_primitives::policy::Policy;
 
 use crate::gadgets::mnt4::{MerkleTreeGadget, PedersenHashGadget, SerializeGadget};
 use crate::utils::unpack_inputs;
@@ -98,7 +98,7 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeLeafCircuit {
         let agg_pk_commitment_bits = unpack_inputs(agg_pk_commitment_var)?[..760].to_vec();
 
         let signer_bitmap_chunk_bits = unpack_inputs(vec![signer_bitmap_chunk_var])?
-            [..SLOTS as usize / PK_TREE_BREADTH]
+            [..Policy::SLOTS as usize / PK_TREE_BREADTH]
             .to_vec();
 
         let path_bits = unpack_inputs(vec![path_var])?[..PK_TREE_DEPTH].to_vec();

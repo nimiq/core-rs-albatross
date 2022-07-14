@@ -9,7 +9,7 @@ use nimiq_keys::{Address, KeyPair, PrivateKey, PublicKey};
 use nimiq_primitives::account::AccountType;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
-use nimiq_primitives::policy::{STAKING_CONTRACT_ADDRESS, VALIDATOR_DEPOSIT};
+use nimiq_primitives::policy::Policy;
 use nimiq_test_log::test;
 use nimiq_transaction::account::staking_contract::{
     IncomingStakingTransactionData, OutgoingStakingTransactionProof,
@@ -81,7 +81,7 @@ fn create_validator() {
             signal_data: None,
             proof: SignatureProof::default(),
         },
-        VALIDATOR_DEPOSIT,
+        Policy::VALIDATOR_DEPOSIT,
         &cold_keypair,
         None,
     );
@@ -101,14 +101,14 @@ fn create_validator() {
     assert_eq!(AccountType::verify_incoming_transaction(&tx), Ok(()));
 
     // Deposit too small or too big.
-    tx.value = Coin::from_u64_unchecked(VALIDATOR_DEPOSIT - 100);
+    tx.value = Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT - 100);
 
     assert_eq!(
         AccountType::verify_incoming_transaction(&tx),
         Err(TransactionError::InvalidValue)
     );
 
-    tx.value = Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 100);
+    tx.value = Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 100);
 
     assert_eq!(
         AccountType::verify_incoming_transaction(&tx),
@@ -128,7 +128,7 @@ fn create_validator() {
             signal_data: None,
             proof: SignatureProof::default(),
         },
-        VALIDATOR_DEPOSIT,
+        Policy::VALIDATOR_DEPOSIT,
         &cold_keypair,
         None,
     );
@@ -152,7 +152,7 @@ fn create_validator() {
             signal_data: None,
             proof: SignatureProof::default(),
         },
-        VALIDATOR_DEPOSIT,
+        Policy::VALIDATOR_DEPOSIT,
         &cold_keypair,
         Some(other_pair.public),
     );
@@ -499,7 +499,7 @@ fn create_staker() {
             delegation: None,
             proof: SignatureProof::default(),
         },
-        VALIDATOR_DEPOSIT,
+        Policy::VALIDATOR_DEPOSIT,
         &keypair,
         Some(other_pair.public),
     );
@@ -598,7 +598,7 @@ fn update_staker() {
 #[test]
 fn delete_validator() {
     // Test serialization and deserialization.
-    let tx = make_delete_validator_tx(VALIDATOR_DEPOSIT - 100, false);
+    let tx = make_delete_validator_tx(Policy::VALIDATOR_DEPOSIT - 100, false);
 
     let tx_hex = "010000d6d530da000000000000602dbca99b0000000000038c551fabc6e6e00c609c3f0313257ad7e835643c00000000003b9ac99c00000000000000640000000104000062007451b039e2f3fcafc3be7c6bd9e01fbc072c956a2b95a335cfb3cd3702335b5300f59b9c7c01cd154de300f0106650b7f3a7d79af892ddb69c96f4010e9f5fe78160a371e8d801da9f55e079687474601898857d02168f160d47041dade476280a";
     let tx_size = 167;
@@ -616,16 +616,16 @@ fn delete_validator() {
 
     // This transaction is no longer statically checked for the validator deposit, so the only case where the verification
     // would fail, is by sending a wrong signature
-    let tx = make_delete_validator_tx(VALIDATOR_DEPOSIT - 200, false);
+    let tx = make_delete_validator_tx(Policy::VALIDATOR_DEPOSIT - 200, false);
 
     assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
 
-    let tx = make_delete_validator_tx(VALIDATOR_DEPOSIT, false);
+    let tx = make_delete_validator_tx(Policy::VALIDATOR_DEPOSIT, false);
 
     assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
 
     // Wrong signature.
-    let tx = make_delete_validator_tx(VALIDATOR_DEPOSIT - 100, true);
+    let tx = make_delete_validator_tx(Policy::VALIDATOR_DEPOSIT - 100, true);
 
     assert_eq!(
         AccountType::verify_outgoing_transaction(&tx),
@@ -668,7 +668,7 @@ fn make_incoming_tx(data: IncomingStakingTransactionData, value: u64) -> Transac
         | IncomingStakingTransactionData::Stake { .. } => Transaction::new_extended(
             Address::from_any_str(STAKER_ADDRESS).unwrap(),
             AccountType::Basic,
-            STAKING_CONTRACT_ADDRESS,
+            Policy::STAKING_CONTRACT_ADDRESS,
             AccountType::Staking,
             value.try_into().unwrap(),
             100.try_into().unwrap(),
@@ -679,7 +679,7 @@ fn make_incoming_tx(data: IncomingStakingTransactionData, value: u64) -> Transac
         _ => Transaction::new_signalling(
             Address::from_any_str(STAKER_ADDRESS).unwrap(),
             AccountType::Basic,
-            STAKING_CONTRACT_ADDRESS,
+            Policy::STAKING_CONTRACT_ADDRESS,
             AccountType::Staking,
             value.try_into().unwrap(),
             100.try_into().unwrap(),
@@ -726,7 +726,7 @@ fn make_signed_incoming_tx(
 
 fn make_delete_validator_tx(value: u64, wrong_sig: bool) -> Transaction {
     let mut tx = Transaction::new_extended(
-        STAKING_CONTRACT_ADDRESS,
+        Policy::STAKING_CONTRACT_ADDRESS,
         AccountType::Staking,
         Address::from_any_str(STAKER_ADDRESS).unwrap(),
         AccountType::Basic,
@@ -764,7 +764,7 @@ fn make_delete_validator_tx(value: u64, wrong_sig: bool) -> Transaction {
 
 fn make_unstake_tx(wrong_sig: bool) -> Transaction {
     let mut tx = Transaction::new_extended(
-        STAKING_CONTRACT_ADDRESS,
+        Policy::STAKING_CONTRACT_ADDRESS,
         AccountType::Staking,
         Address::from_any_str(STAKER_ADDRESS).unwrap(),
         AccountType::Basic,

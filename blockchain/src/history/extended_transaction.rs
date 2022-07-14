@@ -9,7 +9,7 @@ use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_mmr::hash::Hash as MMRHash;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
-use nimiq_primitives::policy::COINBASE_ADDRESS;
+use nimiq_primitives::policy::Policy;
 use nimiq_transaction::ExecutedTransaction;
 use nimiq_transaction::Transaction as BlockchainTransaction;
 
@@ -148,7 +148,7 @@ impl ExtendedTransaction {
             ExtTxData::Inherent(x) => {
                 if x.ty == InherentType::Reward {
                     let txn = BlockchainTransaction::new_basic(
-                        COINBASE_ADDRESS,
+                        Policy::COINBASE_ADDRESS,
                         x.target,
                         x.value,
                         Coin::ZERO,

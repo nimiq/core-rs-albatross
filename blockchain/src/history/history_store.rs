@@ -16,7 +16,7 @@ use nimiq_mmr::mmr::position::leaf_number_to_index;
 use nimiq_mmr::mmr::proof::RangeProof;
 use nimiq_mmr::mmr::MerkleMountainRange;
 use nimiq_mmr::store::memory::MemoryStore;
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 
 use crate::history::mmr_store::MMRStore;
 use crate::history::ordered_hash::OrderedHash;
@@ -101,7 +101,7 @@ impl HistoryStore {
             None => match cursor.prev::<u32, u32>() {
                 // If it exists, we also need to check if the previous block is in the same epoch.
                 Some((n, i)) => {
-                    if policy::epoch_at(n.to_be()) == policy::epoch_at(block_number) {
+                    if Policy::epoch_at(n.to_be()) == Policy::epoch_at(block_number) {
                         i + 1
                     } else {
                         0
@@ -394,7 +394,7 @@ impl HistoryStore {
         let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(
             &self.hist_tree_db,
             txn,
-            policy::epoch_at(block_number),
+            Policy::epoch_at(block_number),
         ));
 
         // Get the range of leaf indexes at this height.
@@ -501,7 +501,7 @@ impl HistoryStore {
         // Find the number of the last macro stored for the given epoch.
         let last_leaf = tree.get_leaf(num_leaves - 1).unwrap();
         let last_tx = self.get_extended_tx(&last_leaf, Some(txn)).unwrap();
-        let last_macro_block = policy::last_macro_block(last_tx.block_number);
+        let last_macro_block = Policy::last_macro_block(last_tx.block_number);
 
         // Count the extended transactions up to the last macro block.
         let mut ext_txs = Vec::new();
@@ -551,7 +551,7 @@ impl HistoryStore {
         // Find the number of the last macro stored for the given epoch.
         let last_leaf = tree.get_leaf(num_leaves - 1).unwrap();
         let last_tx = self.get_extended_tx(&last_leaf, Some(txn)).unwrap();
-        let last_macro_block = policy::last_macro_block(last_tx.block_number);
+        let last_macro_block = Policy::last_macro_block(last_tx.block_number);
 
         // Iterate backwards and check when we find a transaction of a block that is before the last macro block
         let mut count = tree.num_leaves();
@@ -599,7 +599,7 @@ impl HistoryStore {
         // Find the block number of the last macro stored for the given epoch.
         let last_leaf = tree.get_leaf(num_leaves - 1).unwrap();
         let last_tx = self.get_extended_tx(&last_leaf, Some(txn)).unwrap();
-        let last_macro_block = policy::last_macro_block(last_tx.block_number);
+        let last_macro_block = Policy::last_macro_block(last_tx.block_number);
 
         // Get each extended transaction after the last macro block from the tree.
         let mut ext_txs = VecDeque::new();
@@ -978,7 +978,7 @@ impl HistoryStore {
             Some(i) => i + 1,
         };
 
-        let start = if policy::epoch_index_at(block_number) == 0 {
+        let start = if Policy::epoch_index_at(block_number) == 0 {
             // If this is the first block of the epoch then it starts at zero by definition.
             0
         } else {
@@ -988,7 +988,7 @@ impl HistoryStore {
                 None => 0,
                 Some((n, i)) => {
                     // If the previous block is from a different epoch, then we also have to start at zero.
-                    if policy::epoch_at(n.to_be()) != policy::epoch_at(block_number) {
+                    if Policy::epoch_at(n.to_be()) != Policy::epoch_at(block_number) {
                         0
                     } else {
                         i + 1
@@ -1543,8 +1543,8 @@ mod tests {
         let history_store = HistoryStore::new(env.clone());
         let mut txn = WriteTransaction::new(&env);
 
-        for i in 0..=(16 * policy::BLOCKS_PER_BATCH) {
-            if policy::is_macro_block_at(i) {
+        for i in 0..=(16 * Policy::blocks_per_batch()) {
+            if Policy::is_macro_block_at(i) {
                 let ext_txs = vec![
                     create_inherent(i, 1),
                     create_inherent(i, 2),
@@ -1552,7 +1552,7 @@ mod tests {
                     create_inherent(i, 4),
                 ];
 
-                history_store.add_to_history(&mut txn, policy::epoch_at(i), &ext_txs);
+                history_store.add_to_history(&mut txn, Policy::epoch_at(i), &ext_txs);
             }
         }
 
@@ -1569,7 +1569,7 @@ mod tests {
         for i in (1..=16).rev() {
             history_store.remove_partial_history(
                 &mut txn,
-                policy::epoch_at(i * policy::BLOCKS_PER_BATCH),
+                Policy::epoch_at(i * Policy::blocks_per_batch()),
                 4,
             );
 

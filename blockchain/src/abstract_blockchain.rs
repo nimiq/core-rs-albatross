@@ -2,7 +2,7 @@ use nimiq_block::{Block, BlockType, MacroBlock};
 use nimiq_database::Transaction;
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::networks::NetworkId;
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 use nimiq_primitives::slots::{Validator, Validators};
 
 use crate::{Blockchain, ChainInfo};
@@ -61,7 +61,7 @@ pub trait AbstractBlockchain {
             Some(n) => n,
         };
 
-        if policy::is_macro_block_at(last_block_number + 1) {
+        if Policy::is_macro_block_at(last_block_number + 1) {
             BlockType::Macro
         } else {
             BlockType::Micro

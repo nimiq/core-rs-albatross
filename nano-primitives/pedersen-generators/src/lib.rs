@@ -6,7 +6,7 @@ use beserial::Serialize;
 use beserial::SerializeWithLength;
 pub use beserial::SerializingError;
 use nimiq_bls::pedersen::pedersen_generator_powers;
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 
 /// This is the depth of the PKTree circuit.
 const PK_TREE_DEPTH: usize = 5;
@@ -17,7 +17,7 @@ const PK_TREE_BREADTH: usize = 2_usize.pow(PK_TREE_DEPTH as u32);
 const G2_MNT6_SIZE: usize = 285;
 
 pub fn generate_pedersen_generators(dest_path: PathBuf) -> Result<(), SerializingError> {
-    let num_pks = policy::SLOTS as usize;
+    let num_pks = Policy::SLOTS as usize;
     let num_bits = num_pks * G2_MNT6_SIZE * 8;
     let num_bits_per_leaf = num_bits / PK_TREE_BREADTH;
 

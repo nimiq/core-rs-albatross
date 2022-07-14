@@ -270,7 +270,7 @@ impl TransactionProofBuilder {
     /// use nimiq_primitives::networks::NetworkId;
     /// use nimiq_primitives::account::{AccountType};
     /// # use nimiq_utils::key_rng::SecureGenerate;
-    /// use nimiq_primitives::policy::STAKING_CONTRACT_ADDRESS;
+    /// use nimiq_primitives::policy::Policy;
     ///
     /// # let key_pair = KeyPair::generate_default_csprng();
     /// # let recipient_address = Address::from(&key_pair.public);
@@ -278,7 +278,7 @@ impl TransactionProofBuilder {
     /// let recipient = Recipient::new_basic(recipient_address);
     ///
     /// let mut tx_builder = TransactionBuilder::with_required(
-    ///     STAKING_CONTRACT_ADDRESS,
+    ///     Policy::STAKING_CONTRACT_ADDRESS,
     ///     recipient,
     ///     Coin::from_u64_unchecked(100),
     ///     1,

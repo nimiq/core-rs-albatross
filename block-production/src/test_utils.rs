@@ -15,7 +15,7 @@ use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
 use nimiq_hash::Blake2sHash;
 use nimiq_keys::{KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey};
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 use nimiq_utils::time::OffsetTime;
 
 use crate::BlockProducer;
@@ -71,7 +71,7 @@ impl TemporaryBlockProducer {
 
         let height = blockchain.block_number() + 1;
 
-        let block = if policy::is_macro_block_at(height) {
+        let block = if Policy::is_macro_block_at(height) {
             let macro_block_proposal = self.producer.next_macro_block_proposal(
                 &blockchain,
                 blockchain.time.now() + height as u64 * 1000,
@@ -84,7 +84,7 @@ impl TemporaryBlockProducer {
 
             // Get validator set and make sure it exists.
             let validators = blockchain
-                .get_validators_for_epoch(policy::epoch_at(blockchain.block_number() + 1), None);
+                .get_validators_for_epoch(Policy::epoch_at(blockchain.block_number() + 1), None);
             assert!(validators.is_some());
 
             Block::Macro(TemporaryBlockProducer::finalize_macro_block(
@@ -102,7 +102,7 @@ impl TemporaryBlockProducer {
         } else if skip_block {
             Block::Micro(self.producer.next_micro_block(
                 &blockchain,
-                blockchain.head().timestamp() + policy::BLOCK_PRODUCER_TIMEOUT,
+                blockchain.head().timestamp() + Policy::BLOCK_PRODUCER_TIMEOUT,
                 vec![],
                 vec![],
                 extra_data,
@@ -150,11 +150,11 @@ impl TemporaryBlockProducer {
         let signature = AggregateSignature::from_signatures(&[keypair
             .secret_key
             .sign(&vote)
-            .multiply(policy::SLOTS)]);
+            .multiply(Policy::SLOTS)]);
 
         // create and populate signers BitSet.
         let mut signers = BitSet::new();
-        for i in 0..policy::SLOTS {
+        for i in 0..Policy::SLOTS {
             signers.insert(i as usize);
         }
 
@@ -190,9 +190,9 @@ impl TemporaryBlockProducer {
 
         let signature = AggregateSignature::from_signatures(&[skip_block_info
             .signature
-            .multiply(policy::SLOTS)]);
+            .multiply(Policy::SLOTS)]);
         let mut signers = BitSet::new();
-        for i in 0..policy::SLOTS {
+        for i in 0..Policy::SLOTS {
             signers.insert(i as usize);
         }
 

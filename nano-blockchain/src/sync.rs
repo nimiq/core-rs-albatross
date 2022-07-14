@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use nimiq_block::{Block, BlockError, TendermintProof};
 use nimiq_blockchain::{AbstractBlockchain, ChainInfo, PushError, PushResult};
 use nimiq_nano_zkp::{NanoProof, NanoZKP};
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 
 use crate::blockchain::NanoBlockchain;
 
@@ -18,7 +18,7 @@ impl NanoBlockchain {
         assert!(block.is_election());
 
         // Check the version
-        if block.header().version() != policy::VERSION {
+        if block.header().version() != Policy::VERSION {
             return Err(PushError::InvalidBlock(BlockError::UnsupportedVersion));
         }
 
@@ -116,7 +116,7 @@ impl NanoBlockchain {
         assert!(block.is_macro());
 
         // Check the version
-        if block.header().version() != policy::VERSION {
+        if block.header().version() != Policy::VERSION {
             return Err(PushError::InvalidBlock(BlockError::UnsupportedVersion));
         }
 
@@ -135,7 +135,7 @@ impl NanoBlockchain {
 
         // Check if we have this block's parent. The checks change depending if the last macro block
         // that we pushed was an election block or not.
-        if policy::is_election_block_at(self.block_number()) {
+        if Policy::is_election_block_at(self.block_number()) {
             // We only need to check that the parent election block of this block is the same as our
             // head block.
             if block.header().parent_election_hash().unwrap() != &self.head_hash() {

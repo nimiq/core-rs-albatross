@@ -9,7 +9,7 @@ use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, SerializeContent};
 use nimiq_hash_derive::SerializeContent;
 use nimiq_primitives::coin::Coin;
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 use nimiq_primitives::slots::Validators;
 use nimiq_transaction::ExecutedTransaction;
 use nimiq_vrf::VrfSeed;
@@ -62,7 +62,7 @@ impl Block {
 
     /// Returns the epoch number of the block.
     pub fn epoch_number(&self) -> u32 {
-        policy::epoch_at(self.block_number())
+        Policy::epoch_at(self.block_number())
     }
 
     /// Returns the timestamp of the block.

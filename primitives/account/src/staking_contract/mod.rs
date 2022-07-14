@@ -9,7 +9,7 @@ use nimiq_collections::BitSet;
 use nimiq_database::{Transaction as DBTransaction, WriteTransaction};
 use nimiq_keys::Address;
 use nimiq_primitives::slots::{Validators, ValidatorsBuilder};
-use nimiq_primitives::{coin::Coin, policy};
+use nimiq_primitives::{coin::Coin, policy::Policy};
 use nimiq_transaction::account::staking_contract::{
     IncomingStakingTransactionData, OutgoingStakingTransactionProof,
 };
@@ -98,7 +98,7 @@ impl StakingContract {
     /// Returns the key in the AccountsTrie for the Staking contract struct.
     pub fn get_key_staking_contract() -> KeyNibbles {
         let mut bytes = Vec::with_capacity(21);
-        bytes.extend(policy::STAKING_CONTRACT_ADDRESS.as_bytes());
+        bytes.extend(Policy::STAKING_CONTRACT_ADDRESS.as_bytes());
         bytes.push(StakingContract::PATH_CONTRACT_MAIN);
 
         KeyNibbles::from(bytes.as_slice())
@@ -107,7 +107,7 @@ impl StakingContract {
     /// Returns the key in the AccountsTrie for a Validator struct with a given validator address.
     pub fn get_key_validator(validator_address: &Address) -> KeyNibbles {
         let mut bytes = Vec::with_capacity(42);
-        bytes.extend(policy::STAKING_CONTRACT_ADDRESS.as_bytes());
+        bytes.extend(Policy::STAKING_CONTRACT_ADDRESS.as_bytes());
         bytes.push(StakingContract::PATH_VALIDATORS_LIST);
         bytes.extend(validator_address.as_slice());
         bytes.push(StakingContract::PATH_VALIDATOR_MAIN);
@@ -121,7 +121,7 @@ impl StakingContract {
         staker_address: &Address,
     ) -> KeyNibbles {
         let mut bytes = Vec::with_capacity(62);
-        bytes.extend(policy::STAKING_CONTRACT_ADDRESS.as_bytes());
+        bytes.extend(Policy::STAKING_CONTRACT_ADDRESS.as_bytes());
         bytes.push(StakingContract::PATH_VALIDATORS_LIST);
         bytes.extend(validator_address.as_slice());
         bytes.push(StakingContract::PATH_VALIDATOR_STAKERS_LIST);
@@ -133,7 +133,7 @@ impl StakingContract {
     /// Returns the key in the AccountsTrie for a Staker struct with a given staker address.
     pub fn get_key_staker(staker_address: &Address) -> KeyNibbles {
         let mut bytes = Vec::with_capacity(41);
-        bytes.extend(policy::STAKING_CONTRACT_ADDRESS.as_bytes());
+        bytes.extend(Policy::STAKING_CONTRACT_ADDRESS.as_bytes());
         bytes.push(StakingContract::PATH_STAKERS_LIST);
         bytes.extend(staker_address.as_bytes());
 
@@ -252,7 +252,7 @@ impl StakingContract {
 
         let mut slots_builder = ValidatorsBuilder::default();
 
-        for _ in 0..policy::SLOTS {
+        for _ in 0..Policy::SLOTS {
             let index = lookup.sample(&mut rng);
 
             let chosen_validator =
@@ -347,7 +347,7 @@ impl StakingContract {
                     }
                     Some(time) => {
                         if block_height
-                            <= policy::election_block_after(time) + policy::BLOCKS_PER_BATCH
+                            <= Policy::election_block_after(time) + Policy::blocks_per_batch()
                         {
                             warn!(
                     "Cannot pay fees for transaction because validator hasn't been inactive for long enough."

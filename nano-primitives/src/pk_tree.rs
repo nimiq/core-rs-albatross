@@ -2,7 +2,7 @@ use ark_mnt6_753::G2Projective;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 use nimiq_bls::utils::bytes_to_bits;
-use nimiq_primitives::policy::SLOTS;
+use nimiq_primitives::policy::Policy;
 
 use crate::merkle_tree::merkle_tree_construct;
 use crate::serialize::serialize_g2_mnt6;
@@ -22,7 +22,7 @@ pub fn pk_tree_construct(public_keys: Vec<G2Projective>) -> Vec<u8> {
     //return Default::default();
 
     // Checking that the number of public keys is equal to the number of validator slots.
-    assert_eq!(public_keys.len(), SLOTS as usize);
+    assert_eq!(public_keys.len(), Policy::SLOTS as usize);
 
     // Checking that the number of public keys is a multiple of the number of leaves.
     assert_eq!(public_keys.len() % PK_TREE_BREADTH, 0);

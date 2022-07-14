@@ -6,7 +6,8 @@ use nimiq_block_production::test_utils::TemporaryBlockProducer;
 use nimiq_blockchain::PushError::InvalidBlock;
 use nimiq_blockchain::{PushError, PushResult};
 use nimiq_hash::Blake2bHash;
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
+use nimiq_test_log::test;
 use nimiq_vrf::VrfSeed;
 
 pub fn expect_push_micro_block(config: BlockConfig, expected_res: Result<PushResult, PushError>) {
@@ -163,7 +164,7 @@ fn push_rebranch_across_epochs(config: BlockConfig) {
     assert_eq!(temp_producer2.push(ancestor), Ok(PushResult::Extended));
 
     // progress the chain across an epoch boundary.
-    for _ in 0..policy::BLOCKS_PER_EPOCH {
+    for _ in 0..Policy::blocks_per_epoch() {
         temp_producer1.next_block(vec![], false);
     }
 
@@ -182,7 +183,7 @@ fn push_rebranch_across_epochs(config: BlockConfig) {
 fn simply_push_macro_block(config: &BlockConfig, expected_res: &Result<PushResult, PushError>) {
     let temp_producer = TemporaryBlockProducer::new();
 
-    for _ in 0..policy::BLOCKS_PER_BATCH - 1 {
+    for _ in 0..Policy::blocks_per_batch() - 1 {
         let block = temp_producer.next_block(vec![], false);
         temp_producer.push(block.clone()).unwrap();
     }
@@ -227,7 +228,7 @@ fn it_works_with_valid_blocks() {
 fn it_validates_version() {
     expect_push_micro_block(
         BlockConfig {
-            version: Some(policy::VERSION - 1),
+            version: Some(Policy::VERSION - 1),
             ..Default::default()
         },
         Err(InvalidBlock(BlockError::UnsupportedVersion)),

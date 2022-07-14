@@ -16,7 +16,7 @@ use ark_r1cs_std::prelude::{
 use ark_relations::r1cs::{ConstraintSystemRef, Namespace, SynthesisError};
 
 use nimiq_nano_primitives::MacroBlock;
-use nimiq_primitives::policy::{SLOTS, TWO_F_PLUS_ONE};
+use nimiq_primitives::policy::Policy;
 
 use crate::gadgets::mnt4::{CheckSigGadget, HashToCurve};
 use crate::utils::reverse_inner_byte_order;
@@ -183,7 +183,7 @@ impl MacroBlockGadget {
         cs: ConstraintSystemRef<MNT4Fr>,
     ) -> Result<Boolean<MNT4Fr>, SynthesisError> {
         // Get the minimum number of signers.
-        let min_signers = FqVar::new_constant(cs, Fq::from(TWO_F_PLUS_ONE as u64))?;
+        let min_signers = FqVar::new_constant(cs, Fq::from(Policy::TWO_F_PLUS_ONE as u64))?;
 
         // Initialize the running sum.
         let mut num_signers = FqVar::zero();
@@ -231,7 +231,7 @@ impl AllocVar<MacroBlock, MNT4Fr> for MacroBlockGadget {
             Err(_) => empty_block,
         };
 
-        assert_eq!(value.signer_bitmap.len(), SLOTS as usize);
+        assert_eq!(value.signer_bitmap.len(), Policy::SLOTS as usize);
 
         let block_number = UInt32::<MNT4Fr>::new_input(cs.clone(), || Ok(value.block_number))?;
 
@@ -276,7 +276,7 @@ impl AllocVar<MacroBlock, MNT4Fr> for MacroBlockGadget {
             Err(_) => empty_block,
         };
 
-        assert_eq!(value.signer_bitmap.len(), SLOTS as usize);
+        assert_eq!(value.signer_bitmap.len(), Policy::SLOTS as usize);
 
         let block_number = UInt32::<MNT4Fr>::new_witness(cs.clone(), || Ok(value.block_number))?;
 
@@ -324,7 +324,7 @@ mod tests {
 
     use nimiq_bls::utils::bytes_to_bits;
     use nimiq_nano_primitives::MacroBlock;
-    use nimiq_primitives::policy::{SLOTS, TWO_F_PLUS_ONE};
+    use nimiq_primitives::policy::Policy;
     use nimiq_test_log::test;
 
     use super::*;
@@ -345,7 +345,7 @@ mod tests {
         let mut header_hash = [2u8; 32];
         rng.fill_bytes(&mut header_hash);
 
-        let mut bytes = [3u8; SLOTS as usize / 8];
+        let mut bytes = [3u8; Policy::SLOTS as usize / 8];
         rng.fill_bytes(&mut bytes);
         let signer_bitmap = bytes_to_bits(&bytes);
 
@@ -403,7 +403,7 @@ mod tests {
         // Create macro block with correct signers set.
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
-        for i in 0..TWO_F_PLUS_ONE as usize {
+        for i in 0..Policy::TWO_F_PLUS_ONE as usize {
             block.sign(&sk, i, &pk_tree_root);
             agg_pk += &pk;
         }
@@ -455,7 +455,7 @@ mod tests {
         // Create macro block with correct signers set.
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
-        for i in 0..TWO_F_PLUS_ONE as usize {
+        for i in 0..Policy::TWO_F_PLUS_ONE as usize {
             block.sign(&sk, i, &pk_tree_root);
             agg_pk += &pk;
         }
@@ -510,7 +510,7 @@ mod tests {
         // Create macro block with correct signers set.
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
-        for i in 0..TWO_F_PLUS_ONE as usize {
+        for i in 0..Policy::TWO_F_PLUS_ONE as usize {
             block.sign(&sk, i, &pk_tree_root);
             agg_pk += &pk;
         }
@@ -565,7 +565,7 @@ mod tests {
         // Create macro block with correct signers set.
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
-        for i in 0..TWO_F_PLUS_ONE as usize {
+        for i in 0..Policy::TWO_F_PLUS_ONE as usize {
             block.sign(&sk, i, &pk_tree_root);
             agg_pk += &pk;
         }
@@ -622,7 +622,7 @@ mod tests {
         // Create macro block with correct signers set.
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
-        for i in 0..TWO_F_PLUS_ONE as usize {
+        for i in 0..Policy::TWO_F_PLUS_ONE as usize {
             block.sign(&sk, i, &pk_tree_root);
             agg_pk += &pk;
         }
@@ -677,7 +677,7 @@ mod tests {
         // Create macro block with correct signers set.
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
-        for i in 0..TWO_F_PLUS_ONE as usize {
+        for i in 0..Policy::TWO_F_PLUS_ONE as usize {
             block.sign(&sk, i, &pk_tree_root);
             agg_pk += &pk;
         }
@@ -734,7 +734,7 @@ mod tests {
         // Create macro block with correct signers set.
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
-        for i in 0..TWO_F_PLUS_ONE as usize {
+        for i in 0..Policy::TWO_F_PLUS_ONE as usize {
             block.sign(&sk, i, &pk_tree_root);
             agg_pk += &pk;
         }
@@ -789,7 +789,7 @@ mod tests {
         // Create macro block with too few signers.
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
-        for i in 0..TWO_F_PLUS_ONE as usize - 1 {
+        for i in 0..Policy::TWO_F_PLUS_ONE as usize - 1 {
             block.sign(&sk, i, &pk_tree_root);
             agg_pk += &pk;
         }

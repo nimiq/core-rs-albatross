@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_nano_zkp::NanoZKP;
-use nimiq_primitives::policy::BLS_CACHE_MAX_CAPACITY;
+use nimiq_primitives::policy::Policy;
 use parking_lot::{Mutex, RwLock};
 
 use nimiq_block::Block;
@@ -175,7 +175,9 @@ impl ClientInner {
         .await;
 
         // Initialize consensus
-        let bls_cache = Arc::new(Mutex::new(PublicKeyCache::new(BLS_CACHE_MAX_CAPACITY)));
+        let bls_cache = Arc::new(Mutex::new(PublicKeyCache::new(
+            Policy::BLS_CACHE_MAX_CAPACITY,
+        )));
         let sync = HistorySync::<Network>::new(
             Arc::clone(&blockchain),
             Arc::clone(&network),

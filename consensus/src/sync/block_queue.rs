@@ -17,7 +17,7 @@ use nimiq_blockchain::{Blockchain, PushError, PushResult};
 use nimiq_hash::Blake2bHash;
 use nimiq_macros::store_waker;
 use nimiq_network_interface::network::{MsgAcceptance, Network, PubsubId, Topic};
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 
 use crate::sync::request_component::RequestComponentEvent;
 
@@ -57,8 +57,8 @@ pub struct BlockQueueConfig {
 impl Default for BlockQueueConfig {
     fn default() -> Self {
         Self {
-            buffer_max: 4 * policy::BLOCKS_PER_BATCH as usize,
-            window_max: 2 * policy::BLOCKS_PER_BATCH,
+            buffer_max: 4 * Policy::blocks_per_batch() as usize,
+            window_max: 2 * Policy::blocks_per_batch(),
         }
     }
 }
@@ -124,7 +124,7 @@ impl<N: Network, TReq: RequestComponent<N>> Inner<N, TReq> {
         drop(blockchain);
 
         // Check if a macro block boundary was passed. If so prune the block buffer.
-        let macro_height = policy::last_macro_block(head_height);
+        let macro_height = Policy::last_macro_block(head_height);
         if macro_height > self.current_macro_height {
             self.current_macro_height = macro_height;
             self.prune_buffer();
@@ -227,7 +227,7 @@ impl<N: Network, TReq: RequestComponent<N>> Inner<N, TReq> {
         let blockchain = self.blockchain.read();
         let head_hash = blockchain.head_hash();
         let head_height = blockchain.block_number();
-        let macro_height = policy::last_macro_block(head_height);
+        let macro_height = Policy::last_macro_block(head_height);
 
         log::debug!(
             block_number,
@@ -601,7 +601,7 @@ impl<N: Network, TReq: RequestComponent<N>> BlockQueue<N, TReq> {
         block_stream: BlockStream<N>,
         bls_cache: Arc<Mutex<PublicKeyCache>>,
     ) -> Self {
-        let current_macro_height = policy::last_macro_block(blockchain.read().block_number());
+        let current_macro_height = Policy::last_macro_block(blockchain.read().block_number());
         Self {
             block_stream,
             inner: Inner {

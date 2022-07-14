@@ -3,7 +3,7 @@ use nimiq_block::Block;
 use nimiq_database::Transaction;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 use nimiq_utils::observer::{Listener, ListenerHandle};
 #[cfg(feature = "metrics")]
 use std::sync::Arc;
@@ -81,7 +81,7 @@ impl Blockchain {
 
     pub fn get_account(&self, address: &Address) -> Option<Account> {
         // TODO: Find a better place for this differentiation, it should be in a more general location.
-        let key = if *address == policy::STAKING_CONTRACT_ADDRESS {
+        let key = if *address == Policy::STAKING_CONTRACT_ADDRESS {
             StakingContract::get_key_staking_contract()
         } else {
             KeyNibbles::from(address)
@@ -125,12 +125,12 @@ impl Blockchain {
     ) -> bool {
         let max_block_number = self
             .block_number()
-            .saturating_sub(policy::TRANSACTION_VALIDITY_WINDOW);
+            .saturating_sub(Policy::TRANSACTION_VALIDITY_WINDOW);
         self.tx_in_validity_window(tx_hash, max_block_number, txn_opt)
     }
 
     pub fn staking_contract_address(&self) -> Address {
-        policy::STAKING_CONTRACT_ADDRESS
+        Policy::STAKING_CONTRACT_ADDRESS
     }
 
     #[cfg(feature = "metrics")]

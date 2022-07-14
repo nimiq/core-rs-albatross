@@ -3196,6 +3196,7 @@ dependencies = [
  "nimiq-test-log",
  "nimiq-utils",
  "num-traits",
+ "once_cell",
  "parking_lot 0.12.0",
  "regex",
  "serde",
@@ -3363,6 +3364,7 @@ name = "nimiq-test-log"
 version = "0.1.0"
 dependencies = [
  "nimiq-log",
+ "nimiq-primitives",
  "nimiq-test-log-proc-macro",
  "parking_lot 0.12.0",
  "tracing",

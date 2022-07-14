@@ -4,7 +4,7 @@ use crate::{
 };
 use beserial::{Deserialize, Serialize};
 use nimiq_block::TendermintStep;
-use nimiq_primitives::policy::TWO_F_PLUS_ONE;
+use nimiq_primitives::policy::Policy;
 use std::collections::BTreeMap;
 use thiserror::Error;
 
@@ -134,7 +134,9 @@ pub(crate) fn aggregation_to_vote<ProposalHashTy: ProposalHashTrait, ProofTy: Pr
     proposal_hash: &Option<ProposalHashTy>,
     agg: BTreeMap<Option<ProposalHashTy>, (ProofTy, u16)>,
 ) -> VoteResult<ProofTy> {
-    if proposal_hash.is_some() && agg.get(proposal_hash).map_or(0, |x| x.1) >= TWO_F_PLUS_ONE {
+    if proposal_hash.is_some()
+        && agg.get(proposal_hash).map_or(0, |x| x.1) >= Policy::TWO_F_PLUS_ONE
+    {
         log::debug!(
             "Current proposal {:?} has {} votes: {:#?}",
             &proposal_hash,
@@ -144,7 +146,7 @@ pub(crate) fn aggregation_to_vote<ProposalHashTy: ProposalHashTrait, ProofTy: Pr
         // If we received 2f+1 votes for the current (assuming that it isn't None), then we
         // must return Block.
         VoteResult::Block(agg.get(proposal_hash).cloned().unwrap().0)
-    } else if agg.get(&None).map_or(0, |x| x.1) >= TWO_F_PLUS_ONE {
+    } else if agg.get(&None).map_or(0, |x| x.1) >= Policy::TWO_F_PLUS_ONE {
         // is f+1 sufficient here?
         log::debug!(
             "Nil has {} votes: {:#?}",
@@ -181,5 +183,5 @@ pub(crate) fn has_2f1_votes<ProposalHashTy: ProposalHashTrait, ProofTy: ProofTra
         &prop_opt,
         agg.get(&prop_opt).map_or(0, |x| x.1),
     );
-    agg.get(&prop_opt).map_or(0, |x| x.1) >= TWO_F_PLUS_ONE
+    agg.get(&prop_opt).map_or(0, |x| x.1) >= Policy::TWO_F_PLUS_ONE
 }

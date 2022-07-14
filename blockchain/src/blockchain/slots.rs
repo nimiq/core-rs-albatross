@@ -1,7 +1,7 @@
 use nimiq_account::StakingContract;
 use nimiq_collections::BitSet;
 use nimiq_database::Transaction;
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 use nimiq_primitives::slots::{Validator, Validators};
 use nimiq_vrf::{Rng, VrfEntropy, VrfSeed, VrfUseCase};
 
@@ -21,7 +21,7 @@ impl Blockchain {
         epoch: u32,
         txn: Option<&Transaction>,
     ) -> Option<Validators> {
-        let current_epoch = policy::epoch_at(self.state.main_chain.head.block_number());
+        let current_epoch = Policy::epoch_at(self.state.main_chain.head.block_number());
 
         if epoch == current_epoch {
             self.state.current_slots.clone()
@@ -31,7 +31,7 @@ impl Blockchain {
             None
         } else {
             self.chain_store
-                .get_block_at(policy::election_block_of(epoch - 1), true, txn)?
+                .get_block_at(Policy::election_block_of(epoch - 1), true, txn)?
                 .unwrap_macro()
                 .get_validators()
         }
@@ -55,14 +55,14 @@ impl Blockchain {
     ) -> Option<Slot> {
         // Fetch the latest macro block that precedes the block at the given block_number.
         // We use the disabled_slots set from that macro block for the slot selection.
-        let macro_block = self.get_block_at(policy::macro_block_before(block_number), true, txn)?;
+        let macro_block = self.get_block_at(Policy::macro_block_before(block_number), true, txn)?;
         let disabled_slots = macro_block.unwrap_macro().body.unwrap().disabled_set;
 
         // Compute the slot number of the next proposer.
         let slot_number = Self::compute_slot_number(offset, vrf_entropy, disabled_slots);
 
         // Fetch the validators that are active in given block's epoch.
-        let epoch_number = policy::epoch_at(block_number);
+        let epoch_number = Policy::epoch_at(block_number);
         let validators = self.get_validators_for_epoch(epoch_number, txn)?;
 
         // Get the validator that owns the proposer slot.
@@ -83,13 +83,13 @@ impl Blockchain {
         let mut rng = vrf_entropy.rng(VrfUseCase::ViewSlotSelection);
 
         // Create a list of viable slots.
-        let mut slots: Vec<u16> = if disabled_slots.len() == policy::SLOTS as usize {
+        let mut slots: Vec<u16> = if disabled_slots.len() == Policy::SLOTS as usize {
             // If all slots are disabled, we will accept any slot, since we want the
             // chain to progress.
-            (0..policy::SLOTS).collect()
+            (0..Policy::SLOTS).collect()
         } else {
             // Otherwise, we will only accept slots that are not disabled.
-            (0..policy::SLOTS)
+            (0..Policy::SLOTS)
                 .filter(|slot| !disabled_slots.contains(*slot as usize))
                 .collect()
         };

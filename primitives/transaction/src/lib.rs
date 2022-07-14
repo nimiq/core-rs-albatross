@@ -20,7 +20,7 @@ use nimiq_keys::{PublicKey, Signature};
 use nimiq_primitives::account::AccountType;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 use nimiq_utils::merkle::{Blake2bMerklePath, Blake2bMerkleProof};
 
 use crate::account::AccountTransactionVerification;
@@ -334,7 +334,7 @@ impl Transaction {
             return Ok(());
         }
 
-        if self.recipient == policy::STAKING_CONTRACT_ADDRESS
+        if self.recipient == Policy::STAKING_CONTRACT_ADDRESS
             && self.recipient_type != AccountType::Staking
         {
             return Err(TransactionError::InvalidForRecipient);
@@ -342,7 +342,7 @@ impl Transaction {
 
         // Should not be necessary as the sender would have to sign the transaction
         // and the private key for the staking contract is unknown
-        if self.sender == policy::STAKING_CONTRACT_ADDRESS
+        if self.sender == Policy::STAKING_CONTRACT_ADDRESS
             && self.sender_type != AccountType::Staking
         {
             return Err(TransactionError::InvalidForSender);
@@ -364,7 +364,7 @@ impl Transaction {
         // Check that value + fee doesn't overflow.
         match self.value.checked_add(self.fee) {
             Some(coin) => {
-                if coin > Coin::from_u64_unchecked(policy::TOTAL_SUPPLY) {
+                if coin > Coin::from_u64_unchecked(Policy::TOTAL_SUPPLY) {
                     return Err(TransactionError::Overflow);
                 }
             }
@@ -387,11 +387,11 @@ impl Transaction {
     }
 
     pub fn is_valid_at(&self, block_height: u32) -> bool {
-        let window = policy::TRANSACTION_VALIDITY_WINDOW;
+        let window = Policy::TRANSACTION_VALIDITY_WINDOW;
         block_height
             >= self
                 .validity_start_height
-                .saturating_sub(policy::BLOCKS_PER_BATCH)
+                .saturating_sub(Policy::blocks_per_batch())
             && block_height < self.validity_start_height + window
     }
 

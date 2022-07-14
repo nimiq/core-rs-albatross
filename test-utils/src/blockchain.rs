@@ -18,7 +18,7 @@ use nimiq_genesis::NetworkId;
 use nimiq_keys::{Address, KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey};
 use nimiq_keys::{KeyPair, PrivateKey};
 use nimiq_primitives::coin::Coin;
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 use nimiq_transaction::Transaction;
 use nimiq_transaction_builder::TransactionBuilder;
 
@@ -126,9 +126,9 @@ pub fn fill_micro_blocks_with_txns(
 ) {
     let init_height = blockchain.read().block_number();
     let key_pair = KeyPair::from(PrivateKey::from_str(UNIT_KEY).unwrap());
-    assert!(policy::is_macro_block_at(init_height));
+    assert!(Policy::is_macro_block_at(init_height));
 
-    let macro_block_number = init_height + policy::BLOCKS_PER_BATCH;
+    let macro_block_number = init_height + Policy::blocks_per_batch();
 
     for i in (init_height + 1)..macro_block_number {
         log::debug!(" Current Height: {}", i);
@@ -203,7 +203,7 @@ pub fn sign_macro_block(
 
     // Create signers Bitset.
     let mut signers = BitSet::new();
-    for i in 0..policy::TWO_F_PLUS_ONE {
+    for i in 0..Policy::TWO_F_PLUS_ONE {
         signers.insert(i as usize);
     }
 
@@ -211,7 +211,7 @@ pub fn sign_macro_block(
     let multisig = MultiSignature {
         signature: AggregateSignature::from_signatures(&vec![
             signed_precommit;
-            policy::TWO_F_PLUS_ONE as usize
+            Policy::TWO_F_PLUS_ONE as usize
         ]),
         signers,
     };
@@ -236,9 +236,9 @@ pub fn sign_skip_block_info(
         SignedSkipBlockInfo::from_message(skip_block_info.clone(), &voting_key_pair.secret_key, 0);
 
     let signature =
-        AggregateSignature::from_signatures(&[skip_block_info.signature.multiply(policy::SLOTS)]);
+        AggregateSignature::from_signatures(&[skip_block_info.signature.multiply(Policy::SLOTS)]);
     let mut signers = BitSet::new();
-    for i in 0..policy::SLOTS {
+    for i in 0..Policy::SLOTS {
         signers.insert(i as usize);
     }
 

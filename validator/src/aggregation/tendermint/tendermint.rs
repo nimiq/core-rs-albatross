@@ -8,7 +8,7 @@ use nimiq_block::{MultiSignature, TendermintIdentifier, TendermintStep, Tendermi
 use nimiq_bls::SecretKey;
 use nimiq_handel::{identity::WeightRegistry, update::LevelUpdateMessage};
 use nimiq_hash::Blake2sHash;
-use nimiq_primitives::{policy, slots::Validators};
+use nimiq_primitives::{policy::Policy, slots::Validators};
 use nimiq_tendermint::{AggregationResult, TendermintError};
 use nimiq_validator_network::ValidatorNetwork;
 
@@ -294,7 +294,7 @@ impl<N: ValidatorNetwork + 'static> HandelTendermintAdapter<N> {
 
                     // iterate all proposals present in this contribution
                     for (proposal, (_, weight)) in map.iter() {
-                        if *weight >= policy::TWO_F_PLUS_ONE {
+                        if *weight >= Policy::TWO_F_PLUS_ONE {
                             if step == TendermintStep::PreCommit {
                                 // PreCommit Aggreations are never requested again, so the aggregation can be canceled.
                                 self.event_sender
@@ -319,7 +319,7 @@ impl<N: ValidatorNetwork + 'static> HandelTendermintAdapter<N> {
                     }
 
                     // combined weight of all proposals excluding the one this node signed reached 2f+1
-                    if combined_weight >= policy::TWO_F_PLUS_ONE {
+                    if combined_weight >= Policy::TWO_F_PLUS_ONE {
                         if step == TendermintStep::PreCommit {
                             // PreCommit Aggreations are never requested again, so the aggregation can be canceled.
                             self.event_sender
@@ -336,7 +336,7 @@ impl<N: ValidatorNetwork + 'static> HandelTendermintAdapter<N> {
                     }
 
                     // none of the above but every signatory is present and thus no improvement can be made
-                    if total_weight == policy::SLOTS {
+                    if total_weight == Policy::SLOTS {
                         if step == TendermintStep::PreCommit {
                             // PreCommit Aggreations are never requested again, so the aggregation can be canceled.
                             self.event_sender

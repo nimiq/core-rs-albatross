@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use ark_groth16::Proof;
 use beserial::Deserialize;
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 use nimiq_test_utils::blockchain_with_rng::produce_macro_blocks_with_rng;
 use nimiq_test_utils::zkp_test_data::{KEYS_PATH, ZKPROOF_SERIALIZED_IN_HEX};
 use nimiq_zkp_component::proof_utils::ProofStore;
@@ -63,7 +63,7 @@ async fn can_detect_invalid_proof_none_genesis_blocks() {
     produce_macro_blocks_with_rng(
         &producer,
         &blockchain,
-        policy::BATCHES_PER_EPOCH as usize,
+        Policy::batches_per_epoch() as usize,
         &mut get_base_seed(),
     );
 
@@ -91,7 +91,7 @@ async fn can_detect_invalid_proof_none_genesis_blocks() {
     );
 
     let zkp_proof = ZKProof {
-        block_number: block.block_number() + policy::BLOCKS_PER_EPOCH,
+        block_number: block.block_number() + Policy::blocks_per_epoch(),
         proof: Some(Proof::default()),
     };
 
@@ -110,7 +110,7 @@ async fn can_detect_valid_proof_none_genesis_blocks() {
     produce_macro_blocks_with_rng(
         &producer,
         &blockchain,
-        policy::BATCHES_PER_EPOCH as usize,
+        Policy::batches_per_epoch() as usize,
         &mut get_base_seed(),
     );
 
@@ -129,7 +129,7 @@ async fn can_store_and_load_zkp_state_from_db() {
 
     let proof_store = ProofStore::new(env);
     let new_proof = ZKProof {
-        block_number: policy::BLOCKS_PER_EPOCH,
+        block_number: Policy::blocks_per_epoch(),
         proof: Some(Proof::default()),
     };
 
@@ -141,7 +141,7 @@ async fn can_store_and_load_zkp_state_from_db() {
     );
 
     let new_proof = ZKProof {
-        block_number: policy::BLOCKS_PER_EPOCH,
+        block_number: Policy::blocks_per_epoch(),
         proof: Some(Proof::default()),
     };
 

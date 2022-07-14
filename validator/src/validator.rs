@@ -29,8 +29,7 @@ use nimiq_keys::{Address, KeyPair as SchnorrKeyPair};
 use nimiq_macros::store_waker;
 use nimiq_mempool::{config::MempoolConfig, mempool::Mempool, mempool_transactions::TxPriority};
 use nimiq_network_interface::network::{Network, PubsubId, Topic};
-use nimiq_primitives::coin::Coin;
-use nimiq_primitives::policy;
+use nimiq_primitives::{coin::Coin, policy::Policy};
 use nimiq_tendermint::TendermintReturn;
 use nimiq_transaction_builder::TransactionBuilder;
 use nimiq_utils::observer::NotifierStream;
@@ -142,7 +141,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
 {
     const MACRO_STATE_DB_NAME: &'static str = "ValidatorState";
     const MACRO_STATE_KEY: &'static str = "validatorState";
-    const PRODUCER_TIMEOUT: Duration = Duration::from_millis(policy::BLOCK_PRODUCER_TIMEOUT);
+    const PRODUCER_TIMEOUT: Duration = Duration::from_millis(Policy::BLOCK_PRODUCER_TIMEOUT);
     const EMPTY_BLOCK_DELAY: Duration = Duration::from_secs(1);
     const FORK_PROOFS_MAX_SIZE: usize = 1_000; // bytes
 
@@ -273,7 +272,8 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             let staking_state = self.get_staking_state(&blockchain);
             if (staking_state == ValidatorStakingState::Parked
                 || staking_state == ValidatorStakingState::Inactive)
-                && blockchain.block_number() >= tx_validity_window_start + policy::BLOCKS_PER_EPOCH
+                && blockchain.block_number()
+                    >= tx_validity_window_start + Policy::blocks_per_epoch()
                 && !blockchain.tx_in_validity_window(tx_hash, *tx_validity_window_start, None)
             {
                 // If we are parked or inactive and no transaction has been seen in the expected validity window

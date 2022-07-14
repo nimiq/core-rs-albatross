@@ -6,7 +6,7 @@ use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
 use nimiq_hash_derive::SerializeContent;
 use nimiq_keys::Signature;
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 use nimiq_transaction::ExecutedTransaction;
 use nimiq_transaction::Transaction;
 use nimiq_vrf::VrfSeed;
@@ -105,7 +105,7 @@ impl MicroBlock {
 
     // Returns the available size, in bytes, in a micro block body for transactions.
     pub fn get_available_bytes(num_fork_proofs: usize) -> usize {
-        policy::MAX_SIZE_MICRO_BODY
+        Policy::MAX_SIZE_MICRO_BODY
             - (/*fork_proofs vector length*/2 + num_fork_proofs * ForkProof::SIZE
             + /*transactions vector length*/ 2)
     }

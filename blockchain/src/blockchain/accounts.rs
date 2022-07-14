@@ -5,7 +5,7 @@ use nimiq_account::Accounts;
 use nimiq_account::BlockLog;
 use nimiq_block::{Block, BlockError::TransactionExecutionMismatch, SkipBlockInfo};
 use nimiq_database::WriteTransaction;
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 
 /// Implements methods to handle the accounts.
 impl Blockchain {
@@ -54,7 +54,7 @@ impl Blockchain {
 
                 let hs_result = self.history_store.add_to_history(
                     txn,
-                    policy::epoch_at(macro_block.header.block_number),
+                    Policy::epoch_at(macro_block.header.block_number),
                     &ext_txs,
                 );
 
@@ -125,7 +125,7 @@ impl Blockchain {
 
                 let hs_result = self.history_store.add_to_history(
                     txn,
-                    policy::epoch_at(micro_block.header.block_number),
+                    Policy::epoch_at(micro_block.header.block_number),
                     &ext_txs,
                 );
 
@@ -207,7 +207,7 @@ impl Blockchain {
 
                 let hs_result = self.history_store.remove_partial_history(
                     txn,
-                    policy::epoch_at(micro_block.header.block_number),
+                    Policy::epoch_at(micro_block.header.block_number),
                     num_txs,
                 );
 

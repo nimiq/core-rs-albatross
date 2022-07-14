@@ -8,7 +8,7 @@ use nimiq_account::{BlockLog as BBlockLog, StakingContract, TransactionLog};
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainEvent};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 use nimiq_rpc_interface::types::{
     is_of_log_type_and_related_to_addresses, BlockLog, BlockNumberOrHash, BlockchainState,
     ParkedSet, RPCData, RPCResult, Validator,
@@ -103,12 +103,12 @@ impl BlockchainInterface for BlockchainDispatcher {
 
     /// Returns the batch number for the current head.
     async fn get_batch_number(&mut self) -> RPCResult<u32, (), Self::Error> {
-        Ok(policy::batch_at(self.blockchain.read().block_number()).into())
+        Ok(Policy::batch_at(self.blockchain.read().block_number()).into())
     }
 
     /// Returns the epoch number for the current head.
     async fn get_epoch_number(&mut self) -> RPCResult<u32, (), Self::Error> {
-        Ok(policy::epoch_at(self.blockchain.read().block_number()).into())
+        Ok(Policy::epoch_at(self.blockchain.read().block_number()).into())
     }
 
     /// Tries to fetch a block given its hash. It has an option to include the transactions in the
@@ -313,8 +313,8 @@ impl BlockchainInterface for BlockchainDispatcher {
         let blockchain = self.blockchain.read();
 
         // Calculate the numbers for the micro blocks in the batch.
-        let first_block = policy::first_block_of_batch(batch_number);
-        let last_block = policy::macro_block_of(batch_number);
+        let first_block = Policy::first_block_of_batch(batch_number);
+        let last_block = Policy::macro_block_of(batch_number);
 
         // Search all micro blocks of the batch to find the transactions.
         let mut transactions = vec![];
@@ -351,7 +351,7 @@ impl BlockchainInterface for BlockchainDispatcher {
     ) -> RPCResult<Vec<Inherent>, (), Self::Error> {
         let blockchain = self.blockchain.read();
 
-        let macro_block_number = policy::macro_block_of(batch_number);
+        let macro_block_number = Policy::macro_block_of(batch_number);
 
         // Check the batch's macro block to see if the batch includes slashes.
         let macro_block = blockchain
@@ -364,7 +364,7 @@ impl BlockchainInterface for BlockchainDispatcher {
 
         if !macro_body.lost_reward_set.is_empty() {
             // Search all micro blocks of the batch to find the slash inherents.
-            let first_micro_block = policy::first_block_of_batch(batch_number);
+            let first_micro_block = Policy::first_block_of_batch(batch_number);
             let last_micro_block = macro_block_number - 1;
 
             for i in first_micro_block..=last_micro_block {

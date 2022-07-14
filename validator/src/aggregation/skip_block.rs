@@ -235,7 +235,7 @@ impl SkipBlockAggregation {
             let protocol = SkipBlockAggregationProtocol::new(
                 active_validators.clone(),
                 validator_id as usize,
-                policy::TWO_F_PLUS_ONE as usize,
+                policy::Policy::TWO_F_PLUS_ONE as usize,
                 message_hash,
             );
 
@@ -271,12 +271,12 @@ impl SkipBlockAggregation {
                             trace!(
                                 "New Skip Block Aggregate weight: {} / {} Signers: {:?}",
                                 aggregate_weight,
-                                policy::TWO_F_PLUS_ONE,
+                                policy::Policy::TWO_F_PLUS_ONE,
                                 &sb_msg.proof.contributors(),
                             );
 
                             // Check if the combined weight of the aggregation is at least 2f+1.
-                            if aggregate_weight >= policy::TWO_F_PLUS_ONE as usize {
+                            if aggregate_weight >= policy::Policy::TWO_F_PLUS_ONE as usize {
                                 // Create SkipBlockProof out of the aggregate
                                 let skip_block_proof = SkipBlockProof { sig: sb_msg.proof };
                                 trace!("Skip block completed, proof={:?}", &skip_block_proof);

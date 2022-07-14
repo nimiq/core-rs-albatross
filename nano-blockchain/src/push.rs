@@ -3,7 +3,7 @@ use nimiq_blockchain::{
     AbstractBlockchain, Blockchain, ChainInfo, ChainOrdering, NextBlock, PushError, PushResult,
 };
 use nimiq_hash::{Blake2bHash, Hash};
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::Policy;
 
 use crate::blockchain::NanoBlockchain;
 
@@ -229,7 +229,7 @@ impl NanoBlockchain {
         header: MacroHeader,
     ) -> Result<PushResult, PushError> {
         // Get epoch number.
-        let epoch = policy::epoch_at(header.block_number);
+        let epoch = Policy::epoch_at(header.block_number);
 
         // Get read transaction for ChainStore.
         let chain_store_r = self
@@ -244,7 +244,7 @@ impl NanoBlockchain {
 
         // Check if we have this block's successor.
         let prev_block = chain_store_r
-            .get_election(epoch + policy::BLOCKS_PER_EPOCH)
+            .get_election(epoch + Policy::blocks_per_epoch())
             .ok_or(PushError::InvalidSuccessor)?;
 
         // Verify that the block is indeed the predecessor.
