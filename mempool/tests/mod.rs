@@ -18,8 +18,8 @@ use nimiq_keys::{
     Address, KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey,
     PublicKey as SchnorrPublicKey, SecureGenerate,
 };
-use nimiq_mempool::config::MempoolConfig;
 use nimiq_mempool::mempool::Mempool;
+use nimiq_mempool::{config::MempoolConfig, mempool_transactions::TxPriority};
 use nimiq_network_mock::{MockHub, MockId, MockNetwork, MockPeerId};
 use nimiq_primitives::{networks::NetworkId, policy};
 use nimiq_test_log::test;
@@ -37,7 +37,11 @@ const NUM_TXNS_START_STOP: usize = 100;
 pub const ACCOUNT_SECRET_KEY: &str =
     "6c9320ac201caf1f8eaa5b05f5d67a9e77826f3f6be266a0ecccc20416dc6587";
 
+pub const VALIDATOR_SECRET_KEY: &str =
+    "041580cc67e66e9e08b68fd9e4c9deb68737168fbe7488de2638c2e906c2f5ad";
+
 const STAKER_ADDRESS: &str = "NQ20TSB0DFSMUH9C15GQGAGJTTE4D3MA859E";
+const VALIDATOR_ADDRESS: &str = "NQ20 TSB0 DFSM UH9C 15GQ GAGJ TTE4 D3MA 859E";
 
 fn ed25519_key_pair(secret_key: &str) -> SchnorrKeyPair {
     let priv_key: SchnorrPrivateKey =
@@ -1551,12 +1555,24 @@ async fn mempool_update_create_staker_twice() {
 }
 
 #[test(tokio::test(flavor = "multi_thread", worker_threads = 10))]
-async fn mempool_basic_control_tx() {
+async fn mempool_basic_prioritization_control_tx() {
     let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
 
     let key_pair = ed25519_key_pair(ACCOUNT_SECRET_KEY);
+    let validator_signing_key = ed25519_key_pair(VALIDATOR_SECRET_KEY);
     let address = Address::from_any_str(STAKER_ADDRESS).unwrap();
+    let validator_address = Address::from_any_str(VALIDATOR_ADDRESS).unwrap();
+
+    let unpark = TransactionBuilder::new_unpark_validator(
+        &key_pair,
+        validator_address,
+        &validator_signing_key,
+        1.try_into().unwrap(),
+        1,
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
 
     // This is the transaction produced in the block
     let tx = TransactionBuilder::new_create_staker(
@@ -1583,7 +1599,7 @@ async fn mempool_basic_control_tx() {
     let mock_network = Arc::new(hub.new_network());
 
     // Send txns to mempool
-    send_control_txn_to_mempool(&mempool, mock_network, mock_id, txns).await;
+    send_control_txn_to_mempool(&mempool, mock_network, mock_id, txns.clone()).await;
 
     assert_eq!(
         mempool.num_transactions(),
@@ -1591,27 +1607,26 @@ async fn mempool_basic_control_tx() {
         "Number of txns in mempool is not what is expected"
     );
 
-    // Get regular txns from mempool
-    let (updated_txns, _) = mempool.get_transactions_for_block(10_000);
-
-    //We should obtain 0 regular txns since we only have 1 control tx in the mempool
-    assert_eq!(
-        updated_txns.len(),
-        0,
-        "Number of txns is not what is expected"
-    );
+    // Insert unpark with high priority
+    mempool
+        .add_transaction(unpark.clone(), Some(TxPriority::HighPriority))
+        .await
+        .unwrap();
 
     // Get control txns from mempool
     let (updated_txns, _) = mempool.get_control_transactions_for_block(10_000);
 
-    //Now we should obtain one control transaction
+    // Now we should obtain one control transaction
     assert_eq!(
         updated_txns.len(),
-        1,
+        2,
         "Number of txns is not what is expected"
     );
 
-    //Now the mempool should have 0 total txns
+    // We should obtain the txns in the reversed ordered as the unpark should have been prioritized.
+    assert_eq!(updated_txns[0], unpark);
+
+    // Now the mempool should have 0 total txns
     assert_eq!(
         mempool.num_transactions(),
         0,
@@ -1875,7 +1890,7 @@ async fn applies_total_tx_size_limits() {
     let worst_tx = txns[1].hash::<Blake2bHash>();
 
     for tx in txns {
-        mempool.add_transaction(tx).await.unwrap();
+        mempool.add_transaction(tx, None).await.unwrap();
     }
 
     let (mempool_txns, _) = mempool.get_transactions_for_block(txns_len);

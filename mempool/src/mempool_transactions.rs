@@ -9,6 +9,18 @@ use keyed_priority_queue::KeyedPriorityQueue;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_transaction::Transaction;
 
+/// TxPriority that is used when adding transactions into the mempool
+/// Higher Priority transactions are returned first from the mempool
+#[derive(Copy, Clone, PartialEq)]
+pub enum TxPriority {
+    /// Low Priority transactions
+    LowPriority = 1,
+    /// Medium Priority transactions, this is thed default
+    MediumPriority = 2,
+    /// High Priority transactions,
+    HighPriority = 3,
+}
+
 /// Ordering in which transactions removed from the mempool to be included in blocks.
 /// This is stored on a max-heap, so the greater transaction comes first.
 /// Compares by fee per byte (higher first), then by insertion order (lower i.e. older first).
@@ -17,6 +29,7 @@ use nimiq_transaction::Transaction;
 //       we might prefer basic transactions over staking contract transactions, etc, etc.
 #[derive(PartialEq)]
 pub struct BestTxOrder {
+    priority: TxPriority,
     fee_per_byte: f64,
     insertion_order: u64,
 }
@@ -31,9 +44,14 @@ impl PartialOrd for BestTxOrder {
 
 impl Ord for BestTxOrder {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.fee_per_byte
-            .partial_cmp(&other.fee_per_byte)
-            .expect("fees can't be NaN")
+        (self.priority as u8)
+            .partial_cmp(&(other.priority as u8))
+            .expect("TX Priority is required")
+            .then(
+                self.fee_per_byte
+                    .partial_cmp(&other.fee_per_byte)
+                    .expect("fees can't be NaN"),
+            )
             .then(self.insertion_order.cmp(&other.insertion_order).reverse())
     }
 }
@@ -43,6 +61,7 @@ impl Ord for BestTxOrder {
 /// Compares by fee per byte (lower first), then by insertion order (higher i.e. newer first).
 #[derive(PartialEq)]
 pub struct WorstTxOrder {
+    priority: TxPriority,
     fee_per_byte: f64,
     insertion_order: u64,
 }
@@ -57,11 +76,17 @@ impl PartialOrd for WorstTxOrder {
 
 impl Ord for WorstTxOrder {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.fee_per_byte
-            .partial_cmp(&other.fee_per_byte)
-            .expect("fees can't be NaN")
+        (self.priority as u8)
+            .partial_cmp(&(other.priority as u8))
+            .expect("TX Priority is required")
             .reverse()
-            .then(self.insertion_order.cmp(&other.insertion_order))
+            .then(
+                self.fee_per_byte
+                    .partial_cmp(&other.fee_per_byte)
+                    .expect("fees can't be NaN")
+                    .reverse()
+                    .then(self.insertion_order.cmp(&other.insertion_order)),
+            )
     }
 }
 
@@ -147,7 +172,7 @@ impl MempoolTransactions {
         self.transactions.get(hash)
     }
 
-    pub(crate) fn insert(&mut self, tx: &Transaction) -> bool {
+    pub(crate) fn insert(&mut self, tx: &Transaction, priority: TxPriority) -> bool {
         let tx_hash = tx.hash();
 
         if self.transactions.contains_key(&tx_hash) {
@@ -159,6 +184,7 @@ impl MempoolTransactions {
         self.best_transactions.push(
             tx_hash.clone(),
             BestTxOrder {
+                priority,
                 fee_per_byte: tx.fee_per_byte(),
                 insertion_order: self.tx_counter,
             },
@@ -166,6 +192,7 @@ impl MempoolTransactions {
         self.worst_transactions.push(
             tx_hash.clone(),
             WorstTxOrder {
+                priority,
                 fee_per_byte: tx.fee_per_byte(),
                 insertion_order: self.tx_counter,
             },

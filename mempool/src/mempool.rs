@@ -25,6 +25,7 @@ use crate::filter::{MempoolFilter, MempoolRules};
 #[cfg(feature = "metrics")]
 use crate::mempool_metrics::MempoolMetrics;
 use crate::mempool_state::{EvictionReason, MempoolState};
+use crate::mempool_transactions::TxPriority;
 use crate::verify::{verify_tx, VerifyErr};
 
 /// Transaction topic for the Mempool to request transactions from the network
@@ -46,7 +47,7 @@ pub struct ControlTransactionTopic;
 impl Topic for ControlTransactionTopic {
     type Item = Transaction;
 
-    const BUFFER_SIZE: usize = 100;
+    const BUFFER_SIZE: usize = 1024;
     const NAME: &'static str = "Controltransactions";
     const VALIDATE: bool = true;
 }
@@ -520,7 +521,8 @@ impl Mempool {
                     let pending_balance = tx.total_value() + sender_total;
 
                     if pending_balance <= sender_balance {
-                        mempool_state.put(tx);
+                        //TODO: This could be improved by re-adding unpark txns with high priority
+                        mempool_state.put(tx, TxPriority::MediumPriority);
                     } else {
                         debug!(
                             block_number = block.block_number(),
@@ -658,7 +660,11 @@ impl Mempool {
     }
 
     /// Adds a transaction to the Mempool.
-    pub async fn add_transaction(&self, transaction: Transaction) -> Result<(), VerifyErr> {
+    pub async fn add_transaction(
+        &self,
+        transaction: Transaction,
+        tx_priority: Option<TxPriority>,
+    ) -> Result<(), VerifyErr> {
         let blockchain = Arc::clone(&self.blockchain);
         let mempool_state = Arc::clone(&self.state);
         let filter = Arc::clone(&self.filter);
@@ -668,7 +674,11 @@ impl Mempool {
 
         match verify_tx_ret {
             Ok(mempool_state_lock) => {
-                RwLockUpgradableReadGuard::upgrade(mempool_state_lock).put(&transaction);
+                RwLockUpgradableReadGuard::upgrade(mempool_state_lock).put(
+                    &transaction,
+                    tx_priority.unwrap_or(TxPriority::MediumPriority),
+                );
+
                 Ok(())
             }
             Err(e) => Err(e),

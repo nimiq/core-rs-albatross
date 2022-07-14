@@ -5,7 +5,7 @@ use std::{
 
 #[cfg(feature = "metrics")]
 use crate::mempool_metrics::MempoolMetrics;
-use crate::mempool_transactions::MempoolTransactions;
+use crate::mempool_transactions::{MempoolTransactions, TxPriority};
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
 use nimiq_primitives::{account::AccountType, coin::Coin};
@@ -69,7 +69,7 @@ impl MempoolState {
         }
     }
 
-    pub(crate) fn put(&mut self, tx: &Transaction) -> bool {
+    pub(crate) fn put(&mut self, tx: &Transaction, priority: TxPriority) -> bool {
         let tx_hash = tx.hash();
 
         if self.regular_transactions.contains_key(&tx_hash)
@@ -81,9 +81,9 @@ impl MempoolState {
         // If we are adding a stacking transaction we insert it into the control txns container
         // Staking txns are control txns
         if tx.sender_type == AccountType::Staking || tx.recipient_type == AccountType::Staking {
-            self.control_transactions.insert(tx);
+            self.control_transactions.insert(tx, priority);
         } else {
-            self.regular_transactions.insert(tx);
+            self.regular_transactions.insert(tx, priority);
         }
 
         // Update the per sender state

@@ -22,7 +22,7 @@ use nimiq_database::{Database, Environment, ReadTransaction, WriteTransaction};
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::{Address, KeyPair as SchnorrKeyPair};
 use nimiq_macros::store_waker;
-use nimiq_mempool::{config::MempoolConfig, mempool::Mempool};
+use nimiq_mempool::{config::MempoolConfig, mempool::Mempool, mempool_transactions::TxPriority};
 use nimiq_network_interface::network::{Network, PubsubId, Topic};
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy;
@@ -629,11 +629,15 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         .unwrap(); // TODO: Handle transaction creation error
         let tx_hash = unpark_transaction.hash();
 
-        let cn = self.consensus.clone();
+        let mempool = self.mempool.clone();
         tokio::spawn(async move {
-            debug!("Sending unpark transaction");
-            if cn.send_transaction(unpark_transaction).await.is_err() {
-                error!("Failed to send unpark transaction");
+            debug!("Adding unpark transaction to mempool");
+            if mempool
+                .add_transaction(unpark_transaction, Some(TxPriority::HighPriority))
+                .await
+                .is_err()
+            {
+                error!("Failed adding unpark transaction into mempool");
             }
         });
 
