@@ -27,20 +27,23 @@ use crate::{Account, AccountError, AccountsTrie, Receipt, StakingContract};
 /// 6. Delete: Deletes a validator (validator must have been inactive for the cooldown period).
 ///
 /// The actions can be summarized by the following state diagram:
-///        +--------+   retire    +----------+
-/// create |        +------------>+          | drop
-///+------>+ active |             | inactive +------>
-///        |        +<------------+          |
-///        +-+--+---+  reactivate +-----+----+
-///          |  ^                       ^
-///          |  |                       |
-///          |  | unpark                | automatically
-/// slashing |  |                       |
-///          |  |     +--------+        |
-///          |  +-----+        |        |
-///          |        | parked +--------+
-///          +------->+        |
-///                   +--------+
+///        +--------+          retire           +----------+
+/// create |        +-------------------------->+          | drop
+///+------>+ active |                           | inactive +------>
+///        |        +<-- -- -- -- -- -- -- -- --+          |
+///        +-+--+---+        reactivate         +-----+----+
+///          |  ^     (*optional) automatically       ^
+///          |  |                                     |
+///          |  | unpark                              | automatically
+/// slashing |  |                                     |
+///          |  |             +--------+              |
+///          |  +-------------+        |              |
+///          |                | parked +--------------+
+///          +--------------->+        |
+///                           +--------+
+///
+///         (*optional) The validator my be set to automatically reactivate itself upon incativation.
+///                     If this setting is not enabled the state change is triggered manually.
 ///
 /// Create, Update, Retire, Re-activate and Unpark are incoming transactions to the staking contract.
 /// Drop is an outgoing transaction from the staking contract.

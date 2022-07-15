@@ -506,8 +506,8 @@ pub struct ValidatorConfig {
     /// The validator address.
     pub validator_address: Address,
 
-    /// Config if the validator automatically activates.
-    pub automatic_activate: bool,
+    /// Config if the validator automatically reactivates itself.
+    pub automatic_reactivate: bool,
 }
 
 /// Credentials for JSON RPC server, metrics server or websocket RPC server
@@ -763,7 +763,7 @@ impl ClientConfigBuilder {
         if let Some(validator_config) = config_file.validator.as_ref() {
             self.validator(ValidatorConfig {
                 validator_address: Address::from_any_str(&validator_config.validator_address)?,
-                automatic_activate: validator_config.automatic_activation,
+                automatic_reactivate: validator_config.automatic_reactivate,
             });
 
             if let Some(key_path) = &validator_config.voting_key_file {

@@ -91,7 +91,7 @@ pub struct ValidatorProxy {
     pub signing_key: Arc<RwLock<SchnorrKeyPair>>,
     pub voting_key: Arc<RwLock<BlsKeyPair>>,
     pub fee_key: Arc<RwLock<SchnorrKeyPair>>,
-    pub automatic_activate: Arc<AtomicBool>,
+    pub automatic_reactivate: Arc<AtomicBool>,
 }
 
 impl Clone for ValidatorProxy {
@@ -101,7 +101,7 @@ impl Clone for ValidatorProxy {
             signing_key: Arc::clone(&self.signing_key),
             voting_key: Arc::clone(&self.voting_key),
             fee_key: Arc::clone(&self.fee_key),
-            automatic_activate: Arc::clone(&self.automatic_activate),
+            automatic_reactivate: Arc::clone(&self.automatic_reactivate),
         }
     }
 }
@@ -127,7 +127,7 @@ pub struct Validator<TNetwork: Network, TValidatorNetwork: ValidatorNetwork + 's
     epoch_state: Option<ActiveEpochState>,
     blockchain_state: BlockchainState,
     validator_state: Option<ValidatorState>,
-    automatic_activate: Arc<AtomicBool>,
+    automatic_reactivate: Arc<AtomicBool>,
 
     macro_producer: Option<ProduceMacroBlock<TValidatorNetwork>>,
     macro_state: Option<PersistedMacroState<TValidatorNetwork>>,
@@ -156,7 +156,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         consensus: &Consensus<TNetwork>,
         network: Arc<TValidatorNetwork>,
         validator_address: Address,
-        automatic_activate: bool,
+        automatic_reactivate: bool,
         signing_key: SchnorrKeyPair,
         voting_key: BlsKeyPair,
         fee_key: SchnorrKeyPair,
@@ -193,7 +193,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         let mempool = Arc::new(Mempool::new(consensus.blockchain.clone(), mempool_config));
         let mempool_state = MempoolState::Inactive;
 
-        let automatic_activate = Arc::new(AtomicBool::new(automatic_activate));
+        let automatic_reactivate = Arc::new(AtomicBool::new(automatic_reactivate));
 
         let mut this = Self {
             consensus: consensus.proxy(),
@@ -216,7 +216,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             epoch_state: None,
             blockchain_state,
             validator_state: None,
-            automatic_activate,
+            automatic_reactivate,
 
             macro_producer: None,
             macro_state,
@@ -685,10 +685,10 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
 
         let cn = self.consensus.clone();
         tokio::spawn(async move {
-            debug!("Sending reactivate transaction");
             if cn.send_transaction(reactivate_transaction).await.is_err() {
                 error!("Failed to send reactivate transaction");
             }
+            debug!("Sent reactivate transaction.");
         });
 
         ValidatorState::InactivityState {
@@ -719,19 +719,14 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
     pub fn fee_key(&self) -> SchnorrKeyPair {
         self.fee_key.read().clone()
     }
-    /*
-       pub fn set_automatic_reactivate(&self, automatic_reactivate: bool) {
-           self.automatic_activate
-               .store(automatic_reactivate, Ordering::Release);
-       }
-    */
+
     pub fn proxy(&self) -> ValidatorProxy {
         ValidatorProxy {
             validator_address: Arc::clone(&self.validator_address),
             signing_key: Arc::clone(&self.signing_key),
             voting_key: Arc::clone(&self.voting_key),
             fee_key: Arc::clone(&self.fee_key),
-            automatic_activate: Arc::clone(&self.automatic_activate),
+            automatic_reactivate: Arc::clone(&self.automatic_reactivate),
         }
     }
 }
@@ -838,12 +833,13 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Future
                     drop(blockchain);
                     if self.validator_state.is_some() {
                         self.validator_state = None;
+                        info!("Automatically reactivativated.");
                     }
                 }
                 ValidatorStakingState::Inactive => match self.validator_state {
                     Some(ValidatorState::InactivityState { .. }) => {}
                     _ => {
-                        if self.automatic_activate.load(Ordering::Acquire) {
+                        if self.automatic_reactivate.load(Ordering::Acquire) {
                             let inactivity_state = self.reactivate(&*blockchain);
                             drop(blockchain);
                             self.validator_state = Some(inactivity_state);

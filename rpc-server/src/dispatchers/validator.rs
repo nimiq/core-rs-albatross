@@ -47,13 +47,16 @@ impl ValidatorInterface for ValidatorDispatcher {
         ))
     }
 
-    async fn set_automatic_activation(
+    /// Updates the configuration setting to automatically reactivate our validator.
+    async fn set_automatic_reactivation(
         &mut self,
-        automatic_activation: bool,
+        automatic_reactivate: bool,
     ) -> Result<bool, Self::Error> {
         self.validator
-            .automatic_activate
-            .store(automatic_activation, Ordering::Release);
-        Ok(automatic_activation)
+            .automatic_reactivate
+            .store(automatic_reactivate, Ordering::Release);
+
+        log::debug!("Automatic reactivation set to {}.", automatic_reactivate);
+        Ok(automatic_reactivate)
     }
 }

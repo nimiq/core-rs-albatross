@@ -470,5 +470,5 @@ pub struct ValidatorSettings {
     pub fee_key_file: Option<String>,
     pub fee_key: Option<String>,
     #[serde(default)]
-    pub automatic_activation: bool,
+    pub automatic_reactivate: bool,
 }

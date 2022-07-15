@@ -244,4 +244,4 @@ fee_key_file = "fee_key.dat"
 #signing_key = "Schnorr Private Key"
 #fee_key = "Schnorr Private Key"
 #voting_key = "BLS Private Key"
-#automatic_activation = false
+automatic_reactivate = true

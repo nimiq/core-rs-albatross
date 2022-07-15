@@ -75,29 +75,10 @@ enum Command {
     Transaction(TransactionCommand),
 
     /// Changes the automatic reactivation setting for the current validator.
-    ValidatorSetAutoReactivate {
+    SetAutoReactivateValidator {
         /// The validator setting for automatic reactivation to be applied.
         #[clap(short, long)]
-        auto_reactivate_activate: bool,
-    },
-
-    /// Sends a transaction to inactivate this validator.
-    InactivateValidator {
-        /// The stake will be sent from this wallet.
-        wallet: Address,
-
-        /// The associated transaction fee to be payed from the sender_wallet. If absent it defaults to 0 NIM.
-        #[clap(short, long, default_value = "0")]
-        fee: Coin,
-
-        /// The block height from which on the unstake could be applied. The maximum amount of blocks the transaction is valid for is specified in `TRANSACTION_VALIDITY_WINDOW`.
-        /// If absent it defaults to the current block height at time of processing.
-        #[clap(short, long, default_value_t)]
-        validity_start_height: ValidityStartHeight,
-
-        /// Don't actually send the transaction, but output the transaction as hex string.
-        #[clap(long = "dry")]
-        dry: bool,
+        automatic_reactivate: bool,
     },
 }
 
@@ -211,6 +192,27 @@ enum TransactionCommand {
         #[clap(long = "dry")]
         dry: bool,
     },
+
+    /// Sends a transaction to inactivate this validator. In order to avoid having the validator reactivated soon after
+    /// this transacation takes effect, use the command set-auto-reactivate-validator to make sure the automatic reactivation
+    /// configuration is turned off.
+    InactivateValidator {
+        /// The stake will be sent from this wallet.
+        wallet: Address,
+
+        /// The associated transaction fee to be payed from the sender_wallet. If absent it defaults to 0 NIM.
+        #[clap(short, long, default_value = "0")]
+        fee: Coin,
+
+        /// The block height from which on the unstake could be applied. The maximum amount of blocks the transaction is valid for is specified in `TRANSACTION_VALIDITY_WINDOW`.
+        /// If absent it defaults to the current block height at time of processing.
+        #[clap(short, long, default_value_t)]
+        validity_start_height: ValidityStartHeight,
+
+        /// Don't actually send the transaction, but output the transaction as hex string.
+        #[clap(long = "dry")]
+        dry: bool,
+    },
 }
 
 impl Command {
@@ -291,48 +293,14 @@ impl Command {
                     println!("{:#?}", blocklog);
                 }
             }
-            Command::ValidatorSetAutoReactivate {
-                auto_reactivate_activate,
+            Command::SetAutoReactivateValidator {
+                automatic_reactivate,
             } => {
                 let result = client
                     .validator
-                    .set_automatic_activation(auto_reactivate_activate)
+                    .set_automatic_reactivation(automatic_reactivate)
                     .await?;
                 println!("Auto reacivate set to {}", result);
-            }
-            Command::InactivateValidator {
-                wallet,
-                fee,
-                validity_start_height,
-                dry,
-            } => {
-                let validator_address = client.validator.get_address().await?;
-                let key_data = client.validator.get_signing_key().await?;
-                if dry {
-                    let tx = client
-                        .consensus
-                        .create_inactivate_validator_transaction(
-                            wallet,
-                            validator_address,
-                            key_data,
-                            fee,
-                            validity_start_height,
-                        )
-                        .await?;
-                    println!("{}", tx);
-                } else {
-                    let txid = client
-                        .consensus
-                        .send_inactivate_validator_transaction(
-                            wallet,
-                            validator_address,
-                            key_data,
-                            fee,
-                            validity_start_height,
-                        )
-                        .await?;
-                    println!("{}", txid);
-                }
             }
 
             Command::Account(command) => {
@@ -411,6 +379,41 @@ impl Command {
                                 wallet,
                                 recipient,
                                 value,
+                                fee,
+                                validity_start_height,
+                            )
+                            .await?;
+                        println!("{}", txid);
+                    }
+                }
+
+                TransactionCommand::InactivateValidator {
+                    wallet,
+                    fee,
+                    validity_start_height,
+                    dry,
+                } => {
+                    let validator_address = client.validator.get_address().await?;
+                    let key_data = client.validator.get_signing_key().await?;
+                    if dry {
+                        let tx = client
+                            .consensus
+                            .create_inactivate_validator_transaction(
+                                wallet,
+                                validator_address,
+                                key_data,
+                                fee,
+                                validity_start_height,
+                            )
+                            .await?;
+                        println!("{}", tx);
+                    } else {
+                        let txid = client
+                            .consensus
+                            .send_inactivate_validator_transaction(
+                                wallet,
+                                validator_address,
+                                key_data,
                                 fee,
                                 validity_start_height,
                             )

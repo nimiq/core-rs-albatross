@@ -26,7 +26,7 @@ pub fn seeded_rng(seed: u64) -> StdRng {
 pub async fn build_validator<N: TestNetwork + NetworkInterface>(
     peer_id: u64,
     validator_address: Address,
-    automatic_activate: bool,
+    automatic_reactivate: bool,
     signing_key: SchnorrKeyPair,
     voting_key: BlsKeyPair,
     fee_key: SchnorrKeyPair,
@@ -47,7 +47,7 @@ where
             &consensus,
             validator_network,
             validator_address,
-            automatic_activate,
+            automatic_reactivate,
             signing_key,
             voting_key,
             fee_key,
