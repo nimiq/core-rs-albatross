@@ -683,12 +683,16 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         .unwrap(); // TODO: Handle transaction creation error
         let tx_hash = reactivate_transaction.hash();
 
-        let cn = self.consensus.clone();
+        let mempool = self.mempool.clone();
         tokio::spawn(async move {
-            if cn.send_transaction(reactivate_transaction).await.is_err() {
-                error!("Failed to send reactivate transaction");
+            debug!("Adding reactivate transaction to mempool");
+            if mempool
+                .add_transaction(reactivate_transaction, Some(TxPriority::HighPriority))
+                .await
+                .is_err()
+            {
+                error!("Failed adding reactivate transaction into mempool");
             }
-            debug!("Sent reactivate transaction.");
         });
 
         ValidatorState::InactivityState {
