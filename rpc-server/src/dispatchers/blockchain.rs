@@ -74,8 +74,10 @@ fn get_validator_by_address(
         let mut stakers_list: Vec<Staker> = vec![];
 
         for address in staker_addresses {
-            let staker = StakingContract::get_staker(accounts_tree, &db_txn, &address).unwrap();
+            let mut staker = StakingContract::get_staker(accounts_tree, &db_txn, &address).unwrap();
             if !staker.balance.is_zero() {
+                // Delegation is unnecessary because the address is in the parent struct.
+                staker.delegation = None;
                 stakers_list.push(Staker::from_staker(&staker));
             }
         }
