@@ -22,6 +22,7 @@ use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy;
 use nimiq_primitives::slots::Validators;
 use nimiq_transaction::account::htlc_contract::AnyHash;
+use nimiq_transaction::account::htlc_contract::HashAlgorithm as HTLCContractHashAlgorithm;
 use nimiq_vrf::VrfSeed;
 
 use crate::error::Error;
@@ -125,6 +126,23 @@ impl FromStr for ValidityStartHeight {
             Ok(Self::Relative(stripped.parse()?))
         } else {
             Ok(Self::Absolute(s.parse()?))
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, ArgEnum)]
+#[serde(rename_all = "kebab-case")]
+pub enum HashAlgorithm {
+    Blake2b = 1,
+    Sha256 = 3,
+}
+
+#[allow(clippy::from_over_into)]
+impl Into<HTLCContractHashAlgorithm> for HashAlgorithm {
+    fn into(self) -> HTLCContractHashAlgorithm {
+        match self {
+            HashAlgorithm::Blake2b => HTLCContractHashAlgorithm::Blake2b,
+            HashAlgorithm::Sha256 => HTLCContractHashAlgorithm::Sha256,
         }
     }
 }

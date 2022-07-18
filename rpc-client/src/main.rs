@@ -11,10 +11,11 @@ use nimiq_rpc_interface::{
     blockchain::{BlockchainInterface, BlockchainProxy},
     consensus::{ConsensusInterface, ConsensusProxy},
     mempool::MempoolProxy,
-    types::{BlockNumberOrHash, LogType, ValidityStartHeight},
+    types::{BlockNumberOrHash, HashAlgorithm, LogType, ValidityStartHeight},
     validator::{ValidatorInterface, ValidatorProxy},
     wallet::{WalletInterface, WalletProxy},
 };
+use nimiq_transaction::account::htlc_contract::AnyHash;
 
 #[derive(Debug, Parser)]
 struct Opt {
@@ -212,6 +213,231 @@ enum TransactionCommand {
         /// Don't actually send the transaction, but output the transaction as hex string.
         #[clap(long = "dry")]
         dry: bool,
+    },
+
+    VestingCreate {
+        /// The wallet used to sign the transaction. The vesting contract value is sent from the basic account
+        /// belonging to this wallet.
+        wallet: Address,
+
+        /// The owner of the vesting contract.
+        owner: Address,
+
+        /// The amount of NIM to place on the vesting contract.
+        value: Coin,
+
+        start_time: u64,
+
+        time_step: u64,
+
+        /// Create a release schedule of `num_steps` payouts of value starting at `start_time + time_step`.
+        num_steps: u32,
+
+        /// The associated transaction fee to be payed by the sender wallet. If absent it defaults to 0 NIM.
+        #[clap(short, long, default_value = "0")]
+        fee: Coin,
+
+        /// The block height from which on the unstake could be applied. The maximum amount of blocks the transaction is valid for
+        /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
+        /// If absent it defaults to the current block height at time of processing.
+        #[clap(short, long, default_value_t)]
+        validity_start_height: ValidityStartHeight,
+
+        /// Don't actually send the transaction, but output the transaction as hex string.
+        #[clap(long = "dry")]
+        dry: bool,
+    },
+
+    VestingRedeem {
+        /// The wallet to sign the transaction. This wallet should be the owner of the vesting contract
+        wallet: Address,
+
+        /// The vesting contract address.
+        contract_address: Address,
+
+        /// The address of the basic account that will receive the funds.
+        recipient: Address,
+
+        /// The amount of NIM to be redeemed from the vesting contract.
+        value: Coin,
+
+        /// The associated transaction fee to be payed by the sender wallet. If absent it defaults to 0 NIM.
+        #[clap(short, long, default_value = "0")]
+        fee: Coin,
+
+        /// The block height from which on the unstake could be applied. The maximum amount of blocks the transaction is valid for
+        /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
+        /// If absent it defaults to the current block height at time of processing.
+        #[clap(short, long, default_value_t)]
+        validity_start_height: ValidityStartHeight,
+
+        /// Don't actually send the transaction, but output the transaction as hex string.
+        #[clap(long = "dry")]
+        dry: bool,
+    },
+
+    CreateHTLC {
+        /// The wallet to sign the transaction. The HTLC contract value is sent from the basic account belonging to this wallet.
+        wallet: Address,
+
+        /// The address of the sender in the HTLC contract.
+        htlc_sender: Address,
+
+        /// The address of the recipient in the HTLC contract.
+        htlc_recipient: Address,
+
+        #[clap(short = 'r', long)]
+        hash_root: AnyHash,
+
+        #[clap(short = 'c', long = "count")]
+        hash_count: u8,
+
+        /// The `hash_root` is the result of hashing the pre-image `hash_count` times using `hash_algorithm`.
+        #[clap(short = 'a', long, arg_enum)]
+        hash_algorithm: HashAlgorithm,
+
+        /// Sets the blockchain height at which the `htlc_sender` automatically gains control over the funds.
+        timeout: u64,
+
+        /// The amount of NIM to be transfered to the HTLC contract.
+        value: Coin,
+
+        /// The associated transaction fee to be payed by the sender wallet. If absent it defaults to 0 NIM.
+        #[clap(short, long, default_value = "0")]
+        fee: Coin,
+
+        /// The block height from which on the unstake could be applied. The maximum amount of blocks the transaction is valid for
+        /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
+        /// If absent it defaults to the current block height at time of processing.
+        #[clap(short, long, default_value_t)]
+        validity_start_height: ValidityStartHeight,
+
+        /// Don't actually send the transaction, but output the transaction as hex string.
+        #[clap(long = "dry")]
+        dry: bool,
+    },
+
+    RedeemRegularHTLC {
+        /// This key pair corresponds to the `htlc_recipient` in the HTLC contract.
+        wallet: Address,
+
+        /// The address of the HTLC contract.
+        contract_address: Address,
+
+        /// The address of the basic account that will receive the funds.
+        htlc_recipient: Address,
+
+        pre_image: AnyHash,
+
+        #[clap(short = 'r', long)]
+        hash_root: AnyHash,
+
+        #[clap(short = 'c', long)]
+        hash_count: u8,
+
+        /// The `hash_root` is the result of hashing the `pre_image` `hash_count` times using `hash_algorithm`.
+        #[clap(short = 'a', long, arg_enum)]
+        hash_algorithm: HashAlgorithm,
+
+        /// The value that will be sent to the recipient account.
+        value: Coin,
+
+        /// The associated transaction fee to be payed by the sender wallet. If absent it defaults to 0 NIM.
+        #[clap(short, long, default_value = "0")]
+        fee: Coin,
+
+        /// The block height from which on the unstake could be applied. The maximum amount of blocks the transaction is valid for
+        /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
+        /// If absent it defaults to the current block height at time of processing.
+        #[clap(short, long, default_value_t)]
+        validity_start_height: ValidityStartHeight,
+
+        /// Don't actually send the transaction, but output the transaction as hex string.
+        #[clap(long = "dry")]
+        dry: bool,
+    },
+
+    RedeemHTLCTimeout {
+        /// This key pair corresponds to the `htlc_recipient` in the HTLC contract.
+        wallet: Address,
+
+        /// The address of the HTLC contract.
+        contract_address: Address,
+
+        /// The address of the basic account that will receive the funds.
+        htlc_recipient: Address,
+
+        /// The value that will be sent to the recipient account.
+        value: Coin,
+
+        /// The associated transaction fee to be payed by the sender wallet. If absent it defaults to 0 NIM.
+        #[clap(short, long, default_value = "0")]
+        fee: Coin,
+
+        /// The block height from which on the unstake could be applied. The maximum amount of blocks the transaction is valid for
+        /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
+        /// If absent it defaults to the current block height at time of processing.
+        #[clap(short, long, default_value_t)]
+        validity_start_height: ValidityStartHeight,
+
+        /// Don't actually send the transaction, but output the transaction as hex string.
+        #[clap(long = "dry")]
+        dry: bool,
+    },
+
+    RedeemHTLCEarly {
+        /// The address of the HTLC contract.
+        contract_address: Address,
+
+        /// The address of the basic account that will receive the funds.
+        htlc_recipient: Address,
+
+        /// The signature corresponding to the `htlc_sender` in the HTLC contract.
+        htlc_sender_signature: String,
+
+        /// The signature corresponding to the `htlc_recipient` in the HTLC contract.
+        htlc_recipient_signature: String,
+
+        /// The value that will be sent to the recipient account.
+        value: Coin,
+
+        /// The associated transaction fee to be payed by the sender wallet. If absent it defaults to 0 NIM.
+        #[clap(short, long, default_value = "0")]
+        fee: Coin,
+
+        /// The block height from which on the unstake could be applied. The maximum amount of blocks the transaction is valid for
+        /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
+        /// If absent it defaults to the current block height at time of processing.
+        #[clap(short, long, default_value_t)]
+        validity_start_height: ValidityStartHeight,
+
+        /// Don't actually send the transaction, but output the transaction as hex string.
+        #[clap(long = "dry")]
+        dry: bool,
+    },
+
+    SignRedeemHTLCEarly {
+        /// This is the address used to sign the transaction. It corresponds either to the `htlc_sender` or the `htlc_recipient` in the HTLC contract.
+        wallet: Address,
+
+        /// The address of the HTLC contract.
+        contract_address: Address,
+
+        /// The address of the basic account that will receive the funds.
+        htlc_recipient: Address,
+
+        /// The value that will be sent to the recipient account.
+        value: Coin,
+
+        /// The associated transaction fee to be payed by the sender wallet. If absent it defaults to 0 NIM.
+        #[clap(short, long, default_value = "0")]
+        fee: Coin,
+
+        /// The block height from which on the unstake could be applied. The maximum amount of blocks the transaction is valid for
+        /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
+        /// If absent it defaults to the current block height at time of processing.
+        #[clap(short, long, default_value_t)]
+        validity_start_height: ValidityStartHeight,
     },
 }
 
@@ -490,6 +716,282 @@ impl Command {
                             .await?;
                         println!("{}", txid);
                     }
+                }
+                TransactionCommand::VestingCreate {
+                    wallet,
+                    owner,
+                    value,
+                    start_time,
+                    time_step,
+                    num_steps,
+                    fee,
+                    validity_start_height,
+                    dry,
+                } => {
+                    if dry {
+                        let tx = client
+                            .consensus
+                            .create_new_vesting_transaction(
+                                wallet,
+                                owner,
+                                start_time,
+                                time_step,
+                                num_steps,
+                                value,
+                                fee,
+                                validity_start_height,
+                            )
+                            .await?;
+                        println!("{}", tx);
+                    } else {
+                        let txid = client
+                            .consensus
+                            .send_new_vesting_transaction(
+                                wallet,
+                                owner,
+                                start_time,
+                                time_step,
+                                num_steps,
+                                value,
+                                fee,
+                                validity_start_height,
+                            )
+                            .await?;
+                        println!("{}", txid);
+                    }
+                }
+                TransactionCommand::VestingRedeem {
+                    wallet,
+                    contract_address,
+                    recipient,
+                    value,
+                    fee,
+                    validity_start_height,
+                    dry,
+                } => {
+                    if dry {
+                        let tx = client
+                            .consensus
+                            .create_redeem_vesting_transaction(
+                                wallet,
+                                contract_address,
+                                recipient,
+                                value,
+                                fee,
+                                validity_start_height,
+                            )
+                            .await?;
+                        println!("{}", tx);
+                    } else {
+                        let txid = client
+                            .consensus
+                            .send_redeem_vesting_transaction(
+                                wallet,
+                                contract_address,
+                                recipient,
+                                value,
+                                fee,
+                                validity_start_height,
+                            )
+                            .await?;
+                        println!("{}", txid);
+                    }
+                }
+                TransactionCommand::CreateHTLC {
+                    wallet,
+                    htlc_sender,
+                    htlc_recipient,
+                    hash_root,
+                    hash_count,
+                    hash_algorithm,
+                    timeout,
+                    value,
+                    fee,
+                    validity_start_height,
+                    dry,
+                } => {
+                    if dry {
+                        let tx = client
+                            .consensus
+                            .create_new_htlc_transaction(
+                                wallet,
+                                htlc_sender,
+                                htlc_recipient,
+                                hash_root,
+                                hash_count,
+                                hash_algorithm.into(),
+                                timeout,
+                                value,
+                                fee,
+                                validity_start_height,
+                            )
+                            .await?;
+                        println!("{}", tx);
+                    } else {
+                        let txid = client
+                            .consensus
+                            .send_new_htlc_transaction(
+                                wallet,
+                                htlc_sender,
+                                htlc_recipient,
+                                hash_root,
+                                hash_count,
+                                hash_algorithm.into(),
+                                timeout,
+                                value,
+                                fee,
+                                validity_start_height,
+                            )
+                            .await?;
+                        println!("{}", txid);
+                    }
+                }
+                TransactionCommand::RedeemRegularHTLC {
+                    wallet,
+                    contract_address,
+                    htlc_recipient,
+                    pre_image,
+                    hash_root,
+                    hash_count,
+                    hash_algorithm,
+                    value,
+                    fee,
+                    validity_start_height,
+                    dry,
+                } => {
+                    if dry {
+                        let tx = client
+                            .consensus
+                            .create_redeem_regular_htlc_transaction(
+                                wallet,
+                                contract_address,
+                                htlc_recipient,
+                                pre_image,
+                                hash_root,
+                                hash_count,
+                                hash_algorithm.into(),
+                                value,
+                                fee,
+                                validity_start_height,
+                            )
+                            .await?;
+                        println!("{}", tx);
+                    } else {
+                        let txid = client
+                            .consensus
+                            .send_redeem_regular_htlc_transaction(
+                                wallet,
+                                contract_address,
+                                htlc_recipient,
+                                pre_image,
+                                hash_root,
+                                hash_count,
+                                hash_algorithm.into(),
+                                value,
+                                fee,
+                                validity_start_height,
+                            )
+                            .await?;
+                        println!("{}", txid);
+                    }
+                }
+                TransactionCommand::RedeemHTLCTimeout {
+                    wallet,
+                    contract_address,
+                    htlc_recipient,
+                    value,
+                    fee,
+                    validity_start_height,
+                    dry,
+                } => {
+                    if dry {
+                        let tx = client
+                            .consensus
+                            .create_redeem_timeout_htlc_transaction(
+                                wallet,
+                                contract_address,
+                                htlc_recipient,
+                                value,
+                                fee,
+                                validity_start_height,
+                            )
+                            .await?;
+                        println!("{}", tx);
+                    } else {
+                        let txid = client
+                            .consensus
+                            .send_redeem_timeout_htlc_transaction(
+                                wallet,
+                                contract_address,
+                                htlc_recipient,
+                                value,
+                                fee,
+                                validity_start_height,
+                            )
+                            .await?;
+                        println!("{}", txid);
+                    }
+                }
+                TransactionCommand::RedeemHTLCEarly {
+                    contract_address,
+                    htlc_recipient,
+                    htlc_sender_signature,
+                    htlc_recipient_signature,
+                    value,
+                    fee,
+                    validity_start_height,
+                    dry,
+                } => {
+                    if dry {
+                        let tx = client
+                            .consensus
+                            .create_redeem_early_htlc_transaction(
+                                contract_address,
+                                htlc_recipient,
+                                htlc_sender_signature,
+                                htlc_recipient_signature,
+                                value,
+                                fee,
+                                validity_start_height,
+                            )
+                            .await?;
+                        println!("{}", tx);
+                    } else {
+                        let txid = client
+                            .consensus
+                            .send_redeem_early_htlc_transaction(
+                                contract_address,
+                                htlc_recipient,
+                                htlc_sender_signature,
+                                htlc_recipient_signature,
+                                value,
+                                fee,
+                                validity_start_height,
+                            )
+                            .await?;
+                        println!("{}", txid);
+                    }
+                }
+                TransactionCommand::SignRedeemHTLCEarly {
+                    wallet,
+                    contract_address,
+                    htlc_recipient,
+                    value,
+                    fee,
+                    validity_start_height,
+                } => {
+                    let tx = client
+                        .consensus
+                        .sign_redeem_early_htlc_transaction(
+                            wallet,
+                            contract_address,
+                            htlc_recipient,
+                            value,
+                            fee,
+                            validity_start_height,
+                        )
+                        .await?;
+                    println!("{}", tx);
                 }
             },
         }
