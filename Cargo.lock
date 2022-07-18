@@ -1952,7 +1952,7 @@ dependencies = [
  "libp2p-core",
  "libp2p-swarm",
  "log",
- "prometheus-client",
+ "prometheus-client 0.16.0",
  "prost 0.10.0",
  "prost-build",
  "rand 0.7.3",
@@ -2024,7 +2024,7 @@ dependencies = [
  "libp2p-kad",
  "libp2p-ping",
  "libp2p-swarm",
- "prometheus-client",
+ "prometheus-client 0.16.0",
 ]
 
 [[package]]
@@ -2565,7 +2565,7 @@ dependencies = [
  "nimiq-utils",
  "nimiq-vrf",
  "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
- "prometheus-client",
+ "prometheus-client 0.17.0",
  "rand 0.8.5",
  "thiserror",
  "tracing",
@@ -2962,7 +2962,7 @@ dependencies = [
  "nimiq-utils",
  "nimiq-vrf",
  "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
- "prometheus-client",
+ "prometheus-client 0.17.0",
  "rand 0.8.5",
  "tokio",
  "tokio-metrics",
@@ -2982,7 +2982,7 @@ dependencies = [
  "nimiq-network-interface",
  "nimiq-network-libp2p",
  "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
- "prometheus-client",
+ "prometheus-client 0.17.0",
  "tokio",
  "tokio-metrics",
  "tracing",
@@ -3112,7 +3112,7 @@ dependencies = [
  "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
  "pin-project",
  "pin-project-lite 0.2.9",
- "prometheus-client",
+ "prometheus-client 0.17.0",
  "rand 0.8.5",
  "serde",
  "thiserror",
@@ -3975,7 +3975,19 @@ dependencies = [
  "dtoa",
  "itoa",
  "owning_ref",
- "prometheus-client-derive-text-encode",
+ "prometheus-client-derive-text-encode 0.2.0",
+]
+
+[[package]]
+name = "prometheus-client"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7fe21d29a3d5c97c2ae9bcae7b944bfb71dbc281e3035e301085086f9bc83611"
+dependencies = [
+ "dtoa",
+ "itoa",
+ "owning_ref",
+ "prometheus-client-derive-text-encode 0.3.0",
 ]
 
 [[package]]
@@ -3983,6 +3995,17 @@ name = "prometheus-client-derive-text-encode"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8e12d01b9d66ad9eb4529c57666b6263fc1993cb30261d83ead658fdd932652"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "prometheus-client-derive-text-encode"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "66a455fbcb954c1a7decf3c586e860fd7889cddf4b8e164be736dbac95a953cd"
 dependencies = [
  "proc-macro2",
  "quote",
