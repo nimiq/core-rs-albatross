@@ -59,7 +59,7 @@ pub fn generate_transactions(
             Coin::from_u64_unchecked(mempool_transaction.value),
             Coin::from_u64_unchecked(mempool_transaction.fee),
             1,
-            NetworkId::UnitAlbatross,
+            Some(NetworkId::UnitAlbatross),
         );
 
         if signature {

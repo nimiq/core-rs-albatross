@@ -48,7 +48,7 @@ fn it_does_not_support_contract_creation() {
         100.try_into().unwrap(),
         0.try_into().unwrap(),
         0,
-        NetworkId::Dummy,
+        Some(NetworkId::Dummy),
     );
 
     assert_eq!(
@@ -679,7 +679,7 @@ fn make_incoming_tx(data: IncomingStakingTransactionData, value: u64) -> Transac
             100.try_into().unwrap(),
             data.serialize_to_vec(),
             1,
-            NetworkId::Dummy,
+            Some(NetworkId::Dummy),
         ),
         _ => Transaction::new_signalling(
             Address::from_any_str(STAKER_ADDRESS).unwrap(),
@@ -690,7 +690,7 @@ fn make_incoming_tx(data: IncomingStakingTransactionData, value: u64) -> Transac
             100.try_into().unwrap(),
             data.serialize_to_vec(),
             1,
-            NetworkId::Dummy,
+            Some(NetworkId::Dummy),
         ),
     }
 }
@@ -739,7 +739,7 @@ fn make_delete_validator_tx(value: u64, wrong_sig: bool) -> Transaction {
         100.try_into().unwrap(),
         vec![],
         1,
-        NetworkId::Dummy,
+        Some(NetworkId::Dummy),
     );
 
     let private_key =
@@ -777,7 +777,7 @@ fn make_unstake_tx(wrong_sig: bool) -> Transaction {
         100.try_into().unwrap(),
         vec![],
         1,
-        NetworkId::Dummy,
+        Some(NetworkId::Dummy),
     );
 
     let private_key =

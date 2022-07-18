@@ -74,7 +74,7 @@ fn it_can_verify_creation_transaction() {
         100.try_into().unwrap(),
         0.try_into().unwrap(),
         0,
-        NetworkId::Dummy,
+        Some(NetworkId::Dummy),
     );
 
     // Invalid data
@@ -156,7 +156,7 @@ fn it_can_create_contract_from_transaction() {
         100.try_into().unwrap(),
         0.try_into().unwrap(),
         0,
-        NetworkId::Dummy,
+        Some(NetworkId::Dummy),
     );
 
     VestingContract::create(&accounts_tree, &mut db_txn, &transaction, 0, 0);
@@ -254,7 +254,7 @@ fn it_does_not_support_incoming_transactions() {
         1.try_into().unwrap(),
         1000.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        Some(NetworkId::Dummy),
     );
     tx.recipient_type = AccountType::Vesting;
 
@@ -282,7 +282,7 @@ fn it_can_verify_outgoing_transactions() {
         1.try_into().unwrap(),
         1000.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        Some(NetworkId::Dummy),
     );
     tx.sender_type = AccountType::Vesting;
 
@@ -346,7 +346,7 @@ fn it_can_apply_and_revert_valid_transaction() {
         200.try_into().unwrap(),
         0.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        Some(NetworkId::Dummy),
     );
     tx.sender_type = AccountType::Vesting;
 
@@ -443,7 +443,7 @@ fn it_refuses_invalid_transaction() {
         200.try_into().unwrap(),
         0.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        Some(NetworkId::Dummy),
     );
     tx.sender_type = AccountType::Vesting;
 

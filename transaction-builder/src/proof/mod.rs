@@ -85,7 +85,6 @@ impl TransactionProofBuilder {
     ///     recipient,
     ///     Coin::from_u64_unchecked(100),
     ///     1,
-    ///     NetworkId::Main
     /// );
     /// builder.with_fee(Coin::from_u64_unchecked(1337));
     ///
@@ -124,7 +123,6 @@ impl TransactionProofBuilder {
     ///     recipient,
     ///     Coin::from_u64_unchecked(100),
     ///     1,
-    ///     NetworkId::Main
     /// );
     /// builder.with_fee(Coin::from_u64_unchecked(1337));
     ///
@@ -178,7 +176,6 @@ impl TransactionProofBuilder {
     ///     recipient,
     ///     Coin::from_u64_unchecked(100),
     ///     1,
-    ///     NetworkId::Main
     /// );
     /// builder.with_sender_type(AccountType::HTLC);
     ///
@@ -230,7 +227,6 @@ impl TransactionProofBuilder {
     ///     recipient.generate().unwrap(),
     ///     Coin::from_u64_unchecked(0), // must be zero because of signalling transaction
     ///     1,
-    ///     NetworkId::Main
     /// );
     ///
     /// let proof_builder = tx_builder.generate().unwrap();
@@ -282,7 +278,6 @@ impl TransactionProofBuilder {
     ///     recipient,
     ///     Coin::from_u64_unchecked(100),
     ///     1,
-    ///     NetworkId::Main
     /// );
     /// tx_builder.with_sender_type(AccountType::Staking);
     ///

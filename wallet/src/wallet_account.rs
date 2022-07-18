@@ -36,7 +36,7 @@ impl WalletAccount {
         value: Coin,
         fee: Coin,
         validity_start_height: u32,
-        network_id: NetworkId,
+        network_id: Option<NetworkId>,
     ) -> Transaction {
         let mut transaction = Transaction::new_basic(
             self.address.clone(),

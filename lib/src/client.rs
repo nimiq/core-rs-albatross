@@ -17,6 +17,7 @@ use nimiq_network_libp2p::{
     discovery::peer_contacts::{PeerContact, Services},
     Config as NetworkConfig, Multiaddr, Network,
 };
+use nimiq_primitives::globals::NETWORK_ID;
 use nimiq_utils::time::OffsetTime;
 #[cfg(feature = "validator")]
 use nimiq_validator::validator::Validator as AbstractValidator;
@@ -75,6 +76,7 @@ impl ClientInner {
             )));
         }
         let network_info = NetworkInfo::from_network_id(config.network_id);
+        NETWORK_ID.set(network_info.network_id()).unwrap();
 
         // Initialize clock
         let time = Arc::new(OffsetTime::new());

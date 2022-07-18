@@ -2,6 +2,7 @@
 pub mod account;
 #[cfg(feature = "coin")]
 pub mod coin;
+pub mod globals;
 #[cfg(feature = "networks")]
 pub mod networks;
 #[cfg(feature = "policy")]

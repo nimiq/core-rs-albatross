@@ -1501,7 +1501,7 @@ mod tests {
                 Coin::from_u64_unchecked(value),
                 Coin::from_u64_unchecked(0),
                 0,
-                NetworkId::Dummy,
+                Some(NetworkId::Dummy),
             )),
         }
     }

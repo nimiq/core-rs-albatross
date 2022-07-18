@@ -87,7 +87,7 @@ fn it_can_commit_and_revert_a_block_body() {
         Coin::from_u64_unchecked(10),
         Coin::ZERO,
         1,
-        NetworkId::Main,
+        Some(NetworkId::Main),
     );
 
     let transactions = vec![tx.clone()];
@@ -249,7 +249,7 @@ fn it_correctly_rewards_validators() {
         value1,
         fee1,
         2,
-        NetworkId::Main,
+        Some(NetworkId::Main),
     );
 
     let tx2 = Transaction::new_basic(
@@ -258,7 +258,7 @@ fn it_correctly_rewards_validators() {
         value2,
         fee2,
         2,
-        NetworkId::Main,
+        Some(NetworkId::Main),
     );
 
     // Validator 2 mines second block.
@@ -331,7 +331,7 @@ fn it_checks_for_sufficient_funds() {
         Coin::try_from(10).unwrap(),
         Coin::ZERO,
         1,
-        NetworkId::Main,
+        Some(NetworkId::Main),
     );
 
     let reward = Inherent {

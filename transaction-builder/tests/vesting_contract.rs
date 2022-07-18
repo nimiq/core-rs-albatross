@@ -25,7 +25,7 @@ fn it_can_create_creation_transaction() {
         100.try_into().unwrap(),
         0.try_into().unwrap(),
         0,
-        NetworkId::Dummy,
+        Some(NetworkId::Dummy),
     );
 
     // Valid
@@ -121,7 +121,7 @@ fn it_can_create_outgoing_transactions() {
         1.try_into().unwrap(),
         1000.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        Some(NetworkId::Dummy),
     );
     tx.sender_type = AccountType::Vesting;
 

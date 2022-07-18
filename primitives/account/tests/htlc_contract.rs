@@ -93,7 +93,7 @@ fn it_can_verify_creation_transaction() {
         100.try_into().unwrap(),
         0.try_into().unwrap(),
         0,
-        NetworkId::Dummy,
+        Some(NetworkId::Dummy),
     );
 
     // Invalid data
@@ -169,7 +169,7 @@ fn it_can_create_contract_from_transaction() {
         100.try_into().unwrap(),
         0.try_into().unwrap(),
         0,
-        NetworkId::Dummy,
+        Some(NetworkId::Dummy),
     );
 
     HashedTimeLockedContract::create(&accounts_tree, &mut db_txn, &transaction, 0, 0);
@@ -202,7 +202,7 @@ fn it_does_not_support_incoming_transactions() {
         1.try_into().unwrap(),
         1000.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        Some(NetworkId::Dummy),
     );
     tx.recipient_type = AccountType::HTLC;
 
@@ -277,7 +277,7 @@ fn prepare_outgoing_transaction() -> (
         1000.try_into().unwrap(),
         0.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        Some(NetworkId::Dummy),
     );
 
     let sender_signature = sender_key_pair.sign(&tx.serialize_content()[..]);

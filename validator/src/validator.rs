@@ -615,7 +615,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             &self.signing_key(),
             Coin::ZERO,
             validity_start_height,
-            blockchain.network_id(),
+            None,
         )
         .unwrap(); // TODO: Handle transaction creation error
         let tx_hash = unpark_transaction.hash();

@@ -114,7 +114,7 @@ fn run_app() -> Result<(), Error> {
             value,
             fee,
             validity_start_height,
-            network_id,
+            Some(network_id),
         )
     };
 

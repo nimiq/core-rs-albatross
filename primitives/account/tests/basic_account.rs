@@ -32,7 +32,7 @@ fn it_does_not_allow_creation() {
         100.try_into().unwrap(),
         0.try_into().unwrap(),
         0,
-        NetworkId::Dummy,
+        Some(NetworkId::Dummy),
     );
 
     assert_eq!(
@@ -264,7 +264,7 @@ fn make_signed_transaction(value: u64, recipient: Address) -> Transaction {
         value.try_into().unwrap(),
         1.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        Some(NetworkId::Dummy),
     );
 
     let key_pair = KeyPair::from(

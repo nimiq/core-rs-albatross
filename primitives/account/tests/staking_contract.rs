@@ -2313,7 +2313,7 @@ fn make_incoming_transaction(data: IncomingStakingTransactionData, value: u64) -
             100.try_into().unwrap(),
             data.serialize_to_vec(),
             1,
-            NetworkId::Dummy,
+            Some(NetworkId::Dummy),
         ),
         _ => Transaction::new_signalling(
             Address::from_any_str(STAKER_ADDRESS).unwrap(),
@@ -2324,7 +2324,7 @@ fn make_incoming_transaction(data: IncomingStakingTransactionData, value: u64) -
             100.try_into().unwrap(),
             data.serialize_to_vec(),
             1,
-            NetworkId::Dummy,
+            Some(NetworkId::Dummy),
         ),
     }
 }
@@ -2369,7 +2369,7 @@ fn make_delete_validator_transaction() -> Transaction {
         100.try_into().unwrap(),
         vec![],
         1,
-        NetworkId::Dummy,
+        Some(NetworkId::Dummy),
     );
 
     let private_key =
@@ -2396,7 +2396,7 @@ fn make_unstake_transaction(value: u64) -> Transaction {
         100.try_into().unwrap(),
         vec![],
         1,
-        NetworkId::Dummy,
+        Some(NetworkId::Dummy),
     );
 
     let private_key =

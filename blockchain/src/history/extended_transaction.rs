@@ -49,6 +49,7 @@ impl ExtendedTransaction {
     /// number and a block timestamp) into a vector of extended transactions.
     /// We only want to store slash and reward inherents, so we ignore the other inherent types.
     pub fn from(
+        // TODO: Make into an Option<NetworkId>
         network_id: NetworkId,
         block_number: u32,
         block_time: u64,
@@ -152,7 +153,7 @@ impl ExtendedTransaction {
                         x.value,
                         Coin::ZERO,
                         self.block_number,
-                        self.network_id,
+                        Some(self.network_id),
                     ))
                 } else {
                     Err(IntoTransactionError::NoBasicTransactionMapping)

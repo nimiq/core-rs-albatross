@@ -1414,7 +1414,7 @@ async fn mempool_update_create_staker_twice() {
         100_000_000.try_into().unwrap(),
         100.try_into().unwrap(),
         1,
-        NetworkId::UnitAlbatross,
+        Some(NetworkId::UnitAlbatross),
     )
     .unwrap();
 
@@ -1426,7 +1426,7 @@ async fn mempool_update_create_staker_twice() {
         100.try_into().unwrap(),
         0.try_into().unwrap(),
         1,
-        NetworkId::UnitAlbatross,
+        Some(NetworkId::UnitAlbatross),
     )
     .unwrap();
 
@@ -1539,7 +1539,7 @@ async fn mempool_update_create_staker_non_existant_delegation_addr() {
         100.try_into().unwrap(),
         0.try_into().unwrap(),
         1,
-        NetworkId::UnitAlbatross,
+        Some(NetworkId::UnitAlbatross),
     )
     .unwrap();
 

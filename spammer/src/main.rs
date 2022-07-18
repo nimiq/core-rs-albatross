@@ -376,10 +376,7 @@ async fn spam(
     config: Arc<SpammerGenerationOptions>,
     state: Arc<RwLock<SpammerState>>,
 ) {
-    let (number, net_id) = {
-        let blockchain = consensus.blockchain.read();
-        (blockchain.block_number(), blockchain.network_id)
-    };
+    let number = consensus.blockchain.read().block_number();
     tokio::task::spawn_blocking(move || {
         let choices = [
             SpamType::BaseBasicTransaction,
@@ -394,29 +391,15 @@ async fn spam(
         let txs = match choices[dist.sample(&mut rng)] {
             SpamType::BaseBasicTransaction => {
                 new_count = config.tpb;
-                generate_basic_transactions(
-                    &key_pair,
-                    number,
-                    net_id,
-                    new_count,
-                    config.clone(),
-                    state,
-                )
+                generate_basic_transactions(&key_pair, number, new_count, config.clone(), state)
             }
             SpamType::BurstBasicTransaction => {
                 new_count = rng.gen_range(config.tpb * 10..config.tpb * 20);
-                generate_basic_transactions(
-                    &key_pair,
-                    number,
-                    net_id,
-                    new_count,
-                    config.clone(),
-                    state,
-                )
+                generate_basic_transactions(&key_pair, number, new_count, config.clone(), state)
             }
             SpamType::Vesting => {
                 new_count = rng.gen_range(0..config.tpb);
-                generate_vesting_contracts(&key_pair, number, net_id, new_count, state)
+                generate_vesting_contracts(&key_pair, number, new_count, state)
             }
         };
 
@@ -441,7 +424,6 @@ async fn spam(
 fn generate_basic_transactions(
     key_pair: &KeyPair,
     start_height: u32,
-    network_id: NetworkId,
     count: usize,
     config: Arc<SpammerGenerationOptions>,
     state: std::sync::Arc<RwLock<SpammerState>>,
@@ -484,7 +466,7 @@ fn generate_basic_transactions(
                 amount,
                 Coin::ZERO,
                 start_height,
-                network_id,
+                None,
             )
             .unwrap();
             txs.push(tx);
@@ -521,7 +503,7 @@ fn generate_basic_transactions(
             amount,
             Coin::ZERO,
             start_height,
-            network_id,
+            None,
         )
         .unwrap();
         txs.push(tx);
@@ -533,7 +515,6 @@ fn generate_basic_transactions(
 fn generate_vesting_contracts(
     key_pair: &KeyPair,
     start_height: u32,
-    network_id: NetworkId,
     count: usize,
     state: Arc<RwLock<SpammerState>>,
 ) -> Vec<Transaction> {
@@ -555,7 +536,7 @@ fn generate_vesting_contracts(
                 Coin::from_u64_unchecked(10),
                 Coin::ZERO,
                 start_height,
-                network_id,
+                None,
             )
             .unwrap();
             txs.push(tx);
@@ -576,7 +557,7 @@ fn generate_vesting_contracts(
             Coin::from_u64_unchecked(10),
             Coin::ZERO,
             start_height,
-            network_id,
+            None,
         )
         .unwrap();
 

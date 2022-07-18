@@ -6,6 +6,7 @@ use nimiq_database::{Environment, ReadTransaction, WriteTransaction};
 use nimiq_genesis::NetworkInfo;
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::coin::Coin;
+use nimiq_primitives::globals::NETWORK_ID;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_primitives::policy;
 use nimiq_primitives::slots::Validators;
@@ -78,6 +79,8 @@ impl Blockchain {
     ) -> Result<Self, BlockchainError> {
         let chain_store = ChainStore::new(env.clone());
         let history_store = HistoryStore::new(env.clone());
+
+        NETWORK_ID.get_or_init(|| network_id);
 
         Ok(match chain_store.get_head(None) {
             Some(head_hash) => Blockchain::load(

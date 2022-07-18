@@ -150,7 +150,6 @@ impl HtlcProofBuilder {
     ///     recipient,
     ///     Coin::from_u64_unchecked(100),
     ///     1,
-    ///     NetworkId::Main
     /// );
     /// builder.with_sender_type(AccountType::HTLC);
     ///
@@ -198,7 +197,6 @@ impl HtlcProofBuilder {
     ///     recipient,
     ///     Coin::from_u64_unchecked(100),
     ///     1,
-    ///     NetworkId::Main
     /// );
     /// builder.with_sender_type(AccountType::HTLC);
     ///
@@ -250,7 +248,6 @@ impl HtlcProofBuilder {
     ///     recipient,
     ///     Coin::from_u64_unchecked(100),
     ///     1,
-    ///     NetworkId::Main
     /// );
     /// builder.with_sender_type(AccountType::HTLC);
     ///
@@ -352,7 +349,6 @@ impl HtlcProofBuilder {
     ///     recipient,
     ///     Coin::from_u64_unchecked(100),
     ///     1,
-    ///     NetworkId::Main
     /// );
     /// builder.with_sender_type(AccountType::HTLC);
     ///
@@ -430,7 +426,6 @@ impl HtlcProofBuilder {
     ///     recipient,
     ///     Coin::from_u64_unchecked(100),
     ///     1,
-    ///     NetworkId::Main
     /// );
     /// builder.with_sender_type(AccountType::HTLC);
     ///

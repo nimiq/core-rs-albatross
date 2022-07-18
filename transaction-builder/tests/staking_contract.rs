@@ -42,7 +42,7 @@ fn it_can_create_staker_transactions() {
         100_000_000.try_into().unwrap(),
         100.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        Some(NetworkId::Dummy),
     )
     .unwrap();
 
@@ -63,7 +63,7 @@ fn it_can_create_staker_transactions() {
         100_000_000.try_into().unwrap(),
         100.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        Some(NetworkId::Dummy),
     )
     .unwrap();
 
@@ -85,7 +85,7 @@ fn it_can_create_staker_transactions() {
         None,
         100.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        Some(NetworkId::Dummy),
     )
     .unwrap();
 
@@ -106,7 +106,7 @@ fn it_can_create_staker_transactions() {
         None,
         100.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        Some(NetworkId::Dummy),
     )
     .unwrap();
 
@@ -121,7 +121,7 @@ fn it_can_create_staker_transactions() {
         150_000_000.try_into().unwrap(),
         100.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        Some(NetworkId::Dummy),
     )
     .unwrap();
 
@@ -140,7 +140,7 @@ fn it_can_fail_creating_staker_transactions() {
         0.try_into().unwrap(), // InvalidValue
         100.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        Some(NetworkId::Dummy),
     )
     .err();
 
@@ -180,7 +180,7 @@ fn it_can_create_validator_transactions() {
         Some(Blake2bHash::default()),
         100.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        Some(NetworkId::Dummy),
     )
     .unwrap();
 
@@ -209,7 +209,7 @@ fn it_can_create_validator_transactions() {
         None,
         100.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        Some(NetworkId::Dummy),
     )
     .unwrap();
 
@@ -231,7 +231,7 @@ fn it_can_create_validator_transactions() {
         &key_pair,
         100.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        Some(NetworkId::Dummy),
     )
     .unwrap();
 
@@ -253,7 +253,7 @@ fn it_can_create_validator_transactions() {
         &key_pair,
         100.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        Some(NetworkId::Dummy),
     )
     .unwrap();
 
@@ -275,7 +275,7 @@ fn it_can_create_validator_transactions() {
         &key_pair,
         100.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        Some(NetworkId::Dummy),
     )
     .unwrap();
 
@@ -289,7 +289,7 @@ fn it_can_create_validator_transactions() {
         &key_pair,
         100.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        Some(NetworkId::Dummy),
     )
     .unwrap();
 
@@ -309,7 +309,7 @@ fn make_incoming_transaction(data: IncomingStakingTransactionData, value: u64) -
             100.try_into().unwrap(),
             data.serialize_to_vec(),
             1,
-            NetworkId::Dummy,
+            Some(NetworkId::Dummy),
         ),
         _ => Transaction::new_signalling(
             Address::from_any_str(ADDRESS).unwrap(),
@@ -320,7 +320,7 @@ fn make_incoming_transaction(data: IncomingStakingTransactionData, value: u64) -
             100.try_into().unwrap(),
             data.serialize_to_vec(),
             1,
-            NetworkId::Dummy,
+            Some(NetworkId::Dummy),
         ),
     }
 }
@@ -352,7 +352,7 @@ fn make_unstake_transaction(key_pair: &KeyPair, value: u64) -> Transaction {
         100.try_into().unwrap(),
         vec![],
         1,
-        NetworkId::Dummy,
+        Some(NetworkId::Dummy),
     );
     let proof = OutgoingStakingTransactionProof::Unstake {
         proof: SignatureProof::from(key_pair.public, key_pair.sign(&tx.serialize_content())),
@@ -371,7 +371,7 @@ fn make_delete_transaction(key_pair: &KeyPair, value: u64) -> Transaction {
         100.try_into().unwrap(),
         vec![],
         1,
-        NetworkId::Dummy,
+        Some(NetworkId::Dummy),
     );
     let proof = OutgoingStakingTransactionProof::DeleteValidator {
         proof: SignatureProof::from(key_pair.public, key_pair.sign(&tx.serialize_content())),
@@ -390,7 +390,7 @@ fn make_self_transaction(data: IncomingStakingTransactionData, key_pair: &KeyPai
         100.try_into().unwrap(),
         data.serialize_to_vec(),
         1,
-        NetworkId::Dummy,
+        Some(NetworkId::Dummy),
     );
     tx.data = IncomingStakingTransactionData::set_signature_on_data(
         &tx.data,

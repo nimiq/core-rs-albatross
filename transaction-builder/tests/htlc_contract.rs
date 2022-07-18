@@ -31,7 +31,7 @@ fn it_can_create_creation_transaction() {
         100.try_into().unwrap(),
         0.try_into().unwrap(),
         0,
-        NetworkId::Dummy,
+        Some(NetworkId::Dummy),
     );
 
     let mut htlc_builder = Recipient::new_htlc_builder();
@@ -94,7 +94,7 @@ fn prepare_outgoing_transaction() -> (
         0.try_into().unwrap(),
         vec![],
         1,
-        NetworkId::Dummy,
+        Some(NetworkId::Dummy),
     );
 
     let sender_signature = sender_key_pair.sign(&tx.serialize_content()[..]);

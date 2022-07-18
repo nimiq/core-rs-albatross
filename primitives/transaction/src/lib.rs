@@ -19,6 +19,7 @@ use nimiq_keys::Address;
 use nimiq_keys::{PublicKey, Signature};
 use nimiq_primitives::account::AccountType;
 use nimiq_primitives::coin::Coin;
+use nimiq_primitives::globals::NETWORK_ID;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_primitives::policy;
 use nimiq_utils::merkle::{Blake2bMerklePath, Blake2bMerkleProof};
@@ -150,7 +151,7 @@ impl Transaction {
         value: Coin,
         fee: Coin,
         validity_start_height: u32,
-        network_id: NetworkId,
+        network_id: Option<NetworkId>,
     ) -> Self {
         Self {
             data: Vec::new(),
@@ -161,7 +162,8 @@ impl Transaction {
             value,
             fee,
             validity_start_height,
-            network_id,
+            network_id: network_id
+                .unwrap_or_else(|| *NETWORK_ID.get().expect("Network ID not set")),
             flags: TransactionFlags::empty(),
             proof: Vec::new(),
             valid: false,
@@ -177,7 +179,7 @@ impl Transaction {
         fee: Coin,
         data: Vec<u8>,
         validity_start_height: u32,
-        network_id: NetworkId,
+        network_id: Option<NetworkId>,
     ) -> Self {
         Self {
             data,
@@ -188,7 +190,8 @@ impl Transaction {
             value,
             fee,
             validity_start_height,
-            network_id,
+            network_id: network_id
+                .unwrap_or_else(|| *NETWORK_ID.get().expect("Network ID not set")),
             flags: TransactionFlags::empty(),
             proof: Vec::new(),
             valid: false,
@@ -204,7 +207,7 @@ impl Transaction {
         fee: Coin,
         data: Vec<u8>,
         validity_start_height: u32,
-        network_id: NetworkId,
+        network_id: Option<NetworkId>,
     ) -> Self {
         Self {
             data,
@@ -215,7 +218,8 @@ impl Transaction {
             value,
             fee,
             validity_start_height,
-            network_id,
+            network_id: network_id
+                .unwrap_or_else(|| *NETWORK_ID.get().expect("Network ID not set")),
             flags: TransactionFlags::SIGNALLING,
             proof: Vec::new(),
             valid: false,
@@ -230,7 +234,7 @@ impl Transaction {
         value: Coin,
         fee: Coin,
         validity_start_height: u32,
-        network_id: NetworkId,
+        network_id: Option<NetworkId>,
     ) -> Self {
         let mut tx = Self {
             data,
@@ -241,7 +245,8 @@ impl Transaction {
             value,
             fee,
             validity_start_height,
-            network_id,
+            network_id: network_id
+                .unwrap_or_else(|| *NETWORK_ID.get().expect("Network ID not set")),
             flags: TransactionFlags::CONTRACT_CREATION,
             proof: Vec::new(),
             valid: false,

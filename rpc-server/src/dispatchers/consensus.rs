@@ -10,7 +10,7 @@ use nimiq_consensus::ConsensusProxy;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::{Address, KeyPair, PrivateKey, PublicKey};
 use nimiq_network_libp2p::Network;
-use nimiq_primitives::{coin::Coin, networks::NetworkId};
+use nimiq_primitives::coin::Coin;
 use nimiq_rpc_interface::{
     consensus::ConsensusInterface,
     types::{Transaction as RPCTransaction, ValidityStartHeight},
@@ -48,11 +48,6 @@ impl ConsensusDispatcher {
             .ok_or_else(|| Error::UnlockedWalletNotFound(address.clone()))?
             .key_pair
             .clone())
-    }
-
-    /// Returns the network ID for our current blockchain.
-    fn get_network_id(&self) -> NetworkId {
-        self.consensus.blockchain.read().network_id
     }
 
     /// Calculates the actual block number for the validity start height given the ValidityStartHeight
@@ -108,7 +103,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             value,
             fee,
             self.validity_start_height(validity_start_height),
-            self.get_network_id(),
+            None,
         )?;
 
         Ok(transaction_to_hex_string(&transaction))
@@ -146,7 +141,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             value,
             fee,
             self.validity_start_height(validity_start_height),
-            self.get_network_id(),
+            None,
         )?;
 
         Ok(transaction_to_hex_string(&transaction))
@@ -196,7 +191,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             value,
             fee,
             self.validity_start_height(validity_start_height),
-            self.get_network_id(),
+            None,
         )?;
 
         Ok(transaction_to_hex_string(&transaction))
@@ -246,7 +241,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             value,
             fee,
             self.validity_start_height(validity_start_height),
-            self.get_network_id(),
+            None,
         )?;
 
         Ok(transaction_to_hex_string(&transaction))
@@ -300,7 +295,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             value,
             fee,
             self.validity_start_height(validity_start_height),
-            self.get_network_id(),
+            None,
         )?;
 
         Ok(transaction_to_hex_string(&transaction))
@@ -363,7 +358,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             value,
             fee,
             self.validity_start_height(validity_start_height),
-            self.get_network_id(),
+            None,
         )?;
 
         Ok(transaction_to_hex_string(&transaction))
@@ -419,7 +414,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             value,
             fee,
             self.validity_start_height(validity_start_height),
-            self.get_network_id(),
+            None,
         )?;
 
         Ok(transaction_to_hex_string(&transaction))
@@ -476,7 +471,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             value,
             fee,
             self.validity_start_height(validity_start_height),
-            self.get_network_id(),
+            None,
         )?;
 
         Ok(transaction_to_hex_string(&transaction))
@@ -526,7 +521,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             value,
             fee,
             self.validity_start_height(validity_start_height),
-            self.get_network_id(),
+            None,
         )?;
 
         Ok(hex::encode(&sig.serialize_to_vec()))
@@ -550,7 +545,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             value,
             fee,
             self.validity_start_height(validity_start_height),
-            self.get_network_id(),
+            None,
         )?;
 
         Ok(transaction_to_hex_string(&transaction))
@@ -596,7 +591,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             value,
             fee,
             self.validity_start_height(validity_start_height),
-            self.get_network_id(),
+            None,
         )?;
 
         Ok(transaction_to_hex_string(&transaction))
@@ -646,7 +641,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             new_delegation,
             fee,
             self.validity_start_height(validity_start_height),
-            self.get_network_id(),
+            None,
         )?;
 
         Ok(transaction_to_hex_string(&transaction))
@@ -691,7 +686,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             value,
             fee,
             self.validity_start_height(validity_start_height),
-            self.get_network_id(),
+            None,
         )?;
 
         Ok(transaction_to_hex_string(&transaction))
@@ -759,7 +754,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             signal_data,
             fee,
             self.validity_start_height(validity_start_height),
-            self.get_network_id(),
+            None,
         )?;
 
         Ok(transaction_to_hex_string(&transaction))
@@ -861,7 +856,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             new_signal_data,
             fee,
             self.validity_start_height(validity_start_height),
-            self.get_network_id(),
+            None,
         )?;
 
         Ok(transaction_to_hex_string(&transaction))
@@ -920,7 +915,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             &signing_key_pair,
             fee,
             self.validity_start_height(validity_start_height),
-            self.get_network_id(),
+            None,
         )?;
 
         Ok(transaction_to_hex_string(&transaction))
@@ -968,7 +963,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             &signing_key_pair,
             fee,
             self.validity_start_height(validity_start_height),
-            self.get_network_id(),
+            None,
         )?;
 
         Ok(transaction_to_hex_string(&transaction))
@@ -1016,7 +1011,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             &signing_key_pair,
             fee,
             self.validity_start_height(validity_start_height),
-            self.get_network_id(),
+            None,
         )?;
 
         Ok(transaction_to_hex_string(&transaction))
@@ -1058,7 +1053,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             &self.get_wallet_keypair(&validator_wallet)?,
             fee,
             self.validity_start_height(validity_start_height),
-            self.get_network_id(),
+            None,
         )?;
 
         Ok(transaction_to_hex_string(&transaction))

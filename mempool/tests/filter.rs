@@ -18,7 +18,7 @@ fn it_can_blacklist_transactions() {
         Coin::try_from(100).unwrap(),
         Coin::try_from(1).unwrap(),
         123,
-        NetworkId::Main,
+        Some(NetworkId::Main),
     );
 
     let hash: Blake2bHash = tx.hash();
@@ -41,7 +41,7 @@ fn it_accepts_and_rejects_transactions() {
         Coin::try_from(0).unwrap(),
         Coin::try_from(0).unwrap(),
         0,
-        NetworkId::Main,
+        Some(NetworkId::Main),
     );
 
     assert!(!f.accepts_transaction(&tx));
