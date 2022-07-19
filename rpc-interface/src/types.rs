@@ -9,7 +9,7 @@ use std::{
 
 use clap::ArgEnum;
 use serde::{Deserialize, Serialize};
-use serde_with::{DeserializeFromStr, SerializeDisplay};
+use serde_with::{serde_as, DeserializeFromStr, DisplayFromStr, SerializeDisplay};
 
 use beserial::Serialize as BeSerialize;
 use nimiq_account::Log;
@@ -554,6 +554,7 @@ pub struct Account {
     pub account_additional_fields: AccountAdditionalFields,
 }
 
+#[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", tag = "type")]
 pub enum AccountAdditionalFields {
@@ -584,7 +585,7 @@ pub enum AccountAdditionalFields {
         /// User friendly address (NQ-address) of the recipient of the HTLC.
         recipient: Address,
         /// Hex-encoded 32 byte hash root.
-        #[serde(with = "serde_with::rust::display_fromstr")]
+        #[serde_as(as = "DisplayFromStr")]
         hash_root: AnyHash,
         /// Number of hashes this HTLC is split into
         hash_count: u8,
