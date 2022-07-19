@@ -7,9 +7,8 @@ use rand::{rngs::StdRng, RngCore, SeedableRng};
 
 use beserial::Deserialize;
 use nimiq_block::{
-    Block, MacroBlock, MacroBody, MacroHeader, MultiSignature, SignedViewChange,
-    TendermintIdentifier, TendermintProof, TendermintStep, TendermintVote, ViewChange,
-    ViewChangeProof,
+    Block, MacroBlock, MacroBody, MacroHeader, MultiSignature, SignedSkipBlockInfo, SkipBlockInfo,
+    SkipBlockProof, TendermintIdentifier, TendermintProof, TendermintStep, TendermintVote,
 };
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, PushResult};
@@ -22,7 +21,6 @@ use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy;
 use nimiq_transaction::Transaction;
 use nimiq_transaction_builder::TransactionBuilder;
-use nimiq_vrf::VrfSeed;
 
 /// Secret keys of validator. Tests run with `genesis/src/genesis/unit-albatross.toml`
 pub const SIGNING_KEY: &str = "041580cc67e66e9e08b68fd9e4c9deb68737168fbe7488de2638c2e906c2f5ad";
@@ -74,7 +72,6 @@ pub fn produce_macro_blocks(
         let macro_block_proposal = producer.next_macro_block_proposal(
             &blockchain,
             blockchain.time.now() + next_block_height * 1000,
-            0u32,
             vec![],
         );
 
@@ -108,7 +105,6 @@ pub fn produce_macro_blocks_with_txns(
         let macro_block_proposal = producer.next_macro_block_proposal(
             &blockchain,
             blockchain.time.now() + next_block_height * 1000,
-            0u32,
             vec![],
         );
 
@@ -128,15 +124,13 @@ pub fn produce_macro_blocks_with_txns(
 /// Create the next micro block with default parameters.
 pub fn next_micro_block(producer: &BlockProducer, blockchain: &Arc<RwLock<Blockchain>>) -> Block {
     let blockchain = blockchain.upgradable_read();
-    let view_number = blockchain.view_number();
     let block = producer.next_micro_block(
         &blockchain,
         blockchain.head().timestamp() + 500,
-        view_number,
-        None,
         vec![],
         vec![],
         vec![0x42],
+        None,
     );
     Block::Micro(block)
 }
@@ -196,11 +190,10 @@ pub fn fill_micro_blocks_with_txns(
         let last_micro_block = producer.next_micro_block(
             &blockchain,
             blockchain.time.now() + i as u64 * 100,
-            0,
-            None,
             vec![],
             txns,
             vec![0x42],
+            None,
         );
         let duration = start.elapsed();
         log::debug!(
@@ -279,41 +272,23 @@ pub fn sign_macro_block(
     block
 }
 
-pub fn sign_view_change(
-    prev_seed: VrfSeed,
-    block_number: u32,
-    new_view_number: u32,
-) -> ViewChangeProof {
-    let keypair = voting_key();
+pub fn sign_skip_block_info(
+    voting_key_pair: &BlsKeyPair,
+    skip_block_info: &SkipBlockInfo,
+) -> SkipBlockProof {
+    let skip_block_info =
+        SignedSkipBlockInfo::from_message(skip_block_info.clone(), &voting_key_pair.secret_key, 0);
 
-    // Create the view change.
-    let view_change = ViewChange {
-        block_number,
-        new_view_number,
-        vrf_entropy: prev_seed.entropy(),
-    };
-
-    // Sign the view change.
-    let signed_view_change =
-        SignedViewChange::from_message(view_change, &keypair.secret_key, 0).signature;
-
-    // Create signers Bitset.
+    let signature =
+        AggregateSignature::from_signatures(&[skip_block_info.signature.multiply(policy::SLOTS)]);
     let mut signers = BitSet::new();
-    for i in 0..policy::TWO_F_PLUS_ONE {
+    for i in 0..policy::SLOTS {
         signers.insert(i as usize);
     }
 
-    // Create multisignature.
-    let multisig = MultiSignature {
-        signature: AggregateSignature::from_signatures(&vec![
-            signed_view_change;
-            policy::TWO_F_PLUS_ONE as usize
-        ]),
-        signers,
-    };
-
-    // Create and return view change proof.
-    ViewChangeProof { sig: multisig }
+    SkipBlockProof {
+        sig: MultiSignature::new(signature, signers),
+    }
 }
 
 pub fn voting_key() -> BlsKeyPair {

@@ -170,17 +170,11 @@ impl<N: Network, TReq: RequestComponent<N>> Inner<N, TReq> {
             return;
         }
 
-        let view_number = block.view_number();
         let parent_hash = block.parent_hash().clone();
 
         // Insert block into buffer. If we already know the block, we're done.
         let block_known = self.insert_block_into_buffer(block, pubsub_id);
-        log::trace!(
-            "Buffering block #{}.{}, known={}",
-            block_number,
-            view_number,
-            block_known
-        );
+        log::trace!("Buffering block #{}, known={}", block_number, block_known);
         if block_known {
             return;
         }
@@ -188,9 +182,8 @@ impl<N: Network, TReq: RequestComponent<N>> Inner<N, TReq> {
         // If the parent of this block is already in the buffer, we're done.
         let parent_buffered = self.is_block_buffered(block_number - 1, &parent_hash);
         log::trace!(
-            "Parent of block #{}.{} buffered={}",
+            "Parent of block #{} buffered={}",
             block_number,
-            view_number,
             parent_buffered
         );
         if parent_buffered {
@@ -200,9 +193,8 @@ impl<N: Network, TReq: RequestComponent<N>> Inner<N, TReq> {
         // If the parent of this block is already being pushed, we're done.
         let parent_pending = self.pending_blocks.contains(&parent_hash);
         log::trace!(
-            "Parent of block #{}.{} pending={}",
+            "Parent of block #{} pending={}",
             block_number,
-            view_number,
             parent_pending
         );
         if parent_pending {

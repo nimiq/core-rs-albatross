@@ -7,23 +7,21 @@ use futures::{future::BoxFuture, ready, FutureExt, Stream};
 use parking_lot::RwLock;
 use tokio::time;
 
-use nimiq_block::{Block, ForkProof, MicroBlock, ViewChange, ViewChangeProof};
+use nimiq_block::{Block, ForkProof, MicroBlock, SkipBlockInfo};
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, PushResult};
 use nimiq_mempool::mempool::Mempool;
-use nimiq_primitives::slots::Validators;
 use nimiq_utils::time::systemtime_to_timestamp;
 use nimiq_validator_network::ValidatorNetwork;
 use nimiq_vrf::VrfSeed;
 
-use crate::aggregation::view_change::ViewChangeAggregation;
+use crate::aggregation::skip_block::SkipBlockAggregation;
 
 // Ignoring this clippy warning since size difference is not that much (320
 // bytes) and we probably don't want the performance penalty of the allocation.
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum ProduceMicroBlockEvent {
     MicroBlock(MicroBlock, PushResult),
-    ViewChange(ViewChange, ViewChangeProof),
 }
 
 #[derive(Clone)]
@@ -36,10 +34,7 @@ struct NextProduceMicroBlockEvent<TValidatorNetwork> {
     fork_proofs: Vec<ForkProof>,
     prev_seed: VrfSeed,
     block_number: u32,
-    view_number: u32,
-    view_change_proof: Option<ViewChangeProof>,
-    view_change: Option<ViewChange>,
-    view_change_delay: Duration,
+    producer_timeout: Duration,
     empty_block_delay: Duration,
 }
 
@@ -58,10 +53,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         fork_proofs: Vec<ForkProof>,
         prev_seed: VrfSeed,
         block_number: u32,
-        view_number: u32,
-        view_change_proof: Option<ViewChangeProof>,
-        view_change: Option<ViewChange>,
-        view_change_delay: Duration,
+        producer_timeout: Duration,
         empty_block_delay: Duration,
     ) -> Self {
         Self {
@@ -73,24 +65,19 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
             fork_proofs,
             prev_seed,
             block_number,
-            view_number,
-            view_change_proof,
-            view_change,
-            view_change_delay,
+            producer_timeout,
             empty_block_delay,
         }
     }
 
     async fn next(
-        mut self,
+        self,
     ) -> (
         Option<ProduceMicroBlockEvent>,
         NextProduceMicroBlockEvent<TValidatorNetwork>,
     ) {
         let in_current_state = |head: &Block| {
-            self.prev_seed == *head.seed()
-                && self.block_number == head.block_number() + 1
-                && self.view_number >= head.next_view_number()
+            self.prev_seed == *head.seed() && self.block_number == head.block_number() + 1
         };
 
         // If there are no transactions to include, we want to wait a bit before producing the
@@ -111,11 +98,9 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
                     if !logged {
                         info!(
                             block_number = self.block_number,
-                            view_number = self.view_number,
                             slot_band = self.validator_slot_band,
-                            "Our turn, producing micro block #{}.{}",
+                            "Our turn, producing micro block #{}",
                             self.block_number,
-                            self.view_number,
                         );
                         logged = true;
                     }
@@ -132,7 +117,6 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
                     if num_transactions > 0 || SystemTime::now() >= deadline {
                         debug!(
                             block_number = block.header.block_number,
-                            view_number = block.header.view_number,
                             num_transactions,
                             ?delay,
                             "Produced micro block {} with {} transactions",
@@ -175,19 +159,16 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
 
         debug!(
             block_number = self.block_number,
-            view_number = self.view_number,
             slot_band = self.validator_slot_band,
-            "Not our turn, waiting for micro block #{}.{}",
+            "Not our turn, waiting for micro block #{}",
             self.block_number,
-            self.view_number,
         );
 
-        time::sleep(self.view_change_delay).await;
+        time::sleep(self.producer_timeout).await;
 
         info!(
             block_number = self.block_number,
-            view_number = self.view_number,
-            "No micro block received within timeout, starting view change"
+            "No micro block received within timeout, producing skip block"
         );
 
         // Acquire a blockchain read lock and check if the state still matches to fetch active validators.
@@ -203,25 +184,63 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
             return (None, self);
         }
 
-        let (view_change, view_change_proof) = self.change_view(active_validators.unwrap()).await;
-        info!(
-            block_number = self.block_number,
-            view_number = self.view_number,
-            new_view_number = view_change.new_view_number,
-            "View change completed"
-        );
+        let skip_block_info = SkipBlockInfo {
+            block_number: self.block_number,
+            vrf_entropy: self.prev_seed.entropy(),
+        };
 
-        let event = ProduceMicroBlockEvent::ViewChange(view_change, view_change_proof);
-        (Some(event), self)
+        let (_, skip_block_proof) = SkipBlockAggregation::start(
+            skip_block_info.clone(),
+            self.block_producer.voting_key.clone(),
+            self.validator_slot_band,
+            active_validators.unwrap(),
+            Arc::clone(&self.network),
+        )
+        .await;
+
+        let (result, block) = {
+            // Acquire blockchain.upgradable_read() to prevent further changes to the blockchain while
+            // we're constructing the block. Check if we're still in the correct state, abort otherwise.
+            let blockchain = self.blockchain.upgradable_read();
+
+            let timestamp = blockchain.timestamp() + self.producer_timeout.as_secs() * 1000;
+
+            let block = self.block_producer.next_micro_block(
+                &blockchain,
+                timestamp,
+                vec![],
+                vec![],
+                vec![], // TODO: Allow validators to set extra data field.
+                Some(skip_block_proof),
+            );
+
+            let block1 = block.clone();
+
+            // Use a trusted push since these blocks were generated by this validator
+            let result = if cfg!(feature = "trusted_push") {
+                Blockchain::trusted_push(blockchain, Block::Micro(block))
+            } else {
+                Blockchain::push(blockchain, Block::Micro(block))
+            };
+
+            if let Err(e) = &result {
+                error!("Failed to push our own block onto the chain: {:?}", e);
+            }
+            (result, block1)
+        };
+
+        let event = result
+            .map(move |result| ProduceMicroBlockEvent::MicroBlock(block, result))
+            .ok();
+
+        info!(block_number = self.block_number, "Skip block pushed");
+
+        (event, self)
     }
 
     fn is_our_turn(&self, blockchain: &Blockchain) -> bool {
-        let proposer_slot = blockchain.get_proposer_at(
-            self.block_number,
-            self.view_number,
-            self.prev_seed.entropy(),
-            None,
-        );
+        let proposer_slot =
+            blockchain.get_proposer_at(self.block_number, self.prev_seed.entropy(), None);
 
         match proposer_slot {
             Some(slot) => slot.band == self.validator_slot_band,
@@ -258,50 +277,11 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         self.block_producer.next_micro_block(
             blockchain,
             timestamp,
-            self.view_number,
-            self.view_change_proof.clone(),
             self.fork_proofs.clone(),
             transactions,
             vec![], // TODO: Allow validators to set extra data field.
+            None,
         )
-    }
-
-    async fn change_view(
-        &mut self,
-        active_validators: Validators,
-    ) -> (ViewChange, ViewChangeProof) {
-        let new_view_number = self.view_number + 1;
-        let view_change = ViewChange {
-            block_number: self.block_number,
-            new_view_number,
-            vrf_entropy: self.prev_seed.entropy(),
-        };
-
-        // Include the previous_view_change_proof only if it has not yet been persisted on chain.
-        let view_change_proof = self.view_change.as_ref().and_then(|vc| {
-            if vc.block_number == self.block_number {
-                Some(self.view_change_proof.as_ref().unwrap().sig.clone())
-            } else {
-                None
-            }
-        });
-
-        let (view_change, view_change_proof) = ViewChangeAggregation::start(
-            view_change.clone(),
-            view_change_proof,
-            self.block_producer.voting_key.clone(),
-            self.validator_slot_band,
-            active_validators,
-            Arc::clone(&self.network),
-        )
-        .await;
-
-        // Set the view change and view_change_proof properties so in case another view change happens they are available.
-        self.view_number = view_change.new_view_number;
-        self.view_change = Some(view_change.clone());
-        self.view_change_proof = Some(view_change_proof.clone());
-
-        (view_change, view_change_proof)
     }
 }
 
@@ -330,10 +310,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> ProduceMicroBlock<TValidator
         fork_proofs: Vec<ForkProof>,
         prev_seed: VrfSeed,
         block_number: u32,
-        view_number: u32,
-        view_change_proof: Option<ViewChangeProof>,
-        view_change: Option<ViewChange>,
-        view_change_delay: Duration,
+        producer_timeout: Duration,
         empty_block_delay: Duration,
     ) -> Self {
         let next_event = NextProduceMicroBlockEvent::new(
@@ -345,10 +322,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> ProduceMicroBlock<TValidator
             fork_proofs,
             prev_seed,
             block_number,
-            view_number,
-            view_change_proof,
-            view_change,
-            view_change_delay,
+            producer_timeout,
             empty_block_delay,
         )
         .next()
@@ -370,7 +344,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> Stream
             None => return Poll::Ready(None),
         };
 
-        let (event, next_event) = ready!(next_event.poll_unpin(cx));
+        let (event, _) = ready!(next_event.poll_unpin(cx));
         let event = match event {
             Some(event) => event,
             None => {
@@ -381,7 +355,6 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> Stream
 
         self.next_event = match &event {
             ProduceMicroBlockEvent::MicroBlock(..) => None,
-            ProduceMicroBlockEvent::ViewChange(..) => Some(next_event.next().boxed()),
         };
         Poll::Ready(Some(event))
     }

@@ -295,14 +295,14 @@ impl<N: Network> Future for Consensus<N> {
                     if !self.is_established() {
                         // Note: this output is parsed by our testing infrastructure (specifically devnet.sh),
                         // so please test that nothing breaks in there if you change this.
-                        let (block_number, view_number) = {
+                        let block_number = {
                             let blockchain = self.blockchain.read();
-                            (blockchain.block_number(), blockchain.view_number())
+                            blockchain.block_number()
                         };
 
                         info!(
-                            "Catching up to tip of the chain (now at #{}.{}, {} blocks remaining)",
-                            block_number, view_number, remaining_in_buffer
+                            "Catching up to tip of the chain (now at #{}, {} blocks remaining)",
+                            block_number, remaining_in_buffer
                         );
 
                         if remaining_in_buffer == 0 {

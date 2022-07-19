@@ -54,16 +54,6 @@ pub trait AbstractBlockchain {
         self.head().timestamp()
     }
 
-    /// Returns the view number at the head of the main chain.
-    fn view_number(&self) -> u32 {
-        self.head().view_number()
-    }
-
-    /// Returns the next view number at the head of the main chain.
-    fn next_view_number(&self) -> u32 {
-        self.head().next_view_number()
-    }
-
     /// Returns the block type of the next block.
     fn get_next_block_type(&self, last_number: Option<u32>) -> BlockType {
         let last_block_number = match last_number {
@@ -112,11 +102,10 @@ pub trait AbstractBlockchain {
     ) -> Option<ChainInfo>;
 
     /// Calculates the slot owner (represented as the validator plus the slot number) at a given
-    /// block number and view number.
+    /// block number
     fn get_slot_owner_at(
         &self,
         block_number: u32,
-        view_number: u32,
         txn_option: Option<&Transaction>,
     ) -> Option<(Validator, u16)>;
 }
@@ -197,14 +186,13 @@ impl AbstractBlockchain for Blockchain {
     fn get_slot_owner_at(
         &self,
         block_number: u32,
-        view_number: u32,
         txn_option: Option<&Transaction>,
     ) -> Option<(Validator, u16)> {
         let vrf_entropy = self
             .get_block_at(block_number - 1, false, txn_option)?
             .seed()
             .entropy();
-        self.get_proposer_at(block_number, view_number, vrf_entropy, txn_option)
+        self.get_proposer_at(block_number, vrf_entropy, txn_option)
             .map(|slot| (slot.validator, slot.number))
     }
 }

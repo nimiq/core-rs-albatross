@@ -2,8 +2,8 @@ use crate::{BlsKeyPair, SchnorrKeyPair};
 use nimiq_account::Inherent;
 use nimiq_block::{
     Block, ForkProof, MacroBlock, MacroBody, MacroHeader, MicroBlock, MicroBody, MicroHeader,
-    MicroJustification, MultiSignature, SignedViewChange, TendermintIdentifier, TendermintProof,
-    TendermintProposal, TendermintStep, TendermintVote, ViewChange, ViewChangeProof, ViewChanges,
+    MicroJustification, MultiSignature, SignedSkipBlockInfo, SkipBlockInfo, SkipBlockProof,
+    TendermintIdentifier, TendermintProof, TendermintProposal, TendermintStep, TendermintVote,
 };
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, ExtendedTransaction};
 use nimiq_bls::AggregateSignature;
@@ -11,7 +11,7 @@ use nimiq_collections::BitSet;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_primitives::policy;
 use nimiq_transaction::Transaction;
-use nimiq_vrf::{VrfEntropy, VrfSeed};
+use nimiq_vrf::VrfSeed;
 
 #[derive(Clone, Default)]
 pub struct BlockConfig {
@@ -24,16 +24,12 @@ pub struct BlockConfig {
     pub body_hash: Option<Blake2bHash>,
     pub state_root: Option<Blake2bHash>,
     pub history_root: Option<Blake2bHash>,
-    pub view_number_offset: i32,
 
-    pub omit_view_change_proof: bool,
-    pub view_change_block_number_offset: i32,
-    pub view_change_view_number_offset: i32,
-    pub view_change_vrf_entropy: Option<VrfEntropy>,
+    // Skip only
+    pub skip_block_proof: Option<SkipBlockProof>,
 
     // Micro only
     pub micro_only: bool,
-    pub view_change_proof: Option<ViewChangeProof>,
     pub fork_proofs: Vec<ForkProof>,
     pub transactions: Vec<Transaction>,
     pub extra_data: Vec<u8>,
@@ -47,7 +43,6 @@ pub struct BlockConfig {
 /// `config` can be used to generate blocks that can be invalid in some way. config == Default creates a valid block.
 pub fn next_micro_block(
     signing_key: &SchnorrKeyPair,
-    voting_key: &BlsKeyPair,
     blockchain: &Blockchain,
     config: &BlockConfig,
 ) -> MicroBlock {
@@ -66,19 +61,10 @@ pub fn next_micro_block(
         .clone()
         .unwrap_or_else(|| prev_seed.sign_next(signing_key));
 
-    let view_number = (blockchain.next_view_number() as i32 + config.view_number_offset) as u32;
-
     let mut transactions = config.transactions.clone();
     transactions.sort_unstable();
 
-    let view_changes = ViewChanges::new(
-        block_number,
-        blockchain.next_view_number(),
-        view_number,
-        prev_seed.entropy(),
-    );
-
-    let inherents = blockchain.create_slash_inherents(&config.fork_proofs, &view_changes, None);
+    let inherents = blockchain.create_slash_inherents(&config.fork_proofs, None, None);
 
     let state_root = config.state_root.clone().unwrap_or_else(|| {
         blockchain
@@ -115,7 +101,6 @@ pub fn next_micro_block(
     let header = MicroHeader {
         version: config.version.unwrap_or(policy::VERSION),
         block_number,
-        view_number,
         timestamp,
         parent_hash,
         seed,
@@ -128,19 +113,6 @@ pub fn next_micro_block(
     let hash = header.hash::<Blake2bHash>();
     let signature = signing_key.sign(hash.as_slice());
 
-    let view_change_proof = if config.view_change_proof.is_some() {
-        config.view_change_proof.clone()
-    } else if config.view_number_offset <= 0 || config.omit_view_change_proof {
-        None
-    } else {
-        Some(
-            config
-                .view_change_proof
-                .clone()
-                .unwrap_or_else(|| create_view_change_proof(voting_key, blockchain, config)),
-        )
-    };
-
     MicroBlock {
         header,
         body: if !config.missing_body {
@@ -148,10 +120,89 @@ pub fn next_micro_block(
         } else {
             None
         },
-        justification: Some(MicroJustification {
-            signature,
-            view_change_proof,
-        }),
+        justification: Some(MicroJustification::Micro(signature)),
+    }
+}
+
+/// `config` can be used to generate blocks that can be invalid in some way. config == Default creates a valid block.
+pub fn next_skip_block(
+    voting_key: &BlsKeyPair,
+    blockchain: &Blockchain,
+    config: &BlockConfig,
+) -> MicroBlock {
+    let block_number = (blockchain.block_number() as i32 + 1 + config.block_number_offset) as u32;
+
+    let timestamp = (blockchain.head().timestamp() as i64 + 1 + config.timestamp_offset) as u64;
+
+    let parent_hash = config
+        .parent_hash
+        .clone()
+        .unwrap_or_else(|| blockchain.head_hash());
+
+    let prev_seed = blockchain.head().seed().clone();
+
+    let skip_block_info = SkipBlockInfo {
+        block_number,
+        vrf_entropy: prev_seed.entropy(),
+    };
+
+    // Create the inherents from the skip block info.
+    let inherents = blockchain.create_slash_inherents(&[], Some(skip_block_info), None);
+
+    let state_root = config.state_root.clone().unwrap_or_else(|| {
+        blockchain
+            .state()
+            .accounts
+            .get_root_with(&[], &inherents, block_number, timestamp)
+            .expect("Failed to compute accounts hash during block production")
+    });
+
+    let ext_txs = ExtendedTransaction::from(
+        blockchain.network_id,
+        block_number,
+        timestamp,
+        vec![],
+        inherents,
+    );
+
+    let mut txn = blockchain.write_transaction();
+
+    let history_root = config.history_root.clone().unwrap_or_else(|| {
+        blockchain
+            .history_store
+            .add_to_history(&mut txn, policy::epoch_at(block_number), &ext_txs)
+            .expect("Failed to compute history root during block production.")
+    });
+
+    txn.abort();
+
+    let body = MicroBody {
+        fork_proofs: vec![],
+        transactions: vec![],
+    };
+
+    let header = MicroHeader {
+        version: config.version.unwrap_or(policy::VERSION),
+        block_number,
+        timestamp,
+        parent_hash,
+        seed: prev_seed,
+        extra_data: config.extra_data.clone(),
+        state_root,
+        body_root: config.body_hash.clone().unwrap_or_else(|| body.hash()),
+        history_root,
+    };
+
+    let skip_block_proof = create_skip_block_proof(voting_key, blockchain, config);
+
+    MicroBlock {
+        header,
+        justification: Some(MicroJustification::Skip(skip_block_proof)),
+        body: if !config.missing_body {
+            Some(body)
+        } else {
+            None
+        },
     }
 }
 
@@ -182,7 +233,6 @@ fn next_macro_block_proposal(
     let mut header = MacroHeader {
         version: config.version.unwrap_or(policy::VERSION),
         block_number,
-        view_number: 0, // TODO
         timestamp,
         parent_hash,
         parent_election_hash,
@@ -323,35 +373,32 @@ pub fn next_macro_block(
     ))
 }
 
-fn create_view_change_proof(
+fn create_skip_block_proof(
     voting_key_pair: &BlsKeyPair,
     blockchain: &Blockchain,
     config: &BlockConfig,
-) -> ViewChangeProof {
-    let view_change = ViewChange {
-        block_number: (blockchain.block_number() as i32
-            + 1
-            + config.block_number_offset
-            + config.view_change_block_number_offset) as u32,
-        new_view_number: (blockchain.view_number() as i32
-            + config.view_number_offset
-            + config.view_change_view_number_offset) as u32,
-        vrf_entropy: config
-            .view_change_vrf_entropy
-            .clone()
-            .unwrap_or_else(|| blockchain.head().seed().entropy()),
+) -> SkipBlockProof {
+    let seed = config
+        .seed
+        .clone()
+        .unwrap_or_else(|| blockchain.head().seed().clone());
+
+    let skip_block_info = SkipBlockInfo {
+        block_number: (blockchain.block_number() as i32 + 1 + config.block_number_offset) as u32,
+        vrf_entropy: seed.entropy(),
     };
 
-    let view_change = SignedViewChange::from_message(view_change, &voting_key_pair.secret_key, 0);
+    let skip_block_info =
+        SignedSkipBlockInfo::from_message(skip_block_info, &voting_key_pair.secret_key, 0);
 
     let signature =
-        AggregateSignature::from_signatures(&[view_change.signature.multiply(policy::SLOTS)]);
+        AggregateSignature::from_signatures(&[skip_block_info.signature.multiply(policy::SLOTS)]);
     let mut signers = BitSet::new();
     for i in 0..policy::SLOTS {
         signers.insert(i as usize);
     }
 
-    ViewChangeProof {
+    SkipBlockProof {
         sig: MultiSignature::new(signature, signers),
     }
 }

@@ -56,7 +56,7 @@ pub struct Validator {
     pub address: Address,
     // This key used to sign blocks. It is also used to retire, reactivate and unpark the validator.
     pub signing_key: SchnorrPublicKey,
-    // The voting key, it is used to vote for view changes and macro blocks.
+    // The voting key, it is used to vote for skip and macro blocks.
     pub voting_key: BlsPublicKey,
     // The reward address of the validator. All the block rewards are paid to this address.
     pub reward_address: Address,

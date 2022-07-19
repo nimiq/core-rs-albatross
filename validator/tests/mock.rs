@@ -1,7 +1,7 @@
 use futures::{future, StreamExt};
 use tokio::time;
 
-use nimiq_block::{MultiSignature, SignedViewChange, ViewChange};
+use nimiq_block::{MultiSignature, SignedSkipBlockInfo, SkipBlockInfo};
 use nimiq_blockchain::{AbstractBlockchain, BlockchainEvent};
 use nimiq_bls::{AggregateSignature, KeyPair as BlsKeyPair};
 use nimiq_collections::BitSet;
@@ -19,7 +19,7 @@ use nimiq_test_utils::{
         build_validator, build_validators, pop_validator_for_slot, seeded_rng, validator_for_slot,
     },
 };
-use nimiq_validator::aggregation::view_change::SignedViewChangeMessage;
+use nimiq_validator::aggregation::skip_block::SignedSkipBlockMessage;
 use nimiq_vrf::VrfSeed;
 use std::sync::Arc;
 use std::time::Duration;
@@ -92,7 +92,7 @@ async fn four_validators_can_create_micro_blocks() {
 }
 
 #[test(tokio::test)]
-async fn four_validators_can_view_change() {
+async fn four_validators_can_do_skip_block() {
     let hub = MockHub::default();
     let env = VolatileEnvironment::new(10).expect("Could not open a volatile database");
 
@@ -100,17 +100,17 @@ async fn four_validators_can_view_change() {
         build_validators::<Network>(env, &(5u64..=8u64).collect::<Vec<_>>(), &mut Some(hub)).await;
 
     // Disconnect the next block producer.
-    let validator = pop_validator_for_slot(&mut validators, 1, 0);
+    let validator = pop_validator_for_slot(&mut validators, 1);
     validator.consensus.network.disconnect().await;
     drop(validator);
     log::info!("Peer disconnection");
 
-    // Listen for blockchain events from the new block producer (after view change).
-    let validator = validator_for_slot(&validators, 1, 1);
+    // Listen for blockchain events from the new block producer (after a skip block).
+    let validator = validators.first().unwrap();
     let blockchain = Arc::clone(&validator.consensus.blockchain);
     let mut events = blockchain.write().notifier.as_stream();
 
-    // Freeze time to immediately trigger the view change timeout.
+    // Freeze time to immediately trigger the block producer timeout.
     // time::pause();
 
     tokio::spawn(future::join_all(validators));
@@ -119,30 +119,30 @@ async fn four_validators_can_view_change() {
     events.next().await;
 
     assert!(blockchain.read().block_number() >= 1);
-    assert!(blockchain.read().view_number() >= 1);
 }
 
-fn create_view_change_update(
+fn create_skip_block_update(
     block_number: u32,
-    new_view_number: u32,
     prev_seed: VrfSeed,
     key_pair: BlsKeyPair,
     validator_id: u16,
     slots: &Vec<u16>,
-) -> LevelUpdateMessage<SignedViewChangeMessage, ViewChange> {
-    // create view change according to parameters
-    let view_change = ViewChange {
+) -> LevelUpdateMessage<SignedSkipBlockMessage, SkipBlockInfo> {
+    // create skip block data according to parameters
+    let skip_block_info = SkipBlockInfo {
         block_number,
-        new_view_number,
         vrf_entropy: prev_seed.entropy(),
     };
 
-    // get a single signature for this view_change
-    let signed_view_change =
-        SignedViewChange::from_message(view_change.clone(), &key_pair.secret_key, validator_id);
+    // get a single signature for this skip block data
+    let signed_skip_block_info = SignedSkipBlockInfo::from_message(
+        skip_block_info.clone(),
+        &key_pair.secret_key,
+        validator_id,
+    );
 
     // multiply with number of slots to get a signature representing all the slots of this public_key
-    let signature = AggregateSignature::from_signatures(&[signed_view_change
+    let signature = AggregateSignature::from_signatures(&[signed_skip_block_info
         .signature
         .multiply(slots.len() as u16)]);
 
@@ -153,9 +153,8 @@ fn create_view_change_update(
     }
 
     // the contribution is composed of the signers bitset with the signature already multiplied by the number of slots.
-    let contribution = SignedViewChangeMessage {
-        view_change: MultiSignature::new(signature, signers),
-        previous_proof: None,
+    let contribution = SignedSkipBlockMessage {
+        proof: MultiSignature::new(signature, signers),
     };
 
     LevelUpdate::new(
@@ -164,15 +163,15 @@ fn create_view_change_update(
         1,
         validator_id as usize,
     )
-    .with_tag(view_change)
+    .with_tag(skip_block_info)
 }
 
 #[ignore]
 #[test(tokio::test)]
 async fn validator_can_catch_up() {
-    // remove first block producer in order to trigger a view change. Never connect him again
-    // remove the second block producer to trigger another view change after the first one (which we want someone to catch up to). Never connect him again
-    // third block producer needs to be disconnected as well and then reconnected to catch up to the seconds view change while not having seen the first one,
+    // remove first block producer in order to trigger a skip block. Never connect him again
+    // remove the second block producer to trigger another skip block after the first one (which we want someone to catch up to). Never connect him again
+    // third block producer needs to be disconnected as well and then reconnected to catch up to the second's skip blocks while not having seen the first one,
     // resulting in him producing the first block.
     let hub = MockHub::default();
     let env = VolatileEnvironment::new(10).expect("Could not open a volatile database");
@@ -187,12 +186,12 @@ async fn validator_can_catch_up() {
         .map(|v| v.consensus.network.clone())
         .collect();
 
-    // Disconnect the block producers for the next 3 views. remember the one which is supposed to actually create the block (3rd view)
+    // Disconnect the block producers for the next 3 skip blocks. remember the one which is supposed to actually create the block (3rd skip block)
     let (validator, _) = {
-        let validator = validator_for_slot(&mut validators, 1, 0);
+        let validator = validator_for_slot(&mut validators, 1);
         validator.consensus.network.disconnect().await;
         let id1 = validator.validator_slot_band();
-        let validator = validator_for_slot(&mut validators, 1, 1);
+        let validator = validator_for_slot(&mut validators, 1);
         validator.consensus.network.disconnect().await;
         let id2 = validator.validator_slot_band();
         assert_ne!(id2, id1);
@@ -204,7 +203,7 @@ async fn validator_can_catch_up() {
         //     v.validator_address() != id1 && v.validator_address() != id2
         // });
 
-        let validator = validator_for_slot(&validators, 1, 2);
+        let validator = validator_for_slot(&validators, 1);
         validator.consensus.network.disconnect().await;
         assert_ne!(id1, validator.validator_slot_band());
         assert_ne!(id2, validator.validator_slot_band());
@@ -213,7 +212,7 @@ async fn validator_can_catch_up() {
     // assert_eq!(validators.len(), 7);
 
     let blockchain = validator.consensus.blockchain.clone();
-    // Listen for blockchain events from the block producer (after two view changes).
+    // Listen for blockchain events from the block producer (after two skip blocks).
     let mut events = blockchain.write().notifier.as_stream();
 
     let (start, end) = blockchain.read().current_validators().unwrap().validators
@@ -222,9 +221,8 @@ async fn validator_can_catch_up() {
 
     let slots = (start..end).collect();
 
-    // Manually construct a view change for the validator
-    let vc = create_view_change_update(
-        1,
+    // Manually construct a skip block for the validator
+    let vc = create_skip_block_update(
         1,
         blockchain.read().head().seed().clone(),
         validator.voting_key(),
@@ -235,14 +233,14 @@ async fn validator_can_catch_up() {
     // let the validators run.
     tokio::spawn(future::join_all(validators));
 
-    // while waiting for them to run into the view_change_timeout (10s)
+    // while waiting for them to run into the block producer timeout (10s)
     time::sleep(Duration::from_secs(11)).await;
-    // At which point the prepared view_change message is broadcast
+    // At which point the prepared skip block message is broadcast
     // (only a subset of the validators will accept it as it send as level 1 message)
     for network in &networks {
         for peer_id in network.get_peers() {
             network
-                .message::<LevelUpdateMessage<SignedViewChangeMessage, ViewChange>>(
+                .message::<LevelUpdateMessage<SignedSkipBlockMessage, SkipBlockInfo>>(
                     vc.clone(),
                     peer_id,
                 )
@@ -251,10 +249,10 @@ async fn validator_can_catch_up() {
         }
     }
 
-    // wait enough time to complete the view change (it really does not matter how long, as long as the vc completes)
+    // wait enough time to complete the skip block aggregation (it really does not matter how long, as long as the vc completes)
     time::sleep(Duration::from_secs(8)).await;
 
-    // reconnect a validator (who has not seen the proof for the ViewChange to view 1)
+    // reconnect a validator (who has not seen the proof for the skip block)
     log::warn!("connecting networks");
     Network::connect_networks(&networks, 9u64).await;
 
@@ -265,9 +263,7 @@ async fn validator_can_catch_up() {
             // the hash needs to be the one the extended event returned.
             // (the chain itself i.e blockchain.header_hash() might have already progressed further)
             assert_eq!(block.header().hash(), hash);
-            // the view of the block needs to be 2 or higher.
-            assert!(block.header().view_number() >= 2);
-            // now in that case the validator producing this block has progressed the 2nd view change to view 2 without having seen the view change to view 1.
+            // now in that case the validator producing this block has progressed the 2nd skip block without having seen the first skip block.
             return;
         }
     }

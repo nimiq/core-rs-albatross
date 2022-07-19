@@ -3,7 +3,7 @@ use std::cmp::Ordering;
 use beserial::Serialize;
 use nimiq_block::{
     Block, BlockBody, BlockError, BlockHeader, BlockType, ForkProof, MacroBlock, MacroBody,
-    TendermintProof, ViewChange,
+    MicroJustification, SkipBlockInfo, TendermintProof,
 };
 use nimiq_database::Transaction as DBtx;
 use nimiq_hash::{Blake2bHash, Hash};
@@ -31,6 +31,7 @@ impl Blockchain {
         signing_key: &SchnorrPublicKey,
         txn_opt: Option<&DBtx>,
         check_seed: bool,
+        skip_block: bool,
     ) -> Result<(), PushError> {
         // Check the version
         if header.version() != policy::VERSION {
@@ -115,7 +116,15 @@ impl Blockchain {
 
         // Check if the seed was signed by the intended producer.
         if check_seed {
-            if let Err(e) = header.seed().verify(prev_info.head.seed(), signing_key) {
+            if skip_block {
+                // In skip blocks the VRF seed must be carried over (because a new VRF seed requires a new leader)
+                if header.seed() != prev_info.head.seed() {
+                    warn!(header = %header,
+                        reason = "Invalid seed",
+                        "Rejecting skip block");
+                    return Err(PushError::InvalidBlock(BlockError::InvalidSeed));
+                }
+            } else if let Err(e) = header.seed().verify(prev_info.head.seed(), signing_key) {
                 warn!(header = %header,
                       reason = "Invalid seed",
                       "Rejecting block vrf_error={:?}", e);
@@ -148,7 +157,6 @@ impl Blockchain {
         blockchain: &B,
         block: &Block,
         signing_key: &SchnorrPublicKey,
-        txn_opt: Option<&DBtx>,
         check_signature: bool,
     ) -> Result<(), PushError> {
         match block {
@@ -161,73 +169,39 @@ impl Blockchain {
 
                 if check_signature {
                     // Verify the signature on the justification.
-                    let hash = block.hash();
-                    if !signing_key.verify(&justification.signature, hash.as_slice()) {
-                        warn!(
-                            %block,
-                            %signing_key,
-                            reason = "Invalid signature for slot owner",
-                            "Rejecting block"
-                        );
-                        return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
-                    }
-                }
+                    match justification {
+                        MicroJustification::Micro(justification) => {
+                            let hash = block.hash();
+                            if !signing_key.verify(justification, hash.as_slice()) {
+                                warn!(
+                                    %block,
+                                    %signing_key,
+                                    reason = "Invalid signature for slot owner",
+                                    "Rejecting block"
+                                );
+                                return Err(PushError::InvalidBlock(
+                                    BlockError::InvalidJustification,
+                                ));
+                            }
+                        }
+                        MicroJustification::Skip(justification) => {
+                            let skip_block_info = SkipBlockInfo {
+                                block_number: micro_block.header.block_number,
+                                vrf_entropy: micro_block.header.seed.entropy(),
+                            };
 
-                // Check if a view change occurred - if so, validate the proof
-                let prev_info = blockchain
-                    .get_chain_info(block.parent_hash(), false, txn_opt)
-                    .unwrap();
-
-                let next_view_number = prev_info.head.next_view_number();
-                let view_number = block.view_number();
-
-                if view_number < next_view_number {
-                    warn!(
-                        %block,
-                        view_number = view_number,
-                        next_view_number = next_view_number,
-                        reason = "Decreasing view number",
-                        "Rejecting block"
-                    );
-                    return Err(PushError::InvalidBlock(BlockError::InvalidViewNumber));
-                } else if view_number == next_view_number
-                    && justification.view_change_proof.is_some()
-                {
-                    warn!(
-                        %block,
-                        reason = "Must not contain view change proof",
-                        "Rejecting block"
-                    );
-                    return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
-                } else if view_number > next_view_number
-                    && justification.view_change_proof.is_none()
-                {
-                    warn!(
-                        %block,
-                        view_number = view_number,
-                        next_view_number = next_view_number,
-                        reason = "Missing view change proof", "Rejecting block");
-                    return Err(PushError::InvalidBlock(BlockError::NoViewChangeProof));
-                } else if view_number > next_view_number
-                    && justification.view_change_proof.is_some()
-                {
-                    let view_change = ViewChange {
-                        block_number: block.block_number(),
-                        new_view_number: block.view_number(),
-                        vrf_entropy: prev_info.head.seed().entropy(),
-                    };
-
-                    if !justification
-                        .view_change_proof
-                        .as_ref()
-                        .unwrap()
-                        .verify(&view_change, &blockchain.current_validators().unwrap())
-                    {
-                        warn!(
-                              %block,
-                              reason = "Bad view change proof",
-                              "Rejecting block");
-                        return Err(PushError::InvalidBlock(BlockError::InvalidViewChangeProof));
+                            if !justification
+                                .verify(&skip_block_info, &blockchain.current_validators().unwrap())
+                            {
+                                warn!(
+                                    %block,
+                                    reason = "Bad skip block proof",
+                                    "Rejecting block");
+                                return Err(PushError::InvalidBlock(
+                                    BlockError::InvalidSkipBlockProof,
+                                ));
+                            }
+                        }
                     }
                 }
             }
@@ -325,7 +299,6 @@ impl Blockchain {
                     // Get intended slot owner for that block.
                     if let Some(slot) = self.get_proposer_at(
                         proof.header1.block_number,
-                        proof.header1.view_number,
                         proof.prev_vrf_seed.entropy(),
                         txn_opt,
                     ) {

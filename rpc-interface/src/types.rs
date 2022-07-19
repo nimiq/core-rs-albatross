@@ -12,12 +12,12 @@ use serde_with::{serde_as, DeserializeFromStr, DisplayFromStr, SerializeDisplay}
 
 use beserial::Serialize as BeSerialize;
 use nimiq_account::Log;
-use nimiq_block::{MultiSignature, ViewChangeProof};
+use nimiq_block::{MicroJustification, MultiSignature};
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_bls::CompressedPublicKey;
 use nimiq_collections::BitSet;
 use nimiq_hash::{Blake2bHash, Hash};
-use nimiq_keys::{Address, PublicKey, Signature};
+use nimiq_keys::{Address, PublicKey};
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy;
 use nimiq_primitives::slots::Validators;
@@ -157,14 +157,14 @@ pub struct Block {
 
     pub version: u16,
     pub number: u32,
-    pub view: u32,
     pub timestamp: u64,
     pub parent_hash: Blake2bHash,
     pub seed: VrfSeed,
     #[serde(with = "crate::serde_helpers::hex")]
     pub extra_data: Vec<u8>,
     pub state_hash: Blake2bHash,
-    pub body_hash: Blake2bHash,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub body_hash: Option<Blake2bHash>,
     pub history_hash: Blake2bHash,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -260,13 +260,12 @@ impl Block {
                     epoch,
                     version: macro_block.header.version,
                     number: block_number,
-                    view: macro_block.header.view_number,
                     timestamp,
                     parent_hash: macro_block.header.parent_hash,
                     seed: macro_block.header.seed,
                     extra_data: macro_block.header.extra_data,
                     state_hash: macro_block.header.state_root,
-                    body_hash: macro_block.header.body_root,
+                    body_hash: Some(macro_block.header.body_root),
                     history_hash: macro_block.header.history_root,
                     transactions,
                     additional_fields: BlockAdditionalFields::Macro {
@@ -320,21 +319,16 @@ impl Block {
                     epoch,
                     version: micro_block.header.version,
                     number: block_number,
-                    view: micro_block.header.view_number,
                     timestamp,
                     parent_hash: micro_block.header.parent_hash,
                     seed: micro_block.header.seed,
                     extra_data: micro_block.header.extra_data,
                     state_hash: micro_block.header.state_root,
-                    body_hash: micro_block.header.body_root,
+                    body_hash: Some(micro_block.header.body_root),
                     history_hash: micro_block.header.history_root,
                     transactions,
                     additional_fields: BlockAdditionalFields::Micro {
-                        producer: Slot::from(
-                            blockchain,
-                            block_number,
-                            micro_block.header.view_number,
-                        ),
+                        producer: Slot::from(blockchain, block_number),
                         fork_proofs,
                         justification: micro_block.justification.map(Into::into),
                     },
@@ -356,23 +350,6 @@ impl From<nimiq_block::TendermintProof> for TendermintProof {
         Self {
             round: tendermint_proof.round,
             sig: tendermint_proof.sig,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MicroJustification {
-    signature: Signature,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    view_change_proof: Option<ViewChangeProof>,
-}
-
-impl From<nimiq_block::MicroJustification> for MicroJustification {
-    fn from(justification: nimiq_block::MicroJustification) -> Self {
-        Self {
-            signature: justification.signature,
-            view_change_proof: justification.view_change_proof,
         }
     }
 }
@@ -402,9 +379,9 @@ pub struct Slot {
 }
 
 impl Slot {
-    pub fn from(blockchain: &Blockchain, block_number: u32, view_number: u32) -> Self {
+    pub fn from(blockchain: &Blockchain, block_number: u32) -> Self {
         let (validator, slot_number) = blockchain
-            .get_slot_owner_at(block_number, view_number, None)
+            .get_slot_owner_at(block_number, None)
             .expect("Couldn't calculate slot owner!");
 
         Slot {
@@ -460,7 +437,6 @@ pub struct ParkedSet {
 #[serde(rename_all = "camelCase")]
 pub struct ForkProof {
     pub block_number: u32,
-    pub view_number: u32,
     pub hashes: [Blake2bHash; 2],
 }
 
@@ -470,7 +446,6 @@ impl From<nimiq_block::ForkProof> for ForkProof {
 
         Self {
             block_number: fork_proof.header1.block_number,
-            view_number: fork_proof.header1.view_number,
             hashes,
         }
     }

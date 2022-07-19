@@ -303,10 +303,8 @@ async fn main_inner() -> Result<(), Error> {
 
                 info!(
                     block_number = block.block_number(),
-                    view_number = block.view_number(),
-                    "Blockchain extended to #{}.{}",
+                    "Blockchain extended to #{}",
                     block.block_number(),
-                    block.view_number(),
                 );
 
                 if consensus.is_established() {

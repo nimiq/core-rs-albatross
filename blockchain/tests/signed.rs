@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use beserial::Deserialize;
 use nimiq_block::{
-    MacroBlock, MultiSignature, SignedViewChange, TendermintIdentifier, TendermintProof,
-    TendermintStep, TendermintVote, ViewChange, ViewChangeProof,
+    MacroBlock, MultiSignature, SignedSkipBlockInfo, SkipBlockInfo, SkipBlockProof,
+    TendermintIdentifier, TendermintProof, TendermintStep, TendermintVote,
 };
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_bls::{lazy::LazyPublicKey, AggregateSignature, KeyPair};
@@ -25,36 +25,35 @@ use nimiq_vrf::VrfEntropy;
 const SECRET_KEY: &str = "196ffdb1a8acc7cbd76a251aeac0600a1d68b3aba1eba823b5e4dc5dbdcdc730afa752c05ab4f6ef8518384ad514f403c5a088a22b17bf1bc14f8ff8decc2a512c0a200f68d7bdf5a319b30356fe8d1d75ef510aed7a8660968c216c328a0000";
 
 #[test]
-fn test_view_change_single_signature() {
+fn test_skip_block_single_signature() {
     // parse key pair
     let key_pair = KeyPair::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap();
 
-    // create a view change
-    let view_change = ViewChange {
+    // create skip block data
+    let skip_block_info = SkipBlockInfo {
         block_number: 1234,
-        new_view_number: 42,
         vrf_entropy: VrfEntropy::default(),
     };
 
-    // sign view change and build view change proof
-    let signature = AggregateSignature::from_signatures(&[SignedViewChange::from_message(
-        view_change.clone(),
+    // sign skip block and build skip block proof
+    let signature = AggregateSignature::from_signatures(&[SignedSkipBlockInfo::from_message(
+        skip_block_info.clone(),
         &key_pair.secret_key,
         0,
     )
     .signature
     .multiply(policy::SLOTS)]);
-    // ViewChangeProof is just a MultiSignature, but for ease of getting there an individual Signature is created first.
+    // SkipBlockProof is just a MultiSignature, but for ease of getting there an individual Signature is created first.
     let mut signers = BitSet::new();
     for i in 0..policy::SLOTS {
         signers.insert(i as usize);
     }
 
-    let view_change_proof: ViewChangeProof = ViewChangeProof {
+    let skip_block_proof: SkipBlockProof = SkipBlockProof {
         sig: MultiSignature::new(signature, signers),
     };
 
-    // verify view change proof
+    // verify skip block proof
     let validators = Validators::new(vec![Validator::new(
         Address::default(),
         LazyPublicKey::from(key_pair.public_key),
@@ -62,7 +61,7 @@ fn test_view_change_single_signature() {
         (0, policy::SLOTS),
     )]);
 
-    assert!(view_change_proof.verify(&view_change, &validators));
+    assert!(skip_block_proof.verify(&skip_block_info, &validators));
 }
 
 #[test]

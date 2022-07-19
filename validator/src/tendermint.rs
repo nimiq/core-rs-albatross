@@ -80,7 +80,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
     }
 
     fn initial_round(&self) -> u32 {
-        // Macro blocks follow the same rules as micro blocks when it comes to view_number/round.
+        // Macro blocks follow the same rules as micro blocks when it comes to round.
         // Thus the round is offset by the predecessors view.
         self.initial_round
     }
@@ -110,7 +110,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
 
         // Get the validator for this round.
         let proposer_slot = blockchain
-            .get_proposer_at(self.block_height, round, self.prev_seed.entropy(), None)
+            .get_proposer_at(round, self.prev_seed.entropy(), None)
             .expect("Couldn't find slot owner!");
 
         // Check if the slot bands match.
@@ -122,7 +122,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
     /// Produces a proposal. Evidently, used when we are the proposer.
     fn get_value(
         &mut self,
-        round: u32,
+        _round: u32,
     ) -> Result<(Self::ProposalTy, Self::ProposalCacheTy), TendermintError> {
         let blockchain = self.blockchain.read();
 
@@ -130,7 +130,6 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
         let block = self.block_producer.next_macro_block_proposal(
             &blockchain,
             self.offset_time.now(),
-            round,
             vec![],
         );
 
@@ -262,9 +261,9 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
         let (timeout, proposer_slot_band, proposer_voting_key, proposer_signing_key) = {
             let blockchain = self.blockchain.read();
 
-            // Get the proposer's slot and slot number for this round.
+            // Get the proposer's slot and slot number.
             let proposer_slot = blockchain
-                .get_proposer_at(self.block_height, round, self.prev_seed.entropy(), None)
+                .get_proposer_at(round, self.prev_seed.entropy(), None)
                 .expect("Couldn't find slot owner!");
             let proposer_slot_band = proposer_slot.band;
 
@@ -323,15 +322,9 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
 
             // In case the proposal has a valid round, the original proposer signed the VRF Seed,
             // so the original slot owners key must be retrieved for header verification.
-            // View numbers in macro blocks denote the original proposers round.
             let vrf_key = if valid_round.is_some() {
                 let proposer_slot = blockchain
-                    .get_proposer_at(
-                        self.block_height,
-                        header.view_number,
-                        self.prev_seed.entropy(),
-                        None,
-                    )
+                    .get_proposer_at(round, self.prev_seed.entropy(), None)
                     .expect("Couldn't find slot owner!");
 
                 proposer_slot.validator.signing_key
@@ -347,6 +340,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
                 &vrf_key,
                 None,
                 true,
+                false,
             )
             .is_err()
             {
@@ -368,11 +362,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
 
                 // Update our blockchain state using the received proposal. If we can't update the state, we
                 // return a proposal timeout.
-                // FIXME Is first_view_number = 0 correct here? Does it matter?
-                if blockchain
-                    .commit_accounts(state, &block, self.prev_seed.entropy(), 0, &mut txn)
-                    .is_err()
-                {
+                if blockchain.commit_accounts(state, &block, &mut txn).is_err() {
                     debug!("Tendermint - await_proposal: Can't update state");
                     (MsgAcceptance::Reject, valid_round, None, None)
                 } else {
@@ -498,7 +488,6 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintInterface<TValidat
             if msg.message.value.block_number == expected_height
                 && msg.message.round == expected_round
             {
-                // view number
                 // Check if the proposal comes from the correct validator and the signature of the
                 // proposal is valid. If not, keep awaiting.
                 debug!(

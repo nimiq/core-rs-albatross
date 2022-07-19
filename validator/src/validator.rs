@@ -17,7 +17,7 @@ use crate::micro::{ProduceMicroBlock, ProduceMicroBlockEvent};
 use crate::r#macro::{PersistedMacroState, ProduceMacroBlock};
 use crate::slash::ForkProofPool;
 use nimiq_account::StakingContract;
-use nimiq_block::{Block, BlockType, SignedTendermintProposal, ViewChange, ViewChangeProof};
+use nimiq_block::{Block, BlockType, SignedTendermintProposal};
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainEvent, ForkEvent, PushResult};
 use nimiq_bls::{CompressedPublicKey, KeyPair as BlsKeyPair};
@@ -59,12 +59,6 @@ struct ActiveEpochState {
 
 struct BlockchainState {
     fork_proofs: ForkProofPool,
-}
-
-struct ProduceMicroBlockState {
-    view_number: u32,
-    view_change_proof: Option<ViewChangeProof>,
-    view_change: Option<ViewChange>,
 }
 
 /// Validator inactivity and parking state
@@ -133,7 +127,6 @@ pub struct Validator<TNetwork: Network, TValidatorNetwork: ValidatorNetwork + 's
     macro_state: Option<PersistedMacroState<TValidatorNetwork>>,
 
     micro_producer: Option<ProduceMicroBlock<TValidatorNetwork>>,
-    micro_state: ProduceMicroBlockState,
 
     pub mempool: Arc<Mempool>,
     mempool_state: MempoolState,
@@ -148,7 +141,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
 {
     const MACRO_STATE_DB_NAME: &'static str = "ValidatorState";
     const MACRO_STATE_KEY: &'static str = "validatorState";
-    const VIEW_CHANGE_DELAY: Duration = Duration::from_secs(4);
+    const PRODUCER_TIMEOUT: Duration = Duration::from_secs(4);
     const EMPTY_BLOCK_DELAY: Duration = Duration::from_secs(1);
     const FORK_PROOFS_MAX_SIZE: usize = 1_000; // bytes
 
@@ -168,11 +161,6 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         let blockchain_event_rx = blockchain.notifier.as_stream();
         let fork_event_rx = blockchain.fork_notifier.as_stream();
 
-        let micro_state = ProduceMicroBlockState {
-            view_number: blockchain.view_number(),
-            view_change_proof: None,
-            view_change: None,
-        };
         drop(blockchain);
 
         let blockchain_state = BlockchainState {
@@ -222,7 +210,6 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             macro_state,
 
             micro_producer: None,
-            micro_state,
 
             mempool: Arc::clone(&mempool),
             mempool_state,
@@ -356,12 +343,10 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
 
         let head = blockchain.head();
         let next_block_number = head.block_number() + 1;
-        let next_view_number = head.next_view_number();
         let block_producer = BlockProducer::new(self.signing_key(), self.voting_key());
 
         debug!(
             next_block_number = next_block_number,
-            next_view_number = next_view_number,
             "Initializing block producer"
         );
 
@@ -383,7 +368,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                     active_validators,
                     head.seed().clone(),
                     next_block_number,
-                    next_view_number,
+                    0, // TODO: check this
                     // This cannot be .take() as there is a chance init_epoch is called multiple times without
                     // poll_macro being called creating a new macro_state that is Some(...).
                     self.macro_state.clone(),
@@ -391,12 +376,6 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                 ));
             }
             BlockType::Micro => {
-                self.micro_state = ProduceMicroBlockState {
-                    view_number: next_view_number,
-                    view_change_proof: None,
-                    view_change: None,
-                };
-
                 let fork_proofs = self
                     .blockchain_state
                     .fork_proofs
@@ -414,10 +393,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                     fork_proofs,
                     prev_seed,
                     next_block_number,
-                    self.micro_state.view_number,
-                    self.micro_state.view_change_proof.clone(),
-                    self.micro_state.view_change.clone(),
-                    Self::VIEW_CHANGE_DELAY,
+                    Self::PRODUCER_TIMEOUT,
                     Self::EMPTY_BLOCK_DELAY,
                 ));
             }
@@ -597,11 +573,6 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                         });
                     }
                 }
-                ProduceMicroBlockEvent::ViewChange(view_change, view_change_proof) => {
-                    self.micro_state.view_number = view_change.new_view_number; // needed?
-                    self.micro_state.view_change_proof = Some(view_change_proof);
-                    self.micro_state.view_change = Some(view_change);
-                }
             }
         }
     }
@@ -642,7 +613,6 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
     }
 
     fn unpark(&self, blockchain: &Blockchain) -> ValidatorState {
-        // TODO: Get the last view change height instead of the current height
         let validity_start_height = blockchain.block_number();
 
         let unpark_transaction = TransactionBuilder::new_unpark_validator(
@@ -687,7 +657,6 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
     }
 
     fn reactivate(&self, blockchain: &Blockchain) -> ValidatorState {
-        // TODO: Get the last view change height instead of the current height
         let validity_start_height = blockchain.block_number();
 
         let reactivate_transaction = TransactionBuilder::new_reactivate_validator(

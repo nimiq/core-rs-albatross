@@ -11,7 +11,7 @@ use crate::MicroHeader;
 
 /// Struct representing a fork proof. A fork proof proves that a given validator created or
 /// continued a fork. For this it is enough to provide two different headers, with the same block
-/// number and view number, signed by the same validator.
+/// number, signed by the same validator.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ForkProof {
     /// Header number 1.
@@ -39,9 +39,8 @@ impl ForkProof {
             return Err(ForkProofError::SameHeader);
         }
 
-        // Check that the headers have equal block numbers and view numbers as well as seeds.
+        // Check that the headers have equal block numbers and seeds.
         if self.header1.block_number != self.header2.block_number
-            || self.header1.view_number != self.header2.view_number
             || self.header1.seed.entropy() != self.header2.seed.entropy()
         {
             return Err(ForkProofError::SlotMismatch);
@@ -77,11 +76,6 @@ impl ForkProof {
     /// Returns the block number of a fork proof. This assumes that the fork proof is valid.
     pub fn block_number(&self) -> u32 {
         self.header1.block_number
-    }
-
-    /// Returns the view number of a fork proof. This assumes that the fork proof is valid.
-    pub fn view_number(&self) -> u32 {
-        self.header1.view_number
     }
 }
 

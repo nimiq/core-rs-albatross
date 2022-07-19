@@ -122,7 +122,7 @@ where
     }
 
     // Connect network
-    N::connect_networks(&networks, peer_ids[0]).await;
+    N::connect_networks(&networks, *peer_ids.last().unwrap()).await;
 
     // Wait until validators are connected.
     let mut events: Vec<BroadcastStream<ConsensusEvent>> =
@@ -141,7 +141,6 @@ where
 pub fn validator_for_slot<N: TestNetwork + NetworkInterface>(
     validators: &[AbstractValidator<N, ValidatorNetworkImpl<N>>],
     block_number: u32,
-    view_number: u32,
 ) -> &AbstractValidator<N, ValidatorNetworkImpl<N>>
 where
     N::Error: Send,
@@ -152,7 +151,7 @@ where
     let (slot, _) = consensus
         .blockchain
         .read()
-        .get_slot_owner_at(block_number, view_number, None)
+        .get_slot_owner_at(block_number, None)
         .expect("Couldn't find slot owner!");
 
     validators
@@ -166,7 +165,6 @@ where
 pub fn pop_validator_for_slot<N: TestNetwork + NetworkInterface>(
     validators: &mut Vec<AbstractValidator<N, ValidatorNetworkImpl<N>>>,
     block_number: u32,
-    view_number: u32,
 ) -> AbstractValidator<N, ValidatorNetworkImpl<N>>
 where
     N::Error: Send,
@@ -177,7 +175,7 @@ where
     let (slot, _) = consensus
         .blockchain
         .read()
-        .get_slot_owner_at(block_number, view_number, None)
+        .get_slot_owner_at(block_number, None)
         .expect("Couldn't find slot owner!");
 
     let index = validators

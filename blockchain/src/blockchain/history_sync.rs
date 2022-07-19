@@ -480,7 +480,7 @@ impl Blockchain {
         first_new_ext_tx
     }
 
-    /// Reverts a given number of micro blocks from the blockchain.
+    /// Reverts a given number of micro or skip blocks from the blockchain.
     pub fn revert_blocks(
         &self,
         num_blocks: u32,
@@ -497,28 +497,15 @@ impl Blockchain {
 
         // Revert each block individually.
         for _ in 0..num_blocks {
-            match current_info.head {
-                Block::Micro(ref micro_block) => {
-                    // Get the chain info for the parent of the current head of the chain.
-                    let prev_info = self
-                        .get_chain_info(&micro_block.header.parent_hash, true, Some(write_txn))
-                        .expect("Failed to find main chain predecessor while reverting blocks!");
+            // Get the chain info for the parent of the current head of the chain.
+            let prev_info = self
+                .get_chain_info(current_info.head.parent_hash(), true, Some(write_txn))
+                .expect("Failed to find main chain predecessor while reverting blocks!");
 
-                    // Revert the accounts tree. This also reverts the history store.
-                    self.revert_accounts(
-                        &self.state.accounts,
-                        write_txn,
-                        micro_block,
-                        prev_info.head.seed().entropy(),
-                        prev_info.head.next_view_number(),
-                    )?;
+            // Revert the accounts tree. This also reverts the history store.
+            self.revert_accounts(&self.state.accounts, write_txn, &current_info.head)?;
 
-                    current_info = prev_info;
-                }
-                Block::Macro(_) => {
-                    unreachable!();
-                }
-            }
+            current_info = prev_info;
         }
 
         Ok(())

@@ -7,7 +7,7 @@ use nimiq_handel::identity::IdentityRegistry;
 use nimiq_handel::verifier::{VerificationResult, Verifier};
 use nimiq_hash::Blake2sHash;
 
-use super::view_change::SignedViewChangeMessage;
+use super::skip_block::SignedSkipBlockMessage;
 
 pub struct MultithreadedVerifier<I: IdentityRegistry> {
     message_hash: Blake2sHash,
@@ -26,11 +26,11 @@ impl<I: IdentityRegistry> MultithreadedVerifier<I> {
 #[async_trait]
 impl<I: IdentityRegistry + Sync + Send + 'static> Verifier for MultithreadedVerifier<I> {
     // type Output = CpuFuture<VerificationResult, ()>;
-    type Contribution = SignedViewChangeMessage;
+    type Contribution = SignedSkipBlockMessage;
 
     async fn verify(&self, contribution: &Self::Contribution) -> VerificationResult {
         let mut aggregated_public_key = AggregatePublicKey::new();
-        for signer in contribution.view_change.signers.iter() {
+        for signer in contribution.proof.signers.iter() {
             if let Some(public_key) = self.identity_registry.public_key(signer) {
                 aggregated_public_key.aggregate(&public_key);
             } else {
@@ -39,10 +39,9 @@ impl<I: IdentityRegistry + Sync + Send + 'static> Verifier for MultithreadedVeri
             }
         }
 
-        if aggregated_public_key.verify_hash(
-            self.message_hash.clone(),
-            &contribution.view_change.signature,
-        ) {
+        if aggregated_public_key
+            .verify_hash(self.message_hash.clone(), &contribution.proof.signature)
+        {
             VerificationResult::Ok
         } else {
             VerificationResult::Forged

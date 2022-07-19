@@ -1,6 +1,6 @@
 use beserial::Serialize;
 use nimiq_account::{Inherent, InherentType, StakingContract};
-use nimiq_block::{ForkProof, MacroHeader, ViewChanges};
+use nimiq_block::{ForkProof, MacroHeader, SkipBlockInfo};
 use nimiq_database as db;
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
@@ -35,12 +35,12 @@ impl Blockchain {
 
         inherents
     }
-    /// Given fork proofs and view changes, it returns the respective slash inherents. It expects
-    /// verified fork proofs and view changes.
+    /// Given fork proofs and (or) a skip block, it returns the respective slash inherents. It expects
+    /// verified fork proofs and (or) skip block.
     pub fn create_slash_inherents(
         &self,
         fork_proofs: &[ForkProof],
-        view_changes: &Option<ViewChanges>,
+        skip_block_info: Option<SkipBlockInfo>,
         txn_option: Option<&db::Transaction>,
     ) -> Vec<Inherent> {
         let mut inherents = vec![];
@@ -50,9 +50,9 @@ impl Blockchain {
             inherents.push(self.inherent_from_fork_proof(fork_proof, txn_option));
         }
 
-        if let Some(view_changes) = view_changes {
-            trace!("Creating inherent from view changes: {:?}", view_changes);
-            inherents.append(&mut self.inherents_from_view_changes(view_changes, txn_option));
+        if let Some(skip_block_info) = skip_block_info {
+            trace!("Creating inherent from skip block: {:?}", skip_block_info);
+            inherents.push(self.inherent_from_skip_block_info(&skip_block_info, txn_option));
         }
 
         inherents
@@ -64,11 +64,10 @@ impl Blockchain {
         fork_proof: &ForkProof,
         txn_option: Option<&db::Transaction>,
     ) -> Inherent {
-        // Get the slot owner and slot number for this block number and view number.
+        // Get the slot owner and slot number for this block number.
         let proposer_slot = self
             .get_proposer_at(
                 fork_proof.header1.block_number,
-                fork_proof.header1.view_number,
                 fork_proof.prev_vrf_seed.entropy(),
                 txn_option,
             )
@@ -90,46 +89,40 @@ impl Blockchain {
         }
     }
 
-    /// It creates a slash inherent(s) from a view change(s). It expects a *verified* view change!
-    pub fn inherents_from_view_changes(
+    /// It creates a slash inherent from a skip block. It expects a *verified* skip block!
+    pub fn inherent_from_skip_block_info(
         &self,
-        view_changes: &ViewChanges,
+        skip_block_info: &SkipBlockInfo,
         txn_option: Option<&db::Transaction>,
-    ) -> Vec<Inherent> {
-        // Iterate over all the view changes.
-        (view_changes.first_view_number..view_changes.last_view_number)
-            .map(|view_number| {
-                // Get the slot owner and slot number for this block number and view number.
-                let proposer_slot = self
-                    .get_proposer_at(
-                        view_changes.block_number,
-                        view_number,
-                        view_changes.vrf_entropy.clone(),
-                        txn_option,
-                    )
-                    .expect("Couldn't calculate slot owner!");
+    ) -> Inherent {
+        // Get the slot owner and slot number for this block number.
+        let proposer_slot = self
+            .get_proposer_at(
+                skip_block_info.block_number,
+                skip_block_info.vrf_entropy.clone(),
+                txn_option,
+            )
+            .expect("Couldn't calculate slot owner!");
 
-                debug!(
-                    address = %proposer_slot.validator.address,
-                    "Slash inherent from view change"
-                );
+        debug!(
+            address = %proposer_slot.validator.address,
+            "Slash inherent from skip block"
+        );
 
-                // Create the SlashedSlot struct.
-                let slot = SlashedSlot {
-                    slot: proposer_slot.number,
-                    validator_address: proposer_slot.validator.address,
-                    event_block: view_changes.block_number,
-                };
+        // Create the SlashedSlot struct.
+        let slot = SlashedSlot {
+            slot: proposer_slot.number,
+            validator_address: proposer_slot.validator.address,
+            event_block: skip_block_info.block_number,
+        };
 
-                // Create the corresponding slash inherent.
-                Inherent {
-                    ty: InherentType::Slash,
-                    target: self.staking_contract_address(),
-                    value: Coin::ZERO,
-                    data: slot.serialize_to_vec(),
-                }
-            })
-            .collect::<Vec<Inherent>>()
+        // Create the corresponding slash inherent.
+        Inherent {
+            ty: InherentType::Slash,
+            target: self.staking_contract_address(),
+            value: Coin::ZERO,
+            data: slot.serialize_to_vec(),
+        }
     }
 
     /// Creates the inherents to finalize a batch. The inherents are for reward distribution and

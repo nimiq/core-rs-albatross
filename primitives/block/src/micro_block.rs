@@ -11,7 +11,7 @@ use nimiq_transaction::Transaction;
 use nimiq_vrf::VrfSeed;
 
 use crate::fork_proof::ForkProof;
-use crate::ViewChangeProof;
+use crate::skip_block::SkipBlockProof;
 
 /// The struct representing a Micro block.
 /// A Micro block, unlike a Macro block, doesn't contain any inherents (data that can be calculated
@@ -27,6 +27,19 @@ pub struct MicroBlock {
     pub body: Option<MicroBody>,
 }
 
+/// Enumeration representing the justification for a Micro block
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
+#[repr(u8)]
+pub enum MicroJustification {
+    /// Regular micro block justification which is the signature of the block producer
+    Micro(Signature),
+    /// Skip block justification which is the aggregated signature of the validator's
+    /// signatures for a skip block.
+    Skip(SkipBlockProof),
+}
+
 /// The struct representing the header of a Micro block.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, SerializeContent)]
 pub struct MicroHeader {
@@ -34,9 +47,6 @@ pub struct MicroHeader {
     pub version: u16,
     /// The number of the block.
     pub block_number: u32,
-    /// The view number of this block. It increases whenever a view change happens and resets on
-    /// every macro block.
-    pub view_number: u32,
     /// The timestamp of the block. It follows the Unix time and has millisecond precision.
     pub timestamp: u64,
     /// The hash of the header of the immediately preceding block (either micro or macro).
@@ -53,18 +63,8 @@ pub struct MicroHeader {
     /// The root of the Merkle tree of the body. It just acts as a commitment to the
     /// body.
     pub body_root: Blake2bHash,
-    /// A merkle root over all of the transactions that happened in the current epoch.
+    /// A Merkle root over all of the transactions that happened in the current epoch.
     pub history_root: Blake2bHash,
-}
-
-/// The struct representing the justification for a Micro block.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct MicroJustification {
-    /// The signature of the block producer.
-    pub signature: Signature,
-    /// The view change proof. It consists of the aggregated signatures to a single view change
-    /// message. It is an Option since a view change might not occur for any given block.
-    pub view_change_proof: Option<ViewChangeProof>,
 }
 
 /// The struct representing the body of a Micro block.
@@ -84,6 +84,14 @@ impl MicroBlock {
         self.header.hash()
     }
 
+    /// Returns wether the micro block is a skip block
+    pub fn is_skip_block(&self) -> bool {
+        if let Some(justification) = &self.justification {
+            return matches!(justification, MicroJustification::Skip(_));
+        }
+        false
+    }
+
     // Returns the available size, in bytes, in a micro block body for transactions.
     pub fn get_available_bytes(num_fork_proofs: usize) -> usize {
         policy::MAX_SIZE_MICRO_BODY
@@ -97,9 +105,9 @@ impl MicroHeader {
     /// size since we assume that the extra_data field is completely filled.
     pub const MAX_SIZE: usize =
         /*version*/
-        2 + /*block_number*/ 4 + /*view_number*/ 4 + /*timestamp*/ 8
-            + /*parent_hash*/ 32 + /*seed*/ VrfSeed::SIZE + /*extra_data*/ 32 +
-            /*state_root*/ 32 + /*body_root*/ 32 + /*history_root*/ 32;
+        2 + /*block_number*/ 4 + /*timestamp*/ 8 + /*parent_hash*/ 32
+        + /*seed*/ VrfSeed::SIZE + /*extra_data*/ 32 + /*state_root*/ 32
+        + /*body_root*/ 32 + /*history_root*/ 32;
 }
 
 impl IntoDatabaseValue for MicroBlock {
@@ -134,9 +142,8 @@ impl fmt::Display for MicroHeader {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(
             f,
-            "#{}.{}:MI:{}",
+            "#{}:MI:{}",
             self.block_number,
-            self.view_number,
             self.hash::<Blake2bHash>().to_short_str(),
         )
     }

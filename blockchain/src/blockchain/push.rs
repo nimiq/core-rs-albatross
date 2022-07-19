@@ -8,7 +8,6 @@ use nimiq_block::{Block, ForkProof};
 use nimiq_database::WriteTransaction;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::policy;
-use nimiq_vrf::VrfEntropy;
 
 use crate::blockchain_state::BlockchainState;
 use crate::chain_info::ChainInfo;
@@ -73,7 +72,6 @@ impl Blockchain {
         let proposer_slot = this
             .get_proposer_at(
                 block.block_number(),
-                block.view_number(),
                 prev_info.head.seed().entropy(),
                 Some(&read_txn),
             )
@@ -89,6 +87,7 @@ impl Blockchain {
             &proposer_slot.validator.signing_key,
             Some(&read_txn),
             !trusted,
+            block.is_skip(),
         ) {
             warn!(%block, reason = "bad header", "Rejecting block");
             return Err(e);
@@ -99,7 +98,6 @@ impl Blockchain {
             &*this,
             &block,
             &proposer_slot.validator.signing_key,
-            Some(&read_txn),
             !trusted,
         ) {
             warn!(%block, reason = "bad justification", "Rejecting block");
@@ -114,52 +112,59 @@ impl Blockchain {
             return Err(e);
         }
 
-        // Detect forks.
-        if let Block::Micro(micro_block) = &block {
-            // Check if there are two blocks in the same slot and with the same height. Since we already
-            // verified the validator for the current slot, this is enough to check for fork proofs.
-            // Note: We don't verify the justifications for the other blocks here, since they had to
-            // already be verified in order to be added to the blockchain.
-            // Count the micro blocks after the last macro block.
-            let mut micro_blocks: Vec<Block> =
-                this.chain_store
-                    .get_blocks_at(block.block_number(), false, Some(&read_txn));
+        // Detect forks in micro blocks other than skip block
+        if !block.is_skip() {
+            if let Block::Micro(micro_block) = &block {
+                // Check if there are two blocks in the same slot and with the same height. Since we already
+                // verified the validator for the current slot, this is enough to check for fork proofs.
+                // Note: We don't verify the justifications for the other blocks here, since they had to
+                // already be verified in order to be added to the blockchain.
+                // Count the micro blocks after the last macro block.
+                let mut micro_blocks: Vec<Block> =
+                    this.chain_store
+                        .get_blocks_at(block.block_number(), false, Some(&read_txn));
 
-            // Get the micro header from the block
-            let micro_header1 = &micro_block.header;
+                micro_blocks.retain(|block| block.is_micro() && !block.is_skip());
 
-            // Get the justification for the block. We assume that the
-            // validator's signature is valid.
-            let justification1 = &micro_block
-                .justification
-                .as_ref()
-                .expect("Missing justification!")
-                .signature;
+                // Get the micro header from the block
+                let micro_header1 = &micro_block.header;
 
-            // Get the view number from the block
-            let view_number = block.view_number();
-
-            for micro_block in micro_blocks.drain(..).map(|block| block.unwrap_micro()) {
-                // If there's another micro block set to this view number, which also has the same
-                // VrfSeed entropy we notify the fork event.
-                if view_number == micro_block.header.view_number
-                    && block.seed().entropy() == micro_block.header.seed.entropy()
+                // Get the justification for the block. We assume that the
+                // validator's signature is valid.
+                let justification1 = match micro_block
+                    .justification
+                    .clone()
+                    .expect("Missing justification!")
                 {
-                    let micro_header2 = micro_block.header;
-                    let justification2 = micro_block
-                        .justification
-                        .expect("Missing justification!")
-                        .signature;
+                    nimiq_block::MicroJustification::Micro(signature) => signature,
+                    nimiq_block::MicroJustification::Skip(_) => {
+                        unreachable!("Skip blocks are already filtered")
+                    }
+                };
 
-                    let proof = ForkProof {
-                        header1: micro_header1.clone(),
-                        header2: micro_header2,
-                        justification1: justification1.clone(),
-                        justification2,
-                        prev_vrf_seed: prev_info.head.seed().clone(),
-                    };
+                for micro_block in micro_blocks.drain(..).map(|block| block.unwrap_micro()) {
+                    // If there's another micro block set to this block height, which also has the same
+                    // VrfSeed entropy we notify the fork event.
+                    if block.seed().entropy() == micro_block.header.seed.entropy() {
+                        let micro_header2 = micro_block.header;
+                        let justification2 =
+                            match micro_block.justification.expect("Missing justification!") {
+                                nimiq_block::MicroJustification::Micro(signature) => signature,
+                                nimiq_block::MicroJustification::Skip(_) => {
+                                    unreachable!("Skip blocks are already filtered")
+                                }
+                            };
 
-                    this.fork_notifier.notify(ForkEvent::Detected(proof));
+                        let proof = ForkProof {
+                            header1: micro_header1.clone(),
+                            header2: micro_header2,
+                            justification1: justification1.clone(),
+                            justification2,
+                            prev_vrf_seed: prev_info.head.seed().clone(),
+                        };
+
+                        this.fork_notifier.notify(ForkEvent::Detected(proof));
+                    }
                 }
             }
         }
@@ -257,13 +262,7 @@ impl Blockchain {
         let is_macro_block = policy::is_macro_block_at(block_number);
         let is_election_block = policy::is_election_block_at(block_number);
 
-        let block_info = this.check_and_commit(
-            &this.state,
-            &chain_info.head,
-            prev_info.head.seed().entropy(),
-            prev_info.head.next_view_number(),
-            &mut txn,
-        );
+        let block_info = this.check_and_commit(&this.state, &chain_info.head, &mut txn);
         let block_log = match block_info {
             Ok(block_info) => block_info,
             Err(e) => {
@@ -398,55 +397,37 @@ impl Blockchain {
         let mut block_logs = Vec::new();
 
         while current.0 != ancestor.0 {
-            match current.1.head {
-                Block::Macro(_) => {
-                    // Macro blocks are final, we can't revert across them. This should be checked
-                    // before we start reverting.
-                    panic!("Trying to rebranch across macro block");
-                }
-                Block::Micro(ref micro_block) => {
-                    let prev_hash = micro_block.header.parent_hash.clone();
-
-                    let prev_info = this
-                        .chain_store
-                        .get_chain_info(&prev_hash, true, Some(&write_txn))
-                        .expect("Corrupted store: Failed to find main chain predecessor while rebranching");
-
-                    block_logs.push(this.revert_accounts(
-                        &this.state.accounts,
-                        &mut write_txn,
-                        micro_block,
-                        prev_info.head.seed().entropy(),
-                        prev_info.head.next_view_number(),
-                    )?);
-
-                    assert_eq!(
-                        prev_info.head.state_root(),
-                        &this.state.accounts.get_root(Some(&write_txn)),
-                        "Failed to revert main chain while rebranching - inconsistent state"
-                    );
-
-                    revert_chain.push(current);
-
-                    current = (prev_hash, prev_info);
-                }
+            let block = current.1.head.clone();
+            if block.is_macro() {
+                panic!("Trying to rebranch across macro block");
             }
+
+            let prev_hash = block.parent_hash().clone();
+
+            let prev_info = this
+                .chain_store
+                .get_chain_info(&prev_hash, true, Some(&write_txn))
+                .expect("Corrupted store: Failed to find main chain predecessor while rebranching");
+
+            block_logs.push(this.revert_accounts(&this.state.accounts, &mut write_txn, &block)?);
+
+            assert_eq!(
+                prev_info.head.state_root(),
+                &this.state.accounts.get_root(Some(&write_txn)),
+                "Failed to revert main chain while rebranching - inconsistent state"
+            );
+
+            revert_chain.push(current);
+
+            current = (prev_hash, prev_info);
         }
 
         // Push each fork block.
-        let mut prev_entropy = ancestor.1.head.seed().entropy();
-        let mut prev_view_number = ancestor.1.head.next_view_number();
 
         let mut fork_iter = fork_chain.iter().rev();
 
         while let Some(fork_block) = fork_iter.next() {
-            let block_log = this.check_and_commit(
-                &this.state,
-                &fork_block.1.head,
-                prev_entropy,
-                prev_view_number,
-                &mut write_txn,
-            );
+            let block_log = this.check_and_commit(&this.state, &fork_block.1.head, &mut write_txn);
             let block_log = match block_log {
                 Ok(block_info) => block_info,
                 Err(e) => {
@@ -474,8 +455,6 @@ impl Blockchain {
                 }
             };
             block_logs.push(block_log);
-            prev_entropy = fork_block.1.head.seed().entropy();
-            prev_view_number = fork_block.1.head.next_view_number();
         }
 
         // Unset onMainChain flag / mainChainSuccessor on the current main chain up to (excluding) the common ancestor.
@@ -587,8 +566,6 @@ impl Blockchain {
         &self,
         state: &BlockchainState,
         block: &Block,
-        prev_entropy: VrfEntropy,
-        first_view_number: u32,
         txn: &mut WriteTransaction,
     ) -> Result<BlockLog, PushError> {
         // Check transactions against replay attacks. This is only necessary for micro blocks.
@@ -612,7 +589,7 @@ impl Blockchain {
         }
 
         // Commit block to AccountsTree.
-        let block_log = self.commit_accounts(state, block, prev_entropy, first_view_number, txn);
+        let block_log = self.commit_accounts(state, block, txn);
         if let Err(e) = block_log {
             warn!(%block, reason = "commit failed", error = &e as &dyn Error, "Rejecting block");
             #[cfg(feature = "metrics")]

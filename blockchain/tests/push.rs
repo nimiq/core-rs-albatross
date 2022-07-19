@@ -1,20 +1,19 @@
-use nimiq_block::{Block, ViewChangeProof};
-use nimiq_block::{BlockError, MultiSignature};
+use nimiq_block::Block;
+use nimiq_block::BlockError;
+use nimiq_block_production::test_custom_block::next_skip_block;
 use nimiq_block_production::test_custom_block::{next_macro_block, next_micro_block, BlockConfig};
 use nimiq_block_production::test_utils::TemporaryBlockProducer;
 use nimiq_blockchain::PushError::InvalidBlock;
 use nimiq_blockchain::{PushError, PushResult};
-use nimiq_bls::AggregateSignature;
-use nimiq_collections::BitSet;
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::policy;
-use nimiq_vrf::{VrfEntropy, VrfSeed};
+use nimiq_vrf::VrfSeed;
 
 pub fn expect_push_micro_block(config: BlockConfig, expected_res: Result<PushResult, PushError>) {
     if !config.macro_only {
         push_micro_after_macro(&config, &expected_res);
         push_micro_after_micro(&config, &expected_res);
-        push_simple_increased_view_number(&config, &expected_res);
+        push_simple_skip_block(&config, &expected_res);
         push_rebranch(config.clone(), &expected_res);
         push_rebranch_across_epochs(config.clone());
         push_fork(&config, &expected_res);
@@ -31,12 +30,7 @@ fn push_micro_after_macro(config: &BlockConfig, expected_res: &Result<PushResult
 
     let micro_block = {
         let blockchain = &temp_producer.blockchain.read();
-        next_micro_block(
-            &temp_producer.producer.signing_key,
-            &temp_producer.producer.voting_key,
-            blockchain,
-            config,
-        )
+        next_micro_block(&temp_producer.producer.signing_key, blockchain, config)
     };
 
     assert_eq!(&temp_producer.push(Block::Micro(micro_block)), expected_res);
@@ -44,92 +38,82 @@ fn push_micro_after_macro(config: &BlockConfig, expected_res: &Result<PushResult
 
 fn push_micro_after_micro(config: &BlockConfig, expected_res: &Result<PushResult, PushError>) {
     let temp_producer = TemporaryBlockProducer::new();
-    temp_producer.next_block(0, vec![]);
+    temp_producer.next_block(vec![], false);
 
     let micro_block = {
         let blockchain = &temp_producer.blockchain.read();
-        next_micro_block(
-            &temp_producer.producer.signing_key,
-            &temp_producer.producer.voting_key,
-            blockchain,
-            config,
-        )
+        next_micro_block(&temp_producer.producer.signing_key, blockchain, config)
     };
 
     assert_eq!(&temp_producer.push(Block::Micro(micro_block)), expected_res);
 }
 
-fn push_simple_increased_view_number(
-    config: &BlockConfig,
-    expected_res: &Result<PushResult, PushError>,
-) {
+fn push_simple_skip_block(config: &BlockConfig, expected_res: &Result<PushResult, PushError>) {
+    // (Numbers denote accumulated skip blocks)
     // [0] - [0]
     //    \- [1] - [1]
     let temp_producer1 = TemporaryBlockProducer::new();
 
-    temp_producer1.next_block(0, vec![]);
-    temp_producer1.next_block(1, vec![]);
+    temp_producer1.next_block(vec![], false);
+    temp_producer1.next_block(vec![], true);
 
     let block = {
         let blockchain = &temp_producer1.blockchain.read();
-        next_micro_block(
-            &temp_producer1.producer.signing_key,
-            &temp_producer1.producer.voting_key,
-            blockchain,
-            config,
-        )
+        next_micro_block(&temp_producer1.producer.signing_key, blockchain, config)
     };
 
     assert_eq!(&temp_producer1.push(Block::Micro(block)), expected_res);
 }
 
-fn push_rebranch(mut config: BlockConfig, expected_res: &Result<PushResult, PushError>) {
+fn push_rebranch(config: BlockConfig, expected_res: &Result<PushResult, PushError>) {
+    // (Numbers denote accumulated skip blocks)
     // [0] - [0]
     //    \- [1]
     let temp_producer1 = TemporaryBlockProducer::new();
     let temp_producer2 = TemporaryBlockProducer::new();
 
-    let block = temp_producer1.next_block(0, vec![]);
+    let block = temp_producer1.next_block(vec![], false);
     assert_eq!(temp_producer2.push(block), Ok(PushResult::Extended));
 
-    let block_1a = temp_producer1.next_block(0, vec![]);
-
-    config.view_number_offset = 1;
+    let block_1a = temp_producer1.next_block(vec![], false);
 
     let block_2a = {
         let blockchain = &temp_producer2.blockchain.read();
-        next_micro_block(
-            &temp_producer2.producer.signing_key,
-            &temp_producer2.producer.voting_key,
-            blockchain,
-            &config,
-        )
+        next_skip_block(&temp_producer2.producer.voting_key, blockchain, &config)
     };
 
     assert_eq!(temp_producer2.push(block_1a), Ok(PushResult::Extended));
 
-    assert_eq!(&temp_producer1.push(Block::Micro(block_2a)), expected_res);
+    let expected_result = match &expected_res {
+        // Skip blocks carry over the seed of the previous block. An incorrect seed if it matches
+        // the previous block seed would fail as an invalid skip block proof
+        Err(PushError::InvalidBlock(BlockError::InvalidSeed)) => {
+            &Err(PushError::InvalidBlock(BlockError::InvalidSkipBlockProof))
+        }
+        _ => expected_res,
+    };
+
+    assert_eq!(
+        &temp_producer1.push(Block::Micro(block_2a)),
+        expected_result
+    );
 }
 
 fn push_fork(config: &BlockConfig, expected_res: &Result<PushResult, PushError>) {
+    // (Numbers denote accumulated skip blocks)
     // [0] - [0]
     //    \- [0]
     let temp_producer1 = TemporaryBlockProducer::new();
     let temp_producer2 = TemporaryBlockProducer::new();
 
-    let block = temp_producer1.next_block(0, vec![]);
+    let block = temp_producer1.next_block(vec![], false);
     assert_eq!(temp_producer2.push(block), Ok(PushResult::Extended));
 
-    let block_1a = temp_producer1.next_block(0, vec![]);
+    let block_1a = temp_producer1.next_block(vec![], false);
 
     let block_2a = {
         let blockchain = &temp_producer2.blockchain.read();
-        next_micro_block(
-            &temp_producer2.producer.signing_key,
-            &temp_producer2.producer.voting_key,
-            blockchain,
-            config,
-        )
+        next_micro_block(&&&temp_producer2.producer.signing_key, blockchain, config)
     };
 
     assert_eq!(temp_producer2.push(block_1a), Ok(PushResult::Extended));
@@ -145,11 +129,11 @@ fn push_rebranch_fork(config: &BlockConfig, expected_res: &Result<PushResult, Pu
     // Case 1: easy rebranch
     // [0] - [0] - [0] - [0]
     //          \- [0]
-    let block = temp_producer1.next_block(0, vec![]);
+    let block = temp_producer1.next_block(vec![], false);
     assert_eq!(temp_producer2.push(block), Ok(PushResult::Extended));
 
-    let fork1 = temp_producer1.next_block(0, vec![0x48]);
-    let fork2 = temp_producer2.next_block(0, vec![]);
+    let fork1 = temp_producer1.next_block(vec![0x48], false);
+    let fork2 = temp_producer2.next_block(vec![], false);
 
     // Check that each one accepts other fork.
     assert_eq!(temp_producer1.push(fork2), Ok(PushResult::Forked));
@@ -157,12 +141,7 @@ fn push_rebranch_fork(config: &BlockConfig, expected_res: &Result<PushResult, Pu
 
     let better = {
         let blockchain = &temp_producer1.blockchain.read();
-        next_micro_block(
-            &temp_producer1.producer.signing_key,
-            &temp_producer1.producer.voting_key,
-            blockchain,
-            config,
-        )
+        next_micro_block(&&&temp_producer1.producer.signing_key, blockchain, config)
     };
 
     // Check that producer 2 rebranches.
@@ -170,7 +149,7 @@ fn push_rebranch_fork(config: &BlockConfig, expected_res: &Result<PushResult, Pu
 }
 
 /// Check that it doesn't rebranch across epochs. This push should always result in OK::Ignored.
-fn push_rebranch_across_epochs(mut config: BlockConfig) {
+fn push_rebranch_across_epochs(config: BlockConfig) {
     // Build forks using two producers.
     let temp_producer1 = TemporaryBlockProducer::new();
     let temp_producer2 = TemporaryBlockProducer::new();
@@ -180,24 +159,17 @@ fn push_rebranch_across_epochs(mut config: BlockConfig) {
     // [0] - [0] - [0]
     //          \- [0] - ... - [0] - [1]
 
-    let ancestor = temp_producer1.next_block(0, vec![]);
+    let ancestor = temp_producer1.next_block(vec![], false);
     assert_eq!(temp_producer2.push(ancestor), Ok(PushResult::Extended));
 
     // progress the chain across an epoch boundary.
     for _ in 0..policy::BLOCKS_PER_EPOCH {
-        temp_producer1.next_block(0, vec![]);
+        temp_producer1.next_block(vec![], false);
     }
-
-    config.view_number_offset = 1;
 
     let fork = {
         let blockchain = &temp_producer2.blockchain.read();
-        next_micro_block(
-            &temp_producer2.producer.signing_key,
-            &temp_producer2.producer.voting_key,
-            blockchain,
-            &config,
-        )
+        next_micro_block(&temp_producer2.producer.signing_key, blockchain, &config)
     };
 
     // Pushing a block from a previous batch/epoch is atm cought before checking if it's a fork or known block
@@ -211,7 +183,7 @@ fn simply_push_macro_block(config: &BlockConfig, expected_res: &Result<PushResul
     let temp_producer = TemporaryBlockProducer::new();
 
     for _ in 0..policy::BLOCKS_PER_BATCH - 1 {
-        let block = temp_producer.next_block(0, vec![]);
+        let block = temp_producer.next_block(vec![], false);
         temp_producer.push(block.clone()).unwrap();
     }
 
@@ -379,96 +351,6 @@ fn it_validates_parent_election_hash() {
             ..Default::default()
         },
         Err(PushError::InvalidSuccessor),
-    );
-}
-
-#[test]
-fn it_validates_view_number() {
-    // Increased view number without view change proof
-    expect_push_micro_block(
-        BlockConfig {
-            micro_only: true,
-            view_number_offset: 1,
-            omit_view_change_proof: true,
-            ..Default::default()
-        },
-        Err(InvalidBlock(BlockError::NoViewChangeProof)),
-    );
-
-    // Decreased view number
-    push_simple_increased_view_number(
-        &BlockConfig {
-            micro_only: true,
-            view_number_offset: -1,
-            ..Default::default()
-        },
-        &Err(InvalidBlock(BlockError::InvalidViewNumber)),
-    );
-}
-
-#[test]
-fn it_validates_view_change_proof_simple() {
-    // Totally invalid view change
-    expect_push_micro_block(
-        BlockConfig {
-            micro_only: true,
-            view_number_offset: 1,
-            view_change_proof: Some(ViewChangeProof {
-                sig: MultiSignature::new(AggregateSignature::default(), BitSet::new()),
-            }),
-            ..Default::default()
-        },
-        Err(InvalidBlock(BlockError::InvalidViewChangeProof)),
-    );
-
-    // View change provided although the view number didn't change.
-    let config = BlockConfig {
-        micro_only: true,
-        view_change_proof: Some(ViewChangeProof {
-            sig: MultiSignature::new(AggregateSignature::default(), BitSet::new()),
-        }),
-        ..Default::default()
-    };
-
-    let expected_error = Err(InvalidBlock(BlockError::InvalidJustification));
-    push_micro_after_micro(&config, &expected_error);
-    push_fork(&config, &expected_error);
-    push_rebranch_fork(&config, &expected_error);
-}
-
-#[test]
-fn it_validates_view_change() {
-    // The view number in the view change doesn't match the block's
-    expect_push_micro_block(
-        BlockConfig {
-            micro_only: true,
-            view_number_offset: 1,
-            view_change_view_number_offset: 1,
-            ..Default::default()
-        },
-        Err(InvalidBlock(BlockError::InvalidViewChangeProof)),
-    );
-
-    // The block number in the view change doesn't match the block's
-    expect_push_micro_block(
-        BlockConfig {
-            micro_only: true,
-            view_number_offset: 1,
-            view_change_block_number_offset: 1,
-            ..Default::default()
-        },
-        Err(InvalidBlock(BlockError::InvalidViewChangeProof)),
-    );
-
-    // The used VrfEntropy is wrong
-    expect_push_micro_block(
-        BlockConfig {
-            micro_only: true,
-            view_number_offset: 1,
-            view_change_vrf_entropy: Some(VrfEntropy::default()),
-            ..Default::default()
-        },
-        Err(InvalidBlock(BlockError::InvalidViewChangeProof)),
     );
 }
 

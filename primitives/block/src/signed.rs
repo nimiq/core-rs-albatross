@@ -40,8 +40,8 @@ impl<M: Message> SignedMessage<M> {
 // Therefore all signed messages should be prefixed with a standardized type. We should keep those
 // prefixes at one place to not accidentally create collisions.
 
-/// prefix to sign view change messages
-pub const PREFIX_VIEW_CHANGE: u8 = 0x01;
+/// prefix to sign skip block info messages
+pub const PREFIX_SKIP_BLOCK_INFO: u8 = 0x01;
 /// prefix to sign a tendermint proposal
 pub const PREFIX_TENDERMINT_PROPOSAL: u8 = 0x02;
 /// prefix to sign tendermint prepare messages

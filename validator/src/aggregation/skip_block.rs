@@ -1,0 +1,299 @@
+use std::fmt;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::task::{Context, Poll};
+
+use futures::{ready, stream::select, stream::BoxStream, Stream, StreamExt};
+use parking_lot::RwLock;
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
+use tokio_stream::wrappers::UnboundedReceiverStream;
+
+use beserial::{Deserialize, Serialize};
+use nimiq_block::{Message, MultiSignature, SignedSkipBlockInfo, SkipBlockInfo, SkipBlockProof};
+use nimiq_bls::{AggregateSignature, KeyPair};
+use nimiq_collections::BitSet;
+use nimiq_handel::aggregation::Aggregation;
+use nimiq_handel::config::Config;
+use nimiq_handel::contribution::{AggregatableContribution, ContributionError};
+use nimiq_handel::evaluator::WeightedVote;
+use nimiq_handel::identity::WeightRegistry;
+use nimiq_handel::partitioner::BinomialPartitioner;
+use nimiq_handel::protocol::Protocol;
+use nimiq_handel::store::ReplaceStore;
+use nimiq_handel::update::{LevelUpdate, LevelUpdateMessage};
+use nimiq_hash::Blake2sHash;
+use nimiq_primitives::policy;
+use nimiq_primitives::slots::Validators;
+use nimiq_validator_network::ValidatorNetwork;
+
+use super::network_sink::NetworkSink;
+use super::registry::ValidatorRegistry;
+use super::verifier::MultithreadedVerifier;
+
+enum SkipBlockResult {
+    SkipBlock(SignedSkipBlockMessage),
+}
+
+/// Switch for incoming SkipBlockInfo.
+/// Keeps track of SkipBlockInfo for future Aggregations in order to be able to sync the state of this node with others
+/// in case it recognizes it is behind.
+struct InputStreamSwitch {
+    input: BoxStream<'static, LevelUpdateMessage<SignedSkipBlockMessage, SkipBlockInfo>>,
+    current_skip_block: SkipBlockInfo,
+}
+
+impl InputStreamSwitch {
+    fn new(
+        input: BoxStream<'static, LevelUpdateMessage<SignedSkipBlockMessage, SkipBlockInfo>>,
+        current_skip_block: SkipBlockInfo,
+    ) -> (Self, UnboundedReceiver<SkipBlockResult>) {
+        let (_, receiver) = unbounded_channel();
+
+        let this = Self {
+            input,
+            current_skip_block,
+        };
+
+        (this, receiver)
+    }
+}
+
+impl Stream for InputStreamSwitch {
+    type Item = LevelUpdate<SignedSkipBlockMessage>;
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        while let Some(message) = ready!(self.input.poll_next_unpin(cx)) {
+            if message.tag.block_number != self.current_skip_block.block_number
+                || message.tag.vrf_entropy != self.current_skip_block.vrf_entropy
+            {
+                // The LevelUpdate is not for this skip block and thus irrelevant.
+                // TODO If it is for a future skip block we might want to shortcut a HeadRequest here.
+                continue;
+            }
+
+            return Poll::Ready(Some(message.update));
+        }
+
+        // We have exited the loop, so poll_next() must have returned Poll::Ready(None).
+        // Thus, we terminate the stream.
+        Poll::Ready(None)
+    }
+}
+
+// TODO once actual state sync is implemented this can be removed again as it serves the same purpose.
+/// The SignedSkipBlockMessage containing the current skip block proof.
+/// Contains the actual information of block_height and prev_seed as tag (SkipBlockInfo).
+#[derive(Clone, Deserialize, Serialize, std::fmt::Debug)]
+pub struct SignedSkipBlockMessage {
+    /// The currently aggregated proof for a skip block.
+    pub proof: MultiSignature,
+}
+
+impl AggregatableContribution for SignedSkipBlockMessage {
+    const TYPE_ID: u16 = 123;
+
+    fn contributors(&self) -> BitSet {
+        self.proof.contributors()
+    }
+
+    fn combine(&mut self, other_contribution: &Self) -> Result<(), ContributionError> {
+        self.proof.combine(&other_contribution.proof)
+    }
+}
+
+struct SkipBlockAggregationProtocol {
+    verifier: Arc<<Self as Protocol>::Verifier>,
+    partitioner: Arc<<Self as Protocol>::Partitioner>,
+    evaluator: Arc<<Self as Protocol>::Evaluator>,
+    store: Arc<RwLock<<Self as Protocol>::Store>>,
+    registry: Arc<<Self as Protocol>::Registry>,
+
+    node_id: usize,
+}
+
+impl SkipBlockAggregationProtocol {
+    pub fn new(
+        validators: Validators,
+        node_id: usize,
+        threshold: usize,
+        message_hash: Blake2sHash,
+    ) -> Self {
+        let partitioner = Arc::new(BinomialPartitioner::new(
+            node_id,
+            validators.num_validators(),
+        ));
+
+        let store = Arc::new(RwLock::new(ReplaceStore::<
+            BinomialPartitioner,
+            SignedSkipBlockMessage,
+        >::new(Arc::clone(&partitioner))));
+
+        let registry = Arc::new(ValidatorRegistry::new(validators));
+
+        let evaluator = Arc::new(WeightedVote::new(
+            Arc::clone(&store),
+            Arc::clone(&registry),
+            Arc::clone(&partitioner),
+            threshold,
+        ));
+
+        SkipBlockAggregationProtocol {
+            verifier: Arc::new(MultithreadedVerifier::new(
+                message_hash,
+                Arc::clone(&registry),
+            )),
+            partitioner,
+            evaluator,
+            store,
+            registry,
+            node_id,
+        }
+    }
+}
+
+impl Protocol for SkipBlockAggregationProtocol {
+    type Contribution = SignedSkipBlockMessage;
+    type Registry = ValidatorRegistry;
+    type Verifier = MultithreadedVerifier<Self::Registry>;
+    type Store = ReplaceStore<Self::Partitioner, Self::Contribution>;
+    type Evaluator = WeightedVote<Self::Store, Self::Registry, Self::Partitioner>;
+    type Partitioner = BinomialPartitioner;
+
+    fn registry(&self) -> Arc<Self::Registry> {
+        self.registry.clone()
+    }
+
+    fn verifier(&self) -> Arc<Self::Verifier> {
+        self.verifier.clone()
+    }
+
+    fn store(&self) -> Arc<RwLock<Self::Store>> {
+        self.store.clone()
+    }
+
+    fn evaluator(&self) -> Arc<Self::Evaluator> {
+        self.evaluator.clone()
+    }
+
+    fn partitioner(&self) -> Arc<Self::Partitioner> {
+        self.partitioner.clone()
+    }
+
+    fn node_id(&self) -> usize {
+        self.node_id
+    }
+}
+
+pub struct SkipBlockAggregation {}
+
+impl SkipBlockAggregation {
+    pub async fn start<N: ValidatorNetwork + 'static>(
+        skip_block_info: SkipBlockInfo,
+        voting_key: KeyPair,
+        // TODO: This seems to be a SlotBand. Change this to a proper Validator ID.
+        validator_id: u16,
+        active_validators: Validators,
+        network: Arc<N>,
+    ) -> (SkipBlockInfo, SkipBlockProof) {
+        // TODO expose this somewehere else so we don't need to clone here.
+        let weights = Arc::new(ValidatorRegistry::new(active_validators.clone()));
+
+        let slot_range = active_validators.validators[validator_id as usize].slot_range;
+
+        let slots: Vec<u16> = (slot_range.0..slot_range.1).collect();
+
+        loop {
+            let message_hash = skip_block_info.hash_with_prefix();
+            trace!(
+                "message: {:?}, message_hash: {:?}",
+                &skip_block_info,
+                message_hash
+            );
+            let signed_skip_block_info = SignedSkipBlockInfo::from_message(
+                skip_block_info.clone(),
+                &voting_key.secret_key,
+                validator_id,
+            );
+
+            let signature = AggregateSignature::from_signatures(&[signed_skip_block_info
+                .signature
+                .multiply(slots.len() as u16)]);
+
+            let mut signers = BitSet::new();
+            for slot in &slots {
+                signers.insert(*slot as usize);
+            }
+
+            let own_contribution = SignedSkipBlockMessage {
+                proof: MultiSignature::new(signature, signers),
+            };
+
+            warn!(
+                block_number = &skip_block_info.block_number,
+                "Starting skip block signature aggregation"
+            );
+
+            let protocol = SkipBlockAggregationProtocol::new(
+                active_validators.clone(),
+                validator_id as usize,
+                policy::TWO_F_PLUS_ONE as usize,
+                message_hash,
+            );
+
+            let (input_switch, receiver) = InputStreamSwitch::new(
+                Box::pin(
+                    network
+                        .receive::<LevelUpdateMessage<SignedSkipBlockMessage, SkipBlockInfo>>()
+                        .map(move |msg| msg.0),
+                ),
+                skip_block_info.clone(),
+            );
+
+            let aggregation = Aggregation::new(
+                protocol,
+                skip_block_info.clone(),
+                Config::default(),
+                own_contribution,
+                Box::pin(input_switch),
+                Box::new(NetworkSink::<
+                    LevelUpdateMessage<SignedSkipBlockMessage, SkipBlockInfo>,
+                    N,
+                >::new(network.clone())),
+            );
+
+            let mut stream = select(
+                aggregation.map(SkipBlockResult::SkipBlock),
+                UnboundedReceiverStream::new(receiver),
+            );
+            while let Some(msg) = stream.next().await {
+                match msg {
+                    SkipBlockResult::SkipBlock(sb_msg) => {
+                        if let Some(aggregate_weight) = weights.signature_weight(&sb_msg.proof) {
+                            trace!(
+                                "New Skip Block Aggregate weight: {} / {} Signers: {:?}",
+                                aggregate_weight,
+                                policy::TWO_F_PLUS_ONE,
+                                &sb_msg.proof.contributors(),
+                            );
+
+                            // Check if the combined weight of the aggregation is at least 2f+1.
+                            if aggregate_weight >= policy::TWO_F_PLUS_ONE as usize {
+                                // Create SkipBlockProof out of the aggregate
+                                let skip_block_proof = SkipBlockProof { sig: sb_msg.proof };
+                                trace!("Skip block completed, proof={:?}", &skip_block_proof);
+
+                                // return the SkipBlockProof
+                                return (skip_block_info, skip_block_proof);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+impl fmt::Debug for SkipBlockAggregationProtocol {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "SkipBlockAggregation {{ node_id: {} }}", self.node_id(),)
+    }
+}

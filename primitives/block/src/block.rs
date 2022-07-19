@@ -64,14 +64,6 @@ impl Block {
         policy::epoch_at(self.block_number())
     }
 
-    /// Returns the view number of the block.
-    pub fn view_number(&self) -> u32 {
-        match self {
-            Block::Macro(ref block) => block.header.view_number,
-            Block::Micro(ref block) => block.header.view_number,
-        }
-    }
-
     /// Returns the timestamp of the block.
     pub fn timestamp(&self) -> u64 {
         match self {
@@ -138,19 +130,6 @@ impl Block {
         }
     }
 
-    /// Returns the next view number, assuming that there was no view change. This will return 0, if
-    /// the next block is the first of the batch (i.e. the current one is a macro block), or the
-    /// view number of the current block.
-    /// To get the view number for after a single view change, just add 1.
-    pub fn next_view_number(&self) -> u32 {
-        match self {
-            // If the previous block was a macro block, this resets the view number.
-            Block::Macro(_) => 0,
-            // Otherwise we are now at the view number of the previous block.
-            Block::Micro(ref block) => block.header.view_number,
-        }
-    }
-
     /// Returns the Blake2b hash of the block header.
     pub fn hash(&self) -> Blake2bHash {
         match self {
@@ -193,10 +172,10 @@ impl Block {
     /// Returns the body of the block. If the block has no body then it returns None.
     pub fn body(&self) -> Option<BlockBody> {
         // TODO Can we eliminate the clone()s here?
-        Some(match self {
-            Block::Macro(ref block) => BlockBody::Macro(block.body.as_ref()?.clone()),
-            Block::Micro(ref block) => BlockBody::Micro(block.body.as_ref()?.clone()),
-        })
+        match self {
+            Block::Macro(ref block) => Some(BlockBody::Macro(block.body.as_ref()?.clone())),
+            Block::Micro(ref block) => Some(BlockBody::Micro(block.body.as_ref()?.clone())),
+        }
     }
 
     /// Returns a reference to the transactions of the block. If the block is a Macro block it just
@@ -280,6 +259,14 @@ impl Block {
     /// Returns true if the block is a Micro block, false otherwise.
     pub fn is_micro(&self) -> bool {
         matches!(self, Block::Micro(_))
+    }
+
+    /// Returns true if the block is a Skip block, false otherwise.
+    pub fn is_skip(&self) -> bool {
+        match self {
+            Block::Macro(_) => false,
+            Block::Micro(block) => block.is_skip_block(),
+        }
     }
 
     /// Returns true if the block is a Macro block, false otherwise.
@@ -391,14 +378,6 @@ impl BlockHeader {
         }
     }
 
-    /// Returns the view number of the block.
-    pub fn view_number(&self) -> u32 {
-        match self {
-            BlockHeader::Macro(ref header) => header.view_number,
-            BlockHeader::Micro(ref header) => header.view_number,
-        }
-    }
-
     /// Returns the timestamp of the block.
     pub fn timestamp(&self) -> u64 {
         match self {
@@ -454,19 +433,6 @@ impl BlockHeader {
         match self {
             BlockHeader::Macro(ref header) => &header.body_root,
             BlockHeader::Micro(ref header) => &header.body_root,
-        }
-    }
-
-    /// Returns the next view number, assuming that there was no view change. This will return 0, if
-    /// the next block is the first of the batch (i.e. the current one is a macro block), or the
-    /// view number of the current block.
-    /// To get the view number for after a single view change, just add 1.
-    pub fn next_view_number(&self) -> u32 {
-        match self {
-            // If the previous block was a macro block, this resets the view number.
-            BlockHeader::Macro(_) => 0,
-            // Otherwise we are now at the view number of the previous block.
-            BlockHeader::Micro(header) => header.view_number,
         }
     }
 

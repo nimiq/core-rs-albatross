@@ -252,7 +252,6 @@ fn create_dummy_micro_block(transactions: Option<Vec<Transaction>>) -> Block {
     let micro_header = MicroHeader {
         version: 0,
         block_number: 0,
-        view_number: 0,
         timestamp: 0,
         parent_hash: Blake2bHash::default(),
         seed: VrfSeed::default(),
@@ -1231,15 +1230,8 @@ async fn mempool_update_not_enough_balance() {
     {
         let bc = blockchain.upgradable_read();
 
-        let block = producer.next_micro_block(
-            &bc,
-            bc.time.now(),
-            0,
-            None,
-            vec![],
-            adopted_txns,
-            vec![0x41],
-        );
+        let block =
+            producer.next_micro_block(&bc, bc.time.now(), vec![], adopted_txns, vec![0x41], None);
 
         assert_eq!(
             Blockchain::push(bc, Block::Micro(block)),
@@ -1267,11 +1259,10 @@ async fn mempool_update_not_enough_balance() {
         let block = producer.next_micro_block(
             &bc,
             bc.time.now(),
-            0,
-            None,
             vec![],
             updated_txns.clone(),
             vec![0x41],
+            None,
         );
 
         // We should succeed producing a block with the remaining mempool transactions
@@ -1388,15 +1379,8 @@ async fn mempool_update_pruned_account() {
     {
         let bc = blockchain.upgradable_read();
 
-        let block = producer.next_micro_block(
-            &bc,
-            bc.time.now(),
-            0,
-            None,
-            vec![],
-            adopted_txns,
-            vec![0x41],
-        );
+        let block =
+            producer.next_micro_block(&bc, bc.time.now(), vec![], adopted_txns, vec![0x41], None);
 
         assert_eq!(
             Blockchain::push(bc, Block::Micro(block)),
@@ -1422,11 +1406,10 @@ async fn mempool_update_pruned_account() {
         let block = producer.next_micro_block(
             &bc,
             bc.time.now(),
-            0,
-            None,
             vec![],
             updated_txns.clone(),
             vec![0x41],
+            None,
         );
 
         // We should succeed producing a block with the remaining mempool transactions
@@ -1507,15 +1490,8 @@ async fn mempool_update_create_staker_twice() {
     {
         let bc = blockchain.upgradable_read();
 
-        let block = producer.next_micro_block(
-            &bc,
-            bc.time.now(),
-            0,
-            None,
-            vec![],
-            adopted_txns,
-            vec![0x41],
-        );
+        let block =
+            producer.next_micro_block(&bc, bc.time.now(), vec![], adopted_txns, vec![0x41], None);
 
         assert_eq!(
             Blockchain::push(bc, Block::Micro(block)),
@@ -1540,11 +1516,10 @@ async fn mempool_update_create_staker_twice() {
     let block = producer.next_micro_block(
         &bc,
         bc.time.now(),
-        0,
-        None,
         vec![],
         updated_txns.clone(),
         vec![0x41],
+        None,
     );
 
     // We should succeed producing a block with the remaining mempool transactions

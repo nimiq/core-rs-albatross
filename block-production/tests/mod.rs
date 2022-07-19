@@ -4,9 +4,9 @@ use std::sync::Arc;
 use tempfile::tempdir;
 
 use beserial::Deserialize;
-use nimiq_block::{Block, BlockError, ForkProof};
+use nimiq_block::{Block, ForkProof, MicroJustification};
 use nimiq_block_production::BlockProducer;
-use nimiq_blockchain::{AbstractBlockchain, Blockchain, PushError, PushResult};
+use nimiq_blockchain::{AbstractBlockchain, Blockchain, PushResult};
 use nimiq_database::{mdbx::MdbxEnvironment, volatile::VolatileEnvironment};
 use nimiq_genesis::NetworkId;
 use nimiq_hash::{Blake2bHash, Hash};
@@ -15,12 +15,10 @@ use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy;
 use nimiq_test_log::test;
 use nimiq_test_utils::blockchain::{
-    fill_micro_blocks, fill_micro_blocks_with_txns, sign_macro_block, sign_view_change,
-    signing_key, voting_key,
+    fill_micro_blocks, fill_micro_blocks_with_txns, sign_macro_block, signing_key, voting_key,
 };
 use nimiq_transaction_builder::TransactionBuilder;
 use nimiq_utils::time::OffsetTime;
-use nimiq_vrf::VrfSeed;
 
 const ADDRESS: &str = "NQ20TSB0DFSMUH9C15GQGAGJTTE4D3MA859E";
 
@@ -46,7 +44,7 @@ fn it_can_produce_micro_blocks() {
     let prev_vrf_seed = bc.head().seed().clone();
 
     // #1.0: Empty standard micro block
-    let block = producer.next_micro_block(&bc, bc.time.now(), 0, None, vec![], vec![], vec![0x41]);
+    let block = producer.next_micro_block(&bc, bc.time.now(), vec![], vec![], vec![0x41], None);
 
     assert_eq!(
         Blockchain::push(bc, Block::Micro(block.clone())),
@@ -58,7 +56,12 @@ fn it_can_produce_micro_blocks() {
     // Create fork at #1.0
     let fork_proof = {
         let header1 = block.header.clone();
-        let justification1 = block.justification.unwrap().signature;
+        let justification1 = match block.justification.unwrap() {
+            MicroJustification::Micro(justification) => justification,
+            MicroJustification::Skip(_) => {
+                unreachable!("Block must not contain a skip block proof")
+            }
+        };
         let mut header2 = header1.clone();
         header2.timestamp += 1;
         let hash2 = header2.hash::<Blake2bHash>();
@@ -77,11 +80,10 @@ fn it_can_produce_micro_blocks() {
     let block = producer.next_micro_block(
         &bc,
         bc.time.now() + 1000,
-        0,
-        None,
         vec![fork_proof],
         vec![],
         vec![0x41],
+        None,
     );
     assert_eq!(
         Blockchain::push(bc, Block::Micro(block)),
@@ -89,45 +91,28 @@ fn it_can_produce_micro_blocks() {
     );
 
     assert_eq!(blockchain.read().block_number(), 2);
-    assert_eq!(blockchain.read().view_number(), 0);
 
-    // #2.1: Empty view-changed micro block (wrong prev_hash)
-    let view_change = sign_view_change(VrfSeed::default(), 3, 1);
+    // #2.1: Empty micro block (wrong prev_hash)
     let bc = blockchain.upgradable_read();
-    let block = producer.next_micro_block(
-        &bc,
-        bc.time.now() + 2000,
-        1,
-        Some(view_change),
-        vec![],
-        vec![],
-        vec![0x41],
-    );
+    let block =
+        producer.next_micro_block(&bc, bc.time.now() + 2000, vec![], vec![], vec![0x41], None);
 
-    // the block justification is ok, the view_change justification is not.
-    assert_eq!(
-        Blockchain::push(bc, Block::Micro(block)),
-        Err(PushError::InvalidBlock(BlockError::InvalidViewChangeProof))
-    );
-
-    // #2.2: Empty view-changed micro block
-    let view_change = sign_view_change(blockchain.read().head().seed().clone(), 3, 1);
-    let bc = blockchain.upgradable_read();
-    let block = producer.next_micro_block(
-        &bc,
-        bc.time.now() + 2000,
-        1,
-        Some(view_change),
-        vec![],
-        vec![],
-        vec![0x41],
-    );
+    // the block justification is ok.
     assert_eq!(
         Blockchain::push(bc, Block::Micro(block)),
         Ok(PushResult::Extended)
     );
     assert_eq!(blockchain.read().block_number(), 3);
-    assert_eq!(blockchain.read().next_view_number(), 1);
+
+    // #2.2: Empty micro block
+    let bc = blockchain.upgradable_read();
+    let block =
+        producer.next_micro_block(&bc, bc.time.now() + 2000, vec![], vec![], vec![0x41], None);
+    assert_eq!(
+        Blockchain::push(bc, Block::Micro(block)),
+        Ok(PushResult::Extended)
+    );
+    assert_eq!(blockchain.read().block_number(), 4);
 }
 
 #[test]
@@ -146,7 +131,6 @@ fn it_can_produce_macro_blocks() {
         producer.next_macro_block_proposal(
             &bc,
             bc.time.now() + bc.block_number() as u64 * 1000,
-            0u32,
             vec![],
         )
     };
@@ -176,7 +160,6 @@ fn it_can_produce_election_blocks() {
             producer.next_macro_block_proposal(
                 &bc,
                 bc.time.now() + bc.block_number() as u64 * 1000,
-                0u32,
                 vec![0x42],
             )
         };
@@ -216,7 +199,6 @@ fn it_can_produce_a_chain_with_txns() {
         let macro_block_proposal = producer.next_macro_block_proposal(
             &blockchain,
             blockchain.time.now() + next_block_height as u64 * 100,
-            0u32,
             vec![],
         );
 
@@ -242,19 +224,10 @@ fn it_can_revert_unpark_transactions() {
     ));
     let producer = BlockProducer::new(signing_key(), voting_key());
 
-    // #1.0: Empty view-changed micro block
-    let view_change = sign_view_change(blockchain.read().head().seed().clone(), 1, 1);
+    // #1.0: Empty micro block
     let bc = blockchain.upgradable_read();
 
-    let block = producer.next_micro_block(
-        &bc,
-        bc.time.now(),
-        1,
-        Some(view_change),
-        vec![],
-        vec![],
-        vec![0x41],
-    );
+    let block = producer.next_micro_block(&bc, bc.time.now(), vec![], vec![], vec![0x41], None);
 
     assert_eq!(
         Blockchain::push(bc, Block::Micro(block)),
@@ -262,20 +235,12 @@ fn it_can_revert_unpark_transactions() {
     );
 
     assert_eq!(blockchain.read().block_number(), 1);
-    assert_eq!(blockchain.read().next_view_number(), 1);
 
     let bc = blockchain.upgradable_read();
 
     // One empty block
-    let block = producer.next_micro_block(
-        &bc,
-        bc.time.now() + 2000,
-        1,
-        None,
-        vec![],
-        vec![],
-        vec![0x41],
-    );
+    let block =
+        producer.next_micro_block(&bc, bc.time.now() + 2000, vec![], vec![], vec![0x41], None);
 
     assert_eq!(
         Blockchain::push(bc, Block::Micro(block)),
@@ -283,7 +248,6 @@ fn it_can_revert_unpark_transactions() {
     );
 
     assert_eq!(blockchain.read().block_number(), 2);
-    assert_eq!(blockchain.read().next_view_number(), 1);
 
     // One block with stacking transactions
 
@@ -309,11 +273,10 @@ fn it_can_revert_unpark_transactions() {
     let block = producer.next_micro_block(
         &bc,
         bc.time.now() + 2000,
-        1,
-        None,
         vec![],
         transactions,
         vec![0x41],
+        None,
     );
 
     assert_eq!(
@@ -322,7 +285,6 @@ fn it_can_revert_unpark_transactions() {
     );
 
     assert_eq!(blockchain.read().block_number(), 3);
-    assert_eq!(blockchain.read().next_view_number(), 1);
 
     let bc = blockchain.upgradable_read();
 
@@ -342,38 +304,21 @@ fn it_can_revert_create_staker_transaction() {
     ));
     let producer = BlockProducer::new(signing_key(), voting_key());
 
-    // #1.0: Empty view-changed micro block
-    let view_change = sign_view_change(blockchain.read().head().seed().clone(), 1, 1);
+    // #1.0: Empty micro block
     let bc = blockchain.upgradable_read();
 
-    let block = producer.next_micro_block(
-        &bc,
-        bc.time.now(),
-        1,
-        Some(view_change),
-        vec![],
-        vec![],
-        vec![0x41],
-    );
+    let block = producer.next_micro_block(&bc, bc.time.now(), vec![], vec![], vec![0x41], None);
     assert_eq!(
         Blockchain::push(bc, Block::Micro(block)),
         Ok(PushResult::Extended)
     );
     assert_eq!(blockchain.read().block_number(), 1);
-    assert_eq!(blockchain.read().next_view_number(), 1);
 
     let bc = blockchain.upgradable_read();
 
     // One empty block
-    let block = producer.next_micro_block(
-        &bc,
-        bc.time.now() + 2000,
-        1,
-        None,
-        vec![],
-        vec![],
-        vec![0x41],
-    );
+    let block =
+        producer.next_micro_block(&bc, bc.time.now() + 2000, vec![], vec![], vec![0x41], None);
 
     assert_eq!(
         Blockchain::push(bc, Block::Micro(block)),
@@ -381,7 +326,6 @@ fn it_can_revert_create_staker_transaction() {
     );
 
     assert_eq!(blockchain.read().block_number(), 2);
-    assert_eq!(blockchain.read().next_view_number(), 1);
 
     // One block with stacking transactions
 
@@ -408,11 +352,10 @@ fn it_can_revert_create_staker_transaction() {
     let block = producer.next_micro_block(
         &bc,
         bc.time.now() + 2000,
-        1,
-        None,
         vec![],
         transactions,
         vec![0x41],
+        None,
     );
 
     assert_eq!(
@@ -421,7 +364,6 @@ fn it_can_revert_create_staker_transaction() {
     );
 
     assert_eq!(blockchain.read().block_number(), 3);
-    assert_eq!(blockchain.read().next_view_number(), 1);
 
     let bc = blockchain.upgradable_read();
 

@@ -1,9 +1,9 @@
 use nimiq_account::Accounts;
 use nimiq_account::BlockLog;
-use nimiq_block::{Block, MicroBlock, ViewChanges};
+use nimiq_block::Block;
+use nimiq_block::SkipBlockInfo;
 use nimiq_database::WriteTransaction;
 use nimiq_primitives::policy;
-use nimiq_vrf::VrfEntropy;
 
 use crate::blockchain_state::BlockchainState;
 use crate::history::ExtendedTransaction;
@@ -16,8 +16,6 @@ impl Blockchain {
         &self,
         state: &BlockchainState,
         block: &Block,
-        prev_entropy: VrfEntropy,
-        first_view_number: u32,
         txn: &mut WriteTransaction,
     ) -> Result<BlockLog, PushError> {
         // Get the accounts from the state.
@@ -75,17 +73,18 @@ impl Blockchain {
                 // Get the body of the block.
                 let body = micro_block.body.as_ref().unwrap();
 
-                // Get the view changes.
-                let view_changes = ViewChanges::new(
-                    micro_block.header.block_number,
-                    first_view_number,
-                    micro_block.header.view_number,
-                    prev_entropy,
-                );
+                let skip_block_info = if micro_block.is_skip_block() {
+                    Some(SkipBlockInfo {
+                        block_number: micro_block.header.block_number,
+                        vrf_entropy: micro_block.header.seed.entropy(),
+                    })
+                } else {
+                    None
+                };
 
-                // Create the inherents from any forks and view changes.
+                // Create the inherents from any forks or skip block info.
                 let inherents =
-                    self.create_slash_inherents(&body.fork_proofs, &view_changes, Some(txn));
+                    self.create_slash_inherents(&body.fork_proofs, skip_block_info, Some(txn));
 
                 // Commit block to AccountsTree and create the receipts.
                 let batch_info = accounts.commit(
@@ -134,79 +133,83 @@ impl Blockchain {
         }
     }
 
-    /// Reverts the accounts given a block. This only applies to micro blocks, since macro blocks
+    /// Reverts the accounts given a block. This only applies to micro blocks and skip blocks, since macro blocks
     /// are final and can't be reverted.
     pub(crate) fn revert_accounts(
         &self,
         accounts: &Accounts,
         txn: &mut WriteTransaction,
-        micro_block: &MicroBlock,
-        prev_entropy: VrfEntropy,
-        prev_view_number: u32,
+        block: &Block,
     ) -> Result<BlockLog, PushError> {
-        assert_eq!(
-            micro_block.header.state_root,
-            accounts.get_root(Some(txn)),
-            "Failed to revert - inconsistent state"
-        );
+        match block {
+            Block::Micro(ref micro_block) => {
+                assert_eq!(
+                    micro_block.header.state_root,
+                    accounts.get_root(Some(txn)),
+                    "Failed to revert - inconsistent state"
+                );
 
-        debug!(
-            block_number = &micro_block.header.block_number,
-            view_number = &micro_block.header.view_number,
-            "Reverting block"
-        );
+                debug!(
+                    block_number = &micro_block.header.block_number,
+                    "Reverting block"
+                );
 
-        // Get the body of the block.
-        let body = micro_block.body.as_ref().unwrap();
+                // Get the body of the block.
+                let body = micro_block.body.as_ref().unwrap();
 
-        // Get the view changes.
-        let view_changes = ViewChanges::new(
-            micro_block.header.block_number,
-            prev_view_number,
-            micro_block.header.view_number,
-            prev_entropy,
-        );
+                let skip_block_info = if micro_block.is_skip_block() {
+                    Some(SkipBlockInfo {
+                        block_number: micro_block.header.block_number,
+                        vrf_entropy: micro_block.header.seed.entropy(),
+                    })
+                } else {
+                    None
+                };
 
-        // Create the inherents from any forks and view changes.
-        let inherents = self.create_slash_inherents(&body.fork_proofs, &view_changes, Some(txn));
+                // Create the inherents from any forks or skip block info.
+                let inherents =
+                    self.create_slash_inherents(&body.fork_proofs, skip_block_info, Some(txn));
 
-        // Get the receipts for this block.
-        let receipts = self
-            .chain_store
-            .get_receipts(micro_block.header.block_number, Some(txn))
-            .expect("Failed to revert - missing receipts");
+                // Get the receipts for this block.
+                let receipts = self
+                    .chain_store
+                    .get_receipts(micro_block.header.block_number, Some(txn))
+                    .expect("Failed to revert - missing receipts");
 
-        // Revert the block from AccountsTree.
-        let batch_info = accounts.revert(
-            txn,
-            &body.transactions,
-            &inherents,
-            micro_block.header.block_number,
-            micro_block.header.timestamp,
-            &receipts,
-        );
-        let batch_info = match batch_info {
-            Ok(batch_info) => batch_info,
-            Err(e) => {
-                panic!("Failed to revert - {:?}", e);
+                // Revert the block from AccountsTree.
+                let batch_info = accounts.revert(
+                    txn,
+                    &body.transactions,
+                    &inherents,
+                    micro_block.header.block_number,
+                    micro_block.header.timestamp,
+                    &receipts,
+                );
+                let batch_info = match batch_info {
+                    Ok(batch_info) => batch_info,
+                    Err(e) => {
+                        panic!("Failed to revert - {:?}", e);
+                    }
+                };
+
+                // Remove the transactions from the History tree. For this you only need to calculate the
+                // number of transactions that you want to remove.
+                let num_txs = body.transactions.len() + inherents.len();
+
+                self.history_store.remove_partial_history(
+                    txn,
+                    policy::epoch_at(micro_block.header.block_number),
+                    num_txs,
+                );
+
+                Ok(BlockLog::RevertedBlock {
+                    inherent_logs: batch_info.inherent_logs,
+                    block_hash: micro_block.hash(),
+                    block_number: micro_block.header.block_number,
+                    tx_logs: batch_info.tx_logs,
+                })
             }
-        };
-
-        // Remove the transactions from the History tree. For this you only need to calculate the
-        // number of transactions that you want to remove.
-        let num_txs = body.transactions.len() + inherents.len();
-
-        self.history_store.remove_partial_history(
-            txn,
-            policy::epoch_at(micro_block.header.block_number),
-            num_txs,
-        );
-
-        Ok(BlockLog::RevertedBlock {
-            inherent_logs: batch_info.inherent_logs,
-            block_hash: micro_block.hash(),
-            block_number: micro_block.header.block_number,
-            tx_logs: batch_info.tx_logs,
-        })
+            Block::Macro(_) => unreachable!("Macro blocks are final and can't be reverted"),
+        }
     }
 }

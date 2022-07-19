@@ -33,7 +33,7 @@ impl NanoBlockchain {
 
         // Get the intended slot owner.
         let (slot_owner, _) = self
-            .get_slot_owner_at(block.block_number(), block.view_number(), None)
+            .get_slot_owner_at(block.block_number(), None)
             .expect("Failed to find slot owner!");
 
         // Check the header.
@@ -43,6 +43,7 @@ impl NanoBlockchain {
             &slot_owner.signing_key,
             None,
             true,
+            block.is_skip(),
         )?;
 
         // If this is an election block, check the body.
@@ -59,7 +60,7 @@ impl NanoBlockchain {
         }
 
         // Check the justification.
-        Blockchain::verify_block_justification(self, &block, &slot_owner.signing_key, None, true)?;
+        Blockchain::verify_block_justification(self, &block, &slot_owner.signing_key, true)?;
 
         // Create the chaininfo for the new block.
         let chain_info = ChainInfo::from_block(block, &prev_info);

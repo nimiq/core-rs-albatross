@@ -10,8 +10,8 @@ pub use micro_block::*;
 pub use multisig::*;
 use nimiq_transaction::TransactionError;
 pub use signed::*;
+pub use skip_block::*;
 pub use tendermint::*;
-pub use view_change::*;
 
 mod block;
 mod fork_proof;
@@ -19,8 +19,8 @@ mod macro_block;
 mod micro_block;
 mod multisig;
 mod signed;
+mod skip_block;
 mod tendermint;
-mod view_change;
 
 /// Enum containing a variety of block error types.
 #[derive(Error, Debug, PartialEq, Eq)]
@@ -41,8 +41,8 @@ pub enum BlockError {
 
     #[error("Missing justification")]
     NoJustification,
-    #[error("Missing view change proof")]
-    NoViewChangeProof,
+    #[error("Missing skip block proof")]
+    NoSkipBlockProof,
     #[error("Missing body")]
     MissingBody,
 
@@ -71,12 +71,10 @@ pub enum BlockError {
 
     #[error("Justification is invalid")]
     InvalidJustification,
-    #[error("View change proof is invalid")]
-    InvalidViewChangeProof,
+    #[error("Skip block proof is invalid")]
+    InvalidSkipBlockProof,
     #[error("Contains an invalid seed")]
     InvalidSeed,
-    #[error("Invalid view number")]
-    InvalidViewNumber,
     #[error("Invalid history root")]
     InvalidHistoryRoot,
     #[error("Incorrect validators")]

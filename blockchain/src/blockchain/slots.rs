@@ -49,7 +49,6 @@ impl Blockchain {
     pub fn get_proposer_at(
         &self,
         block_number: u32,
-        view_number: u32,
         vrf_entropy: VrfEntropy,
         txn: Option<&Transaction>,
     ) -> Option<Slot> {
@@ -59,7 +58,7 @@ impl Blockchain {
         let disabled_slots = macro_block.unwrap_macro().body.unwrap().disabled_set;
 
         // Compute the slot number of the next proposer.
-        let slot_number = Self::compute_slot_number(view_number, vrf_entropy, disabled_slots);
+        let slot_number = Self::compute_slot_number(block_number, vrf_entropy, disabled_slots);
 
         // Fetch the validators that are active in given block's epoch.
         let epoch_number = policy::epoch_at(block_number);
@@ -79,7 +78,7 @@ impl Blockchain {
     }
 
     fn compute_slot_number(
-        view_number: u32,
+        block_number: u32,
         vrf_entropy: VrfEntropy,
         disabled_slots: BitSet,
     ) -> u16 {
@@ -104,8 +103,8 @@ impl Blockchain {
             slots.swap(r, i);
         }
 
-        // Now simply take the view number modulo the number of viable slots and that will give us
+        // Now simply take the block number modulo the number of viable slots and that will give us
         // the chosen slot.
-        slots[view_number as usize % slots.len()]
+        slots[block_number as usize % slots.len()]
     }
 }

@@ -24,5 +24,4 @@ async fn four_validators_can_create_an_epoch() {
     events.take(130).for_each(|_| future::ready(())).await;
 
     assert!(blockchain.read().block_number() >= 130);
-    assert_eq!(blockchain.read().view_number(), 0);
 }

@@ -1,5 +1,4 @@
 use std::cmp;
-use std::cmp::Ordering;
 
 use nimiq_block::{Block, BlockType};
 use nimiq_database::Transaction;
@@ -37,31 +36,29 @@ impl ChainOrdering {
         } else if block.is_macro() && block.block_number() > blockchain.block_number() {
             chain_order = ChainOrdering::Superior;
         } else {
-            // To compare two blocks, we need to compare the view number at the intersection.
+            // To compare two chains, we need to compare and find which chain has an earlier
+            // skip block. For example (numbers denotes accumulated skip block):
             //   [2] - [2] - [3] - [4]
             //      \- [3] - [3] - [3]
             // The example above illustrates that you actually want to choose the lower chain,
-            // since its view change happened way earlier.
+            // since its skip block happened way earlier.
             // Let's thus find the first block on the branch (not on the main chain).
-            // If there is a malicious fork, it might happen that the two view numbers before
+            // If there is a malicious fork, it might happen that the two skip blocks before
             // the branch are the same. Then, we need to follow and compare.
-            let mut view_numbers = vec![block.view_number()];
+            let mut blocks = vec![block.clone()];
 
             let mut current = ChainInfo::new(block.clone(), false);
-
             let mut prev = prev_info.clone();
 
             while !prev.on_main_chain {
                 // Macro blocks are final
-                assert_eq!(
-                    prev.head.ty(),
-                    BlockType::Micro,
+                assert!(
+                    prev.head.ty() != BlockType::Macro,
                     "Trying to rebranch across macro block"
                 );
 
-                view_numbers.push(prev.head.view_number());
-
                 let prev_hash = prev.head.parent_hash();
+                blocks.push(prev.head.clone());
 
                 let prev_info = blockchain
                     .get_chain_info(prev_hash, false, txn_option)
@@ -72,8 +69,9 @@ impl ChainOrdering {
                 prev = prev_info;
             }
 
-            // Now follow the view numbers back until you find one that differs.
-            // Example:
+            // Now go forward from the first block on the branch and detect which chain has an earlier
+            // skip block.
+            // Example (skip blocks noted as '1'):
             // [0] - [0] - [1]  *correct chain*
             //    \- [0] - [0]
             // Otherwise take the longest:
@@ -84,25 +82,19 @@ impl ChainOrdering {
 
             // Iterate over common block heights starting from right after the intersection.
             for h in current_height..=min_height {
-                // Take corresponding view number from branch.
-                let branch_view_number = view_numbers.pop().unwrap();
+                let current_block = blocks.pop().unwrap();
 
-                // And calculate equivalent on main chain.
+                // Get equivalent block on main chain.
                 let current_on_main_chain = blockchain
                     .get_block_at(h, false, txn_option)
                     .expect("Corrupted store: Failed to find main chain equivalent of fork");
 
-                // Choose better one as early as possible.
-                match current_on_main_chain.view_number().cmp(&branch_view_number) {
-                    Ordering::Less => {
-                        chain_order = ChainOrdering::Superior;
-                        break;
-                    }
-                    Ordering::Greater => {
-                        chain_order = ChainOrdering::Inferior;
-                        break;
-                    }
-                    Ordering::Equal => {} // Continue...
+                if current_block.is_skip() && !current_on_main_chain.is_skip() {
+                    chain_order = ChainOrdering::Superior;
+                    break;
+                } else if !current_block.is_skip() && current_on_main_chain.is_skip() {
+                    chain_order = ChainOrdering::Inferior;
+                    break;
                 }
             }
 
@@ -116,9 +108,7 @@ impl ChainOrdering {
             info!(
                 fork_block_number = current_height - 1,
                 current_block_number = blockchain.block_number(),
-                current_view_number = blockchain.view_number(),
                 new_block_number = block.block_number(),
-                new_view_number = block.view_number(),
                 "New block in {:?} chain",
                 chain_order
             );

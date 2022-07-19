@@ -125,7 +125,6 @@ mod tests {
             header: MicroHeader {
                 version: random(),
                 block_number: 0,
-                view_number: random(),
                 timestamp: random(),
                 parent_hash: hash_1.clone(),
                 seed: Default::default(),
@@ -134,10 +133,7 @@ mod tests {
                 body_root: hash_1.clone(),
                 history_root: hash_1,
             },
-            justification: Some(MicroJustification {
-                signature: Default::default(),
-                view_change_proof: None,
-            }),
+            justification: Some(MicroJustification::Micro(Default::default())),
             body: Some(MicroBody {
                 fork_proofs: vec![],
                 transactions: vec![],
@@ -152,7 +148,6 @@ mod tests {
             header: MicroHeader {
                 version: random(),
                 block_number: 0,
-                view_number: random(),
                 timestamp: random(),
                 parent_hash: hash_2.clone(),
                 seed: Default::default(),
@@ -161,10 +156,7 @@ mod tests {
                 body_root: hash_2.clone(),
                 history_root: hash_2,
             },
-            justification: Some(MicroJustification {
-                signature: Default::default(),
-                view_change_proof: None,
-            }),
+            justification: Some(MicroJustification::Micro(Default::default())),
             body: Some(MicroBody {
                 fork_proofs: vec![],
                 transactions: vec![],

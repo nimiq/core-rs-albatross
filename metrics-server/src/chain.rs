@@ -35,15 +35,9 @@ impl BlockMetrics {
     fn register_chain(registry: &mut Registry, blockchain: Arc<RwLock<Blockchain>>) {
         let sub_registry = registry.sub_registry_with_prefix("blockchain");
 
-        let bc = blockchain.clone();
         let closure = Box::new(NumericClosureMetric::new_gauge(Box::new(move || {
-            bc.read().block_number()
+            blockchain.read().block_number()
         })));
         sub_registry.register("block_number", "Number of latest block", closure);
-
-        let closure = Box::new(NumericClosureMetric::new_gauge(Box::new(move || {
-            blockchain.read().view_number()
-        })));
-        sub_registry.register("view_number", "View number of latest block", closure);
     }
 }

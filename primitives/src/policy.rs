@@ -32,7 +32,7 @@ pub const VERSION: u16 = 1;
 pub const SLOTS: u16 = 512;
 
 /// Calculates 2f+1 slots which is the minimum number of slots necessary to produce a macro block,
-/// a view change and other actions.
+/// a skip block and other actions.
 /// It is also the minimum number of slots necessary to be guaranteed to have a majority of honest
 /// slots. That's because from a total of 3f+1 slots at most f will be malicious. If in a group of
 /// 2f+1 slots we have f malicious ones (which is the worst case scenario), that still leaves us

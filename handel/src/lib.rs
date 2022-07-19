@@ -3,7 +3,7 @@
 /// Handel implementation for Nimiq's Rust Albatross client.
 ///
 /// Handel[1] is byzantine fault-tolerant signature aggregation protocol. Albatross uses Handel to
-/// aggregate signatures for view changes and the pBFT prepare and commit phases.
+/// aggregate signatures for skip blocks and the pBFT prepare and commit phases.
 ///
 /// [1] [Handel: Practical Multi-Signature Aggregation for Large Byzantine Committees](https://arxiv.org/abs/1906.05132)
 #[macro_use]

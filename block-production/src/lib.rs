@@ -1,7 +1,7 @@
 use nimiq_account::Inherent;
 use nimiq_block::{
     ForkProof, MacroBlock, MacroBody, MacroHeader, MicroBlock, MicroBody, MicroHeader,
-    MicroJustification, ViewChangeProof, ViewChanges,
+    MicroJustification, SkipBlockInfo, SkipBlockProof,
 };
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, ExtendedTransaction};
 use nimiq_bls::KeyPair as BlsKeyPair;
@@ -34,11 +34,6 @@ impl BlockProducer {
         blockchain: &Blockchain,
         // The timestamp for the block.
         timestamp: u64,
-        // The view number for the block.
-        view_number: u32,
-        // The view change proof. Only exists if one or more view changes happened for this block
-        // height.
-        view_change_proof: Option<ViewChangeProof>,
         // Proofs of any forks created by malicious validators. A fork proof may be submitted during
         // the batch when it happened or in the next one, but not after that.
         fork_proofs: Vec<ForkProof>,
@@ -46,6 +41,8 @@ impl BlockProducer {
         mut transactions: Vec<Transaction>,
         // Extra data for this block.
         extra_data: Vec<u8>,
+        // Skip block proof
+        skip_block_proof: Option<SkipBlockProof>,
     ) -> MicroBlock {
         // Calculate the block number. It is simply the previous block number incremented by one.
         let block_number = blockchain.block_number() + 1;
@@ -60,21 +57,29 @@ impl BlockProducer {
         // Calculate the seed for this block by signing the previous block seed with the validator
         // key.
         let prev_seed = blockchain.head().seed().clone();
-        let seed = prev_seed.sign_next(&self.signing_key);
+
+        let skip_block_info = if skip_block_proof.is_some() {
+            Some(SkipBlockInfo {
+                block_number,
+                vrf_entropy: prev_seed.entropy(),
+            })
+        } else {
+            None
+        };
+
+        let seed = if skip_block_proof.is_some() {
+            // VRF seed of a skip block is carried over since a new VRF seed would require a new
+            // leader.
+            prev_seed
+        } else {
+            prev_seed.sign_next(&self.signing_key)
+        };
 
         // Sort the transactions.
         transactions.sort_unstable();
 
-        // Creates a new ViewChanges struct.
-        let view_changes = ViewChanges::new(
-            blockchain.block_number() + 1,
-            blockchain.next_view_number(),
-            view_number,
-            prev_seed.entropy(),
-        );
-
-        // Create the inherents from the fork proofs and the view changes.
-        let inherents = blockchain.create_slash_inherents(&fork_proofs, &view_changes, None);
+        // Create the inherents from the fork proofs or skip block info.
+        let inherents = blockchain.create_slash_inherents(&fork_proofs, skip_block_info, None);
 
         // Update the state and calculate the state root.
         let state_root = blockchain
@@ -115,7 +120,6 @@ impl BlockProducer {
         let header = MicroHeader {
             version: policy::VERSION,
             block_number,
-            view_number,
             timestamp,
             parent_hash,
             seed,
@@ -125,18 +129,20 @@ impl BlockProducer {
             history_root,
         };
 
-        // Signs the block header using the signing key.
-        let hash = header.hash::<Blake2bHash>();
-        let signature = self.signing_key.sign(hash.as_slice());
+        let justification = if let Some(skip_block_proof) = skip_block_proof {
+            MicroJustification::Skip(skip_block_proof)
+        } else {
+            // Signs the block header using the signing key.
+            let hash = header.hash::<Blake2bHash>();
+            let signature = self.signing_key.sign(hash.as_slice());
+            MicroJustification::Micro(signature)
+        };
 
         // Returns the micro block.
         MicroBlock {
             header,
             body: Some(body),
-            justification: Some(MicroJustification {
-                signature,
-                view_change_proof,
-            }),
+            justification: Some(justification),
         }
     }
 
@@ -150,8 +156,6 @@ impl BlockProducer {
         blockchain: &Blockchain,
         // The timestamp for the block proposal.
         timestamp: u64,
-        // The view number for the block proposal.
-        view_number: u32,
         // Extra data for this block.
         extra_data: Vec<u8>,
     ) -> MacroBlock {
@@ -178,7 +182,6 @@ impl BlockProducer {
         let mut header = MacroHeader {
             version: policy::VERSION,
             block_number,
-            view_number,
             timestamp,
             parent_hash,
             parent_election_hash,

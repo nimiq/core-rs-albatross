@@ -33,9 +33,6 @@ pub struct MacroHeader {
     pub version: u16,
     /// The number of the block.
     pub block_number: u32,
-    /// The view number of this block. It increases whenever a view change happens and resets on
-    /// every macro block.
-    pub view_number: u32,
     /// The timestamp of the block. It follows the Unix time and has millisecond precision.
     pub timestamp: u64,
     /// The hash of the header of the immediately preceding block (either micro or macro).
@@ -171,9 +168,8 @@ impl fmt::Display for MacroHeader {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(
             f,
-            "#{}.{}:MA:{}",
+            "#{}:MA:{}",
             self.block_number,
-            self.view_number,
             self.hash::<Blake2bHash>().to_short_str(),
         )
     }

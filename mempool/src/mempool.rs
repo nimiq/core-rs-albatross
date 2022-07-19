@@ -543,7 +543,6 @@ impl Mempool {
                     } else {
                         debug!(
                             block_number = block.block_number(),
-                            view_number = block.view_number(),
                             "Tx from reverted block was dropped because of insufficient funds tx_hash={}", tx_hash
                         );
                     }

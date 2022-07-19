@@ -167,21 +167,10 @@ impl BlockchainInterface for BlockchainDispatcher {
     async fn get_slot_at(
         &mut self,
         block_number: u32,
-        view_number_opt: Option<u32>,
     ) -> Result<Slot, Self::Error> {
         let blockchain = self.blockchain.read();
 
-        let view_number = if let Some(view_number) = view_number_opt {
-            view_number
-        } else {
-            blockchain
-                .chain_store
-                .get_block_at(block_number, false, None)
-                .ok_or_else(|| Error::BlockNotFound(block_number.into()))?
-                .view_number()
-        };
-
-        Ok(Slot::from(blockchain.deref(), block_number, view_number))
+        Ok(Slot::from(blockchain.deref(), block_number))
     }
 
     /// Tries to fetch a transaction (including reward transactions) given its hash.

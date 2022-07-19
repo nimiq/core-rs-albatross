@@ -4,9 +4,9 @@ use parking_lot::RwLock;
 
 use beserial::Deserialize;
 use nimiq_block::{
-    Block, MacroBlock, MacroBody, MultiSignature, SignedViewChange, TendermintIdentifier,
-    TendermintProof, TendermintProposal, TendermintStep, TendermintVote, ViewChange,
-    ViewChangeProof,
+    Block, MacroBlock, MacroBody, MultiSignature, SignedSkipBlockInfo, SkipBlockInfo,
+    SkipBlockProof, TendermintIdentifier, TendermintProof, TendermintProposal, TendermintStep,
+    TendermintVote,
 };
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, PushError, PushResult};
 use nimiq_bls::{AggregateSignature, KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
@@ -60,13 +60,13 @@ impl TemporaryBlockProducer {
         Blockchain::push(self.blockchain.upgradable_read(), block)
     }
 
-    pub fn next_block(&self, view_number: u32, extra_data: Vec<u8>) -> Block {
-        let block = self.next_block_no_push(view_number, extra_data);
+    pub fn next_block(&self, extra_data: Vec<u8>, skip_block: bool) -> Block {
+        let block = self.next_block_no_push(extra_data, skip_block);
         assert_eq!(self.push(block.clone()), Ok(PushResult::Extended));
         block
     }
 
-    pub fn next_block_no_push(&self, view_number: u32, extra_data: Vec<u8>) -> Block {
+    pub fn next_block_no_push(&self, extra_data: Vec<u8>, skip_block: bool) -> Block {
         let blockchain = self.blockchain.read();
 
         let height = blockchain.block_number() + 1;
@@ -75,7 +75,6 @@ impl TemporaryBlockProducer {
             let macro_block_proposal = self.producer.next_macro_block_proposal(
                 &blockchain,
                 blockchain.time.now() + height as u64 * 1000,
-                view_number,
                 extra_data,
             );
 
@@ -99,21 +98,23 @@ impl TemporaryBlockProducer {
                     .unwrap(),
                 block_hash,
             ))
-        } else {
-            let view_change_proof = if blockchain.next_view_number() == view_number {
-                None
-            } else {
-                Some(self.create_view_change_proof(view_number))
-            };
-
+        } else if skip_block {
             Block::Micro(self.producer.next_micro_block(
                 &blockchain,
                 blockchain.time.now() + height as u64 * 1000,
-                view_number,
-                view_change_proof,
                 vec![],
                 vec![],
                 extra_data,
+                Some(self.create_skip_block_proof()),
+            ))
+        } else {
+            Block::Micro(self.producer.next_micro_block(
+                &blockchain,
+                blockchain.time.now() + height as u64 * 1000,
+                vec![],
+                vec![],
+                extra_data,
+                None,
             ))
         };
 
@@ -169,32 +170,33 @@ impl TemporaryBlockProducer {
         }
     }
 
-    pub fn create_view_change_proof(&self, view_number: u32) -> ViewChangeProof {
+    pub fn create_skip_block_proof(&self) -> SkipBlockProof {
         let keypair = BlsKeyPair::from(
             BlsSecretKey::deserialize_from_vec(&hex::decode(VOTING_KEY).unwrap()).unwrap(),
         );
 
-        let view_change = {
+        let skip_block_info = {
             let blockchain = self.blockchain.read();
-            ViewChange {
+            SkipBlockInfo {
                 block_number: blockchain.block_number() + 1,
-                new_view_number: view_number,
                 vrf_entropy: blockchain.head().seed().entropy(),
             }
         };
 
-        // create signed view change
-        let view_change = SignedViewChange::from_message(view_change, &keypair.secret_key, 0);
+        // create signed skip block information
+        let skip_block_info =
+            SignedSkipBlockInfo::from_message(skip_block_info, &keypair.secret_key, 0);
 
-        let signature =
-            AggregateSignature::from_signatures(&[view_change.signature.multiply(policy::SLOTS)]);
+        let signature = AggregateSignature::from_signatures(&[skip_block_info
+            .signature
+            .multiply(policy::SLOTS)]);
         let mut signers = BitSet::new();
         for i in 0..policy::SLOTS {
             signers.insert(i as usize);
         }
 
         // create proof
-        ViewChangeProof {
+        SkipBlockProof {
             sig: MultiSignature::new(signature, signers),
         }
     }
