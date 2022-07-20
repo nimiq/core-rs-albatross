@@ -650,7 +650,19 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         .unwrap(); // TODO: Handle transaction creation error
         let tx_hash = unpark_transaction.hash();
 
+        let cn = self.consensus.clone();
         let mempool = self.mempool.clone();
+
+        // We publish the unpark transaction
+        let publish_transaction = unpark_transaction.clone();
+        tokio::spawn(async move {
+            debug!("Publishing unpark transaction");
+            if cn.send_transaction(publish_transaction).await.is_err() {
+                error!("Failed to send unpark transaction");
+            }
+        });
+
+        // We also add the unpark transaction to our own mempool with high piority
         tokio::spawn(async move {
             debug!("Adding unpark transaction to mempool");
             if mempool
@@ -683,15 +695,15 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         .unwrap(); // TODO: Handle transaction creation error
         let tx_hash = reactivate_transaction.hash();
 
-        let mempool = self.mempool.clone();
+        let cn = self.consensus.clone();
         tokio::spawn(async move {
-            debug!("Adding reactivate transaction to mempool");
-            if mempool
-                .add_transaction(reactivate_transaction, Some(TxPriority::HighPriority))
+            debug!("Sending reactivate transaction to the network");
+            if cn
+                .send_transaction(reactivate_transaction.clone())
                 .await
                 .is_err()
             {
-                error!("Failed adding reactivate transaction into mempool");
+                error!("Failed to send reactivate transaction");
             }
         });
 
