@@ -454,7 +454,12 @@ impl BlockchainInterface for BlockchainDispatcher {
         let result = self.blockchain.read().get_account(&address);
 
         match result {
-            Some(account) => Ok(Account::from_account(address, account)),
+            Some(account) => match account {
+                nimiq_account::Account::Staking(_) => {
+                    Err(Error::GetAccountUnsupportedStakingContract)
+                }
+                _ => Ok(Account::from_account(address, account)),
+            },
             None => Ok(Account::empty(address)),
         }
     }

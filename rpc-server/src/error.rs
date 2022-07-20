@@ -64,6 +64,9 @@ pub enum Error {
 
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
+
+    #[error("getAccountByAddress does not support querying the staking contract")]
+    GetAccountUnsupportedStakingContract,
 }
 
 impl From<Error> for nimiq_jsonrpc_core::RpcError {
