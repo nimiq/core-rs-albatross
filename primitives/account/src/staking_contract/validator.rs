@@ -42,8 +42,8 @@ use crate::{Account, AccountError, AccountsTrie, Receipt, StakingContract};
 ///          +--------------->+        |
 ///                           +--------+
 ///
-///         (*optional) The validator my be set to automatically reactivate itself upon incativation.
-///                     If this setting is not enabled the state change is triggered manually.
+/// (*optional) The validator my be set to automatically reactivate itself upon inactivation.
+///             If this setting is not enabled the state change is triggered manually.
 ///
 /// Create, Update, Retire, Re-activate and Unpark are incoming transactions to the staking contract.
 /// Drop is an outgoing transaction from the staking contract.
