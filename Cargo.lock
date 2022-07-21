@@ -812,7 +812,7 @@ dependencies = [
  "tonic",
  "tracing",
  "tracing-core",
- "tracing-subscriber 0.3.14",
+ "tracing-subscriber 0.3.15",
 ]
 
 [[package]]
@@ -2657,7 +2657,7 @@ dependencies = [
  "nimiq-trie",
  "nimiq-utils",
  "tracing",
- "tracing-subscriber 0.3.14",
+ "tracing-subscriber 0.3.15",
  "url",
 ]
 
@@ -2681,7 +2681,7 @@ dependencies = [
  "time 0.3.11",
  "toml",
  "tracing",
- "tracing-subscriber 0.3.14",
+ "tracing-subscriber 0.3.15",
 ]
 
 [[package]]
@@ -2879,7 +2879,7 @@ dependencies = [
  "toml",
  "tracing",
  "tracing-loki",
- "tracing-subscriber 0.3.14",
+ "tracing-subscriber 0.3.15",
  "url",
 ]
 
@@ -2890,7 +2890,7 @@ dependencies = [
  "ansi_term",
  "tracing",
  "tracing-log",
- "tracing-subscriber 0.3.14",
+ "tracing-subscriber 0.3.15",
 ]
 
 [[package]]
@@ -3166,7 +3166,7 @@ dependencies = [
  "nimiq-rpc-interface",
  "nimiq-transaction",
  "tokio",
- "tracing-subscriber 0.3.14",
+ "tracing-subscriber 0.3.15",
  "url",
 ]
 
@@ -3303,7 +3303,7 @@ dependencies = [
  "nimiq-test-log-proc-macro",
  "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
  "tracing",
- "tracing-subscriber 0.3.14",
+ "tracing-subscriber 0.3.15",
 ]
 
 [[package]]
@@ -3493,7 +3493,7 @@ dependencies = [
  "tokio-stream",
  "tracing",
  "tracing-core",
- "tracing-subscriber 0.3.14",
+ "tracing-subscriber 0.3.15",
 ]
 
 [[package]]
@@ -5186,7 +5186,7 @@ dependencies = [
  "tracing-core",
  "tracing-log",
  "tracing-serde",
- "tracing-subscriber 0.3.14",
+ "tracing-subscriber 0.3.15",
  "url",
 ]
 
@@ -5211,9 +5211,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-subscriber"
-version = "0.3.14"
+version = "0.3.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a713421342a5a666b7577783721d3117f1b69a393df803ee17bb73b1e122a59"
+checksum = "60db860322da191b40952ad9affe65ea23e7dd6a5c442c2c42865810c6ab8e6b"
 dependencies = [
  "ansi_term",
  "matchers",
