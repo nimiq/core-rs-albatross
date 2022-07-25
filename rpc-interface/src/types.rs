@@ -594,17 +594,23 @@ pub enum AccountAdditionalFields {
         /// The total amount (in smallest unit) that was provided at the contract creation.
         total_amount: Coin,
     },
+    /// Additional account information for the staking contract.
+    #[serde(rename_all = "camelCase")]
+    Staking {},
 }
 
 impl Account {
-    pub fn from_account(address: Address, account: nimiq_account::Account) -> Self {
+    pub fn try_from_account(
+        address: Address,
+        account: nimiq_account::Account,
+    ) -> Result<Self, Error> {
         match account {
-            nimiq_account::Account::Basic(basic) => Account {
+            nimiq_account::Account::Basic(basic) => Ok(Account {
                 address,
                 balance: basic.balance,
                 account_additional_fields: AccountAdditionalFields::Basic {},
-            },
-            nimiq_account::Account::Vesting(vesting) => Account {
+            }),
+            nimiq_account::Account::Vesting(vesting) => Ok(Account {
                 address,
                 balance: vesting.balance,
                 account_additional_fields: AccountAdditionalFields::Vesting {
@@ -614,8 +620,8 @@ impl Account {
                     vesting_step_amount: vesting.step_amount,
                     vesting_total_amount: vesting.total_amount,
                 },
-            },
-            nimiq_account::Account::HTLC(htlc) => Account {
+            }),
+            nimiq_account::Account::HTLC(htlc) => Ok(Account {
                 address,
                 balance: htlc.balance,
                 account_additional_fields: AccountAdditionalFields::HTLC {
@@ -626,8 +632,13 @@ impl Account {
                     timeout: htlc.timeout,
                     total_amount: htlc.total_amount,
                 },
-            },
-            _ => unreachable!(),
+            }),
+            nimiq_account::Account::Staking(staking) => Ok(Account {
+                address,
+                balance: staking.balance,
+                account_additional_fields: AccountAdditionalFields::Staking {},
+            }),
+            _ => Err(Error::UnsupportedAccountType),
         }
     }
 
