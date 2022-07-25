@@ -361,6 +361,21 @@ impl From<nimiq_block::MicroJustification> for MicroJustification {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct PolicyConstants {
+    pub staking_contract_address: String,
+    pub coinbase_address: String,
+    pub transaction_validity_window: u32,
+    pub max_size_micro_body: usize,
+    pub version: u16,
+    pub slots: u16,
+    pub blocks_per_batch: u32,
+    pub batches_per_epoch: u16,
+    pub validator_deposit: u64,
+    pub total_supply: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Slot {
     pub slot_number: u16,
     pub validator: Address,

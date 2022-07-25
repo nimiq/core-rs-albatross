@@ -94,7 +94,7 @@ pub fn epoch_at(block_number: u32) -> u32 {
 }
 
 /// Returns the epoch index at a given block number. The epoch index is the number of a block relative
-/// to the the epoch it is in. For example, the first block of any epoch always has an epoch index of 0.
+/// to the epoch it is in. For example, the first block of any epoch always has an epoch index of 0.
 #[inline]
 pub fn epoch_index_at(block_number: u32) -> u32 {
     (block_number + BLOCKS_PER_EPOCH - 1) % BLOCKS_PER_EPOCH
@@ -107,7 +107,7 @@ pub fn batch_at(block_number: u32) -> u32 {
 }
 
 /// Returns the batch index at a given block number. The batch index is the number of a block relative
-/// to the the batch it is in. For example, the first block of any batch always has an batch index of 0.
+/// to the batch it is in. For example, the first block of any batch always has an batch index of 0.
 #[inline]
 pub fn batch_index_at(block_number: u32) -> u32 {
     (block_number + BLOCKS_PER_BATCH - 1) % BLOCKS_PER_BATCH
@@ -119,8 +119,8 @@ pub fn election_block_after(block_number: u32) -> u32 {
     (block_number / BLOCKS_PER_EPOCH + 1) * BLOCKS_PER_EPOCH
 }
 
-/// Returns the number (height) of the preceding election macro block before a given block number (height).
-/// If the given block number is an  election macro block, it returns the election macro block before it.
+/// Returns the block number (height) of the preceding election macro block before a given block number (height).
+/// If the given block number is an election macro block, it returns the election macro block before it.
 #[inline]
 pub fn election_block_before(block_number: u32) -> u32 {
     if block_number == 0 {
@@ -129,7 +129,7 @@ pub fn election_block_before(block_number: u32) -> u32 {
     (block_number - 1) / BLOCKS_PER_EPOCH * BLOCKS_PER_EPOCH
 }
 
-/// Returns the number (height) of the last election macro block at a given block number (height).
+/// Returns the block number (height) of the last election macro block at a given block number (height).
 /// If the given block number is an election macro block, then it returns that block number.
 #[inline]
 pub fn last_election_block(block_number: u32) -> u32 {
@@ -142,13 +142,13 @@ pub fn is_election_block_at(block_number: u32) -> bool {
     epoch_index_at(block_number) == BLOCKS_PER_EPOCH - 1
 }
 
-/// Returns the number (height) of the next macro block after a given block number (height).
+/// Returns the block number (height) of the next macro block after a given block number (height).
 #[inline]
 pub fn macro_block_after(block_number: u32) -> u32 {
     (block_number / BLOCKS_PER_BATCH + 1) * BLOCKS_PER_BATCH
 }
 
-/// Returns the number (height) of the preceding macro block before a given block number (height).
+/// Returns the block number (height) of the preceding macro block before a given block number (height).
 /// If the given block number is a macro block, it returns the macro block before it.
 #[inline]
 pub fn macro_block_before(block_number: u32) -> u32 {
@@ -158,7 +158,7 @@ pub fn macro_block_before(block_number: u32) -> u32 {
     (block_number - 1) / BLOCKS_PER_BATCH * BLOCKS_PER_BATCH
 }
 
-/// Returns the number (height) of the last macro block at a given block number (height).
+/// Returns the block number (height) of the last macro block at a given block number (height).
 /// If the given block number is a macro block, then it returns that block number.
 #[inline]
 pub fn last_macro_block(block_number: u32) -> u32 {
@@ -185,7 +185,7 @@ pub fn first_block_of(epoch: u32) -> u32 {
     (epoch - 1) * BLOCKS_PER_EPOCH + 1
 }
 
-///  Returns the block number of the first block of the given batch (which is always a micro block).
+/// Returns the block number of the first block of the given batch (which is always a micro block).
 pub fn first_block_of_batch(batch: u32) -> u32 {
     if batch == 0 {
         panic!("Called first_block_of_batch for batch 0");
