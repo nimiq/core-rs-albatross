@@ -312,16 +312,22 @@ mod tests {
             network,
             network.receive_requests::<RequestMacroChain>(),
             blockchain,
+            policy::MAX_RESPONSE_REQUEST_MACRO_CHAIN,
+            policy::MAX_RESPONSE_REQUEST_BLOCK_RANGE,
         ));
         tokio::spawn(Consensus::<TNetwork>::request_handler(
             network,
             network.receive_requests::<RequestBatchSet>(),
             blockchain,
+            policy::MAX_RESPONSE_REQUEST_BATCH_SET,
+            policy::MAX_RESPONSE_REQUEST_BLOCK_RANGE,
         ));
         tokio::spawn(Consensus::<TNetwork>::request_handler(
             network,
             network.receive_requests::<RequestHistoryChunk>(),
             blockchain,
+            policy::MAX_RESPONSE_REQUEST_HISTORY_CHUNK,
+            policy::MAX_RESPONSE_REQUEST_BLOCK_RANGE,
         ));
     }
 

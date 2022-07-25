@@ -31,6 +31,23 @@ pub const VERSION: u16 = 1;
 /// Number of available validator slots. Note that a single validator may own several validator slots.
 pub const SLOTS: u16 = 512;
 
+// The max number of request to be processed per peerID and per request type.
+
+/// The range to restrict the responses to the requests on the consensus network.
+pub const MAX_RESPONSE_REQUEST_BLOCK_RANGE: u32 = 1000;
+/// The The max number of MacroChain requests per peer.
+pub const MAX_RESPONSE_REQUEST_MACRO_CHAIN: u16 = 1000;
+/// The The max number of BatchSet requests per peer.
+pub const MAX_RESPONSE_REQUEST_BATCH_SET: u16 = 1000;
+/// The The max number of HistoryChunk requests per peer.
+pub const MAX_RESPONSE_REQUEST_HISTORY_CHUNK: u16 = 1000;
+/// The The max number of RequestBlock requests per peer.
+pub const MAX_RESPONSE_REQUEST_BLOCK: u16 = 1000;
+/// The The max number of MissingBlocks requests per peer.
+pub const MAX_RESPONSE_REQUEST_MISSING_BLOCKS: u16 = 1000;
+/// The The max number of RequestHead requests per peer.
+pub const MAX_RESPONSE_REQUEST_HEAD: u16 = 1000;
+
 /// Calculates 2f+1 slots which is the minimum number of slots necessary to produce a macro block,
 /// a skip block and other actions.
 /// It is also the minimum number of slots necessary to be guaranteed to have a majority of honest

@@ -15,6 +15,3 @@ pub enum SyncError {
     #[error("No valid sync target found")]
     NoValidSyncTarget,
 }
-
-#[derive(Debug, Error)]
-pub enum BlockQueueError {}

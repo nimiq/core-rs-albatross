@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use nimiq_network_interface::network::Network;
 use parking_lot::RwLock;
 
 use nimiq_block::Block;
@@ -9,13 +10,14 @@ use nimiq_blockchain::{AbstractBlockchain, Blockchain, Direction, CHUNK_SIZE};
 use crate::messages::*;
 
 /// This trait defines the behaviour when receiving a message and how to generate the response.
-pub trait Handle<Response> {
+pub trait Handle<Response, N: Network> {
     fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> Response;
 }
 
-impl Handle<MacroChain> for RequestMacroChain {
+impl<N: Network> Handle<MacroChain, N> for RequestMacroChain {
     fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> MacroChain {
         let blockchain = blockchain.read();
+
         // A peer has the macro chain. Check all block locator hashes in the given order and pick
         // the first hash that is found on our main chain, ignore the rest.
         let mut start_block_hash = None;
@@ -76,9 +78,10 @@ impl Handle<MacroChain> for RequestMacroChain {
     }
 }
 
-impl Handle<BatchSetInfo> for RequestBatchSet {
+impl<N: Network> Handle<BatchSetInfo, N> for RequestBatchSet {
     fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> BatchSetInfo {
         let blockchain = blockchain.read();
+
         if let Some(Block::Macro(block)) = blockchain.get_block(&self.hash, true, None) {
             let history_len = blockchain
                 .history_store
@@ -97,7 +100,7 @@ impl Handle<BatchSetInfo> for RequestBatchSet {
     }
 }
 
-impl Handle<HistoryChunk> for RequestHistoryChunk {
+impl<N: Network> Handle<HistoryChunk, N> for RequestHistoryChunk {
     fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> HistoryChunk {
         let chunk = blockchain.read().history_store.prove_chunk(
             self.epoch_number,
@@ -110,13 +113,13 @@ impl Handle<HistoryChunk> for RequestHistoryChunk {
     }
 }
 
-impl Handle<Option<Block>> for RequestBlock {
+impl<N: Network> Handle<Option<Block>, N> for RequestBlock {
     fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> Option<Block> {
         blockchain.read().get_block(&self.hash, true, None)
     }
 }
 
-impl Handle<ResponseBlocks> for RequestMissingBlocks {
+impl<N: Network> Handle<ResponseBlocks, N> for RequestMissingBlocks {
     fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> ResponseBlocks {
         let blockchain = blockchain.read();
 
@@ -164,7 +167,7 @@ impl Handle<ResponseBlocks> for RequestMissingBlocks {
     }
 }
 
-impl Handle<Blake2bHash> for RequestHead {
+impl<N: Network> Handle<Blake2bHash, N> for RequestHead {
     fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> Blake2bHash {
         blockchain.read().head_hash()
     }
