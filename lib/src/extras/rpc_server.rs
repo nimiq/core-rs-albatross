@@ -54,6 +54,7 @@ pub fn initialize_rpc_server(
     if let Some(mempool) = client.mempool() {
         dispatcher.add(MempoolDispatcher::new(mempool));
     }
+    dispatcher.add(PolicyDispatcher::new());
     if let Some(validator_proxy) = client.validator_proxy() {
         dispatcher.add(ValidatorDispatcher::new(validator_proxy));
     }

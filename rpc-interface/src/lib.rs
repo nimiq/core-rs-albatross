@@ -3,6 +3,7 @@ pub mod consensus;
 pub mod error;
 pub mod mempool;
 pub mod network;
+pub mod policy;
 mod serde_helpers;
 pub mod types;
 pub mod validator;
