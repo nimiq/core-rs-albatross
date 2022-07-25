@@ -101,7 +101,7 @@ impl WalletInterface for WalletDispatcher {
         address: Address,
         passphrase: Option<String>,
         _duration: Option<u64>,
-    ) -> Result<(), Error> {
+    ) -> Result<bool, Error> {
         let passphrase = passphrase.unwrap_or_default();
         let account = self
             .wallet_store
@@ -114,7 +114,7 @@ impl WalletInterface for WalletDispatcher {
 
         self.unlocked_wallets.write().insert(unlocked_account);
 
-        Ok(())
+        Ok(true)
     }
 
     async fn is_account_unlocked(&mut self, address: Address) -> Result<bool, Error> {

@@ -330,11 +330,11 @@ fn it_can_revert_unpark_transactions() {
 
     let result = bc.revert_blocks(3, &mut txn);
 
-    assert_eq!(result, Ok(()));
+    assert!(result.is_ok());
 }
 
 #[test]
-fn it_can_revert_create_stacker_transaction() {
+fn it_can_revert_create_staker_transaction() {
     let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(RwLock::new(
@@ -428,7 +428,7 @@ fn it_can_revert_create_stacker_transaction() {
     let mut txn = bc.write_transaction();
     let result = bc.revert_blocks(3, &mut txn);
 
-    assert_eq!(result, Ok(()));
+    assert!(result.is_ok());
 }
 
 fn ed25519_key_pair(secret_key: &str) -> SchnorrKeyPair {

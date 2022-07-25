@@ -469,4 +469,6 @@ pub struct ValidatorSettings {
     pub voting_key: Option<String>,
     pub fee_key_file: Option<String>,
     pub fee_key: Option<String>,
+    #[serde(default)]
+    pub automatic_reactivate: bool,
 }

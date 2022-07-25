@@ -12,6 +12,7 @@ use nimiq_rpc_interface::{
     consensus::{ConsensusInterface, ConsensusProxy},
     mempool::MempoolProxy,
     types::{BlockNumberOrHash, LogType, ValidityStartHeight},
+    validator::{ValidatorInterface, ValidatorProxy},
     wallet::{WalletInterface, WalletProxy},
 };
 
@@ -72,6 +73,13 @@ enum Command {
     /// Create, sign and send transactions.
     #[clap(name = "tx", flatten)]
     Transaction(TransactionCommand),
+
+    /// Changes the automatic reactivation setting for the current validator.
+    SetAutoReactivateValidator {
+        /// The validator setting for automatic reactivation to be applied.
+        #[clap(short, long)]
+        automatic_reactivate: bool,
+    },
 }
 
 #[derive(Debug, Parser)]
@@ -184,6 +192,27 @@ enum TransactionCommand {
         #[clap(long = "dry")]
         dry: bool,
     },
+
+    /// Sends a transaction to inactivate this validator. In order to avoid having the validator reactivated soon after
+    /// this transacation takes effect, use the command set-auto-reactivate-validator to make sure the automatic reactivation
+    /// configuration is turned off.
+    InactivateValidator {
+        /// The stake will be sent from this wallet.
+        wallet: Address,
+
+        /// The associated transaction fee to be payed from the sender_wallet. If absent it defaults to 0 NIM.
+        #[clap(short, long, default_value = "0")]
+        fee: Coin,
+
+        /// The block height from which on the unstake could be applied. The maximum amount of blocks the transaction is valid for is specified in `TRANSACTION_VALIDITY_WINDOW`.
+        /// If absent it defaults to the current block height at time of processing.
+        #[clap(short, long, default_value_t)]
+        validity_start_height: ValidityStartHeight,
+
+        /// Don't actually send the transaction, but output the transaction as hex string.
+        #[clap(long = "dry")]
+        dry: bool,
+    },
 }
 
 impl Command {
@@ -264,6 +293,15 @@ impl Command {
                     println!("{:#?}", blocklog);
                 }
             }
+            Command::SetAutoReactivateValidator {
+                automatic_reactivate,
+            } => {
+                let result = client
+                    .validator
+                    .set_automatic_reactivation(automatic_reactivate)
+                    .await?;
+                println!("Auto reacivate set to {}", result);
+            }
 
             Command::Account(command) => {
                 match command {
@@ -341,6 +379,41 @@ impl Command {
                                 wallet,
                                 recipient,
                                 value,
+                                fee,
+                                validity_start_height,
+                            )
+                            .await?;
+                        println!("{}", txid);
+                    }
+                }
+
+                TransactionCommand::InactivateValidator {
+                    wallet,
+                    fee,
+                    validity_start_height,
+                    dry,
+                } => {
+                    let validator_address = client.validator.get_address().await?;
+                    let key_data = client.validator.get_signing_key().await?;
+                    if dry {
+                        let tx = client
+                            .consensus
+                            .create_inactivate_validator_transaction(
+                                wallet,
+                                validator_address,
+                                key_data,
+                                fee,
+                                validity_start_height,
+                            )
+                            .await?;
+                        println!("{}", tx);
+                    } else {
+                        let txid = client
+                            .consensus
+                            .send_inactivate_validator_transaction(
+                                wallet,
+                                validator_address,
+                                key_data,
                                 fee,
                                 validity_start_height,
                             )
@@ -430,6 +503,7 @@ pub struct Client {
     pub consensus: ConsensusProxy<ArcClient<WebsocketClient>>,
     pub mempool: MempoolProxy<ArcClient<WebsocketClient>>,
     pub wallet: WalletProxy<ArcClient<WebsocketClient>>,
+    pub validator: ValidatorProxy<ArcClient<WebsocketClient>>,
 }
 
 impl Client {
@@ -440,7 +514,8 @@ impl Client {
             blockchain: BlockchainProxy::new(client.clone()),
             consensus: ConsensusProxy::new(client.clone()),
             mempool: MempoolProxy::new(client.clone()),
-            wallet: WalletProxy::new(client),
+            wallet: WalletProxy::new(client.clone()),
+            validator: ValidatorProxy::new(client),
         })
     }
 }

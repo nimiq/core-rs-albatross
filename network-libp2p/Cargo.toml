@@ -20,7 +20,7 @@ maintenance = { status = "experimental" }
 async-trait = "0.1"
 base64 = "0.13"
 bitflags = "1.2"
-bytes = "1.0"
+bytes = "1.2"
 derive_more = "0.99"
 futures = { package = "futures-util", version = "0.3" }
 hex = "0.4"
@@ -41,7 +41,7 @@ log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
 pin-project = "1.0"
 pin-project-lite = "0.2.9"
-prometheus-client = { version = "0.16.0", optional = true}
+prometheus-client = { version = "0.17.0", optional = true}
 rand = "0.8"
 serde = { version = "1.0", features = ["derive"], optional = true }
 thiserror = "1.0"

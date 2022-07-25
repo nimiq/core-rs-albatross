@@ -46,7 +46,7 @@ pub trait WalletInterface {
         address: Address,
         passphrase: Option<String>,
         duration: Option<u64>,
-    ) -> Result<(), Self::Error>;
+    ) -> Result<bool, Self::Error>;
 
     // `nimiq_jsonrpc_derive::proxy` requires the receiver type to be a mutable reference.
     #[allow(clippy::wrong_self_convention)]

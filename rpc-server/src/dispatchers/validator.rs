@@ -1,3 +1,5 @@
+use std::sync::atomic::Ordering;
+
 use async_trait::async_trait;
 use beserial::Serialize;
 
@@ -43,5 +45,18 @@ impl ValidatorInterface for ValidatorDispatcher {
                 .secret_key
                 .serialize_to_vec(),
         ))
+    }
+
+    /// Updates the configuration setting to automatically reactivate our validator.
+    async fn set_automatic_reactivation(
+        &mut self,
+        automatic_reactivate: bool,
+    ) -> Result<bool, Self::Error> {
+        self.validator
+            .automatic_reactivate
+            .store(automatic_reactivate, Ordering::Release);
+
+        log::debug!("Automatic reactivation set to {}.", automatic_reactivate);
+        Ok(automatic_reactivate)
     }
 }

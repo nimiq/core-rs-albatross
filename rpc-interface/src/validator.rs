@@ -12,4 +12,9 @@ pub trait ValidatorInterface {
     async fn get_signing_key(&mut self) -> Result<String, Self::Error>;
 
     async fn get_voting_key(&mut self) -> Result<String, Self::Error>;
+
+    async fn set_automatic_reactivation(
+        &mut self,
+        automatic_reactivate: bool,
+    ) -> Result<bool, Self::Error>;
 }

@@ -33,9 +33,9 @@ impl AccountTransactionVerification for AccountType {
             AccountType::Staking => {
                 StakingContractVerifier::verify_incoming_transaction(transaction)
             }
-            _ => {
-                unreachable!()
-            }
+            AccountType::StakingStaker
+            | AccountType::StakingValidator
+            | AccountType::StakingValidatorsStaker => Err(TransactionError::InvalidForRecipient),
         }
     }
 
@@ -52,9 +52,9 @@ impl AccountTransactionVerification for AccountType {
             AccountType::Staking => {
                 StakingContractVerifier::verify_outgoing_transaction(transaction)
             }
-            _ => {
-                unreachable!()
-            }
+            AccountType::StakingStaker
+            | AccountType::StakingValidator
+            | AccountType::StakingValidatorsStaker => Err(TransactionError::InvalidForRecipient),
         }
     }
 }

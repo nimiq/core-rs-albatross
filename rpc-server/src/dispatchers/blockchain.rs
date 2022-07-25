@@ -454,7 +454,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         let result = self.blockchain.read().get_account(&address);
 
         match result {
-            Some(account) => Ok(Account::from_account(address, account)),
+            Some(account) => Account::try_from_account(address, account).map_err(Error::Core),
             None => Ok(Account::empty(address)),
         }
     }

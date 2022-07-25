@@ -10,4 +10,10 @@ pub enum Error {
 
     #[error("Invalid log type: {0}")]
     InvalidLogType(String),
+
+    // This is likely unreachable!() due to the nature of staking contract internal account types,
+    // but is added for completeness.
+    // Getting rid of staking contract internal account types like StakingStaker etc makes this obsolete.
+    #[error("Unsupported account type")]
+    UnsupportedAccountType,
 }
