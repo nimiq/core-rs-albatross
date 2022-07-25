@@ -8,12 +8,6 @@ use crate::error::Error;
 
 pub struct PolicyDispatcher {}
 
-impl PolicyDispatcher {
-    pub fn new() -> Self {
-        PolicyDispatcher {}
-    }
-}
-
 #[nimiq_jsonrpc_derive::service(rename_all = "camelCase")]
 #[async_trait]
 impl PolicyInterface for PolicyDispatcher {
