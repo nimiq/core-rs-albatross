@@ -35,7 +35,7 @@ impl PolicyInterface for PolicyDispatcher {
     }
 
     /// Returns the epoch index at a given block number. The epoch index is the number of a block relative
-    /// to the the epoch it is in. For example, the first block of any epoch always has an epoch index of 0.
+    /// to the epoch it is in. For example, the first block of any epoch always has an epoch index of 0.
     async fn get_epoch_index_at(&mut self, block_number: u32) -> Result<u32, Self::Error> {
         Ok(policy::epoch_index_at(block_number))
     }
@@ -46,7 +46,7 @@ impl PolicyInterface for PolicyDispatcher {
     }
 
     /// Returns the batch index at a given block number. The batch index is the number of a block relative
-    /// to the the batch it is in. For example, the first block of any batch always has an batch index of 0.
+    /// to the batch it is in. For example, the first block of any batch always has an batch index of 0.
     async fn get_batch_index_at(&mut self, block_number: u32) -> Result<u32, Self::Error> {
         Ok(policy::batch_index_at(block_number))
     }
@@ -56,8 +56,8 @@ impl PolicyInterface for PolicyDispatcher {
         Ok(policy::election_block_after(block_number))
     }
 
-    /// Returns the number (height) of the preceding election macro block before a given block number (height).
-    /// If the given block number is an  election macro block, it returns the election macro block before it.
+    /// Returns the number block (height) of the preceding election macro block before a given block number (height).
+    /// If the given block number is an election macro block, it returns the election macro block before it.
     async fn get_election_block_before(&mut self, block_number: u32) -> Result<u32, Self::Error> {
         if block_number == 0 {
             return Err(Error::BlockNumberNotZero);
@@ -66,7 +66,7 @@ impl PolicyInterface for PolicyDispatcher {
         Ok(policy::election_block_before(block_number))
     }
 
-    /// Returns the number (height) of the last election macro block at a given block number (height).
+    /// Returns the block number (height) of the last election macro block at a given block number (height).
     /// If the given block number is an election macro block, then it returns that block number.
     async fn get_last_election_block(&mut self, block_number: u32) -> Result<u32, Self::Error> {
         Ok(policy::last_election_block(block_number))
@@ -77,12 +77,12 @@ impl PolicyInterface for PolicyDispatcher {
         Ok(policy::is_election_block_at(block_number))
     }
 
-    /// Returns the number (height) of the next macro block after a given block number (height).
+    /// Returns the block number (height) of the next macro block after a given block number (height).
     async fn get_macro_block_after(&mut self, block_number: u32) -> Result<u32, Self::Error> {
         Ok(policy::macro_block_after(block_number))
     }
 
-    /// Returns the number (height) of the preceding macro block before a given block number (height).
+    /// Returns the block number (height) of the preceding macro block before a given block number (height).
     /// If the given block number is a macro block, it returns the macro block before it.
     async fn get_macro_block_before(&mut self, block_number: u32) -> Result<u32, Self::Error> {
         if block_number == 0 {
@@ -92,7 +92,7 @@ impl PolicyInterface for PolicyDispatcher {
         Ok(policy::macro_block_before(block_number))
     }
 
-    /// Returns the number (height) of the last macro block at a given block number (height).
+    /// Returns block the number (height) of the last macro block at a given block number (height).
     /// If the given block number is a macro block, then it returns that block number.
     async fn get_last_macro_block(&mut self, block_number: u32) -> Result<u32, Self::Error> {
         Ok(policy::last_macro_block(block_number))
@@ -117,7 +117,7 @@ impl PolicyInterface for PolicyDispatcher {
         Ok(policy::first_block_of(epoch))
     }
 
-    ///  Returns the block number of the first block of the given batch (which is always a micro block).
+    /// Returns the block number of the first block of the given batch (which is always a micro block).
     async fn get_first_block_of_batch(&mut self, batch: u32) -> Result<u32, Self::Error> {
         if batch == 0 {
             return Err(Error::BatchNumberNotZero);
