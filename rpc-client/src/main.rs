@@ -144,7 +144,39 @@ enum TransactionCommand {
         dry: bool,
     },
 
-    /// Sends a staking transaction from the address of a given `key_pair` to a given `staker_address`.
+    /** Staker transactions **/
+
+    /// Sends a `new_staker` transaction to the network. You need to provide the address of a basic
+    /// account (the sender wallet) to pay the transaction fee.
+    NewStaker {
+        /// The stake will be sent from this wallet.
+        wallet: Address,
+
+        /// Destination address for the stake.
+        staker_address: Address,
+
+        /// Validator address to delegate stake to. If empty, no delegation will occour.
+        delegation: Option<Address>,
+
+        /// The amount of NIM to stake.
+        value: Coin,
+
+        /// The associated transaction fee to be payed by the sender wallet. If absent it defaults to 0 NIM.
+        #[clap(short, long, default_value = "0")]
+        fee: Coin,
+
+        /// The block height from which on the transaction could be applied. The maximum amount of blocks the transaction is valid for
+        /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
+        /// If absent it defaults to the current block height at time of processing.
+        #[clap(short, long, default_value_t)]
+        validity_start_height: ValidityStartHeight,
+
+        /// Don't actually send the transaction, but output the transaction as hex string.
+        #[clap(long = "dry")]
+        dry: bool,
+    },
+
+    /// Sends a staking transaction from the address of a given `wallet` to a given `staker_address`.
     Stake {
         /// The stake will be sent from this wallet.
         wallet: Address,
@@ -159,7 +191,7 @@ enum TransactionCommand {
         #[clap(short, long, default_value = "0")]
         fee: Coin,
 
-        /// The block height from which on the unstake could be applied. The maximum amount of blocks the transaction is valid for
+        /// The block height from which on the transaction could be applied. The maximum amount of blocks the transaction is valid for
         /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
         /// If absent it defaults to the current block height at time of processing.
         #[clap(short, long, default_value_t)]
@@ -170,6 +202,36 @@ enum TransactionCommand {
         dry: bool,
     },
 
+    /// Sends a `update_staker` transaction to the network. You can pay the transaction fee from a basic
+    /// account (by providing the sender wallet) or from the staker account's balance (by not
+    /// providing a sender wallet).
+    UpdateStaker {
+        /// The fee will be payed by this wallet if any is provided. If absent the fee is payed by the stakers account.
+        sender_wallet: Option<Address>,
+
+        /// Destination address for the update.
+        staker_address: Address,
+
+        /// The new address for the delegation. If none is provided the delegation will remain the same. ??
+        new_delegation: Option<Address>,
+
+        /// The associated transaction fee to be payed by the sender wallet. If absent it defaults to 0 NIM.
+        #[clap(short, long, default_value = "0")]
+        fee: Coin,
+
+        /// The block height from which on the transaction could be applied. The maximum amount of blocks the transaction is valid for
+        /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
+        /// If absent it defaults to the current block height at time of processing.
+        #[clap(short, long, default_value_t)]
+        validity_start_height: ValidityStartHeight,
+
+        /// Don't actually send the transaction, but output the transaction as hex string.
+        #[clap(long = "dry")]
+        dry: bool,
+    },
+
+    /// Sends a `unstake` transaction to the network. The transaction fee will be paid from the funds
+    /// being unstaked.
     Unstake {
         /// The stake will be sent from this wallet.
         wallet: Address,
@@ -184,7 +246,88 @@ enum TransactionCommand {
         #[clap(short, long, default_value = "0")]
         fee: Coin,
 
-        /// The block height from which on the unstake could be applied. The maximum amount of blocks the transaction is valid for is specified in `TRANSACTION_VALIDITY_WINDOW`.
+        /// The block height from which on the transaction could be applied. The maximum amount of blocks the transaction is valid for
+        /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
+        /// If absent it defaults to the current block height at time of processing.
+        #[clap(short, long, default_value_t)]
+        validity_start_height: ValidityStartHeight,
+
+        /// Don't actually send the transaction, but output the transaction as hex string.
+        #[clap(long = "dry")]
+        dry: bool,
+    },
+
+    /** Validator transactions **/
+
+    /// Sends a `new_validator` transaction to the network. You need to provide the address of a basic
+    /// account (the sender wallet) to pay the transaction fee and the validator deposit.
+    /// Since JSON doesn't have a primitive for Option (it just has the null primitive), we can't
+    /// have a double Option. So we use the following work-around for the signal data:
+    ///  "" = Set the signal data field to None.
+    ///  "0x29a4b..." = Set the signal data field to Some(0x29a4b...).
+    CreateValidator {
+        /// The fee will be payed from this wallet.
+        sender_wallet: Address,
+
+        // The new validator address.
+        validator_address: Address,
+
+        // The secret key for validator to sign its transactions. ??
+        signing_secret_key: String,
+
+        // The secret key for the validator to sign the voting transactions. ??
+        voting_secret_key: String,
+
+        // The address to receive the rewards.
+        reward_address: Address,
+
+        // ??
+        signal_data: String,
+
+        /// The associated transaction fee to be payed from the sender_wallet. If absent it defaults to 0 NIM.
+        #[clap(short, long, default_value = "0")]
+        fee: Coin,
+
+        /// The block height from which on the transaction could be applied. The maximum amount of blocks the transaction is valid for
+        /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
+        /// If absent it defaults to the current block height at time of processing.
+        #[clap(short, long, default_value_t)]
+        validity_start_height: ValidityStartHeight,
+
+        /// Don't actually send the transaction, but output the transaction as hex string.
+        #[clap(long = "dry")]
+        dry: bool,
+    },
+
+    /// Sends a transaction to the network to update this validator. You need to provide the address of a basic
+    /// account (the sender wallet) to pay the transaction fee.
+    ///  Since JSON doesn't have a primitive for Option (it just has the null primitive), we can't
+    /// have a double Option. So we use the following work-around for the signal data:
+    ///  null = No change in the signal data field.
+    ///  "" = Change the signal data field to None.
+    ///  "0x29a4b..." = Change the signal data field to Some(0x29a4b...).
+    UpdateValidator {
+        /// The fee will be payed from this wallet.
+        sender_wallet: Address,
+
+        // The secret key for validator to sign its transactions. ??
+        new_signing_secret_key: Option<String>,
+
+        // The secret key for the validator to sign the voting transactions. ??
+        new_voting_secret_key: Option<String>,
+
+        // The address to receive the rewards.
+        new_reward_address: Option<Address>,
+
+        // ??
+        new_signal_data: Option<String>,
+
+        /// The associated transaction fee to be payed from the sender_wallet. If absent it defaults to 0 NIM.
+        #[clap(short, long, default_value = "0")]
+        fee: Coin,
+
+        /// The block height from which on the transaction could be applied. The maximum amount of blocks the transaction is valid for
+        /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
         /// If absent it defaults to the current block height at time of processing.
         #[clap(short, long, default_value_t)]
         validity_start_height: ValidityStartHeight,
@@ -198,14 +341,15 @@ enum TransactionCommand {
     /// this transacation takes effect, use the command set-auto-reactivate-validator to make sure the automatic reactivation
     /// configuration is turned off.
     InactivateValidator {
-        /// The stake will be sent from this wallet.
+        /// The fee will be payed from this wallet.
         wallet: Address,
 
         /// The associated transaction fee to be payed from the sender_wallet. If absent it defaults to 0 NIM.
         #[clap(short, long, default_value = "0")]
         fee: Coin,
 
-        /// The block height from which on the unstake could be applied. The maximum amount of blocks the transaction is valid for is specified in `TRANSACTION_VALIDITY_WINDOW`.
+        /// The block height from which on the transaction could be applied. The maximum amount of blocks the transaction is valid for
+        /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
         /// If absent it defaults to the current block height at time of processing.
         #[clap(short, long, default_value_t)]
         validity_start_height: ValidityStartHeight,
@@ -215,6 +359,70 @@ enum TransactionCommand {
         dry: bool,
     },
 
+    /// Sends a transaction to reactivate this validator. You need to provide the address of a basic
+    /// account (the sender wallet) to pay the transaction fee.
+    ReactivateValidator {
+        /// The fee will be payed from this wallet.
+        wallet: Address,
+
+        /// The associated transaction fee to be payed from the sender_wallet. If absent it defaults to 0 NIM.
+        #[clap(short, long, default_value = "0")]
+        fee: Coin,
+
+        /// The block height from which on the transaction could be applied. The maximum amount of blocks the transaction is valid for
+        /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
+        /// If absent it defaults to the current block height at time of processing.
+        #[clap(short, long, default_value_t)]
+        validity_start_height: ValidityStartHeight,
+
+        /// Don't actually send the transaction, but output the transaction as hex string.
+        #[clap(long = "dry")]
+        dry: bool,
+    },
+
+    /// Sends a transaction to unpark this validator. You need to provide the address of a basic
+    /// account (the sender wallet) to pay the transaction fee.
+    UnparkValidator {
+        /// The fee will be payed from this wallet.
+        wallet: Address,
+
+        /// The associated transaction fee to be payed from the sender_wallet. If absent it defaults to 0 NIM.
+        #[clap(short, long, default_value = "0")]
+        fee: Coin,
+
+        /// The block height from which on the transaction could be applied. The maximum amount of blocks the transaction is valid for
+        /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
+        /// If absent it defaults to the current block height at time of processing.
+        #[clap(short, long, default_value_t)]
+        validity_start_height: ValidityStartHeight,
+
+        /// Don't actually send the transaction, but output the transaction as hex string.
+        #[clap(long = "dry")]
+        dry: bool,
+    },
+
+    /// Sends a transaction to delete this validator. The transaction fee will be paid from the
+    /// validator deposit that is being returned.
+    DeleteValidator {
+        /// The associated transaction fee to be payed from the sender_wallet. If absent it defaults to 0 NIM.
+        #[clap(short, long, default_value = "0")]
+        fee: Coin,
+
+        /// The address to receive the balance of the validator.
+        recipient_address: Address,
+
+        /// The block height from which on the transaction could be applied. The maximum amount of blocks the transaction is valid for
+        /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
+        /// If absent it defaults to the current block height at time of processing.
+        #[clap(short, long, default_value_t)]
+        validity_start_height: ValidityStartHeight,
+
+        /// Don't actually send the transaction, but output the transaction as hex string.
+        #[clap(long = "dry")]
+        dry: bool,
+    },
+
+    /** Vesting transactions **/
     VestingCreate {
         /// The wallet used to sign the transaction. The vesting contract value is sent from the basic account
         /// belonging to this wallet.
@@ -237,7 +445,7 @@ enum TransactionCommand {
         #[clap(short, long, default_value = "0")]
         fee: Coin,
 
-        /// The block height from which on the unstake could be applied. The maximum amount of blocks the transaction is valid for
+        /// The block height from which on the transaction could be applied. The maximum amount of blocks the transaction is valid for
         /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
         /// If absent it defaults to the current block height at time of processing.
         #[clap(short, long, default_value_t)]
@@ -265,7 +473,7 @@ enum TransactionCommand {
         #[clap(short, long, default_value = "0")]
         fee: Coin,
 
-        /// The block height from which on the unstake could be applied. The maximum amount of blocks the transaction is valid for
+        /// The block height from which on the transaction could be applied. The maximum amount of blocks the transaction is valid for
         /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
         /// If absent it defaults to the current block height at time of processing.
         #[clap(short, long, default_value_t)]
@@ -276,6 +484,7 @@ enum TransactionCommand {
         dry: bool,
     },
 
+    /** HTLC transactions **/
     CreateHTLC {
         /// The wallet to sign the transaction. The HTLC contract value is sent from the basic account belonging to this wallet.
         wallet: Address,
@@ -306,7 +515,7 @@ enum TransactionCommand {
         #[clap(short, long, default_value = "0")]
         fee: Coin,
 
-        /// The block height from which on the unstake could be applied. The maximum amount of blocks the transaction is valid for
+        /// The block height from which on the transaction could be applied. The maximum amount of blocks the transaction is valid for
         /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
         /// If absent it defaults to the current block height at time of processing.
         #[clap(short, long, default_value_t)]
@@ -318,7 +527,7 @@ enum TransactionCommand {
     },
 
     RedeemRegularHTLC {
-        /// This key pair corresponds to the `htlc_recipient` in the HTLC contract.
+        /// This address corresponds to the `htlc_recipient` in the HTLC contract.
         wallet: Address,
 
         /// The address of the HTLC contract.
@@ -346,7 +555,7 @@ enum TransactionCommand {
         #[clap(short, long, default_value = "0")]
         fee: Coin,
 
-        /// The block height from which on the unstake could be applied. The maximum amount of blocks the transaction is valid for
+        /// The block height from which on the transaction could be applied. The maximum amount of blocks the transaction is valid for
         /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
         /// If absent it defaults to the current block height at time of processing.
         #[clap(short, long, default_value_t)]
@@ -358,7 +567,7 @@ enum TransactionCommand {
     },
 
     RedeemHTLCTimeout {
-        /// This key pair corresponds to the `htlc_recipient` in the HTLC contract.
+        /// This address corresponds to the `htlc_recipient` in the HTLC contract.
         wallet: Address,
 
         /// The address of the HTLC contract.
@@ -374,7 +583,7 @@ enum TransactionCommand {
         #[clap(short, long, default_value = "0")]
         fee: Coin,
 
-        /// The block height from which on the unstake could be applied. The maximum amount of blocks the transaction is valid for
+        /// The block height from which on the transaction could be applied. The maximum amount of blocks the transaction is valid for
         /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
         /// If absent it defaults to the current block height at time of processing.
         #[clap(short, long, default_value_t)]
@@ -405,7 +614,7 @@ enum TransactionCommand {
         #[clap(short, long, default_value = "0")]
         fee: Coin,
 
-        /// The block height from which on the unstake could be applied. The maximum amount of blocks the transaction is valid for
+        /// The block height from which on the transaction could be applied. The maximum amount of blocks the transaction is valid for
         /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
         /// If absent it defaults to the current block height at time of processing.
         #[clap(short, long, default_value_t)]
@@ -417,7 +626,8 @@ enum TransactionCommand {
     },
 
     SignRedeemHTLCEarly {
-        /// This is the address used to sign the transaction. It corresponds either to the `htlc_sender` or the `htlc_recipient` in the HTLC contract.
+        /// This is the address used to sign the transaction. It corresponds either to the `htlc_sender` or the `htlc_recipient`
+        /// in the HTLC contract.
         wallet: Address,
 
         /// The address of the HTLC contract.
@@ -433,7 +643,7 @@ enum TransactionCommand {
         #[clap(short, long, default_value = "0")]
         fee: Coin,
 
-        /// The block height from which on the unstake could be applied. The maximum amount of blocks the transaction is valid for
+        /// The block height from which on the transaction could be applied. The maximum amount of blocks the transaction is valid for
         /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
         /// If absent it defaults to the current block height at time of processing.
         #[clap(short, long, default_value_t)]
@@ -613,21 +823,23 @@ impl Command {
                     }
                 }
 
-                TransactionCommand::InactivateValidator {
+                TransactionCommand::NewStaker {
                     wallet,
+                    staker_address,
+                    delegation,
+                    value,
                     fee,
                     validity_start_height,
                     dry,
                 } => {
-                    let validator_address = client.validator.get_address().await?;
-                    let key_data = client.validator.get_signing_key().await?;
                     if dry {
                         let tx = client
                             .consensus
-                            .create_inactivate_validator_transaction(
+                            .create_new_staker_transaction(
                                 wallet,
-                                validator_address,
-                                key_data,
+                                staker_address,
+                                delegation,
+                                value,
                                 fee,
                                 validity_start_height,
                             )
@@ -636,10 +848,11 @@ impl Command {
                     } else {
                         let txid = client
                             .consensus
-                            .send_inactivate_validator_transaction(
+                            .send_new_staker_transaction(
                                 wallet,
-                                validator_address,
-                                key_data,
+                                staker_address,
+                                delegation,
+                                value,
                                 fee,
                                 validity_start_height,
                             )
@@ -683,6 +896,41 @@ impl Command {
                     }
                 }
 
+                TransactionCommand::UpdateStaker {
+                    sender_wallet,
+                    staker_address,
+                    new_delegation,
+                    fee,
+                    validity_start_height,
+                    dry,
+                } => {
+                    if dry {
+                        let tx = client
+                            .consensus
+                            .create_update_transaction(
+                                sender_wallet,
+                                staker_address,
+                                new_delegation,
+                                fee,
+                                validity_start_height,
+                            )
+                            .await?;
+                        println!("{}", tx);
+                    } else {
+                        let txid = client
+                            .consensus
+                            .send_update_transaction(
+                                sender_wallet,
+                                staker_address,
+                                new_delegation,
+                                fee,
+                                validity_start_height,
+                            )
+                            .await?;
+                        println!("{}", txid);
+                    }
+                }
+
                 TransactionCommand::Unstake {
                     wallet,
                     recipient,
@@ -717,6 +965,232 @@ impl Command {
                         println!("{}", txid);
                     }
                 }
+
+                TransactionCommand::CreateValidator {
+                    sender_wallet,
+                    validator_address,
+                    signing_secret_key,
+                    voting_secret_key,
+                    reward_address,
+                    signal_data,
+                    fee,
+                    validity_start_height,
+                    dry,
+                } => {
+                    if dry {
+                        let tx = client
+                            .consensus
+                            .create_new_validator_transaction(
+                                sender_wallet,
+                                validator_address,
+                                signing_secret_key,
+                                voting_secret_key,
+                                reward_address,
+                                signal_data,
+                                fee,
+                                validity_start_height,
+                            )
+                            .await?;
+                        println!("{}", tx);
+                    } else {
+                        let txid = client
+                            .consensus
+                            .send_new_validator_transaction(
+                                sender_wallet,
+                                validator_address,
+                                signing_secret_key,
+                                voting_secret_key,
+                                reward_address,
+                                signal_data,
+                                fee,
+                                validity_start_height,
+                            )
+                            .await?;
+                        println!("{}", txid);
+                    }
+                }
+
+                TransactionCommand::UpdateValidator {
+                    sender_wallet,
+                    new_signing_secret_key,
+                    new_voting_secret_key,
+                    new_reward_address,
+                    new_signal_data,
+                    fee,
+                    validity_start_height,
+                    dry,
+                } => {
+                    let validator_address = client.validator.get_address().await?;
+                    if dry {
+                        let tx = client
+                            .consensus
+                            .create_update_validator_transaction(
+                                sender_wallet,
+                                validator_address,
+                                new_signing_secret_key,
+                                new_voting_secret_key,
+                                new_reward_address,
+                                new_signal_data,
+                                fee,
+                                validity_start_height,
+                            )
+                            .await?;
+                        println!("{}", tx);
+                    } else {
+                        let txid = client
+                            .consensus
+                            .send_update_validator_transaction(
+                                sender_wallet,
+                                validator_address,
+                                new_signing_secret_key,
+                                new_voting_secret_key,
+                                new_reward_address,
+                                new_signal_data,
+                                fee,
+                                validity_start_height,
+                            )
+                            .await?;
+                        println!("{}", txid);
+                    }
+                }
+
+                TransactionCommand::InactivateValidator {
+                    wallet,
+                    fee,
+                    validity_start_height,
+                    dry,
+                } => {
+                    let validator_address = client.validator.get_address().await?;
+                    let key_data = client.validator.get_signing_key().await?;
+                    if dry {
+                        let tx = client
+                            .consensus
+                            .create_inactivate_validator_transaction(
+                                wallet,
+                                validator_address,
+                                key_data,
+                                fee,
+                                validity_start_height,
+                            )
+                            .await?;
+                        println!("{}", tx);
+                    } else {
+                        let txid = client
+                            .consensus
+                            .send_inactivate_validator_transaction(
+                                wallet,
+                                validator_address,
+                                key_data,
+                                fee,
+                                validity_start_height,
+                            )
+                            .await?;
+                        println!("{}", txid);
+                    }
+                }
+
+                TransactionCommand::ReactivateValidator {
+                    wallet,
+                    fee,
+                    validity_start_height,
+                    dry,
+                } => {
+                    let validator_address = client.validator.get_address().await?;
+                    let key_data = client.validator.get_signing_key().await?;
+                    if dry {
+                        let tx = client
+                            .consensus
+                            .create_reactivate_validator_transaction(
+                                wallet,
+                                validator_address,
+                                key_data,
+                                fee,
+                                validity_start_height,
+                            )
+                            .await?;
+                        println!("{}", tx);
+                    } else {
+                        let txid = client
+                            .consensus
+                            .send_reactivate_validator_transaction(
+                                wallet,
+                                validator_address,
+                                key_data,
+                                fee,
+                                validity_start_height,
+                            )
+                            .await?;
+                        println!("{}", txid);
+                    }
+                }
+
+                TransactionCommand::UnparkValidator {
+                    wallet,
+                    fee,
+                    validity_start_height,
+                    dry,
+                } => {
+                    let validator_address = client.validator.get_address().await?;
+                    let key_data = client.validator.get_signing_key().await?;
+                    if dry {
+                        let tx = client
+                            .consensus
+                            .create_unpark_validator_transaction(
+                                wallet,
+                                validator_address,
+                                key_data,
+                                fee,
+                                validity_start_height,
+                            )
+                            .await?;
+                        println!("{}", tx);
+                    } else {
+                        let txid = client
+                            .consensus
+                            .send_unpark_validator_transaction(
+                                wallet,
+                                validator_address,
+                                key_data,
+                                fee,
+                                validity_start_height,
+                            )
+                            .await?;
+                        println!("{}", txid);
+                    }
+                }
+
+                TransactionCommand::DeleteValidator {
+                    recipient_address,
+                    fee,
+                    validity_start_height,
+                    dry,
+                } => {
+                    let validator_address = client.validator.get_address().await?;
+                    if dry {
+                        let tx = client
+                            .consensus
+                            .create_delete_validator_transaction(
+                                validator_address,
+                                recipient_address,
+                                fee,
+                                validity_start_height,
+                            )
+                            .await?;
+                        println!("{}", tx);
+                    } else {
+                        let txid = client
+                            .consensus
+                            .send_delete_validator_transaction(
+                                validator_address,
+                                recipient_address,
+                                fee,
+                                validity_start_height,
+                            )
+                            .await?;
+                        println!("{}", txid);
+                    }
+                }
+
                 TransactionCommand::VestingCreate {
                     wallet,
                     owner,
