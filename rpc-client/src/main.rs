@@ -1,5 +1,5 @@
 use anyhow::{bail, Error};
-use clap::Parser;
+use clap::{Args, Parser};
 use futures::StreamExt;
 use url::Url;
 
@@ -118,30 +118,44 @@ enum AccountCommand {
     },
 }
 
+#[derive(Debug, Args)]
+pub struct TxCommounWithValue {
+    /// The amount of NIM to be used by the transaction.
+    value: Coin,
+
+    #[clap(flatten)]
+    commoun_tx_fields: TxCommoun,
+}
+
+#[derive(Debug, Args)]
+struct TxCommoun {
+    /// The associated transaction fee to be payed. If absent it defaults to 0 NIM.
+    #[clap(short, long, default_value = "0")]
+    fee: Coin,
+
+    /// The block height from which on the transaction could be applied. The maximum amount of blocks the transaction is valid for
+    /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
+    /// If absent it defaults to the current block height at time of processing.
+    #[clap(short, long, default_value_t)]
+    validity_start_height: ValidityStartHeight,
+
+    /// Don't actually send the transaction, but output the transaction as hex string.
+    #[clap(long = "dry")]
+    dry: bool,
+}
+
 #[derive(Debug, Parser)]
 enum TransactionCommand {
     /// Sends a simple transaction from the wallet `wallet` to a basic `recipient`.
     Basic {
         /// Transaction will be sent from this address. An wallet with this address must be unlocked.
-        wallet: Address,
+        sender_wallet: Address,
 
         /// Recipient for this transaction. This must be a basic account.
         recipient: Address,
 
-        /// The amount of NIM to send to the recipient.
-        value: Coin,
-
-        /// The associated transaction fee to be payed by the sender. If absent it defaults to 0 NIM.
-        #[clap(short, long, default_value = "0")]
-        fee: Coin,
-
-        /// The block height for the unstake to be applied. If absent it defaults to the current block height at time of processing.
-        #[clap(short, long, default_value_t)]
-        validity_start_height: ValidityStartHeight,
-
-        /// Don't actually send the transaction, but output the transaction as hex string.
-        #[clap(long = "dry")]
-        dry: bool,
+        #[clap(flatten)]
+        tx_commons: TxCommounWithValue,
     },
 
     /** Staker transactions **/
@@ -150,7 +164,7 @@ enum TransactionCommand {
     /// account (the sender wallet) to pay the transaction fee.
     NewStaker {
         /// The stake will be sent from this wallet.
-        wallet: Address,
+        sender_wallet: Address,
 
         /// Destination address for the stake.
         staker_address: Address,
@@ -158,48 +172,20 @@ enum TransactionCommand {
         /// Validator address to delegate stake to. If empty, no delegation will occour.
         delegation: Option<Address>,
 
-        /// The amount of NIM to stake.
-        value: Coin,
-
-        /// The associated transaction fee to be payed by the sender wallet. If absent it defaults to 0 NIM.
-        #[clap(short, long, default_value = "0")]
-        fee: Coin,
-
-        /// The block height from which on the transaction could be applied. The maximum amount of blocks the transaction is valid for
-        /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
-        /// If absent it defaults to the current block height at time of processing.
-        #[clap(short, long, default_value_t)]
-        validity_start_height: ValidityStartHeight,
-
-        /// Don't actually send the transaction, but output the transaction as hex string.
-        #[clap(long = "dry")]
-        dry: bool,
+        #[clap(flatten)]
+        tx_commons: TxCommounWithValue,
     },
 
     /// Sends a staking transaction from the address of a given `wallet` to a given `staker_address`.
     Stake {
         /// The stake will be sent from this wallet.
-        wallet: Address,
+        sender_wallet: Address,
 
         /// Destination address for the stake.
         staker_address: Address,
 
-        /// The amount of NIM to stake.
-        value: Coin,
-
-        /// The associated transaction fee to be payed by the sender wallet. If absent it defaults to 0 NIM.
-        #[clap(short, long, default_value = "0")]
-        fee: Coin,
-
-        /// The block height from which on the transaction could be applied. The maximum amount of blocks the transaction is valid for
-        /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
-        /// If absent it defaults to the current block height at time of processing.
-        #[clap(short, long, default_value_t)]
-        validity_start_height: ValidityStartHeight,
-
-        /// Don't actually send the transaction, but output the transaction as hex string.
-        #[clap(long = "dry")]
-        dry: bool,
+        #[clap(flatten)]
+        tx_commons: TxCommounWithValue,
     },
 
     /// Sends a `update_staker` transaction to the network. You can pay the transaction fee from a basic
@@ -215,46 +201,22 @@ enum TransactionCommand {
         /// The new address for the delegation. If none is provided the delegation will remain the same. ??
         new_delegation: Option<Address>,
 
-        /// The associated transaction fee to be payed by the sender wallet. If absent it defaults to 0 NIM.
-        #[clap(short, long, default_value = "0")]
-        fee: Coin,
-
-        /// The block height from which on the transaction could be applied. The maximum amount of blocks the transaction is valid for
-        /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
-        /// If absent it defaults to the current block height at time of processing.
-        #[clap(short, long, default_value_t)]
-        validity_start_height: ValidityStartHeight,
-
-        /// Don't actually send the transaction, but output the transaction as hex string.
-        #[clap(long = "dry")]
-        dry: bool,
+        #[clap(flatten)]
+        tx_commons: TxCommoun,
     },
 
     /// Sends a `unstake` transaction to the network. The transaction fee will be paid from the funds
     /// being unstaked.
     Unstake {
         /// The stake will be sent from this wallet.
-        wallet: Address,
+        sender_wallet: Address,
 
         /// The recipients of the previously staked coins.
         recipient: Address,
 
         /// The amount of NIM to unstake.
-        value: Coin,
-
-        /// The associated transaction fee to be payed from the funds being unstaked. If absent it defaults to 0 NIM.
-        #[clap(short, long, default_value = "0")]
-        fee: Coin,
-
-        /// The block height from which on the transaction could be applied. The maximum amount of blocks the transaction is valid for
-        /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
-        /// If absent it defaults to the current block height at time of processing.
-        #[clap(short, long, default_value_t)]
-        validity_start_height: ValidityStartHeight,
-
-        /// Don't actually send the transaction, but output the transaction as hex string.
-        #[clap(long = "dry")]
-        dry: bool,
+        #[clap(flatten)]
+        tx_commons: TxCommounWithValue,
     },
 
     /** Validator transactions **/
@@ -284,19 +246,8 @@ enum TransactionCommand {
         // ??
         signal_data: String,
 
-        /// The associated transaction fee to be payed from the sender_wallet. If absent it defaults to 0 NIM.
-        #[clap(short, long, default_value = "0")]
-        fee: Coin,
-
-        /// The block height from which on the transaction could be applied. The maximum amount of blocks the transaction is valid for
-        /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
-        /// If absent it defaults to the current block height at time of processing.
-        #[clap(short, long, default_value_t)]
-        validity_start_height: ValidityStartHeight,
-
-        /// Don't actually send the transaction, but output the transaction as hex string.
-        #[clap(long = "dry")]
-        dry: bool,
+        #[clap(flatten)]
+        tx_commons: TxCommoun,
     },
 
     /// Sends a transaction to the network to update this validator. You need to provide the address of a basic
@@ -322,19 +273,8 @@ enum TransactionCommand {
         // ??
         new_signal_data: Option<String>,
 
-        /// The associated transaction fee to be payed from the sender_wallet. If absent it defaults to 0 NIM.
-        #[clap(short, long, default_value = "0")]
-        fee: Coin,
-
-        /// The block height from which on the transaction could be applied. The maximum amount of blocks the transaction is valid for
-        /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
-        /// If absent it defaults to the current block height at time of processing.
-        #[clap(short, long, default_value_t)]
-        validity_start_height: ValidityStartHeight,
-
-        /// Don't actually send the transaction, but output the transaction as hex string.
-        #[clap(long = "dry")]
-        dry: bool,
+        #[clap(flatten)]
+        tx_commons: TxCommoun,
     },
 
     /// Sends a transaction to inactivate this validator. In order to avoid having the validator reactivated soon after
@@ -342,97 +282,50 @@ enum TransactionCommand {
     /// configuration is turned off.
     InactivateValidator {
         /// The fee will be payed from this wallet.
-        wallet: Address,
+        sender_wallet: Address,
 
-        /// The associated transaction fee to be payed from the sender_wallet. If absent it defaults to 0 NIM.
-        #[clap(short, long, default_value = "0")]
-        fee: Coin,
-
-        /// The block height from which on the transaction could be applied. The maximum amount of blocks the transaction is valid for
-        /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
-        /// If absent it defaults to the current block height at time of processing.
-        #[clap(short, long, default_value_t)]
-        validity_start_height: ValidityStartHeight,
-
-        /// Don't actually send the transaction, but output the transaction as hex string.
-        #[clap(long = "dry")]
-        dry: bool,
+        #[clap(flatten)]
+        tx_commons: TxCommoun,
     },
 
     /// Sends a transaction to reactivate this validator. You need to provide the address of a basic
     /// account (the sender wallet) to pay the transaction fee.
     ReactivateValidator {
         /// The fee will be payed from this wallet.
-        wallet: Address,
+        sender_wallet: Address,
 
-        /// The associated transaction fee to be payed from the sender_wallet. If absent it defaults to 0 NIM.
-        #[clap(short, long, default_value = "0")]
-        fee: Coin,
-
-        /// The block height from which on the transaction could be applied. The maximum amount of blocks the transaction is valid for
-        /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
-        /// If absent it defaults to the current block height at time of processing.
-        #[clap(short, long, default_value_t)]
-        validity_start_height: ValidityStartHeight,
-
-        /// Don't actually send the transaction, but output the transaction as hex string.
-        #[clap(long = "dry")]
-        dry: bool,
+        #[clap(flatten)]
+        tx_commons: TxCommoun,
     },
 
     /// Sends a transaction to unpark this validator. You need to provide the address of a basic
     /// account (the sender wallet) to pay the transaction fee.
     UnparkValidator {
         /// The fee will be payed from this wallet.
-        wallet: Address,
+        sender_wallet: Address,
 
-        /// The associated transaction fee to be payed from the sender_wallet. If absent it defaults to 0 NIM.
-        #[clap(short, long, default_value = "0")]
-        fee: Coin,
-
-        /// The block height from which on the transaction could be applied. The maximum amount of blocks the transaction is valid for
-        /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
-        /// If absent it defaults to the current block height at time of processing.
-        #[clap(short, long, default_value_t)]
-        validity_start_height: ValidityStartHeight,
-
-        /// Don't actually send the transaction, but output the transaction as hex string.
-        #[clap(long = "dry")]
-        dry: bool,
+        #[clap(flatten)]
+        tx_commons: TxCommoun,
     },
 
     /// Sends a transaction to delete this validator. The transaction fee will be paid from the
     /// validator deposit that is being returned.
     DeleteValidator {
-        /// The associated transaction fee to be payed from the sender_wallet. If absent it defaults to 0 NIM.
-        #[clap(short, long, default_value = "0")]
-        fee: Coin,
-
         /// The address to receive the balance of the validator.
         recipient_address: Address,
 
-        /// The block height from which on the transaction could be applied. The maximum amount of blocks the transaction is valid for
-        /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
-        /// If absent it defaults to the current block height at time of processing.
-        #[clap(short, long, default_value_t)]
-        validity_start_height: ValidityStartHeight,
-
-        /// Don't actually send the transaction, but output the transaction as hex string.
-        #[clap(long = "dry")]
-        dry: bool,
+        #[clap(flatten)]
+        tx_commons: TxCommoun,
     },
 
     /** Vesting transactions **/
     VestingCreate {
         /// The wallet used to sign the transaction. The vesting contract value is sent from the basic account
         /// belonging to this wallet.
-        wallet: Address,
+        sender_wallet: Address,
 
         /// The owner of the vesting contract.
         owner: Address,
-
-        /// The amount of NIM to place on the vesting contract.
-        value: Coin,
 
         start_time: u64,
 
@@ -441,24 +334,13 @@ enum TransactionCommand {
         /// Create a release schedule of `num_steps` payouts of value starting at `start_time + time_step`.
         num_steps: u32,
 
-        /// The associated transaction fee to be payed by the sender wallet. If absent it defaults to 0 NIM.
-        #[clap(short, long, default_value = "0")]
-        fee: Coin,
-
-        /// The block height from which on the transaction could be applied. The maximum amount of blocks the transaction is valid for
-        /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
-        /// If absent it defaults to the current block height at time of processing.
-        #[clap(short, long, default_value_t)]
-        validity_start_height: ValidityStartHeight,
-
-        /// Don't actually send the transaction, but output the transaction as hex string.
-        #[clap(long = "dry")]
-        dry: bool,
+        #[clap(flatten)]
+        tx_commons: TxCommounWithValue,
     },
 
     VestingRedeem {
         /// The wallet to sign the transaction. This wallet should be the owner of the vesting contract
-        wallet: Address,
+        sender_wallet: Address,
 
         /// The vesting contract address.
         contract_address: Address,
@@ -466,28 +348,14 @@ enum TransactionCommand {
         /// The address of the basic account that will receive the funds.
         recipient: Address,
 
-        /// The amount of NIM to be redeemed from the vesting contract.
-        value: Coin,
-
-        /// The associated transaction fee to be payed by the sender wallet. If absent it defaults to 0 NIM.
-        #[clap(short, long, default_value = "0")]
-        fee: Coin,
-
-        /// The block height from which on the transaction could be applied. The maximum amount of blocks the transaction is valid for
-        /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
-        /// If absent it defaults to the current block height at time of processing.
-        #[clap(short, long, default_value_t)]
-        validity_start_height: ValidityStartHeight,
-
-        /// Don't actually send the transaction, but output the transaction as hex string.
-        #[clap(long = "dry")]
-        dry: bool,
+        #[clap(flatten)]
+        tx_commons: TxCommounWithValue,
     },
 
     /** HTLC transactions **/
     CreateHTLC {
         /// The wallet to sign the transaction. The HTLC contract value is sent from the basic account belonging to this wallet.
-        wallet: Address,
+        sender_wallet: Address,
 
         /// The address of the sender in the HTLC contract.
         htlc_sender: Address,
@@ -508,27 +376,13 @@ enum TransactionCommand {
         /// Sets the blockchain height at which the `htlc_sender` automatically gains control over the funds.
         timeout: u64,
 
-        /// The amount of NIM to be transfered to the HTLC contract.
-        value: Coin,
-
-        /// The associated transaction fee to be payed by the sender wallet. If absent it defaults to 0 NIM.
-        #[clap(short, long, default_value = "0")]
-        fee: Coin,
-
-        /// The block height from which on the transaction could be applied. The maximum amount of blocks the transaction is valid for
-        /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
-        /// If absent it defaults to the current block height at time of processing.
-        #[clap(short, long, default_value_t)]
-        validity_start_height: ValidityStartHeight,
-
-        /// Don't actually send the transaction, but output the transaction as hex string.
-        #[clap(long = "dry")]
-        dry: bool,
+        #[clap(flatten)]
+        tx_commons: TxCommounWithValue,
     },
 
     RedeemRegularHTLC {
         /// This address corresponds to the `htlc_recipient` in the HTLC contract.
-        wallet: Address,
+        sender_wallet: Address,
 
         /// The address of the HTLC contract.
         contract_address: Address,
@@ -548,27 +402,13 @@ enum TransactionCommand {
         #[clap(short = 'a', long, arg_enum)]
         hash_algorithm: HashAlgorithm,
 
-        /// The value that will be sent to the recipient account.
-        value: Coin,
-
-        /// The associated transaction fee to be payed by the sender wallet. If absent it defaults to 0 NIM.
-        #[clap(short, long, default_value = "0")]
-        fee: Coin,
-
-        /// The block height from which on the transaction could be applied. The maximum amount of blocks the transaction is valid for
-        /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
-        /// If absent it defaults to the current block height at time of processing.
-        #[clap(short, long, default_value_t)]
-        validity_start_height: ValidityStartHeight,
-
-        /// Don't actually send the transaction, but output the transaction as hex string.
-        #[clap(long = "dry")]
-        dry: bool,
+        #[clap(flatten)]
+        tx_commons: TxCommounWithValue,
     },
 
     RedeemHTLCTimeout {
         /// This address corresponds to the `htlc_recipient` in the HTLC contract.
-        wallet: Address,
+        sender_wallet: Address,
 
         /// The address of the HTLC contract.
         contract_address: Address,
@@ -576,22 +416,8 @@ enum TransactionCommand {
         /// The address of the basic account that will receive the funds.
         htlc_recipient: Address,
 
-        /// The value that will be sent to the recipient account.
-        value: Coin,
-
-        /// The associated transaction fee to be payed by the sender wallet. If absent it defaults to 0 NIM.
-        #[clap(short, long, default_value = "0")]
-        fee: Coin,
-
-        /// The block height from which on the transaction could be applied. The maximum amount of blocks the transaction is valid for
-        /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
-        /// If absent it defaults to the current block height at time of processing.
-        #[clap(short, long, default_value_t)]
-        validity_start_height: ValidityStartHeight,
-
-        /// Don't actually send the transaction, but output the transaction as hex string.
-        #[clap(long = "dry")]
-        dry: bool,
+        #[clap(flatten)]
+        tx_commons: TxCommounWithValue,
     },
 
     RedeemHTLCEarly {
@@ -607,28 +433,14 @@ enum TransactionCommand {
         /// The signature corresponding to the `htlc_recipient` in the HTLC contract.
         htlc_recipient_signature: String,
 
-        /// The value that will be sent to the recipient account.
-        value: Coin,
-
-        /// The associated transaction fee to be payed by the sender wallet. If absent it defaults to 0 NIM.
-        #[clap(short, long, default_value = "0")]
-        fee: Coin,
-
-        /// The block height from which on the transaction could be applied. The maximum amount of blocks the transaction is valid for
-        /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
-        /// If absent it defaults to the current block height at time of processing.
-        #[clap(short, long, default_value_t)]
-        validity_start_height: ValidityStartHeight,
-
-        /// Don't actually send the transaction, but output the transaction as hex string.
-        #[clap(long = "dry")]
-        dry: bool,
+        #[clap(flatten)]
+        tx_commons: TxCommounWithValue,
     },
 
     SignRedeemHTLCEarly {
         /// This is the address used to sign the transaction. It corresponds either to the `htlc_sender` or the `htlc_recipient`
         /// in the HTLC contract.
-        wallet: Address,
+        sender_wallet: Address,
 
         /// The address of the HTLC contract.
         contract_address: Address,
@@ -636,18 +448,8 @@ enum TransactionCommand {
         /// The address of the basic account that will receive the funds.
         htlc_recipient: Address,
 
-        /// The value that will be sent to the recipient account.
-        value: Coin,
-
-        /// The associated transaction fee to be payed by the sender wallet. If absent it defaults to 0 NIM.
-        #[clap(short, long, default_value = "0")]
-        fee: Coin,
-
-        /// The block height from which on the transaction could be applied. The maximum amount of blocks the transaction is valid for
-        /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
-        /// If absent it defaults to the current block height at time of processing.
-        #[clap(short, long, default_value_t)]
-        validity_start_height: ValidityStartHeight,
+        #[clap(flatten)]
+        tx_commons: TxCommounWithValue,
     },
 }
 
@@ -789,22 +591,19 @@ impl Command {
 
             Command::Transaction(command) => match command {
                 TransactionCommand::Basic {
-                    wallet,
+                    sender_wallet,
                     recipient,
-                    value,
-                    fee,
-                    validity_start_height,
-                    dry,
+                    tx_commons,
                 } => {
-                    if dry {
+                    if tx_commons.commoun_tx_fields.dry {
                         let tx = client
                             .consensus
                             .create_basic_transaction(
-                                wallet,
+                                sender_wallet,
                                 recipient,
-                                value,
-                                fee,
-                                validity_start_height,
+                                tx_commons.value,
+                                tx_commons.commoun_tx_fields.fee,
+                                tx_commons.commoun_tx_fields.validity_start_height,
                             )
                             .await?;
                         println!("{}", tx);
@@ -812,36 +611,32 @@ impl Command {
                         let txid = client
                             .consensus
                             .send_basic_transaction(
-                                wallet,
+                                sender_wallet,
                                 recipient,
-                                value,
-                                fee,
-                                validity_start_height,
+                                tx_commons.value,
+                                tx_commons.commoun_tx_fields.fee,
+                                tx_commons.commoun_tx_fields.validity_start_height,
                             )
                             .await?;
                         println!("{}", txid);
                     }
                 }
-
                 TransactionCommand::NewStaker {
-                    wallet,
+                    sender_wallet,
                     staker_address,
                     delegation,
-                    value,
-                    fee,
-                    validity_start_height,
-                    dry,
+                    tx_commons,
                 } => {
-                    if dry {
+                    if tx_commons.commoun_tx_fields.dry {
                         let tx = client
                             .consensus
                             .create_new_staker_transaction(
-                                wallet,
+                                sender_wallet,
                                 staker_address,
                                 delegation,
-                                value,
-                                fee,
-                                validity_start_height,
+                                tx_commons.value,
+                                tx_commons.commoun_tx_fields.fee,
+                                tx_commons.commoun_tx_fields.validity_start_height,
                             )
                             .await?;
                         println!("{}", tx);
@@ -849,12 +644,12 @@ impl Command {
                         let txid = client
                             .consensus
                             .send_new_staker_transaction(
-                                wallet,
+                                sender_wallet,
                                 staker_address,
                                 delegation,
-                                value,
-                                fee,
-                                validity_start_height,
+                                tx_commons.value,
+                                tx_commons.commoun_tx_fields.fee,
+                                tx_commons.commoun_tx_fields.validity_start_height,
                             )
                             .await?;
                         println!("{}", txid);
@@ -862,22 +657,19 @@ impl Command {
                 }
 
                 TransactionCommand::Stake {
-                    wallet,
+                    sender_wallet,
                     staker_address,
-                    value,
-                    fee,
-                    validity_start_height,
-                    dry,
+                    tx_commons,
                 } => {
-                    if dry {
+                    if tx_commons.commoun_tx_fields.dry {
                         let tx = client
                             .consensus
                             .create_stake_transaction(
-                                wallet,
+                                sender_wallet,
                                 staker_address,
-                                value,
-                                fee,
-                                validity_start_height,
+                                tx_commons.value,
+                                tx_commons.commoun_tx_fields.fee,
+                                tx_commons.commoun_tx_fields.validity_start_height,
                             )
                             .await?;
                         println!("{}", tx);
@@ -885,11 +677,11 @@ impl Command {
                         let txid = client
                             .consensus
                             .send_stake_transaction(
-                                wallet,
+                                sender_wallet,
                                 staker_address,
-                                value,
-                                fee,
-                                validity_start_height,
+                                tx_commons.value,
+                                tx_commons.commoun_tx_fields.fee,
+                                tx_commons.commoun_tx_fields.validity_start_height,
                             )
                             .await?;
                         println!("{}", txid);
@@ -900,19 +692,17 @@ impl Command {
                     sender_wallet,
                     staker_address,
                     new_delegation,
-                    fee,
-                    validity_start_height,
-                    dry,
+                    tx_commons,
                 } => {
-                    if dry {
+                    if tx_commons.dry {
                         let tx = client
                             .consensus
                             .create_update_transaction(
                                 sender_wallet,
                                 staker_address,
                                 new_delegation,
-                                fee,
-                                validity_start_height,
+                                tx_commons.fee,
+                                tx_commons.validity_start_height,
                             )
                             .await?;
                         println!("{}", tx);
@@ -923,8 +713,8 @@ impl Command {
                                 sender_wallet,
                                 staker_address,
                                 new_delegation,
-                                fee,
-                                validity_start_height,
+                                tx_commons.fee,
+                                tx_commons.validity_start_height,
                             )
                             .await?;
                         println!("{}", txid);
@@ -932,22 +722,19 @@ impl Command {
                 }
 
                 TransactionCommand::Unstake {
-                    wallet,
+                    sender_wallet,
                     recipient,
-                    value,
-                    fee,
-                    validity_start_height,
-                    dry,
+                    tx_commons,
                 } => {
-                    if dry {
+                    if tx_commons.commoun_tx_fields.dry {
                         let tx = client
                             .consensus
                             .create_unstake_transaction(
-                                wallet,
+                                sender_wallet,
                                 recipient,
-                                value,
-                                fee,
-                                validity_start_height,
+                                tx_commons.value,
+                                tx_commons.commoun_tx_fields.fee,
+                                tx_commons.commoun_tx_fields.validity_start_height,
                             )
                             .await?;
                         println!("{}", tx);
@@ -955,11 +742,11 @@ impl Command {
                         let txid = client
                             .consensus
                             .send_unstake_transaction(
-                                wallet,
+                                sender_wallet,
                                 recipient,
-                                value,
-                                fee,
-                                validity_start_height,
+                                tx_commons.value,
+                                tx_commons.commoun_tx_fields.fee,
+                                tx_commons.commoun_tx_fields.validity_start_height,
                             )
                             .await?;
                         println!("{}", txid);
@@ -973,11 +760,9 @@ impl Command {
                     voting_secret_key,
                     reward_address,
                     signal_data,
-                    fee,
-                    validity_start_height,
-                    dry,
+                    tx_commons,
                 } => {
-                    if dry {
+                    if tx_commons.dry {
                         let tx = client
                             .consensus
                             .create_new_validator_transaction(
@@ -987,8 +772,8 @@ impl Command {
                                 voting_secret_key,
                                 reward_address,
                                 signal_data,
-                                fee,
-                                validity_start_height,
+                                tx_commons.fee,
+                                tx_commons.validity_start_height,
                             )
                             .await?;
                         println!("{}", tx);
@@ -1002,8 +787,8 @@ impl Command {
                                 voting_secret_key,
                                 reward_address,
                                 signal_data,
-                                fee,
-                                validity_start_height,
+                                tx_commons.fee,
+                                tx_commons.validity_start_height,
                             )
                             .await?;
                         println!("{}", txid);
@@ -1016,12 +801,10 @@ impl Command {
                     new_voting_secret_key,
                     new_reward_address,
                     new_signal_data,
-                    fee,
-                    validity_start_height,
-                    dry,
+                    tx_commons,
                 } => {
                     let validator_address = client.validator.get_address().await?;
-                    if dry {
+                    if tx_commons.dry {
                         let tx = client
                             .consensus
                             .create_update_validator_transaction(
@@ -1031,8 +814,8 @@ impl Command {
                                 new_voting_secret_key,
                                 new_reward_address,
                                 new_signal_data,
-                                fee,
-                                validity_start_height,
+                                tx_commons.fee,
+                                tx_commons.validity_start_height,
                             )
                             .await?;
                         println!("{}", tx);
@@ -1046,8 +829,8 @@ impl Command {
                                 new_voting_secret_key,
                                 new_reward_address,
                                 new_signal_data,
-                                fee,
-                                validity_start_height,
+                                tx_commons.fee,
+                                tx_commons.validity_start_height,
                             )
                             .await?;
                         println!("{}", txid);
@@ -1055,22 +838,20 @@ impl Command {
                 }
 
                 TransactionCommand::InactivateValidator {
-                    wallet,
-                    fee,
-                    validity_start_height,
-                    dry,
+                    sender_wallet,
+                    tx_commons,
                 } => {
                     let validator_address = client.validator.get_address().await?;
                     let key_data = client.validator.get_signing_key().await?;
-                    if dry {
+                    if tx_commons.dry {
                         let tx = client
                             .consensus
                             .create_inactivate_validator_transaction(
-                                wallet,
+                                sender_wallet,
                                 validator_address,
                                 key_data,
-                                fee,
-                                validity_start_height,
+                                tx_commons.fee,
+                                tx_commons.validity_start_height,
                             )
                             .await?;
                         println!("{}", tx);
@@ -1078,11 +859,11 @@ impl Command {
                         let txid = client
                             .consensus
                             .send_inactivate_validator_transaction(
-                                wallet,
+                                sender_wallet,
                                 validator_address,
                                 key_data,
-                                fee,
-                                validity_start_height,
+                                tx_commons.fee,
+                                tx_commons.validity_start_height,
                             )
                             .await?;
                         println!("{}", txid);
@@ -1090,22 +871,20 @@ impl Command {
                 }
 
                 TransactionCommand::ReactivateValidator {
-                    wallet,
-                    fee,
-                    validity_start_height,
-                    dry,
+                    sender_wallet,
+                    tx_commons,
                 } => {
                     let validator_address = client.validator.get_address().await?;
                     let key_data = client.validator.get_signing_key().await?;
-                    if dry {
+                    if tx_commons.dry {
                         let tx = client
                             .consensus
                             .create_reactivate_validator_transaction(
-                                wallet,
+                                sender_wallet,
                                 validator_address,
                                 key_data,
-                                fee,
-                                validity_start_height,
+                                tx_commons.fee,
+                                tx_commons.validity_start_height,
                             )
                             .await?;
                         println!("{}", tx);
@@ -1113,11 +892,11 @@ impl Command {
                         let txid = client
                             .consensus
                             .send_reactivate_validator_transaction(
-                                wallet,
+                                sender_wallet,
                                 validator_address,
                                 key_data,
-                                fee,
-                                validity_start_height,
+                                tx_commons.fee,
+                                tx_commons.validity_start_height,
                             )
                             .await?;
                         println!("{}", txid);
@@ -1125,22 +904,20 @@ impl Command {
                 }
 
                 TransactionCommand::UnparkValidator {
-                    wallet,
-                    fee,
-                    validity_start_height,
-                    dry,
+                    sender_wallet,
+                    tx_commons,
                 } => {
                     let validator_address = client.validator.get_address().await?;
                     let key_data = client.validator.get_signing_key().await?;
-                    if dry {
+                    if tx_commons.dry {
                         let tx = client
                             .consensus
                             .create_unpark_validator_transaction(
-                                wallet,
+                                sender_wallet,
                                 validator_address,
                                 key_data,
-                                fee,
-                                validity_start_height,
+                                tx_commons.fee,
+                                tx_commons.validity_start_height,
                             )
                             .await?;
                         println!("{}", tx);
@@ -1148,11 +925,11 @@ impl Command {
                         let txid = client
                             .consensus
                             .send_unpark_validator_transaction(
-                                wallet,
+                                sender_wallet,
                                 validator_address,
                                 key_data,
-                                fee,
-                                validity_start_height,
+                                tx_commons.fee,
+                                tx_commons.validity_start_height,
                             )
                             .await?;
                         println!("{}", txid);
@@ -1161,19 +938,17 @@ impl Command {
 
                 TransactionCommand::DeleteValidator {
                     recipient_address,
-                    fee,
-                    validity_start_height,
-                    dry,
+                    tx_commons,
                 } => {
                     let validator_address = client.validator.get_address().await?;
-                    if dry {
+                    if tx_commons.dry {
                         let tx = client
                             .consensus
                             .create_delete_validator_transaction(
                                 validator_address,
                                 recipient_address,
-                                fee,
-                                validity_start_height,
+                                tx_commons.fee,
+                                tx_commons.validity_start_height,
                             )
                             .await?;
                         println!("{}", tx);
@@ -1183,8 +958,8 @@ impl Command {
                             .send_delete_validator_transaction(
                                 validator_address,
                                 recipient_address,
-                                fee,
-                                validity_start_height,
+                                tx_commons.fee,
+                                tx_commons.validity_start_height,
                             )
                             .await?;
                         println!("{}", txid);
@@ -1192,28 +967,25 @@ impl Command {
                 }
 
                 TransactionCommand::VestingCreate {
-                    wallet,
+                    sender_wallet,
                     owner,
-                    value,
                     start_time,
                     time_step,
                     num_steps,
-                    fee,
-                    validity_start_height,
-                    dry,
+                    tx_commons,
                 } => {
-                    if dry {
+                    if tx_commons.commoun_tx_fields.dry {
                         let tx = client
                             .consensus
                             .create_new_vesting_transaction(
-                                wallet,
+                                sender_wallet,
                                 owner,
                                 start_time,
                                 time_step,
                                 num_steps,
-                                value,
-                                fee,
-                                validity_start_height,
+                                tx_commons.value,
+                                tx_commons.commoun_tx_fields.fee,
+                                tx_commons.commoun_tx_fields.validity_start_height,
                             )
                             .await?;
                         println!("{}", tx);
@@ -1221,38 +993,35 @@ impl Command {
                         let txid = client
                             .consensus
                             .send_new_vesting_transaction(
-                                wallet,
+                                sender_wallet,
                                 owner,
                                 start_time,
                                 time_step,
                                 num_steps,
-                                value,
-                                fee,
-                                validity_start_height,
+                                tx_commons.value,
+                                tx_commons.commoun_tx_fields.fee,
+                                tx_commons.commoun_tx_fields.validity_start_height,
                             )
                             .await?;
                         println!("{}", txid);
                     }
                 }
                 TransactionCommand::VestingRedeem {
-                    wallet,
+                    sender_wallet,
                     contract_address,
                     recipient,
-                    value,
-                    fee,
-                    validity_start_height,
-                    dry,
+                    tx_commons,
                 } => {
-                    if dry {
+                    if tx_commons.commoun_tx_fields.dry {
                         let tx = client
                             .consensus
                             .create_redeem_vesting_transaction(
-                                wallet,
+                                sender_wallet,
                                 contract_address,
                                 recipient,
-                                value,
-                                fee,
-                                validity_start_height,
+                                tx_commons.value,
+                                tx_commons.commoun_tx_fields.fee,
+                                tx_commons.commoun_tx_fields.validity_start_height,
                             )
                             .await?;
                         println!("{}", tx);
@@ -1260,44 +1029,41 @@ impl Command {
                         let txid = client
                             .consensus
                             .send_redeem_vesting_transaction(
-                                wallet,
+                                sender_wallet,
                                 contract_address,
                                 recipient,
-                                value,
-                                fee,
-                                validity_start_height,
+                                tx_commons.value,
+                                tx_commons.commoun_tx_fields.fee,
+                                tx_commons.commoun_tx_fields.validity_start_height,
                             )
                             .await?;
                         println!("{}", txid);
                     }
                 }
                 TransactionCommand::CreateHTLC {
-                    wallet,
+                    sender_wallet,
                     htlc_sender,
                     htlc_recipient,
                     hash_root,
                     hash_count,
                     hash_algorithm,
                     timeout,
-                    value,
-                    fee,
-                    validity_start_height,
-                    dry,
+                    tx_commons,
                 } => {
-                    if dry {
+                    if tx_commons.commoun_tx_fields.dry {
                         let tx = client
                             .consensus
                             .create_new_htlc_transaction(
-                                wallet,
+                                sender_wallet,
                                 htlc_sender,
                                 htlc_recipient,
                                 hash_root,
                                 hash_count,
                                 hash_algorithm.into(),
                                 timeout,
-                                value,
-                                fee,
-                                validity_start_height,
+                                tx_commons.value,
+                                tx_commons.commoun_tx_fields.fee,
+                                tx_commons.commoun_tx_fields.validity_start_height,
                             )
                             .await?;
                         println!("{}", tx);
@@ -1305,48 +1071,45 @@ impl Command {
                         let txid = client
                             .consensus
                             .send_new_htlc_transaction(
-                                wallet,
+                                sender_wallet,
                                 htlc_sender,
                                 htlc_recipient,
                                 hash_root,
                                 hash_count,
                                 hash_algorithm.into(),
                                 timeout,
-                                value,
-                                fee,
-                                validity_start_height,
+                                tx_commons.value,
+                                tx_commons.commoun_tx_fields.fee,
+                                tx_commons.commoun_tx_fields.validity_start_height,
                             )
                             .await?;
                         println!("{}", txid);
                     }
                 }
                 TransactionCommand::RedeemRegularHTLC {
-                    wallet,
+                    sender_wallet,
                     contract_address,
                     htlc_recipient,
                     pre_image,
                     hash_root,
                     hash_count,
                     hash_algorithm,
-                    value,
-                    fee,
-                    validity_start_height,
-                    dry,
+                    tx_commons,
                 } => {
-                    if dry {
+                    if tx_commons.commoun_tx_fields.dry {
                         let tx = client
                             .consensus
                             .create_redeem_regular_htlc_transaction(
-                                wallet,
+                                sender_wallet,
                                 contract_address,
                                 htlc_recipient,
                                 pre_image,
                                 hash_root,
                                 hash_count,
                                 hash_algorithm.into(),
-                                value,
-                                fee,
-                                validity_start_height,
+                                tx_commons.value,
+                                tx_commons.commoun_tx_fields.fee,
+                                tx_commons.commoun_tx_fields.validity_start_height,
                             )
                             .await?;
                         println!("{}", tx);
@@ -1354,40 +1117,37 @@ impl Command {
                         let txid = client
                             .consensus
                             .send_redeem_regular_htlc_transaction(
-                                wallet,
+                                sender_wallet,
                                 contract_address,
                                 htlc_recipient,
                                 pre_image,
                                 hash_root,
                                 hash_count,
                                 hash_algorithm.into(),
-                                value,
-                                fee,
-                                validity_start_height,
+                                tx_commons.value,
+                                tx_commons.commoun_tx_fields.fee,
+                                tx_commons.commoun_tx_fields.validity_start_height,
                             )
                             .await?;
                         println!("{}", txid);
                     }
                 }
                 TransactionCommand::RedeemHTLCTimeout {
-                    wallet,
+                    sender_wallet,
                     contract_address,
                     htlc_recipient,
-                    value,
-                    fee,
-                    validity_start_height,
-                    dry,
+                    tx_commons,
                 } => {
-                    if dry {
+                    if tx_commons.commoun_tx_fields.dry {
                         let tx = client
                             .consensus
                             .create_redeem_timeout_htlc_transaction(
-                                wallet,
+                                sender_wallet,
                                 contract_address,
                                 htlc_recipient,
-                                value,
-                                fee,
-                                validity_start_height,
+                                tx_commons.value,
+                                tx_commons.commoun_tx_fields.fee,
+                                tx_commons.commoun_tx_fields.validity_start_height,
                             )
                             .await?;
                         println!("{}", tx);
@@ -1395,12 +1155,12 @@ impl Command {
                         let txid = client
                             .consensus
                             .send_redeem_timeout_htlc_transaction(
-                                wallet,
+                                sender_wallet,
                                 contract_address,
                                 htlc_recipient,
-                                value,
-                                fee,
-                                validity_start_height,
+                                tx_commons.value,
+                                tx_commons.commoun_tx_fields.fee,
+                                tx_commons.commoun_tx_fields.validity_start_height,
                             )
                             .await?;
                         println!("{}", txid);
@@ -1411,12 +1171,10 @@ impl Command {
                     htlc_recipient,
                     htlc_sender_signature,
                     htlc_recipient_signature,
-                    value,
-                    fee,
-                    validity_start_height,
-                    dry,
+
+                    tx_commons,
                 } => {
-                    if dry {
+                    if tx_commons.commoun_tx_fields.dry {
                         let tx = client
                             .consensus
                             .create_redeem_early_htlc_transaction(
@@ -1424,9 +1182,9 @@ impl Command {
                                 htlc_recipient,
                                 htlc_sender_signature,
                                 htlc_recipient_signature,
-                                value,
-                                fee,
-                                validity_start_height,
+                                tx_commons.value,
+                                tx_commons.commoun_tx_fields.fee,
+                                tx_commons.commoun_tx_fields.validity_start_height,
                             )
                             .await?;
                         println!("{}", tx);
@@ -1438,31 +1196,29 @@ impl Command {
                                 htlc_recipient,
                                 htlc_sender_signature,
                                 htlc_recipient_signature,
-                                value,
-                                fee,
-                                validity_start_height,
+                                tx_commons.value,
+                                tx_commons.commoun_tx_fields.fee,
+                                tx_commons.commoun_tx_fields.validity_start_height,
                             )
                             .await?;
                         println!("{}", txid);
                     }
                 }
                 TransactionCommand::SignRedeemHTLCEarly {
-                    wallet,
+                    sender_wallet,
                     contract_address,
                     htlc_recipient,
-                    value,
-                    fee,
-                    validity_start_height,
+                    tx_commons,
                 } => {
                     let tx = client
                         .consensus
                         .sign_redeem_early_htlc_transaction(
-                            wallet,
+                            sender_wallet,
                             contract_address,
                             htlc_recipient,
-                            value,
-                            fee,
-                            validity_start_height,
+                            tx_commons.value,
+                            tx_commons.commoun_tx_fields.fee,
+                            tx_commons.commoun_tx_fields.validity_start_height,
                         )
                         .await?;
                     println!("{}", tx);
