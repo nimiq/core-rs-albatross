@@ -1,12 +1,9 @@
-use std::collections::HashMap;
-
 use async_trait::async_trait;
 use futures::stream::BoxStream;
 
 use nimiq_account::BlockLog;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
-use nimiq_primitives::coin::Coin;
 
 use crate::types::{
     Account, Block, BlockchainState, Inherent, LogType, ParkedSet, SlashedSlots, Slot, Staker,
@@ -87,7 +84,7 @@ pub trait BlockchainInterface {
 
     async fn get_account_by_address(&mut self, address: Address) -> Result<Account, Self::Error>;
 
-    async fn get_active_validators(&mut self) -> Result<HashMap<Address, Coin>, Self::Error>;
+    async fn get_active_validators(&mut self) -> Result<Vec<Staker>, Self::Error>;
 
     async fn get_current_slashed_slots(&mut self) -> Result<SlashedSlots, Self::Error>;
 

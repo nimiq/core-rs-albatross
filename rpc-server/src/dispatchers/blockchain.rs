@@ -1,4 +1,4 @@
-use std::{collections::HashMap, ops::Deref, sync::Arc};
+use std::{ops::Deref, sync::Arc};
 
 use async_trait::async_trait;
 use futures::{future, stream::BoxStream, StreamExt};
@@ -8,7 +8,7 @@ use nimiq_account::{BlockLog, StakingContract, TransactionLog};
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainEvent};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
-use nimiq_primitives::{coin::Coin, policy};
+use nimiq_primitives::policy;
 use nimiq_rpc_interface::types::{
     is_of_log_type_and_related_to_addresses, BlockchainState, ParkedSet, Validator,
 };
@@ -460,13 +460,17 @@ impl BlockchainInterface for BlockchainDispatcher {
     }
 
     /// Returns a map of the currently active validator's addresses and balances.
-    async fn get_active_validators(&mut self) -> Result<HashMap<Address, Coin>, Error> {
+    async fn get_active_validators(&mut self) -> Result<Vec<Staker>, Error> {
         let staking_contract = self.blockchain.read().get_staking_contract();
 
-        let mut active_validators = HashMap::new();
+        let mut active_validators = vec![];
 
         for (address, balance) in staking_contract.active_validators {
-            active_validators.insert(address, balance);
+            active_validators.push(Staker {
+                address,
+                balance,
+                delegation: None,
+            });
         }
 
         Ok(active_validators)
