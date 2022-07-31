@@ -1,4 +1,4 @@
-use std::{collections::HashMap, ops::Deref, sync::Arc};
+use std::{ops::Deref, sync::Arc};
 
 use async_trait::async_trait;
 use futures::{future, stream::BoxStream, StreamExt};
@@ -8,7 +8,7 @@ use nimiq_account::{BlockLog, StakingContract, TransactionLog};
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainEvent};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
-use nimiq_primitives::{coin::Coin, policy};
+use nimiq_primitives::policy;
 use nimiq_rpc_interface::types::{
     is_of_log_type_and_related_to_addresses, BlockchainState, ParkedSet, Validator,
 };
@@ -49,7 +49,7 @@ fn get_block_by_hash(
         .ok_or_else(|| Error::BlockNotFound(hash.clone().into()))
 }
 
-/// Tries to fetch a validator information given its address. It has an option to include a map
+/// Tries to fetch a validator information given its address. It has an option to include a collection
 /// containing the addresses and stakes of all the stakers that are delegating to the validator.
 /// This function requeires the read lock acquisition prior to its execution
 fn get_validator_by_address(
@@ -459,14 +459,17 @@ impl BlockchainInterface for BlockchainDispatcher {
         }
     }
 
-    /// Returns a map of the currently active validator's addresses and balances.
-    async fn get_active_validators(&mut self) -> Result<HashMap<Address, Coin>, Error> {
-        let staking_contract = self.blockchain.read().get_staking_contract();
+    /// Returns a collection of the currently active validator's addresses and balances.
+    async fn get_active_validators(&mut self) -> Result<Vec<Validator>, Self::Error> {
+        let blockchain = self.blockchain.read();
+        let staking_contract = blockchain.get_staking_contract();
 
-        let mut active_validators = HashMap::new();
+        let mut active_validators = vec![];
 
-        for (address, balance) in staking_contract.active_validators {
-            active_validators.insert(address, balance);
+        for (address, _) in staking_contract.active_validators {
+            if let Ok(v) = get_validator_by_address(&blockchain, &address, None) {
+                active_validators.push(v.value);
+            }
         }
 
         Ok(active_validators)
