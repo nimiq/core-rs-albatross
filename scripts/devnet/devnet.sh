@@ -396,35 +396,22 @@ do
 
     # Obtain the greatest one
     new_block_number=0
-    new_view_number=0
     for bn in "${bns[@]}" ; do
-        block_number=$(echo $bn | cut -d "." -f 1)
-        view_number=$(echo $bn | cut -d "." -f 2)
-
-        # First we need to detect if the blocks being compared correspond to the same batch
-        batch_number1=$((block_number/$batch_size))
-        batch_number2=$((new_block_number/$batch_size))
-
-        # If they are in the same batch, the greatest view number wins
-        if [ $batch_number1 -eq $batch_number2 ] && [ $view_number -gt $new_view_number ] ; then
+        block_number=$(echo $bn)
+        if [ $block_number -gt $new_block_number ] ; then
             new_block_number=$block_number
-            new_view_number=$view_number
-        elif [ $block_number -gt $new_block_number ] ; then
-            new_block_number=$block_number
-            new_view_number=$view_number
         fi
     done
 
-    echo "     Latest block: #$new_block_number.$new_view_number"
+    echo "     Latest block: #$new_block_number"
 
-    if [ $new_block_number -eq $old_block_number ] && [ $new_view_number -eq $old_view_number ] ; then
+    if [ $new_block_number -eq $old_block_number ] ; then
         echo "   !!!   BLOCKS ARE NOT BEING PRODUCED AFTER $sleep_time SECONDS   !!!"
         echo "CHAIN-STALL" >> temp-state/RESULT.TXT
         fail=true
         break
     fi
     old_block_number=$new_block_number
-    old_view_number=$new_view_number
 done
 
 sleep 30

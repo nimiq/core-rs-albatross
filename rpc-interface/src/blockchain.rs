@@ -38,7 +38,11 @@ pub trait BlockchainInterface {
         include_transactions: Option<bool>,
     ) -> Result<Block, Self::Error>;
 
-    async fn get_slot_at(&mut self, block_number: u32) -> Result<Slot, Self::Error>;
+    async fn get_slot_at(
+        &mut self,
+        block_number: u32,
+        offset_opt: Option<u32>,
+    ) -> Result<Slot, Self::Error>;
 
     async fn get_transaction_by_hash(
         &mut self,

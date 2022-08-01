@@ -10,7 +10,8 @@ use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::policy;
 use nimiq_rpc_interface::types::{
-    is_of_log_type_and_related_to_addresses, BlockchainState, ParkedSet, Validator,
+    is_of_log_type_and_related_to_addresses, BlockNumberOrHash, BlockchainState, ParkedSet,
+    Validator,
 };
 use nimiq_rpc_interface::{
     blockchain::BlockchainInterface,
@@ -161,16 +162,37 @@ impl BlockchainInterface for BlockchainDispatcher {
         ))
     }
 
-    /// Returns the information for the slot owner at the given block height and view number. The
-    /// view number is optional, it will default to getting the view number for the existing block
+    /// Returns the information for the slot owner at the given block height and offset. The
+    /// offset is optional, it will default to getting the offset for the existing block
     /// at the given height.
     async fn get_slot_at(
         &mut self,
         block_number: u32,
+        offset_opt: Option<u32>,
     ) -> Result<Slot, Self::Error> {
         let blockchain = self.blockchain.read();
 
-        Ok(Slot::from(blockchain.deref(), block_number))
+        let offset = if let Some(offset) = offset_opt {
+            offset
+        } else {
+            let block = blockchain
+                .get_block_at(block_number, true, None)
+                .ok_or_else(|| Error::BlockNotFound(block_number.into()))?;
+            if let nimiq_block::Block::Macro(macro_block) = block {
+                if let Some(proof) = macro_block.justification {
+                    proof.round
+                } else {
+                    return Err(Error::UnexpectedMacroBlock(BlockNumberOrHash::Number(
+                        block_number,
+                    )));
+                }
+            } else {
+                // Skip and micro block offset is always 0
+                0
+            }
+        };
+
+        Ok(Slot::from(blockchain.deref(), block_number, offset))
     }
 
     /// Tries to fetch a transaction (including reward transactions) given its hash.

@@ -328,7 +328,7 @@ impl Block {
                     history_hash: micro_block.header.history_root,
                     transactions,
                     additional_fields: BlockAdditionalFields::Micro {
-                        producer: Slot::from(blockchain, block_number),
+                        producer: Slot::from(blockchain, block_number, 0),
                         fork_proofs,
                         justification: micro_block.justification.map(Into::into),
                     },
@@ -379,9 +379,9 @@ pub struct Slot {
 }
 
 impl Slot {
-    pub fn from(blockchain: &Blockchain, block_number: u32) -> Self {
+    pub fn from(blockchain: &Blockchain, block_number: u32, offset: u32) -> Self {
         let (validator, slot_number) = blockchain
-            .get_slot_owner_at(block_number, None)
+            .get_slot_owner_at(block_number, offset, None)
             .expect("Couldn't calculate slot owner!");
 
         Slot {

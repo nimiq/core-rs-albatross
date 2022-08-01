@@ -32,8 +32,17 @@ impl NanoBlockchain {
         }
 
         // Get the intended slot owner.
+        let offset = if let Block::Macro(macro_block) = &block {
+            if let Some(proof) = &macro_block.justification {
+                proof.round
+            } else {
+                return Err(PushError::InvalidBlock(BlockError::NoJustification));
+            }
+        } else {
+            0
+        };
         let (slot_owner, _) = self
-            .get_slot_owner_at(block.block_number(), None)
+            .get_slot_owner_at(block.block_number(), offset, None)
             .expect("Failed to find slot owner!");
 
         // Check the header.

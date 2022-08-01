@@ -100,7 +100,7 @@ async fn four_validators_can_do_skip_block() {
         build_validators::<Network>(env, &(5u64..=8u64).collect::<Vec<_>>(), &mut Some(hub)).await;
 
     // Disconnect the next block producer.
-    let validator = pop_validator_for_slot(&mut validators, 1);
+    let validator = pop_validator_for_slot(&mut validators, 1, 0);
     validator.consensus.network.disconnect().await;
     drop(validator);
     log::info!("Peer disconnection");
@@ -188,10 +188,10 @@ async fn validator_can_catch_up() {
 
     // Disconnect the block producers for the next 3 skip blocks. remember the one which is supposed to actually create the block (3rd skip block)
     let (validator, _) = {
-        let validator = validator_for_slot(&mut validators, 1);
+        let validator = validator_for_slot(&mut validators, 1, 0);
         validator.consensus.network.disconnect().await;
         let id1 = validator.validator_slot_band();
-        let validator = validator_for_slot(&mut validators, 1);
+        let validator = validator_for_slot(&mut validators, 2, 0);
         validator.consensus.network.disconnect().await;
         let id2 = validator.validator_slot_band();
         assert_ne!(id2, id1);
@@ -203,7 +203,7 @@ async fn validator_can_catch_up() {
         //     v.validator_address() != id1 && v.validator_address() != id2
         // });
 
-        let validator = validator_for_slot(&validators, 1);
+        let validator = validator_for_slot(&validators, 3, 0);
         validator.consensus.network.disconnect().await;
         assert_ne!(id1, validator.validator_slot_band());
         assert_ne!(id2, validator.validator_slot_band());

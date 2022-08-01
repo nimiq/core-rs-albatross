@@ -4,7 +4,7 @@ use std::ops::Deref;
 use nimiq_account::BlockLog;
 use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
 
-use nimiq_block::{Block, ForkProof};
+use nimiq_block::{Block, BlockError, ForkProof};
 use nimiq_database::WriteTransaction;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::policy;
@@ -69,9 +69,20 @@ impl Blockchain {
             })?;
 
         // Get the intended block proposer.
+        let offset = if let Block::Macro(macro_block) = &block {
+            if let Some(proof) = &macro_block.justification {
+                proof.round
+            } else {
+                return Err(PushError::InvalidBlock(BlockError::NoJustification));
+            }
+        } else {
+            // Skip and micro block offset is always 0
+            0
+        };
         let proposer_slot = this
             .get_proposer_at(
                 block.block_number(),
+                offset,
                 prev_info.head.seed().entropy(),
                 Some(&read_txn),
             )

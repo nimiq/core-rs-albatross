@@ -86,6 +86,7 @@ impl AbstractBlockchain for NanoBlockchain {
     fn get_slot_owner_at(
         &self,
         _block_number: u32,
+        _offset: u32,
         _txn_option: Option<&Transaction>,
     ) -> Option<(Validator, u16)> {
         todo!()

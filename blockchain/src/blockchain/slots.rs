@@ -49,6 +49,7 @@ impl Blockchain {
     pub fn get_proposer_at(
         &self,
         block_number: u32,
+        offset: u32,
         vrf_entropy: VrfEntropy,
         txn: Option<&Transaction>,
     ) -> Option<Slot> {
@@ -58,7 +59,7 @@ impl Blockchain {
         let disabled_slots = macro_block.unwrap_macro().body.unwrap().disabled_set;
 
         // Compute the slot number of the next proposer.
-        let slot_number = Self::compute_slot_number(block_number, vrf_entropy, disabled_slots);
+        let slot_number = Self::compute_slot_number(offset, vrf_entropy, disabled_slots);
 
         // Fetch the validators that are active in given block's epoch.
         let epoch_number = policy::epoch_at(block_number);
@@ -77,11 +78,7 @@ impl Blockchain {
         })
     }
 
-    fn compute_slot_number(
-        block_number: u32,
-        vrf_entropy: VrfEntropy,
-        disabled_slots: BitSet,
-    ) -> u16 {
+    fn compute_slot_number(offset: u32, vrf_entropy: VrfEntropy, disabled_slots: BitSet) -> u16 {
         // RNG for slot selection
         let mut rng = vrf_entropy.rng(VrfUseCase::ViewSlotSelection);
 
@@ -103,8 +100,8 @@ impl Blockchain {
             slots.swap(r, i);
         }
 
-        // Now simply take the block number modulo the number of viable slots and that will give us
+        // Now simply take the offset modulo the number of viable slots and that will give us
         // the chosen slot.
-        slots[block_number as usize % slots.len()]
+        slots[offset as usize % slots.len()]
     }
 }

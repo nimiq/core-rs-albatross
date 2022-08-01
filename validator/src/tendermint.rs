@@ -110,7 +110,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
 
         // Get the validator for this round.
         let proposer_slot = blockchain
-            .get_proposer_at(round, self.prev_seed.entropy(), None)
+            .get_proposer_at(self.block_height, round, self.prev_seed.entropy(), None)
             .expect("Couldn't find slot owner!");
 
         // Check if the slot bands match.
@@ -261,9 +261,9 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
         let (timeout, proposer_slot_band, proposer_voting_key, proposer_signing_key) = {
             let blockchain = self.blockchain.read();
 
-            // Get the proposer's slot and slot number.
+            // Get the proposer's slot and slot number for this round.
             let proposer_slot = blockchain
-                .get_proposer_at(round, self.prev_seed.entropy(), None)
+                .get_proposer_at(self.block_height, round, self.prev_seed.entropy(), None)
                 .expect("Couldn't find slot owner!");
             let proposer_slot_band = proposer_slot.band;
 
@@ -322,9 +322,14 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
 
             // In case the proposal has a valid round, the original proposer signed the VRF Seed,
             // so the original slot owners key must be retrieved for header verification.
-            let vrf_key = if valid_round.is_some() {
+            let vrf_key = if let Some(valid_round) = valid_round {
                 let proposer_slot = blockchain
-                    .get_proposer_at(round, self.prev_seed.entropy(), None)
+                    .get_proposer_at(
+                        self.block_height,
+                        valid_round,
+                        self.prev_seed.entropy(),
+                        None,
+                    )
                     .expect("Couldn't find slot owner!");
 
                 proposer_slot.validator.signing_key
