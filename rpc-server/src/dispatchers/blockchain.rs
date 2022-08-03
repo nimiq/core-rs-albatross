@@ -49,7 +49,7 @@ fn get_block_by_hash(
         .ok_or_else(|| Error::BlockNotFound(hash.clone().into()))
 }
 
-/// Tries to fetch a validator information given its address. It has an option to include a map
+/// Tries to fetch a validator information given its address. It has an option to include a collection
 /// containing the addresses and stakes of all the stakers that are delegating to the validator.
 /// This function requeires the read lock acquisition prior to its execution
 fn get_validator_by_address(
@@ -459,7 +459,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         }
     }
 
-    /// Returns a map of the currently active validator's addresses and balances.
+    /// Returns a collection of the currently active validator's addresses and balances.
     async fn get_active_validators(&mut self) -> Result<Vec<Validator>, Self::Error> {
         let blockchain = self.blockchain.read();
         let staking_contract = blockchain.get_staking_contract();
