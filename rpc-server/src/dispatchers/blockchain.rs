@@ -460,17 +460,16 @@ impl BlockchainInterface for BlockchainDispatcher {
     }
 
     /// Returns a map of the currently active validator's addresses and balances.
-    async fn get_active_validators(&mut self) -> Result<Vec<Staker>, Error> {
-        let staking_contract = self.blockchain.read().get_staking_contract();
+    async fn get_active_validators(&mut self) -> Result<Vec<Validator>, Self::Error> {
+        let blockchain = self.blockchain.read();
+        let staking_contract = blockchain.get_staking_contract();
 
         let mut active_validators = vec![];
 
-        for (address, balance) in staking_contract.active_validators {
-            active_validators.push(Staker {
-                address,
-                balance,
-                delegation: None,
-            });
+        for (address, _) in staking_contract.active_validators {
+            if let Ok(v) = get_validator_by_address(&blockchain, &address, None) {
+                active_validators.push(v.value);
+            }
         }
 
         Ok(active_validators)

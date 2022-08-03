@@ -84,7 +84,7 @@ pub trait BlockchainInterface {
 
     async fn get_account_by_address(&mut self, address: Address) -> Result<Account, Self::Error>;
 
-    async fn get_active_validators(&mut self) -> Result<Vec<Staker>, Self::Error>;
+    async fn get_active_validators(&mut self) -> Result<Vec<Validator>, Self::Error>;
 
     async fn get_current_slashed_slots(&mut self) -> Result<SlashedSlots, Self::Error>;
 
