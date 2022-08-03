@@ -42,7 +42,7 @@ impl WalletInterface for WalletDispatcher {
         &mut self,
         key_data: String,
         passphrase: Option<String>,
-    ) -> Result<Address, Error> {
+    ) -> Result<Address, Self::Error> {
         let passphrase = passphrase.unwrap_or_default();
 
         let private_key: PrivateKey = Deserialize::deserialize_from_vec(&hex::decode(&key_data)?)?;
@@ -60,22 +60,25 @@ impl WalletInterface for WalletDispatcher {
         Ok(address)
     }
 
-    async fn is_account_imported(&mut self, address: Address) -> Result<bool, Error> {
+    async fn is_account_imported(&mut self, address: Address) -> Result<bool, Self::Error> {
         let is_imported = self.wallet_store.get(&address, None).is_some();
 
         Ok(is_imported)
     }
 
-    async fn list_accounts(&mut self) -> Result<Vec<Address>, Error> {
+    async fn list_accounts(&mut self) -> Result<Vec<Address>, Self::Error> {
         Ok(self.wallet_store.list(None))
     }
 
-    async fn lock_account(&mut self, address: Address) -> Result<(), Error> {
+    async fn lock_account(&mut self, address: Address) -> Result<(), Self::Error> {
         self.unlocked_wallets.write().remove(&address);
         Ok(())
     }
 
-    async fn create_account(&mut self, passphrase: Option<String>) -> Result<ReturnAccount, Error> {
+    async fn create_account(
+        &mut self,
+        passphrase: Option<String>,
+    ) -> Result<ReturnAccount, Self::Error> {
         let passphrase = passphrase.unwrap_or_default();
         let account = WalletAccount::generate();
         let address = account.address.clone();
@@ -101,7 +104,7 @@ impl WalletInterface for WalletDispatcher {
         address: Address,
         passphrase: Option<String>,
         _duration: Option<u64>,
-    ) -> Result<bool, Error> {
+    ) -> Result<bool, Self::Error> {
         let passphrase = passphrase.unwrap_or_default();
         let account = self
             .wallet_store
@@ -117,7 +120,7 @@ impl WalletInterface for WalletDispatcher {
         Ok(true)
     }
 
-    async fn is_account_unlocked(&mut self, address: Address) -> Result<bool, Error> {
+    async fn is_account_unlocked(&mut self, address: Address) -> Result<bool, Self::Error> {
         let unlocked_wallets = self.unlocked_wallets.read();
         let is_unlocked = unlocked_wallets.get(&address).is_some();
 
@@ -130,7 +133,7 @@ impl WalletInterface for WalletDispatcher {
         address: Address,
         passphrase: Option<String>,
         is_hex: bool,
-    ) -> Result<ReturnSignature, Error> {
+    ) -> Result<ReturnSignature, Self::Error> {
         let message = message_from_maybe_hex(message, is_hex)?;
 
         let passphrase = passphrase.unwrap_or_default();
@@ -167,7 +170,7 @@ impl WalletInterface for WalletDispatcher {
         public_key: PublicKey,
         signature: Signature,
         is_hex: bool,
-    ) -> Result<bool, Error> {
+    ) -> Result<bool, Self::Error> {
         let message = message_from_maybe_hex(message, is_hex)?;
         Ok(WalletAccount::verify_message(
             &public_key,

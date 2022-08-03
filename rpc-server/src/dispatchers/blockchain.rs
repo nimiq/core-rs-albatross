@@ -98,17 +98,17 @@ impl BlockchainInterface for BlockchainDispatcher {
     type Error = Error;
 
     /// Returns the block number for the current head.
-    async fn get_block_number(&mut self) -> Result<u32, Error> {
+    async fn get_block_number(&mut self) -> Result<u32, Self::Error> {
         Ok(self.blockchain.read().block_number())
     }
 
     /// Returns the batch number for the current head.
-    async fn get_batch_number(&mut self) -> Result<u32, Error> {
+    async fn get_batch_number(&mut self) -> Result<u32, Self::Error> {
         Ok(policy::batch_at(self.blockchain.read().block_number()))
     }
 
     /// Returns the epoch number for the current head.
-    async fn get_epoch_number(&mut self) -> Result<u32, Error> {
+    async fn get_epoch_number(&mut self) -> Result<u32, Self::Error> {
         Ok(policy::epoch_at(self.blockchain.read().block_number()))
     }
 
@@ -118,7 +118,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         &mut self,
         hash: Blake2bHash,
         include_transactions: Option<bool>,
-    ) -> Result<Block, Error> {
+    ) -> Result<Block, Self::Error> {
         let blockchain = self.blockchain.read();
 
         get_block_by_hash(blockchain.deref(), &hash, include_transactions)
@@ -131,7 +131,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         &mut self,
         block_number: u32,
         include_transactions: Option<bool>,
-    ) -> Result<Block, Error> {
+    ) -> Result<Block, Self::Error> {
         let blockchain = self.blockchain.read();
 
         let block = blockchain
@@ -150,7 +150,7 @@ impl BlockchainInterface for BlockchainDispatcher {
     async fn get_latest_block(
         &mut self,
         include_transactions: Option<bool>,
-    ) -> Result<Block, Error> {
+    ) -> Result<Block, Self::Error> {
         let blockchain = self.blockchain.read();
         let block = blockchain.head();
 
@@ -168,7 +168,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         &mut self,
         block_number: u32,
         view_number_opt: Option<u32>,
-    ) -> Result<Slot, Error> {
+    ) -> Result<Slot, Self::Error> {
         let blockchain = self.blockchain.read();
 
         let view_number = if let Some(view_number) = view_number_opt {
@@ -185,7 +185,10 @@ impl BlockchainInterface for BlockchainDispatcher {
     }
 
     /// Tries to fetch a transaction (including reward transactions) given its hash.
-    async fn get_transaction_by_hash(&mut self, hash: Blake2bHash) -> Result<Transaction, Error> {
+    async fn get_transaction_by_hash(
+        &mut self,
+        hash: Blake2bHash,
+    ) -> Result<Transaction, Self::Error> {
         let blockchain = self.blockchain.read();
 
         // Get all the extended transactions that correspond to this hash.
@@ -223,7 +226,7 @@ impl BlockchainInterface for BlockchainDispatcher {
     async fn get_transactions_by_block_number(
         &mut self,
         block_number: u32,
-    ) -> Result<Vec<Transaction>, Error> {
+    ) -> Result<Vec<Transaction>, Self::Error> {
         let blockchain = self.blockchain.read();
 
         // Get all the extended transactions that correspond to this block.
@@ -330,7 +333,7 @@ impl BlockchainInterface for BlockchainDispatcher {
     async fn get_inherents_by_batch_number(
         &mut self,
         batch_number: u32,
-    ) -> Result<Vec<Inherent>, Error> {
+    ) -> Result<Vec<Inherent>, Self::Error> {
         let blockchain = self.blockchain.read();
 
         let macro_block_number = policy::macro_block_of(batch_number);
@@ -389,7 +392,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         &mut self,
         address: Address,
         max: Option<u16>,
-    ) -> Result<Vec<Blake2bHash>, Error> {
+    ) -> Result<Vec<Blake2bHash>, Self::Error> {
         Ok(self
             .blockchain
             .read()
@@ -405,7 +408,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         &mut self,
         address: Address,
         max: Option<u16>,
-    ) -> Result<Vec<Transaction>, Error> {
+    ) -> Result<Vec<Transaction>, Self::Error> {
         let blockchain = self.blockchain.read();
 
         // Get the transaction hashes for this address.
@@ -450,7 +453,7 @@ impl BlockchainInterface for BlockchainDispatcher {
     }
 
     /// Tries to fetch the account at the given address.
-    async fn get_account_by_address(&mut self, address: Address) -> Result<Account, Error> {
+    async fn get_account_by_address(&mut self, address: Address) -> Result<Account, Self::Error> {
         let result = self.blockchain.read().get_account(&address);
 
         match result {
@@ -527,7 +530,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         &mut self,
         address: Address,
         include_stakers: Option<bool>,
-    ) -> Result<BlockchainState<Validator>, Error> {
+    ) -> Result<BlockchainState<Validator>, Self::Error> {
         let blockchain = self.blockchain.read();
 
         get_validator_by_address(blockchain.deref(), &address, include_stakers)
@@ -537,7 +540,7 @@ impl BlockchainInterface for BlockchainDispatcher {
     async fn get_staker_by_address(
         &mut self,
         address: Address,
-    ) -> Result<BlockchainState<Staker>, Error> {
+    ) -> Result<BlockchainState<Staker>, Self::Error> {
         let blockchain = self.blockchain.read();
 
         let accounts_tree = &blockchain.state().accounts.tree;
@@ -562,7 +565,7 @@ impl BlockchainInterface for BlockchainDispatcher {
     async fn subscribe_for_head_block(
         &mut self,
         include_transactions: Option<bool>,
-    ) -> Result<BoxStream<'static, Block>, Error> {
+    ) -> Result<BoxStream<'static, Block>, Self::Error> {
         let blockchain = Arc::clone(&self.blockchain);
         let stream = self.subscribe_for_head_block_hash().await?;
 
@@ -582,7 +585,7 @@ impl BlockchainInterface for BlockchainDispatcher {
     #[stream]
     async fn subscribe_for_head_block_hash(
         &mut self,
-    ) -> Result<BoxStream<'static, Blake2bHash>, Error> {
+    ) -> Result<BoxStream<'static, Blake2bHash>, Self::Error> {
         let stream = self.blockchain.write().notifier.as_stream();
         Ok(stream
             .map(|event| match event {
@@ -601,7 +604,7 @@ impl BlockchainInterface for BlockchainDispatcher {
     async fn subscribe_for_validator_election_by_address(
         &mut self,
         address: Address,
-    ) -> Result<BoxStream<'static, BlockchainState<Validator>>, Error> {
+    ) -> Result<BoxStream<'static, BlockchainState<Validator>>, Self::Error> {
         let blockchain = Arc::clone(&self.blockchain);
         let stream = self.blockchain.write().notifier.as_stream();
 
