@@ -62,7 +62,7 @@ impl MempoolInterface for MempoolDispatcher {
     async fn mempool_content(
         &mut self,
         include_transactions: bool,
-    ) -> Result<Vec<HashOrTx>, Error> {
+    ) -> Result<Vec<HashOrTx>, Self::Error> {
         return match include_transactions {
             true => Ok(self
                 .mempool
@@ -79,7 +79,7 @@ impl MempoolInterface for MempoolDispatcher {
         };
     }
 
-    async fn mempool(&mut self) -> Result<MempoolInfo, Error> {
+    async fn mempool(&mut self) -> Result<MempoolInfo, Self::Error> {
         Ok(MempoolInfo::from_txs(self.mempool.get_transactions()))
     }
 
