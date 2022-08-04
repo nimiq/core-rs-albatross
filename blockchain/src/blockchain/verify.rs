@@ -299,7 +299,7 @@ impl Blockchain {
                     // Get intended slot owner for that block.
                     if let Some(slot) = self.get_proposer_at(
                         proof.header1.block_number,
-                        0,
+                        proof.header1.block_number,
                         proof.prev_vrf_seed.entropy(),
                         txn_opt,
                     ) {

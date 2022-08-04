@@ -76,8 +76,8 @@ impl Blockchain {
                 return Err(PushError::InvalidBlock(BlockError::NoJustification));
             }
         } else {
-            // Skip and micro block offset is always 0
-            0
+            // Skip and micro block offset is block number
+            block.block_number()
         };
         let proposer_slot = this
             .get_proposer_at(

@@ -328,7 +328,7 @@ impl Block {
                     history_hash: micro_block.header.history_root,
                     transactions,
                     additional_fields: BlockAdditionalFields::Micro {
-                        producer: Slot::from(blockchain, block_number, 0),
+                        producer: Slot::from(blockchain, block_number, block_number),
                         fork_proofs,
                         justification: micro_block.justification.map(Into::into),
                     },

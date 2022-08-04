@@ -39,7 +39,7 @@ impl NanoBlockchain {
                 return Err(PushError::InvalidBlock(BlockError::NoJustification));
             }
         } else {
-            0
+            block.block_number()
         };
         let (slot_owner, _) = self
             .get_slot_owner_at(block.block_number(), offset, None)

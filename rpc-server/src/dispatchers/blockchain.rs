@@ -187,8 +187,8 @@ impl BlockchainInterface for BlockchainDispatcher {
                     )));
                 }
             } else {
-                // Skip and micro block offset is always 0
-                0
+                // Skip and micro block offset is block number
+                block_number
             }
         };
 

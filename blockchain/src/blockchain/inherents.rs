@@ -68,7 +68,7 @@ impl Blockchain {
         let proposer_slot = self
             .get_proposer_at(
                 fork_proof.header1.block_number,
-                0,
+                fork_proof.header1.block_number,
                 fork_proof.prev_vrf_seed.entropy(),
                 txn_option,
             )
@@ -100,7 +100,7 @@ impl Blockchain {
         let proposer_slot = self
             .get_proposer_at(
                 skip_block_info.block_number,
-                0,
+                skip_block_info.block_number,
                 skip_block_info.vrf_entropy.clone(),
                 txn_option,
             )
