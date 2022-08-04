@@ -403,7 +403,7 @@ impl<TNetwork: Network + 'static> Stream for SyncCluster<TNetwork> {
                         let block_hash = { pusher.read().block.hash() };
                         let future = async move {
                             debug!("Processing epoch #{} (no history items)", epoch_number);
-                            let pusher = pusher.read();
+                            let mut pusher = pusher.write();
                             if pusher.commit(blockchain.upgradable_read()).is_err() {
                                 return SyncClusterResult::Error;
                             }

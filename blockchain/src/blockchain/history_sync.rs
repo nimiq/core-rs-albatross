@@ -7,6 +7,7 @@ use nimiq_database::WriteTransaction;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy;
+use nimiq_transaction::Transaction;
 
 use crate::chain_info::ChainInfo;
 use crate::history::{ExtTxData, ExtendedTransaction};
@@ -14,6 +15,18 @@ use crate::{
     AbstractBlockchain, Blockchain, BlockchainEvent, HistoryTreeChunk, PushError, PushResult,
 };
 use nimiq_account::{Inherent, InherentType};
+
+/// Struct used to identify extended transactions of a block
+pub struct BlockTransactions {
+    /// Block height or number
+    pub block_number: u32,
+    /// Timestamp of the block
+    pub timestamp: u64,
+    /// Transactions of the block
+    pub transactions: Vec<Transaction>,
+    /// Ineherents of the block
+    pub inherents: Vec<Inherent>,
+}
 
 /// Struct produced after starting history sync.
 /// The object provides methods for adding history chunks and finally commit
@@ -26,9 +39,80 @@ pub struct HistoryPusher {
     /// Cumulative transaction fees for the transactions added to this
     /// HistoryPusher instance
     pub cum_tx_fees: Coin,
+    /// Last block transactions seen for a chunk
+    pub last_transactions: Option<BlockTransactions>,
 }
 
 impl HistoryPusher {
+    /// Commits a batch of transactions to the accounts tree for a set of blocks
+    /// In case of error, the caller must abort the passed DB transaction.
+    fn accounts_commit_batch(
+        &mut self,
+        blockchain: &RwLockUpgradableReadGuard<Blockchain>,
+        txn: &mut WriteTransaction,
+        chunk_block_txns: &mut [BlockTransactions],
+    ) -> Result<PushResult, PushError> {
+        let staking_contract_address = blockchain.staking_contract_address();
+
+        // We go over the blocks one more time and add the FinalizeBatch and FinalizeEpoch inherents
+        // to the macro blocks. This is necessary because the History Store doesn't store those inherents
+        // so we need to add them again in order to correctly sync.
+        for block_txns in chunk_block_txns.iter_mut() {
+            if policy::is_macro_block_at(block_txns.block_number) {
+                let finalize_batch = Inherent {
+                    ty: InherentType::FinalizeBatch,
+                    target: staking_contract_address.clone(),
+                    value: Coin::ZERO,
+                    data: vec![],
+                };
+
+                block_txns.inherents.push(finalize_batch);
+
+                if policy::is_election_block_at(block_txns.block_number) {
+                    let finalize_epoch = Inherent {
+                        ty: InherentType::FinalizeEpoch,
+                        target: staking_contract_address.clone(),
+                        value: Coin::ZERO,
+                        data: vec![],
+                    };
+
+                    block_txns.inherents.push(finalize_epoch);
+                }
+            }
+        }
+
+        // Update the accounts tree, one block at a time.
+        for block_txns in chunk_block_txns {
+            // Commit block to AccountsTree and create the receipts.
+            let receipts = blockchain.state.accounts.commit_batch(
+                txn,
+                &block_txns.transactions,
+                &block_txns.inherents,
+                block_txns.block_number,
+                block_txns.timestamp,
+            );
+
+            // Check if the receipts contain an error.
+            if let Err(e) = receipts {
+                warn!(
+                    %self.block,
+                    reason = "commit of macro block failed",
+                    block_no = block_txns.block_number,
+                    num_inherents = block_txns.inherents.len(),
+                    error = &e as &dyn Error,
+                    "Rejecting block",
+                );
+
+                #[cfg(feature = "metrics")]
+                blockchain.metrics.note_invalid_block();
+                return Err(PushError::AccountsError(e));
+            }
+        }
+        blockchain.state.accounts.finalize_batch(txn);
+
+        Ok(PushResult::Extended)
+    }
+
     /// Adds transactions to the history pusher.
     /// Transactions are only received in chunks using the `HistoryTreeChunk`
     /// struct. This means that the chunks must come with a proof that relates
@@ -45,7 +129,6 @@ impl HistoryPusher {
         chunk_size: usize,
     ) -> Result<PushResult, PushError> {
         let macro_block = self.block.clone();
-        let staking_contract_address = blockchain.staking_contract_address();
 
         // Check the history chunk proof against the macro block history root
         if !history_chunk
@@ -90,83 +173,49 @@ impl HistoryPusher {
         // We know it comes sorted because we already checked it against the history root and
         // extended transactions in the history tree come sorted by block number and type.
         // Ignore the extended transactions that were already added in past macro blocks.
-        let mut block_numbers = vec![];
-        let mut block_timestamps = vec![];
-        let mut block_transactions = vec![];
-        let mut block_inherents = vec![];
-        let mut prev = 0;
+        let (mut chunk_block_txns, mut prev) =
+            if let Some(last_block_txns) = self.last_transactions.take() {
+                let last_block_number = last_block_txns.block_number;
+                (vec![last_block_txns], last_block_number)
+            } else {
+                (vec![], 0)
+            };
 
         for ext_tx in history_chunk.history.iter().skip(first_new_ext_tx_idx) {
             if ext_tx.block_number > prev {
-                block_numbers.push(ext_tx.block_number);
-                block_timestamps.push(ext_tx.block_time);
-                block_transactions.push(vec![]);
-                block_inherents.push(vec![]);
+                let block_txns = BlockTransactions {
+                    block_number: ext_tx.block_number,
+                    timestamp: ext_tx.block_time,
+                    transactions: vec![],
+                    inherents: vec![],
+                };
+                chunk_block_txns.push(block_txns);
                 prev = ext_tx.block_number;
             }
 
             match &ext_tx.data {
-                ExtTxData::Basic(tx) => block_transactions.last_mut().unwrap().push(tx.clone()),
-                ExtTxData::Inherent(tx) => block_inherents.last_mut().unwrap().push(tx.clone()),
+                ExtTxData::Basic(tx) => chunk_block_txns
+                    .last_mut()
+                    .unwrap()
+                    .transactions
+                    .push(tx.clone()),
+                ExtTxData::Inherent(tx) => chunk_block_txns
+                    .last_mut()
+                    .unwrap()
+                    .inherents
+                    .push(tx.clone()),
             }
         }
 
-        // We go over the blocks one more time and add the FinalizeBatch and FinalizeEpoch inherents
-        // to the macro blocks. This is necessary because the History Store doesn't store those inherents
-        // so we need to add them again in order to correctly sync.
-        for (i, block_number) in block_numbers.iter().enumerate() {
-            if policy::is_macro_block_at(*block_number) {
-                let finalize_batch = Inherent {
-                    ty: InherentType::FinalizeBatch,
-                    target: staking_contract_address.clone(),
-                    value: Coin::ZERO,
-                    data: vec![],
-                };
+        // Remove the last block's transactions and cache it in case it continues in the following
+        // chunk
+        self.last_transactions = chunk_block_txns.pop();
 
-                block_inherents.get_mut(i).unwrap().push(finalize_batch);
-
-                if policy::is_election_block_at(*block_number) {
-                    let finalize_epoch = Inherent {
-                        ty: InherentType::FinalizeEpoch,
-                        target: staking_contract_address.clone(),
-                        value: Coin::ZERO,
-                        data: vec![],
-                    };
-
-                    block_inherents.get_mut(i).unwrap().push(finalize_epoch);
-                }
-            }
+        // Try to commit accounts
+        if let Err(e) = self.accounts_commit_batch(&blockchain, &mut txn, &mut chunk_block_txns) {
+            txn.abort();
+            return Err(e);
         }
-
-        // Update the accounts tree, one block at a time.
-        for i in 0..block_numbers.len() {
-            // Commit block to AccountsTree and create the receipts.
-            let receipts = blockchain.state.accounts.commit_batch(
-                &mut txn,
-                &block_transactions[i],
-                &block_inherents[i],
-                block_numbers[i],
-                block_timestamps[i],
-            );
-
-            // Check if the receipts contain an error.
-            if let Err(e) = receipts {
-                warn!(
-                    %self.block,
-                    reason = "commit of macro block failed",
-                    block_no = block_numbers[i],
-                    num_inherents = block_inherents[i].len(),
-                    error = &e as &dyn Error,
-                    "Rejecting block",
-                );
-
-                txn.abort();
-                #[cfg(feature = "metrics")]
-                blockchain.metrics.note_invalid_block();
-                return Err(PushError::AccountsError(e));
-            }
-        }
-        blockchain.state.accounts.finalize_batch(&mut txn);
 
         // Store the new extended transactions into the History tree.
         blockchain.history_store.add_to_history(
@@ -195,13 +244,13 @@ impl HistoryPusher {
     /// expected. A final check is also performed to verify that the accounts
     /// tree root matches the macro block's history root.
     pub fn commit(
-        &self,
+        &mut self,
         blockchain: RwLockUpgradableReadGuard<Blockchain>,
     ) -> Result<PushResult, PushError> {
         let mut txn = blockchain.write_transaction();
         let block_hash = self.block.hash();
         let mut prev_macro_info = blockchain.state.macro_info.clone();
-        let macro_block = &self.block;
+        let macro_block = self.block.clone();
 
         // Get the current macro head.
         let macro_head = &blockchain.state.macro_info.head;
@@ -213,6 +262,16 @@ impl HistoryPusher {
             .is_some()
         {
             return Err(PushError::AlreadyKnown);
+        }
+
+        // Check if there is pending block transactions to push
+        if let Some(last_account_txns) = self.last_transactions.take() {
+            if let Err(e) =
+                self.accounts_commit_batch(&blockchain, &mut txn, &mut [last_account_txns])
+            {
+                txn.abort();
+                return Err(e);
+            }
         }
 
         // Check if we have this block's parent. The checks change depending if the last macro block
@@ -259,7 +318,7 @@ impl HistoryPusher {
         }
 
         // Check the justification.
-        if !TendermintProof::verify(macro_block, &blockchain.current_validators().unwrap()) {
+        if !TendermintProof::verify(&macro_block, &blockchain.current_validators().unwrap()) {
             warn!(
                 block = %macro_block,
                 reason = "bad justification",
@@ -529,6 +588,7 @@ impl Blockchain {
             block: macro_block,
             tx_count: 0,
             cum_tx_fees: Coin::ZERO,
+            last_transactions: None,
         })
     }
 
