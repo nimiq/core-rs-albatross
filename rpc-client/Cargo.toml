@@ -21,6 +21,7 @@ is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
+async-trait = "0.1"
 anyhow = "1.0"
 clap = { version = "3.2", features = ["derive"] }
 dotenv = "0.15"

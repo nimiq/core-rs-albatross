@@ -1,0 +1,177 @@
+use anyhow::Error;
+use async_trait::async_trait;
+
+use clap::Parser;
+use nimiq_rpc_interface::{blockchain::BlockchainInterface, wallet::WalletInterface};
+
+use nimiq_keys::{Address, PublicKey, Signature};
+
+use crate::Client;
+
+#[async_trait]
+pub trait HandleSubcommand {
+    async fn handle_subcommand(self, mut client: Client) -> Result<(), Error>;
+}
+
+#[derive(Debug, Parser)]
+pub enum AccountCommand {
+    /// Lists all the currently unlocked accounts.
+    List {
+        /// Lists only the addresses of the accounts.
+        #[clap(short, long)]
+        short: bool,
+    },
+
+    /// Creates a new account. This doesn't unlock the account automatically.
+    New {
+        /// Encryption password.
+        #[clap(short = 'P', long)]
+        password: Option<String>,
+    },
+
+    /// Imports an existing account and unlocks it.
+    Import {
+        #[clap(short = 'P', long)]
+        password: Option<String>,
+        /// The private key of the account to be unlocked.
+        key_data: String,
+    },
+
+    /// Checks if account is imported.
+    IsImported {
+        /// The account's address.
+        address: Address,
+    },
+
+    /// Locks a currently unlocked account.
+    Lock {
+        /// The account's address.
+        address: Address,
+    },
+
+    /// Unlocks an account.
+    Unlock {
+        #[clap(short = 'P', long)]
+        password: Option<String>,
+
+        /// The account's address.
+        address: Address,
+    },
+
+    /// Checks if account is unlocked.
+    IsUnlocked {
+        /// The account's address.
+        address: Address,
+    },
+
+    /// Signs a message using the the specified account. The account must already be unlocked or imported.
+    Sign {
+        /// The message to be signed.
+        message: String,
+
+        /// The address to sign the message.
+        address: Address,
+
+        /// Specifies if the message is in hexadecimal.
+        #[clap(short = 'h', long)]
+        is_hex: bool,
+    },
+
+    /// Verfies if the message was signed by specified account. The account must already be unlocked or imported.
+    VerifySignature {
+        /// The signed message to be verified.
+        message: String,
+
+        /// The public key returned upon signing the message.
+        public_key: PublicKey,
+
+        /// The signature returned upon signing the message.
+        signature: Signature,
+
+        /// Specifies if the message is in hexadecimal.
+        #[clap(short = 'h', long)]
+        is_hex: bool,
+    },
+
+    /// Queries the account state (e.g. account balance for basic accounts).
+    Get {
+        /// The account's address.
+        address: Address,
+    },
+}
+
+#[async_trait]
+impl HandleSubcommand for AccountCommand {
+    async fn handle_subcommand(self, mut client: Client) -> Result<(), Error> {
+        match self {
+            AccountCommand::List { short } => {
+                let accounts = client.wallet.list_accounts().await?;
+                for address in &accounts {
+                    if short {
+                        println!("{}", address.to_user_friendly_address());
+                    } else {
+                        let account = client
+                            .blockchain
+                            .get_account_by_address(address.clone())
+                            .await?;
+                        println!("{}: {:#?}", address.to_user_friendly_address(), account);
+                    }
+                }
+            }
+            AccountCommand::New { password } => {
+                println!("{:#?}", client.wallet.create_account(password).await?);
+            }
+            AccountCommand::Import { password, key_data } => {
+                let address = client.wallet.import_raw_key(key_data, password).await?;
+                println!("{}", address);
+            }
+            AccountCommand::IsImported { address } => {
+                println!("{}", client.wallet.is_account_imported(address).await?);
+            }
+            AccountCommand::Lock { address } => client.wallet.lock_account(address).await?,
+            AccountCommand::Unlock {
+                address, password, ..
+            } => {
+                // TODO: Duration
+                client
+                    .wallet
+                    .unlock_account(address, password, None)
+                    .await?;
+            }
+            AccountCommand::IsUnlocked { address } => {
+                println!("{}", client.wallet.is_account_unlocked(address).await?);
+            }
+            AccountCommand::Sign {
+                message,
+                address,
+                is_hex,
+            } => {
+                println!(
+                    "{:?}",
+                    client.wallet.sign(message, address, None, is_hex).await?
+                );
+            }
+            AccountCommand::VerifySignature {
+                message,
+                public_key,
+                signature,
+                is_hex,
+            } => {
+                println!(
+                    "{:?}",
+                    client
+                        .wallet
+                        .verify_signature(message, public_key, signature, is_hex)
+                        .await?
+                );
+            }
+            AccountCommand::Get { address } => {
+                println!(
+                    "{:#?}",
+                    client.blockchain.get_account_by_address(address).await?
+                );
+            }
+        }
+        Ok(())
+    }
+}
