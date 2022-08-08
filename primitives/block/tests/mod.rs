@@ -87,6 +87,7 @@ fn it_can_convert_macro_block_into_slots() {
         header: MacroHeader {
             version: 1,
             block_number: 42,
+            round: 0,
             timestamp: 0,
             parent_hash: hash.clone(),
             parent_election_hash: hash.clone(),

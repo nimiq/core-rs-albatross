@@ -156,6 +156,8 @@ impl BlockProducer {
         blockchain: &Blockchain,
         // The timestamp for the block proposal.
         timestamp: u64,
+        // The round for the block proposal.
+        round: u32,
         // Extra data for this block.
         extra_data: Vec<u8>,
     ) -> MacroBlock {
@@ -182,6 +184,7 @@ impl BlockProducer {
         let mut header = MacroHeader {
             version: policy::VERSION,
             block_number,
+            round,
             timestamp,
             parent_hash,
             parent_election_hash,

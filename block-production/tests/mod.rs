@@ -131,6 +131,7 @@ fn it_can_produce_macro_blocks() {
         producer.next_macro_block_proposal(
             &bc,
             bc.time.now() + bc.block_number() as u64 * 1000,
+            0u32,
             vec![],
         )
     };
@@ -160,6 +161,7 @@ fn it_can_produce_election_blocks() {
             producer.next_macro_block_proposal(
                 &bc,
                 bc.time.now() + bc.block_number() as u64 * 1000,
+                0u32,
                 vec![0x42],
             )
         };
@@ -199,6 +201,7 @@ fn it_can_produce_a_chain_with_txns() {
         let macro_block_proposal = producer.next_macro_block_proposal(
             &blockchain,
             blockchain.time.now() + next_block_height as u64 * 100,
+            0u32,
             vec![],
         );
 

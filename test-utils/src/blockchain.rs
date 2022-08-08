@@ -72,6 +72,7 @@ pub fn produce_macro_blocks(
         let macro_block_proposal = producer.next_macro_block_proposal(
             &blockchain,
             blockchain.time.now() + next_block_height * 1000,
+            0u32,
             vec![],
         );
 
@@ -105,6 +106,7 @@ pub fn produce_macro_blocks_with_txns(
         let macro_block_proposal = producer.next_macro_block_proposal(
             &blockchain,
             blockchain.time.now() + next_block_height * 1000,
+            0u32,
             vec![],
         );
 

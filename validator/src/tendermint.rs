@@ -122,7 +122,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
     /// Produces a proposal. Evidently, used when we are the proposer.
     fn get_value(
         &mut self,
-        _round: u32,
+        round: u32,
     ) -> Result<(Self::ProposalTy, Self::ProposalCacheTy), TendermintError> {
         let blockchain = self.blockchain.read();
 
@@ -130,6 +130,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
         let block = self.block_producer.next_macro_block_proposal(
             &blockchain,
             self.offset_time.now(),
+            round,
             vec![],
         );
 

@@ -248,6 +248,7 @@ impl GenesisBuilder {
         let header = MacroHeader {
             version: 1,
             block_number: 0,
+            round: 0,
             timestamp: u64::try_from(timestamp.unix_timestamp())
                 .map_err(|_| GenesisBuilderError::InvalidTimestamp(timestamp))?,
             parent_hash: [0u8; 32].into(),

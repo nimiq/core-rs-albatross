@@ -75,6 +75,7 @@ impl TemporaryBlockProducer {
             let macro_block_proposal = self.producer.next_macro_block_proposal(
                 &blockchain,
                 blockchain.time.now() + height as u64 * 1000,
+                0,
                 extra_data,
             );
 

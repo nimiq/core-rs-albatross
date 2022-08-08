@@ -33,6 +33,8 @@ pub struct MacroHeader {
     pub version: u16,
     /// The number of the block.
     pub block_number: u32,
+    /// The round number this block was proposed in.
+    pub round: u32,
     /// The timestamp of the block. It follows the Unix time and has millisecond precision.
     pub timestamp: u64,
     /// The hash of the header of the immediately preceding block (either micro or macro).
@@ -143,6 +145,11 @@ impl MacroBlock {
     /// Returns the block number of this macro block.
     pub fn block_number(&self) -> u32 {
         self.header.block_number
+    }
+
+    /// Return the round of this macro block.
+    pub fn round(&self) -> u32 {
+        self.header.round
     }
 
     /// Returns the epoch number of this macro block.

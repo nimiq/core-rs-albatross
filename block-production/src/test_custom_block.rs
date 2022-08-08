@@ -233,6 +233,7 @@ fn next_macro_block_proposal(
     let mut header = MacroHeader {
         version: config.version.unwrap_or(policy::VERSION),
         block_number,
+        round: 0,
         timestamp,
         parent_hash,
         parent_election_hash,
