@@ -24,6 +24,7 @@ impl PolicyInterface for PolicyDispatcher {
             slots: policy::SLOTS,
             blocks_per_batch: policy::BLOCKS_PER_BATCH,
             batches_per_epoch: policy::BATCHES_PER_EPOCH,
+            blocks_per_epoch: policy::BLOCKS_PER_EPOCH,
             validator_deposit: policy::VALIDATOR_DEPOSIT,
             total_supply: policy::TOTAL_SUPPLY,
         })
