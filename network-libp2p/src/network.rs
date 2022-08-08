@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -30,8 +30,9 @@ use libp2p::{
     tcp, websocket, yamux, Multiaddr, PeerId, Swarm, Transport,
 };
 use log::Instrument;
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use tokio::sync::{broadcast, mpsc, oneshot};
+use tokio::time::Instant as TokioInstant;
 use tokio_stream::wrappers::{BroadcastStream, ReceiverStream};
 
 use beserial::{Deserialize, Serialize};
@@ -51,6 +52,7 @@ use nimiq_validator_network::validator_record::SignedValidatorRecord;
 
 #[cfg(feature = "metrics")]
 use crate::network_metrics::NetworkMetrics;
+use crate::rate_limiting::RateLimit;
 use crate::{
     behaviour::{NimiqBehaviour, NimiqEvent, NimiqNetworkBehaviourError, RequestResponseEvent},
     connection_pool::behaviour::ConnectionPoolEvent,
@@ -180,6 +182,8 @@ pub struct Network {
     events_tx: broadcast::Sender<NetworkEvent<PeerId>>,
     action_tx: mpsc::Sender<NetworkAction>,
     validate_tx: mpsc::UnboundedSender<ValidateMessage<PeerId>>,
+    peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<u16, RateLimit>>>>,
+
     #[cfg(feature = "metrics")]
     metrics: Arc<NetworkMetrics>,
 }
@@ -202,6 +206,8 @@ impl Network {
         let (events_tx, _) = broadcast::channel(64);
         let (action_tx, action_rx) = mpsc::channel(64);
         let (validate_tx, validate_rx) = mpsc::unbounded_channel();
+        let peer_request_limits = Arc::new(Mutex::new(HashMap::new()));
+        let rate_limits_pending_deletion = Arc::new(Mutex::new(VecDeque::new()));
 
         #[cfg(feature = "metrics")]
         let metrics = Arc::new(NetworkMetrics::default());
@@ -212,6 +218,8 @@ impl Network {
             action_rx,
             validate_rx,
             Arc::clone(&connected_peers),
+            Arc::clone(&peer_request_limits),
+            Arc::clone(&rate_limits_pending_deletion),
             #[cfg(feature = "metrics")]
             metrics.clone(),
         ));
@@ -222,6 +230,7 @@ impl Network {
             events_tx,
             action_tx,
             validate_tx,
+            peer_request_limits,
             #[cfg(feature = "metrics")]
             metrics,
         }
@@ -306,6 +315,8 @@ impl Network {
         mut action_rx: mpsc::Receiver<NetworkAction>,
         mut validate_rx: mpsc::UnboundedReceiver<ValidateMessage<PeerId>>,
         connected_peers: Arc<RwLock<HashSet<PeerId>>>,
+        peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<u16, RateLimit>>>>,
+        rate_limits_pending_deletion: Arc<Mutex<VecDeque<((PeerId, u16), TokioInstant)>>>,
         #[cfg(feature = "metrics")] metrics: Arc<NetworkMetrics>,
     ) {
         let mut task_state = TaskState::default();
@@ -337,7 +348,7 @@ impl Network {
                     },
                     event = swarm.next() => {
                         if let Some(event) = event {
-                            Self::handle_event(event, &events_tx, &mut swarm, &mut task_state, &connected_peers, #[cfg( feature = "metrics")] &metrics);
+                            Self::handle_event(event, &events_tx, &mut swarm, &mut task_state, &connected_peers, Arc::clone(&peer_request_limits), Arc::clone(&rate_limits_pending_deletion), #[cfg( feature = "metrics")] &metrics);
                         }
                     },
                     action = action_rx.recv() => {
@@ -362,6 +373,8 @@ impl Network {
         swarm: &mut NimiqSwarm,
         state: &mut TaskState,
         connected_peers: &RwLock<HashSet<PeerId>>,
+        peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<u16, RateLimit>>>>,
+        rate_limits_pending_deletion: Arc<Mutex<VecDeque<((PeerId, u16), TokioInstant)>>>,
         #[cfg(feature = "metrics")] metrics: &Arc<NetworkMetrics>,
     ) {
         match event {
@@ -432,6 +445,15 @@ impl Network {
                 if num_established == 0 {
                     connected_peers.write().remove(&peer_id);
                     swarm.behaviour_mut().remove_peer(peer_id);
+
+                    // Removes or marks to remove the respective rate limits.
+                    // Also cleans up the experied rate limits pending to delete.
+                    Self::remove_rate_limits(
+                        peer_request_limits,
+                        rate_limits_pending_deletion,
+                        peer_id,
+                    );
+
                     if let Err(error) = events_tx.send(NetworkEvent::PeerLeft(peer_id)) {
                         error!(%error, "could not send peer left event to channel");
                     }
@@ -1233,7 +1255,9 @@ impl Network {
             // there are going to be more requests or none at all.
         }
 
+        let peer_request_limits = Arc::clone(&self.peer_request_limits);
         let action_tx = self.action_tx.clone();
+        let action_tx2 = self.action_tx.clone();
         ReceiveStream::WaitingForRegister(Box::pin(async move {
             // TODO Make buffer size configurable
             let (tx, rx) = mpsc::channel(1024);
@@ -1248,19 +1272,48 @@ impl Network {
 
             rx
         }))
-        .filter_map(|(data, request_id, peer_id)| async move {
-            // Map the (data, peer) stream to (message, peer) by deserializing the messages.
-            match Req::deserialize_request(&mut data.reader()) {
-                Ok(message) => Some((message, request_id, peer_id)),
-                Err(e) => {
-                    error!(
+        .filter_map(move |(data, request_id, peer_id)| {
+            let peer_request_limits = Arc::clone(&peer_request_limits);
+            let action_tx2 = action_tx2.clone();
+            async move {
+                // If the request is not respecting the rate limits for its request type, filters the request out
+                // and replies with the respective error message.
+                if !Self::is_under_the_rate_limits::<Req>(peer_request_limits, peer_id, request_id)
+                {
+                    info!(
                         %request_id,
                         %peer_id,
                         type_id = std::any::type_name::<Req>(),
-                        error = %e,
-                        "Failed to deserialize request from peer",
+                        "Rate limit was exceeded!",
                     );
-                    None
+                    if let Err(e) = Self::respond_with_error::<Req>(
+                        action_tx2,
+                        request_id,
+                        InboundRequestError::ExceedsRateLimit,
+                    )
+                    .await
+                    {
+                        trace!(
+                            "Error while seding a Exceeds Rate limit error to the sender {:?}",
+                            e
+                        );
+                    }
+                    return None;
+                }
+
+                // Map the (data, peer) stream to (message, peer) by deserializing the messages.
+                match Req::deserialize_request(&mut data.reader()) {
+                    Ok(message) => Some((message, request_id, peer_id)),
+                    Err(e) => {
+                        error!(
+                            %request_id,
+                            %peer_id,
+                            type_id = std::any::type_name::<Req>(),
+                            error = %e,
+                            "Failed to deserialize request from peer",
+                        );
+                        None
+                    }
                 }
             }
         })
@@ -1297,6 +1350,149 @@ impl Network {
     #[cfg(feature = "metrics")]
     pub fn metrics(&self) -> Arc<NetworkMetrics> {
         self.metrics.clone()
+    }
+
+    fn is_under_the_rate_limits<Req: RequestCommon>(
+        peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<u16, RateLimit>>>>,
+        peer_id: PeerId,
+        request_id: RequestId,
+    ) -> bool {
+        // Gets lock of peer requests limits read and write on it.
+        let mut peer_request_limits = peer_request_limits.lock();
+
+        // If the peer has never sent a request of this type, creates a new entry.
+        let requests_limit = peer_request_limits
+            .entry(peer_id)
+            .or_default()
+            .entry(Req::TYPE_ID)
+            .or_insert_with(|| {
+                RateLimit::new(Req::MAX_REQUESTS, Req::TIME_WINDOW, TokioInstant::now())
+            });
+
+        // Ensures that the request is allowed based on the set limits and updates the counter.
+        // Returns early if not allowed.
+        if !requests_limit.increment_and_is_allowed(1, TokioInstant::now()) {
+            log::debug!(
+                "[{:?}][{:?}] {:?} Exceeded max requests rate {:?} requests per {:?} seconds",
+                request_id,
+                peer_id,
+                std::any::type_name::<Req>(),
+                Req::MAX_REQUESTS,
+                Req::TIME_WINDOW,
+            );
+            return false;
+        }
+        true
+    }
+
+    fn remove_rate_limits(
+        peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<u16, RateLimit>>>>,
+        rate_limits_pending_deletion: Arc<Mutex<VecDeque<((PeerId, u16), TokioInstant)>>>,
+        peer_id: PeerId,
+    ) {
+        // Every time a peer disconnects, we delete all expired pending limits.
+        Self::clean_up(
+            Arc::clone(&peer_request_limits),
+            Arc::clone(&rate_limits_pending_deletion),
+        );
+
+        // Firstly we must acquire the lock of the pending deletes to avoid deadlocks.
+        let mut rate_limits_pending_deletion_l = rate_limits_pending_deletion.lock();
+        let mut peer_request_limits_l = peer_request_limits.lock();
+
+        // Go through all existing request types of the given peer and deletes the limit counters if possible or marks it for deletion.
+        if let Some(request_limits) = peer_request_limits_l.get_mut(&peer_id) {
+            request_limits.retain(|req_type, rate_limit| {
+                // Gets the requests limit and deletes it if no counter info would be lost, otherwise places it as pending deletion.
+                if !rate_limit.can_delete(TokioInstant::now()) {
+                    rate_limits_pending_deletion_l
+                        .push_back(((peer_id, *req_type), rate_limit.next_reset_time()));
+                    true
+                } else {
+                    false
+                }
+            });
+            // If the peer no longer has any pending rate limits, then it gets removed.
+            if request_limits.is_empty() {
+                peer_request_limits_l.remove(&peer_id);
+            }
+        }
+    }
+
+    /// Deletes the rate limits that were previously marked as pending if their expiration block height has passed.
+    fn clean_up(
+        peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<u16, RateLimit>>>>,
+        rate_limits_pending_deletion: Arc<Mutex<VecDeque<((PeerId, u16), TokioInstant)>>>,
+    ) {
+        let mut rate_limits_pending_deletion_l = rate_limits_pending_deletion.lock();
+
+        // Iterates from the oldest to the most recent object of the queue, deletes the entries that have expired.
+        // The queue is ordered from the oldest to the most recent object added, meaning that its loosely ordered by expiration date.
+        // Thus, the iteration stops upon the first object that is hasn't yet expired. In the case where the queue is out of order,
+        // the clean up will reach it after a few more blocks (max block_range).
+        while let Some(((peer_id, req_type), block_expiration)) =
+            rate_limits_pending_deletion_l.front()
+        {
+            let current_timestamp = TokioInstant::now();
+            if block_expiration <= &current_timestamp {
+                let mut peer_request_limits_l = peer_request_limits.lock();
+
+                if let Some(peer_req_limits) =
+                    peer_request_limits_l
+                        .get_mut(peer_id)
+                        .and_then(|peer_req_limits| {
+                            if let Some(rate_limit) = peer_req_limits.get(req_type) {
+                                // If the peer has reconnected the rate limit may be inforcing a new limit. In this case we only remove the pending deletion.
+                                if rate_limit.can_delete(current_timestamp) {
+                                    peer_req_limits.remove(req_type);
+                                }
+                                return Some(peer_req_limits);
+                            }
+                            // Only returns None if no request type was found.
+                            None
+                        })
+                {
+                    // If the peer no longer has any pending rate limits, then it gets removed.
+                    if peer_req_limits.is_empty() {
+                        peer_request_limits_l.remove(peer_id);
+                    }
+                } else {
+                    // If the information is in pending deletion, that should mean it was not deleted from peer_request_limits yet, so that
+                    // reconnections don't bypass the limits we are trying to reinforce.
+                    unreachable!(
+                        "Tried to remove a non existing rate limit from peer_request_limits."
+                    );
+                }
+                // Remove the entry from the qeue.
+                rate_limits_pending_deletion_l.pop_front();
+            } else {
+                break;
+            }
+        }
+    }
+
+    async fn respond_with_error<Req: RequestCommon>(
+        action_tx: mpsc::Sender<NetworkAction>,
+        request_id: RequestId,
+        response: InboundRequestError,
+    ) -> Result<(), NetworkError> {
+        let (output_tx, output_rx) = oneshot::channel();
+
+        // Encapsulate it in a `Result` to signal the network that this
+        // was a unsuccessful response from the application.
+        let response: Result<Req::Response, InboundRequestError> = Err(response);
+        let buf = response.serialize_to_vec();
+
+        action_tx
+            .clone()
+            .send(NetworkAction::SendResponse {
+                request_id,
+                response: buf,
+                output: output_tx,
+            })
+            .await?;
+
+        output_rx.await?
     }
 }
 

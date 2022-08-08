@@ -27,6 +27,7 @@ nimiq-utils = { path = "../utils", features = [
     "observer",
 ] }
 nimiq-network-interface = { path = "../network-interface" }
+nimiq-primitives = { path = "../primitives", features = ["policy"] }
 
 [dev-dependencies]
 nimiq-network-mock = { path = "../network-mock" }

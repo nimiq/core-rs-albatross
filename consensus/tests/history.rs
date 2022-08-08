@@ -4,6 +4,7 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 
 use futures::{Stream, StreamExt};
+use nimiq_test_log::test;
 use parking_lot::RwLock;
 
 use nimiq_block_production::BlockProducer;
@@ -17,7 +18,6 @@ use nimiq_network_interface::network::Network as NetworkInterface;
 use nimiq_network_libp2p::Network;
 use nimiq_network_mock::MockHub;
 use nimiq_primitives::policy;
-use nimiq_test_log::test;
 use nimiq_test_utils::{
     blockchain::{produce_macro_blocks, signing_key, voting_key},
     test_network::TestNetwork,
@@ -244,6 +244,7 @@ async fn sync_ingredients() {
     // Test ingredients:
     // Request macro chain, first request must return all epochs, but no checkpoint
     let peer_id = net2.get_peers()[0];
+
     let macro_chain = HistorySync::request_macro_chain(
         Arc::clone(&net2),
         peer_id,
@@ -252,6 +253,7 @@ async fn sync_ingredients() {
     )
     .await
     .expect("Should yield macro chain");
+
     let epochs = macro_chain.epochs.expect("Should contain epochs");
     assert!(
         macro_chain.checkpoint.is_none(),

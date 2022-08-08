@@ -55,6 +55,7 @@ beserial = { path = "../beserial", features = ["derive", "libp2p"] }
 nimiq-bls = { path = "../bls" }
 nimiq-macros = { path = "../macros" }
 nimiq-network-interface = { path = "../network-interface" }
+nimiq-primitives = { path = "../primitives", features = ["policy"] }
 nimiq-hash = { path = "../hash" }
 nimiq-utils = { path = "../utils", features = [
     "tagged-signing",

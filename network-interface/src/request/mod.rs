@@ -1,12 +1,12 @@
 use std::fmt;
 use std::io;
 
-use thiserror::Error;
-
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
+use thiserror::Error;
+use tokio::time::Duration;
 
 #[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct RequestType(u16);
+pub struct RequestType(pub u16);
 
 impl fmt::Display for RequestType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -99,6 +99,9 @@ pub enum InboundRequestError {
     /// The request timed out before a response could have been sent.
     #[error("Request timed out")]
     Timeout = 4,
+    /// The request exceeded the maximum defined rate limit for its request type.
+    #[error("Request exceeds the maximum rate limit")]
+    ExceedsRateLimit = 5,
 }
 
 pub trait RequestKind {
@@ -121,6 +124,8 @@ pub trait RequestCommon:
     type Kind: RequestKind;
     const TYPE_ID: u16;
     type Response: Deserialize + Serialize + Send;
+    const MAX_REQUESTS: u32;
+    const TIME_WINDOW: Duration;
 
     /// Serializes a request.
     /// A serialized request is composed of:

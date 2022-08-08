@@ -10,6 +10,7 @@ mod error;
 mod network;
 #[cfg(feature = "metrics")]
 mod network_metrics;
+mod rate_limiting;
 
 pub const REQRES_PROTOCOL: &[u8] = b"/nimiq/reqres/0.0.1";
 pub const MESSAGE_PROTOCOL: &[u8] = b"/nimiq/message/0.0.1";
