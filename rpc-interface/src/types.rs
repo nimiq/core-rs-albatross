@@ -370,6 +370,7 @@ pub struct PolicyConstants {
     pub slots: u16,
     pub blocks_per_batch: u32,
     pub batches_per_epoch: u16,
+    pub blocks_per_epoch: u32,
     pub validator_deposit: u64,
     pub total_supply: u64,
 }
