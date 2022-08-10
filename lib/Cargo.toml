@@ -23,7 +23,7 @@ clap = { version = "3.2", features = ["derive"] }
 console-subscriber = { version = "0.1", features = ["parking_lot"], optional = true }
 derive_builder = "0.11"
 directories = "4.0"
-file-rotate = { version = "0.6" }
+file-rotate = { version = "0.7" }
 hex = "0.4"
 # human-panic = { version = "1.0", optional = true } currently unused, might be used in the future
 log = { package = "tracing", version = "0.1", features = ["log"] }

@@ -139,6 +139,8 @@ pub fn initialize_logging(
             AppendCount::new(rotating_file_settings.file_count),
             ContentLimit::Bytes(rotating_file_settings.size),
             Compression::None,
+            #[cfg(unix)]
+            None,
         ))));
 
         Some(
