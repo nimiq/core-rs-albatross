@@ -5,14 +5,13 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
-use futures::{future::BoxFuture, FutureExt, Stream, StreamExt};
+use futures::{FutureExt, Stream, StreamExt};
 use lazy_static::lazy_static;
 use parking_lot::RwLock;
 
 use nimiq_block::MacroBlock;
 use nimiq_blockchain::{
-    AbstractBlockchain, Blockchain, HistoryPusher, HistoryTreeChunk, PushError, PushResult,
-    CHUNK_SIZE,
+    AbstractBlockchain, Blockchain, ExtendedTransaction, PushError, PushResult, CHUNK_SIZE,
 };
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{network::Network, request::RequestError};
@@ -23,15 +22,41 @@ use crate::messages::{BatchSetInfo, HistoryChunk, RequestBatchSet, RequestHistor
 use crate::sync::sync_queue::{SyncQueue, SyncQueuePeer};
 
 struct PendingBatchSet {
-    pusher: Arc<RwLock<HistoryPusher>>,
-    epoch_number: u32,
+    block: MacroBlock,
     history_len: usize,
     history_offset: usize,
-    history_received: usize,
+    history: Vec<ExtendedTransaction>,
 }
 impl PendingBatchSet {
     fn is_complete(&self) -> bool {
-        self.history_len == self.history_received + self.history_offset
+        self.history_len == self.history.len() + self.history_offset
+    }
+
+    fn epoch_number(&self) -> u32 {
+        self.block.epoch_number()
+    }
+}
+
+pub struct BatchSet {
+    pub block: MacroBlock,
+    pub history: Vec<ExtendedTransaction>,
+}
+
+impl std::fmt::Debug for BatchSet {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut dbg = f.debug_struct("BatchSet");
+        dbg.field("epoch_number", &self.block.epoch_number());
+        dbg.field("history_len", &self.history.len());
+        dbg.finish()
+    }
+}
+
+impl From<PendingBatchSet> for BatchSet {
+    fn from(batch_set: PendingBatchSet) -> Self {
+        Self {
+            block: batch_set.block,
+            history: batch_set.history,
+        }
     }
 }
 
@@ -156,7 +181,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         }
     }
 
-    fn on_epoch_received(&mut self, epoch: BatchSetInfo) -> Result<MacroBlock, SyncClusterResult> {
+    fn on_epoch_received(&mut self, epoch: BatchSetInfo) -> Result<(), SyncClusterResult> {
         // `epoch.block` is Some, since we filtered it accordingly in the `request_fn`
         let block = epoch.block.expect("epoch.block should exist");
 
@@ -169,63 +194,57 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
 
         // TODO Verify macro blocks and their ordering
         // Currently we only do a very basic check here
-        let blockchain = self.blockchain.upgradable_read();
+        let blockchain = self.blockchain.read();
         let current_block_number = blockchain.block_number();
-        let current_epoch_number = blockchain.epoch_number();
         if block.header.block_number <= current_block_number {
             debug!("Received outdated epoch at block {}", current_block_number);
             return Err(SyncClusterResult::Outdated);
         }
 
-        let epoch_number = block.epoch_number();
-        let num_known_txs = blockchain
-            .history_store
-            .get_final_epoch_transactions(epoch_number, None)
-            .len();
+        // Prepare pending info.
+        let mut pending_batch_set = PendingBatchSet {
+            block,
+            history_len: epoch.history_len as usize,
+            history_offset: 0,
+            history: Vec::new(),
+        };
 
-        if let Ok(pusher) = Blockchain::start_history_sync(blockchain, block.clone()) {
-            // Prepare pending info.
-            let mut pending_batch_set = PendingBatchSet {
-                pusher: Arc::new(RwLock::new(pusher)),
-                epoch_number,
-                history_len: epoch.history_len as usize,
-                history_offset: 0,
-                history_received: 0,
-            };
+        // If the block is in the same epoch, add already known history.
+        let epoch_number = pending_batch_set.block.epoch_number();
 
-            let epoch_number = pending_batch_set.epoch_number;
-
-            let mut start_index = 0;
-            if current_epoch_number == epoch_number {
-                start_index = num_known_txs / CHUNK_SIZE;
-                pending_batch_set.history_offset = start_index * CHUNK_SIZE;
-            }
-
-            // Queue history chunks for the given epoch for download.
-            let history_chunk_ids = (start_index
-                ..((epoch.history_len as usize).ceiling_div(CHUNK_SIZE)))
-                .map(|i| (epoch_number, block.header.block_number, i))
-                .collect();
-            self.history_queue.add_ids(history_chunk_ids);
-
-            // We keep the epoch in pending_epochs while the history is downloading.
-            self.pending_batch_sets.push_back(pending_batch_set);
-
-            Ok(block)
-        } else {
-            Err(SyncClusterResult::Error)
+        let mut start_index = 0;
+        if blockchain.epoch_number() == epoch_number {
+            let num_known_txs = blockchain
+                .history_store
+                .get_final_epoch_transactions(epoch_number, None)
+                .len();
+            start_index = num_known_txs / CHUNK_SIZE;
+            pending_batch_set.history_offset = start_index * CHUNK_SIZE;
         }
+
+        // Queue history chunks for the given epoch for download.
+        let history_chunk_ids = (start_index
+            ..((epoch.history_len as usize).ceiling_div(CHUNK_SIZE)))
+            .map(|i| (epoch_number, pending_batch_set.block.header.block_number, i))
+            .collect();
+        self.history_queue.add_ids(history_chunk_ids);
+
+        // We keep the epoch in pending_epochs while the history is downloading.
+        self.pending_batch_sets.push_back(pending_batch_set);
+
+        Ok(())
     }
 
     fn on_history_chunk_received(
         &mut self,
         epoch_number: u32,
+        chunk_index: usize,
         history_chunk: HistoryChunk,
-    ) -> Result<(usize, HistoryTreeChunk), SyncClusterResult> {
+    ) -> Result<(), SyncClusterResult> {
         // Find epoch in pending_epochs.
         // TODO: This assumes that epochs are always dense in `pending_batch_sets`
         //  which might not be the case for misbehaving peers.
-        let first_epoch_number = self.pending_batch_sets[0].epoch_number;
+        let first_epoch_number = self.pending_batch_sets[0].epoch_number();
         let epoch_index = (epoch_number - first_epoch_number) as usize;
         let epoch = &mut self.pending_batch_sets[epoch_index];
 
@@ -235,21 +254,38 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
             return Err(SyncClusterResult::Error);
         }
 
+        // Verify chunk.
+        let chunk = history_chunk.chunk.expect("History chunk missing");
+        if !chunk
+            .verify(
+                epoch.block.header.history_root.clone(),
+                chunk_index * CHUNK_SIZE,
+            )
+            .unwrap_or(false)
+        {
+            log::warn!(
+                "History Chunk failed to verify (chunk {} of epoch {})",
+                chunk_index,
+                epoch_number
+            );
+            return Err(SyncClusterResult::Error);
+        }
+
         // Add the received history chunk to the pending epoch.
-        let history_chunk = history_chunk.chunk.expect("History chunk missing");
-        epoch.history_received += history_chunk.history.len();
+        let mut chunk = chunk.history;
+        epoch.history.append(&mut chunk);
 
         if epoch.history_len > CHUNK_SIZE {
             log::info!(
                 "Downloading history for epoch #{}: {}/{} ({:.0}%)",
-                epoch.epoch_number,
-                epoch.history_received,
+                epoch.epoch_number(),
+                epoch.history.len(),
                 epoch.history_len,
-                (epoch.history_received as f64 / epoch.history_len as f64) * 100f64
+                (epoch.history.len() as f64 / epoch.history_len as f64) * 100f64
             );
         }
 
-        Ok((epoch_index, history_chunk))
+        Ok(())
     }
 
     pub(crate) fn add_peer(&mut self, peer_id: TNetwork::PeerId) -> bool {
@@ -374,7 +410,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
 }
 
 impl<TNetwork: Network + 'static> Stream for SyncCluster<TNetwork> {
-    type Item = Result<(Blake2bHash, BoxFuture<'static, SyncClusterResult>), SyncClusterResult>;
+    type Item = Result<BatchSet, SyncClusterResult>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         while self.pending_batch_sets.len() < Self::NUM_PENDING_BATCH_SETS {
@@ -397,20 +433,7 @@ impl<TNetwork: Network + 'static> Stream for SyncCluster<TNetwork> {
                     if self.pending_batch_sets[0].is_complete() {
                         self.num_epochs_finished += 1;
                         let batch_set = self.pending_batch_sets.pop_front().unwrap();
-                        let blockchain = Arc::clone(&self.blockchain);
-                        let pusher = batch_set.pusher;
-                        let epoch_number = batch_set.epoch_number;
-                        let block_hash = { pusher.read().block.hash() };
-                        let future = async move {
-                            debug!("Processing epoch #{} (no history items)", epoch_number);
-                            let mut pusher = pusher.write();
-                            if pusher.commit(blockchain.upgradable_read()).is_err() {
-                                return SyncClusterResult::Error;
-                            }
-                            SyncClusterResult::EpochSuccessful
-                        }
-                        .boxed();
-                        return Poll::Ready(Some(Ok((block_hash, future))));
+                        return Poll::Ready(Some(Ok(batch_set.into())));
                     }
                 }
                 Err(e) => {
@@ -424,53 +447,20 @@ impl<TNetwork: Network + 'static> Stream for SyncCluster<TNetwork> {
             }
         }
 
-        if let Poll::Ready(Some(result)) = self.history_queue.poll_next_unpin(cx) {
+        while let Poll::Ready(Some(result)) = self.history_queue.poll_next_unpin(cx) {
             match result {
                 Ok((epoch_number, chunk_index, history_chunk)) => {
-                    match self.on_history_chunk_received(epoch_number, history_chunk) {
-                        Err(e) => return Poll::Ready(Some(Err(e))),
-                        Ok((epoch_idx, history_chunk)) => {
-                            let blockchain = Arc::clone(&self.blockchain);
-                            let pusher = Arc::clone(&self.pending_batch_sets[epoch_idx].pusher);
-                            let block_hash = { pusher.read().block.hash() };
-                            let is_complete = self.pending_batch_sets[epoch_idx].is_complete();
-                            let epoch_len = self.pending_batch_sets[epoch_idx].history_len;
-                            let future = async move {
-                                debug!(
-                                    "Processing epoch #{} ({} history items, chunk {}/{})",
-                                    epoch_number,
-                                    history_chunk.history.len(),
-                                    chunk_index,
-                                    epoch_len
-                                );
-                                let mut pusher = pusher.write();
-                                match pusher.add_history_chunk(
-                                    blockchain.upgradable_read(),
-                                    history_chunk,
-                                    chunk_index,
-                                    CHUNK_SIZE,
-                                ) {
-                                    Err(_) => SyncClusterResult::Error,
-                                    Ok(_) => {
-                                        if is_complete {
-                                            debug!("Committing epoch #{}", epoch_number);
-                                            if pusher.commit(blockchain.upgradable_read()).is_err()
-                                            {
-                                                return SyncClusterResult::Error;
-                                            }
-                                        }
-                                        SyncClusterResult::EpochSuccessful
-                                    }
-                                }
-                            }
-                            .boxed();
-                            // Mark finished epochs.
-                            if is_complete {
-                                self.num_epochs_finished += 1;
-                                self.pending_batch_sets.remove(epoch_idx);
-                            }
-                            return Poll::Ready(Some(Ok((block_hash, future))));
-                        }
+                    if let Err(e) =
+                        self.on_history_chunk_received(epoch_number, chunk_index, history_chunk)
+                    {
+                        return Poll::Ready(Some(Err(e)));
+                    }
+
+                    // Emit finished epochs.
+                    if self.pending_batch_sets[0].is_complete() {
+                        self.num_epochs_finished += 1;
+                        let batch_set = self.pending_batch_sets.pop_front().unwrap();
+                        return Poll::Ready(Some(Ok(batch_set.into())));
                     }
                 }
                 Err(e) => {

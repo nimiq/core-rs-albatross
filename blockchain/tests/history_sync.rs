@@ -3,7 +3,7 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 
 use nimiq_block_production::BlockProducer;
-use nimiq_blockchain::{AbstractBlockchain, Blockchain, PushResult, CHUNK_SIZE};
+use nimiq_blockchain::{AbstractBlockchain, Blockchain, PushResult};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
 use nimiq_primitives::policy::{BATCHES_PER_EPOCH, BLOCKS_PER_BATCH, BLOCKS_PER_EPOCH};
@@ -43,32 +43,14 @@ fn history_sync_works() {
         .get_block_at(BLOCKS_PER_EPOCH, true, None)
         .unwrap();
 
-    let election_txs_1 = blockchain
-        .history_store
-        .prove_chunk(
-            election_block_1.epoch_number(),
-            election_block_1.block_number(),
-            CHUNK_SIZE,
-            0,
-            None,
-        )
-        .unwrap();
+    let election_txs_1 = blockchain.history_store.get_epoch_transactions(1, None);
 
     let election_block_2 = blockchain
         .chain_store
         .get_block_at(2 * BLOCKS_PER_EPOCH, true, None)
         .unwrap();
 
-    let election_txs_2 = blockchain
-        .history_store
-        .prove_chunk(
-            election_block_2.epoch_number(),
-            election_block_2.block_number(),
-            CHUNK_SIZE,
-            0,
-            None,
-        )
-        .unwrap();
+    let election_txs_2 = blockchain.history_store.get_epoch_transactions(2, None);
 
     // Get the checkpoint blocks and corresponding history tree transactions.
     let checkpoint_block_2_1 = blockchain
@@ -76,48 +58,37 @@ fn history_sync_works() {
         .get_block_at(BLOCKS_PER_EPOCH + BLOCKS_PER_BATCH, true, None)
         .unwrap();
 
-    let checkpoint_txs_2_1 = blockchain
-        .history_store
-        .prove_chunk(
-            checkpoint_block_2_1.epoch_number(),
-            checkpoint_block_2_1.block_number(),
-            CHUNK_SIZE as usize,
-            0,
-            None,
-        )
-        .unwrap();
+    let mut checkpoint_txs_2_1 = vec![];
+
+    for ext_tx in &election_txs_2 {
+        if ext_tx.block_number > BLOCKS_PER_EPOCH + BLOCKS_PER_BATCH {
+            break;
+        }
+
+        checkpoint_txs_2_1.push(ext_tx.clone());
+    }
 
     let checkpoint_block_2_3 = blockchain
         .chain_store
         .get_block_at(BLOCKS_PER_EPOCH + 3 * BLOCKS_PER_BATCH, true, None)
         .unwrap();
 
-    let checkpoint_txs_2_3 = blockchain
-        .history_store
-        .prove_chunk(
-            checkpoint_block_2_3.epoch_number(),
-            checkpoint_block_2_3.block_number(),
-            CHUNK_SIZE as usize,
-            0,
-            None,
-        )
-        .unwrap();
+    let mut checkpoint_txs_2_3 = vec![];
+
+    for ext_tx in &election_txs_2 {
+        if ext_tx.block_number > BLOCKS_PER_EPOCH + 3 * BLOCKS_PER_BATCH {
+            break;
+        }
+
+        checkpoint_txs_2_3.push(ext_tx.clone());
+    }
 
     let checkpoint_block_3_1 = blockchain
         .chain_store
         .get_block_at(2 * BLOCKS_PER_EPOCH + BLOCKS_PER_BATCH, true, None)
         .unwrap();
 
-    let checkpoint_txs_3_1 = blockchain
-        .history_store
-        .prove_chunk(
-            checkpoint_block_3_1.epoch_number(),
-            checkpoint_block_3_1.block_number(),
-            CHUNK_SIZE,
-            0,
-            None,
-        )
-        .unwrap();
+    let checkpoint_txs_3_1 = blockchain.history_store.get_epoch_transactions(3, None);
 
     let time = Arc::new(OffsetTime::new());
     // Create a second blockchain to push these blocks.
@@ -127,113 +98,49 @@ fn history_sync_works() {
         Blockchain::new(env2, NetworkId::UnitAlbatross, time).unwrap(),
     ));
 
-    // Push election_block_1 associated transactions
-
-    let mut pusher = Blockchain::start_history_sync(
-        blockchain2.upgradable_read(),
-        election_block_1.unwrap_macro(),
-    )
-    .expect("Failed starting history sync");
-
     // Push blocks using history sync.
     assert_eq!(
-        pusher.add_history_chunk(blockchain2.upgradable_read(), election_txs_1, 0, CHUNK_SIZE),
-        Ok(PushResult::Extended)
-    );
-
-    assert_eq!(
-        pusher.commit(blockchain2.upgradable_read()),
-        Ok(PushResult::Extended)
-    );
-
-    // Push checkpoint_block_2_1 associated transactions
-
-    let mut pusher = Blockchain::start_history_sync(
-        blockchain2.upgradable_read(),
-        checkpoint_block_2_1.unwrap_macro(),
-    )
-    .expect("Failed starting history sync");
-
-    // Push blocks using history sync.
-    assert_eq!(
-        pusher.add_history_chunk(
+        Blockchain::push_history_sync(
             blockchain2.upgradable_read(),
-            checkpoint_txs_2_1,
-            0,
-            CHUNK_SIZE
+            election_block_1,
+            &election_txs_1
         ),
         Ok(PushResult::Extended)
     );
 
     assert_eq!(
-        pusher.commit(blockchain2.upgradable_read()),
-        Ok(PushResult::Extended)
-    );
-
-    // Push checkpoint_block_2_3 associated transactions
-
-    let mut pusher = Blockchain::start_history_sync(
-        blockchain2.upgradable_read(),
-        checkpoint_block_2_3.unwrap_macro(),
-    )
-    .expect("Failed starting history sync");
-
-    // Push blocks using history sync.
-    assert_eq!(
-        pusher.add_history_chunk(
+        Blockchain::push_history_sync(
             blockchain2.upgradable_read(),
-            checkpoint_txs_2_3,
-            0,
-            CHUNK_SIZE
+            checkpoint_block_2_1,
+            &checkpoint_txs_2_1
         ),
         Ok(PushResult::Extended)
     );
 
     assert_eq!(
-        pusher.commit(blockchain2.upgradable_read()),
-        Ok(PushResult::Extended)
-    );
-
-    // Push election_block_2 associated transactions
-
-    let mut pusher = Blockchain::start_history_sync(
-        blockchain2.upgradable_read(),
-        election_block_2.unwrap_macro(),
-    )
-    .expect("Failed starting history sync");
-
-    // Push blocks using history sync.
-    assert_eq!(
-        pusher.add_history_chunk(blockchain2.upgradable_read(), election_txs_2, 0, CHUNK_SIZE),
-        Ok(PushResult::Extended)
-    );
-
-    assert_eq!(
-        pusher.commit(blockchain2.upgradable_read()),
-        Ok(PushResult::Extended)
-    );
-
-    // Push checkpoint_block_3_1 associated transactions
-
-    let mut pusher = Blockchain::start_history_sync(
-        blockchain2.upgradable_read(),
-        checkpoint_block_3_1.unwrap_macro(),
-    )
-    .expect("Failed starting history sync");
-
-    // Push blocks using history sync.
-    assert_eq!(
-        pusher.add_history_chunk(
+        Blockchain::push_history_sync(
             blockchain2.upgradable_read(),
-            checkpoint_txs_3_1,
-            0,
-            CHUNK_SIZE
+            checkpoint_block_2_3,
+            &checkpoint_txs_2_3
         ),
         Ok(PushResult::Extended)
     );
 
     assert_eq!(
-        pusher.commit(blockchain2.upgradable_read()),
+        Blockchain::push_history_sync(
+            blockchain2.upgradable_read(),
+            election_block_2,
+            &election_txs_2
+        ),
+        Ok(PushResult::Extended)
+    );
+
+    assert_eq!(
+        Blockchain::push_history_sync(
+            blockchain2.upgradable_read(),
+            checkpoint_block_3_1,
+            &checkpoint_txs_3_1
+        ),
         Ok(PushResult::Extended)
     );
 }
@@ -267,32 +174,14 @@ fn history_sync_works_with_micro_blocks() {
         .get_block_at(BLOCKS_PER_EPOCH, true, None)
         .unwrap();
 
-    let election_txs_1 = blockchain
-        .history_store
-        .prove_chunk(
-            election_block_1.epoch_number(),
-            election_block_1.block_number(),
-            CHUNK_SIZE,
-            0,
-            None,
-        )
-        .unwrap();
+    let election_txs_1 = blockchain.history_store.get_epoch_transactions(1, None);
 
     let election_block_2 = blockchain
         .chain_store
         .get_block_at(2 * BLOCKS_PER_EPOCH, true, None)
         .unwrap();
 
-    let election_txs_2 = blockchain
-        .history_store
-        .prove_chunk(
-            election_block_2.epoch_number(),
-            election_block_2.block_number(),
-            CHUNK_SIZE,
-            0,
-            None,
-        )
-        .unwrap();
+    let election_txs_2 = blockchain.history_store.get_epoch_transactions(2, None);
 
     // Get the checkpoint blocks and corresponding history tree transactions.
     let checkpoint_block_2_1 = blockchain
@@ -300,32 +189,22 @@ fn history_sync_works_with_micro_blocks() {
         .get_block_at(BLOCKS_PER_EPOCH + BLOCKS_PER_BATCH, true, None)
         .unwrap();
 
-    let checkpoint_txs_2_1 = blockchain
-        .history_store
-        .prove_chunk(
-            checkpoint_block_2_1.epoch_number(),
-            checkpoint_block_2_1.block_number(),
-            CHUNK_SIZE,
-            0,
-            None,
-        )
-        .unwrap();
+    let mut checkpoint_txs_2_1 = vec![];
+
+    for ext_tx in &election_txs_2 {
+        if ext_tx.block_number > BLOCKS_PER_EPOCH + BLOCKS_PER_BATCH {
+            break;
+        }
+
+        checkpoint_txs_2_1.push(ext_tx.clone());
+    }
 
     let checkpoint_block_3_2 = blockchain
         .chain_store
         .get_block_at(2 * BLOCKS_PER_EPOCH + 2 * BLOCKS_PER_BATCH, true, None)
         .unwrap();
 
-    let checkpoint_txs_3_2 = blockchain
-        .history_store
-        .prove_chunk(
-            checkpoint_block_3_2.epoch_number(),
-            checkpoint_block_3_2.block_number(),
-            CHUNK_SIZE,
-            0,
-            None,
-        )
-        .unwrap();
+    let checkpoint_txs_3_2 = blockchain.history_store.get_epoch_transactions(3, None);
 
     // Get the micro blocks.
     let mut micro_blocks_2_2 = vec![];
@@ -359,43 +238,21 @@ fn history_sync_works_with_micro_blocks() {
     ));
 
     // Push blocks using history sync.
-    let mut pusher = Blockchain::start_history_sync(
-        blockchain2.upgradable_read(),
-        election_block_1.unwrap_macro(),
-    )
-    .expect("Failed starting history sync");
-
-    // Push blocks using history sync.
     assert_eq!(
-        pusher.add_history_chunk(blockchain2.upgradable_read(), election_txs_1, 0, CHUNK_SIZE),
-        Ok(PushResult::Extended)
-    );
-
-    assert_eq!(
-        pusher.commit(blockchain2.upgradable_read()),
-        Ok(PushResult::Extended)
-    );
-
-    // Push blocks using history sync.
-    let mut pusher = Blockchain::start_history_sync(
-        blockchain2.upgradable_read(),
-        checkpoint_block_2_1.unwrap_macro(),
-    )
-    .expect("Failed starting history sync");
-
-    // Push blocks using history sync.
-    assert_eq!(
-        pusher.add_history_chunk(
+        Blockchain::push_history_sync(
             blockchain2.upgradable_read(),
-            checkpoint_txs_2_1,
-            0,
-            CHUNK_SIZE
+            election_block_1,
+            &election_txs_1
         ),
         Ok(PushResult::Extended)
     );
 
     assert_eq!(
-        pusher.commit(blockchain2.upgradable_read()),
+        Blockchain::push_history_sync(
+            blockchain2.upgradable_read(),
+            checkpoint_block_2_1,
+            &checkpoint_txs_2_1
+        ),
         Ok(PushResult::Extended)
     );
 
@@ -408,20 +265,12 @@ fn history_sync_works_with_micro_blocks() {
     }
 
     // Now go back into history sync.
-    let mut pusher = Blockchain::start_history_sync(
-        blockchain2.upgradable_read(),
-        election_block_2.unwrap_macro(),
-    )
-    .expect("Failed starting history sync");
-
-    // Push blocks using history sync.
     assert_eq!(
-        pusher.add_history_chunk(blockchain2.upgradable_read(), election_txs_2, 0, CHUNK_SIZE),
-        Ok(PushResult::Extended)
-    );
-
-    assert_eq!(
-        pusher.commit(blockchain2.upgradable_read()),
+        Blockchain::push_history_sync(
+            blockchain2.upgradable_read(),
+            election_block_2,
+            &election_txs_2
+        ),
         Ok(PushResult::Extended)
     );
 
@@ -434,25 +283,12 @@ fn history_sync_works_with_micro_blocks() {
     }
 
     // End by going into history sync.
-    let mut pusher = Blockchain::start_history_sync(
-        blockchain2.upgradable_read(),
-        checkpoint_block_3_2.unwrap_macro(),
-    )
-    .expect("Failed starting history sync");
-
-    // Push blocks using history sync.
     assert_eq!(
-        pusher.add_history_chunk(
+        Blockchain::push_history_sync(
             blockchain2.upgradable_read(),
-            checkpoint_txs_3_2,
-            0,
-            CHUNK_SIZE
+            checkpoint_block_3_2,
+            &checkpoint_txs_3_2
         ),
-        Ok(PushResult::Extended)
-    );
-
-    assert_eq!(
-        pusher.commit(blockchain2.upgradable_read()),
         Ok(PushResult::Extended)
     );
 }
@@ -488,110 +324,15 @@ fn history_sync_works_with_diverging_history() {
         .chain_store
         .get_block_at(BLOCKS_PER_EPOCH, true, None)
         .unwrap();
-
-    let election_txs_1 = blockchain
-        .history_store
-        .prove_chunk(
-            election_block_1.epoch_number(),
-            election_block_1.block_number(),
-            CHUNK_SIZE,
-            0,
-            None,
-        )
-        .unwrap();
+    let election_txs_1 = blockchain.history_store.get_epoch_transactions(1, None);
 
     // Push the epoch to blockchain2.
-    let mut pusher = Blockchain::start_history_sync(
-        blockchain2.upgradable_read(),
-        election_block_1.unwrap_macro(),
-    )
-    .expect("Failed starting history sync");
-
-    // Push blocks using history sync.
     assert_eq!(
-        pusher.add_history_chunk(blockchain2.upgradable_read(), election_txs_1, 0, CHUNK_SIZE),
-        Ok(PushResult::Extended)
-    );
-
-    assert_eq!(
-        pusher.commit(blockchain2.upgradable_read()),
-        Ok(PushResult::Extended)
-    );
-
-    assert_eq!(blockchain.head(), blockchain2.read().head());
-}
-
-// Tests if the history sync works when micro blocks have already been pushed in the blockchain,
-// and tries to push history in multiple chunks
-#[test]
-fn history_sync_works_with_multiple_chunks() {
-    // Produce macro blocks to complete one epoch in blockchain1.
-    let env = VolatileEnvironment::new(10).unwrap();
-    let time = Arc::new(OffsetTime::new());
-    let blockchain1 = Arc::new(RwLock::new(
-        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
-    ));
-
-    // Build blockchain2.
-    let env = VolatileEnvironment::new(10).unwrap();
-    let time = Arc::new(OffsetTime::new());
-    let blockchain2 = Arc::new(RwLock::new(
-        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
-    ));
-
-    let num_macro_blocks = BATCHES_PER_EPOCH as usize;
-    let num_chunks = 4;
-    let producer = BlockProducer::new(signing_key(), voting_key());
-    produce_macro_blocks_with_txns(&producer, &blockchain1, num_macro_blocks, 2, 0);
-    assert_eq!(blockchain1.read().block_number(), BLOCKS_PER_EPOCH);
-
-    // Get the election block and corresponding history tree transactions from blockchain1.
-    let blockchain = blockchain1.read();
-    let election_block_1 = blockchain
-        .chain_store
-        .get_block_at(BLOCKS_PER_EPOCH, true, None)
-        .unwrap();
-
-    let mut election_txs_1 = vec![];
-    for i in 0..num_chunks {
-        election_txs_1.push(
-            blockchain
-                .history_store
-                .prove_chunk(
-                    election_block_1.epoch_number(),
-                    election_block_1.block_number(),
-                    2 * BLOCKS_PER_EPOCH as usize / num_chunks,
-                    i,
-                    None,
-                )
-                .unwrap(),
-        );
-    }
-
-    // Push the epoch to blockchain1.
-    let mut pusher = Blockchain::start_history_sync(
-        blockchain2.upgradable_read(),
-        election_block_1.unwrap_macro(),
-    )
-    .expect("Failed starting history sync");
-
-    let mut chunk_index = 0;
-    for chunk in election_txs_1 {
-        // Push blocks using history sync.
-        assert_eq!(
-            pusher.add_history_chunk(
-                blockchain2.upgradable_read(),
-                chunk,
-                chunk_index,
-                2 * BLOCKS_PER_EPOCH as usize / num_chunks
-            ),
-            Ok(PushResult::Extended)
-        );
-        chunk_index += 1;
-    }
-
-    assert_eq!(
-        pusher.commit(blockchain2.upgradable_read()),
+        Blockchain::push_history_sync(
+            blockchain2.upgradable_read(),
+            election_block_1,
+            &election_txs_1
+        ),
         Ok(PushResult::Extended)
     );
 

@@ -330,7 +330,7 @@ fn it_can_revert_unpark_transactions() {
 
     let result = bc.revert_blocks(3, &mut txn);
 
-    assert!(result.is_ok());
+    assert_eq!(result, Ok(()));
 }
 
 #[test]
@@ -428,7 +428,7 @@ fn it_can_revert_create_staker_transaction() {
     let mut txn = bc.write_transaction();
     let result = bc.revert_blocks(3, &mut txn);
 
-    assert!(result.is_ok());
+    assert_eq!(result, Ok(()));
 }
 
 fn ed25519_key_pair(secret_key: &str) -> SchnorrKeyPair {
