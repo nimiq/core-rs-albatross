@@ -6,7 +6,7 @@ use nimiq_jsonrpc_client::{websocket::WebsocketClient, ArcClient};
 use nimiq_jsonrpc_core::Credentials;
 use nimiq_rpc_interface::{
     blockchain::BlockchainProxy, consensus::ConsensusProxy, mempool::MempoolProxy,
-    network::NetworkProxy, validator::ValidatorProxy, wallet::WalletProxy,
+    network::NetworkProxy, policy::PolicyProxy, validator::ValidatorProxy, wallet::WalletProxy,
 };
 pub mod subcommands;
 
@@ -29,6 +29,10 @@ struct Opt {
 
 #[derive(Debug, Parser)]
 enum Command {
+    /// Shows policy information.
+    #[clap(flatten)]
+    Policy(PolicyCommand),
+
     /// Show and subscribe to the blockchain's current state.
     #[clap(flatten)]
     Blockchain(BlockchainCommand),
@@ -58,6 +62,7 @@ enum Command {
 impl Command {
     async fn run(self, client: Client) -> Result<(), Error> {
         match self {
+            Command::Policy(command) => command.handle_subcommand(client),
             Command::Blockchain(command) => command.handle_subcommand(client),
             Command::Account(command) => command.handle_subcommand(client),
             Command::Transaction(command) => command.handle_subcommand(client),
@@ -70,6 +75,7 @@ impl Command {
 }
 
 pub struct Client {
+    pub policy: PolicyProxy<ArcClient<WebsocketClient>>,
     pub blockchain: BlockchainProxy<ArcClient<WebsocketClient>>,
     pub consensus: ConsensusProxy<ArcClient<WebsocketClient>>,
     pub mempool: MempoolProxy<ArcClient<WebsocketClient>>,
@@ -83,6 +89,7 @@ impl Client {
         let client = ArcClient::new(WebsocketClient::new(url, credentials).await?);
 
         Ok(Self {
+            policy: PolicyProxy::new(client.clone()),
             blockchain: BlockchainProxy::new(client.clone()),
             consensus: ConsensusProxy::new(client.clone()),
             mempool: MempoolProxy::new(client.clone()),
