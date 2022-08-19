@@ -2556,7 +2556,7 @@ dependencies = [
  "nimiq-utils",
  "nimiq-vrf",
  "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
- "prometheus-client 0.17.0",
+ "prometheus-client 0.18.0",
  "rand 0.8.5",
  "thiserror",
  "tracing",
@@ -2953,7 +2953,7 @@ dependencies = [
  "nimiq-utils",
  "nimiq-vrf",
  "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
- "prometheus-client 0.17.0",
+ "prometheus-client 0.18.0",
  "rand 0.8.5",
  "tokio",
  "tokio-metrics",
@@ -2973,7 +2973,7 @@ dependencies = [
  "nimiq-network-interface",
  "nimiq-network-libp2p",
  "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
- "prometheus-client 0.17.0",
+ "prometheus-client 0.18.0",
  "tokio",
  "tokio-metrics",
  "tracing",
@@ -3103,7 +3103,7 @@ dependencies = [
  "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
  "pin-project",
  "pin-project-lite 0.2.9",
- "prometheus-client 0.17.0",
+ "prometheus-client 0.18.0",
  "rand 0.8.5",
  "serde",
  "thiserror",
@@ -3971,13 +3971,13 @@ dependencies = [
 
 [[package]]
 name = "prometheus-client"
-version = "0.17.0"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7fe21d29a3d5c97c2ae9bcae7b944bfb71dbc281e3035e301085086f9bc83611"
+checksum = "3c473049631c233933d6286c88bbb7be30e62ec534cf99a9ae0079211f7fa603"
 dependencies = [
  "dtoa",
  "itoa",
- "owning_ref",
+ "parking_lot 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "prometheus-client-derive-text-encode 0.3.0",
 ]
 
