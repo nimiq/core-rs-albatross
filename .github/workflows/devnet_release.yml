@@ -108,7 +108,7 @@ jobs:
          echo "::set-output name=GRAFANA_URL::http://localhost:3001/d/YbjdvlU7z/nimiq-test?orgId=1&var-env=ci&var-run_id=${{steps.final_ts_run_id.outputs.RUN_ID}}&from=${{steps.initial_ts.outputs.INITIAL_TS}}&to=${{steps.final_ts_run_id.outputs.FINAL_TS}}"
     - name: Report potential deadlocks to slack
       if: always() && contains(steps.reason.outputs.FAIL_REASON, 'DEADLOCK')
-      uses: ravsamhq/notify-slack-action@v1
+      uses: ravsamhq/notify-slack-action@v2
       with:
           status: ${{ job.status }}
           notification_title: 'Potential deadlock detected in ${{ matrix.test }}'
@@ -117,7 +117,7 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
 #    - name: Report long lock hold times
 #      if: always() && contains(steps.reason.outputs.FAIL_REASON, 'LONG_LOCK_HOLD_TIME')
-#      uses: ravsamhq/notify-slack-action@v1
+#      uses: ravsamhq/notify-slack-action@v2
 #      with:
 #          status: ${{ job.status }}
 #          notification_title: 'Long lock hold time in ${{ matrix.test }}'
@@ -126,7 +126,7 @@ jobs:
 #          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
 #    - name: Report slow lock acquisitions
 #      if: always() && contains(steps.reason.outputs.FAIL_REASON, 'SLOW_LOCK_ACQUISITION')
-#      uses: ravsamhq/notify-slack-action@v1
+#      uses: ravsamhq/notify-slack-action@v2
 #      with:
 #          status: ${{ job.status }}
 #          notification_title: 'Slow lock acquisition detected in ${{ matrix.test }}'
@@ -135,7 +135,7 @@ jobs:
 #          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
     - name: Report Status to Slack
       if: always() && github.ref == 'refs/heads/albatross'
-      uses: ravsamhq/notify-slack-action@v1
+      uses: ravsamhq/notify-slack-action@v2
       with:
           status: ${{ job.status }}
           notify_when: 'failure'
