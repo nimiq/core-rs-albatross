@@ -64,32 +64,38 @@ pub enum AccountCommand {
         address: Address,
     },
 
-    /// Signs a message using the the specified account. The account must already be unlocked or imported.
+    /// Signs a message using the the specified account. The account must already be unlocked.
     Sign {
         /// The message to be signed.
+        #[clap(short, long)]
         message: String,
 
         /// The address to sign the message.
+        #[clap(short, long)]
         address: Address,
 
         /// Specifies if the message is in hexadecimal.
-        #[clap(short = 'h', long)]
+        #[clap(long)]
         is_hex: bool,
     },
 
-    /// Verfies if the message was signed by specified account. The account must already be unlocked or imported.
+    /// Verfies if the message was signed by specified account. The account must already be unlocked.
     VerifySignature {
         /// The signed message to be verified.
+        #[clap(short, long)]
         message: String,
 
         /// The public key returned upon signing the message.
+        #[clap(short, long)]
         public_key: PublicKey,
 
-        /// The signature returned upon signing the message.
+        /// The signature returned upon signing the message. The r and s bystes should be all concatenated
+        /// into one continous input.
+        #[clap(short, long)]
         signature: Signature,
 
         /// Specifies if the message is in hexadecimal.
-        #[clap(short = 'h', long)]
+        #[clap(long)]
         is_hex: bool,
     },
 

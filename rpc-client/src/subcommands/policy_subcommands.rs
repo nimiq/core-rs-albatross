@@ -10,7 +10,7 @@ use super::accounts_subcommands::HandleSubcommand;
 
 #[derive(Debug, Parser)]
 pub enum PolicyCommand {
-    /// Returns a bundle of policy constants
+    /// Returns a bundle of policy constants.
     PolicyConstants {},
 
     /// Returns the epoch number at a given block number (height).
@@ -26,7 +26,7 @@ pub enum PolicyCommand {
         block_number: u32,
     },
 
-    /// Returns the batch number at a given `block_number` (height)
+    /// Returns the batch number at a given `block_number` (height).
     BatchAt {
         /// The block number to fetch its batch number from.
         block_number: u32,
@@ -133,13 +133,16 @@ pub enum PolicyCommand {
     /// calculated using the following formula:
     /// Supply (t) = Genesis_supply + Initial_supply_velocity / Supply_decay * (1 - e^(- Supply_decay * t))
     /// Where e is the exponential function, t is the time in milliseconds since the genesis block and
-    /// Genesis_supply is the supply at the genesis of the Nimiq 2.0 chain.
+    /// 'genesis_supply' is the supply at the genesis of the Nimiq 2.0 chain.
     SupplyAt {
         /// The supply at genesis.
+        #[clap(long)]
         genesis_supply: u64,
         /// The time of genesis.
+        #[clap(long)]
         genesis_time: u64,
         /// The current time.
+        #[clap(long)]
         current_time: u64,
     },
 }

@@ -62,15 +62,14 @@ enum Command {
 impl Command {
     async fn run(self, client: Client) -> Result<(), Error> {
         match self {
-            Command::Policy(command) => command.handle_subcommand(client),
-            Command::Blockchain(command) => command.handle_subcommand(client),
-            Command::Account(command) => command.handle_subcommand(client),
-            Command::Transaction(command) => command.handle_subcommand(client),
-            Command::Network(command) => command.handle_subcommand(client),
-            Command::Mempool(command) => command.handle_subcommand(client),
-            Command::Validator(command) => command.handle_subcommand(client),
-        };
-        Ok(())
+            Command::Policy(command) => command.handle_subcommand(client).await,
+            Command::Blockchain(command) => command.handle_subcommand(client).await,
+            Command::Account(command) => command.handle_subcommand(client).await,
+            Command::Transaction(command) => command.handle_subcommand(client).await,
+            Command::Network(command) => command.handle_subcommand(client).await,
+            Command::Mempool(command) => command.handle_subcommand(client).await,
+            Command::Validator(command) => command.handle_subcommand(client).await,
+        }
     }
 }
 
@@ -104,7 +103,7 @@ async fn run_app(opt: Opt) -> Result<(), Error> {
     let url = opt
         .url
         .as_deref()
-        .unwrap_or("ws://127.0.0.1:8648/ws")
+        .unwrap_or("ws://127.0.0.1:8649/ws")
         .parse()?;
 
     let credentials = match (&opt.username, &opt.password) {

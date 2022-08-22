@@ -27,8 +27,18 @@ pub struct TxCommon {
     pub validity_start_height: ValidityStartHeight,
 
     /// Don't actually send the transaction, but output the transaction as hex string.
-    #[clap(long = "dry")]
+    #[clap(long)]
     pub dry: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct TxCommonWithValue {
+    /// The amount of NIM to be used by the transaction.
+    #[clap(long)]
+    pub value: Coin,
+
+    #[clap(flatten)]
+    pub common_tx_fields: TxCommon,
 }
 
 #[derive(Debug, Parser)]
@@ -36,27 +46,31 @@ pub enum TransactionCommand {
     /// Sends a simple transaction from the wallet `wallet` to a basic `recipient`.
     Basic {
         /// Transaction will be sent from this address. The sender wallet must be unlocked prior to this action.
+        #[clap(long)]
         sender_wallet: Address,
 
         /// Recipient for this transaction. This must be a basic account.
+        #[clap(short, long)]
         recipient: Address,
 
         #[clap(flatten)]
         tx_commons: TxCommonWithValue,
     },
 
-    /** Staker transactions **/
-
+    /* Staker transactions */
     /// Sends a `new_staker` transaction to the network. You need to provide the address of a basic
     /// account (the sender wallet) to pay the transaction fee.
     NewStaker {
         /// The stake will be sent from this wallet. The sender wallet must be unlocked prior to this action.
+        #[clap(long)]
         sender_wallet: Address,
 
-        /// Destination address for the stake.
-        staker_address: Address,
+        /// The staker address. This wallet must be unlocked prior to this action.
+        #[clap(long)]
+        staker_wallet: Address,
 
-        /// Validator address to delegate stake to. If empty, no delegation will occour.
+        /// Validator address to delegate stake to. If empty, no delegation will occur.
+        #[clap(long)]
         delegation: Option<Address>,
 
         #[clap(flatten)]
@@ -66,9 +80,11 @@ pub enum TransactionCommand {
     /// Sends a staking transaction from the address of a given `wallet` to a given `staker_address`.
     Stake {
         /// The stake will be sent from this wallet. The sender wallet must be unlocked prior to this action.
+        #[clap(long)]
         sender_wallet: Address,
 
         /// Destination address for the stake.
+        #[clap(long)]
         staker_address: Address,
 
         #[clap(flatten)]
@@ -81,12 +97,15 @@ pub enum TransactionCommand {
     UpdateStaker {
         /// The fee will be payed by this wallet if any is provided. In such case the sender wallet must be unlocked prior to this action.
         /// If absent the fee is payed by the stakers account.
+        #[clap(long)]
         sender_wallet: Option<Address>,
 
-        /// Destination address for the update.
-        staker_address: Address,
+        /// Destination address for the update. This wallet must be already unlocked.
+        #[clap(long)]
+        staker_wallet: Address,
 
         /// The new address for the delegation.
+        #[clap(long)]
         new_delegation: Option<Address>,
 
         #[clap(flatten)]
@@ -97,9 +116,11 @@ pub enum TransactionCommand {
     /// being unstaked.
     Unstake {
         /// The stake will be sent from this wallet. The sender wallet must be unlocked prior to this action.
+        #[clap(long)]
         sender_wallet: Address,
 
         /// The recipients of the previously staked coins.
+        #[clap(long)]
         recipient: Address,
 
         /// The amount of NIM to unstake.
@@ -107,21 +128,26 @@ pub enum TransactionCommand {
         tx_commons: TxCommonWithValue,
     },
 
-    /** Vesting transactions **/
+    /* Vesting transactions */
     /// Sends a transaction creating a new vesting contract to the network.
     VestingCreate {
         /// The wallet used to sign the transaction. The vesting contract value is sent from the basic account
         /// belonging to this wallet. The sender wallet must be unlocked prior to this action.
+        #[clap(long)]
         sender_wallet: Address,
 
         /// The owner of the vesting contract.
+        #[clap(long)]
         owner: Address,
 
+        #[clap(long)]
         start_time: u64,
 
+        #[clap(long)]
         time_step: u64,
 
         /// Create a release schedule of `num_steps` payouts of value starting at `start_time + time_step`.
+        #[clap(long)]
         num_steps: u32,
 
         #[clap(flatten)]
@@ -130,31 +156,37 @@ pub enum TransactionCommand {
 
     /// Sends a transaction redeeming a vesting contract to the network.
     VestingRedeem {
-        /// The wallet to sign the transaction. This wallet should be the owner of the vesting contract.
+        /// The address to sign the transaction. This address should be the owner of the vesting contract.
         /// The sender wallet must be unlocked prior to this action.
+        #[clap(long)]
         sender_wallet: Address,
 
         /// The vesting contract address.
+        #[clap(long)]
         contract_address: Address,
 
         /// The address of the basic account that will receive the funds.
+        #[clap(long)]
         recipient: Address,
 
         #[clap(flatten)]
         tx_commons: TxCommonWithValue,
     },
 
-    /** HTLC transactions **/
+    /* HTLC transactions */
     /// Sends a transaction creating a new HTLC contract to the network.
     CreateHTLC {
         /// The wallet to sign the transaction. The HTLC contract value is sent from the basic account belonging to this wallet.
         /// The sender wallet must be unlocked prior to this action.
+        #[clap(long)]
         sender_wallet: Address,
 
         /// The address of the sender in the HTLC contract.
+        #[clap(long)]
         htlc_sender: Address,
 
         /// The address of the recipient in the HTLC contract.
+        #[clap(long)]
         htlc_recipient: Address,
 
         /// The result of hashing the pre-image hash `hash_count` times.
@@ -162,7 +194,7 @@ pub enum TransactionCommand {
         hash_root: AnyHash,
 
         /// Number of times the pre-image was hashed.
-        #[clap(short = 'c', long = "count")]
+        #[clap(short = 'c', long)]
         hash_count: u8,
 
         /// The hashing algorithm used.
@@ -170,6 +202,7 @@ pub enum TransactionCommand {
         hash_algorithm: HashAlgorithm,
 
         /// Sets the blockchain height at which the `htlc_sender` automatically gains control over the funds.
+        #[clap(long)]
         timeout: u64,
 
         #[clap(flatten)]
@@ -181,14 +214,18 @@ pub enum TransactionCommand {
     RedeemRegularHTLC {
         /// This address corresponds to the `htlc_recipient` in the HTLC contract.
         /// The sender wallet must be unlocked prior to this action.
+        #[clap(long)]
         sender_wallet: Address,
 
         /// The address of the HTLC contract.
+        #[clap(long)]
         contract_address: Address,
 
         /// The address of the basic account that will receive the funds.
+        #[clap(long)]
         htlc_recipient: Address,
 
+        #[clap(long)]
         pre_image: AnyHash,
 
         /// The result of hashing the pre-image hash `hash_count` times.
@@ -212,12 +249,15 @@ pub enum TransactionCommand {
     RedeemHTLCTimeout {
         /// This address corresponds to the `htlc_recipient` in the HTLC contract.
         /// The sender wallet must be unlocked prior to this action.
+        #[clap(long)]
         sender_wallet: Address,
 
         /// The address of the HTLC contract.
+        #[clap(long)]
         contract_address: Address,
 
         /// The address of the basic account that will receive the funds.
+        #[clap(long)]
         htlc_recipient: Address,
 
         #[clap(flatten)]
@@ -228,15 +268,19 @@ pub enum TransactionCommand {
     /// network.
     RedeemHTLCEarly {
         /// The address of the HTLC contract.
+        #[clap(long)]
         contract_address: Address,
 
         /// The address of the basic account that will receive the funds.
+        #[clap(long)]
         htlc_recipient: Address,
 
         /// The signature corresponding to the `htlc_sender` in the HTLC contract.
+        #[clap(long)]
         htlc_sender_signature: String,
 
         /// The signature corresponding to the `htlc_recipient` in the HTLC contract.
+        #[clap(long)]
         htlc_recipient_signature: String,
 
         #[clap(flatten)]
@@ -249,15 +293,19 @@ pub enum TransactionCommand {
         /// This is the address used to sign the transaction. It corresponds either to the `htlc_sender` or the `htlc_recipient`
         /// in the HTLC contract.
         /// The sender wallet must be unlocked prior to this action.
+        #[clap(long)]
         sender_wallet: Address,
 
         /// The address of the HTLC contract.
+        #[clap(long)]
         contract_address: Address,
 
         /// The address of the basic account that will receive the funds.
+        #[clap(long)]
         htlc_recipient: Address,
 
         /// The amount of NIM to be used by the transaction.
+        #[clap(long)]
         value: Coin,
 
         /// The associated transaction fee to be payed. If absent it defaults to 0 NIM.
@@ -309,7 +357,7 @@ impl HandleSubcommand for TransactionCommand {
             }
             TransactionCommand::NewStaker {
                 sender_wallet,
-                staker_address,
+                staker_wallet,
                 delegation,
                 tx_commons,
             } => {
@@ -318,7 +366,7 @@ impl HandleSubcommand for TransactionCommand {
                         .consensus
                         .create_new_staker_transaction(
                             sender_wallet,
-                            staker_address,
+                            staker_wallet,
                             delegation,
                             tx_commons.value,
                             tx_commons.common_tx_fields.fee,
@@ -331,7 +379,7 @@ impl HandleSubcommand for TransactionCommand {
                         .consensus
                         .send_new_staker_transaction(
                             sender_wallet,
-                            staker_address,
+                            staker_wallet,
                             delegation,
                             tx_commons.value,
                             tx_commons.common_tx_fields.fee,
@@ -374,16 +422,16 @@ impl HandleSubcommand for TransactionCommand {
             }
             TransactionCommand::UpdateStaker {
                 sender_wallet,
-                staker_address,
+                staker_wallet,
                 new_delegation,
                 tx_commons,
             } => {
                 if tx_commons.dry {
                     let tx = client
                         .consensus
-                        .create_update_transaction(
+                        .create_update_staker_transaction(
                             sender_wallet,
-                            staker_address,
+                            staker_wallet,
                             new_delegation,
                             tx_commons.fee,
                             tx_commons.validity_start_height,
@@ -393,9 +441,9 @@ impl HandleSubcommand for TransactionCommand {
                 } else {
                     let txid = client
                         .consensus
-                        .send_update_transaction(
+                        .send_update_staker_transaction(
                             sender_wallet,
-                            staker_address,
+                            staker_wallet,
                             new_delegation,
                             tx_commons.fee,
                             tx_commons.validity_start_height,
@@ -699,13 +747,4 @@ impl HandleSubcommand for TransactionCommand {
         }
         Ok(())
     }
-}
-
-#[derive(Debug, Args)]
-pub struct TxCommonWithValue {
-    /// The amount of NIM to be used by the transaction.
-    pub value: Coin,
-
-    #[clap(flatten)]
-    pub common_tx_fields: TxCommon,
 }

@@ -30,29 +30,36 @@ pub enum ValidatorCommand {
     ValidatorVotingKey {},
 
     /// Sends a `new_validator` transaction to the network. You need to provide the address of a basic
-    /// account (the sender wallet) to pay the transaction fee and the validator deposit.
+    /// account (the sender wallet) to pay the transaction fee and the validator deposit. The sender wallet must be unlocked
+    /// prior to this command.
     /// The sender_wallet must be unlocked prior to this command.
     /// Since JSON doesn't have a primitive for Option (it just has the null primitive), we can't
     /// have a double Option. So we use the following work-around for the signal data:
     ///  "" = Set the signal data field to None.
     ///  "0x29a4b..." = Set the signal data field to Some(0x29a4b...).
     CreateNewValidator {
-        /// The fee will be payed from this wallet.
+        /// The fee will be payed from this address. This address must be already unlocked.
+        #[clap(long)]
         sender_wallet: Address,
 
-        // The new validator address.
-        validator_address: Address,
+        /// The new validator address. This wallet must be already unlocked.
+        #[clap(long)]
+        validator_wallet: Address,
 
-        // The Schnorr signing key used by the validator.
+        /// The Schnorr signing key used by the validator.
+        #[clap(long)]
         signing_secret_key: String,
 
-        // The BLS key used by the validator.
+        /// The BLS key used by the validator.
+        #[clap(long)]
         voting_secret_key: String,
 
-        // The address to which the staking rewards are sent.
+        /// The address to which the staking rewards are sent.
+        #[clap(long)]
         reward_address: Address,
 
-        // The signal data showed by the validator.
+        /// The signal data showed by the validator.
+        #[clap(short = 'd', long)]
         signal_data: String,
 
         #[clap(flatten)]
@@ -60,26 +67,31 @@ pub enum ValidatorCommand {
     },
 
     /// Sends a transaction to the network to update this validator. You need to provide the address of a basic
-    /// account (the sender wallet) to pay the transaction fee.
+    /// account (the sender wallet) to pay the transaction fee and the sender wallet must be unlocked prior to this command.
     ///  Since JSON doesn't have a primitive for Option (it just has the null primitive), we can't
     /// have a double Option. So we use the following work-around for the signal data:
     ///  null = No change in the signal data field.
     ///  "" = Change the signal data field to None.
     ///  "0x29a4b..." = Change the signal data field to Some(0x29a4b...).
     UpdateValidator {
-        /// The fee will be payed from this wallet.
+        /// The fee will be payed from this address. This wallet must be already unlocked.
+        #[clap(long)]
         sender_wallet: Address,
 
-        // The new Schnorr signing key used by the validator.
+        /// The new Schnorr signing key used by the validator.
+        #[clap(long)]
         new_signing_secret_key: Option<String>,
 
-        // The new validator BLS key used by the validator.
+        /// The new validator BLS key used by the validator.
+        #[clap(long)]
         new_voting_secret_key: Option<String>,
 
-        // The new address to which the staking reward is sent.
+        /// The new address to which the staking reward is sent.
+        #[clap(long)]
         new_reward_address: Option<Address>,
 
-        // The new signal data showed by the validator.
+        /// The new signal data showed by the validator.
+        #[clap(short = 'd', long)]
         new_signal_data: Option<String>,
 
         #[clap(flatten)]
@@ -91,7 +103,8 @@ pub enum ValidatorCommand {
     /// configuration is turned off.
     /// The sender wallet must be unlocked prior to this command.
     InactivateValidator {
-        /// The fee will be payed from this wallet.
+        /// The fee will be payed from this address. This wallet must be already unlocked.
+        #[clap(long)]
         sender_wallet: Address,
 
         #[clap(flatten)]
@@ -102,7 +115,8 @@ pub enum ValidatorCommand {
     /// account (the sender wallet) to pay the transaction fee.
     /// The sender wallet must be unlocked prior to this command.
     ReactivateValidator {
-        /// The fee will be payed from this wallet.
+        /// The fee will be payed from this address. This wallet must be already unlocked.
+        #[clap(long)]
         sender_wallet: Address,
 
         #[clap(flatten)]
@@ -113,7 +127,8 @@ pub enum ValidatorCommand {
     /// account (the sender wallet) to pay the transaction fee.
     /// The sender wallet must be unlocked prior to this command.
     UnparkValidator {
-        /// The fee will be payed from this wallet.
+        /// The fee will be payed from this address. This wallet must be already unlocked.
+        #[clap(long)]
         sender_wallet: Address,
 
         #[clap(flatten)]
@@ -124,6 +139,7 @@ pub enum ValidatorCommand {
     /// validator deposit that is being returned.
     DeleteValidator {
         /// The address to receive the balance of the validator.
+        #[clap(long)]
         recipient_address: Address,
 
         #[clap(flatten)]
@@ -159,7 +175,7 @@ impl HandleSubcommand for ValidatorCommand {
 
             ValidatorCommand::CreateNewValidator {
                 sender_wallet,
-                validator_address,
+                validator_wallet,
                 signing_secret_key,
                 voting_secret_key,
                 reward_address,
@@ -171,7 +187,7 @@ impl HandleSubcommand for ValidatorCommand {
                         .consensus
                         .create_new_validator_transaction(
                             sender_wallet,
-                            validator_address,
+                            validator_wallet,
                             signing_secret_key,
                             voting_secret_key,
                             reward_address,
@@ -186,7 +202,7 @@ impl HandleSubcommand for ValidatorCommand {
                         .consensus
                         .send_new_validator_transaction(
                             sender_wallet,
-                            validator_address,
+                            validator_wallet,
                             signing_secret_key,
                             voting_secret_key,
                             reward_address,

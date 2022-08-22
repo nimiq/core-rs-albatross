@@ -91,12 +91,13 @@ pub enum BlockchainCommand {
 
     /// Returns the information for the slot owner at the given block height and view number. The
     /// view number is optional, it will default to getting the view number for the existing block
-    /// at the given height.
-    Slot {
+    /// at the given height. We only have this information available for the last 2 batches at most.
+    SlotAt {
         /// The block height to retrieve the slots information.
         block_number: u32,
 
-        /// The view number to retrieve at the block height specified. ??
+        /// The view number to retrieve at the block height specified.
+        #[clap(short, long)]
         view_number: Option<u32>,
     },
 
@@ -195,7 +196,7 @@ impl HandleSubcommand for BlockchainCommand {
             BlockchainCommand::EpochNumber {} => {
                 println!("{:#?}", client.blockchain.get_epoch_number().await?)
             }
-            BlockchainCommand::Slot {
+            BlockchainCommand::SlotAt {
                 block_number,
                 view_number,
             } => {

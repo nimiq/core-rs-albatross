@@ -3,16 +3,16 @@ use async_trait::async_trait;
 use clap::Parser;
 use nimiq_rpc_interface::mempool::MempoolInterface;
 
-use crate::Client;
-
 use super::accounts_subcommands::HandleSubcommand;
+use crate::Client;
 
 #[derive(Debug, Parser)]
 pub enum MempoolCommand {
-    /// Pushes the given serialized transaction to the local mempool with normal or high priotity.
+    /// Pushes the given serialized transaction to the local mempool with normal or high priority.
     PushTransaction {
-        /// The raw transaction to be pushed to the local mempool.
+        /// The raw transaction (in hex) to be pushed to the local mempool.
         raw_tx: String,
+
         /// To set this transaction as high priority.
         #[clap(short = 'p', long)]
         high_priority: bool,
@@ -21,6 +21,7 @@ pub enum MempoolCommand {
     /// Returns the hashes or the full transactions of the local mempool.
     MempoolContent {
         /// Includes the full transactions.
+        #[clap(short = 't', long)]
         include_transactions: bool,
     },
 

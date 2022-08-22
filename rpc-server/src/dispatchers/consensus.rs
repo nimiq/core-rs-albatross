@@ -678,6 +678,57 @@ impl ConsensusInterface for ConsensusDispatcher {
         self.send_raw_transaction(raw_tx).await
     }
 
+    /// Returns a serialized `update_staker` transaction. You can pay the transaction fee from a basic
+    /// account (by providing the sender wallet) or from the staker account's balance (by not
+    /// providing a sender wallet).
+    async fn create_update_staker_transaction(
+        &mut self,
+        sender_wallet: Option<Address>,
+        staker_wallet: Address,
+        new_delegation: Option<Address>,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> Result<String, Self::Error> {
+        let sender_key = match sender_wallet {
+            None => None,
+            Some(address) => Some(self.get_wallet_keypair(&address)?),
+        };
+
+        let transaction = TransactionBuilder::new_update_staker(
+            sender_key.as_ref(),
+            &self.get_wallet_keypair(&staker_wallet)?,
+            new_delegation,
+            fee,
+            self.validity_start_height(validity_start_height),
+            self.get_network_id(),
+        )?;
+
+        Ok(transaction_to_hex_string(&transaction))
+    }
+
+    /// Sends a `update_staker` transaction to the network. You can pay the transaction fee from a basic
+    /// account (by providing the sender wallet) or from the staker account's balance (by not
+    /// providing a sender wallet).
+    async fn send_update_staker_transaction(
+        &mut self,
+        sender_wallet: Option<Address>,
+        staker_wallet: Address,
+        new_delegation: Option<Address>,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> Result<Blake2bHash, Self::Error> {
+        let raw_tx = self
+            .create_update_staker_transaction(
+                sender_wallet,
+                staker_wallet,
+                new_delegation,
+                fee,
+                validity_start_height,
+            )
+            .await?;
+        self.send_raw_transaction(raw_tx).await
+    }
+
     /// Returns a serialized `unstake` transaction. The transaction fee will be paid from the funds
     /// being unstaked.
     async fn create_unstake_transaction(
