@@ -153,7 +153,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
             Self::NUM_PENDING_CHUNKS,
             move |(epoch_number, block_number, chunk_index), network, peer_id| {
                 async move {
-                    return Self::request_history_chunk(
+                    Self::request_history_chunk(
                         network,
                         peer_id,
                         epoch_number,
@@ -162,7 +162,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
                     )
                     .await
                     .ok()
-                    .map(|chunk| (epoch_number, chunk_index, chunk));
+                    .map(|chunk| (epoch_number, chunk_index, chunk))
                 }
                 .boxed()
             },

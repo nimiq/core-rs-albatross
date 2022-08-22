@@ -24,7 +24,7 @@ use nimiq_network_interface::{
 use crate::hub::{MockHubInner, RequestKey, ResponseSender};
 use crate::{observable_hash_map, MockAddress, MockPeerId, ObservableHashMap};
 
-#[derive(Debug, Error, PartialEq)]
+#[derive(Debug, Error, Eq, PartialEq)]
 pub enum MockNetworkError {
     #[error("Serialization error: {0}")]
     Serialization(#[from] beserial::SerializingError),

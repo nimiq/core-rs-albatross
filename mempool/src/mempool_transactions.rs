@@ -11,7 +11,7 @@ use nimiq_transaction::Transaction;
 
 /// TxPriority that is used when adding transactions into the mempool
 /// Higher Priority transactions are returned first from the mempool
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub enum TxPriority {
     /// Low Priority transactions
     LowPriority = 1,

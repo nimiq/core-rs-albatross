@@ -7,7 +7,7 @@ use nimiq_utils::math::log2;
 use crate::contribution::AggregatableContribution;
 
 /// Errors that can happen during partitioning
-#[derive(Clone, Debug, Error, PartialEq)]
+#[derive(Clone, Debug, Error, Eq, PartialEq)]
 pub enum PartitioningError {
     #[error("Invalid level: {level}")]
     InvalidLevel { level: usize },

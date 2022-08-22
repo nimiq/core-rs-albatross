@@ -11,7 +11,7 @@ use nimiq_utils::otp::Verify;
 
 pub const NIMIQ_SIGN_MESSAGE_PREFIX: &[u8] = b"\x16Nimiq Signed Message:\n";
 
-#[derive(Default, Debug, Clone, Serialize, PartialEq)]
+#[derive(Default, Debug, Clone, Serialize, Eq, PartialEq)]
 pub struct WalletAccount {
     pub key_pair: KeyPair,
     #[beserial(skip)]

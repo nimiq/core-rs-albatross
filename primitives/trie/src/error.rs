@@ -1,7 +1,7 @@
 use thiserror::Error;
 
 /// An enum containing possible errors that can happen in the Merkle Radix Trie.
-#[derive(Error, Debug, Clone, PartialEq)]
+#[derive(Error, Debug, Clone, Eq, PartialEq)]
 pub enum MerkleRadixTrieError {
     #[error("Prefix doesn't match node's key.")]
     WrongPrefix,

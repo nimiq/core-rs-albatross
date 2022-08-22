@@ -282,7 +282,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                 } => (inactive_tx_hash, inactive_tx_validity_window_start),
             };
             // Check that the transaction was sent in the validity window
-            let staking_state = self.get_staking_state(&*blockchain);
+            let staking_state = self.get_staking_state(&blockchain);
             if (staking_state == ValidatorStakingState::Parked
                 || staking_state == ValidatorStakingState::Inactive)
                 && blockchain.block_number() >= tx_validity_window_start + policy::BLOCKS_PER_EPOCH
@@ -449,7 +449,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         // Update mempool and blockchain state
         self.blockchain_state.fork_proofs.apply_block(&block);
         self.mempool
-            .mempool_update(&vec![(hash.clone(), block)], &[].to_vec());
+            .mempool_update(&vec![(hash.clone(), block)], [].as_ref());
     }
 
     fn on_blockchain_rebranched(
@@ -836,11 +836,11 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Future
         // Once consensus is established, check the validator staking state.
         if self.consensus.is_established() {
             let blockchain = self.consensus.blockchain.read();
-            match self.get_staking_state(&*blockchain) {
+            match self.get_staking_state(&blockchain) {
                 ValidatorStakingState::Parked => match self.validator_state {
                     Some(ValidatorState::ParkingState { .. }) => {}
                     _ => {
-                        let parking_state = self.unpark(&*blockchain);
+                        let parking_state = self.unpark(&blockchain);
                         drop(blockchain);
                         self.validator_state = Some(parking_state);
                     }
@@ -856,7 +856,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Future
                     Some(ValidatorState::InactivityState { .. }) => {}
                     _ => {
                         if self.automatic_reactivate.load(Ordering::Acquire) {
-                            let inactivity_state = self.reactivate(&*blockchain);
+                            let inactivity_state = self.reactivate(&blockchain);
                             drop(blockchain);
                             self.validator_state = Some(inactivity_state);
                         }

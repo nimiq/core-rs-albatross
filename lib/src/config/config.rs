@@ -239,7 +239,7 @@ impl Default for FileStorageConfig {
 }
 
 /// Configuration options for the database
-#[derive(Debug, Clone, Builder, PartialEq)]
+#[derive(Debug, Clone, Builder, Eq, PartialEq)]
 #[builder(setter(into))]
 pub struct DatabaseConfig {
     /// Initial database size. Default: 1 TB
