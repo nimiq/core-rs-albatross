@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DeserializeFromStr, DisplayFromStr, SerializeDisplay};
 
 use beserial::Serialize as BeSerialize;
-use nimiq_account::Log;
+use nimiq_account::{BlockLog as BBlockLog, Log, TransactionLog};
 use nimiq_block::{MicroJustification, MultiSignature};
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_bls::CompressedPublicKey;
@@ -644,40 +644,53 @@ impl Account {
     pub fn try_from_account(
         address: Address,
         account: nimiq_account::Account,
-    ) -> Result<Self, Error> {
+        blockchain_state: BlockchainState,
+    ) -> Result<RPCResult<Self>, Error> {
         match account {
-            nimiq_account::Account::Basic(basic) => Ok(Account {
-                address,
-                balance: basic.balance,
-                account_additional_fields: AccountAdditionalFields::Basic {},
-            }),
-            nimiq_account::Account::Vesting(vesting) => Ok(Account {
-                address,
-                balance: vesting.balance,
-                account_additional_fields: AccountAdditionalFields::Vesting {
-                    owner: vesting.owner,
-                    vesting_start: vesting.start_time,
-                    vesting_step_blocks: vesting.time_step,
-                    vesting_step_amount: vesting.step_amount,
-                    vesting_total_amount: vesting.total_amount,
+            nimiq_account::Account::Basic(basic) => Ok(RPCResult {
+                data: Account {
+                    address,
+                    balance: basic.balance,
+                    account_additional_fields: AccountAdditionalFields::Basic {},
                 },
+                metadata: blockchain_state,
             }),
-            nimiq_account::Account::HTLC(htlc) => Ok(Account {
-                address,
-                balance: htlc.balance,
-                account_additional_fields: AccountAdditionalFields::HTLC {
-                    sender: htlc.sender,
-                    recipient: htlc.recipient,
-                    hash_root: htlc.hash_root,
-                    hash_count: htlc.hash_count,
-                    timeout: htlc.timeout,
-                    total_amount: htlc.total_amount,
+            nimiq_account::Account::Vesting(vesting) => Ok(RPCResult {
+                data: Account {
+                    address,
+                    balance: vesting.balance,
+                    account_additional_fields: AccountAdditionalFields::Vesting {
+                        owner: vesting.owner,
+                        vesting_start: vesting.start_time,
+                        vesting_step_blocks: vesting.time_step,
+                        vesting_step_amount: vesting.step_amount,
+                        vesting_total_amount: vesting.total_amount,
+                    },
                 },
+                metadata: blockchain_state,
             }),
-            nimiq_account::Account::Staking(staking) => Ok(Account {
-                address,
-                balance: staking.balance,
-                account_additional_fields: AccountAdditionalFields::Staking {},
+            nimiq_account::Account::HTLC(htlc) => Ok(RPCResult {
+                data: Account {
+                    address,
+                    balance: htlc.balance,
+                    account_additional_fields: AccountAdditionalFields::HTLC {
+                        sender: htlc.sender,
+                        recipient: htlc.recipient,
+                        hash_root: htlc.hash_root,
+                        hash_count: htlc.hash_count,
+                        timeout: htlc.timeout,
+                        total_amount: htlc.total_amount,
+                    },
+                },
+                metadata: blockchain_state,
+            }),
+            nimiq_account::Account::Staking(staking) => Ok(RPCResult {
+                data: Account {
+                    address,
+                    balance: staking.balance,
+                    account_additional_fields: AccountAdditionalFields::Staking {},
+                },
+                metadata: blockchain_state,
             }),
             _ => Err(Error::UnsupportedAccountType),
         }
@@ -749,20 +762,81 @@ impl Validator {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct BlockchainState<T> {
-    pub block_number: u32,
-    pub block_hash: Blake2bHash,
-    #[serde(flatten)]
-    pub value: T,
+pub struct RPCResult<T> {
+    pub data: T,
+    pub metadata: BlockchainState,
 }
 
-impl<T> BlockchainState<T> {
-    pub fn new(block_number: u32, block_hash: Blake2bHash, value: T) -> Self {
+impl<T> RPCResult<T> {
+    pub fn new(data: T, metadata: BlockchainState) -> Self {
+        RPCResult { data, metadata }
+    }
+
+    pub fn with_blockchain(data: T, blockchain: &Blockchain) -> Self {
+        RPCResult {
+            data,
+            metadata: BlockchainState::with_blockchain(blockchain),
+        }
+    }
+}
+
+impl RPCResult<BlockLog> {
+    pub fn with_block_log(block_log: BBlockLog) -> Self {
+        match block_log {
+            BBlockLog::AppliedBlock {
+                inherent_logs,
+                block_hash,
+                block_number,
+                timestamp,
+                tx_logs,
+            } => Self::new(
+                BlockLog::AppliedBlock {
+                    inherent_logs,
+                    timestamp,
+                    tx_logs,
+                },
+                BlockchainState {
+                    block_number,
+                    block_hash,
+                },
+            ),
+            BBlockLog::RevertedBlock {
+                inherent_logs,
+                block_hash,
+                block_number,
+                tx_logs,
+            } => Self::new(
+                BlockLog::RevertedBlock {
+                    inherent_logs,
+                    tx_logs,
+                },
+                BlockchainState {
+                    block_number,
+                    block_hash,
+                },
+            ),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BlockchainState {
+    pub block_number: u32,
+    pub block_hash: Blake2bHash,
+}
+
+impl BlockchainState {
+    pub fn new(block_number: u32, block_hash: Blake2bHash) -> Self {
         BlockchainState {
             block_number,
             block_hash,
-            value,
         }
+    }
+
+    pub fn with_blockchain(blockchain: &Blockchain) -> Self {
+        let block = blockchain.head();
+        BlockchainState::new(block.block_number(), block.hash())
     }
 }
 
@@ -791,6 +865,31 @@ pub enum LogType {
     Slash,
     RevertContract,
     FailedTransaction,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
+// Renaming affects only the struct names and thus their tag, the "type" field.
+#[cfg_attr(
+    feature = "serde-derive",
+    serde(rename_all = "kebab-case", tag = "type")
+)]
+pub enum BlockLog {
+    #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
+    AppliedBlock {
+        #[cfg_attr(feature = "serde-derive", serde(rename = "inherents"))]
+        inherent_logs: Vec<Log>,
+        timestamp: u64,
+        #[cfg_attr(feature = "serde-derive", serde(rename = "transactions"))]
+        tx_logs: Vec<TransactionLog>,
+    },
+
+    #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
+    RevertedBlock {
+        #[cfg_attr(feature = "serde-derive", serde(rename = "inherents"))]
+        inherent_logs: Vec<Log>,
+        #[cfg_attr(feature = "serde-derive", serde(rename = "transactions"))]
+        tx_logs: Vec<TransactionLog>,
+    },
 }
 
 impl LogType {

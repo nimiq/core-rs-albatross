@@ -4,14 +4,14 @@ use async_trait::async_trait;
 use futures::{future, stream::BoxStream, StreamExt};
 use parking_lot::RwLock;
 
-use nimiq_account::{BlockLog, StakingContract, TransactionLog};
+use nimiq_account::{BlockLog as BBlockLog, StakingContract, TransactionLog};
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainEvent};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::policy;
 use nimiq_rpc_interface::types::{
-    is_of_log_type_and_related_to_addresses, BlockNumberOrHash, BlockchainState, ParkedSet,
-    Validator,
+    is_of_log_type_and_related_to_addresses, BlockLog, BlockNumberOrHash, BlockchainState,
+    ParkedSet, RPCResult, Validator,
 };
 use nimiq_rpc_interface::{
     blockchain::BlockchainInterface,
@@ -57,7 +57,7 @@ fn get_validator_by_address(
     blockchain: &Blockchain,
     address: &Address,
     include_stakers: Option<bool>,
-) -> Result<BlockchainState<Validator>, Error> {
+) -> Result<RPCResult<Validator>, Error> {
     let accounts_tree = &blockchain.state().accounts.tree;
     let db_txn = blockchain.read_transaction();
     let validator = StakingContract::get_validator(accounts_tree, &db_txn, address);
@@ -84,12 +84,9 @@ fn get_validator_by_address(
         stakers = Some(stakers_list);
     }
 
-    let block_number = blockchain.block_number();
-    let block_hash = blockchain.head_hash();
-    Ok(BlockchainState::new(
-        block_number,
-        block_hash,
+    Ok(RPCResult::with_blockchain(
         Validator::from_validator(&validator.unwrap(), stakers),
+        blockchain,
     ))
 }
 
@@ -169,7 +166,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         &mut self,
         block_number: u32,
         offset_opt: Option<u32>,
-    ) -> Result<Slot, Self::Error> {
+    ) -> Result<RPCResult<Slot>, Self::Error> {
         let blockchain = self.blockchain.read();
 
         let offset = if let Some(offset) = offset_opt {
@@ -192,7 +189,10 @@ impl BlockchainInterface for BlockchainDispatcher {
             }
         };
 
-        Ok(Slot::from(blockchain.deref(), block_number, offset))
+        Ok(RPCResult::with_blockchain(
+            Slot::from(blockchain.deref(), block_number, offset),
+            &blockchain,
+        ))
     }
 
     /// Tries to fetch a transaction (including reward transactions) given its hash.
@@ -464,75 +464,96 @@ impl BlockchainInterface for BlockchainDispatcher {
     }
 
     /// Tries to fetch the account at the given address.
-    async fn get_account_by_address(&mut self, address: Address) -> Result<Account, Self::Error> {
-        let result = self.blockchain.read().get_account(&address);
+    async fn get_account_by_address(
+        &mut self,
+        address: Address,
+    ) -> Result<RPCResult<Account>, Self::Error> {
+        let blockchain = self.blockchain.read();
+        let result = blockchain.get_account(&address);
 
         match result {
-            Some(account) => Account::try_from_account(address, account).map_err(Error::Core),
-            None => Ok(Account::empty(address)),
+            Some(account) => Account::try_from_account(
+                address,
+                account,
+                BlockchainState::new(blockchain.block_number(), blockchain.head_hash()),
+            )
+            .map_err(Error::Core),
+            None => Ok(RPCResult::with_blockchain(
+                Account::empty(address),
+                &blockchain,
+            )),
         }
     }
 
     /// Returns a collection of the currently active validator's addresses and balances.
-    async fn get_active_validators(&mut self) -> Result<Vec<Validator>, Self::Error> {
+    async fn get_active_validators(&mut self) -> Result<RPCResult<Vec<Validator>>, Self::Error> {
         let blockchain = self.blockchain.read();
         let staking_contract = blockchain.get_staking_contract();
 
         let mut active_validators = vec![];
 
         for (address, _) in staking_contract.active_validators {
-            if let Ok(v) = get_validator_by_address(&blockchain, &address, None) {
-                active_validators.push(v.value);
+            if let Ok(rpc_result) = get_validator_by_address(&blockchain, &address, None) {
+                active_validators.push(rpc_result.data);
             }
         }
 
-        Ok(active_validators)
+        Ok(RPCResult::with_blockchain(active_validators, &blockchain))
     }
 
     /// Returns information about the currently slashed slots. This includes slots that lost rewards
     /// and that were disabled.
-    async fn get_current_slashed_slots(&mut self) -> Result<SlashedSlots, Self::Error> {
+    async fn get_current_slashed_slots(&mut self) -> Result<RPCResult<SlashedSlots>, Self::Error> {
         let blockchain = self.blockchain.read();
 
         // FIXME: Race condition
         let block_number = blockchain.block_number();
         let staking_contract = blockchain.get_staking_contract();
 
-        Ok(SlashedSlots {
-            block_number,
-            lost_rewards: staking_contract.current_lost_rewards(),
-            disabled: staking_contract.current_disabled_slots(),
-        })
+        Ok(RPCResult::with_blockchain(
+            SlashedSlots {
+                block_number,
+                lost_rewards: staking_contract.current_lost_rewards(),
+                disabled: staking_contract.current_disabled_slots(),
+            },
+            &blockchain,
+        ))
     }
 
     /// Returns information about the slashed slots of the previous batch. This includes slots that
     /// lost rewards and that were disabled.
-    async fn get_previous_slashed_slots(&mut self) -> Result<SlashedSlots, Self::Error> {
+    async fn get_previous_slashed_slots(&mut self) -> Result<RPCResult<SlashedSlots>, Self::Error> {
         let blockchain = self.blockchain.read();
 
         // FIXME: Race condition
         let block_number = blockchain.block_number();
         let staking_contract = blockchain.get_staking_contract();
 
-        Ok(SlashedSlots {
-            block_number,
-            lost_rewards: staking_contract.previous_lost_rewards(),
-            disabled: staking_contract.previous_disabled_slots(),
-        })
+        Ok(RPCResult::with_blockchain(
+            SlashedSlots {
+                block_number,
+                lost_rewards: staking_contract.previous_lost_rewards(),
+                disabled: staking_contract.previous_disabled_slots(),
+            },
+            &blockchain,
+        ))
     }
 
     /// Returns information about the currently parked validators.
-    async fn get_parked_validators(&mut self) -> Result<ParkedSet, Self::Error> {
+    async fn get_parked_validators(&mut self) -> Result<RPCResult<ParkedSet>, Self::Error> {
         let blockchain = self.blockchain.read();
 
         // FIXME: Race condition
         let block_number = blockchain.block_number();
         let staking_contract = blockchain.get_staking_contract();
 
-        Ok(ParkedSet {
-            block_number,
-            validators: staking_contract.parked_set(),
-        })
+        Ok(RPCResult::with_blockchain(
+            ParkedSet {
+                block_number,
+                validators: staking_contract.parked_set(),
+            },
+            &blockchain,
+        ))
     }
 
     /// Tries to fetch a validator information given its address. It has an option to include a map
@@ -541,7 +562,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         &mut self,
         address: Address,
         include_stakers: Option<bool>,
-    ) -> Result<BlockchainState<Validator>, Self::Error> {
+    ) -> Result<RPCResult<Validator>, Self::Error> {
         let blockchain = self.blockchain.read();
 
         get_validator_by_address(blockchain.deref(), &address, include_stakers)
@@ -551,21 +572,17 @@ impl BlockchainInterface for BlockchainDispatcher {
     async fn get_staker_by_address(
         &mut self,
         address: Address,
-    ) -> Result<BlockchainState<Staker>, Self::Error> {
+    ) -> Result<RPCResult<Staker>, Self::Error> {
         let blockchain = self.blockchain.read();
 
         let accounts_tree = &blockchain.state().accounts.tree;
         let db_txn = blockchain.read_transaction();
         let staker = StakingContract::get_staker(accounts_tree, &db_txn, &address);
 
-        let block_number = blockchain.block_number();
-        let block_hash = blockchain.head_hash();
-
         match staker {
-            Some(s) => Ok(BlockchainState::new(
-                block_number,
-                block_hash,
+            Some(s) => Ok(RPCResult::with_blockchain(
                 Staker::from_staker(&s),
+                &blockchain,
             )),
             None => Err(Error::StakerNotFound(address)),
         }
@@ -616,7 +633,7 @@ impl BlockchainInterface for BlockchainDispatcher {
     async fn subscribe_for_validator_election_by_address(
         &mut self,
         address: Address,
-    ) -> Result<BoxStream<'static, BlockchainState<Validator>>, Self::Error> {
+    ) -> Result<BoxStream<'static, RPCResult<Validator>>, Self::Error> {
         let blockchain = Arc::clone(&self.blockchain);
         let stream = self.blockchain.write().notifier.as_stream();
 
@@ -643,15 +660,16 @@ impl BlockchainInterface for BlockchainDispatcher {
         &mut self,
         addresses: Vec<Address>,
         log_types: Vec<LogType>,
-    ) -> Result<BoxStream<'static, BlockLog>, Self::Error> {
+    ) -> Result<BoxStream<'static, RPCResult<BlockLog>>, Self::Error> {
         let stream = self.blockchain.write().log_notifier.as_stream();
+
         if addresses.is_empty() && log_types.is_empty() {
-            Ok(stream.boxed())
+            Ok(Box::pin(stream.boxed().map(RPCResult::with_block_log)))
         } else {
             Ok(stream
                 .filter_map(move |event| {
                     let result = match event {
-                        BlockLog::AppliedBlock {
+                        BBlockLog::AppliedBlock {
                             mut inherent_logs,
                             block_hash,
                             block_number,
@@ -683,18 +701,22 @@ impl BlockchainInterface for BlockchainDispatcher {
                             // If this block has no transaction logs or inherent logs of interest, we return None. Otherwise, we return the filtered BlockLog.
                             // This way the stream only emmits an event if a block has at least one log fulfilling the specified criteria.
                             if !inherent_logs.is_empty() || !tx_logs.is_empty() {
-                                Some(BlockLog::AppliedBlock {
-                                    inherent_logs,
-                                    block_hash,
-                                    block_number,
-                                    timestamp,
-                                    tx_logs,
-                                })
+                                Some(RPCResult::new(
+                                    BlockLog::AppliedBlock {
+                                        inherent_logs,
+                                        timestamp,
+                                        tx_logs,
+                                    },
+                                    BlockchainState {
+                                        block_number,
+                                        block_hash,
+                                    },
+                                ))
                             } else {
                                 None
                             }
                         }
-                        BlockLog::RevertedBlock {
+                        BBlockLog::RevertedBlock {
                             mut inherent_logs,
                             block_hash,
                             block_number,
@@ -721,12 +743,16 @@ impl BlockchainInterface for BlockchainDispatcher {
                                 .collect();
 
                             if !inherent_logs.is_empty() || !tx_logs.is_empty() {
-                                Some(BlockLog::RevertedBlock {
-                                    inherent_logs,
-                                    block_hash,
-                                    block_number,
-                                    tx_logs,
-                                })
+                                Some(RPCResult::new(
+                                    BlockLog::RevertedBlock {
+                                        inherent_logs,
+                                        tx_logs,
+                                    },
+                                    BlockchainState {
+                                        block_number,
+                                        block_hash,
+                                    },
+                                ))
                             } else {
                                 None
                             }

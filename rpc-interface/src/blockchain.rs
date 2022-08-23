@@ -1,12 +1,11 @@
 use async_trait::async_trait;
 use futures::stream::BoxStream;
 
-use nimiq_account::BlockLog;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 
 use crate::types::{
-    Account, Block, BlockchainState, ExecutedTransaction, Inherent, LogType, ParkedSet,
+    Account, Block, BlockLog, ExecutedTransaction, Inherent, LogType, ParkedSet, RPCResult,
     SlashedSlots, Slot, Staker, Validator,
 };
 
@@ -42,7 +41,7 @@ pub trait BlockchainInterface {
         &mut self,
         block_number: u32,
         offset_opt: Option<u32>,
-    ) -> Result<Slot, Self::Error>;
+    ) -> Result<RPCResult<Slot>, Self::Error>;
 
     async fn get_transaction_by_hash(
         &mut self,
@@ -82,26 +81,29 @@ pub trait BlockchainInterface {
         max: Option<u16>,
     ) -> Result<Vec<ExecutedTransaction>, Self::Error>;
 
-    async fn get_account_by_address(&mut self, address: Address) -> Result<Account, Self::Error>;
+    async fn get_account_by_address(
+        &mut self,
+        address: Address,
+    ) -> Result<RPCResult<Account>, Self::Error>;
 
-    async fn get_active_validators(&mut self) -> Result<Vec<Validator>, Self::Error>;
+    async fn get_active_validators(&mut self) -> Result<RPCResult<Vec<Validator>>, Self::Error>;
 
-    async fn get_current_slashed_slots(&mut self) -> Result<SlashedSlots, Self::Error>;
+    async fn get_current_slashed_slots(&mut self) -> Result<RPCResult<SlashedSlots>, Self::Error>;
 
-    async fn get_previous_slashed_slots(&mut self) -> Result<SlashedSlots, Self::Error>;
+    async fn get_previous_slashed_slots(&mut self) -> Result<RPCResult<SlashedSlots>, Self::Error>;
 
-    async fn get_parked_validators(&mut self) -> Result<ParkedSet, Self::Error>;
+    async fn get_parked_validators(&mut self) -> Result<RPCResult<ParkedSet>, Self::Error>;
 
     async fn get_validator_by_address(
         &mut self,
         address: Address,
         include_stakers: Option<bool>,
-    ) -> Result<BlockchainState<Validator>, Self::Error>;
+    ) -> Result<RPCResult<Validator>, Self::Error>;
 
     async fn get_staker_by_address(
         &mut self,
         address: Address,
-    ) -> Result<BlockchainState<Staker>, Self::Error>;
+    ) -> Result<RPCResult<Staker>, Self::Error>;
 
     #[stream]
     async fn subscribe_for_head_block(
@@ -118,12 +120,12 @@ pub trait BlockchainInterface {
     async fn subscribe_for_validator_election_by_address(
         &mut self,
         address: Address,
-    ) -> Result<BoxStream<'static, BlockchainState<Validator>>, Self::Error>;
+    ) -> Result<BoxStream<'static, RPCResult<Validator>>, Self::Error>;
 
     #[stream]
     async fn subscribe_for_logs_by_addresses_and_types(
         &mut self,
         addresses: Vec<Address>,
         log_types: Vec<LogType>,
-    ) -> Result<BoxStream<'static, BlockLog>, Self::Error>;
+    ) -> Result<BoxStream<'static, RPCResult<BlockLog>>, Self::Error>;
 }

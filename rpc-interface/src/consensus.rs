@@ -251,26 +251,6 @@ pub trait ConsensusInterface {
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Self::Error>;
 
-    #[deprecated(note = "please use `create_update_staker_transaction` instead")]
-    async fn create_update_transaction(
-        &mut self,
-        sender_wallet: Option<Address>,
-        staker_wallet: Address,
-        new_delegation: Option<Address>,
-        fee: Coin,
-        validity_start_height: ValidityStartHeight,
-    ) -> Result<String, Self::Error>;
-
-    #[deprecated(note = "please use `send_update_staker_transaction` instead")]
-    async fn send_update_transaction(
-        &mut self,
-        sender_wallet: Option<Address>,
-        staker_wallet: Address,
-        new_delegation: Option<Address>,
-        fee: Coin,
-        validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Self::Error>;
-
     async fn create_update_staker_transaction(
         &mut self,
         sender_wallet: Option<Address>,

@@ -266,31 +266,19 @@ impl TransactionLog {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
-// Renaming affects only the struct names and thus their tag, the "type" field.
-#[cfg_attr(
-    feature = "serde-derive",
-    serde(rename_all = "kebab-case", tag = "type")
-)]
 pub enum BlockLog {
-    #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
     AppliedBlock {
-        #[cfg_attr(feature = "serde-derive", serde(rename = "inherents"))]
         inherent_logs: Vec<Log>,
         block_hash: Blake2bHash,
         block_number: u32,
         timestamp: u64,
-        #[cfg_attr(feature = "serde-derive", serde(rename = "transactions"))]
         tx_logs: Vec<TransactionLog>,
     },
 
-    #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
     RevertedBlock {
-        #[cfg_attr(feature = "serde-derive", serde(rename = "inherents"))]
         inherent_logs: Vec<Log>,
         block_hash: Blake2bHash,
         block_number: u32,
-        #[cfg_attr(feature = "serde-derive", serde(rename = "transactions"))]
         tx_logs: Vec<TransactionLog>,
     },
 }
