@@ -107,7 +107,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
                 let blockchain = self.blockchain.upgradable_read();
                 if !in_current_state(&blockchain.head()) {
                     break Some(None);
-                } else if self.is_our_turn(&*blockchain) {
+                } else if self.is_our_turn(&blockchain) {
                     if !logged {
                         info!(
                             block_number = self.block_number,
@@ -120,7 +120,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
                         logged = true;
                     }
 
-                    let block = self.produce_micro_block(&*blockchain);
+                    let block = self.produce_micro_block(&blockchain);
                     let num_transactions = block
                         .body
                         .as_ref()

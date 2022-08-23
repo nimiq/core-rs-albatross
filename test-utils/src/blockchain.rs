@@ -260,7 +260,7 @@ pub fn sign_macro_block(
 
     // Create multisignature.
     let multisig = MultiSignature {
-        signature: AggregateSignature::from_signatures(&*vec![
+        signature: AggregateSignature::from_signatures(&vec![
             signed_precommit;
             policy::TWO_F_PLUS_ONE as usize
         ]),
@@ -305,7 +305,7 @@ pub fn sign_view_change(
 
     // Create multisignature.
     let multisig = MultiSignature {
-        signature: AggregateSignature::from_signatures(&*vec![
+        signature: AggregateSignature::from_signatures(&vec![
             signed_view_change;
             policy::TWO_F_PLUS_ONE as usize
         ]),

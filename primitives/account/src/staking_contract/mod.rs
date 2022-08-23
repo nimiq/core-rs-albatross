@@ -416,7 +416,7 @@ impl StakingContract {
                 // Verify we have a valid delegation address (if present)
                 if let Some(delegation) = delegation {
                     let key = StakingContract::get_key_validator(&delegation);
-                    if accounts_tree.get(db_txn, &key) == None {
+                    if accounts_tree.get(db_txn, &key).is_none() {
                         return false;
                     }
                 }

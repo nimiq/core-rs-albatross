@@ -41,7 +41,7 @@ impl RequestType {
 }
 
 /// Error enumeration for requests
-#[derive(Clone, Debug, Error, PartialEq)]
+#[derive(Clone, Debug, Error, Eq, PartialEq)]
 pub enum RequestError {
     /// Outbound request error
     #[error("Outbound error: {0}")]
@@ -51,7 +51,7 @@ pub enum RequestError {
     InboundRequest(InboundRequestError),
 }
 
-#[derive(Clone, Debug, Error, PartialEq)]
+#[derive(Clone, Debug, Error, Eq, PartialEq)]
 pub enum OutboundRequestError {
     /// The connection closed before a response was received.
     ///
@@ -85,7 +85,7 @@ pub enum OutboundRequestError {
 }
 
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, Error, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Error, Eq, PartialEq, Serialize, Deserialize)]
 pub enum InboundRequestError {
     /// Response failed to be deserialized
     #[error("Response failed to be deserialized")]

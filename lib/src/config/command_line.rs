@@ -82,7 +82,7 @@ pub enum LogTagParseError {
 
 fn parse_log_tags(s: &str) -> Result<(String, LevelFilter), LogTagParseError> {
     let p: Vec<&str> = s.splitn(2, ':').collect();
-    let tag = p.get(0).unwrap().to_string();
+    let tag = p.first().unwrap().to_string();
     let level = p
         .get(1)
         .ok_or_else(|| LogTagParseError::MissingColon(s.to_string()))?
