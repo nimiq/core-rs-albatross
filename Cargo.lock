@@ -313,17 +313,16 @@ dependencies = [
 [[package]]
 name = "ark-sponge"
 version = "0.3.0"
-source = "git+https://github.com/arkworks-rs/sponge#51d6fc9aac1fa69f44a04839202b5de828584ed8"
+source = "git+https://github.com/arkworks-rs/sponge#7d9b3a474c9ddb62890014aeaefcb142ac2b3776"
 dependencies = [
  "ark-ec",
  "ark-ff",
- "ark-nonnative-field",
  "ark-r1cs-std",
  "ark-relations",
  "ark-serialize",
  "ark-std",
  "derivative",
- "digest 0.9.0",
+ "digest 0.10.3",
  "rand_chacha 0.3.1",
  "tracing",
 ]
