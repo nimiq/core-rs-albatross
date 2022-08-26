@@ -1,18 +1,19 @@
 use std::error::Error;
 
-use nimiq_transaction::Transaction;
 use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
 
+use beserial::Serialize;
+use nimiq_account::{Inherent, InherentType};
 use nimiq_block::{Block, BlockError, TendermintProof};
 use nimiq_database::WriteTransaction;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy;
+use nimiq_transaction::Transaction;
 
 use crate::chain_info::ChainInfo;
 use crate::history::{ExtTxData, ExtendedTransaction, HistoryStore};
 use crate::{AbstractBlockchain, Blockchain, BlockchainEvent, PushError, PushResult};
-use nimiq_account::{Inherent, InherentType};
 
 /// Implements methods to push macro blocks into the chain when an history node is syncing. This
 /// type of syncing is called history syncing. It works by having the node get all the election
@@ -204,6 +205,7 @@ impl Blockchain {
         // create the chain info for the block.
         let mut cum_tx_fees = Coin::ZERO;
         let current_batch = policy::batch_at(block.block_number());
+        let mut cum_ext_tx_size = 0u64;
         for i in (0..history.len()).rev() {
             if policy::batch_at(history[i].block_number) != current_batch {
                 break;
@@ -211,6 +213,7 @@ impl Blockchain {
             if let ExtTxData::Basic(tx) = &history[i].data {
                 cum_tx_fees += tx.get_raw_transaction().fee;
             }
+            cum_ext_tx_size += history[i].data.serialized_size() as u64;
         }
 
         // Create the chain info for the given block and store it.
@@ -219,6 +222,8 @@ impl Blockchain {
             main_chain_successor: None,
             head: block.clone(),
             cum_tx_fees,
+            cum_ext_tx_size,
+            prunable: false,
         };
 
         this.chain_store

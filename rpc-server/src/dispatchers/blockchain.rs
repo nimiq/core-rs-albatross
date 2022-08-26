@@ -693,6 +693,7 @@ impl BlockchainInterface for BlockchainDispatcher {
                             block_number,
                             timestamp,
                             tx_logs,
+                            total_tx_size: _,
                         } => {
                             // Collects the inherents that are related to any of the addresses specified and of any of the log types provided.
                             inherent_logs.retain(|log| {
@@ -739,6 +740,7 @@ impl BlockchainInterface for BlockchainDispatcher {
                             block_hash,
                             block_number,
                             tx_logs,
+                            total_tx_size: _,
                         } => {
                             // Filters the inherents and tx_logs the same way as the AppliedBlock
                             inherent_logs.retain(|log| {

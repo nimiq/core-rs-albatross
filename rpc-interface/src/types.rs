@@ -799,6 +799,7 @@ impl RPCData<BlockLog, BlockchainState> {
                 block_number,
                 timestamp,
                 tx_logs,
+                total_tx_size: _,
             } => Self::new(
                 BlockLog::AppliedBlock {
                     inherent_logs,
@@ -815,6 +816,7 @@ impl RPCData<BlockLog, BlockchainState> {
                 block_hash,
                 block_number,
                 tx_logs,
+                total_tx_size: _,
             } => Self::new(
                 BlockLog::RevertedBlock {
                     inherent_logs,

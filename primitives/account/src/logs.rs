@@ -273,6 +273,7 @@ pub enum BlockLog {
         block_number: u32,
         timestamp: u64,
         tx_logs: Vec<TransactionLog>,
+        total_tx_size: u64,
     },
 
     RevertedBlock {
@@ -280,6 +281,7 @@ pub enum BlockLog {
         block_hash: Blake2bHash,
         block_number: u32,
         tx_logs: Vec<TransactionLog>,
+        total_tx_size: u64,
     },
 }
 
@@ -288,6 +290,13 @@ impl BlockLog {
         match self {
             BlockLog::AppliedBlock { .. } => false,
             BlockLog::RevertedBlock { .. } => true,
+        }
+    }
+
+    pub fn total_tx_size(&self) -> u64 {
+        match self {
+            BlockLog::AppliedBlock { total_tx_size, .. } => *total_tx_size,
+            BlockLog::RevertedBlock { total_tx_size, .. } => *total_tx_size,
         }
     }
 }

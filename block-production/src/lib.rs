@@ -128,7 +128,7 @@ impl BlockProducer {
         // Store the extended transactions into the history tree and calculate the history root.
         let mut txn = blockchain.write_transaction();
 
-        let history_root = blockchain
+        let (history_root, _) = blockchain
             .history_store
             .add_to_history(&mut txn, policy::epoch_at(block_number), &ext_txs)
             .expect("Failed to compute history root during block production.");
@@ -280,7 +280,8 @@ impl BlockProducer {
         header.history_root = blockchain
             .history_store
             .add_to_history(&mut txn, policy::epoch_at(block_number), &ext_txs)
-            .expect("Failed to compute history root during block production.");
+            .expect("Failed to compute history root during block production.")
+            .0;
 
         txn.abort();
 

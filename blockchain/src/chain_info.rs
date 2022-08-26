@@ -22,16 +22,23 @@ pub struct ChainInfo {
     pub main_chain_successor: Option<Blake2bHash>,
     // The sum of all transaction fees in this chain. It resets every batch.
     pub cum_tx_fees: Coin,
+    // The accumulated extended transaction size. It resets every other macro block.
+    pub cum_ext_tx_size: u64,
+    // A boolean stating if this block can be pruned
+    pub prunable: bool,
 }
 
 impl ChainInfo {
     /// Creates a new ChainInfo. Without successor and cumulative transaction fees.
     pub fn new(head: Block, on_main_chain: bool) -> Self {
+        let prunable = !head.is_election();
         ChainInfo {
             head,
             on_main_chain,
             main_chain_successor: None,
             cum_tx_fees: Coin::ZERO,
+            cum_ext_tx_size: 0,
+            prunable,
         }
     }
 
@@ -47,11 +54,37 @@ impl ChainInfo {
             prev_info.cum_tx_fees + block.sum_transaction_fees()
         };
 
+        let prunable = !block.is_election();
+
         ChainInfo {
             on_main_chain: false,
             main_chain_successor: None,
             head: block,
             cum_tx_fees,
+            cum_ext_tx_size: 0,
+            prunable,
+        }
+    }
+
+    /// Sets the value for the cumulative extended transaction size and the prunable flag
+    pub fn set_cumulative_ext_tx_size(&mut self, prev_info: &ChainInfo, block_ext_tx_size: u64) {
+        // Reset the cumulative extended transaction size if the previous block
+        // was an election macro block or it was a checkpoint macro block and such checkpoint macro
+        // block was not pruned.
+        // Also set prunable to `false` if we exceeded the policy::HISTORY_CHUNKS_MAX_SIZE
+        if policy::is_election_block_at(prev_info.head.block_number())
+            || (policy::is_macro_block_at(prev_info.head.block_number()) && !prev_info.prunable)
+        {
+            self.cum_ext_tx_size = block_ext_tx_size;
+            self.prunable = true;
+        } else if policy::is_macro_block_at(self.head.block_number())
+            && prev_info.cum_ext_tx_size + block_ext_tx_size > policy::HISTORY_CHUNKS_MAX_SIZE
+        {
+            self.cum_ext_tx_size = prev_info.cum_ext_tx_size + block_ext_tx_size;
+            self.prunable = false;
+        } else {
+            self.cum_ext_tx_size = prev_info.cum_ext_tx_size + block_ext_tx_size;
+            self.prunable = true;
         }
     }
 }
@@ -87,6 +120,8 @@ impl Serialize for ChainInfo {
         size += Serialize::serialize(&self.on_main_chain, writer)?;
         size += Serialize::serialize(&self.main_chain_successor, writer)?;
         size += Serialize::serialize(&self.cum_tx_fees, writer)?;
+        size += Serialize::serialize(&self.cum_ext_tx_size, writer)?;
+        size += Serialize::serialize(&self.prunable, writer)?;
         Ok(size)
     }
 
@@ -108,6 +143,8 @@ impl Serialize for ChainInfo {
         size += Serialize::serialized_size(&self.on_main_chain);
         size += Serialize::serialized_size(&self.main_chain_successor);
         size += Serialize::serialized_size(&self.cum_tx_fees);
+        size += Serialize::serialized_size(&self.cum_ext_tx_size);
+        size += Serialize::serialized_size(&self.prunable);
         size
     }
 }
@@ -152,12 +189,16 @@ impl Deserialize for ChainInfo {
         let on_main_chain = Deserialize::deserialize(reader)?;
         let main_chain_successor = Deserialize::deserialize(reader)?;
         let cum_tx_fees = Deserialize::deserialize(reader)?;
+        let cum_ext_tx_size = Deserialize::deserialize(reader)?;
+        let prunable = Deserialize::deserialize(reader)?;
 
         Ok(ChainInfo {
             head,
             on_main_chain,
             main_chain_successor,
             cum_tx_fees,
+            cum_ext_tx_size,
+            prunable,
         })
     }
 }

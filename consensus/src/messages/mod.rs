@@ -86,24 +86,32 @@ impl RequestCommon for RequestBatchSet {
     const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_BATCH_SET;
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BatchSet {
+    pub macro_block: Option<MacroBlock>,
+    pub history_len: u32,
+}
+
 /// This message contains a macro block and the number of extended transactions (transitions)
 /// within this epoch.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct BatchSetInfo {
-    pub block: Option<MacroBlock>,
-    pub history_len: u32,
+    pub election_macro_block: Option<MacroBlock>,
+    #[beserial(len_type(u16, limit = 128))]
+    pub batch_sets: Vec<BatchSet>,
+    pub total_history_len: u64,
 }
 
 impl Debug for BatchSetInfo {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut debug_struct = f.debug_struct("BatchSetInfo");
-        if let Some(block) = &self.block {
+        if let Some(block) = &self.election_macro_block {
             debug_struct
-                .field("epoch_number", &block.epoch_number())
-                .field("block_number", &block.block_number())
-                .field("is_election_block", &block.is_election_block());
+                .field("election_epoch_number", &block.epoch_number())
+                .field("election_block_number", &block.block_number());
         }
-        debug_struct.field("history_len", &self.history_len);
+        debug_struct.field("total_history_len", &self.total_history_len);
+        debug_struct.field("batch_sets_len", &self.batch_sets.len());
         debug_struct.finish()
     }
 }

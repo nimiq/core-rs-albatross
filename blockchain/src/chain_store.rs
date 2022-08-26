@@ -5,7 +5,7 @@ use nimiq_database::{
     Database, DatabaseFlags, Environment, ReadTransaction, Transaction, WriteTransaction,
 };
 use nimiq_hash::Blake2bHash;
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::{self, epoch_at};
 
 use crate::chain_info::ChainInfo;
 use crate::Direction;
@@ -162,6 +162,52 @@ impl ChainStore {
         // Add to height index.
         let height = chain_info.head.block_number();
         txn.put(&self.height_idx, &height, hash);
+    }
+
+    pub fn get_epoch_chunks(
+        &self,
+        block_height: u32,
+        txn_option: Option<&Transaction>,
+    ) -> Option<Vec<Blake2bHash>> {
+        let read_txn: ReadTransaction;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = ReadTransaction::new(&self.env);
+                &read_txn
+            }
+        };
+
+        let block = self.get_block_at(block_height, false, Some(txn))?;
+        let epoch_number = policy::epoch_at(block_height);
+
+        // Seek to the first block at the given height.
+        let mut blocks = vec![block.hash()];
+        let mut cursor = txn.cursor(&self.height_idx);
+        // First block is the last one inserted
+        let (first_block_number, _) = cursor.first::<u32, Blake2bHash>()?;
+        let mut last_block_number = block_height;
+
+        // Iterate until we find all blocks at the same epoch.
+        while epoch_at(last_block_number) == epoch_number && last_block_number != first_block_number
+        {
+            match cursor.prev_no_duplicate::<u32, Blake2bHash>() {
+                Some((block_number, hash)) => {
+                    if policy::is_macro_block_at(block_number)
+                        && epoch_at(block_number) == epoch_number
+                    {
+                        if let Some(chain_info) = self.get_chain_info(&hash, false, Some(txn)) {
+                            if !chain_info.prunable {
+                                blocks.push(hash);
+                            }
+                        }
+                    }
+                    last_block_number = block_number;
+                }
+                None => break,
+            }
+        }
+        Some(blocks.into_iter().rev().collect())
     }
 
     pub fn remove_chain_info(&self, txn: &mut WriteTransaction, hash: &Blake2bHash, height: u32) {
@@ -463,9 +509,16 @@ impl ChainStore {
         for height in policy::first_block_of(epoch_number)..policy::election_block_of(epoch_number)
         {
             if let Some(hash) = txn.get::<u32, Blake2bHash>(&self.height_idx, &height) {
-                txn.remove(&self.chain_db, &hash);
-                txn.remove(&self.block_db, &hash);
-                txn.remove_item(&self.height_idx, &height, &hash);
+                // If we detect a block whose prunable flag is set to false, we don't prune it
+                // Then we need to keep the previous macro block
+                let chain_info: ChainInfo = txn
+                    .get(&self.chain_db, &hash)
+                    .expect("Corrupted store: ChainInfo referenced from index not found");
+                if chain_info.prunable {
+                    txn.remove(&self.chain_db, &hash);
+                    txn.remove(&self.block_db, &hash);
+                    txn.remove_item(&self.height_idx, &height, &hash);
+                }
             }
         }
     }

@@ -77,18 +77,57 @@ impl Handle<BatchSetInfo, Arc<RwLock<Blockchain>>> for RequestBatchSet {
         let blockchain = blockchain.read();
 
         if let Some(Block::Macro(block)) = blockchain.get_block(&self.hash, true, None) {
-            let history_len = blockchain
-                .history_store
-                .length_at(block.header.block_number, None);
+            let (batch_sets, total_history_len) = if let Some(macro_hashes) = blockchain
+                .chain_store
+                .get_epoch_chunks(block.block_number(), None)
+            {
+                let mut total_history_len = 0usize;
+                let mut previous_length = 0u32;
+                let mut batch_sets = vec![];
+                for macro_hash in macro_hashes {
+                    let macro_block = blockchain
+                        .get_block(&macro_hash, true, None)
+                        .expect("Macro block must exist since it can't be pruned");
+                    let tot_history_len = blockchain
+                        .history_store
+                        .length_at(macro_block.block_number(), None);
+                    let history_len = tot_history_len - previous_length;
+                    let batch_set = BatchSet {
+                        macro_block: Some(macro_block.unwrap_macro()),
+                        history_len,
+                    };
+                    batch_sets.push(batch_set);
+                    total_history_len += history_len as usize;
+                    previous_length += history_len / CHUNK_SIZE as u32 * CHUNK_SIZE as u32;
+                }
+                (batch_sets, total_history_len)
+            } else {
+                let history_len = blockchain
+                    .history_store
+                    .length_at(block.block_number(), None);
+                let batch_set = BatchSet {
+                    macro_block: Some(block.clone()),
+                    history_len,
+                };
+                (vec![batch_set], history_len as usize)
+            };
+
+            let election_macro_block = if block.is_election_block() {
+                Some(block)
+            } else {
+                None
+            };
 
             BatchSetInfo {
-                block: Some(block),
-                history_len,
+                election_macro_block,
+                batch_sets,
+                total_history_len: total_history_len as u64,
             }
         } else {
             BatchSetInfo {
-                block: None,
-                history_len: 0,
+                election_macro_block: None,
+                batch_sets: vec![],
+                total_history_len: 0,
             }
         }
     }

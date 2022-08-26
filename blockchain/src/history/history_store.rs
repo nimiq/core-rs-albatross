@@ -1,6 +1,7 @@
 use std::cmp;
 use std::collections::{HashSet, VecDeque};
 
+use beserial::Serialize;
 use nimiq_account::InherentType;
 use nimiq_database::cursor::{ReadCursor, WriteCursor};
 use nimiq_database::{
@@ -113,7 +114,7 @@ impl HistoryStore {
     }
 
     /// Add a list of extended transactions to an existing history tree. It returns the root of the
-    /// resulting tree.
+    /// resulting tree and the total size of the transactions added.
     /// This function assumes that:
     ///     1. The transactions are pushed in increasing block number order.
     ///     2. All the blocks are consecutive.
@@ -123,7 +124,7 @@ impl HistoryStore {
         txn: &mut WriteTransaction,
         epoch_number: u32,
         ext_txs: &[ExtendedTransaction],
-    ) -> Option<Blake2bHash> {
+    ) -> Option<(Blake2bHash, u64)> {
         // Get the history tree.
         let mut tree = MerkleMountainRange::new(MMRStore::with_write_transaction(
             &self.hist_tree_db,
@@ -140,27 +141,30 @@ impl HistoryStore {
         }
 
         let root = tree.get_root().ok()?;
+        let mut txns_size = 0u64;
 
         // Add the extended transactions into the respective database.
         // We need to do this separately due to the borrowing rules of Rust.
         for (tx, i) in ext_txs.iter().zip(leaf_idx.iter()) {
             // The prefix is one because it is a leaf.
-            self.put_extended_tx(txn, &tx.hash(1), *i, tx);
+            txns_size += self.put_extended_tx(txn, &tx.hash(1), *i, tx) as u64;
         }
 
         // Return the history root.
-        Some(root)
+        Some((root, txns_size))
     }
 
     fn remove_txns_from_history(
         &self,
         txn: &mut WriteTransaction,
         hashes: Vec<(usize, Blake2bHash)>,
-    ) {
+    ) -> u64 {
         // Set to keep track of the txs we are removing to remove them later
         // from the address db in a single batch operation
         let mut removed_txs = HashSet::new();
         let mut affected_addresses = HashSet::new();
+
+        let mut txns_size = 0u64;
 
         for (leaf_index, leaf_hash) in hashes {
             let tx_opt: Option<ExtendedTransaction> = txn.get(&self.ext_tx_db, &leaf_hash);
@@ -184,6 +188,8 @@ impl HistoryStore {
                     hash: leaf_hash.clone(),
                 },
             );
+
+            txns_size += ext_tx.serialized_size() as u64;
 
             // Remove it from the leaf index database.
             // Check if you are removing the last extended transaction for this block. If yes,
@@ -234,16 +240,18 @@ impl HistoryStore {
                     .map(|(_, v)| v);
             }
         }
+
+        txns_size
     }
 
     /// Removes a number of extended transactions from an existing history tree. It returns the root
-    /// of the resulting tree.
+    /// of the resulting tree and the total size of of the transactions removed.
     pub fn remove_partial_history(
         &self,
         txn: &mut WriteTransaction,
         epoch_number: u32,
         num_ext_txs: usize,
-    ) -> Option<Blake2bHash> {
+    ) -> Option<(Blake2bHash, u64)> {
         // Get the history tree.
         let mut tree = MerkleMountainRange::new(MMRStore::with_write_transaction(
             &self.hist_tree_db,
@@ -267,10 +275,10 @@ impl HistoryStore {
 
         // Remove each of the extended transactions in the history tree from the extended
         // transaction database.
-        self.remove_txns_from_history(txn, hashes);
+        let txns_size = self.remove_txns_from_history(txn, hashes);
 
         // Return the history root.
-        Some(root)
+        Some((root, txns_size))
     }
 
     /// Removes an existing history tree and all the extended transactions that were part of it.
@@ -784,13 +792,14 @@ impl HistoryStore {
     }
 
     /// Inserts a extended transaction into the History Store's transaction databases.
+    /// Returns the size of the serialized transaction
     fn put_extended_tx(
         &self,
         txn: &mut WriteTransaction,
         leaf_hash: &Blake2bHash,
         leaf_index: u32,
         ext_tx: &ExtendedTransaction,
-    ) {
+    ) -> usize {
         txn.put_reserve(&self.ext_tx_db, leaf_hash, ext_tx);
 
         let tx_hash = ext_tx.tx_hash();
@@ -856,6 +865,7 @@ impl HistoryStore {
                 }
             }
         }
+        ext_tx.serialized_size()
     }
 
     /// Returns a vector containing all leaf hashes and indexes corresponding to the given

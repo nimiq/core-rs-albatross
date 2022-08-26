@@ -52,19 +52,21 @@ impl Blockchain {
                     inherents,
                 );
 
-                self.history_store.add_to_history(
+                let hs_result = self.history_store.add_to_history(
                     txn,
                     policy::epoch_at(macro_block.header.block_number),
                     &ext_txs,
                 );
 
                 let (batch_info, _) = batch_info.unwrap();
+                let (_, total_tx_size) = hs_result.unwrap();
                 Ok(BlockLog::AppliedBlock {
                     inherent_logs: batch_info.inherent_logs,
                     block_hash: macro_block.hash(),
                     block_number: macro_block.header.block_number,
                     timestamp: macro_block.header.timestamp,
                     tx_logs: batch_info.tx_logs,
+                    total_tx_size,
                 })
             }
             Block::Micro(ref micro_block) => {
@@ -121,18 +123,20 @@ impl Blockchain {
                     inherents,
                 );
 
-                self.history_store.add_to_history(
+                let hs_result = self.history_store.add_to_history(
                     txn,
                     policy::epoch_at(micro_block.header.block_number),
                     &ext_txs,
                 );
 
+                let total_tx_size = hs_result.unwrap().1;
                 Ok(BlockLog::AppliedBlock {
                     inherent_logs: batch_info.inherent_logs,
                     block_hash: micro_block.hash(),
                     block_number: micro_block.header.block_number,
                     timestamp: micro_block.header.timestamp,
                     tx_logs: batch_info.tx_logs,
+                    total_tx_size,
                 })
             }
         }
@@ -201,17 +205,20 @@ impl Blockchain {
                 // number of transactions that you want to remove.
                 let num_txs = body.transactions.len() + inherents.len();
 
-                self.history_store.remove_partial_history(
+                let hs_result = self.history_store.remove_partial_history(
                     txn,
                     policy::epoch_at(micro_block.header.block_number),
                     num_txs,
                 );
+
+                let (_, total_tx_size) = hs_result.unwrap();
 
                 Ok(BlockLog::RevertedBlock {
                     inherent_logs: batch_info.inherent_logs,
                     block_hash: micro_block.hash(),
                     block_number: micro_block.header.block_number,
                     tx_logs: batch_info.tx_logs,
+                    total_tx_size,
                 })
             }
             Block::Macro(_) => unreachable!("Macro blocks are final and can't be reverted"),

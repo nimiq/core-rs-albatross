@@ -283,6 +283,7 @@ impl Blockchain {
         };
 
         chain_info.on_main_chain = true;
+        chain_info.set_cumulative_ext_tx_size(&prev_info, block_log.total_tx_size());
         prev_info.main_chain_successor = Some(chain_info.head.hash());
 
         this.chain_store

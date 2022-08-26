@@ -93,6 +93,10 @@ pub const SUPPLY_DECAY: f64 = 4.692821935e-13;
 /// The maximum size of the BLS public key cache.
 pub const BLS_CACHE_MAX_CAPACITY: usize = 1000;
 
+/// Maximum size of history chunks
+/// 25 MB
+pub const HISTORY_CHUNKS_MAX_SIZE: u64 = 25 * 1024 * 1024;
+
 /// Returns the epoch number at a given block number (height).
 #[inline]
 pub fn epoch_at(block_number: u32) -> u32 {
