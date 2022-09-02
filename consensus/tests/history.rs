@@ -242,7 +242,7 @@ async fn sync_ingredients() {
     tokio::time::sleep(Duration::from_secs(1)).await; // FIXME, Prof. Berrang told me to do this
 
     // Test ingredients:
-    // Request macro chain
+    // Request macro chain, first request must return all epochs, but no checkpoint
     let peer_id = net2.get_peers()[0];
     let macro_chain = HistorySync::request_macro_chain(
         Arc::clone(&net2),
@@ -253,20 +253,18 @@ async fn sync_ingredients() {
     .await
     .expect("Should yield macro chain");
     let epochs = macro_chain.epochs.expect("Should contain epochs");
-    let checkpoint = macro_chain.checkpoint.expect("Should contain checkpoint");
+    assert!(
+        macro_chain.checkpoint.is_none(),
+        "MacroChain must contain either epochs, or a checkpoint or neither"
+    );
     let blockchain = consensus1.blockchain.read();
     assert_eq!(epochs.len(), 1);
     assert_eq!(epochs[0], blockchain.election_head_hash());
-    assert_eq!(checkpoint.hash, blockchain.macro_head_hash());
 
-    // Request epoch
-    let epoch = SyncCluster::request_epoch(
-        Arc::clone(&net2),
-        peer_id,
-        consensus1.blockchain.read().election_head_hash(),
-    )
-    .await
-    .expect("Should yield epoch");
+    // Request epoch 1 using the single epochs election block returned by request_macro_chain
+    let epoch = SyncCluster::request_epoch(Arc::clone(&net2), peer_id, epochs[0].clone())
+        .await
+        .expect("Should yield epoch");
     let block1 = epoch.block.expect("Should have block");
 
     assert_eq!(epoch.history_len, 3);
@@ -275,22 +273,7 @@ async fn sync_ingredients() {
         consensus1.blockchain.read().election_head_hash()
     );
 
-    let epoch = SyncCluster::request_epoch(
-        Arc::clone(&net2),
-        peer_id,
-        consensus1.blockchain.read().macro_head_hash(),
-    )
-    .await
-    .expect("Should yield epoch");
-    let block2 = epoch.block.expect("Should have block");
-
-    assert_eq!(epoch.history_len, 1);
-    assert_eq!(
-        block2.hash(),
-        consensus1.blockchain.read().macro_head_hash()
-    );
-
-    // Request history chunk.
+    // Request history chunk of epoch 1.
     let chunk =
         SyncCluster::request_history_chunk(Arc::clone(&net2), peer_id, 1, block1.block_number(), 0)
             .await
@@ -312,6 +295,36 @@ async fn sync_ingredients() {
         Some(true)
     );
 
+    // Re-request macro chain. This time it must return no epochs, but the checkpoint.
+    let macro_chain = HistorySync::request_macro_chain(
+        Arc::clone(&net2),
+        peer_id,
+        vec![consensus1.blockchain.read().election_head_hash()],
+        3,
+    )
+    .await
+    .expect("Should yield macro chain");
+    let checkpoint = macro_chain.checkpoint.expect("Should contain checkpoint");
+    assert!(
+        macro_chain.epochs.is_none() || macro_chain.epochs.unwrap().len() == 0,
+        "MacroChain must contain either epochs, or a checkpoint or neither"
+    );
+    let blockchain = consensus1.blockchain.read();
+    assert_eq!(checkpoint.hash, blockchain.macro_head_hash());
+
+    // request epoch 2 using the returned checkpoint
+    let epoch = SyncCluster::request_epoch(Arc::clone(&net2), peer_id, checkpoint.hash)
+        .await
+        .expect("Should yield epoch");
+    let block2 = epoch.block.expect("Should have block");
+
+    assert_eq!(epoch.history_len, 1);
+    assert_eq!(
+        block2.hash(),
+        consensus1.blockchain.read().macro_head_hash()
+    );
+
+    // Request HistoryChunk for epoch 2 containing the checkpoint
     let chunk =
         SyncCluster::request_history_chunk(Arc::clone(&net2), peer_id, 2, block2.block_number(), 0)
             .await
@@ -331,5 +344,23 @@ async fn sync_ingredients() {
             0
         ),
         Some(true)
+    );
+
+    // Re-request Macro chain one final time. This time it must return neither epochs, nor a checkpoint.
+    let macro_chain = HistorySync::request_macro_chain(
+        Arc::clone(&net2),
+        peer_id,
+        vec![consensus1.blockchain.read().macro_head_hash()],
+        3,
+    )
+    .await
+    .expect("Should yield macro chain");
+    assert!(
+        macro_chain.epochs.is_none() || macro_chain.epochs.unwrap().len() == 0,
+        "Must not contain epochs"
+    );
+    assert!(
+        macro_chain.checkpoint.is_none(),
+        "Must not contain a checkpoint"
     );
 }

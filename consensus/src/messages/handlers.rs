@@ -53,14 +53,11 @@ impl Handle<MacroChain> for RequestMacroChain {
 
         // Add latest checkpoint block if all of the following conditions are met:
         // * the requester has caught up, i.e. it already knows the last epoch (epochs.is_empty())
-        //   or we are returning the last epoch in this response.
         // * the latest macro block is a checkpoint block.
         // * the latest macro block is not the locator given by the requester.
         let checkpoint_block = blockchain.macro_head();
         let checkpoint_hash = blockchain.macro_head_hash();
-        let caught_up =
-            epochs.is_empty() || *epochs.last().unwrap() == blockchain.election_head_hash();
-        let checkpoint = if caught_up
+        let checkpoint = if epochs.is_empty()
             && !checkpoint_block.is_election_block()
             && checkpoint_hash != start_block_hash
         {
