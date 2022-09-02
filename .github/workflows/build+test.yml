@@ -7,7 +7,7 @@ on:
 jobs:
 
   rustfmt:
-    runs-on: ubuntu-20.04
+    runs-on: [self-hosted, ubuntu-20.04]
 
     steps:
     - uses: actions/checkout@v3
@@ -30,7 +30,7 @@ jobs:
         args: --all -- --check
 
   test:
-    runs-on: ubuntu-20.04
+    runs-on: [self-hosted, ubuntu-20.04]
 
     steps:
     - name: "Free up disk space"
@@ -83,7 +83,7 @@ jobs:
 
   clippy:
     if: github.event_name != 'push' || github.event.pusher.name != 'dependabot[bot]'
-    runs-on: ubuntu-20.04
+    runs-on: [self-hosted, ubuntu-20.04]
 
     steps:
     - uses: actions/checkout@v3
@@ -107,7 +107,7 @@ jobs:
         args: --release --all-features
 
   reconnect-test:
-    runs-on: ubuntu-20.04
+    runs-on: [self-hosted, ubuntu-20.04]
 
     steps:
     - uses: actions/checkout@v3

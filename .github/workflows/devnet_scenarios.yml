@@ -37,7 +37,7 @@ jobs:
           pre: "sed -i 's/VIEW_CHANGE_DELAY: Duration = Duration::from_secs(10);/VIEW_CHANGE_DELAY: Duration = Duration::from_secs(2);/g' validator/src/validator.rs"
           devnet_args: -k 0 -s 15
 
-    runs-on: ubuntu-20.04
+    runs-on: [self-hosted, ubuntu-20.04]
 
     steps:
     - uses: actions/checkout@v3
@@ -67,7 +67,7 @@ jobs:
       run: |
          echo "::set-output name=INITIAL_TS::$(date +%s%N | cut -b1-13)"
     - name: Execute the test
-      run: |          
+      run: |
           bash scripts/devnet/devnet.sh --run-environment ci ${{ matrix.devnet_args }}
       env:
         NIMIQ_LOKI_URL: ${{ secrets.LOKI_URL }}
