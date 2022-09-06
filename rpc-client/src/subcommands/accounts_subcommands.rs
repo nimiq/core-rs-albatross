@@ -89,7 +89,7 @@ pub enum AccountCommand {
         #[clap(short, long)]
         public_key: PublicKey,
 
-        /// The signature returned upon signing the message. The r and s bystes should be all concatenated
+        /// The signature returned upon signing the message. The r and s bytes should be all concatenated
         /// into one continous input.
         #[clap(short, long)]
         signature: Signature,
@@ -111,7 +111,7 @@ impl HandleSubcommand for AccountCommand {
     async fn handle_subcommand(self, mut client: Client) -> Result<(), Error> {
         match self {
             AccountCommand::List { short } => {
-                let accounts = client.wallet.list_accounts().await?;
+                let accounts = client.wallet.list_accounts().await?.data;
                 for address in &accounts {
                     if short {
                         println!("{}", address.to_user_friendly_address());
@@ -129,23 +129,28 @@ impl HandleSubcommand for AccountCommand {
             }
             AccountCommand::Import { password, key_data } => {
                 let address = client.wallet.import_raw_key(key_data, password).await?;
-                println!("{}", address);
+                println!("{:#?}", address);
             }
             AccountCommand::IsImported { address } => {
-                println!("{}", client.wallet.is_account_imported(address).await?);
+                println!("{:#?}", client.wallet.is_account_imported(address).await?);
             }
-            AccountCommand::Lock { address } => client.wallet.lock_account(address).await?,
+            AccountCommand::Lock { address } => {
+                client.wallet.lock_account(address).await?;
+            }
             AccountCommand::Unlock {
                 address, password, ..
             } => {
                 // TODO: Duration
-                client
-                    .wallet
-                    .unlock_account(address, password, None)
-                    .await?;
+                println!(
+                    "{:#?}",
+                    client
+                        .wallet
+                        .unlock_account(address, password, None)
+                        .await?
+                );
             }
             AccountCommand::IsUnlocked { address } => {
-                println!("{}", client.wallet.is_account_unlocked(address).await?);
+                println!("{:#?}", client.wallet.is_account_unlocked(address).await?);
             }
             AccountCommand::Sign {
                 message,
@@ -153,7 +158,7 @@ impl HandleSubcommand for AccountCommand {
                 is_hex,
             } => {
                 println!(
-                    "{:?}",
+                    "{:#?}",
                     client.wallet.sign(message, address, None, is_hex).await?
                 );
             }
@@ -164,7 +169,7 @@ impl HandleSubcommand for AccountCommand {
                 is_hex,
             } => {
                 println!(
-                    "{:?}",
+                    "{:#?}",
                     client
                         .wallet
                         .verify_signature(message, public_key, signature, is_hex)

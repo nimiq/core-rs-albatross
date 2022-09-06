@@ -25,13 +25,13 @@ impl HandleSubcommand for NetworkCommand {
     async fn handle_subcommand(self, mut client: Client) -> Result<(), Error> {
         match self {
             NetworkCommand::PeerId {} => {
-                println!("{}", client.network.get_peer_id().await?);
+                println!("{:#?}", client.network.get_peer_id().await?);
             }
             NetworkCommand::Peers { count } => {
                 if count {
-                    println!("{}", client.network.get_peer_count().await?);
+                    println!("{:#?}", client.network.get_peer_count().await?);
                 } else {
-                    println!("{:?}", client.network.get_peer_list().await?);
+                    println!("{:#?}", client.network.get_peer_list().await?);
                 }
             }
         }

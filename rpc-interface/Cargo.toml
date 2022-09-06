@@ -25,6 +25,7 @@ serde_with = "2.0"
 thiserror = "1.0"
 clap = { version = "4.0", features = ["derive"] }
 parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
+
 beserial = { path = "../beserial" }
 nimiq-account = { path = "../primitives/account", features = ["serde-derive"] }
 nimiq-block = { path = "../primitives/block", features = ["serde-derive"] }

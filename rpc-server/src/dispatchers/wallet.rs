@@ -5,6 +5,7 @@ use parking_lot::RwLock;
 
 use beserial::Deserialize;
 use nimiq_keys::{Address, KeyPair, PrivateKey, PublicKey, Signature};
+use nimiq_rpc_interface::types::RPCResult;
 use nimiq_rpc_interface::wallet::{ReturnAccount, ReturnSignature, WalletInterface};
 use nimiq_utils::otp::Locked;
 use nimiq_wallet::{WalletAccount, WalletStore};
@@ -42,7 +43,7 @@ impl WalletInterface for WalletDispatcher {
         &mut self,
         key_data: String,
         passphrase: Option<String>,
-    ) -> Result<Address, Self::Error> {
+    ) -> RPCResult<Address, (), Self::Error> {
         let passphrase = passphrase.unwrap_or_default();
 
         let private_key: PrivateKey = Deserialize::deserialize_from_vec(&hex::decode(&key_data)?)?;
@@ -57,28 +58,28 @@ impl WalletInterface for WalletDispatcher {
         self.wallet_store.put(&address, &wallet_account, &mut txn);
         txn.commit();
 
-        Ok(address)
+        Ok(address.into())
     }
 
-    async fn is_account_imported(&mut self, address: Address) -> Result<bool, Self::Error> {
+    async fn is_account_imported(&mut self, address: Address) -> RPCResult<bool, (), Self::Error> {
         let is_imported = self.wallet_store.get(&address, None).is_some();
 
-        Ok(is_imported)
+        Ok(is_imported.into())
     }
 
-    async fn list_accounts(&mut self) -> Result<Vec<Address>, Self::Error> {
-        Ok(self.wallet_store.list(None))
+    async fn list_accounts(&mut self) -> RPCResult<Vec<Address>, (), Self::Error> {
+        Ok(self.wallet_store.list(None).into())
     }
 
-    async fn lock_account(&mut self, address: Address) -> Result<(), Self::Error> {
+    async fn lock_account(&mut self, address: Address) -> RPCResult<(), (), Self::Error> {
         self.unlocked_wallets.write().remove(&address);
-        Ok(())
+        Ok(().into())
     }
 
     async fn create_account(
         &mut self,
         passphrase: Option<String>,
-    ) -> Result<ReturnAccount, Self::Error> {
+    ) -> RPCResult<ReturnAccount, (), Self::Error> {
         let passphrase = passphrase.unwrap_or_default();
         let account = WalletAccount::generate();
         let address = account.address.clone();
@@ -92,7 +93,8 @@ impl WalletInterface for WalletDispatcher {
             address,
             public_key: account.key_pair.public,
             private_key: account.key_pair.private,
-        })
+        }
+        .into())
     }
 
     /// # TODO
@@ -104,7 +106,7 @@ impl WalletInterface for WalletDispatcher {
         address: Address,
         passphrase: Option<String>,
         _duration: Option<u64>,
-    ) -> Result<bool, Self::Error> {
+    ) -> RPCResult<bool, (), Self::Error> {
         let passphrase = passphrase.unwrap_or_default();
         let account = self
             .wallet_store
@@ -117,14 +119,14 @@ impl WalletInterface for WalletDispatcher {
 
         self.unlocked_wallets.write().insert(unlocked_account);
 
-        Ok(true)
+        Ok(true.into())
     }
 
-    async fn is_account_unlocked(&mut self, address: Address) -> Result<bool, Self::Error> {
+    async fn is_account_unlocked(&mut self, address: Address) -> RPCResult<bool, (), Self::Error> {
         let unlocked_wallets = self.unlocked_wallets.read();
         let is_unlocked = unlocked_wallets.get(&address).is_some();
 
-        Ok(is_unlocked)
+        Ok(is_unlocked.into())
     }
 
     async fn sign(
@@ -133,7 +135,7 @@ impl WalletInterface for WalletDispatcher {
         address: Address,
         passphrase: Option<String>,
         is_hex: bool,
-    ) -> Result<ReturnSignature, Self::Error> {
+    ) -> RPCResult<ReturnSignature, (), Self::Error> {
         let message = message_from_maybe_hex(message, is_hex)?;
 
         let passphrase = passphrase.unwrap_or_default();
@@ -161,7 +163,8 @@ impl WalletInterface for WalletDispatcher {
         Ok(ReturnSignature {
             public_key,
             signature,
-        })
+        }
+        .into())
     }
 
     async fn verify_signature(
@@ -170,12 +173,8 @@ impl WalletInterface for WalletDispatcher {
         public_key: PublicKey,
         signature: Signature,
         is_hex: bool,
-    ) -> Result<bool, Self::Error> {
+    ) -> RPCResult<bool, (), Self::Error> {
         let message = message_from_maybe_hex(message, is_hex)?;
-        Ok(WalletAccount::verify_message(
-            &public_key,
-            &message,
-            &signature,
-        ))
+        Ok(WalletAccount::verify_message(&public_key, &message, &signature).into())
     }
 }

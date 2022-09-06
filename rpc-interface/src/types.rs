@@ -645,9 +645,9 @@ impl Account {
         address: Address,
         account: nimiq_account::Account,
         blockchain_state: BlockchainState,
-    ) -> Result<RPCResult<Self>, Error> {
+    ) -> Result<RPCData<Self, BlockchainState>, Error> {
         match account {
-            nimiq_account::Account::Basic(basic) => Ok(RPCResult {
+            nimiq_account::Account::Basic(basic) => Ok(RPCData {
                 data: Account {
                     address,
                     balance: basic.balance,
@@ -655,7 +655,7 @@ impl Account {
                 },
                 metadata: blockchain_state,
             }),
-            nimiq_account::Account::Vesting(vesting) => Ok(RPCResult {
+            nimiq_account::Account::Vesting(vesting) => Ok(RPCData {
                 data: Account {
                     address,
                     balance: vesting.balance,
@@ -669,7 +669,7 @@ impl Account {
                 },
                 metadata: blockchain_state,
             }),
-            nimiq_account::Account::HTLC(htlc) => Ok(RPCResult {
+            nimiq_account::Account::HTLC(htlc) => Ok(RPCData {
                 data: Account {
                     address,
                     balance: htlc.balance,
@@ -684,7 +684,7 @@ impl Account {
                 },
                 metadata: blockchain_state,
             }),
-            nimiq_account::Account::Staking(staking) => Ok(RPCResult {
+            nimiq_account::Account::Staking(staking) => Ok(RPCData {
                 data: Account {
                     address,
                     balance: staking.balance,
@@ -760,27 +760,37 @@ impl Validator {
     }
 }
 
+pub type RPCResult<T, S, E> = Result<RPCData<T, S>, E>;
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RPCResult<T> {
+pub struct RPCData<T, S> {
     pub data: T,
-    pub metadata: BlockchainState,
+    pub metadata: S,
 }
 
-impl<T> RPCResult<T> {
-    pub fn new(data: T, metadata: BlockchainState) -> Self {
-        RPCResult { data, metadata }
+impl<T, S> RPCData<T, S> {
+    pub fn new(data: T, metadata: S) -> Self {
+        RPCData { data, metadata }
     }
+}
 
-    pub fn with_blockchain(data: T, blockchain: &Blockchain) -> Self {
-        RPCResult {
+impl<T> RPCData<T, BlockchainState> {
+    pub fn with_blockchain(data: T, blockchain: &Blockchain) -> RPCData<T, BlockchainState> {
+        RPCData {
             data,
             metadata: BlockchainState::with_blockchain(blockchain),
         }
     }
 }
 
-impl RPCResult<BlockLog> {
+impl<T> From<T> for RPCData<T, ()> {
+    fn from(data: T) -> Self {
+        RPCData { data, metadata: () }
+    }
+}
+
+impl RPCData<BlockLog, BlockchainState> {
     pub fn with_block_log(block_log: BBlockLog) -> Self {
         match block_log {
             BBlockLog::AppliedBlock {
@@ -866,28 +876,24 @@ pub enum LogType {
     RevertContract,
     FailedTransaction,
 }
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
-// Renaming affects only the struct names and thus their tag, the "type" field.
-#[cfg_attr(
-    feature = "serde-derive",
-    serde(rename_all = "kebab-case", tag = "type")
-)]
+#[serde(rename_all = "kebab-case", tag = "type")]
 pub enum BlockLog {
-    #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
+    #[serde(rename_all = "camelCase")]
     AppliedBlock {
-        #[cfg_attr(feature = "serde-derive", serde(rename = "inherents"))]
+        #[serde(rename = "inherents")]
         inherent_logs: Vec<Log>,
         timestamp: u64,
-        #[cfg_attr(feature = "serde-derive", serde(rename = "transactions"))]
+        #[serde(rename = "transactions")]
         tx_logs: Vec<TransactionLog>,
     },
 
-    #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
+    #[serde(rename_all = "camelCase")]
     RevertedBlock {
-        #[cfg_attr(feature = "serde-derive", serde(rename = "inherents"))]
+        #[serde(rename = "inherents")]
         inherent_logs: Vec<Log>,
-        #[cfg_attr(feature = "serde-derive", serde(rename = "transactions"))]
+        #[serde(rename = "transactions")]
         tx_logs: Vec<TransactionLog>,
     },
 }

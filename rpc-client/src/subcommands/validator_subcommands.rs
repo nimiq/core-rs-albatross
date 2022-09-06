@@ -152,25 +152,25 @@ impl HandleSubcommand for ValidatorCommand {
     async fn handle_subcommand(self, mut client: Client) -> Result<(), Error> {
         match self {
             ValidatorCommand::ValidatorAddress {} => {
-                println!("{}", client.validator.get_address().await?);
+                println!("{:#?}", client.validator.get_address().await?);
             }
 
             ValidatorCommand::ValidatorSigningKey {} => {
-                println!("{}", client.validator.get_signing_key().await?);
+                println!("{:#?}", client.validator.get_signing_key().await?);
             }
 
             ValidatorCommand::ValidatorVotingKey {} => {
-                println!("{}", client.validator.get_voting_key().await?);
+                println!("{:#?}", client.validator.get_voting_key().await?);
             }
 
             ValidatorCommand::SetAutoReactivateValidator {
                 automatic_reactivate,
             } => {
-                let result = client
+                client
                     .validator
                     .set_automatic_reactivation(automatic_reactivate)
                     .await?;
-                println!("Auto reacivate set to {}", result);
+                println!("Auto reacivate set to {}", automatic_reactivate);
             }
 
             ValidatorCommand::CreateNewValidator {
@@ -196,7 +196,7 @@ impl HandleSubcommand for ValidatorCommand {
                             tx_commons.validity_start_height,
                         )
                         .await?;
-                    println!("{}", tx);
+                    println!("{:#?}", tx);
                 } else {
                     let txid = client
                         .consensus
@@ -211,7 +211,7 @@ impl HandleSubcommand for ValidatorCommand {
                             tx_commons.validity_start_height,
                         )
                         .await?;
-                    println!("{}", txid);
+                    println!("{:#?}", txid);
                 }
             }
 
@@ -223,7 +223,7 @@ impl HandleSubcommand for ValidatorCommand {
                 new_signal_data,
                 tx_commons,
             } => {
-                let validator_address = client.validator.get_address().await?;
+                let validator_address = client.validator.get_address().await?.data;
                 if tx_commons.dry {
                     let tx = client
                         .consensus
@@ -238,7 +238,7 @@ impl HandleSubcommand for ValidatorCommand {
                             tx_commons.validity_start_height,
                         )
                         .await?;
-                    println!("{}", tx);
+                    println!("{:#?}", tx);
                 } else {
                     let txid = client
                         .consensus
@@ -253,7 +253,7 @@ impl HandleSubcommand for ValidatorCommand {
                             tx_commons.validity_start_height,
                         )
                         .await?;
-                    println!("{}", txid);
+                    println!("{:#?}", txid);
                 }
             }
 
@@ -261,8 +261,8 @@ impl HandleSubcommand for ValidatorCommand {
                 sender_wallet,
                 tx_commons,
             } => {
-                let validator_address = client.validator.get_address().await?;
-                let key_data = client.validator.get_signing_key().await?;
+                let validator_address = client.validator.get_address().await?.data;
+                let key_data = client.validator.get_signing_key().await?.data;
                 if tx_commons.dry {
                     let tx = client
                         .consensus
@@ -274,7 +274,7 @@ impl HandleSubcommand for ValidatorCommand {
                             tx_commons.validity_start_height,
                         )
                         .await?;
-                    println!("{}", tx);
+                    println!("{:#?}", tx);
                 } else {
                     let txid = client
                         .consensus
@@ -286,7 +286,7 @@ impl HandleSubcommand for ValidatorCommand {
                             tx_commons.validity_start_height,
                         )
                         .await?;
-                    println!("{}", txid);
+                    println!("{:#?}", txid);
                 }
             }
 
@@ -294,8 +294,8 @@ impl HandleSubcommand for ValidatorCommand {
                 sender_wallet,
                 tx_commons,
             } => {
-                let validator_address = client.validator.get_address().await?;
-                let key_data = client.validator.get_signing_key().await?;
+                let validator_address = client.validator.get_address().await?.data;
+                let key_data = client.validator.get_signing_key().await?.data;
                 if tx_commons.dry {
                     let tx = client
                         .consensus
@@ -307,7 +307,7 @@ impl HandleSubcommand for ValidatorCommand {
                             tx_commons.validity_start_height,
                         )
                         .await?;
-                    println!("{}", tx);
+                    println!("{:#?}", tx);
                 } else {
                     let txid = client
                         .consensus
@@ -319,7 +319,7 @@ impl HandleSubcommand for ValidatorCommand {
                             tx_commons.validity_start_height,
                         )
                         .await?;
-                    println!("{}", txid);
+                    println!("{:#?}", txid);
                 }
             }
 
@@ -327,8 +327,8 @@ impl HandleSubcommand for ValidatorCommand {
                 sender_wallet,
                 tx_commons,
             } => {
-                let validator_address = client.validator.get_address().await?;
-                let key_data = client.validator.get_signing_key().await?;
+                let validator_address = client.validator.get_address().await?.data;
+                let key_data = client.validator.get_signing_key().await?.data;
                 if tx_commons.dry {
                     let tx = client
                         .consensus
@@ -340,7 +340,7 @@ impl HandleSubcommand for ValidatorCommand {
                             tx_commons.validity_start_height,
                         )
                         .await?;
-                    println!("{}", tx);
+                    println!("{:#?}", tx);
                 } else {
                     let txid = client
                         .consensus
@@ -352,7 +352,7 @@ impl HandleSubcommand for ValidatorCommand {
                             tx_commons.validity_start_height,
                         )
                         .await?;
-                    println!("{}", txid);
+                    println!("{:#?}", txid);
                 }
             }
 
@@ -360,7 +360,7 @@ impl HandleSubcommand for ValidatorCommand {
                 recipient_address,
                 tx_commons,
             } => {
-                let validator_address = client.validator.get_address().await?;
+                let validator_address = client.validator.get_address().await?.data;
                 if tx_commons.common_tx_fields.dry {
                     let tx = client
                         .consensus
@@ -372,7 +372,7 @@ impl HandleSubcommand for ValidatorCommand {
                             tx_commons.common_tx_fields.validity_start_height,
                         )
                         .await?;
-                    println!("{}", tx);
+                    println!("{:#?}", tx);
                 } else {
                     let txid = client
                         .consensus
@@ -384,7 +384,7 @@ impl HandleSubcommand for ValidatorCommand {
                             tx_commons.common_tx_fields.validity_start_height,
                         )
                         .await?;
-                    println!("{}", txid);
+                    println!("{:#?}", txid);
                 }
             }
         }

@@ -89,16 +89,16 @@ pub enum BlockchainCommand {
         just_hash: bool,
     },
 
-    /// Returns the information for the slot owner at the given block height and view number. The
-    /// view number is optional, it will default to getting the view number for the existing block
-    /// at the given height. We only have this information available for the last 2 batches at most.
+    /// Returns the information for the slot owner at the given block height and offset. The
+    /// offset is optional, it will default to the block number for micro blocks and to the round number for macro blocks.
+    /// We only have this information available for the last 2 batches at most.
     SlotAt {
         /// The block height to retrieve the slots information.
         block_number: u32,
 
-        /// The view number to retrieve at the block height specified.
+        /// The offset to retrieve at the block height specified.
         #[clap(short, long)]
-        view_number: Option<u32>,
+        offset: Option<u32>,
     },
 
     /// Returns information about the currently slashed slots or the previous batch. This includes slots that lost rewards
@@ -198,14 +198,11 @@ impl HandleSubcommand for BlockchainCommand {
             }
             BlockchainCommand::SlotAt {
                 block_number,
-                view_number,
+                offset,
             } => {
                 println!(
                     "{:#?}",
-                    client
-                        .blockchain
-                        .get_slot_at(block_number, view_number)
-                        .await?
+                    client.blockchain.get_slot_at(block_number, offset).await?
                 )
             }
             BlockchainCommand::Transaction { hash } => {
@@ -333,7 +330,7 @@ impl HandleSubcommand for BlockchainCommand {
                     let mut stream = client.blockchain.subscribe_for_head_block_hash().await?;
 
                     while let Some(block_hash) = stream.next().await {
-                        println!("{}", block_hash);
+                        println!("{:#?}", block_hash);
                     }
                 }
             }

@@ -1,5 +1,5 @@
+use crate::types::RPCResult;
 use async_trait::async_trait;
-
 use nimiq_keys::{Address, PrivateKey, PublicKey, Signature};
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -26,31 +26,31 @@ pub trait WalletInterface {
         &mut self,
         key_data: String,
         passphrase: Option<String>,
-    ) -> Result<Address, Self::Error>;
+    ) -> RPCResult<Address, (), Self::Error>;
 
     // `nimiq_jsonrpc_derive::proxy` requires the receiver type to be a mutable reference.
     #[allow(clippy::wrong_self_convention)]
-    async fn is_account_imported(&mut self, address: Address) -> Result<bool, Self::Error>;
+    async fn is_account_imported(&mut self, address: Address) -> RPCResult<bool, (), Self::Error>;
 
-    async fn list_accounts(&mut self) -> Result<Vec<Address>, Self::Error>;
+    async fn list_accounts(&mut self) -> RPCResult<Vec<Address>, (), Self::Error>;
 
-    async fn lock_account(&mut self, address: Address) -> Result<(), Self::Error>;
+    async fn lock_account(&mut self, address: Address) -> RPCResult<(), (), Self::Error>;
 
     async fn create_account(
         &mut self,
         passphrase: Option<String>,
-    ) -> Result<ReturnAccount, Self::Error>;
+    ) -> RPCResult<ReturnAccount, (), Self::Error>;
 
     async fn unlock_account(
         &mut self,
         address: Address,
         passphrase: Option<String>,
         duration: Option<u64>,
-    ) -> Result<bool, Self::Error>;
+    ) -> RPCResult<bool, (), Self::Error>;
 
     // `nimiq_jsonrpc_derive::proxy` requires the receiver type to be a mutable reference.
     #[allow(clippy::wrong_self_convention)]
-    async fn is_account_unlocked(&mut self, address: Address) -> Result<bool, Self::Error>;
+    async fn is_account_unlocked(&mut self, address: Address) -> RPCResult<bool, (), Self::Error>;
 
     async fn sign(
         &mut self,
@@ -58,7 +58,7 @@ pub trait WalletInterface {
         address: Address,
         passphrase: Option<String>,
         is_hex: bool,
-    ) -> Result<ReturnSignature, Self::Error>;
+    ) -> RPCResult<ReturnSignature, (), Self::Error>;
 
     async fn verify_signature(
         &mut self,
@@ -66,5 +66,5 @@ pub trait WalletInterface {
         public_key: PublicKey,
         signature: Signature,
         is_hex: bool,
-    ) -> Result<bool, Self::Error>;
+    ) -> RPCResult<bool, (), Self::Error>;
 }

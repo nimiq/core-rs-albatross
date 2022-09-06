@@ -340,7 +340,7 @@ impl HandleSubcommand for TransactionCommand {
                             tx_commons.common_tx_fields.validity_start_height,
                         )
                         .await?;
-                    println!("{}", tx);
+                    println!("{:#?}", tx);
                 } else {
                     let txid = client
                         .consensus
@@ -352,7 +352,7 @@ impl HandleSubcommand for TransactionCommand {
                             tx_commons.common_tx_fields.validity_start_height,
                         )
                         .await?;
-                    println!("{}", txid);
+                    println!("{:#?}", txid);
                 }
             }
             TransactionCommand::NewStaker {
@@ -373,7 +373,7 @@ impl HandleSubcommand for TransactionCommand {
                             tx_commons.common_tx_fields.validity_start_height,
                         )
                         .await?;
-                    println!("{}", tx);
+                    println!("{:#?}", tx);
                 } else {
                     let txid = client
                         .consensus
@@ -386,7 +386,7 @@ impl HandleSubcommand for TransactionCommand {
                             tx_commons.common_tx_fields.validity_start_height,
                         )
                         .await?;
-                    println!("{}", txid);
+                    println!("{:#?}", txid);
                 }
             }
             TransactionCommand::Stake {
@@ -405,7 +405,7 @@ impl HandleSubcommand for TransactionCommand {
                             tx_commons.common_tx_fields.validity_start_height,
                         )
                         .await?;
-                    println!("{}", tx);
+                    println!("{:#?}", tx);
                 } else {
                     let txid = client
                         .consensus
@@ -417,7 +417,7 @@ impl HandleSubcommand for TransactionCommand {
                             tx_commons.common_tx_fields.validity_start_height,
                         )
                         .await?;
-                    println!("{}", txid);
+                    println!("{:#?}", txid);
                 }
             }
             TransactionCommand::UpdateStaker {
@@ -437,7 +437,7 @@ impl HandleSubcommand for TransactionCommand {
                             tx_commons.validity_start_height,
                         )
                         .await?;
-                    println!("{}", tx);
+                    println!("{:#?}", tx);
                 } else {
                     let txid = client
                         .consensus
@@ -449,7 +449,7 @@ impl HandleSubcommand for TransactionCommand {
                             tx_commons.validity_start_height,
                         )
                         .await?;
-                    println!("{}", txid);
+                    println!("{:#?}", txid);
                 }
             }
             TransactionCommand::Unstake {
@@ -468,7 +468,7 @@ impl HandleSubcommand for TransactionCommand {
                             tx_commons.common_tx_fields.validity_start_height,
                         )
                         .await?;
-                    println!("{}", tx);
+                    println!("{:#?}", tx);
                 } else {
                     let txid = client
                         .consensus
@@ -480,7 +480,7 @@ impl HandleSubcommand for TransactionCommand {
                             tx_commons.common_tx_fields.validity_start_height,
                         )
                         .await?;
-                    println!("{}", txid);
+                    println!("{:#?}", txid);
                 }
             }
 
@@ -506,7 +506,7 @@ impl HandleSubcommand for TransactionCommand {
                             tx_commons.common_tx_fields.validity_start_height,
                         )
                         .await?;
-                    println!("{}", tx);
+                    println!("{:#?}", tx);
                 } else {
                     let txid = client
                         .consensus
@@ -521,7 +521,7 @@ impl HandleSubcommand for TransactionCommand {
                             tx_commons.common_tx_fields.validity_start_height,
                         )
                         .await?;
-                    println!("{}", txid);
+                    println!("{:#?}", txid);
                 }
             }
             TransactionCommand::VestingRedeem {
@@ -542,7 +542,7 @@ impl HandleSubcommand for TransactionCommand {
                             tx_commons.common_tx_fields.validity_start_height,
                         )
                         .await?;
-                    println!("{}", tx);
+                    println!("{:#?}", tx);
                 } else {
                     let txid = client
                         .consensus
@@ -555,7 +555,7 @@ impl HandleSubcommand for TransactionCommand {
                             tx_commons.common_tx_fields.validity_start_height,
                         )
                         .await?;
-                    println!("{}", txid);
+                    println!("{:#?}", txid);
                 }
             }
 
@@ -585,7 +585,7 @@ impl HandleSubcommand for TransactionCommand {
                             tx_commons.common_tx_fields.validity_start_height,
                         )
                         .await?;
-                    println!("{}", tx);
+                    println!("{:#?}", tx);
                 } else {
                     let txid = client
                         .consensus
@@ -602,7 +602,7 @@ impl HandleSubcommand for TransactionCommand {
                             tx_commons.common_tx_fields.validity_start_height,
                         )
                         .await?;
-                    println!("{}", txid);
+                    println!("{:#?}", txid);
                 }
             }
             TransactionCommand::RedeemRegularHTLC {
@@ -631,7 +631,7 @@ impl HandleSubcommand for TransactionCommand {
                             tx_commons.common_tx_fields.validity_start_height,
                         )
                         .await?;
-                    println!("{}", tx);
+                    println!("{:#?}", tx);
                 } else {
                     let txid = client
                         .consensus
@@ -648,7 +648,7 @@ impl HandleSubcommand for TransactionCommand {
                             tx_commons.common_tx_fields.validity_start_height,
                         )
                         .await?;
-                    println!("{}", txid);
+                    println!("{:#?}", txid);
                 }
             }
             TransactionCommand::RedeemHTLCTimeout {
@@ -669,7 +669,7 @@ impl HandleSubcommand for TransactionCommand {
                             tx_commons.common_tx_fields.validity_start_height,
                         )
                         .await?;
-                    println!("{}", tx);
+                    println!("{:#?}", tx);
                 } else {
                     let txid = client
                         .consensus
@@ -682,7 +682,7 @@ impl HandleSubcommand for TransactionCommand {
                             tx_commons.common_tx_fields.validity_start_height,
                         )
                         .await?;
-                    println!("{}", txid);
+                    println!("{:#?}", txid);
                 }
             }
             TransactionCommand::RedeemHTLCEarly {
@@ -706,7 +706,7 @@ impl HandleSubcommand for TransactionCommand {
                             tx_commons.common_tx_fields.validity_start_height,
                         )
                         .await?;
-                    println!("{}", tx);
+                    println!("{:#?}", tx);
                 } else {
                     let txid = client
                         .consensus
@@ -720,7 +720,7 @@ impl HandleSubcommand for TransactionCommand {
                             tx_commons.common_tx_fields.validity_start_height,
                         )
                         .await?;
-                    println!("{}", txid);
+                    println!("{:#?}", txid);
                 }
             }
             TransactionCommand::SignRedeemHTLCEarly {
@@ -742,7 +742,7 @@ impl HandleSubcommand for TransactionCommand {
                         validity_start_height,
                     )
                     .await?;
-                println!("{}", tx);
+                println!("{:#?}", tx);
             }
         }
         Ok(())

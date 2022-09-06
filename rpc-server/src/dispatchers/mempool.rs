@@ -8,6 +8,7 @@ use nimiq_mempool::mempool::Mempool;
 
 use nimiq_mempool::mempool_transactions::TxPriority;
 use nimiq_rpc_interface::mempool::MempoolInterface;
+use nimiq_rpc_interface::types::RPCResult;
 use nimiq_rpc_interface::types::{HashOrTx, MempoolInfo};
 
 use crate::error::Error;
@@ -29,13 +30,16 @@ impl MempoolInterface for MempoolDispatcher {
     type Error = Error;
 
     /// Pushes the given serialized transaction to the local mempool.
-    async fn push_transaction(&mut self, raw_tx: String) -> Result<Blake2bHash, Self::Error> {
+    async fn push_transaction(
+        &mut self,
+        raw_tx: String,
+    ) -> RPCResult<Blake2bHash, (), Self::Error> {
         let tx: nimiq_transaction::Transaction =
             Deserialize::deserialize_from_vec(&hex::decode(&raw_tx)?)?;
         let txid = tx.hash::<Blake2bHash>();
 
         match self.mempool.add_transaction(tx, None).await {
-            Ok(_) => Ok(txid),
+            Ok(_) => Ok(txid.into()),
             Err(e) => Err(Error::MempoolError(e)),
         }
     }
@@ -44,7 +48,7 @@ impl MempoolInterface for MempoolDispatcher {
     async fn push_high_priority_transaction(
         &mut self,
         raw_tx: String,
-    ) -> Result<Blake2bHash, Self::Error> {
+    ) -> RPCResult<Blake2bHash, (), Self::Error> {
         let tx: nimiq_transaction::Transaction =
             Deserialize::deserialize_from_vec(&hex::decode(&raw_tx)?)?;
         let txid = tx.hash::<Blake2bHash>();
@@ -54,7 +58,7 @@ impl MempoolInterface for MempoolDispatcher {
             .add_transaction(tx, Some(TxPriority::HighPriority))
             .await
         {
-            Ok(_) => Ok(txid),
+            Ok(_) => Ok(txid.into()),
             Err(e) => Err(Error::MempoolError(e)),
         }
     }
@@ -62,28 +66,30 @@ impl MempoolInterface for MempoolDispatcher {
     async fn mempool_content(
         &mut self,
         include_transactions: bool,
-    ) -> Result<Vec<HashOrTx>, Self::Error> {
+    ) -> RPCResult<Vec<HashOrTx>, (), Self::Error> {
         return match include_transactions {
             true => Ok(self
                 .mempool
                 .get_transactions()
                 .iter()
                 .map(|tx| HashOrTx::from(tx.clone()))
-                .collect()),
+                .collect::<Vec<_>>()
+                .into()),
             false => Ok(self
                 .mempool
                 .get_transaction_hashes()
                 .iter()
                 .map(|hash| HashOrTx::from(hash.clone()))
-                .collect()),
+                .collect::<Vec<_>>()
+                .into()),
         };
     }
 
-    async fn mempool(&mut self) -> Result<MempoolInfo, Self::Error> {
-        Ok(MempoolInfo::from_txs(self.mempool.get_transactions()))
+    async fn mempool(&mut self) -> RPCResult<MempoolInfo, (), Self::Error> {
+        Ok(MempoolInfo::from_txs(self.mempool.get_transactions()).into())
     }
 
-    async fn get_min_fee_per_byte(&mut self) -> Result<f64, Self::Error> {
-        Ok(self.mempool.get_rules().tx_fee_per_byte)
+    async fn get_min_fee_per_byte(&mut self) -> RPCResult<f64, (), Self::Error> {
+        Ok(self.mempool.get_rules().tx_fee_per_byte.into())
     }
 }

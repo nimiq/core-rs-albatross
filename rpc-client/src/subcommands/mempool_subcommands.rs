@@ -42,29 +42,29 @@ impl HandleSubcommand for MempoolCommand {
             } => {
                 if high_priority {
                     println!(
-                        "{}",
+                        "{:#?}",
                         client
                             .mempool
                             .push_high_priority_transaction(raw_tx)
                             .await?
                     );
                 } else {
-                    println!("{}", client.mempool.push_transaction(raw_tx).await?);
+                    println!("{:#?}", client.mempool.push_transaction(raw_tx).await?);
                 }
             }
             MempoolCommand::MempoolContent {
                 include_transactions,
             } => {
                 println!(
-                    "{:?}",
+                    "{:#?}",
                     client.mempool.mempool_content(include_transactions).await?
                 );
             }
             MempoolCommand::MempoolInfo {} => {
-                println!("{:?}", client.mempool.mempool().await?);
+                println!("{:#?}", client.mempool.mempool().await?);
             }
             MempoolCommand::MinFeePerByte {} => {
-                println!("{}", client.mempool.get_min_fee_per_byte().await?);
+                println!("{:#?}", client.mempool.get_min_fee_per_byte().await?);
             }
         }
         Ok(())
