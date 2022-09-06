@@ -1371,7 +1371,7 @@ impl Network {
 
         // Ensures that the request is allowed based on the set limits and updates the counter.
         // Returns early if not allowed.
-        if !requests_limit.increment_and_is_allowed(1, TokioInstant::now()) {
+        if !requests_limit.increment_and_is_allowed(1) {
             log::debug!(
                 "[{:?}][{:?}] {:?} Exceeded max requests rate {:?} requests per {:?} seconds",
                 request_id,
@@ -1419,7 +1419,7 @@ impl Network {
         }
     }
 
-    /// Deletes the rate limits that were previously marked as pending if their expiration block height has passed.
+    /// Deletes the rate limits that were previously marked as pending if their expiration time has passed.
     fn clean_up(
         peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<u16, RateLimit>>>>,
         rate_limits_pending_deletion: Arc<Mutex<VecDeque<((PeerId, u16), TokioInstant)>>>,
@@ -1429,12 +1429,12 @@ impl Network {
         // Iterates from the oldest to the most recent object of the queue, deletes the entries that have expired.
         // The queue is ordered from the oldest to the most recent object added, meaning that its loosely ordered by expiration date.
         // Thus, the iteration stops upon the first object that is hasn't yet expired. In the case where the queue is out of order,
-        // the clean up will reach it after a few more blocks (max block_range).
-        while let Some(((peer_id, req_type), block_expiration)) =
+        // the clean up will reach it after a few more instants (max time_window).
+        while let Some(((peer_id, req_type), expiration_time)) =
             rate_limits_pending_deletion_l.front()
         {
             let current_timestamp = TokioInstant::now();
-            if block_expiration <= &current_timestamp {
+            if expiration_time <= &current_timestamp {
                 let mut peer_request_limits_l = peer_request_limits.lock();
 
                 if let Some(peer_req_limits) =
@@ -1442,7 +1442,7 @@ impl Network {
                         .get_mut(peer_id)
                         .and_then(|peer_req_limits| {
                             if let Some(rate_limit) = peer_req_limits.get(req_type) {
-                                // If the peer has reconnected the rate limit may be inforcing a new limit. In this case we only remove the pending deletion.
+                                // If the peer has reconnected the rate limit may be enforcing a new limit. In this case we only remove the pending deletion.
                                 if rate_limit.can_delete(current_timestamp) {
                                     peer_req_limits.remove(req_type);
                                 }
@@ -1458,7 +1458,7 @@ impl Network {
                     }
                 } else {
                     // If the information is in pending deletion, that should mean it was not deleted from peer_request_limits yet, so that
-                    // reconnections don't bypass the limits we are trying to reinforce.
+                    // reconnections don't bypass the limits we are trying to reenforce.
                     unreachable!(
                         "Tried to remove a non existing rate limit from peer_request_limits."
                     );

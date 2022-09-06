@@ -1,12 +1,10 @@
 use std::fmt::{Debug, Formatter};
-use tokio::time::Duration;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_block::{Block, MacroBlock};
 use nimiq_blockchain::HistoryTreeChunk;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::request::{RequestCommon, RequestMarker};
-use nimiq_primitives::policy;
 
 pub(crate) mod handlers;
 
@@ -17,6 +15,19 @@ The consensus module uses the following messages:
 202 RequestResponseMessage<RequestEpoch>
 203 RequestResponseMessage<Epoch>
 */
+
+/// The max number of MacroChain requests per peer.
+pub const MAX_REQUEST_RESPONSE_MACRO_CHAIN: u32 = 1000;
+/// The max number of BatchSet requests per peer.
+pub const MAX_REQUEST_RESPONSE_BATCH_SET: u32 = 1000;
+/// The max number of HistoryChunk requests per peer.
+pub const MAX_REQUEST_RESPONSE_HISTORY_CHUNK: u32 = 1000;
+/// The max number of RequestBlock requests per peer.
+pub const MAX_REQUEST_RESPONSE_BLOCK: u32 = 1000;
+/// The max number of MissingBlocks requests per peer.
+pub const MAX_REQUEST_RESPONSE_MISSING_BLOCKS: u32 = 1000;
+/// The max number of RequestHead requests per peer.
+pub const MAX_REQUEST_RESPONSE_HEAD: u32 = 1000;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Checkpoint {
@@ -60,9 +71,7 @@ impl RequestCommon for RequestMacroChain {
     type Kind = RequestMarker;
     const TYPE_ID: u16 = 200;
     type Response = MacroChain;
-
-    const MAX_REQUESTS: u32 = policy::MAX_REQUEST_RESPONSE_MACRO_CHAIN;
-    const TIME_WINDOW: Duration = policy::MAX_REQUEST_RESPONSE_TIME_WINDOW;
+    const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_MACRO_CHAIN;
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -74,8 +83,7 @@ impl RequestCommon for RequestBatchSet {
     type Kind = RequestMarker;
     const TYPE_ID: u16 = 202;
     type Response = BatchSetInfo;
-    const MAX_REQUESTS: u32 = policy::MAX_REQUEST_RESPONSE_BATCH_SET;
-    const TIME_WINDOW: Duration = policy::MAX_REQUEST_RESPONSE_TIME_WINDOW;
+    const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_BATCH_SET;
 }
 
 /// This message contains a macro block and the number of extended transactions (transitions)
@@ -112,8 +120,7 @@ impl RequestCommon for RequestHistoryChunk {
     type Kind = RequestMarker;
     const TYPE_ID: u16 = 204;
     type Response = HistoryChunk;
-    const MAX_REQUESTS: u32 = policy::MAX_REQUEST_RESPONSE_HISTORY_CHUNK;
-    const TIME_WINDOW: Duration = policy::MAX_REQUEST_RESPONSE_TIME_WINDOW;
+    const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_HISTORY_CHUNK;
 }
 
 /// This message contains a chunk of the history.
@@ -131,8 +138,7 @@ impl RequestCommon for RequestBlock {
     type Kind = RequestMarker;
     const TYPE_ID: u16 = 207;
     type Response = Option<Block>;
-    const MAX_REQUESTS: u32 = policy::MAX_REQUEST_RESPONSE_BLOCK;
-    const TIME_WINDOW: Duration = policy::MAX_REQUEST_RESPONSE_TIME_WINDOW;
+    const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_BLOCK;
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -170,8 +176,7 @@ impl RequestCommon for RequestMissingBlocks {
     type Kind = RequestMarker;
     const TYPE_ID: u16 = 209;
     type Response = ResponseBlocks;
-    const MAX_REQUESTS: u32 = policy::MAX_REQUEST_RESPONSE_MISSING_BLOCKS;
-    const TIME_WINDOW: Duration = policy::MAX_REQUEST_RESPONSE_TIME_WINDOW;
+    const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_MISSING_BLOCKS;
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -181,6 +186,5 @@ impl RequestCommon for RequestHead {
     type Kind = RequestMarker;
     const TYPE_ID: u16 = 210;
     type Response = Blake2bHash;
-    const MAX_REQUESTS: u32 = policy::MAX_REQUEST_RESPONSE_HEAD;
-    const TIME_WINDOW: Duration = policy::MAX_REQUEST_RESPONSE_TIME_WINDOW;
+    const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_HEAD;
 }

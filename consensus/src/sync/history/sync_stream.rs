@@ -236,7 +236,6 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
 
 #[cfg(test)]
 mod tests {
-    // use std::collections::HashMap;
     use std::sync::Arc;
     use std::task::Poll;
 

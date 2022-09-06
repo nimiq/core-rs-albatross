@@ -1,9 +1,14 @@
 use std::fmt;
 use std::io;
+use std::time::Duration;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use thiserror::Error;
-use tokio::time::Duration;
+
+// The max number of request to be processed per peerID and per request type.
+
+/// The range to restrict the responses to the requests on the network layer.
+pub const DEFAULT_MAX_REQUEST_RESPONSE_TIME_WINDOW: Duration = Duration::from_secs(10);
 
 #[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct RequestType(pub u16);
@@ -125,7 +130,7 @@ pub trait RequestCommon:
     const TYPE_ID: u16;
     type Response: Deserialize + Serialize + Send;
     const MAX_REQUESTS: u32;
-    const TIME_WINDOW: Duration;
+    const TIME_WINDOW: Duration = DEFAULT_MAX_REQUEST_RESPONSE_TIME_WINDOW;
 
     /// Serializes a request.
     /// A serialized request is composed of:

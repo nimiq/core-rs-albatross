@@ -2,11 +2,10 @@ use std::fmt::Debug;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_network_interface::request::{MessageMarker, RequestCommon};
-use nimiq_primitives::policy;
-use tokio::time::Duration;
 
 use crate::contribution::AggregatableContribution;
-
+/// The max number of LevelUpdateMessages requests per peer.
+pub const MAX_REQUEST_RESPONSE_LEVEL_UPDATE_MESSAGE: u32 = 1000;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LevelUpdate<C: AggregatableContribution> {
     /// The updated multi-signature for this level
@@ -86,6 +85,5 @@ impl<
     const TYPE_ID: u16 = C::TYPE_ID;
     type Response = ();
 
-    const MAX_REQUESTS: u32 = policy::MAX_REQUEST_RESPONSE_LEVEL_UPDATE_MESSAGE;
-    const TIME_WINDOW: Duration = policy::MAX_REQUEST_RESPONSE_TIME_WINDOW;
+    const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_LEVEL_UPDATE_MESSAGE;
 }

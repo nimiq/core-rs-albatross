@@ -26,7 +26,8 @@ impl RateLimit {
     /// Updates the last_reset if needed and then increments the counter of number of requests by
     /// the specified number.
     /// Receives the number to increment the counter and the current time measured in seconds.
-    pub fn increment_and_is_allowed(&mut self, request_count: u32, current_time: Instant) -> bool {
+    pub fn increment_and_is_allowed(&mut self, request_count: u32) -> bool {
+        let current_time = Instant::now();
         if self.next_reset_time() <= current_time {
             self.last_reset = current_time;
             self.occurrences_counter = 0;

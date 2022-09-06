@@ -1,5 +1,4 @@
 use std::cmp;
-use tokio::time::Duration;
 
 use nimiq_keys::Address;
 
@@ -31,25 +30,6 @@ pub const VERSION: u16 = 1;
 
 /// Number of available validator slots. Note that a single validator may own several validator slots.
 pub const SLOTS: u16 = 512;
-
-// The max number of request to be processed per peerID and per request type.
-
-/// The range to restrict the responses to the requests on the network layer.
-pub const MAX_REQUEST_RESPONSE_TIME_WINDOW: Duration = Duration::from_secs(10);
-/// The max number of MacroChain requests per peer.
-pub const MAX_REQUEST_RESPONSE_MACRO_CHAIN: u32 = 1000;
-/// The max number of BatchSet requests per peer.
-pub const MAX_REQUEST_RESPONSE_BATCH_SET: u32 = 1000;
-/// The max number of HistoryChunk requests per peer.
-pub const MAX_REQUEST_RESPONSE_HISTORY_CHUNK: u32 = 1000;
-/// The max number of RequestBlock requests per peer.
-pub const MAX_REQUEST_RESPONSE_BLOCK: u32 = 1000;
-/// The max number of MissingBlocks requests per peer.
-pub const MAX_REQUEST_RESPONSE_MISSING_BLOCKS: u32 = 1000;
-/// The max number of RequestHead requests per peer.
-pub const MAX_REQUEST_RESPONSE_HEAD: u32 = 1000;
-/// The max number of LevelUpdateMessages requests per peer.
-pub const MAX_REQUEST_RESPONSE_LEVEL_UPDATE_MESSAGE: u32 = 1000;
 
 /// Calculates 2f+1 slots which is the minimum number of slots necessary to produce a macro block,
 /// a skip block and other actions.
