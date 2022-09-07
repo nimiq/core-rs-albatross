@@ -477,11 +477,28 @@ impl Accounts {
         let mut recipient_index = 0_usize;
         let mut recipient_receipt;
 
-        for (index, transaction) in transactions.iter().enumerate() {
+        // Safety check, we should always have one sender receipt per transaction
+        if transactions.len() != sender_receipts.len() {
+            panic!(" The number of sender receipts does not match the number of transactions");
+        }
+
+        //Iterate the transactions in the reverse order they were applied
+        for (index, transaction) in transactions.iter().rev().enumerate() {
             // Sender receipts are always present, however a recipient receipt might or might not be present:
             // it is not present when the transaction is a contract creation transaction, so we need to track
             // recipient receipts using a different index,
             let sender_receipt = sender_receipts[index].clone();
+
+            match sender_receipt {
+                Receipt::Transaction {
+                    index: receipt_index,
+                    sender: _,
+                    data: _,
+                } => {
+                    assert_eq!((transactions.len() - 1) - index, receipt_index as usize)
+                }
+                _ => panic!(" Only transaction receipts should be present "),
+            }
 
             if transaction
                 .get_raw_transaction()
@@ -504,7 +521,18 @@ impl Accounts {
 
                 recipient_receipt = None;
             } else {
-                recipient_receipt = Some(recipient_receipts[recipient_index].clone());
+                let receipt = recipient_receipts[recipient_index].clone();
+                match receipt {
+                    Receipt::Transaction {
+                        index: receipt_index,
+                        sender: _,
+                        data: _,
+                    } => {
+                        assert_eq!((transactions.len() - 1) - index, receipt_index as usize)
+                    }
+                    _ => panic!(" Only transaction receipts should be present "),
+                }
+                recipient_receipt = Some(receipt);
                 recipient_index += 1;
             }
 
