@@ -148,7 +148,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
 {
     const MACRO_STATE_DB_NAME: &'static str = "ValidatorState";
     const MACRO_STATE_KEY: &'static str = "validatorState";
-    const VIEW_CHANGE_DELAY: Duration = Duration::from_secs(10);
+    const VIEW_CHANGE_DELAY: Duration = Duration::from_secs(4);
     const EMPTY_BLOCK_DELAY: Duration = Duration::from_secs(1);
     const FORK_PROOFS_MAX_SIZE: usize = 1_000; // bytes
 
