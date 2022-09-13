@@ -101,6 +101,56 @@ impl<N: ValidatorNetwork + 'static> HandelTendermintAdapter<N> {
         }
     }
 
+    pub fn rebroadcast_and_aggregate(
+        &self,
+        round: u32,
+        step: impl Into<TendermintStep>,
+        proposal_hash: Option<Blake2sHash>,
+    ) {
+        // Assemble identifier from available information
+        let id = TendermintIdentifier {
+            block_number: self.block_height,
+            round_number: round,
+            step: step.into(),
+        };
+
+        // Construct the vote so it can be hashed and signed
+        let vote = TendermintVote {
+            proposal_hash: proposal_hash.clone(),
+            id: id.clone(),
+        };
+
+        // Create the signed contribution of this validator
+        let own_contribution = TendermintContribution::from_vote(
+            vote,
+            &self.secret_key,
+            self.validator_registry.get_slots(self.validator_slot_band),
+        );
+
+        let output_sink = Box::new(NetworkSink::<
+            LevelUpdateMessage<TendermintContribution, TendermintIdentifier>,
+            N,
+        >::new(self.network.clone()));
+
+        // Clone the sender so the send can be spawned
+        let sender = self.event_sender.clone();
+
+        tokio::spawn(async move {
+            // Relay the AggregationEvent to TendermintAggregations
+            let _ = sender
+                .send(AggregationEvent::Start(
+                    id.clone(),
+                    own_contribution,
+                    output_sink,
+                ))
+                .await
+                .map_err(|err| {
+                    debug!("event_sender.send failed: {:?}", err);
+                    TendermintError::AggregationError
+                });
+        });
+    }
+
     /// starts an aggregation for given `round` and `step`.
     /// * `round` is the number indicating in which round Tendermint is
     /// * `step` is either `TendermintStep::PreVote` or `Tendermint::PreCommit`.

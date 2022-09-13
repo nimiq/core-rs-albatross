@@ -55,7 +55,7 @@ impl<DepsTy: TendermintOutsideDeps> Tendermint<DepsTy> {
             >,
         >,
     ) -> Self {
-        if let Some(state) = state_opt {
+        let mut this = if let Some(state) = state_opt {
             Self {
                 state,
                 deps: Some(deps),
@@ -66,6 +66,25 @@ impl<DepsTy: TendermintOutsideDeps> Tendermint<DepsTy> {
                 state: TendermintState::new(deps.block_height(), deps.initial_round()),
                 deps: Some(deps),
                 fut: None,
+            }
+        };
+
+        this.init();
+
+        this
+    }
+
+    fn init(&mut self) {
+        // Restart all aggregations prior to our current state aggregation
+        for ((round, step), hash) in self.state.own_votes.iter() {
+            if &self.state.round != round || &self.state.step != step {
+                // potentially do sanity checks here.
+                // I.e do we have the proposal if our vote is not None etc.
+
+                self.deps
+                    .as_ref()
+                    .unwrap()
+                    .rebroadcast_and_aggregate(*round, *step, hash.clone());
             }
         }
     }

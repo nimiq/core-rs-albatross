@@ -433,6 +433,16 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
             .map(|result| (self, result))
     }
 
+    fn rebroadcast_and_aggregate(
+        &self,
+        round: u32,
+        step: Step,
+        proposal_hash: Option<Self::ProposalHashTy>,
+    ) {
+        self.aggregation_adapter
+            .rebroadcast_and_aggregate(round, step, proposal_hash)
+    }
+
     /// Returns the vote aggregation for a given round and step. It simply calls the aggregation
     /// adapter, which does all the work.
     async fn get_aggregation(

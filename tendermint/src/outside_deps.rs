@@ -87,6 +87,15 @@ pub trait TendermintOutsideDeps: Send + Unpin + Sized + 'static {
         proposal_hash: Option<Self::ProposalHashTy>,
     ) -> Result<(Self, AggregationResult<Self::ProposalHashTy, Self::ProofTy>), TendermintError>;
 
+    /// Rebroadcasts a vote and starts an aggregations, but does not wait for the result.
+    /// Used for restarting aggregations from state.
+    fn rebroadcast_and_aggregate(
+        &self,
+        round: u32,
+        step: Step,
+        proposal_hash: Option<Self::ProposalHashTy>,
+    );
+
     /// Returns the current aggregation for a given round and step. The returned aggregation might
     /// or not have 2f+1 votes, this function only returns all the votes that we have so far.
     /// It will fail if no aggregation was started for the given round and step.

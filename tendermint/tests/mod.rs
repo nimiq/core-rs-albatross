@@ -161,6 +161,14 @@ impl TendermintOutsideDeps for TestValidator {
         }
     }
 
+    fn rebroadcast_and_aggregate(
+        &self,
+        _round: u32,
+        _step: Step,
+        _proposal_hash: Option<Self::ProposalHashTy>,
+    ) {
+    }
+
     // Note that this function returns an AggregationResult, not VoteResult. AggregationResult can
     // only be an Aggregation (containing the raw votes) or a NewRound.
     async fn broadcast_and_aggregate(
