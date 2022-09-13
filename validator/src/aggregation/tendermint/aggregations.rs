@@ -163,11 +163,12 @@ impl<N: ValidatorNetwork> TendermintAggregations<N> {
         }
     }
 
-    pub fn cancel_aggregation(&self, round: u32, step: TendermintStep) {
-        if let Some(descriptor) = self.aggregation_descriptors.get(&(round, step)) {
-            trace!("cancelling aggregation for {}-{:?}", &round, &step);
-            descriptor.is_running.store(false, Ordering::Relaxed);
-        }
+    pub fn cancel_aggregation(&self, _round: u32, _step: TendermintStep) {
+        // For now do not cancel any aggregations
+        // if let Some(descriptor) = self.aggregation_descriptors.get(&(round, step)) {
+        //     trace!("cancelling aggregation for {}-{:?}", &round, &step);
+        //     descriptor.is_running.store(false, Ordering::Relaxed);
+        // }
     }
 }
 
