@@ -47,6 +47,10 @@ impl AggregateSignature {
         self.0.signature += &other.0.signature;
         self.0.compressed = CompressedSignature::from(self.0.signature);
     }
+
+    pub fn get_point(&self) -> G1Projective {
+        self.0.signature
+    }
 }
 
 impl Eq for AggregateSignature {}

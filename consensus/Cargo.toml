@@ -17,6 +17,9 @@ is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
+ark-groth16 = "0.3"
+ark-mnt4-753 = "0.3"
+ark-mnt6-753 = "0.3"
 async-trait = "0.1"
 futures = { package = "futures-util", version = "0.3" }
 lazy_static = "1.4.0"
@@ -37,6 +40,8 @@ nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-macros = { path = "../macros" }
 nimiq-mempool = { path = "../mempool" }
+nimiq-nano-primitives = { path = "../nano-primitives" }
+nimiq-nano-zkp = { path = "../nano-zkp", features = ["prover"] }
 nimiq-network-interface = { path = "../network-interface" }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }
 nimiq-transaction = { path = "../primitives/transaction" }
