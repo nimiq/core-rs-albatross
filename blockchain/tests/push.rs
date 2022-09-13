@@ -316,9 +316,10 @@ fn it_validates_state_root() {
         ..Default::default()
     };
 
+    // This does not fail since now the state root is properly calculated from strach
     push_micro_after_micro(&config.clone(), &Ok(PushResult::Extended));
 
-    push_rebranch(config.clone(), &Ok(PushResult::Rebranched));
+    push_rebranch(config.clone(), &Err(PushError::InvalidFork));
 
     push_rebranch_across_epochs(config.clone());
 }

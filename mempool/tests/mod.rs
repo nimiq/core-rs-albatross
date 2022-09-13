@@ -496,7 +496,8 @@ async fn mempool_get_txn_max_size() {
 
     // Expect only 1 of the transactions because of the size we passed
     assert_eq!(rec_txns.len(), 1);
-    assert_eq!(txn_size, rec_txns[0].serialized_size());
+    // Need to account for one extra byte due to the transaction execution result
+    assert_eq!(txn_size, rec_txns[0].serialized_size() + 1);
 
     // Send the transactions again
     let (rec_txns, _) = send_get_mempool_txns(blockchain, txns, txns_len).await;
@@ -1921,15 +1922,8 @@ async fn it_can_reject_invalid_vesting_contract_transaction() {
 
     let transactions = vec![tx.clone()];
 
-    let block = producer.next_micro_block(
-        &bc,
-        bc.time.now(),
-        0,
-        None,
-        vec![],
-        transactions,
-        vec![0x41],
-    );
+    let block =
+        producer.next_micro_block(&bc, bc.time.now(), vec![], transactions, vec![0x41], None);
     assert_eq!(
         Blockchain::push(bc, Block::Micro(block)),
         Ok(PushResult::Extended)

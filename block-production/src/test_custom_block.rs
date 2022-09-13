@@ -69,7 +69,7 @@ pub fn next_micro_block(
     let (state_root, executed_txns) = blockchain
         .state()
         .accounts
-        .get_root_with(&transactions, &inherents, block_number, timestamp)
+        .exercise_transactions(&transactions, &inherents, block_number, timestamp)
         .expect("Failed to compute accounts hash during block production");
 
     let ext_txs = ExtendedTransaction::from(
@@ -152,11 +152,12 @@ pub fn next_skip_block(
     let inherents = blockchain.create_slash_inherents(&[], Some(skip_block_info), None);
 
     let state_root = config.state_root.clone().unwrap_or_else(|| {
-        blockchain
+        let (state_root, _) = blockchain
             .state()
             .accounts
-            .get_root_with(&[], &inherents, block_number, timestamp)
-            .expect("Failed to compute accounts hash during block production")
+            .exercise_transactions(&[], &inherents, block_number, timestamp)
+            .expect("Failed to compute accounts hash during block production");
+        state_root
     });
 
     let ext_txs = ExtendedTransaction::from(
@@ -252,7 +253,7 @@ fn next_macro_block_proposal(
 
     let (root, _) = state
         .accounts
-        .get_root_with(&[], &inherents, block_number, timestamp)
+        .exercise_transactions(&[], &inherents, block_number, timestamp)
         .expect("Failed to compute accounts hash during block production.");
 
     header.state_root = root;

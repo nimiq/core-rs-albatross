@@ -73,16 +73,6 @@ impl Account {
             }),
         }
     }
-
-    // This function is used by the mempool to check if a fee is payable for a particular transaction, according to the current balance for that account in the mempool
-    pub fn can_fee_be_paid(
-        &self,
-        transaction: &Transaction,
-        mempool_balance: Coin,
-        block_time: u64,
-    ) -> bool {
-        AccountTransactionInteraction::can_pay_fee(self, transaction, mempool_balance, block_time)
-    }
 }
 
 impl AccountTransactionInteraction for Account {
@@ -361,6 +351,20 @@ impl AccountTransactionInteraction for Account {
                 StakingContract::can_pay_fee(account, transaction, current_balance, block_time)
             }
             _ => false,
+        }
+    }
+
+    fn delete(
+        accounts_tree: &AccountsTrie,
+        db_txn: &mut WriteTransaction,
+        transaction: &Transaction,
+    ) -> Result<Vec<Log>, AccountError> {
+        match transaction.recipient_type {
+            AccountType::Vesting => VestingContract::delete(accounts_tree, db_txn, transaction),
+            AccountType::HTLC => {
+                HashedTimeLockedContract::delete(accounts_tree, db_txn, transaction)
+            }
+            _ => Err(AccountError::InvalidForRecipient),
         }
     }
 }

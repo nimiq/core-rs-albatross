@@ -38,7 +38,7 @@ impl BlockProducer {
         // the batch when it happened or in the next one, but not after that.
         fork_proofs: Vec<ForkProof>,
         // The transactions to be included in the block body.
-        mut transactions: Vec<Transaction>,
+        transactions: Vec<Transaction>,
         // Extra data for this block.
         extra_data: Vec<u8>,
         // Skip block proof
@@ -75,9 +75,6 @@ impl BlockProducer {
             prev_seed.sign_next(&self.signing_key)
         };
 
-        // Sort the transactions.
-        transactions.sort_unstable();
-
         // Create the inherents from the fork proofs or skip block info.
         let inherents = blockchain.create_slash_inherents(&fork_proofs, skip_block_info, None);
 
@@ -85,7 +82,7 @@ impl BlockProducer {
         let (state_root, executed_txns) = blockchain
             .state()
             .accounts
-            .get_root_with(&transactions, &inherents, block_number, timestamp)
+            .exercise_transactions(&transactions, &inherents, block_number, timestamp)
             .expect("Failed to compute accounts hash during block production");
 
         // Calculate the extended transactions from the transactions and the inherents.
@@ -203,7 +200,7 @@ impl BlockProducer {
         // Update the state and add the state root to the header.
         let (root, _) = state
             .accounts
-            .get_root_with(&[], &inherents, block_number, timestamp)
+            .exercise_transactions(&[], &inherents, block_number, timestamp)
             .expect("Failed to compute accounts hash during block production.");
 
         header.state_root = root;

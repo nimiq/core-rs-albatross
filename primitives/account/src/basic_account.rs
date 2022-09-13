@@ -309,6 +309,14 @@ impl AccountTransactionInteraction for BasicAccount {
     ) -> bool {
         Account::balance_sub(self.balance, mempool_balance).is_ok()
     }
+
+    fn delete(
+        _accounts_tree: &AccountsTrie,
+        _db_txn: &mut WriteTransaction,
+        _transaction: &Transaction,
+    ) -> Result<Vec<Log>, AccountError> {
+        Err(AccountError::InvalidForRecipient)
+    }
 }
 
 impl AccountInherentInteraction for BasicAccount {

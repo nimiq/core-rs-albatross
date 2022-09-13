@@ -10,7 +10,7 @@ use nimiq_trie::key_nibbles::KeyNibbles;
 use crate::inherent::Inherent;
 use crate::interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction};
 use crate::logs::{AccountInfo, Log};
-use crate::{Account, AccountError, AccountsTrie};
+use crate::{Account, AccountError, AccountsTrie, BasicAccount};
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
@@ -379,6 +379,47 @@ impl AccountTransactionInteraction for VestingContract {
         }
 
         true
+    }
+
+    fn delete(
+        accounts_tree: &AccountsTrie,
+        db_txn: &mut WriteTransaction,
+        transaction: &Transaction,
+    ) -> Result<Vec<Log>, AccountError> {
+        let key = KeyNibbles::from(&transaction.contract_creation_address());
+
+        let account = accounts_tree
+            .get(db_txn, &key)
+            .ok_or(AccountError::NonExistentAddress {
+                address: transaction.sender.clone(),
+            })?;
+
+        let vesting = match account {
+            Account::Vesting(ref value) => value,
+            _ => {
+                return Err(AccountError::TypeMismatch {
+                    expected: AccountType::Vesting,
+                    got: account.account_type(),
+                })
+            }
+        };
+
+        let previous_balance = Account::balance_sub(vesting.balance, transaction.value)?;
+
+        if previous_balance == Coin::ZERO {
+            // If the previous balance was zero, we just remove the account from the accounts tree
+            accounts_tree.remove(db_txn, &key);
+        } else {
+            // If the previous balance was not zero, we need to restore the basic account with the previous balance
+            accounts_tree.put(
+                db_txn,
+                &key,
+                Account::Basic(BasicAccount {
+                    balance: previous_balance,
+                }),
+            );
+        }
+        Ok(Vec::new())
     }
 }
 

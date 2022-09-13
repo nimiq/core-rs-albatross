@@ -68,7 +68,7 @@ impl Accounts {
         }
     }
 
-    pub fn get_root_with(
+    pub fn exercise_transactions(
         &self,
         transactions: &[Transaction],
         inherents: &[Inherent],
@@ -505,18 +505,20 @@ impl Accounts {
                 .flags
                 .contains(TransactionFlags::CONTRACT_CREATION)
             {
-                if transaction.succeed() {
-                    self.tree.remove(
-                        txn,
-                        &KeyNibbles::from(&transaction.get_raw_transaction().recipient),
-                    );
+                match transaction {
+                    ExecutedTransaction::Ok(transaction) => {
+                        Account::delete(&self.tree, txn, &transaction).unwrap();
 
-                    contracts_logs.push(TransactionLog::new(
-                        transaction.get_raw_transaction().hash(),
-                        vec![Log::RevertContract {
-                            contract_address: transaction.get_raw_transaction().recipient.clone(),
-                        }],
-                    ));
+                        contracts_logs.push(TransactionLog::new(
+                            transaction.hash(),
+                            vec![Log::RevertContract {
+                                contract_address: transaction.recipient.clone(),
+                            }],
+                        ));
+                    }
+                    ExecutedTransaction::Err(_) => {
+                        // If the contract creation failed, we have nothing to do
+                    }
                 }
 
                 recipient_receipt = None;

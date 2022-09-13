@@ -5,7 +5,7 @@ use std::{
     sync::Arc,
 };
 
-use nimiq_account::{Account, BasicAccount, StakingContract};
+use nimiq_account::{Account, AccountTransactionInteraction, BasicAccount, StakingContract};
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_hash::Hash;
 use nimiq_primitives::account::AccountType;
@@ -277,7 +277,8 @@ pub(crate) async fn verify_tx<'a>(
     }
 
     // The sender must be able to at least pay the fee (in case the tx fails), assumming all pending txns in the mempool for this sender are included in a block
-    if !sender_account.can_fee_be_paid(
+    if !AccountTransactionInteraction::can_pay_fee(
+        &sender_account,
         transaction,
         sender_current_balance + transaction.fee,
         blockchain.timestamp(),

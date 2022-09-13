@@ -20,6 +20,12 @@ pub trait AccountTransactionInteraction: Sized {
         block_time: u64,
     ) -> Result<AccountInfo, AccountError>;
 
+    fn delete(
+        accounts_tree: &AccountsTrie,
+        db_txn: &mut WriteTransaction,
+        transaction: &Transaction,
+    ) -> Result<Vec<Log>, AccountError>;
+
     fn commit_incoming_transaction(
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,

@@ -59,8 +59,6 @@ pub enum BlockError {
     InvalidTransaction(#[from] TransactionError),
     #[error("Expired transaction in block")]
     ExpiredTransaction,
-    #[error("Transactions incorrectly ordered")]
-    TransactionsNotOrdered,
     #[error("Transactions execution result mismatch")]
     TransactionExecutionMismatch,
 

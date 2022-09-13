@@ -3,7 +3,7 @@ use crate::history::ExtendedTransaction;
 use crate::{Blockchain, PushError};
 use nimiq_account::Accounts;
 use nimiq_account::BlockLog;
-use nimiq_block::{Block, SkipBlockInfo,BlockError::TransactionExecutionMismatch};
+use nimiq_block::{Block, BlockError::TransactionExecutionMismatch, SkipBlockInfo};
 use nimiq_database::WriteTransaction;
 use nimiq_primitives::policy;
 

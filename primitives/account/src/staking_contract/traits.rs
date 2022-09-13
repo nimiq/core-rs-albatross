@@ -526,6 +526,14 @@ impl AccountTransactionInteraction for StakingContract {
 
         true
     }
+
+    fn delete(
+        _accounts_tree: &AccountsTrie,
+        _db_txn: &mut WriteTransaction,
+        _transaction: &Transaction,
+    ) -> Result<Vec<Log>, AccountError> {
+        Err(AccountError::InvalidForRecipient)
+    }
 }
 
 impl AccountInherentInteraction for StakingContract {

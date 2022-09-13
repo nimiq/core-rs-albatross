@@ -7,7 +7,7 @@ use std::sync::Arc;
 use tokio_metrics::TaskMonitor;
 
 use beserial::Serialize;
-use nimiq_account::{Account, BasicAccount};
+use nimiq_account::{Account, AccountTransactionInteraction, BasicAccount};
 use nimiq_block::Block;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, TransactionVerificationCache};
 use nimiq_hash::{Blake2bHash, Hash};
@@ -409,7 +409,9 @@ impl Mempool {
 
                                     // The sender must be able to at least pay the fee (in case the tx fails)
                                     // (Assuming that all pending txns in the mempool for this sender are included in a block)
-                                    if !sender_account.can_fee_be_paid(
+
+                                    if !AccountTransactionInteraction::can_pay_fee(
+                                        &sender_account,
                                         old_tx,
                                         new_total + old_tx.fee,
                                         blockchain.timestamp(),
