@@ -27,4 +27,6 @@ pub enum NanoZKPError {
     Serialization(#[from] SerializationError),
     #[error("circuit error")]
     Circuit(#[from] SynthesisError),
+    #[error("empty proof")]
+    EmptyProof,
 }

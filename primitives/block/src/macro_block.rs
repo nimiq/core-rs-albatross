@@ -7,6 +7,7 @@ use beserial::{Deserialize, Serialize};
 use nimiq_collections::bitset::BitSet;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, SerializeContent};
 use nimiq_nano_primitives::pk_tree_construct;
+use nimiq_nano_primitives::MacroBlock as ZKPMacroBlock;
 use nimiq_primitives::policy;
 use nimiq_primitives::slots::Validators;
 use nimiq_vrf::VrfSeed;
@@ -79,6 +80,26 @@ pub struct MacroBody {
     /// proposing macro blocks at the time when this block was produced. It is used later on for
     /// reward distribution.
     pub disabled_set: BitSet,
+}
+
+impl<'a> TryFrom<&'a MacroBlock> for ZKPMacroBlock {
+    type Error = ();
+
+    fn try_from(block: &'a MacroBlock) -> Result<ZKPMacroBlock, Self::Error> {
+        let block_number = block.block_number();
+        let mut header_hash: [u8; 32] = [0; 32];
+        header_hash.copy_from_slice(block.hash().as_slice());
+        let proof = block.justification.as_ref().ok_or(())?;
+        let round_number = proof.round;
+
+        Ok(ZKPMacroBlock {
+            block_number,
+            round_number,
+            header_hash,
+            signature: proof.sig.signature.get_point(),
+            signer_bitmap: proof.sig.signers.iter_bits().collect(),
+        })
+    }
 }
 
 impl MacroBlock {

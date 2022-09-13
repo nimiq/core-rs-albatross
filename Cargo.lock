@@ -2612,6 +2612,9 @@ dependencies = [
 name = "nimiq-consensus"
 version = "0.1.0"
 dependencies = [
+ "ark-groth16",
+ "ark-mnt4-753",
+ "ark-mnt6-753",
  "async-trait",
  "beserial",
  "futures-util",
@@ -2628,6 +2631,8 @@ dependencies = [
  "nimiq-keys",
  "nimiq-macros",
  "nimiq-mempool",
+ "nimiq-nano-primitives",
+ "nimiq-nano-zkp",
  "nimiq-network-interface",
  "nimiq-network-libp2p",
  "nimiq-network-mock",
