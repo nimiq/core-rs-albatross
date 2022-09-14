@@ -108,7 +108,7 @@ Please take a look at the [`client.example.toml`](lib/src/config/config_file/cli
 
 ### Devnet
 
-The development network is currently in release-candidate phase where we are giving RPC access to interested developers.
+The development network is currently in a phase where we are giving RPC access to interested developers.
 Its main purpose is to invite all developers to exercise and test the Nimiq 2.0 RPC functionality (to see how it fits for
 their app use cases), and we invite them to file and report any [issues](https://github.com/nimiq/core-rs-albatross/issues/new)
 through our GitHub repository.
