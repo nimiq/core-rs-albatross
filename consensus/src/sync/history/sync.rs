@@ -23,8 +23,14 @@ pub(crate) struct EpochIds<T> {
 }
 
 impl<T> EpochIds<T> {
-    pub(crate) fn get_checkpoint_epoch(&self) -> usize {
+    #[inline]
+    pub(crate) fn checkpoint_epoch_number(&self) -> usize {
         self.first_epoch_number + self.ids.len()
+    }
+
+    #[inline]
+    pub(crate) fn last_epoch_number(&self) -> usize {
+        self.checkpoint_epoch_number().saturating_sub(1)
     }
 }
 

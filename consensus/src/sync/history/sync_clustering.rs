@@ -121,8 +121,17 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
 
         // Truncate epoch_ids by epoch_number: Discard all epoch_ids prior to our accepted state.
         if !epoch_ids.ids.is_empty() && epoch_ids.first_epoch_number <= our_epoch_number {
-            if our_epoch_number - epoch_ids.first_epoch_number <= epoch_ids.ids.len() {
+            let peers_epoch_number = epoch_ids.last_epoch_number();
+            if peers_epoch_number < our_epoch_number
+                || (peers_epoch_number == our_epoch_number && epoch_ids.checkpoint.is_none())
+            {
                 // Peer is behind, emit it as useless.
+                debug!(
+                    our_epoch_number,
+                    peers_epoch_number,
+                    peer = %epoch_ids.sender,
+                    "Peer is behind"
+                );
                 return Some(epoch_ids.sender);
             } else {
                 // Check that the epoch_id sent by the peer at our current epoch number corresponds to
@@ -131,6 +140,13 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                     &epoch_ids.ids[our_epoch_number - epoch_ids.first_epoch_number];
                 if our_epoch_id != *peers_epoch_id {
                     // TODO Actually ban the peer.
+                    debug!(
+                        our_epoch_number,
+                        %our_epoch_id,
+                        %peers_epoch_id,
+                        peer = %epoch_ids.sender,
+                        "Peer is on a different chain"
+                    );
                     return Some(epoch_ids.sender);
                 }
 
@@ -216,7 +232,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
         let mut new_clusters = VecDeque::new();
         let mut num_clusters = 0;
 
-        let checkpoint_epoch = epoch_ids.get_checkpoint_epoch();
+        let checkpoint_epoch = epoch_ids.checkpoint_epoch_number();
         let sender_peer_id = epoch_ids.sender;
 
         debug!(
