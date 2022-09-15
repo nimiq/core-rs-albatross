@@ -474,6 +474,10 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
     ) -> Vec<TrieNode<A>> {
         let mut chunk = Vec::new();
 
+        if size == 0_usize {
+            return chunk;
+        }
+
         let mut stack = vec![self
             .get_root(txn)
             .expect("The Merkle Radix Trie didn't have a root node!")];
