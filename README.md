@@ -48,6 +48,7 @@ Besides [Rust stable](https://www.rust-lang.org/learn/get-started#installing-rus
 the following packages are required to be able to compile the source code:
 
 - `clang`
+- `cmake`
 - `pkg-config`
 - `libssl-dev` (in Debian/Ubuntu) or `openssl-devel` (in Fedora/Red Hat)
 
