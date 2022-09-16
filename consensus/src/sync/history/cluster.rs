@@ -11,7 +11,8 @@ use parking_lot::RwLock;
 
 use nimiq_block::MacroBlock;
 use nimiq_blockchain::{
-    AbstractBlockchain, Blockchain, ExtendedTransaction, PushError, PushResult, CHUNK_SIZE,
+    AbstractBlockchain, Blockchain, ExtendedTransaction, HistoryTreeChunk, PushError, PushResult,
+    CHUNK_SIZE,
 };
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{network::Network, request::RequestError};
@@ -71,7 +72,7 @@ pub struct SyncCluster<TNetwork: Network> {
     pub first_block_number: usize,
 
     pub(crate) batch_set_queue: SyncQueue<TNetwork, Blake2bHash, BatchSetInfo>,
-    history_queue: SyncQueue<TNetwork, (u32, u32, usize), (u32, usize, HistoryChunk)>,
+    history_queue: SyncQueue<TNetwork, (u32, u32, usize), (u32, usize, HistoryTreeChunk)>,
 
     pending_batch_sets: VecDeque<PendingBatchSet>,
     num_epochs_finished: usize,
@@ -162,7 +163,8 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
                     )
                     .await
                     .ok()
-                    .map(|chunk| (epoch_number, chunk_index, chunk))
+                    .filter(|chunk| chunk.chunk.is_some())
+                    .map(|chunk| (epoch_number, chunk_index, chunk.chunk.unwrap()))
                 }
                 .boxed()
             },
@@ -239,7 +241,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         &mut self,
         epoch_number: u32,
         chunk_index: usize,
-        history_chunk: HistoryChunk,
+        mut history_chunk: HistoryTreeChunk,
     ) -> Result<(), SyncClusterResult> {
         // Find epoch in pending_epochs.
         // TODO: This assumes that epochs are always dense in `pending_batch_sets`
@@ -248,15 +250,8 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         let epoch_index = (epoch_number - first_epoch_number) as usize;
         let epoch = &mut self.pending_batch_sets[epoch_index];
 
-        // TODO: This assumes that we have already filtered responses with no chunk.
-        if history_chunk.chunk.is_none() {
-            log::error!("Received empty history chunk {:?}", history_chunk);
-            return Err(SyncClusterResult::Error);
-        }
-
         // Verify chunk.
-        let chunk = history_chunk.chunk.expect("History chunk missing");
-        if !chunk
+        if !history_chunk
             .verify(
                 epoch.block.header.history_root.clone(),
                 chunk_index * CHUNK_SIZE,
@@ -272,8 +267,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         }
 
         // Add the received history chunk to the pending epoch.
-        let mut chunk = chunk.history;
-        epoch.history.append(&mut chunk);
+        epoch.history.append(&mut history_chunk.history);
 
         if epoch.history_len > CHUNK_SIZE {
             log::info!(
@@ -395,7 +389,6 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         block_number: u32,
         chunk_index: usize,
     ) -> Result<HistoryChunk, RequestError> {
-        // TODO filter empty chunks here?
         network
             .request(
                 RequestHistoryChunk {
