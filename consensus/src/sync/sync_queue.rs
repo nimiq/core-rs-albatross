@@ -8,7 +8,9 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll, Waker};
 
-use futures::{future::BoxFuture, ready, stream::FuturesUnordered, Stream, StreamExt};
+use futures::{
+    future, future::BoxFuture, ready, stream::FuturesUnordered, FutureExt, Stream, StreamExt,
+};
 use pin_project::pin_project;
 
 use nimiq_macros::store_waker;
@@ -74,7 +76,7 @@ pub struct SyncQueuePeer<T> {
 /// The SyncQueue will request a list of ids from a set of peers
 /// and implements an ordered stream over the resulting objects.
 /// The stream returns an error if an id could not be resolved.
-pub struct SyncQueue<TNetwork: Network, TId, TOutput> {
+pub struct SyncQueue<TNetwork: Network, TId, TOutput: 'static> {
     pub(crate) peers: Vec<SyncQueuePeer<TNetwork::PeerId>>,
     network: Arc<TNetwork>,
     desired_pending_size: usize,
@@ -91,7 +93,7 @@ pub struct SyncQueue<TNetwork: Network, TId, TOutput> {
 impl<TNetwork, TId, TOutput> SyncQueue<TNetwork, TId, TOutput>
 where
     TId: Clone + Debug,
-    TOutput: Send + Unpin,
+    TOutput: Send + Unpin + 'static,
     TNetwork: Network,
 {
     pub fn new(
@@ -144,31 +146,40 @@ where
 
         // Drain ids and produce futures.
         for _ in 0..num_ids_to_request {
-            // Get next peer in line. Abort if there are no more peers.
-            let peer_id = match self.get_next_peer(self.current_peer_index) {
-                Some(peer_id) => peer_id,
-                None => return,
-            };
-
             let id = self.ids_to_request.pop_front().unwrap();
 
-            log::trace!(
-                "Requesting {:?} @ {} from peer {}",
-                id,
-                self.next_incoming_index,
-                self.current_peer_index
-            );
+            // Get next peer in line. If there are no more peers, simulate a failed request.
+            let wrapper = match self.get_next_peer(self.current_peer_index) {
+                Some(peer_id) => {
+                    log::trace!(
+                        "Requesting {:?} @ {} from peer {}",
+                        id,
+                        self.next_incoming_index,
+                        self.current_peer_index
+                    );
 
-            let wrapper = OrderWrapper {
-                data: (self.request_fn)(id.clone(), Arc::clone(&self.network), peer_id),
-                id,
-                index: self.next_incoming_index,
-                peer: self.current_peer_index,
-                num_tries: 1,
+                    let wrapper = OrderWrapper {
+                        data: (self.request_fn)(id.clone(), Arc::clone(&self.network), peer_id),
+                        id,
+                        index: self.next_incoming_index,
+                        peer: self.current_peer_index,
+                        num_tries: 1,
+                    };
+
+                    self.current_peer_index = (self.current_peer_index + 1) % self.peers.len();
+
+                    wrapper
+                }
+                None => OrderWrapper {
+                    data: future::ready(None).boxed(),
+                    id,
+                    index: self.next_incoming_index,
+                    peer: 0,
+                    num_tries: 1,
+                },
             };
 
             self.next_incoming_index += 1;
-            self.current_peer_index = (self.current_peer_index + 1) % self.peers.len();
 
             self.pending_futures.push(wrapper);
         }
@@ -324,5 +335,33 @@ where
     fn size_hint(&self) -> (usize, Option<usize>) {
         let len = self.len();
         (len, Some(len))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use std::task::{Context, Poll};
+
+    use futures::{future, task::noop_waker_ref, FutureExt, StreamExt};
+
+    use nimiq_network_mock::MockHub;
+
+    use crate::sync::sync_queue::SyncQueue;
+
+    #[test]
+    fn it_can_handle_no_peers() {
+        let mut hub = MockHub::new();
+        let network = Arc::new(hub.new_network());
+
+        let mut queue: SyncQueue<_, _, i32> =
+            SyncQueue::new(network, vec![1, 2, 3, 4], vec![], 1, |_, _, _| {
+                future::ready(None).boxed()
+            });
+
+        match queue.poll_next_unpin(&mut Context::from_waker(noop_waker_ref())) {
+            Poll::Ready(Some(Err(id))) => assert_eq!(id, 1),
+            _ => panic!("Expected error"),
+        };
     }
 }
