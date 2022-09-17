@@ -222,8 +222,6 @@ impl DiscoveryHandler {
     /// the waker.
     fn check_initialized(&mut self) {
         if self.inbound.is_some() && self.outbound.is_some() && self.peer_address.is_some() {
-            debug!("Inbound and outbound connected. Performing handshake");
-
             self.state = HandlerState::SendHandshake;
 
             self.waker

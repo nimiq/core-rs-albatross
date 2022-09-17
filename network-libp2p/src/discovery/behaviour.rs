@@ -152,16 +152,11 @@ impl NetworkBehaviour for DiscoveryBehaviour {
     }
 
     fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
-        let addresses = self
-            .peer_contact_book
+        self.peer_contact_book
             .read()
             .get(peer_id)
             .map(|addresses_opt| addresses_opt.addresses().cloned().collect())
-            .unwrap_or_default();
-
-        debug!(%peer_id, ?addresses, "addresses_of_peer");
-
-        addresses
+            .unwrap_or_default()
     }
 
     fn inject_connection_closed(
@@ -272,7 +267,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         // Poll house-keeping timer
         match self.house_keeping_timer.poll_next_unpin(cx) {
             Poll::Ready(Some(_)) => {
-                debug!("Doing house-keeping in peer address book");
+                trace!("Doing house-keeping in peer address book");
                 let mut peer_address_book = self.peer_contact_book.write();
                 peer_address_book.update_own_contact(&self.keypair);
                 peer_address_book.house_keeping();

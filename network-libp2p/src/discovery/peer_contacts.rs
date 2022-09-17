@@ -364,7 +364,7 @@ impl PeerContactBook {
     ) {
         let mut contact = self.own_peer_contact.contact.inner.clone();
         let addresses = addresses.into_iter().collect::<Vec<Multiaddr>>();
-        debug!(?addresses, "Adding addresses observed for our own");
+        trace!(?addresses, "Adding addresses observed for us");
         contact.add_addresses(addresses);
         self.insert(contact.sign(keypair));
     }

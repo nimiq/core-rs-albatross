@@ -1,3 +1,4 @@
+use std::io::Error;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
     sync::Arc,
@@ -15,7 +16,7 @@ use libp2p::{
         ConnectionHandler, DialError, IntoConnectionHandler, NetworkBehaviour,
         NetworkBehaviourAction, NotifyHandler, PollParameters,
     },
-    Multiaddr, PeerId,
+    Multiaddr, PeerId, TransportError,
 };
 use nimiq_macros::store_waker;
 use nimiq_network_interface::{network::CloseReason, peer_info::Services};
@@ -753,6 +754,33 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
         _handler: Self::ConnectionHandler,
         error: &DialError,
     ) {
+        let error_msg = match error {
+            DialError::Transport(errors) => {
+                let str = errors
+                    .iter()
+                    .map(|(address, error)| {
+                        let mut address = address.clone();
+                        // XXX Cut off public key
+                        address.pop();
+
+                        let err = match error {
+                            TransportError::MultiaddrNotSupported(address) => {
+                                format!("MultiaddrNotSupported({})", address)
+                            }
+                            TransportError::Other(e) => e.to_string(),
+                        };
+
+                        format!("{} => {}", address, err)
+                    })
+                    .collect::<Vec<String>>()
+                    .join(", ");
+
+                format!("No transport: {}", str)
+            }
+            DialError::ConnectionIo(error) => error.to_string(),
+            e => e.to_string(),
+        };
+
         match error {
             DialError::Banned
             | DialError::ConnectionLimit(_)
@@ -769,7 +797,7 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
                     None => return,
                 };
 
-                debug!(%peer_id, %error, "Failed to dial peer");
+                debug!(%peer_id, error = error_msg, "Failed to dial peer");
                 self.peer_ids.mark_failed(peer_id);
                 self.maintain_peers();
             }

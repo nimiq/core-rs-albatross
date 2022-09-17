@@ -265,15 +265,13 @@ where
     }
 
     fn init_epoch(&mut self) {
-        log::debug!("Initializing epoch");
-
         // Clear producers here, as this validator might not be active anymore.
         self.macro_producer = None;
         self.micro_producer = None;
 
         let blockchain = self.blockchain.read();
 
-        // Check if the transaction was sent
+        // Check if the unpark/activate transaction was sent
         if let Some(validator_state) = &self.validator_state {
             let tx_validity_window_start = validator_state.inactive_tx_validity_window_start;
             // Check that the transaction was sent in the validity window
@@ -297,23 +295,29 @@ where
         let validators = blockchain.current_validators().unwrap();
 
         self.epoch_state = None;
-        log::trace!(
-            "This is our validator address: {}",
-            self.validator_address()
-        );
 
         for (i, validator) in validators.iter().enumerate() {
-            log::trace!(
-                "Matching against this current validator: {}",
-                &validator.address
-            );
             if validator.address == self.validator_address() {
-                log::debug!("We are active on this epoch");
+                log::info!(
+                    validator_address = %validator.address,
+                    validator_slot_band = i,
+                    epoch_number = blockchain.epoch_number(),
+                    "We are ACTIVE in this epoch"
+                );
+
                 self.epoch_state = Some(ActiveEpochState {
                     validator_slot_band: i as u16,
                 });
                 break;
             }
+        }
+
+        if self.epoch_state.is_none() {
+            log::debug!(
+                validator_address = %self.validator_address(),
+                epoch_number = blockchain.epoch_number(),
+                "We are INACTIVE in this epoch"
+            );
         }
 
         let voting_keys: Vec<LazyPublicKey> = validators

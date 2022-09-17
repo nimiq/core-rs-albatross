@@ -161,16 +161,20 @@ async fn main_inner() -> Result<(), Error> {
         if show_statistics {
             match client.network().network_info().await {
                 Ok(network_info) => {
-                    let head = client.blockchain_head().clone();
+                    let head = client.blockchain_head();
 
                     info!(
+                        consensus_established = consensus.is_established(),
                         block_number = head.block_number(),
                         num_peers = network_info.num_peers(),
-                        status = consensus.is_established(),
-                        "Consensus status: {:?} - Head: #{}- {}",
-                        consensus.is_established(),
-                        head.block_number(),
-                        head.hash(),
+                        "Consensus: {} - Head: {} - Peers: {}",
+                        if consensus.is_established() {
+                            "established"
+                        } else {
+                            "lost"
+                        },
+                        head,
+                        network_info.num_peers(),
                     )
                 }
                 Err(err) => {
