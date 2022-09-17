@@ -6,7 +6,7 @@ use rand::SeedableRng;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
-use beserial::Deserialize;
+use beserial::{Deserialize, Serialize};
 use nimiq_block::{Block, MicroBlock, MicroBody, MicroHeader};
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{Blockchain, PushResult};
@@ -53,7 +53,7 @@ async fn send_get_mempool_txns(
     blockchain: Arc<RwLock<Blockchain>>,
     transactions: Vec<Transaction>,
     txn_len: usize,
-) -> Vec<Transaction> {
+) -> (Vec<Transaction>, usize) {
     // Create mempool and subscribe with a custom txn stream.
     let mempool = Mempool::new(Arc::clone(&blockchain), MempoolConfig::default());
     let mut hub = MockHub::new();
@@ -63,8 +63,7 @@ async fn send_get_mempool_txns(
     send_txn_to_mempool(&mempool, mock_network, mock_id, transactions).await;
 
     // Get the transactions from the mempool
-    let (mempool_txns, _) = mempool.get_transactions_for_block(txn_len);
-    mempool_txns
+    mempool.get_transactions_for_block(txn_len)
 }
 
 async fn send_txn_to_mempool(
@@ -328,7 +327,7 @@ async fn push_same_tx_twice() {
         .unwrap(),
     ));
 
-    let txns = send_get_mempool_txns(blockchain, txns, txns_len).await;
+    let (txns, _) = send_get_mempool_txns(blockchain, txns, txns_len).await;
 
     // Expect only 1 of the transactions in the mempool
     assert_eq!(txns.len(), 1);
@@ -371,7 +370,7 @@ async fn valid_tx_not_in_blockchain() {
     ));
 
     // Send 2 transactions
-    let txns = send_get_mempool_txns(blockchain, txns, txns_len).await;
+    let (txns, _) = send_get_mempool_txns(blockchain, txns, txns_len).await;
 
     // Expect no transactions in the mempool
     assert_eq!(txns.len(), 0);
@@ -426,7 +425,7 @@ async fn push_tx_with_wrong_signature() {
         .unwrap(),
     ));
 
-    let txns = send_get_mempool_txns(blockchain, txns, txns_len).await;
+    let (txns, _) = send_get_mempool_txns(blockchain, txns, txns_len).await;
 
     // Expect no transactions in the mempool
     assert_eq!(txns.len(), 0);
@@ -486,14 +485,15 @@ async fn mempool_get_txn_max_size() {
     ));
 
     // Send the transactions
-    let rec_txns = send_get_mempool_txns(blockchain.clone(), txns.clone(), txns_len - 1).await;
+    let (rec_txns, txn_size) =
+        send_get_mempool_txns(blockchain.clone(), txns.clone(), txns_len - 1).await;
 
     // Expect only 1 of the transactions because of the size we passed
-    // The other one shouldn't be allowed because of insufficient balance
     assert_eq!(rec_txns.len(), 1);
+    assert_eq!(txn_size, rec_txns[0].serialized_size());
 
     // Send the transactions again
-    let rec_txns = send_get_mempool_txns(blockchain, txns, txns_len).await;
+    let (rec_txns, _) = send_get_mempool_txns(blockchain, txns, txns_len).await;
 
     // Expect both transactions
     assert_eq!(rec_txns.len(), num_txns as usize);
@@ -553,7 +553,7 @@ async fn mempool_get_txn_ordered() {
     ));
 
     // Send the transactions
-    let txns = send_get_mempool_txns(blockchain, txns, txns_len).await;
+    let (txns, _) = send_get_mempool_txns(blockchain, txns, txns_len).await;
 
     // Expect all of the transactions in the mempool
     assert_eq!(txns.len(), num_txns as usize);
@@ -623,7 +623,7 @@ async fn push_tx_with_insufficient_balance() {
     ));
 
     // Send the transactions
-    let txns = send_get_mempool_txns(blockchain, txns, txns_len).await;
+    let (txns, _) = send_get_mempool_txns(blockchain, txns, txns_len).await;
 
     // Expect only 1 of the transactions in the mempool
     // The other one shouldn't be allowed because of insufficient balance
@@ -683,7 +683,7 @@ async fn multiple_transactions_multiple_senders() {
     ));
 
     // Send the transactions
-    let txns = send_get_mempool_txns(blockchain, txns, txns_len).await;
+    let (txns, _) = send_get_mempool_txns(blockchain, txns, txns_len).await;
 
     // Expect all of the transactions in the mempool
     assert_eq!(txns.len(), num_txns as usize);
@@ -753,7 +753,7 @@ async fn mempool_tps() {
     ));
 
     // Send the transactions
-    let txns = send_get_mempool_txns(blockchain, txns, txns_len).await;
+    let (txns, _) = send_get_mempool_txns(blockchain, txns, txns_len).await;
 
     // Expect at least 100 of the transactions in the mempool
     assert!(

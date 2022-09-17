@@ -571,11 +571,13 @@ impl Mempool {
 
             // Calculate size. If we can't fit the transaction in the block, then we stop here.
             // TODO: We can optimize this. There might be a smaller transaction that still fits.
-            size += tx.serialized_size();
+            let next_size = size + tx.serialized_size();
 
-            if size > max_bytes {
+            if next_size > max_bytes {
                 break;
             }
+
+            size = next_size;
 
             // Remove the transaction from the mempool.
             mempool_state_upgraded.remove(&tx_hash, EvictionReason::BlockBuilding);
@@ -634,11 +636,13 @@ impl Mempool {
 
             // Calculate size. If we can't fit the transaction in the block, then we stop here.
             // TODO: We can optimize this. There might be a smaller transaction that still fits.
-            size += tx.serialized_size();
+            let next_size = size + tx.serialized_size();
 
-            if size > max_bytes {
+            if next_size > max_bytes {
                 break;
             }
+
+            size = next_size;
 
             // Remove the transaction from the mempool.
             mempool_state_upgraded.remove(&tx_hash, EvictionReason::BlockBuilding);
