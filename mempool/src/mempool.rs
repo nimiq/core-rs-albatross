@@ -289,6 +289,23 @@ impl Mempool {
             .abort();
     }
 
+    /// This function prunes transactions from the mempool that were already included in the blockchain
+    /// This is generally used by history sync when it adopts epochs
+    pub fn mempool_clean_up(&self) {
+        // Acquire the mempool and blockchain locks
+        let blockchain = self.blockchain.read();
+        let mut mempool_state = self.state.write();
+
+        let transactions = self.get_transactions();
+
+        for transaction in &transactions {
+            let tx_hash: Blake2bHash = transaction.hash();
+            if blockchain.contains_tx_in_validity_window(&tx_hash, None) {
+                mempool_state.remove(&tx_hash, EvictionReason::AlreadyIncluded);
+            }
+        }
+    }
+
     /// Updates the mempool given a set of reverted and adopted blocks.
     ///
     /// During a Blockchain extend event a new block is mined which implies that:

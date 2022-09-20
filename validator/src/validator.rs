@@ -427,6 +427,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
     fn on_blockchain_event(&mut self, event: BlockchainEvent) {
         match event {
             BlockchainEvent::Extended(ref hash) => self.on_blockchain_extended(hash),
+            BlockchainEvent::HistoryAdopted(ref hash) => self.on_blockchain_history_adopted(hash),
             BlockchainEvent::Finalized(ref hash) => self.on_blockchain_extended(hash),
             BlockchainEvent::EpochFinalized(ref hash) => {
                 self.on_blockchain_extended(hash);
@@ -436,6 +437,11 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                 self.on_blockchain_rebranched(old_chain, new_chain)
             }
         }
+    }
+
+    fn on_blockchain_history_adopted(&mut self, _: &Blake2bHash) {
+        self.mempool.mempool_clean_up();
+        debug!("Performed a mempool clean up because new history was adopted");
     }
 
     fn on_blockchain_extended(&mut self, hash: &Blake2bHash) {

@@ -389,6 +389,10 @@ impl Blockchain {
             "Accepted epoch",
         );
 
+        // Notify the mempool about a new history adopted
+        this.notifier
+            .notify(BlockchainEvent::HistoryAdopted(block_hash.clone()));
+
         if is_election_block {
             this.notifier
                 .notify(BlockchainEvent::EpochFinalized(block_hash));

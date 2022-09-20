@@ -590,6 +590,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         Ok(stream
             .map(|event| match event {
                 BlockchainEvent::Extended(hash) => hash,
+                BlockchainEvent::HistoryAdopted(hash) => hash,
                 BlockchainEvent::Finalized(hash) => hash,
                 BlockchainEvent::EpochFinalized(hash) => hash,
                 BlockchainEvent::Rebranched(_, new_branch) => {
