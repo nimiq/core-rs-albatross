@@ -4,7 +4,7 @@ use std::slice;
 
 use log::error;
 
-use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
+use beserial::{Deserialize, Serialize};
 use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
 
@@ -12,15 +12,16 @@ use crate::error::MerkleRadixTrieError;
 use crate::key_nibbles::KeyNibbles;
 
 /// A struct representing a node in the Merkle Radix Trie. It can be either a branch node, which has
-/// only references to its children, or a leaf node, which contains a value. A branch node can have
-/// up to 16 children, since we represent the keys in hexadecimal form, each child represents a
-/// different hexadecimal character.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
-pub enum TrieNode<A: Serialize + Deserialize> {
+/// only references to its children, a leaf node, which contains a value or a hybrid node, which has
+/// both children and a value. A branch/hybrid node can have up to 16 children, since we represent
+/// the keys in hexadecimal form, each child represents a different hexadecimal character.
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Serialize, Deserialize)]
+#[repr(u8)]
+pub enum TrieNode {
     RootNode {
-        children: TrieNodeChildren,
         num_branches: u64,
         num_leaves: u64,
+        children: TrieNodeChildren,
     },
     BranchNode {
         key: KeyNibbles,
@@ -28,21 +29,21 @@ pub enum TrieNode<A: Serialize + Deserialize> {
     },
     LeafNode {
         key: KeyNibbles,
-        value: A,
+        #[beserial(len_type(u16))]
+        value: Vec<u8>,
+    },
+    HybridNode {
+        key: KeyNibbles,
+        #[beserial(len_type(u16))]
+        value: Vec<u8>,
+        children: TrieNodeChildren,
     },
 }
 
-/// Just a enum stating the trie node type, branch or leaf. It is used to serialize/deserialize a node.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Copy, Clone, Debug, Serialize, Deserialize)]
-#[repr(u8)]
-pub enum TrieNodeType {
-    BranchNode = 0x00,
-    RootNode = 0x01,
-    LeafNode = 0xff,
-}
+pub type TrieNodeChildren = [Option<TrieNodeChild>; 16];
 
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub struct TrieNodeChildren([Option<TrieNodeChild>; 16]);
+// #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
+// pub struct TrieNodeChildren([Option<TrieNodeChild>; 16]);
 
 /// A struct representing the child of a node. It just contains the child's suffix (the part of the
 /// child's key that is different from its parent) and its hash.
@@ -52,14 +53,17 @@ pub struct TrieNodeChild {
     pub hash: Blake2bHash,
 }
 
-pub const NO_CHILDREN: TrieNodeChildren = TrieNodeChildren([
+pub const NO_CHILDREN: TrieNodeChildren = [
     None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
-]);
+];
 
-impl<A: Serialize + Deserialize> TrieNode<A> {
+impl TrieNode {
     /// Creates a new leaf node.
-    pub fn new_leaf(key: KeyNibbles, value: A) -> Self {
-        TrieNode::LeafNode { key, value }
+    pub fn new_leaf<T: Serialize>(key: KeyNibbles, value: T) -> Self {
+        TrieNode::LeafNode {
+            key,
+            value: value.serialize_to_vec(),
+        }
     }
 
     /// Creates an empty root node
@@ -79,101 +83,118 @@ impl<A: Serialize + Deserialize> TrieNode<A> {
         }
     }
 
+    /// Creates a new hybrid node with no children.
+    pub fn new_hybrid<T: Serialize>(key: KeyNibbles, value: T) -> Self {
+        TrieNode::HybridNode {
+            key,
+            value: value.serialize_to_vec(),
+            children: NO_CHILDREN,
+        }
+    }
+
     /// Checks if the node is a leaf node.
     pub fn is_leaf(&self) -> bool {
         match self {
             TrieNode::LeafNode { .. } => true,
-            TrieNode::RootNode { .. } => false,
-            TrieNode::BranchNode { .. } => false,
+            _ => false,
         }
     }
 
     /// Checks if the node is a branch node.
     pub fn is_branch(&self) -> bool {
-        !self.is_leaf()
+        match self {
+            TrieNode::BranchNode { .. } => true,
+            _ => false,
+        }
     }
 
-    /// Returns the type of a node.
-    pub fn ty(&self) -> TrieNodeType {
+    /// Checks if the node is a hybrid node.
+    pub fn is_hybrid(&self) -> bool {
         match self {
-            TrieNode::LeafNode { .. } => TrieNodeType::LeafNode,
-            TrieNode::RootNode { .. } => TrieNodeType::RootNode,
-            TrieNode::BranchNode { .. } => TrieNodeType::BranchNode,
+            TrieNode::HybridNode { .. } => true,
+            _ => false,
         }
+    }
+
+    /// Check if this node contains a value.
+    pub fn has_value(&self) -> bool {
+        self.is_leaf() || self.is_hybrid()
     }
 
     /// Returns the key of a node.
     pub fn key(&self) -> &KeyNibbles {
         match self {
-            TrieNode::LeafNode { ref key, .. } => key,
             TrieNode::RootNode { .. } => &KeyNibbles::ROOT,
-            TrieNode::BranchNode { ref key, .. } => key,
+            TrieNode::LeafNode { ref key, .. }
+            | TrieNode::BranchNode { ref key, .. }
+            | TrieNode::HybridNode { ref key, .. } => key,
         }
     }
 
-    pub fn children(&self) -> Result<&[Option<TrieNodeChild>; 16], MerkleRadixTrieError> {
+    pub fn children(&self) -> Result<&TrieNodeChildren, MerkleRadixTrieError> {
         match self {
-            TrieNode::RootNode { ref children, .. } | TrieNode::BranchNode { ref children, .. } => {
-                Ok(&children.0)
-            }
+            TrieNode::RootNode { ref children, .. }
+            | TrieNode::BranchNode { ref children, .. }
+            | TrieNode::HybridNode { ref children, .. } => Ok(children),
             TrieNode::LeafNode { .. } => Err(MerkleRadixTrieError::LeavesHaveNoChildren),
         }
     }
 
-    pub fn children_mut(
-        &mut self,
-    ) -> Result<&mut [Option<TrieNodeChild>; 16], MerkleRadixTrieError> {
+    pub fn children_mut(&mut self) -> Result<&mut TrieNodeChildren, MerkleRadixTrieError> {
         match self {
             TrieNode::RootNode {
                 ref mut children, ..
             }
             | TrieNode::BranchNode {
                 ref mut children, ..
-            } => Ok(&mut children.0),
+            }
+            | TrieNode::HybridNode {
+                ref mut children, ..
+            } => Ok(children),
             TrieNode::LeafNode { .. } => Err(MerkleRadixTrieError::LeavesHaveNoChildren),
         }
     }
 
-    /// Returns the value of a node, if it is a leaf node.
-    pub fn value(&self) -> Result<&A, MerkleRadixTrieError> {
+    /// Returns the value of a node, if it is a leaf or hybrid node.
+    pub fn value<T: Deserialize>(&self) -> Result<T, MerkleRadixTrieError> {
         match self {
-            TrieNode::LeafNode { ref value, .. } => Ok(value),
+            TrieNode::LeafNode { ref value, .. } | TrieNode::HybridNode { ref value, .. } => {
+                Ok(T::deserialize(&mut &value[..]).unwrap())
+            }
             TrieNode::RootNode { .. } | TrieNode::BranchNode { .. } => {
                 error!(
                     "Node with key {} is a branch node and so it can't have a value!",
                     self.key()
                 );
-
                 Err(MerkleRadixTrieError::BranchesHaveNoValue)
             }
         }
     }
 
-    /// Returns the value of a node, if it is a leaf node.
-    pub fn value_mut(&mut self) -> Result<&mut A, MerkleRadixTrieError> {
+    /// Returns the value of a node, if it is a leaf or hybrid node.
+    pub fn raw_value_mut(&mut self) -> Result<&mut Vec<u8>, MerkleRadixTrieError> {
         match self {
-            TrieNode::LeafNode { ref mut value, .. } => Ok(value),
+            TrieNode::LeafNode { ref mut value, .. }
+            | TrieNode::HybridNode { ref mut value, .. } => Ok(value),
             TrieNode::RootNode { .. } | TrieNode::BranchNode { .. } => {
                 error!(
                     "Node with key {} is a branch node and so it can't have a value!",
                     self.key()
                 );
-
                 Err(MerkleRadixTrieError::BranchesHaveNoValue)
             }
         }
     }
 
-    /// Returns the value of a node, if it is a leaf node.
-    pub fn into_value(self) -> Result<A, MerkleRadixTrieError> {
+    /// Returns the value of a node, if it is a leaf or hybrid node.
+    pub fn into_raw_value(self) -> Result<Vec<u8>, MerkleRadixTrieError> {
         match self {
-            TrieNode::LeafNode { value, .. } => Ok(value),
+            TrieNode::LeafNode { value, .. } | TrieNode::HybridNode { value, .. } => Ok(value),
             TrieNode::RootNode { .. } | TrieNode::BranchNode { .. } => {
                 error!(
                     "Node with key {} is a branch node and so it can't have a value!",
                     self.key()
                 );
-
                 Err(MerkleRadixTrieError::BranchesHaveNoValue)
             }
         }
@@ -221,8 +242,7 @@ impl<A: Serialize + Deserialize> TrieNode<A> {
         Err(MerkleRadixTrieError::ChildDoesNotExist)
     }
 
-    /// Add a child, with the given key and hash, to the current node. If successful, it returns the
-    /// modified node.
+    /// Add a child, with the given key and hash, to the current node. Returns the modified node.
     pub fn put_child(
         mut self,
         child_key: &KeyNibbles,
@@ -230,26 +250,76 @@ impl<A: Serialize + Deserialize> TrieNode<A> {
     ) -> Result<Self, MerkleRadixTrieError> {
         let child_index = self.get_child_index(child_key)?;
         let suffix = child_key.suffix(self.key().len() as u8);
+
+        // Turn leaf node into a hybrid node.
+        self = match self {
+            TrieNode::LeafNode { key, value } => TrieNode::HybridNode {
+                key,
+                value,
+                children: NO_CHILDREN,
+            },
+            other => other,
+        };
+
         self.children_mut()?[child_index] = Some(TrieNodeChild {
             suffix,
             hash: child_hash,
         });
+
         Ok(self)
     }
 
-    /// Removes a child, with the given key, to the current node. If successful, it returns the
+    /// Removes the child with the given key from the current node. If successful, it returns the
     /// modified node.
     pub fn remove_child(mut self, child_key: &KeyNibbles) -> Result<Self, MerkleRadixTrieError> {
         let child_index = self.get_child_index(child_key)?;
+
         self.children_mut()?[child_index] = None;
+
+        // If there are no more children, turn this hybrid node into a leaf node.
+        self = match self {
+            TrieNode::HybridNode {
+                key,
+                value,
+                children,
+            } if children.iter().all(|child| child.is_none()) => TrieNode::LeafNode { key, value },
+            other => other,
+        };
+
         Ok(self)
     }
 
-    /// Adds, or overwrites, the value at the given node. If successful, it returns the modified
+    /// Adds, or overwrites, the value at the given node. If successful, it returns  the modified
     /// node.
-    pub fn put_value(mut self, new_value: A) -> Result<Self, MerkleRadixTrieError> {
-        *self.value_mut()? = new_value;
+    pub fn put_value<T: Serialize>(mut self, new_value: T) -> Result<Self, MerkleRadixTrieError> {
+        // Turn branch node into a hybrid node.
+        self = match self {
+            TrieNode::BranchNode { key, children } => TrieNode::HybridNode {
+                key,
+                value: new_value.serialize_to_vec(),
+                children,
+            },
+            TrieNode::RootNode { .. } => return Err(MerkleRadixTrieError::RootCantHaveValue),
+            other => other,
+        };
+
+        new_value.serialize(self.raw_value_mut()?)?;
+
         Ok(self)
+    }
+
+    /// Removes the value at the given node. Returns the modified node or None if the node is a
+    /// leaf node.
+    pub fn remove_value(self) -> Option<Self> {
+        match self {
+            TrieNode::LeafNode { .. } => None,
+            TrieNode::HybridNode { key, children, .. } => {
+                // Turn this hybrid node into a branch node.
+                Some(TrieNode::BranchNode { key, children })
+            }
+            // TODO Error instead silently doing nothing?
+            TrieNode::BranchNode { .. } | TrieNode::RootNode { .. } => Some(self),
+        }
     }
 
     pub fn iter_children(&self) -> Iter {
@@ -261,144 +331,15 @@ impl<A: Serialize + Deserialize> TrieNode<A> {
     }
 }
 
-impl Serialize for TrieNodeChildren {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        let mut size = 0;
-        let child_count: u8 = self
-            .0
-            .iter()
-            .fold(0, |acc, child| acc + if child.is_none() { 0 } else { 1 });
-        size += Serialize::serialize(&child_count, writer)?;
-        for child in self.0.iter().flatten() {
-            size += Serialize::serialize(&child, writer)?;
-        }
-        Ok(size)
-    }
-
-    fn serialized_size(&self) -> usize {
-        let mut size = /*count*/ 1;
-        for child in self.0.iter().flatten() {
-            size += Serialize::serialized_size(&child);
-        }
-        size
-    }
-}
-
-impl Deserialize for TrieNodeChildren {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        let child_count: u8 = Deserialize::deserialize(reader)?;
-        let mut children = NO_CHILDREN;
-        for _ in 0..child_count {
-            let child: TrieNodeChild = Deserialize::deserialize(reader)?;
-            if let Some(i) = child.suffix.get(0) {
-                children.0[i] = Some(child);
-            } else {
-                return Err(io::Error::from(io::ErrorKind::InvalidData).into());
-            }
-        }
-        Ok(children)
-    }
-}
-
-impl<A: Serialize + Deserialize> Serialize for TrieNode<A> {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        let mut size: usize = 0;
-        size += Serialize::serialize(&self.ty(), writer)?;
-
-        match self {
-            TrieNode::LeafNode { ref key, ref value } => {
-                size += Serialize::serialize(key, writer)?;
-                size += Serialize::serialize(value, writer)?;
-            }
-            TrieNode::RootNode {
-                ref children,
-                num_branches,
-                num_leaves,
-            } => {
-                size += Serialize::serialize(children, writer)?;
-                size += Serialize::serialize(num_branches, writer)?;
-                size += Serialize::serialize(num_leaves, writer)?;
-            }
-            TrieNode::BranchNode {
-                ref key,
-                ref children,
-            } => {
-                size += Serialize::serialize(key, writer)?;
-                size += Serialize::serialize(children, writer)?;
-            }
-        }
-
-        Ok(size)
-    }
-
-    fn serialized_size(&self) -> usize {
-        let mut size = /*type*/ 1;
-
-        match self {
-            TrieNode::LeafNode { ref key, ref value } => {
-                size += Serialize::serialized_size(key);
-                size += Serialize::serialized_size(value);
-            }
-            TrieNode::RootNode {
-                ref children,
-                num_branches,
-                num_leaves,
-            } => {
-                size += Serialize::serialized_size(children);
-                size += Serialize::serialized_size(num_branches);
-                size += Serialize::serialized_size(num_leaves);
-            }
-            TrieNode::BranchNode {
-                ref key,
-                ref children,
-            } => {
-                size += Serialize::serialized_size(key);
-                size += Serialize::serialized_size(children);
-            }
-        }
-
-        size
-    }
-}
-
-impl<A: Serialize + Deserialize> Deserialize for TrieNode<A> {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        let node_type: TrieNodeType = Deserialize::deserialize(reader)?;
-
-        Ok(match node_type {
-            TrieNodeType::LeafNode => {
-                let key: KeyNibbles = Deserialize::deserialize(reader)?;
-                let value: A = Deserialize::deserialize(reader)?;
-                TrieNode::LeafNode { key, value }
-            }
-            TrieNodeType::RootNode => {
-                let children: TrieNodeChildren = Deserialize::deserialize(reader)?;
-                let num_branches: u64 = Deserialize::deserialize(reader)?;
-                let num_leaves: u64 = Deserialize::deserialize(reader)?;
-                TrieNode::RootNode {
-                    children,
-                    num_branches,
-                    num_leaves,
-                }
-            }
-            TrieNodeType::BranchNode => {
-                let key: KeyNibbles = Deserialize::deserialize(reader)?;
-                let children: TrieNodeChildren = Deserialize::deserialize(reader)?;
-                TrieNode::BranchNode { key, children }
-            }
-        })
-    }
-}
-
-impl<A: Serialize + Deserialize> SerializeContent for TrieNode<A> {
+impl SerializeContent for TrieNode {
     fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
         Ok(self.serialize(writer)?)
     }
 }
 
-impl<A: Serialize + Deserialize> Hash for TrieNode<A> {}
+impl Hash for TrieNode {}
 
-impl<A: Serialize + Deserialize> IntoDatabaseValue for TrieNode<A> {
+impl IntoDatabaseValue for TrieNode {
     fn database_byte_size(&self) -> usize {
         self.serialized_size()
     }
@@ -408,7 +349,7 @@ impl<A: Serialize + Deserialize> IntoDatabaseValue for TrieNode<A> {
     }
 }
 
-impl<A: Serialize + Deserialize> FromDatabaseValue for TrieNode<A> {
+impl FromDatabaseValue for TrieNode {
     fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
     where
         Self: Sized,
@@ -428,7 +369,7 @@ pub struct Iter<'a> {
     it: AccountsTrieNodeIter<'a>,
 }
 
-impl<'a> iter::Iterator for Iter<'a> {
+impl<'a> Iterator for Iter<'a> {
     type Item = &'a TrieNodeChild;
 
     fn next(&mut self) -> Option<&'a TrieNodeChild> {
@@ -436,7 +377,7 @@ impl<'a> iter::Iterator for Iter<'a> {
     }
 }
 
-impl<'a, A: Serialize + Deserialize> iter::IntoIterator for &'a TrieNode<A> {
+impl<'a> IntoIterator for &'a TrieNode {
     type Item = &'a TrieNodeChild;
     type IntoIter = Iter<'a>;
 
@@ -464,7 +405,7 @@ pub struct IterMut<'a> {
     it: AccountsTrieNodeChildFilterMap<'a>,
 }
 
-impl<'a> iter::Iterator for IterMut<'a> {
+impl<'a> Iterator for IterMut<'a> {
     type Item = &'a mut TrieNodeChild;
 
     fn next(&mut self) -> Option<&'a mut TrieNodeChild> {
@@ -472,7 +413,7 @@ impl<'a> iter::Iterator for IterMut<'a> {
     }
 }
 
-impl<'a, A: Serialize + Deserialize> iter::IntoIterator for &'a mut TrieNode<A> {
+impl<'a> IntoIterator for &'a mut TrieNode {
     type Item = &'a mut TrieNodeChild;
     type IntoIter = IterMut<'a>;
 
@@ -493,15 +434,16 @@ impl<'a, A: Serialize + Deserialize> iter::IntoIterator for &'a mut TrieNode<A> 
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use nimiq_test_log::test;
+
+    use super::*;
 
     #[test]
     fn get_child_index_works() {
         let key: KeyNibbles = "cfb986".parse().unwrap();
 
-        let leaf_node = TrieNode::<u32>::new_leaf(key.clone(), 666);
-        let branch_node = TrieNode::<u32>::new_branch(key);
+        let leaf_node = TrieNode::new_leaf::<u32>(key.clone(), 666);
+        let branch_node = TrieNode::new_branch(key);
 
         let child_key_1 = "cfb986f5a".parse().unwrap();
         let child_key_2 = "cfb986ab9".parse().unwrap();
@@ -531,8 +473,8 @@ mod tests {
     fn get_child_hash_works() {
         let key: KeyNibbles = "cfb986".parse().unwrap();
 
-        let leaf_node = TrieNode::<u32>::new_leaf(key.clone(), 666);
-        let mut branch_node = TrieNode::<u32>::new_branch(key);
+        let leaf_node = TrieNode::new_leaf::<u32>(key.clone(), 666);
+        let mut branch_node = TrieNode::new_branch(key);
 
         let child_key_1 = "cfb986f5a".parse().unwrap();
         branch_node = branch_node
@@ -592,8 +534,8 @@ mod tests {
     fn get_child_key_works() {
         let key: KeyNibbles = "cfb986".parse().unwrap();
 
-        let leaf_node = TrieNode::<u32>::new_leaf(key.clone(), 666);
-        let mut branch_node = TrieNode::<u32>::new_branch(key);
+        let leaf_node = TrieNode::new_leaf::<u32>(key.clone(), 666);
+        let mut branch_node = TrieNode::new_branch(key);
 
         let child_key_1 = "cfb986f5a".parse().unwrap();
         branch_node = branch_node
@@ -653,7 +595,7 @@ mod tests {
     fn remove_child_works() {
         let key: KeyNibbles = "cfb986".parse().unwrap();
 
-        let mut branch_node = TrieNode::<u32>::new_branch(key);
+        let mut branch_node = TrieNode::new_branch(key);
 
         let child_key_1 = "cfb986f5a".parse().unwrap();
         branch_node = branch_node

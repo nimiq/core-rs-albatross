@@ -44,7 +44,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
 
         let mut txn = WriteTransaction::new(&env);
         if tree.get_root(&txn).is_none() {
-            txn.put_reserve(&tree.db, &KeyNibbles::ROOT, &TrieNode::<A>::new_root());
+            txn.put_reserve(&tree.db, &KeyNibbles::ROOT, &TrieNode::new_root());
         }
         txn.commit();
 
@@ -76,20 +76,16 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
             .expect("The Merkle Radix Trie didn't have a root node!")];
 
         while let Some(item) = stack.pop() {
-            match item.children().ok() {
-                Some(children) => {
-                    for child in children.iter().flatten().rev() {
-                        let combined = item.key() + &child.suffix;
+            if let Ok(children) = item.children() {
+                for child in children.iter().flatten().rev() {
+                    let combined = item.key() + &child.suffix;
 
-                        stack.push(txn.get(&self.db, &combined)
-                                .expect("Failed to find the child of a Merkle Radix Trie node. The database must be corrupt!"));
-                    }
-                    num_branches += 1;
+                    stack.push(txn.get(&self.db, &combined)
+                        .expect("Failed to find the child of a Merkle Radix Trie node. The database must be corrupt!"));
                 }
-                None => {
-                    // Leaf node.
-                    num_leaves += 1;
-                }
+                num_branches += 1;
+            } else {
+                num_leaves += 1;
             }
         }
 
@@ -99,10 +95,11 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
         (num_branches, num_leaves)
     }
 
-    /// Get the value at the given key. If there's no leaf node at the given key then it returns None.
+    /// Get the value at the given key. If there's no leaf or hybrid node at the given key then it
+    /// returns None.
     pub fn get(&self, txn: &Transaction, key: &KeyNibbles) -> Option<A> {
-        let node: TrieNode<A> = txn.get(&self.db, key)?;
-        node.into_value().ok()
+        let node: TrieNode = txn.get(&self.db, key)?;
+        node.value().ok()
     }
 
     /// Returns a chunk of the Merkle Radix Trie that starts at the key `start` (which might or not
@@ -113,7 +110,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
 
         chunk
             .into_iter()
-            .map(|node| node.into_value().unwrap())
+            .map(|node| node.value().unwrap())
             .collect()
     }
 
@@ -126,7 +123,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
             .expect("Merkle Radix Trie must have a root node!");
 
         // And initialize the root path.
-        let mut root_path: Vec<TrieNode<A>> = vec![];
+        let mut root_path: Vec<TrieNode> = vec![];
         let added_branches;
         let added_leaves;
 
@@ -140,7 +137,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
                 txn.put_reserve(&self.db, key, &new_node);
 
                 // Create and store the new parent node.
-                let new_parent = TrieNode::<A>::new_branch(cur_node.key().common_prefix(key))
+                let new_parent = TrieNode::new_branch(cur_node.key().common_prefix(key))
                     .put_child(cur_node.key(), Blake2bHash::default())
                     .unwrap()
                     .put_child(new_node.key(), new_node.hash())
@@ -155,16 +152,11 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
                 break;
             }
 
-            // If the current node key is equal to the given key, we have found an existing leaf
-            // node with the given key. Update the value.
+            // If the current node key is equal to the given key, we have found an existing node
+            // with the given key. Update the value.
             if cur_node.key() == key {
-                assert!(
-                    cur_node.is_leaf(),
-                    "We can't put a leaf node in the middle of a branch! The node has key {}.",
-                    key
-                );
-
                 // Update the node and store it.
+                // TODO This unwrap() will fail when attempting to store a value at the root node
                 cur_node = cur_node.put_value(value).unwrap();
                 txn.put_reserve(&self.db, key, &cur_node);
 
@@ -181,7 +173,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
                 // If no matching child exists, add a new child to the current node.
                 Err(_) => {
                     // Create and store the new node.
-                    let new_node = TrieNode::<A>::new_leaf(key.clone(), value);
+                    let new_node = TrieNode::new_leaf(key.clone(), value);
                     txn.put_reserve(&self.db, key, &new_node);
 
                     // Update the parent node and store it.
@@ -218,7 +210,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
             .expect("Patricia Trie must have a root node!");
 
         // And initialize the root path.
-        let mut root_path: Vec<TrieNode<A>> = vec![];
+        let mut root_path: Vec<TrieNode> = vec![];
 
         // Go down the trie until you find the key.
         loop {
@@ -229,16 +221,21 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
             }
 
             // If the current node key is equal to our given key, we have found our node.
-            // Remove the node.
+            // Update/remove the node.
             if cur_node.key() == key {
                 assert!(
-                    cur_node.is_leaf(),
+                    !cur_node.is_branch(),
                     "We can't remove a branch node! The node has key {}.",
                     key
                 );
 
-                // Remove the node from the database.
-                txn.remove(&self.db, key);
+                // If a node remains after removing the value, update it, otherwise remove the
+                // node from the database.
+                if let Some(cur_node) = cur_node.remove_value() {
+                    txn.put_reserve(&self.db, key, &cur_node);
+                } else {
+                    txn.remove(&self.db, key);
+                }
 
                 break;
             }
@@ -327,7 +324,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
     /// If any of the given keys doesn't exist this function just returns None.
     /// The exclusion (non-inclusion) of keys in the Merkle Radix Trie could also be proven, but it
     /// requires some light refactoring to the way proofs work.
-    pub fn get_proof(&self, txn: &Transaction, mut keys: Vec<&KeyNibbles>) -> Option<TrieProof<A>> {
+    pub fn get_proof(&self, txn: &Transaction, mut keys: Vec<&KeyNibbles>) -> Option<TrieProof> {
         // We sort the keys to simplify traversal in post-order.
         keys.sort();
 
@@ -341,7 +338,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
             .expect("Merkle Radix Trie must have a root node!");
 
         // Initialize the root path.
-        let mut root_path: Vec<TrieNode<A>> = vec![];
+        let mut root_path: Vec<TrieNode> = vec![];
 
         // Get the first key.
         let mut cur_key = keys
@@ -439,7 +436,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
         txn: &Transaction,
         start: &KeyNibbles,
         size: usize,
-    ) -> Option<TrieProof<A>> {
+    ) -> Option<TrieProof> {
         let chunk = self.get_trie_chunk(txn, start, size);
 
         let chunk_keys = chunk.iter().map(|node| node.key()).collect();
@@ -452,7 +449,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
     }
 
     /// Returns the root node, if there is one.
-    fn get_root(&self, txn: &Transaction) -> Option<TrieNode<A>> {
+    fn get_root(&self, txn: &Transaction) -> Option<TrieNode> {
         txn.get(&self.db, &KeyNibbles::ROOT)
     }
 
@@ -461,7 +458,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
     fn update_keys(
         &self,
         txn: &mut WriteTransaction,
-        mut root_path: Vec<TrieNode<A>>,
+        mut root_path: Vec<TrieNode>,
         added_branches: i8,
         added_leaves: i8,
     ) {
@@ -522,7 +519,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
 
     /// Updates the hashes of all dirty nodes in the subtree specified by `key`.
     fn update_hashes(&self, txn: &mut WriteTransaction, key: &KeyNibbles) -> Blake2bHash {
-        let mut node: TrieNode<A> = txn.get(&self.db, key).unwrap();
+        let mut node: TrieNode = txn.get(&self.db, key).unwrap();
         if node.is_leaf() {
             return node.hash();
         }
@@ -541,12 +538,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
 
     /// Returns the nodes of the chunk of the Merkle Radix Trie that starts at the key `start` and
     /// has size `size`. This is used by the `get_chunk` and `get_chunk_proof` functions.
-    fn get_trie_chunk(
-        &self,
-        txn: &Transaction,
-        start: &KeyNibbles,
-        size: usize,
-    ) -> Vec<TrieNode<A>> {
+    fn get_trie_chunk(&self, txn: &Transaction, start: &KeyNibbles, size: usize) -> Vec<TrieNode> {
         let mut chunk = Vec::new();
 
         if size == 0_usize {
@@ -558,24 +550,23 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
             .expect("The Merkle Radix Trie didn't have a root node!")];
 
         while let Some(item) = stack.pop() {
-            match item.children().ok() {
-                Some(children) => {
-                    for child in children.iter().flatten().rev() {
-                        let combined = item.key() + &child.suffix;
+            if let Ok(children) = item.children() {
+                for child in children.iter().flatten().rev() {
+                    let combined = item.key() + &child.suffix;
 
-                        if combined.is_prefix_of(start) || *start <= combined {
-                            stack.push(txn.get(&self.db, &combined)
-                                .expect("Failed to find the child of a Merkle Radix Trie node. The database must be corrupt!"));
-                        }
+                    if combined.is_prefix_of(start) || *start <= combined {
+                        stack.push(txn.get(&self.db, &combined)
+                            .expect("Failed to find the child of a Merkle Radix Trie node. The database must be corrupt!"));
                     }
                 }
-                None => {
-                    if start.len() < item.key().len() || start <= item.key() {
-                        chunk.push(item);
-                    }
-                    if chunk.len() >= size {
-                        break;
-                    }
+            }
+
+            if item.has_value() {
+                if start.len() < item.key().len() || start <= item.key() {
+                    chunk.push(item);
+                }
+                if chunk.len() >= size {
+                    break;
                 }
             }
         }

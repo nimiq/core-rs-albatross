@@ -1,4 +1,3 @@
-use nimiq_account::Account;
 use nimiq_blockchain::{AbstractBlockchain, HistoryTreeProof};
 use nimiq_hash::Blake2bHash;
 use nimiq_trie::trie_proof::TrieProof;
@@ -15,7 +14,7 @@ impl NanoBlockchain {
     pub fn check_account(
         &self,
         block_hash: Blake2bHash,
-        account_proof: TrieProof<Account>,
+        account_proof: TrieProof,
     ) -> Result<(), NanoError> {
         // Get the block.
         let block = self

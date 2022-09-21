@@ -25,19 +25,19 @@ use crate::trie_node::TrieNode;
 /// The exclusion (non-inclusion) of keys in the Merkle Radix Trie could also be proven, but it
 /// requires some light refactoring to the way proofs work.
 #[derive(Debug, Serialize, Deserialize)]
-pub struct TrieProof<A: Serialize + Deserialize> {
+pub struct TrieProof {
     #[beserial(len_type(u16))]
-    pub nodes: Vec<TrieNode<A>>,
+    pub nodes: Vec<TrieNode>,
 }
 
-impl<A: Serialize + Deserialize> TrieProof<A> {
-    pub fn new(nodes: Vec<TrieNode<A>>) -> TrieProof<A> {
+impl TrieProof {
+    pub fn new(nodes: Vec<TrieNode>) -> TrieProof {
         TrieProof { nodes }
     }
 
     /// Returns all of the leaf nodes in the proof. These are the nodes that we are proving
     /// inclusion in the trie.
-    pub fn leaf_nodes(&self) -> Vec<&TrieNode<A>> {
+    pub fn leaf_nodes(&self) -> Vec<&TrieNode> {
         let mut leaf_nodes = Vec::new();
 
         for node in &self.nodes {
@@ -62,7 +62,7 @@ impl<A: Serialize + Deserialize> TrieProof<A> {
         }
 
         // We'll use this vector to temporarily store child nodes before they are verified.
-        let mut children: Vec<&TrieNode<A>> = Vec::new();
+        let mut children: Vec<&TrieNode> = Vec::new();
 
         // Check that the proof is a valid trie.
         for node in &self.nodes {
