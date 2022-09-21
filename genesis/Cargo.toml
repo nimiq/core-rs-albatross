@@ -21,7 +21,7 @@ maintenance = { status = "experimental" }
 bitflags = "1.0"
 hex = "0.4"
 lazy_static = "1.2"
-url = "2.2"
+url = "2.3"
 
 beserial = { path = "../beserial", features = ["derive", "net"] }
 nimiq-account = { path = "../primitives/account" }

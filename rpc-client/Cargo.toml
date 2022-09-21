@@ -32,7 +32,7 @@ tokio = { version = "1.21", features = [
     "tracing",
 ] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-url = "2.2"
+url = "2.3"
 
 nimiq-account = { path = "../primitives/account" }
 nimiq-bls = { path = "../bls" }
