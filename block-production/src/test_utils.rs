@@ -102,7 +102,7 @@ impl TemporaryBlockProducer {
         } else if skip_block {
             Block::Micro(self.producer.next_micro_block(
                 &blockchain,
-                blockchain.time.now() + height as u64 * 1000,
+                blockchain.head().timestamp() + policy::BLOCK_PRODUCER_TIMEOUT,
                 vec![],
                 vec![],
                 extra_data,

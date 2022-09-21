@@ -112,9 +112,13 @@ impl Blockchain {
         }
 
         // Check the body.
-        if let Err(e) =
-            this.verify_block_body(&block.header(), &block.body(), Some(&read_txn), !trusted)
-        {
+        if let Err(e) = this.verify_block_body(
+            &block.header(),
+            &block.body(),
+            Some(&read_txn),
+            block.is_skip(),
+            !trusted,
+        ) {
             warn!(%block, reason = "bad body", "Rejecting block");
             return Err(e);
         }

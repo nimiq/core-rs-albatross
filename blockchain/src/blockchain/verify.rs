@@ -46,8 +46,10 @@ impl Blockchain {
             return Err(PushError::InvalidBlock(BlockError::UnsupportedVersion));
         }
 
-        // Check that the extra data does not exceed the permitted size. This is also checked during deserialization.
-        if header.extra_data().len() > 32 {
+        // Check that the extra data does not exceed the permitted size.
+        // This is also checked during deserialization.
+        // Skip blocks should not have extra data
+        if header.extra_data().len() > 32 || (skip_block && header.extra_data().len() != 0) {
             warn!(
                 header = %header,
                 reason = "too much extra data",
@@ -98,7 +100,23 @@ impl Blockchain {
             return Err(PushError::InvalidSuccessor);
         }
 
-        // Check that the current block timestamp less the node's current time is less than or equal
+        // Check that skip blocks has the expected timestamp
+        if skip_block
+            && header.timestamp() != prev_info.head.timestamp() + policy::BLOCK_PRODUCER_TIMEOUT
+        {
+            warn!(
+                header = %header,
+                obtained_timestamp = header.timestamp(),
+                expected_timestamp   = prev_info.head.timestamp() + policy::BLOCK_PRODUCER_TIMEOUT,
+                reason = "Unexpected timestamp for a skip block",
+                "Rejecting block"
+            );
+            return Err(PushError::InvalidBlock(
+                BlockError::InvalidSkipBlockTimestamp,
+            ));
+        }
+
+        // Check that the current block timestamp subtracting the node's current time is less than or equal
         // to the allowed maximum drift. Basically, we check that the block isn't from the future.
         // Both times are given in Unix time standard in millisecond precision.
         let timestamp_diff = header.timestamp().saturating_sub(blockchain.now());
@@ -235,6 +253,7 @@ impl Blockchain {
         header: &BlockHeader,
         body_opt: &Option<BlockBody>,
         txn_opt: Option<&DBtx>,
+        skip_block: bool,
         verify_txns: bool,
     ) -> Result<(), PushError> {
         // Checks if the body exists. If yes, unwrap it.
@@ -268,6 +287,18 @@ impl Blockchain {
                         "Rejecting block"
                     );
                     return Err(PushError::InvalidBlock(BlockError::BodyHashMismatch));
+                }
+
+                // Check if we have an empty body if this is a skip block
+                if skip_block && (!body.fork_proofs.is_empty() || !body.transactions.is_empty()) {
+                    warn!(
+                        %header,
+                        body_root = %header.body_root(),
+                        body_hash = %body_hash,
+                        reason = "Skip block has a non empty body",
+                        "Rejecting block"
+                    );
+                    return Err(PushError::InvalidBlock(BlockError::InvalidSkipBlockBody));
                 }
 
                 // Validate the fork proofs.

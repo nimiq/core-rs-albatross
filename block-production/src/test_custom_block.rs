@@ -132,7 +132,11 @@ pub fn next_skip_block(
 ) -> MicroBlock {
     let block_number = (blockchain.block_number() as i32 + 1 + config.block_number_offset) as u32;
 
-    let timestamp = (blockchain.head().timestamp() as i64 + 1 + config.timestamp_offset) as u64;
+    let timestamp = if config.timestamp_offset != 0 {
+        (blockchain.head().timestamp() as i64 + config.timestamp_offset) as u64
+    } else {
+        blockchain.head().timestamp() + policy::BLOCK_PRODUCER_TIMEOUT
+    };
 
     let parent_hash = config
         .parent_hash

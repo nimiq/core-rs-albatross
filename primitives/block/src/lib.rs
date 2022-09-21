@@ -81,4 +81,8 @@ pub enum BlockError {
     InvalidValidators,
     #[error("Incorrect PK Tree root")]
     InvalidPkTreeRoot,
+    #[error("Invalid skip block timestamp")]
+    InvalidSkipBlockTimestamp,
+    #[error("Skip block contains a non empty body")]
+    InvalidSkipBlockBody,
 }

@@ -57,6 +57,9 @@ pub const BATCHES_PER_EPOCH: u16 = 4; // TODO Set
 /// Length of epoch including election macro block
 pub const BLOCKS_PER_EPOCH: u32 = BLOCKS_PER_BATCH * BATCHES_PER_EPOCH as u32;
 
+/// The timeout in milliseconds for a validator to produce a block (4s)
+pub const BLOCK_PRODUCER_TIMEOUT: u64 = 4 * 1000;
+
 /// The maximum drift, in milliseconds, that is allowed between any block's timestamp and the node's
 /// system time. We only care about drifting to the future.
 pub const TIMESTAMP_MAX_DRIFT: u64 = 600000;
