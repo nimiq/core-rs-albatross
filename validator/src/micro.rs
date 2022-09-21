@@ -247,7 +247,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
             .mempool
             .get_control_transactions_for_block(block_available_bytes);
 
-        block_available_bytes -= txn_size;
+        block_available_bytes = block_available_bytes.saturating_sub(txn_size);
 
         let (mut regular_transactions, _) = self
             .mempool
