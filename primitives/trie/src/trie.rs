@@ -467,7 +467,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
             let only_root_needs_update = root_path.len() == 1;
             let root = root_path.first_mut().expect("Root path must not be empty");
             if added_branches != 0 || added_leaves != 0 {
-                if let TrieNode::RootNode {
+                if let TrieNode::Root {
                     ref mut num_branches,
                     ref mut num_leaves,
                     ..
@@ -509,7 +509,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
                 .unwrap();
             assert_eq!(
                 root_path.is_empty(),
-                matches!(parent_node, TrieNode::RootNode { .. })
+                matches!(parent_node, TrieNode::Root { .. })
             );
             txn.put_reserve(&self.db, parent_node.key(), &parent_node);
 
