@@ -14,6 +14,7 @@ pub enum ForkEvent {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BlockchainEvent {
     Extended(Blake2bHash),
+    HistoryAdopted(Blake2bHash),
     Rebranched(Vec<(Blake2bHash, Block)>, Vec<(Blake2bHash, Block)>),
     Finalized(Blake2bHash),
     EpochFinalized(Blake2bHash),
@@ -23,6 +24,7 @@ impl BlockchainEvent {
     pub fn get_newest_hash(&self) -> Blake2bHash {
         match self {
             Self::Extended(h) => h,
+            Self::HistoryAdopted(h) => h,
             Self::Rebranched(_, new_chain) => {
                 if let Some((h, _)) = new_chain.last() {
                     h
