@@ -2615,6 +2615,7 @@ dependencies = [
  "ark-groth16",
  "ark-mnt4-753",
  "ark-mnt6-753",
+ "ark-serialize",
  "async-trait",
  "beserial",
  "futures-util",

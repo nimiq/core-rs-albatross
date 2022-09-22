@@ -6,6 +6,8 @@ use nimiq_blockchain::HistoryTreeChunk;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::request::{RequestCommon, RequestMarker};
 
+use crate::consensus::ZKProof;
+
 pub(crate) mod handlers;
 
 /*
@@ -187,4 +189,13 @@ impl RequestCommon for RequestHead {
     const TYPE_ID: u16 = 210;
     type Response = Blake2bHash;
     const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_HEAD;
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RequestZKP {}
+
+impl RequestCommon for RequestZKP {
+    type Kind = RequestMarker;
+    const TYPE_ID: u16 = 211;
+    type Response = ZKProof;
 }

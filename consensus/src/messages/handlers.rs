@@ -5,14 +5,14 @@ use parking_lot::RwLock;
 use nimiq_block::Block;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, Direction, CHUNK_SIZE};
 
-use crate::messages::*;
+use crate::{consensus::ZKProof, messages::*, zkp::zkp_component::ZKPComponentState};
 
 /// This trait defines the behaviour when receiving a message and how to generate the response.
-pub trait Handle<Response> {
-    fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> Response;
+pub trait Handle<Response, T> {
+    fn handle(&self, blockchain: &T) -> Response;
 }
 
-impl Handle<MacroChain> for RequestMacroChain {
+impl Handle<MacroChain, Arc<RwLock<Blockchain>>> for RequestMacroChain {
     fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> MacroChain {
         let blockchain = blockchain.read();
 
@@ -76,7 +76,7 @@ impl Handle<MacroChain> for RequestMacroChain {
     }
 }
 
-impl Handle<BatchSetInfo> for RequestBatchSet {
+impl Handle<BatchSetInfo, Arc<RwLock<Blockchain>>> for RequestBatchSet {
     fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> BatchSetInfo {
         let blockchain = blockchain.read();
 
@@ -98,7 +98,7 @@ impl Handle<BatchSetInfo> for RequestBatchSet {
     }
 }
 
-impl Handle<HistoryChunk> for RequestHistoryChunk {
+impl Handle<HistoryChunk, Arc<RwLock<Blockchain>>> for RequestHistoryChunk {
     fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> HistoryChunk {
         let chunk = blockchain.read().history_store.prove_chunk(
             self.epoch_number,
@@ -111,13 +111,13 @@ impl Handle<HistoryChunk> for RequestHistoryChunk {
     }
 }
 
-impl Handle<Option<Block>> for RequestBlock {
+impl Handle<Option<Block>, Arc<RwLock<Blockchain>>> for RequestBlock {
     fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> Option<Block> {
         blockchain.read().get_block(&self.hash, true, None)
     }
 }
 
-impl Handle<ResponseBlocks> for RequestMissingBlocks {
+impl Handle<ResponseBlocks, Arc<RwLock<Blockchain>>> for RequestMissingBlocks {
     fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> ResponseBlocks {
         let blockchain = blockchain.read();
 
@@ -165,8 +165,14 @@ impl Handle<ResponseBlocks> for RequestMissingBlocks {
     }
 }
 
-impl Handle<Blake2bHash> for RequestHead {
+impl Handle<Blake2bHash, Arc<RwLock<Blockchain>>> for RequestHead {
     fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> Blake2bHash {
         blockchain.read().head_hash()
+    }
+}
+
+impl Handle<ZKProof, Arc<RwLock<ZKPComponentState>>> for RequestZKP {
+    fn handle(&self, zkp_component: &Arc<RwLock<ZKPComponentState>>) -> ZKProof {
+        zkp_component.write().into()
     }
 }
