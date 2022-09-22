@@ -86,18 +86,16 @@ impl<'a> TryFrom<&'a MacroBlock> for ZKPMacroBlock {
     type Error = ();
 
     fn try_from(block: &'a MacroBlock) -> Result<ZKPMacroBlock, Self::Error> {
-        let block_number = block.block_number();
-        let mut header_hash: [u8; 32] = [0; 32];
-        header_hash.copy_from_slice(block.hash().as_slice());
-        let proof = block.justification.as_ref().ok_or(())?;
-        let round_number = proof.round;
-
-        Ok(ZKPMacroBlock {
-            block_number,
-            round_number,
-            header_hash,
-            signature: proof.sig.signature.get_point(),
-            signer_bitmap: proof.sig.signers.iter_bits().collect(),
+        Ok(if let Some(proof) = block.justification.as_ref() {
+            ZKPMacroBlock {
+                block_number: block.block_number(),
+                round_number: proof.round,
+                header_hash: block.hash().into(),
+                signature: proof.sig.signature.get_point(),
+                signer_bitmap: proof.sig.signers.iter_bits().collect(),
+            }
+        } else {
+            ZKPMacroBlock::without_signatures(block.block_number(), 0, block.hash().into())
         })
     }
 }

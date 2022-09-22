@@ -28,6 +28,10 @@ impl NanoZKP {
     /// order is absolutely necessary because each circuit needs a verifying key from the circuit "below"
     /// it. Note that the parameter generation can take longer than one hour, even two on some computers.
     pub fn setup() -> Result<(), NanoZKPError> {
+        if NanoZKP::are_all_files_created() {
+            return Ok(());
+        }
+
         let rng = &mut thread_rng();
 
         NanoZKP::setup_pk_tree_leaf(rng, "pk_tree_5")?;
@@ -51,6 +55,24 @@ impl NanoZKP {
         NanoZKP::setup_merger_wrapper(rng)?;
 
         Ok(())
+    }
+
+    fn are_all_files_created() -> bool {
+        for i in 0..5 {
+            if !Path::new(&format!("verifying_keys/pk_tree_{}.bin", i)).exists()
+                && !Path::new(&format!("proving_keys/pk_tree_{}.bin", i)).exists()
+            {
+                return false;
+            }
+        }
+        Path::new("verifying_keys/macro_block.bin").exists()
+            && Path::new("verifying_keys/macro_block_wrapper.bin").exists()
+            && Path::new("verifying_keys/merger.bin").exists()
+            && Path::new("verifying_keys/merger_wrapper.bin").exists()
+            && Path::new("proving_keys/merger_wrapper.bin").exists()
+            && Path::new("proving_keys/macro_block_wrapper.bin").exists()
+            && Path::new("proving_keys/merger.bin").exists()
+            && Path::new("proving_keys/merger_wrapper.bin").exists()
     }
 
     fn setup_pk_tree_leaf<R: CryptoRng + Rng>(rng: &mut R, name: &str) -> Result<(), NanoZKPError> {
