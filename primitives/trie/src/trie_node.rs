@@ -551,53 +551,120 @@ mod tests {
     }
 
     #[test]
-    fn remove_child_works() {
+    fn put_remove_child_works() {
         let key: KeyNibbles = "cfb986".parse().unwrap();
 
-        let mut branch_node = TrieNode::new_branch(key);
+        let mut node = TrieNode::new_leaf(key, 666u32);
 
         let child_key_1 = "cfb986f5a".parse().unwrap();
-        branch_node = branch_node
-            .put_child(&child_key_1, "child_1".hash())
-            .unwrap();
+        node = node.put_child(&child_key_1, "child_1".hash()).unwrap();
 
         let child_key_2 = "cfb986ab9".parse().unwrap();
-        branch_node = branch_node
-            .put_child(&child_key_2, "child_2".hash())
-            .unwrap();
+        node = node.put_child(&child_key_2, "child_2".hash()).unwrap();
 
         let child_key_3 = "cfb9860f6".parse().unwrap();
-        branch_node = branch_node
-            .put_child(&child_key_3, "child_3".hash())
-            .unwrap();
+        node = node.put_child(&child_key_3, "child_3".hash()).unwrap();
 
         let child_key_4 = "cfb986d50".parse().unwrap();
-        branch_node = branch_node
-            .put_child(&child_key_4, "child_4".hash())
-            .unwrap();
+        node = node.put_child(&child_key_4, "child_4".hash()).unwrap();
 
-        branch_node = branch_node.remove_child(&child_key_1).unwrap();
+        node = node.remove_child(&child_key_1).unwrap();
         assert_eq!(
-            branch_node.get_child_hash(&child_key_1),
+            node.get_child_hash(&child_key_1),
             Err(MerkleRadixTrieError::ChildDoesNotExist)
         );
 
-        branch_node = branch_node.remove_child(&child_key_2).unwrap();
+        node = node.remove_child(&child_key_2).unwrap();
         assert_eq!(
-            branch_node.get_child_hash(&child_key_2),
+            node.get_child_hash(&child_key_2),
             Err(MerkleRadixTrieError::ChildDoesNotExist)
         );
 
-        branch_node = branch_node.remove_child(&child_key_3).unwrap();
+        node = node.remove_child(&child_key_3).unwrap();
         assert_eq!(
-            branch_node.get_child_hash(&child_key_3),
+            node.get_child_hash(&child_key_3),
             Err(MerkleRadixTrieError::ChildDoesNotExist)
         );
 
-        branch_node = branch_node.remove_child(&child_key_4).unwrap();
+        node = node.remove_child(&child_key_4).unwrap();
         assert_eq!(
-            branch_node.get_child_hash(&child_key_4),
-            Err(MerkleRadixTrieError::ChildDoesNotExist)
+            node.get_child_hash(&child_key_4),
+            Err(MerkleRadixTrieError::LeavesHaveNoChildren)
+        );
+
+        assert_eq!(node.value(), Ok(666u32));
+    }
+
+    #[test]
+    fn put_value_works() {
+        let key: KeyNibbles = "cfb986".parse().unwrap();
+
+        let leaf_node = TrieNode::new_leaf::<u32>(key.clone(), 666);
+        assert_eq!(leaf_node.value(), Ok(666u32));
+        let leaf_node = leaf_node.put_value(999).unwrap();
+        assert_eq!(leaf_node.value(), Ok(999u32));
+
+        let hybrid_node = TrieNode::new_hybrid::<u32>(key.clone(), 666);
+        assert_eq!(hybrid_node.value(), Ok(666u32));
+        let hybrid_node = hybrid_node.put_value(999).unwrap();
+        assert_eq!(hybrid_node.value(), Ok(999u32));
+
+        let branch_node = TrieNode::new_branch(key);
+        assert_eq!(
+            branch_node.value::<u32>(),
+            Err(MerkleRadixTrieError::BranchesHaveNoValue)
+        );
+        let branch_node = branch_node.put_value(999).unwrap();
+        assert_eq!(branch_node.value(), Ok(999u32));
+
+        let root_node = TrieNode::new_root();
+        assert_eq!(
+            root_node.value::<u32>(),
+            Err(MerkleRadixTrieError::BranchesHaveNoValue)
+        );
+        assert_eq!(
+            root_node.put_value(999),
+            Err(MerkleRadixTrieError::RootCantHaveValue)
+        );
+    }
+
+    #[test]
+    fn remove_value_works() {
+        let key: KeyNibbles = "cfb986".parse().unwrap();
+
+        let leaf_node = TrieNode::new_leaf::<u32>(key.clone(), 666);
+        assert_eq!(leaf_node.value(), Ok(666u32));
+        let leaf_node = leaf_node.remove_value();
+        assert_eq!(leaf_node, None);
+
+        let hybrid_node = TrieNode::new_hybrid::<u32>(key.clone(), 666);
+        assert_eq!(hybrid_node.value(), Ok(666u32));
+        let hybrid_node = hybrid_node.remove_value().unwrap();
+        assert_eq!(
+            hybrid_node.value::<u32>(),
+            Err(MerkleRadixTrieError::BranchesHaveNoValue)
+        );
+
+        let branch_node = TrieNode::new_branch(key);
+        assert_eq!(
+            branch_node.value::<u32>(),
+            Err(MerkleRadixTrieError::BranchesHaveNoValue)
+        );
+        let branch_node = branch_node.remove_value().unwrap();
+        assert_eq!(
+            branch_node.value::<u32>(),
+            Err(MerkleRadixTrieError::BranchesHaveNoValue)
+        );
+
+        let root_node = TrieNode::new_root();
+        assert_eq!(
+            root_node.value::<u32>(),
+            Err(MerkleRadixTrieError::BranchesHaveNoValue)
+        );
+        let branch_node = branch_node.remove_value().unwrap();
+        assert_eq!(
+            branch_node.value::<u32>(),
+            Err(MerkleRadixTrieError::BranchesHaveNoValue)
         );
     }
 }
