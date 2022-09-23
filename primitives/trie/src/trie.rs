@@ -223,12 +223,6 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
             // If the current node key is equal to our given key, we have found our node.
             // Update/remove the node.
             if cur_node.key() == key {
-                assert!(
-                    !cur_node.is_branch(),
-                    "We can't remove a branch node! The node has key {}.",
-                    key
-                );
-
                 // If a node remains after removing the value, update it, otherwise remove the
                 // node from the database.
                 if let Some(cur_node) = cur_node.remove_value() {
@@ -361,9 +355,9 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
                 }
 
                 // If the key fully matches, we have found the requested node. We must check that
-                // it is a leaf node, we don't want to prove branch nodes.
+                // it is a leaf/hybrid node, we don't want to prove branch nodes.
                 if pointer_node.key() == cur_key {
-                    if pointer_node.is_branch() {
+                    if !pointer_node.has_value() {
                         error!(
                             "Pointer node with key {} is a branch node. We don't want to prove branch nodes.",
                             pointer_node.key(),
@@ -520,7 +514,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
     /// Updates the hashes of all dirty nodes in the subtree specified by `key`.
     fn update_hashes(&self, txn: &mut WriteTransaction, key: &KeyNibbles) -> Blake2bHash {
         let mut node: TrieNode = txn.get(&self.db, key).unwrap();
-        if node.is_leaf() {
+        if !node.has_children() {
             return node.hash();
         }
 

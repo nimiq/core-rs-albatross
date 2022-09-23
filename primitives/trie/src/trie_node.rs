@@ -92,33 +92,20 @@ impl TrieNode {
         }
     }
 
-    /// Checks if the node is a leaf node.
-    pub fn is_leaf(&self) -> bool {
-        match self {
-            TrieNode::Leaf { .. } => true,
-            _ => false,
-        }
-    }
-
-    /// Checks if the node is a branch node.
-    pub fn is_branch(&self) -> bool {
-        match self {
-            TrieNode::Branch { .. } => true,
-            _ => false,
-        }
-    }
-
-    /// Checks if the node is a hybrid node.
-    pub fn is_hybrid(&self) -> bool {
-        match self {
-            TrieNode::Hybrid { .. } => true,
-            _ => false,
-        }
-    }
-
-    /// Check if this node contains a value.
+    /// Checks if this node contains a value.
     pub fn has_value(&self) -> bool {
-        self.is_leaf() || self.is_hybrid()
+        match self {
+            TrieNode::Leaf { .. } | TrieNode::Hybrid { .. } => true,
+            TrieNode::Root { .. } | TrieNode::Branch { .. } => false,
+        }
+    }
+
+    /// Checks if this node has children.
+    pub fn has_children(&self) -> bool {
+        match self {
+            TrieNode::Root { .. } | TrieNode::Branch { .. } | TrieNode::Hybrid { .. } => true,
+            TrieNode::Leaf { .. } => false,
+        }
     }
 
     /// Returns the key of a node.
@@ -131,6 +118,7 @@ impl TrieNode {
         }
     }
 
+    /// Returns the children of a node, if it is not a leaf node.
     pub fn children(&self) -> Result<&TrieNodeChildren, MerkleRadixTrieError> {
         match self {
             TrieNode::Root { ref children, .. }
@@ -140,6 +128,7 @@ impl TrieNode {
         }
     }
 
+    /// Returns the children of a node, if it is not a leaf node.
     pub fn children_mut(&mut self) -> Result<&mut TrieNodeChildren, MerkleRadixTrieError> {
         match self {
             TrieNode::Root {
@@ -161,36 +150,6 @@ impl TrieNode {
             TrieNode::Leaf { value, .. } | TrieNode::Hybrid { value, .. } => {
                 Ok(T::deserialize(&mut &value[..]).unwrap())
             }
-            TrieNode::Root { .. } | TrieNode::Branch { .. } => {
-                error!(
-                    "Node with key {} is a branch node and so it can't have a value!",
-                    self.key()
-                );
-                Err(MerkleRadixTrieError::BranchesHaveNoValue)
-            }
-        }
-    }
-
-    /// Returns the value of a node, if it is a leaf or hybrid node.
-    pub fn raw_value_mut(&mut self) -> Result<&mut Vec<u8>, MerkleRadixTrieError> {
-        match self {
-            TrieNode::Leaf { ref mut value, .. } | TrieNode::Hybrid { ref mut value, .. } => {
-                Ok(value)
-            }
-            TrieNode::Root { .. } | TrieNode::Branch { .. } => {
-                error!(
-                    "Node with key {} is a branch node and so it can't have a value!",
-                    self.key()
-                );
-                Err(MerkleRadixTrieError::BranchesHaveNoValue)
-            }
-        }
-    }
-
-    /// Returns the value of a node, if it is a leaf or hybrid node.
-    pub fn into_raw_value(self) -> Result<Vec<u8>, MerkleRadixTrieError> {
-        match self {
-            TrieNode::Leaf { value, .. } | TrieNode::Hybrid { value, .. } => Ok(value),
             TrieNode::Root { .. } | TrieNode::Branch { .. } => {
                 error!(
                     "Node with key {} is a branch node and so it can't have a value!",
