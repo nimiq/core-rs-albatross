@@ -982,7 +982,7 @@ checksum = "12dc3116fe595d7847c701796ac1b189bd86b81f4f593c6f775f9d80fb2e29f4"
 dependencies = [
  "byteorder",
  "digest 0.10.3",
- "rand_core 0.6.3",
+ "rand_core 0.6.4",
  "subtle",
  "zeroize",
 ]
@@ -1200,7 +1200,7 @@ source = "git+https://github.com/nimiq/ed25519-zebra.git?branch=main#9bef4281db3
 dependencies = [
  "curve25519-dalek 3.2.1",
  "hex",
- "rand_core 0.6.3",
+ "rand_core 0.6.4",
  "serde",
  "sha2 0.9.9",
  "thiserror",
@@ -2849,7 +2849,7 @@ dependencies = [
  "nimiq-test-log",
  "nimiq-utils",
  "rand 0.8.5",
- "rand_core 0.6.3",
+ "rand_core 0.6.4",
  "serde",
  "sha2 0.9.9",
  "thiserror",
@@ -3465,7 +3465,7 @@ dependencies = [
  "nimiq-test-log",
  "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
  "rand 0.8.5",
- "rand_core 0.6.3",
+ "rand_core 0.6.4",
  "serde",
  "thiserror",
  "tokio",
@@ -4180,7 +4180,7 @@ checksum = "34af8d1a0e25924bc5b7c43c079c942339d8f0a8b57c39049bef581b46327404"
 dependencies = [
  "libc",
  "rand_chacha 0.3.1",
- "rand_core 0.6.3",
+ "rand_core 0.6.4",
 ]
 
 [[package]]
@@ -4200,7 +4200,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6c10a63a0fa32252be49d21e7709d4d4baf8d231c2dbce1eaa8141b9b127d88"
 dependencies = [
  "ppv-lite86",
- "rand_core 0.6.3",
+ "rand_core 0.6.4",
 ]
 
 [[package]]
@@ -4214,9 +4214,9 @@ dependencies = [
 
 [[package]]
 name = "rand_core"
-version = "0.6.3"
+version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d34f1408f55294453790c48b2f1ebbb1c5b4b7563eb1f418bcfcfdbb06ebb4e7"
+checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
 dependencies = [
  "getrandom 0.2.6",
 ]
@@ -4729,7 +4729,7 @@ dependencies = [
  "blake2 0.10.4",
  "chacha20poly1305",
  "curve25519-dalek 4.0.0-pre.2",
- "rand_core 0.6.3",
+ "rand_core 0.6.4",
  "ring",
  "rustc_version 0.4.0",
  "sha2 0.10.2",
