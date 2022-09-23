@@ -252,20 +252,19 @@ impl TrieNode {
     /// Adds, or overwrites, the value at the given node. If successful, it returns  the modified
     /// node.
     pub fn put_value<T: Serialize>(mut self, new_value: T) -> Result<Self, MerkleRadixTrieError> {
-        // Turn branch node into a hybrid node.
-        self = match self {
-            TrieNode::Branch { key, children } => TrieNode::Hybrid {
+        match self {
+            // Turn branch node into a hybrid node.
+            TrieNode::Branch { key, children } => Ok(TrieNode::Hybrid {
                 key,
                 value: new_value.serialize_to_vec(),
                 children,
-            },
-            TrieNode::Root { .. } => return Err(MerkleRadixTrieError::RootCantHaveValue),
-            other => other,
-        };
-
-        new_value.serialize(self.raw_value_mut()?)?;
-
-        Ok(self)
+            }),
+            TrieNode::Leaf { ref mut value, .. } | TrieNode::Hybrid { ref mut value, .. } => {
+                *value = new_value.serialize_to_vec();
+                Ok(self)
+            }
+            TrieNode::Root { .. } => Err(MerkleRadixTrieError::RootCantHaveValue),
+        }
     }
 
     /// Removes the value at the given node. Returns the modified node or None if the node is a
