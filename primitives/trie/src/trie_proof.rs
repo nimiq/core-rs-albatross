@@ -35,18 +35,18 @@ impl TrieProof {
         TrieProof { nodes }
     }
 
-    /// Returns all of the leaf nodes in the proof. These are the nodes that we are proving
+    /// Returns all of the leaf/hybrid nodes in the proof. These are the nodes that we are proving
     /// inclusion in the trie.
-    pub fn leaf_nodes(&self) -> Vec<&TrieNode> {
-        let mut leaf_nodes = Vec::new();
+    pub fn values(&self) -> Vec<&TrieNode> {
+        let mut nodes = Vec::new();
 
         for node in &self.nodes {
-            if node.is_leaf() {
-                leaf_nodes.push(node);
+            if node.has_value() {
+                nodes.push(node);
             }
         }
 
-        leaf_nodes
+        nodes
     }
 
     /// Verifies a proof against the given root hash. Note that this doesn't check that whatever keys
@@ -66,8 +66,8 @@ impl TrieProof {
 
         // Check that the proof is a valid trie.
         for node in &self.nodes {
-            // If the node is a branch node, validate its children.
-            if node.is_branch() {
+            // If the node has children, validate them.
+            if node.has_children() {
                 // Pop the last node from the children.
                 while let Some(child) = children.pop() {
                     // If the node is a prefix of the child node, we need to verify that it is a
