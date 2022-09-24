@@ -368,7 +368,7 @@ impl PeerContactInfo {
     }
 
     /// Returns an iterator over the multi-addresses of this contact.
-    pub fn addresses<'a>(&'a self) -> impl Iterator<Item = &Multiaddr> + 'a {
+    pub fn addresses(&self) -> impl Iterator<Item = &Multiaddr> {
         self.contact.inner.addresses.iter()
     }
 
@@ -467,8 +467,8 @@ impl PeerContactBook {
         self.peer_contacts.get(peer_id).map(Arc::clone)
     }
 
-    pub fn query<'a>(
-        &'a self,
+    pub fn query(
+        &self,
         protocols: Protocols,
         services: Services,
     ) -> impl Iterator<Item = Arc<PeerContactInfo>> + '_ {

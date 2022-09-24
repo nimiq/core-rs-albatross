@@ -49,7 +49,7 @@ impl Blockchain {
         // Check that the extra data does not exceed the permitted size.
         // This is also checked during deserialization.
         // Skip blocks should not have extra data
-        if header.extra_data().len() > 32 || (skip_block && header.extra_data().len() != 0) {
+        if header.extra_data().len() > 32 || (skip_block && !header.extra_data().is_empty()) {
             warn!(
                 header = %header,
                 reason = "too much extra data",

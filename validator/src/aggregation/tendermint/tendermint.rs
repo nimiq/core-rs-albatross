@@ -116,7 +116,7 @@ impl<N: ValidatorNetwork + 'static> HandelTendermintAdapter<N> {
 
         // Construct the vote so it can be hashed and signed
         let vote = TendermintVote {
-            proposal_hash: proposal_hash.clone(),
+            proposal_hash,
             id: id.clone(),
         };
 

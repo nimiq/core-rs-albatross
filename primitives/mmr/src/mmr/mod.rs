@@ -419,13 +419,13 @@ impl<H: Merge + Clone + PartialEq, S: Store<H>> MerkleMountainRange<H, S> {
     {
         let h = elem.hash(1);
 
-        for i in 0..self.num_leaves() {
-            if h.eq(&self.get_leaf(i)?) {
-                return Some(i);
+        (0..self.num_leaves()).find(|&i| {
+            if let Some(leaf) = self.get_leaf(i) {
+                h.eq(&leaf)
+            } else {
+                false
             }
-        }
-
-        None
+        })
     }
 }
 
