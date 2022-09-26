@@ -26,6 +26,7 @@ fn blockchain() -> Arc<RwLock<Blockchain>> {
 }
 
 #[test(tokio::test)]
+#[ignore]
 async fn can_produce_first_zkp_proof() {
     NanoZKP::setup().unwrap();
     let blockchain = blockchain();
@@ -41,7 +42,7 @@ async fn can_produce_first_zkp_proof() {
         .voting_keys()
         .into_iter()
         .map(|pub_key| pub_key.public_key)
-        .collect(); //itodo
+        .collect();
 
     let genesis_block = ZKPMacroBlock::try_from(&genesis_block).unwrap();
 

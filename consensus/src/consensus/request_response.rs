@@ -12,7 +12,7 @@ use crate::messages::{
     RequestBatchSet, RequestBlock, RequestHead, RequestHistoryChunk, RequestMacroChain,
     RequestMissingBlocks, RequestZKP,
 };
-use crate::zkp::zkp_component::ZKPComponentState;
+use crate::zkp::zkp_component::ZKPComponent;
 use crate::Consensus;
 
 impl<N: Network> Consensus<N> {
@@ -21,7 +21,7 @@ impl<N: Network> Consensus<N> {
     pub(super) fn init_network_request_receivers(
         network: &Arc<N>,
         blockchain: &Arc<RwLock<Blockchain>>,
-        zkp_component_state: &Arc<RwLock<ZKPComponentState>>,
+        zkp_component: &Option<ZKPComponent>,
     ) {
         let stream = network.receive_requests::<RequestMacroChain>();
         tokio::spawn(Self::request_handler(network, stream, blockchain));
@@ -41,8 +41,14 @@ impl<N: Network> Consensus<N> {
         let stream = network.receive_requests::<RequestHead>();
         tokio::spawn(Self::request_handler(network, stream, blockchain));
 
-        let stream = network.receive_requests::<RequestZKP>();
-        tokio::spawn(Self::request_handler(network, stream, zkp_component_state));
+        if let Some(zkp_component) = zkp_component {
+            let stream = network.receive_requests::<RequestZKP>();
+            tokio::spawn(Self::request_handler(
+                network,
+                stream,
+                &zkp_component.zkp_state,
+            ));
+        }
     }
 
     pub(crate) fn request_handler<
@@ -51,10 +57,11 @@ impl<N: Network> Consensus<N> {
     >(
         network: &Arc<N>,
         stream: BoxStream<'static, (Req, N::RequestId, N::PeerId)>,
-        blockchain: &Arc<T>,
+        req_envioroment: &Arc<T>,
     ) -> impl Future<Output = ()> {
+        let blockchain = Arc::clone(req_envioroment);
         let network = Arc::clone(network);
-        let blockchain = Arc::clone(blockchain);
+        let blockchain = Arc::clone(&blockchain);
 
         async move {
             stream

@@ -182,6 +182,7 @@ pub struct ConsensusSettings {
     #[serde(default)]
     pub network: Network,
     pub min_peers: Option<usize>,
+    pub zkp_prover: Option<bool>,
 }
 
 #[derive(Deserialize, Debug, Copy, Clone, PartialEq, Eq)]

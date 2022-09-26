@@ -92,7 +92,12 @@ impl<'a> TryFrom<&'a MacroBlock> for ZKPMacroBlock {
                 round_number: proof.round,
                 header_hash: block.hash().into(),
                 signature: proof.sig.signature.get_point(),
-                signer_bitmap: proof.sig.signers.iter_bits().collect(),
+                signer_bitmap: proof
+                    .sig
+                    .signers
+                    .iter_bits()
+                    .take(policy::SLOTS as usize)
+                    .collect(),
             }
         } else {
             ZKPMacroBlock::without_signatures(block.block_number(), 0, block.hash().into())
