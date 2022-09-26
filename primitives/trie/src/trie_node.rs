@@ -151,10 +151,6 @@ impl TrieNode {
                 Ok(T::deserialize(&mut &value[..]).unwrap())
             }
             TrieNode::Root { .. } | TrieNode::Branch { .. } => {
-                error!(
-                    "Node with key {} is a branch node and so it can't have a value!",
-                    self.key()
-                );
                 Err(MerkleRadixTrieError::BranchesHaveNoValue)
             }
         }
