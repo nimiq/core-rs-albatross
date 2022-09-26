@@ -758,4 +758,69 @@ mod tests {
         assert_eq!(chunk.nodes.len(), 3);
         assert_eq!(chunk.verify(&trie.root_hash(&txn)), true);
     }
+
+    #[test]
+    fn hybrid_nodes_work() {
+        let key_1 = "413f22".parse().unwrap();
+        let key_2 = "413".parse().unwrap();
+        let key_3 = "413f227fa".parse().unwrap();
+        let key_4 = "413b391".parse().unwrap();
+        let key_5 = "412324".parse().unwrap();
+
+        let env = nimiq_database::volatile::VolatileEnvironment::new(10).unwrap();
+        let trie = MerkleRadixTrie::new(env.clone(), "database");
+        let mut txn = WriteTransaction::new(&env);
+
+        let initial_hash = trie.root_hash(&txn);
+        assert_eq!(trie.count_branches_and_leaves(&txn), (1, 0));
+
+        trie.put(&mut txn, &key_1, 80085);
+        trie.put(&mut txn, &key_2, 999);
+        trie.put(&mut txn, &key_3, 1337);
+        trie.put(&mut txn, &key_4, 6969);
+
+        assert_eq!(trie.count_branches_and_leaves(&txn), (3, 2));
+        assert_eq!(trie.get(&txn, &key_1), Some(80085));
+        assert_eq!(trie.get(&txn, &key_2), Some(999));
+        assert_eq!(trie.get(&txn, &key_3), Some(1337));
+        assert_eq!(trie.get(&txn, &key_4), Some(6969));
+        assert_eq!(trie.get(&txn, &key_5), None);
+
+        trie.remove(&mut txn, &key_5);
+        assert_eq!(trie.count_branches_and_leaves(&txn), (3, 2));
+        assert_eq!(trie.get(&txn, &key_1), Some(80085));
+        assert_eq!(trie.get(&txn, &key_2), Some(999));
+        assert_eq!(trie.get(&txn, &key_3), Some(1337));
+        assert_eq!(trie.get(&txn, &key_4), Some(6969));
+
+        trie.remove(&mut txn, &key_1);
+        assert_eq!(trie.count_branches_and_leaves(&txn), (2, 2));
+        assert_eq!(trie.get(&txn, &key_1), None);
+        assert_eq!(trie.get(&txn, &key_2), Some(999));
+        assert_eq!(trie.get(&txn, &key_3), Some(1337));
+        assert_eq!(trie.get(&txn, &key_4), Some(6969));
+
+        trie.remove(&mut txn, &key_2);
+        assert_eq!(trie.count_branches_and_leaves(&txn), (2, 2));
+        assert_eq!(trie.get(&txn, &key_1), None);
+        assert_eq!(trie.get(&txn, &key_2), None);
+        assert_eq!(trie.get(&txn, &key_3), Some(1337));
+        assert_eq!(trie.get(&txn, &key_4), Some(6969));
+
+        trie.remove(&mut txn, &key_3);
+        assert_eq!(trie.count_branches_and_leaves(&txn), (1, 1));
+        assert_eq!(trie.get(&txn, &key_1), None);
+        assert_eq!(trie.get(&txn, &key_2), None);
+        assert_eq!(trie.get(&txn, &key_3), None);
+        assert_eq!(trie.get(&txn, &key_4), Some(6969));
+
+        trie.remove(&mut txn, &key_4);
+        assert_eq!(trie.count_branches_and_leaves(&txn), (1, 0));
+        assert_eq!(trie.get(&txn, &key_1), None);
+        assert_eq!(trie.get(&txn, &key_2), None);
+        assert_eq!(trie.get(&txn, &key_3), None);
+        assert_eq!(trie.get(&txn, &key_4), None);
+
+        assert_eq!(trie.root_hash(&txn), initial_hash);
+    }
 }
