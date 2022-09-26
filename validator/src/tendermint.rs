@@ -323,11 +323,11 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
 
             // In case the proposal has a valid round, the original proposer signed the VRF Seed,
             // so the original slot owners key must be retrieved for header verification.
-            let vrf_key = if let Some(valid_round) = valid_round {
+            let vrf_key = if valid_round.is_some() {
                 let proposer_slot = blockchain
                     .get_proposer_at(
                         self.block_height,
-                        valid_round,
+                        header.round,
                         self.prev_seed.entropy(),
                         None,
                     )
