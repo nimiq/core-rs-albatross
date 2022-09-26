@@ -132,22 +132,37 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
             // If the current node key is no longer a prefix for the given key then we need to
             // split the node.
             if !cur_node.key().is_prefix_of(key) {
-                // Create and store the new node.
-                let new_node = TrieNode::new_leaf(key.clone(), value);
-                txn.put_reserve(&self.db, key, &new_node);
+                // Check if the new node is a sibling or the parent of cur_node.
+                if key.is_prefix_of(cur_node.key()) {
+                    // The new node is the parent of the current node. Thus it needs to be a hybrid node.
+                    let new_node = TrieNode::new_hybrid(key.clone(), value)
+                        .put_child(cur_node.key(), Blake2bHash::default())
+                        .unwrap();
+                    txn.put_reserve(&self.db, key, &new_node);
 
-                // Create and store the new parent node.
-                let new_parent = TrieNode::new_branch(cur_node.key().common_prefix(key))
-                    .put_child(cur_node.key(), Blake2bHash::default())
-                    .unwrap()
-                    .put_child(new_node.key(), new_node.hash())
-                    .unwrap();
-                txn.put_reserve(&self.db, new_parent.key(), &new_parent);
+                    // Push the new node into the root path.
+                    root_path.push(new_node);
+                    added_branches = 1;
+                    added_leaves = 0;
+                } else {
+                    // The new node is a sibling of the current node. Thus it is a leaf node.
+                    let new_node = TrieNode::new_leaf(key.clone(), value);
+                    txn.put_reserve(&self.db, key, &new_node);
 
-                // Push the parent node into the root path.
-                root_path.push(new_parent);
-                added_branches = 1;
-                added_leaves = 1;
+                    // We insert a new branch node as the parent of both the current node and the
+                    // new node.
+                    let new_parent = TrieNode::new_branch(cur_node.key().common_prefix(key))
+                        .put_child(cur_node.key(), Blake2bHash::default())
+                        .unwrap()
+                        .put_child(new_node.key(), new_node.hash())
+                        .unwrap();
+                    txn.put_reserve(&self.db, new_parent.key(), &new_parent);
+
+                    // Push the parent node into the root path.
+                    root_path.push(new_parent);
+                    added_branches = 1;
+                    added_leaves = 1;
+                }
 
                 break;
             }
@@ -177,13 +192,20 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
                     txn.put_reserve(&self.db, key, &new_node);
 
                     // Update the parent node and store it.
+                    let was_leaf = !cur_node.has_children();
                     cur_node = cur_node.put_child(new_node.key(), new_node.hash()).unwrap();
                     txn.put_reserve(&self.db, cur_node.key(), &cur_node);
 
                     // Push the parent node into the root path.
                     root_path.push(cur_node);
-                    added_branches = 0;
-                    added_leaves = 1;
+
+                    if was_leaf {
+                        added_branches = 1;
+                        added_leaves = 0;
+                    } else {
+                        added_branches = 0;
+                        added_leaves = 1;
+                    }
 
                     break;
                 }
@@ -223,11 +245,43 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
             // If the current node key is equal to our given key, we have found our node.
             // Update/remove the node.
             if cur_node.key() == key {
-                // If a node remains after removing the value, update it, otherwise remove the
-                // node from the database.
+                // Remove the value from the node.
                 if let Some(cur_node) = cur_node.remove_value() {
-                    txn.put_reserve(&self.db, key, &cur_node);
+                    // Node was a hybrid node and is now a branch node.
+                    let num_children = cur_node.iter_children().count();
+                    let added_branches;
+
+                    // If it has only a single child and isn't the root node, merge it with that child.
+                    if num_children == 1 && cur_node.key() != &KeyNibbles::ROOT {
+                        // Remove the node from the database.
+                        txn.remove(&self.db, cur_node.key());
+
+                        // Get the node's only child and add it to the root path.
+                        let only_child_key = cur_node.key()
+                            + &cur_node.iter_children().next().unwrap().suffix.clone();
+
+                        let only_child = txn.get(&self.db, &only_child_key).unwrap();
+
+                        root_path.push(only_child);
+
+                        // We removed a hybrid node.
+                        added_branches = -1;
+                    } else {
+                        // Update the node and add it to the root path.
+                        txn.put_reserve(&self.db, key, &cur_node);
+
+                        root_path.push(cur_node);
+
+                        // We didn't delete any nodes.
+                        added_branches = 0;
+                    }
+
+                    // Update the keys and hashes of the rest of the root path.
+                    self.update_keys(txn, root_path, added_branches, 0);
+
+                    return;
                 } else {
+                    // Node was a leaf node, delete if from the database.
                     txn.remove(&self.db, key);
                 }
 
@@ -257,13 +311,12 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
             // Remove the child from the parent node.
             parent_node = parent_node.remove_child(&child_key).unwrap();
 
-            // Get the root address and the number of children of the node.
-            let root_address = KeyNibbles::ROOT;
+            // Get the number of children of the node.
             let num_children = parent_node.iter_children().count();
 
             // If the node has only a single child (and it isn't the root node), merge it with the
             // child.
-            if num_children == 1 && parent_node.key() != &root_address {
+            if num_children == 1 && parent_node.key() != &KeyNibbles::ROOT {
                 // Remove the node from the database.
                 txn.remove(&self.db, parent_node.key());
 
@@ -283,7 +336,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
             // If the node has any children, or it is the root node, we just store the
             // parent node in the database and the root path. Then we update the keys and hashes of
             // of the root path.
-            else if num_children > 0 || parent_node.key() == &root_address {
+            else if num_children > 0 || parent_node.key() == &KeyNibbles::ROOT {
                 txn.put_reserve(&self.db, parent_node.key(), &parent_node);
 
                 root_path.push(parent_node);
