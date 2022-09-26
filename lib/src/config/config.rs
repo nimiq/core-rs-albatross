@@ -66,6 +66,8 @@ pub struct ConsensusConfig {
     pub sync_mode: SyncMode,
     #[builder(default = "3")]
     pub min_peers: usize,
+    #[builder(default)]
+    pub zkp_prover_node_functionality: bool,
 }
 
 impl Default for ConsensusConfig {
@@ -73,6 +75,7 @@ impl Default for ConsensusConfig {
         ConsensusConfig {
             sync_mode: SyncMode::default(),
             min_peers: 3,
+            zkp_prover_node_functionality: false,
         }
     }
 }
@@ -740,6 +743,9 @@ impl ClientConfigBuilder {
             .unwrap();
         if let Some(min_peers) = config_file.consensus.min_peers {
             consensus.min_peers = min_peers;
+        }
+        if let Some(zkp_prover) = config_file.consensus.zkp_prover {
+            consensus.zkp_prover_node_functionality = zkp_prover;
         }
         self.consensus(consensus);
 

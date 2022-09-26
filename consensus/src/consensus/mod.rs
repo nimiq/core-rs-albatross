@@ -146,7 +146,7 @@ pub struct Consensus<N: Network> {
 
     block_queue: BlockQueue<N, BlockRequestComponent<N>>,
 
-    zkp_prover: ZKPComponent,
+    zkp_prover: Option<ZKPComponent>,
 
     /// A Delay which exists purely for the waker on its poll to reactivate the task running Consensus::poll
     /// FIXME Remove this
@@ -171,6 +171,9 @@ impl<N: Network> Consensus<N> {
     /// established state and to advance the chain.
     const HEAD_REQUESTS_TIMEOUT: Duration = Duration::from_secs(5);
 
+    ///
+    const ZKP_PROVER_FUNCTIONALITY: bool = false;
+
     /// Timeout after which the consensus is polled after it ran last
     ///
     /// TODO: Set appropriate duration
@@ -183,22 +186,24 @@ impl<N: Network> Consensus<N> {
         network: Arc<N>,
         sync_protocol: Pin<Box<dyn HistorySyncStream<N::PeerId>>>,
     ) -> Self {
-        Self::with_min_peers(
+        Self::with_min_peers_zkp_prover(
             env,
             blockchain,
             network,
             sync_protocol,
             Self::MIN_PEERS_ESTABLISHED,
+            Self::ZKP_PROVER_FUNCTIONALITY,
         )
         .await
     }
 
-    pub async fn with_min_peers(
+    pub async fn with_min_peers_zkp_prover(
         env: Environment,
         blockchain: Arc<RwLock<Blockchain>>,
         network: Arc<N>,
         sync_protocol: Pin<Box<dyn HistorySyncStream<N::PeerId>>>,
         min_peers: usize,
+        zkp_prover_node_functionality: bool,
     ) -> Self {
         let request_component = BlockRequestComponent::new(
             sync_protocol,
@@ -214,7 +219,17 @@ impl<N: Network> Consensus<N> {
         )
         .await;
 
-        Self::new(env, blockchain, network, block_queue, min_peers)
+        let mut zkp_prover = None;
+        if zkp_prover_node_functionality {
+            let network_info = NetworkInfo::from_network_id(blockchain.read().network_id());
+            let genesis_block = network_info.genesis_block::<Block>();
+            zkp_prover = Some(ZKPComponent::new(
+                Arc::clone(&blockchain),
+                genesis_block.unwrap_macro(),
+            ));
+        }
+
+        Self::new(env, blockchain, network, block_queue, min_peers, zkp_prover)
     }
 
     pub fn new(
@@ -223,14 +238,11 @@ impl<N: Network> Consensus<N> {
         network: Arc<N>,
         block_queue: BlockQueue<N, BlockRequestComponent<N>>,
         min_peers: usize,
+        zkp_prover: Option<ZKPComponent>,
     ) -> Self {
         let (tx, _rx) = broadcast(256);
 
-        let network_info = NetworkInfo::from_network_id(blockchain.read().network_id());
-        let genesis_block = network_info.genesis_block::<Block>();
-        let zkp_prover = ZKPComponent::new(Arc::clone(&blockchain), genesis_block.unwrap_macro());
-
-        Self::init_network_request_receivers(&network, &blockchain, &zkp_prover.zkp_state);
+        Self::init_network_request_receivers(&network, &blockchain, &zkp_prover);
 
         let established_flag = Arc::new(AtomicBool::new(false));
 
@@ -241,7 +253,6 @@ impl<N: Network> Consensus<N> {
             network,
             env,
             zkp_prover,
-
             block_queue,
             events: tx,
             next_execution_timer: Some(timer),
@@ -450,8 +461,10 @@ impl<N: Network> Future for Consensus<N> {
         // 4. Advance consensus and catch-up through head requests.
         self.request_heads();
 
-        while let Poll::Ready(Some(_)) = self.zkp_prover.poll_next_unpin(cx) {
-            //ITODO broadcasting?
+        if let Some(ref mut zkp_prover) = self.zkp_prover {
+            while let Poll::Ready(Some(_)) = zkp_prover.poll_next_unpin(cx) {
+                //ITODO broadcasting?
+            }
         }
 
         Poll::Pending

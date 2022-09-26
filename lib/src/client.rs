@@ -140,12 +140,13 @@ impl ClientInner {
             Arc::clone(&network),
             network_events,
         );
-        let consensus = Consensus::with_min_peers(
+        let consensus = Consensus::with_min_peers_zkp_prover(
             environment.clone(),
             blockchain,
             Arc::clone(&network),
             Box::pin(sync),
             config.consensus.min_peers,
+            config.consensus.zkp_prover_node_functionality,
         )
         .await;
 

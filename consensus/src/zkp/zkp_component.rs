@@ -12,6 +12,7 @@ use nimiq_nano_primitives::{state_commitment, MacroBlock as ZKPMacroBlock};
 
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainEvent};
 use nimiq_nano_zkp::{NanoZKP, NanoZKPError};
+use nimiq_utils::observer::NotifierStream;
 use parking_lot::RwLock;
 use tokio::sync::oneshot::{self, Receiver, Sender};
 
@@ -43,6 +44,7 @@ pub struct ZKPComponent {
     pub zkp_state: Arc<RwLock<ZKPComponentState>>,
     genesis_state: Vec<u8>,
     receiver: Option<Receiver<(u32, Blake2bHash, Result<ZKPComponentState, NanoZKPError>)>>,
+    blockchain_election_rx: NotifierStream<BlockchainEvent>,
 }
 
 impl ZKPComponent {
@@ -62,6 +64,8 @@ impl ZKPComponent {
             latest_pks.clone(),
         );
 
+        let blockchain_election_rx = blockchain.write().notifier.as_stream();
+
         Self {
             blockchain,
             zkp_state: Arc::new(RwLock::new(ZKPComponentState {
@@ -71,6 +75,7 @@ impl ZKPComponent {
             })),
             genesis_state,
             receiver: None,
+            blockchain_election_rx,
         }
     }
 
@@ -91,7 +96,7 @@ impl ZKPComponent {
             .collect(); //itodo
 
         let block = ZKPMacroBlock::try_from(&block).unwrap();
-
+        log::info!("Starting to generate the proof");
         let proof = NanoZKP::prove(
             latest_pks.clone(),
             latest_header_hash,
@@ -126,8 +131,6 @@ impl Stream for ZKPComponent {
     type Item = ZKPComponentEvent;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-        let mut blockchain_election_rx = self.blockchain.write().notifier.as_stream();
-
         if let Some(ref mut receiver) = self.receiver {
             return match receiver.poll_unpin(cx) {
                 Poll::Ready(Ok((block_number, block_hash, Ok(zkp_state)))) => {
@@ -162,26 +165,27 @@ impl Stream for ZKPComponent {
             };
         }
 
-        //concurrently launch at every event
-        match blockchain_election_rx.poll_next_unpin(cx) {
-            Poll::Ready(Some(BlockchainEvent::EpochFinalized(hash))) => {
-                let block = self.blockchain.read().get_block(&hash, true, None);
-                if let Some(Block::Macro(block)) = block {
-                    let (sender, receiver) = oneshot::channel();
-                    self.receiver = Some(receiver);
-                    let zkp_state = self.zkp_state.read();
-                    tokio::spawn(Self::generate_new_proof(
-                        block,
-                        zkp_state.latest_pks.clone(),
-                        zkp_state.latest_header_hash,
-                        zkp_state.latest_proof.clone(),
-                        self.genesis_state.clone(),
-                        sender,
-                    ));
+        while let Poll::Ready(event) = self.blockchain_election_rx.poll_next_unpin(cx) {
+            match event {
+                Some(BlockchainEvent::EpochFinalized(hash)) => {
+                    let block = self.blockchain.read().get_block(&hash, true, None);
+                    if let Some(Block::Macro(block)) = block {
+                        let (sender, receiver) = oneshot::channel();
+                        self.receiver = Some(receiver);
+                        let zkp_state = self.zkp_state.read();
+                        tokio::spawn(Self::generate_new_proof(
+                            block,
+                            zkp_state.latest_pks.clone(),
+                            zkp_state.latest_header_hash,
+                            zkp_state.latest_proof.clone(),
+                            self.genesis_state.clone(),
+                            sender,
+                        ));
+                    }
                 }
+                Some(_) => (),
+                None => return Poll::Ready(None),
             }
-            Poll::Ready(None) => return Poll::Ready(None),
-            _ => {}
         }
         Poll::Pending
     }

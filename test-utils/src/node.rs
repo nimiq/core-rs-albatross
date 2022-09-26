@@ -42,12 +42,13 @@ impl<N: NetworkInterface + TestNetwork> Node<N> {
             Arc::clone(&network),
             network.subscribe_events(),
         );
-        let consensus = AbstractConsensus::<N>::with_min_peers(
+        let consensus = AbstractConsensus::<N>::with_min_peers_zkp_prover(
             env,
             Arc::clone(&blockchain),
             Arc::clone(&network),
             Box::pin(sync_protocol),
             1,
+            false,
         )
         .await;
 
