@@ -21,7 +21,7 @@ impl<N: Network> Consensus<N> {
     pub(super) fn init_network_request_receivers(
         network: &Arc<N>,
         blockchain: &Arc<RwLock<Blockchain>>,
-        zkp_component: &Option<ZKPComponent>,
+        zkp_component: &ZKPComponent<N>,
     ) {
         let stream = network.receive_requests::<RequestMacroChain>();
         tokio::spawn(Self::request_handler(network, stream, blockchain));
@@ -41,14 +41,12 @@ impl<N: Network> Consensus<N> {
         let stream = network.receive_requests::<RequestHead>();
         tokio::spawn(Self::request_handler(network, stream, blockchain));
 
-        if let Some(zkp_component) = zkp_component {
-            let stream = network.receive_requests::<RequestZKP>();
-            tokio::spawn(Self::request_handler(
-                network,
-                stream,
-                &zkp_component.zkp_state,
-            ));
-        }
+        let stream = network.receive_requests::<RequestZKP>();
+        tokio::spawn(Self::request_handler(
+            network,
+            stream,
+            &zkp_component.zkp_state,
+        ));
     }
 
     pub(crate) fn request_handler<

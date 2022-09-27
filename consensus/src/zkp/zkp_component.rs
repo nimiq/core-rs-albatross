@@ -1,36 +1,30 @@
+use std::error::Error;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use futures::{FutureExt, Stream, StreamExt};
 
-use ark_groth16::Proof;
-use ark_mnt6_753::{G2Projective as G2MNT6, MNT6_753};
 use nimiq_block::{Block, MacroBlock};
 use nimiq_hash::Blake2bHash;
 use nimiq_nano_primitives::{state_commitment, MacroBlock as ZKPMacroBlock};
+use nimiq_network_interface::request::RequestError;
+use parking_lot::{RwLock, RwLockUpgradableReadGuard, RwLockWriteGuard};
 
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainEvent};
-use nimiq_nano_zkp::{NanoZKP, NanoZKPError};
+use nimiq_network_interface::network::Network;
 use nimiq_utils::observer::NotifierStream;
-use parking_lot::RwLock;
-use tokio::sync::oneshot::{self, Receiver, Sender};
+use tokio::sync::oneshot::{self, Receiver};
 
-#[derive(Debug)]
-pub enum ZKPComponentEvent {
-    ElectionZKProof(
-        u32,
-        Blake2bHash,
-        Result<Proof<MNT6_753>, NanoZKPError>,
-        Vec<G2MNT6>,
-    ),
-}
+use pin_project::pin_project;
+use tokio::task::JoinHandle;
 
-pub struct ZKPComponentState {
-    pub latest_pks: Vec<G2MNT6>,
-    pub latest_header_hash: [u8; 32],
-    pub latest_proof: Option<Proof<MNT6_753>>,
-}
+use crate::messages::RequestZKP;
+use crate::zkp::proof_component as ZKProofComponent;
+use crate::zkp::types::*;
+use futures::stream::BoxStream;
+
+pub type ZKProofsStream<N> = BoxStream<'static, (ZKProof, <N as Network>::PubsubId)>;
 
 /// Election blocks ZKP Component. Has:
 ///
@@ -39,16 +33,26 @@ pub struct ZKPComponentState {
 /// - The pk tree root at genesis or none if genesis block
 ///
 /// The proofs are returned by polling the components.
-pub struct ZKPComponent {
+#[pin_project]
+pub struct ZKPComponent<N: Network> {
     blockchain: Arc<RwLock<Blockchain>>,
-    pub zkp_state: Arc<RwLock<ZKPComponentState>>,
+    network: Arc<N>,
+    pub(crate) zkp_state: Arc<RwLock<ZKPComponentState>>,
     genesis_state: Vec<u8>,
-    receiver: Option<Receiver<(u32, Blake2bHash, Result<ZKPComponentState, NanoZKPError>)>>,
-    blockchain_election_rx: NotifierStream<BlockchainEvent>,
+    receiver: Option<Receiver<(Blake2bHash, Result<ZKPComponentState, ZKPComponentError>)>>,
+    blockchain_election_rx: Option<NotifierStream<BlockchainEvent>>,
+    zk_proofs_stream: ZKProofsStream<N>,
+    proof_generation_thread: Option<JoinHandle<()>>,
+    //zkp_request_result: Option<Pin<Box<dyn Future<Output = Result<ZKProof, RequestError>>>>>,
 }
 
-impl ZKPComponent {
-    pub fn new(blockchain: Arc<RwLock<Blockchain>>, genesis_block: MacroBlock) -> Self {
+impl<N: Network> ZKPComponent<N> {
+    pub async fn new(
+        blockchain: Arc<RwLock<Blockchain>>,
+        network: Arc<N>,
+        genesis_block: MacroBlock,
+        is_prover_active: bool,
+    ) -> Self {
         let latest_pks: Vec<_> = genesis_block
             .get_validators()
             .unwrap()
@@ -57,6 +61,8 @@ impl ZKPComponent {
             .map(|pub_key| pub_key.public_key)
             .collect(); //itodo
 
+        let genesis_hash = genesis_block.hash();
+
         let genesis_block = ZKPMacroBlock::try_from(&genesis_block).unwrap();
         let genesis_state = state_commitment(
             genesis_block.block_number,
@@ -64,129 +70,182 @@ impl ZKPComponent {
             latest_pks.clone(),
         );
 
-        let blockchain_election_rx = blockchain.write().notifier.as_stream();
+        let mut blockchain_election_rx = None;
+        if is_prover_active {
+            blockchain_election_rx = Some(blockchain.write().notifier.as_stream());
+        }
+        let zk_proofs_stream = network.subscribe::<ZKProofTopic>().await.unwrap().boxed();
+
+        // TODO load from db the preexisting proof if any
 
         Self {
             blockchain,
+            network: Arc::clone(&network),
             zkp_state: Arc::new(RwLock::new(ZKPComponentState {
                 latest_pks,
-                latest_header_hash: genesis_block.header_hash,
+                latest_header_hash: genesis_hash,
+                latest_block_number: genesis_block.block_number,
                 latest_proof: None,
             })),
             genesis_state,
             receiver: None,
             blockchain_election_rx,
+            zk_proofs_stream,
+            proof_generation_thread: None,
         }
     }
 
-    async fn generate_new_proof(
-        block: MacroBlock,
-        latest_pks: Vec<G2MNT6>,
-        latest_header_hash: [u8; 32],
-        previous_proof: Option<Proof<MNT6_753>>,
-        genesis_state: Vec<u8>,
-        sender: Sender<(u32, Blake2bHash, Result<ZKPComponentState, NanoZKPError>)>,
-    ) {
-        let final_pks: Vec<G2MNT6> = block
-            .get_validators()
-            .unwrap()
-            .voting_keys()
-            .into_iter()
-            .map(|pub_key| pub_key.public_key)
-            .collect(); //itodo
+    pub async fn request_zkp(&self, peer_id: N::PeerId) -> Result<ZKProof, RequestError> {
+        self.network
+            .request::<RequestZKP>(RequestZKP {}, peer_id)
+            .await
+    }
 
-        let block = ZKPMacroBlock::try_from(&block).unwrap();
-        log::info!("Starting to generate the proof");
-        let proof = NanoZKP::prove(
-            latest_pks.clone(),
-            latest_header_hash,
-            final_pks,
-            block.clone(),
-            previous_proof.map(|proof| (proof, genesis_state.clone())),
-            true,
-            true,
-        );
+    pub fn make_request_zkp(&mut self, _peer_id: N::PeerId) {
+        //let network = Arc::clone(&self.network);
+        //let stuff = N::request::<RequestZKP>(network, RequestZKP {}, peer_id);
+        //self.zkp_request_result = Some(stuff);
+    }
 
-        let new_block_blake_hash = block.header_hash.into();
-        let result = match proof {
-            Ok(proof) => sender.send((
-                block.block_number,
-                new_block_blake_hash,
-                Ok(ZKPComponentState {
-                    latest_pks,
-                    latest_header_hash: block.header_hash,
-                    latest_proof: Some(proof),
-                }),
-            )),
-            Err(e) => sender.send((block.block_number, new_block_blake_hash, Err(e))),
-        };
+    pub fn broadcast_zk_proof(network: &Arc<N>, zk_proof: ZKProof) {
+        let network = Arc::clone(network);
+        tokio::spawn(async move {
+            if let Err(e) = network.publish::<ZKProofTopic>(zk_proof).await {
+                warn!(error = &e as &dyn Error, "Failed to publish the zk proof");
+            }
+        });
+    }
 
-        if result.is_err() {
-            log::error!(error = "receiver hung up", "error sending the zk proof",);
+    pub fn is_zkp_prover_activated(&self) -> bool {
+        self.blockchain_election_rx.is_some()
+    }
+
+    pub fn push_proof(&mut self, proof: ZKProof) -> Result<(), ZKPComponentError> {
+        Self::do_push_proof(
+            &self.blockchain,
+            &self.zkp_state,
+            proof,
+            &mut self.receiver,
+            &mut self.proof_generation_thread,
+        )
+    }
+
+    fn do_push_proof(
+        blockchain: &Arc<RwLock<Blockchain>>,
+        zkp_state: &Arc<RwLock<ZKPComponentState>>,
+        proof: ZKProof,
+        receiver: &mut Option<
+            Receiver<(Blake2bHash, Result<ZKPComponentState, ZKPComponentError>)>,
+        >,
+        proof_generation_thread: &mut Option<JoinHandle<()>>,
+    ) -> Result<(), ZKPComponentError> {
+        let (new_block, old_block, proof) =
+            ZKProofComponent::pre_proof_validity_checks(blockchain, proof)?;
+
+        let zkp_state_lock = zkp_state.upgradable_read();
+        if new_block.block_number() <= zkp_state_lock.latest_block_number {
+            return Err(ZKPComponentError::OutdatedProof);
         }
+
+        if let Ok(Some(new_zkp_state)) =
+            ZKProofComponent::validate_proof_get_new_state(proof, new_block, old_block)
+        {
+            let mut zkp_state_lock = RwLockUpgradableReadGuard::upgrade(zkp_state_lock);
+            *zkp_state_lock = new_zkp_state;
+
+            // Since someone else generate a valide proof faster, we will terminate our own proof generation.
+            *receiver = None;
+            if let Some(ref thread) = proof_generation_thread {
+                thread.abort();
+                *proof_generation_thread = None;
+            }
+            return Ok(());
+        }
+        Err(ZKPComponentError::InvalidProof)
     }
 }
 
-impl Stream for ZKPComponent {
-    type Item = ZKPComponentEvent;
+impl<N: Network> Stream for ZKPComponent<N> {
+    type Item = ZKProof;
 
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-        if let Some(ref mut receiver) = self.receiver {
-            return match receiver.poll_unpin(cx) {
-                Poll::Ready(Ok((block_number, block_hash, Ok(zkp_state)))) => {
-                    self.receiver = None;
-                    let mut zkp_state_write = self.zkp_state.write();
-                    zkp_state_write.latest_pks = zkp_state.latest_pks;
-                    zkp_state_write.latest_header_hash = zkp_state.latest_header_hash;
-                    zkp_state_write.latest_proof = zkp_state.latest_proof;
-                    drop(zkp_state_write);
-                    let zkp_state_rg = self.zkp_state.read(); //ITODO change lock to downgradable ?
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+        let this = self.project();
 
-                    Poll::Ready(Some(ZKPComponentEvent::ElectionZKProof(
-                        block_number,
-                        block_hash,
-                        zkp_state_rg
-                            .latest_proof
-                            .clone()
-                            .ok_or(NanoZKPError::EmptyProof),
-                        zkp_state_rg.latest_pks.clone(),
-                    )))
+        // Check if new proof arrived, validate and store the new proofs.
+        // Then, try to get as many blocks from the gossipsub stream as possible.
+        // Stays with the first valid zproof it gets.
+        loop {
+            match this.zk_proofs_stream.as_mut().poll_next(cx) {
+                Poll::Ready(Some(proof)) => {
+                    log::debug!("Received zk proof via gossipsub {:?}", proof.0);
+                    if let Err(e) = Self::do_push_proof(
+                        this.blockchain,
+                        this.zkp_state,
+                        proof.0,
+                        this.receiver,
+                        this.proof_generation_thread,
+                    ) {
+                        log::error!("Error pushing the new zk proof {}", e);
+                    }
                 }
-                Poll::Ready(Ok((block_number, block_hash, Err(e)))) => {
-                    self.receiver = None;
-                    Poll::Ready(Some(ZKPComponentEvent::ElectionZKProof(
-                        block_number,
+                Poll::Ready(None) => {} //Error proof (?)
+                // If the zkp_stream is exhausted, we quit as well.
+                _ => break,
+            }
+        }
+
+        // This returns early to avoid multiple spawns of proof generation.
+        if let Some(ref mut receiver) = this.receiver {
+            return match receiver.poll_unpin(cx) {
+                Poll::Ready(Ok((block_hash, Ok(zkp_state)))) => {
+                    *this.receiver = None;
+                    let mut zkp_state_lock = this.zkp_state.write();
+                    *zkp_state_lock = zkp_state;
+
+                    let zkp_state_lock = RwLockWriteGuard::downgrade(zkp_state_lock);
+                    let zkp_proof = ZKProof::new(
                         block_hash,
-                        Err(e),
-                        vec![],
-                    )))
+                        zkp_state_lock.latest_proof.clone(), //.ok_or(NanoZKPError::EmptyProof),
+                    );
+
+                    Self::broadcast_zk_proof(this.network, zkp_proof.clone());
+                    Poll::Ready(Some(zkp_proof))
+                }
+                Poll::Ready(Ok((block_hash, Err(e)))) => {
+                    *this.receiver = None;
+                    log::error!("Error generating ZK Proof {}", e);
+                    Poll::Ready(Some(ZKProof::new(block_hash, None)))
                 }
                 _ => Poll::Pending,
             };
         }
 
-        while let Poll::Ready(event) = self.blockchain_election_rx.poll_next_unpin(cx) {
-            match event {
-                Some(BlockchainEvent::EpochFinalized(hash)) => {
-                    let block = self.blockchain.read().get_block(&hash, true, None);
-                    if let Some(Block::Macro(block)) = block {
-                        let (sender, receiver) = oneshot::channel();
-                        self.receiver = Some(receiver);
-                        let zkp_state = self.zkp_state.read();
-                        tokio::spawn(Self::generate_new_proof(
-                            block,
-                            zkp_state.latest_pks.clone(),
-                            zkp_state.latest_header_hash,
-                            zkp_state.latest_proof.clone(),
-                            self.genesis_state.clone(),
-                            sender,
-                        ));
+        if let Some(ref mut blockchain_election_rx) = this.blockchain_election_rx {
+            while let Poll::Ready(event) = blockchain_election_rx.poll_next_unpin(cx) {
+                match event {
+                    Some(BlockchainEvent::EpochFinalized(hash)) => {
+                        let block = this.blockchain.read().get_block(&hash, true, None);
+                        if let Some(Block::Macro(block)) = block {
+                            let (sender, receiver) = oneshot::channel();
+                            *this.receiver = Some(receiver);
+                            let zkp_state = this.zkp_state.read();
+                            *this.proof_generation_thread =
+                                Some(tokio::spawn(ZKProofComponent::generate_new_proof(
+                                    block,
+                                    zkp_state.latest_pks.clone(),
+                                    zkp_state.latest_header_hash.clone().into(),
+                                    zkp_state.latest_proof.clone(),
+                                    this.genesis_state.clone(),
+                                    sender,
+                                )));
+                        }
                     }
+                    Some(_) => (),
+                    None => return Poll::Ready(None),
                 }
-                Some(_) => (),
-                None => return Poll::Ready(None),
             }
         }
+
         Poll::Pending
     }
 }

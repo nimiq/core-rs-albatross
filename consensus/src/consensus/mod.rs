@@ -5,19 +5,11 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 
-use ark_groth16::Proof;
-use ark_mnt6_753::MNT6_753;
-use ark_serialize::{
-    CanonicalDeserialize, CanonicalSerialize, SerializationError as ArkSerializingError,
-};
-use beserial::{Deserialize, Serialize, SerializingError as BeserialSerializingError};
 use futures::{FutureExt, StreamExt};
 use nimiq_block::Block;
 use nimiq_genesis::NetworkInfo;
-use nimiq_hash::Blake2bHash;
 use nimiq_primitives::account::AccountType;
 use parking_lot::RwLock;
-use parking_lot::RwLockWriteGuard;
 use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
 use tokio::time::Sleep;
 use tokio_stream::wrappers::BroadcastStream;
@@ -31,78 +23,10 @@ use nimiq_transaction::Transaction;
 use crate::consensus::head_requests::{HeadRequests, HeadRequestsResult};
 use crate::sync::block_queue::{BlockQueue, BlockQueueConfig, BlockQueueEvent};
 use crate::sync::request_component::{BlockRequestComponent, HistorySyncStream};
-use crate::zkp::zkp_component::{ZKPComponent, ZKPComponentState};
+use crate::zkp::zkp_component::ZKPComponent;
 
 mod head_requests;
 mod request_response;
-
-#[derive(Clone, Debug)]
-pub struct ZKProof {
-    pub header_hash: Blake2bHash,
-    pub proof: Option<Proof<MNT6_753>>,
-}
-
-impl From<RwLockWriteGuard<'_, ZKPComponentState>> for ZKProof {
-    fn from(zkp_component_state: RwLockWriteGuard<ZKPComponentState>) -> Self {
-        Self {
-            header_hash: zkp_component_state.latest_header_hash.into(),
-            proof: zkp_component_state.latest_proof.clone(),
-        }
-    }
-}
-
-impl Serialize for ZKProof {
-    fn serialize<W: beserial::WriteBytesExt>(
-        &self,
-        writer: &mut W,
-    ) -> Result<usize, beserial::SerializingError> {
-        let mut size = Serialize::serialize(&self.header_hash, writer)?;
-        size += Serialize::serialize(&self.proof.is_some(), writer)?;
-        if let Some(ref latest_proof) = self.proof {
-            CanonicalSerialize::serialize(latest_proof, writer).map_err(ark_to_bserial_error)?;
-            size += CanonicalSerialize::serialized_size(latest_proof);
-        }
-        Ok(size)
-    }
-
-    fn serialized_size(&self) -> usize {
-        let mut size = Serialize::serialized_size(&self.header_hash);
-        size += Serialize::serialized_size(&self.proof.is_some());
-        if let Some(ref latest_proof) = self.proof {
-            size += CanonicalSerialize::serialized_size(latest_proof);
-        }
-        size
-    }
-}
-
-impl Deserialize for ZKProof {
-    fn deserialize<R: beserial::ReadBytesExt>(
-        reader: &mut R,
-    ) -> Result<Self, BeserialSerializingError> {
-        let header_hash = Deserialize::deserialize(reader)?;
-        let is_some: bool = Deserialize::deserialize(reader)?;
-        let mut latest_proof = None;
-
-        if is_some {
-            latest_proof =
-                Some(CanonicalDeserialize::deserialize(reader).map_err(ark_to_bserial_error)?);
-        }
-
-        Ok(ZKProof {
-            header_hash,
-            proof: latest_proof,
-        })
-    }
-}
-
-fn ark_to_bserial_error(error: ArkSerializingError) -> BeserialSerializingError {
-    match error {
-        ArkSerializingError::NotEnoughSpace => BeserialSerializingError::Overflow,
-        ArkSerializingError::InvalidData => BeserialSerializingError::InvalidValue,
-        ArkSerializingError::UnexpectedFlags => BeserialSerializingError::InvalidValue,
-        ArkSerializingError::IoError(e) => BeserialSerializingError::IoError(e),
-    }
-}
 
 pub struct ConsensusProxy<N: Network> {
     pub blockchain: Arc<RwLock<Blockchain>>,
@@ -146,7 +70,7 @@ pub struct Consensus<N: Network> {
 
     block_queue: BlockQueue<N, BlockRequestComponent<N>>,
 
-    zkp_prover: Option<ZKPComponent>,
+    zkp_component: ZKPComponent<N>,
 
     /// A Delay which exists purely for the waker on its poll to reactivate the task running Consensus::poll
     /// FIXME Remove this
@@ -203,7 +127,7 @@ impl<N: Network> Consensus<N> {
         network: Arc<N>,
         sync_protocol: Pin<Box<dyn HistorySyncStream<N::PeerId>>>,
         min_peers: usize,
-        zkp_prover_node_functionality: bool,
+        zkp_prover_active: bool,
     ) -> Self {
         let request_component = BlockRequestComponent::new(
             sync_protocol,
@@ -219,17 +143,24 @@ impl<N: Network> Consensus<N> {
         )
         .await;
 
-        let mut zkp_prover = None;
-        if zkp_prover_node_functionality {
-            let network_info = NetworkInfo::from_network_id(blockchain.read().network_id());
-            let genesis_block = network_info.genesis_block::<Block>();
-            zkp_prover = Some(ZKPComponent::new(
-                Arc::clone(&blockchain),
-                genesis_block.unwrap_macro(),
-            ));
-        }
+        let network_info = NetworkInfo::from_network_id(blockchain.read().network_id());
+        let genesis_block = network_info.genesis_block::<Block>();
+        let zkp_component = ZKPComponent::new(
+            Arc::clone(&blockchain),
+            Arc::clone(&network),
+            genesis_block.unwrap_macro(),
+            zkp_prover_active,
+        )
+        .await;
 
-        Self::new(env, blockchain, network, block_queue, min_peers, zkp_prover)
+        Self::new(
+            env,
+            blockchain,
+            network,
+            block_queue,
+            min_peers,
+            zkp_component,
+        )
     }
 
     pub fn new(
@@ -238,11 +169,11 @@ impl<N: Network> Consensus<N> {
         network: Arc<N>,
         block_queue: BlockQueue<N, BlockRequestComponent<N>>,
         min_peers: usize,
-        zkp_prover: Option<ZKPComponent>,
+        zkp_component: ZKPComponent<N>,
     ) -> Self {
         let (tx, _rx) = broadcast(256);
 
-        Self::init_network_request_receivers(&network, &blockchain, &zkp_prover);
+        Self::init_network_request_receivers(&network, &blockchain, &zkp_component);
 
         let established_flag = Arc::new(AtomicBool::new(false));
 
@@ -252,7 +183,7 @@ impl<N: Network> Consensus<N> {
             blockchain,
             network,
             env,
-            zkp_prover,
+            zkp_component,
             block_queue,
             events: tx,
             next_execution_timer: Some(timer),
@@ -461,11 +392,8 @@ impl<N: Network> Future for Consensus<N> {
         // 4. Advance consensus and catch-up through head requests.
         self.request_heads();
 
-        if let Some(ref mut zkp_prover) = self.zkp_prover {
-            while let Poll::Ready(Some(_)) = zkp_prover.poll_next_unpin(cx) {
-                //ITODO broadcasting?
-            }
-        }
+        // 5. Advance the zkp component ITODO write what this does
+        while let Poll::Ready(Some(_)) = self.zkp_component.poll_next_unpin(cx) {}
 
         Poll::Pending
     }
