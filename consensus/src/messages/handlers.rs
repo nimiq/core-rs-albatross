@@ -5,7 +5,8 @@ use parking_lot::RwLock;
 use nimiq_block::Block;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, Direction, CHUNK_SIZE};
 
-use crate::{consensus::ZKProof, messages::*, zkp::zkp_component::ZKPComponentState};
+use crate::zkp::types::ZKProof;
+use crate::{messages::*, zkp::types::ZKPComponentState};
 
 /// This trait defines the behaviour when receiving a message and how to generate the response.
 pub trait Handle<Response, T> {
@@ -173,6 +174,6 @@ impl Handle<Blake2bHash, Arc<RwLock<Blockchain>>> for RequestHead {
 
 impl Handle<ZKProof, Arc<RwLock<ZKPComponentState>>> for RequestZKP {
     fn handle(&self, zkp_component: &Arc<RwLock<ZKPComponentState>>) -> ZKProof {
-        zkp_component.write().into()
+        zkp_component.read().into()
     }
 }

@@ -6,7 +6,7 @@ use nimiq_blockchain::HistoryTreeChunk;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::request::{RequestCommon, RequestMarker};
 
-use crate::consensus::ZKProof;
+use crate::zkp::types::ZKProof;
 
 pub(crate) mod handlers;
 
@@ -15,7 +15,7 @@ The consensus module uses the following messages:
 200 RequestResponseMessage<RequestBlockHashes>
 201 RequestResponseMessage<BlockHashes>
 202 RequestResponseMessage<RequestEpoch>
-203 RequestResponseMessage<Epoch>
+203 RequestResponseMessage<Epoch> ITODO
 */
 
 /// The max number of MacroChain requests per peer.

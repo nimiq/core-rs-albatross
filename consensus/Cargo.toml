@@ -52,6 +52,7 @@ nimiq-utils = { path = "../utils", features = [
     "merkle",
     "time",
 ] }
+nimiq-validator-network = { path = "../validator-network" }
 
 [dev-dependencies]
 hex = "0.4"
