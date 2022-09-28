@@ -40,10 +40,8 @@ pub enum TrieNode {
     },
 }
 
-pub type TrieNodeChildren = [Option<TrieNodeChild>; 16];
-
-// #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
-// pub struct TrieNodeChildren([Option<TrieNodeChild>; 16]);
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub struct TrieNodeChildren([Option<TrieNodeChild>; 16]);
 
 /// A struct representing the child of a node. It just contains the child's suffix (the part of the
 /// child's key that is different from its parent) and its hash.
@@ -53,9 +51,9 @@ pub struct TrieNodeChild {
     pub hash: Blake2bHash,
 }
 
-pub const NO_CHILDREN: TrieNodeChildren = [
+pub const NO_CHILDREN: TrieNodeChildren = TrieNodeChildren([
     None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
-];
+]);
 
 impl TrieNode {
     /// Creates a new leaf node.
@@ -119,17 +117,19 @@ impl TrieNode {
     }
 
     /// Returns the children of a node, if it is not a leaf node.
-    pub fn children(&self) -> Result<&TrieNodeChildren, MerkleRadixTrieError> {
+    pub fn children(&self) -> Result<&[Option<TrieNodeChild>; 16], MerkleRadixTrieError> {
         match self {
             TrieNode::Root { ref children, .. }
             | TrieNode::Branch { ref children, .. }
-            | TrieNode::Hybrid { ref children, .. } => Ok(children),
+            | TrieNode::Hybrid { ref children, .. } => Ok(&children.0),
             TrieNode::Leaf { .. } => Err(MerkleRadixTrieError::LeavesHaveNoChildren),
         }
     }
 
     /// Returns the children of a node, if it is not a leaf node.
-    pub fn children_mut(&mut self) -> Result<&mut TrieNodeChildren, MerkleRadixTrieError> {
+    pub fn children_mut(
+        &mut self,
+    ) -> Result<&mut [Option<TrieNodeChild>; 16], MerkleRadixTrieError> {
         match self {
             TrieNode::Root {
                 ref mut children, ..
@@ -139,7 +139,7 @@ impl TrieNode {
             }
             | TrieNode::Hybrid {
                 ref mut children, ..
-            } => Ok(children),
+            } => Ok(&mut children.0),
             TrieNode::Leaf { .. } => Err(MerkleRadixTrieError::LeavesHaveNoChildren),
         }
     }
@@ -238,7 +238,7 @@ impl TrieNode {
                 key,
                 value,
                 children,
-            } if children.iter().all(|child| child.is_none()) => TrieNode::Leaf { key, value },
+            } if children.0.iter().all(|child| child.is_none()) => TrieNode::Leaf { key, value },
             other => other,
         };
 
@@ -384,6 +384,45 @@ impl<'a> IntoIterator for &'a mut TrieNode {
                 .iter_mut()
                 .filter_map(Option::as_mut),
         }
+    }
+}
+
+impl Serialize for TrieNodeChildren {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+        let mut size = 0;
+        let child_count: u8 = self
+            .0
+            .iter()
+            .fold(0, |acc, child| acc + if child.is_none() { 0 } else { 1 });
+        size += Serialize::serialize(&child_count, writer)?;
+        for child in self.0.iter().flatten() {
+            size += Serialize::serialize(&child, writer)?;
+        }
+        Ok(size)
+    }
+
+    fn serialized_size(&self) -> usize {
+        let mut size = /*count*/ 1;
+        for child in self.0.iter().flatten() {
+            size += Serialize::serialized_size(&child);
+        }
+        size
+    }
+}
+
+impl Deserialize for TrieNodeChildren {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+        let child_count: u8 = Deserialize::deserialize(reader)?;
+        let mut children = NO_CHILDREN;
+        for _ in 0..child_count {
+            let child: TrieNodeChild = Deserialize::deserialize(reader)?;
+            if let Some(i) = child.suffix.get(0) {
+                children.0[i] = Some(child);
+            } else {
+                return Err(io::Error::from(io::ErrorKind::InvalidData).into());
+            }
+        }
+        Ok(children)
     }
 }
 
