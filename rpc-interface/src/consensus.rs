@@ -414,6 +414,7 @@ pub trait ConsensusInterface {
         validator_wallet: Address,
         recipient: Address,
         fee: Coin,
+        value: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<String, Self::Error>;
 
@@ -422,6 +423,7 @@ pub trait ConsensusInterface {
         validator_wallet: Address,
         recipient: Address,
         fee: Coin,
+        value: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Self::Error>;
 }

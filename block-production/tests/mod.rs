@@ -1,3 +1,4 @@
+use nimiq_account::StakingContract;
 use nimiq_transaction::ExecutedTransaction;
 use parking_lot::RwLock;
 use std::convert::TryInto;
@@ -31,7 +32,8 @@ pub const ACCOUNT_SECRET_KEY: &str =
 pub const VALIDATOR_SIGNING_KEY: &str =
     "041580cc67e66e9e08b68fd9e4c9deb68737168fbe7488de2638c2e906c2f5ad";
 const STAKER_ADDRESS: &str = "NQ20TSB0DFSMUH9C15GQGAGJTTE4D3MA859E";
-
+pub const VALIDATOR_SECRET_KEY: &str =
+    "6927eb8de74e8ea06a8afae5a66db176a7031f742b656651ac53bddb8a4ad3f3";
 const VOLATILE_ENV: bool = true;
 
 #[test]
@@ -682,13 +684,17 @@ fn it_can_revert_reactivate_transaction() {
     )
     .unwrap();
 
-    transactions.push(tx);
+    transactions.push(tx.clone());
 
     let bc = blockchain.upgradable_read();
 
     // Block with stacking transactions
     let block =
         producer.next_micro_block(&bc, bc.time.now(), vec![], transactions, vec![0x41], None);
+
+    let block_transactions = &block.body.as_ref().unwrap().transactions;
+
+    assert_eq!(block_transactions[0], ExecutedTransaction::Ok(tx));
 
     assert_eq!(
         Blockchain::push(bc, Block::Micro(block)),
@@ -811,6 +817,240 @@ fn it_can_revert_unpark_transaction() {
     let result = bc.revert_blocks(2, &mut txn);
 
     assert!(result.is_ok());
+}
+
+#[test]
+fn it_can_consume_all_validator_deposit() {
+    let time = Arc::new(OffsetTime::new());
+    let env = VolatileEnvironment::new(10).unwrap();
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+    ));
+    let producer = BlockProducer::new(signing_key(), voting_key());
+
+    // One block with stacking transactions
+    let mut transactions = vec![];
+    let key_pair = ed25519_key_pair(VALIDATOR_SECRET_KEY);
+    let address =
+        Address::from_user_friendly_address("NQ20 TSB0 DFSM UH9C 15GQ GAGJ TTE4 D3MA 859E")
+            .unwrap();
+
+    let signing_key_pair = ed25519_key_pair(VALIDATOR_SIGNING_KEY);
+    let account_key_pair = ed25519_key_pair(ACCOUNT_SECRET_KEY);
+    let tx = TransactionBuilder::new_inactivate_validator(
+        &account_key_pair,
+        Address::from(&key_pair.public),
+        &signing_key_pair,
+        Coin::from_u64_unchecked(100),
+        1,
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
+
+    transactions.push(tx);
+
+    // This is an invalid tx since it will try to move more than the validator deposit
+    let invalid_tx = TransactionBuilder::new_delete_validator(
+        address.clone(),
+        &key_pair,
+        Coin::from_u64_unchecked(100),
+        Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT),
+        1,
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
+
+    transactions.push(invalid_tx.clone());
+
+    let bc = blockchain.upgradable_read();
+
+    // Block with stacking transactions
+    let block =
+        producer.next_micro_block(&bc, bc.time.now(), vec![], transactions, vec![0x41], None);
+
+    let block_transactions = &block.body.as_ref().unwrap().transactions;
+
+    assert_eq!(block_transactions[1], ExecutedTransaction::Err(invalid_tx));
+
+    assert_eq!(
+        Blockchain::push(bc, Block::Micro(block)),
+        Ok(PushResult::Extended)
+    );
+
+    assert_eq!(blockchain.read().block_number(), 1);
+
+    // Now we need to verify that the validator deposit was reduced because of the failing txn
+    {
+        let blockchain = blockchain.read();
+        let accounts_tree = &blockchain.state().accounts.tree;
+        let db_txn = blockchain.read_transaction();
+        let validator = StakingContract::get_validator(
+            accounts_tree,
+            &db_txn,
+            &Address::from(&key_pair.public),
+        )
+        .unwrap();
+
+        assert_eq!(
+            validator.deposit,
+            Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT - 100)
+        );
+    }
+
+    //Send another transaction that will consume all the remaining validator deposit, and thus, the validator is deleted
+    let mut transactions = vec![];
+
+    let invalid_tx = TransactionBuilder::new_delete_validator(
+        address.clone(),
+        &key_pair,
+        Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT - 100),
+        Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT),
+        1,
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
+
+    transactions.push(invalid_tx.clone());
+
+    let bc = blockchain.upgradable_read();
+
+    // Block with stacking transactions
+    let block =
+        producer.next_micro_block(&bc, bc.time.now(), vec![], transactions, vec![0x41], None);
+
+    let block_transactions = &block.body.as_ref().unwrap().transactions;
+
+    assert_eq!(block_transactions[0], ExecutedTransaction::Err(invalid_tx));
+
+    assert_eq!(
+        Blockchain::push(bc, Block::Micro(block)),
+        Ok(PushResult::Extended)
+    );
+
+    assert_eq!(blockchain.read().block_number(), 2);
+
+    // Now we need to verify that the validator no longer exists
+    {
+        let blockchain = blockchain.read();
+        let accounts_tree = &blockchain.state().accounts.tree;
+        let db_txn = blockchain.read_transaction();
+
+        // The validator should be deleted.
+        let validator = StakingContract::get_validator(
+            accounts_tree,
+            &db_txn,
+            &Address::from(&key_pair.public),
+        );
+
+        assert_eq!(validator, None);
+    }
+    let blockchain = blockchain.upgradable_read();
+    let mut txn = blockchain.write_transaction();
+    // Revert the failed delete transaction
+    let result = blockchain.revert_blocks(1, &mut txn);
+
+    assert!(result.is_ok());
+    txn.commit();
+
+    //Now the validator should be back:
+
+    let accounts_tree = &blockchain.state().accounts.tree;
+    let db_txn = blockchain.read_transaction();
+
+    // The validator should be deleted.
+    let validator =
+        StakingContract::get_validator(accounts_tree, &db_txn, &Address::from(&key_pair.public));
+
+    assert!(validator.is_some());
+}
+
+#[test]
+fn it_can_revert_failed_delete_validator() {
+    let time = Arc::new(OffsetTime::new());
+    let env = VolatileEnvironment::new(10).unwrap();
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+    ));
+    let producer = BlockProducer::new(signing_key(), voting_key());
+
+    // One block with stacking transactions
+    let mut transactions = vec![];
+    let key_pair = ed25519_key_pair(VALIDATOR_SECRET_KEY);
+    let address =
+        Address::from_user_friendly_address("NQ20 TSB0 DFSM UH9C 15GQ GAGJ TTE4 D3MA 859E")
+            .unwrap();
+
+    // This is an invalid tx since it will try to move more than the validator deposit
+    let invalid_tx = TransactionBuilder::new_delete_validator(
+        address.clone(),
+        &key_pair,
+        Coin::from_u64_unchecked(100),
+        Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT),
+        1,
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
+
+    transactions.push(invalid_tx.clone());
+
+    let bc = blockchain.upgradable_read();
+
+    // Block with stacking transactions
+    let block =
+        producer.next_micro_block(&bc, bc.time.now(), vec![], transactions, vec![0x41], None);
+
+    let block_transactions = &block.body.as_ref().unwrap().transactions;
+
+    assert_eq!(block_transactions[0], ExecutedTransaction::Err(invalid_tx));
+
+    assert_eq!(
+        Blockchain::push(bc, Block::Micro(block)),
+        Ok(PushResult::Extended)
+    );
+
+    assert_eq!(blockchain.read().block_number(), 1);
+
+    // Now we need to verify that the validator deposit was reduced because of the failing txn
+    {
+        let blockchain = blockchain.read();
+        let accounts_tree = &blockchain.state().accounts.tree;
+        let db_txn = blockchain.read_transaction();
+        let validator = StakingContract::get_validator(
+            accounts_tree,
+            &db_txn,
+            &Address::from(&key_pair.public),
+        )
+        .unwrap();
+
+        assert_eq!(
+            validator.deposit,
+            Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT - 100)
+        );
+        //Now the validator should be inactive because of the failing txn..
+        assert_eq!(validator.inactivity_flag, Some(1));
+    }
+
+    let blockchain = blockchain.upgradable_read();
+
+    let mut txn = blockchain.write_transaction();
+    // Revert the reactivate transaction
+    let result = blockchain.revert_blocks(1, &mut txn);
+
+    assert!(result.is_ok());
+
+    txn.commit();
+
+    // Now we need to verify that the validator deposit was reduced because of the failing txn
+    let accounts_tree = &blockchain.state().accounts.tree;
+    let db_txn = blockchain.read_transaction();
+    let validator =
+        StakingContract::get_validator(accounts_tree, &db_txn, &Address::from(&key_pair.public))
+            .unwrap();
+
+    assert_eq!(
+        validator.deposit,
+        Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT)
+    );
 }
 
 #[test]

@@ -981,12 +981,14 @@ fn delete_validator_works() {
     // Doesn't work until the next election block.
     let next_election_block = policy::election_block_after(2);
 
-    for h in 2..=next_election_block {
-        assert_eq!(
-            StakingContract::commit_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, h, 0),
-            Err(AccountError::InvalidForSender)
-        );
-    }
+    //for h in 2..=next_election_block {
+    // This check was removed by the failing txn change, it is now possible to delete a validator
+    // If slashing is introduced, this strategy would need to be revisited
+    //    assert_eq!(
+    //        StakingContract::commit_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, h, 0),
+    //        Err(AccountError::InvalidForSender)
+    //    );
+    //}
 
     // Works in the valid case.
     let validator_address = Address::from_any_str(VALIDATOR_ADDRESS).unwrap();
@@ -1391,6 +1393,7 @@ fn update_staker_works() {
         voting_key,
         other_validator_address.clone(),
         None,
+        Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT),
     )
     .unwrap();
 
@@ -2285,6 +2288,7 @@ fn make_sample_contract(
         voting_key,
         cold_address.clone(),
         None,
+        Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT),
     )
     .unwrap();
 

@@ -275,23 +275,34 @@ impl AccountTransactionInteraction for Account {
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         transaction: &Transaction,
+        block_height: u32,
     ) -> Result<AccountInfo, AccountError> {
         // Commiting a failed transaction is based upon the sender type: the fee needs to be paid from the sender accounr
         match transaction.sender_type {
-            AccountType::Basic => {
-                BasicAccount::commit_failed_transaction(accounts_tree, db_txn, transaction)
-            }
-            AccountType::Vesting => {
-                VestingContract::commit_failed_transaction(accounts_tree, db_txn, transaction)
-            }
+            AccountType::Basic => BasicAccount::commit_failed_transaction(
+                accounts_tree,
+                db_txn,
+                transaction,
+                block_height,
+            ),
+            AccountType::Vesting => VestingContract::commit_failed_transaction(
+                accounts_tree,
+                db_txn,
+                transaction,
+                block_height,
+            ),
             AccountType::HTLC => HashedTimeLockedContract::commit_failed_transaction(
                 accounts_tree,
                 db_txn,
                 transaction,
+                block_height,
             ),
-            AccountType::Staking => {
-                StakingContract::commit_failed_transaction(accounts_tree, db_txn, transaction)
-            }
+            AccountType::Staking => StakingContract::commit_failed_transaction(
+                accounts_tree,
+                db_txn,
+                transaction,
+                block_height,
+            ),
             _ => Err(AccountError::InvalidForRecipient),
         }
     }

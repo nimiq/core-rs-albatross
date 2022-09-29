@@ -64,6 +64,7 @@ pub trait AccountTransactionInteraction: Sized {
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         transaction: &Transaction,
+        block_height: u32,
     ) -> Result<AccountInfo, AccountError>;
 
     fn revert_failed_transaction(

@@ -1100,17 +1100,21 @@ impl ConsensusInterface for ConsensusDispatcher {
 
     /// Returns a serialized `delete_validator` transaction. The transaction fee will be paid from the
     /// validator deposit that is being returned.
+    /// Note in order for this transaction to be accepted fee + value should be equal to the validator deposit, which is not a fixed value:
+    /// Failed delete validator transactions can diminish the validator deposit
     async fn create_delete_validator_transaction(
         &mut self,
         validator_wallet: Address,
         recipient: Address,
         fee: Coin,
+        value: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<String, Self::Error> {
         let transaction = TransactionBuilder::new_delete_validator(
             recipient,
             &self.get_wallet_keypair(&validator_wallet)?,
             fee,
+            value,
             self.validity_start_height(validity_start_height),
             self.get_network_id(),
         )?;
@@ -1125,6 +1129,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         validator_wallet: Address,
         recipient: Address,
         fee: Coin,
+        value: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Self::Error> {
         let raw_tx = self
@@ -1132,6 +1137,7 @@ impl ConsensusInterface for ConsensusDispatcher {
                 validator_wallet,
                 recipient,
                 fee,
+                value,
                 validity_start_height,
             )
             .await?;

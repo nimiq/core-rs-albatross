@@ -66,6 +66,9 @@ pub struct Validator {
     // The amount of coins held by this validator. It also includes the coins delegated to him by
     // stakers.
     pub balance: Coin,
+    // The amount of coins deposit by this validator. The initial deposit is a fixed amount,
+    // however this value can be decremented by failing staking transactions due to fees.
+    pub deposit: Coin,
     // The number of stakers that are staking for this validator.
     pub num_stakers: u64,
     // A flag stating if the validator is inactive. If it is inactive, then it contains the block
@@ -86,10 +89,8 @@ impl StakingContract {
         voting_key: BlsPublicKey,
         reward_address: Address,
         signal_data: Option<Blake2bHash>,
+        deposit: Coin,
     ) -> Result<OperationInfo<Receipt>, AccountError> {
-        // Get the deposit value.
-        let deposit = Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT);
-
         // See if the validator already exists.
         if StakingContract::get_validator(accounts_tree, db_txn, validator_address).is_some() {
             return Err(AccountError::AlreadyExistentAddress {
@@ -116,6 +117,7 @@ impl StakingContract {
             balance: deposit,
             num_stakers: 0,
             inactivity_flag: None,
+            deposit,
         };
 
         // All checks passed, not allowed to fail from here on!
@@ -347,7 +349,7 @@ impl StakingContract {
             .remove(validator_address)
             .is_none()
         {
-            error!(
+            info!(
                 "Tried to inactivate a validator that was already inactivated! It has address {}.",
                 validator_address
             );
@@ -723,7 +725,8 @@ impl StakingContract {
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         validator_address: &Address,
-        block_height: u32,
+        _: u32,
+        transaction_total_value: Coin,
     ) -> Result<OperationInfo<DeleteValidatorReceipt>, AccountError> {
         // Get the validator.
         let validator =
@@ -745,11 +748,21 @@ impl StakingContract {
                 );
                 return Err(AccountError::InvalidForSender);
             }
-            Some(time) => {
-                if block_height <= policy::election_block_after(time) + policy::BLOCKS_PER_BATCH {
-                    return Err(AccountError::InvalidForSender);
-                }
+            Some(_time) => {
+                //  This check was removed because of the nature of the failed delete validator transaction
+                // (which can delete the validator if the deposit is consumed, regardles of the inactivity state)
+                // However, if slashing is implemented, then this strategy needs to be revisited.
+                //if block_height <= policy::election_block_after(time) + policy::BLOCKS_PER_BATCH {
+                //    return Err(AccountError::InvalidForSender);
+                //}
             }
+        }
+
+        let deposit = validator.deposit;
+
+        // The transaction value + fee must be equal to the validator deposit
+        if transaction_total_value != deposit {
+            return Err(AccountError::InvalidCoinValue);
         }
 
         // All checks passed, not allowed to fail from here on!
@@ -829,8 +842,6 @@ impl StakingContract {
         // Get the staking contract main and update it.
         let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
 
-        let deposit = Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT);
-
         staking_contract.balance = Account::balance_sub(staking_contract.balance, deposit)?;
 
         accounts_tree.put(
@@ -893,6 +904,7 @@ impl StakingContract {
             balance: Coin::from_u64_unchecked(balance + policy::VALIDATOR_DEPOSIT),
             num_stakers,
             inactivity_flag: Some(receipt.retire_time),
+            deposit: Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT),
         };
 
         accounts_tree.put(

@@ -1456,6 +1456,7 @@ impl TransactionBuilder {
         recipient: Address,
         cold_key_pair: &KeyPair,
         fee: Coin,
+        value: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Result<Transaction, TransactionBuilderError> {
@@ -1466,7 +1467,7 @@ impl TransactionBuilder {
             .with_sender(STAKING_CONTRACT_ADDRESS)
             .with_sender_type(AccountType::Staking)
             .with_recipient(recipient)
-            .with_value(Coin::from_u64_unchecked(VALIDATOR_DEPOSIT) - fee)
+            .with_value(value)
             .with_fee(fee)
             .with_validity_start_height(validity_start_height)
             .with_network_id(network_id);

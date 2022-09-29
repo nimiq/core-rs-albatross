@@ -215,6 +215,7 @@ impl AccountTransactionInteraction for BasicAccount {
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         transaction: &Transaction,
+        _block_height: u32,
     ) -> Result<AccountInfo, AccountError> {
         let key = KeyNibbles::from(&transaction.sender);
 

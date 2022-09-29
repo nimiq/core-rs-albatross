@@ -3,6 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use beserial::{Deserialize, Serialize};
 use nimiq_collections::BitSet;
 use nimiq_database::WriteTransaction;
+use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy;
 use nimiq_primitives::slots::SlashedSlot;
@@ -15,7 +16,9 @@ use crate::interaction_traits::{AccountInherentInteraction, AccountTransactionIn
 use crate::logs::{AccountInfo, Log};
 use crate::staking_contract::receipts::DeleteValidatorReceipt;
 use crate::staking_contract::SlashReceipt;
-use crate::{Account, AccountError, AccountsTrie, Inherent, InherentType, StakingContract};
+use crate::{
+    Account, AccountError, AccountsTrie, Inherent, InherentType, OperationInfo, StakingContract,
+};
 
 /// We need to distinguish between two types of transactions:
 /// 1. Incoming transactions, which include:
@@ -77,6 +80,14 @@ impl AccountTransactionInteraction for StakingContract {
                 // Get the validator address from the proof.
                 let validator_address = proof.compute_signer();
 
+                // Get the deposit value.
+                let deposit = Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT);
+
+                // Verify the transaction was formed properly
+                if transaction.value != deposit {
+                    return Err(AccountError::InvalidCoinValue);
+                }
+
                 Ok(StakingContract::create_validator(
                     accounts_tree,
                     db_txn,
@@ -85,6 +96,7 @@ impl AccountTransactionInteraction for StakingContract {
                     voting_key,
                     reward_address,
                     signal_data,
+                    deposit,
                 )?
                 .into())
             }
@@ -341,6 +353,7 @@ impl AccountTransactionInteraction for StakingContract {
                     db_txn,
                     &validator_address,
                     block_height,
+                    transaction.total_value(),
                 )?
                 .into()
             }
@@ -436,24 +449,86 @@ impl AccountTransactionInteraction for StakingContract {
 
         Ok(logs)
     }
-    /// Commits an outgoing transaction to the accounts trie.
+    /// Commits a failed transaction
     fn commit_failed_transaction(
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         transaction: &Transaction,
+        block_height: u32,
     ) -> Result<AccountInfo, AccountError> {
         // Check that the address is that of the Staking contract.
         if transaction.sender != policy::STAKING_CONTRACT_ADDRESS {
             return Err(AccountError::InvalidForSender);
         }
 
-        // Parse transaction data.
         let data = OutgoingStakingTransactionProof::parse(transaction)?;
 
         let mut acc_info: AccountInfo = match data {
-            OutgoingStakingTransactionProof::DeleteValidator { proof: _ } => {
-                // TODO: We need to implement the ability to pay the fee for this kind of transaction from a third party.
-                return Err(AccountError::InvalidForSender);
+            // In the case of a failed Delete Validator we will:
+            // 1. Pay the fee from the validator deposit
+            // 2. Inactivate the validator
+            // 3. If the deposit reaches 0, we delete the validator
+            OutgoingStakingTransactionProof::DeleteValidator { proof } => {
+                // Get the staking contract main and update it.
+                let mut staking_contract =
+                    StakingContract::get_staking_contract(accounts_tree, db_txn);
+
+                let validator_address = proof.compute_signer();
+
+                let mut validator =
+                    match StakingContract::get_validator(accounts_tree, db_txn, &validator_address)
+                    {
+                        Some(v) => v,
+                        None => {
+                            return Err(AccountError::NonExistentAddress {
+                                address: validator_address.clone(),
+                            });
+                        }
+                    };
+
+                validator.inactivity_flag = Some(block_height);
+
+                staking_contract
+                    .active_validators
+                    .remove(&validator_address);
+
+                staking_contract.parked_set.remove(&validator_address);
+
+                let new_deposit = Account::balance_sub(validator.deposit, transaction.fee)?;
+
+                if new_deposit.is_zero() {
+                    //Delete the validator if deposit reaches zero, note that we are passing the previous deposit value
+                    StakingContract::delete_validator(
+                        accounts_tree,
+                        db_txn,
+                        &validator_address,
+                        block_height,
+                        validator.deposit,
+                    )?
+                    .into()
+                } else {
+                    // Update the validator balance
+                    validator.deposit = new_deposit;
+                    Account::balance_sub(validator.balance, transaction.fee)?;
+
+                    accounts_tree.put(
+                        db_txn,
+                        &StakingContract::get_key_validator(&validator_address),
+                        Account::StakingValidator(validator),
+                    );
+
+                    // Update the staking contract
+
+                    staking_contract.balance =
+                        Account::balance_sub(staking_contract.balance, transaction.fee)?;
+
+                    accounts_tree.put(
+                        db_txn,
+                        &StakingContract::get_key_staking_contract(),
+                        Account::Staking(staking_contract),
+                    );
+                    OperationInfo::<DeleteValidatorReceipt>::new(None, vec![]).into()
+                }
             }
             OutgoingStakingTransactionProof::Unstake { proof } => {
                 // Get the staker address from the proof.
@@ -479,7 +554,7 @@ impl AccountTransactionInteraction for StakingContract {
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         transaction: &Transaction,
-        _receipt: Option<&Vec<u8>>,
+        receipt: Option<&Vec<u8>>,
     ) -> Result<Vec<Log>, AccountError> {
         // Check that the address is that of the Staking contract.
         if transaction.sender != policy::STAKING_CONTRACT_ADDRESS {
@@ -490,9 +565,74 @@ impl AccountTransactionInteraction for StakingContract {
         let data = OutgoingStakingTransactionProof::parse(transaction)?;
 
         let mut acc_info: AccountInfo = match data {
-            OutgoingStakingTransactionProof::DeleteValidator { proof: _ } => {
-                //TODO Pending implementation
-                return Err(AccountError::InvalidForSender);
+            OutgoingStakingTransactionProof::DeleteValidator { proof } => {
+                let validator_address = proof.compute_signer();
+
+                let mut validator =
+                    match StakingContract::get_validator(accounts_tree, db_txn, &validator_address)
+                    {
+                        Some(v) => v,
+                        None => {
+                            // Receipt is only needed when the validator was deleted
+                            let receipt: DeleteValidatorReceipt =
+                                Deserialize::deserialize_from_vec(
+                                    receipt.ok_or(AccountError::InvalidReceipt)?,
+                                )?;
+
+                            // Need to re-create the validator with the deposit equal to fee
+                            // Need to obtain the validator info from the receipt
+                            StakingContract::create_validator(
+                                accounts_tree,
+                                db_txn,
+                                &validator_address,
+                                receipt.signing_key,
+                                receipt.voting_key,
+                                receipt.reward_address,
+                                receipt.signal_data,
+                                Coin::ZERO,
+                            )
+                            .unwrap();
+                            StakingContract::get_validator(
+                                accounts_tree,
+                                db_txn,
+                                &validator_address,
+                            )
+                            .expect("re-Creating a validator failed")
+                        }
+                    };
+
+                StakingContract::reactivate_validator(
+                    accounts_tree,
+                    db_txn,
+                    &validator_address,
+                    &Address::from(&validator.signing_key),
+                )
+                .unwrap();
+
+                validator.deposit = Account::balance_add(validator.deposit, transaction.fee)?;
+                validator.balance = Account::balance_add(validator.balance, transaction.fee)?;
+
+                accounts_tree.put(
+                    db_txn,
+                    &StakingContract::get_key_validator(&validator_address),
+                    Account::StakingValidator(validator),
+                );
+
+                // Update the staking contract
+                // Get the staking contract main and update it.
+                let mut staking_contract =
+                    StakingContract::get_staking_contract(accounts_tree, db_txn);
+
+                staking_contract.balance =
+                    Account::balance_add(staking_contract.balance, transaction.fee)?;
+
+                accounts_tree.put(
+                    db_txn,
+                    &StakingContract::get_key_staking_contract(),
+                    Account::Staking(staking_contract),
+                );
+
+                AccountInfo::new(None, vec![])
             }
             OutgoingStakingTransactionProof::Unstake { proof } => {
                 // Get the staker address from the proof.
@@ -520,9 +660,8 @@ impl AccountTransactionInteraction for StakingContract {
         _current_balance: Coin,
         _block_time: u64,
     ) -> bool {
-        // TODO Implementation missing: we need to support the ability to pay the fee from a third party for outgoing stacking transactions
-        // When that is ready, we can use this function to verify if the third party can actually pay the fee
-        // For now we just return true, to be consistant with the current implementation
+        // Note: Currently this check is performed via the StakingContract::can_pay_tx interface, which is used by the mempool
+        // Once a better accounts interface is created, both checks can be reconciliated.
 
         true
     }

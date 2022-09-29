@@ -519,13 +519,6 @@ impl OutgoingStakingTransactionProof {
     pub fn verify(&self, transaction: &Transaction) -> Result<(), TransactionError> {
         match self {
             OutgoingStakingTransactionProof::DeleteValidator { proof } => {
-                // When dropping a validator you get exactly the validator deposit back.
-                if transaction.total_value() != Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT)
-                {
-                    error!("Wrong value when dropping a validator. It must be VALIDATOR_DEPOSIT. The offending transaction is the following:\n{:?}", transaction);
-                    return Err(TransactionError::InvalidValue);
-                }
-
                 // Check that the signature is correct.
                 verify_transaction_signature(transaction, proof, false)?
             }

@@ -243,7 +243,12 @@ impl Accounts {
                 }
                 Err(account_err) => {
                     // Commit the failed transaction (i.e deduce fee) and collect logs
-                    match Account::commit_failed_transaction(&self.tree, txn, transaction) {
+                    match Account::commit_failed_transaction(
+                        &self.tree,
+                        txn,
+                        transaction,
+                        block_height,
+                    ) {
                         Ok(account_info) => {
                             // Store the reason why the transaction failed
                             let mut logs = vec![Log::FailedTransaction {

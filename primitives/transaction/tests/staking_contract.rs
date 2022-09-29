@@ -611,23 +611,18 @@ fn delete_validator() {
     let deser_tx = Deserialize::deserialize(&mut &hex::decode(tx_hex).unwrap()[..]).unwrap();
     assert_eq!(tx, deser_tx);
 
-    // Works in the valid case.
+    // Works in the valid case (This assumes the delete_validator_tx function creates a tx with 100 fee)
     assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
 
-    // Wrong values.
+    // This transaction is no longer statically checked for the validator deposit, so the only case where the verification
+    // would fail, is by sending a wrong signature
     let tx = make_delete_validator_tx(VALIDATOR_DEPOSIT - 200, false);
 
-    assert_eq!(
-        AccountType::verify_outgoing_transaction(&tx),
-        Err(TransactionError::InvalidValue)
-    );
+    assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
 
     let tx = make_delete_validator_tx(VALIDATOR_DEPOSIT, false);
 
-    assert_eq!(
-        AccountType::verify_outgoing_transaction(&tx),
-        Err(TransactionError::InvalidValue)
-    );
+    assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
 
     // Wrong signature.
     let tx = make_delete_validator_tx(VALIDATOR_DEPOSIT - 100, true);

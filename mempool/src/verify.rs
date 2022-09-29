@@ -215,6 +215,7 @@ pub(crate) async fn verify_tx<'a>(
 
         // If the sender is not already in the mempool, then we need to check if it can pay the
         // transaction.
+        //TODO: use the pending balance in the mempool?
         if !StakingContract::can_pay_tx(
             accounts_tree,
             &db_txn,

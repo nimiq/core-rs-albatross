@@ -315,14 +315,6 @@ impl StakingContract {
     ) -> bool {
         match tx_proof {
             OutgoingStakingTransactionProof::DeleteValidator { proof } => {
-                // If the fee is larger than the validator deposit then this won't work.
-                if tx_value > Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT) {
-                    warn!(
-                    "Cannot pay fees for transaction because fee is larger than validator deposit."
-                );
-                    return false;
-                }
-
                 // Get the validator address from the proof.
                 let validator_address = proof.compute_signer();
 
@@ -338,6 +330,14 @@ impl StakingContract {
                             return false;
                         }
                     };
+
+                // If the fee is larger than the validator deposit then this won't work.
+                if tx_value > validator.deposit {
+                    warn!(
+    "Cannot pay fees for transaction because fee is larger than validator deposit."
+);
+                    return false;
+                }
 
                 // Check that the validator has been inactive for long enough.
                 match validator.inactivity_flag {

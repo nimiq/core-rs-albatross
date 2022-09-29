@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use crate::Client;
 
 use super::accounts_subcommands::HandleSubcommand;
-use super::transactions_subcommands::TxCommon;
+use super::transactions_subcommands::{TxCommon, TxCommonWithValue};
 
 #[derive(Debug, Parser)]
 pub enum ValidatorCommand {
@@ -143,7 +143,7 @@ pub enum ValidatorCommand {
         recipient_address: Address,
 
         #[clap(flatten)]
-        tx_commons: TxCommon,
+        tx_commons: TxCommonWithValue,
     },
 }
 
@@ -361,14 +361,15 @@ impl HandleSubcommand for ValidatorCommand {
                 tx_commons,
             } => {
                 let validator_address = client.validator.get_address().await?;
-                if tx_commons.dry {
+                if tx_commons.common_tx_fields.dry {
                     let tx = client
                         .consensus
                         .create_delete_validator_transaction(
                             validator_address,
                             recipient_address,
-                            tx_commons.fee,
-                            tx_commons.validity_start_height,
+                            tx_commons.common_tx_fields.fee,
+                            tx_commons.value,
+                            tx_commons.common_tx_fields.validity_start_height,
                         )
                         .await?;
                     println!("{}", tx);
@@ -378,8 +379,9 @@ impl HandleSubcommand for ValidatorCommand {
                         .send_delete_validator_transaction(
                             validator_address,
                             recipient_address,
-                            tx_commons.fee,
-                            tx_commons.validity_start_height,
+                            tx_commons.common_tx_fields.fee,
+                            tx_commons.value,
+                            tx_commons.common_tx_fields.validity_start_height,
                         )
                         .await?;
                     println!("{}", txid);

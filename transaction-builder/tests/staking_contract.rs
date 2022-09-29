@@ -5,6 +5,7 @@ use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::account::AccountType;
+use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_primitives::policy::{STAKING_CONTRACT_ADDRESS, VALIDATOR_DEPOSIT};
 use nimiq_test_log::test;
@@ -288,6 +289,7 @@ fn it_can_create_validator_transactions() {
         address,
         &key_pair,
         100.try_into().unwrap(),
+        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT - 100),
         1,
         NetworkId::Dummy,
     )
@@ -361,6 +363,7 @@ fn make_unstake_transaction(key_pair: &KeyPair, value: u64) -> Transaction {
     tx
 }
 
+//TODO update this function with a more proper interface
 fn make_delete_transaction(key_pair: &KeyPair, value: u64) -> Transaction {
     let mut tx = Transaction::new_extended(
         STAKING_CONTRACT_ADDRESS,
