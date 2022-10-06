@@ -470,7 +470,7 @@ impl HistoryStore {
         tree.num_leaves()
     }
 
-    /// Gets the number of all finalized extended transactions for a given epoch.
+    /// Gets all finalized extended transactions for a given epoch.
     pub fn get_final_epoch_transactions(
         &self,
         epoch_number: u32,
@@ -516,6 +516,56 @@ impl HistoryStore {
         }
 
         ext_txs
+    }
+
+    /// Gets the number of all finalized extended transactions for a given epoch.
+    /// This is basically an optimization of calling `get_final_epoch_transactions(..).len()`
+    /// since the latter is very expensive
+    pub fn get_number_final_epoch_transactions(
+        &self,
+        epoch_number: u32,
+        txn_option: Option<&Transaction>,
+    ) -> usize {
+        let read_txn: ReadTransaction;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = ReadTransaction::new(&self.env);
+                &read_txn
+            }
+        };
+
+        // Get history tree for given epoch.
+        let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(
+            &self.hist_tree_db,
+            txn,
+            epoch_number,
+        ));
+
+        // Return early if there are no leaves in the HistoryTree for the given epoch.
+        let num_leaves = tree.num_leaves();
+        if num_leaves == 0 {
+            return 0;
+        }
+
+        // Find the number of the last macro stored for the given epoch.
+        let last_leaf = tree.get_leaf(num_leaves - 1).unwrap();
+        let last_tx = self.get_extended_tx(&last_leaf, Some(txn)).unwrap();
+        let last_macro_block = policy::last_macro_block(last_tx.block_number);
+
+        // Iterate backwards and check when we find a transaction of a block that is before the last macro block
+        let mut count = tree.num_leaves();
+        for i in (0..tree.num_leaves()).rev() {
+            let leaf_hash = tree.get_leaf(i).unwrap();
+            let ext_tx = self.get_extended_tx(&leaf_hash, Some(txn)).unwrap();
+            if ext_tx.block_number > last_macro_block {
+                count -= 1;
+            } else {
+                break;
+            }
+        }
+
+        count
     }
 
     /// Gets all non-finalized extended transactions for a given epoch.
