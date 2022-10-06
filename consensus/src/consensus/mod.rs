@@ -6,8 +6,6 @@ use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 
 use futures::{FutureExt, StreamExt};
-use nimiq_block::Block;
-use nimiq_genesis::NetworkInfo;
 use nimiq_primitives::account::AccountType;
 use parking_lot::RwLock;
 use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
@@ -23,7 +21,6 @@ use nimiq_transaction::Transaction;
 use crate::consensus::head_requests::{HeadRequests, HeadRequestsResult};
 use crate::sync::block_queue::{BlockQueue, BlockQueueConfig, BlockQueueEvent};
 use crate::sync::request_component::{BlockRequestComponent, HistorySyncStream};
-use crate::zkp::zkp_component::ZKPComponent;
 
 mod head_requests;
 mod request_response;
@@ -70,8 +67,6 @@ pub struct Consensus<N: Network> {
 
     block_queue: BlockQueue<N, BlockRequestComponent<N>>,
 
-    zkp_component: ZKPComponent<N>,
-
     /// A Delay which exists purely for the waker on its poll to reactivate the task running Consensus::poll
     /// FIXME Remove this
     next_execution_timer: Option<Pin<Box<Sleep>>>,
@@ -95,9 +90,6 @@ impl<N: Network> Consensus<N> {
     /// established state and to advance the chain.
     const HEAD_REQUESTS_TIMEOUT: Duration = Duration::from_secs(5);
 
-    ///
-    const ZKP_PROVER_FUNCTIONALITY: bool = false;
-
     /// Timeout after which the consensus is polled after it ran last
     ///
     /// TODO: Set appropriate duration
@@ -110,24 +102,22 @@ impl<N: Network> Consensus<N> {
         network: Arc<N>,
         sync_protocol: Pin<Box<dyn HistorySyncStream<N::PeerId>>>,
     ) -> Self {
-        Self::with_min_peers_zkp_prover(
+        Self::with_min_peers(
             env,
             blockchain,
             network,
             sync_protocol,
             Self::MIN_PEERS_ESTABLISHED,
-            Self::ZKP_PROVER_FUNCTIONALITY,
         )
         .await
     }
 
-    pub async fn with_min_peers_zkp_prover(
+    pub async fn with_min_peers(
         env: Environment,
         blockchain: Arc<RwLock<Blockchain>>,
         network: Arc<N>,
         sync_protocol: Pin<Box<dyn HistorySyncStream<N::PeerId>>>,
         min_peers: usize,
-        zkp_prover_active: bool,
     ) -> Self {
         let request_component = BlockRequestComponent::new(
             sync_protocol,
@@ -143,24 +133,7 @@ impl<N: Network> Consensus<N> {
         )
         .await;
 
-        let network_info = NetworkInfo::from_network_id(blockchain.read().network_id());
-        let genesis_block = network_info.genesis_block::<Block>();
-        let zkp_component = ZKPComponent::new(
-            Arc::clone(&blockchain),
-            Arc::clone(&network),
-            genesis_block.unwrap_macro(),
-            zkp_prover_active,
-        )
-        .await;
-
-        Self::new(
-            env,
-            blockchain,
-            network,
-            block_queue,
-            min_peers,
-            zkp_component,
-        )
+        Self::new(env, blockchain, network, block_queue, min_peers)
     }
 
     pub fn new(
@@ -169,11 +142,10 @@ impl<N: Network> Consensus<N> {
         network: Arc<N>,
         block_queue: BlockQueue<N, BlockRequestComponent<N>>,
         min_peers: usize,
-        zkp_component: ZKPComponent<N>,
     ) -> Self {
         let (tx, _rx) = broadcast(256);
 
-        Self::init_network_request_receivers(&network, &blockchain, &zkp_component);
+        Self::init_network_request_receivers(&network, &blockchain);
 
         let established_flag = Arc::new(AtomicBool::new(false));
 
@@ -183,7 +155,6 @@ impl<N: Network> Consensus<N> {
             blockchain,
             network,
             env,
-            zkp_component,
             block_queue,
             events: tx,
             next_execution_timer: Some(timer),
@@ -393,7 +364,7 @@ impl<N: Network> Future for Consensus<N> {
         self.request_heads();
 
         // 5. Advance the zkp component ITODO write what this does
-        while let Poll::Ready(Some(_)) = self.zkp_component.poll_next_unpin(cx) {}
+        //        while let Poll::Ready(Some(_)) = self.zkp_component.poll_next_unpin(cx) {}
 
         Poll::Pending
     }

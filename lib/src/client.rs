@@ -27,6 +27,9 @@ use nimiq_validator_network::network_impl::ValidatorNetworkImpl;
 #[cfg(feature = "wallet")]
 use nimiq_wallet::WalletStore;
 
+use nimiq_zkp_prover::zkp_component::ZKPComponent as AbstractZKPComponent;
+use nimiq_zkp_prover::zkp_component::ZKPComponentProxy as AbstractZKPComponentProxy;
+
 use crate::config::config::ClientConfig;
 use crate::error::Error;
 
@@ -37,6 +40,9 @@ pub type ConsensusProxy = AbstractConsensusProxy<Network>;
 pub type Validator = AbstractValidator<Network, ValidatorNetworkImpl<Network>>;
 #[cfg(feature = "validator")]
 pub type ValidatorProxy = AbstractValidatorProxy;
+
+pub type ZKPComponent = AbstractZKPComponent<Network>;
+pub type ZKPComponentProxy = AbstractZKPComponentProxy<Network>;
 
 /// Holds references to the relevant structs. This is then Arc'd in `Client` and a nice API is
 /// exposed.
@@ -63,6 +69,8 @@ pub(crate) struct ClientInner {
     /// Wallet that stores keypairs for transaction signing
     #[cfg(feature = "wallet")]
     wallet_store: Arc<WalletStore>,
+
+    zkp_component: ZKPComponentProxy,
 }
 
 impl ClientInner {
@@ -140,13 +148,24 @@ impl ClientInner {
             Arc::clone(&network),
             network_events,
         );
-        let consensus = Consensus::with_min_peers_zkp_prover(
+        let consensus = Consensus::with_min_peers(
             environment.clone(),
-            blockchain,
+            Arc::clone(&blockchain),
             Arc::clone(&network),
             Box::pin(sync),
             config.consensus.min_peers,
-            config.consensus.zkp_prover_node_functionality,
+        )
+        .await;
+
+        let zkp_prover_active = config.zkp_prover_node_functionality;
+        let network_info = NetworkInfo::from_network_id(blockchain.read().network_id());
+        let genesis_block = network_info.genesis_block::<Block>();
+        let zkp_component = ZKPComponent::new(
+            Arc::clone(&blockchain),
+            Arc::clone(&network),
+            genesis_block.unwrap_macro(),
+            zkp_prover_active,
+            environment.clone(),
         )
         .await;
 
@@ -204,10 +223,12 @@ impl ClientInner {
                 validator: validator_proxy,
                 #[cfg(feature = "wallet")]
                 wallet_store,
+                zkp_component: zkp_component.proxy(),
             }),
             consensus: Some(consensus),
             #[cfg(feature = "validator")]
             validator,
+            zkp_component: Some(zkp_component),
         })
     }
 }
@@ -235,6 +256,7 @@ pub struct Client {
     consensus: Option<Consensus>,
     #[cfg(feature = "validator")]
     validator: Option<Validator>,
+    zkp_component: Option<ZKPComponent>,
 }
 
 impl Client {
@@ -293,5 +315,15 @@ impl Client {
     /// Returns the database environment.
     pub fn environment(&self) -> Environment {
         self.inner.environment.clone()
+    }
+
+    /// Returns a reference to the *ZKP Component* or none.
+    pub fn take_zkp_component(&mut self) -> Option<ZKPComponent> {
+        self.zkp_component.take()
+    }
+
+    /// Returns a reference to the *ZKP Component Proxy*.
+    pub fn zkp_component(&self) -> ZKPComponentProxy {
+        self.inner.zkp_component.clone()
     }
 }

@@ -55,6 +55,7 @@ nimiq-keys = { path = "../keys" }
 nimiq-log = { path = "../log", optional = true }
 nimiq-mempool = { path = "../mempool" }
 nimiq-metrics-server = { path = "../metrics-server" }
+nimiq-nano-zkp = { path = "../nano-zkp", features = ["prover"] }
 nimiq-network-libp2p = { path = "../network-libp2p", features = ["metrics"] }
 nimiq-network-interface = { path = "../network-interface" }
 nimiq-peer-address = { path = "../peer-address" }
@@ -64,6 +65,7 @@ nimiq-utils = { path = "../utils", features = ["time", "key-store"] }
 nimiq-validator = { path = "../validator", optional = true, features = ["trusted_push"] }
 nimiq-validator-network = { path = "../validator-network", optional = true }
 nimiq-wallet = { path = "../wallet", optional = true }
+nimiq-zkp-prover = {path = "../zkp-prover"}
 
 [dev-dependencies]
 nimiq-test-log = { path = "../test-log" }

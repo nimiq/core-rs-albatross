@@ -66,8 +66,6 @@ pub struct ConsensusConfig {
     pub sync_mode: SyncMode,
     #[builder(default = "3")]
     pub min_peers: usize,
-    #[builder(default)]
-    pub zkp_prover_node_functionality: bool,
 }
 
 impl Default for ConsensusConfig {
@@ -75,7 +73,6 @@ impl Default for ConsensusConfig {
         ConsensusConfig {
             sync_mode: SyncMode::default(),
             min_peers: 3,
-            zkp_prover_node_functionality: false,
         }
     }
 }
@@ -603,6 +600,10 @@ pub struct ClientConfig {
     #[builder(default)]
     pub consensus: ConsensusConfig,
 
+    /// ZK Prover config
+    #[builder(default = "false")]
+    pub zkp_prover_node_functionality: bool,
+
     /// The Nimiq network the client should connect to. Usually this should be either `Test` or
     /// `Main` for the Nimiq 1.0 networks. For Albatross there is currently only `TestAlbatross`
     /// and `DevAlbatross` available. Since Albatross is still in development at time of writing,
@@ -744,9 +745,6 @@ impl ClientConfigBuilder {
         if let Some(min_peers) = config_file.consensus.min_peers {
             consensus.min_peers = min_peers;
         }
-        if let Some(zkp_prover) = config_file.consensus.zkp_prover {
-            consensus.zkp_prover_node_functionality = zkp_prover;
-        }
         self.consensus(consensus);
 
         // Configure network
@@ -795,6 +793,9 @@ impl ClientConfigBuilder {
 
         // Configure database
         self.database(config_file.database.clone());
+
+        // Configure the zk prover
+        self.zkp_prover_node_functionality = Some(config_file.zkp_prover_node_functionality);
 
         // Configure RPC server
         #[cfg(feature = "rpc-server")]

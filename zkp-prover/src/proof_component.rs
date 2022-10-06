@@ -8,11 +8,12 @@ use nimiq_nano_primitives::MacroBlock as ZKPMacroBlock;
 use parking_lot::RwLock;
 
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
+use nimiq_database::{Database, Environment, ReadTransaction, WriteTransaction};
 use nimiq_nano_zkp::{NanoZKP, NanoZKPError};
 use tokio::sync::oneshot::Sender;
 
-use super::types::ZKPComponentState;
-use crate::zkp::types::*;
+use super::types::ZKPState;
+use crate::types::*;
 
 pub(crate) fn pre_proof_validity_checks(
     blockchain: &Arc<RwLock<Blockchain>>,
@@ -50,14 +51,14 @@ pub fn validate_proof(blockchain: &Arc<RwLock<Blockchain>>, proof: ZKProof) -> b
         return validate_proof_get_new_state(proof, new_block, old_block)
             .map_or(false, |zkp_state| zkp_state.is_some());
     }
-    return false;
+    false
 }
 
 pub(crate) fn validate_proof_get_new_state(
     proof: Proof<MNT6_753>,
     new_block: MacroBlock,
     old_block: MacroBlock,
-) -> Result<Option<ZKPComponentState>, ZKPComponentError> {
+) -> Result<Option<ZKPState>, ZKPComponentError> {
     let old_pks: Vec<G2MNT6> = old_block
         .get_validators()
         .unwrap()
@@ -82,9 +83,9 @@ pub(crate) fn validate_proof_get_new_state(
         new_pks.clone(),
         proof.clone(),
     )? {
-        return Ok(Some(ZKPComponentState {
+        return Ok(Some(ZKPState {
             latest_pks: new_pks,
-            latest_header_hash: new_block.hash().into(),
+            latest_header_hash: new_block.hash(),
             latest_block_number: new_block.block_number(),
             latest_proof: Some(proof),
         }));
@@ -98,7 +99,7 @@ pub(crate) async fn generate_new_proof(
     latest_header_hash: [u8; 32],
     previous_proof: Option<Proof<MNT6_753>>,
     genesis_state: Vec<u8>,
-    sender: Sender<(Blake2bHash, Result<ZKPComponentState, ZKPComponentError>)>,
+    sender: Sender<(Blake2bHash, Result<ZKPState, ZKPComponentError>)>,
 ) {
     let final_pks: Vec<G2MNT6> = block
         .get_validators()
@@ -124,7 +125,7 @@ pub(crate) async fn generate_new_proof(
     let result = match proof {
         Ok(proof) => sender.send((
             new_block_blake_hash.clone(),
-            Ok(ZKPComponentState {
+            Ok(ZKPState {
                 latest_pks,
                 latest_header_hash: new_block_blake_hash,
                 latest_block_number: block.block_number,
@@ -136,5 +137,31 @@ pub(crate) async fn generate_new_proof(
 
     if result.is_err() {
         log::error!(error = "receiver hung up", "error sending the zk proof",);
+    }
+}
+
+#[derive(Debug)]
+pub struct ProofStore {
+    env: Environment,
+    // A database of the curreent zkp state indexed by their block number.
+    zkp_db: Database,
+}
+
+impl ProofStore {
+    const PROOF_DB_NAME: &'static str = "ZKPState";
+    const PROOF_KEY: &'static str = "proof";
+
+    pub fn new(env: Environment) -> Self {
+        let zkp_db = env.open_database(Self::PROOF_DB_NAME.to_string());
+
+        ProofStore { env, zkp_db }
+    }
+
+    pub fn get_zkp(&self) -> Option<ZKPState> {
+        ReadTransaction::new(&self.env).get(&self.zkp_db, ProofStore::PROOF_KEY)
+    }
+
+    pub fn set_zkp(&self, zkp_state: &ZKPState) {
+        WriteTransaction::new(&self.env).put(&self.zkp_db, ProofStore::PROOF_KEY, zkp_state);
     }
 }

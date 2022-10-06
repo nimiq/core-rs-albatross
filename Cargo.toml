@@ -51,6 +51,7 @@ members = [
   "validator-network",
   "vrf",
   "wallet",
+  "zkp-prover",
 ]
 
 # Force nimiq-bls and nimiq-nano-zkp to be built with the highest optimization level in the test profiles. This is
