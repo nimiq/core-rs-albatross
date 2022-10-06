@@ -40,7 +40,9 @@ impl ChainStore {
         let block_db = env.open_database(Self::BLOCK_DB_NAME.to_string());
         let height_idx = env.open_database_with_flags(
             Self::HEIGHT_IDX_NAME.to_string(),
-            DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_FIXED_SIZE_VALUES,
+            DatabaseFlags::DUPLICATE_KEYS
+                | DatabaseFlags::DUP_FIXED_SIZE_VALUES
+                | DatabaseFlags::UINT_KEYS,
         );
         let receipt_db = env
             .open_database_with_flags(Self::RECEIPT_DB_NAME.to_string(), DatabaseFlags::UINT_KEYS);
