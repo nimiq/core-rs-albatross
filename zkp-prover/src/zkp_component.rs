@@ -6,6 +6,7 @@ use std::task::{Context, Poll};
 use futures::{FutureExt, Stream, StreamExt};
 
 use nimiq_block::{Block, MacroBlock};
+use nimiq_database::Environment;
 use nimiq_hash::Blake2bHash;
 use nimiq_nano_primitives::{state_commitment, MacroBlock as ZKPMacroBlock};
 use nimiq_network_interface::request::RequestError;
@@ -19,12 +20,37 @@ use tokio::sync::oneshot::{self, Receiver};
 use pin_project::pin_project;
 use tokio::task::JoinHandle;
 
-use crate::messages::RequestZKP;
-use crate::zkp::proof_component as ZKProofComponent;
-use crate::zkp::types::*;
+use nimiq_consensus::consensus::Consensus;
+
+use crate::proof_component::{self as ZKProofComponent, ProofStore};
+use crate::types::*;
 use futures::stream::BoxStream;
 
 pub type ZKProofsStream<N> = BoxStream<'static, (ZKProof, <N as Network>::PubsubId)>;
+
+pub struct ZKPComponentProxy<N: Network> {
+    pub network: Arc<N>,
+    zkp_state: Arc<RwLock<ZKPState>>,
+    genesis_state: Vec<u8>,
+}
+
+impl<N: Network> Clone for ZKPComponentProxy<N> {
+    fn clone(&self) -> Self {
+        Self {
+            network: Arc::clone(&self.network),
+            zkp_state: Arc::clone(&self.zkp_state),
+            genesis_state: self.genesis_state.clone(),
+        }
+    }
+}
+
+impl<N: Network> ZKPComponentProxy<N> {
+    pub async fn request_zkp(&self, peer_id: N::PeerId) -> Result<ZKProof, RequestError> {
+        self.network
+            .request::<RequestZKP>(RequestZKP {}, peer_id)
+            .await
+    }
+}
 
 /// Election blocks ZKP Component. Has:
 ///
@@ -37,12 +63,13 @@ pub type ZKProofsStream<N> = BoxStream<'static, (ZKProof, <N as Network>::Pubsub
 pub struct ZKPComponent<N: Network> {
     blockchain: Arc<RwLock<Blockchain>>,
     network: Arc<N>,
-    pub(crate) zkp_state: Arc<RwLock<ZKPComponentState>>,
+    pub(crate) zkp_state: Arc<RwLock<ZKPState>>,
     genesis_state: Vec<u8>,
-    receiver: Option<Receiver<(Blake2bHash, Result<ZKPComponentState, ZKPComponentError>)>>,
+    receiver: Option<Receiver<(Blake2bHash, Result<ZKPState, ZKPComponentError>)>>,
     blockchain_election_rx: Option<NotifierStream<BlockchainEvent>>,
     zk_proofs_stream: ZKProofsStream<N>,
     proof_generation_thread: Option<JoinHandle<()>>,
+    proof_storage: ProofStore,
     //zkp_request_result: Option<Pin<Box<dyn Future<Output = Result<ZKProof, RequestError>>>>>,
 }
 
@@ -52,8 +79,9 @@ impl<N: Network> ZKPComponent<N> {
         network: Arc<N>,
         genesis_block: MacroBlock,
         is_prover_active: bool,
+        env: Environment,
     ) -> Self {
-        let latest_pks: Vec<_> = genesis_block
+        let latest_pks: Vec<_> = genesis_block //ITODO maybe call push proof instead
             .get_validators()
             .unwrap()
             .voting_keys()
@@ -76,22 +104,65 @@ impl<N: Network> ZKPComponent<N> {
         }
         let zk_proofs_stream = network.subscribe::<ZKProofTopic>().await.unwrap().boxed();
 
-        // TODO load from db the preexisting proof if any
+        // Sets to zkp_component state to genesis
+        let mut zkp_state = Arc::new(RwLock::new(ZKPState {
+            latest_pks,
+            latest_header_hash: genesis_hash,
+            latest_block_number: genesis_block.block_number,
+            latest_proof: None,
+        }));
 
-        Self {
+        // Load from db the preexisting proof if any
+        let proof_storage = ProofStore::new(env);
+        if let Some(loaded_zkp_state) = proof_storage.get_zkp() {
+            let loaded_zkp_state = Arc::new(RwLock::new(loaded_zkp_state));
+            if let Err(e) = Self::do_push_proof(
+                &blockchain,
+                &loaded_zkp_state,
+                loaded_zkp_state.read().into(),
+                &mut None,
+                &mut None,
+                &proof_storage,
+                false,
+            ) {
+                log::error!("Error pushing the zk proof load from disk {}", e);
+                // ITODO Delete proof/push genesis proof (?) ask pascal
+                proof_storage.set_zkp(&zkp_state.read());
+            } else {
+                zkp_state = loaded_zkp_state;
+            }
+        }
+
+        let zkp_component = Self {
             blockchain,
             network: Arc::clone(&network),
-            zkp_state: Arc::new(RwLock::new(ZKPComponentState {
-                latest_pks,
-                latest_header_hash: genesis_hash,
-                latest_block_number: genesis_block.block_number,
-                latest_proof: None,
-            })),
+            zkp_state,
             genesis_state,
             receiver: None,
             blockchain_election_rx,
             zk_proofs_stream,
             proof_generation_thread: None,
+            proof_storage,
+        };
+
+        zkp_component.launch_request_handler();
+        zkp_component
+    }
+
+    fn launch_request_handler(&self) {
+        let stream = self.network.receive_requests::<RequestZKP>();
+        tokio::spawn(Consensus::request_handler(
+            &self.network,
+            stream,
+            &self.zkp_state,
+        ));
+    }
+
+    pub fn proxy(&self) -> ZKPComponentProxy<N> {
+        ZKPComponentProxy {
+            network: Arc::clone(&self.network),
+            zkp_state: Arc::clone(&self.zkp_state),
+            genesis_state: self.genesis_state.clone(),
         }
     }
 
@@ -111,7 +182,7 @@ impl<N: Network> ZKPComponent<N> {
         let network = Arc::clone(network);
         tokio::spawn(async move {
             if let Err(e) = network.publish::<ZKProofTopic>(zk_proof).await {
-                warn!(error = &e as &dyn Error, "Failed to publish the zk proof");
+                log::warn!(error = &e as &dyn Error, "Failed to publish the zk proof");
             }
         });
     }
@@ -127,17 +198,19 @@ impl<N: Network> ZKPComponent<N> {
             proof,
             &mut self.receiver,
             &mut self.proof_generation_thread,
+            &self.proof_storage,
+            true,
         )
     }
 
     fn do_push_proof(
         blockchain: &Arc<RwLock<Blockchain>>,
-        zkp_state: &Arc<RwLock<ZKPComponentState>>,
+        zkp_state: &Arc<RwLock<ZKPState>>,
         proof: ZKProof,
-        receiver: &mut Option<
-            Receiver<(Blake2bHash, Result<ZKPComponentState, ZKPComponentError>)>,
-        >,
+        receiver: &mut Option<Receiver<(Blake2bHash, Result<ZKPState, ZKPComponentError>)>>,
         proof_generation_thread: &mut Option<JoinHandle<()>>,
+        proof_storage: &ProofStore,
+        add_to_storage: bool,
     ) -> Result<(), ZKPComponentError> {
         let (new_block, old_block, proof) =
             ZKProofComponent::pre_proof_validity_checks(blockchain, proof)?;
@@ -158,6 +231,9 @@ impl<N: Network> ZKPComponent<N> {
             if let Some(ref thread) = proof_generation_thread {
                 thread.abort();
                 *proof_generation_thread = None;
+            }
+            if add_to_storage {
+                proof_storage.set_zkp(&zkp_state_lock)
             }
             return Ok(());
         }
@@ -184,6 +260,8 @@ impl<N: Network> Stream for ZKPComponent<N> {
                         proof.0,
                         this.receiver,
                         this.proof_generation_thread,
+                        this.proof_storage,
+                        true,
                     ) {
                         log::error!("Error pushing the new zk proof {}", e);
                     }

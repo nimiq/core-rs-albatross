@@ -1,9 +1,9 @@
 [package]
-name = "nimiq-consensus"
+name = "nimiq-zkp-prover"
 version = "0.1.0"
-authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
+authors = ["Ines C <ii.cruz@campus.fct.unl.pt>"]
 edition = "2021"
-description = "Consensus logic of Nimiq's Albatross implementation"
+description = "All functionality related to the zk proof storage, dessimination and request handeling."
 homepage = "https://nimiq.com"
 repository = "https://github.com/nimiq/core-rs-albatross"
 license = "Apache-2.0"
@@ -35,6 +35,7 @@ tokio-stream = { version = "0.1", features = ["sync"] }
 beserial = { path = "../beserial", features = ["derive"] }
 nimiq-block = { path = "../primitives/block" }
 nimiq-blockchain = { path = "../blockchain" }
+nimiq-consensus = { path = "../consensus" }
 nimiq-database = { path = "../database" }
 nimiq-genesis = { path = "../genesis" }
 nimiq-hash = { path = "../hash" }
@@ -42,6 +43,7 @@ nimiq-keys = { path = "../keys" }
 nimiq-macros = { path = "../macros" }
 nimiq-mempool = { path = "../mempool" }
 nimiq-nano-primitives = { path = "../nano-primitives" }
+nimiq-nano-zkp = { path = "../nano-zkp", features = ["prover"] }
 nimiq-network-interface = { path = "../network-interface" }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }
 nimiq-transaction = { path = "../primitives/transaction" }

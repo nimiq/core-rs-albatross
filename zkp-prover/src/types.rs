@@ -1,3 +1,6 @@
+use std::io;
+use std::sync::Arc;
+
 use ark_groth16::Proof;
 use ark_mnt6_753::{G2Projective as G2MNT6, MNT6_753};
 
@@ -7,21 +10,46 @@ use ark_serialize::{
 use beserial::{
     Deserialize, Serialize, SerializingError, SerializingError as BeserialSerializingError,
 };
+use nimiq_consensus::messages::handlers::Handle;
+use nimiq_database::{AsDatabaseBytes, FromDatabaseValue};
 use nimiq_hash::Blake2bHash;
-use nimiq_network_interface::network::Topic;
+use nimiq_network_interface::{
+    network::Topic,
+    request::{RequestCommon, RequestMarker},
+};
+use std::borrow::Cow;
+
+use parking_lot::RwLock;
 use parking_lot::RwLockReadGuard;
 
 use nimiq_nano_zkp::NanoZKPError;
 use thiserror::Error;
 
-pub struct ZKPComponentState {
+impl AsDatabaseBytes for ZKPState {
+    fn as_database_bytes(&self) -> Cow<[u8]> {
+        let v = Serialize::serialize_to_vec(&self);
+        Cow::Owned(v)
+    }
+}
+
+impl FromDatabaseValue for ZKPState {
+    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
+    where
+        Self: Sized,
+    {
+        let mut cursor = io::Cursor::new(bytes);
+        Ok(Deserialize::deserialize(&mut cursor)?)
+    }
+}
+
+pub struct ZKPState {
     pub latest_pks: Vec<G2MNT6>,
     pub latest_header_hash: Blake2bHash,
     pub latest_block_number: u32,
     pub latest_proof: Option<Proof<MNT6_753>>,
 }
 
-impl Serialize for ZKPComponentState {
+impl Serialize for ZKPState {
     fn serialize<W: beserial::WriteBytesExt>(
         &self,
         writer: &mut W,
@@ -63,7 +91,7 @@ impl Serialize for ZKPComponentState {
     }
 }
 
-impl Deserialize for ZKPComponentState {
+impl Deserialize for ZKPState {
     fn deserialize<R: beserial::ReadBytesExt>(
         reader: &mut R,
     ) -> Result<Self, BeserialSerializingError> {
@@ -86,7 +114,7 @@ impl Deserialize for ZKPComponentState {
                 Some(CanonicalDeserialize::deserialize(reader).map_err(ark_to_bserial_error)?);
         }
 
-        Ok(ZKPComponentState {
+        Ok(ZKPState {
             latest_pks,
             latest_header_hash,
             latest_block_number,
@@ -110,8 +138,8 @@ impl ZKProof {
     }
 }
 
-impl From<RwLockReadGuard<'_, ZKPComponentState>> for ZKProof {
-    fn from(zkp_component_state: RwLockReadGuard<ZKPComponentState>) -> Self {
+impl From<RwLockReadGuard<'_, ZKPState>> for ZKProof {
+    fn from(zkp_component_state: RwLockReadGuard<ZKPState>) -> Self {
         Self {
             header_hash: zkp_component_state.latest_header_hash.clone(),
             proof: zkp_component_state.latest_proof.clone(),
@@ -193,4 +221,19 @@ pub enum ZKPComponentError {
 
     #[error("Invalid proof")]
     InvalidProof,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RequestZKP {}
+
+impl RequestCommon for RequestZKP {
+    type Kind = RequestMarker;
+    const TYPE_ID: u16 = 211;
+    type Response = ZKProof;
+}
+
+impl Handle<ZKProof, Arc<RwLock<ZKPState>>> for RequestZKP {
+    fn handle(&self, zkp_component: &Arc<RwLock<ZKPState>>) -> ZKProof {
+        zkp_component.read().into()
+    }
 }

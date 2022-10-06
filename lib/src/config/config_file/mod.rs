@@ -35,6 +35,8 @@ pub struct ConfigFile {
     pub network: NetworkSettings,
     #[serde(default)]
     pub consensus: ConsensusSettings,
+    #[serde(default)]
+    pub zkp_prover_node_functionality: bool,
     pub rpc_server: Option<RpcServerSettings>,
     pub metrics_server: Option<MetricsServerSettings>,
     #[serde(default)]
@@ -182,7 +184,6 @@ pub struct ConsensusSettings {
     #[serde(default)]
     pub network: Network,
     pub min_peers: Option<usize>,
-    pub zkp_prover: Option<bool>,
 }
 
 #[derive(Deserialize, Debug, Copy, Clone, PartialEq, Eq)]

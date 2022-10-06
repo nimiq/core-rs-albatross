@@ -10,9 +10,9 @@ use nimiq_network_interface::{network::Network, request::Request};
 use crate::messages::handlers::Handle;
 use crate::messages::{
     RequestBatchSet, RequestBlock, RequestHead, RequestHistoryChunk, RequestMacroChain,
-    RequestMissingBlocks, RequestZKP,
+    RequestMissingBlocks,
 };
-use crate::zkp::zkp_component::ZKPComponent;
+
 use crate::Consensus;
 
 impl<N: Network> Consensus<N> {
@@ -21,7 +21,6 @@ impl<N: Network> Consensus<N> {
     pub(super) fn init_network_request_receivers(
         network: &Arc<N>,
         blockchain: &Arc<RwLock<Blockchain>>,
-        zkp_component: &ZKPComponent<N>,
     ) {
         let stream = network.receive_requests::<RequestMacroChain>();
         tokio::spawn(Self::request_handler(network, stream, blockchain));
@@ -40,16 +39,9 @@ impl<N: Network> Consensus<N> {
 
         let stream = network.receive_requests::<RequestHead>();
         tokio::spawn(Self::request_handler(network, stream, blockchain));
-
-        let stream = network.receive_requests::<RequestZKP>();
-        tokio::spawn(Self::request_handler(
-            network,
-            stream,
-            &zkp_component.zkp_state,
-        ));
     }
 
-    pub(crate) fn request_handler<
+    pub fn request_handler<
         T: Send + Sync + 'static,
         Req: Handle<Req::Response, Arc<T>> + Request,
     >(

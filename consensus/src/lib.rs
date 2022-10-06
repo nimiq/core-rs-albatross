@@ -8,4 +8,3 @@ pub mod consensus;
 pub mod error;
 pub mod messages;
 pub mod sync;
-pub mod zkp;
