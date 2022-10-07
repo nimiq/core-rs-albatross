@@ -6,7 +6,7 @@ use std::{
     str::FromStr,
 };
 
-use clap::ArgEnum;
+use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DeserializeFromStr, DisplayFromStr, SerializeDisplay};
 
@@ -130,7 +130,7 @@ impl FromStr for ValidityStartHeight {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, ArgEnum)]
+#[derive(Clone, Debug, Serialize, Deserialize, ValueEnum)]
 #[serde(rename_all = "kebab-case")]
 pub enum HashAlgorithm {
     Blake2b = 1,
@@ -733,7 +733,7 @@ impl<T> BlockchainState<T> {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, ArgEnum)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, ValueEnum)]
 #[serde(rename_all = "kebab-case")]
 pub enum LogType {
     PayFee,
