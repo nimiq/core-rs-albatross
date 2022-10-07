@@ -10,10 +10,10 @@ fn parse_private_key(s: &str) -> Result<PrivateKey, Box<dyn Error>> {
 fn main() {
     let matches = Command::new("nimiq-address")
         .about("Displays address etc. of a random or specified key")
-        .arg(Arg::new("private").takes_value(true).value_name("PRIVATE"))
+        .arg(Arg::new("private").value_name("PRIVATE"))
         .get_matches();
 
-    let private_key = if let Some(p) = matches.value_of("private") {
+    let private_key = if let Some(p) = matches.get_one::<String>("private") {
         match parse_private_key(p) {
             Ok(p) => p,
             Err(e) => {

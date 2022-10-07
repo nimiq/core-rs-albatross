@@ -34,7 +34,7 @@ pub struct CommandLine {
     ///
     /// * `nimiq-client --log-tags nimiq-handel:trace --log-tags nimiq-validator:trace`
     ///
-    #[clap(long = "log-tags", parse(try_from_str = parse_log_tags))]
+    #[clap(long = "log-tags", value_parser = parse_log_tags)]
     pub log_tags: Option<Vec<(String, LevelFilter)>>,
 
     /// Do not actively connect to the network
@@ -53,7 +53,7 @@ pub struct CommandLine {
     ///
     /// * `nimiq-client --mode history`
     ///
-    #[clap(long = "mode", parse(try_from_str))]
+    #[clap(long = "mode", value_parser)]
     pub sync_mode: Option<SyncMode>,
 
     /// Configure the network to connect to, one of test-albatross, dev-albatross (default)

@@ -198,7 +198,7 @@ pub enum TransactionCommand {
         hash_count: u8,
 
         /// The hashing algorithm used.
-        #[clap(short = 'a', long, arg_enum)]
+        #[clap(short = 'a', long, value_enum)]
         hash_algorithm: HashAlgorithm,
 
         /// Sets the blockchain height at which the `htlc_sender` automatically gains control over the funds.
@@ -237,7 +237,7 @@ pub enum TransactionCommand {
         hash_count: u8,
 
         /// The `hash_root` is the result of hashing the `pre_image` `hash_count` times using `hash_algorithm`.
-        #[clap(short = 'a', long, arg_enum)]
+        #[clap(short = 'a', long, value_enum)]
         hash_algorithm: HashAlgorithm,
 
         #[clap(flatten)]

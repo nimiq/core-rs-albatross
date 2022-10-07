@@ -148,11 +148,11 @@ pub enum BlockchainCommand {
     /// If no addresses or no logtypes are provided it fetches all logs.
     FollowLogsOfAddressesAndTypes {
         /// List of all address to follow. If empty it does not filter by address.
-        #[clap(short = 'a', long, multiple_values = true)]
+        #[clap(short = 'a', long)]
         addresses: Vec<Address>,
 
         /// List of all log types to select. If empty it does not filter by log type.
-        #[clap(short = 'l', long, arg_enum, multiple_values = true)]
+        #[clap(short = 'l', long, value_enum)]
         log_types: Vec<LogType>,
     },
 }
