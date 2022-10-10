@@ -42,6 +42,7 @@ impl FromDatabaseValue for ZKPState {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct ZKPState {
     pub latest_pks: Vec<G2MNT6>,
     pub latest_header_hash: Blake2bHash,
@@ -224,16 +225,22 @@ pub enum ZKPComponentError {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct RequestZKP {}
+pub struct RequestZKP {
+    pub(crate) block_number: u32,
+}
 
 impl RequestCommon for RequestZKP {
     type Kind = RequestMarker;
     const TYPE_ID: u16 = 211;
-    type Response = ZKProof;
+    type Response = Option<ZKProof>;
 }
 
-impl Handle<ZKProof, Arc<RwLock<ZKPState>>> for RequestZKP {
-    fn handle(&self, zkp_component: &Arc<RwLock<ZKPState>>) -> ZKProof {
-        zkp_component.read().into()
+impl Handle<Option<ZKProof>, Arc<RwLock<ZKPState>>> for RequestZKP {
+    fn handle(&self, zkp_component: &Arc<RwLock<ZKPState>>) -> Option<ZKProof> {
+        let zkp_state = zkp_component.read();
+        if zkp_state.latest_block_number > self.block_number {
+            return Some(zkp_state.into());
+        }
+        None
     }
 }
