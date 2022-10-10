@@ -88,6 +88,9 @@ async fn main_inner() -> Result<(), Error> {
     let consensus = client.consensus_proxy();
     let mempool = client.mempool();
 
+    let zkp_component = client.take_zkp_component().unwrap();
+    tokio::spawn(zkp_component); //ITODO get metrics on this? ask JD
+
     // Start validator
     let val_metric_monitor = tokio_metrics::TaskMonitor::new();
     if let Some(validator) = client.take_validator() {

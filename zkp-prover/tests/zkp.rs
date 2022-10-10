@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use futures::StreamExt;
 use nimiq_block::Block;
 use nimiq_genesis::NetworkInfo;
 use nimiq_network_mock::MockHub;
@@ -39,7 +38,7 @@ async fn can_produce_first_zkp_proof() {
     let genesis_block = network_info.genesis_block::<Block>().unwrap_macro();
     let env = VolatileEnvironment::new(10).unwrap();
 
-    let mut zkp_prover = ZKPComponent::new(
+    let zkp_prover = ZKPComponent::new(
         Arc::clone(&blockchain),
         Arc::new(network),
         genesis_block.clone(),
@@ -55,7 +54,7 @@ async fn can_produce_first_zkp_proof() {
     produce_macro_blocks(&producer, &blockchain, policy::BATCHES_PER_EPOCH as usize);
 
     // Waits for the proof generation and verifies the proof
-    if let Some(zk_proof) = zkp_prover.next().await {
+    if let Some(zk_proof) = zkp_prover.await {
         assert!(
             ZKProofComponent::validate_proof(&blockchain, zk_proof),
             "Invalid zk proof"
