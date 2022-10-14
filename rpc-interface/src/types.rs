@@ -964,6 +964,28 @@ pub fn is_of_log_type_and_related_to_addresses(
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct ZKPState {
+    latest_header_hash: Blake2bHash,
+    latest_block_number: u32,
+    latest_proof: Option<String>,
+}
+
+impl ZKPState {
+    pub fn with_zkp_state(zkp_state: &nimiq_zkp_prover::types::ZKPState) -> Self {
+        let latest_proof = zkp_state
+            .latest_proof
+            .as_ref()
+            .map(|latest_proof| format!("{:?}", latest_proof));
+        Self {
+            latest_header_hash: zkp_state.latest_header_hash.clone(),
+            latest_block_number: zkp_state.latest_block_number,
+            latest_proof,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MempoolInfo {
     #[serde(skip_serializing_if = "Option::is_none")]

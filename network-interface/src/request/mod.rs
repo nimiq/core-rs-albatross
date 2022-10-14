@@ -1,14 +1,21 @@
 use std::fmt;
 use std::io;
+use std::sync::Arc;
 use std::time::Duration;
 
-use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
+use futures::stream::BoxStream;
+use futures::Future;
+use futures::StreamExt;
 use thiserror::Error;
+
+use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 
 // The max number of request to be processed per peerID and per request type.
 
 /// The range to restrict the responses to the requests on the network layer.
 pub const DEFAULT_MAX_REQUEST_RESPONSE_TIME_WINDOW: Duration = Duration::from_secs(10);
+
+use crate::network::Network;
 
 #[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct RequestType(pub u16);
@@ -183,4 +190,56 @@ impl<T: RequestCommon<Kind = MessageMarker, Response = ()>> Message for T {}
 pub fn peek_type(buffer: &[u8]) -> Result<RequestType, SerializingError> {
     let ty = u16::deserialize_from_vec(buffer)?;
     Ok(RequestType(ty))
+}
+
+/// This trait defines the behaviour when receiving a message and how to generate the response.
+pub trait Handle<Response, T> {
+    fn handle(&self, context: &T) -> Response;
+}
+
+const MAX_CONCURRENT_HANDLERS: usize = 64;
+
+pub fn request_handler<
+    T: Send + Sync + 'static,
+    Req: Handle<Req::Response, Arc<T>> + Request,
+    N: Network,
+>(
+    network: &Arc<N>,
+    stream: BoxStream<'static, (Req, N::RequestId, N::PeerId)>,
+    req_envioroment: &Arc<T>,
+) -> impl Future<Output = ()> {
+    let blockchain = Arc::clone(req_envioroment);
+    let network = Arc::clone(network);
+    async move {
+        stream
+            .for_each_concurrent(MAX_CONCURRENT_HANDLERS, |(msg, request_id, peer_id)| {
+                let request_id = request_id;
+                let network = Arc::clone(&network);
+                let blockchain = Arc::clone(&blockchain);
+                async move {
+                    let blockchain = Arc::clone(&blockchain);
+                    let network = Arc::clone(&network);
+                    let request_id = request_id;
+                    tokio::spawn(async move {
+                        log::trace!("[{:?}] {:?} {:#?}", request_id, peer_id, msg);
+
+                        // Try to send the response, logging to debug if it fails
+                        if let Err(err) = network
+                            .respond::<Req>(request_id, msg.handle(&blockchain))
+                            .await
+                        {
+                            log::debug!(
+                                "[{:?}] Failed to send {} response: {:?}",
+                                request_id,
+                                std::any::type_name::<Req>(),
+                                err
+                            );
+                        };
+                    })
+                    .await
+                    .expect("Request handler panicked")
+                }
+            })
+            .await
+    }
 }

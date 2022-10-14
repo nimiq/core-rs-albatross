@@ -17,6 +17,8 @@ is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
+ark-groth16 = "0.3"
+ark-mnt6-753 = "0.3"
 async-trait = "0.1"
 hex = "0.4"
 futures = { package = "futures-util", version = "0.3" }
@@ -40,6 +42,7 @@ nimiq-keys = { path = "../keys", features = ["serde-derive"] }
 nimiq-primitives = { path = "../primitives", features = ["coin", "account", "serde-derive"] }
 nimiq-transaction = { path = "../primitives/transaction", features = ["serde-derive"] }
 nimiq-vrf = { path = "../vrf", features = ["serde-derive"] }
+nimiq-zkp-prover = {path = "../zkp-prover"}
 
 [dev-dependencies]
 serde_json = "1.0"

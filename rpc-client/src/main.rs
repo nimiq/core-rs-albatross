@@ -7,6 +7,7 @@ use nimiq_jsonrpc_core::Credentials;
 use nimiq_rpc_interface::{
     blockchain::BlockchainProxy, consensus::ConsensusProxy, mempool::MempoolProxy,
     network::NetworkProxy, policy::PolicyProxy, validator::ValidatorProxy, wallet::WalletProxy,
+    zkp_component::ZKPComponentProxy,
 };
 pub mod subcommands;
 
@@ -57,6 +58,10 @@ enum Command {
     /// Create, signs and send transactions reffering to the local validator.
     #[clap(flatten)]
     Validator(ValidatorCommand),
+
+    ///
+    #[clap(flatten)]
+    ZKPComponent(ZKProverCommand),
 }
 
 impl Command {
@@ -69,6 +74,7 @@ impl Command {
             Command::Network(command) => command.handle_subcommand(client).await,
             Command::Mempool(command) => command.handle_subcommand(client).await,
             Command::Validator(command) => command.handle_subcommand(client).await,
+            Command::ZKPComponent(command) => command.handle_subcommand(client).await,
         }
     }
 }
@@ -81,6 +87,7 @@ pub struct Client {
     pub wallet: WalletProxy<ArcClient<WebsocketClient>>,
     pub validator: ValidatorProxy<ArcClient<WebsocketClient>>,
     pub network: NetworkProxy<ArcClient<WebsocketClient>>,
+    pub zkp_component: ZKPComponentProxy<ArcClient<WebsocketClient>>,
 }
 
 impl Client {
@@ -94,7 +101,8 @@ impl Client {
             mempool: MempoolProxy::new(client.clone()),
             wallet: WalletProxy::new(client.clone()),
             validator: ValidatorProxy::new(client.clone()),
-            network: NetworkProxy::new(client),
+            network: NetworkProxy::new(client.clone()),
+            zkp_component: ZKPComponentProxy::new(client),
         })
     }
 }

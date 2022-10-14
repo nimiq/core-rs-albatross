@@ -10,9 +10,11 @@ use ark_serialize::{
 use beserial::{
     Deserialize, Serialize, SerializingError, SerializingError as BeserialSerializingError,
 };
-use nimiq_consensus::messages::handlers::Handle;
+use nimiq_block::MacroBlock;
 use nimiq_database::{AsDatabaseBytes, FromDatabaseValue};
 use nimiq_hash::Blake2bHash;
+use nimiq_nano_primitives::MacroBlock as ZKPMacroBlock;
+use nimiq_network_interface::request::Handle;
 use nimiq_network_interface::{
     network::Topic,
     request::{RequestCommon, RequestMarker},
@@ -20,7 +22,6 @@ use nimiq_network_interface::{
 use std::borrow::Cow;
 
 use parking_lot::RwLock;
-use parking_lot::RwLockReadGuard;
 
 use nimiq_nano_zkp::NanoZKPError;
 use thiserror::Error;
@@ -42,12 +43,34 @@ impl FromDatabaseValue for ZKPState {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ZKPState {
     pub latest_pks: Vec<G2MNT6>,
     pub latest_header_hash: Blake2bHash,
     pub latest_block_number: u32,
     pub latest_proof: Option<Proof<MNT6_753>>,
+}
+
+impl ZKPState {
+    pub fn with_genesis(genesis_block: &MacroBlock) -> Result<Self, ZKPComponentError> {
+        let latest_pks: Vec<_> = genesis_block
+            .get_validators()
+            .ok_or(ZKPComponentError::InvalidBlock)?
+            .voting_keys()
+            .into_iter()
+            .map(|pub_key| pub_key.public_key)
+            .collect();
+
+        let genesis_block =
+            ZKPMacroBlock::try_from(genesis_block).map_err(|_| ZKPComponentError::InvalidBlock)?;
+
+        Ok(ZKPState {
+            latest_pks,
+            latest_header_hash: genesis_block.header_hash.into(),
+            latest_block_number: genesis_block.block_number,
+            latest_proof: None,
+        })
+    }
 }
 
 impl Serialize for ZKPState {
@@ -124,26 +147,26 @@ impl Deserialize for ZKPState {
     }
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct ZKProofTopic;
-
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ZKProof {
-    pub header_hash: Blake2bHash,
+    pub block_number: u32,
     pub proof: Option<Proof<MNT6_753>>,
 }
 
 impl ZKProof {
-    pub fn new(header_hash: Blake2bHash, proof: Option<Proof<MNT6_753>>) -> Self {
-        Self { header_hash, proof }
+    pub fn new(block_number: u32, proof: Option<Proof<MNT6_753>>) -> Self {
+        Self {
+            block_number,
+            proof,
+        }
     }
 }
 
-impl From<RwLockReadGuard<'_, ZKPState>> for ZKProof {
-    fn from(zkp_component_state: RwLockReadGuard<ZKPState>) -> Self {
+impl From<ZKPState> for ZKProof {
+    fn from(zkp_component_state: ZKPState) -> Self {
         Self {
-            header_hash: zkp_component_state.latest_header_hash.clone(),
-            proof: zkp_component_state.latest_proof.clone(),
+            block_number: zkp_component_state.latest_block_number,
+            proof: zkp_component_state.latest_proof,
         }
     }
 }
@@ -153,7 +176,7 @@ impl Serialize for ZKProof {
         &self,
         writer: &mut W,
     ) -> Result<usize, beserial::SerializingError> {
-        let mut size = Serialize::serialize(&self.header_hash, writer)?;
+        let mut size = Serialize::serialize(&self.block_number, writer)?;
         size += Serialize::serialize(&self.proof.is_some(), writer)?;
         if let Some(ref latest_proof) = self.proof {
             CanonicalSerialize::serialize(latest_proof, writer).map_err(ark_to_bserial_error)?;
@@ -163,7 +186,7 @@ impl Serialize for ZKProof {
     }
 
     fn serialized_size(&self) -> usize {
-        let mut size = Serialize::serialized_size(&self.header_hash);
+        let mut size = Serialize::serialized_size(&self.block_number);
         size += Serialize::serialized_size(&self.proof.is_some());
         if let Some(ref latest_proof) = self.proof {
             size += CanonicalSerialize::serialized_size(latest_proof);
@@ -176,7 +199,7 @@ impl Deserialize for ZKProof {
     fn deserialize<R: beserial::ReadBytesExt>(
         reader: &mut R,
     ) -> Result<Self, BeserialSerializingError> {
-        let header_hash = Deserialize::deserialize(reader)?;
+        let block_number = Deserialize::deserialize(reader)?;
         let is_some: bool = Deserialize::deserialize(reader)?;
         let mut latest_proof = None;
 
@@ -186,7 +209,7 @@ impl Deserialize for ZKProof {
         }
 
         Ok(ZKProof {
-            header_hash,
+            block_number,
             proof: latest_proof,
         })
     }
@@ -200,6 +223,9 @@ fn ark_to_bserial_error(error: ArkSerializingError) -> BeserialSerializingError 
         ArkSerializingError::IoError(e) => BeserialSerializingError::IoError(e),
     }
 }
+
+#[derive(Clone, Debug, Default)]
+pub struct ZKProofTopic;
 
 impl Topic for ZKProofTopic {
     type Item = ZKProof;
@@ -224,6 +250,9 @@ pub enum ZKPComponentError {
     InvalidProof,
 }
 
+/// The max number of MacroChain requests per peer.
+pub const MAX_REQUEST_RESPONSE_ZKP: u32 = 1000;
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestZKP {
     pub(crate) block_number: u32,
@@ -233,13 +262,15 @@ impl RequestCommon for RequestZKP {
     type Kind = RequestMarker;
     const TYPE_ID: u16 = 211;
     type Response = Option<ZKProof>;
+
+    const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_ZKP;
 }
 
 impl Handle<Option<ZKProof>, Arc<RwLock<ZKPState>>> for RequestZKP {
     fn handle(&self, zkp_component: &Arc<RwLock<ZKPState>>) -> Option<ZKProof> {
         let zkp_state = zkp_component.read();
         if zkp_state.latest_block_number > self.block_number {
-            return Some(zkp_state.into());
+            return Some((*zkp_state).clone().into());
         }
         None
     }

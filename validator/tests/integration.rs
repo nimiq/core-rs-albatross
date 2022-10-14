@@ -13,7 +13,8 @@ async fn four_validators_can_create_an_epoch() {
     let env = VolatileEnvironment::new(10).expect("Could not open a volatile database");
 
     let validators =
-        build_validators::<Network>(env, &(1u64..=4u64).collect::<Vec<_>>(), &mut None).await;
+        build_validators::<Network>(env, &(1u64..=4u64).collect::<Vec<_>>(), &mut None, false)
+            .await;
 
     let blockchain = Arc::clone(&validators.first().unwrap().consensus.blockchain);
 

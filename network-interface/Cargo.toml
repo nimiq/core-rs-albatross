@@ -20,9 +20,10 @@ maintenance = { status = "experimental" }
 async-trait = "0.1"
 derive_more = "0.99"
 futures = { package = "futures-util", version = "0.3" }
+log = { package = "tracing", version = "0.1", features = ["log"] }
 thiserror = "1.0"
-tokio-stream = { version = "0.1", features = ["default", "sync"] }
 tokio = { version = "1.20", features = ["macros", "rt", "tracing", "time", "test-util"] }
+tokio-stream = { version = "0.1", features = ["default", "sync"] }
 
 beserial = { path = "../beserial", features = ["derive"] }
 

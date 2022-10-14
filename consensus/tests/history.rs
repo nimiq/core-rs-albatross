@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use futures::{Stream, StreamExt};
 use nimiq_test_log::test;
+use nimiq_zkp_prover::ZKPComponent;
 use parking_lot::RwLock;
 
 use nimiq_block_production::BlockProducer;
@@ -48,7 +49,7 @@ async fn peers_can_sync() {
     let mut networks = vec![];
 
     // Setup first peer.
-    let env1 = VolatileEnvironment::new(10).unwrap();
+    let env1 = VolatileEnvironment::new(11).unwrap();
     let time = Arc::new(OffsetTime::new());
     let blockchain1 = Arc::new(RwLock::new(
         Blockchain::new(env1.clone(), NetworkId::UnitAlbatross, time).unwrap(),
@@ -70,12 +71,26 @@ async fn peers_can_sync() {
         Arc::clone(&net1),
         net1.subscribe_events(),
     );
-    let consensus1 =
-        Consensus::from_network(env1, blockchain1, Arc::clone(&net1), Box::pin(sync1)).await;
+    let zkp_prover1 = ZKPComponent::new(
+        Arc::clone(&blockchain1),
+        Arc::clone(&net1),
+        false,
+        env1.clone(),
+    )
+    .await
+    .proxy();
+    let consensus1 = Consensus::from_network(
+        env1,
+        blockchain1,
+        Arc::clone(&net1),
+        Box::pin(sync1),
+        zkp_prover1,
+    )
+    .await;
 
     // Setup second peer (not synced yet).
     let time = Arc::new(OffsetTime::new());
-    let env2 = VolatileEnvironment::new(10).unwrap();
+    let env2 = VolatileEnvironment::new(11).unwrap();
     let blockchain2 = Arc::new(RwLock::new(
         Blockchain::new(env2.clone(), NetworkId::UnitAlbatross, time).unwrap(),
     ));
@@ -88,6 +103,14 @@ async fn peers_can_sync() {
         Arc::clone(&net2),
         net2.subscribe_events(),
     );
+    let zkp_prover2 = ZKPComponent::new(
+        Arc::clone(&blockchain2),
+        Arc::clone(&net2),
+        false,
+        env2.clone(),
+    )
+    .await
+    .proxy();
     let consensus2 = Consensus::from_network(
         env2,
         blockchain2,
@@ -95,6 +118,7 @@ async fn peers_can_sync() {
         Box::pin(MockHistorySyncStream {
             _network: Arc::clone(&net2),
         }),
+        zkp_prover2,
     )
     .await;
 
@@ -188,7 +212,7 @@ async fn sync_ingredients() {
 
     // Setup first peer.
     let time = Arc::new(OffsetTime::new());
-    let env1 = VolatileEnvironment::new(10).unwrap();
+    let env1 = VolatileEnvironment::new(11).unwrap();
     let blockchain1 = Arc::new(RwLock::new(
         Blockchain::new(env1.clone(), NetworkId::UnitAlbatross, time).unwrap(),
     ));
@@ -204,6 +228,14 @@ async fn sync_ingredients() {
 
     let net1 = TestNetwork::build_network(2, Default::default(), &mut Some(hub)).await;
     networks.push(Arc::clone(&net1));
+    let zkp_prover1 = ZKPComponent::new(
+        Arc::clone(&blockchain1),
+        Arc::clone(&net1),
+        false,
+        env1.clone(),
+    )
+    .await
+    .proxy();
     let consensus1 = Consensus::from_network(
         env1,
         blockchain1,
@@ -211,11 +243,12 @@ async fn sync_ingredients() {
         Box::pin(MockHistorySyncStream {
             _network: Arc::clone(&net1),
         }),
+        zkp_prover1,
     )
     .await;
 
     // Setup second peer (not synced yet).
-    let env2 = VolatileEnvironment::new(10).unwrap();
+    let env2 = VolatileEnvironment::new(11).unwrap();
     let time = Arc::new(OffsetTime::new());
     let blockchain2 = Arc::new(RwLock::new(
         Blockchain::new(env2.clone(), NetworkId::UnitAlbatross, time).unwrap(),
@@ -224,6 +257,14 @@ async fn sync_ingredients() {
     let net2: Arc<Network> =
         TestNetwork::build_network(3, Default::default(), &mut Some(MockHub::default())).await;
     networks.push(Arc::clone(&net2));
+    let zkp_prover2 = ZKPComponent::new(
+        Arc::clone(&blockchain2),
+        Arc::clone(&net2),
+        false,
+        env2.clone(),
+    )
+    .await
+    .proxy();
     let consensus2 = Consensus::from_network(
         env2,
         blockchain2,
@@ -231,6 +272,7 @@ async fn sync_ingredients() {
         Box::pin(MockHistorySyncStream {
             _network: Arc::clone(&net2),
         }),
+        zkp_prover2,
     )
     .await;
 

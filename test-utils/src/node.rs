@@ -11,6 +11,7 @@ use nimiq_network_interface::network::Network as NetworkInterface;
 use nimiq_network_mock::MockHub;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_utils::time::OffsetTime;
+use nimiq_zkp_prover::ZKPComponent;
 
 use crate::test_network::TestNetwork;
 
@@ -21,8 +22,13 @@ pub struct Node<N: NetworkInterface + TestNetwork> {
 }
 
 impl<N: NetworkInterface + TestNetwork> Node<N> {
-    pub async fn new(peer_id: u64, genesis_info: GenesisInfo, hub: &mut Option<MockHub>) -> Self {
-        let env = VolatileEnvironment::new(12).unwrap();
+    pub async fn new(
+        peer_id: u64,
+        genesis_info: GenesisInfo,
+        hub: &mut Option<MockHub>,
+        is_prover_active: bool,
+    ) -> Self {
+        let env = VolatileEnvironment::new(14).unwrap();
         let clock = Arc::new(OffsetTime::new());
         let blockchain = Arc::new(RwLock::new(
             Blockchain::with_genesis(
@@ -36,6 +42,13 @@ impl<N: NetworkInterface + TestNetwork> Node<N> {
         ));
 
         let network = N::build_network(peer_id, genesis_info.hash, hub).await;
+        let zkp_proxy = ZKPComponent::new(
+            Arc::clone(&blockchain),
+            Arc::clone(&network),
+            is_prover_active,
+            env.clone(),
+        )
+        .await;
 
         let sync_protocol = HistorySync::<N>::new(
             Arc::clone(&blockchain),
@@ -48,6 +61,7 @@ impl<N: NetworkInterface + TestNetwork> Node<N> {
             Arc::clone(&network),
             Box::pin(sync_protocol),
             1,
+            zkp_proxy.proxy(),
         )
         .await;
 

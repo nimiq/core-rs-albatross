@@ -1,7 +1,8 @@
 #[macro_use]
 extern crate log;
 
-pub use consensus::{Consensus, ConsensusEvent, ConsensusProxy};
+pub use consensus::consensus_proxy::ConsensusProxy;
+pub use consensus::{Consensus, ConsensusEvent};
 pub use error::Error;
 
 pub mod consensus;

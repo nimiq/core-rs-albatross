@@ -241,6 +241,7 @@ mod tests {
 
     use futures::{Stream, StreamExt};
     use nimiq_block_production::BlockProducer;
+    use nimiq_network_interface::request::request_handler;
     use parking_lot::RwLock;
 
     use nimiq_blockchain::{AbstractBlockchain, Blockchain};
@@ -255,7 +256,6 @@ mod tests {
 
     use crate::messages::{RequestBatchSet, RequestHistoryChunk, RequestMacroChain};
     use crate::sync::history::{HistorySync, HistorySyncReturn};
-    use crate::Consensus;
 
     fn blockchain() -> Arc<RwLock<Blockchain>> {
         let time = Arc::new(OffsetTime::new());
@@ -308,17 +308,17 @@ mod tests {
         network: &Arc<TNetwork>,
         blockchain: &Arc<RwLock<Blockchain>>,
     ) {
-        tokio::spawn(Consensus::<TNetwork>::request_handler(
+        tokio::spawn(request_handler(
             network,
             network.receive_requests::<RequestMacroChain>(),
             blockchain,
         ));
-        tokio::spawn(Consensus::<TNetwork>::request_handler(
+        tokio::spawn(request_handler(
             network,
             network.receive_requests::<RequestBatchSet>(),
             blockchain,
         ));
-        tokio::spawn(Consensus::<TNetwork>::request_handler(
+        tokio::spawn(request_handler(
             network,
             network.receive_requests::<RequestHistoryChunk>(),
             blockchain,
