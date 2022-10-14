@@ -33,8 +33,8 @@ async fn test_request_component() {
         .generate(env)
         .unwrap();
 
-    let mut node1 = Node::<MockNetwork>::new(1, genesis.clone(), &mut hub).await;
-    let mut node2 = Node::<MockNetwork>::new(2, genesis.clone(), &mut hub).await;
+    let mut node1 = Node::<MockNetwork>::new(1, genesis.clone(), &mut hub, false).await;
+    let mut node2 = Node::<MockNetwork>::new(2, genesis.clone(), &mut hub, false).await;
 
     let producer1 = BlockProducer::new(signing_key(), voting_key());
 

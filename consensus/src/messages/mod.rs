@@ -13,7 +13,7 @@ The consensus module uses the following messages:
 200 RequestResponseMessage<RequestBlockHashes>
 201 RequestResponseMessage<BlockHashes>
 202 RequestResponseMessage<RequestEpoch>
-203 RequestResponseMessage<Epoch> ITODO
+203 RequestResponseMessage<Epoch>
 */
 
 /// The max number of MacroChain requests per peer.

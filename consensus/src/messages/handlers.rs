@@ -6,11 +6,7 @@ use nimiq_block::Block;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, Direction, CHUNK_SIZE};
 
 use crate::messages::*;
-
-/// This trait defines the behaviour when receiving a message and how to generate the response.
-pub trait Handle<Response, T> {
-    fn handle(&self, blockchain: &T) -> Response;
-}
+use nimiq_network_interface::request::Handle;
 
 impl Handle<MacroChain, Arc<RwLock<Blockchain>>> for RequestMacroChain {
     fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> MacroChain {

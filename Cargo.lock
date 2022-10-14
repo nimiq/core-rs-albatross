@@ -2612,10 +2612,6 @@ dependencies = [
 name = "nimiq-consensus"
 version = "0.1.0"
 dependencies = [
- "ark-groth16",
- "ark-mnt4-753",
- "ark-mnt6-753",
- "ark-serialize",
  "async-trait",
  "beserial",
  "futures-util",
@@ -2642,6 +2638,7 @@ dependencies = [
  "nimiq-transaction",
  "nimiq-utils",
  "nimiq-validator-network",
+ "nimiq-zkp-prover",
  "parking_lot 0.12.0",
  "pin-project",
  "rand 0.8.5",
@@ -3086,6 +3083,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-stream",
+ "tracing",
 ]
 
 [[package]]
@@ -3210,6 +3208,8 @@ dependencies = [
 name = "nimiq-rpc-interface"
 version = "0.1.0"
 dependencies = [
+ "ark-groth16",
+ "ark-mnt6-753",
  "async-trait",
  "beserial",
  "clap",
@@ -3228,6 +3228,7 @@ dependencies = [
  "nimiq-primitives",
  "nimiq-transaction",
  "nimiq-vrf",
+ "nimiq-zkp-prover",
  "parking_lot 0.12.0",
  "serde",
  "serde_json",
@@ -3267,6 +3268,7 @@ dependencies = [
  "nimiq-validator-network",
  "nimiq-vrf",
  "nimiq-wallet",
+ "nimiq-zkp-prover",
  "parking_lot 0.12.0",
  "serde",
  "serde_json",
@@ -3384,6 +3386,7 @@ dependencies = [
  "nimiq-validator",
  "nimiq-validator-network",
  "nimiq-vrf",
+ "nimiq-zkp-prover",
  "parking_lot 0.12.0",
  "rand 0.8.5",
  "tokio",
@@ -3601,7 +3604,6 @@ dependencies = [
  "nimiq-block-production",
  "nimiq-blockchain",
  "nimiq-bls",
- "nimiq-consensus",
  "nimiq-database",
  "nimiq-genesis",
  "nimiq-genesis-builder",
@@ -3623,6 +3625,7 @@ dependencies = [
  "parking_lot 0.12.0",
  "pin-project",
  "rand 0.8.5",
+ "tempfile",
  "thiserror",
  "tokio",
  "tokio-stream",

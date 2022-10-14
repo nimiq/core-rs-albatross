@@ -32,6 +32,7 @@ pub async fn build_validator<N: TestNetwork + NetworkInterface>(
     fee_key: SchnorrKeyPair,
     genesis_info: GenesisInfo,
     hub: &mut Option<MockHub>,
+    is_prover_active: bool,
 ) -> (
     AbstractValidator<N, ValidatorNetworkImpl<N>>,
     AbstractConsensus<N>,
@@ -40,7 +41,7 @@ where
     N::Error: Send,
     N::PeerId: Deserialize + Serialize,
 {
-    let consensus = consensus(peer_id, genesis_info, hub).await;
+    let consensus = consensus(peer_id, genesis_info, hub, is_prover_active).await;
     let validator_network = Arc::new(ValidatorNetworkImpl::new(Arc::clone(&consensus.network)));
     (
         AbstractValidator::<N, ValidatorNetworkImpl<N>>::new(
@@ -61,6 +62,7 @@ pub async fn build_validators<N: TestNetwork + NetworkInterface>(
     env: Environment,
     peer_ids: &[u64],
     hub: &mut Option<MockHub>,
+    is_prover_active: bool,
 ) -> Vec<AbstractValidator<N, ValidatorNetworkImpl<N>>>
 where
     N::Error: Send,
@@ -108,6 +110,7 @@ where
             fee_keys[i].clone(),
             genesis.clone(),
             hub,
+            is_prover_active,
         )
         .await;
         let network: Arc<N> = Arc::clone(&c.network);

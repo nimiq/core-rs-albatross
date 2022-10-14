@@ -142,6 +142,15 @@ impl ClientInner {
         #[cfg(feature = "wallet")]
         let wallet_store = Arc::new(WalletStore::new(environment.clone()));
 
+        let zkp_prover_active = config.zkp_prover_node_functionality;
+        let zkp_component = ZKPComponent::new(
+            Arc::clone(&blockchain),
+            Arc::clone(&network),
+            zkp_prover_active,
+            environment.clone(),
+        )
+        .await;
+
         // Initialize consensus
         let sync = HistorySync::<Network>::new(
             Arc::clone(&blockchain),
@@ -154,18 +163,7 @@ impl ClientInner {
             Arc::clone(&network),
             Box::pin(sync),
             config.consensus.min_peers,
-        )
-        .await;
-
-        let zkp_prover_active = config.zkp_prover_node_functionality;
-        let network_info = NetworkInfo::from_network_id(blockchain.read().network_id());
-        let genesis_block = network_info.genesis_block::<Block>();
-        let zkp_component = ZKPComponent::new(
-            Arc::clone(&blockchain),
-            Arc::clone(&network),
-            genesis_block.unwrap_macro(),
-            zkp_prover_active,
-            environment.clone(),
+            zkp_component.proxy(),
         )
         .await;
 

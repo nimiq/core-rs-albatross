@@ -6,7 +6,6 @@ use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 
 use futures::{FutureExt, StreamExt};
-use nimiq_primitives::account::AccountType;
 use parking_lot::RwLock;
 use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
 use tokio::time::Sleep;
@@ -14,45 +13,22 @@ use tokio_stream::wrappers::BroadcastStream;
 
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_database::Environment;
-use nimiq_mempool::mempool::{ControlTransactionTopic, TransactionTopic};
-use nimiq_network_interface::network::Network;
-use nimiq_transaction::Transaction;
+use nimiq_network_interface::{network::Network, request::request_handler};
+use nimiq_zkp_prover::zkp_component::ZKPComponentProxy;
+
+use crate::messages::{
+    RequestBatchSet, RequestBlock, RequestHead, RequestHistoryChunk, RequestMacroChain,
+    RequestMissingBlocks,
+};
 
 use crate::consensus::head_requests::{HeadRequests, HeadRequestsResult};
 use crate::sync::block_queue::{BlockQueue, BlockQueueConfig, BlockQueueEvent};
 use crate::sync::request_component::{BlockRequestComponent, HistorySyncStream};
 
+use self::consensus_proxy::ConsensusProxy;
+
+pub mod consensus_proxy;
 mod head_requests;
-mod request_response;
-
-pub struct ConsensusProxy<N: Network> {
-    pub blockchain: Arc<RwLock<Blockchain>>,
-    pub network: Arc<N>,
-    established_flag: Arc<AtomicBool>,
-}
-
-impl<N: Network> Clone for ConsensusProxy<N> {
-    fn clone(&self) -> Self {
-        Self {
-            blockchain: Arc::clone(&self.blockchain),
-            network: Arc::clone(&self.network),
-            established_flag: Arc::clone(&self.established_flag),
-        }
-    }
-}
-
-impl<N: Network> ConsensusProxy<N> {
-    pub async fn send_transaction(&self, tx: Transaction) -> Result<(), N::Error> {
-        if tx.sender_type == AccountType::Staking || tx.recipient_type == AccountType::Staking {
-            return self.network.publish::<ControlTransactionTopic>(tx).await;
-        }
-        self.network.publish::<TransactionTopic>(tx).await
-    }
-
-    pub fn is_established(&self) -> bool {
-        self.established_flag.load(Ordering::Acquire)
-    }
-}
 
 #[derive(Clone)]
 pub enum ConsensusEvent {
@@ -77,6 +53,8 @@ pub struct Consensus<N: Network> {
     head_requests_time: Option<Instant>,
 
     min_peers: usize,
+
+    zkp_proxy: ZKPComponentProxy<N>,
 }
 
 impl<N: Network> Consensus<N> {
@@ -101,6 +79,7 @@ impl<N: Network> Consensus<N> {
         blockchain: Arc<RwLock<Blockchain>>,
         network: Arc<N>,
         sync_protocol: Pin<Box<dyn HistorySyncStream<N::PeerId>>>,
+        zkp_proxy: ZKPComponentProxy<N>,
     ) -> Self {
         Self::with_min_peers(
             env,
@@ -108,6 +87,7 @@ impl<N: Network> Consensus<N> {
             network,
             sync_protocol,
             Self::MIN_PEERS_ESTABLISHED,
+            zkp_proxy,
         )
         .await
     }
@@ -118,6 +98,7 @@ impl<N: Network> Consensus<N> {
         network: Arc<N>,
         sync_protocol: Pin<Box<dyn HistorySyncStream<N::PeerId>>>,
         min_peers: usize,
+        zkp_proxy: ZKPComponentProxy<N>,
     ) -> Self {
         let request_component = BlockRequestComponent::new(
             sync_protocol,
@@ -133,7 +114,7 @@ impl<N: Network> Consensus<N> {
         )
         .await;
 
-        Self::new(env, blockchain, network, block_queue, min_peers)
+        Self::new(env, blockchain, network, block_queue, min_peers, zkp_proxy)
     }
 
     pub fn new(
@@ -142,6 +123,7 @@ impl<N: Network> Consensus<N> {
         network: Arc<N>,
         block_queue: BlockQueue<N, BlockRequestComponent<N>>,
         min_peers: usize,
+        zkp_proxy: ZKPComponentProxy<N>,
     ) -> Self {
         let (tx, _rx) = broadcast(256);
 
@@ -161,9 +143,29 @@ impl<N: Network> Consensus<N> {
             established_flag,
             head_requests: None,
             head_requests_time: None,
-
             min_peers,
+            zkp_proxy,
         }
+    }
+
+    fn init_network_request_receivers(network: &Arc<N>, blockchain: &Arc<RwLock<Blockchain>>) {
+        let stream = network.receive_requests::<RequestMacroChain>();
+        tokio::spawn(request_handler(network, stream, blockchain));
+
+        let stream = network.receive_requests::<RequestBatchSet>();
+        tokio::spawn(request_handler(network, stream, blockchain));
+
+        let stream = network.receive_requests::<RequestHistoryChunk>();
+        tokio::spawn(request_handler(network, stream, blockchain));
+
+        let stream = network.receive_requests::<RequestBlock>();
+        tokio::spawn(request_handler(network, stream, blockchain));
+
+        let stream = network.receive_requests::<RequestMissingBlocks>();
+        tokio::spawn(request_handler(network, stream, blockchain));
+
+        let stream = network.receive_requests::<RequestHead>();
+        tokio::spawn(request_handler(network, stream, blockchain));
     }
 
     pub fn subscribe_events(&self) -> BroadcastStream<ConsensusEvent> {
@@ -183,6 +185,7 @@ impl<N: Network> Consensus<N> {
             blockchain: Arc::clone(&self.blockchain),
             network: Arc::clone(&self.network),
             established_flag: Arc::clone(&self.established_flag),
+            events: self.events.clone(),
         }
     }
 
@@ -235,6 +238,8 @@ impl<N: Network> Consensus<N> {
                     // Also stop any other checks.
                     self.head_requests = None;
                     self.head_requests_time = None;
+                    self.zkp_proxy
+                        .request_zkp_from_peers(self.block_queue.peers());
                     return Some(ConsensusEvent::Established);
                 } else {
                     // The head state check is carried out immediately after we reach the minimum
@@ -246,6 +251,8 @@ impl<N: Network> Consensus<N> {
                         if head_request.num_known_blocks >= 2 * head_request.num_unknown_blocks {
                             info!("Consensus established, 2/3 of heads known.");
                             self.established_flag.swap(true, Ordering::Release);
+                            self.zkp_proxy
+                                .request_zkp_from_peers(self.block_queue.peers());
                             return Some(ConsensusEvent::Established);
                         }
                     }
@@ -362,9 +369,6 @@ impl<N: Network> Future for Consensus<N> {
 
         // 4. Advance consensus and catch-up through head requests.
         self.request_heads();
-
-        // 5. Advance the zkp component ITODO write what this does
-        //        while let Poll::Ready(Some(_)) = self.zkp_component.poll_next_unpin(cx) {}
 
         Poll::Pending
     }
