@@ -512,7 +512,7 @@ impl Accounts {
             {
                 match transaction {
                     ExecutedTransaction::Ok(transaction) => {
-                        Account::delete(&self.tree, txn, &transaction).unwrap();
+                        Account::delete(&self.tree, txn, transaction).unwrap();
 
                         contracts_logs.push(TransactionLog::new(
                             transaction.hash(),

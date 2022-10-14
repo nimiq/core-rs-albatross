@@ -360,13 +360,8 @@ impl Blockchain {
                 for tx in &body.get_raw_transactions() {
                     // Ensure transactions are ordered and unique.
                     if let Some(previous) = previous_tx {
-                        match previous.cmp(tx) {
-                            Ordering::Equal => {
-                                return Err(PushError::InvalidBlock(
-                                    BlockError::DuplicateTransaction,
-                                ));
-                            }
-                            _ => (),
+                        if previous.cmp(tx) == Ordering::Equal {
+                            return Err(PushError::InvalidBlock(BlockError::DuplicateTransaction));
                         }
                     }
 
