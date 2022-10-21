@@ -1,9 +1,9 @@
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::Instant;
 
 use parking_lot::RwLock;
 use rand::{rngs::StdRng, RngCore, SeedableRng};
+use std::time::Instant;
 
 use beserial::Deserialize;
 use nimiq_block::{
@@ -21,6 +21,8 @@ use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy;
 use nimiq_transaction::Transaction;
 use nimiq_transaction_builder::TransactionBuilder;
+
+use crate::blockchain_with_rng::*;
 
 /// Secret keys of validator. Tests run with `genesis/src/genesis/unit-albatross.toml`
 pub const SIGNING_KEY: &str = "041580cc67e66e9e08b68fd9e4c9deb68737168fbe7488de2638c2e906c2f5ad";
@@ -63,30 +65,7 @@ pub fn produce_macro_blocks(
     blockchain: &Arc<RwLock<Blockchain>>,
     num_blocks: usize,
 ) {
-    for _ in 0..num_blocks {
-        fill_micro_blocks(producer, blockchain);
-
-        let blockchain = blockchain.upgradable_read();
-        let next_block_height = (blockchain.block_number() + 1) as u64;
-
-        let macro_block_proposal = producer.next_macro_block_proposal(
-            &blockchain,
-            blockchain.time.now() + next_block_height * 1000,
-            0u32,
-            vec![],
-        );
-
-        let block = sign_macro_block(
-            &producer.voting_key,
-            macro_block_proposal.header,
-            macro_block_proposal.body,
-        );
-
-        assert_eq!(
-            Blockchain::push(blockchain, Block::Macro(block)),
-            Ok(PushResult::Extended)
-        );
-    }
+    produce_macro_blocks_with_rng(producer, blockchain, num_blocks, &mut rand::thread_rng())
 }
 
 /// Produces a series of macro blocks (and the corresponding batches).
@@ -125,42 +104,17 @@ pub fn produce_macro_blocks_with_txns(
 
 /// Create the next micro block with default parameters.
 pub fn next_micro_block(producer: &BlockProducer, blockchain: &Arc<RwLock<Blockchain>>) -> Block {
-    let blockchain = blockchain.upgradable_read();
-    let block = producer.next_micro_block(
-        &blockchain,
-        blockchain.head().timestamp() + 500,
-        vec![],
-        vec![],
-        vec![0x42],
-        None,
-    );
-    Block::Micro(block)
+    next_micro_block_with_rng(producer, blockchain, &mut rand::thread_rng())
 }
 
 /// Creates and pushes a single micro block to the chain.
 pub fn push_micro_block(producer: &BlockProducer, blockchain: &Arc<RwLock<Blockchain>>) -> Block {
-    let block = next_micro_block(producer, blockchain);
-    let blockchain = blockchain.upgradable_read();
-    assert_eq!(
-        Blockchain::push(blockchain, block.clone()),
-        Ok(PushResult::Extended)
-    );
-    block
+    push_micro_block_with_rng(producer, blockchain, &mut rand::thread_rng())
 }
 
 /// Fill batch with micro blocks.
 pub fn fill_micro_blocks(producer: &BlockProducer, blockchain: &Arc<RwLock<Blockchain>>) {
-    let init_height = blockchain.read().block_number();
-
-    assert!(policy::is_macro_block_at(init_height));
-
-    let macro_block_number = init_height + policy::BLOCKS_PER_BATCH;
-
-    for _ in (init_height + 1)..macro_block_number {
-        push_micro_block(producer, blockchain);
-    }
-
-    assert_eq!(blockchain.read().block_number(), macro_block_number - 1);
+    fill_micro_blocks_with_rng(producer, blockchain, &mut rand::thread_rng())
 }
 
 /// Fill batch with simple transactions to random recipients

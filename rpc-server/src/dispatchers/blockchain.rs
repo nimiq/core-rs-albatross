@@ -481,7 +481,7 @@ impl BlockchainInterface for BlockchainDispatcher {
             Some(account) => Account::try_from_account(
                 address,
                 account,
-                BlockchainState::new(blockchain.block_number(), blockchain.head_hash()), //itodo
+                BlockchainState::new(blockchain.block_number(), blockchain.head_hash()),
             )
             .map_err(Error::Core),
             None => Ok(RPCData::with_blockchain(

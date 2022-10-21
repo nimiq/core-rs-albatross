@@ -18,7 +18,7 @@ use tokio::sync::oneshot::{self, Receiver};
 use pin_project::pin_project;
 use tokio::task::JoinHandle;
 
-use crate::proof_component::{self as ZKProofComponent, ProofStore};
+use crate::proof_component::*;
 use crate::types::*;
 use crate::zkp_requests::ZKPRequests;
 use futures::stream::BoxStream;
@@ -90,7 +90,7 @@ impl<N: Network> ZKPComponent<N> {
         let network_info = NetworkInfo::from_network_id(blockchain.read().network_id());
         let genesis_block = network_info.genesis_block::<Block>().unwrap_macro();
 
-        let mut zkp_state = Arc::new(RwLock::new(
+        let zkp_state = Arc::new(RwLock::new(
             ZKPState::with_genesis(&genesis_block).expect("Invalid genesis block"),
         ));
         let public_keys = zkp_state.read().latest_pks.clone();
@@ -102,24 +102,20 @@ impl<N: Network> ZKPComponent<N> {
 
         // Load from db the preexisting proof if any
         let proof_storage = ProofStore::new(env);
-        if let Some(loaded_zkp_state) = proof_storage.get_zkp() {
-            //let loaded_zkp_state = loaded_zkp_state;
-            let proof = loaded_zkp_state.clone().into();
-            let loaded_zkp_state = Arc::new(RwLock::new(loaded_zkp_state));
+        if let Some(loaded_proof) = proof_storage.get_zkp() {
             if let Err(e) = Self::do_push_proof(
                 &blockchain,
-                &loaded_zkp_state,
-                proof,
+                &zkp_state,
+                &loaded_proof,
                 &mut None,
                 &mut None,
                 &proof_storage,
                 false,
             ) {
                 log::error!("Error pushing the zk proof load from disk {}", e);
-                proof_storage.set_zkp(&zkp_state.read());
+                proof_storage.set_zkp(&zkp_state.read().clone().into());
             } else {
                 log::info!("The zk proof was successfully load from disk");
-                zkp_state = loaded_zkp_state;
             }
         } else {
             log::trace!("No zk proof found on the db, starts from genesis");
@@ -164,7 +160,11 @@ impl<N: Network> ZKPComponent<N> {
         }
     }
 
-    pub fn broadcast_zk_proof(network: &Arc<N>, zk_proof: ZKProof) {
+    pub fn is_zkp_prover_activated(&self) -> bool {
+        self.blockchain_election_rx.is_some()
+    }
+
+    fn broadcast_zk_proof(network: &Arc<N>, zk_proof: ZKProof) {
         let network = Arc::clone(network);
         tokio::spawn(async move {
             if let Err(e) = network.publish::<ZKProofTopic>(zk_proof).await {
@@ -173,57 +173,36 @@ impl<N: Network> ZKPComponent<N> {
         });
     }
 
-    pub fn is_zkp_prover_activated(&self) -> bool {
-        self.blockchain_election_rx.is_some()
-    }
-
-    pub fn push_proof(&mut self, proof: ZKProof) -> Result<(), ZKPComponentError> {
-        Self::do_push_proof(
-            &self.blockchain,
-            &self.zkp_state,
-            proof,
-            &mut self.receiver,
-            &mut self.proof_generation_thread,
-            &self.proof_storage,
-            true,
-        )
-    }
-
     fn do_push_proof(
         blockchain: &Arc<RwLock<Blockchain>>,
         zkp_state: &Arc<RwLock<ZKPState>>,
-        proof: ZKProof,
+        proof: &ZKProof,
         receiver: &mut Option<Receiver<Result<ZKPState, ZKPComponentError>>>,
         proof_generation_thread: &mut Option<JoinHandle<()>>,
         proof_storage: &ProofStore,
         add_to_storage: bool,
     ) -> Result<(), ZKPComponentError> {
-        let (new_block, genesis_block, proof) =
-            ZKProofComponent::pre_proof_validity_checks(blockchain, proof)?;
-
+        let (new_block, genesis_block, proof) = pre_proof_validity_checks(blockchain, proof)?;
         let zkp_state_lock = zkp_state.upgradable_read();
+
         if new_block.block_number() <= zkp_state_lock.latest_block_number {
             return Err(ZKPComponentError::OutdatedProof);
         }
+        let new_zkp_state = validate_proof_get_new_state(proof, new_block, genesis_block)?;
 
-        if let Ok(Some(new_zkp_state)) =
-            ZKProofComponent::validate_proof_get_new_state(proof, new_block, genesis_block)
-        {
-            let mut zkp_state_lock = RwLockUpgradableReadGuard::upgrade(zkp_state_lock);
-            *zkp_state_lock = new_zkp_state;
+        let mut zkp_state_lock = RwLockUpgradableReadGuard::upgrade(zkp_state_lock);
+        *zkp_state_lock = new_zkp_state;
 
-            // Since someone else generate a valide proof faster, we will terminate our own proof generation.
-            *receiver = None;
-            if let Some(ref thread) = proof_generation_thread {
-                thread.abort();
-                *proof_generation_thread = None;
-            }
-            if add_to_storage {
-                proof_storage.set_zkp(&zkp_state_lock)
-            }
-            return Ok(());
+        // Since someone else generate a valide proof faster, we will terminate our own proof generation.
+        *receiver = None;
+        if let Some(ref thread) = proof_generation_thread {
+            thread.abort();
+            *proof_generation_thread = None;
         }
-        Err(ZKPComponentError::InvalidProof)
+        if add_to_storage {
+            proof_storage.set_zkp(&zkp_state_lock.clone().into())
+        }
+        Ok(())
     }
 }
 
@@ -243,7 +222,7 @@ impl<N: Network> Future for ZKPComponent<N> {
             if let Err(e) = Self::do_push_proof(
                 this.blockchain,
                 this.zkp_state,
-                proof,
+                &proof,
                 this.receiver,
                 this.proof_generation_thread,
                 this.proof_storage,
@@ -263,13 +242,13 @@ impl<N: Network> Future for ZKPComponent<N> {
                     if let Err(e) = Self::do_push_proof(
                         this.blockchain,
                         this.zkp_state,
-                        proof.0,
+                        &proof.0,
                         this.receiver,
                         this.proof_generation_thread,
                         this.proof_storage,
                         true,
                     ) {
-                        log::error!("Error pushing the new zk proof {}", e);
+                        log::error!("Error pushing the zk proof {:?} - {} ", proof.0, e);
                     }
                 }
                 Poll::Ready(None) => {}
@@ -320,15 +299,14 @@ impl<N: Network> Future for ZKPComponent<N> {
                             let (sender, receiver) = oneshot::channel();
                             *this.receiver = Some(receiver);
                             let zkp_state = this.zkp_state.read();
-                            *this.proof_generation_thread =
-                                Some(tokio::spawn(ZKProofComponent::generate_new_proof(
-                                    block,
-                                    zkp_state.latest_pks.clone(),
-                                    zkp_state.latest_header_hash.clone().into(),
-                                    zkp_state.latest_proof.clone(),
-                                    this.genesis_state.clone(),
-                                    sender,
-                                )));
+                            *this.proof_generation_thread = Some(tokio::spawn(generate_new_proof(
+                                block,
+                                zkp_state.latest_pks.clone(),
+                                zkp_state.latest_header_hash.clone().into(),
+                                zkp_state.latest_proof.clone(),
+                                this.genesis_state.clone(),
+                                sender,
+                            )));
                         }
                     }
                     Some(_) => (),

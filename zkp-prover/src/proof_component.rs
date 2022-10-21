@@ -15,25 +15,24 @@ use tokio::sync::oneshot::Sender;
 use super::types::ZKPState;
 use crate::types::*;
 
-pub fn validate_proof(blockchain: &Arc<RwLock<Blockchain>>, proof: ZKProof) -> bool {
+pub fn validate_proof(blockchain: &Arc<RwLock<Blockchain>>, proof: &ZKProof) -> bool {
     // If it's a genesis block proof, then should have none as proof value to be valid
     if proof.block_number == 0 && proof.proof.is_none() {
         return true;
     }
 
     if let Ok((new_block, genesis_block, proof)) = pre_proof_validity_checks(blockchain, proof) {
-        return validate_proof_get_new_state(proof, new_block, genesis_block)
-            .map_or(false, |zkp_state| zkp_state.is_some());
+        return validate_proof_get_new_state(proof, new_block, genesis_block).is_ok();
     }
     false
 }
 
 pub(crate) fn pre_proof_validity_checks(
     blockchain: &Arc<RwLock<Blockchain>>,
-    proof: ZKProof,
+    proof: &ZKProof,
 ) -> Result<(MacroBlock, MacroBlock, Proof<MNT6_753>), ZKPComponentError> {
     let block_number = proof.block_number;
-    let proof = proof.proof.ok_or(NanoZKPError::EmptyProof)?;
+    let proof = proof.proof.clone().ok_or(NanoZKPError::EmptyProof)?;
 
     let new_block = blockchain
         .read()
@@ -55,8 +54,8 @@ pub(crate) fn validate_proof_get_new_state(
     proof: Proof<MNT6_753>,
     new_block: MacroBlock,
     genesis_block: MacroBlock,
-) -> Result<Option<ZKPState>, ZKPComponentError> {
-    let old_pks: Vec<G2MNT6> = genesis_block
+) -> Result<ZKPState, ZKPComponentError> {
+    let genesis_pks: Vec<G2MNT6> = genesis_block
         .get_validators()
         .ok_or(ZKPComponentError::InvalidBlock)?
         .voting_keys()
@@ -74,20 +73,20 @@ pub(crate) fn validate_proof_get_new_state(
     if NanoZKP::verify(
         genesis_block.block_number(),
         genesis_block.hash().into(),
-        old_pks,
+        genesis_pks,
         new_block.block_number(),
         new_block.hash().into(),
         new_pks.clone(),
         proof.clone(),
     )? {
-        return Ok(Some(ZKPState {
+        return Ok(ZKPState {
             latest_pks: new_pks,
             latest_header_hash: new_block.hash(),
             latest_block_number: new_block.block_number(),
             latest_proof: Some(proof),
-        }));
+        });
     }
-    Ok(None)
+    Err(ZKPComponentError::InvalidProof)
 }
 
 pub(crate) async fn generate_new_proof(
@@ -154,13 +153,13 @@ impl ProofStore {
         ProofStore { env, zkp_db }
     }
 
-    pub fn get_zkp(&self) -> Option<ZKPState> {
+    pub fn get_zkp(&self) -> Option<ZKProof> {
         ReadTransaction::new(&self.env).get(&self.zkp_db, ProofStore::PROOF_KEY)
     }
 
-    pub fn set_zkp(&self, zkp_state: &ZKPState) {
+    pub fn set_zkp(&self, zk_proof: &ZKProof) {
         let mut tx = WriteTransaction::new(&self.env);
-        tx.put(&self.zkp_db, ProofStore::PROOF_KEY, zkp_state);
+        tx.put(&self.zkp_db, ProofStore::PROOF_KEY, zk_proof);
         tx.commit();
     }
 }

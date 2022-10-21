@@ -35,6 +35,7 @@ nimiq-primitives = { path = "../primitives" }
 nimiq-transaction = { path = "../primitives/transaction" }
 nimiq-vrf = { path = "../vrf" }
 nimiq-utils = { path = "../utils"}
+rand = "0.8"
 
 [dev-dependencies]
 nimiq-test-log = { path = "../test-log" }
