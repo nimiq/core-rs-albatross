@@ -7,9 +7,7 @@ use ark_mnt6_753::{G2Projective as G2MNT6, MNT6_753};
 use ark_serialize::{
     CanonicalDeserialize, CanonicalSerialize, SerializationError as ArkSerializingError,
 };
-use beserial::{
-    Deserialize, Serialize, SerializingError, SerializingError as BeserialSerializingError,
-};
+use beserial::{Deserialize, Serialize, SerializingError as BeserialSerializingError};
 use nimiq_block::MacroBlock;
 use nimiq_database::{AsDatabaseBytes, FromDatabaseValue};
 use nimiq_hash::Blake2bHash;
@@ -25,23 +23,6 @@ use parking_lot::RwLock;
 
 use nimiq_nano_zkp::NanoZKPError;
 use thiserror::Error;
-
-impl AsDatabaseBytes for ZKPState {
-    fn as_database_bytes(&self) -> Cow<[u8]> {
-        let v = Serialize::serialize_to_vec(&self);
-        Cow::Owned(v)
-    }
-}
-
-impl FromDatabaseValue for ZKPState {
-    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
-    where
-        Self: Sized,
-    {
-        let mut cursor = io::Cursor::new(bytes);
-        Ok(Deserialize::deserialize(&mut cursor)?)
-    }
-}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ZKPState {
@@ -69,80 +50,6 @@ impl ZKPState {
             latest_header_hash: genesis_block.header_hash.into(),
             latest_block_number: genesis_block.block_number,
             latest_proof: None,
-        })
-    }
-}
-
-impl Serialize for ZKPState {
-    fn serialize<W: beserial::WriteBytesExt>(
-        &self,
-        writer: &mut W,
-    ) -> Result<usize, beserial::SerializingError> {
-        let mut size = 0;
-        let count: u16 =
-            u16::try_from(self.latest_pks.len()).map_err(|_| SerializingError::Overflow)?;
-        size += Serialize::serialize(&count, writer)?;
-        for pk in self.latest_pks.iter() {
-            CanonicalSerialize::serialize(pk, writer.by_ref()).map_err(ark_to_bserial_error)?;
-            size += CanonicalSerialize::serialized_size(pk);
-        }
-
-        size += Serialize::serialize(&self.latest_header_hash, writer)?;
-        size += Serialize::serialize(&self.latest_block_number, writer)?;
-
-        size += Serialize::serialize(&self.latest_proof.is_some(), writer)?;
-        if let Some(ref latest_proof) = self.latest_proof {
-            CanonicalSerialize::serialize(latest_proof, writer).map_err(ark_to_bserial_error)?;
-            size += CanonicalSerialize::serialized_size(latest_proof);
-        }
-        Ok(size)
-    }
-
-    fn serialized_size(&self) -> usize {
-        let mut size = 2; // count as u16
-        for pk in self.latest_pks.iter() {
-            size += CanonicalSerialize::serialized_size(pk);
-        }
-
-        size += Serialize::serialized_size(&self.latest_header_hash);
-        size += Serialize::serialized_size(&self.latest_block_number);
-
-        size += Serialize::serialized_size(&self.latest_proof.is_some());
-        if let Some(ref latest_proof) = self.latest_proof {
-            size += CanonicalSerialize::serialized_size(latest_proof);
-        }
-        size
-    }
-}
-
-impl Deserialize for ZKPState {
-    fn deserialize<R: beserial::ReadBytesExt>(
-        reader: &mut R,
-    ) -> Result<Self, BeserialSerializingError> {
-        let count: u16 = Deserialize::deserialize(reader)?;
-        let mut latest_pks: Vec<G2MNT6> = Vec::with_capacity(count as usize);
-        for _ in 0..count {
-            latest_pks.push(
-                CanonicalDeserialize::deserialize(reader.by_ref()).map_err(ark_to_bserial_error)?,
-            );
-        }
-
-        let latest_header_hash = Deserialize::deserialize(reader)?;
-        let latest_block_number = Deserialize::deserialize(reader)?;
-
-        let is_some: bool = Deserialize::deserialize(reader)?;
-        let mut latest_proof = None;
-
-        if is_some {
-            latest_proof =
-                Some(CanonicalDeserialize::deserialize(reader).map_err(ark_to_bserial_error)?);
-        }
-
-        Ok(ZKPState {
-            latest_pks,
-            latest_header_hash,
-            latest_block_number,
-            latest_proof,
         })
     }
 }
@@ -212,6 +119,23 @@ impl Deserialize for ZKProof {
             block_number,
             proof: latest_proof,
         })
+    }
+}
+
+impl AsDatabaseBytes for ZKProof {
+    fn as_database_bytes(&self) -> Cow<[u8]> {
+        let v = Serialize::serialize_to_vec(&self);
+        Cow::Owned(v)
+    }
+}
+
+impl FromDatabaseValue for ZKProof {
+    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
+    where
+        Self: Sized,
+    {
+        let mut cursor = io::Cursor::new(bytes);
+        Ok(Deserialize::deserialize(&mut cursor)?)
     }
 }
 

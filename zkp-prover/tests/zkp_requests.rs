@@ -1,15 +1,24 @@
 use std::sync::Arc;
 
+use beserial::Deserialize;
 use futures::StreamExt;
 
+use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::Blockchain;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_nano_zkp::NanoZKP;
 use nimiq_network_interface::network::Network;
 use nimiq_network_mock::MockHub;
 use nimiq_primitives::networks::NetworkId;
+use nimiq_primitives::policy;
 use nimiq_test_log::test;
-use nimiq_zkp_prover::proof_component as ZKProofComponent;
+use nimiq_test_utils::blockchain::{signing_key, voting_key};
+use nimiq_test_utils::blockchain_with_rng::produce_macro_blocks_with_rng;
+use nimiq_test_utils::zkp_test_data::get_base_seed;
+use nimiq_test_utils::zkp_test_data::ZKPROOF_SERIALIZED_IN_HEX;
+
+use nimiq_zkp_prover::proof_component::{validate_proof, ProofStore};
+use nimiq_zkp_prover::types::ZKProof;
 use nimiq_zkp_prover::zkp_requests::ZKPRequests;
 use nimiq_zkp_prover::ZKPComponent;
 use parking_lot::RwLock;
@@ -26,7 +35,7 @@ fn blockchain() -> Arc<RwLock<Blockchain>> {
 
 #[test(tokio::test)]
 async fn peers_dont_reply_with_outdated_proof() {
-    NanoZKP::setup().unwrap();
+    NanoZKP::setup(get_base_seed()).unwrap();
     let blockchain = blockchain();
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
@@ -65,10 +74,10 @@ async fn peers_dont_reply_with_outdated_proof() {
 }
 
 #[test(tokio::test)]
-#[ignore]
 async fn peers_reply_with_valid_proof() {
-    NanoZKP::setup().unwrap();
-    let blockchain = blockchain();
+    NanoZKP::setup(get_base_seed()).unwrap();
+    let blockchain2 = blockchain();
+    let blockchain3 = blockchain();
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
     let network2 = Arc::new(hub.new_network());
@@ -76,35 +85,47 @@ async fn peers_reply_with_valid_proof() {
     network.dial_address(network3.address()).await.unwrap();
     network.dial_address(network2.address()).await.unwrap();
 
-    let _zkp_prover2 = ZKPComponent::new(
-        Arc::clone(&blockchain),
-        Arc::clone(&network2),
-        false,
-        VolatileEnvironment::new(10).unwrap(),
-    )
-    .await;
+    let env2 = VolatileEnvironment::new(10).unwrap();
+    let env3 = VolatileEnvironment::new(10).unwrap();
+    let store2 = ProofStore::new(env2.clone());
+    let store3 = ProofStore::new(env3.clone());
+    let producer = BlockProducer::new(signing_key(), voting_key());
+    produce_macro_blocks_with_rng(
+        &producer,
+        &blockchain2,
+        policy::BATCHES_PER_EPOCH as usize,
+        &mut get_base_seed(),
+    );
+    produce_macro_blocks_with_rng(
+        &producer,
+        &blockchain3,
+        policy::BATCHES_PER_EPOCH as usize,
+        &mut get_base_seed(),
+    );
 
-    let _zkp_prover3 = ZKPComponent::new(
-        Arc::clone(&blockchain),
-        Arc::clone(&network3),
-        false,
-        VolatileEnvironment::new(10).unwrap(),
-    )
-    .await;
+    // Seta valid proof into the 2 components
+    let new_proof =
+        &ZKProof::deserialize_from_vec(&hex::decode(ZKPROOF_SERIALIZED_IN_HEX).unwrap()).unwrap();
+    log::info!("setting proof");
+    store2.set_zkp(&new_proof);
+    store3.set_zkp(&new_proof);
+
+    log::info!("launching zkps");
+    let _zkp_prover2 =
+        ZKPComponent::new(Arc::clone(&blockchain2), Arc::clone(&network2), false, env2).await;
+    let _zkp_prover3 =
+        ZKPComponent::new(Arc::clone(&blockchain3), Arc::clone(&network3), false, env3).await;
 
     let mut zkp_requests = ZKPRequests::new(Arc::clone(&network));
 
-    // ITODO set valid proof into the 2 components and request proofs
-
-    // Trigger zkp requests
+    // Trigger zkp requests from the first component
     zkp_requests.request_zkps(network.get_peers(), 0);
 
     for _ in 0..2 {
         let proof = zkp_requests.next().await;
-        assert!(proof.is_some(), "Peer sent a new proof");
         assert!(
-            ZKProofComponent::validate_proof(&blockchain, proof.unwrap().1),
-            "Peer sent a new proof"
+            validate_proof(&blockchain2, &proof.unwrap().1),
+            "Peer should sent a new proof valid proof"
         );
     }
 }

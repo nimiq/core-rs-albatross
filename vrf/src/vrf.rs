@@ -10,7 +10,7 @@ use curve25519_dalek::edwards::{CompressedEdwardsY, EdwardsPoint};
 use curve25519_dalek::scalar::Scalar;
 use curve25519_dalek::traits::IsIdentity;
 use log::debug;
-use rand::RngCore;
+use rand::{CryptoRng, RngCore};
 #[cfg(feature = "serde-derive")]
 use serde_big_array::BigArray;
 use sha2::{Digest, Sha256, Sha512};
@@ -137,8 +137,18 @@ impl VrfSeed {
     /// key pair.
     #[must_use]
     pub fn sign_next(&self, keypair: &KeyPair) -> Self {
+        self.sign_next_with_rng(keypair, rand::thread_rng())
+    }
+
+    /// Produces the next VRF Seed given the current VRF Seed (which is part of the message) and a
+    /// key pair.
+    #[must_use]
+    pub fn sign_next_with_rng<R: RngCore + CryptoRng>(
+        &self,
+        keypair: &KeyPair,
+        mut rng: R,
+    ) -> Self {
         // Get random bytes.
-        let mut rng = rand::thread_rng();
         let mut Z = [0u8; 64];
         rng.fill_bytes(&mut Z[..]);
 

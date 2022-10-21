@@ -9,6 +9,7 @@ use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::KeyPair as SchnorrKeyPair;
 use nimiq_primitives::policy;
 use nimiq_transaction::Transaction;
+use rand::{CryptoRng, Rng, RngCore};
 
 /// Struct that contains all necessary information to actually produce blocks.
 /// It has the validator keys for this validator.
@@ -44,6 +45,35 @@ impl BlockProducer {
         // Skip block proof
         skip_block_proof: Option<SkipBlockProof>,
     ) -> MicroBlock {
+        self.next_micro_block_with_rng(
+            blockchain,
+            timestamp,
+            fork_proofs,
+            transactions,
+            extra_data,
+            skip_block_proof,
+            rand::thread_rng(),
+        )
+    }
+
+    /// Creates the next micro block.
+    pub fn next_micro_block_with_rng<R: Rng + CryptoRng>(
+        &self,
+        // The (upgradable) read locked guard to the blockchain
+        blockchain: &Blockchain,
+        // The timestamp for the block.
+        timestamp: u64,
+        // Proofs of any forks created by malicious validators. A fork proof may be submitted during
+        // the batch when it happened or in the next one, but not after that.
+        fork_proofs: Vec<ForkProof>,
+        // The transactions to be included in the block body.
+        transactions: Vec<Transaction>,
+        // Extra data for this block.
+        extra_data: Vec<u8>,
+        // Skip block proof
+        skip_block_proof: Option<SkipBlockProof>,
+        rng: R,
+    ) -> MicroBlock {
         // Calculate the block number. It is simply the previous block number incremented by one.
         let block_number = blockchain.block_number() + 1;
 
@@ -72,7 +102,7 @@ impl BlockProducer {
             // leader.
             prev_seed
         } else {
-            prev_seed.sign_next(&self.signing_key)
+            prev_seed.sign_next_with_rng(&self.signing_key, rng)
         };
 
         // Create the inherents from the fork proofs or skip block info.
@@ -158,6 +188,31 @@ impl BlockProducer {
         // Extra data for this block.
         extra_data: Vec<u8>,
     ) -> MacroBlock {
+        self.next_macro_block_proposal_with_rng(
+            blockchain,
+            timestamp,
+            round,
+            extra_data,
+            &mut rand::thread_rng(),
+        )
+    }
+
+    /// Creates a proposal for the next macro block (checkpoint or election). It is just a proposal,
+    /// NOT a complete block. It still needs to go through the Tendermint protocol in order to be
+    /// finalized.
+    // Note: Needs to be called with the Blockchain lock held.
+    pub fn next_macro_block_proposal_with_rng<R: RngCore + CryptoRng>(
+        &self,
+        // The (upgradable) read locked guard to the blockchain
+        blockchain: &Blockchain,
+        // The timestamp for the block proposal.
+        timestamp: u64,
+        // The round for the block proposal.
+        round: u32,
+        // Extra data for this block.
+        extra_data: Vec<u8>,
+        rng: &mut R,
+    ) -> MacroBlock {
         // Calculate the block number. It is simply the previous block number incremented by one.
         let block_number = blockchain.block_number() + 1;
 
@@ -173,7 +228,10 @@ impl BlockProducer {
 
         // Calculate the seed for this block by signing the previous block seed with the validator
         // key.
-        let seed = blockchain.head().seed().sign_next(&self.signing_key);
+        let seed = blockchain
+            .head()
+            .seed()
+            .sign_next_with_rng(&self.signing_key, rng);
 
         // Create the header for the macro block without the state root and the transactions root.
         // We need several fields of this header in order to calculate the transactions and the
