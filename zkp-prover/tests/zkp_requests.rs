@@ -34,6 +34,7 @@ fn blockchain() -> Arc<RwLock<Blockchain>> {
 }
 
 #[test(tokio::test)]
+#[ignore]
 async fn peers_dont_reply_with_outdated_proof() {
     NanoZKP::setup(get_base_seed()).unwrap();
     let blockchain = blockchain();
@@ -74,6 +75,7 @@ async fn peers_dont_reply_with_outdated_proof() {
 }
 
 #[test(tokio::test)]
+#[ignore]
 async fn peers_reply_with_valid_proof() {
     NanoZKP::setup(get_base_seed()).unwrap();
     let blockchain2 = blockchain();

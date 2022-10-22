@@ -76,8 +76,8 @@ seed_nodes = [
 #size=0
 
 # Max number of databases
-# Default: 10
-#max_dbs=10
+# Default: 13
+#max_dbs=13
 
 ##############################################################################
 #
