@@ -246,8 +246,8 @@ pub struct DatabaseConfig {
     #[builder(default = "1024 * 1024 * 1024 * 1024")]
     size: usize,
 
-    /// Max number of DBs. Recommended: 12
-    #[builder(default = "12")]
+    /// Max number of DBs. Recommended: 13
+    #[builder(default = "13")]
     max_dbs: u32,
 
     /// Max number of threads that can open read transactions.
@@ -263,7 +263,7 @@ impl Default for DatabaseConfig {
         Self {
             // 1 TB
             size: 1024 * 1024 * 1024 * 1024,
-            max_dbs: 12,
+            max_dbs: 13,
             max_readers: 600,
         }
     }

@@ -1,25 +1,21 @@
-use std::error::Error;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
-use futures::{Future, FutureExt, StreamExt};
+use futures::{Future, StreamExt};
 use nimiq_block::Block;
 use nimiq_database::Environment;
 use nimiq_genesis::NetworkInfo;
-use nimiq_nano_primitives::state_commitment;
-use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard, RwLockWriteGuard};
+use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 
-use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainEvent};
+use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_network_interface::{network::Network, request::request_handler};
-use nimiq_utils::observer::NotifierStream;
-use tokio::sync::oneshot::{self, Receiver};
 
 use pin_project::pin_project;
-use tokio::task::JoinHandle;
 
 use crate::proof_component::*;
 use crate::types::*;
+use crate::zkp_prover::ZKProver;
 use crate::zkp_requests::ZKPRequests;
 use futures::stream::BoxStream;
 
@@ -28,7 +24,6 @@ pub type ZKProofsStream<N> = BoxStream<'static, (ZKProof, <N as Network>::Pubsub
 pub struct ZKPComponentProxy<N: Network> {
     network: Arc<N>,
     zkp_state: Arc<RwLock<ZKPState>>,
-    genesis_state: Vec<u8>,
     zkp_requests: Arc<Mutex<ZKPRequests<N>>>,
 }
 
@@ -37,7 +32,6 @@ impl<N: Network> Clone for ZKPComponentProxy<N> {
         Self {
             network: Arc::clone(&self.network),
             zkp_state: Arc::clone(&self.zkp_state),
-            genesis_state: self.genesis_state.clone(),
             zkp_requests: Arc::clone(&self.zkp_requests),
         }
     }
@@ -70,11 +64,8 @@ pub struct ZKPComponent<N: Network> {
     blockchain: Arc<RwLock<Blockchain>>,
     network: Arc<N>,
     zkp_state: Arc<RwLock<ZKPState>>,
-    genesis_state: Vec<u8>,
-    receiver: Option<Receiver<Result<ZKPState, ZKPComponentError>>>,
-    blockchain_election_rx: Option<NotifierStream<BlockchainEvent>>,
+    zk_prover: Option<ZKProver<N>>,
     zk_proofs_stream: ZKProofsStream<N>,
-    proof_generation_thread: Option<JoinHandle<()>>,
     proof_storage: ProofStore,
     zkp_requests: Arc<Mutex<ZKPRequests<N>>>,
 }
@@ -93,39 +84,23 @@ impl<N: Network> ZKPComponent<N> {
         let zkp_state = Arc::new(RwLock::new(
             ZKPState::with_genesis(&genesis_block).expect("Invalid genesis block"),
         ));
-        let public_keys = zkp_state.read().latest_pks.clone();
-        let genesis_state = state_commitment(
-            genesis_block.block_number(),
-            genesis_block.hash().into(),
-            public_keys,
-        );
 
         // Load from db the preexisting proof if any
-        let proof_storage = ProofStore::new(env);
-        if let Some(loaded_proof) = proof_storage.get_zkp() {
-            if let Err(e) = Self::do_push_proof(
-                &blockchain,
-                &zkp_state,
-                &loaded_proof,
-                &mut None,
-                &mut None,
-                &proof_storage,
-                false,
-            ) {
-                log::error!("Error pushing the zk proof load from disk {}", e);
-                proof_storage.set_zkp(&zkp_state.read().clone().into());
-            } else {
-                log::info!("The zk proof was successfully load from disk");
-            }
-        } else {
-            log::trace!("No zk proof found on the db, starts from genesis");
-        }
+        let proof_storage = ProofStore::new(env.clone());
+        Self::load_proof_from_db(&blockchain, &zkp_state, &proof_storage);
 
-        // If we are an active prover, the component will listen to the election block events
-        let mut blockchain_election_rx = None;
-        if is_prover_active {
-            blockchain_election_rx = Some(blockchain.write().notifier.as_stream());
-        }
+        let zk_prover = if is_prover_active {
+            Some(
+                ZKProver::new(
+                    Arc::clone(&blockchain),
+                    Arc::clone(&network),
+                    Arc::clone(&zkp_state),
+                )
+                .await,
+            )
+        } else {
+            None
+        };
 
         // Sets the stream of the broadcasted
         let zk_proofs_stream = network.subscribe::<ZKProofTopic>().await.unwrap().boxed();
@@ -134,11 +109,8 @@ impl<N: Network> ZKPComponent<N> {
             blockchain,
             network: Arc::clone(&network),
             zkp_state,
-            genesis_state,
-            receiver: None,
-            blockchain_election_rx,
+            zk_prover,
             zk_proofs_stream,
-            proof_generation_thread: None,
             proof_storage,
             zkp_requests: Arc::new(Mutex::new(ZKPRequests::new(network))),
         };
@@ -155,30 +127,44 @@ impl<N: Network> ZKPComponent<N> {
         ZKPComponentProxy {
             network: Arc::clone(&self.network),
             zkp_state: Arc::clone(&self.zkp_state),
-            genesis_state: self.genesis_state.clone(),
             zkp_requests: Arc::clone(&self.zkp_requests),
         }
     }
 
     pub fn is_zkp_prover_activated(&self) -> bool {
-        self.blockchain_election_rx.is_some()
+        self.zk_prover.is_some()
     }
 
-    fn broadcast_zk_proof(network: &Arc<N>, zk_proof: ZKProof) {
-        let network = Arc::clone(network);
-        tokio::spawn(async move {
-            if let Err(e) = network.publish::<ZKProofTopic>(zk_proof).await {
-                log::warn!(error = &e as &dyn Error, "Failed to publish the zk proof");
+    fn load_proof_from_db(
+        blockchain: &Arc<RwLock<Blockchain>>,
+        zkp_state: &Arc<RwLock<ZKPState>>,
+        proof_storage: &ProofStore,
+    ) {
+        // Load from db the preexisting proof if any.
+        if let Some(loaded_proof) = proof_storage.get_zkp() {
+            if let Err(e) = Self::push_proof_from_peers(
+                blockchain,
+                zkp_state,
+                &loaded_proof,
+                &mut None,
+                proof_storage,
+                false,
+            ) {
+                log::error!("Error pushing the zk proof load from disk {}", e);
+                proof_storage.set_zkp(&zkp_state.read().clone().into());
+            } else {
+                log::info!("The zk proof was successfully load from disk");
             }
-        });
+        } else {
+            log::trace!("No zk proof found on the db");
+        }
     }
 
-    fn do_push_proof(
+    fn push_proof_from_peers(
         blockchain: &Arc<RwLock<Blockchain>>,
         zkp_state: &Arc<RwLock<ZKPState>>,
         proof: &ZKProof,
-        receiver: &mut Option<Receiver<Result<ZKPState, ZKPComponentError>>>,
-        proof_generation_thread: &mut Option<JoinHandle<()>>,
+        zk_prover: &mut Option<ZKProver<N>>,
         proof_storage: &ProofStore,
         add_to_storage: bool,
     ) -> Result<(), ZKPComponentError> {
@@ -194,11 +180,10 @@ impl<N: Network> ZKPComponent<N> {
         *zkp_state_lock = new_zkp_state;
 
         // Since someone else generate a valide proof faster, we will terminate our own proof generation.
-        *receiver = None;
-        if let Some(ref thread) = proof_generation_thread {
-            thread.abort();
-            *proof_generation_thread = None;
+        if let Some(zk_prover) = zk_prover {
+            zk_prover.cancel_current_proof_production();
         }
+
         if add_to_storage {
             proof_storage.set_zkp(&zkp_state_lock.clone().into())
         }
@@ -215,16 +200,14 @@ impl<N: Network> Future for ZKPComponent<N> {
         // Check if we have requested and are waiting for peers proofs
         // Goes over all received proofs and tries to update state
         // When  all requests were addressed and processed we reset the zkp_request variable
-
         while let Poll::Ready(Some((_peer_id, proof))) =
             this.zkp_requests.lock().poll_next_unpin(cx)
         {
-            if let Err(e) = Self::do_push_proof(
+            if let Err(e) = Self::push_proof_from_peers(
                 this.blockchain,
                 this.zkp_state,
                 &proof,
-                this.receiver,
-                this.proof_generation_thread,
+                this.zk_prover,
                 this.proof_storage,
                 true,
             ) {
@@ -239,12 +222,11 @@ impl<N: Network> Future for ZKPComponent<N> {
             match this.zk_proofs_stream.as_mut().poll_next(cx) {
                 Poll::Ready(Some(proof)) => {
                     log::debug!("Received zk proof via gossipsub {:?}", proof.0);
-                    if let Err(e) = Self::do_push_proof(
+                    if let Err(e) = Self::push_proof_from_peers(
                         this.blockchain,
                         this.zkp_state,
                         &proof.0,
-                        this.receiver,
-                        this.proof_generation_thread,
+                        this.zk_prover,
                         this.proof_storage,
                         true,
                     ) {
@@ -257,62 +239,18 @@ impl<N: Network> Future for ZKPComponent<N> {
             }
         }
 
-        // If a new proof was generated it sets the state and broadcasts the new proof
-        // This returns early to avoid multiple spawns of proof generation
-        if let Some(ref mut receiver) = this.receiver {
-            return match receiver.poll_unpin(cx) {
-                Poll::Ready(Ok(Ok(zkp_state))) => {
-                    *this.receiver = None;
-                    let mut zkp_state_lock = this.zkp_state.write();
-                    *zkp_state_lock = zkp_state;
-
-                    let zkp_state_lock = RwLockWriteGuard::downgrade(zkp_state_lock);
-                    assert!(
-                        zkp_state_lock.latest_proof.is_some(),
-                        "The generate new proof should never produces a empty proof"
-                    );
-                    let zkp_proof = ZKProof::new(
-                        zkp_state_lock.latest_block_number,
-                        zkp_state_lock.latest_proof.clone(),
-                    );
-
-                    Self::broadcast_zk_proof(this.network, zkp_proof);
-                    Poll::Pending
+        // Polls prover for new proofs
+        if let Some(ref mut zk_prover) = this.zk_prover {
+            match zk_prover.poll_next_unpin(cx) {
+                Poll::Ready(Some(_zkp_state)) => {
+                    //ITODO info message
                 }
-                Poll::Ready(Ok(Err(e))) => {
-                    log::error!("Error generating ZK Proof for block {}", e);
-                    *this.receiver = None;
-                    Poll::Pending
+                Poll::Ready(None) => {
+                    log::error!("ZK prover aborted. We are no longer generating new proofs");
+                    return Poll::Ready(());
                 }
-                _ => Poll::Pending,
+                _ => {}
             };
-        }
-
-        // Only active if the proof generation was activated on the constructor
-        // Listens to block election events from blockchain and deploys the proof generation thread
-        if let Some(ref mut blockchain_election_rx) = this.blockchain_election_rx {
-            while let Poll::Ready(event) = blockchain_election_rx.poll_next_unpin(cx) {
-                match event {
-                    Some(BlockchainEvent::EpochFinalized(hash)) => {
-                        let block = this.blockchain.read().get_block(&hash, true, None);
-                        if let Some(Block::Macro(block)) = block {
-                            let (sender, receiver) = oneshot::channel();
-                            *this.receiver = Some(receiver);
-                            let zkp_state = this.zkp_state.read();
-                            *this.proof_generation_thread = Some(tokio::spawn(generate_new_proof(
-                                block,
-                                zkp_state.latest_pks.clone(),
-                                zkp_state.latest_header_hash.clone().into(),
-                                zkp_state.latest_proof.clone(),
-                                this.genesis_state.clone(),
-                                sender,
-                            )));
-                        }
-                    }
-                    Some(_) => (),
-                    None => return Poll::Ready(()),
-                }
-            }
         }
 
         Poll::Pending
