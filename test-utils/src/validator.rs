@@ -41,11 +41,12 @@ where
     N::Error: Send,
     N::PeerId: Deserialize + Serialize,
 {
-    let consensus = consensus(peer_id, genesis_info, hub, is_prover_active).await;
+    let (consensus, blockchain) = consensus(peer_id, genesis_info, hub, is_prover_active).await;
     let validator_network = Arc::new(ValidatorNetworkImpl::new(Arc::clone(&consensus.network)));
     (
         AbstractValidator::<N, ValidatorNetworkImpl<N>>::new(
             &consensus,
+            blockchain,
             validator_network,
             validator_address,
             automatic_reactivate,

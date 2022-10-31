@@ -15,12 +15,16 @@ is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
+futures = { package = "futures-util", version = "0.3" }
 thiserror = "1.0"
+tokio = { version = "1.21", features = ["full"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
 hex = "0.4"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
 prometheus-client = { version = "0.18.1", optional = true}
 rand = "0.8"
+
 
 beserial = { path = "../beserial", features = ["derive"] }
 nimiq-account = { path = "../primitives/account" }
@@ -35,7 +39,7 @@ nimiq-mmr = { path = "../primitives/mmr" }
 nimiq-primitives = { path = "../primitives" }
 nimiq-transaction = { path = "../primitives/transaction" }
 nimiq-trie = { path = "../primitives/trie" }
-nimiq-utils = { path = "../utils", features = ["math", "observer", "time"] }
+nimiq-utils = { path = "../utils", features = ["math", "time"] }
 nimiq-vrf = { path = "../vrf" }
 
 [dev-dependencies]

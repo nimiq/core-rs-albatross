@@ -1,10 +1,12 @@
 use parking_lot::RwLock;
 use std::sync::Arc;
+use tokio_stream::wrappers::BroadcastStream;
+use tokio_stream::StreamExt;
 
 use nimiq_block::Block;
 use nimiq_block_production::{test_utils::TemporaryBlockProducer, BlockProducer};
+use nimiq_blockchain::PushResult;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
-use nimiq_blockchain::{ForkEvent, PushResult};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
 use nimiq_primitives::policy::Policy;
@@ -312,24 +314,13 @@ fn it_can_rebranch_to_inferior_macro_block() {
     );
 }
 
-#[test]
-fn create_fork_proof() {
+#[test(tokio::test)]
+async fn create_fork_proof() {
     // Build a fork using two producers.
     let producer1 = TemporaryBlockProducer::new();
     let producer2 = TemporaryBlockProducer::new();
 
-    let event1_rc1 = Arc::new(std::sync::RwLock::new(false));
-    let event1_rc2 = event1_rc1.clone();
-
-    producer1
-        .blockchain
-        .write()
-        .fork_notifier
-        .register(move |e: &ForkEvent| {
-            match e {
-                ForkEvent::Detected(_) => *event1_rc2.write().unwrap() = true,
-            };
-        });
+    let mut fork_rx = BroadcastStream::new(producer1.blockchain.read().fork_notifier.subscribe());
 
     // Easy rebranch
     // [0] - [0] - [0] - [0]
@@ -342,5 +333,5 @@ fn create_fork_proof() {
     producer1.push(fork).unwrap();
 
     // Verify that the fork proof was generated
-    assert!(*event1_rc1.read().unwrap());
+    assert!(fork_rx.next().await.is_some());
 }

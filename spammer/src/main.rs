@@ -212,8 +212,8 @@ async fn main_inner() -> Result<(), Error> {
     let consensus = client.take_consensus().unwrap();
 
     let mut bc_events = {
-        let mut bc = consensus.blockchain.write();
-        bc.notifier.as_stream()
+        let bc = consensus.blockchain.read();
+        bc.notifier_as_stream()
     };
 
     log::info!("Spawning consensus");
@@ -225,12 +225,12 @@ async fn main_inner() -> Result<(), Error> {
         use nimiq::extras::metrics_server::start_metrics_server;
         start_metrics_server(
             metrics_config.addr,
-            Arc::clone(&consensus.blockchain),
+            client.blockchain(),
             client.mempool(),
             client.consensus_proxy(),
             client.network(),
             &[],
-        );
+        )
     }
 
     // Start Spammer
@@ -377,7 +377,7 @@ async fn spam(
 ) {
     let (number, net_id) = {
         let blockchain = consensus.blockchain.read();
-        (blockchain.block_number(), blockchain.network_id)
+        (blockchain.block_number(), blockchain.network_id())
     };
     tokio::task::spawn_blocking(move || {
         let choices = [

@@ -1,0 +1,28 @@
+[package]
+name = "nimiq-blockchain-proxy"
+version = "0.1.0"
+authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
+edition = "2021"
+description = "Persistent block storage for Nimiq's Albatross implementation"
+homepage = "https://nimiq.com"
+repository = "https://github.com/nimiq/core-rs-albatross"
+license = "Apache-2.0"
+
+[badges]
+travis-ci = { repository = "nimiq/core-rs", branch = "master" }
+is-it-maintained-issue-resolution = { repository = "nimiq/core-rs" }
+is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
+maintenance = { status = "experimental" }
+
+[dependencies]
+parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
+tokio-stream = { version = "0.1", features = ["sync"] }
+futures = { package = "futures-util", version = "0.3" }
+
+nimiq-block = { path = "../primitives/block" }
+nimiq-blockchain = { path = "../blockchain" }
+nimiq-database = { path = "../database" }
+nimiq-genesis = { path = "../genesis" }
+nimiq-hash = { path = "../hash" }
+nimiq-primitives = { path = "../primitives" }
+nimiq-transaction = { path = "../primitives/transaction" }

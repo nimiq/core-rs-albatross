@@ -6,8 +6,9 @@ use std::{
 };
 
 use futures::{future::BoxFuture, ready, stream::BoxStream, FutureExt, Stream, StreamExt};
+use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::Mutex;
 use pin_project::pin_project;
 use tokio::task::spawn_blocking;
 
@@ -68,7 +69,7 @@ struct Inner<N: Network, TReq: RequestComponent<N>> {
     config: BlockQueueConfig,
 
     /// Reference to the block chain
-    blockchain: Arc<RwLock<Blockchain>>,
+    blockchain: BlockchainProxy,
 
     /// Reference to the network
     network: Arc<N>,
@@ -240,7 +241,6 @@ impl<N: Network, TReq: RequestComponent<N>> Inner<N, TReq> {
         // Get block locators. The blocks returned by `get_blocks` do *not* include the start block.
         // FIXME We don't want to send the full batch as locators here.
         let block_locators = blockchain
-            .chain_store
             .get_blocks(
                 &head_hash,
                 head_height - macro_height,
@@ -292,7 +292,7 @@ impl<N: Network, TReq: RequestComponent<N>> Inner<N, TReq> {
         self.pending_blocks
             .extend(blocks.iter().map(|block| block.hash()));
 
-        let blockchain = Arc::clone(&self.blockchain);
+        let blockchain = self.blockchain.clone();
         let cache = Arc::clone(&self.bls_cache);
         let future = async move {
             let mut block_iter = blocks.into_iter();
@@ -314,12 +314,16 @@ impl<N: Network, TReq: RequestComponent<N>> Inner<N, TReq> {
 
                 log::debug!("Pushing block {} from missing blocks response", block);
 
-                let blockchain1 = Arc::clone(&blockchain);
+                let blockchain1 = blockchain.clone();
                 let cache1 = Arc::clone(&cache);
                 push_result = spawn_blocking(move || {
                     // Update validator keys from BLS public key cache.
                     block.update_validator_keys(&mut cache1.lock());
-                    Blockchain::push(blockchain1.upgradable_read(), block)
+                    match blockchain1 {
+                        BlockchainProxy::Full(blockchain) => {
+                            Blockchain::push(blockchain.upgradable_read(), block)
+                        }
+                    }
                 })
                 .await
                 .expect("blockchain.push() should not panic");
@@ -360,14 +364,18 @@ impl<N: Network, TReq: RequestComponent<N>> Inner<N, TReq> {
             return;
         }
 
-        let blockchain = Arc::clone(&self.blockchain);
+        let blockchain = self.blockchain.clone();
         let cache = Arc::clone(&self.bls_cache);
         let network = Arc::clone(&self.network);
         let future = async move {
             let push_result = spawn_blocking(move || {
                 // Update validator keys from BLS public key cache.
                 block.update_validator_keys(&mut cache.lock());
-                Blockchain::push(blockchain.upgradable_read(), block)
+                match blockchain {
+                    BlockchainProxy::Full(blockchain) => {
+                        Blockchain::push(blockchain.upgradable_read(), block)
+                    }
+                }
             })
             .await
             .expect("blockchain.push() should not panic");
@@ -576,8 +584,8 @@ pub struct BlockQueue<N: Network, TReq: RequestComponent<N>> {
 impl<N: Network, TReq: RequestComponent<N>> BlockQueue<N, TReq> {
     pub async fn new(
         config: BlockQueueConfig,
-        blockchain: Arc<RwLock<Blockchain>>,
         network: Arc<N>,
+        blockchain: BlockchainProxy,
         request_component: TReq,
         bls_cache: Arc<Mutex<PublicKeyCache>>,
     ) -> Self {
@@ -595,7 +603,7 @@ impl<N: Network, TReq: RequestComponent<N>> BlockQueue<N, TReq> {
 
     pub fn with_block_stream(
         config: BlockQueueConfig,
-        blockchain: Arc<RwLock<Blockchain>>,
+        blockchain: BlockchainProxy,
         network: Arc<N>,
         request_component: TReq,
         block_stream: BlockStream<N>,

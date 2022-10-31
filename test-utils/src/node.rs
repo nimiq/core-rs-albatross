@@ -5,6 +5,7 @@ use nimiq_bls::cache::PublicKeyCache;
 use parking_lot::{Mutex, RwLock};
 
 use nimiq_blockchain::Blockchain;
+use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_consensus::sync::history::HistorySync;
 use nimiq_consensus::Consensus as AbstractConsensus;
 use nimiq_database::volatile::VolatileEnvironment;
@@ -64,7 +65,7 @@ impl<N: NetworkInterface + TestNetwork> Node<N> {
         );
         let consensus = AbstractConsensus::<N>::with_min_peers(
             env,
-            Arc::clone(&blockchain),
+            BlockchainProxy::Full(Arc::clone(&blockchain)),
             Arc::clone(&network),
             Box::pin(sync_protocol),
             1,

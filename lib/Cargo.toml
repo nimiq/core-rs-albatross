@@ -46,6 +46,7 @@ tracing-subscriber = { version = "0.3", optional = true }
 beserial = { path = "../beserial" }
 nimiq-block = { path = "../primitives/block" }
 nimiq-blockchain = { path = "../blockchain" }
+nimiq-blockchain-proxy = { path = "../blockchain-proxy" }
 nimiq-bls = { path = "../bls", optional = true }
 nimiq-consensus = { path = "../consensus" }
 nimiq-database = { path = "../database" }

@@ -16,11 +16,11 @@ async fn four_validators_can_create_an_epoch() {
         build_validators::<Network>(env, &(1u64..=4u64).collect::<Vec<_>>(), &mut None, false)
             .await;
 
-    let blockchain = Arc::clone(&validators.first().unwrap().consensus.blockchain);
+    let blockchain = Arc::clone(&validators.first().unwrap().blockchain);
 
     tokio::spawn(future::join_all(validators));
 
-    let events = blockchain.write().notifier.as_stream();
+    let events = blockchain.read().notifier_as_stream();
 
     events.take(130).for_each(|_| future::ready(())).await;
 

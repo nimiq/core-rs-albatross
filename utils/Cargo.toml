@@ -27,11 +27,6 @@ rand = { version = "0.8", optional = true }
 rand_core = { version = "0.6", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 thiserror = { version = "1.0", optional = true }
-tokio = { package = "tokio", version = "1.21", features = [
-    "sync",
-    "tracing",
-], optional = true }
-tokio-stream = "0.1"
 
 beserial = { path = "../beserial", features = ["derive"], optional = true }
 nimiq-collections = { path = "../collections", optional = true }
@@ -51,7 +46,6 @@ merkle = [
     "nimiq-collections",
     "nimiq-hash",
 ]
-observer = ["log", "tokio"]
 otp = ["beserial", "clear_on_drop", "nimiq-hash", "rand"]
 time = []
 tagged-signing = ["beserial", "hex"]
@@ -64,7 +58,6 @@ all = [
     "key-store",
     "math",
     "merkle",
-    "observer",
     "otp",
     "time",
 ]
@@ -72,6 +65,5 @@ all = [
 full-nimiq = [
     "key-store",
     "merkle",
-    "observer",
     "time",
 ]

@@ -2542,6 +2542,7 @@ name = "nimiq-blockchain"
 version = "0.1.0"
 dependencies = [
  "beserial",
+ "futures-util",
  "hex",
  "nimiq-account",
  "nimiq-block",
@@ -2565,7 +2566,25 @@ dependencies = [
  "prometheus-client 0.18.1",
  "rand 0.8.5",
  "thiserror",
+ "tokio",
+ "tokio-stream",
  "tracing",
+]
+
+[[package]]
+name = "nimiq-blockchain-proxy"
+version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "nimiq-block",
+ "nimiq-blockchain",
+ "nimiq-database",
+ "nimiq-genesis",
+ "nimiq-hash",
+ "nimiq-primitives",
+ "nimiq-transaction",
+ "parking_lot 0.12.0",
+ "tokio-stream",
 ]
 
 [[package]]
@@ -2629,6 +2648,7 @@ dependencies = [
  "nimiq-block",
  "nimiq-block-production",
  "nimiq-blockchain",
+ "nimiq-blockchain-proxy",
  "nimiq-bls",
  "nimiq-database",
  "nimiq-genesis",
@@ -2882,6 +2902,7 @@ dependencies = [
  "log-panics",
  "nimiq-block",
  "nimiq-blockchain",
+ "nimiq-blockchain-proxy",
  "nimiq-bls",
  "nimiq-consensus",
  "nimiq-database",
@@ -3020,6 +3041,7 @@ dependencies = [
 name = "nimiq-nano-blockchain"
 version = "0.1.0"
 dependencies = [
+ "futures-util",
  "nimiq-account",
  "nimiq-block",
  "nimiq-blockchain",
@@ -3031,8 +3053,10 @@ dependencies = [
  "nimiq-test-log",
  "nimiq-trie",
  "nimiq-utils",
+ "parking_lot 0.12.0",
  "rand 0.8.5",
  "thiserror",
+ "tokio-stream",
 ]
 
 [[package]]
@@ -3392,6 +3416,7 @@ dependencies = [
  "nimiq-block",
  "nimiq-block-production",
  "nimiq-blockchain",
+ "nimiq-blockchain-proxy",
  "nimiq-bls",
  "nimiq-collections",
  "nimiq-consensus",
@@ -3512,8 +3537,6 @@ dependencies = [
  "rand_core 0.6.4",
  "serde",
  "thiserror",
- "tokio",
- "tokio-stream",
  "tracing",
 ]
 

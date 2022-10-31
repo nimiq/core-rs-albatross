@@ -50,7 +50,6 @@ nimiq-network-interface = { path = "../network-interface" }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }
 nimiq-transaction = { path = "../primitives/transaction" }
 nimiq-utils = { path = "../utils", features = [
-    "observer",
     "math",
     "merkle",
     "time",

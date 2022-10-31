@@ -46,6 +46,7 @@ pub fn initialize_rpc_server(
     let unlocked_wallets = Arc::clone(&wallet_dispatcher.unlocked_wallets);
 
     dispatcher.add(BlockchainDispatcher::new(client.blockchain()));
+
     dispatcher.add(ConsensusDispatcher::new(
         client.consensus_proxy(),
         Some(unlocked_wallets),

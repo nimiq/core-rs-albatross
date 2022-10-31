@@ -376,14 +376,29 @@ impl Blockchain {
         );
 
         // Notify the mempool about a new history adopted
-        this.notifier
-            .notify(BlockchainEvent::HistoryAdopted(block_hash.clone()));
+        if let Err(e) = this
+            .notifier
+            .send(BlockchainEvent::HistoryAdopted(block_hash.clone()))
+        {
+            log::error!(
+                error = ?e,
+                "Error sending the History Adopted event to the events notifier",
+            );
+        }
 
         if is_election_block {
-            this.notifier
-                .notify(BlockchainEvent::EpochFinalized(block_hash));
-        } else {
-            this.notifier.notify(BlockchainEvent::Finalized(block_hash));
+            if let Err(e) = this
+                .notifier
+                .send(BlockchainEvent::EpochFinalized(block_hash))
+            {
+                log::error!(error = ?e,
+                    "Error sending the Epoch Finalized event to the events notifier",
+                );
+            }
+        } else if let Err(e) = this.notifier.send(BlockchainEvent::Finalized(block_hash)) {
+            log::error!(
+                error = ?e,"Error sending the Finalized event to the events notifier",
+            );
         }
 
         // Return result.

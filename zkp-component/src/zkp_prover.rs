@@ -56,7 +56,7 @@ impl<N: Network> ZKProver<N> {
         );
 
         // Gets the stream of blockchain events and converts it into an election macro block stream
-        let blockchain_election_rx = blockchain.write().notifier.as_stream();
+        let blockchain_election_rx = blockchain.read().notifier_as_stream();
         let blockchain2 = Arc::clone(&blockchain);
 
         let blockchain_election_rx = blockchain_election_rx.filter_map(move |event| {

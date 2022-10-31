@@ -44,7 +44,6 @@ nimiq-primitives = { path = "../primitives" }
 nimiq-tendermint = { path = "../tendermint" }
 nimiq-transaction-builder = { path = "../transaction-builder" }
 nimiq-utils = { path = "../utils", features = [
-    "observer",
     "time",
 ] }
 nimiq-validator-network = { path = "../validator-network" }

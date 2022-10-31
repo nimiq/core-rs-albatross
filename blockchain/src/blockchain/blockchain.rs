@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
 
 use nimiq_account::{Account, Accounts, BlockLog};
 use nimiq_block::Block;
@@ -9,7 +10,6 @@ use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_primitives::policy::Policy;
 use nimiq_primitives::slots::Validators;
-use nimiq_utils::observer::Notifier;
 use nimiq_utils::time::OffsetTime;
 
 use crate::blockchain_state::BlockchainState;
@@ -22,6 +22,8 @@ use crate::reward::genesis_parameters;
 use crate::{BlockchainError, BlockchainEvent, ForkEvent};
 use nimiq_trie::key_nibbles::KeyNibbles;
 
+const BROADCAST_MAX_CAPACITY: usize = 256;
+
 /// The Blockchain struct. It stores all information of the blockchain. It is the main data
 /// structure in this crate.
 pub struct Blockchain {
@@ -32,11 +34,11 @@ pub struct Blockchain {
     // The OffsetTime struct. It allows us to query the current time.
     pub time: Arc<OffsetTime>, // shared with network
     // The notifier processes events relative to the blockchain.
-    pub notifier: Notifier<BlockchainEvent>,
+    pub notifier: BroadcastSender<BlockchainEvent>,
     // The fork notifier processes fork events.
-    pub fork_notifier: Notifier<ForkEvent>,
+    pub fork_notifier: BroadcastSender<ForkEvent>,
     // The log notifier processes all events regarding accounts changes.
-    pub log_notifier: Notifier<BlockLog>,
+    pub log_notifier: BroadcastSender<BlockLog>,
     // The chain store is a database containing all of the chain infos, blocks and receipts.
     pub chain_store: ChainStore,
     // The history store is a database containing all of the history trees and transactions.
@@ -190,13 +192,17 @@ impl Blockchain {
             _ => return Err(BlockchainError::InconsistentState),
         };
 
+        let (tx, _rx) = broadcast(BROADCAST_MAX_CAPACITY);
+        let (tx_fork, _rx_fork) = broadcast(BROADCAST_MAX_CAPACITY);
+        let (tx_log, _rx_log) = broadcast(BROADCAST_MAX_CAPACITY);
+
         Ok(Blockchain {
             env,
             network_id,
             time,
-            notifier: Notifier::new(),
-            fork_notifier: Notifier::new(),
-            log_notifier: Notifier::new(),
+            notifier: tx,
+            fork_notifier: tx_fork,
+            log_notifier: tx_log,
             chain_store,
             history_store,
             state: BlockchainState {
@@ -247,13 +253,17 @@ impl Blockchain {
         chain_store.set_head(&mut txn, &head_hash);
         txn.commit();
 
+        let (tx, _rx) = broadcast(BROADCAST_MAX_CAPACITY);
+        let (tx_fork, _rx_fork) = broadcast(BROADCAST_MAX_CAPACITY);
+        let (tx_log, _rx_log) = broadcast(BROADCAST_MAX_CAPACITY);
+
         Ok(Blockchain {
             env,
             network_id,
             time,
-            notifier: Notifier::new(),
-            fork_notifier: Notifier::new(),
-            log_notifier: Notifier::new(),
+            notifier: tx,
+            fork_notifier: tx_fork,
+            log_notifier: tx_log,
             chain_store,
             history_store,
             state: BlockchainState {

@@ -1,11 +1,15 @@
+use futures::future;
+use futures::stream::BoxStream;
+use futures::StreamExt;
 use nimiq_block::{Block, BlockType, MacroBlock};
 use nimiq_database::Transaction;
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_primitives::policy::Policy;
 use nimiq_primitives::slots::{Validator, Validators};
+use tokio_stream::wrappers::BroadcastStream;
 
-use crate::{Blockchain, ChainInfo};
+use crate::{Blockchain, BlockchainEvent, ChainInfo, Direction};
 
 /// Defines several basic methods for blockchains.
 pub trait AbstractBlockchain {
@@ -93,6 +97,16 @@ pub trait AbstractBlockchain {
         txn_option: Option<&Transaction>,
     ) -> Option<Block>;
 
+    /// Get several blocks.
+    fn get_blocks(
+        &self,
+        start_block_hash: &Blake2bHash,
+        count: u32,
+        include_body: bool,
+        direction: Direction,
+        txn_option: Option<&Transaction>,
+    ) -> Vec<Block>;
+
     /// Fetches a given chain info, by its hash.
     fn get_chain_info(
         &self,
@@ -102,13 +116,16 @@ pub trait AbstractBlockchain {
     ) -> Option<ChainInfo>;
 
     /// Calculates the slot owner (represented as the validator plus the slot number) at a given
-    /// block number and offset
+    /// block number and offset.
     fn get_slot_owner_at(
         &self,
         block_number: u32,
         offset: u32,
         txn_option: Option<&Transaction>,
     ) -> Option<(Validator, u16)>;
+
+    /// Stream of Blockchain Events.
+    fn notifier_as_stream(&self) -> BoxStream<'static, BlockchainEvent>;
 }
 
 impl AbstractBlockchain for Blockchain {
@@ -196,5 +213,23 @@ impl AbstractBlockchain for Blockchain {
             .entropy();
         self.get_proposer_at(block_number, offset, vrf_entropy, txn_option)
             .map(|slot| (slot.validator, slot.number))
+    }
+
+    fn get_blocks(
+        &self,
+        start_block_hash: &Blake2bHash,
+        count: u32,
+        include_body: bool,
+        direction: Direction,
+        txn_option: Option<&Transaction>,
+    ) -> Vec<Block> {
+        self.chain_store
+            .get_blocks(start_block_hash, count, include_body, direction, txn_option)
+    }
+
+    fn notifier_as_stream(&self) -> BoxStream<'static, BlockchainEvent> {
+        BroadcastStream::new(self.notifier.subscribe())
+            .filter_map(|x| future::ready(x.ok()))
+            .boxed()
     }
 }

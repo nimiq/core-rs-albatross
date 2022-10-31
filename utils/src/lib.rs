@@ -8,8 +8,6 @@ pub mod key_rng;
 pub mod math;
 #[cfg(feature = "merkle")]
 pub mod merkle;
-#[cfg(feature = "observer")]
-pub mod observer;
 #[cfg(feature = "otp")]
 pub mod otp;
 #[cfg(feature = "tagged-signing")]

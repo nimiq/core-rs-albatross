@@ -1,9 +1,9 @@
-use std::sync::Arc;
 use std::time::Duration;
 
 use log::info;
 
 use nimiq::prover::prover_main;
+
 pub use nimiq::{
     client::{Client, Consensus},
     config::command_line::CommandLine,
@@ -134,12 +134,12 @@ async fn main_inner() -> Result<(), Error> {
     if let Some(metrics_config) = metrics_config {
         nimiq::extras::metrics_server::start_metrics_server(
             metrics_config.addr,
-            Arc::clone(&consensus.blockchain),
+            client.blockchain(),
             mempool,
             client.consensus_proxy(),
             client.network(),
             &nimiq_task_metric,
-        );
+        )
     }
 
     // Create the "monitor" future which never completes to keep the client alive.

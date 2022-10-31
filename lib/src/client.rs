@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_nano_zkp::NanoZKP;
 use nimiq_primitives::policy::Policy;
@@ -7,6 +8,7 @@ use parking_lot::{Mutex, RwLock};
 
 use nimiq_block::Block;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
+
 use nimiq_consensus::{
     sync::history::HistorySync, Consensus as AbstractConsensus,
     ConsensusProxy as AbstractConsensusProxy,
@@ -67,6 +69,8 @@ pub(crate) struct ClientInner {
     /// The consensus object, which maintains the blockchain, the network and other things to
     /// reach consensus.
     consensus: ConsensusProxy,
+
+    blockchain: Arc<RwLock<Blockchain>>,
 
     #[cfg(feature = "validator")]
     validator: Option<ValidatorProxy>,
@@ -194,7 +198,7 @@ impl ClientInner {
         );
         let consensus = Consensus::with_min_peers(
             environment.clone(),
-            Arc::clone(&blockchain),
+            BlockchainProxy::Full(Arc::clone(&blockchain)),
             Arc::clone(&network),
             Box::pin(sync),
             config.consensus.min_peers,
@@ -225,6 +229,7 @@ impl ClientInner {
 
                 let validator = Validator::new(
                     &consensus,
+                    Arc::clone(&blockchain),
                     validator_network,
                     validator_address,
                     automatic_reactivate,
@@ -235,7 +240,7 @@ impl ClientInner {
                 );
 
                 // Use the validator's mempool as TransactionVerificationCache in the blockchain.
-                consensus.blockchain.write().tx_verification_cache =
+                blockchain.write().tx_verification_cache =
                     Arc::<Mempool>::clone(&validator.mempool);
 
                 let validator_proxy = validator.proxy();
@@ -253,6 +258,7 @@ impl ClientInner {
                 environment,
                 network,
                 consensus: consensus.proxy(),
+                blockchain,
                 #[cfg(feature = "validator")]
                 validator: validator_proxy,
                 #[cfg(feature = "wallet")]
@@ -314,12 +320,12 @@ impl Client {
 
     /// Returns a reference to the blockchain
     pub fn blockchain(&self) -> Arc<RwLock<Blockchain>> {
-        Arc::clone(&self.inner.consensus.blockchain)
+        Arc::clone(&self.inner.blockchain)
     }
 
     /// Returns the blockchain head
     pub fn blockchain_head(&self) -> Block {
-        self.inner.consensus.blockchain.read().head()
+        self.inner.blockchain.read().head()
     }
 
     #[cfg(feature = "wallet")]

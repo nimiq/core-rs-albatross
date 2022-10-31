@@ -27,7 +27,7 @@ beserial = { path = "../beserial", features = ["derive", "net"] }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-macros = { path = "../macros" }
-nimiq-utils = { path = "../utils", features = ["observer", "time"] }
+nimiq-utils = { path = "../utils", features = ["time"] }
 
 [dev-dependencies]
 nimiq-test-log = { path = "../test-log" }

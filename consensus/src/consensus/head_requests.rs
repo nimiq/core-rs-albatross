@@ -8,10 +8,10 @@ use std::task::{Context, Poll};
 use futures::future::BoxFuture;
 use futures::stream::FuturesUnordered;
 use futures::{FutureExt, StreamExt};
-use parking_lot::RwLock;
+use nimiq_blockchain_proxy::BlockchainProxy;
 
 use nimiq_block::Block;
-use nimiq_blockchain::{AbstractBlockchain, Blockchain};
+use nimiq_blockchain::AbstractBlockchain;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{network::Network, request::RequestError};
 
@@ -26,7 +26,7 @@ pub struct HeadRequests<TNetwork: Network + 'static> {
         BoxFuture<'static, (Result<Option<Block>, RequestError>, TNetwork::PeerId)>,
     >,
     requested_hashes: HashSet<Blake2bHash>,
-    blockchain: Arc<RwLock<Blockchain>>,
+    blockchain: BlockchainProxy,
     network: Arc<TNetwork>,
     num_known_blocks: usize,
     num_unknown_blocks: usize,
@@ -43,7 +43,7 @@ impl<TNetwork: Network + 'static> HeadRequests<TNetwork> {
     pub fn new(
         peers: Vec<TNetwork::PeerId>,
         network: Arc<TNetwork>,
-        blockchain: Arc<RwLock<Blockchain>>,
+        blockchain: BlockchainProxy,
     ) -> Self {
         let head_hashes = peers
             .iter()

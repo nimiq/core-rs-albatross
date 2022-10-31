@@ -4,6 +4,7 @@ members = [
   "beserial/beserial_derive",
   "block-production",
   "blockchain",
+  "blockchain-proxy",
   "bls",
   "client",
   "collections",

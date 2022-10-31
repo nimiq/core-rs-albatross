@@ -8,6 +8,7 @@ use nimiq_block::{Block, ForkProof};
 use nimiq_database::WriteTransaction;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::policy::Policy;
+use tokio::sync::broadcast::Sender as BroadcastSender;
 
 use crate::blockchain_state::BlockchainState;
 use crate::chain_info::ChainInfo;
@@ -16,6 +17,14 @@ use crate::{
     AbstractBlockchain, Blockchain, BlockchainEvent, ChainOrdering, ForkEvent, NextBlock,
     PushError, PushResult,
 };
+
+fn send_vec(log_notifier: &BroadcastSender<BlockLog>, logs: Vec<BlockLog>) {
+    for log in logs {
+        if let Err(e) = log_notifier.send(log) {
+            log::error!(error = ?e,"Error sending the Block logs to the log notifier");
+        }
+    }
+}
 
 /// Implements methods to push blocks into the chain. This is used when the node has already synced
 /// and is just receiving newly produced blocks. It is also used for the final phase of syncing,
@@ -177,7 +186,9 @@ impl Blockchain {
                             prev_vrf_seed: prev_info.head.seed().clone(),
                         };
 
-                        this.fork_notifier.notify(ForkEvent::Detected(proof));
+                        if let Err(e) = this.fork_notifier.send(ForkEvent::Detected(proof)) {
+                            log::error!(error = ?e,"Error sending the Fork event to the forks notifier");
+                        }
                     }
                 }
             }
@@ -340,16 +351,29 @@ impl Blockchain {
         );
 
         if is_election_block {
-            this.notifier
-                .notify(BlockchainEvent::EpochFinalized(block_hash));
+            if let Err(e) = this
+                .notifier
+                .send(BlockchainEvent::EpochFinalized(block_hash))
+            {
+                log::error!(error = ?e,
+                    "Error sending the Epoch Finalized event to the events notifier",
+                );
+            }
         } else if is_macro_block {
-            this.notifier.notify(BlockchainEvent::Finalized(block_hash));
-        } else {
-            this.notifier.notify(BlockchainEvent::Extended(block_hash));
+            if let Err(e) = this.notifier.send(BlockchainEvent::Finalized(block_hash)) {
+                log::error!(error = ?e,
+                    "Error sending the Finalized event to the events notifier",
+                );
+            }
+        } else if let Err(e) = this.notifier.send(BlockchainEvent::Extended(block_hash)) {
+            log::error!(error = ?e,
+                "Error sending the Extended event to the events notifier",
+            );
         }
 
-        this.log_notifier.notify(block_log);
-
+        if let Err(e) = this.log_notifier.send(block_log) {
+            log::error!(error = ?e,"Error sending the Block logs to the log notifier");
+        }
         Ok(PushResult::Extended)
     }
 
@@ -569,10 +593,15 @@ impl Blockchain {
         this.metrics
             .note_rebranch(&reverted_blocks, &adopted_blocks);
 
-        let event = BlockchainEvent::Rebranched(reverted_blocks, adopted_blocks);
-        this.notifier.notify(event);
-
-        this.log_notifier.notify_vec(block_logs);
+        if let Err(e) = this
+            .notifier
+            .send(BlockchainEvent::Rebranched(reverted_blocks, adopted_blocks))
+        {
+            log::error!(error = ?e,
+                "Error sending the Rebranched event to the events notifier"
+            );
+        }
+        send_vec(&this.log_notifier, block_logs);
 
         Ok(PushResult::Rebranched)
     }

@@ -6,13 +6,14 @@ use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 
 use futures::{FutureExt, StreamExt};
+use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::Mutex;
 use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
 use tokio::time::Sleep;
 use tokio_stream::wrappers::BroadcastStream;
 
-use nimiq_blockchain::{AbstractBlockchain, Blockchain};
+use nimiq_blockchain::AbstractBlockchain;
 use nimiq_database::Environment;
 use nimiq_network_interface::{network::Network, request::request_handler};
 use nimiq_zkp_component::zkp_component::ZKPComponentProxy;
@@ -38,7 +39,7 @@ pub enum ConsensusEvent {
 }
 
 pub struct Consensus<N: Network> {
-    pub blockchain: Arc<RwLock<Blockchain>>,
+    pub blockchain: BlockchainProxy,
     pub network: Arc<N>,
     pub env: Environment,
 
@@ -77,7 +78,7 @@ impl<N: Network> Consensus<N> {
 
     pub async fn from_network(
         env: Environment,
-        blockchain: Arc<RwLock<Blockchain>>,
+        blockchain: BlockchainProxy,
         network: Arc<N>,
         sync_protocol: Pin<Box<dyn HistorySyncStream<N::PeerId>>>,
         zkp_proxy: ZKPComponentProxy<N>,
@@ -97,7 +98,7 @@ impl<N: Network> Consensus<N> {
 
     pub async fn with_min_peers(
         env: Environment,
-        blockchain: Arc<RwLock<Blockchain>>,
+        blockchain: BlockchainProxy,
         network: Arc<N>,
         sync_protocol: Pin<Box<dyn HistorySyncStream<N::PeerId>>>,
         min_peers: usize,
@@ -112,8 +113,8 @@ impl<N: Network> Consensus<N> {
 
         let block_queue = BlockQueue::new(
             BlockQueueConfig::default(),
-            Arc::clone(&blockchain),
             Arc::clone(&network),
+            blockchain.clone(),
             request_component,
             bls_cache,
         )
@@ -124,7 +125,7 @@ impl<N: Network> Consensus<N> {
 
     pub fn new(
         env: Environment,
-        blockchain: Arc<RwLock<Blockchain>>,
+        blockchain: BlockchainProxy,
         network: Arc<N>,
         block_queue: BlockQueue<N, BlockRequestComponent<N>>,
         min_peers: usize,
@@ -132,6 +133,7 @@ impl<N: Network> Consensus<N> {
     ) -> Self {
         let (tx, _rx) = broadcast(256);
 
+        // IPTODO
         Self::init_network_request_receivers(&network, &blockchain);
 
         let established_flag = Arc::new(AtomicBool::new(false));
@@ -153,24 +155,28 @@ impl<N: Network> Consensus<N> {
         }
     }
 
-    fn init_network_request_receivers(network: &Arc<N>, blockchain: &Arc<RwLock<Blockchain>>) {
-        let stream = network.receive_requests::<RequestMacroChain>();
-        tokio::spawn(request_handler(network, stream, blockchain));
+    fn init_network_request_receivers(network: &Arc<N>, blockchain: &BlockchainProxy) {
+        match blockchain {
+            BlockchainProxy::Full(blockchain) => {
+                let stream = network.receive_requests::<RequestMacroChain>();
+                tokio::spawn(request_handler(network, stream, blockchain));
 
-        let stream = network.receive_requests::<RequestBatchSet>();
-        tokio::spawn(request_handler(network, stream, blockchain));
+                let stream = network.receive_requests::<RequestBatchSet>();
+                tokio::spawn(request_handler(network, stream, blockchain));
 
-        let stream = network.receive_requests::<RequestHistoryChunk>();
-        tokio::spawn(request_handler(network, stream, blockchain));
+                let stream = network.receive_requests::<RequestHistoryChunk>();
+                tokio::spawn(request_handler(network, stream, blockchain));
 
-        let stream = network.receive_requests::<RequestBlock>();
-        tokio::spawn(request_handler(network, stream, blockchain));
+                let stream = network.receive_requests::<RequestBlock>();
+                tokio::spawn(request_handler(network, stream, blockchain));
 
-        let stream = network.receive_requests::<RequestMissingBlocks>();
-        tokio::spawn(request_handler(network, stream, blockchain));
+                let stream = network.receive_requests::<RequestMissingBlocks>();
+                tokio::spawn(request_handler(network, stream, blockchain));
 
-        let stream = network.receive_requests::<RequestHead>();
-        tokio::spawn(request_handler(network, stream, blockchain));
+                let stream = network.receive_requests::<RequestHead>();
+                tokio::spawn(request_handler(network, stream, blockchain));
+            }
+        }
     }
 
     pub fn subscribe_events(&self) -> BroadcastStream<ConsensusEvent> {
@@ -187,7 +193,7 @@ impl<N: Network> Consensus<N> {
 
     pub fn proxy(&self) -> ConsensusProxy<N> {
         ConsensusProxy {
-            blockchain: Arc::clone(&self.blockchain),
+            blockchain: self.blockchain.clone(),
             network: Arc::clone(&self.network),
             established_flag: Arc::clone(&self.established_flag),
             events: self.events.clone(),
@@ -284,7 +290,7 @@ impl<N: Network> Consensus<N> {
                 self.head_requests = Some(HeadRequests::new(
                     self.block_queue.peers(),
                     Arc::clone(&self.network),
-                    Arc::clone(&self.blockchain),
+                    self.blockchain.clone(),
                 ));
                 self.head_requests_time = Some(Instant::now());
             }

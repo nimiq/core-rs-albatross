@@ -6,6 +6,7 @@ use std::{
 };
 
 use futures::{task::noop_waker_ref, Stream, StreamExt};
+use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
 use parking_lot::{Mutex, RwLock};
 use pin_project::pin_project;
@@ -129,7 +130,7 @@ async fn send_single_micro_block_to_block_queue() {
 
     let mut block_queue = BlockQueue::with_block_stream(
         Default::default(),
-        Arc::clone(&blockchain),
+        BlockchainProxy::from(&blockchain),
         Arc::clone(&network),
         request_component,
         ReceiverStream::new(block_rx).boxed(),
@@ -168,7 +169,7 @@ async fn send_two_micro_blocks_out_of_order() {
 
     let mut block_queue = BlockQueue::with_block_stream(
         Default::default(),
-        Arc::clone(&blockchain1),
+        BlockchainProxy::from(&blockchain1),
         network,
         request_component,
         ReceiverStream::new(block_rx).boxed(),
@@ -238,7 +239,7 @@ async fn send_micro_blocks_out_of_order() {
 
     let mut block_queue = BlockQueue::with_block_stream(
         Default::default(),
-        Arc::clone(&blockchain1),
+        BlockchainProxy::from(&blockchain1),
         network,
         request_component,
         ReceiverStream::new(block_rx).boxed(),
@@ -314,7 +315,7 @@ async fn send_invalid_block() {
 
     let mut block_queue = BlockQueue::with_block_stream(
         Default::default(),
-        Arc::clone(&blockchain1),
+        BlockchainProxy::from(&blockchain1),
         network,
         request_component,
         ReceiverStream::new(block_rx).boxed(),
@@ -391,7 +392,7 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
 
     let mut block_queue = BlockQueue::with_block_stream(
         Default::default(),
-        Arc::clone(&blockchain1),
+        BlockchainProxy::from(&blockchain1),
         network,
         request_component,
         ReceiverStream::new(block_rx).boxed(),
@@ -462,7 +463,7 @@ async fn request_missing_blocks_across_macro_block() {
 
     let mut block_queue = BlockQueue::with_block_stream(
         Default::default(),
-        Arc::clone(&blockchain1),
+        BlockchainProxy::from(&blockchain1),
         network,
         request_component,
         ReceiverStream::new(block_rx).boxed(),
@@ -584,7 +585,7 @@ async fn put_peer_back_into_sync_mode() {
             buffer_max: 10,
             window_max: 10,
         },
-        Arc::clone(&blockchain1),
+        BlockchainProxy::from(&blockchain1),
         network,
         request_component,
         ReceiverStream::new(block_rx).boxed(),

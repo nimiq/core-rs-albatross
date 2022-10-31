@@ -24,7 +24,6 @@ nimiq-hash = { path = "../hash" }
 nimiq-macros = { path = "../macros" }
 nimiq-utils = { path = "../utils", features = [
     "math",
-    "observer",
 ] }
 nimiq-network-interface = { path = "../network-interface" }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }

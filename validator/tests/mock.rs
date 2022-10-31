@@ -60,10 +60,12 @@ async fn one_validator_can_create_micro_blocks() {
     consensus1.force_established();
     assert_eq!(consensus1.is_established(), true);
 
+    let blockchain = Arc::clone(&validator.blockchain);
+
     log::debug!("Spawning validator...");
     tokio::spawn(validator);
 
-    let events1 = consensus1.blockchain.write().notifier.as_stream();
+    let events1 = blockchain.read().notifier_as_stream();
     events1.take(10).for_each(|_| future::ready(())).await;
 
     assert!(consensus1.blockchain.read().block_number() >= 10);
@@ -82,11 +84,11 @@ async fn four_validators_can_create_micro_blocks() {
     )
     .await;
 
-    let blockchain = Arc::clone(&validators.first().unwrap().consensus.blockchain);
+    let blockchain = Arc::clone(&validators.first().unwrap().blockchain);
 
     tokio::spawn(future::join_all(validators));
 
-    let events = blockchain.write().notifier.as_stream();
+    let events = blockchain.read().notifier_as_stream();
     time::timeout(
         Duration::from_secs(60),
         events.take(30).for_each(|_| future::ready(())),
@@ -118,8 +120,8 @@ async fn four_validators_can_do_skip_block() {
 
     // Listen for blockchain events from the new block producer (after a skip block).
     let validator = validators.first().unwrap();
-    let blockchain = Arc::clone(&validator.consensus.blockchain);
-    let mut events = blockchain.write().notifier.as_stream();
+    let blockchain = Arc::clone(&validator.blockchain);
+    let mut events = blockchain.read().notifier_as_stream();
 
     // Freeze time to immediately trigger the block producer timeout.
     // time::pause();
@@ -227,9 +229,9 @@ async fn validator_can_catch_up() {
     };
     // assert_eq!(validators.len(), 7);
 
-    let blockchain = validator.consensus.blockchain.clone();
+    let blockchain = validator.blockchain.clone();
     // Listen for blockchain events from the block producer (after two skip blocks).
-    let mut events = blockchain.write().notifier.as_stream();
+    let mut events = blockchain.read().notifier_as_stream();
 
     let (start, end) = blockchain.read().current_validators().unwrap().validators
         [validator.validator_slot_band() as usize]

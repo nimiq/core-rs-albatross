@@ -30,6 +30,7 @@ tokio-stream = { version = "0.1", features = ["sync"] }
 
 beserial = { path = "../beserial", features = ["derive"] }
 nimiq-block = { path = "../primitives/block" }
+nimiq-blockchain-proxy = { path = "../blockchain-proxy" }
 nimiq-bls = { path = "../bls" }
 nimiq-blockchain = { path = "../blockchain" }
 nimiq-database = { path = "../database" }
@@ -43,7 +44,6 @@ nimiq-network-interface = { path = "../network-interface" }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }
 nimiq-transaction = { path = "../primitives/transaction" }
 nimiq-utils = { path = "../utils", features = [
-    "observer",
     "math",
     "merkle",
     "time",

@@ -1,5 +1,6 @@
+use futures::stream::BoxStream;
 use nimiq_block::{Block, MacroBlock};
-use nimiq_blockchain::{AbstractBlockchain, ChainInfo};
+use nimiq_blockchain::{AbstractBlockchain, BlockchainEvent, ChainInfo};
 use nimiq_database::Transaction;
 use nimiq_genesis::NetworkId;
 use nimiq_hash::Blake2bHash;
@@ -89,6 +90,21 @@ impl AbstractBlockchain for NanoBlockchain {
         _offset: u32,
         _txn_option: Option<&Transaction>,
     ) -> Option<(Validator, u16)> {
-        todo!()
+        todo!() // IPTODO
+    }
+
+    fn notifier_as_stream(&self) -> BoxStream<'static, BlockchainEvent> {
+        todo!() // IPTODO
+    }
+
+    fn get_blocks(
+        &self,
+        _start_block_hash: &Blake2bHash,
+        _count: u32,
+        _include_body: bool,
+        _direction: nimiq_blockchain::Direction,
+        _txn_option: Option<&Transaction>,
+    ) -> Vec<Block> {
+        todo!() // IPTODO
     }
 }

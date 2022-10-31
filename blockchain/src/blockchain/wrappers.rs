@@ -4,14 +4,13 @@ use nimiq_database::Transaction;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::policy::Policy;
-use nimiq_utils::observer::{Listener, ListenerHandle};
 #[cfg(feature = "metrics")]
 use std::sync::Arc;
 
 use crate::blockchain_state::BlockchainState;
 #[cfg(feature = "metrics")]
 use crate::chain_metrics::BlockchainMetrics;
-use crate::{AbstractBlockchain, Blockchain, BlockchainEvent, Direction};
+use crate::{AbstractBlockchain, Blockchain, Direction};
 use nimiq_trie::key_nibbles::KeyNibbles;
 
 /// Implements several wrapper functions.
@@ -64,13 +63,6 @@ impl Blockchain {
                 unreachable!()
             }
         }
-    }
-
-    pub fn register_listener<T: Listener<BlockchainEvent> + 'static>(
-        &mut self,
-        listener: T,
-    ) -> ListenerHandle {
-        self.notifier.register(listener)
     }
 
     /// Returns the number of accounts in the Accounts Tree. An account id defined as any leaf node

@@ -5,6 +5,7 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 
 use futures::{Stream, StreamExt};
+use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_test_log::test;
 use nimiq_test_utils::node::TESTING_BLS_CACHE_MAX_CAPACITY;
@@ -87,7 +88,7 @@ async fn peers_can_sync() {
     .proxy();
     let consensus1 = Consensus::from_network(
         env1,
-        blockchain1,
+        BlockchainProxy::from(&blockchain1),
         Arc::clone(&net1),
         Box::pin(sync1),
         zkp_prover1,
@@ -124,7 +125,7 @@ async fn peers_can_sync() {
     .proxy();
     let consensus2 = Consensus::from_network(
         env2,
-        blockchain2,
+        BlockchainProxy::from(&blockchain2),
         Arc::clone(&net2),
         Box::pin(MockHistorySyncStream {
             _network: Arc::clone(&net2),
@@ -254,7 +255,7 @@ async fn sync_ingredients() {
     .proxy();
     let consensus1 = Consensus::from_network(
         env1,
-        blockchain1,
+        BlockchainProxy::from(&blockchain1),
         Arc::clone(&net1),
         Box::pin(MockHistorySyncStream {
             _network: Arc::clone(&net1),
@@ -288,7 +289,7 @@ async fn sync_ingredients() {
     .proxy();
     let consensus2 = Consensus::from_network(
         env2,
-        blockchain2,
+        BlockchainProxy::from(&blockchain2),
         Arc::clone(&net2),
         Box::pin(MockHistorySyncStream {
             _network: Arc::clone(&net2),

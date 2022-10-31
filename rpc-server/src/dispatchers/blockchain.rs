@@ -17,6 +17,7 @@ use nimiq_rpc_interface::{
     blockchain::BlockchainInterface,
     types::{Account, Block, ExecutedTransaction, Inherent, LogType, SlashedSlots, Slot, Staker},
 };
+use tokio_stream::wrappers::BroadcastStream;
 
 use crate::error::Error;
 
@@ -632,16 +633,19 @@ impl BlockchainInterface for BlockchainDispatcher {
     async fn subscribe_for_head_block_hash(
         &mut self,
     ) -> Result<BoxStream<'static, RPCData<Blake2bHash, ()>>, Self::Error> {
-        let stream = self.blockchain.write().notifier.as_stream();
+        let stream = self.blockchain.read().notifier_as_stream();
         Ok(stream
-            .map(|event| match event {
-                BlockchainEvent::Extended(hash) => hash.into(),
-                BlockchainEvent::HistoryAdopted(hash) => hash.into(),
-                BlockchainEvent::Finalized(hash) => hash.into(),
-                BlockchainEvent::EpochFinalized(hash) => hash.into(),
-                BlockchainEvent::Rebranched(_, new_branch) => {
-                    new_branch.into_iter().last().unwrap().0.into()
-                }
+            .filter_map(|event| {
+                let result = match event {
+                    BlockchainEvent::Extended(hash) => Some(hash.into()),
+                    BlockchainEvent::HistoryAdopted(hash) => Some(hash.into()),
+                    BlockchainEvent::Finalized(hash) => Some(hash.into()),
+                    BlockchainEvent::EpochFinalized(hash) => Some(hash.into()),
+                    BlockchainEvent::Rebranched(_, new_branch) => {
+                        Some(new_branch.into_iter().last().unwrap().0.into())
+                    }
+                };
+                future::ready(result)
             })
             .boxed())
     }
@@ -653,7 +657,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         address: Address,
     ) -> Result<BoxStream<'static, RPCData<Validator, BlockchainState>>, Self::Error> {
         let blockchain = Arc::clone(&self.blockchain);
-        let stream = self.blockchain.write().notifier.as_stream();
+        let stream = self.blockchain.read().notifier_as_stream();
 
         Ok(stream
             .filter_map(move |event| {
@@ -679,22 +683,28 @@ impl BlockchainInterface for BlockchainDispatcher {
         addresses: Vec<Address>,
         log_types: Vec<LogType>,
     ) -> Result<BoxStream<'static, RPCData<BlockLog, BlockchainState>>, Self::Error> {
-        let stream = self.blockchain.write().log_notifier.as_stream();
+        let stream = BroadcastStream::new(self.blockchain.read().log_notifier.subscribe());
 
         if addresses.is_empty() && log_types.is_empty() {
-            Ok(Box::pin(stream.boxed().map(RPCData::with_block_log)))
+            Ok(Box::pin(stream.boxed().filter_map(|event| {
+                let result = match event {
+                    Ok(event) => Some(RPCData::with_block_log(event)),
+                    Err(_) => None,
+                };
+                future::ready(result)
+            })))
         } else {
             Ok(stream
                 .filter_map(move |event| {
                     let result = match event {
-                        BBlockLog::AppliedBlock {
+                        Ok(BBlockLog::AppliedBlock {
                             mut inherent_logs,
                             block_hash,
                             block_number,
                             timestamp,
                             tx_logs,
                             total_tx_size: _,
-                        } => {
+                        }) => {
                             // Collects the inherents that are related to any of the addresses specified and of any of the log types provided.
                             inherent_logs.retain(|log| {
                                 is_of_log_type_and_related_to_addresses(log, &addresses, &log_types)
@@ -735,13 +745,13 @@ impl BlockchainInterface for BlockchainDispatcher {
                                 None
                             }
                         }
-                        BBlockLog::RevertedBlock {
+                        Ok(BBlockLog::RevertedBlock {
                             mut inherent_logs,
                             block_hash,
                             block_number,
                             tx_logs,
                             total_tx_size: _,
-                        } => {
+                        }) => {
                             // Filters the inherents and tx_logs the same way as the AppliedBlock
                             inherent_logs.retain(|log| {
                                 is_of_log_type_and_related_to_addresses(log, &addresses, &log_types)
@@ -777,6 +787,7 @@ impl BlockchainInterface for BlockchainDispatcher {
                                 None
                             }
                         }
+                        Err(_) => None,
                     };
                     future::ready(result)
                 })

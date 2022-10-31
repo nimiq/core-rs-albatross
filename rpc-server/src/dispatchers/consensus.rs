@@ -53,7 +53,7 @@ impl ConsensusDispatcher {
 
     /// Returns the network ID for our current blockchain.
     fn get_network_id(&self) -> NetworkId {
-        self.consensus.blockchain.read().network_id
+        self.consensus.blockchain.read().network_id()
     }
 
     /// Calculates the actual block number for the validity start height given the ValidityStartHeight
