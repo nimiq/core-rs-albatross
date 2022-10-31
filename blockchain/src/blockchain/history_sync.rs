@@ -12,7 +12,7 @@ use nimiq_primitives::policy;
 use nimiq_transaction::Transaction;
 
 use crate::chain_info::ChainInfo;
-use crate::history::{ExtTxData, ExtendedTransaction, HistoryStore};
+use crate::history::{ExtTxData, ExtendedTransaction};
 use crate::{AbstractBlockchain, Blockchain, BlockchainEvent, PushError, PushResult};
 
 /// Implements methods to push macro blocks into the chain when an history node is syncing. This
@@ -115,38 +115,9 @@ impl Blockchain {
             }
         }
 
-        // Check the history root.
-        // The given history might be incomplete if we already know parts of it.
-        // Reconstruct the full history to compute the root hash if necessary.
-        let last_macro_block = policy::last_macro_block(this.block_number());
-        let mut known_history = this.history_store.get_final_epoch_transactions(
-            policy::epoch_at(this.block_number() + 1),
-            Some(&read_txn),
-        );
-        let first_new_ext_tx = history
-            .iter()
-            .position(|ext_tx| ext_tx.block_number > last_macro_block)
-            .unwrap_or(history.len());
-        let full_history = if first_new_ext_tx < known_history.len() {
-            known_history.extend_from_slice(&history[first_new_ext_tx..]);
-            known_history.as_slice()
-        } else {
-            history
-        };
-
-        let wanted_history_root = HistoryStore::root_from_ext_txs(full_history)
-            .ok_or(PushError::InvalidBlock(BlockError::InvalidHistoryRoot))?;
-
-        if *block.history_root() != wanted_history_root {
-            warn!(
-                block = %macro_block,
-                reason = "wrong history root",
-                history_root = %block.history_root(),
-                %wanted_history_root,
-                "Rejecting block",
-            );
-            return Err(PushError::InvalidBlock(BlockError::InvalidHistoryRoot));
-        }
+        // History root checks are done once we push history by calling `extend_history_sync`
+        // Doing them here will imply to build a in memory accounts tree and with large
+        // epochs this is not suitable.
 
         // Checks if the body exists.
         let body = macro_block.body.as_ref().ok_or_else(|| {
@@ -365,6 +336,22 @@ impl Blockchain {
             block.epoch_number(),
             &history[first_new_ext_tx..],
         );
+
+        let wanted_history_root = this
+            .history_store
+            .get_history_tree_root(block.epoch_number(), Some(&txn))
+            .ok_or(PushError::InvalidBlock(BlockError::InvalidHistoryRoot))?;
+
+        if *block.history_root() != wanted_history_root {
+            warn!(
+                block = %macro_block,
+                reason = "wrong history root",
+                history_root = %block.history_root(),
+                %wanted_history_root,
+                "Rejecting block",
+            );
+            return Err(PushError::InvalidBlock(BlockError::InvalidHistoryRoot));
+        }
 
         // Give up database transactions and push lock before creating notifications.
         txn.commit();
