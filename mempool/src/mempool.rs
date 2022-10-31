@@ -296,7 +296,19 @@ impl Mempool {
         let blockchain = self.blockchain.read();
         let mut mempool_state = self.state.write();
 
-        let transactions = self.get_transactions();
+        let transactions: Vec<Transaction> = mempool_state
+            .control_transactions
+            .transactions
+            .values()
+            .cloned()
+            .chain(
+                mempool_state
+                    .regular_transactions
+                    .transactions
+                    .values()
+                    .cloned(),
+            )
+            .collect();
 
         for transaction in &transactions {
             let tx_hash: Blake2bHash = transaction.hash();
