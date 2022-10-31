@@ -12,6 +12,8 @@ use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_network_interface::{network::Network, request::request_handler};
 
 use pin_project::pin_project;
+use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
+use tokio_stream::wrappers::BroadcastStream;
 
 use crate::proof_component::*;
 use crate::types::*;
@@ -21,10 +23,13 @@ use futures::stream::BoxStream;
 
 pub type ZKProofsStream<N> = BoxStream<'static, (ZKProof, <N as Network>::PubsubId)>;
 
+const BROADCAST_MAX_CAPACITY: usize = 256;
+
 pub struct ZKPComponentProxy<N: Network> {
     network: Arc<N>,
     zkp_state: Arc<RwLock<ZKPState>>,
     zkp_requests: Arc<Mutex<ZKPRequests<N>>>,
+    pub(crate) zkp_events: BroadcastSender<ZKProof>,
 }
 
 impl<N: Network> Clone for ZKPComponentProxy<N> {
@@ -33,6 +38,7 @@ impl<N: Network> Clone for ZKPComponentProxy<N> {
             network: Arc::clone(&self.network),
             zkp_state: Arc::clone(&self.zkp_state),
             zkp_requests: Arc::clone(&self.zkp_requests),
+            zkp_events: self.zkp_events.clone(),
         }
     }
 }
@@ -49,6 +55,10 @@ impl<N: Network> ZKPComponentProxy<N> {
             return true;
         }
         false
+    }
+
+    pub fn subscribe_zkps(&self) -> BroadcastStream<ZKProof> {
+        BroadcastStream::new(self.zkp_events.subscribe())
     }
 }
 
@@ -68,6 +78,7 @@ pub struct ZKPComponent<N: Network> {
     zk_proofs_stream: ZKProofsStream<N>,
     proof_storage: ProofStore,
     zkp_requests: Arc<Mutex<ZKPRequests<N>>>,
+    zkp_events: BroadcastSender<ZKProof>,
 }
 
 impl<N: Network> ZKPComponent<N> {
@@ -85,9 +96,11 @@ impl<N: Network> ZKPComponent<N> {
             ZKPState::with_genesis(&genesis_block).expect("Invalid genesis block"),
         ));
 
+        let (zkp_events, _rx) = broadcast(BROADCAST_MAX_CAPACITY);
+
         // Load from db the preexisting proof if any
         let proof_storage = ProofStore::new(env.clone());
-        Self::load_proof_from_db(&blockchain, &zkp_state, &proof_storage);
+        Self::load_proof_from_db(&blockchain, &zkp_state, &proof_storage, &zkp_events);
 
         let zk_prover = if is_prover_active {
             Some(
@@ -113,6 +126,7 @@ impl<N: Network> ZKPComponent<N> {
             zk_proofs_stream,
             proof_storage,
             zkp_requests: Arc::new(Mutex::new(ZKPRequests::new(network))),
+            zkp_events,
         };
         zkp_component.launch_request_handler();
         zkp_component
@@ -128,6 +142,7 @@ impl<N: Network> ZKPComponent<N> {
             network: Arc::clone(&self.network),
             zkp_state: Arc::clone(&self.zkp_state),
             zkp_requests: Arc::clone(&self.zkp_requests),
+            zkp_events: self.zkp_events.clone(),
         }
     }
 
@@ -139,15 +154,17 @@ impl<N: Network> ZKPComponent<N> {
         blockchain: &Arc<RwLock<Blockchain>>,
         zkp_state: &Arc<RwLock<ZKPState>>,
         proof_storage: &ProofStore,
+        zkp_events: &BroadcastSender<ZKProof>,
     ) {
         // Load from db the preexisting proof if any.
         if let Some(loaded_proof) = proof_storage.get_zkp() {
             if let Err(e) = Self::push_proof_from_peers(
                 blockchain,
                 zkp_state,
-                &loaded_proof,
+                loaded_proof,
                 &mut None,
                 proof_storage,
+                zkp_events,
                 false,
             ) {
                 log::error!("Error pushing the zk proof load from disk {}", e);
@@ -163,12 +180,13 @@ impl<N: Network> ZKPComponent<N> {
     fn push_proof_from_peers(
         blockchain: &Arc<RwLock<Blockchain>>,
         zkp_state: &Arc<RwLock<ZKPState>>,
-        proof: &ZKProof,
+        zk_proof: ZKProof,
         zk_prover: &mut Option<ZKProver<N>>,
         proof_storage: &ProofStore,
+        zkp_events: &BroadcastSender<ZKProof>,
         add_to_storage: bool,
     ) -> Result<(), ZKPComponentError> {
-        let (new_block, genesis_block, proof) = pre_proof_validity_checks(blockchain, proof)?;
+        let (new_block, genesis_block, proof) = pre_proof_validity_checks(blockchain, &zk_proof)?;
         let zkp_state_lock = zkp_state.upgradable_read();
 
         if new_block.block_number() <= zkp_state_lock.latest_block_number {
@@ -187,6 +205,11 @@ impl<N: Network> ZKPComponent<N> {
         if add_to_storage {
             proof_storage.set_zkp(&zkp_state_lock.clone().into())
         }
+
+        if let Err(e) = zkp_events.send(zk_proof) {
+            log::error!("Error sending the proof to stream {}", e);
+        }
+
         Ok(())
     }
 }
@@ -206,9 +229,10 @@ impl<N: Network> Future for ZKPComponent<N> {
             if let Err(e) = Self::push_proof_from_peers(
                 this.blockchain,
                 this.zkp_state,
-                &proof,
+                proof,
                 this.zk_prover,
                 this.proof_storage,
+                this.zkp_events,
                 true,
             ) {
                 log::error!("Error pushing the new zk proof {}", e);
@@ -225,12 +249,13 @@ impl<N: Network> Future for ZKPComponent<N> {
                     if let Err(e) = Self::push_proof_from_peers(
                         this.blockchain,
                         this.zkp_state,
-                        &proof.0,
+                        proof.0,
                         this.zk_prover,
                         this.proof_storage,
+                        this.zkp_events,
                         true,
                     ) {
-                        log::error!("Error pushing the zk proof {:?} - {} ", proof.0, e);
+                        log::error!("Error pushing the zk proof - {} ", e);
                     }
                 }
                 Poll::Ready(None) => {}
