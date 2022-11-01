@@ -230,12 +230,9 @@ impl str::FromStr for KeyNibbles {
                 length: s.len() as u8,
             })
         } else {
-            let last_complete_nibble_idx = s.len() - 2;
-            let last_complete_byte_idx = (last_complete_nibble_idx) / 2;
-            hex::decode_to_slice(
-                &s[..last_complete_nibble_idx + 1],
-                &mut bytes[..last_complete_byte_idx + 1],
-            )?;
+            let complete_nibble_range = ..(s.len() - 1);
+            let complete_byte_range = ..(s.len() / 2);
+            hex::decode_to_slice(&s[complete_nibble_range], &mut bytes[complete_byte_range])?;
 
             let last_nibble = s.chars().last().unwrap();
 
@@ -247,11 +244,11 @@ impl str::FromStr for KeyNibbles {
                         index: s.len() - 1,
                     })?;
 
-            bytes[last_complete_byte_idx + 1] = (last_nibble as u8) << 4;
+            bytes[complete_byte_range.end] = (last_nibble as u8) << 4;
 
             Ok(KeyNibbles {
                 bytes,
-                bytes_length: (last_complete_byte_idx + 2) as u8,
+                bytes_length: ((s.len() + 1) / 2) as u8,
                 length: s.len() as u8,
             })
         }
@@ -357,8 +354,16 @@ mod tests {
     #[test]
     fn to_from_str_works() {
         let key: KeyNibbles = "cfb98637bcae43c13323eaa1731ced2b716962fd".parse().unwrap();
-
         assert_eq!(key.to_string(), "cfb98637bcae43c13323eaa1731ced2b716962fd");
+
+        let key: KeyNibbles = "".parse().unwrap();
+        assert_eq!(key.to_string(), "");
+
+        let key: KeyNibbles = "1".parse().unwrap();
+        assert_eq!(key.to_string(), "1");
+
+        let key: KeyNibbles = "23".parse().unwrap();
+        assert_eq!(key.to_string(), "23");
     }
 
     #[test]
