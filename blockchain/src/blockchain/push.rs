@@ -13,8 +13,8 @@ use crate::blockchain_state::BlockchainState;
 use crate::chain_info::ChainInfo;
 use crate::chain_store::MAX_EPOCHS_STORED;
 use crate::{
-    AbstractBlockchain, Blockchain, BlockchainEvent, ChainOrdering, ForkEvent, PushError,
-    PushResult,
+    AbstractBlockchain, Blockchain, BlockchainEvent, ChainOrdering, ForkEvent, NextBlock,
+    PushError, PushResult,
 };
 
 /// Implements methods to push blocks into the chain. This is used when the node has already synced
@@ -95,6 +95,7 @@ impl Blockchain {
             Some(&read_txn),
             !trusted,
             block.is_skip(),
+            NextBlock::Subsequent,
         ) {
             warn!(%block, reason = "bad header", "Rejecting block");
             return Err(e);

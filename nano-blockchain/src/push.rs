@@ -1,6 +1,6 @@
 use nimiq_block::{Block, BlockError, BlockType, MacroHeader};
 use nimiq_blockchain::{
-    AbstractBlockchain, Blockchain, ChainInfo, ChainOrdering, PushError, PushResult,
+    AbstractBlockchain, Blockchain, ChainInfo, ChainOrdering, NextBlock, PushError, PushResult,
 };
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::policy;
@@ -53,6 +53,7 @@ impl NanoBlockchain {
             None,
             true,
             block.is_skip(),
+            NextBlock::Subsequent,
         )?;
 
         // If this is an election block, check the body.

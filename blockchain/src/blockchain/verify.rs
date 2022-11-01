@@ -13,7 +13,7 @@ use nimiq_primitives::policy;
 use nimiq_transaction::Transaction;
 
 use crate::blockchain_state::BlockchainState;
-use crate::{AbstractBlockchain, Blockchain, PushError};
+use crate::{AbstractBlockchain, Blockchain, BlockchainError, NextBlock, PushError};
 
 /// Implements methods to verify the validity of blocks.
 impl Blockchain {
@@ -32,6 +32,7 @@ impl Blockchain {
         txn_opt: Option<&DBtx>,
         check_seed: bool,
         skip_block: bool,
+        next_block_type: NextBlock,
     ) -> Result<(), PushError> {
         // Check the version
         if header.version() != policy::VERSION {
@@ -58,95 +59,143 @@ impl Blockchain {
             return Err(PushError::InvalidBlock(BlockError::ExtraDataTooLarge));
         }
 
-        // Check if the block's immediate predecessor is part of the chain.
-        let prev_info = blockchain
-            .get_chain_info(header.parent_hash(), false, txn_opt)
-            .ok_or(PushError::Orphan)?;
+        match next_block_type {
+            NextBlock::Subsequent => {
+                // Check if the block's immediate predecessor is part of the chain.
+                let prev_info = blockchain
+                    .get_chain_info(header.parent_hash(), false, txn_opt)
+                    .ok_or(PushError::Orphan)?;
 
-        // Check that the block is a valid successor of its predecessor.
-        let next_block_type = blockchain.get_next_block_type(Some(prev_info.head.block_number()));
-        if header.ty() != next_block_type {
-            warn!(
-                header = %header,
-                reason = "Wrong block type",
-                "Rejecting block obtained_type={:?} expected_type={:?}", header.ty(), next_block_type
-            );
-            return Err(PushError::InvalidSuccessor);
-        }
+                // Check that the block is a valid successor of its predecessor.
+                let next_block_type =
+                    blockchain.get_next_block_type(Some(prev_info.head.block_number()));
+                if header.ty() != next_block_type {
+                    warn!(
+                        header = %header,
+                        reason = "Wrong block type",
+                        "Rejecting block obtained_type={:?} expected_type={:?}", header.ty(), next_block_type
+                    );
+                    return Err(PushError::InvalidSuccessor);
+                }
 
-        // Check the block number.
-        let next_block_number = prev_info.head.block_number() + 1;
-        if header.block_number() != next_block_number {
-            warn!(
-                header = %header,
-                obtained_block_number = header.block_number(),
-                expected_block_number = next_block_number,
-                reason = "Wrong block number",
-                "Rejecting block"
-            );
-            return Err(PushError::InvalidSuccessor);
-        }
+                // Check the block number.
+                let next_block_number = prev_info.head.block_number() + 1;
+                if header.block_number() != next_block_number {
+                    warn!(
+                        header = %header,
+                        obtained_block_number = header.block_number(),
+                        expected_block_number = next_block_number,
+                        reason = "Wrong block number",
+                        "Rejecting block"
+                    );
+                    return Err(PushError::InvalidSuccessor);
+                }
 
-        // Check that the current block timestamp is equal or greater than the timestamp of the
-        // previous block.
-        if header.timestamp() < prev_info.head.timestamp() {
-            warn!(
-                header = %header,
-                obtained_timestamp = header.timestamp(),
-                parent_timestamp   = prev_info.head.timestamp(),
-                reason = "Block timestamp precedes parent timestamp",
-                "Rejecting block"
-            );
-            return Err(PushError::InvalidSuccessor);
-        }
+                // Check that the current block timestamp is equal or greater than the timestamp of the
+                // previous block.
+                if header.timestamp() < prev_info.head.timestamp() {
+                    warn!(
+                        header = %header,
+                        obtained_timestamp = header.timestamp(),
+                        parent_timestamp   = prev_info.head.timestamp(),
+                        reason = "Block timestamp precedes parent timestamp",
+                        "Rejecting block"
+                    );
+                    return Err(PushError::InvalidSuccessor);
+                }
 
-        // Check that skip blocks has the expected timestamp
-        if skip_block
-            && header.timestamp() != prev_info.head.timestamp() + policy::BLOCK_PRODUCER_TIMEOUT
-        {
-            warn!(
-                header = %header,
-                obtained_timestamp = header.timestamp(),
-                expected_timestamp   = prev_info.head.timestamp() + policy::BLOCK_PRODUCER_TIMEOUT,
-                reason = "Unexpected timestamp for a skip block",
-                "Rejecting block"
-            );
-            return Err(PushError::InvalidBlock(
-                BlockError::InvalidSkipBlockTimestamp,
-            ));
-        }
+                // Check that skip blocks has the expected timestamp
+                if skip_block
+                    && header.timestamp()
+                        != prev_info.head.timestamp() + policy::BLOCK_PRODUCER_TIMEOUT
+                {
+                    warn!(
+                        header = %header,
+                        obtained_timestamp = header.timestamp(),
+                        expected_timestamp   = prev_info.head.timestamp() + policy::BLOCK_PRODUCER_TIMEOUT,
+                        reason = "Unexpected timestamp for a skip block",
+                        "Rejecting block"
+                    );
+                    return Err(PushError::InvalidBlock(
+                        BlockError::InvalidSkipBlockTimestamp,
+                    ));
+                }
 
-        // Check that the current block timestamp subtracting the node's current time is less than or equal
-        // to the allowed maximum drift. Basically, we check that the block isn't from the future.
-        // Both times are given in Unix time standard in millisecond precision.
-        let timestamp_diff = header.timestamp().saturating_sub(blockchain.now());
-        if timestamp_diff > policy::TIMESTAMP_MAX_DRIFT {
-            warn!(
-                header = %header,
-                block_timestamp = header.timestamp(),
-                obtained_timestamp_diff = timestamp_diff,
-                max_timestamp_drift     = policy::TIMESTAMP_MAX_DRIFT,
-                reason = "Block timestamp exceeds allowed maximum drift",
-                "Rejecting block"
-            );
-            return Err(PushError::InvalidBlock(BlockError::FromTheFuture));
-        }
+                // Check that the current block timestamp subtracting the node's current time is less than or equal
+                // to the allowed maximum drift. Basically, we check that the block isn't from the future.
+                // Both times are given in Unix time standard in millisecond precision.
+                let timestamp_diff = header.timestamp().saturating_sub(blockchain.now());
+                if timestamp_diff > policy::TIMESTAMP_MAX_DRIFT {
+                    warn!(
+                        header = %header,
+                        block_timestamp = header.timestamp(),
+                        obtained_timestamp_diff = timestamp_diff,
+                        max_timestamp_drift     = policy::TIMESTAMP_MAX_DRIFT,
+                        reason = "Block timestamp exceeds allowed maximum drift",
+                        "Rejecting block"
+                    );
+                    return Err(PushError::InvalidBlock(BlockError::FromTheFuture));
+                }
 
-        // Check if the seed was signed by the intended producer.
-        if check_seed {
-            if skip_block {
-                // In skip blocks the VRF seed must be carried over (because a new VRF seed requires a new leader)
-                if header.seed() != prev_info.head.seed() {
-                    warn!(header = %header,
+                // Check if the seed was signed by the intended producer.
+                if check_seed {
+                    if skip_block {
+                        // In skip blocks the VRF seed must be carried over (because a new VRF seed requires a new leader)
+                        if header.seed() != prev_info.head.seed() {
+                            warn!(header = %header,
                         reason = "Invalid seed",
                         "Rejecting skip block");
-                    return Err(PushError::InvalidBlock(BlockError::InvalidSeed));
-                }
-            } else if let Err(e) = header.seed().verify(prev_info.head.seed(), signing_key) {
-                warn!(header = %header,
+                            return Err(PushError::InvalidBlock(BlockError::InvalidSeed));
+                        }
+                    } else if let Err(e) = header.seed().verify(prev_info.head.seed(), signing_key)
+                    {
+                        warn!(header = %header,
                       reason = "Invalid seed",
                       "Rejecting block vrf_error={:?}", e);
-                return Err(PushError::InvalidBlock(BlockError::InvalidSeed));
+                        return Err(PushError::InvalidBlock(BlockError::InvalidSeed));
+                    }
+                }
+            }
+            NextBlock::HistoryChunkMacro => {
+                // Check that the block is a macro block
+                if header.ty() != BlockType::Macro {
+                    warn!(
+                        header = %header,
+                        reason = "Wrong block type",
+                        "Rejecting block obtained_type={:?} expected_type=macro", header.ty()
+                    );
+                    return Err(PushError::InvalidSuccessor);
+                }
+
+                let head = blockchain.head();
+                let prev_info = blockchain
+                    .get_chain_info(&head.hash(), false, txn_opt)
+                    .ok_or(PushError::BlockchainError(
+                        BlockchainError::InconsistentState,
+                    ))?;
+
+                // Check the block number.
+                if header.block_number() <= head.block_number() {
+                    warn!(
+                        header = %header,
+                        obtained_block_number = header.block_number(),
+                        reason = "Wrong block number",
+                        "Rejecting block"
+                    );
+                    return Err(PushError::InvalidSuccessor);
+                }
+                // Check that the current block timestamp is equal or greater than the timestamp of the
+                // previous block.
+                if header.timestamp() < prev_info.head.timestamp() {
+                    warn!(
+                        header = %header,
+                        obtained_timestamp = header.timestamp(),
+                        parent_timestamp   = prev_info.head.timestamp(),
+                        reason = "Block timestamp precedes parent timestamp",
+                        "Rejecting block"
+                    );
+                    return Err(PushError::InvalidSuccessor);
+                }
             }
         }
 

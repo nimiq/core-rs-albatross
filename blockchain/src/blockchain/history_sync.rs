@@ -1,19 +1,20 @@
 use std::error::Error;
+use std::ops::Deref;
 
 use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
 
 use beserial::Serialize;
 use nimiq_account::{Inherent, InherentType};
-use nimiq_block::{Block, BlockError, TendermintProof};
+use nimiq_block::{Block, BlockError};
 use nimiq_database::WriteTransaction;
-use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_keys::PublicKey;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy;
 use nimiq_transaction::Transaction;
 
 use crate::chain_info::ChainInfo;
 use crate::history::{ExtTxData, ExtendedTransaction};
-use crate::{AbstractBlockchain, Blockchain, BlockchainEvent, PushError, PushResult};
+use crate::{AbstractBlockchain, Blockchain, BlockchainEvent, NextBlock, PushError, PushResult};
 
 /// Implements methods to push macro blocks into the chain when an history node is syncing. This
 /// type of syncing is called history syncing. It works by having the node get all the election
@@ -47,18 +48,6 @@ impl Blockchain {
 
         // Unwrap the block.
         let macro_block = block.unwrap_macro_ref();
-
-        // Check the version
-        if macro_block.header.version != policy::VERSION {
-            warn!(
-                %block,
-                reason = "wrong version",
-                version = macro_block.header.version,
-                wanted_version = policy::VERSION,
-                "Rejecting block",
-            );
-            return Err(PushError::InvalidBlock(BlockError::UnsupportedVersion));
-        }
 
         // Check if we already know this block.
         if this
@@ -115,41 +104,34 @@ impl Blockchain {
             }
         }
 
-        // History root checks are done once we push history by calling `extend_history_sync`
-        // Doing them here will imply to build a in memory accounts tree and with large
-        // epochs this is not suitable.
-
-        // Checks if the body exists.
-        let body = macro_block.body.as_ref().ok_or_else(|| {
-            warn!(
-                block = %macro_block,
-                reason = "body missing",
-                "Rejecting block"
-            );
-            PushError::InvalidBlock(BlockError::MissingBody)
-        })?;
-
-        // Check the body root.
-        let body_hash = body.hash::<Blake2bHash>();
-        if macro_block.header.body_root != body_hash {
-            warn!(
-                block = %macro_block,
-                reason = "header body hash doesn't match real body hash",
-                given_body_hash = %macro_block.header.body_root,
-                actual_body_hash = %body_hash,
-                "Rejecting block",
-            );
-            return Err(PushError::InvalidBlock(BlockError::BodyHashMismatch));
+        // Check the header. Signing key is not necessary since we can't check the seed
+        if let Err(e) = Blockchain::verify_block_header(
+            this.deref(),
+            &block.header(),
+            &PublicKey::default(),
+            Some(&read_txn),
+            false, // Can't check seed since we don't have the previous block info to get the proposer's signing key
+            false,
+            NextBlock::HistoryChunkMacro,
+        ) {
+            warn!(%block, reason = "bad header", "Rejecting block");
+            return Err(e);
         }
 
-        // Check the justification.
-        if !TendermintProof::verify(macro_block, &this.current_validators().unwrap()) {
-            warn!(
-                block = %macro_block,
-                reason = "bad justification",
-                "Rejecting block",
-            );
-            return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
+        // Check the justification. Signing key is not necessary since it isn't needed for macro blocks
+        if let Err(e) =
+            Blockchain::verify_block_justification(&*this, &block, &PublicKey::default(), true)
+        {
+            warn!(%block, reason = "bad justification", "Rejecting block");
+            return Err(e);
+        }
+
+        // Check the body.
+        if let Err(e) =
+            this.verify_block_body(&block.header(), &block.body(), Some(&read_txn), false, true)
+        {
+            warn!(%block, reason = "bad body", "Rejecting block");
+            return Err(e);
         }
 
         drop(read_txn);
