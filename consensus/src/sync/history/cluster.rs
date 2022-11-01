@@ -5,6 +5,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
+use thiserror::Error;
+
 use futures::{FutureExt, Stream, StreamExt};
 use lazy_static::lazy_static;
 use parking_lot::RwLock;
@@ -21,6 +23,17 @@ use nimiq_utils::math::CeilingDiv;
 
 use crate::messages::{BatchSetInfo, HistoryChunk, RequestBatchSet, RequestHistoryChunk};
 use crate::sync::sync_queue::{SyncQueue, SyncQueuePeer};
+
+/// Error enumeration for history sync request
+#[derive(Clone, Debug, Error, Eq, PartialEq)]
+pub enum HistoryRequestError {
+    /// Outbound request error
+    #[error("Outbound error: {0}")]
+    RequestError(RequestError),
+    /// Batch set info obtained doesn't match the requested hash
+    #[error("Batch set info mismatch")]
+    BatchSetInfoMismatch,
+}
 
 struct PendingBatchSet {
     macro_block: MacroBlock,
@@ -466,9 +479,20 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         network: Arc<TNetwork>,
         peer_id: TNetwork::PeerId,
         hash: Blake2bHash,
-    ) -> Result<BatchSetInfo, RequestError> {
-        // TODO verify that hash of returned epoch matches the one we requested
-        network.request(RequestBatchSet { hash }, peer_id).await
+    ) -> Result<BatchSetInfo, HistoryRequestError> {
+        let batch_set_info = network
+            .request(RequestBatchSet { hash: hash.clone() }, peer_id)
+            .await
+            .map_err(|e| HistoryRequestError::RequestError(e))?;
+
+        // Check that the received batch set info matches the requested hash
+        if let Some(ref election_macro_block) = batch_set_info.election_macro_block {
+            if election_macro_block.hash() != hash {
+                warn!(expected = %hash, received = %election_macro_block.hash(), "Received unexpected block");
+                return Err(HistoryRequestError::BatchSetInfoMismatch);
+            }
+        }
+        Ok(batch_set_info)
     }
 
     pub async fn request_history_chunk(
