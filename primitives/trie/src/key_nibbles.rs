@@ -15,6 +15,7 @@ use nimiq_keys::Address;
 /// stores up to 2 nibbles. Internally, we assume that a key is represented in hexadecimal form.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
 pub struct KeyNibbles {
+    /// Invariant: Unused nibbles are always zeroed.
     bytes: [u8; KeyNibbles::MAX_BYTES],
     bytes_length: u8,
     length: u8,
@@ -57,6 +58,16 @@ impl KeyNibbles {
         let nibble = index % 2;
 
         Some(((self.bytes[byte] >> ((1 - nibble) * 4)) & 0xf) as usize)
+    }
+
+    /// Returns the next possible `KeyNibbles` in the ordering relation.
+    ///
+    /// This is always the same, but with a single `0` digit appended.
+    pub fn successor(&self) -> Self {
+        let mut result = self.clone();
+        result.length += 1;
+        result.bytes_length = (result.length + 1) / 2;
+        result
     }
 
     /// Checks if the current key is a prefix of the given key. If the keys are equal it also
@@ -449,5 +460,16 @@ mod tests {
         let key5: KeyNibbles = "2da".parse().unwrap();
         let key6: KeyNibbles = "2da3183636aae21c2710b5bd4486903f8541fb80".parse().unwrap();
         assert_eq!(key5.common_prefix(&key6), "2da".parse().unwrap());
+    }
+
+    #[test]
+    fn successor_works() {
+        let key1: KeyNibbles = "".parse().unwrap();
+        let key1s: KeyNibbles = "0".parse().unwrap();
+        assert_eq!(key1.successor(), key1s);
+
+        let key2: KeyNibbles = "123".parse().unwrap();
+        let key2s: KeyNibbles = "1230".parse().unwrap();
+        assert_eq!(key2.successor(), key2s);
     }
 }
