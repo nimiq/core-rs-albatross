@@ -3,6 +3,7 @@ use std::hash::BuildHasher;
 use std::ops::Deref;
 use std::sync::Arc;
 
+use arrayvec::ArrayVec;
 #[cfg(feature = "derive")]
 pub use beserial_derive::{Deserialize, Serialize};
 pub use byteorder::{BigEndian, ByteOrder, ReadBytesExt, WriteBytesExt};
@@ -744,6 +745,32 @@ impl<T: Deserialize, V: Deserialize> Deserialize for (T, V) {
             Deserialize::deserialize(reader)?,
             Deserialize::deserialize(reader)?,
         ))
+    }
+}
+
+// Arrays
+
+impl<T: Serialize, const N: usize> Serialize for [T; N] {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+        let mut size = 0;
+        for elem in self {
+            size += elem.serialize(writer)?;
+        }
+        Ok(size)
+    }
+
+    fn serialized_size(&self) -> usize {
+        self.iter().map(|elem| elem.serialized_size()).sum()
+    }
+}
+
+impl<T: Deserialize, const N: usize> Deserialize for [T; N] {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<[T; N], SerializingError> {
+        let mut partial = ArrayVec::new();
+        for _ in 0..N {
+            partial.push(Deserialize::deserialize(reader)?);
+        }
+        Ok(partial.into_inner().ok().unwrap())
     }
 }
 
