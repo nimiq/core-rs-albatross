@@ -15,25 +15,29 @@ use tokio::sync::oneshot::Sender;
 use super::types::ZKPState;
 use crate::types::*;
 
+/// Fully validates the proof by verifying both the zk proof and the blocks existance on the blockchain.
 pub fn validate_proof(blockchain: &Arc<RwLock<Blockchain>>, proof: &ZKProof) -> bool {
-    // If it's a genesis block proof, then should have none as proof value to be valid
+    // If it's a genesis block proof, then should have none as proof value to be valid.
     if proof.block_number == 0 && proof.proof.is_none() {
         return true;
     }
 
-    if let Ok((new_block, genesis_block, proof)) = pre_proof_validity_checks(blockchain, proof) {
+    // Fetches and verfies the election blocks for the proofs and then validates the proof
+    if let Ok((new_block, genesis_block, proof)) = get_proof_macro_blocks(blockchain, proof) {
         return validate_proof_get_new_state(proof, new_block, genesis_block).is_ok();
     }
     false
 }
 
-pub(crate) fn pre_proof_validity_checks(
+/// Fetches both the genesis and the proof block. Fails if the proof block is a election block.
+pub(crate) fn get_proof_macro_blocks(
     blockchain: &Arc<RwLock<Blockchain>>,
     proof: &ZKProof,
 ) -> Result<(MacroBlock, MacroBlock, Proof<MNT6_753>), ZKPComponentError> {
     let block_number = proof.block_number;
     let proof = proof.proof.clone().ok_or(NanoZKPError::EmptyProof)?;
 
+    // Gets the block of the new proof
     let new_block = blockchain
         .read()
         .get_block_at(block_number, true, None)
@@ -44,12 +48,14 @@ pub(crate) fn pre_proof_validity_checks(
     }
     let new_block = new_block.unwrap_macro();
 
+    // Gets genesis block
     let network_info = NetworkInfo::from_network_id(blockchain.read().network_id());
     let genesis_block = network_info.genesis_block::<Block>().unwrap_macro();
 
     Ok((new_block, genesis_block, proof))
 }
 
+/// Validates proof and returns the new zkp state. Assumes the blocks provided are valid.
 pub(crate) fn validate_proof_get_new_state(
     proof: Proof<MNT6_753>,
     new_block: MacroBlock,
@@ -89,6 +95,7 @@ pub(crate) fn validate_proof_get_new_state(
     Err(ZKPComponentError::InvalidProof)
 }
 
+/// Generates the zk proof and sends it through the channel provided. Upon failure, the error is sent trough the channel providded.
 pub(crate) async fn generate_new_proof(
     block: MacroBlock,
     latest_pks: Vec<G2MNT6>,
@@ -136,10 +143,11 @@ pub(crate) async fn generate_new_proof(
     }
 }
 
+/// DB for storing and retrieving the ZK Proof.
 #[derive(Debug)]
 pub struct ProofStore {
     pub env: Environment,
-    // A database of the curreent zkp state indexed by their block number.
+    // A database of the curreent zkp state.
     zkp_db: Database,
 }
 

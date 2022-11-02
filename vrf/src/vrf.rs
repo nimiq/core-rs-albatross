@@ -137,7 +137,7 @@ impl VrfSeed {
     /// key pair.
     #[must_use]
     pub fn sign_next(&self, keypair: &KeyPair) -> Self {
-        self.sign_next_with_rng(keypair, rand::thread_rng())
+        self.sign_next_with_rng(keypair, &mut rand::thread_rng())
     }
 
     /// Produces the next VRF Seed given the current VRF Seed (which is part of the message) and a
@@ -146,7 +146,7 @@ impl VrfSeed {
     pub fn sign_next_with_rng<R: RngCore + CryptoRng>(
         &self,
         keypair: &KeyPair,
-        mut rng: R,
+        rng: &mut R,
     ) -> Self {
         // Get random bytes.
         let mut Z = [0u8; 64];

@@ -48,7 +48,7 @@ nimiq-utils = { path = "../utils", features = [
     "time",
 ] }
 nimiq-validator-network = { path = "../validator-network" }
-nimiq-zkp-prover = {path = "../zkp-prover"}
+nimiq-zkp-prover = { path = "../zkp-prover" }
 
 [dev-dependencies]
 hex = "0.4"

@@ -86,8 +86,8 @@ impl<'a> TryFrom<&'a MacroBlock> for ZKPMacroBlock {
     type Error = ();
 
     fn try_from(block: &'a MacroBlock) -> Result<ZKPMacroBlock, Self::Error> {
-        Ok(if let Some(proof) = block.justification.as_ref() {
-            ZKPMacroBlock {
+        if let Some(proof) = block.justification.as_ref() {
+            Ok(ZKPMacroBlock {
                 block_number: block.block_number(),
                 round_number: proof.round,
                 header_hash: block.hash().into(),
@@ -98,10 +98,14 @@ impl<'a> TryFrom<&'a MacroBlock> for ZKPMacroBlock {
                     .iter_bits()
                     .take(policy::SLOTS as usize)
                     .collect(),
-            }
+            })
         } else {
-            ZKPMacroBlock::without_signatures(block.block_number(), 0, block.hash().into())
-        })
+            Ok(ZKPMacroBlock::without_signatures(
+                block.block_number(),
+                0,
+                block.hash().into(),
+            ))
+        }
     }
 }
 

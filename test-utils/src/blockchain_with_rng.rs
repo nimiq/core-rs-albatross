@@ -11,7 +11,7 @@ use nimiq_primitives::policy;
 
 use crate::blockchain::sign_macro_block;
 
-/// Produces a series of macro blocks (and the corresponding batches). here
+/// Produces a series of macro blocks (and the corresponding batches).
 pub fn produce_macro_blocks_with_rng<R: Rng + CryptoRng>(
     producer: &BlockProducer,
     blockchain: &Arc<RwLock<Blockchain>>,

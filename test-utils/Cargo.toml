@@ -45,4 +45,4 @@ nimiq-validator = { path = "../validator" }
 nimiq-validator-network = { path = "../validator-network" }
 nimiq-utils = { path = "../utils" }
 nimiq-vrf = { path = "../vrf" }
-nimiq-zkp-prover = {path = "../zkp-prover"}
+nimiq-zkp-prover = { path = "../zkp-prover" }

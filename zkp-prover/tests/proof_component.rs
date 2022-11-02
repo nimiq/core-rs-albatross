@@ -5,7 +5,7 @@ use beserial::Deserialize;
 use nimiq_primitives::policy;
 use nimiq_test_utils::blockchain_with_rng::produce_macro_blocks_with_rng;
 use nimiq_test_utils::zkp_test_data::ZKPROOF_SERIALIZED_IN_HEX;
-use nimiq_zkp_prover::proof_component::ProofStore;
+use nimiq_zkp_prover::proof_utils::ProofStore;
 use nimiq_zkp_prover::types::ZKProof;
 use parking_lot::RwLock;
 
@@ -19,7 +19,7 @@ use nimiq_test_utils::blockchain::{signing_key, voting_key};
 use nimiq_test_utils::zkp_test_data::get_base_seed;
 use nimiq_utils::time::OffsetTime;
 
-use nimiq_zkp_prover::proof_component::validate_proof;
+use nimiq_zkp_prover::proof_utils::validate_proof;
 
 fn blockchain() -> Arc<RwLock<Blockchain>> {
     let time = Arc::new(OffsetTime::new());
@@ -41,7 +41,7 @@ async fn can_detect_valid_and_invalid_genesis_proof() {
     };
     assert!(
         validate_proof(&blockchain, &proof),
-        "The validation of a empty proof for the genesis block should successed"
+        "The validation of a empty proof for the genesis block should succeed"
     );
 
     let proof = ZKProof {
@@ -68,7 +68,7 @@ async fn can_detect_invalid_proof_none_genesis_blocks() {
         &mut get_base_seed(),
     );
 
-    // Gets the new election block and makes a fake proof for it
+    // Gets the new election block and makes a fake proof for it.
     let block = blockchain.read().state.election_head.clone();
 
     let zkp_proof = ZKProof {
@@ -78,7 +78,7 @@ async fn can_detect_invalid_proof_none_genesis_blocks() {
 
     assert!(
         !validate_proof(&blockchain, &zkp_proof),
-        "The validation of a fake proof should failed"
+        "The validation of a fake proof should fail"
     );
 
     let zkp_proof = ZKProof {
@@ -116,7 +116,7 @@ async fn can_detect_valid_proof_none_genesis_blocks() {
         &mut get_base_seed(),
     );
 
-    // Gets the election block and sets the precomputed zk proof from it
+    // Gets the election block and sets the precomputed zk proof from it.
     let zkp_proof =
         &ZKProof::deserialize_from_vec(&hex::decode(ZKPROOF_SERIALIZED_IN_HEX).unwrap()).unwrap();
     assert!(

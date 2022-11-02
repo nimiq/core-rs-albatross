@@ -28,7 +28,7 @@ impl NanoZKP {
     /// order is absolutely necessary because each circuit needs a verifying key from the circuit "below"
     /// it. Note that the parameter generation can take longer than one hour, even two on some computers.
     pub fn setup<R: Rng + CryptoRng>(mut rng: R) -> Result<(), NanoZKPError> {
-        if NanoZKP::are_all_files_created() {
+        if NanoZKP::all_files_created() {
             return Ok(());
         }
 
@@ -55,7 +55,7 @@ impl NanoZKP {
         Ok(())
     }
 
-    fn are_all_files_created() -> bool {
+    fn all_files_created() -> bool {
         for i in 0..5 {
             if !Path::new(&format!("verifying_keys/pk_tree_{}.bin", i)).exists()
                 && !Path::new(&format!("proving_keys/pk_tree_{}.bin", i)).exists()

@@ -17,7 +17,7 @@ use nimiq_test_utils::blockchain_with_rng::produce_macro_blocks_with_rng;
 use nimiq_test_utils::zkp_test_data::get_base_seed;
 use nimiq_test_utils::zkp_test_data::ZKPROOF_SERIALIZED_IN_HEX;
 
-use nimiq_zkp_prover::proof_component::{validate_proof, ProofStore};
+use nimiq_zkp_prover::proof_utils::{validate_proof, ProofStore};
 use nimiq_zkp_prover::types::ZKProof;
 use nimiq_zkp_prover::zkp_requests::ZKPRequests;
 use nimiq_zkp_prover::ZKPComponent;
@@ -105,7 +105,7 @@ async fn peers_reply_with_valid_proof() {
         &mut get_base_seed(),
     );
 
-    // Seta valid proof into the 2 components
+    // Seta valid proof into the 2 components.
     let new_proof =
         &ZKProof::deserialize_from_vec(&hex::decode(ZKPROOF_SERIALIZED_IN_HEX).unwrap()).unwrap();
     log::info!("setting proof");
@@ -120,7 +120,7 @@ async fn peers_reply_with_valid_proof() {
 
     let mut zkp_requests = ZKPRequests::new(Arc::clone(&network));
 
-    // Trigger zkp requests from the first component
+    // Trigger zkp requests from the first component.
     zkp_requests.request_zkps(network.get_peers(), 0);
 
     for _ in 0..2 {

@@ -59,7 +59,7 @@ enum Command {
     #[clap(flatten)]
     Validator(ValidatorCommand),
 
-    ///
+    /// Shows the zkp information.
     #[clap(flatten)]
     ZKPComponent(ZKProverCommand),
 }
