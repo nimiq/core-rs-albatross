@@ -64,6 +64,10 @@ pub struct CommandLine {
     ///
     #[clap(long)]
     pub network: Option<NetworkId>,
+
+    /// Internally used flag to start a zero-knowledge prover process.
+    #[clap(long, action)]
+    pub prove: bool,
 }
 
 impl CommandLine {

@@ -23,7 +23,7 @@ use futures::stream::BoxStream;
 
 pub type ZKProofsStream<N> = BoxStream<'static, (ZKProof, <N as Network>::PubsubId)>;
 
-const BROADCAST_MAX_CAPACITY: usize = 256;
+pub(crate) const BROADCAST_MAX_CAPACITY: usize = 256;
 
 pub struct ZKPComponentProxy<N: Network> {
     network: Arc<N>,
