@@ -17,6 +17,7 @@ is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
+arrayvec = "0.7.2"
 beserial_derive = { path = "beserial_derive", version = "0.1.0", optional = true }
 bitvec = { version = "1.0", optional = true }
 libp2p = { version = "0.46", default-features = false, optional = true }

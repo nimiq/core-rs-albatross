@@ -508,6 +508,7 @@ checksum = "7dfdb4953a096c551ce9ace855a604d702e6e62d77fac690575ae347571717f5"
 name = "beserial"
 version = "0.1.0"
 dependencies = [
+ "arrayvec 0.7.2",
  "beserial_derive",
  "bitvec",
  "byteorder",
