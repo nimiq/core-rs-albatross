@@ -45,6 +45,9 @@ pub enum Error {
 
     #[error("Failed to parse Address: {0}")]
     Address(#[from] nimiq_keys::AddressParseError),
+
+    #[error("Serializing Error: {0}")]
+    Serializing(#[from] beserial::SerializingError),
 }
 
 impl Error {

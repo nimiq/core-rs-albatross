@@ -1,7 +1,8 @@
-use std::sync::Arc;
+use std::{process::Stdio, sync::Arc};
 
 use ark_groth16::Proof;
 use ark_mnt6_753::{G2Projective as G2MNT6, MNT6_753};
+use beserial::{Deserialize, Serialize};
 use nimiq_block::{Block, MacroBlock};
 use nimiq_genesis::NetworkInfo;
 use nimiq_nano_primitives::MacroBlock as ZKPMacroBlock;
@@ -10,7 +11,10 @@ use parking_lot::RwLock;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_database::{Database, Environment, ReadTransaction, WriteTransaction};
 use nimiq_nano_zkp::{NanoZKP, NanoZKPError};
-use tokio::sync::oneshot::Sender;
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
+use tokio::process::ChildStdout;
+use tokio::sync::broadcast::Receiver as BroadcastReceiver;
+use tokio::{io::AsyncWriteExt, process::Command};
 
 use super::types::ZKPState;
 use crate::types::*;
@@ -96,14 +100,13 @@ pub(crate) fn validate_proof_get_new_state(
 }
 
 /// Generates the zk proof and sends it through the channel provided. Upon failure, the error is sent trough the channel providded.
-pub(crate) async fn generate_new_proof(
+pub fn generate_new_proof(
     block: MacroBlock,
     latest_pks: Vec<G2MNT6>,
     latest_header_hash: [u8; 32],
     previous_proof: Option<Proof<MNT6_753>>,
     genesis_state: Vec<u8>,
-    sender: Sender<Result<ZKPState, ZKPComponentError>>,
-) {
+) -> Result<ZKPState, ZKProofGenerationError> {
     let validators = block.get_validators();
 
     if let Some(validators) = validators {
@@ -125,22 +128,75 @@ pub(crate) async fn generate_new_proof(
             true,
         );
 
-        let result = match proof {
-            Ok(proof) => sender.send(Ok(ZKPState {
+        return match proof {
+            Ok(proof) => Ok(ZKPState {
                 latest_pks,
                 latest_header_hash: block.header_hash.into(),
                 latest_block_number: block.block_number,
                 latest_proof: Some(proof),
-            })),
-            Err(e) => sender.send(Err(ZKPComponentError::from(e))),
+            }),
+            Err(e) => Err(ZKProofGenerationError::from(e)),
         };
-
-        if result.is_err() {
-            log::error!(error = "receiver hung up", "error sending the zk proof",);
-        }
-    } else if sender.send(Err(ZKPComponentError::InvalidBlock)).is_err() {
-        log::error!(error = "receiver hung up", "error sending the zk proof",);
     }
+    Err(ZKProofGenerationError::InvalidBlock)
+}
+
+pub(crate) async fn launch_generate_new_proof(
+    mut recv: BroadcastReceiver<()>,
+    proof_input: ProofInput,
+) -> Result<ZKPState, ZKProofGenerationError> {
+    let mut child = Command::new(std::env::current_exe()?)
+        .arg("--prove")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()?;
+
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(&proof_input.serialize_to_vec())
+        .await?;
+
+    tokio::select! {
+        _ = child.wait() => {
+            let output = child.stdout.take().unwrap();
+            parse_proof_generation_output(output).await
+        }
+        _ = recv.recv() => {
+            child.kill().await?;
+            Err(ZKProofGenerationError::ChannelError)
+        },
+    }
+}
+
+async fn parse_proof_generation_output(
+    output: ChildStdout,
+) -> Result<ZKPState, ZKProofGenerationError> {
+    let mut reader = BufReader::new(output);
+    // We read until the two delimiter bytes.
+    // `prev_byte` stores the last read byte.
+    let mut prev_byte = 0;
+    loop {
+        // If the previous byte is not the first delimiter byte, we skip until we encounter it.
+        if prev_byte != PROOF_GENERATION_OUTPUT_DELIMITER[0] {
+            let mut buffer = vec![];
+            reader
+                .read_until(PROOF_GENERATION_OUTPUT_DELIMITER[0], &mut buffer)
+                .await?;
+        }
+
+        // Then attempt to read another byte.
+        prev_byte = reader.read_u8().await?;
+        // If the byte is the expected second byte, break.
+        if prev_byte == PROOF_GENERATION_OUTPUT_DELIMITER[1] {
+            break;
+        }
+    }
+    let mut buffer = vec![];
+    reader.read_to_end(&mut buffer).await?;
+
+    Deserialize::deserialize_from_vec(&buffer)?
 }
 
 /// DB for storing and retrieving the ZK Proof.

@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use log::info;
 
+use nimiq::prover::prover_main;
 pub use nimiq::{
     client::{Client, Consensus},
     config::command_line::CommandLine,
@@ -25,6 +26,20 @@ async fn main_inner() -> Result<(), Error> {
     // Parse command line.
     let command_line = CommandLine::parse();
     log::trace!("Command line: {:#?}", command_line);
+
+    // Early return in case of a proving process.
+    if command_line.prove {
+        // Initialize logging with config values.
+        initialize_logging(Some(&command_line), None)?;
+
+        // Initialize panic hook.
+        initialize_panic_reporting();
+
+        // Initialize signal handler
+        initialize_signal_handler();
+
+        return Ok(prover_main().await?);
+    }
 
     // Parse config file - this will obey the `--config` command line option.
     let config_file = ConfigFile::find(Some(&command_line))?;

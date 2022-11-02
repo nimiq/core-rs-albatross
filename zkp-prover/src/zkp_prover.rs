@@ -1,9 +1,10 @@
 use std::error::Error;
+use std::future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
-use futures::{FutureExt, Stream, StreamExt};
+use futures::{Stream, StreamExt};
 use nimiq_block::Block;
 use nimiq_genesis::NetworkInfo;
 use nimiq_nano_primitives::state_commitment;
@@ -12,33 +13,26 @@ use parking_lot::lock_api::RwLockUpgradableReadGuard;
 use parking_lot::{RwLock, RwLockWriteGuard};
 
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainEvent};
-use nimiq_utils::observer::NotifierStream;
-use tokio::sync::oneshot::{self, Receiver};
 
-use tokio::task::JoinHandle;
+use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
 
 use crate::proof_utils::*;
 use crate::types::*;
+use crate::zkp_component::BROADCAST_MAX_CAPACITY;
 
 /// ZK Prover generates the zk proof for an election block. It has:
 ///
-/// - The blockchain
 /// - The network
 /// - The current zkp state
-/// - The genesis state used to generate the proof
-/// - The receiver channel from the spawn task
-/// - The blockchain election events stream
-/// - The Proof generation task
+/// - The channel to kill the current process generating the proof
+/// - The stream with the generated zero knowledge proofs
 ///
 /// The proofs are returned by polling the components.
 pub struct ZKProver<N: Network> {
-    blockchain: Arc<RwLock<Blockchain>>,
     network: Arc<N>,
     zkp_state: Arc<RwLock<ZKPState>>,
-    genesis_state: Vec<u8>,
-    receiver: Option<Receiver<Result<ZKPState, ZKPComponentError>>>,
-    blockchain_election_rx: NotifierStream<BlockchainEvent>,
-    proof_generation_thread: Option<JoinHandle<()>>,
+    sender: BroadcastSender<()>,
+    proof_stream: Pin<Box<dyn Stream<Item = Result<ZKPState, ZKProofGenerationError>> + Send>>,
 }
 
 impl<N: Network> ZKProver<N> {
@@ -58,20 +52,51 @@ impl<N: Network> ZKProver<N> {
         );
 
         let blockchain_election_rx = blockchain.write().notifier.as_stream();
+        let (sender, recv) = broadcast(BROADCAST_MAX_CAPACITY);
+
+        let blockchain2 = Arc::clone(&blockchain);
+        let blockchain_election_rx = blockchain_election_rx.filter_map(move |event| {
+            let result = match event {
+                BlockchainEvent::EpochFinalized(hash) => {
+                    let block = blockchain2.read().get_block(&hash, true, None);
+                    if let Some(Block::Macro(block)) = block {
+                        Some(block)
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            };
+            future::ready(result)
+        });
+
+        let zkp_state2 = Arc::clone(&zkp_state);
+        let proof_stream = blockchain_election_rx
+            .then(move |block| {
+                let genesis_state3 = genesis_state.clone();
+                let zkp_state3 = Arc::clone(&zkp_state2);
+                let recv = recv.resubscribe();
+                let zkp_state = zkp_state3.read();
+                assert_eq!(zkp_state.latest_header_hash, block.header.parent_election_hash, "The new block should be the immediatly after the one we currently have the proof for");
+                launch_generate_new_proof(
+                    recv,
+                    ProofInput {
+                        block,
+                        latest_pks: zkp_state.latest_pks.clone(),
+                        latest_header_hash: zkp_state.latest_header_hash.clone(),
+                        previous_proof: zkp_state.latest_proof.clone(),
+                        genesis_state: genesis_state3,
+                    },
+                )
+            })
+            .boxed();
 
         Self {
-            blockchain,
             network,
             zkp_state,
-            genesis_state,
-            receiver: None,
-            blockchain_election_rx,
-            proof_generation_thread: None,
+            sender,
+            proof_stream,
         }
-    }
-
-    pub fn is_generating_proof(&self) -> bool {
-        self.proof_generation_thread.is_some()
     }
 
     fn broadcast_zk_proof(network: &Arc<N>, zk_proof: ZKProof) {
@@ -84,11 +109,7 @@ impl<N: Network> ZKProver<N> {
     }
 
     pub(crate) fn cancel_current_proof_production(&mut self) {
-        self.receiver = None;
-        if let Some(ref thread) = self.proof_generation_thread {
-            thread.abort();
-            self.proof_generation_thread = None;
-        }
+        self.sender.send(()).unwrap();
     }
 }
 
@@ -97,15 +118,13 @@ impl<N: Network> Stream for ZKProver<N> {
 
     fn poll_next(mut self: Pin<&mut ZKProver<N>>, cx: &mut Context) -> Poll<Option<Self::Item>> {
         // If a new proof was generated it sets the state and broadcasts the new proof.
-        // This returns early to avoid multiple spawns of proof generation.
-        if let Some(ref mut receiver) = self.receiver {
-            return match receiver.poll_unpin(cx) {
-                Poll::Ready(Ok(Ok(new_zkp_state))) => {
+        while let Poll::Ready(Some(proof)) = self.proof_stream.poll_next_unpin(cx) {
+            match proof {
+                Ok(new_zkp_state) => {
                     assert!(
                         new_zkp_state.latest_proof.is_some(),
                         "The generate new proof should never produces a empty proof"
                     );
-                    self.receiver = None;
                     let zkp_state_lock = self.zkp_state.upgradable_read();
                     if zkp_state_lock.latest_block_number < new_zkp_state.latest_block_number {
                         let mut zkp_state_lock = RwLockUpgradableReadGuard::upgrade(zkp_state_lock);
@@ -117,45 +136,11 @@ impl<N: Network> Stream for ZKProver<N> {
                         Self::broadcast_zk_proof(&self.network, proof.clone());
                         return Poll::Ready(Some(proof));
                     }
-                    Poll::Pending //ITODO Doesn't need to return early but it's cleared to do so (?)
                 }
-                Poll::Ready(Ok(Err(e))) => {
+                Err(e) => {
                     log::error!("Error generating ZK Proof for block {}", e);
-                    self.receiver = None;
-                    Poll::Pending
                 }
-                _ => Poll::Pending,
             };
-        }
-
-        // Listens to block election events from blockchain and deploys the proof generation thread
-        while let Poll::Ready(event) = self.blockchain_election_rx.poll_next_unpin(cx) {
-            match event {
-                Some(BlockchainEvent::EpochFinalized(hash)) => {
-                    let block = self.blockchain.read().get_block(&hash, true, None);
-                    if let Some(Block::Macro(block)) = block {
-                        assert!(
-                            self.proof_generation_thread.is_none() && self.receiver.is_none(),
-                            "There should be no proof generation ongoing at this point."
-                        );
-
-                        let zkp_state = self.zkp_state.read().clone();
-                        let (sender, receiver) = oneshot::channel();
-
-                        self.receiver = Some(receiver);
-                        self.proof_generation_thread = Some(tokio::spawn(generate_new_proof(
-                            block,
-                            zkp_state.latest_pks.clone(),
-                            zkp_state.latest_header_hash.clone().into(),
-                            zkp_state.latest_proof.clone(),
-                            self.genesis_state.clone(),
-                            sender,
-                        )));
-                    }
-                }
-                Some(_) => (),
-                None => return Poll::Ready(None),
-            }
         }
 
         Poll::Pending
