@@ -24,6 +24,8 @@ use parking_lot::RwLock;
 use nimiq_nano_zkp::NanoZKPError;
 use thiserror::Error;
 
+/// The ZK Proof state containing the pks block info and the proof.
+/// The genesis block has no zk proof.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ZKPState {
     pub latest_pks: Vec<G2MNT6>,
@@ -54,6 +56,7 @@ impl ZKPState {
     }
 }
 
+/// The ZK Proof and the respective block identifier. This object is sent though the network and stored in the zkp db.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ZKProof {
     pub block_number: u32,
@@ -148,6 +151,7 @@ fn ark_to_bserial_error(error: ArkSerializingError) -> BeserialSerializingError 
     }
 }
 
+/// The topic for zkp gossiping.
 #[derive(Clone, Debug, Default)]
 pub struct ZKProofTopic;
 
@@ -172,11 +176,17 @@ pub enum ZKPComponentError {
 
     #[error("Invalid proof")]
     InvalidProof,
+
+    #[error("Channel error")]
+    ChannelError,
 }
 
-/// The max number of MacroChain requests per peer.
+/// The max number of ZKP requests per peer.
 pub const MAX_REQUEST_RESPONSE_ZKP: u32 = 1000;
 
+/// The request of a zkp. The request specifies the block height to be used as a filtering mechanism to avoid flooding the network
+/// with older proofs.
+/// The response should either have a more recent proof (> than block_number) or None.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestZKP {
     pub(crate) block_number: u32,

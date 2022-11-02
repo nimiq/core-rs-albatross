@@ -52,14 +52,14 @@ impl BlockProducer {
             transactions,
             extra_data,
             skip_block_proof,
-            rand::thread_rng(),
+            &mut rand::thread_rng(),
         )
     }
 
     /// Creates the next micro block.
     pub fn next_micro_block_with_rng<R: Rng + CryptoRng>(
         &self,
-        // The (upgradable) read locked guard to the blockchain
+        // The (upgradable) read locked guard to the blockchain.
         blockchain: &Blockchain,
         // The timestamp for the block.
         timestamp: u64,
@@ -70,9 +70,10 @@ impl BlockProducer {
         transactions: Vec<Transaction>,
         // Extra data for this block.
         extra_data: Vec<u8>,
-        // Skip block proof
+        // Skip block proof.
         skip_block_proof: Option<SkipBlockProof>,
-        rng: R,
+        // The rng seed. We need this parameterized in order to have determinism when running unit tests.
+        rng: &mut R,
     ) -> MicroBlock {
         // Calculate the block number. It is simply the previous block number incremented by one.
         let block_number = blockchain.block_number() + 1;
@@ -203,7 +204,7 @@ impl BlockProducer {
     // Note: Needs to be called with the Blockchain lock held.
     pub fn next_macro_block_proposal_with_rng<R: RngCore + CryptoRng>(
         &self,
-        // The (upgradable) read locked guard to the blockchain
+        // The (upgradable) read locked guard to the blockchain.
         blockchain: &Blockchain,
         // The timestamp for the block proposal.
         timestamp: u64,
@@ -211,6 +212,7 @@ impl BlockProducer {
         round: u32,
         // Extra data for this block.
         extra_data: Vec<u8>,
+        // The rng seed. We need this parameterized in order to have determinism when running unit tests.
         rng: &mut R,
     ) -> MacroBlock {
         // Calculate the block number. It is simply the previous block number incremented by one.

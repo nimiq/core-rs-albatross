@@ -15,20 +15,22 @@ use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainEvent};
 use nimiq_utils::observer::NotifierStream;
 use tokio::sync::oneshot::{self, Receiver};
 
-use pin_project::pin_project;
 use tokio::task::JoinHandle;
 
-use crate::proof_component::*;
+use crate::proof_utils::*;
 use crate::types::*;
 
-/// Election blocks ZKP Component. Has:
+/// ZK Prover generates the zk proof for an election block. It has:
 ///
-/// - The previous election block public keys
-/// - Previous election block header hash
-/// - The pk tree root at genesis or none if genesis block
+/// - The blockchain
+/// - The network
+/// - The current zkp state
+/// - The genesis state used to generate the proof
+/// - The receiver channel from the spawn task
+/// - The blockchain election events stream
+/// - The Proof generation task
 ///
 /// The proofs are returned by polling the components.
-#[pin_project]
 pub struct ZKProver<N: Network> {
     blockchain: Arc<RwLock<Blockchain>>,
     network: Arc<N>,
@@ -94,8 +96,8 @@ impl<N: Network> Stream for ZKProver<N> {
     type Item = ZKProof;
 
     fn poll_next(mut self: Pin<&mut ZKProver<N>>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-        // If a new proof was generated it sets the state and broadcasts the new proof
-        // This returns early to avoid multiple spawns of proof generation
+        // If a new proof was generated it sets the state and broadcasts the new proof.
+        // This returns early to avoid multiple spawns of proof generation.
         if let Some(ref mut receiver) = self.receiver {
             return match receiver.poll_unpin(cx) {
                 Poll::Ready(Ok(Ok(new_zkp_state))) => {

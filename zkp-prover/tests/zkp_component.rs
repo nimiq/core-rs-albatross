@@ -11,7 +11,7 @@ use nimiq_network_interface::network::Network;
 use nimiq_network_mock::MockHub;
 use nimiq_network_mock::MockNetwork;
 use nimiq_primitives::policy;
-use nimiq_zkp_prover::proof_component::ProofStore;
+use nimiq_zkp_prover::proof_utils::ProofStore;
 use nimiq_zkp_prover::types::ZKProofTopic;
 
 use nimiq_block_production::BlockProducer;
@@ -24,7 +24,7 @@ use nimiq_test_utils::blockchain::{signing_key, voting_key};
 use nimiq_test_utils::zkp_test_data::get_base_seed;
 use nimiq_utils::time::OffsetTime;
 
-use nimiq_zkp_prover::proof_component::validate_proof;
+use nimiq_zkp_prover::proof_utils::validate_proof;
 use nimiq_zkp_prover::zkp_component::ZKPComponent;
 use nimiq_zkp_prover::zkp_component::ZKProofsStream;
 
@@ -52,7 +52,7 @@ async fn builds_valid_genesis_proof() {
 
     assert!(
         validate_proof(&blockchain, &zkp_prover.get_zkp_state().into()),
-        "The validation of a empty proof for the genesis block should successed"
+        "The validation of a empty proof for the genesis block should succeed"
     );
 }
 
@@ -150,7 +150,7 @@ async fn can_produce_two_consecutive_valid_zk_proofs() {
 
     let mut zk_proofs_stream: ZKProofsStream<MockNetwork> =
         network2.subscribe::<ZKProofTopic>().await.unwrap().boxed();
-    // Produce the 1st election block after genesis
+    // Produce the 1st election block after genesis.
     let producer = BlockProducer::new(signing_key(), voting_key());
     produce_macro_blocks_with_rng(
         &producer,
@@ -161,7 +161,7 @@ async fn can_produce_two_consecutive_valid_zk_proofs() {
 
     log::info!("going to wait for the 1st proof");
 
-    // Waits for the proof generation and verifies the proof
+    // Waits for the proof generation and verifies the proof.
     let (proof, _) = zk_proofs_stream.as_mut().next().await.unwrap();
     assert!(
         validate_proof(&blockchain, &proof),

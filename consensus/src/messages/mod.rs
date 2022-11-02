@@ -6,7 +6,7 @@ use nimiq_blockchain::HistoryTreeChunk;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::request::{RequestCommon, RequestMarker};
 
-pub mod handlers;
+mod handlers;
 
 /*
 The consensus module uses the following messages:

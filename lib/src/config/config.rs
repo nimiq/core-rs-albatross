@@ -601,7 +601,7 @@ pub struct ClientConfig {
     pub consensus: ConsensusConfig,
 
     /// ZK Prover config
-    #[builder(default = "false")]
+    #[builder(default)]
     pub zkp_prover_node_functionality: bool,
 
     /// The Nimiq network the client should connect to. Usually this should be either `Test` or
