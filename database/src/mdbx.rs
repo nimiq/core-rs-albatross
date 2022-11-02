@@ -57,7 +57,7 @@ impl MdbxEnvironment {
         let db_flags = libmdbx::EnvironmentFlags {
             no_rdahead: true,
             mode: libmdbx::Mode::ReadWrite {
-                sync_mode: libmdbx::SyncMode::UtterlyNoSync,
+                sync_mode: libmdbx::SyncMode::Durable,
             },
             ..Default::default()
         };
