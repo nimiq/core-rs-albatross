@@ -4,15 +4,16 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
-use futures::{Stream, StreamExt};
+use futures::{stream, FutureExt, Stream, StreamExt};
 use nimiq_block::Block;
 use nimiq_genesis::NetworkInfo;
 use nimiq_nano_primitives::state_commitment;
 use nimiq_network_interface::network::Network;
+use nimiq_primitives::policy;
 use parking_lot::lock_api::RwLockUpgradableReadGuard;
 use parking_lot::{RwLock, RwLockWriteGuard};
 
-use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainEvent};
+use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainEvent, Direction};
 
 use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
 
@@ -51,10 +52,10 @@ impl<N: Network> ZKProver<N> {
             public_keys,
         );
 
+        // Gets the stream of blockchain events and converts it into an election macro block stream
         let blockchain_election_rx = blockchain.write().notifier.as_stream();
-        let (sender, recv) = broadcast(BROADCAST_MAX_CAPACITY);
-
         let blockchain2 = Arc::clone(&blockchain);
+
         let blockchain_election_rx = blockchain_election_rx.filter_map(move |event| {
             let result = match event {
                 BlockchainEvent::EpochFinalized(hash) => {
@@ -70,24 +71,66 @@ impl<N: Network> ZKProver<N> {
             future::ready(result)
         });
 
+        // Prepends the election blocks from the blockchain for which we don't have a proof yet
+        let blockchain_rg = blockchain.read();
+        let current_state_height = zkp_state.read().latest_block_number;
+        let blockchain_election_height = blockchain_rg.state.election_head.block_number();
+
+        let blocks = if blockchain_election_height > current_state_height {
+            blockchain_rg
+                .get_macro_blocks(
+                    &zkp_state.read().latest_header_hash,
+                    (blockchain_election_height - current_state_height) / policy::BLOCKS_PER_EPOCH,
+                    true,
+                    Direction::Forward,
+                    true,
+                )
+                .expect("Fetching election blocks for zkp prover initialization failed")
+                .drain(..)
+                .map(|block| block.unwrap_macro())
+                .collect()
+        } else {
+            vec![]
+        };
+        let blockchain_election_rx = stream::iter(blocks).chain(blockchain_election_rx);
+        drop(blockchain_rg);
+
+        // Upon every election block, a proof generation process is launched.
+        // The assertion holds true since we should only start generating the next proof after its predecessor's
+        // proof has been pushed into our state.
+        //
+        // Note: The election block stream may have blocks that are too old relative to our zkp state;
+        // thus we will filter those blocks out.
+        let (sender, recv) = broadcast(BROADCAST_MAX_CAPACITY);
         let zkp_state2 = Arc::clone(&zkp_state);
         let proof_stream = blockchain_election_rx
-            .then(move |block| {
+            .filter_map(move |block| {
                 let genesis_state3 = genesis_state.clone();
                 let zkp_state3 = Arc::clone(&zkp_state2);
                 let recv = recv.resubscribe();
                 let zkp_state = zkp_state3.read();
-                assert_eq!(zkp_state.latest_header_hash, block.header.parent_election_hash, "The new block should be the immediatly after the one we currently have the proof for");
-                launch_generate_new_proof(
-                    recv,
-                    ProofInput {
-                        block,
-                        latest_pks: zkp_state.latest_pks.clone(),
-                        latest_header_hash: zkp_state.latest_header_hash.clone(),
-                        previous_proof: zkp_state.latest_proof.clone(),
-                        genesis_state: genesis_state3,
-                    },
-                )
+                assert!(
+                    zkp_state.latest_block_number
+                        >= block.block_number() - policy::BLOCKS_PER_EPOCH,
+                    "The current state should never lag behiind more than one epoch"
+                );
+                if zkp_state.latest_block_number == block.block_number() - policy::BLOCKS_PER_EPOCH
+                {
+                    launch_generate_new_proof(
+                        recv,
+                        ProofInput {
+                            block,
+                            latest_pks: zkp_state.latest_pks.clone(),
+                            latest_header_hash: zkp_state.latest_header_hash.clone(),
+                            previous_proof: zkp_state.latest_proof.clone(),
+                            genesis_state: genesis_state3,
+                        },
+                    )
+                    .map(Some)
+                    .left_future()
+                } else {
+                    future::ready(None).right_future()
+                }
             })
             .boxed();
 
@@ -99,6 +142,7 @@ impl<N: Network> ZKProver<N> {
         }
     }
 
+    /// The broadcasting of the generated zk proof.
     fn broadcast_zk_proof(network: &Arc<N>, zk_proof: ZKProof) {
         let network = Arc::clone(network);
         tokio::spawn(async move {
@@ -108,6 +152,7 @@ impl<N: Network> ZKProver<N> {
         });
     }
 
+    /// This sends the kill signal to the proof generation process.
     pub(crate) fn cancel_current_proof_production(&mut self) {
         self.sender.send(()).unwrap();
     }
@@ -126,16 +171,21 @@ impl<N: Network> Stream for ZKProver<N> {
                         "The generate new proof should never produces a empty proof"
                     );
                     let zkp_state_lock = self.zkp_state.upgradable_read();
-                    if zkp_state_lock.latest_block_number < new_zkp_state.latest_block_number {
-                        let mut zkp_state_lock = RwLockUpgradableReadGuard::upgrade(zkp_state_lock);
-                        *zkp_state_lock = new_zkp_state;
 
-                        let zkp_state_lock = RwLockWriteGuard::downgrade(zkp_state_lock);
+                    // If we received a more recent proof in the meanwhile, we should have cancelled the proof generation process already.
+                    assert!(
+                        zkp_state_lock.latest_block_number < new_zkp_state.latest_block_number,
+                        "The generated proof should always be more recent than the current state"
+                    );
 
-                        let proof: ZKProof = zkp_state_lock.clone().into();
-                        Self::broadcast_zk_proof(&self.network, proof.clone());
-                        return Poll::Ready(Some(proof));
-                    }
+                    let mut zkp_state_lock = RwLockUpgradableReadGuard::upgrade(zkp_state_lock);
+                    *zkp_state_lock = new_zkp_state;
+
+                    let zkp_state_lock = RwLockWriteGuard::downgrade(zkp_state_lock);
+
+                    let proof: ZKProof = zkp_state_lock.clone().into();
+                    Self::broadcast_zk_proof(&self.network, proof.clone());
+                    return Poll::Ready(Some(proof));
                 }
                 Err(e) => {
                     log::error!("Error generating ZK Proof for block {}", e);
