@@ -566,4 +566,8 @@ impl Network for MockNetwork {
             Err(MockNetworkError::CantRespond(request_id))
         }
     }
+
+    fn peer_provides_history(&self, _peer_id: Self::PeerId) -> bool {
+        true
+    }
 }

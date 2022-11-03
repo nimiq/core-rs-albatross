@@ -51,6 +51,8 @@ use crate::{
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Display)]
 pub enum SyncMode {
     History,
+    Full,
+    Nano,
 }
 
 impl Default for SyncMode {
@@ -96,66 +98,6 @@ pub struct NetworkConfig {
 
     #[builder(default)]
     pub seeds: Vec<Seed>,
-}
-
-/// Contains which protocol to use and the configuration needed for that protocol.
-///
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub enum ProtocolConfig {
-    /// The dumb protocol will not accept any incoming connections. This is not recommended.
-    ///
-    /// # Notes
-    ///
-    /// This is currently not supported.
-    ///
-    Dumb,
-
-    /// Accept connections over an unsecure websocket. This is not recommended. Use `Wss` whenever
-    /// possible.
-    ///
-    Ws {
-        /// The hostname of your machine. This must be a valid domain name or IP address as it
-        /// will be advertised to other peers in order for them to connect to you.
-        ///
-        host: String,
-
-        /// The port on which Nimiq will listen for incoming connections.
-        ///
-        port: u16,
-    },
-    Wss {
-        /// The hostname of your machine. This must be a valid domain name as it will be advertised
-        /// to other peers in order for them to connect to you. Also this must be the CN in your
-        /// SSL certificate.
-        ///
-        host: String,
-
-        /// The port on which Nimiq will listen for incoming connections.
-        ///
-        port: u16,
-
-        /// Path to your PKCS#12 key file, that contains private key and certificate.
-        ///
-        /// # Notes
-        ///
-        /// Only PKCS#12 is supported right now, but it is planned to move away from this and use
-        /// the PEM format for certificate and private key.
-        ///
-        pkcs12_key_file: PathBuf,
-
-        /// PKCS#12 is always encrypted, therefore you must provide a password for Nimiq to be able
-        /// to access your SSL private key.
-        ///
-        pkcs12_passphrase: String,
-    },
-
-    /// Accept incoming connections over WebRTC
-    ///
-    /// # Notes
-    ///
-    /// This is currently not supported.
-    ///
-    Rtc,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]

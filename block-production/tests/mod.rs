@@ -8,7 +8,9 @@ use tempfile::tempdir;
 use beserial::Deserialize;
 use nimiq_block::{Block, ForkProof, MicroJustification};
 use nimiq_block_production::BlockProducer;
-use nimiq_blockchain::{AbstractBlockchain, Blockchain, PushResult};
+
+use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainConfig, PushResult};
+
 use nimiq_database::{mdbx::MdbxEnvironment, volatile::VolatileEnvironment};
 use nimiq_genesis::NetworkId;
 use nimiq_hash::{Blake2bHash, Hash};
@@ -41,7 +43,13 @@ fn it_can_produce_micro_blocks() {
     let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(RwLock::new(
-        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
     ));
     let producer = BlockProducer::new(signing_key(), voting_key());
 
@@ -127,7 +135,13 @@ fn it_can_produce_macro_blocks() {
     let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(RwLock::new(
-        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
     ));
     let producer = BlockProducer::new(signing_key(), voting_key());
 
@@ -155,7 +169,13 @@ fn it_can_produce_election_blocks() {
     let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(RwLock::new(
-        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
     ));
     let producer = BlockProducer::new(signing_key(), voting_key());
 
@@ -193,7 +213,13 @@ fn it_can_produce_a_chain_with_txns() {
         MdbxEnvironment::new(tmp_dir, 1024 * 1024 * 1024 * 1024, 21).unwrap()
     };
     let blockchain = Arc::new(RwLock::new(
-        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
     ));
     let producer = BlockProducer::new(signing_key(), voting_key());
 
@@ -230,7 +256,13 @@ fn it_can_revert_unpark_transactions() {
     let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(RwLock::new(
-        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
     ));
     let producer = BlockProducer::new(signing_key(), voting_key());
 
@@ -310,7 +342,13 @@ fn it_can_revert_create_staker_transaction() {
     let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(RwLock::new(
-        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
     ));
     let producer = BlockProducer::new(signing_key(), voting_key());
 
@@ -388,7 +426,13 @@ fn it_can_revert_failed_transactions() {
     let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(RwLock::new(
-        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
     ));
     let producer = BlockProducer::new(signing_key(), voting_key());
 
@@ -511,7 +555,13 @@ fn it_can_revert_failed_vesting_contract_transaction() {
     let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(RwLock::new(
-        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
     ));
     let producer = BlockProducer::new(signing_key(), voting_key());
 
@@ -662,7 +712,13 @@ fn it_can_revert_reactivate_transaction() {
     let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(RwLock::new(
-        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
     ));
     let producer = BlockProducer::new(signing_key(), voting_key());
 
@@ -745,7 +801,13 @@ fn it_can_revert_unpark_transaction() {
     let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(RwLock::new(
-        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
     ));
     let producer = BlockProducer::new(signing_key(), voting_key());
 
@@ -824,7 +886,13 @@ fn it_can_consume_all_validator_deposit() {
     let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(RwLock::new(
-        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
     ));
     let producer = BlockProducer::new(signing_key(), voting_key());
 
@@ -969,7 +1037,13 @@ fn it_can_revert_failed_delete_validator() {
     let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(RwLock::new(
-        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
     ));
     let producer = BlockProducer::new(signing_key(), voting_key());
 
@@ -1058,7 +1132,13 @@ fn it_can_revert_basic_and_create_contracts_txns() {
     let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(RwLock::new(
-        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
     ));
     let producer = BlockProducer::new(signing_key(), voting_key());
 

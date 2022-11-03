@@ -4,7 +4,7 @@ use std::sync::Arc;
 use nimiq_bls::cache::PublicKeyCache;
 use parking_lot::{Mutex, RwLock};
 
-use nimiq_blockchain::Blockchain;
+use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_consensus::{sync::syncer_proxy::SyncerProxy, Consensus as AbstractConsensus};
 use nimiq_database::volatile::VolatileEnvironment;
@@ -38,6 +38,7 @@ impl<N: NetworkInterface + TestNetwork> Node<N> {
         let blockchain = Arc::new(RwLock::new(
             Blockchain::with_genesis(
                 env.clone(),
+                BlockchainConfig::default(),
                 Arc::clone(&clock),
                 NetworkId::UnitAlbatross,
                 genesis_info.block,

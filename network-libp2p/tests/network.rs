@@ -17,7 +17,7 @@ use nimiq_network_interface::{network::Network as NetworkInterface, peer::CloseR
 use nimiq_network_libp2p::{
     discovery::{
         behaviour::DiscoveryConfig,
-        peer_contacts::{PeerContact, Protocols, Services},
+        peer_contacts::{PeerContact, Services},
     },
     Config, Network,
 };
@@ -49,7 +49,6 @@ fn network_config(address: Multiaddr) -> Config {
             update_interval: Duration::from_secs(60),
             min_recv_update_interval: Duration::from_secs(30),
             update_limit: 64,
-            protocols_filter: Protocols::all(),
             services_filter: Services::all(),
             min_send_update_interval: Duration::from_secs(30),
             house_keeping_interval: Duration::from_secs(60),
@@ -189,6 +188,7 @@ async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
     let mut addresses = Vec::new();
     let mut events = Vec::new();
     let mut rng = rand::thread_rng();
+    let mut peer_ids = Vec::new();
 
     // Create all the networks and addresses
     for peer in 0..n_peers {
@@ -202,6 +202,8 @@ async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
         network.listen_on(vec![addr.clone()]).await;
 
         log::debug!(address = %addr, peer_id = %network.get_local_peer_id(), "Network {}", peer);
+
+        peer_ids.push(network.get_local_peer_id());
 
         events.push(network.subscribe_events());
         networks.push(network);
@@ -222,10 +224,13 @@ async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
         .take(n_peers * (n_peers - 1))
         .for_each(|event| async move {
             match event {
-                Ok(NetworkEvent::PeerJoined(_)) => {}
-                _ => panic!("Unexpected NetworkEvent: {:?}", event),
+                Ok(NetworkEvent::PeerJoined(peer_id)) => {
+                    log::info!(" Received peer joined event {}", peer_id);
+                }
+                _ => log::error!("Unexpected NetworkEvent: {:?}", event),
             };
         });
+
     if timeout(Duration::from_secs(120), all_joined).await.is_err() {
         log::warn!("Timeout triggered while waiting for peers to join");
     };

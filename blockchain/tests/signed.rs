@@ -5,7 +5,7 @@ use nimiq_block::{
     MacroBlock, MultiSignature, SignedSkipBlockInfo, SkipBlockInfo, SkipBlockProof,
     TendermintIdentifier, TendermintProof, TendermintStep, TendermintVote,
 };
-use nimiq_blockchain::{AbstractBlockchain, Blockchain};
+use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainConfig};
 use nimiq_bls::{lazy::LazyPublicKey, AggregateSignature, KeyPair};
 use nimiq_collections::bitset::BitSet;
 use nimiq_database::volatile::VolatileEnvironment;
@@ -73,7 +73,15 @@ fn test_replay() {
     let time = Arc::new(OffsetTime::new());
     // Create a blockchain to have access to the validator slots.
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap());
+    let blockchain = Arc::new(
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
+    );
 
     // load key pair
     let key_pair = KeyPair::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap();

@@ -26,7 +26,7 @@ use nimiq_utils::tagged_signing::TaggedKeypair;
 use super::{
     behaviour::DiscoveryConfig,
     message_codec::{MessageReader, MessageWriter},
-    peer_contacts::{PeerContactBook, Protocols, Services, SignedPeerContact},
+    peer_contacts::{PeerContactBook, Services, SignedPeerContact},
     protocol::{ChallengeNonce, DiscoveryMessage, DiscoveryProtocol},
 };
 
@@ -131,9 +131,6 @@ pub struct DiscoveryHandler {
     /// Services filter sent to us by this peer.
     services_filter: Services,
 
-    /// Protocols filter sent to us by this peer.
-    protocols_filter: Protocols,
-
     /// The limit for peer updates sent to us by this peer.
     peer_list_limit: Option<u16>,
 
@@ -168,7 +165,6 @@ impl DiscoveryHandler {
             challenge_nonce: ChallengeNonce::generate(),
             state: HandlerState::Init,
             services_filter: Services::empty(),
-            protocols_filter: Protocols::empty(),
             peer_list_limit: None,
             periodic_update_interval: None,
             last_update_time: None,
@@ -200,7 +196,7 @@ impl DiscoveryHandler {
         let mut rng = thread_rng();
 
         peer_contact_book
-            .query(self.protocols_filter, self.services_filter)
+            .query(self.services_filter)
             .choose_multiple(&mut rng, n)
             .into_iter()
             .map(|c| c.signed().clone())
@@ -341,7 +337,6 @@ impl ConnectionHandler for DiscoveryHandler {
                         genesis_hash: self.config.genesis_hash.clone(),
                         limit: self.config.update_limit,
                         services: self.config.services_filter,
-                        protocols: self.config.protocols_filter,
                         // TODO: If we really include this here, put this in `DiscoveryConfig`
                         user_agent: "TODO".to_string(),
                     };
@@ -364,7 +359,6 @@ impl ConnectionHandler for DiscoveryHandler {
                                     genesis_hash,
                                     limit,
                                     services,
-                                    protocols,
                                     user_agent: _,
                                 } => {
                                     // Check if the received genesis hash matches.
@@ -389,7 +383,6 @@ impl ConnectionHandler for DiscoveryHandler {
                                     // Remember peer's filter
                                     self.peer_list_limit = Some(limit);
                                     self.services_filter = services;
-                                    self.protocols_filter = protocols;
 
                                     let msg = DiscoveryMessage::HandshakeAck {
                                         peer_contact: peer_contact_book
@@ -479,7 +472,6 @@ impl ConnectionHandler for DiscoveryHandler {
                                     // Insert the peer into the peer contact book.
                                     peer_contact_book.insert_filtered(
                                         peer_contact.clone(),
-                                        self.config.protocols_filter,
                                         self.config.services_filter,
                                     );
 
@@ -564,7 +556,6 @@ impl ConnectionHandler for DiscoveryHandler {
                                     // Insert the new peer contacts into the peer contact book.
                                     self.peer_contact_book.write().insert_all_filtered(
                                         peer_contacts,
-                                        self.config.protocols_filter,
                                         self.config.services_filter,
                                     );
 

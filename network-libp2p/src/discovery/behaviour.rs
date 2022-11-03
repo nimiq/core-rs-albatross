@@ -23,7 +23,7 @@ use nimiq_utils::time::OffsetTime;
 
 use super::{
     handler::{DiscoveryHandler, HandlerInEvent, HandlerOutEvent},
-    peer_contacts::{PeerContactBook, Protocols, Services},
+    peer_contacts::{PeerContact, PeerContactBook, Services},
 };
 
 #[derive(Clone, Debug)]
@@ -41,9 +41,6 @@ pub struct DiscoveryConfig {
     /// How many updated peer contacts we want to receive per update.
     pub update_limit: u16,
 
-    /// Protocols for which we filter.
-    pub protocols_filter: Protocols,
-
     /// Services for which we filter.
     pub services_filter: Services,
 
@@ -58,15 +55,14 @@ pub struct DiscoveryConfig {
 }
 
 impl DiscoveryConfig {
-    pub fn new(genesis_hash: Blake2bHash) -> Self {
+    pub fn new(genesis_hash: Blake2bHash, services_flags: Services) -> Self {
         Self {
             genesis_hash,
             update_interval: Duration::from_secs(60),
             min_send_update_interval: Duration::from_secs(30),
             min_recv_update_interval: Duration::from_secs(30),
             update_limit: 64,
-            protocols_filter: Protocols::all(),
-            services_filter: Services::all(),
+            services_filter: services_flags,
             house_keeping_interval: Duration::from_secs(60),
             keep_alive: KeepAlive::Yes,
         }
@@ -75,7 +71,10 @@ impl DiscoveryConfig {
 
 #[derive(Clone, Debug)]
 pub enum DiscoveryEvent {
-    Established { peer_id: PeerId },
+    Established {
+        peer_id: PeerId,
+        peer_contact: Option<PeerContact>,
+    },
     Update,
 }
 
@@ -192,7 +191,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
             // This is the first connection to this peer
             self.connected_peers.insert(*peer_id);
 
-            if endpoint.is_dialer() {
+            if endpoint.is_listener() {
                 self.events
                     .push_back(NetworkBehaviourAction::NotifyHandler {
                         peer_id: *peer_id,
@@ -215,6 +214,11 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                 self.events.push_back(NetworkBehaviourAction::GenerateEvent(
                     DiscoveryEvent::Established {
                         peer_id: peer_contact.public_key().clone().to_peer_id(),
+                        peer_contact: self
+                            .peer_contact_book
+                            .read()
+                            .get(&peer_id)
+                            .map(|peer_contact_info| peer_contact_info.contact().clone()),
                     },
                 ));
             }
@@ -247,7 +251,6 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                 debug!("Doing house-keeping in peer address book");
                 let mut peer_address_book = self.peer_contact_book.write();
                 peer_address_book.update_own_contact(&self.keypair);
-                peer_address_book.house_keeping();
             }
             Poll::Ready(None) => unreachable!(),
             Poll::Pending => {}

@@ -553,7 +553,7 @@ mod tests {
 
     use parking_lot::RwLock;
 
-    use nimiq_blockchain::Blockchain;
+    use nimiq_blockchain::{Blockchain, BlockchainConfig};
     use nimiq_database::volatile::VolatileEnvironment;
     use nimiq_hash::Blake2bHash;
     use nimiq_network_interface::network::Network;
@@ -653,7 +653,13 @@ mod tests {
         let time = Arc::new(OffsetTime::new());
         let env = VolatileEnvironment::new(10).unwrap();
         let blockchain = Arc::new(RwLock::new(
-            Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+            Blockchain::new(
+                env,
+                BlockchainConfig::default(),
+                NetworkId::UnitAlbatross,
+                time,
+            )
+            .unwrap(),
         ));
 
         let mut hub = MockHub::default();
@@ -807,7 +813,13 @@ mod tests {
         let time = Arc::new(OffsetTime::new());
         let env = VolatileEnvironment::new(10).unwrap();
         let blockchain = Arc::new(RwLock::new(
-            Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+            Blockchain::new(
+                env,
+                BlockchainConfig::default(),
+                NetworkId::UnitAlbatross,
+                time,
+            )
+            .unwrap(),
         ));
 
         let mut hub = MockHub::default();
@@ -1005,7 +1017,13 @@ mod tests {
         let time = Arc::new(OffsetTime::new());
         let env = VolatileEnvironment::new(10).unwrap();
         let blockchain = Arc::new(RwLock::new(
-            Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+            Blockchain::new(
+                env,
+                BlockchainConfig::default(),
+                NetworkId::UnitAlbatross,
+                time,
+            )
+            .unwrap(),
         ));
 
         let mut hub = MockHub::default();

@@ -9,7 +9,7 @@ use nimiq_utils::tagged_signing::{TaggedSignable, TaggedSignature};
 
 use super::{
     message_codec::{MessageReader, MessageWriter},
-    peer_contacts::{Protocols, Services, SignedPeerContact},
+    peer_contacts::{Services, SignedPeerContact},
 };
 use crate::DISCOVERY_PROTOCOL;
 
@@ -50,9 +50,6 @@ pub enum DiscoveryMessage {
 
         /// Service flags for which the sender needs peer contacts.
         services: Services,
-
-        /// Protocol flags for which the sender needs peer contacts.
-        protocols: Protocols,
 
         /// User agent string of the sender.
         #[beserial(len_type(u8))]

@@ -2,7 +2,7 @@
 extern crate log;
 
 pub use abstract_blockchain::AbstractBlockchain;
-pub use blockchain::blockchain::{Blockchain, TransactionVerificationCache};
+pub use blockchain::blockchain::{Blockchain, BlockchainConfig, TransactionVerificationCache};
 pub use chain_info::ChainInfo;
 pub use chain_ordering::ChainOrdering;
 pub use error::*;

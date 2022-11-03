@@ -61,9 +61,9 @@ impl Config {
 
         Self {
             keypair,
-            peer_contact,
+            peer_contact: peer_contact.clone(),
             seeds,
-            discovery: DiscoveryConfig::new(genesis_hash),
+            discovery: DiscoveryConfig::new(genesis_hash, peer_contact.services),
             kademlia,
             gossipsub,
             memory_transport,

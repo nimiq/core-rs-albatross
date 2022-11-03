@@ -264,7 +264,7 @@ impl ConnectionPoolBehaviour {
 
         // TODO Services
         contacts
-            .query(own_contact.protocols(), Services::all()) // TODO Services
+            .query(Services::all()) // TODO Services
             .filter_map(|contact| {
                 let peer_id = contact.peer_id();
                 if peer_id != own_peer_id && self.peer_ids.can_dial(peer_id) {

@@ -16,7 +16,7 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use nimiq_block::Block;
 use nimiq_block_production::BlockProducer;
-use nimiq_blockchain::{AbstractBlockchain, Blockchain, Direction};
+use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainConfig, Direction};
 use nimiq_consensus::sync::live::block_queue::{BlockQueue, BlockQueueConfig};
 use nimiq_consensus::sync::live::request_component::{RequestComponent, RequestComponentEvent};
 use nimiq_consensus::sync::live::BlockLiveSync;
@@ -142,7 +142,13 @@ fn blockchain() -> Arc<RwLock<Blockchain>> {
     let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
     Arc::new(RwLock::new(
-        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
     ))
 }
 

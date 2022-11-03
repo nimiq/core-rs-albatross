@@ -10,6 +10,8 @@ validators=()
 vpids=()
 #Array with seed/spammer pids
 spids=()
+#Array with history_nodes pids
+hpids=()
 #Array with validators indexes that are killed
 kindexes=()
 fail=false
@@ -39,6 +41,10 @@ function cleanup_exit() {
     done
     echo "Killing seed/spammer..."
     for pid in ${spids[@]}; do
+        kill -2 $pid || true
+    done
+    echo "Killing history nodes..."
+    for pid in ${hpids[@]}; do
         kill -2 $pid || true
     done
     echo "Done."
@@ -294,6 +300,14 @@ echo "Starting seed node..."
 mkdir -p temp-state/dev/seed
 $cargo --bin nimiq-client -- -c $configdir/seed/client.toml &>> $logsdir/Seed.log &
 spids+=($!)
+sleep 3
+echo "Done."
+
+# Launch the history node
+echo "Starting history node..."
+mkdir -p temp-state/dev/history1
+$cargo --bin nimiq-client -- -c $configdir/history1/client.toml &>> $logsdir/History.log &
+hpids+=($!)
 sleep 3
 echo "Done."
 

@@ -135,7 +135,6 @@ impl NimiqBehaviour {
         // Discovery behaviour
         // TODO: persist to disk
         let contacts = Arc::new(RwLock::new(PeerContactBook::new(
-            Default::default(),
             config.peer_contact.sign(&config.keypair),
         )));
         let discovery = DiscoveryBehaviour::new(

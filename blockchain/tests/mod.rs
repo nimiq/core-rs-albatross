@@ -6,7 +6,7 @@ use tokio_stream::StreamExt;
 use nimiq_block::Block;
 use nimiq_block_production::{test_utils::TemporaryBlockProducer, BlockProducer};
 use nimiq_blockchain::PushResult;
-use nimiq_blockchain::{AbstractBlockchain, Blockchain};
+use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainConfig};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
 use nimiq_primitives::policy::Policy;
@@ -66,7 +66,13 @@ fn it_can_push_consecutive_view_changes() {
     let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(RwLock::new(
-        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
     ));
     let producer = BlockProducer::new(signing_key(), voting_key());
 

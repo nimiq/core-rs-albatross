@@ -7,7 +7,7 @@ use nimiq_primitives::policy::Policy;
 use parking_lot::{Mutex, RwLock};
 
 use nimiq_block::Block;
-use nimiq_blockchain::{AbstractBlockchain, Blockchain};
+use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainConfig};
 
 use nimiq_consensus::{
     sync::syncer_proxy::SyncerProxy, Consensus as AbstractConsensus,
@@ -38,6 +38,7 @@ use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 
 use crate::config::config::ClientConfig;
+use crate::config::config::SyncMode::History;
 use crate::error::Error;
 
 /// Alias for the Consensus and Validator specialized over libp2p network
@@ -130,11 +131,29 @@ impl ClientInner {
             identity_keypair.public().to_peer_id().to_base58()
         );
 
+        let services = match config.consensus.sync_mode {
+            // Services provided by full history nodes
+            crate::config::config::SyncMode::History => {
+                log::info!("Client configured as a history node");
+                Services::HISTORY
+                    | Services::FULL_BLOCKS
+                    | Services::ACCOUNTS_PROOF
+                    | Services::ACCOUNTS_CHUNKS
+                    | Services::TRANSACTION_INDEX
+            }
+            // Services provided by full nodes
+            crate::config::config::SyncMode::Full => {
+                log::info!("Client configured as a full node");
+                Services::ACCOUNTS_PROOF | Services::FULL_BLOCKS | Services::ACCOUNTS_CHUNKS
+            }
+            crate::config::config::SyncMode::Nano => Services::empty(),
+        };
+
         // Generate peer contact from identity keypair and services/protocols
         let mut peer_contact = PeerContact::new(
             config.network.listen_addresses.clone(),
             identity_keypair.public(),
-            Services::all(), // TODO
+            services,
             None,
         );
         peer_contact.set_current_time();
@@ -169,8 +188,21 @@ impl ClientInner {
             config.consensus.sync_mode,
             config.database,
         )?;
+
+        let mut blockchain_config = BlockchainConfig::default();
+
+        if config.consensus.sync_mode == History {
+            blockchain_config.keep_history = true;
+        }
+
         let blockchain = Arc::new(RwLock::new(
-            Blockchain::new(environment.clone(), config.network_id, time).unwrap(),
+            Blockchain::new(
+                environment.clone(),
+                blockchain_config,
+                config.network_id,
+                time,
+            )
+            .unwrap(),
         ));
 
         // Open wallet

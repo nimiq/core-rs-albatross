@@ -13,7 +13,7 @@ use nimiq_zkp_component::ZKPComponent;
 use parking_lot::{Mutex, RwLock};
 
 use nimiq_block_production::BlockProducer;
-use nimiq_blockchain::{AbstractBlockchain, Blockchain};
+use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainConfig};
 use nimiq_consensus::consensus::Consensus;
 use nimiq_consensus::sync::history::{cluster::SyncCluster, HistoryMacroSync};
 use nimiq_database::volatile::VolatileEnvironment;
@@ -37,7 +37,13 @@ async fn peers_can_sync() {
     let env1 = VolatileEnvironment::new(11).unwrap();
     let time = Arc::new(OffsetTime::new());
     let blockchain1 = Arc::new(RwLock::new(
-        Blockchain::new(env1.clone(), NetworkId::UnitAlbatross, time).unwrap(),
+        Blockchain::new(
+            env1.clone(),
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
     ));
 
     let producer = BlockProducer::new(signing_key(), voting_key());
@@ -84,7 +90,13 @@ async fn peers_can_sync() {
     let time = Arc::new(OffsetTime::new());
     let env2 = VolatileEnvironment::new(11).unwrap();
     let blockchain2 = Arc::new(RwLock::new(
-        Blockchain::new(env2.clone(), NetworkId::UnitAlbatross, time).unwrap(),
+        Blockchain::new(
+            env2.clone(),
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
     ));
 
     let blockchain2_proxy = BlockchainProxy::from(&blockchain2);
@@ -218,7 +230,13 @@ async fn sync_ingredients() {
     let time = Arc::new(OffsetTime::new());
     let env1 = VolatileEnvironment::new(11).unwrap();
     let blockchain1 = Arc::new(RwLock::new(
-        Blockchain::new(env1.clone(), NetworkId::UnitAlbatross, time).unwrap(),
+        Blockchain::new(
+            env1.clone(),
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
     ));
 
     let producer = BlockProducer::new(signing_key(), voting_key());
@@ -265,7 +283,13 @@ async fn sync_ingredients() {
     let env2 = VolatileEnvironment::new(11).unwrap();
     let time = Arc::new(OffsetTime::new());
     let blockchain2 = Arc::new(RwLock::new(
-        Blockchain::new(env2.clone(), NetworkId::UnitAlbatross, time).unwrap(),
+        Blockchain::new(
+            env2.clone(),
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
     ));
 
     let net2: Arc<Network> =

@@ -10,7 +10,7 @@ use tokio_stream::wrappers::ReceiverStream;
 use beserial::{Deserialize, Serialize};
 use nimiq_block::{Block, MicroBlock, MicroBody, MicroHeader};
 use nimiq_block_production::BlockProducer;
-use nimiq_blockchain::{AbstractBlockchain, Blockchain, PushResult};
+use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainConfig, PushResult};
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis_builder::GenesisBuilder;
@@ -325,6 +325,7 @@ async fn push_same_tx_twice() {
     let blockchain = Arc::new(RwLock::new(
         Blockchain::with_genesis(
             env.clone(),
+            BlockchainConfig::default(),
             time,
             NetworkId::UnitAlbatross,
             genesis_info.block,
@@ -372,7 +373,13 @@ async fn valid_tx_not_in_blockchain() {
 
     // Create an empty blockchain
     let blockchain = Arc::new(RwLock::new(
-        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
     ));
 
     // Send 2 transactions
@@ -423,6 +430,7 @@ async fn push_tx_with_wrong_signature() {
     let blockchain = Arc::new(RwLock::new(
         Blockchain::with_genesis(
             env.clone(),
+            BlockchainConfig::default(),
             time,
             NetworkId::UnitAlbatross,
             genesis_info.block,
@@ -482,6 +490,7 @@ async fn mempool_get_txn_max_size() {
     let blockchain = Arc::new(RwLock::new(
         Blockchain::with_genesis(
             env.clone(),
+            BlockchainConfig::default(),
             time,
             NetworkId::UnitAlbatross,
             genesis_info.block,
@@ -551,6 +560,7 @@ async fn mempool_get_txn_ordered() {
     let blockchain = Arc::new(RwLock::new(
         Blockchain::with_genesis(
             env.clone(),
+            BlockchainConfig::default(),
             time,
             NetworkId::UnitAlbatross,
             genesis_info.block,
@@ -621,6 +631,7 @@ async fn push_tx_with_insufficient_balance() {
     let blockchain = Arc::new(RwLock::new(
         Blockchain::with_genesis(
             env.clone(),
+            BlockchainConfig::default(),
             time,
             NetworkId::UnitAlbatross,
             genesis_info.block,
@@ -681,6 +692,7 @@ async fn multiple_transactions_multiple_senders() {
     let blockchain = Arc::new(RwLock::new(
         Blockchain::with_genesis(
             env.clone(),
+            BlockchainConfig::default(),
             time,
             NetworkId::UnitAlbatross,
             genesis_info.block,
@@ -751,6 +763,7 @@ async fn mempool_tps() {
     let blockchain = Arc::new(RwLock::new(
         Blockchain::with_genesis(
             env.clone(),
+            BlockchainConfig::default(),
             time,
             NetworkId::UnitAlbatross,
             genesis_info.block,
@@ -827,6 +840,7 @@ async fn multiple_start_stop() {
     let blockchain = Arc::new(RwLock::new(
         Blockchain::with_genesis(
             env.clone(),
+            BlockchainConfig::default(),
             time,
             NetworkId::UnitAlbatross,
             genesis_info.block,
@@ -959,6 +973,7 @@ async fn mempool_update() {
     let blockchain = Arc::new(RwLock::new(
         Blockchain::with_genesis(
             env.clone(),
+            BlockchainConfig::default(),
             time,
             NetworkId::UnitAlbatross,
             genesis_info.block,
@@ -1075,6 +1090,7 @@ async fn mempool_update_aged_transaction() {
     let blockchain = Arc::new(RwLock::new(
         Blockchain::with_genesis(
             env.clone(),
+            BlockchainConfig::default(),
             time,
             NetworkId::UnitAlbatross,
             genesis_info.block,
@@ -1209,6 +1225,7 @@ async fn mempool_update_not_enough_balance() {
     let blockchain = Arc::new(RwLock::new(
         Blockchain::with_genesis(
             env.clone(),
+            BlockchainConfig::default(),
             time,
             NetworkId::UnitAlbatross,
             genesis_info.block,
@@ -1358,6 +1375,7 @@ async fn mempool_update_pruned_account() {
     let blockchain = Arc::new(RwLock::new(
         Blockchain::with_genesis(
             env.clone(),
+            BlockchainConfig::default(),
             time,
             NetworkId::UnitAlbatross,
             genesis_info.block,
@@ -1474,7 +1492,13 @@ async fn mempool_update_create_staker_twice() {
     log::debug!("Done generating adopted micro block");
 
     let blockchain = Arc::new(RwLock::new(
-        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
     ));
 
     // Create mempool and subscribe with a custom txn stream.
@@ -1572,7 +1596,13 @@ async fn mempool_basic_prioritization_control_tx() {
     let txns = vec![tx];
 
     let blockchain = Arc::new(RwLock::new(
-        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
     ));
 
     // Create mempool and subscribe with a custom txn stream.
@@ -1661,6 +1691,7 @@ async fn mempool_regular_and_control_tx() {
     let blockchain = Arc::new(RwLock::new(
         Blockchain::with_genesis(
             env.clone(),
+            BlockchainConfig::default(),
             time,
             NetworkId::UnitAlbatross,
             genesis_info.block,
@@ -1789,6 +1820,7 @@ async fn mempool_update_create_staker_non_existant_delegation_addr() {
     let blockchain = Arc::new(RwLock::new(
         Blockchain::with_genesis(
             env.clone(),
+            BlockchainConfig::default(),
             time,
             NetworkId::UnitAlbatross,
             genesis_info.block,
@@ -1854,6 +1886,7 @@ async fn applies_total_tx_size_limits() {
     let blockchain = Arc::new(RwLock::new(
         Blockchain::with_genesis(
             env.clone(),
+            BlockchainConfig::default(),
             Arc::new(OffsetTime::new()),
             NetworkId::UnitAlbatross,
             genesis_info.block,
@@ -1891,7 +1924,13 @@ async fn it_can_reject_invalid_vesting_contract_transaction() {
     let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(RwLock::new(
-        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
     ));
     let producer = BlockProducer::new(signing_key(), voting_key());
 

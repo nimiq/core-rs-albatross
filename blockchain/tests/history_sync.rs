@@ -3,7 +3,7 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 
 use nimiq_block_production::BlockProducer;
-use nimiq_blockchain::{AbstractBlockchain, Blockchain, PushResult};
+use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainConfig, PushResult};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
 use nimiq_primitives::policy::Policy;
@@ -29,7 +29,13 @@ fn history_sync_works() {
     let env = VolatileEnvironment::new(10).unwrap();
 
     let blockchain = Arc::new(RwLock::new(
-        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
     ));
 
     // Produce the blocks.
@@ -107,7 +113,13 @@ fn history_sync_works() {
     let env2 = VolatileEnvironment::new(10).unwrap();
 
     let blockchain2 = Arc::new(RwLock::new(
-        Blockchain::new(env2, NetworkId::UnitAlbatross, time).unwrap(),
+        Blockchain::new(
+            env2,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
     ));
 
     // Push blocks using history sync.
@@ -171,7 +183,13 @@ fn history_sync_works_with_micro_blocks() {
     let env = VolatileEnvironment::new(10).unwrap();
 
     let blockchain = Arc::new(RwLock::new(
-        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
     ));
 
     // Produce the blocks.
@@ -258,7 +276,13 @@ fn history_sync_works_with_micro_blocks() {
     let env2 = VolatileEnvironment::new(10).unwrap();
 
     let blockchain2 = Arc::new(RwLock::new(
-        Blockchain::new(env2, NetworkId::UnitAlbatross, time).unwrap(),
+        Blockchain::new(
+            env2,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
     ));
 
     // Push blocks using history sync.
@@ -325,7 +349,13 @@ fn history_sync_works_with_diverging_history() {
     let env = VolatileEnvironment::new(10).unwrap();
     let time = Arc::new(OffsetTime::new());
     let blockchain1 = Arc::new(RwLock::new(
-        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
     ));
 
     let num_macro_blocks = Policy::batches_per_epoch() as usize;
@@ -340,7 +370,13 @@ fn history_sync_works_with_diverging_history() {
     let env = VolatileEnvironment::new(10).unwrap();
     let time = Arc::new(OffsetTime::new());
     let blockchain2 = Arc::new(RwLock::new(
-        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
     ));
     fill_micro_blocks_with_txns(&producer, &blockchain2, 3, 1);
     assert_eq!(

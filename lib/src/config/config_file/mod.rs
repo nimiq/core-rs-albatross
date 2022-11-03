@@ -14,7 +14,7 @@ use nimiq_mempool::{
     filter::{MempoolFilter, MempoolRules},
 };
 use nimiq_network_libp2p::Multiaddr;
-use nimiq_peer_address::{address, protocol}; // TODO: probably not needed anymore
+use nimiq_peer_address::address;
 use nimiq_primitives::{coin::Coin, networks::NetworkId};
 
 use crate::{
@@ -142,32 +142,6 @@ pub struct Seed {
     pub address: Multiaddr,
 }
 
-#[derive(Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
-pub enum Protocol {
-    Wss,
-    Ws,
-    Dumb,
-    Rtc,
-}
-
-impl Default for Protocol {
-    fn default() -> Self {
-        Protocol::Ws
-    }
-}
-
-impl From<Protocol> for protocol::Protocol {
-    fn from(protocol: Protocol) -> Self {
-        match protocol {
-            Protocol::Dumb => Self::Dumb,
-            Protocol::Ws => Self::Ws,
-            Protocol::Wss => Self::Wss,
-            Protocol::Rtc => Self::Rtc,
-        }
-    }
-}
-
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TlsSettings {
@@ -178,7 +152,6 @@ pub struct TlsSettings {
 #[derive(Clone, Debug, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct ConsensusSettings {
-    #[serde(rename = "type")]
     #[serde(default)]
     pub sync_mode: SyncMode,
     #[serde(default)]
@@ -190,6 +163,8 @@ pub struct ConsensusSettings {
 #[serde(rename_all = "lowercase")]
 pub enum SyncMode {
     History,
+    Full,
+    Nano,
 }
 impl Default for SyncMode {
     fn default() -> Self {
@@ -207,6 +182,8 @@ impl FromStr for SyncMode {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s.to_lowercase().as_str() {
             "history" => Self::History,
+            "full" => Self::Full,
+            "nano" => Self::Nano,
             _ => return Err(SyncModeParseError(s.to_string())),
         })
     }
@@ -216,6 +193,8 @@ impl From<SyncMode> for config::SyncMode {
     fn from(sync_mode: SyncMode) -> Self {
         match sync_mode {
             SyncMode::History => Self::History,
+            SyncMode::Full => Self::Full,
+            SyncMode::Nano => Self::Nano,
         }
     }
 }

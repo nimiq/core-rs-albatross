@@ -1,7 +1,7 @@
 use beserial::Serialize;
 use nimiq_account::{Inherent, InherentType};
 use nimiq_block::MacroHeader;
-use nimiq_blockchain::Blockchain;
+use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_hash::{Blake2bHasher, Hasher};
 use nimiq_keys::Address;
@@ -18,7 +18,15 @@ use std::sync::Arc;
 fn it_can_create_batch_finalization_inherents() {
     let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap());
+    let blockchain = Arc::new(
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
+    );
 
     let staking_contract_address = blockchain.staking_contract_address();
 

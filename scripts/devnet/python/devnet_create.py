@@ -265,6 +265,7 @@ seed_nodes = [
 
 [consensus]
 network = "dev-albatross"
+sync_mode = "full"
 min_peers = {min_peers}
 
 [database]
@@ -317,6 +318,56 @@ port = {metrics_port}
     }
 
 
+def create_history_node(path, i, min_peers, enable_metrics):
+    path.mkdir(parents=True, exist_ok=True)
+
+    config_str = """[network]
+peer_key_file = "{path}/peer_key.dat"
+listen_addresses = [
+    "/ip4/127.0.0.1/tcp/{port}/ws",
+]
+seed_nodes = [
+    {{ address = "/ip4/127.0.0.1/tcp/9100/ws" }}
+]
+
+[consensus]
+network = "dev-albatross"
+min_peers = {min_peers}
+
+[database]
+path = "{path}"
+
+[log]
+level = "trace"
+timestamps = true
+
+{loki}[log.tags]
+libp2p_swarm = "debug"
+lock_api = "trace"
+
+""".format(
+        port=str(9000 + i),
+        path="temp-state/dev/history1".format(i+1),  # str(path),
+        min_peers=min_peers,
+        loki=loki_settings("validator{}".format(i+1)),
+    )
+
+    if enable_metrics:
+        config_str += """
+[metrics-server]
+bind="127.0.0.1"
+port = {metrics_port}
+""".format(metrics_port=str(9601 + i))
+
+    # write config
+    with (path / "client.toml").open("wt") as f:
+        f.write(config_str)
+
+    return {
+        "path": str(path)
+    }
+
+
 print("Writing devnet to: {}".format(output))
 print("Creating validators...")
 validators = []
@@ -327,6 +378,11 @@ for i in range(num_validators):
     validators.append(validator)
     print("Created validator: {}..".format(
         validator["voting_key"]["public_key"][0:16]))
+
+# Create history node
+create_history_node(
+    output / "history{:d}".format(0+1), 0, min_peers, args.metrics)
+print("Created history node")
 
 # Create seed node configuration
 create_seed(output / "seed", min_peers, args.metrics)

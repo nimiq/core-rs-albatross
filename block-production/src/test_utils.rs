@@ -8,7 +8,7 @@ use nimiq_block::{
     SkipBlockProof, TendermintIdentifier, TendermintProof, TendermintProposal, TendermintStep,
     TendermintVote,
 };
-use nimiq_blockchain::{AbstractBlockchain, Blockchain, PushError, PushResult};
+use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainConfig, PushError, PushResult};
 use nimiq_bls::{AggregateSignature, KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
 use nimiq_collections::BitSet;
 use nimiq_database::volatile::VolatileEnvironment;
@@ -40,7 +40,13 @@ impl TemporaryBlockProducer {
         let time = Arc::new(OffsetTime::new());
         let env = VolatileEnvironment::new(10).unwrap();
         let blockchain = Arc::new(RwLock::new(
-            Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+            Blockchain::new(
+                env,
+                BlockchainConfig::default(),
+                NetworkId::UnitAlbatross,
+                time,
+            )
+            .unwrap(),
         ));
 
         let signing_key = SchnorrKeyPair::from(

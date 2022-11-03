@@ -59,6 +59,7 @@ seed_nodes = [
 # Possible values: "main", "test", "dev", "test-albatross", "dev-albatross"
 # Default: "dev-albatross"
 #network = "main"
+sync_mode = "full"
 
 ##############################################################################
 #

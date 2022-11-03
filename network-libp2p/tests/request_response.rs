@@ -23,7 +23,7 @@ use nimiq_network_interface::{
 use nimiq_network_libp2p::{
     discovery::{
         behaviour::DiscoveryConfig,
-        peer_contacts::{PeerContact, Protocols, Services},
+        peer_contacts::{PeerContact, Services},
     },
     Config, Network, PeerId,
 };
@@ -270,7 +270,6 @@ fn network_config(address: Multiaddr) -> Config {
             update_interval: Duration::from_secs(60),
             min_recv_update_interval: Duration::from_secs(30),
             update_limit: 64,
-            protocols_filter: Protocols::all(),
             services_filter: Services::all(),
             min_send_update_interval: Duration::from_secs(30),
             house_keeping_interval: Duration::from_secs(60),

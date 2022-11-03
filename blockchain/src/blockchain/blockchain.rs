@@ -29,6 +29,8 @@ const BROADCAST_MAX_CAPACITY: usize = 256;
 pub struct Blockchain {
     // The environment of the blockchain.
     env: Environment,
+    // Blockchain configuration options
+    pub config: BlockchainConfig,
     // The network ID. It determines if this is the mainnet or one of the testnets.
     pub network_id: NetworkId,
     // The OffsetTime struct. It allows us to query the current time.
@@ -56,23 +58,44 @@ pub struct Blockchain {
     pub(crate) genesis_timestamp: u64,
 }
 
+/// Contains various blockchain configuration knobs
+pub struct BlockchainConfig {
+    // Flag indicating if the full history should be stored
+    pub keep_history: bool,
+}
+
+impl Default for BlockchainConfig {
+    fn default() -> Self {
+        Self { keep_history: true }
+    }
+}
+
 /// Implements methods to start a Blockchain.
 impl Blockchain {
     /// Creates a new blockchain from a given environment and network ID.
     pub fn new(
         env: Environment,
+        config: BlockchainConfig,
         network_id: NetworkId,
         time: Arc<OffsetTime>,
     ) -> Result<Self, BlockchainError> {
         let network_info = NetworkInfo::from_network_id(network_id);
         let genesis_block = network_info.genesis_block::<Block>();
         let genesis_accounts = network_info.genesis_accounts();
-        Self::with_genesis(env, time, network_id, genesis_block, genesis_accounts)
+        Self::with_genesis(
+            env,
+            config,
+            time,
+            network_id,
+            genesis_block,
+            genesis_accounts,
+        )
     }
 
     /// Creates a new blockchain with the given genesis block.
     pub fn with_genesis(
         env: Environment,
+        config: BlockchainConfig,
         time: Arc<OffsetTime>,
         network_id: NetworkId,
         genesis_block: Block,
@@ -84,6 +107,7 @@ impl Blockchain {
         Ok(match chain_store.get_head(None) {
             Some(head_hash) => Blockchain::load(
                 env,
+                config,
                 chain_store,
                 history_store,
                 time,
@@ -93,6 +117,7 @@ impl Blockchain {
             )?,
             None => Blockchain::init(
                 env,
+                config,
                 chain_store,
                 history_store,
                 time,
@@ -106,6 +131,7 @@ impl Blockchain {
     /// Loads a blockchain from given inputs.
     fn load(
         env: Environment,
+        config: BlockchainConfig,
         chain_store: ChainStore,
         history_store: HistoryStore,
         time: Arc<OffsetTime>,
@@ -198,6 +224,7 @@ impl Blockchain {
 
         Ok(Blockchain {
             env,
+            config,
             network_id,
             time,
             notifier: tx,
@@ -227,6 +254,7 @@ impl Blockchain {
     /// Initializes a blockchain.
     fn init(
         env: Environment,
+        config: BlockchainConfig,
         chain_store: ChainStore,
         history_store: HistoryStore,
         time: Arc<OffsetTime>,
@@ -259,6 +287,7 @@ impl Blockchain {
 
         Ok(Blockchain {
             env,
+            config,
             network_id,
             time,
             notifier: tx,
