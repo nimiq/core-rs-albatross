@@ -5,7 +5,7 @@ use log::error;
 
 use beserial::{Deserialize, Serialize, SerializeWithLength, WriteBytesExt};
 use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
-use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
+use nimiq_hash::{Blake2bHash, HashOutput, Hasher, SerializeContent};
 
 use crate::error::MerkleRadixTrieError;
 use crate::key_nibbles::KeyNibbles;
@@ -17,6 +17,7 @@ use crate::key_nibbles::KeyNibbles;
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Serialize, Deserialize)]
 pub struct TrieNode {
     pub key: KeyNibbles,
+    // The root data is not included when the `TrieNode` is hashed.
     pub root_data: Option<RootData>,
     #[beserial(len_type(u16))]
     pub serialized_value: Option<Vec<u8>>,
@@ -35,7 +36,14 @@ pub struct RootData {
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Serialize, Deserialize)]
 pub struct TrieNodeChild {
     pub suffix: KeyNibbles,
+    // An all-zero hash (the `Default::default()` value) marks an uncomputed child hash.
     pub hash: Blake2bHash,
+}
+
+impl TrieNodeChild {
+    fn has_hash(&self) -> bool {
+        self.hash != Default::default()
+    }
 }
 
 pub const NO_CHILDREN: [Option<TrieNodeChild>; 16] = [
@@ -202,6 +210,23 @@ impl TrieNode {
     pub fn iter_children_mut(&mut self) -> IterMut {
         self.into_iter()
     }
+
+    fn is_complete(&self) -> bool {
+        self.iter_children().all(|child| child.has_hash())
+    }
+
+    pub fn hash_if_complete<H: HashOutput>(&self) -> Option<H> {
+        self.is_complete().then(|| {
+            let mut hasher = H::Builder::default();
+            self.serialize_content(&mut hasher).unwrap();
+            hasher.finish()
+        })
+    }
+
+    pub fn hash_assert_complete<H: HashOutput>(&self) -> H {
+        self.hash_if_complete()
+            .expect("can only hash TrieNode with complete information about children")
+    }
 }
 
 impl SerializeContent for TrieNode {
@@ -218,8 +243,6 @@ impl SerializeContent for TrieNode {
         Ok(result)
     }
 }
-
-impl Hash for TrieNode {}
 
 impl IntoDatabaseValue for TrieNode {
     fn database_byte_size(&self) -> usize {
@@ -321,6 +344,7 @@ impl<'a> IntoIterator for &'a mut TrieNode {
 
 #[cfg(test)]
 mod tests {
+    use nimiq_hash::Hash;
     use nimiq_test_log::test;
 
     use super::*;
