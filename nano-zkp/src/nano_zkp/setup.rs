@@ -28,9 +28,7 @@ impl NanoZKP {
     /// order is absolutely necessary because each circuit needs a verifying key from the circuit "below"
     /// it. Note that the parameter generation can take longer than one hour, even two on some computers.
     pub fn setup<R: Rng + CryptoRng>(mut rng: R) -> Result<(), NanoZKPError> {
-        eprintln!("I'm in setup");
         if NanoZKP::all_files_created() {
-            eprintln!("I'm leaving setup");
             return Ok(());
         }
 

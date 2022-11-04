@@ -12,8 +12,7 @@ use parking_lot::RwLock;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_database::{Database, Environment, ReadTransaction, WriteTransaction};
 use nimiq_nano_zkp::{NanoZKP, NanoZKPError};
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
-use tokio::process::ChildStdout;
+use tokio::io::AsyncReadExt;
 use tokio::sync::broadcast::Receiver as BroadcastReceiver;
 use tokio::{io::AsyncWriteExt, process::Command};
 
@@ -151,6 +150,7 @@ pub async fn launch_generate_new_proof(
         Some(path) => path,
         None => std::env::current_exe()?,
     };
+
     let mut child = Command::new(path)
         .arg("--prove")
         .stdin(Stdio::piped())
@@ -164,10 +164,13 @@ pub async fn launch_generate_new_proof(
         .write_all(&proof_input.serialize_to_vec())
         .await?;
 
+    let mut output = child.stdout.take().unwrap();
+    let mut buffer = vec![];
+
     tokio::select! {
-        _ = child.wait() => {
-            let output = child.stdout.take().unwrap();
-            parse_proof_generation_output(output).await
+        _ = output.read_to_end(&mut buffer) => {
+            let _ = child.wait().await;
+            parse_proof_generation_output(buffer).await
         }
         _ = recv.recv() => {
             child.kill().await?;
@@ -177,32 +180,18 @@ pub async fn launch_generate_new_proof(
 }
 
 async fn parse_proof_generation_output(
-    output: ChildStdout,
+    output: Vec<u8>,
 ) -> Result<ZKPState, ZKProofGenerationError> {
-    let mut reader = BufReader::new(output);
     // We read until the two delimiter bytes.
-    // `prev_byte` stores the last read byte.
-    let mut prev_byte = 0;
-    loop {
-        // If the previous byte is not the first delimiter byte, we skip until we encounter it.
-        if prev_byte != PROOF_GENERATION_OUTPUT_DELIMITER[0] {
-            let mut buffer = vec![];
-            reader
-                .read_until(PROOF_GENERATION_OUTPUT_DELIMITER[0], &mut buffer)
-                .await?;
-        }
-
-        // Then attempt to read another byte.
-        prev_byte = reader.read_u8().await?;
-        // If the byte is the expected second byte, break.
-        if prev_byte == PROOF_GENERATION_OUTPUT_DELIMITER[1] {
+    let mut mid = 0;
+    for i in 0..output.len() - 2 {
+        if output[i..i + 2] == PROOF_GENERATION_OUTPUT_DELIMITER {
+            mid = i + 2;
             break;
         }
     }
-    let mut buffer = vec![];
-    reader.read_to_end(&mut buffer).await?;
 
-    Deserialize::deserialize_from_vec(&buffer)?
+    Deserialize::deserialize_from_vec(&output[mid..])?
 }
 
 /// DB for storing and retrieving the ZK Proof.

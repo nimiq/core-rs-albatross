@@ -47,7 +47,7 @@ fn it_serializes_and_deserializes_to_bytes_zk_proof() {
 #[test]
 fn it_serializes_and_deserializes_zkp_state() {
     let state = ZKPState {
-        latest_pks: vec![Default::default()],
+        latest_pks: vec![Default::default(); 512],
         latest_header_hash: Blake2bHash::default(),
         latest_block_number: policy::BLOCKS_PER_EPOCH,
         latest_proof: Some(Proof::default()),
