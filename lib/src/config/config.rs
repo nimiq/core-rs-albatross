@@ -542,6 +542,10 @@ pub struct ClientConfig {
     #[builder(default)]
     pub consensus: ConsensusConfig,
 
+    /// ZKP propagation
+    #[builder(default)]
+    pub zkp_propagation: bool,
+
     /// The Nimiq network the client should connect to. Usually this should be either `Test` or
     /// `Main` for the Nimiq 1.0 networks. For Albatross there is currently only `TestAlbatross`
     /// and `DevAlbatross` available. Since Albatross is still in development at time of writing,
@@ -746,6 +750,7 @@ impl ClientConfigBuilder {
             self.zkp = Some(ZKPConfig {
                 prover_active: zkp_settings.prover_active,
                 setup_keys_path,
+                zkp_propagation: zkp_settings.zkp_propagation,
             });
         }
 
@@ -850,6 +855,9 @@ pub struct ZKPConfig {
 
     /// ZKP prover path for verifying and proving keys.
     pub setup_keys_path: PathBuf,
+
+    /// ZKP propagation
+    pub zkp_propagation: bool,
 }
 
 impl Default for ZKPConfig {
@@ -857,6 +865,7 @@ impl Default for ZKPConfig {
         ZKPConfig {
             prover_active: false,
             setup_keys_path: PathBuf::from(".zkp"),
+            zkp_propagation: false,
         }
     }
 }

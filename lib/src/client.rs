@@ -131,7 +131,7 @@ impl ClientInner {
             identity_keypair.public().to_peer_id().to_base58()
         );
 
-        let services = match config.consensus.sync_mode {
+        let mut services = match config.consensus.sync_mode {
             // Services provided by full history nodes
             crate::config::config::SyncMode::History => {
                 log::info!("Client configured as a history node");
@@ -148,6 +148,11 @@ impl ClientInner {
             }
             crate::config::config::SyncMode::Nano => Services::empty(),
         };
+
+        // TODO: This flag should be used internally to, apart from announcing the service, properly control the mechanism
+        if config.zkp_propagation {
+            services |= Services::CHAIN_PROOF;
+        }
 
         // Generate peer contact from identity keypair and services/protocols
         let mut peer_contact = PeerContact::new(

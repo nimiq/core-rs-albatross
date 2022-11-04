@@ -461,4 +461,6 @@ pub struct ZKPSettings {
     pub prover_active: bool,
     #[serde(default)]
     pub setup_keys_path: Option<String>,
+    #[serde(default)]
+    pub zkp_propagation: bool,
 }
