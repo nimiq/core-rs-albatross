@@ -222,7 +222,7 @@ fn ark_to_bserial_error(error: ArkSerializingError) -> BeserialSerializingError 
 }
 
 /// The input to the proof generation process.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct ProofInput {
     pub block: MacroBlock,
     pub latest_pks: Vec<G2MNT6>,

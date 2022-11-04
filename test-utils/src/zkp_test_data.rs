@@ -34,5 +34,5 @@ pub fn zkp_test_exe() -> std::path::PathBuf {
     path.set_extension(std::env::consts::EXE_EXTENSION);
 
     assert!(path.exists());
-    return path;
+    path
 }
