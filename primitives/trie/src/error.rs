@@ -6,8 +6,6 @@ use thiserror::Error;
 pub enum MerkleRadixTrieError {
     #[error("Prefix doesn't match node's key.")]
     WrongPrefix,
-    #[error("Tried to query the child of a leaf node. Leaf nodes don't have children.")]
-    LeavesHaveNoChildren,
     #[error("Tried to query the value of a branch node. Branch nodes don't have a value.")]
     BranchesHaveNoValue,
     #[error("Tried to query a child that does not exist.")]

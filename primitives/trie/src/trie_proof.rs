@@ -41,7 +41,7 @@ impl TrieProof {
         let mut nodes = Vec::new();
 
         for node in &self.nodes {
-            if node.has_value() {
+            if node.serialized_value.is_some() {
                 nodes.push(node);
             }
         }
@@ -72,27 +72,19 @@ impl TrieProof {
                 while let Some(child) = children.pop() {
                     // If the node is a prefix of the child node, we need to verify that it is a
                     // correct child node.
-                    if node.key().is_prefix_of(child.key()) {
+                    if node.key.is_prefix_of(&child.key) {
                         // Get the hash and key of the child from the parent node.
-                        let child_hash = match node.get_child_hash(child.key()) {
-                            Ok(v) => v,
-                            Err(_) => {
-                                return false;
-                            }
-                        };
-
-                        let child_key = match node.get_child_key(child.key()) {
-                            Ok(v) => v,
-                            Err(_) => {
-                                return false;
-                            }
-                        };
+                        let (child_hash, child_key) =
+                            match (node.child(&child.key), node.child_key(&child.key)) {
+                                (Ok(c), Ok(k)) => (&c.hash, k),
+                                _ => return false,
+                            };
 
                         // The child node must match the hash and the key, otherwise the proof is
                         // invalid.
-                        if child_hash != &child.hash::<Blake2bHash>() || &child_key != child.key() {
+                        if child_hash != &child.hash::<Blake2bHash>() || child_key != child.key {
                             error!("The child node doesn't match the given hash and/or key. Got hash {}, child has hash {}. Got key {}, child has key {}.",
-                                   child_hash, child.hash::<Blake2bHash>(), child_key, child.key());
+                                   child_hash, child.hash::<Blake2bHash>(), child_key, child.key);
                             return false;
                         }
                     }
@@ -116,10 +108,10 @@ impl TrieProof {
 
         let root = children.pop().unwrap();
 
-        if root.key() != &KeyNibbles::ROOT {
+        if root.key != KeyNibbles::ROOT {
             error!(
                 "The root node doesn't have the correct key! It has key {}.",
-                root.key()
+                root.key,
             );
             return false;
         }
@@ -169,25 +161,19 @@ mod tests {
         let l4 = TrieNode::new_leaf(key_l4.clone(), 4);
 
         let key_b2: KeyNibbles = "002".parse().unwrap();
-        let b2 = TrieNode::new_branch(key_b2.clone())
-            .put_child(&key_l3, l3.hash())
-            .unwrap()
-            .put_child(&key_l4, l4.hash())
-            .unwrap();
+        let mut b2 = TrieNode::new_empty(key_b2.clone());
+        b2.put_child(&key_l3, l3.hash()).unwrap();
+        b2.put_child(&key_l4, l4.hash()).unwrap();
 
         let key_b1: KeyNibbles = "00".parse().unwrap();
-        let b1 = TrieNode::new_branch(key_b1.clone())
-            .put_child(&key_l1, l1.hash())
-            .unwrap()
-            .put_child(&key_b2, b2.hash())
-            .unwrap()
-            .put_child(&key_l2, l2.hash())
-            .unwrap();
+        let mut b1 = TrieNode::new_empty(key_b1.clone());
+        b1.put_child(&key_l1, l1.hash()).unwrap();
+        b1.put_child(&key_b2, b2.hash()).unwrap();
+        b1.put_child(&key_l2, l2.hash()).unwrap();
 
         let key_r: KeyNibbles = "".parse().unwrap();
-        let r = TrieNode::new_branch(key_r)
-            .put_child(&key_b1, b1.hash())
-            .unwrap();
+        let mut r = TrieNode::new_empty(key_r);
+        r.put_child(&key_b1, b1.hash()).unwrap();
 
         let root_hash = r.hash::<Blake2bHash>();
         let wrong_root_hash = ":-E".hash::<Blake2bHash>();
@@ -247,19 +233,14 @@ mod tests {
         assert!(!proof3.verify(&wrong_root_hash));
 
         // Wrong proofs. Nodes with wrong hash.
-        let b2_wrong = TrieNode::new_branch(key_b2.clone())
-            .put_child(&key_l3, ":-[".hash())
-            .unwrap()
-            .put_child(&key_l4, l4.hash())
-            .unwrap();
+        let mut b2_wrong = TrieNode::new_empty(key_b2.clone());
+        b2_wrong.put_child(&key_l3, ":-[".hash()).unwrap();
+        b2_wrong.put_child(&key_l4, l4.hash()).unwrap();
 
-        let b1_wrong = TrieNode::new_branch(key_b1.clone())
-            .put_child(&key_l1, l1.hash())
-            .unwrap()
-            .put_child(&key_b2, ":-[".hash())
-            .unwrap()
-            .put_child(&key_l2, l2.hash())
-            .unwrap();
+        let mut b1_wrong = TrieNode::new_empty(key_b1.clone());
+        b1_wrong.put_child(&key_l1, l1.hash()).unwrap();
+        b1_wrong.put_child(&key_b2, ":-[".hash()).unwrap();
+        b1_wrong.put_child(&key_l2, l2.hash()).unwrap();
 
         let proof1 = TrieProof::new(vec![
             l1.clone(),
@@ -289,20 +270,15 @@ mod tests {
 
         // Wrong proofs. Nodes with wrong key.
         let key_l3_wrong: KeyNibbles = "00201".parse().unwrap();
-        let b2_wrong = TrieNode::new_branch(key_b2)
-            .put_child(&key_l3_wrong, l3.hash())
-            .unwrap()
-            .put_child(&key_l4, l4.hash())
-            .unwrap();
+        let mut b2_wrong = TrieNode::new_empty(key_b2);
+        b2_wrong.put_child(&key_l3_wrong, l3.hash()).unwrap();
+        b2_wrong.put_child(&key_l4, l4.hash()).unwrap();
 
         let key_b2_wrong: KeyNibbles = "003".parse().unwrap();
-        let b1_wrong = TrieNode::new_branch(key_b1)
-            .put_child(&key_l1, l1.hash())
-            .unwrap()
-            .put_child(&key_b2_wrong, b2.hash())
-            .unwrap()
-            .put_child(&key_l2, l2.hash())
-            .unwrap();
+        let mut b1_wrong = TrieNode::new_empty(key_b1);
+        b1_wrong.put_child(&key_l1, l1.hash()).unwrap();
+        b1_wrong.put_child(&key_b2_wrong, b2.hash()).unwrap();
+        b1_wrong.put_child(&key_l2, l2.hash()).unwrap();
 
         let proof1 = TrieProof::new(vec![
             l1.clone(),
