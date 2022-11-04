@@ -61,6 +61,9 @@ impl ZKPState {
     }
 }
 
+/// The serialization of the ZKPState is unsafe over the network.
+/// It uses unchecked serialization of elliptic curve points for performance reasons.
+/// We only invoke it when transferring data from the proof generation process.
 impl Serialize for ZKPState {
     fn serialize<W: beserial::WriteBytesExt>(
         &self,
@@ -71,8 +74,10 @@ impl Serialize for ZKPState {
             u16::try_from(self.latest_pks.len()).map_err(|_| SerializingError::Overflow)?;
         size += Serialize::serialize(&count, writer)?;
         for pk in self.latest_pks.iter() {
-            CanonicalSerialize::serialize(pk, writer.by_ref()).map_err(ark_to_bserial_error)?;
-            size += CanonicalSerialize::serialized_size(pk);
+            // Unchecked serialization happening here.
+            CanonicalSerialize::serialize_unchecked(pk, writer.by_ref())
+                .map_err(ark_to_bserial_error)?;
+            size += CanonicalSerialize::uncompressed_size(pk);
         }
         size += Serialize::serialize(&self.latest_header_hash, writer)?;
         size += Serialize::serialize(&self.latest_block_number, writer)?;
@@ -86,7 +91,7 @@ impl Serialize for ZKPState {
     fn serialized_size(&self) -> usize {
         let mut size = 2; // count as u16
         for pk in self.latest_pks.iter() {
-            size += CanonicalSerialize::serialized_size(pk);
+            size += CanonicalSerialize::uncompressed_size(pk);
         }
         size += Serialize::serialized_size(&self.latest_header_hash);
         size += Serialize::serialized_size(&self.latest_block_number);
@@ -98,6 +103,9 @@ impl Serialize for ZKPState {
     }
 }
 
+/// The deserialization of the ZKPState is unsafe over the network.
+/// It uses unchecked deserialization of elliptic curve points for performance reasons.
+/// We only invoke it when transferring data from the proof generation process.
 impl Deserialize for ZKPState {
     fn deserialize<R: beserial::ReadBytesExt>(
         reader: &mut R,
@@ -105,8 +113,10 @@ impl Deserialize for ZKPState {
         let count: u16 = Deserialize::deserialize(reader)?;
         let mut latest_pks: Vec<G2MNT6> = Vec::with_capacity(count as usize);
         for _ in 0..count {
+            // Unchecked deserialization happening here.
             latest_pks.push(
-                CanonicalDeserialize::deserialize(reader.by_ref()).map_err(ark_to_bserial_error)?,
+                CanonicalDeserialize::deserialize_unchecked(reader.by_ref())
+                    .map_err(ark_to_bserial_error)?,
             );
         }
         let latest_header_hash = Deserialize::deserialize(reader)?;
@@ -222,7 +232,7 @@ fn ark_to_bserial_error(error: ArkSerializingError) -> BeserialSerializingError 
 }
 
 /// The input to the proof generation process.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct ProofInput {
     pub block: MacroBlock,
     pub latest_pks: Vec<G2MNT6>,
@@ -231,6 +241,9 @@ pub struct ProofInput {
     pub genesis_state: Vec<u8>,
 }
 
+/// The serialization of the ProofInput is unsafe over the network.
+/// It uses unchecked serialization of elliptic curve points for performance reasons.
+/// We only invoke it when transferring data to the proof generation process.
 impl Serialize for ProofInput {
     fn serialize<W: beserial::WriteBytesExt>(
         &self,
@@ -242,8 +255,10 @@ impl Serialize for ProofInput {
             u16::try_from(self.latest_pks.len()).map_err(|_| SerializingError::Overflow)?;
         size += Serialize::serialize(&count, writer)?;
         for pk in self.latest_pks.iter() {
-            CanonicalSerialize::serialize(pk, writer.by_ref()).map_err(ark_to_bserial_error)?;
-            size += CanonicalSerialize::serialized_size(pk);
+            // Unchecked serialization happening here.
+            CanonicalSerialize::serialize_unchecked(pk, writer.by_ref())
+                .map_err(ark_to_bserial_error)?;
+            size += CanonicalSerialize::uncompressed_size(pk);
         }
 
         size += Serialize::serialize(&self.latest_header_hash, writer)?;
@@ -264,7 +279,7 @@ impl Serialize for ProofInput {
         let mut size = Serialize::serialized_size(&self.block);
         size += 2; // count as u16
         for pk in self.latest_pks.iter() {
-            size += CanonicalSerialize::serialized_size(pk);
+            size += CanonicalSerialize::uncompressed_size(pk);
         }
 
         size += Serialize::serialized_size(&self.latest_header_hash);
@@ -280,6 +295,9 @@ impl Serialize for ProofInput {
     }
 }
 
+/// The deserialization of the ProofInput is unsafe over the network.
+/// It uses unchecked deserialization of elliptic curve points for performance reasons.
+/// We only invoke it when transferring data to the proof generation process.
 impl Deserialize for ProofInput {
     fn deserialize<R: beserial::ReadBytesExt>(
         reader: &mut R,
@@ -289,8 +307,10 @@ impl Deserialize for ProofInput {
         let count: u16 = Deserialize::deserialize(reader)?;
         let mut latest_pks: Vec<G2MNT6> = Vec::with_capacity(count as usize);
         for _ in 0..count {
+            // Unchecked deserialization happening here.
             latest_pks.push(
-                CanonicalDeserialize::deserialize(reader.by_ref()).map_err(ark_to_bserial_error)?,
+                CanonicalDeserialize::deserialize_unchecked(reader.by_ref())
+                    .map_err(ark_to_bserial_error)?,
             );
         }
 

@@ -1,4 +1,4 @@
-use std::io;
+use std::io::{self, BufReader, BufWriter};
 
 use crate::proof_utils::generate_new_proof;
 use crate::types::{ProofInput, PROOF_GENERATION_OUTPUT_DELIMITER};
@@ -9,7 +9,7 @@ use crate::types::ZKProofGenerationError;
 
 pub async fn prover_main() -> Result<(), SerializingError> {
     // Read proof input from stdin.
-    let mut stdin = io::stdin();
+    let mut stdin = BufReader::new(io::stdin());
     let proof_input: Result<ProofInput, _> = Deserialize::deserialize(&mut stdin);
 
     // Then generate proof.
@@ -23,14 +23,12 @@ pub async fn prover_main() -> Result<(), SerializingError> {
         ),
         Err(e) => Err(ZKProofGenerationError::from(e)),
     };
-
     log::info!("Finished proof generation with result {:?}", result);
 
     // Then print delimiter followed by the serialized result.
-    let mut stdout = io::stdout();
+    let mut stdout = BufWriter::new(io::stdout());
     stdout.write_all(&PROOF_GENERATION_OUTPUT_DELIMITER)?;
 
     Serialize::serialize(&result, &mut stdout)?;
-
     Ok(())
 }

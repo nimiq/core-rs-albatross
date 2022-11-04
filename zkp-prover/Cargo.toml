@@ -56,9 +56,9 @@ nimiq-utils = { path = "../utils", features = [
     "time",
 ] }
 nimiq-validator-network = { path = "../validator-network" }
+hex = "0.4"
 
 [dev-dependencies]
-hex = "0.4"
 
 nimiq-block-production = { path = "../block-production" }
 nimiq-bls = { path = "../bls" }

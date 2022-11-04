@@ -100,7 +100,7 @@ impl NanoZKP {
                 continue;
             }
 
-            println!("generating pk_tree_5_{}", i);
+            eprintln!("generating pk_tree_5_{}", i);
 
             NanoZKP::prove_pk_tree_leaf(
                 rng,
@@ -120,7 +120,7 @@ impl NanoZKP {
                 continue;
             }
 
-            println!("generating pk_tree_4_{}", i);
+            eprintln!("generating pk_tree_4_{}", i);
 
             NanoZKP::prove_pk_tree_node_mnt6(
                 rng,
@@ -141,7 +141,7 @@ impl NanoZKP {
                 continue;
             }
 
-            println!("generating pk_tree_3_{}", i);
+            eprintln!("generating pk_tree_3_{}", i);
 
             NanoZKP::prove_pk_tree_node_mnt4(
                 rng,
@@ -162,7 +162,7 @@ impl NanoZKP {
                 continue;
             }
 
-            println!("generating pk_tree_2_{}", i);
+            eprintln!("generating pk_tree_2_{}", i);
 
             NanoZKP::prove_pk_tree_node_mnt6(
                 rng,
@@ -183,7 +183,7 @@ impl NanoZKP {
                 continue;
             }
 
-            println!("generating pk_tree_1_{}", i);
+            eprintln!("generating pk_tree_1_{}", i);
 
             NanoZKP::prove_pk_tree_node_mnt4(
                 rng,
@@ -200,7 +200,7 @@ impl NanoZKP {
 
         // Start generating proof for PKTree level 0.
         if !(proof_caching && Path::new("proofs/pk_tree_0_0.bin").exists()) {
-            println!("generating pk_tree_0_0");
+            eprintln!("generating pk_tree_0_0");
 
             NanoZKP::prove_pk_tree_node_mnt6(
                 rng,
@@ -217,7 +217,7 @@ impl NanoZKP {
 
         // Start generating proof for Macro Block.
         if !(proof_caching && Path::new("proofs/macro_block.bin").exists()) {
-            println!("generating macro_block");
+            eprintln!("generating macro_block");
 
             NanoZKP::prove_macro_block(
                 rng,
@@ -233,7 +233,7 @@ impl NanoZKP {
 
         // Start generating proof for Macro Block Wrapper.
         if !(proof_caching && Path::new("proofs/macro_block_wrapper.bin").exists()) {
-            println!("generating macro_block_wrapper");
+            eprintln!("generating macro_block_wrapper");
 
             NanoZKP::prove_macro_block_wrapper(
                 rng,
@@ -247,7 +247,7 @@ impl NanoZKP {
 
         // Start generating proof for Merger.
         if !(proof_caching && Path::new("proofs/merger.bin").exists()) {
-            println!("generating merger");
+            eprintln!("generating merger");
 
             NanoZKP::prove_merger(
                 rng,
@@ -261,7 +261,7 @@ impl NanoZKP {
         }
 
         // Start generating proof for Merger Wrapper.
-        println!("generating merger wrapper");
+        eprintln!("generating merger wrapper");
 
         let proof = NanoZKP::prove_merger_wrapper(
             rng,

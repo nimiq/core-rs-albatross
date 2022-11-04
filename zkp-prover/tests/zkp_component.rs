@@ -1,5 +1,4 @@
 use beserial::Deserialize;
-use beserial::Serialize;
 use futures::StreamExt;
 use nimiq_test_utils::blockchain_with_rng::produce_macro_blocks_with_rng;
 use nimiq_test_utils::zkp_test_data::zkp_test_exe;
@@ -158,7 +157,7 @@ async fn can_produce_two_consecutive_valid_zk_proofs() {
         env,
     )
     .await;
-    let zkp_prover_proxy = zkp_prover.proxy();
+
     tokio::spawn(zkp_prover);
 
     assert_eq!(blockchain.read().block_number(), 0);
@@ -174,20 +173,14 @@ async fn can_produce_two_consecutive_valid_zk_proofs() {
         &mut get_base_seed(),
     );
 
-    log::info!("going to wait for the 1st proof");
+    log::info!("Going to wait for the 1st proof");
 
     // Waits for the proof generation and verifies the proof.
     let (proof, _) = zk_proofs_stream.as_mut().next().await.unwrap();
     assert!(
         validate_proof(&blockchain, &proof),
-        "Generated ZK proof for the second block should be valid"
+        "Generated ZK proof for the first block should be valid"
     );
-    let state = zkp_prover_proxy.get_zkp_state();
-
-    log::error!("State {:?}", state);
-    let zkp = hex::encode(proof.serialize_to_vec());
-    log::error!("State serialized and in hexcode {:?}", state);
-    log::error!("ZKP serialized and in hexcode {:?}", zkp);
 
     produce_macro_blocks_with_rng(
         &producer,
@@ -196,18 +189,11 @@ async fn can_produce_two_consecutive_valid_zk_proofs() {
         &mut get_base_seed(),
     );
 
-    log::info!("going to wait for the 2nd proof");
+    log::info!("Going to wait for the 2nd proof");
 
     let (proof, _) = zk_proofs_stream.as_mut().next().await.unwrap();
     assert!(
         validate_proof(&blockchain, &proof),
         "Generated ZK proof for the second block should be valid"
     );
-
-    let state = zkp_prover_proxy.get_zkp_state();
-
-    log::error!("State {:?}", state);
-    let zkp = hex::encode(proof.serialize_to_vec());
-    log::error!("State serialized and in hexcode {:?}", state);
-    log::error!("ZKP serialized and in hexcode {:?}", zkp);
 }
