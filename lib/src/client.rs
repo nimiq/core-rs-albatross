@@ -147,6 +147,7 @@ impl ClientInner {
             Arc::clone(&blockchain),
             Arc::clone(&network),
             zkp_prover_active,
+            None,
             environment.clone(),
         )
         .await;

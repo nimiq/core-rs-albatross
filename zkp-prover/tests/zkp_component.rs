@@ -2,6 +2,7 @@ use beserial::Deserialize;
 use beserial::Serialize;
 use futures::StreamExt;
 use nimiq_test_utils::blockchain_with_rng::produce_macro_blocks_with_rng;
+use nimiq_test_utils::zkp_test_data::zkp_test_exe;
 use nimiq_test_utils::zkp_test_data::ZKPROOF_SERIALIZED_IN_HEX;
 use nimiq_zkp_prover::types::ZKProof;
 use parking_lot::RwLock;
@@ -46,9 +47,15 @@ async fn builds_valid_genesis_proof() {
 
     let env = VolatileEnvironment::new(10).unwrap();
 
-    let zkp_prover = ZKPComponent::new(Arc::clone(&blockchain), Arc::clone(&network), false, env)
-        .await
-        .proxy();
+    let zkp_prover = ZKPComponent::new(
+        Arc::clone(&blockchain),
+        Arc::clone(&network),
+        false,
+        Some(zkp_test_exe()),
+        env,
+    )
+    .await
+    .proxy();
 
     assert!(
         validate_proof(&blockchain, &zkp_prover.get_zkp_state().into()),
@@ -82,6 +89,7 @@ async fn loads_valid_zkp_state_from_db() {
         Arc::clone(&blockchain),
         Arc::clone(&network),
         false,
+        Some(zkp_test_exe()),
         proof_store.env,
     )
     .await;
@@ -116,6 +124,7 @@ async fn does_not_load_invalid_zkp_state_from_db() {
         Arc::clone(&blockchain),
         Arc::clone(&network),
         false,
+        Some(zkp_test_exe()),
         proof_store.env,
     )
     .await;
@@ -141,8 +150,14 @@ async fn can_produce_two_consecutive_valid_zk_proofs() {
 
     let env = VolatileEnvironment::new(10).unwrap();
 
-    let zkp_prover =
-        ZKPComponent::new(Arc::clone(&blockchain), Arc::clone(&network), true, env).await;
+    let zkp_prover = ZKPComponent::new(
+        Arc::clone(&blockchain),
+        Arc::clone(&network),
+        true,
+        Some(zkp_test_exe()),
+        env,
+    )
+    .await;
     let zkp_prover_proxy = zkp_prover.proxy();
     tokio::spawn(zkp_prover);
 

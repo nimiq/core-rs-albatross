@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::{process::Stdio, sync::Arc};
 
 use ark_groth16::Proof;
@@ -141,11 +142,16 @@ pub fn generate_new_proof(
     Err(ZKProofGenerationError::InvalidBlock)
 }
 
-pub(crate) async fn launch_generate_new_proof(
+pub async fn launch_generate_new_proof(
     mut recv: BroadcastReceiver<()>,
     proof_input: ProofInput,
+    prover_path: Option<PathBuf>,
 ) -> Result<ZKPState, ZKProofGenerationError> {
-    let mut child = Command::new(std::env::current_exe()?)
+    let path = match prover_path {
+        Some(path) => path,
+        None => std::env::current_exe()?,
+    };
+    let mut child = Command::new(path)
         .arg("--prove")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

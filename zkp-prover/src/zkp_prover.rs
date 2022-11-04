@@ -1,5 +1,6 @@
 use std::error::Error;
 use std::future;
+use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -41,6 +42,7 @@ impl<N: Network> ZKProver<N> {
         blockchain: Arc<RwLock<Blockchain>>,
         network: Arc<N>,
         zkp_state: Arc<RwLock<ZKPState>>,
+        prover_path: Option<PathBuf>,
     ) -> Self {
         let network_info = NetworkInfo::from_network_id(blockchain.read().network_id());
         let genesis_block = network_info.genesis_block::<Block>().unwrap_macro();
@@ -109,6 +111,7 @@ impl<N: Network> ZKProver<N> {
                 let zkp_state3 = Arc::clone(&zkp_state2);
                 let recv = recv.resubscribe();
                 let zkp_state = zkp_state3.read();
+                let prover_path = prover_path.clone();
                 assert!(
                     zkp_state.latest_block_number
                         >= block.block_number() - policy::BLOCKS_PER_EPOCH,
@@ -125,6 +128,7 @@ impl<N: Network> ZKProver<N> {
                             previous_proof: zkp_state.latest_proof.clone(),
                             genesis_state: genesis_state3,
                         },
+                        prover_path,
                     )
                     .map(Some)
                     .left_future()

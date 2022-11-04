@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use futures::{Stream, StreamExt};
 use nimiq_test_log::test;
+use nimiq_test_utils::zkp_test_data::zkp_test_exe;
 use nimiq_zkp_prover::ZKPComponent;
 use parking_lot::RwLock;
 
@@ -75,6 +76,7 @@ async fn peers_can_sync() {
         Arc::clone(&blockchain1),
         Arc::clone(&net1),
         false,
+        Some(zkp_test_exe()),
         env1.clone(),
     )
     .await
@@ -107,6 +109,7 @@ async fn peers_can_sync() {
         Arc::clone(&blockchain2),
         Arc::clone(&net2),
         false,
+        Some(zkp_test_exe()),
         env2.clone(),
     )
     .await
@@ -232,6 +235,7 @@ async fn sync_ingredients() {
         Arc::clone(&blockchain1),
         Arc::clone(&net1),
         false,
+        Some(zkp_test_exe()),
         env1.clone(),
     )
     .await
@@ -261,6 +265,7 @@ async fn sync_ingredients() {
         Arc::clone(&blockchain2),
         Arc::clone(&net2),
         false,
+        Some(zkp_test_exe()),
         env2.clone(),
     )
     .await
