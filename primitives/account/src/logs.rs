@@ -291,7 +291,7 @@ impl BlockLog {
         }
     }
 }
-// This structure stores the info/data associated to a sucessful transaction that was commited
+// This structure stores the info/data associated to a sucessful transaction that was committed
 pub struct TransactionInfo {
     pub sender_info: Option<AccountInfo>,
     pub recipient_info: Option<AccountInfo>,

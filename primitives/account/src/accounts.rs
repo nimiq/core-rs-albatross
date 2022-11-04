@@ -88,7 +88,7 @@ impl Accounts {
     }
 
     /// This functions operates on a per transaction basis.
-    /// It operates atomically i.e.: either the transaction is fully commited (sender / recipient) or
+    /// It operates atomically i.e.: either the transaction is fully committed (sender / recipient) or
     /// it returns an error and no state is changed
     pub fn commit_transaction(
         &self,
@@ -124,7 +124,7 @@ impl Accounts {
         }
 
         // Commit sender
-        // If this fails, we need to revert any change that was commited to the accounts tree
+        // If this fails, we need to revert any change that was committed to the accounts tree
         match Account::commit_outgoing_transaction(
             &self.tree,
             txn,
