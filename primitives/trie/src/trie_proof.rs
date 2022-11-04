@@ -1,7 +1,7 @@
 use log::error;
 
 use beserial::{Deserialize, Serialize};
-use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_hash::Blake2bHash;
 
 use crate::key_nibbles::KeyNibbles;
 use crate::trie_node::TrieNode;
@@ -82,9 +82,11 @@ impl TrieProof {
 
                         // The child node must match the hash and the key, otherwise the proof is
                         // invalid.
-                        if child_hash != &child.hash::<Blake2bHash>() || child_key != child.key {
+                        if child_hash != &child.hash_assert_complete::<Blake2bHash>()
+                            || child_key != child.key
+                        {
                             error!("The child node doesn't match the given hash and/or key. Got hash {}, child has hash {}. Got key {}, child has key {}.",
-                                   child_hash, child.hash::<Blake2bHash>(), child_key, child.key);
+                                   child_hash, child.hash_assert_complete::<Blake2bHash>(), child_key, child.key);
                             return false;
                         }
                     }
@@ -117,10 +119,10 @@ impl TrieProof {
         }
 
         // And must match the hash given as the root hash.
-        if &root.hash::<Blake2bHash>() != root_hash {
+        if &root.hash_assert_complete::<Blake2bHash>() != root_hash {
             error!(
                 "The root node doesn't have the correct has! It has hash {}, but it should be {}.",
-                root.hash::<Blake2bHash>(),
+                root.hash_assert_complete::<Blake2bHash>(),
                 root_hash
             );
             return false;
@@ -134,6 +136,7 @@ impl TrieProof {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nimiq_hash::Hash;
     use nimiq_test_log::test;
 
     // We're going to construct proofs based on this tree:
@@ -162,20 +165,20 @@ mod tests {
 
         let key_b2: KeyNibbles = "002".parse().unwrap();
         let mut b2 = TrieNode::new_empty(key_b2.clone());
-        b2.put_child(&key_l3, l3.hash()).unwrap();
-        b2.put_child(&key_l4, l4.hash()).unwrap();
+        b2.put_child(&key_l3, l3.hash_assert_complete()).unwrap();
+        b2.put_child(&key_l4, l4.hash_assert_complete()).unwrap();
 
         let key_b1: KeyNibbles = "00".parse().unwrap();
         let mut b1 = TrieNode::new_empty(key_b1.clone());
-        b1.put_child(&key_l1, l1.hash()).unwrap();
-        b1.put_child(&key_b2, b2.hash()).unwrap();
-        b1.put_child(&key_l2, l2.hash()).unwrap();
+        b1.put_child(&key_l1, l1.hash_assert_complete()).unwrap();
+        b1.put_child(&key_b2, b2.hash_assert_complete()).unwrap();
+        b1.put_child(&key_l2, l2.hash_assert_complete()).unwrap();
 
         let key_r: KeyNibbles = "".parse().unwrap();
         let mut r = TrieNode::new_empty(key_r);
-        r.put_child(&key_b1, b1.hash()).unwrap();
+        r.put_child(&key_b1, b1.hash_assert_complete()).unwrap();
 
-        let root_hash = r.hash::<Blake2bHash>();
+        let root_hash = r.hash_assert_complete();
         let wrong_root_hash = ":-E".hash::<Blake2bHash>();
 
         // Correct proofs.
@@ -235,12 +238,18 @@ mod tests {
         // Wrong proofs. Nodes with wrong hash.
         let mut b2_wrong = TrieNode::new_empty(key_b2.clone());
         b2_wrong.put_child(&key_l3, ":-[".hash()).unwrap();
-        b2_wrong.put_child(&key_l4, l4.hash()).unwrap();
+        b2_wrong
+            .put_child(&key_l4, l4.hash_assert_complete())
+            .unwrap();
 
         let mut b1_wrong = TrieNode::new_empty(key_b1.clone());
-        b1_wrong.put_child(&key_l1, l1.hash()).unwrap();
+        b1_wrong
+            .put_child(&key_l1, l1.hash_assert_complete())
+            .unwrap();
         b1_wrong.put_child(&key_b2, ":-[".hash()).unwrap();
-        b1_wrong.put_child(&key_l2, l2.hash()).unwrap();
+        b1_wrong
+            .put_child(&key_l2, l2.hash_assert_complete())
+            .unwrap();
 
         let proof1 = TrieProof::new(vec![
             l1.clone(),
@@ -271,14 +280,24 @@ mod tests {
         // Wrong proofs. Nodes with wrong key.
         let key_l3_wrong: KeyNibbles = "00201".parse().unwrap();
         let mut b2_wrong = TrieNode::new_empty(key_b2);
-        b2_wrong.put_child(&key_l3_wrong, l3.hash()).unwrap();
-        b2_wrong.put_child(&key_l4, l4.hash()).unwrap();
+        b2_wrong
+            .put_child(&key_l3_wrong, l3.hash_assert_complete())
+            .unwrap();
+        b2_wrong
+            .put_child(&key_l4, l4.hash_assert_complete())
+            .unwrap();
 
         let key_b2_wrong: KeyNibbles = "003".parse().unwrap();
         let mut b1_wrong = TrieNode::new_empty(key_b1);
-        b1_wrong.put_child(&key_l1, l1.hash()).unwrap();
-        b1_wrong.put_child(&key_b2_wrong, b2.hash()).unwrap();
-        b1_wrong.put_child(&key_l2, l2.hash()).unwrap();
+        b1_wrong
+            .put_child(&key_l1, l1.hash_assert_complete())
+            .unwrap();
+        b1_wrong
+            .put_child(&key_b2_wrong, b2.hash_assert_complete())
+            .unwrap();
+        b1_wrong
+            .put_child(&key_l2, l2.hash_assert_complete())
+            .unwrap();
 
         let proof1 = TrieProof::new(vec![
             l1.clone(),

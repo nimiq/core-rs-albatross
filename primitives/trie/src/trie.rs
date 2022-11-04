@@ -7,7 +7,7 @@ use log::error;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_database::{Database, Environment, Transaction, WriteTransaction};
-use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_hash::Blake2bHash;
 
 use crate::key_nibbles::KeyNibbles;
 use crate::trie_node::{RootData, TrieNode, TrieNodeKind};
@@ -113,7 +113,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
 
     /// Returns the root hash of the Merkle Radix Trie.
     pub fn root_hash(&self, txn: &Transaction) -> Blake2bHash {
-        self.get_root(txn).unwrap().hash()
+        self.get_root(txn).unwrap().hash_assert_complete()
     }
 
     /// Returns the number of branch nodes in the Merkle Radix Trie.
@@ -225,7 +225,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
                     let mut new_parent = TrieNode::new_empty(cur_node.key.common_prefix(key));
                     new_parent.put_child_no_hash(&cur_node.key).unwrap();
                     new_parent
-                        .put_child(&new_node.key, new_node.hash())
+                        .put_child(&new_node.key, new_node.hash_assert_complete())
                         .unwrap();
                     txn.put_reserve(&self.db, &new_parent.key, &new_parent);
 
@@ -265,7 +265,9 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
 
                     // Update the parent node and store it.
                     let old_kind = cur_node.kind();
-                    cur_node.put_child(&new_node.key, new_node.hash()).unwrap();
+                    cur_node
+                        .put_child(&new_node.key, new_node.hash_assert_complete())
+                        .unwrap();
                     txn.put_reserve(&self.db, &cur_node.key, &cur_node);
 
                     count_updates = CountUpdates {
@@ -642,7 +644,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
     fn update_hashes(&self, txn: &mut WriteTransaction, key: &KeyNibbles) -> Blake2bHash {
         let mut node: TrieNode = txn.get(&self.db, key).unwrap();
         if !node.has_children() {
-            return node.hash();
+            return node.hash_assert_complete();
         }
 
         // Compute sub hashes if necessary.
@@ -654,7 +656,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
             }
         }
         txn.put_reserve(&self.db, key, &node);
-        node.hash()
+        node.hash_assert_complete()
     }
 
     /// Returns the nodes of the chunk of the Merkle Radix Trie that starts at the key `start` and
