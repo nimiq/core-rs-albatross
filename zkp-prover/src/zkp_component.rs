@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -97,6 +98,7 @@ impl<N: Network> ZKPComponent<N> {
         blockchain: Arc<RwLock<Blockchain>>,
         network: Arc<N>,
         is_prover_active: bool,
+        prover_path: Option<PathBuf>,
         env: Environment,
     ) -> Self {
         // Defaults zkp state to genesis.
@@ -125,6 +127,7 @@ impl<N: Network> ZKPComponent<N> {
                     Arc::clone(&blockchain),
                     Arc::clone(&network),
                     Arc::clone(&zkp_state),
+                    prover_path,
                 )
                 .await,
             )

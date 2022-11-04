@@ -27,8 +27,7 @@ use parking_lot::RwLock;
 use nimiq_nano_zkp::NanoZKPError;
 use thiserror::Error;
 
-pub const PROOF_GENERATION_OUTPUT_DELIMITER: [u8; 10] =
-    [242, 208, 3, 184, 79, 113, 228, 184, 44, 239];
+pub const PROOF_GENERATION_OUTPUT_DELIMITER: [u8; 2] = [242, 208];
 
 /// The ZK Proof state containing the pks block info and the proof.
 /// The genesis block has no zk proof.
@@ -223,7 +222,7 @@ fn ark_to_bserial_error(error: ArkSerializingError) -> BeserialSerializingError 
 }
 
 /// The input to the proof generation process.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct ProofInput {
     pub block: MacroBlock,
     pub latest_pks: Vec<G2MNT6>,
@@ -345,7 +344,7 @@ pub enum ZKPComponentError {
     InvalidProof,
 }
 
-#[derive(Error, Debug, Serialize, Deserialize)]
+#[derive(Error, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[repr(u8)]
 pub enum ZKProofGenerationError {
     #[error("Nano Zkp Error")]

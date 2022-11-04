@@ -38,6 +38,8 @@ async fn main_inner() -> Result<(), Error> {
         // Initialize signal handler
         initialize_signal_handler();
 
+        info!("Starting proof generation. Waiting for input.");
+
         return Ok(prover_main().await?);
     }
 

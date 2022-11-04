@@ -14,8 +14,8 @@ use nimiq_primitives::policy;
 use nimiq_test_log::test;
 use nimiq_test_utils::blockchain::{signing_key, voting_key};
 use nimiq_test_utils::blockchain_with_rng::produce_macro_blocks_with_rng;
-use nimiq_test_utils::zkp_test_data::get_base_seed;
 use nimiq_test_utils::zkp_test_data::ZKPROOF_SERIALIZED_IN_HEX;
+use nimiq_test_utils::zkp_test_data::{get_base_seed, zkp_test_exe};
 
 use nimiq_zkp_prover::proof_utils::{validate_proof, ProofStore};
 use nimiq_zkp_prover::types::ZKProof;
@@ -49,6 +49,7 @@ async fn peers_dont_reply_with_outdated_proof() {
         Arc::clone(&blockchain),
         Arc::clone(&network2),
         false,
+        Some(zkp_test_exe()),
         VolatileEnvironment::new(10).unwrap(),
     )
     .await;
@@ -57,6 +58,7 @@ async fn peers_dont_reply_with_outdated_proof() {
         Arc::clone(&blockchain),
         Arc::clone(&network3),
         false,
+        Some(zkp_test_exe()),
         VolatileEnvironment::new(10).unwrap(),
     )
     .await;
@@ -113,10 +115,22 @@ async fn peers_reply_with_valid_proof() {
     store3.set_zkp(&new_proof);
 
     log::info!("launching zkps");
-    let _zkp_prover2 =
-        ZKPComponent::new(Arc::clone(&blockchain2), Arc::clone(&network2), false, env2).await;
-    let _zkp_prover3 =
-        ZKPComponent::new(Arc::clone(&blockchain3), Arc::clone(&network3), false, env3).await;
+    let _zkp_prover2 = ZKPComponent::new(
+        Arc::clone(&blockchain2),
+        Arc::clone(&network2),
+        false,
+        Some(zkp_test_exe()),
+        env2,
+    )
+    .await;
+    let _zkp_prover3 = ZKPComponent::new(
+        Arc::clone(&blockchain3),
+        Arc::clone(&network3),
+        false,
+        Some(zkp_test_exe()),
+        env3,
+    )
+    .await;
 
     let mut zkp_requests = ZKPRequests::new(Arc::clone(&network));
 

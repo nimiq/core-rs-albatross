@@ -24,9 +24,10 @@ pub async fn prover_main() -> Result<(), SerializingError> {
         Err(e) => Err(ZKProofGenerationError::from(e)),
     };
 
+    log::info!("Finished proof generation with result {:?}", result);
+
     // Then print delimiter followed by the serialized result.
     let mut stdout = io::stdout();
-
     stdout.write_all(&PROOF_GENERATION_OUTPUT_DELIMITER)?;
 
     Serialize::serialize(&result, &mut stdout)?;

@@ -14,6 +14,7 @@ use nimiq_utils::time::OffsetTime;
 use nimiq_zkp_prover::ZKPComponent;
 
 use crate::test_network::TestNetwork;
+use crate::zkp_test_data::zkp_test_exe;
 
 pub struct Node<N: NetworkInterface + TestNetwork> {
     pub network: Arc<N>,
@@ -46,6 +47,7 @@ impl<N: NetworkInterface + TestNetwork> Node<N> {
             Arc::clone(&blockchain),
             Arc::clone(&network),
             is_prover_active,
+            Some(zkp_test_exe()),
             env.clone(),
         )
         .await;
