@@ -84,13 +84,17 @@ seed_nodes = [
 # ZK Proof specific configuration
 #
 ##############################################################################
-[zkp]
+#[zkp]
 
-# Speficy the proof generation capabilities.
-# Possible values: "main", "test", "dev", "test-albatross", "dev-albatross"
-# Default: "dev-albatross"
-#prover_active = "false"
-#setup_keys_path = "" #defaults to current working directory
+# Specify the proof generation capabilities.
+
+# Defines if the proof generation is active
+# Default: false
+# prover_active = true
+
+# Defines the path for the proving and verifying keys folders
+# Default: ".zkp"
+# setup_keys_path = "some_folder" #defaults to .zkp folder
 
 ##############################################################################
 #

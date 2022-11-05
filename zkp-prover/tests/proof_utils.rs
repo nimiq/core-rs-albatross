@@ -31,9 +31,8 @@ fn blockchain() -> Arc<RwLock<Blockchain>> {
 }
 
 #[test(tokio::test)]
-#[ignore]
 async fn can_detect_valid_and_invalid_genesis_proof() {
-    NanoZKP::setup(get_base_seed(), Path::new(KEYS_PATH)).unwrap();
+    NanoZKP::setup(get_base_seed(), Path::new(KEYS_PATH), false).unwrap();
     let blockchain = blockchain();
 
     let proof = ZKProof {
@@ -56,9 +55,8 @@ async fn can_detect_valid_and_invalid_genesis_proof() {
 }
 
 #[test(tokio::test)]
-#[ignore]
 async fn can_detect_invalid_proof_none_genesis_blocks() {
-    NanoZKP::setup(get_base_seed(), Path::new(KEYS_PATH)).unwrap();
+    NanoZKP::setup(get_base_seed(), Path::new(KEYS_PATH), false).unwrap();
     let blockchain = blockchain();
 
     let producer = BlockProducer::new(signing_key(), voting_key());
@@ -104,9 +102,8 @@ async fn can_detect_invalid_proof_none_genesis_blocks() {
 }
 
 #[test(tokio::test)]
-#[ignore]
 async fn can_detect_valid_proof_none_genesis_blocks() {
-    NanoZKP::setup(get_base_seed(), Path::new(KEYS_PATH)).unwrap();
+    NanoZKP::setup(get_base_seed(), Path::new(KEYS_PATH), false).unwrap();
     let blockchain = blockchain();
 
     let producer = BlockProducer::new(signing_key(), voting_key());

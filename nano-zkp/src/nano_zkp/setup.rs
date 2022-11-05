@@ -27,8 +27,12 @@ impl NanoZKP {
     /// program. It does this by generating the parameters for each circuit, "from bottom to top". The
     /// order is absolutely necessary because each circuit needs a verifying key from the circuit "below"
     /// it. Note that the parameter generation can take longer than one hour, even two on some computers.
-    pub fn setup<R: Rng + CryptoRng>(mut rng: R, path: &Path) -> Result<(), NanoZKPError> {
-        if NanoZKP::all_files_created(path) {
+    pub fn setup<R: Rng + CryptoRng>(
+        mut rng: R,
+        path: &Path,
+        prover_active: bool,
+    ) -> Result<(), NanoZKPError> {
+        if NanoZKP::all_files_created(path, prover_active) {
             return Ok(());
         }
 
@@ -55,25 +59,27 @@ impl NanoZKP {
         Ok(())
     }
 
-    fn all_files_created(path: &Path) -> bool {
+    fn all_files_created(path: &Path, prover_active: bool) -> bool {
         let verifying_keys = path.join("verifying_keys");
         let proving_keys = path.join("proving_keys");
 
         for i in 0..5 {
             if !verifying_keys.join(&format!("pk_tree_{}.bin", i)).exists()
-                && !proving_keys.join(&format!("pk_tree_{}.bin", i)).exists()
+                || (prover_active && !proving_keys.join(&format!("pk_tree_{}.bin", i)).exists())
             {
                 return false;
             }
         }
+
         verifying_keys.join("macro_block.bin").exists()
             && verifying_keys.join("macro_block_wrapper.bin").exists()
             && verifying_keys.join("merger.bin").exists()
             && verifying_keys.join("merger_wrapper.bin").exists()
-            && proving_keys.join("merger_wrapper.bin").exists()
-            && proving_keys.join("macro_block_wrapper.bin").exists()
-            && proving_keys.join("merger.bin").exists()
-            && proving_keys.join("merger_wrapper.bin").exists()
+            && (!prover_active
+                || (proving_keys.join("merger_wrapper.bin").exists()
+                    && proving_keys.join("macro_block_wrapper.bin").exists()
+                    && proving_keys.join("merger.bin").exists()
+                    && proving_keys.join("merger_wrapper.bin").exists()))
     }
 
     fn setup_pk_tree_leaf<R: Rng + CryptoRng>(

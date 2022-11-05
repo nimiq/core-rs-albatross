@@ -11,7 +11,7 @@ fn main() {
     let start = Instant::now();
 
     // use the current directory
-    NanoZKP::setup(thread_rng(), &PathBuf::new()).unwrap();
+    NanoZKP::setup(thread_rng(), &PathBuf::new(), true).unwrap();
 
     println!("====== Parameter generation for Nano Sync finished ======");
     println!("Total time elapsed: {:?} seconds", start.elapsed());

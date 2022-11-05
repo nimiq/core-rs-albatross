@@ -797,7 +797,7 @@ impl ClientConfigBuilder {
 
         // Configure the zk prover
         if let Some(zkp_settings) = config_file.zkp.as_ref() {
-            let mut setup_keys_path = PathBuf::new();
+            let mut setup_keys_path = PathBuf::from(".zkp");
             if let Some(zkp_path) = zkp_settings.setup_keys_path.as_ref() {
                 setup_keys_path = PathBuf::from(zkp_path);
             }

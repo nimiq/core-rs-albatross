@@ -40,9 +40,8 @@ fn blockchain() -> Arc<RwLock<Blockchain>> {
 }
 
 #[test(tokio::test)]
-#[ignore]
 async fn builds_valid_genesis_proof() {
-    NanoZKP::setup(get_base_seed(), Path::new(KEYS_PATH)).unwrap();
+    NanoZKP::setup(get_base_seed(), Path::new(KEYS_PATH), false).unwrap();
     let blockchain = blockchain();
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
@@ -71,9 +70,8 @@ async fn builds_valid_genesis_proof() {
 }
 
 #[test(tokio::test)]
-#[ignore]
 async fn loads_valid_zkp_state_from_db() {
-    NanoZKP::setup(get_base_seed(), Path::new(KEYS_PATH)).unwrap();
+    NanoZKP::setup(get_base_seed(), Path::new(KEYS_PATH), false).unwrap();
     let blockchain = blockchain();
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
@@ -111,9 +109,8 @@ async fn loads_valid_zkp_state_from_db() {
 }
 
 #[test(tokio::test)]
-#[ignore]
 async fn does_not_load_invalid_zkp_state_from_db() {
-    NanoZKP::setup(get_base_seed(), Path::new(KEYS_PATH)).unwrap();
+    NanoZKP::setup(get_base_seed(), Path::new(KEYS_PATH), false).unwrap();
     let blockchain = blockchain();
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
@@ -149,7 +146,7 @@ async fn does_not_load_invalid_zkp_state_from_db() {
 #[test(tokio::test)]
 #[ignore]
 async fn can_produce_two_consecutive_valid_zk_proofs() {
-    NanoZKP::setup(get_base_seed(), Path::new(KEYS_PATH)).unwrap();
+    NanoZKP::setup(get_base_seed(), Path::new(KEYS_PATH), true).unwrap();
     let blockchain = blockchain();
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());

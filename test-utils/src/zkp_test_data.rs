@@ -1,7 +1,7 @@
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 
-pub const KEYS_PATH: &str = "";
+pub const KEYS_PATH: &str = "../.zkp";
 
 pub fn get_base_seed() -> ChaCha20Rng {
     let seed = [

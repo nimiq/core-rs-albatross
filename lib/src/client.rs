@@ -96,7 +96,11 @@ impl ClientInner {
                 1, 0, 52, 0, 0, 0, 0, 0, 1, 0, 10, 0, 22, 32, 0, 0, 2, 0, 55, 49, 0, 11, 0, 0, 3,
                 0, 0, 0, 0, 0, 2, 92,
             ];
-            NanoZKP::setup(ChaCha20Rng::from_seed(seed), &config.zkp.setup_keys_path)?;
+            NanoZKP::setup(
+                ChaCha20Rng::from_seed(seed),
+                &config.zkp.setup_keys_path,
+                config.zkp.prover_active,
+            )?;
             log::debug!("Finished Nano ZKP setup.")
         }
 
