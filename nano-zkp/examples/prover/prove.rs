@@ -1,6 +1,6 @@
 use std::fs::{DirBuilder, File};
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use ark_groth16::Proof;
@@ -56,6 +56,7 @@ fn main() {
             genesis_data.clone(),
             true,
             true,
+            &PathBuf::new(), // use the current directory
         )
         .unwrap();
 

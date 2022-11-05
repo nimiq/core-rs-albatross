@@ -88,6 +88,7 @@ pub(crate) fn validate_proof_get_new_state(
         new_block.hash().into(),
         new_pks.clone(),
         proof.clone(),
+        &PathBuf::new(), // ITODO: use config
     )? {
         return Ok(ZKPState {
             latest_pks: new_pks,
@@ -126,6 +127,7 @@ pub fn generate_new_proof(
             previous_proof.map(|proof| (proof, genesis_state.clone())),
             true,
             true,
+            &PathBuf::new(), // ITODO: use config
         );
 
         return match proof {

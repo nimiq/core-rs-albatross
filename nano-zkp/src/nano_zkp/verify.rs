@@ -1,4 +1,5 @@
 use std::fs::File;
+use std::path::Path;
 
 use ark_crypto_primitives::SNARK;
 use ark_groth16::{Groth16, Proof, VerifyingKey};
@@ -35,9 +36,11 @@ impl NanoZKP {
         final_pks: Vec<G2MNT6>,
         // The SNARK proof for this circuit.
         proof: Proof<MNT6_753>,
+        // The path to where the `verifying_keys` folder is stored in.
+        path: &Path,
     ) -> Result<bool, NanoZKPError> {
         // Load the verifying key from file.
-        let mut file = File::open("verifying_keys/merger_wrapper.bin")?;
+        let mut file = File::open(path.join("verifying_keys").join("merger_wrapper.bin"))?;
 
         let vk = VerifyingKey::deserialize_unchecked(&mut file)?;
 

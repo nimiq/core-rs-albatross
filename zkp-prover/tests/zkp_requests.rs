@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use beserial::Deserialize;
@@ -36,7 +37,7 @@ fn blockchain() -> Arc<RwLock<Blockchain>> {
 #[test(tokio::test)]
 #[ignore]
 async fn peers_dont_reply_with_outdated_proof() {
-    NanoZKP::setup(get_base_seed()).unwrap();
+    NanoZKP::setup(get_base_seed(), &PathBuf::new()).unwrap();
     let blockchain = blockchain();
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
@@ -79,7 +80,7 @@ async fn peers_dont_reply_with_outdated_proof() {
 #[test(tokio::test)]
 #[ignore]
 async fn peers_reply_with_valid_proof() {
-    NanoZKP::setup(get_base_seed()).unwrap();
+    NanoZKP::setup(get_base_seed(), &PathBuf::new()).unwrap();
     let blockchain2 = blockchain();
     let blockchain3 = blockchain();
     let mut hub = MockHub::new();

@@ -55,8 +55,11 @@ impl NanoZKP {
         // This is a flag indicating if we want to run this function in debug mode. It will verify
         // each proof it creates right after the proof is generated.
         debug_mode: bool,
+        // The path to where the `verifying_keys` folder is stored in.
+        path: &Path,
     ) -> Result<Proof<MNT6_753>, NanoZKPError> {
         let rng = &mut thread_rng();
+        let proofs = path.join("proofs");
 
         // Serialize the initial public keys into bits and chunk them into the number of leaves.
         let mut bytes = Vec::new();
@@ -96,7 +99,7 @@ impl NanoZKP {
         // Start generating proofs for PKTree level 5.
         #[allow(clippy::needless_range_loop)]
         for i in 0..32 {
-            if proof_caching && Path::new(&format!("proofs/pk_tree_5_{}.bin", i)).exists() {
+            if proof_caching && proofs.join(format!("pk_tree_5_{}.bin", i)).exists() {
                 continue;
             }
 
@@ -111,12 +114,13 @@ impl NanoZKP {
                 &initial_pk_tree_root,
                 &block.signer_bitmap,
                 debug_mode,
+                path,
             )?;
         }
 
         // Start generating proofs for PKTree level 4.
         for i in 0..16 {
-            if proof_caching && Path::new(&format!("proofs/pk_tree_4_{}.bin", i)).exists() {
+            if proof_caching && proofs.join(format!("pk_tree_4_{}.bin", i)).exists() {
                 continue;
             }
 
@@ -132,12 +136,13 @@ impl NanoZKP {
                 &initial_pk_tree_root,
                 &block.signer_bitmap,
                 debug_mode,
+                path,
             )?;
         }
 
         // Start generating proofs for PKTree level 3.
         for i in 0..8 {
-            if proof_caching && Path::new(&format!("proofs/pk_tree_3_{}.bin", i)).exists() {
+            if proof_caching && proofs.join(format!("pk_tree_3_{}.bin", i)).exists() {
                 continue;
             }
 
@@ -153,12 +158,13 @@ impl NanoZKP {
                 &initial_pk_tree_root,
                 &block.signer_bitmap,
                 debug_mode,
+                path,
             )?;
         }
 
         // Start generating proofs for PKTree level 2.
         for i in 0..4 {
-            if proof_caching && Path::new(&format!("proofs/pk_tree_2_{}.bin", i)).exists() {
+            if proof_caching && proofs.join(format!("pk_tree_2_{}.bin", i)).exists() {
                 continue;
             }
 
@@ -174,12 +180,13 @@ impl NanoZKP {
                 &initial_pk_tree_root,
                 &block.signer_bitmap,
                 debug_mode,
+                path,
             )?;
         }
 
         // Start generating proofs for PKTree level 1.
         for i in 0..2 {
-            if proof_caching && Path::new(&format!("proofs/pk_tree_1_{}.bin", i)).exists() {
+            if proof_caching && proofs.join(format!("pk_tree_1_{}.bin", i)).exists() {
                 continue;
             }
 
@@ -195,11 +202,12 @@ impl NanoZKP {
                 &initial_pk_tree_root,
                 &block.signer_bitmap,
                 debug_mode,
+                path,
             )?;
         }
 
         // Start generating proof for PKTree level 0.
-        if !(proof_caching && Path::new("proofs/pk_tree_0_0.bin").exists()) {
+        if !(proof_caching && proofs.join("pk_tree_0_0.bin").exists()) {
             eprintln!("generating pk_tree_0_0");
 
             NanoZKP::prove_pk_tree_node_mnt6(
@@ -212,11 +220,12 @@ impl NanoZKP {
                 &initial_pk_tree_root,
                 &block.signer_bitmap,
                 debug_mode,
+                path,
             )?;
         }
 
         // Start generating proof for Macro Block.
-        if !(proof_caching && Path::new("proofs/macro_block.bin").exists()) {
+        if !(proof_caching && proofs.join("macro_block.bin").exists()) {
             eprintln!("generating macro_block");
 
             NanoZKP::prove_macro_block(
@@ -228,11 +237,12 @@ impl NanoZKP {
                 &final_pk_tree_root,
                 &block,
                 debug_mode,
+                path,
             )?;
         }
 
         // Start generating proof for Macro Block Wrapper.
-        if !(proof_caching && Path::new("proofs/macro_block_wrapper.bin").exists()) {
+        if !(proof_caching && proofs.join("macro_block_wrapper.bin").exists()) {
             eprintln!("generating macro_block_wrapper");
 
             NanoZKP::prove_macro_block_wrapper(
@@ -242,11 +252,12 @@ impl NanoZKP {
                 &final_pks,
                 &block,
                 debug_mode,
+                path,
             )?;
         }
 
         // Start generating proof for Merger.
-        if !(proof_caching && Path::new("proofs/merger.bin").exists()) {
+        if !(proof_caching && proofs.join("merger.bin").exists()) {
             eprintln!("generating merger");
 
             NanoZKP::prove_merger(
@@ -257,6 +268,7 @@ impl NanoZKP {
                 &block,
                 genesis_data.clone(),
                 debug_mode,
+                path,
             )?;
         }
 
@@ -271,10 +283,11 @@ impl NanoZKP {
             &block,
             genesis_data,
             debug_mode,
+            path,
         )?;
 
         // Delete cached proofs.
-        fs::remove_dir_all("proofs/")?;
+        fs::remove_dir_all(proofs)?;
 
         // Return proof.
         Ok(proof)
@@ -289,9 +302,10 @@ impl NanoZKP {
         pk_tree_root: &[u8],
         signer_bitmap: &[bool],
         debug_mode: bool,
+        dir_path: &Path,
     ) -> Result<(), NanoZKPError> {
         // Load the proving key from file.
-        let mut file = File::open(format!("proving_keys/{}.bin", name))?;
+        let mut file = File::open(dir_path.join("proving_keys").join(format!("{}.bin", name)))?;
 
         let proving_key = ProvingKey::deserialize_unchecked(&mut file)?;
 
@@ -343,7 +357,11 @@ impl NanoZKP {
         // Optionally verify the proof.
         if debug_mode {
             // Load the proving key from file.
-            let mut file = File::open(format!("verifying_keys/{}.bin", name))?;
+            let mut file = File::open(
+                dir_path
+                    .join("verifying_keys")
+                    .join(format!("{}.bin", name)),
+            )?;
 
             let verifying_key = VerifyingKey::deserialize_unchecked(&mut file)?;
 
@@ -367,7 +385,7 @@ impl NanoZKP {
         }
 
         // Cache proof to file.
-        NanoZKP::proof_to_file(proof, name, Some(position))
+        NanoZKP::proof_to_file(proof, name, Some(position), dir_path)
     }
 
     fn prove_pk_tree_node_mnt6<R: CryptoRng + Rng>(
@@ -380,28 +398,32 @@ impl NanoZKP {
         pk_tree_root: &[u8],
         signer_bitmap: &[bool],
         debug_mode: bool,
+        dir_path: &Path,
     ) -> Result<(), NanoZKPError> {
+        let proving_keys = dir_path.join("proving_keys");
+        let verifying_keys = dir_path.join("verifying_keys");
+        let proofs = dir_path.join("proofs");
         // Load the proving key from file.
-        let mut file = File::open(format!("proving_keys/{}.bin", name))?;
+        let mut file = File::open(proving_keys.join(format!("{}.bin", name)))?;
 
         let proving_key = ProvingKey::deserialize_unchecked(&mut file)?;
 
         // Load the verifying key from file.
-        let mut file = File::open(format!("verifying_keys/{}.bin", vk_file))?;
+        let mut file = File::open(verifying_keys.join(format!("{}.bin", vk_file)))?;
 
         let vk_child = VerifyingKey::deserialize_unchecked(&mut file)?;
 
         // Load the left proof from file.
         let left_position = 2 * position;
 
-        let mut file = File::open(format!("proofs/{}_{}.bin", vk_file, left_position))?;
+        let mut file = File::open(proofs.join(format!("{}_{}.bin", vk_file, left_position)))?;
 
         let left_proof = Proof::deserialize_unchecked(&mut file)?;
 
         // Load the right proof from file.
         let right_position = 2 * position + 1;
 
-        let mut file = File::open(format!("proofs/{}_{}.bin", vk_file, right_position))?;
+        let mut file = File::open(proofs.join(format!("{}_{}.bin", vk_file, right_position)))?;
 
         let right_proof = Proof::deserialize_unchecked(&mut file)?;
 
@@ -474,7 +496,7 @@ impl NanoZKP {
         // Optionally verify the proof.
         if debug_mode {
             // Load the proving key from file.
-            let mut file = File::open(format!("verifying_keys/{}.bin", name))?;
+            let mut file = File::open(verifying_keys.join(format!("{}.bin", name)))?;
 
             let verifying_key = VerifyingKey::deserialize_unchecked(&mut file)?;
 
@@ -500,7 +522,7 @@ impl NanoZKP {
         }
 
         // Cache proof to file.
-        NanoZKP::proof_to_file(proof, name, Some(position))
+        NanoZKP::proof_to_file(proof, name, Some(position), dir_path)
     }
 
     fn prove_pk_tree_node_mnt4<R: CryptoRng + Rng>(
@@ -513,28 +535,33 @@ impl NanoZKP {
         pk_tree_root: &[u8],
         signer_bitmap: &[bool],
         debug_mode: bool,
+        dir_path: &Path,
     ) -> Result<(), NanoZKPError> {
+        let proving_keys = dir_path.join("proving_keys");
+        let verifying_keys = dir_path.join("verifying_keys");
+        let proofs = dir_path.join("proofs");
+
         // Load the proving key from file.
-        let mut file = File::open(format!("proving_keys/{}.bin", name))?;
+        let mut file = File::open(proving_keys.join(format!("{}.bin", name)))?;
 
         let proving_key = ProvingKey::deserialize_unchecked(&mut file)?;
 
         // Load the verifying key from file.
-        let mut file = File::open(format!("verifying_keys/{}.bin", vk_file))?;
+        let mut file = File::open(verifying_keys.join(format!("{}.bin", vk_file)))?;
 
         let vk_child = VerifyingKey::deserialize_unchecked(&mut file)?;
 
         // Load the left proof from file.
         let left_position = 2 * position;
 
-        let mut file = File::open(format!("proofs/{}_{}.bin", vk_file, left_position))?;
+        let mut file = File::open(proofs.join(format!("{}_{}.bin", vk_file, left_position)))?;
 
         let left_proof = Proof::deserialize_unchecked(&mut file)?;
 
         // Load the right proof from file.
         let right_position = 2 * position + 1;
 
-        let mut file = File::open(format!("proofs/{}_{}.bin", vk_file, right_position))?;
+        let mut file = File::open(proofs.join(format!("{}_{}.bin", vk_file, right_position)))?;
 
         let right_proof = Proof::deserialize_unchecked(&mut file)?;
 
@@ -601,7 +628,7 @@ impl NanoZKP {
         // Optionally verify the proof.
         if debug_mode {
             // Load the proving key from file.
-            let mut file = File::open(format!("verifying_keys/{}.bin", name))?;
+            let mut file = File::open(verifying_keys.join(format!("{}.bin", name)))?;
 
             let verifying_key = VerifyingKey::deserialize_unchecked(&mut file)?;
 
@@ -625,7 +652,7 @@ impl NanoZKP {
         }
 
         // Cache proof to file.
-        NanoZKP::proof_to_file(proof, name, Some(position))
+        NanoZKP::proof_to_file(proof, name, Some(position), dir_path)
     }
 
     fn prove_macro_block<R: CryptoRng + Rng>(
@@ -637,19 +664,24 @@ impl NanoZKP {
         final_pk_tree_root: &[u8],
         block: &MacroBlock,
         debug_mode: bool,
+        path: &Path,
     ) -> Result<(), NanoZKPError> {
+        let proving_keys = path.join("proving_keys");
+        let verifying_keys = path.join("verifying_keys");
+        let proofs = path.join("proofs");
+
         // Load the proving key from file.
-        let mut file = File::open("proving_keys/macro_block.bin")?;
+        let mut file = File::open(proving_keys.join("macro_block.bin"))?;
 
         let proving_key = ProvingKey::deserialize_unchecked(&mut file)?;
 
         // Load the verifying key from file.
-        let mut file = File::open("verifying_keys/pk_tree_0.bin")?;
+        let mut file = File::open(verifying_keys.join("pk_tree_0.bin"))?;
 
         let vk_pk_tree = VerifyingKey::deserialize_unchecked(&mut file)?;
 
         // Load the proof from file.
-        let mut file = File::open("proofs/pk_tree_0_0.bin")?;
+        let mut file = File::open(proofs.join("pk_tree_0_0.bin"))?;
 
         let proof = Proof::deserialize_unchecked(&mut file)?;
 
@@ -701,7 +733,7 @@ impl NanoZKP {
         // Optionally verify the proof.
         if debug_mode {
             // Load the proving key from file.
-            let mut file = File::open("verifying_keys/macro_block.bin")?;
+            let mut file = File::open(verifying_keys.join("macro_block.bin"))?;
 
             let verifying_key = VerifyingKey::deserialize_unchecked(&mut file)?;
 
@@ -721,7 +753,7 @@ impl NanoZKP {
         }
 
         // Cache proof to file.
-        NanoZKP::proof_to_file(proof, "macro_block", None)
+        NanoZKP::proof_to_file(proof, "macro_block", None, path)
     }
 
     fn prove_macro_block_wrapper<R: CryptoRng + Rng>(
@@ -731,19 +763,24 @@ impl NanoZKP {
         final_pks: &[G2MNT6],
         block: &MacroBlock,
         debug_mode: bool,
+        path: &Path,
     ) -> Result<(), NanoZKPError> {
+        let proving_keys = path.join("proving_keys");
+        let verifying_keys = path.join("verifying_keys");
+        let proofs = path.join("proofs");
+
         // Load the proving key from file.
-        let mut file = File::open("proving_keys/macro_block_wrapper.bin")?;
+        let mut file = File::open(proving_keys.join("macro_block_wrapper.bin"))?;
 
         let proving_key = ProvingKey::deserialize_unchecked(&mut file)?;
 
         // Load the verifying key from file.
-        let mut file = File::open("verifying_keys/macro_block.bin")?;
+        let mut file = File::open(verifying_keys.join("macro_block.bin"))?;
 
         let vk_macro_block = VerifyingKey::deserialize_unchecked(&mut file)?;
 
         // Load the proof from file.
-        let mut file = File::open("proofs/macro_block.bin")?;
+        let mut file = File::open(proofs.join("macro_block.bin"))?;
 
         let proof = Proof::deserialize_unchecked(&mut file)?;
 
@@ -774,7 +811,7 @@ impl NanoZKP {
         // Optionally verify the proof.
         if debug_mode {
             // Load the proving key from file.
-            let mut file = File::open("verifying_keys/macro_block_wrapper.bin")?;
+            let mut file = File::open(verifying_keys.join("macro_block_wrapper.bin"))?;
 
             let verifying_key = VerifyingKey::deserialize_unchecked(&mut file)?;
 
@@ -794,7 +831,7 @@ impl NanoZKP {
         }
 
         // Cache proof to file.
-        NanoZKP::proof_to_file(proof, "macro_block_wrapper", None)
+        NanoZKP::proof_to_file(proof, "macro_block_wrapper", None, path)
     }
 
     fn prove_merger<R: CryptoRng + Rng>(
@@ -805,24 +842,28 @@ impl NanoZKP {
         block: &MacroBlock,
         genesis_data: Option<(Proof<MNT6_753>, Vec<u8>)>,
         debug_mode: bool,
+        path: &Path,
     ) -> Result<(), NanoZKPError> {
+        let proving_keys = path.join("proving_keys");
+        let verifying_keys = path.join("verifying_keys");
+        let proofs = path.join("proofs");
         // Load the proving key from file.
-        let mut file = File::open("proving_keys/merger.bin")?;
+        let mut file = File::open(proving_keys.join("merger.bin"))?;
 
         let proving_key = ProvingKey::deserialize_unchecked(&mut file)?;
 
         // Load the verifying key for Macro Block Wrapper from file.
-        let mut file = File::open("verifying_keys/macro_block_wrapper.bin")?;
+        let mut file = File::open(verifying_keys.join("macro_block_wrapper.bin"))?;
 
         let vk_macro_block_wrapper = VerifyingKey::deserialize_unchecked(&mut file)?;
 
         // Load the proof for Macro Block Wrapper from file.
-        let mut file = File::open("proofs/macro_block_wrapper.bin")?;
+        let mut file = File::open(proofs.join("macro_block_wrapper.bin"))?;
 
         let proof_macro_block_wrapper = Proof::deserialize_unchecked(&mut file)?;
 
         // Load the verifying key for Merger Wrapper from file.
-        let mut file = File::open("verifying_keys/merger_wrapper.bin")?;
+        let mut file = File::open(verifying_keys.join("merger_wrapper.bin"))?;
 
         let vk_merger_wrapper = VerifyingKey::deserialize_unchecked(&mut file)?;
 
@@ -879,7 +920,7 @@ impl NanoZKP {
         // Optionally verify the proof.
         if debug_mode {
             // Load the proving key from file.
-            let mut file = File::open("verifying_keys/merger.bin")?;
+            let mut file = File::open(verifying_keys.join("merger.bin"))?;
 
             let verifying_key = VerifyingKey::deserialize_unchecked(&mut file)?;
 
@@ -901,7 +942,7 @@ impl NanoZKP {
         }
 
         // Cache proof to file.
-        NanoZKP::proof_to_file(proof, "merger", None)
+        NanoZKP::proof_to_file(proof, "merger", None, path)
     }
 
     fn prove_merger_wrapper<R: CryptoRng + Rng>(
@@ -912,24 +953,28 @@ impl NanoZKP {
         block: &MacroBlock,
         genesis_data: Option<(Proof<MNT6_753>, Vec<u8>)>,
         debug_mode: bool,
+        path: &Path,
     ) -> Result<Proof<MNT6_753>, NanoZKPError> {
+        let proving_keys = path.join("proving_keys");
+        let verifying_keys = path.join("verifying_keys");
+        let proofs = path.join("proofs");
         // Load the proving key from file.
-        let mut file = File::open("proving_keys/merger_wrapper.bin")?;
+        let mut file = File::open(proving_keys.join("merger_wrapper.bin"))?;
 
         let proving_key = ProvingKey::deserialize_unchecked(&mut file)?;
 
         // Load the verifying key from file.
-        let mut file = File::open("verifying_keys/merger.bin")?;
+        let mut file = File::open(verifying_keys.join("merger.bin"))?;
 
         let vk_merger = VerifyingKey::deserialize_unchecked(&mut file)?;
 
         // Load the proof from file.
-        let mut file = File::open("proofs/merger.bin")?;
+        let mut file = File::open(proofs.join("merger.bin"))?;
 
         let proof = Proof::deserialize_unchecked(&mut file)?;
 
         // Load the verifying key for Merger Wrapper from file.
-        let mut file = File::open("verifying_keys/merger_wrapper.bin")?;
+        let mut file = File::open(verifying_keys.join("merger_wrapper.bin"))?;
 
         let vk_merger_wrapper = VerifyingKey::deserialize_unchecked(&mut file)?;
 
@@ -968,7 +1013,7 @@ impl NanoZKP {
         // Optionally verify the proof.
         if debug_mode {
             // Load the proving key from file.
-            let mut file = File::open("verifying_keys/merger_wrapper.bin")?;
+            let mut file = File::open(verifying_keys.join("merger_wrapper.bin"))?;
 
             let verifying_key = VerifyingKey::deserialize_unchecked(&mut file)?;
 
@@ -990,7 +1035,7 @@ impl NanoZKP {
         }
 
         // Cache proof to file.
-        NanoZKP::proof_to_file(proof.clone(), "merger_wrapper", None)?;
+        NanoZKP::proof_to_file(proof.clone(), "merger_wrapper", None, path)?;
 
         Ok(proof)
     }
@@ -1000,9 +1045,11 @@ impl NanoZKP {
         pk: Proof<T>,
         name: &str,
         number: Option<usize>,
+        path: &Path,
     ) -> Result<(), NanoZKPError> {
-        if !Path::new("proofs/").is_dir() {
-            DirBuilder::new().create("proofs/")?;
+        let proofs = path.join("proofs");
+        if !proofs.is_dir() {
+            DirBuilder::new().create(&proofs)?;
         }
 
         let suffix = match number {
@@ -1010,7 +1057,7 @@ impl NanoZKP {
             Some(n) => format!("_{}", n),
         };
 
-        let mut file = File::create(format!("proofs/{}{}.bin", name, suffix))?;
+        let mut file = File::create(proofs.join(format!("{}{}.bin", name, suffix)))?;
 
         pk.serialize_unchecked(&mut file)?;
 
