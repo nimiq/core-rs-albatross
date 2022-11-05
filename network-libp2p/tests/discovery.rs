@@ -68,6 +68,7 @@ impl TestNode {
             addresses: Some(address.clone()).into_iter().collect(),
             public_key: keypair.public(),
             services: config.services_filter,
+            needed_services: config.services_filter,
             timestamp: None,
         }
         .sign(&keypair);
@@ -110,6 +111,7 @@ fn random_peer_contact(n: usize, services: Services) -> SignedPeerContact {
         addresses: vec![format!("/dns/test{}.local/tcp/443/wss", n).parse().unwrap()],
         public_key: keypair.public(),
         services,
+        needed_services: services,
         timestamp: None,
     };
 

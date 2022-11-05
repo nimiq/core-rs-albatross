@@ -39,6 +39,7 @@ use rand_chacha::ChaCha20Rng;
 
 use crate::config::config::ClientConfig;
 use crate::config::config::SyncMode::History;
+use crate::config::config::{ClientConfig, SyncMode};
 use crate::error::Error;
 
 /// Alias for the Consensus and Validator specialized over libp2p network
@@ -81,6 +82,38 @@ pub(crate) struct ClientInner {
     wallet_store: Arc<WalletStore>,
 
     zkp_component: ZKPComponentProxy,
+}
+
+/// This function is used to generate the serices flags (provided, needed) based upon the configured sync mode
+pub fn generate_services_flags(sync_mode: SyncMode) -> (Services, Services) {
+    let provided_services = match sync_mode {
+        // Services provided by history nodes
+        crate::config::config::SyncMode::History => {
+            log::info!("Client configured as a history node");
+            Services::HISTORY
+                | Services::FULL_BLOCKS
+                | Services::ACCOUNTS_PROOF
+                | Services::ACCOUNTS_CHUNKS
+                | Services::TRANSACTION_INDEX
+        }
+        // Services provided by full nodes
+        crate::config::config::SyncMode::Full => {
+            log::info!("Client configured as a full node");
+            Services::ACCOUNTS_PROOF | Services::FULL_BLOCKS | Services::ACCOUNTS_CHUNKS
+        }
+        // Services provided by nano nodes
+        crate::config::config::SyncMode::Nano => Services::empty(),
+    };
+
+    let needed_services = match sync_mode {
+        // Services provided by history nodes
+        crate::config::config::SyncMode::History => Services::HISTORY | Services::FULL_BLOCKS,
+        // Services provided by full nodes
+        crate::config::config::SyncMode::Full => Services::FULL_BLOCKS | Services::ACCOUNTS_CHUNKS,
+        // Services provided by nano nodes
+        crate::config::config::SyncMode::Nano => Services::CHAIN_PROOF | Services::ACCOUNTS_PROOF,
+    };
+    (provided_services, needed_services)
 }
 
 impl ClientInner {
@@ -131,34 +164,20 @@ impl ClientInner {
             identity_keypair.public().to_peer_id().to_base58()
         );
 
-        let mut services = match config.consensus.sync_mode {
-            // Services provided by full history nodes
-            crate::config::config::SyncMode::History => {
-                log::info!("Client configured as a history node");
-                Services::HISTORY
-                    | Services::FULL_BLOCKS
-                    | Services::ACCOUNTS_PROOF
-                    | Services::ACCOUNTS_CHUNKS
-                    | Services::TRANSACTION_INDEX
-            }
-            // Services provided by full nodes
-            crate::config::config::SyncMode::Full => {
-                log::info!("Client configured as a full node");
-                Services::ACCOUNTS_PROOF | Services::FULL_BLOCKS | Services::ACCOUNTS_CHUNKS
-            }
-            crate::config::config::SyncMode::Nano => Services::empty(),
-        };
+        let (mut provided_services, needed_services) =
+            generate_services_flags(config.consensus.sync_mode);
 
         // TODO: This flag should be used internally to, apart from announcing the service, properly control the mechanism
         if config.zkp_propagation {
-            services |= Services::CHAIN_PROOF;
+            provided_services |= Services::CHAIN_PROOF;
         }
 
-        // Generate peer contact from identity keypair and services/protocols
+        // Generate my peer contact from identity keypair and my provided services
         let mut peer_contact = PeerContact::new(
             config.network.listen_addresses.clone(),
             identity_keypair.public(),
-            services,
+            provided_services,
+            needed_services,
             None,
         );
         peer_contact.set_current_time();

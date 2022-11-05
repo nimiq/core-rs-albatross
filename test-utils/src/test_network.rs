@@ -60,6 +60,7 @@ impl TestNetwork for Network {
             vec![peer_address.clone()],
             peer_key.public(),
             Services::all(),
+            Services::all(),
             None,
         );
         peer_contact.set_current_time();

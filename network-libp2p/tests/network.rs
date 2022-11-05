@@ -31,6 +31,7 @@ fn network_config(address: Multiaddr) -> Config {
         addresses: vec![address],
         public_key: keypair.public(),
         services: Services::all(),
+        needed_services: Services::all(),
         timestamp: None,
     };
     peer_contact.set_current_time();

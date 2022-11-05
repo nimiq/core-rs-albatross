@@ -41,7 +41,7 @@ pub struct DiscoveryConfig {
     /// How many updated peer contacts we want to receive per update.
     pub update_limit: u16,
 
-    /// Services for which we filter.
+    /// Services for which we filter (the services that we need others to provide)
     pub services_filter: Services,
 
     /// Minimium interval that we will update other peers with.
@@ -55,14 +55,14 @@ pub struct DiscoveryConfig {
 }
 
 impl DiscoveryConfig {
-    pub fn new(genesis_hash: Blake2bHash, services_flags: Services) -> Self {
+    pub fn new(genesis_hash: Blake2bHash, needed_services: Services) -> Self {
         Self {
             genesis_hash,
             update_interval: Duration::from_secs(60),
             min_send_update_interval: Duration::from_secs(30),
             min_recv_update_interval: Duration::from_secs(30),
             update_limit: 64,
-            services_filter: services_flags,
+            services_filter: needed_services,
             house_keeping_interval: Duration::from_secs(60),
             keep_alive: KeepAlive::Yes,
         }

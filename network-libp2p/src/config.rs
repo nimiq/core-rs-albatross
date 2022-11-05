@@ -63,7 +63,7 @@ impl Config {
             keypair,
             peer_contact: peer_contact.clone(),
             seeds,
-            discovery: DiscoveryConfig::new(genesis_hash, peer_contact.services),
+            discovery: DiscoveryConfig::new(genesis_hash, peer_contact.needed_services),
             kademlia,
             gossipsub,
             memory_transport,

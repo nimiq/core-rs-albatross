@@ -95,6 +95,9 @@ pub struct PeerContact {
     /// Services supported by this peer.
     pub services: Services,
 
+    /// Services needed by this peer for its operation
+    pub needed_services: Services,
+
     /// Timestamp when this peer contact was created in *seconds* since unix epoch. `None` if this is a seed.
     pub timestamp: Option<u64>,
 }
@@ -104,6 +107,7 @@ impl PeerContact {
         addresses: I,
         public_key: PublicKey,
         services: Services,
+        needed_services: Services,
         timestamp: Option<u64>,
     ) -> Self {
         let mut addresses = addresses.into_iter().collect::<Vec<Multiaddr>>();
@@ -114,6 +118,7 @@ impl PeerContact {
             addresses,
             public_key,
             services,
+            needed_services,
             timestamp,
         }
     }
@@ -309,8 +314,8 @@ impl PeerContactBook {
         let info = PeerContactInfo::from(contact);
         if info.matches(services_filter) {
             log::debug!(
-                " Inserting peer_id: {} into my peer contacts, because is interesting to me",
-                info.peer_id
+                " Inserting peer_id: {} into my peer contacts, because is interesting to me, it provides: {:?}",
+                info.peer_id,info.services()
             );
             let peer_id = info.peer_id;
             self.peer_contacts.insert(peer_id, Arc::new(info));
