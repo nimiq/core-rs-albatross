@@ -10,5 +10,4 @@ target
 /fixed-unsigned/target
 /devnet-environments/*/build/
 .nimiq_*/*
-verifying_keys
 proving_keys
