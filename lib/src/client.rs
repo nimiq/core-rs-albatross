@@ -159,7 +159,7 @@ impl ClientInner {
         #[cfg(feature = "wallet")]
         let wallet_store = Arc::new(WalletStore::new(environment.clone()));
 
-        let zkp_prover_active = config.zkp_prover_node_functionality;
+        let zkp_prover_active = config.zkp.zkp_prover_node_functionality;
         let zkp_component = ZKPComponent::new(
             Arc::clone(&blockchain),
             Arc::clone(&network),

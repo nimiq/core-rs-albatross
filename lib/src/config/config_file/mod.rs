@@ -36,7 +36,7 @@ pub struct ConfigFile {
     #[serde(default)]
     pub consensus: ConsensusSettings,
     #[serde(default)]
-    pub zkp_prover_node_functionality: bool,
+    pub zkp: Option<ZKPSettings>,
     pub rpc_server: Option<RpcServerSettings>,
     pub metrics_server: Option<MetricsServerSettings>,
     #[serde(default)]
@@ -473,4 +473,13 @@ pub struct ValidatorSettings {
     pub fee_key: Option<String>,
     #[serde(default)]
     pub automatic_reactivate: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+pub struct ZKPSettings {
+    #[serde(default)]
+    pub zkp_prover_node_functionality: bool,
+    #[serde(default)]
+    pub zkp_prover_setup_path: Option<String>,
 }

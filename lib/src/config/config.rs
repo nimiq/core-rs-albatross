@@ -600,10 +600,6 @@ pub struct ClientConfig {
     #[builder(default)]
     pub consensus: ConsensusConfig,
 
-    /// ZK Prover config
-    #[builder(default)]
-    pub zkp_prover_node_functionality: bool,
-
     /// The Nimiq network the client should connect to. Usually this should be either `Test` or
     /// `Main` for the Nimiq 1.0 networks. For Albatross there is currently only `TestAlbatross`
     /// and `DevAlbatross` available. Since Albatross is still in development at time of writing,
@@ -637,6 +633,11 @@ pub struct ClientConfig {
     #[cfg(feature = "validator")]
     #[builder(default)]
     pub validator: Option<ValidatorConfig>,
+
+    /// The optional zkp configuration
+    ///
+    #[builder(default)]
+    pub zkp: ZKPConfig,
 
     /// The optional rpc-server configuration
     ///
@@ -795,7 +796,16 @@ impl ClientConfigBuilder {
         self.database(config_file.database.clone());
 
         // Configure the zk prover
-        self.zkp_prover_node_functionality = Some(config_file.zkp_prover_node_functionality);
+        if let Some(zkp_settings) = config_file.zkp.as_ref() {
+            let mut zkp_prover_setup_path = None;
+            if let Some(zkp_path) = zkp_settings.zkp_prover_setup_path.as_ref() {
+                zkp_prover_setup_path = Some(PathBuf::from(zkp_path));
+            }
+            self.zkp = Some(ZKPConfig {
+                zkp_prover_node_functionality: zkp_settings.zkp_prover_node_functionality,
+                zkp_prover_setup_path,
+            });
+        }
 
         // Configure RPC server
         #[cfg(feature = "rpc-server")]
@@ -888,4 +898,16 @@ impl ClientConfigBuilder {
         // NOTE: We're always return `Ok(_)`, but we might want to introduce errors later.
         Ok(self)
     }
+}
+
+/// Contains the configurations for the ZKP storate, verification and proof generation.
+#[derive(Debug, Clone, Builder, Default)]
+pub struct ZKPConfig {
+    /// ZK Proof generation activation config.
+    #[builder(default)]
+    pub zkp_prover_node_functionality: bool,
+
+    /// ZKP prover path for verifying and proving keys.
+    #[builder(default)]
+    pub zkp_prover_setup_path: Option<PathBuf>,
 }
