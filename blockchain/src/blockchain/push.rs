@@ -96,6 +96,7 @@ impl Blockchain {
             !trusted,
             block.is_skip(),
             NextBlock::Subsequent,
+            &this.election_head_hash(),
         ) {
             warn!(%block, reason = "bad header", "Rejecting block");
             return Err(e);
@@ -107,6 +108,7 @@ impl Blockchain {
             &block,
             &proposer_slot.validator.signing_key,
             !trusted,
+            &this.current_validators().unwrap(),
         ) {
             warn!(%block, reason = "bad justification", "Rejecting block");
             return Err(e);

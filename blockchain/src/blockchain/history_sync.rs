@@ -113,15 +113,20 @@ impl Blockchain {
             false, // Can't check seed since we don't have the previous block info to get the proposer's signing key
             false,
             NextBlock::HistoryChunkMacro,
+            &this.election_head_hash(),
         ) {
             warn!(%block, reason = "bad header", "Rejecting block");
             return Err(e);
         }
 
         // Check the justification. Signing key is not necessary since it isn't needed for macro blocks
-        if let Err(e) =
-            Blockchain::verify_block_justification(&*this, &block, &PublicKey::default(), true)
-        {
+        if let Err(e) = Blockchain::verify_block_justification(
+            &*this,
+            &block,
+            &PublicKey::default(),
+            true,
+            &this.current_validators().unwrap(),
+        ) {
             warn!(%block, reason = "bad justification", "Rejecting block");
             return Err(e);
         }

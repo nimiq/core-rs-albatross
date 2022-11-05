@@ -54,6 +54,7 @@ impl NanoBlockchain {
             true,
             block.is_skip(),
             NextBlock::Subsequent,
+            &self.election_head_hash(),
         )?;
 
         // If this is an election block, check the body.
@@ -70,7 +71,13 @@ impl NanoBlockchain {
         }
 
         // Check the justification.
-        Blockchain::verify_block_justification(self, &block, &slot_owner.signing_key, true)?;
+        Blockchain::verify_block_justification(
+            self,
+            &block,
+            &slot_owner.signing_key,
+            true,
+            &self.current_validators().unwrap(),
+        )?;
 
         // Create the chaininfo for the new block.
         let chain_info = ChainInfo::from_block(block, &prev_info);

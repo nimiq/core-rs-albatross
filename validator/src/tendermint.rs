@@ -348,6 +348,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
                 true,
                 false,
                 NextBlock::Subsequent,
+                &blockchain.election_head_hash(),
             )
             .is_err()
             {

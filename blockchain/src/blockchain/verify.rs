@@ -8,8 +8,7 @@ use nimiq_block::{
 use nimiq_database::Transaction as DBtx;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::PublicKey as SchnorrPublicKey;
-use nimiq_primitives::policy;
-
+use nimiq_primitives::{policy, slots::Validators};
 use nimiq_transaction::Transaction;
 
 use crate::blockchain_state::BlockchainState;
@@ -17,9 +16,7 @@ use crate::{AbstractBlockchain, Blockchain, BlockchainError, NextBlock, PushErro
 
 /// Implements methods to verify the validity of blocks.
 impl Blockchain {
-    /// Verifies the header of a block. This function is used when we are pushing a normal block
-    /// into the chain. It cannot be used when syncing, since this performs more strict checks than
-    /// the ones we make when syncing.
+    /// Verifies the header of a block.
     /// This only performs checks that can be made BEFORE the state is updated with the block. All
     /// checks that require the updated state (ex: if an account has enough funds) are made on the
     /// verify_block_state method.
@@ -33,6 +30,7 @@ impl Blockchain {
         check_seed: bool,
         skip_block: bool,
         next_block_type: NextBlock,
+        expected_election_hash: &Blake2bHash,
     ) -> Result<(), PushError> {
         // Check the version
         if header.version() != policy::VERSION {
@@ -202,7 +200,7 @@ impl Blockchain {
         if header.ty() == BlockType::Macro {
             // Check if the parent election hash matches the current election head hash
             let parent_election_hash = header.parent_election_hash().unwrap();
-            if parent_election_hash != &blockchain.election_head_hash() {
+            if parent_election_hash != expected_election_hash {
                 warn!(
                     header = %header,
                     parent_election_hash = %parent_election_hash,
@@ -225,6 +223,7 @@ impl Blockchain {
         block: &Block,
         signing_key: &SchnorrPublicKey,
         check_signature: bool,
+        current_validators: &Validators,
     ) -> Result<(), PushError> {
         match block {
             Block::Micro(micro_block) => {
@@ -274,12 +273,7 @@ impl Blockchain {
             }
             Block::Macro(macro_block) => {
                 // Verify the Tendermint proof.
-                if check_signature
-                    && !TendermintProof::verify(
-                        macro_block,
-                        &blockchain.current_validators().unwrap(),
-                    )
-                {
+                if check_signature && !TendermintProof::verify(macro_block, current_validators) {
                     warn!(
                         %block,
                         reason = "Macro block with bad justification",

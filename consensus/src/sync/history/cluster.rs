@@ -5,20 +5,21 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
+use nimiq_keys::PublicKey;
 use thiserror::Error;
 
 use futures::{FutureExt, Stream, StreamExt};
 use lazy_static::lazy_static;
 use parking_lot::RwLock;
 
-use nimiq_block::MacroBlock;
+use nimiq_block::{Block, MacroBlock};
 use nimiq_blockchain::{
-    AbstractBlockchain, Blockchain, ExtendedTransaction, HistoryTreeChunk, PushError, PushResult,
-    CHUNK_SIZE,
+    AbstractBlockchain, Blockchain, ExtendedTransaction, HistoryTreeChunk, NextBlock, PushError,
+    PushResult, CHUNK_SIZE,
 };
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{network::Network, request::RequestError};
-use nimiq_primitives::policy;
+use nimiq_primitives::{policy, slots::Validators};
 use nimiq_utils::math::CeilingDiv;
 
 use crate::messages::{BatchSetInfo, HistoryChunk, RequestBatchSet, RequestHistoryChunk};
@@ -33,6 +34,12 @@ pub enum HistoryRequestError {
     /// Batch set info obtained doesn't match the requested hash
     #[error("Batch set info mismatch")]
     BatchSetInfoMismatch,
+    /// Batch set info obtained is invalid
+    #[error("Invalid Batch Set Info")]
+    InvalidBatchSetInfo,
+    /// Macro block obtained is invalid
+    #[error("Invalid Macro Block")]
+    InvalidMacroBlock,
 }
 
 struct PendingBatchSet {
@@ -211,11 +218,139 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         }
     }
 
+    fn verify_macro_block(
+        block: &Block,
+        blockchain: &Blockchain,
+        validators: &Validators,
+        expected_election_hash: &Blake2bHash,
+    ) -> Result<(), HistoryRequestError> {
+        // Check the header. Signing key is not necessary since we can't check the seed
+        if Blockchain::verify_block_header(
+            blockchain,
+            &block.header(),
+            &PublicKey::default(),
+            None,
+            false, // Can't check seed since we don't have the previous block info to get the proposer's signing key
+            false,
+            NextBlock::HistoryChunkMacro,
+            expected_election_hash,
+        )
+        .is_err()
+        {
+            warn!(%block, reason = "bad header", "Invalid macro block");
+            return Err(HistoryRequestError::InvalidMacroBlock);
+        }
+
+        // Check the justification. Signing key is not necessary since it isn't needed for macro blocks
+        if Blockchain::verify_block_justification(
+            blockchain,
+            block,
+            &PublicKey::default(),
+            true,
+            validators,
+        )
+        .is_err()
+        {
+            warn!(%block, reason = "bad justification", "Invalid macro block");
+            return Err(HistoryRequestError::InvalidMacroBlock);
+        }
+
+        // Check the body.
+        if Blockchain::verify_block_body(
+            blockchain,
+            &block.header(),
+            &block.body(),
+            None,
+            false,
+            true,
+        )
+        .is_err()
+        {
+            warn!(%block, reason = "bad body", "Invalid macro block");
+            return Err(HistoryRequestError::InvalidMacroBlock);
+        }
+        Ok(())
+    }
+
+    fn verify_batch_set_info(
+        batch_set_info: &BatchSetInfo,
+        blockchain: &Blockchain,
+        expected_parent_election_hash: &Blake2bHash,
+        last_known_block_number: u32,
+        last_known_validators: &Validators,
+    ) -> Result<(), HistoryRequestError> {
+        // Check and verify the election macro block if it exists and get the parent election_hash of this epoch
+        if let Some(election_macro_block) = &batch_set_info.election_macro_block {
+            let block = Block::Macro(election_macro_block.clone());
+            if !block.is_election() {
+                warn!(%block, reason = "Invalid election block", "Block is not an election block");
+                return Err(HistoryRequestError::InvalidBatchSetInfo);
+            }
+
+            Self::verify_macro_block(
+                &block,
+                blockchain,
+                last_known_validators,
+                expected_parent_election_hash,
+            )?;
+
+            // Check that the received election block closes up the epoch and has a non decreasing block number
+            if block.block_number() < last_known_block_number {
+                warn!(%block, reason = "Decreasing block number", "Block is already known or has a decreasing block number");
+                return Err(HistoryRequestError::BatchSetInfoMismatch);
+            }
+        }
+
+        let mut last_batch_set_block_number = 0;
+        let mut last_seen_block_number = last_known_block_number;
+
+        // Now do some basic consistency checks for batch sets and verify the respective macro block
+        for batch_set in &batch_set_info.batch_sets {
+            if let Some(macro_block) = &batch_set.macro_block {
+                let block = Block::Macro(macro_block.clone());
+
+                // Check that the received blocks within the batch sets are in order
+                if block.block_number() <= last_batch_set_block_number {
+                    warn!(%block, reason = "Decreasing block number", "Block has a decreasing block number");
+                    return Err(HistoryRequestError::BatchSetInfoMismatch);
+                }
+
+                last_batch_set_block_number = block.block_number();
+
+                // Don't verify blocks that are known from an epoch since they are
+                // going to be dismissed later
+                if block.block_number() <= blockchain.block_number() {
+                    continue;
+                }
+
+                // Check the macro block of the batch set
+                Self::verify_macro_block(
+                    &block,
+                    blockchain,
+                    last_known_validators,
+                    expected_parent_election_hash,
+                )?;
+
+                // Check that the received blocks are not known
+                if block.block_number() < last_seen_block_number {
+                    warn!(%block, reason = "Decreasing block number", "Block is already known");
+                    return Err(HistoryRequestError::BatchSetInfoMismatch);
+                }
+                last_seen_block_number = block.block_number();
+            } else {
+                return Err(HistoryRequestError::InvalidBatchSetInfo);
+            }
+        }
+
+        Ok(())
+    }
+
     fn on_epoch_received(&mut self, epoch: BatchSetInfo) -> Result<(), SyncClusterResult> {
         // `epoch.block` is Some or epoch.batch_sets is not empty, since we filtered it accordingly
-        // in the `request_fn`
-        let block = if let Some(election_macro_block) = epoch.election_macro_block {
-            election_macro_block
+        // in the `request_fn`. Also the `request_fn` already verified we obtained a BatchSetInfo for
+        // the block hash we are expecting
+        let block = if let Some(ref election_macro_block) = epoch.election_macro_block {
+            election_macro_block.clone()
         } else {
             epoch
                 .batch_sets
@@ -236,10 +371,8 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
 
         let epoch_number = block.epoch_number();
 
-        // TODO Verify macro blocks and their ordering
-        // Currently we only do a very basic check here
+        let blockchain = self.blockchain.read();
         let (current_block_number, current_epoch_number, num_known_txs) = {
-            let blockchain = self.blockchain.read();
             let current_epoch_number = blockchain.epoch_number();
             let num_known_txs = if epoch_number == current_epoch_number {
                 blockchain
@@ -257,6 +390,46 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
             debug!("Received outdated epoch at block {}", current_block_number);
             return Err(SyncClusterResult::Outdated);
         }
+
+        let last_known_block_number =
+            if let Some(last_pending_batch_set) = self.pending_batch_sets.back() {
+                last_pending_batch_set.macro_block.block_number()
+            } else {
+                // The pending batch set is empty, so the last known block number comes from the blockchain
+                current_block_number
+            };
+
+        let last_known_validators =
+            if let Some(last_pending_batch_set) = self.pending_batch_sets.back() {
+                last_pending_batch_set.macro_block.get_validators().unwrap()
+            } else {
+                // The pending batch set is empty, so the last known block number comes from the blockchain
+                blockchain.current_validators().unwrap()
+            };
+
+        // The expected election hash could be:
+        // 1. The hash of the last epoch pending to download
+        // 2. The election hash of the blockchain
+        let expected_election_hash =
+            if let Some(last_pending_batch_set) = self.pending_batch_sets.back() {
+                last_pending_batch_set.macro_block.hash()
+            } else {
+                // The pending batch set is empty, so the last known election head hash comes from the blockchain
+                blockchain.election_head_hash()
+            };
+
+        // Verify the batch set info received
+        Self::verify_batch_set_info(
+            &epoch,
+            &blockchain,
+            &expected_election_hash,
+            last_known_block_number,
+            &last_known_validators,
+        )
+        .map_err(|_| SyncClusterResult::InvalidBatchSet)?;
+
+        // Release the blockchain lock
+        drop(blockchain);
 
         let mut previous_history_size = 0usize;
         let mut chunk_index_offset = 0usize;
@@ -483,14 +656,30 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         let batch_set_info = network
             .request(RequestBatchSet { hash: hash.clone() }, peer_id)
             .await
-            .map_err(|e| HistoryRequestError::RequestError(e))?;
+            .map_err(HistoryRequestError::RequestError)?;
 
         // Check that the received batch set info matches the requested hash
-        if let Some(ref election_macro_block) = batch_set_info.election_macro_block {
-            if election_macro_block.hash() != hash {
-                warn!(expected = %hash, received = %election_macro_block.hash(), "Received unexpected block");
-                return Err(HistoryRequestError::BatchSetInfoMismatch);
-            }
+        // Two possible cases:
+        // 1. Got a batch set info for a complete epoch (that does have an election macro block)
+        // 2. Got a batch set info for a partial epoch (that doesn't have an election block yet)
+        let block_hash = if let Some(ref election_macro_block) = batch_set_info.election_macro_block
+        {
+            election_macro_block.hash()
+        } else {
+            // This is for an epoch that hasn't finalized. Now check and see if the batch set is properly built
+            // and that the last batch set does have a macro block
+            batch_set_info
+                .batch_sets
+                .last()
+                .ok_or(HistoryRequestError::InvalidBatchSetInfo)?
+                .macro_block
+                .clone()
+                .ok_or(HistoryRequestError::InvalidBatchSetInfo)?
+                .hash()
+        };
+        if hash != block_hash {
+            warn!(expected = %hash, received = %block_hash, "Received unexpected block");
+            return Err(HistoryRequestError::BatchSetInfoMismatch);
         }
         Ok(batch_set_info)
     }
@@ -616,6 +805,7 @@ pub enum SyncClusterResult {
     EpochSuccessful,
     NoMoreEpochs,
     NoSuchBatchSet,
+    InvalidBatchSet,
     InconsistentState,
     Error,
     Outdated,
