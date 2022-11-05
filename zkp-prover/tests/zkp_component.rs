@@ -2,9 +2,11 @@ use beserial::Deserialize;
 use futures::StreamExt;
 use nimiq_test_utils::blockchain_with_rng::produce_macro_blocks_with_rng;
 use nimiq_test_utils::zkp_test_data::zkp_test_exe;
+use nimiq_test_utils::zkp_test_data::KEYS_PATH;
 use nimiq_test_utils::zkp_test_data::ZKPROOF_SERIALIZED_IN_HEX;
 use nimiq_zkp_prover::types::ZKProof;
 use parking_lot::RwLock;
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -40,7 +42,7 @@ fn blockchain() -> Arc<RwLock<Blockchain>> {
 #[test(tokio::test)]
 #[ignore]
 async fn builds_valid_genesis_proof() {
-    NanoZKP::setup(get_base_seed(), &PathBuf::new()).unwrap();
+    NanoZKP::setup(get_base_seed(), Path::new(KEYS_PATH)).unwrap();
     let blockchain = blockchain();
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
@@ -53,12 +55,17 @@ async fn builds_valid_genesis_proof() {
         false,
         Some(zkp_test_exe()),
         env,
+        PathBuf::from(KEYS_PATH),
     )
     .await
     .proxy();
 
     assert!(
-        validate_proof(&blockchain, &zkp_prover.get_zkp_state().into()),
+        validate_proof(
+            &blockchain,
+            &zkp_prover.get_zkp_state().into(),
+            Path::new(KEYS_PATH)
+        ),
         "The validation of a empty proof for the genesis block should succeed"
     );
 }
@@ -66,7 +73,7 @@ async fn builds_valid_genesis_proof() {
 #[test(tokio::test)]
 #[ignore]
 async fn loads_valid_zkp_state_from_db() {
-    NanoZKP::setup(get_base_seed(), &PathBuf::new()).unwrap();
+    NanoZKP::setup(get_base_seed(), Path::new(KEYS_PATH)).unwrap();
     let blockchain = blockchain();
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
@@ -91,6 +98,7 @@ async fn loads_valid_zkp_state_from_db() {
         false,
         Some(zkp_test_exe()),
         proof_store.env,
+        PathBuf::from(KEYS_PATH),
     )
     .await;
 
@@ -105,7 +113,7 @@ async fn loads_valid_zkp_state_from_db() {
 #[test(tokio::test)]
 #[ignore]
 async fn does_not_load_invalid_zkp_state_from_db() {
-    NanoZKP::setup(get_base_seed(), &PathBuf::new()).unwrap();
+    NanoZKP::setup(get_base_seed(), Path::new(KEYS_PATH)).unwrap();
     let blockchain = blockchain();
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
@@ -126,6 +134,7 @@ async fn does_not_load_invalid_zkp_state_from_db() {
         false,
         Some(zkp_test_exe()),
         proof_store.env,
+        PathBuf::from(KEYS_PATH),
     )
     .await;
 
@@ -140,7 +149,7 @@ async fn does_not_load_invalid_zkp_state_from_db() {
 #[test(tokio::test)]
 #[ignore]
 async fn can_produce_two_consecutive_valid_zk_proofs() {
-    NanoZKP::setup(get_base_seed(), &PathBuf::new()).unwrap();
+    NanoZKP::setup(get_base_seed(), Path::new(KEYS_PATH)).unwrap();
     let blockchain = blockchain();
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
@@ -156,6 +165,7 @@ async fn can_produce_two_consecutive_valid_zk_proofs() {
         true,
         Some(zkp_test_exe()),
         env,
+        PathBuf::from(KEYS_PATH),
     )
     .await;
 
@@ -179,7 +189,7 @@ async fn can_produce_two_consecutive_valid_zk_proofs() {
     // Waits for the proof generation and verifies the proof.
     let (proof, _) = zk_proofs_stream.as_mut().next().await.unwrap();
     assert!(
-        validate_proof(&blockchain, &proof),
+        validate_proof(&blockchain, &proof, Path::new(KEYS_PATH)),
         "Generated ZK proof for the first block should be valid"
     );
 
@@ -194,7 +204,7 @@ async fn can_produce_two_consecutive_valid_zk_proofs() {
 
     let (proof, _) = zk_proofs_stream.as_mut().next().await.unwrap();
     assert!(
-        validate_proof(&blockchain, &proof),
+        validate_proof(&blockchain, &proof, Path::new(KEYS_PATH)),
         "Generated ZK proof for the second block should be valid"
     );
 }

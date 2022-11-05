@@ -479,7 +479,7 @@ pub struct ValidatorSettings {
 #[serde(deny_unknown_fields)]
 pub struct ZKPSettings {
     #[serde(default)]
-    pub zkp_prover_node_functionality: bool,
+    pub prover_active: bool,
     #[serde(default)]
-    pub zkp_prover_setup_path: Option<String>,
+    pub setup_keys_path: Option<String>,
 }

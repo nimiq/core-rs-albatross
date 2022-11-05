@@ -1,11 +1,11 @@
-use std::path::PathBuf;
+use std::path::Path;
 use std::sync::Arc;
 
 use ark_groth16::Proof;
 use beserial::Deserialize;
 use nimiq_primitives::policy;
 use nimiq_test_utils::blockchain_with_rng::produce_macro_blocks_with_rng;
-use nimiq_test_utils::zkp_test_data::ZKPROOF_SERIALIZED_IN_HEX;
+use nimiq_test_utils::zkp_test_data::{KEYS_PATH, ZKPROOF_SERIALIZED_IN_HEX};
 use nimiq_zkp_prover::proof_utils::ProofStore;
 use nimiq_zkp_prover::types::ZKProof;
 use parking_lot::RwLock;
@@ -33,7 +33,7 @@ fn blockchain() -> Arc<RwLock<Blockchain>> {
 #[test(tokio::test)]
 #[ignore]
 async fn can_detect_valid_and_invalid_genesis_proof() {
-    NanoZKP::setup(get_base_seed(), &PathBuf::new()).unwrap();
+    NanoZKP::setup(get_base_seed(), Path::new(KEYS_PATH)).unwrap();
     let blockchain = blockchain();
 
     let proof = ZKProof {
@@ -41,7 +41,7 @@ async fn can_detect_valid_and_invalid_genesis_proof() {
         proof: None,
     };
     assert!(
-        validate_proof(&blockchain, &proof),
+        validate_proof(&blockchain, &proof, Path::new(KEYS_PATH)),
         "The validation of a empty proof for the genesis block should succeed"
     );
 
@@ -50,7 +50,7 @@ async fn can_detect_valid_and_invalid_genesis_proof() {
         proof: Some(Proof::default()),
     };
     assert!(
-        !validate_proof(&blockchain, &proof),
+        !validate_proof(&blockchain, &proof, Path::new(KEYS_PATH)),
         "The validation of a Some() proof for a genesis block should fail"
     );
 }
@@ -58,7 +58,7 @@ async fn can_detect_valid_and_invalid_genesis_proof() {
 #[test(tokio::test)]
 #[ignore]
 async fn can_detect_invalid_proof_none_genesis_blocks() {
-    NanoZKP::setup(get_base_seed(), &PathBuf::new()).unwrap();
+    NanoZKP::setup(get_base_seed(), Path::new(KEYS_PATH)).unwrap();
     let blockchain = blockchain();
 
     let producer = BlockProducer::new(signing_key(), voting_key());
@@ -78,7 +78,7 @@ async fn can_detect_invalid_proof_none_genesis_blocks() {
     };
 
     assert!(
-        !validate_proof(&blockchain, &zkp_proof),
+        !validate_proof(&blockchain, &zkp_proof, Path::new(KEYS_PATH)),
         "The validation of a fake proof should fail"
     );
 
@@ -88,7 +88,7 @@ async fn can_detect_invalid_proof_none_genesis_blocks() {
     };
 
     assert!(
-        !validate_proof(&blockchain, &zkp_proof),
+        !validate_proof(&blockchain, &zkp_proof, Path::new(KEYS_PATH)),
         "The validation of a empty proof for a non genesis block should fail"
     );
 
@@ -98,7 +98,7 @@ async fn can_detect_invalid_proof_none_genesis_blocks() {
     };
 
     assert!(
-        !validate_proof(&blockchain, &zkp_proof),
+        !validate_proof(&blockchain, &zkp_proof, Path::new(KEYS_PATH)),
         "The validation of a proof for a non existing block should fail"
     );
 }
@@ -106,7 +106,7 @@ async fn can_detect_invalid_proof_none_genesis_blocks() {
 #[test(tokio::test)]
 #[ignore]
 async fn can_detect_valid_proof_none_genesis_blocks() {
-    NanoZKP::setup(get_base_seed(), &PathBuf::new()).unwrap();
+    NanoZKP::setup(get_base_seed(), Path::new(KEYS_PATH)).unwrap();
     let blockchain = blockchain();
 
     let producer = BlockProducer::new(signing_key(), voting_key());
@@ -121,7 +121,7 @@ async fn can_detect_valid_proof_none_genesis_blocks() {
     let zkp_proof =
         &ZKProof::deserialize_from_vec(&hex::decode(ZKPROOF_SERIALIZED_IN_HEX).unwrap()).unwrap();
     assert!(
-        validate_proof(&blockchain, &zkp_proof),
+        validate_proof(&blockchain, &zkp_proof, Path::new(KEYS_PATH)),
         "The validation of a valid proof failed"
     );
 }

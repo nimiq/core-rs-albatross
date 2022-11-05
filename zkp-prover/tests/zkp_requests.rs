@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use beserial::Deserialize;
@@ -15,8 +15,8 @@ use nimiq_primitives::policy;
 use nimiq_test_log::test;
 use nimiq_test_utils::blockchain::{signing_key, voting_key};
 use nimiq_test_utils::blockchain_with_rng::produce_macro_blocks_with_rng;
-use nimiq_test_utils::zkp_test_data::ZKPROOF_SERIALIZED_IN_HEX;
 use nimiq_test_utils::zkp_test_data::{get_base_seed, zkp_test_exe};
+use nimiq_test_utils::zkp_test_data::{KEYS_PATH, ZKPROOF_SERIALIZED_IN_HEX};
 
 use nimiq_zkp_prover::proof_utils::{validate_proof, ProofStore};
 use nimiq_zkp_prover::types::ZKProof;
@@ -37,7 +37,7 @@ fn blockchain() -> Arc<RwLock<Blockchain>> {
 #[test(tokio::test)]
 #[ignore]
 async fn peers_dont_reply_with_outdated_proof() {
-    NanoZKP::setup(get_base_seed(), &PathBuf::new()).unwrap();
+    NanoZKP::setup(get_base_seed(), Path::new(KEYS_PATH)).unwrap();
     let blockchain = blockchain();
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
@@ -52,6 +52,7 @@ async fn peers_dont_reply_with_outdated_proof() {
         false,
         Some(zkp_test_exe()),
         VolatileEnvironment::new(10).unwrap(),
+        PathBuf::from(KEYS_PATH),
     )
     .await;
 
@@ -61,6 +62,7 @@ async fn peers_dont_reply_with_outdated_proof() {
         false,
         Some(zkp_test_exe()),
         VolatileEnvironment::new(10).unwrap(),
+        PathBuf::from(KEYS_PATH),
     )
     .await;
 
@@ -80,7 +82,7 @@ async fn peers_dont_reply_with_outdated_proof() {
 #[test(tokio::test)]
 #[ignore]
 async fn peers_reply_with_valid_proof() {
-    NanoZKP::setup(get_base_seed(), &PathBuf::new()).unwrap();
+    NanoZKP::setup(get_base_seed(), Path::new(KEYS_PATH)).unwrap();
     let blockchain2 = blockchain();
     let blockchain3 = blockchain();
     let mut hub = MockHub::new();
@@ -122,6 +124,7 @@ async fn peers_reply_with_valid_proof() {
         false,
         Some(zkp_test_exe()),
         env2,
+        PathBuf::from(KEYS_PATH),
     )
     .await;
     let _zkp_prover3 = ZKPComponent::new(
@@ -130,6 +133,7 @@ async fn peers_reply_with_valid_proof() {
         false,
         Some(zkp_test_exe()),
         env3,
+        PathBuf::from(KEYS_PATH),
     )
     .await;
 
@@ -141,7 +145,7 @@ async fn peers_reply_with_valid_proof() {
     for _ in 0..2 {
         let proof = zkp_requests.next().await;
         assert!(
-            validate_proof(&blockchain2, &proof.unwrap().1),
+            validate_proof(&blockchain2, &proof.unwrap().1, Path::new(KEYS_PATH)),
             "Peer should sent a new proof valid proof"
         );
     }

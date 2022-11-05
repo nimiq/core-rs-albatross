@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::Arc};
+use std::sync::Arc;
 
 use nimiq_nano_zkp::NanoZKP;
 use parking_lot::RwLock;
@@ -96,8 +96,7 @@ impl ClientInner {
                 1, 0, 52, 0, 0, 0, 0, 0, 1, 0, 10, 0, 22, 32, 0, 0, 2, 0, 55, 49, 0, 11, 0, 0, 3,
                 0, 0, 0, 0, 0, 2, 92,
             ];
-            // ITODO: use path from config
-            NanoZKP::setup(ChaCha20Rng::from_seed(seed), &PathBuf::new())?;
+            NanoZKP::setup(ChaCha20Rng::from_seed(seed), &config.zkp.setup_keys_path)?;
             log::debug!("Finished Nano ZKP setup.")
         }
 
@@ -159,13 +158,13 @@ impl ClientInner {
         #[cfg(feature = "wallet")]
         let wallet_store = Arc::new(WalletStore::new(environment.clone()));
 
-        let zkp_prover_active = config.zkp.zkp_prover_node_functionality;
         let zkp_component = ZKPComponent::new(
             Arc::clone(&blockchain),
             Arc::clone(&network),
-            zkp_prover_active,
+            config.zkp.prover_active,
             None,
             environment.clone(),
+            config.zkp.setup_keys_path,
         )
         .await;
 

@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -5,7 +6,7 @@ use std::time::Duration;
 
 use futures::{Stream, StreamExt};
 use nimiq_test_log::test;
-use nimiq_test_utils::zkp_test_data::zkp_test_exe;
+use nimiq_test_utils::zkp_test_data::{zkp_test_exe, KEYS_PATH};
 use nimiq_zkp_prover::ZKPComponent;
 use parking_lot::RwLock;
 
@@ -78,6 +79,7 @@ async fn peers_can_sync() {
         false,
         Some(zkp_test_exe()),
         env1.clone(),
+        PathBuf::from(KEYS_PATH),
     )
     .await
     .proxy();
@@ -111,6 +113,7 @@ async fn peers_can_sync() {
         false,
         Some(zkp_test_exe()),
         env2.clone(),
+        PathBuf::from(KEYS_PATH),
     )
     .await
     .proxy();
@@ -237,6 +240,7 @@ async fn sync_ingredients() {
         false,
         Some(zkp_test_exe()),
         env1.clone(),
+        PathBuf::from(KEYS_PATH),
     )
     .await
     .proxy();
@@ -267,6 +271,7 @@ async fn sync_ingredients() {
         false,
         Some(zkp_test_exe()),
         env2.clone(),
+        PathBuf::from(KEYS_PATH),
     )
     .await
     .proxy();

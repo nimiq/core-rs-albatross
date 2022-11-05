@@ -1,6 +1,8 @@
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 
+pub const KEYS_PATH: &str = "";
+
 pub fn get_base_seed() -> ChaCha20Rng {
     let seed = [
         1, 0, 52, 0, 0, 0, 0, 0, 1, 0, 10, 0, 22, 32, 0, 0, 2, 0, 55, 49, 0, 11, 0, 0, 3, 0, 0, 0,

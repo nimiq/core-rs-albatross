@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::{process::Stdio, sync::Arc};
 
 use ark_groth16::Proof;
@@ -20,7 +20,11 @@ use super::types::ZKPState;
 use crate::types::*;
 
 /// Fully validates the proof by verifying both the zk proof and the blocks existance on the blockchain.
-pub fn validate_proof(blockchain: &Arc<RwLock<Blockchain>>, proof: &ZKProof) -> bool {
+pub fn validate_proof(
+    blockchain: &Arc<RwLock<Blockchain>>,
+    proof: &ZKProof,
+    keys_path: &Path,
+) -> bool {
     // If it's a genesis block proof, then should have none as proof value to be valid.
     if proof.block_number == 0 && proof.proof.is_none() {
         return true;
@@ -28,7 +32,7 @@ pub fn validate_proof(blockchain: &Arc<RwLock<Blockchain>>, proof: &ZKProof) -> 
 
     // Fetches and verfies the election blocks for the proofs and then validates the proof
     if let Ok((new_block, genesis_block, proof)) = get_proof_macro_blocks(blockchain, proof) {
-        return validate_proof_get_new_state(proof, new_block, genesis_block).is_ok();
+        return validate_proof_get_new_state(proof, new_block, genesis_block, keys_path).is_ok();
     }
     false
 }
@@ -64,6 +68,7 @@ pub(crate) fn validate_proof_get_new_state(
     proof: Proof<MNT6_753>,
     new_block: MacroBlock,
     genesis_block: MacroBlock,
+    keys_path: &Path,
 ) -> Result<ZKPState, ZKPComponentError> {
     let genesis_pks: Vec<G2MNT6> = genesis_block
         .get_validators()
@@ -88,7 +93,7 @@ pub(crate) fn validate_proof_get_new_state(
         new_block.hash().into(),
         new_pks.clone(),
         proof.clone(),
-        &PathBuf::new(), // ITODO: use config
+        keys_path,
     )? {
         return Ok(ZKPState {
             latest_pks: new_pks,
@@ -107,6 +112,7 @@ pub fn generate_new_proof(
     latest_header_hash: [u8; 32],
     previous_proof: Option<Proof<MNT6_753>>,
     genesis_state: Vec<u8>,
+    keys_path: &Path,
 ) -> Result<ZKPState, ZKProofGenerationError> {
     let validators = block.get_validators();
 
@@ -127,7 +133,7 @@ pub fn generate_new_proof(
             previous_proof.map(|proof| (proof, genesis_state.clone())),
             true,
             true,
-            &PathBuf::new(), // ITODO: use config
+            keys_path,
         );
 
         return match proof {

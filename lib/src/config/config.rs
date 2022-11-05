@@ -797,13 +797,13 @@ impl ClientConfigBuilder {
 
         // Configure the zk prover
         if let Some(zkp_settings) = config_file.zkp.as_ref() {
-            let mut zkp_prover_setup_path = None;
-            if let Some(zkp_path) = zkp_settings.zkp_prover_setup_path.as_ref() {
-                zkp_prover_setup_path = Some(PathBuf::from(zkp_path));
+            let mut setup_keys_path = PathBuf::new();
+            if let Some(zkp_path) = zkp_settings.setup_keys_path.as_ref() {
+                setup_keys_path = PathBuf::from(zkp_path);
             }
             self.zkp = Some(ZKPConfig {
-                zkp_prover_node_functionality: zkp_settings.zkp_prover_node_functionality,
-                zkp_prover_setup_path,
+                prover_active: zkp_settings.prover_active,
+                setup_keys_path,
             });
         }
 
@@ -905,9 +905,9 @@ impl ClientConfigBuilder {
 pub struct ZKPConfig {
     /// ZK Proof generation activation config.
     #[builder(default)]
-    pub zkp_prover_node_functionality: bool,
+    pub prover_active: bool,
 
     /// ZKP prover path for verifying and proving keys.
     #[builder(default)]
-    pub zkp_prover_setup_path: Option<PathBuf>,
+    pub setup_keys_path: PathBuf,
 }
