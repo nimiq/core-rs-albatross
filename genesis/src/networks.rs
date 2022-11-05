@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::env;
 use std::path::Path;
 
-use hex::FromHex;
 use lazy_static::lazy_static;
 
 use beserial::{Deserialize, Serialize};
@@ -11,10 +10,7 @@ use nimiq_account::AccountsList;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis_builder::{GenesisBuilder, GenesisBuilderError, GenesisInfo};
 use nimiq_hash::Blake2bHash;
-use nimiq_keys::PublicKey;
-use nimiq_peer_address::address::seed_list::SeedList;
-use nimiq_peer_address::address::{NetAddress, PeerAddress, PeerAddressType, PeerId};
-use nimiq_peer_address::services::ServiceFlags;
+
 use nimiq_trie::key_nibbles::KeyNibbles;
 
 pub use nimiq_primitives::networks::NetworkId;
@@ -30,10 +26,6 @@ struct GenesisData {
 pub struct NetworkInfo {
     network_id: NetworkId,
     name: &'static str,
-
-    seed_peers: Vec<PeerAddress>,
-    seed_lists: Vec<SeedList>,
-
     genesis: GenesisData,
 }
 
@@ -46,16 +38,6 @@ impl NetworkInfo {
     #[inline]
     pub fn name(&self) -> String {
         self.name.into()
-    }
-
-    #[inline]
-    pub fn seed_peers(&self) -> &Vec<PeerAddress> {
-        &self.seed_peers
-    }
-
-    #[inline]
-    pub fn seed_lists(&self) -> &Vec<SeedList> {
-        &self.seed_lists
     }
 
     #[inline]
@@ -126,12 +108,6 @@ lazy_static! {
             NetworkInfo {
                 network_id: NetworkId::DevAlbatross,
                 name: "dev-albatross",
-                seed_peers: vec![create_seed_peer_addr_ws(
-                    "seed1.validators.devnet.nimiq.dev",
-                    8443,
-                    "5af4c3f30998573e8d3476cd0e0543bf7adba576ef321342e41c2bccc246c377",
-                )],
-                seed_lists: vec![],
                 genesis: dev_genesis,
             },
         );
@@ -141,8 +117,6 @@ lazy_static! {
             NetworkInfo {
                 network_id: NetworkId::UnitAlbatross,
                 name: "unit-albatross",
-                seed_peers: vec![],
-                seed_lists: vec![],
                 genesis: include!(concat!(
                     env!("OUT_DIR"),
                     "/genesis/unit-albatross/genesis.rs"
@@ -152,38 +126,4 @@ lazy_static! {
 
         m
     };
-}
-
-pub fn create_seed_peer_addr(url: &str, port: u16, pubkey_hex: &str) -> PeerAddress {
-    let public_key = PublicKey::from_hex(pubkey_hex).unwrap();
-    PeerAddress {
-        ty: PeerAddressType::Wss(url.to_string(), port),
-        services: ServiceFlags::FULL,
-        timestamp: 0,
-        net_address: NetAddress::Unspecified,
-        public_key,
-        distance: 0,
-        signature: None,
-        peer_id: PeerId::from(&public_key),
-    }
-}
-
-pub fn create_seed_peer_addr_ws(url: &str, port: u16, pubkey_hex: &str) -> PeerAddress {
-    let public_key = PublicKey::from_hex(pubkey_hex).unwrap();
-    PeerAddress {
-        ty: PeerAddressType::Ws(url.to_string(), port),
-        services: ServiceFlags::FULL,
-        timestamp: 0,
-        net_address: NetAddress::Unspecified,
-        public_key,
-        distance: 0,
-        signature: None,
-        peer_id: PeerId::from(&public_key),
-    }
-}
-
-pub fn create_seed_list(url_str: &str, pubkey_hex: &str) -> SeedList {
-    let url = url::Url::parse(url_str).unwrap();
-    let public_key = PublicKey::from_hex(pubkey_hex).unwrap();
-    SeedList::new(url, Some(public_key))
 }

@@ -33,7 +33,6 @@ nimiq-hash = { path = "../hash" }
 nimiq-hash_derive = { path = "../hash/hash_derive" }
 nimiq-keys = { path = "../keys" }
 nimiq-macros = { path = "../macros" }
-nimiq-peer-address = { path = "../peer-address" }
 nimiq-primitives = { path = "../primitives", features = ["coin", "networks"] }
 nimiq-transaction = { path = "../primitives/transaction" }
 nimiq-trie = { path = "../primitives/trie" }

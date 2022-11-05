@@ -2706,7 +2706,6 @@ dependencies = [
  "nimiq-hash_derive",
  "nimiq-keys",
  "nimiq-macros",
- "nimiq-peer-address",
  "nimiq-primitives",
  "nimiq-transaction",
  "nimiq-trie",
@@ -2917,7 +2916,6 @@ dependencies = [
  "nimiq-nano-zkp",
  "nimiq-network-interface",
  "nimiq-network-libp2p",
- "nimiq-peer-address",
  "nimiq-primitives",
  "nimiq-rpc-server",
  "nimiq-test-log",
@@ -3189,25 +3187,6 @@ dependencies = [
  "nimiq-primitives",
 ]
 
-[[package]]
-name = "nimiq-peer-address"
-version = "0.1.0"
-dependencies = [
- "beserial",
- "bitflags",
- "hex",
- "lazy_static",
- "nimiq-genesis-builder",
- "nimiq-hash",
- "nimiq-keys",
- "nimiq-macros",
- "nimiq-test-log",
- "nimiq-utils",
- "thiserror",
- "url",
-]
-
-[[package]]
 name = "nimiq-primitives"
 version = "0.1.0"
 dependencies = [

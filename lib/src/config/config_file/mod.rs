@@ -14,7 +14,6 @@ use nimiq_mempool::{
     filter::{MempoolFilter, MempoolRules},
 };
 use nimiq_network_libp2p::Multiaddr;
-use nimiq_peer_address::address;
 use nimiq_primitives::{coin::Coin, networks::NetworkId};
 
 use crate::{
@@ -251,7 +250,7 @@ impl From<Network> for NetworkId {
 pub struct RpcServerSettings {
     #[serde(deserialize_with = "deserialize_string_option")]
     #[serde(default)]
-    pub bind: Option<address::NetAddress>,
+    pub bind: Option<String>,
     pub port: Option<u16>,
     #[serde(default)]
     pub corsdomain: Vec<String>,
@@ -268,7 +267,7 @@ pub struct RpcServerSettings {
 pub struct MetricsServerSettings {
     #[serde(deserialize_with = "deserialize_string_option")]
     #[serde(default)]
-    pub bind: Option<address::NetAddress>,
+    pub bind: Option<String>,
     pub port: Option<u16>,
     pub username: Option<String>,
     pub password: Option<String>,

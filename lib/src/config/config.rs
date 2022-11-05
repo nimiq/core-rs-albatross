@@ -761,7 +761,7 @@ impl ClientConfigBuilder {
                 let bind_to = rpc_config
                     .bind
                     .as_ref()
-                    .and_then(|addr| addr.into_ip_address());
+                    .and_then(|addr| Some(addr.parse().unwrap()));
 
                 let allow_ips = if rpc_config.allowip.is_empty() {
                     None
@@ -805,7 +805,7 @@ impl ClientConfigBuilder {
                 let ip = metrics_config
                     .bind
                     .as_ref()
-                    .and_then(|addr| addr.into_ip_address());
+                    .and_then(|addr| Some(addr.parse().unwrap()));
 
                 let addr = SocketAddr::new(
                     ip.unwrap_or_else(default_bind),

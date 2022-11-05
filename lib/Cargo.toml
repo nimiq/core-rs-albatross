@@ -60,7 +60,6 @@ nimiq-metrics-server = { path = "../metrics-server" }
 nimiq-nano-zkp = { path = "../nano-zkp", features = ["prover"] }
 nimiq-network-libp2p = { path = "../network-libp2p", features = ["metrics"] }
 nimiq-network-interface = { path = "../network-interface" }
-nimiq-peer-address = { path = "../peer-address" }
 nimiq-primitives = { path = "../primitives", features = ["networks"] }
 nimiq-rpc-server = { path = "../rpc-server", optional = true }
 nimiq-utils = { path = "../utils", features = ["time", "key-store"] }
