@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::{path::PathBuf, time::Instant};
 
 use nimiq_nano_zkp::NanoZKP;
 use rand::thread_rng;
@@ -10,7 +10,8 @@ fn main() {
     println!("====== Parameter generation for Nano Sync initiated ======");
     let start = Instant::now();
 
-    NanoZKP::setup(thread_rng()).unwrap();
+    // use the current directory
+    NanoZKP::setup(thread_rng(), &PathBuf::new()).unwrap();
 
     println!("====== Parameter generation for Nano Sync finished ======");
     println!("Total time elapsed: {:?} seconds", start.elapsed());

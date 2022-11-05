@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -91,6 +91,7 @@ pub struct ZKPComponent<N: Network> {
     proof_storage: ProofStore,
     zkp_requests: Arc<Mutex<ZKPRequests<N>>>,
     zkp_events_notifier: BroadcastSender<ZKProof>,
+    keys_path: PathBuf,
 }
 
 impl<N: Network> ZKPComponent<N> {
@@ -100,6 +101,7 @@ impl<N: Network> ZKPComponent<N> {
         is_prover_active: bool,
         prover_path: Option<PathBuf>,
         env: Environment,
+        keys_path: PathBuf,
     ) -> Self {
         // Defaults zkp state to genesis.
         let network_info = NetworkInfo::from_network_id(blockchain.read().network_id());
@@ -118,6 +120,7 @@ impl<N: Network> ZKPComponent<N> {
             &zkp_state,
             &proof_storage,
             &zkp_events_notifier,
+            &keys_path,
         );
 
         // Activates the prover based on the configuration provided.
@@ -128,6 +131,7 @@ impl<N: Network> ZKPComponent<N> {
                     Arc::clone(&network),
                     Arc::clone(&zkp_state),
                     prover_path,
+                    keys_path.clone(),
                 )
                 .await,
             )
@@ -147,6 +151,7 @@ impl<N: Network> ZKPComponent<N> {
             proof_storage,
             zkp_requests: Arc::new(Mutex::new(ZKPRequests::new(network))),
             zkp_events_notifier,
+            keys_path,
         };
 
         // The handler for zkp request is launched.
@@ -182,6 +187,7 @@ impl<N: Network> ZKPComponent<N> {
         zkp_state: &Arc<RwLock<ZKPState>>,
         proof_storage: &ProofStore,
         zkp_events_notifier: &BroadcastSender<ZKProof>,
+        keys_path: &Path,
     ) {
         if let Some(loaded_proof) = proof_storage.get_zkp() {
             if let Err(e) = Self::push_proof_from_peers(
@@ -192,6 +198,7 @@ impl<N: Network> ZKPComponent<N> {
                 proof_storage,
                 zkp_events_notifier,
                 false,
+                keys_path,
             ) {
                 log::error!("Error pushing the zk proof load from disk {}", e);
                 proof_storage.set_zkp(&zkp_state.read().clone().into());
@@ -213,6 +220,7 @@ impl<N: Network> ZKPComponent<N> {
         proof_storage: &ProofStore,
         zkp_events_notifier: &BroadcastSender<ZKProof>,
         add_to_storage: bool,
+        keys_path: &Path,
     ) -> Result<(), ZKPComponentError> {
         // Gets the relevant election blocks.
         let (new_block, genesis_block, proof) = get_proof_macro_blocks(blockchain, &zk_proof)?;
@@ -222,7 +230,8 @@ impl<N: Network> ZKPComponent<N> {
         if new_block.block_number() <= zkp_state_lock.latest_block_number {
             return Err(ZKPComponentError::OutdatedProof);
         }
-        let new_zkp_state = validate_proof_get_new_state(proof, new_block, genesis_block)?;
+        let new_zkp_state =
+            validate_proof_get_new_state(proof, new_block, genesis_block, keys_path)?;
 
         let mut zkp_state_lock = RwLockUpgradableReadGuard::upgrade(zkp_state_lock);
         *zkp_state_lock = new_zkp_state;
@@ -268,6 +277,7 @@ impl<N: Network> Future for ZKPComponent<N> {
                 this.proof_storage,
                 this.zkp_events_notifier,
                 true,
+                this.keys_path,
             ) {
                 log::error!("Error pushing the new zk proof {}", e);
             }
@@ -286,6 +296,7 @@ impl<N: Network> Future for ZKPComponent<N> {
                         this.proof_storage,
                         this.zkp_events_notifier,
                         true,
+                        this.keys_path,
                     ) {
                         log::error!("Error pushing the zk proof - {} ", e);
                     }

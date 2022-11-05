@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use parking_lot::RwLock;
@@ -14,7 +15,7 @@ use nimiq_utils::time::OffsetTime;
 use nimiq_zkp_prover::ZKPComponent;
 
 use crate::test_network::TestNetwork;
-use crate::zkp_test_data::zkp_test_exe;
+use crate::zkp_test_data::{zkp_test_exe, KEYS_PATH};
 
 pub struct Node<N: NetworkInterface + TestNetwork> {
     pub network: Arc<N>,
@@ -49,6 +50,7 @@ impl<N: NetworkInterface + TestNetwork> Node<N> {
             is_prover_active,
             Some(zkp_test_exe()),
             env.clone(),
+            PathBuf::from(KEYS_PATH),
         )
         .await;
 

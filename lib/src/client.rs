@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use nimiq_nano_zkp::NanoZKP;
 use parking_lot::RwLock;
 
 use nimiq_block::Block;
@@ -9,7 +10,7 @@ use nimiq_consensus::{
     ConsensusProxy as AbstractConsensusProxy,
 };
 use nimiq_database::Environment;
-use nimiq_genesis::NetworkInfo;
+use nimiq_genesis::{NetworkId, NetworkInfo};
 #[cfg(feature = "validator")]
 use nimiq_mempool::mempool::Mempool;
 use nimiq_network_interface::network::Network as NetworkInterface;
@@ -29,6 +30,8 @@ use nimiq_wallet::WalletStore;
 
 use nimiq_zkp_prover::zkp_component::ZKPComponent as AbstractZKPComponent;
 use nimiq_zkp_prover::zkp_component::ZKPComponentProxy as AbstractZKPComponentProxy;
+use rand::SeedableRng;
+use rand_chacha::ChaCha20Rng;
 
 use crate::config::config::ClientConfig;
 use crate::error::Error;
@@ -83,6 +86,19 @@ impl ClientInner {
             )));
         }
         let network_info = NetworkInfo::from_network_id(config.network_id);
+
+        // For the albatross dev net, we need to generate/download the test keys
+        // for the zero-knowledge proofs.
+        if config.network_id == NetworkId::DevAlbatross {
+            log::info!("Setting up zero-knowledge proof keys for devnet.");
+            log::info!("This task only needs to be run once and might take about an hour.");
+            let seed = [
+                1, 0, 52, 0, 0, 0, 0, 0, 1, 0, 10, 0, 22, 32, 0, 0, 2, 0, 55, 49, 0, 11, 0, 0, 3,
+                0, 0, 0, 0, 0, 2, 92,
+            ];
+            NanoZKP::setup(ChaCha20Rng::from_seed(seed), &config.zkp.setup_keys_path)?;
+            log::debug!("Finished Nano ZKP setup.")
+        }
 
         // Initialize clock
         let time = Arc::new(OffsetTime::new());
@@ -142,13 +158,13 @@ impl ClientInner {
         #[cfg(feature = "wallet")]
         let wallet_store = Arc::new(WalletStore::new(environment.clone()));
 
-        let zkp_prover_active = config.zkp_prover_node_functionality;
         let zkp_component = ZKPComponent::new(
             Arc::clone(&blockchain),
             Arc::clone(&network),
-            zkp_prover_active,
+            config.zkp.prover_active,
             None,
             environment.clone(),
+            config.zkp.setup_keys_path,
         )
         .await;
 

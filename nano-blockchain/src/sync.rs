@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use nimiq_block::{Block, BlockError, TendermintProof};
 use nimiq_blockchain::{AbstractBlockchain, ChainInfo, PushError, PushResult};
 use nimiq_nano_zkp::{NanoProof, NanoZKP};
@@ -65,6 +67,7 @@ impl NanoBlockchain {
             final_header_hash,
             final_public_keys,
             proof,
+            &PathBuf::new(), // use the current directory
         );
 
         if verify_result.is_err() || !verify_result.unwrap() {

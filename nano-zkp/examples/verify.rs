@@ -1,5 +1,6 @@
 use std::fs::File;
 use std::io;
+use std::path::PathBuf;
 use std::time::Instant;
 
 use ark_groth16::Proof;
@@ -51,6 +52,7 @@ fn main() {
         final_header_hash,
         final_pks,
         proof,
+        &PathBuf::new(), // use the current directory
     )
     .unwrap();
 

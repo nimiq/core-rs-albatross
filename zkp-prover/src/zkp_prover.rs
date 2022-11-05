@@ -43,6 +43,7 @@ impl<N: Network> ZKProver<N> {
         network: Arc<N>,
         zkp_state: Arc<RwLock<ZKPState>>,
         prover_path: Option<PathBuf>,
+        keys_path: PathBuf,
     ) -> Self {
         let network_info = NetworkInfo::from_network_id(blockchain.read().network_id());
         let genesis_block = network_info.genesis_block::<Block>().unwrap_macro();
@@ -112,6 +113,7 @@ impl<N: Network> ZKProver<N> {
                 let recv = recv.resubscribe();
                 let zkp_state = zkp_state3.read();
                 let prover_path = prover_path.clone();
+                let keys_path2 = keys_path.clone();
                 assert!(
                     zkp_state.latest_block_number
                         >= block.block_number() - policy::BLOCKS_PER_EPOCH,
@@ -127,6 +129,7 @@ impl<N: Network> ZKProver<N> {
                             latest_header_hash: zkp_state.latest_header_hash.clone(),
                             previous_proof: zkp_state.latest_proof.clone(),
                             genesis_state: genesis_state3,
+                            keys_path: keys_path2,
                         },
                         prover_path,
                     )

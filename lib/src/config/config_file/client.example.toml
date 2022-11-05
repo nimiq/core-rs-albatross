@@ -81,6 +81,19 @@ seed_nodes = [
 
 ##############################################################################
 #
+# ZK Proof specific configuration
+#
+##############################################################################
+[zkp]
+
+# Speficy the proof generation capabilities.
+# Possible values: "main", "test", "dev", "test-albatross", "dev-albatross"
+# Default: "dev-albatross"
+#prover_active = "false"
+#setup_keys_path = "" #defaults to current working directory
+
+##############################################################################
+#
 # Configure the JSON-RPC server.
 #
 # To enable, uncomment the section header '[rpc-server]'
