@@ -901,13 +901,20 @@ impl ClientConfigBuilder {
 }
 
 /// Contains the configurations for the ZKP storate, verification and proof generation.
-#[derive(Debug, Clone, Builder, Default)]
+#[derive(Debug, Clone, Builder)]
 pub struct ZKPConfig {
     /// ZK Proof generation activation config.
-    #[builder(default)]
     pub prover_active: bool,
 
     /// ZKP prover path for verifying and proving keys.
-    #[builder(default = "PathBuf::from(\".zkp\")")]
     pub setup_keys_path: PathBuf,
+}
+
+impl Default for ZKPConfig {
+    fn default() -> Self {
+        ZKPConfig {
+            prover_active: false,
+            setup_keys_path: PathBuf::from(".zkp"),
+        }
+    }
 }
