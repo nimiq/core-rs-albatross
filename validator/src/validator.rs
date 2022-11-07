@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use futures::{Stream, StreamExt};
 use linked_hash_map::LinkedHashMap;
+use nimiq_bls::lazy::LazyPublicKey;
 use parking_lot::RwLock;
 #[cfg(feature = "metrics")]
 use tokio_metrics::TaskMonitor;
@@ -20,7 +21,7 @@ use nimiq_account::StakingContract;
 use nimiq_block::{Block, BlockType, SignedTendermintProposal};
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainEvent, ForkEvent, PushResult};
-use nimiq_bls::{CompressedPublicKey, KeyPair as BlsKeyPair};
+use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_consensus::{sync::block_queue::BlockTopic, Consensus, ConsensusEvent, ConsensusProxy};
 use nimiq_database::{Database, Environment, ReadTransaction, WriteTransaction};
 use nimiq_hash::{Blake2bHash, Hash};
@@ -304,9 +305,9 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             }
         }
 
-        let voting_keys: Vec<CompressedPublicKey> = validators
+        let voting_keys: Vec<LazyPublicKey> = validators
             .iter()
-            .map(|validator| validator.voting_key.compressed().clone())
+            .map(|validator| validator.voting_key.clone())
             .collect();
         let key = self.voting_key();
         let network = Arc::clone(&self.network);

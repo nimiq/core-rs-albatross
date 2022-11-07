@@ -90,6 +90,9 @@ pub const INITIAL_SUPPLY_VELOCITY: f64 = 875.0;
 /// steady 1.47% per year.
 pub const SUPPLY_DECAY: f64 = 4.692821935e-13;
 
+/// The maximum size of the BLS public key cache.
+pub const BLS_CACHE_MAX_CAPACITY: usize = 1000;
+
 /// Returns the epoch number at a given block number (height).
 #[inline]
 pub fn epoch_at(block_number: u32) -> u32 {

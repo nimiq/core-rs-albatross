@@ -547,6 +547,7 @@ impl Network {
                                         public_key: compressed_pk,
                                     })
                                     .uncompress()
+                                    // TODO: Move uncompress to caller side
                                     {
                                         if let Ok(signed_record) =
                                             SignedValidatorRecord::<PeerId>::deserialize_from_vec(

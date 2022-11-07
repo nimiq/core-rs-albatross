@@ -26,3 +26,6 @@ pub mod rand_gen;
 
 // Specifies the hash algorithm used for signatures
 pub type SigHash = Blake2sHash;
+
+// A simple cache implementation for the (un)compressed keys.
+pub mod cache;

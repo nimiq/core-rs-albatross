@@ -4,6 +4,7 @@ use std::{fmt, io};
 use bitflags::bitflags;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
+use nimiq_bls::cache::PublicKeyCache;
 use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, SerializeContent};
 use nimiq_hash_derive::SerializeContent;
@@ -284,6 +285,24 @@ impl Block {
         match self {
             Block::Macro(block) => block.is_election_block(),
             Block::Micro(_) => false,
+        }
+    }
+
+    /// Update validator keys from a public key cache.
+    pub fn update_validator_keys(&self, cache: &mut PublicKeyCache) {
+        // Prepare validator keys from BLS cache.
+        if let Block::Macro(MacroBlock {
+            body:
+                Some(MacroBody {
+                    validators: Some(validators),
+                    ..
+                }),
+            ..
+        }) = self
+        {
+            for validator in validators.iter() {
+                cache.get_or_uncompress_lazy_public_key(&validator.voting_key);
+            }
         }
     }
 }

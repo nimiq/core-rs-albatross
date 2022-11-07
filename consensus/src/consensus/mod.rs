@@ -6,7 +6,8 @@ use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 
 use futures::{FutureExt, StreamExt};
-use parking_lot::RwLock;
+use nimiq_bls::cache::PublicKeyCache;
+use parking_lot::{Mutex, RwLock};
 use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
 use tokio::time::Sleep;
 use tokio_stream::wrappers::BroadcastStream;
@@ -80,6 +81,7 @@ impl<N: Network> Consensus<N> {
         network: Arc<N>,
         sync_protocol: Pin<Box<dyn HistorySyncStream<N::PeerId>>>,
         zkp_proxy: ZKPComponentProxy<N>,
+        bls_cache: Arc<Mutex<PublicKeyCache>>,
     ) -> Self {
         Self::with_min_peers(
             env,
@@ -88,6 +90,7 @@ impl<N: Network> Consensus<N> {
             sync_protocol,
             Self::MIN_PEERS_ESTABLISHED,
             zkp_proxy,
+            bls_cache,
         )
         .await
     }
@@ -99,6 +102,7 @@ impl<N: Network> Consensus<N> {
         sync_protocol: Pin<Box<dyn HistorySyncStream<N::PeerId>>>,
         min_peers: usize,
         zkp_proxy: ZKPComponentProxy<N>,
+        bls_cache: Arc<Mutex<PublicKeyCache>>,
     ) -> Self {
         let request_component = BlockRequestComponent::new(
             sync_protocol,
@@ -111,6 +115,7 @@ impl<N: Network> Consensus<N> {
             Arc::clone(&blockchain),
             Arc::clone(&network),
             request_component,
+            bls_cache,
         )
         .await;
 

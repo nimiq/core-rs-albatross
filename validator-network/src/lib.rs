@@ -7,7 +7,7 @@ use std::{pin::Pin, time::Duration};
 use async_trait::async_trait;
 use futures::{stream::BoxStream, Stream};
 
-use nimiq_bls::{CompressedPublicKey, SecretKey};
+use nimiq_bls::{lazy::LazyPublicKey, CompressedPublicKey, SecretKey};
 use nimiq_network_interface::{
     network::{MsgAcceptance, Network, PubsubId, Topic},
     request::Message,
@@ -28,7 +28,7 @@ pub trait ValidatorNetwork: Send + Sync {
 
     /// Tells the validator network the validator keys for the current set of active validators. The keys must be
     /// ordered, such that the k-th entry is the validator with ID k.
-    async fn set_validators(&self, validator_keys: Vec<CompressedPublicKey>);
+    async fn set_validators(&self, validator_keys: Vec<LazyPublicKey>);
 
     /// must make a reasonable effort to establish a connection to the peer denoted with `validator_address`
     /// before returning a connection not established error.

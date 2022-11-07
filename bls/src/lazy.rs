@@ -98,6 +98,10 @@ impl LazyPublicKey {
         &self.compressed
     }
 
+    pub fn has_uncompressed(&self) -> bool {
+        self.cache.read().is_some()
+    }
+
     pub fn verify<M: Hash>(&self, msg: &M, signature: &Signature) -> bool {
         let cached = self.uncompress();
         if let Some(public_key) = cached.as_ref() {

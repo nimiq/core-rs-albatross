@@ -1,7 +1,8 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use parking_lot::RwLock;
+use nimiq_bls::cache::PublicKeyCache;
+use parking_lot::{Mutex, RwLock};
 
 use nimiq_blockchain::Blockchain;
 use nimiq_consensus::sync::history::HistorySync;
@@ -16,6 +17,8 @@ use nimiq_zkp_prover::ZKPComponent;
 
 use crate::test_network::TestNetwork;
 use crate::zkp_test_data::{zkp_test_exe, KEYS_PATH};
+
+pub const TESTING_BLS_CACHE_MAX_CAPACITY: usize = 100;
 
 pub struct Node<N: NetworkInterface + TestNetwork> {
     pub network: Arc<N>,
@@ -66,6 +69,9 @@ impl<N: NetworkInterface + TestNetwork> Node<N> {
             Box::pin(sync_protocol),
             1,
             zkp_proxy.proxy(),
+            Arc::new(Mutex::new(PublicKeyCache::new(
+                TESTING_BLS_CACHE_MAX_CAPACITY,
+            ))),
         )
         .await;
 

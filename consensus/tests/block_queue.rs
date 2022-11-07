@@ -6,7 +6,8 @@ use std::{
 };
 
 use futures::{task::noop_waker_ref, Stream, StreamExt};
-use parking_lot::RwLock;
+use nimiq_bls::cache::PublicKeyCache;
+use parking_lot::{Mutex, RwLock};
 use pin_project::pin_project;
 use rand::Rng;
 use tokio::sync::mpsc;
@@ -23,8 +24,11 @@ use nimiq_network_interface::network::Network;
 use nimiq_network_mock::{MockHub, MockId, MockNetwork};
 use nimiq_primitives::networks::NetworkId;
 use nimiq_test_log::test;
-use nimiq_test_utils::blockchain::{
-    next_micro_block, produce_macro_blocks, push_micro_block, signing_key, voting_key,
+use nimiq_test_utils::{
+    blockchain::{
+        next_micro_block, produce_macro_blocks, push_micro_block, signing_key, voting_key,
+    },
+    node::TESTING_BLS_CACHE_MAX_CAPACITY,
 };
 use nimiq_utils::time::OffsetTime;
 
@@ -129,6 +133,9 @@ async fn send_single_micro_block_to_block_queue() {
         Arc::clone(&network),
         request_component,
         ReceiverStream::new(block_rx).boxed(),
+        Arc::new(Mutex::new(PublicKeyCache::new(
+            TESTING_BLS_CACHE_MAX_CAPACITY,
+        ))),
     );
 
     // push one micro block to the queue
@@ -165,6 +172,9 @@ async fn send_two_micro_blocks_out_of_order() {
         network,
         request_component,
         ReceiverStream::new(block_rx).boxed(),
+        Arc::new(Mutex::new(PublicKeyCache::new(
+            TESTING_BLS_CACHE_MAX_CAPACITY,
+        ))),
     );
 
     let producer = BlockProducer::new(signing_key(), voting_key());
@@ -232,6 +242,9 @@ async fn send_micro_blocks_out_of_order() {
         network,
         request_component,
         ReceiverStream::new(block_rx).boxed(),
+        Arc::new(Mutex::new(PublicKeyCache::new(
+            TESTING_BLS_CACHE_MAX_CAPACITY,
+        ))),
     );
 
     let mut rng = rand::thread_rng();
@@ -305,6 +318,9 @@ async fn send_invalid_block() {
         network,
         request_component,
         ReceiverStream::new(block_rx).boxed(),
+        Arc::new(Mutex::new(PublicKeyCache::new(
+            TESTING_BLS_CACHE_MAX_CAPACITY,
+        ))),
     );
 
     let producer = BlockProducer::new(signing_key(), voting_key());
@@ -379,6 +395,9 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
         network,
         request_component,
         ReceiverStream::new(block_rx).boxed(),
+        Arc::new(Mutex::new(PublicKeyCache::new(
+            TESTING_BLS_CACHE_MAX_CAPACITY,
+        ))),
     );
 
     let producer = BlockProducer::new(signing_key(), voting_key());
@@ -447,6 +466,9 @@ async fn request_missing_blocks_across_macro_block() {
         network,
         request_component,
         ReceiverStream::new(block_rx).boxed(),
+        Arc::new(Mutex::new(PublicKeyCache::new(
+            TESTING_BLS_CACHE_MAX_CAPACITY,
+        ))),
     );
 
     let producer = BlockProducer::new(signing_key(), voting_key());
@@ -566,6 +588,9 @@ async fn put_peer_back_into_sync_mode() {
         network,
         request_component,
         ReceiverStream::new(block_rx).boxed(),
+        Arc::new(Mutex::new(PublicKeyCache::new(
+            TESTING_BLS_CACHE_MAX_CAPACITY,
+        ))),
     );
 
     let producer = BlockProducer::new(signing_key(), voting_key());

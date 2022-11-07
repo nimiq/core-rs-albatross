@@ -5,10 +5,12 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 
 use futures::{Stream, StreamExt};
+use nimiq_bls::cache::PublicKeyCache;
 use nimiq_test_log::test;
+use nimiq_test_utils::node::TESTING_BLS_CACHE_MAX_CAPACITY;
 use nimiq_test_utils::zkp_test_data::{zkp_test_exe, KEYS_PATH};
 use nimiq_zkp_prover::ZKPComponent;
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
@@ -89,6 +91,9 @@ async fn peers_can_sync() {
         Arc::clone(&net1),
         Box::pin(sync1),
         zkp_prover1,
+        Arc::new(Mutex::new(PublicKeyCache::new(
+            TESTING_BLS_CACHE_MAX_CAPACITY,
+        ))),
     )
     .await;
 
@@ -125,6 +130,9 @@ async fn peers_can_sync() {
             _network: Arc::clone(&net2),
         }),
         zkp_prover2,
+        Arc::new(Mutex::new(PublicKeyCache::new(
+            TESTING_BLS_CACHE_MAX_CAPACITY,
+        ))),
     )
     .await;
 
@@ -252,6 +260,9 @@ async fn sync_ingredients() {
             _network: Arc::clone(&net1),
         }),
         zkp_prover1,
+        Arc::new(Mutex::new(PublicKeyCache::new(
+            TESTING_BLS_CACHE_MAX_CAPACITY,
+        ))),
     )
     .await;
 
@@ -283,6 +294,9 @@ async fn sync_ingredients() {
             _network: Arc::clone(&net2),
         }),
         zkp_prover2,
+        Arc::new(Mutex::new(PublicKeyCache::new(
+            TESTING_BLS_CACHE_MAX_CAPACITY,
+        ))),
     )
     .await;
 

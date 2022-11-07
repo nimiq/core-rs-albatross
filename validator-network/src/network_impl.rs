@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use futures::{future::join_all, lock::Mutex, stream::BoxStream, StreamExt};
 
 use beserial::{Deserialize, Serialize};
-use nimiq_bls::{CompressedPublicKey, SecretKey};
+use nimiq_bls::{lazy::LazyPublicKey, CompressedPublicKey, SecretKey};
 use nimiq_network_interface::{
     network::{MsgAcceptance, Network, NetworkEvent, Topic},
     request::Message,
@@ -19,7 +19,7 @@ use crate::validator_record::{SignedValidatorRecord, ValidatorRecord};
 
 #[derive(Clone, Debug)]
 pub struct State<TPeerId> {
-    validator_keys: Vec<CompressedPublicKey>,
+    validator_keys: Vec<LazyPublicKey>,
     validator_peer_id_cache: BTreeMap<CompressedPublicKey, TPeerId>,
 }
 
@@ -78,13 +78,13 @@ where
     /// Looks up the peer ID for a validator public key in the DHT.
     async fn resolve_peer_id(
         network: &N,
-        public_key: &CompressedPublicKey,
+        public_key: &LazyPublicKey,
     ) -> Result<Option<N::PeerId>, NetworkError<N::Error>> {
         if let Some(record) = network
-            .dht_get::<_, SignedValidatorRecord<N::PeerId>>(&public_key)
+            .dht_get::<_, SignedValidatorRecord<N::PeerId>>(public_key.compressed())
             .await?
         {
-            if record.verify(&public_key.uncompress().unwrap()) {
+            if record.verify(&public_key.uncompress().expect("Invalid public key")) {
                 Ok(Some(record.record.peer_id))
             } else {
                 Ok(None)
@@ -107,7 +107,9 @@ where
             .ok_or(NetworkError::UnknownValidator(validator_id))?
             .clone();
 
-        let entry = state.validator_peer_id_cache.entry(public_key.clone());
+        let entry = state
+            .validator_peer_id_cache
+            .entry(public_key.compressed().clone());
 
         match entry {
             Entry::Occupied(occupied) => Ok(*occupied.get()),
@@ -143,7 +145,7 @@ where
 
     /// Tells the validator network the validator keys for the current set of active validators. The keys must be
     /// ordered, such that the k-th entry is the validator with ID k.
-    async fn set_validators(&self, validator_keys: Vec<CompressedPublicKey>) {
+    async fn set_validators(&self, validator_keys: Vec<LazyPublicKey>) {
         log::trace!(
             "setting Validators for ValidatorNetwork: {:?}",
             &validator_keys
@@ -153,8 +155,11 @@ where
 
         let mut keep_cached = BTreeMap::new();
         for validator_key in &validator_keys {
-            if let Some(peer_id) = state.validator_peer_id_cache.remove(validator_key) {
-                keep_cached.insert(validator_key.clone(), peer_id);
+            if let Some(peer_id) = state
+                .validator_peer_id_cache
+                .remove(validator_key.compressed())
+            {
+                keep_cached.insert(validator_key.compressed().clone(), peer_id);
             }
         }
 
@@ -192,7 +197,7 @@ where
                         // set the cache with he new peer_id for this public key
                         state
                             .validator_peer_id_cache
-                            .insert(public_key.clone(), peer_id);
+                            .insert(public_key.compressed().clone(), peer_id);
 
                         // try to get the peer for the peer_id. If it does not exist it should be dialed
                         if !self.network.has_peer(peer_id) {

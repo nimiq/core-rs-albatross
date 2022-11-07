@@ -3044,6 +3044,8 @@ dependencies = [
  "ark-groth16",
  "ark-mnt4-753",
  "ark-mnt6-753",
+ "ark-serialize",
+ "hex",
  "nimiq-block",
  "nimiq-bls",
  "nimiq-collections",
