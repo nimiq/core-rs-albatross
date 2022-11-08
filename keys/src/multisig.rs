@@ -109,7 +109,7 @@ impl CommitmentPair {
         // Decompress the 32 byte cryptographically secure random data to 64 byte.
         let mut h: sha2::Sha512 = sha2::Sha512::default();
 
-        h.update(&randomness);
+        h.update(randomness);
         let scalar = Scalar::from_hash::<sha2::Sha512>(h);
         if scalar == Scalar::zero() || scalar == Scalar::one() {
             return Err(InvalidScalarError);

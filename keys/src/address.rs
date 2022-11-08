@@ -142,7 +142,7 @@ impl Address {
     }
 
     pub fn to_hex(&self) -> String {
-        hex::encode(&self.0)
+        hex::encode(self.0)
     }
 
     pub fn from_hex(s: &str) -> Result<Self, AddressParseError> {

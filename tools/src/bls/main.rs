@@ -17,5 +17,5 @@ fn main() {
     println!();
     println!("# Proof Of Knowledge:");
     println!();
-    println!("{}", hex::encode(&secret_key.sign(&public_key).compress()));
+    println!("{}", hex::encode(secret_key.sign(&public_key).compress()));
 }

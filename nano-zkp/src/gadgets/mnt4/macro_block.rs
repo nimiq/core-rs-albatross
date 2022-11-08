@@ -183,7 +183,7 @@ impl MacroBlockGadget {
         cs: ConstraintSystemRef<MNT4Fr>,
     ) -> Result<Boolean<MNT4Fr>, SynthesisError> {
         // Get the minimum number of signers.
-        let min_signers = FqVar::new_constant(cs, &Fq::from(TWO_F_PLUS_ONE as u64))?;
+        let min_signers = FqVar::new_constant(cs, Fq::from(TWO_F_PLUS_ONE as u64))?;
 
         // Initialize the running sum.
         let mut num_signers = FqVar::zero();

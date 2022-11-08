@@ -52,7 +52,7 @@ impl VrfEntropy {
 impl std::fmt::Debug for VrfEntropy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("VrfEntropy")
-            .field(&hex::encode(&self.0))
+            .field(&hex::encode(self.0))
             .finish()
     }
 }
@@ -229,14 +229,14 @@ impl Default for VrfSeed {
 impl fmt::Debug for VrfSeed {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("VrfSeed")
-            .field(&hex::encode(&self.signature))
+            .field(&hex::encode(self.signature))
             .finish()
     }
 }
 
 impl fmt::Display for VrfSeed {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "{}", hex::encode(&self.signature))
+        write!(f, "{}", hex::encode(self.signature))
     }
 }
 

@@ -153,7 +153,7 @@ impl PeerAddress {
             return None;
         }
 
-        let public_key: String = ::hex::encode(&self.public_key.as_bytes());
+        let public_key: String = ::hex::encode(self.public_key.as_bytes());
         match self.ty {
             PeerAddressType::Ws(ref host, ref port) => {
                 Some(format!("ws://{}:{}/{}", host, port, public_key))
@@ -231,7 +231,7 @@ impl Eq for PeerAddress {}
 
 impl Hash for PeerAddress {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        let peer_id: String = ::hex::encode(&self.peer_id.0);
+        let peer_id: String = ::hex::encode(self.peer_id.0);
         let peer_id_uri = match self.ty {
             PeerAddressType::Dumb => format!("dumb:///{}", peer_id),
             PeerAddressType::Ws(_, _) => format!("ws:///{}", peer_id),

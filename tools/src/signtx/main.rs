@@ -81,7 +81,7 @@ fn run_app() -> Result<(), Error> {
     let tx = if matches.get_flag("tx_from_stdin") {
         let mut line = String::new();
         stdin().read_line(&mut line)?;
-        Transaction::deserialize_from_vec(&hex::decode(&line.trim_end())?)?
+        Transaction::deserialize_from_vec(&hex::decode(line.trim_end())?)?
     } else {
         let from_address = Address::from_user_friendly_address(
             matches

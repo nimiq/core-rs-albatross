@@ -2,7 +2,7 @@ use signal_hook::{consts::SIGINT, iterator::Signals};
 use tokio::time::{sleep, Duration};
 
 pub fn initialize_signal_handler() {
-    let signals = Signals::new(&[SIGINT]);
+    let signals = Signals::new([SIGINT]);
 
     if let Ok(mut signals) = signals {
         tokio::spawn(async move {
