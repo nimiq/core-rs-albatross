@@ -80,7 +80,10 @@ impl BlockProducer {
 
         // Calculate the timestamp. It must be greater than or equal to the previous block
         // timestamp (i.e. time must not go back).
-        let timestamp = u64::max(timestamp, blockchain.head().timestamp());
+        let timestamp = u64::max(
+            timestamp,
+            blockchain.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        );
 
         // Get the hash of the latest block. It can be any block type.
         let parent_hash = blockchain.head_hash();
@@ -220,7 +223,10 @@ impl BlockProducer {
 
         // Calculate the timestamp. It must be greater than or equal to the previous block
         // timestamp (i.e. time must not go back).
-        let timestamp = u64::max(timestamp, blockchain.head().timestamp());
+        let timestamp = u64::max(
+            timestamp,
+            blockchain.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        );
 
         // Get the hash of the latest block (it is by definition a micro block).
         let parent_hash = blockchain.head_hash();

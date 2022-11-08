@@ -59,7 +59,14 @@ fn it_can_produce_micro_blocks() {
     let prev_vrf_seed = bc.head().seed().clone();
 
     // #1.0: Empty standard micro block
-    let block = producer.next_micro_block(&bc, bc.time.now(), vec![], vec![], vec![0x41], None);
+    let block = producer.next_micro_block(
+        &bc,
+        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        vec![],
+        vec![],
+        vec![0x41],
+        None,
+    );
 
     assert_eq!(
         Blockchain::push(bc, Block::Micro(block.clone())),
@@ -94,7 +101,7 @@ fn it_can_produce_micro_blocks() {
     // #2.0: Empty micro block with fork proof
     let block = producer.next_micro_block(
         &bc,
-        bc.time.now() + 1000,
+        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
         vec![fork_proof],
         vec![],
         vec![0x41],
@@ -109,8 +116,14 @@ fn it_can_produce_micro_blocks() {
 
     // #2.1: Empty micro block (wrong prev_hash)
     let bc = blockchain.upgradable_read();
-    let block =
-        producer.next_micro_block(&bc, bc.time.now() + 2000, vec![], vec![], vec![0x41], None);
+    let block = producer.next_micro_block(
+        &bc,
+        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        vec![],
+        vec![],
+        vec![0x41],
+        None,
+    );
 
     // the block justification is ok.
     assert_eq!(
@@ -121,8 +134,14 @@ fn it_can_produce_micro_blocks() {
 
     // #2.2: Empty micro block
     let bc = blockchain.upgradable_read();
-    let block =
-        producer.next_micro_block(&bc, bc.time.now() + 2000, vec![], vec![], vec![0x41], None);
+    let block = producer.next_micro_block(
+        &bc,
+        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        vec![],
+        vec![],
+        vec![0x41],
+        None,
+    );
     assert_eq!(
         Blockchain::push(bc, Block::Micro(block)),
         Ok(PushResult::Extended)
@@ -151,7 +170,7 @@ fn it_can_produce_macro_blocks() {
     let macro_block = {
         producer.next_macro_block_proposal(
             &bc,
-            bc.time.now() + bc.block_number() as u64 * 1000,
+            bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
             0u32,
             vec![],
         )
@@ -187,7 +206,7 @@ fn it_can_produce_election_blocks() {
         let macro_block = {
             producer.next_macro_block_proposal(
                 &bc,
-                bc.time.now() + bc.block_number() as u64 * 1000,
+                bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
                 0u32,
                 vec![0x42],
             )
@@ -229,11 +248,10 @@ fn it_can_produce_a_chain_with_txns() {
         fill_micro_blocks_with_txns(&producer, &blockchain, 5, 0);
 
         let blockchain = blockchain.upgradable_read();
-        let next_block_height = (blockchain.block_number() + 1) as u64;
 
         let macro_block_proposal = producer.next_macro_block_proposal(
             &blockchain,
-            blockchain.time.now() + next_block_height as u64 * 100,
+            blockchain.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
             0u32,
             vec![],
         );
@@ -269,7 +287,14 @@ fn it_can_revert_unpark_transactions() {
     // #1.0: Empty micro block
     let bc = blockchain.upgradable_read();
 
-    let block = producer.next_micro_block(&bc, bc.time.now(), vec![], vec![], vec![0x41], None);
+    let block = producer.next_micro_block(
+        &bc,
+        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        vec![],
+        vec![],
+        vec![0x41],
+        None,
+    );
 
     assert_eq!(
         Blockchain::push(bc, Block::Micro(block)),
@@ -281,8 +306,14 @@ fn it_can_revert_unpark_transactions() {
     let bc = blockchain.upgradable_read();
 
     // One empty block
-    let block =
-        producer.next_micro_block(&bc, bc.time.now() + 2000, vec![], vec![], vec![0x41], None);
+    let block = producer.next_micro_block(
+        &bc,
+        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        vec![],
+        vec![],
+        vec![0x41],
+        None,
+    );
 
     assert_eq!(
         Blockchain::push(bc, Block::Micro(block)),
@@ -314,7 +345,7 @@ fn it_can_revert_unpark_transactions() {
     // Block with stacking transactions
     let block = producer.next_micro_block(
         &bc,
-        bc.time.now() + 2000,
+        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
         vec![],
         transactions,
         vec![0x41],
@@ -355,7 +386,14 @@ fn it_can_revert_create_staker_transaction() {
     // #1.0: Empty micro block
     let bc = blockchain.upgradable_read();
 
-    let block = producer.next_micro_block(&bc, bc.time.now(), vec![], vec![], vec![0x41], None);
+    let block = producer.next_micro_block(
+        &bc,
+        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        vec![],
+        vec![],
+        vec![0x41],
+        None,
+    );
     assert_eq!(
         Blockchain::push(bc, Block::Micro(block)),
         Ok(PushResult::Extended)
@@ -365,8 +403,14 @@ fn it_can_revert_create_staker_transaction() {
     let bc = blockchain.upgradable_read();
 
     // One empty block
-    let block =
-        producer.next_micro_block(&bc, bc.time.now() + 2000, vec![], vec![], vec![0x41], None);
+    let block = producer.next_micro_block(
+        &bc,
+        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        vec![],
+        vec![],
+        vec![0x41],
+        None,
+    );
 
     assert_eq!(
         Blockchain::push(bc, Block::Micro(block)),
@@ -399,7 +443,7 @@ fn it_can_revert_create_staker_transaction() {
     // Block with stacking transactions
     let block = producer.next_micro_block(
         &bc,
-        bc.time.now() + 2000,
+        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
         vec![],
         transactions,
         vec![0x41],
@@ -445,7 +489,14 @@ fn it_can_revert_failed_transactions() {
 
     let bc = blockchain.upgradable_read();
 
-    let block = producer.next_micro_block(&bc, bc.time.now(), vec![], vec![], vec![0x41], None);
+    let block = producer.next_micro_block(
+        &bc,
+        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        vec![],
+        vec![],
+        vec![0x41],
+        None,
+    );
     assert_eq!(
         Blockchain::push(bc, Block::Micro(block)),
         Ok(PushResult::Extended)
@@ -455,8 +506,14 @@ fn it_can_revert_failed_transactions() {
     let bc = blockchain.upgradable_read();
 
     // One empty block
-    let block =
-        producer.next_micro_block(&bc, bc.time.now() + 2000, vec![], vec![], vec![0x41], None);
+    let block = producer.next_micro_block(
+        &bc,
+        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        vec![],
+        vec![],
+        vec![0x41],
+        None,
+    );
 
     assert_eq!(
         Blockchain::push(bc, Block::Micro(block)),
@@ -503,7 +560,7 @@ fn it_can_revert_failed_transactions() {
     // Block with stacking transactions
     let block = producer.next_micro_block(
         &bc,
-        bc.time.now() + 2000,
+        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
         vec![],
         transactions,
         vec![0x41],
@@ -586,8 +643,14 @@ fn it_can_revert_failed_vesting_contract_transaction() {
 
     let transactions = vec![tx.clone()];
 
-    let block =
-        producer.next_micro_block(&bc, bc.time.now(), vec![], transactions, vec![0x41], None);
+    let block = producer.next_micro_block(
+        &bc,
+        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        vec![],
+        transactions,
+        vec![0x41],
+        None,
+    );
     assert_eq!(
         Blockchain::push(bc, Block::Micro(block)),
         Ok(PushResult::Extended)
@@ -643,7 +706,7 @@ fn it_can_revert_failed_vesting_contract_transaction() {
     // Block with redeem funds transaction
     let block = producer.next_micro_block(
         &bc,
-        bc.time.now() + 2000,
+        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
         vec![],
         transactions,
         vec![0x41],
@@ -745,8 +808,14 @@ fn it_can_revert_reactivate_transaction() {
     let bc = blockchain.upgradable_read();
 
     // Block with stacking transactions
-    let block =
-        producer.next_micro_block(&bc, bc.time.now(), vec![], transactions, vec![0x41], None);
+    let block = producer.next_micro_block(
+        &bc,
+        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        vec![],
+        transactions,
+        vec![0x41],
+        None,
+    );
 
     let block_transactions = &block.body.as_ref().unwrap().transactions;
 
@@ -777,8 +846,14 @@ fn it_can_revert_reactivate_transaction() {
     let bc = blockchain.upgradable_read();
 
     // Block with stacking transactions
-    let block =
-        producer.next_micro_block(&bc, bc.time.now(), vec![], transactions, vec![0x41], None);
+    let block = producer.next_micro_block(
+        &bc,
+        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        vec![],
+        transactions,
+        vec![0x41],
+        None,
+    );
 
     assert_eq!(
         Blockchain::push(bc, Block::Micro(block)),
@@ -834,8 +909,14 @@ fn it_can_revert_unpark_transaction() {
     let bc = blockchain.upgradable_read();
 
     // Block with stacking transactions
-    let block =
-        producer.next_micro_block(&bc, bc.time.now(), vec![], transactions, vec![0x41], None);
+    let block = producer.next_micro_block(
+        &bc,
+        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        vec![],
+        transactions,
+        vec![0x41],
+        None,
+    );
 
     assert_eq!(
         Blockchain::push(bc, Block::Micro(block)),
@@ -862,8 +943,14 @@ fn it_can_revert_unpark_transaction() {
     let bc = blockchain.upgradable_read();
 
     // Block with stacking transactions
-    let block =
-        producer.next_micro_block(&bc, bc.time.now(), vec![], transactions, vec![0x41], None);
+    let block = producer.next_micro_block(
+        &bc,
+        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        vec![],
+        transactions,
+        vec![0x41],
+        None,
+    );
 
     assert_eq!(
         Blockchain::push(bc, Block::Micro(block)),
@@ -933,8 +1020,14 @@ fn it_can_consume_all_validator_deposit() {
     let bc = blockchain.upgradable_read();
 
     // Block with stacking transactions
-    let block =
-        producer.next_micro_block(&bc, bc.time.now(), vec![], transactions, vec![0x41], None);
+    let block = producer.next_micro_block(
+        &bc,
+        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        vec![],
+        transactions,
+        vec![0x41],
+        None,
+    );
 
     let block_transactions = &block.body.as_ref().unwrap().transactions;
 
@@ -983,8 +1076,14 @@ fn it_can_consume_all_validator_deposit() {
     let bc = blockchain.upgradable_read();
 
     // Block with stacking transactions
-    let block =
-        producer.next_micro_block(&bc, bc.time.now(), vec![], transactions, vec![0x41], None);
+    let block = producer.next_micro_block(
+        &bc,
+        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        vec![],
+        transactions,
+        vec![0x41],
+        None,
+    );
 
     let block_transactions = &block.body.as_ref().unwrap().transactions;
 
@@ -1070,8 +1169,14 @@ fn it_can_revert_failed_delete_validator() {
     let bc = blockchain.upgradable_read();
 
     // Block with stacking transactions
-    let block =
-        producer.next_micro_block(&bc, bc.time.now(), vec![], transactions, vec![0x41], None);
+    let block = producer.next_micro_block(
+        &bc,
+        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        vec![],
+        transactions,
+        vec![0x41],
+        None,
+    );
 
     let block_transactions = &block.body.as_ref().unwrap().transactions;
 
@@ -1194,8 +1299,14 @@ fn it_can_revert_basic_and_create_contracts_txns() {
     let bc = blockchain.upgradable_read();
 
     // Block with txns
-    let block =
-        producer.next_micro_block(&bc, bc.time.now(), vec![], transactions, vec![0x41], None);
+    let block = producer.next_micro_block(
+        &bc,
+        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        vec![],
+        transactions,
+        vec![0x41],
+        None,
+    );
 
     assert_eq!(
         Blockchain::push(bc, Block::Micro(block)),

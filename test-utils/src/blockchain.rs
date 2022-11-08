@@ -79,11 +79,10 @@ pub fn produce_macro_blocks_with_txns(
         fill_micro_blocks_with_txns(producer, blockchain, num_txns, rng_seed);
 
         let blockchain = blockchain.upgradable_read();
-        let next_block_height = (blockchain.block_number() + 1) as u64;
 
         let macro_block_proposal = producer.next_macro_block_proposal(
             &blockchain,
-            blockchain.time.now() + next_block_height * 1000,
+            blockchain.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
             0u32,
             vec![],
         );
@@ -144,7 +143,7 @@ pub fn fill_micro_blocks_with_txns(
         let start = Instant::now();
         let last_micro_block = producer.next_micro_block(
             &blockchain,
-            blockchain.time.now() + i as u64 * 100,
+            blockchain.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
             vec![],
             txns,
             vec![0x42],

@@ -40,6 +40,9 @@ For more detailed information about how to connect and use the development netwo
 ## System requirements
 - 64-bit computing architecture.
 - File systems with sparse file support.
+- It is highly recommended to run a clock synchronization protocol such as NTP. This
+  is needed for properly accept blocks according to the timestamp and it is specially
+  important for validators in order to produce blocks in the expected timestamps.
 
 
 ## Installation
