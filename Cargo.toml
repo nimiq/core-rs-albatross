@@ -66,6 +66,12 @@ opt-level = 3
 [profile.dev.package.nimiq-nano-primitives]
 opt-level = 3
 
+[profile.test.package.nimiq-nano-primitives]
+opt-level = 3
+
+[profile.dev.package.nimiq-nano-zkp]
+opt-level = 3
+
 [profile.test.package.nimiq-nano-zkp]
 opt-level = 3
 
@@ -81,3 +87,34 @@ lto = "thin"
 [profile.release-with-debug]
 inherits = "release"
 debug = true
+
+# Force arkworks to be built with the highest optimization level.
+[profile.dev.package.ark-ff]
+opt-level = 3
+
+[profile.test.package.ark-ff]
+opt-level = 3
+
+[profile.dev.package.ark-ec]
+opt-level = 3
+
+[profile.test.package.ark-ec]
+opt-level = 3
+
+[profile.dev.package.ark-mnt4-753]
+opt-level = 3
+
+[profile.test.package.ark-mnt4-753]
+opt-level = 3
+
+[profile.dev.package.ark-mnt6-753]
+opt-level = 3
+
+[profile.test.package.ark-mnt6-753]
+opt-level = 3
+
+[profile.dev.package.ark-crypto-primitives]
+opt-level = 3
+
+[profile.test.package.ark-crypto-primitives]
+opt-level = 3
