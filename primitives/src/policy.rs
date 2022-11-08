@@ -69,6 +69,9 @@ impl Policy {
     /// The timeout in milliseconds for a validator to produce a block (4s)
     pub const BLOCK_PRODUCER_TIMEOUT: u64 = 4 * 1000;
 
+    /// The optimal time in milliseconds between blocks (1s)
+    pub const BLOCK_SEPARATION_TIME: u64 = 1000;
+
     /// Minimum number of epochs that the ChainStore will store fully
     pub const MIN_EPOCHS_STORED: u32 = 1;
 

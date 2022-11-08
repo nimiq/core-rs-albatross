@@ -144,7 +144,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
     const MACRO_STATE_DB_NAME: &'static str = "ValidatorState";
     const MACRO_STATE_KEY: &'static str = "validatorState";
     const PRODUCER_TIMEOUT: Duration = Duration::from_millis(Policy::BLOCK_PRODUCER_TIMEOUT);
-    const EMPTY_BLOCK_DELAY: Duration = Duration::from_secs(1);
+    const BLOCK_SEPARATION_TIME: Duration = Duration::from_millis(Policy::BLOCK_SEPARATION_TIME);
     const FORK_PROOFS_MAX_SIZE: usize = 1_000; // bytes
 
     pub fn new(
@@ -399,7 +399,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                     prev_seed,
                     next_block_number,
                     Self::PRODUCER_TIMEOUT,
-                    Self::EMPTY_BLOCK_DELAY,
+                    Self::BLOCK_SEPARATION_TIME,
                 ));
             }
         }

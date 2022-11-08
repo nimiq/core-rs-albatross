@@ -35,12 +35,10 @@ struct NextProduceMicroBlockEvent<TValidatorNetwork> {
     prev_seed: VrfSeed,
     block_number: u32,
     producer_timeout: Duration,
-    empty_block_delay: Duration,
+    block_separation_time: Duration,
 }
 
 impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<TValidatorNetwork> {
-    const CHECK_MEMPOOL_DELAY: Duration = Duration::from_millis(100);
-
     // Ignoring clippy warning because there wouldn't be much to be gained by refactoring this,
     // except making clippy happy
     #[allow(clippy::too_many_arguments)]
@@ -54,7 +52,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         prev_seed: VrfSeed,
         block_number: u32,
         producer_timeout: Duration,
-        empty_block_delay: Duration,
+        block_separation_time: Duration,
     ) -> Self {
         Self {
             blockchain,
@@ -66,7 +64,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
             prev_seed,
             block_number,
             producer_timeout,
-            empty_block_delay,
+            block_separation_time,
         }
     }
 
@@ -80,12 +78,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
             self.prev_seed == *head.seed() && self.block_number == head.block_number() + 1
         };
 
-        // If there are no transactions to include, we want to wait a bit before producing the
-        // micro block to reduce the number of unnecessary empty blocks. Set the deadline at which
-        // we're going to produce the block even if it is empty.
-        let deadline = SystemTime::now() + self.empty_block_delay;
         let mut delay = Duration::default();
-        let mut logged = false;
 
         let return_value = loop {
             // Acquire blockchain.upgradable_read() to prevent further changes to the blockchain while
@@ -95,26 +88,35 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
                 if !in_current_state(&blockchain.head()) {
                     break Some(None);
                 } else if self.is_our_turn(&blockchain) {
-                    if !logged {
+                    // We want to produce a block at the expected timestamp for this block in this batch
+                    // as it is calculated by the reward function
+                    let last_macro_block = blockchain.macro_head();
+                    let target_block_ts = last_macro_block.header.timestamp
+                        + self.block_separation_time.as_millis() as u64
+                            * ((blockchain.block_number() + 1)
+                                .saturating_sub(last_macro_block.block_number()))
+                                as u64;
+                    let now = systemtime_to_timestamp(SystemTime::now());
+
+                    // If the expected timestamp is already in the past, produce a block
+                    // immediately.
+                    // If the timestamp hasn't passed, wait until the expected block timestamp
+                    // to produce the block.
+                    if target_block_ts <= now {
                         info!(
                             block_number = self.block_number,
                             slot_band = self.validator_slot_band,
                             "Our turn, producing micro block #{}",
                             self.block_number,
                         );
-                        logged = true;
-                    }
 
-                    let block = self.produce_micro_block(&blockchain);
-                    let num_transactions = block
-                        .body
-                        .as_ref()
-                        .map(|body| body.transactions.len())
-                        .unwrap_or(0);
+                        let block = self.produce_micro_block(&blockchain);
+                        let num_transactions = block
+                            .body
+                            .as_ref()
+                            .map(|body| body.transactions.len())
+                            .unwrap_or(0);
 
-                    // Publish block immediately if it contains transactions or the block production
-                    // deadline has passed.
-                    if num_transactions > 0 || SystemTime::now() >= deadline {
                         debug!(
                             block_number = block.header.block_number,
                             num_transactions,
@@ -141,16 +143,16 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
                             .map(move |result| ProduceMicroBlockEvent::MicroBlock(block1, result))
                             .ok();
                         break Some(event);
-                    }
+                    } else {
+                        delay = Duration::from_millis(target_block_ts - now);
+                    };
                 } else {
                     break None;
                 }
             }
-
             // We have dropped the blockchain lock.
-            // Wait a bit before trying to produce a block again.
-            delay += Self::CHECK_MEMPOOL_DELAY;
-            time::sleep(Self::CHECK_MEMPOOL_DELAY).await;
+            // Wait for the expected timestamp to arrive before actually producing the block
+            time::sleep(delay).await;
         };
 
         if let Some(event) = return_value {
@@ -322,7 +324,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> ProduceMicroBlock<TValidator
         prev_seed: VrfSeed,
         block_number: u32,
         producer_timeout: Duration,
-        empty_block_delay: Duration,
+        block_separation_time: Duration,
     ) -> Self {
         let next_event = NextProduceMicroBlockEvent::new(
             blockchain,
@@ -334,7 +336,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> ProduceMicroBlock<TValidator
             prev_seed,
             block_number,
             producer_timeout,
-            empty_block_delay,
+            block_separation_time,
         )
         .next()
         .boxed();
