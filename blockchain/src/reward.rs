@@ -23,6 +23,14 @@ pub fn genesis_parameters(genesis_block: &MacroHeader) -> (Coin, u64) {
     (supply, genesis_block.timestamp)
 }
 
+// Compute the current batch delay(in ms)
+pub fn batch_delay(previous_timestamp: u64, current_timestamp: u64) -> u64 {
+    let target_ts =
+        previous_timestamp + Policy::BLOCK_SEPARATION_TIME * (Policy::blocks_per_batch() as u64);
+
+    current_timestamp.saturating_sub(target_ts)
+}
+
 /// Compute the block reward for a batch from the current macro block, the previous macro block,
 /// and the genesis parameters.
 /// This does not include the reward from transaction fees.
@@ -46,7 +54,16 @@ pub fn block_reward_for_batch(
     let current_supply =
         Policy::supply_at(genesis_supply_u64, genesis_timestamp, current_timestamp);
 
-    Coin::from_u64_unchecked(current_supply - prev_supply)
+    // This is the maximum rewards that we can pay for this batch
+    let max_rewards = current_supply - prev_supply;
+
+    // However, there is a penalty if the batch was not produced in time...
+    // First we calculate the delay producing the batch:
+    let batch_delay = batch_delay(previous_timestamp, current_timestamp);
+
+    // The final rewards that are given are a porcentage based on the penalty (if any) for not producing blocks in time.
+    // i.e.: batch_delay_penalty returns a number in the range [0, 1]
+    Coin::from_u64_unchecked((max_rewards as f64 * Policy::batch_delay_penalty(batch_delay)) as u64)
 }
 
 /// Compute the block reward for a batch from the current macro block, the previous macro block,

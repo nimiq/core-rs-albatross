@@ -79,6 +79,12 @@ impl Policy {
     /// system time. We only care about drifting to the future.
     pub const TIMESTAMP_MAX_DRIFT: u64 = 600000;
 
+    /// The slope of the exponential decay used to punish validators for not producing block in time
+    pub const BLOCKS_DELAY_DECAY: f64 = 1.1e-9;
+
+    /// The minimum rewards percentage that we allow
+    pub const MINIMUM_REWARDS_PERCENTAGE: f64 = 0.5;
+
     /// The deposit necessary to create a validator in Lunas (1 NIM = 100,000 Lunas).
     /// A validator is someone who actually participates in block production. They are akin to miners
     /// in proof-of-work.
@@ -111,32 +117,32 @@ impl Policy {
 
     #[inline]
     pub fn batches_per_epoch() -> u16 {
-        GLOBAL_POLICY.get_or_init(Policy::default).batches_per_epoch
+        GLOBAL_POLICY.get_or_init(Self::default).batches_per_epoch
     }
 
     #[inline]
     pub fn blocks_per_batch() -> u32 {
-        GLOBAL_POLICY.get_or_init(Policy::default).blocks_per_batch
+        GLOBAL_POLICY.get_or_init(Self::default).blocks_per_batch
     }
 
     #[inline]
     pub fn blocks_per_epoch() -> u32 {
         GLOBAL_POLICY
-            .get_or_init(Policy::default)
+            .get_or_init(Self::default)
             .get_blocks_per_epoch()
     }
 
     #[inline]
     pub fn tendermint_timeout_init() -> u64 {
         GLOBAL_POLICY
-            .get_or_init(Policy::default)
+            .get_or_init(Self::default)
             .tendermint_timeout_init
     }
 
     #[inline]
     pub fn tendermint_timeout_delta() -> u64 {
         GLOBAL_POLICY
-            .get_or_init(Policy::default)
+            .get_or_init(Self::default)
             .tendermint_timeout_delta
     }
 
@@ -287,10 +293,22 @@ impl Policy {
         let exponent = -Policy::SUPPLY_DECAY * t;
 
         let supply = genesis_supply
-            + (Policy::INITIAL_SUPPLY_VELOCITY / Policy::SUPPLY_DECAY * (1.0 - exponent.exp()))
-                as u64;
+            + (Self::INITIAL_SUPPLY_VELOCITY / Self::SUPPLY_DECAY * (1.0 - exponent.exp())) as u64;
 
         cmp::min(supply, Policy::TOTAL_SUPPLY)
+    }
+
+    /// Returns the percentage reduction that should be applied to the rewards due to a delayed batch.
+    /// This function returns a float in the range [0, 1]
+    /// I.e 1 means that the full rewards should be given, whereas 0.5 means that half of the rewards should be given
+    /// The input to this function is the batch delay, in milliseconds
+    /// The function is: [(1 - MINIMUM_REWARDS_PERCENTAGE) * e ^(-BLOCKS_DELAY_DECAY * t^2)] + MINIMUM_REWARDS_PERCENTAGE
+    pub fn batch_delay_penalty(delay: u64) -> f64 {
+        let t = delay as f64;
+        let exponent = -Self::BLOCKS_DELAY_DECAY * t * t;
+
+        ((1.0 - Self::MINIMUM_REWARDS_PERCENTAGE) * exponent.exp()
+            + Self::MINIMUM_REWARDS_PERCENTAGE) as f64
     }
 
     #[inline]
