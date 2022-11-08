@@ -265,7 +265,9 @@ seed_nodes = [
 
 [consensus]
 network = "dev-albatross"
-sync_mode = "full"
+# Uncomment this once we support state sync, to truly have full nodes.
+# For now validators are history nodes
+# sync_mode = "full"
 min_peers = {min_peers}
 
 [database]
