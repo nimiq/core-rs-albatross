@@ -67,4 +67,9 @@ impl PublicKeyCache {
     pub fn len(&self) -> usize {
         self.cache.len()
     }
+
+    /// Returns true if cache has no elements inside.
+    pub fn is_empty(&self) -> bool {
+        self.cache.is_empty()
+    }
 }

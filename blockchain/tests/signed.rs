@@ -81,7 +81,7 @@ fn test_replay() {
     block.header.block_number = 1;
 
     // create hash and prepare message
-    let block_hash = block.nano_zkp_hash();
+    let block_hash = block.nano_zkp_hash(true);
 
     let validators = blockchain.current_validators().unwrap();
 

@@ -132,19 +132,25 @@ impl MacroBlock {
     /// epoch, so for checkpoint blocks the `pk_tree_root` doesn't exist. Then, for checkpoint blocks
     /// this function simply returns:
     ///     nano_zkp_hash = Blake2s( Blake2b(header) )
-    pub fn nano_zkp_hash(&self) -> Blake2sHash {
+    pub fn nano_zkp_hash(&self, recalculate_pk_tree: bool) -> Blake2sHash {
         let mut message = self.hash().serialize_to_vec();
 
         if let Some(validators) = self.get_validators() {
             // Create the tree.
-            let mut pk_tree_root = MacroBlock::pk_tree_root(&validators);
-
+            let mut pk_tree_root = self.get_pk_tree_root();
+            if recalculate_pk_tree || pk_tree_root.is_none() {
+                pk_tree_root = Some(MacroBlock::pk_tree_root(&validators));
+            }
             // Add it to the message.
-            message.append(&mut pk_tree_root);
+            message.append(&mut pk_tree_root.unwrap());
         }
 
         // Return the final hash.
         message.hash()
+    }
+
+    fn get_pk_tree_root(&self) -> Option<Vec<u8>> {
+        self.body.as_ref()?.pk_tree_root.clone()
     }
 
     /// Calculates the PKTree root from the given validators.

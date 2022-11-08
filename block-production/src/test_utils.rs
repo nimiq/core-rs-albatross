@@ -80,7 +80,7 @@ impl TemporaryBlockProducer {
             );
 
             // Calculate the block hash.
-            let block_hash = macro_block_proposal.nano_zkp_hash();
+            let block_hash = macro_block_proposal.nano_zkp_hash(true);
 
             // Get validator set and make sure it exists.
             let validators = blockchain
