@@ -8,13 +8,15 @@ homepage = "https://nimiq.com"
 repository = "https://github.com/nimiq/core-rs-albatross"
 edition = "2021"
 
-[[bin]]
-name = "nimiq-pedersen-generators"
+[build-dependencies]
+nimiq-pedersen-generators = { path = "pedersen-generators" }
 
 [dependencies]
 num-traits = "0.2"
 rayon = "^1.5"
-hex = "0.4"
+log = { package = "tracing", version = "0.1", features = ["log"] }
+lazy_static = "1.4"
+beserial = { path = "../beserial", features = ["derive"] }
 
 ark-crypto-primitives = "0.3"
 ark-ec = "0.3"

@@ -2,9 +2,10 @@ use ark_ec::AffineCurve;
 use ark_groth16::VerifyingKey;
 use ark_mnt6_753::MNT6_753;
 
-use nimiq_bls::pedersen::{pedersen_generators, pedersen_hash};
+use nimiq_bls::pedersen::pedersen_hash;
 use nimiq_bls::utils::bytes_to_bits;
 
+use crate::pedersen_generator_powers::PEDERSEN_GENERATORS;
 use crate::{serialize_g1_mnt6, serialize_g2_mnt6};
 
 /// This function is meant to calculate a commitment off-circuit for a verifying key of a SNARK in the
@@ -31,16 +32,8 @@ pub fn vk_commitment(vk: VerifyingKey<MNT6_753>) -> Vec<u8> {
 
     let bits = bytes_to_bits(&bytes);
 
-    // Calculate the Pedersen generators and the sum generator. The formula used for the ceiling
-    // division of x/y is (x+y-1)/y.
-    let capacity = 752;
-
-    let generators_needed = (bits.len() + capacity - 1) / capacity + 1;
-
-    let generators = pedersen_generators(generators_needed);
-
     // Calculate the Pedersen hash.
-    let hash = pedersen_hash(bits, generators);
+    let hash = pedersen_hash(bits, &*PEDERSEN_GENERATORS);
 
     // Serialize the Pedersen commitment.
     let bytes = serialize_g1_mnt6(&hash);

@@ -9,5 +9,8 @@ target
 /client/peer_key.dat
 /fixed-unsigned/target
 /devnet-environments/*/build/
-.nimiq_*/*
+.nimiq_*
 proving_keys
+temp-logs
+temp-state
+.vscode

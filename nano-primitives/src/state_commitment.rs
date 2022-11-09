@@ -1,8 +1,9 @@
 use ark_mnt6_753::G2Projective;
 
-use nimiq_bls::pedersen::{pedersen_generators, pedersen_hash};
+use nimiq_bls::pedersen::pedersen_hash;
 use nimiq_bls::utils::bytes_to_bits;
 
+use crate::pedersen_generator_powers::PEDERSEN_GENERATORS;
 use crate::{pk_tree_construct, serialize_g1_mnt6};
 
 /// This gadget is meant to calculate the "state commitment" off-circuit, which is simply a commitment,
@@ -31,16 +32,8 @@ pub fn state_commitment(
 
     let bits = bytes_to_bits(&bytes);
 
-    // Calculate the Pedersen generators and the sum generator. The formula used for the ceiling
-    // division of x/y is (x+y-1)/y.
-    let capacity = 752;
-
-    let generators_needed = (bits.len() + capacity - 1) / capacity + 1;
-
-    let generators = pedersen_generators(generators_needed);
-
     // Calculate the Pedersen hash.
-    let hash = pedersen_hash(bits, generators);
+    let hash = pedersen_hash(bits, &*PEDERSEN_GENERATORS);
 
     // Serialize the Pedersen hash.
     let bytes = serialize_g1_mnt6(&hash);

@@ -23,6 +23,7 @@ members = [
   "metrics-server",
   "mnemonic",
   "nano-primitives",
+  "nano-primitives/pedersen-generators",
   "nano-zkp",
   "nano-blockchain",
   "network-interface",
@@ -79,6 +80,12 @@ opt-level = 3
 opt-level = 3
 
 [profile.test.package.beserial]
+opt-level = 3
+
+[profile.dev.package.nimiq-pedersen-generators]
+opt-level = 3
+
+[profile.test.package.nimiq-pedersen-generators]
 opt-level = 3
 
 [profile.release]

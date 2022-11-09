@@ -12,7 +12,7 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::UniformRand;
 use rand::{thread_rng, CryptoRng, Rng};
 
-use nimiq_bls::pedersen::{pedersen_generators, pedersen_hash};
+use nimiq_bls::pedersen::{pedersen_generator_powers, pedersen_hash};
 use nimiq_bls::utils::{byte_to_le_bits, bytes_to_bits};
 use nimiq_nano_primitives::{merkle_tree_prove, serialize_g1_mnt6, serialize_g2_mnt6};
 use nimiq_nano_primitives::{
@@ -322,7 +322,7 @@ impl NanoZKP {
 
         let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(&agg_pk));
 
-        let hash = pedersen_hash(agg_pk_bits, pedersen_generators(5));
+        let hash = pedersen_hash(agg_pk_bits, &pedersen_generator_powers(5));
 
         let agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(&hash));
 
@@ -440,7 +440,7 @@ impl NanoZKP {
 
         let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(&agg_pk));
 
-        let hash = pedersen_hash(agg_pk_bits, pedersen_generators(5));
+        let hash = pedersen_hash(agg_pk_bits, &pedersen_generator_powers(5));
 
         let left_agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(&hash));
 
@@ -457,7 +457,7 @@ impl NanoZKP {
 
         let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(&agg_pk));
 
-        let hash = pedersen_hash(agg_pk_bits, pedersen_generators(5));
+        let hash = pedersen_hash(agg_pk_bits, &pedersen_generator_powers(5));
 
         let right_agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(&hash));
 
@@ -591,7 +591,7 @@ impl NanoZKP {
 
         let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(&agg_pk));
 
-        let hash = pedersen_hash(agg_pk_bits, pedersen_generators(5));
+        let hash = pedersen_hash(agg_pk_bits, &pedersen_generator_powers(5));
 
         let agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(&hash));
 

@@ -2,12 +2,14 @@ use ark_crypto_primitives::prf::Blake2sWithParameterBlock;
 use ark_ec::group::Group;
 use ark_ff::{FpParameters, One, PrimeField};
 use ark_mnt6_753::{Fq, FqParameters, G1Affine, G1Projective};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use beserial::{Deserialize, Serialize};
 use blake2_rfc::blake2s::Blake2s;
 
 use crate::rand_gen::generate_random_seed;
 use crate::utils::big_int_from_bytes_be;
 
-const POINT_CAPACITY: usize = FqParameters::CAPACITY as usize;
+pub const POINT_CAPACITY: usize = FqParameters::CAPACITY as usize; // 752
 
 /// This is the function for creating generators in the G1 group for the MNT6-753 curve. These
 /// generators are meant to be used for the Pedersen hash function.
@@ -102,15 +104,78 @@ pub fn pedersen_generators(number: usize) -> Vec<G1Projective> {
     generators
 }
 
+fn ark_to_bserial_error(error: ark_serialize::SerializationError) -> beserial::SerializingError {
+    match error {
+        ark_serialize::SerializationError::NotEnoughSpace => beserial::SerializingError::Overflow,
+        ark_serialize::SerializationError::InvalidData => beserial::SerializingError::InvalidValue,
+        ark_serialize::SerializationError::UnexpectedFlags => {
+            beserial::SerializingError::InvalidValue
+        }
+        ark_serialize::SerializationError::IoError(e) => beserial::SerializingError::IoError(e),
+    }
+}
+
+/// This is a wrapper for the G1 projective.
+/// Note: This should only be used when getting the generators from a trusted source.
+pub struct PedersenGenerator(G1Projective);
+
+impl Serialize for PedersenGenerator {
+    fn serialize<W: beserial::WriteBytesExt>(
+        &self,
+        writer: &mut W,
+    ) -> Result<usize, beserial::SerializingError> {
+        let size = CanonicalSerialize::uncompressed_size(&self.0);
+        CanonicalSerialize::serialize_unchecked(&self.0, writer).map_err(ark_to_bserial_error)?;
+        Ok(size)
+    }
+
+    fn serialized_size(&self) -> usize {
+        CanonicalSerialize::uncompressed_size(&self.0)
+    }
+}
+
+impl Deserialize for PedersenGenerator {
+    fn deserialize<R: beserial::ReadBytesExt>(
+        reader: &mut R,
+    ) -> Result<Self, beserial::SerializingError> {
+        let g1: G1Projective =
+            CanonicalDeserialize::deserialize_unchecked(reader).map_err(ark_to_bserial_error)?;
+        Ok(PedersenGenerator(g1))
+    }
+}
+
+pub fn pedersen_generator_powers(number: usize) -> Vec<Vec<PedersenGenerator>> {
+    let generators = pedersen_generators(number);
+    // Pre-calculate POINT_CAPACITY powers of the generators.
+    let mut generator_powers = Vec::with_capacity(number);
+    for (i, generator) in generators.into_iter().enumerate() {
+        if i == 0 {
+            generator_powers.push(vec![PedersenGenerator(generator)]);
+        } else {
+            let mut powers = Vec::with_capacity(POINT_CAPACITY);
+            let mut power = generator;
+            for _ in 0..POINT_CAPACITY {
+                powers.push(PedersenGenerator(power));
+                power.double_in_place();
+            }
+            generator_powers.push(powers);
+        }
+    }
+    generator_powers
+}
+
 /// Calculates the Pedersen hash. Given a vector of bits b_i we divide the vector into chunks
 /// of 752 bits and convert them into scalars like so:
 /// s = b_0 * 2^0 + b_1 * 2^1 + ... + b_750 * 2^750 + b_751 * 2^751
 /// We then calculate the commitment like so:
 /// H = G_0 + s_1 * G_1 + ... + s_n * G_n
 /// where G_0 is a generator that is used as a blinding factor.
-pub fn pedersen_hash(input: Vec<bool>, generators: Vec<G1Projective>) -> G1Projective {
+pub fn pedersen_hash(
+    input: Vec<bool>,
+    generator_powers: &[Vec<PedersenGenerator>],
+) -> G1Projective {
     // Check that the input can be stored using the available generators.
-    assert!((generators.len() - 1) * POINT_CAPACITY >= input.len());
+    assert!((generator_powers.len() - 1) * POINT_CAPACITY >= input.len());
 
     // Calculate the rounds that are necessary to process the input.
     let normal_rounds = input.len() / POINT_CAPACITY;
@@ -118,9 +183,7 @@ pub fn pedersen_hash(input: Vec<bool>, generators: Vec<G1Projective>) -> G1Proje
     let bits_last_round = input.len() % POINT_CAPACITY;
 
     // Initialize the sum to the first generator.
-    let mut result = generators[0];
-
-    let mut power = generators[1];
+    let mut result = generator_powers[0][0].0;
 
     // Start calculating the Pedersen hash.
     for i in 0..normal_rounds {
@@ -129,19 +192,16 @@ pub fn pedersen_hash(input: Vec<bool>, generators: Vec<G1Projective>) -> G1Proje
         // (https://en.wikipedia.org/wiki/Elliptic_curve_point_multiplication#Double-and-add)
         for k in 0..POINT_CAPACITY {
             if input[i * POINT_CAPACITY + k] {
-                result += power;
+                result += generator_powers[i + 1][k].0;
             }
-            power.double_in_place();
         }
-        power = generators[i + 2];
     }
 
     // Begin the final point multiplication. For this one we don't use all 752 bits.
     for k in 0..bits_last_round {
         if input[normal_rounds * POINT_CAPACITY + k] {
-            result += power;
+            result += generator_powers[normal_rounds + 1][k].0;
         }
-        power.double_in_place();
     }
 
     result

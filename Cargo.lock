@@ -2577,6 +2577,7 @@ dependencies = [
  "ark-ff",
  "ark-mnt4-753",
  "ark-mnt6-753",
+ "ark-serialize",
  "ark-std",
  "beserial",
  "blake2-rfc",
@@ -3045,12 +3046,14 @@ dependencies = [
  "ark-mnt4-753",
  "ark-mnt6-753",
  "ark-serialize",
- "hex",
+ "beserial",
+ "lazy_static",
  "nimiq-block",
  "nimiq-bls",
  "nimiq-collections",
  "nimiq-hash",
  "nimiq-keys",
+ "nimiq-pedersen-generators",
  "nimiq-primitives",
  "nimiq-test-log",
  "nimiq-utils",
@@ -3150,6 +3153,15 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tracing",
+]
+
+[[package]]
+name = "nimiq-pedersen-generators"
+version = "0.1.0"
+dependencies = [
+ "beserial",
+ "nimiq-bls",
+ "nimiq-primitives",
 ]
 
 [[package]]

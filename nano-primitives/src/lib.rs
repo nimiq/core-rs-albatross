@@ -12,6 +12,7 @@ pub use vk_commitment::*;
 
 mod macro_block;
 mod merkle_tree;
+mod pedersen_generator_powers;
 mod pk_tree;
 mod serialize;
 mod state_commitment;

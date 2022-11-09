@@ -24,6 +24,7 @@ ark-ec = "^0.3"
 ark-mnt4-753 = "^0.3"
 ark-mnt6-753 = "^0.3"
 ark-crypto-primitives = "^0.3"
+ark-serialize = "^0.3"
 
 beserial = { path = "../beserial", optional = true }
 nimiq-hash = { path = "../hash" }

@@ -140,7 +140,7 @@ mod tests {
     use ark_std::test_rng;
     use rand::RngCore;
 
-    use nimiq_bls::pedersen::{pedersen_generators, pedersen_hash};
+    use nimiq_bls::pedersen::{pedersen_generator_powers, pedersen_generators, pedersen_hash};
     use nimiq_bls::utils::{byte_from_le_bits, bytes_to_bits};
     use nimiq_nano_primitives::{
         merkle_tree_construct, merkle_tree_prove, merkle_tree_verify, serialize_g1_mnt6,
@@ -239,7 +239,7 @@ mod tests {
         let leaf = bytes_to_bits(&bytes);
 
         // Create the Pedersen generators.
-        let generators = pedersen_generators(4);
+        let generators = pedersen_generator_powers(4);
 
         // Create fake Merkle tree branch.
         let path = vec![false, true, false, true];
@@ -247,11 +247,11 @@ mod tests {
         let mut nodes = vec![];
         let mut bits = vec![];
 
-        let mut node = pedersen_hash(leaf.clone(), generators.clone());
+        let mut node = pedersen_hash(leaf.clone(), &generators);
 
         for i in 0..4 {
             rng.fill_bytes(&mut bytes);
-            let other_node = pedersen_hash(bytes_to_bits(&bytes), generators.clone());
+            let other_node = pedersen_hash(bytes_to_bits(&bytes), &generators);
 
             if path[i] {
                 bits.extend_from_slice(
@@ -266,7 +266,7 @@ mod tests {
             }
 
             nodes.push(other_node);
-            node = pedersen_hash(bits.clone(), generators.clone());
+            node = pedersen_hash(bits.clone(), &generators);
             bits.clear();
         }
 
@@ -326,7 +326,7 @@ mod tests {
         let leaf = bytes_to_bits(&bytes);
 
         // Create the Pedersen generators.
-        let generators = pedersen_generators(4);
+        let generators = pedersen_generator_powers(4);
 
         // Create fake Merkle tree branch.
         let path = vec![false, true, false, true];
@@ -334,11 +334,11 @@ mod tests {
         let mut nodes = vec![];
         let mut bits = vec![];
 
-        let mut node = pedersen_hash(leaf.clone(), generators.clone());
+        let mut node = pedersen_hash(leaf.clone(), &generators);
 
         for i in 0..4 {
             rng.fill_bytes(&mut bytes);
-            let other_node = pedersen_hash(bytes_to_bits(&bytes), generators.clone());
+            let other_node = pedersen_hash(bytes_to_bits(&bytes), &generators);
 
             if path[i] {
                 bits.extend_from_slice(
@@ -353,7 +353,7 @@ mod tests {
             }
 
             nodes.push(other_node);
-            node = pedersen_hash(bits.clone(), generators.clone());
+            node = pedersen_hash(bits.clone(), &generators);
             bits.clear();
         }
 

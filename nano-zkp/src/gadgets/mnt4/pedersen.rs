@@ -65,7 +65,7 @@ mod tests {
     use ark_std::test_rng;
     use rand::RngCore;
 
-    use nimiq_bls::pedersen::{pedersen_generators, pedersen_hash};
+    use nimiq_bls::pedersen::{pedersen_generator_powers, pedersen_generators, pedersen_hash};
     use nimiq_bls::utils::bytes_to_bits;
     use nimiq_test_log::test;
 
@@ -86,9 +86,10 @@ mod tests {
 
         // Generate the generators for the Pedersen hash.
         let generators = pedersen_generators(6);
+        let generator_powers = pedersen_generator_powers(6);
 
         // Evaluate Pedersen hash using the primitive version.
-        let primitive_hash = pedersen_hash(bits.clone(), generators.clone());
+        let primitive_hash = pedersen_hash(bits.clone(), &generator_powers);
 
         // Allocate the random bits in the circuit.
         let bits_var = Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(bits)).unwrap();

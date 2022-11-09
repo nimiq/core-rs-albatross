@@ -16,6 +16,9 @@ maintenance = { status = "experimental" }
 name = "pk_tree"
 harness = false
 
+[[example]]
+name = "pk_tree"
+
 [dependencies]
 bitflags = "1.0"
 thiserror = "1.0"
