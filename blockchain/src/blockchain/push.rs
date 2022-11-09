@@ -1,3 +1,4 @@
+use std::cmp;
 use std::error::Error;
 use std::ops::Deref;
 
@@ -12,7 +13,6 @@ use tokio::sync::broadcast::Sender as BroadcastSender;
 
 use crate::blockchain_state::BlockchainState;
 use crate::chain_info::ChainInfo;
-use crate::chain_store::MAX_EPOCHS_STORED;
 use crate::{
     AbstractBlockchain, Blockchain, BlockchainEvent, ChainOrdering, ForkEvent, NextBlock,
     PushError, PushResult,
@@ -307,8 +307,10 @@ impl Blockchain {
         this.chain_store.set_head(&mut txn, &block_hash);
 
         if is_election_block {
+            let epochs_stored = cmp::max(this.config.max_epochs_stored, Policy::MIN_EPOCHS_STORED);
+
             // Calculate the epoch to be pruned. Saturate at zero.
-            let pruned_epoch = policy::epoch_at(block_number).saturating_sub(MAX_EPOCHS_STORED);
+            let pruned_epoch = Policy::epoch_at(block_number).saturating_sub(epochs_stored);
 
             if this.config.keep_history {
                 // If we are a full history node, we only prune the chain store

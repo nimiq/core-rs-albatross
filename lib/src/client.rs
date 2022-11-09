@@ -37,7 +37,6 @@ use nimiq_zkp_component::zkp_component::ZKPComponentProxy as AbstractZKPComponen
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 
-use crate::config::config::ClientConfig;
 use crate::config::config::SyncMode::History;
 use crate::config::config::{ClientConfig, SyncMode};
 use crate::error::Error;
@@ -213,7 +212,10 @@ impl ClientInner {
             config.database,
         )?;
 
-        let mut blockchain_config = BlockchainConfig::default();
+        let mut blockchain_config = BlockchainConfig {
+            max_epochs_stored: config.consensus.max_epochs_stored,
+            ..Default::default()
+        };
 
         if config.consensus.sync_mode == History {
             blockchain_config.keep_history = true;

@@ -8,6 +8,7 @@ use nimiq_genesis::NetworkInfo;
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
+
 use nimiq_primitives::policy::Policy;
 use nimiq_primitives::slots::Validators;
 use nimiq_utils::time::OffsetTime;
@@ -62,11 +63,17 @@ pub struct Blockchain {
 pub struct BlockchainConfig {
     // Flag indicating if the full history should be stored
     pub keep_history: bool,
+    // Maximum number of epochs (other than the current one) that the ChainStore will store fully.
+    // Epochs older than this number will be pruned.
+    pub max_epochs_stored: u32,
 }
 
 impl Default for BlockchainConfig {
     fn default() -> Self {
-        Self { keep_history: true }
+        Self {
+            keep_history: true,
+            max_epochs_stored: Policy::MIN_EPOCHS_STORED,
+        }
     }
 }
 

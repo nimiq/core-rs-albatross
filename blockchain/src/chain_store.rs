@@ -10,10 +10,6 @@ use nimiq_primitives::policy::Policy;
 use crate::chain_info::ChainInfo;
 use crate::Direction;
 
-/// Maximum number of epochs (other than the current one) that the ChainStore will store fully.
-/// Epochs older than this number will be pruned. A minimum of 1 is recommended.
-pub const MAX_EPOCHS_STORED: u32 = 1;
-
 #[derive(Debug)]
 pub struct ChainStore {
     env: Environment,

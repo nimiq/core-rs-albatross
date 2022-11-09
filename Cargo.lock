@@ -3187,6 +3187,7 @@ dependencies = [
  "nimiq-primitives",
 ]
 
+[[package]]
 name = "nimiq-primitives"
 version = "0.1.0"
 dependencies = [

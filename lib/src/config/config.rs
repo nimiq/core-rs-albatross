@@ -18,7 +18,7 @@ use nimiq_database::{mdbx::MdbxEnvironment, volatile::VolatileEnvironment, Envir
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_mempool::{config::MempoolConfig, filter::MempoolRules};
 use nimiq_network_libp2p::{Keypair as IdentityKeypair, Multiaddr};
-use nimiq_primitives::networks::NetworkId;
+use nimiq_primitives::{networks::NetworkId, policy::Policy};
 use nimiq_utils::file_store::FileStore;
 #[cfg(feature = "validator")]
 use nimiq_utils::key_rng::SecureGenerate;
@@ -68,6 +68,8 @@ pub struct ConsensusConfig {
     pub sync_mode: SyncMode,
     #[builder(default = "3")]
     pub min_peers: usize,
+    #[builder(default = "1")]
+    pub max_epochs_stored: u32,
 }
 
 impl Default for ConsensusConfig {
@@ -75,6 +77,7 @@ impl Default for ConsensusConfig {
         ConsensusConfig {
             sync_mode: SyncMode::default(),
             min_peers: 3,
+            max_epochs_stored: Policy::MIN_EPOCHS_STORED,
         }
     }
 }
@@ -758,10 +761,7 @@ impl ClientConfigBuilder {
         #[cfg(feature = "rpc-server")]
         {
             if let Some(rpc_config) = &config_file.rpc_server {
-                let bind_to = rpc_config
-                    .bind
-                    .as_ref()
-                    .and_then(|addr| Some(addr.parse().unwrap()));
+                let bind_to = rpc_config.bind.as_ref().map(|addr| addr.parse().unwrap());
 
                 let allow_ips = if rpc_config.allowip.is_empty() {
                     None
@@ -805,7 +805,7 @@ impl ClientConfigBuilder {
                 let ip = metrics_config
                     .bind
                     .as_ref()
-                    .and_then(|addr| Some(addr.parse().unwrap()));
+                    .map(|addr| addr.parse().unwrap());
 
                 let addr = SocketAddr::new(
                     ip.unwrap_or_else(default_bind),

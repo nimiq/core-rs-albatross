@@ -154,6 +154,8 @@ pub struct ConsensusSettings {
     #[serde(default)]
     pub sync_mode: SyncMode,
     #[serde(default)]
+    pub max_epochs_stored: usize,
+    #[serde(default)]
     pub network: Network,
     pub min_peers: Option<usize>,
 }

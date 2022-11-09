@@ -1537,16 +1537,10 @@ impl NetworkInterface for Network {
     }
 
     fn peer_provides_history(&self, peer_id: PeerId) -> bool {
-        if let Some(peer_contact) = self.connected_peers.read().get(&peer_id) {
-            if let Some(contact) = peer_contact {
-                contact.services.contains(Services::HISTORY)
-            } else {
-                // If we dont know the peer we return false
-                // TODO replace this with a result
-                false
-            }
+        if let Some(Some(contact)) = self.connected_peers.read().get(&peer_id) {
+            contact.services.contains(Services::HISTORY)
         } else {
-            // If we dont know the peer we just return false
+            // If we dont know the peer we return false
             false
         }
     }

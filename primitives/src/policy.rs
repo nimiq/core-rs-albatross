@@ -69,6 +69,9 @@ impl Policy {
     /// The timeout in milliseconds for a validator to produce a block (4s)
     pub const BLOCK_PRODUCER_TIMEOUT: u64 = 4 * 1000;
 
+    /// Minimum number of epochs that the ChainStore will store fully
+    pub const MIN_EPOCHS_STORED: u32 = 1;
+
     /// The maximum drift, in milliseconds, that is allowed between any block's timestamp and the node's
     /// system time. We only care about drifting to the future.
     pub const TIMESTAMP_MAX_DRIFT: u64 = 600000;
