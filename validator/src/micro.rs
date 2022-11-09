@@ -1,3 +1,4 @@
+use std::cmp;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -79,27 +80,33 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         };
 
         let mut delay = Duration::default();
+        let mut expected_next_block_ts;
 
         let return_value = loop {
             // Acquire blockchain.upgradable_read() to prevent further changes to the blockchain while
             // we're constructing the block. Check if we're still in the correct state, abort otherwise.
             {
                 let blockchain = self.blockchain.upgradable_read();
+                let last_macro_block = blockchain.macro_head();
+                // Calculate the expected block TS as expected by the reward function
+                let target_block_ts = last_macro_block.header.timestamp
+                    + self.block_separation_time.as_millis() as u64
+                        * ((blockchain.block_number() + 1)
+                            .saturating_sub(last_macro_block.block_number()))
+                            as u64;
+                // The expected next block TS is the greater of:
+                // - The previous head timestamp (this means we are behind the expected block TS).
+                //   In this case the block will be produced immediately.
+                // - The expected block TS according to the reward function
+                expected_next_block_ts = cmp::max(target_block_ts, blockchain.head().timestamp());
                 if !in_current_state(&blockchain.head()) {
                     break Some(None);
                 } else if self.is_our_turn(&blockchain) {
                     // We want to produce a block at the expected timestamp for this block in this batch
-                    // as it is calculated by the reward function
-                    let last_macro_block = blockchain.macro_head();
-                    let target_block_ts = last_macro_block.header.timestamp
-                        + self.block_separation_time.as_millis() as u64
-                            * ((blockchain.block_number() + 1)
-                                .saturating_sub(last_macro_block.block_number()))
-                                as u64;
+                    // as it is calculated by the reward function and set the producer timeout accordingly
                     let now = systemtime_to_timestamp(SystemTime::now());
 
-                    // If the expected timestamp is already in the past, produce a block
-                    // immediately.
+                    // If the expected timestamp is already in the past, produce a block immediately.
                     // If the timestamp hasn't passed, wait until the expected block timestamp
                     // to produce the block.
                     if target_block_ts <= now {
@@ -166,7 +173,11 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
             self.block_number,
         );
 
-        time::sleep(self.producer_timeout).await;
+        // Wait for the block according to the next block expected timestamp and the producer timeout
+        let now = systemtime_to_timestamp(SystemTime::now());
+        let next_block_timeout =
+            (expected_next_block_ts + self.producer_timeout.as_millis() as u64).saturating_sub(now);
+        time::sleep(Duration::from_millis(next_block_timeout)).await;
 
         info!(
             block_number = self.block_number,
