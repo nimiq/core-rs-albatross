@@ -13,7 +13,7 @@ use nimiq_keys::Address;
 
 /// A compact representation of a node's key. It stores the key in big endian. Each byte
 /// stores up to 2 nibbles. Internally, we assume that a key is represented in hexadecimal form.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct KeyNibbles {
     /// Invariant: Unused nibbles are always zeroed.
     bytes: [u8; KeyNibbles::MAX_BYTES],
@@ -229,6 +229,9 @@ impl str::FromStr for KeyNibbles {
     type Err = hex::FromHexError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s == "ε" {
+            return Ok(KeyNibbles::ROOT);
+        }
         let mut bytes: [u8; KeyNibbles::MAX_BYTES] = [0; KeyNibbles::MAX_BYTES];
         if s.len() % 2 == 0 {
             hex::decode_to_slice(s, &mut bytes[..(s.len() / 2)])?;
@@ -264,6 +267,9 @@ impl str::FromStr for KeyNibbles {
 
 impl fmt::Display for KeyNibbles {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.length == 0 {
+            return f.write_str("ε");
+        }
         let mut hex_representation = hex::encode(&self.bytes[..self.bytes_len()]);
 
         // If prefix ends in the middle of a byte, remove last char.
@@ -272,6 +278,12 @@ impl fmt::Display for KeyNibbles {
         }
 
         f.write_str(&hex_representation)
+    }
+}
+
+impl fmt::Debug for KeyNibbles {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Display::fmt(self, f)
     }
 }
 
@@ -359,7 +371,10 @@ mod tests {
         assert_eq!(key.to_string(), "cfb98637bcae43c13323eaa1731ced2b716962fd");
 
         let key: KeyNibbles = "".parse().unwrap();
-        assert_eq!(key.to_string(), "");
+        assert_eq!(key.to_string(), "ε");
+
+        let key: KeyNibbles = "ε".parse().unwrap();
+        assert_eq!(key.to_string(), "ε");
 
         let key: KeyNibbles = "1".parse().unwrap();
         assert_eq!(key.to_string(), "1");
@@ -404,8 +419,8 @@ mod tests {
             key.slice(1, 40).to_string(),
             "fb98637bcae43c13323eaa1731ced2b716962fd"
         );
-        assert_eq!(key.slice(2, 1).to_string(), "");
-        assert_eq!(key.slice(42, 43).to_string(), "");
+        assert_eq!(key.slice(2, 1).to_string(), "ε");
+        assert_eq!(key.slice(42, 43).to_string(), "ε");
     }
 
     #[test]
@@ -424,8 +439,8 @@ mod tests {
             key.suffix(2).to_string(),
             "b98637bcae43c13323eaa1731ced2b716962fd"
         );
-        assert_eq!(key.suffix(40).to_string(), "");
-        assert_eq!(key.suffix(42).to_string(), "");
+        assert_eq!(key.suffix(40).to_string(), "ε");
+        assert_eq!(key.suffix(42).to_string(), "ε");
     }
 
     #[test]
