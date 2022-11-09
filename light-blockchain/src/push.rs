@@ -79,7 +79,7 @@ impl LightBlockchain {
 
         // Verify that the block is a valid immediate successor to its predecessor.
         let predecessor = &prev_info.head;
-        block.verify_immediate_successor(predecessor)?;
+        block.verify_immediate_successor(predecessor, this.macro_head())?;
 
         // Verify that the block is a valid macro successor to our current macro head.
         if block.is_macro() {

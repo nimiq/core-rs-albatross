@@ -219,7 +219,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
             if !in_current_state(&blockchain.head()) {
                 None
             } else {
-                let timestamp = blockchain.timestamp() + self.producer_timeout.as_secs() * 1000;
+                let timestamp = expected_next_block_ts + self.producer_timeout.as_millis() as u64;
 
                 let block = self.block_producer.next_micro_block(
                     &blockchain,

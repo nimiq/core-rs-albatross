@@ -1,3 +1,4 @@
+use std::cmp::max;
 use std::convert::TryFrom;
 use std::{fmt, io};
 
@@ -356,9 +357,14 @@ impl Block {
     }
 
     /// Verifies that the block is a valid immediate successor of the given block.
-    pub fn verify_immediate_successor(&self, predecessor: &Block) -> Result<(), BlockError> {
+    pub fn verify_immediate_successor(
+        &self,
+        predecessor: &Block,
+        macro_predecessor: MacroBlock,
+    ) -> Result<(), BlockError> {
         // Check block number.
-        if self.block_number() != predecessor.block_number() + 1 {
+        let next_block_number = predecessor.block_number() + 1;
+        if self.block_number() != next_block_number {
             debug!(
                 block = %self,
                 reason = "Wrong block number",
@@ -384,7 +390,11 @@ impl Block {
         // Handle skip blocks.
         if self.is_skip() {
             // Check that skip block has the expected timestamp.
-            let expected_timestamp = predecessor.timestamp() + Policy::BLOCK_PRODUCER_TIMEOUT;
+            let target_block_ts = macro_predecessor.header.timestamp
+                + Policy::BLOCK_SEPARATION_TIME
+                    * (next_block_number.saturating_sub(macro_predecessor.block_number())) as u64;
+            let expected_timestamp =
+                max(target_block_ts, predecessor.timestamp()) + Policy::BLOCK_PRODUCER_TIMEOUT;
             if self.timestamp() != expected_timestamp {
                 debug!(
                     block = %self,

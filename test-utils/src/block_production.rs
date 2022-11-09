@@ -1,3 +1,4 @@
+use std::cmp;
 use std::sync::Arc;
 
 use parking_lot::RwLock;
@@ -105,9 +106,17 @@ impl TemporaryBlockProducer {
                 block_hash,
             ))
         } else if skip_block {
+            let last_macro_block = blockchain.macro_head();
+            // Calculate the expected block TS as expected by the reward function
+            let target_block_ts = last_macro_block.header.timestamp
+                + Policy::BLOCK_SEPARATION_TIME
+                    * ((blockchain.block_number() + 1)
+                        .saturating_sub(last_macro_block.block_number()))
+                        as u64;
+            let target_block_ts = cmp::max(target_block_ts, blockchain.head().timestamp());
             Block::Micro(self.producer.next_micro_block(
                 &blockchain,
-                blockchain.head().timestamp() + Policy::BLOCK_PRODUCER_TIMEOUT,
+                target_block_ts + Policy::BLOCK_PRODUCER_TIMEOUT,
                 vec![],
                 vec![],
                 extra_data,

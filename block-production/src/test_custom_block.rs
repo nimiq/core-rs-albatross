@@ -134,7 +134,11 @@ pub fn next_skip_block(
     let timestamp = if config.timestamp_offset != 0 {
         (blockchain.head().timestamp() as i64 + config.timestamp_offset) as u64
     } else {
-        blockchain.head().timestamp() + Policy::BLOCK_PRODUCER_TIMEOUT
+        let last_macro = blockchain.macro_head();
+        last_macro.header.timestamp
+            + Policy::BLOCK_SEPARATION_TIME
+                * (block_number.saturating_sub(last_macro.block_number()) as u64)
+            + Policy::BLOCK_PRODUCER_TIMEOUT
     };
 
     let parent_hash = config

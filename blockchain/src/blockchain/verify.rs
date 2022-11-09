@@ -31,7 +31,7 @@ impl Blockchain {
             .map_err(|_| PushError::Orphan)?;
 
         // Verify that the block is a valid immediate successor to its predecessor.
-        block.verify_immediate_successor(&predecessor)?;
+        block.verify_immediate_successor(&predecessor, self.macro_head())?;
 
         // If the block is a macro block, check that it is a valid successor to the current
         // election block.
