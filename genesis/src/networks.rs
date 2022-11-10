@@ -91,9 +91,7 @@ fn read_genesis_config(config: &Path) -> Result<GenesisData, GenesisBuilderError
         block,
         hash,
         accounts,
-    } = GenesisBuilder::new()
-        .with_config_file(config)?
-        .generate(env)?;
+    } = GenesisBuilder::from_config_file(config)?.generate(env)?;
 
     let block = block.serialize_to_vec();
     let accounts = AccountsList(accounts).serialize_to_vec();

@@ -56,8 +56,16 @@ pub struct GenesisBuilder {
     pub accounts: Vec<config::GenesisAccount>,
 }
 
+impl Default for GenesisBuilder {
+    fn default() -> Self {
+        let mut result = Self::new_without_defaults();
+        result.with_defaults();
+        result
+    }
+}
+
 impl GenesisBuilder {
-    pub fn new() -> Self {
+    fn new_without_defaults() -> Self {
         GenesisBuilder {
             seed_message: None,
             timestamp: None,
@@ -68,13 +76,13 @@ impl GenesisBuilder {
         }
     }
 
-    pub fn default() -> Self {
-        let mut builder = Self::new();
-        builder.with_defaults();
-        builder
+    pub fn from_config_file<P: AsRef<Path>>(path: P) -> Result<Self, GenesisBuilderError> {
+        let mut result = Self::new_without_defaults();
+        result.with_config_file(path)?;
+        Ok(result)
     }
 
-    pub fn with_defaults(&mut self) -> &mut Self {
+    fn with_defaults(&mut self) -> &mut Self {
         self.vrf_seed = Some(VrfSeed::default());
         self
     }
@@ -130,7 +138,7 @@ impl GenesisBuilder {
         self
     }
 
-    pub fn with_config_file<P: AsRef<Path>>(
+    fn with_config_file<P: AsRef<Path>>(
         &mut self,
         path: P,
     ) -> Result<&mut Self, GenesisBuilderError> {
@@ -344,11 +352,5 @@ impl GenesisBuilder {
         AccountsList(accounts).serialize(&mut file)?;
 
         Ok(hash)
-    }
-}
-
-impl Default for GenesisBuilder {
-    fn default() -> Self {
-        Self::new()
     }
 }
