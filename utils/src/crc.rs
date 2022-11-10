@@ -25,7 +25,7 @@ impl Crc8Computer {
 
     pub fn update(&mut self, buf: &[u8]) -> &mut Self {
         for &i in buf {
-            self.value = Crc8Computer::TABLE[(self.value ^ (i as u8)) as usize];
+            self.value = Crc8Computer::TABLE[(self.value ^ i) as usize];
         }
         self
     }

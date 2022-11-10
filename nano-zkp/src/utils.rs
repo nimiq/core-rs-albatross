@@ -127,7 +127,7 @@ pub fn pad_point_bits<F: PrimeField>(
         }
 
         // Split bits at point_len. Now new_bits contains the elements in the range [MODULUS, len).
-        let new_bits = bits.split_off(point_len as usize);
+        let new_bits = bits.split_off(point_len);
 
         // Reverse the bits to get the big-endian representation.
         bits.reverse();

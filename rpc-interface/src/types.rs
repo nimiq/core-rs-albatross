@@ -544,7 +544,7 @@ impl Transaction {
             to: transaction.recipient,
             value: transaction.value,
             fee: transaction.fee,
-            flags: transaction.flags.bits() as u8,
+            flags: transaction.flags.bits(),
             data: transaction.data,
             validity_start_height: transaction.validity_start_height,
             proof: transaction.proof,

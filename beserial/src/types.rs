@@ -70,6 +70,7 @@ impl ToPrimitive for uvar {
 }
 
 impl Serialize for uvar {
+    #[allow(clippy::unnecessary_cast)] // Allow casts to make sure we write the right type.
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let mut size = 0;
         if self.0 < 0x80 {

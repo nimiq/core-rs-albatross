@@ -84,7 +84,7 @@ impl TendermintProof {
         let mut agg_pk = AggregatePublicKey::new();
 
         for (i, pk) in current_validators.voting_keys().iter().enumerate() {
-            if justification.sig.signers.contains(i as usize) {
+            if justification.sig.signers.contains(i) {
                 agg_pk.aggregate(pk);
             }
         }

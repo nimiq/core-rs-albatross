@@ -6,7 +6,7 @@ pub fn log2(x: usize) -> usize {
     if x == 0 {
         panic!("log_2(0) is undefined.");
     }
-    (num_bits::<usize>() as usize) - (x.leading_zeros() as usize) - 1
+    num_bits::<usize>() - (x.leading_zeros() as usize) - 1
 }
 
 pub trait CeilingDiv {

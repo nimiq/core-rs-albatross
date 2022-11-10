@@ -102,7 +102,7 @@ where
     let mut networks = vec![];
     for i in 0..num_validators {
         let (v, c) = build_validator(
-            peer_ids[i] as u64,
+            peer_ids[i],
             Address::from(&validator_keys[i]),
             false,
             signing_keys[i].clone(),
