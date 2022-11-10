@@ -33,7 +33,7 @@ pub fn state_commitment(
     let bits = bytes_to_bits(&bytes);
 
     // Calculate the Pedersen hash.
-    let hash = pedersen_hash(bits, &*PEDERSEN_GENERATORS);
+    let hash = pedersen_hash(bits, &PEDERSEN_GENERATORS);
 
     // Serialize the Pedersen hash.
     let bytes = serialize_g1_mnt6(&hash);

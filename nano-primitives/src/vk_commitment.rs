@@ -33,7 +33,7 @@ pub fn vk_commitment(vk: VerifyingKey<MNT6_753>) -> Vec<u8> {
     let bits = bytes_to_bits(&bytes);
 
     // Calculate the Pedersen hash.
-    let hash = pedersen_hash(bits, &*PEDERSEN_GENERATORS);
+    let hash = pedersen_hash(bits, &PEDERSEN_GENERATORS);
 
     // Serialize the Pedersen commitment.
     let bytes = serialize_g1_mnt6(&hash);
