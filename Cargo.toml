@@ -55,38 +55,41 @@ members = [
   "zkp-component",
 ]
 
-# Force nimiq-bls and nimiq-nano-zkp to be built with the highest optimization level in the test profiles. This is
-# necessary in order to have decent tests performance.
-# We do the same with nimiq-bls dev profile because it is compiled for a lot of other crates's tests.
+# Force nimiq-bls and nimiq-nano-zkp to be built with optimization level 2 in
+# the test profiles. This is necessary in order to have decent tests
+# performance. We do the same with nimiq-bls dev profile because it is compiled
+# for a lot of other crates's tests.
+#
+# This turned out to be faster than using the highest optimization level 3.
 [profile.dev.package.nimiq-bls]
-opt-level = 3
+opt-level = 2
 
 [profile.test.package.nimiq-bls]
-opt-level = 3
+opt-level = 2
 
 [profile.dev.package.nimiq-nano-primitives]
-opt-level = 3
+opt-level = 2
 
 [profile.test.package.nimiq-nano-primitives]
-opt-level = 3
+opt-level = 2
 
 [profile.dev.package.nimiq-nano-zkp]
-opt-level = 3
+opt-level = 2
 
 [profile.test.package.nimiq-nano-zkp]
-opt-level = 3
+opt-level = 2
 
 [profile.dev.package.beserial]
-opt-level = 3
+opt-level = 2
 
 [profile.test.package.beserial]
-opt-level = 3
+opt-level = 2
 
 [profile.dev.package.nimiq-pedersen-generators]
-opt-level = 3
+opt-level = 2
 
 [profile.test.package.nimiq-pedersen-generators]
-opt-level = 3
+opt-level = 2
 
 [profile.release]
 lto = "thin"
@@ -95,33 +98,33 @@ lto = "thin"
 inherits = "release"
 debug = true
 
-# Force arkworks to be built with the highest optimization level.
+# Force arkworks to be built with optimization level 2.
 [profile.dev.package.ark-ff]
-opt-level = 3
+opt-level = 2
 
 [profile.test.package.ark-ff]
-opt-level = 3
+opt-level = 2
 
 [profile.dev.package.ark-ec]
-opt-level = 3
+opt-level = 2
 
 [profile.test.package.ark-ec]
-opt-level = 3
+opt-level = 2
 
 [profile.dev.package.ark-mnt4-753]
-opt-level = 3
+opt-level = 2
 
 [profile.test.package.ark-mnt4-753]
-opt-level = 3
+opt-level = 2
 
 [profile.dev.package.ark-mnt6-753]
-opt-level = 3
+opt-level = 2
 
 [profile.test.package.ark-mnt6-753]
-opt-level = 3
+opt-level = 2
 
 [profile.dev.package.ark-crypto-primitives]
-opt-level = 3
+opt-level = 2
 
 [profile.test.package.ark-crypto-primitives]
-opt-level = 3
+opt-level = 2
