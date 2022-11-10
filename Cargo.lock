@@ -2647,7 +2647,7 @@ dependencies = [
  "nimiq-transaction",
  "nimiq-utils",
  "nimiq-validator-network",
- "nimiq-zkp-prover",
+ "nimiq-zkp-component",
  "parking_lot 0.12.0",
  "pin-project",
  "rand 0.8.5",
@@ -2903,7 +2903,7 @@ dependencies = [
  "nimiq-validator",
  "nimiq-validator-network",
  "nimiq-wallet",
- "nimiq-zkp-prover",
+ "nimiq-zkp-component",
  "parking_lot 0.12.0",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
@@ -3252,7 +3252,7 @@ dependencies = [
  "nimiq-primitives",
  "nimiq-transaction",
  "nimiq-vrf",
- "nimiq-zkp-prover",
+ "nimiq-zkp-component",
  "parking_lot 0.12.0",
  "serde",
  "serde_json",
@@ -3292,7 +3292,7 @@ dependencies = [
  "nimiq-validator-network",
  "nimiq-vrf",
  "nimiq-wallet",
- "nimiq-zkp-prover",
+ "nimiq-zkp-component",
  "parking_lot 0.12.0",
  "serde",
  "serde_json",
@@ -3410,7 +3410,7 @@ dependencies = [
  "nimiq-validator",
  "nimiq-validator-network",
  "nimiq-vrf",
- "nimiq-zkp-prover",
+ "nimiq-zkp-component",
  "parking_lot 0.12.0",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
@@ -3613,7 +3613,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "nimiq-zkp-prover"
+name = "nimiq-zkp-component"
 version = "0.1.0"
 dependencies = [
  "ark-groth16",

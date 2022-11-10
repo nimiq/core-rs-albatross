@@ -1,6 +1,6 @@
 use nimiq_test_log::test;
 use nimiq_test_utils::zkp_test_data::zkp_test_exe;
-use nimiq_zkp_prover::{
+use nimiq_zkp_component::{
     proof_utils::launch_generate_new_proof,
     types::{ProofInput, ZKProofGenerationError},
 };

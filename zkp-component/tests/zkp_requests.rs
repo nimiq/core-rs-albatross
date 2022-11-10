@@ -18,10 +18,10 @@ use nimiq_test_utils::blockchain_with_rng::produce_macro_blocks_with_rng;
 use nimiq_test_utils::zkp_test_data::{get_base_seed, zkp_test_exe};
 use nimiq_test_utils::zkp_test_data::{KEYS_PATH, ZKPROOF_SERIALIZED_IN_HEX};
 
-use nimiq_zkp_prover::proof_utils::{validate_proof, ProofStore};
-use nimiq_zkp_prover::types::ZKProof;
-use nimiq_zkp_prover::zkp_requests::ZKPRequests;
-use nimiq_zkp_prover::ZKPComponent;
+use nimiq_zkp_component::proof_utils::{validate_proof, ProofStore};
+use nimiq_zkp_component::types::ZKProof;
+use nimiq_zkp_component::zkp_requests::ZKPRequests;
+use nimiq_zkp_component::ZKPComponent;
 use parking_lot::RwLock;
 
 use nimiq_utils::time::OffsetTime;

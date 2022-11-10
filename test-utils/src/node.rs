@@ -13,7 +13,7 @@ use nimiq_network_interface::network::Network as NetworkInterface;
 use nimiq_network_mock::MockHub;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_utils::time::OffsetTime;
-use nimiq_zkp_prover::ZKPComponent;
+use nimiq_zkp_component::ZKPComponent;
 
 use crate::test_network::TestNetwork;
 use crate::zkp_test_data::{zkp_test_exe, KEYS_PATH};

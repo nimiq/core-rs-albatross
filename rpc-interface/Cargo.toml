@@ -42,7 +42,7 @@ nimiq-keys = { path = "../keys", features = ["serde-derive"] }
 nimiq-primitives = { path = "../primitives", features = ["coin", "account", "serde-derive"] }
 nimiq-transaction = { path = "../primitives/transaction", features = ["serde-derive"] }
 nimiq-vrf = { path = "../vrf", features = ["serde-derive"] }
-nimiq-zkp-prover = { path = "../zkp-prover" }
+nimiq-zkp-component = { path = "../zkp-component" }
 
 [dev-dependencies]
 serde_json = "1.0"

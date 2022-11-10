@@ -6,8 +6,8 @@ use beserial::Deserialize;
 use nimiq_primitives::policy;
 use nimiq_test_utils::blockchain_with_rng::produce_macro_blocks_with_rng;
 use nimiq_test_utils::zkp_test_data::{KEYS_PATH, ZKPROOF_SERIALIZED_IN_HEX};
-use nimiq_zkp_prover::proof_utils::ProofStore;
-use nimiq_zkp_prover::types::ZKProof;
+use nimiq_zkp_component::proof_utils::ProofStore;
+use nimiq_zkp_component::types::ZKProof;
 use parking_lot::RwLock;
 
 use nimiq_block_production::BlockProducer;
@@ -20,7 +20,7 @@ use nimiq_test_utils::blockchain::{signing_key, voting_key};
 use nimiq_test_utils::zkp_test_data::get_base_seed;
 use nimiq_utils::time::OffsetTime;
 
-use nimiq_zkp_prover::proof_utils::validate_proof;
+use nimiq_zkp_component::proof_utils::validate_proof;
 
 fn blockchain() -> Arc<RwLock<Blockchain>> {
     let time = Arc::new(OffsetTime::new());

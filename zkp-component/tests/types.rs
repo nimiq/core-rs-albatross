@@ -7,7 +7,7 @@ use nimiq_database::{AsDatabaseBytes, FromDatabaseValue};
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::policy;
 use nimiq_test_utils::zkp_test_data::KEYS_PATH;
-use nimiq_zkp_prover::types::{ProofInput, ZKPState, ZKProof};
+use nimiq_zkp_component::types::{ProofInput, ZKPState, ZKProof};
 
 #[test]
 fn it_serializes_and_deserializes_zk_proof() {

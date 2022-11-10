@@ -4,7 +4,7 @@ use nimiq_test_utils::blockchain_with_rng::produce_macro_blocks_with_rng;
 use nimiq_test_utils::zkp_test_data::zkp_test_exe;
 use nimiq_test_utils::zkp_test_data::KEYS_PATH;
 use nimiq_test_utils::zkp_test_data::ZKPROOF_SERIALIZED_IN_HEX;
-use nimiq_zkp_prover::types::ZKProof;
+use nimiq_zkp_component::types::ZKProof;
 use parking_lot::RwLock;
 use std::path::Path;
 use std::path::PathBuf;
@@ -14,8 +14,8 @@ use nimiq_network_interface::network::Network;
 use nimiq_network_mock::MockHub;
 use nimiq_network_mock::MockNetwork;
 use nimiq_primitives::policy;
-use nimiq_zkp_prover::proof_utils::ProofStore;
-use nimiq_zkp_prover::types::ZKProofTopic;
+use nimiq_zkp_component::proof_utils::ProofStore;
+use nimiq_zkp_component::types::ZKProofTopic;
 
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
@@ -27,9 +27,9 @@ use nimiq_test_utils::blockchain::{signing_key, voting_key};
 use nimiq_test_utils::zkp_test_data::get_base_seed;
 use nimiq_utils::time::OffsetTime;
 
-use nimiq_zkp_prover::proof_utils::validate_proof;
-use nimiq_zkp_prover::zkp_component::ZKPComponent;
-use nimiq_zkp_prover::zkp_component::ZKProofsStream;
+use nimiq_zkp_component::proof_utils::validate_proof;
+use nimiq_zkp_component::zkp_component::ZKPComponent;
+use nimiq_zkp_component::zkp_component::ZKProofsStream;
 
 fn blockchain() -> Arc<RwLock<Blockchain>> {
     let time = Arc::new(OffsetTime::new());

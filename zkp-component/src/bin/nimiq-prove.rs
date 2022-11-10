@@ -1,4 +1,4 @@
-use nimiq_zkp_prover::prover_binary::prover_main;
+use nimiq_zkp_component::prover_binary::prover_main;
 
 #[tokio::main]
 async fn main() {

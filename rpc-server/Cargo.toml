@@ -62,4 +62,4 @@ nimiq-validator = { path = "../validator" }
 nimiq-validator-network = { path = "../validator-network" }
 nimiq-vrf = { path = "../vrf", features = ["serde-derive"] }
 nimiq-wallet = { path = "../wallet" }
-nimiq-zkp-prover = { path = "../zkp-prover" }
+nimiq-zkp-component = { path = "../zkp-component" }

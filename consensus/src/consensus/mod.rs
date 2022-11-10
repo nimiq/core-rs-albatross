@@ -15,7 +15,7 @@ use tokio_stream::wrappers::BroadcastStream;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_database::Environment;
 use nimiq_network_interface::{network::Network, request::request_handler};
-use nimiq_zkp_prover::zkp_component::ZKPComponentProxy;
+use nimiq_zkp_component::zkp_component::ZKPComponentProxy;
 
 use crate::messages::{
     RequestBatchSet, RequestBlock, RequestHead, RequestHistoryChunk, RequestMacroChain,

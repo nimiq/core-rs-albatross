@@ -972,7 +972,7 @@ pub struct ZKPState {
 }
 
 impl ZKPState {
-    pub fn with_zkp_state(zkp_state: &nimiq_zkp_prover::types::ZKPState) -> Self {
+    pub fn with_zkp_state(zkp_state: &nimiq_zkp_component::types::ZKPState) -> Self {
         let latest_proof = zkp_state
             .latest_proof
             .as_ref()

@@ -9,7 +9,7 @@ use nimiq_bls::cache::PublicKeyCache;
 use nimiq_test_log::test;
 use nimiq_test_utils::node::TESTING_BLS_CACHE_MAX_CAPACITY;
 use nimiq_test_utils::zkp_test_data::{zkp_test_exe, KEYS_PATH};
-use nimiq_zkp_prover::ZKPComponent;
+use nimiq_zkp_component::ZKPComponent;
 use parking_lot::{Mutex, RwLock};
 
 use nimiq_block_production::BlockProducer;

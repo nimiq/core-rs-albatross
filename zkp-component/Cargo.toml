@@ -1,5 +1,5 @@
 [package]
-name = "nimiq-zkp-prover"
+name = "nimiq-zkp-component"
 version = "0.1.0"
 authors = ["Ines C <ii.cruz@campus.fct.unl.pt>"]
 edition = "2021"

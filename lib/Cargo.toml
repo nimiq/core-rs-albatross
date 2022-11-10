@@ -66,7 +66,7 @@ nimiq-utils = { path = "../utils", features = ["time", "key-store"] }
 nimiq-validator = { path = "../validator", optional = true, features = ["trusted_push"] }
 nimiq-validator-network = { path = "../validator-network", optional = true }
 nimiq-wallet = { path = "../wallet", optional = true }
-nimiq-zkp-prover = { path = "../zkp-prover" }
+nimiq-zkp-component = { path = "../zkp-component" }
 
 [dev-dependencies]
 nimiq-test-log = { path = "../test-log" }
