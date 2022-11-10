@@ -28,6 +28,7 @@ devnet_create="scripts/devnet/python/devnet_create.py"
 tpb=150
 vkill=1
 down_time=10
+up_time=40
 batch_size=32
 trap cleanup_exit INT
 
@@ -105,6 +106,7 @@ cat << EOF
 usage: $0 [-r|--restarts COUNT] [-e|--erase] [-h|--help]
 
 This script launches N validators and optionally restarts them while they are running
+It verifies that blocks are produced, with all validators up during up_time seconds, if not it fails.
 
 OPTIONS:
    -h|--help       Show this message
@@ -119,6 +121,7 @@ OPTIONS:
    -v|--validators The number of validators, as a minimum 4 validators are created
    -t|--time       Time in seconds that validators are taken down, by default 10s
    -b|--batch      Blocks per batch to properly detect the best chain, by default 32
+   -u|--up_time    Time in seconds during which all validators are up, by default 40s
       --run-environment Sent to Loki, like "ci", "devnet", default: "unknown/devnet.sh"
 EOF
 }
@@ -150,6 +153,15 @@ while [ ! $# -eq 0 ]; do
                 shift
             else
                 echo '--validators requires a value'
+                exit 1
+            fi
+            ;;
+        -u | --up_time)
+            if [ "$2" ]; then
+                up_time=$2
+                shift
+            else
+                echo '--up_time requires a value'
                 exit 1
             fi
             ;;
@@ -374,7 +386,7 @@ do
         cycles=$(( $cycles + 1 ))
     fi
 
-    sleep_time=$((40 + $RANDOM % 100))
+    sleep_time=$up_time
 
     # Produce blocks for some time
     echo "  Producing blocks for $sleep_time seconds with all validators up"
