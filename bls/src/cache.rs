@@ -19,7 +19,7 @@ impl PublicKeyCache {
         }
     }
 
-    /// Gets the corresponding uncompressed key by retriving it from the cache.
+    /// Gets the corresponding uncompressed key by retrieving it from the cache.
     /// If the value isn't cached, it uncompresses the pk and caches it.
     pub fn get_or_uncompress(&mut self, compressed_key: &CompressedPublicKey) -> Option<PublicKey> {
         // First check if we have the uncompressed key cached.
@@ -36,7 +36,7 @@ impl PublicKeyCache {
         }
     }
 
-    /// Gets the corresponding uncompressed key by retriving it from the lazy key cache and storing it on this cache.
+    /// Gets the corresponding uncompressed key by retrieving it from the lazy key cache and storing it on this cache.
     /// If there is no lazy cached uncompressed pk, it will do the same behavior as in `uncompress`.
     pub fn get_or_uncompress_lazy_public_key(&mut self, compressed_key: &LazyPublicKey) {
         let mut uncompressed_key = compressed_key.cache.write();
