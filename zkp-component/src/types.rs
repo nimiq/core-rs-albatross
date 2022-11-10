@@ -12,9 +12,11 @@ use beserial::{
     SerializingError as BeserialSerializingError,
 };
 use nimiq_block::MacroBlock;
+use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_database::{AsDatabaseBytes, FromDatabaseValue};
 use nimiq_hash::Blake2bHash;
 use nimiq_nano_primitives::MacroBlock as ZKPMacroBlock;
+use nimiq_network_interface::network::Network;
 use nimiq_network_interface::request::Handle;
 use nimiq_network_interface::{
     network::Topic,
@@ -26,6 +28,8 @@ use std::path::PathBuf;
 
 use nimiq_nano_zkp::NanoZKPError;
 use thiserror::Error;
+
+use crate::ZKPComponent;
 
 pub const PROOF_GENERATION_OUTPUT_DELIMITER: [u8; 2] = [242, 208];
 
@@ -420,22 +424,52 @@ pub const MAX_REQUEST_RESPONSE_ZKP: u32 = 1000;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestZKP {
     pub(crate) block_number: u32,
+    pub(crate) request_election_block: bool,
 }
 
 impl RequestCommon for RequestZKP {
     type Kind = RequestMarker;
     const TYPE_ID: u16 = 211;
-    type Response = Option<ZKProof>;
+    type Response = (Option<ZKProof>, Option<MacroBlock>);
 
     const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_ZKP;
 }
 
-impl Handle<Option<ZKProof>, Arc<RwLock<ZKPState>>> for RequestZKP {
-    fn handle(&self, zkp_component: &Arc<RwLock<ZKPState>>) -> Option<ZKProof> {
-        let zkp_state = zkp_component.read();
-        if zkp_state.latest_block_number > self.block_number {
-            return Some((*zkp_state).clone().into());
+#[derive(Clone)]
+pub(crate) struct ZKPStateEnvironment {
+    pub(crate) zkp_state: Arc<RwLock<ZKPState>>,
+    pub(crate) blockchain: Arc<RwLock<Blockchain>>,
+}
+
+impl<N: Network> From<&ZKPComponent<N>> for ZKPStateEnvironment {
+    fn from(component: &ZKPComponent<N>) -> Self {
+        ZKPStateEnvironment {
+            zkp_state: Arc::clone(&component.zkp_state),
+            blockchain: Arc::clone(&component.blockchain),
         }
-        None
+    }
+}
+
+impl Handle<(Option<ZKProof>, Option<MacroBlock>), Arc<ZKPStateEnvironment>> for RequestZKP {
+    fn handle(&self, env: &Arc<ZKPStateEnvironment>) -> (Option<ZKProof>, Option<MacroBlock>) {
+        // First retrieve the ZKP proof and release the lock again.
+        let zkp_state = env.zkp_state.read();
+        if zkp_state.latest_block_number <= self.block_number {
+            return (None, None);
+        }
+        let zkp_proof = (*zkp_state).clone().into();
+        let block_number = zkp_state.latest_block_number;
+        drop(zkp_state);
+
+        // Then get the corresponding block if necessary.
+        let block = if self.request_election_block {
+            env.blockchain
+                .read()
+                .get_block_at(block_number, true, None)
+                .map(|block| block.unwrap_macro())
+        } else {
+            None
+        };
+        (Some(zkp_proof), block)
     }
 }

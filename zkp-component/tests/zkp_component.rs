@@ -63,6 +63,7 @@ async fn builds_valid_genesis_proof() {
         validate_proof(
             &blockchain,
             &zkp_prover.get_zkp_state().into(),
+            None,
             Path::new(KEYS_PATH)
         ),
         "The validation of a empty proof for the genesis block should succeed"
@@ -186,7 +187,7 @@ async fn can_produce_two_consecutive_valid_zk_proofs() {
     // Waits for the proof generation and verifies the proof.
     let (proof, _) = zk_proofs_stream.as_mut().next().await.unwrap();
     assert!(
-        validate_proof(&blockchain, &proof, Path::new(KEYS_PATH)),
+        validate_proof(&blockchain, &proof, None, Path::new(KEYS_PATH)),
         "Generated ZK proof for the first block should be valid"
     );
 
@@ -201,7 +202,7 @@ async fn can_produce_two_consecutive_valid_zk_proofs() {
 
     let (proof, _) = zk_proofs_stream.as_mut().next().await.unwrap();
     assert!(
-        validate_proof(&blockchain, &proof, Path::new(KEYS_PATH)),
+        validate_proof(&blockchain, &proof, None, Path::new(KEYS_PATH)),
         "Generated ZK proof for the second block should be valid"
     );
 }

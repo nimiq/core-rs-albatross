@@ -23,6 +23,7 @@ use crate::types::*;
 pub fn validate_proof(
     blockchain: &Arc<RwLock<Blockchain>>,
     proof: &ZKProof,
+    election_block: Option<MacroBlock>,
     keys_path: &Path,
 ) -> bool {
     // If it's a genesis block proof, then should have none as proof value to be valid.
@@ -31,30 +32,38 @@ pub fn validate_proof(
     }
 
     // Fetches and verfies the election blocks for the proofs and then validates the proof
-    if let Ok((new_block, genesis_block, proof)) = get_proof_macro_blocks(blockchain, proof) {
+    if let Ok((new_block, genesis_block, proof)) =
+        get_proof_macro_blocks(blockchain, proof, election_block)
+    {
         return validate_proof_get_new_state(proof, new_block, genesis_block, keys_path).is_ok();
     }
     false
 }
 
-/// Fetches both the genesis and the proof block. Fails if the proof block is a election block.
+/// Fetches both the genesis and the proof block. Fails if the proof block is not an election block or the proof is empty.
+/// If the given option already contains the new election block, we return it. Otherwise, we retrieve it from the blockchain.
 pub(crate) fn get_proof_macro_blocks(
     blockchain: &Arc<RwLock<Blockchain>>,
     proof: &ZKProof,
+    election_block: Option<MacroBlock>,
 ) -> Result<(MacroBlock, MacroBlock, Proof<MNT6_753>), ZKPComponentError> {
     let block_number = proof.block_number;
     let proof = proof.proof.clone().ok_or(NanoZKPError::EmptyProof)?;
 
     // Gets the block of the new proof
-    let new_block = blockchain
-        .read()
-        .get_block_at(block_number, true, None)
-        .ok_or(ZKPComponentError::InvalidBlock)?;
+    let new_block = if let Some(block) = election_block {
+        block
+    } else {
+        let new_block = blockchain
+            .read()
+            .get_block_at(block_number, true, None)
+            .ok_or(ZKPComponentError::InvalidBlock)?;
 
-    if !new_block.is_election() {
-        return Err(ZKPComponentError::InvalidBlock);
-    }
-    let new_block = new_block.unwrap_macro();
+        if !new_block.is_election() {
+            return Err(ZKPComponentError::InvalidBlock);
+        }
+        new_block.unwrap_macro()
+    };
 
     // Gets genesis block
     let network_info = NetworkInfo::from_network_id(blockchain.read().network_id());

@@ -244,7 +244,7 @@ impl<N: Network> Consensus<N> {
                     self.head_requests = None;
                     self.head_requests_time = None;
                     self.zkp_proxy
-                        .request_zkp_from_peers(self.block_queue.peers());
+                        .request_zkp_from_peers(self.block_queue.peers(), false);
                     return Some(ConsensusEvent::Established);
                 } else {
                     // The head state check is carried out immediately after we reach the minimum
@@ -257,7 +257,7 @@ impl<N: Network> Consensus<N> {
                             info!("Consensus established, 2/3 of heads known.");
                             self.established_flag.swap(true, Ordering::Release);
                             self.zkp_proxy
-                                .request_zkp_from_peers(self.block_queue.peers());
+                                .request_zkp_from_peers(self.block_queue.peers(), false);
                             return Some(ConsensusEvent::Established);
                         }
                     }

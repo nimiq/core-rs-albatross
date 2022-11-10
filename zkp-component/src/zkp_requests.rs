@@ -4,6 +4,8 @@ use std::task::{Context, Poll};
 
 use futures::future::BoxFuture;
 use futures::{FutureExt, Stream, StreamExt};
+
+use nimiq_block::MacroBlock;
 use nimiq_network_interface::network::Network;
 use nimiq_network_interface::request::RequestError;
 
@@ -20,7 +22,14 @@ use futures::stream::FuturesUnordered;
 pub struct ZKPRequests<TNetwork: Network + 'static> {
     network: Arc<TNetwork>,
     zkp_request_results: FuturesUnordered<
-        BoxFuture<'static, (TNetwork::PeerId, Result<Option<ZKProof>, RequestError>)>,
+        BoxFuture<
+            'static,
+            (
+                TNetwork::PeerId,
+                bool,
+                Result<(Option<ZKProof>, Option<MacroBlock>), RequestError>,
+            ),
+        >,
     >,
 }
 
@@ -38,15 +47,27 @@ impl<TNetwork: Network + 'static> ZKPRequests<TNetwork> {
     }
 
     /// Created the futures to requests zkps to all specified peers.
-    pub fn request_zkps(&mut self, peers: Vec<TNetwork::PeerId>, block_number: u32) {
+    pub fn request_zkps(
+        &mut self,
+        peers: Vec<TNetwork::PeerId>,
+        block_number: u32,
+        request_election_block: bool,
+    ) {
         for peer_id in peers {
             let network = Arc::clone(&self.network);
             self.zkp_request_results.push(
                 async move {
                     (
                         peer_id,
+                        request_election_block,
                         network
-                            .request::<RequestZKP>(RequestZKP { block_number }, peer_id)
+                            .request::<RequestZKP>(
+                                RequestZKP {
+                                    block_number,
+                                    request_election_block,
+                                },
+                                peer_id,
+                            )
                             .await,
                     )
                 }
@@ -57,17 +78,25 @@ impl<TNetwork: Network + 'static> ZKPRequests<TNetwork> {
 }
 
 impl<TNetwork: Network + 'static> Stream for ZKPRequests<TNetwork> {
-    type Item = (TNetwork::PeerId, ZKProof);
+    type Item = (TNetwork::PeerId, ZKProof, Option<MacroBlock>);
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         // We poll the zkp requests and return the proof.
         while let Poll::Ready(result) = self.zkp_request_results.poll_next_unpin(cx) {
             match result {
-                Some((peer_id, result)) => match result {
-                    Ok(Some(proof)) => {
-                        return Poll::Ready(Some((peer_id, proof)));
+                Some((peer_id, request_election_block, result)) => match result {
+                    Ok((Some(proof), mut election_block)) => {
+                        // Check that the response is in-line with whether we asked for the election block or not.
+                        if request_election_block {
+                            if election_block.is_none() {
+                                continue;
+                            }
+                        } else {
+                            election_block = None;
+                        }
+                        return Poll::Ready(Some((peer_id, proof, election_block)));
                     }
-                    Ok(None) => {
+                    Ok((None, _)) => {
                         // This happens when the peer does not have a more recent proof than us.
                     }
                     Err(_) => {

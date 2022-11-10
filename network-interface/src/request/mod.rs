@@ -206,9 +206,9 @@ pub fn request_handler<
 >(
     network: &Arc<N>,
     stream: BoxStream<'static, (Req, N::RequestId, N::PeerId)>,
-    req_envioroment: &Arc<T>,
+    req_environment: &Arc<T>,
 ) -> impl Future<Output = ()> {
-    let blockchain = Arc::clone(req_envioroment);
+    let blockchain = Arc::clone(req_environment);
     let network = Arc::clone(network);
     async move {
         stream

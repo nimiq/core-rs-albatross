@@ -40,7 +40,7 @@ async fn can_detect_valid_and_invalid_genesis_proof() {
         proof: None,
     };
     assert!(
-        validate_proof(&blockchain, &proof, Path::new(KEYS_PATH)),
+        validate_proof(&blockchain, &proof, None, Path::new(KEYS_PATH)),
         "The validation of a empty proof for the genesis block should succeed"
     );
 
@@ -49,7 +49,7 @@ async fn can_detect_valid_and_invalid_genesis_proof() {
         proof: Some(Proof::default()),
     };
     assert!(
-        !validate_proof(&blockchain, &proof, Path::new(KEYS_PATH)),
+        !validate_proof(&blockchain, &proof, None, Path::new(KEYS_PATH)),
         "The validation of a Some() proof for a genesis block should fail"
     );
 }
@@ -76,7 +76,7 @@ async fn can_detect_invalid_proof_none_genesis_blocks() {
     };
 
     assert!(
-        !validate_proof(&blockchain, &zkp_proof, Path::new(KEYS_PATH)),
+        !validate_proof(&blockchain, &zkp_proof, None, Path::new(KEYS_PATH)),
         "The validation of a fake proof should fail"
     );
 
@@ -86,7 +86,7 @@ async fn can_detect_invalid_proof_none_genesis_blocks() {
     };
 
     assert!(
-        !validate_proof(&blockchain, &zkp_proof, Path::new(KEYS_PATH)),
+        !validate_proof(&blockchain, &zkp_proof, None, Path::new(KEYS_PATH)),
         "The validation of a empty proof for a non genesis block should fail"
     );
 
@@ -96,7 +96,7 @@ async fn can_detect_invalid_proof_none_genesis_blocks() {
     };
 
     assert!(
-        !validate_proof(&blockchain, &zkp_proof, Path::new(KEYS_PATH)),
+        !validate_proof(&blockchain, &zkp_proof, None, Path::new(KEYS_PATH)),
         "The validation of a proof for a non existing block should fail"
     );
 }
@@ -118,7 +118,7 @@ async fn can_detect_valid_proof_none_genesis_blocks() {
     let zkp_proof =
         &ZKProof::deserialize_from_vec(&hex::decode(ZKPROOF_SERIALIZED_IN_HEX).unwrap()).unwrap();
     assert!(
-        validate_proof(&blockchain, &zkp_proof, Path::new(KEYS_PATH)),
+        validate_proof(&blockchain, &zkp_proof, None, Path::new(KEYS_PATH)),
         "The validation of a valid proof failed"
     );
 }

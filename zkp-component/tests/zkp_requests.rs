@@ -68,7 +68,7 @@ async fn peers_dont_reply_with_outdated_proof() {
     let mut zkp_requests = ZKPRequests::new(Arc::clone(&network));
 
     // Trigger zkp requests
-    zkp_requests.request_zkps(network.get_peers(), 0);
+    zkp_requests.request_zkps(network.get_peers(), 0, false);
 
     for _ in 0..2 {
         assert!(
@@ -138,12 +138,96 @@ async fn peers_reply_with_valid_proof() {
     let mut zkp_requests = ZKPRequests::new(Arc::clone(&network));
 
     // Trigger zkp requests from the first component.
-    zkp_requests.request_zkps(network.get_peers(), 0);
+    zkp_requests.request_zkps(network.get_peers(), 0, false);
 
     for _ in 0..2 {
-        let proof = zkp_requests.next().await;
+        let proof_data = zkp_requests.next().await.unwrap();
         assert!(
-            validate_proof(&blockchain2, &proof.unwrap().1, Path::new(KEYS_PATH)),
+            proof_data.2.is_none(),
+            "Peers should not send an election block"
+        );
+        assert!(
+            validate_proof(&blockchain2, &proof_data.1, None, Path::new(KEYS_PATH)),
+            "Peer should sent a new proof valid proof"
+        );
+    }
+}
+
+#[test(tokio::test)]
+async fn peers_reply_with_valid_proof_and_election_block() {
+    NanoZKP::setup(get_base_seed(), Path::new(KEYS_PATH), false).unwrap();
+    let blockchain2 = blockchain();
+    let blockchain3 = blockchain();
+    let mut hub = MockHub::new();
+    let network = Arc::new(hub.new_network());
+    let network2 = Arc::new(hub.new_network());
+    let network3 = Arc::new(hub.new_network());
+    network.dial_address(network3.address()).await.unwrap();
+    network.dial_address(network2.address()).await.unwrap();
+
+    let env2 = VolatileEnvironment::new(10).unwrap();
+    let env3 = VolatileEnvironment::new(10).unwrap();
+    let store2 = ProofStore::new(env2.clone());
+    let store3 = ProofStore::new(env3.clone());
+    let producer = BlockProducer::new(signing_key(), voting_key());
+    produce_macro_blocks_with_rng(
+        &producer,
+        &blockchain2,
+        policy::BATCHES_PER_EPOCH as usize,
+        &mut get_base_seed(),
+    );
+    produce_macro_blocks_with_rng(
+        &producer,
+        &blockchain3,
+        policy::BATCHES_PER_EPOCH as usize,
+        &mut get_base_seed(),
+    );
+
+    // Seta valid proof into the 2 components.
+    let new_proof =
+        &ZKProof::deserialize_from_vec(&hex::decode(ZKPROOF_SERIALIZED_IN_HEX).unwrap()).unwrap();
+    log::info!("setting proof");
+    store2.set_zkp(&new_proof);
+    store3.set_zkp(&new_proof);
+
+    log::info!("launching zkps");
+    let _zkp_prover2 = ZKPComponent::new(
+        Arc::clone(&blockchain2),
+        Arc::clone(&network2),
+        false,
+        Some(zkp_test_exe()),
+        env2,
+        PathBuf::from(KEYS_PATH),
+    )
+    .await;
+    let _zkp_prover3 = ZKPComponent::new(
+        Arc::clone(&blockchain3),
+        Arc::clone(&network3),
+        false,
+        Some(zkp_test_exe()),
+        env3,
+        PathBuf::from(KEYS_PATH),
+    )
+    .await;
+
+    let mut zkp_requests = ZKPRequests::new(Arc::clone(&network));
+
+    // Trigger zkp requests from the first component.
+    zkp_requests.request_zkps(network.get_peers(), 0, true);
+
+    for _ in 0..2 {
+        let proof_data = zkp_requests.next().await.unwrap();
+        assert!(
+            proof_data.2.is_some(),
+            "Peers should send an election block"
+        );
+        assert!(
+            validate_proof(
+                &blockchain2,
+                &proof_data.1,
+                proof_data.2,
+                Path::new(KEYS_PATH)
+            ),
             "Peer should sent a new proof valid proof"
         );
     }

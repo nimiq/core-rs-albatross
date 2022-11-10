@@ -9,6 +9,7 @@ use nimiq_database::Environment;
 use nimiq_genesis::NetworkInfo;
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 
+use nimiq_block::MacroBlock;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_network_interface::{network::Network, request::request_handler};
 
@@ -52,10 +53,18 @@ impl<N: Network> ZKPComponentProxy<N> {
 
     /// Sends zkp request to all given peers. If no requests are ongoing, we request and return true,
     /// otherwise no requests will be sent.
-    pub fn request_zkp_from_peers(&mut self, peers: Vec<N::PeerId>) -> bool {
+    pub fn request_zkp_from_peers(
+        &mut self,
+        peers: Vec<N::PeerId>,
+        request_election_block: bool,
+    ) -> bool {
         let mut zkp_requests_l = self.zkp_requests.lock();
         if zkp_requests_l.is_finished() {
-            zkp_requests_l.request_zkps(peers, self.zkp_state.read().latest_block_number);
+            zkp_requests_l.request_zkps(
+                peers,
+                self.zkp_state.read().latest_block_number,
+                request_election_block,
+            );
             return true;
         }
         false
@@ -83,9 +92,9 @@ impl<N: Network> ZKPComponentProxy<N> {
 /// Awaiting this future ensures that the zkp component works, this component should run forever.
 #[pin_project]
 pub struct ZKPComponent<N: Network> {
-    blockchain: Arc<RwLock<Blockchain>>,
+    pub(crate) blockchain: Arc<RwLock<Blockchain>>,
     network: Arc<N>,
-    zkp_state: Arc<RwLock<ZKPState>>,
+    pub(crate) zkp_state: Arc<RwLock<ZKPState>>,
     zk_prover: Option<ZKProver<N>>,
     zk_proofs_stream: ZKProofsStream<N>,
     proof_storage: ProofStore,
@@ -162,7 +171,8 @@ impl<N: Network> ZKPComponent<N> {
     /// Launches thread that processes the zkp requests and replies to them.
     fn launch_request_handler(&self) {
         let stream = self.network.receive_requests::<RequestZKP>();
-        tokio::spawn(request_handler(&self.network, stream, &self.zkp_state));
+        let env = Arc::new(ZKPStateEnvironment::from(self));
+        tokio::spawn(request_handler(&self.network, stream, &env));
     }
 
     /// Gets a proxy for the current ZKP Component.
@@ -194,6 +204,7 @@ impl<N: Network> ZKPComponent<N> {
                 blockchain,
                 zkp_state,
                 loaded_proof,
+                None,
                 &mut None,
                 proof_storage,
                 zkp_events_notifier,
@@ -216,6 +227,7 @@ impl<N: Network> ZKPComponent<N> {
         blockchain: &Arc<RwLock<Blockchain>>,
         zkp_state: &Arc<RwLock<ZKPState>>,
         zk_proof: ZKProof,
+        election_block: Option<MacroBlock>,
         zk_prover: &mut Option<ZKProver<N>>,
         proof_storage: &ProofStore,
         zkp_events_notifier: &BroadcastSender<ZKProof>,
@@ -223,7 +235,8 @@ impl<N: Network> ZKPComponent<N> {
         keys_path: &Path,
     ) -> Result<(), ZKPComponentError> {
         // Gets the relevant election blocks.
-        let (new_block, genesis_block, proof) = get_proof_macro_blocks(blockchain, &zk_proof)?;
+        let (new_block, genesis_block, proof) =
+            get_proof_macro_blocks(blockchain, &zk_proof, election_block)?;
         let zkp_state_lock = zkp_state.upgradable_read();
 
         // Ensures that the proof is more recent than our current state and validates the proof.
@@ -266,13 +279,14 @@ impl<N: Network> Future for ZKPComponent<N> {
 
         // Check if we have requested zkps rom peers. Goes over all received proofs and tries to update state.
         // Stays with the first most recent valid zproof it gets.
-        while let Poll::Ready(Some((_peer_id, proof))) =
+        while let Poll::Ready(Some((_peer_id, proof, election_block))) =
             this.zkp_requests.lock().poll_next_unpin(cx)
         {
             if let Err(e) = Self::push_proof_from_peers(
                 this.blockchain,
                 this.zkp_state,
                 proof,
+                election_block,
                 this.zk_prover,
                 this.proof_storage,
                 this.zkp_events_notifier,
@@ -292,6 +306,7 @@ impl<N: Network> Future for ZKPComponent<N> {
                         this.blockchain,
                         this.zkp_state,
                         proof.0,
+                        None,
                         this.zk_prover,
                         this.proof_storage,
                         this.zkp_events_notifier,
