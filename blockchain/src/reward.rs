@@ -61,9 +61,18 @@ pub fn block_reward_for_batch(
     // First we calculate the delay producing the batch:
     let batch_delay = batch_delay(previous_timestamp, current_timestamp);
 
-    // The final rewards that are given are a porcentage based on the penalty (if any) for not producing blocks in time.
+    let batch_delay_penalty = Policy::batch_delay_penalty(batch_delay);
+
+    debug!(
+        block_number = current_block.block_number,
+        delay = batch_delay,
+        penalty = batch_delay_penalty,
+        "Computed the batch delay and penalty (if any)",
+    );
+
+    // The final rewards that are given are a percentage based on the penalty (if any) for not producing blocks in time.
     // i.e.: batch_delay_penalty returns a number in the range [0, 1]
-    Coin::from_u64_unchecked((max_rewards as f64 * Policy::batch_delay_penalty(batch_delay)) as u64)
+    Coin::from_u64_unchecked((max_rewards as f64 * batch_delay_penalty) as u64)
 }
 
 /// Compute the block reward for a batch from the current macro block, the previous macro block,

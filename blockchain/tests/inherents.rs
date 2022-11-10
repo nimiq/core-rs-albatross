@@ -130,3 +130,93 @@ fn it_can_create_batch_finalization_inherents() {
     }
     assert!(got_reward && got_slash && got_finalize_batch);
 }
+
+#[test]
+fn it_can_penalize_delayed_batch() {
+    let time = Arc::new(OffsetTime::new());
+    let env = VolatileEnvironment::new(10).unwrap();
+    let blockchain = Arc::new(
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
+    );
+
+    let staking_contract_address = blockchain.staking_contract_address();
+
+    //Delay in ms, so this means a 30s delay. For a 1m target batch time, this represents half of it
+    let delay = 30000;
+
+    let previous_timestamp = blockchain.state().election_head.header.timestamp;
+
+    // We introduce a delay on purpose
+    let next_timestamp = previous_timestamp
+        + Policy::BLOCK_SEPARATION_TIME * (Policy::blocks_per_batch() as u64)
+        + delay;
+
+    let (genesis_suply, genesis_timestamp) = blockchain.get_genesis_parameters();
+
+    // Total reward for the previous batch
+    let prev_supply = Policy::supply_at(
+        u64::from(genesis_suply),
+        genesis_timestamp,
+        genesis_timestamp,
+    );
+
+    let current_supply =
+        Policy::supply_at(u64::from(genesis_suply), genesis_timestamp, next_timestamp);
+
+    let max_reward = current_supply - prev_supply;
+
+    let penalty = Policy::batch_delay_penalty(delay);
+
+    log::info!(
+        " The max available reward is {}, but due to a delay of {}ms there is a penalty of {}",
+        max_reward,
+        delay,
+        penalty
+    );
+
+    let hash = Blake2bHasher::default().digest(&[]);
+    let macro_header = MacroHeader {
+        version: 1,
+        block_number: 42,
+        round: 0,
+        timestamp: next_timestamp,
+        parent_hash: hash.clone(),
+        parent_election_hash: hash.clone(),
+        seed: VrfSeed::default(),
+        extra_data: vec![],
+        state_root: hash.clone(),
+        body_root: hash.clone(),
+        history_root: hash,
+    };
+
+    // Simple case. Expect 1x FinalizeBatch, 1x Reward to validator
+    let inherents = blockchain.finalize_previous_batch(blockchain.state(), &macro_header);
+    assert_eq!(inherents.len(), 2);
+
+    let mut got_reward = false;
+    let mut got_finalize_batch = false;
+    for inherent in &inherents {
+        match inherent.ty {
+            InherentType::Reward => {
+                assert_eq!(
+                    inherent.value,
+                    Coin::from_u64_unchecked((max_reward as f64 * penalty) as u64)
+                );
+                got_reward = true;
+            }
+            InherentType::FinalizeBatch => {
+                assert_eq!(inherent.value, Coin::ZERO);
+                assert_eq!(inherent.target, staking_contract_address.clone());
+                got_finalize_batch = true;
+            }
+            _ => panic!(),
+        }
+    }
+    assert!(got_reward && got_finalize_batch);
+}

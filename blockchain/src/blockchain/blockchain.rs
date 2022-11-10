@@ -326,6 +326,10 @@ impl Blockchain {
         })
     }
 
+    pub fn get_genesis_parameters(&self) -> (Coin, u64) {
+        (self.genesis_supply, self.genesis_timestamp)
+    }
+
     pub fn read_transaction(&self) -> ReadTransaction {
         ReadTransaction::new(&self.env)
     }
