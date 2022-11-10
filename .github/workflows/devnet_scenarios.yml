@@ -17,7 +17,7 @@ jobs:
         - FourValidatorsReconnectSpammer
         - MacroBlockProduction
         - Validators90sDown
-        - LowViewChangeDelay
+        - LowBlockProducerTimeout
 
         include:
         - test: FourValidatorsReconnect
@@ -33,8 +33,8 @@ jobs:
           devnet_args: -k 0 -s 15 -u 100
         - test: Validators90sDown
           devnet_args: -s 50 -t 90 -u 100
-        - test: LowViewChangeDelay
-          pre: "sed -i 's/VIEW_CHANGE_DELAY: Duration = Duration::from_secs(10);/VIEW_CHANGE_DELAY: Duration = Duration::from_secs(2);/g' validator/src/validator.rs"
+        - test: LowBlockProducerTimeout
+          pre: "sed -i 's/BLOCK_PRODUCER_TIMEOUT: u64 = 4 * 1000;/BLOCK_PRODUCER_TIMEOUT: u64 = 2 * 1000;/g' primitives/src/policy.rs"
           devnet_args: -k 0 -s 15 -u 100
 
     runs-on: ubuntu-20.04
