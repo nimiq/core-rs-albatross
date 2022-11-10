@@ -254,7 +254,7 @@ impl Blockchain {
         body_opt: &Option<BlockBody>,
         txn_opt: Option<&DBtx>,
         skip_block: bool,
-        verify_txns: bool,
+        trusted: bool,
     ) -> Result<(), PushError> {
         // Checks if the body exists. If yes, unwrap it.
         let body = body_opt
@@ -370,7 +370,7 @@ impl Blockchain {
                         return Err(PushError::InvalidBlock(BlockError::ExpiredTransaction));
                     }
 
-                    if verify_txns && !self.tx_verification_cache.is_known(&tx.hash()) {
+                    if !trusted && !self.tx_verification_cache.is_known(&tx.hash()) {
                         // Check intrinsic transaction invariants.
                         if let Err(e) = tx.verify(self.network_id) {
                             return Err(PushError::InvalidBlock(BlockError::InvalidTransaction(e)));
@@ -406,8 +406,9 @@ impl Blockchain {
                     return Err(PushError::InvalidBlock(BlockError::InvalidPkTreeRoot));
                 }
 
-                // If this is an election block, check if the pk_tree_root matches the validators.
-                if is_election {
+                // If this is an election block and we are not in trust mode (we produced the block or already checked it),
+                // check if the pk_tree_root matches the validators.
+                if is_election && !trusted {
                     let pk_tree_root = MacroBlock::pk_tree_root(body.validators.as_ref().unwrap());
                     if pk_tree_root != *body.pk_tree_root.as_ref().unwrap() {
                         return Err(PushError::InvalidBlock(BlockError::InvalidPkTreeRoot));

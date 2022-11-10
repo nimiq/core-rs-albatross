@@ -117,7 +117,7 @@ impl Blockchain {
             &block.body(),
             Some(&read_txn),
             block.is_skip(),
-            !trusted,
+            trusted,
         ) {
             warn!(%block, reason = "bad body", "Rejecting block");
             return Err(e);
