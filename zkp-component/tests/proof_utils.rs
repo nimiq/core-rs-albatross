@@ -137,7 +137,7 @@ async fn can_store_and_load_zkp_state_from_db() {
     assert_eq!(
         proof_store.get_zkp().unwrap(),
         new_proof,
-        "Load from db was not succesfull"
+        "Load from db was not successful"
     );
 
     let new_proof = ZKProof {
@@ -149,6 +149,6 @@ async fn can_store_and_load_zkp_state_from_db() {
     assert_eq!(
         proof_store.get_zkp().unwrap(),
         new_proof,
-        "Load from db was not succesfull"
+        "Load from db was not successful"
     );
 }

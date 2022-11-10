@@ -238,7 +238,7 @@ impl Accounts {
                         create_logs.push(TransactionLog::new(transaction.hash(), info.logs));
                     }
 
-                    // Store the sucessful executed transaction
+                    // Store the successfully executed transaction
                     executed_txns.push(ExecutedTransaction::Ok(transaction.clone()));
                 }
                 Err(account_err) => {
@@ -357,7 +357,7 @@ impl Accounts {
                             )
                             .unwrap_or_else(|_| {
                                 log::error!(
-                                    " Failed to revert a succesfull incoming transaction: {:?}",
+                                    " Failed to revert a successful incoming transaction: {:?}",
                                     txn
                                 );
                                 panic!();
@@ -387,7 +387,7 @@ impl Accounts {
                         )
                         .unwrap_or_else(|_| {
                             log::error!(
-                                " Failed to revert a succesfull outgoing transaction: {:?}",
+                                " Failed to revert a successful outgoing transaction: {:?}",
                                 txn
                             );
                             panic!();
@@ -690,7 +690,7 @@ impl Accounts {
         )
     }
 
-    /// Merges the log transactions from senders, receiptients and create_contracts and returns batch_info containing the merged tx_logs.
+    /// Merges the log transactions from senders, recipients and create_contracts and returns batch_info containing the merged tx_logs.
     /// This means that the batch_info inherent_logs and receipts are preserved and returned by this method.
     /// The batch_info provided as argument is expected to have its tx_logs vec empty, otherwise its content will get overwritten.
     fn check_merge_tx_logs(
@@ -699,7 +699,7 @@ impl Accounts {
         mut recipients_logs: Vec<TransactionLog>,
         mut create_logs: Vec<TransactionLog>,
     ) -> BatchInfo {
-        // The senders has all transaction log entries. We iterate over it and append the remaing logs to the respective tx_log of sender_logs.
+        // The senders has all transaction log entries. We iterate over it and append the remaining logs to the respective tx_log of sender_logs.
         let mut tx_logs_recipients = recipients_logs.iter_mut().peekable();
         let mut tx_logs_create = create_logs.iter_mut().peekable();
 
@@ -721,7 +721,7 @@ impl Accounts {
             }
         }
 
-        // All receipient and create tx_logs should have a matching tx_log from the senders.
+        // All recipients and create tx_logs should have a matching tx_log from the senders.
         // Therefore, all tx_logs of these two vecs are now expected to be processed and appended senders_logs tx_logs.
         assert_eq!(None, tx_logs_recipients.peek(), "recipients tx_logs were not fully processed. Possible cause is a ordering difference compared to senders_logs tx_logs");
         assert_eq!(None, tx_logs_create.peek(), "create tx_logs were not fully processed. Possible cause is a ordering difference compared to senders_logs tx_logs");

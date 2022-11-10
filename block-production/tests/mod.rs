@@ -440,7 +440,7 @@ fn it_can_revert_failed_transactions() {
 
     transactions.push(tx_valid.clone());
 
-    //We will send a second create staker transaction, this sould fail, as the same staker cannot be created twice
+    // We will send a second create staker transaction, this should fail, as the same staker cannot be created twice
     let tx_failed = TransactionBuilder::new_create_staker(
         &key_pair,
         &key_pair,
