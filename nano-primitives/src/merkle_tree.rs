@@ -48,7 +48,7 @@ pub fn merkle_tree_construct(inputs: Vec<Vec<bool>>) -> Vec<u8> {
     // Calculate the Pedersen hashes for the leaves.
     let mut nodes: Vec<G1Projective> = inputs
         .into_par_iter()
-        .map(|bits| pedersen_hash(bits, &*PEDERSEN_GENERATORS))
+        .map(|bits| pedersen_hash(bits, &PEDERSEN_GENERATORS))
         .collect();
 
     // Process each level of nodes.
@@ -74,7 +74,7 @@ pub fn merkle_tree_construct(inputs: Vec<Vec<bool>>) -> Vec<u8> {
         // Calculate the parent nodes.
         let mut next_nodes: Vec<G1Projective> = chunks
             .into_par_iter()
-            .map(|bits| pedersen_hash(bits, &*PEDERSEN_GENERATORS))
+            .map(|bits| pedersen_hash(bits, &PEDERSEN_GENERATORS))
             .collect();
 
         // Clear the child nodes and add the parent nodes.
@@ -115,7 +115,7 @@ pub fn merkle_tree_verify(
     assert_eq!(nodes.len(), path.len());
 
     // Calculate the Pedersen hashes for the input.
-    let mut result = pedersen_hash(input, &*PEDERSEN_GENERATORS);
+    let mut result = pedersen_hash(input, &PEDERSEN_GENERATORS);
 
     // Calculate the root of the tree using the branch values.
     let mut left_node;
@@ -142,7 +142,7 @@ pub fn merkle_tree_verify(
         let bits = bytes_to_bits(&bytes);
 
         // Calculate the parent node and update result.
-        result = pedersen_hash(bits, &*PEDERSEN_GENERATORS);
+        result = pedersen_hash(bits, &PEDERSEN_GENERATORS);
     }
 
     // Serialize the root node.
@@ -195,7 +195,7 @@ pub fn merkle_tree_prove(inputs: Vec<Vec<bool>>, path: Vec<bool>) -> Vec<G1Proje
     let mut nodes = Vec::new();
 
     for input in inputs {
-        let hash = pedersen_hash(input, &*PEDERSEN_GENERATORS);
+        let hash = pedersen_hash(input, &PEDERSEN_GENERATORS);
         nodes.push(hash);
     }
 
@@ -231,7 +231,7 @@ pub fn merkle_tree_prove(inputs: Vec<Vec<bool>>, path: Vec<bool>) -> Vec<G1Proje
 
             // Calculate the parent node.
             let bits = bytes_to_bits(&bytes);
-            let parent_node = pedersen_hash(bits, &*PEDERSEN_GENERATORS);
+            let parent_node = pedersen_hash(bits, &PEDERSEN_GENERATORS);
 
             next_nodes.push(parent_node);
         }
