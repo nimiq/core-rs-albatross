@@ -1,5 +1,4 @@
 use std::cmp;
-use std::marker::PhantomData;
 use std::mem;
 use std::ops;
 use std::sync::atomic;
@@ -25,13 +24,12 @@ use crate::trie_proof::TrieProof;
 /// on other chains.
 /// It is generic over the values and makes use of Nimiq's database for storage.
 #[derive(Debug)]
-pub struct MerkleRadixTrie<A: Serialize + Deserialize + Clone> {
+pub struct MerkleRadixTrie {
     db: Database,
     is_complete: AtomicBool,
     num_branches: AtomicU64,
     num_hybrids: AtomicU64,
     num_leaves: AtomicU64,
-    _value: PhantomData<A>,
 }
 
 #[derive(Default)]
@@ -81,7 +79,7 @@ impl CountUpdates {
     }
 }
 
-impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
+impl MerkleRadixTrie {
     /// Start a new Merkle Radix Trie with the given Environment and the given name.
     pub fn new(env: Environment, name: &str) -> Self {
         Self::new_impl(env, name, false)
@@ -100,7 +98,6 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
             num_branches: AtomicU64::new(0),
             num_hybrids: AtomicU64::new(0),
             num_leaves: AtomicU64::new(0),
-            _value: PhantomData,
         };
 
         let mut txn = WriteTransaction::new(&env);
@@ -194,26 +191,36 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
 
     /// Get the value at the given key. If there's no leaf or hybrid node at the given key then it
     /// returns None.
-    pub fn get(&self, txn: &Transaction, key: &KeyNibbles) -> Option<A> {
+    pub fn get<T: Deserialize>(&self, txn: &Transaction, key: &KeyNibbles) -> Option<T> {
         let node: TrieNode = txn.get(&self.db, key)?;
-        node.value().ok()
+        Some(T::deserialize_from_vec(&node.value?).unwrap())
     }
 
     /// Returns a chunk of the Merkle Radix Trie that starts at the key `start` (which might or not
     /// be a part of the trie, if it is then it will be part of the chunk) and contains at most
     /// `size` leaf nodes.
-    pub fn get_chunk(&self, txn: &Transaction, start: &KeyNibbles, size: usize) -> Vec<A> {
+    // FIXME This panics if a node in range can't be deserialized to T
+    pub fn get_chunk<T: Deserialize>(
+        &self,
+        txn: &Transaction,
+        start: &KeyNibbles,
+        size: usize,
+    ) -> Vec<T> {
         let chunk = self.get_trie_chunk(txn, start, size);
 
         chunk
             .into_iter()
-            .map(|node| node.value().unwrap())
+            .map(|node| T::deserialize_from_vec(&node.value.unwrap()).unwrap())
             .collect()
+    }
+
+    pub fn put<T: Serialize>(&self, txn: &mut WriteTransaction, key: &KeyNibbles, value: T) {
+        self.put_raw(txn, key, value.serialize_to_vec())
     }
 
     /// Insert a value into the Merkle Radix Trie at the given key. If the key already exists then
     /// it will overwrite it. You can't use this function to check the existence of a given key.
-    pub fn put(&self, txn: &mut WriteTransaction, key: &KeyNibbles, value: A) {
+    fn put_raw(&self, txn: &mut WriteTransaction, key: &KeyNibbles, value: Vec<u8>) {
         // Start by getting the root node.
         let mut cur_node = self
             .get_root(txn)
@@ -325,7 +332,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
         txn: &Transaction,
         keys: ops::RangeFrom<KeyNibbles>,
         limit: usize,
-    ) -> (Option<KeyNibbles>, Vec<(KeyNibbles, A)>, TrieProof) {
+    ) -> (Option<KeyNibbles>, Vec<(KeyNibbles, Vec<u8>)>, TrieProof) {
         let mut chunk = self.get_trie_chunk(txn, &keys.start, limit + 1);
         let first_not_included = if chunk.len() == limit + 1 {
             chunk.pop().map(|n| n.key)
@@ -334,10 +341,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
         };
         let chunk: Vec<_> = chunk
             .into_iter()
-            .map(|n| {
-                let value = n.value().unwrap();
-                (n.key, value)
-            })
+            .map(|n| (n.key, n.value.unwrap()))
             .collect();
         let proof = if let Some((last, _)) = chunk.last() {
             // Get the proof for the last included item if available.
@@ -406,11 +410,18 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
                 }
 
                 // If we only have one child remaining, merge with the parent node.
-                if !cur_node.has_value() && !root_path.is_empty() && cur_node.iter_children().count() == 1 {
+                if cur_node.value.is_none()
+                    && !root_path.is_empty()
+                    && cur_node.iter_children().count() == 1
+                {
                     count_updates.apply_update(prev_kind, None);
                     txn.remove(&self.db, &cur_node.key);
 
-                    let only_child_key = cur_node.iter_children().next().unwrap().key(&cur_node.key)
+                    let only_child_key = cur_node
+                        .iter_children()
+                        .next()
+                        .unwrap()
+                        .key(&cur_node.key)
                         .expect("no stump");
 
                     cur_node = root_path.pop().unwrap();
@@ -479,7 +490,13 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
             let start_idx = keys
                 .start
                 .get(cur_node.key.len())
-                .map(|x| x + if cur_node.key.len() + 1 < keys.start.len() { 1 } else { 0 })
+                .map(|x| {
+                    x + if cur_node.key.len() + 1 < keys.start.len() {
+                        1
+                    } else {
+                        0
+                    }
+                })
                 .unwrap_or(0);
             let prev_kind = cur_node.kind();
             for i in start_idx..16 {
@@ -568,7 +585,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
         txn: &mut WriteTransaction,
         keys_start: KeyNibbles,
         keys_end: Option<KeyNibbles>,
-        items: &[(KeyNibbles, A)],
+        items: Vec<(KeyNibbles, Vec<u8>)>,
         last_item_proof: TrieProof,
         expected_hash: Blake2bHash,
     ) -> Result<(), &'static str> {
@@ -613,7 +630,9 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
             }
             if !is_valid_end {
                 for proof_node in &last_item_proof.nodes {
-                    if proof_node.key.len() + 1 == keys_end.len() && proof_node.key.is_prefix_of(&keys_end) {
+                    if proof_node.key.len() + 1 == keys_end.len()
+                        && proof_node.key.is_prefix_of(&keys_end)
+                    {
                         is_valid_end = true;
                         break;
                     }
@@ -624,7 +643,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
             }
             if let Some(last_proof_node) = last_item_proof.nodes.first() {
                 if last_proof_node.key >= *keys_end {
-                    return Err("end key inconsistent with last proof node")
+                    return Err("end key inconsistent with last proof node");
                 }
             }
         }
@@ -633,7 +652,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
         self.clear_stumps(txn, keys_start..);
         // Then, put all the new items.
         for (key, value) in items {
-            self.put(txn, key, value.clone());
+            self.put_raw(txn, &key, value);
         }
         // Mark the remaining stumps.
         if let Some(keys_end) = &keys_end {
@@ -681,7 +700,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
             // Update/remove the node.
             if cur_node.key == *key {
                 // Remove the value from the node.
-                cur_node.serialized_value = None;
+                cur_node.value = None;
                 if !cur_node.is_empty() {
                     // Node was a hybrid node and is now a branch node.
                     let num_children = cur_node.iter_children().count();
@@ -693,7 +712,11 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
                         txn.remove(&self.db, &cur_node.key);
 
                         // Get the node's only child and add it to the root path.
-                        let only_child_key = cur_node.iter_children().next().unwrap().key(&cur_node.key)
+                        let only_child_key = cur_node
+                            .iter_children()
+                            .next()
+                            .unwrap()
+                            .key(&cur_node.key)
                             .expect("no stump");
 
                         let only_child = txn.get(&self.db, &only_child_key).unwrap();
@@ -764,7 +787,11 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
                 txn.remove(&self.db, &parent_node.key);
 
                 // Get the node's only child and add it to the root path.
-                let only_child_key = parent_node.iter_children().next().unwrap().key(&parent_node.key)
+                let only_child_key = parent_node
+                    .iter_children()
+                    .next()
+                    .unwrap()
+                    .key(&parent_node.key)
                     .expect("no stump");
 
                 let only_child = txn.get(&self.db, &only_child_key).unwrap();
@@ -867,7 +894,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
                 // If the key fully matches, we have found the requested node. We must check that
                 // it is a leaf/hybrid node, we don't want to prove branch nodes.
                 if pointer_node.key == *cur_key {
-                    if !pointer_node.has_value() {
+                    if pointer_node.value.is_none() {
                         error!(
                             "Pointer node with key {} is a branch node. We don't want to prove branch nodes.",
                             pointer_node.key,
@@ -1039,7 +1066,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
             }
 
             // The current node is a potential predecessor if it has a value.
-            if cur_node.has_value() {
+            if cur_node.value.is_some() {
                 predecessor_branch = Some((cur_node.key.clone(), false));
             }
 
@@ -1063,7 +1090,9 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
                 // If there's a child, then we update the current node and the root path, and
                 // continue down the trie.
                 Some(child) => {
-                    cur_node = txn.get(&self.db, &child.key(&cur_node.key).expect("no stump")).unwrap();
+                    cur_node = txn
+                        .get(&self.db, &child.key(&cur_node.key).expect("no stump"))
+                        .unwrap();
                 }
             }
         }
@@ -1078,7 +1107,9 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
             'outer: loop {
                 for maybe_child in cur_node.children.iter().rev() {
                     if let Some(child) = maybe_child {
-                        cur_node = txn.get(&self.db, &child.key(&cur_node.key).expect("no stump")).unwrap();
+                        cur_node = txn
+                            .get(&self.db, &child.key(&cur_node.key).expect("no stump"))
+                            .unwrap();
                         continue 'outer;
                     }
                 }
@@ -1086,7 +1117,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
                 break;
             }
         }
-        assert!(cur_node.has_value());
+        assert!(cur_node.value.is_some());
         Some(cur_node.key)
     }
 
@@ -1113,7 +1144,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
                 }
             }
 
-            if item.has_value() {
+            if item.value.is_some() {
                 if start.len() < item.key.len() || *start <= item.key {
                     chunk.push(item);
                 }
@@ -1155,7 +1186,7 @@ mod tests {
         assert_eq!(trie.get(&txn, &key_1), Some(80085));
         assert_eq!(trie.get(&txn, &key_2), Some(999));
         assert_eq!(trie.get(&txn, &key_3), Some(1337));
-        assert_eq!(trie.get(&txn, &key_4), None);
+        assert_eq!(trie.get(&txn, &key_4), None::<i32>);
 
         trie.remove(&mut txn, &key_4);
         assert_eq!(trie.count_nodes(&txn), (2, 0, 3));
@@ -1165,21 +1196,21 @@ mod tests {
 
         trie.remove(&mut txn, &key_1);
         assert_eq!(trie.count_nodes(&txn), (1, 0, 2));
-        assert_eq!(trie.get(&txn, &key_1), None);
+        assert_eq!(trie.get(&txn, &key_1), None::<i32>);
         assert_eq!(trie.get(&txn, &key_2), Some(999));
         assert_eq!(trie.get(&txn, &key_3), Some(1337));
 
         trie.remove(&mut txn, &key_2);
         assert_eq!(trie.count_nodes(&txn), (0, 0, 1));
-        assert_eq!(trie.get(&txn, &key_1), None);
-        assert_eq!(trie.get(&txn, &key_2), None);
+        assert_eq!(trie.get(&txn, &key_1), None::<i32>);
+        assert_eq!(trie.get(&txn, &key_2), None::<i32>);
         assert_eq!(trie.get(&txn, &key_3), Some(1337));
 
         trie.remove(&mut txn, &key_3);
         assert_eq!(trie.count_nodes(&txn), (0, 0, 0));
-        assert_eq!(trie.get(&txn, &key_1), None);
-        assert_eq!(trie.get(&txn, &key_2), None);
-        assert_eq!(trie.get(&txn, &key_3), None);
+        assert_eq!(trie.get(&txn, &key_1), None::<i32>);
+        assert_eq!(trie.get(&txn, &key_2), None::<i32>);
+        assert_eq!(trie.get(&txn, &key_3), None::<i32>);
     }
 
     #[test]
@@ -1293,7 +1324,7 @@ mod tests {
         assert_eq!(trie.get(&txn, &key_2), Some(999));
         assert_eq!(trie.get(&txn, &key_3), Some(1337));
         assert_eq!(trie.get(&txn, &key_4), Some(6969));
-        assert_eq!(trie.get(&txn, &key_5), None);
+        assert_eq!(trie.get(&txn, &key_5), None::<i32>);
 
         trie.remove(&mut txn, &key_5);
         assert_eq!(trie.count_nodes(&txn), (0, 2, 2));
@@ -1304,31 +1335,31 @@ mod tests {
 
         trie.remove(&mut txn, &key_1);
         assert_eq!(trie.count_nodes(&txn), (0, 1, 2));
-        assert_eq!(trie.get(&txn, &key_1), None);
+        assert_eq!(trie.get(&txn, &key_1), None::<i32>);
         assert_eq!(trie.get(&txn, &key_2), Some(999));
         assert_eq!(trie.get(&txn, &key_3), Some(1337));
         assert_eq!(trie.get(&txn, &key_4), Some(6969));
 
         trie.remove(&mut txn, &key_2);
         assert_eq!(trie.count_nodes(&txn), (1, 0, 2));
-        assert_eq!(trie.get(&txn, &key_1), None);
-        assert_eq!(trie.get(&txn, &key_2), None);
+        assert_eq!(trie.get(&txn, &key_1), None::<i32>);
+        assert_eq!(trie.get(&txn, &key_2), None::<i32>);
         assert_eq!(trie.get(&txn, &key_3), Some(1337));
         assert_eq!(trie.get(&txn, &key_4), Some(6969));
 
         trie.remove(&mut txn, &key_3);
         assert_eq!(trie.count_nodes(&txn), (0, 0, 1));
-        assert_eq!(trie.get(&txn, &key_1), None);
-        assert_eq!(trie.get(&txn, &key_2), None);
-        assert_eq!(trie.get(&txn, &key_3), None);
+        assert_eq!(trie.get(&txn, &key_1), None::<i32>);
+        assert_eq!(trie.get(&txn, &key_2), None::<i32>);
+        assert_eq!(trie.get(&txn, &key_3), None::<i32>);
         assert_eq!(trie.get(&txn, &key_4), Some(6969));
 
         trie.remove(&mut txn, &key_4);
         assert_eq!(trie.count_nodes(&txn), (0, 0, 0));
-        assert_eq!(trie.get(&txn, &key_1), None);
-        assert_eq!(trie.get(&txn, &key_2), None);
-        assert_eq!(trie.get(&txn, &key_3), None);
-        assert_eq!(trie.get(&txn, &key_4), None);
+        assert_eq!(trie.get(&txn, &key_1), None::<i32>);
+        assert_eq!(trie.get(&txn, &key_2), None::<i32>);
+        assert_eq!(trie.get(&txn, &key_3), None::<i32>);
+        assert_eq!(trie.get(&txn, &key_4), None::<i32>);
 
         assert_eq!(trie.root_hash(&txn), initial_hash);
     }
@@ -1373,14 +1404,14 @@ mod tests {
         let key_2: KeyNibbles = "413b39931".parse().unwrap();
         let key_3: KeyNibbles = "4".parse().unwrap();
 
-        let proof_value_2 = TrieNode::new_leaf(key_2.clone(), 999);
+        let proof_value_2 = TrieNode::new_leaf(key_2.clone(), vec![99]);
         let mut proof_root = TrieNode::new_root();
         proof_root
             .put_child(&proof_value_2.key, proof_value_2.hash_assert_complete())
             .unwrap();
 
         let env = nimiq_database::volatile::VolatileEnvironment::new(10).unwrap();
-        let trie = MerkleRadixTrie::<i32>::new_incomplete(env.clone(), "database");
+        let trie = MerkleRadixTrie::new_incomplete(env.clone(), "database");
         let mut txn = WriteTransaction::new(&env);
         assert!(!trie.is_complete());
 
@@ -1388,11 +1419,11 @@ mod tests {
             &mut txn,
             KeyNibbles::ROOT,
             Some(key_3.clone()),
-            &[],
+            Vec::new(),
             TrieProof::new(vec![TrieNode::new_root()]),
             TrieNode::new_root().hash_assert_complete(),
         )
-            .unwrap();
+        .unwrap();
         assert_eq!(trie.count_nodes(&txn), (0, 0, 0));
         assert!(!trie.is_complete());
 
@@ -1400,7 +1431,7 @@ mod tests {
             &mut txn,
             key_3.clone(),
             Some(key_3.clone()),
-            &[],
+            Vec::new(),
             TrieProof::new(vec![proof_root.clone()]),
             proof_root.hash_assert_complete(),
         )
@@ -1412,7 +1443,7 @@ mod tests {
             &mut txn,
             key_3.clone(),
             Some(key_1.clone()),
-            &[(key_2.clone(), 999)],
+            vec![(key_2.clone(), vec![99])],
             TrieProof::new(vec![proof_value_2.clone(), proof_root.clone()]),
             proof_root.hash_assert_complete(),
         )
@@ -1424,11 +1455,9 @@ mod tests {
             &mut txn,
             key_1.clone(),
             None,
-            &[],
+            Vec::new(),
             TrieProof::new(vec![proof_value_2.clone(), proof_root.clone()]),
-            "5714c5dcd26854d7ff4fc7ecee7f167d4263dc63b8dda101783fd65083f12907"
-                .parse()
-                .unwrap(),
+            proof_root.hash_assert_complete(),
         )
         .unwrap();
         assert_eq!(trie.count_nodes(&txn), (0, 0, 1));
@@ -1466,7 +1495,7 @@ mod tests {
     #[test]
     fn complete_tree_doesnt_accept_chunks() {
         let env = nimiq_database::volatile::VolatileEnvironment::new(10).unwrap();
-        let original = MerkleRadixTrie::<i32>::new(env.clone(), "original");
+        let original = MerkleRadixTrie::new(env.clone(), "original");
         let trie = MerkleRadixTrie::new(env.clone(), "copy");
         let mut txn = WriteTransaction::new(&env);
 
@@ -1474,7 +1503,7 @@ mod tests {
 
         let (end, chunk, proof) = original.get_chunk_with_proof(&txn, KeyNibbles::ROOT.., 100);
         assert_eq!(
-            trie.put_chunk(&mut txn, KeyNibbles::ROOT, end, &chunk, proof, hash)
+            trie.put_chunk(&mut txn, KeyNibbles::ROOT, end, chunk, proof, hash)
                 .map_err(|s| s.contains("complete tree")),
             Err(true)
         );
@@ -1506,37 +1535,71 @@ mod tests {
 
         let start = end.unwrap();
         let (end, chunk, proof) = original.get_chunk_with_proof(&txn, start.clone().., 0);
-        trie.put_chunk(&mut txn, start.clone(), end.clone(), &chunk, proof, hash.clone())
-            .unwrap();
+        trie.put_chunk(
+            &mut txn,
+            start.clone(),
+            end.clone(),
+            chunk,
+            proof,
+            hash.clone(),
+        )
+        .unwrap();
         assert_eq!(trie.count_nodes(&txn), (0, 0, 0));
         assert!(!trie.is_complete());
 
-
         let start = end.unwrap();
         let (end, chunk, proof) = original.get_chunk_with_proof(&txn, start.clone().., 1);
-        trie.put_chunk(&mut txn, start.clone(), end.clone(), &chunk, proof, hash.clone())
-            .unwrap();
+        trie.put_chunk(
+            &mut txn,
+            start.clone(),
+            end.clone(),
+            chunk,
+            proof,
+            hash.clone(),
+        )
+        .unwrap();
         assert_eq!(trie.count_nodes(&txn), (0, 1, 0));
         assert!(!trie.is_complete());
 
         let start = end.unwrap();
         let (end, chunk, proof) = original.get_chunk_with_proof(&txn, start.clone().., 0);
-        trie.put_chunk(&mut txn, start.clone(), end.clone(), &chunk, proof, hash.clone())
-            .unwrap();
+        trie.put_chunk(
+            &mut txn,
+            start.clone(),
+            end.clone(),
+            chunk,
+            proof,
+            hash.clone(),
+        )
+        .unwrap();
         assert_eq!(trie.count_nodes(&txn), (0, 1, 0));
         assert!(!trie.is_complete());
 
         let start = end.unwrap();
         let (end, chunk, proof) = original.get_chunk_with_proof(&txn, start.clone().., 2);
-        trie.put_chunk(&mut txn, start.clone(), end.clone(), &chunk, proof, hash.clone())
-            .unwrap();
+        trie.put_chunk(
+            &mut txn,
+            start.clone(),
+            end.clone(),
+            chunk,
+            proof,
+            hash.clone(),
+        )
+        .unwrap();
         assert_eq!(trie.count_nodes(&txn), (0, 2, 1));
         assert!(!trie.is_complete());
 
         let start = end.unwrap();
         let (end, chunk, proof) = original.get_chunk_with_proof(&txn, start.clone().., 2);
-        trie.put_chunk(&mut txn, start.clone(), end.clone(), &chunk, proof, hash.clone())
-            .unwrap();
+        trie.put_chunk(
+            &mut txn,
+            start.clone(),
+            end.clone(),
+            chunk,
+            proof,
+            hash.clone(),
+        )
+        .unwrap();
         assert_eq!(trie.count_nodes(&txn), (0, 2, 2));
         assert!(trie.is_complete());
 
@@ -1544,7 +1607,7 @@ mod tests {
         assert_eq!(trie.get(&txn, &key_2), Some(999));
         assert_eq!(trie.get(&txn, &key_3), Some(1337));
         assert_eq!(trie.get(&txn, &key_4), Some(6969));
-        assert_eq!(trie.get(&txn, &key_5), None);
+        assert_eq!(trie.get(&txn, &key_5), None::<i32>);
     }
 
     #[test]
@@ -1558,7 +1621,12 @@ mod tests {
         let env = nimiq_database::volatile::VolatileEnvironment::new(10).unwrap();
         let original = MerkleRadixTrie::new(env.clone(), "original");
         let tries: Vec<_> = (1..5)
-            .map(|i| (i, MerkleRadixTrie::new_incomplete(env.clone(), &format!("copy{}", i))))
+            .map(|i| {
+                (
+                    i,
+                    MerkleRadixTrie::new_incomplete(env.clone(), &format!("copy{}", i)),
+                )
+            })
             .collect();
         let mut txn = WriteTransaction::new(&env);
 
@@ -1575,9 +1643,17 @@ mod tests {
             let mut next_start = KeyNibbles::ROOT;
             for _ in 0..10 {
                 let start = next_start;
-                let (end, chunk, proof) = original.get_chunk_with_proof(&txn, start.clone().., chunk_size);
-                trie.put_chunk(&mut txn, start.clone(), end.clone(), &chunk, proof, hash.clone())
-                    .unwrap();
+                let (end, chunk, proof) =
+                    original.get_chunk_with_proof(&txn, start.clone().., chunk_size);
+                trie.put_chunk(
+                    &mut txn,
+                    start.clone(),
+                    end.clone(),
+                    chunk,
+                    proof,
+                    hash.clone(),
+                )
+                .unwrap();
                 if trie.is_complete() {
                     break;
                 }
@@ -1590,7 +1666,7 @@ mod tests {
             assert_eq!(trie.get(&txn, &key_2), Some(999));
             assert_eq!(trie.get(&txn, &key_3), Some(1337));
             assert_eq!(trie.get(&txn, &key_4), Some(6969));
-            assert_eq!(trie.get(&txn, &key_5), None);
+            assert_eq!(trie.get(&txn, &key_5), None::<i32>);
         }
     }
 }

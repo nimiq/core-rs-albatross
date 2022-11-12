@@ -21,7 +21,7 @@ pub struct TrieNode {
     // The root data is not included when the `TrieNode` is hashed.
     pub root_data: Option<RootData>,
     #[beserial(len_type(u16))]
-    pub serialized_value: Option<Vec<u8>>,
+    pub value: Option<Vec<u8>>,
     pub children: [Option<TrieNodeChild>; 16],
 }
 
@@ -78,11 +78,11 @@ pub enum TrieNodeKind {
 
 impl TrieNode {
     /// Creates a new leaf node.
-    pub fn new_leaf<T: Serialize>(key: KeyNibbles, value: T) -> Self {
+    pub fn new_leaf(key: KeyNibbles, value: Vec<u8>) -> Self {
         TrieNode {
             key,
             root_data: None,
-            serialized_value: Some(value.serialize_to_vec()),
+            value: Some(value),
             children: NO_CHILDREN,
         }
     }
@@ -132,7 +132,7 @@ impl TrieNode {
                 num_hybrids: 0,
                 num_leaves: 0,
             }),
-            serialized_value: None,
+            value: None,
             children,
         }
     }
@@ -142,21 +142,17 @@ impl TrieNode {
         TrieNode {
             key,
             root_data: None,
-            serialized_value: None,
+            value: None,
             children: NO_CHILDREN,
         }
     }
 
     pub fn is_empty(&self) -> bool {
-        !self.is_root() && !self.has_value() && !self.has_children()
+        !self.is_root() && self.value.is_none() && !self.has_children()
     }
 
     pub fn is_root(&self) -> bool {
         self.root_data.is_some()
-    }
-
-    pub fn has_value(&self) -> bool {
-        self.serialized_value.is_some()
     }
 
     pub fn has_children(&self) -> bool {
@@ -165,7 +161,7 @@ impl TrieNode {
 
     pub fn kind(&self) -> Option<TrieNodeKind> {
         Some(
-            match (self.is_root(), self.has_children(), self.has_value()) {
+            match (self.is_root(), self.has_children(), self.value.is_some()) {
                 (false, false, false) => return None,
                 (false, false, true) => TrieNodeKind::Leaf,
                 (false, true, false) => TrieNodeKind::Branch,
@@ -173,14 +169,6 @@ impl TrieNode {
                 (true, _, _) => TrieNodeKind::Root,
             },
         )
-    }
-
-    /// Returns the value of a node, if it is a leaf or hybrid node.
-    pub fn value<T: Deserialize>(&self) -> Result<T, MerkleRadixTrieError> {
-        self.serialized_value
-            .as_ref()
-            .map(|v| Deserialize::deserialize(&mut &v[..]).unwrap())
-            .ok_or(MerkleRadixTrieError::BranchesHaveNoValue)
     }
 
     /// Returns the child index of the given prefix in the current node. If the current node has the
@@ -251,11 +239,11 @@ impl TrieNode {
         Ok(())
     }
 
-    pub fn put_value<T: Serialize>(&mut self, new_value: T) -> Result<(), MerkleRadixTrieError> {
+    pub fn put_value(&mut self, new_value: Vec<u8>) -> Result<(), MerkleRadixTrieError> {
         if self.root_data.is_some() {
             return Err(MerkleRadixTrieError::RootCantHaveValue);
         }
-        self.serialized_value = Some(new_value.serialize_to_vec());
+        self.value = Some(new_value);
         Ok(())
     }
 
@@ -289,7 +277,7 @@ impl SerializeContent for TrieNode {
     fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
         let mut result = 0;
         result += self.key.serialize(writer)?;
-        if let Some(v) = &self.serialized_value {
+        if let Some(v) = &self.value {
             writer.write_u8(1)?;
             result += v.serialize::<u16, _>(writer)?;
         } else {
@@ -409,7 +397,7 @@ mod tests {
     fn child_index_works() {
         let key: KeyNibbles = "cfb986".parse().unwrap();
 
-        let leaf_node = TrieNode::new_leaf::<u32>(key.clone(), 666);
+        let leaf_node = TrieNode::new_leaf(key.clone(), vec![66]);
         let branch_node = TrieNode::new_empty(key);
 
         let child_key_1 = "cfb986f5a".parse().unwrap();
@@ -437,7 +425,7 @@ mod tests {
     fn child_works() {
         let key: KeyNibbles = "cfb986".parse().unwrap();
 
-        let leaf_node = TrieNode::new_leaf::<u32>(key.clone(), 666);
+        let leaf_node = TrieNode::new_leaf(key.clone(), vec![66]);
         let mut branch_node = TrieNode::new_empty(key);
 
         let child_key_1 = "cfb986f5a".parse().unwrap();
@@ -498,7 +486,7 @@ mod tests {
     fn child_key_works() {
         let key: KeyNibbles = "cfb986".parse().unwrap();
 
-        let leaf_node = TrieNode::new_leaf::<u32>(key.clone(), 666);
+        let leaf_node = TrieNode::new_leaf(key.clone(), vec![66]);
         let mut branch_node = TrieNode::new_empty(key);
 
         let child_key_1 = "cfb986f5a".parse().unwrap();
@@ -547,7 +535,7 @@ mod tests {
     fn put_remove_child_works() {
         let key: KeyNibbles = "cfb986".parse().unwrap();
 
-        let mut node = TrieNode::new_leaf(key, 666u32);
+        let mut node = TrieNode::new_leaf(key, vec![66]);
 
         let child_key_1 = "cfb986f5a".parse().unwrap();
         node.put_child(&child_key_1, "child_1".hash()).unwrap();
@@ -585,79 +573,50 @@ mod tests {
             Err(MerkleRadixTrieError::ChildDoesNotExist)
         );
 
-        assert_eq!(node.value(), Ok(666u32));
+        assert_eq!(node.value, Some(vec![66]));
     }
 
     #[test]
     fn put_value_works() {
         let key: KeyNibbles = "cfb986".parse().unwrap();
 
-        let mut leaf_node = TrieNode::new_leaf::<u32>(key.clone(), 666);
-        assert_eq!(leaf_node.value(), Ok(666u32));
-        leaf_node.put_value(999).unwrap();
-        assert_eq!(leaf_node.value(), Ok(999u32));
+        let mut leaf_node = TrieNode::new_leaf(key.clone(), vec![66]);
+        assert_eq!(leaf_node.value, Some(vec![66]));
+        leaf_node.put_value(vec![99]).unwrap();
+        assert_eq!(leaf_node.value, Some(vec![99]));
 
-        let mut hybrid_node = TrieNode::new_leaf::<u32>(key.clone(), 666);
-        assert_eq!(hybrid_node.value(), Ok(666u32));
-        hybrid_node.put_value(999).unwrap();
-        assert_eq!(hybrid_node.value(), Ok(999u32));
+        let mut hybrid_node = TrieNode::new_leaf(key.clone(), vec![66]);
+        assert_eq!(hybrid_node.value, Some(vec![66]));
+        hybrid_node.put_value(vec![99]).unwrap();
+        assert_eq!(hybrid_node.value, Some(vec![99]));
 
         let mut branch_node = TrieNode::new_empty(key);
-        assert_eq!(
-            branch_node.value::<u32>(),
-            Err(MerkleRadixTrieError::BranchesHaveNoValue)
-        );
-        branch_node.put_value(999).unwrap();
-        assert_eq!(branch_node.value(), Ok(999u32));
+        assert_eq!(branch_node.value, None);
+        branch_node.put_value(vec![99]).unwrap();
+        assert_eq!(branch_node.value, Some(vec![99]));
 
         let mut root_node = TrieNode::new_root();
+        assert_eq!(root_node.value, None);
         assert_eq!(
-            root_node.value::<u32>(),
-            Err(MerkleRadixTrieError::BranchesHaveNoValue)
-        );
-        assert_eq!(
-            root_node.put_value(999),
+            root_node.put_value(vec![99]),
             Err(MerkleRadixTrieError::RootCantHaveValue)
         );
+        assert_eq!(root_node.value, None);
     }
 
     #[test]
     fn remove_value_works() {
         let key: KeyNibbles = "cfb986".parse().unwrap();
 
-        let mut leaf_node = TrieNode::new_leaf::<u32>(key.clone(), 666);
-        assert_eq!(leaf_node.value(), Ok(666u32));
-        leaf_node.serialized_value = None;
+        let mut leaf_node = TrieNode::new_leaf(key.clone(), vec![66]);
+        assert_eq!(leaf_node.value, Some(vec![66]));
+        leaf_node.value = None;
         assert!(leaf_node.is_empty());
 
-        let mut hybrid_node = TrieNode::new_leaf::<u32>(key.clone(), 666);
-        assert_eq!(hybrid_node.value(), Ok(666u32));
-        hybrid_node.serialized_value = None;
-        assert_eq!(
-            hybrid_node.value::<u32>(),
-            Err(MerkleRadixTrieError::BranchesHaveNoValue)
-        );
+        let branch_node = TrieNode::new_empty(key);
+        assert_eq!(branch_node.value, None);
 
-        let mut branch_node = TrieNode::new_empty(key);
-        assert_eq!(
-            branch_node.value::<u32>(),
-            Err(MerkleRadixTrieError::BranchesHaveNoValue)
-        );
-        branch_node.serialized_value = None;
-        assert_eq!(
-            branch_node.value::<u32>(),
-            Err(MerkleRadixTrieError::BranchesHaveNoValue)
-        );
-
-        let mut root_node = TrieNode::new_root();
-        assert_eq!(
-            root_node.value::<u32>(),
-            Err(MerkleRadixTrieError::BranchesHaveNoValue)
-        );
-        root_node.serialized_value = None;
-        assert_eq!(
-            root_node.value::<u32>(),
-            Err(MerkleRadixTrieError::BranchesHaveNoValue)
-        );
+        let root_node = TrieNode::new_root();
+        assert_eq!(root_node.value, None);
     }
 }

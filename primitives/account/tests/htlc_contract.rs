@@ -504,7 +504,7 @@ fn it_can_apply_and_revert_valid_transaction() {
 
     assert_eq!(
         accounts_tree.get(&db_txn, &KeyNibbles::from(&[0u8; 20][..])),
-        None
+        None::<Account>
     );
 
     HashedTimeLockedContract::revert_outgoing_transaction(
@@ -519,7 +519,7 @@ fn it_can_apply_and_revert_valid_transaction() {
 
     assert_eq!(
         accounts_tree
-            .get(&db_txn, &KeyNibbles::from(&[0u8; 20][..]))
+            .get::<Account>(&db_txn, &KeyNibbles::from(&[0u8; 20][..]))
             .unwrap(),
         Account::HTLC(start_contract.clone())
     );
@@ -550,7 +550,7 @@ fn it_can_apply_and_revert_valid_transaction() {
 
     assert_eq!(
         accounts_tree.get(&db_txn, &KeyNibbles::from(&[0u8; 20][..])),
-        None
+        None::<Account>
     );
 
     HashedTimeLockedContract::revert_outgoing_transaction(
@@ -565,7 +565,7 @@ fn it_can_apply_and_revert_valid_transaction() {
 
     assert_eq!(
         accounts_tree
-            .get(&db_txn, &KeyNibbles::from(&[0u8; 20][..]))
+            .get::<Account>(&db_txn, &KeyNibbles::from(&[0u8; 20][..]))
             .unwrap(),
         Account::HTLC(start_contract.clone())
     );
@@ -593,7 +593,7 @@ fn it_can_apply_and_revert_valid_transaction() {
 
     assert_eq!(
         accounts_tree.get(&db_txn, &KeyNibbles::from(&[0u8; 20][..])),
-        None
+        None::<Account>
     );
 
     HashedTimeLockedContract::revert_outgoing_transaction(
@@ -608,7 +608,7 @@ fn it_can_apply_and_revert_valid_transaction() {
 
     assert_eq!(
         accounts_tree
-            .get(&db_txn, &KeyNibbles::from(&[0u8; 20][..]))
+            .get::<Account>(&db_txn, &KeyNibbles::from(&[0u8; 20][..]))
             .unwrap(),
         Account::HTLC(start_contract)
     );
