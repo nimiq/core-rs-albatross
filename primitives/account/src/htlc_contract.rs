@@ -170,7 +170,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
 
         let contract_key = KeyNibbles::from(&transaction.contract_creation_address());
 
-        let previous_balance = match accounts_tree.get(db_txn, &contract_key) {
+        let previous_balance = match accounts_tree.get::<Account>(db_txn, &contract_key) {
             None => Coin::ZERO,
             Some(account) => account.balance(),
         };
@@ -231,11 +231,12 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
     ) -> Result<AccountInfo, AccountError> {
         let key = KeyNibbles::from(&transaction.sender);
 
-        let account = accounts_tree
-            .get(db_txn, &key)
-            .ok_or(AccountError::NonExistentAddress {
-                address: transaction.sender.clone(),
-            })?;
+        let account =
+            accounts_tree
+                .get::<Account>(db_txn, &key)
+                .ok_or(AccountError::NonExistentAddress {
+                    address: transaction.sender.clone(),
+                })?;
 
         let htlc = match account {
             Account::HTLC(ref value) => value,
@@ -318,12 +319,11 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
 
         let htlc = match receipt {
             None => {
-                let account =
-                    accounts_tree
-                        .get(db_txn, &key)
-                        .ok_or(AccountError::NonExistentAddress {
-                            address: transaction.sender.clone(),
-                        })?;
+                let account = accounts_tree.get::<Account>(db_txn, &key).ok_or(
+                    AccountError::NonExistentAddress {
+                        address: transaction.sender.clone(),
+                    },
+                )?;
 
                 if let Account::HTLC(contract) = account {
                     contract
@@ -389,11 +389,12 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
     ) -> Result<AccountInfo, AccountError> {
         let key = KeyNibbles::from(&transaction.sender);
 
-        let account = accounts_tree
-            .get(db_txn, &key)
-            .ok_or(AccountError::NonExistentAddress {
-                address: transaction.sender.clone(),
-            })?;
+        let account =
+            accounts_tree
+                .get::<Account>(db_txn, &key)
+                .ok_or(AccountError::NonExistentAddress {
+                    address: transaction.sender.clone(),
+                })?;
 
         let htlc = match account {
             Account::HTLC(ref value) => value,
@@ -441,12 +442,11 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
 
         let htlc = match receipt {
             None => {
-                let account =
-                    accounts_tree
-                        .get(db_txn, &key)
-                        .ok_or(AccountError::NonExistentAddress {
-                            address: transaction.sender.clone(),
-                        })?;
+                let account = accounts_tree.get::<Account>(db_txn, &key).ok_or(
+                    AccountError::NonExistentAddress {
+                        address: transaction.sender.clone(),
+                    },
+                )?;
 
                 if let Account::HTLC(contract) = account {
                     contract
@@ -505,11 +505,12 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
     ) -> Result<Vec<Log>, AccountError> {
         let key = KeyNibbles::from(&transaction.contract_creation_address());
 
-        let account = accounts_tree
-            .get(db_txn, &key)
-            .ok_or(AccountError::NonExistentAddress {
-                address: transaction.sender.clone(),
-            })?;
+        let account =
+            accounts_tree
+                .get::<Account>(db_txn, &key)
+                .ok_or(AccountError::NonExistentAddress {
+                    address: transaction.sender.clone(),
+                })?;
 
         let htlc = match account {
             Account::HTLC(ref value) => value,

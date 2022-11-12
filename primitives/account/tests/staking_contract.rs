@@ -1047,7 +1047,7 @@ fn delete_validator_works() {
     );
 
     assert_eq!(
-        accounts_tree.get(
+        accounts_tree.get::<Account>(
             &db_txn,
             &StakingContract::get_key_validator_staker(&validator_address, &staker_address)
         ),
@@ -1115,7 +1115,7 @@ fn delete_validator_works() {
     assert_eq!(validator.inactivity_flag, Some(2));
 
     assert_eq!(
-        accounts_tree.get(
+        accounts_tree.get::<Account>(
             &db_txn,
             &StakingContract::get_key_validator_staker(&validator_address, &staker_address)
         ),
@@ -1187,7 +1187,7 @@ fn create_staker_works() {
     assert_eq!(validator.num_stakers, 1);
 
     assert_eq!(
-        accounts_tree.get(
+        accounts_tree.get::<Account>(
             &db_txn,
             &StakingContract::get_key_validator_staker(&validator_address, &staker_address)
         ),
@@ -1244,7 +1244,7 @@ fn create_staker_works() {
     assert_eq!(validator.num_stakers, 0);
 
     assert_eq!(
-        accounts_tree.get(
+        accounts_tree.get::<Account>(
             &db_txn,
             &StakingContract::get_key_validator_staker(&validator_address, &staker_address)
         ),
@@ -1458,7 +1458,7 @@ fn update_staker_works() {
     assert_eq!(new_validator.num_stakers, 1);
 
     assert_eq!(
-        accounts_tree.get(
+        accounts_tree.get::<Account>(
             &db_txn,
             &StakingContract::get_key_validator_staker(&other_validator_address, &staker_address)
         ),
@@ -1585,7 +1585,7 @@ fn update_staker_works() {
     assert_eq!(validator.num_stakers, 1);
 
     assert_eq!(
-        accounts_tree.get(
+        accounts_tree.get::<Account>(
             &db_txn,
             &StakingContract::get_key_validator_staker(&other_validator_address, &staker_address)
         ),
@@ -1688,7 +1688,7 @@ fn unstake_works() {
     );
     assert_eq!(validator.num_stakers, 1);
     assert_eq!(
-        accounts_tree.get(
+        accounts_tree.get::<Account>(
             &db_txn,
             &StakingContract::get_key_validator_staker(&validator_address, &staker_address)
         ),
@@ -1761,7 +1761,7 @@ fn unstake_works() {
     );
     assert_eq!(validator.num_stakers, 0);
     assert_eq!(
-        accounts_tree.get(
+        accounts_tree.get::<Account>(
             &db_txn,
             &StakingContract::get_key_validator_staker(&validator_address, &staker_address)
         ),
@@ -1826,7 +1826,7 @@ fn unstake_works() {
     );
     assert_eq!(validator.num_stakers, 1);
     assert_eq!(
-        accounts_tree.get(
+        accounts_tree.get::<Account>(
             &db_txn,
             &StakingContract::get_key_validator_staker(&validator_address, &staker_address)
         ),

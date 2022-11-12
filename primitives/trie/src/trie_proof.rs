@@ -42,7 +42,7 @@ impl TrieProof {
         let mut nodes = Vec::new();
 
         for node in &self.nodes {
-            if node.serialized_value.is_some() {
+            if node.value.is_some() {
                 nodes.push(node);
             }
         }
@@ -153,16 +153,16 @@ mod tests {
     #[test]
     fn verify_works() {
         let key_l1: KeyNibbles = "0011".parse().unwrap();
-        let l1 = TrieNode::new_leaf(key_l1.clone(), 1);
+        let l1 = TrieNode::new_leaf(key_l1.clone(), vec![1]);
 
         let key_l2: KeyNibbles = "0033".parse().unwrap();
-        let l2 = TrieNode::new_leaf(key_l2.clone(), 2);
+        let l2 = TrieNode::new_leaf(key_l2.clone(), vec![2]);
 
         let key_l3: KeyNibbles = "0020".parse().unwrap();
-        let l3 = TrieNode::new_leaf(key_l3.clone(), 3);
+        let l3 = TrieNode::new_leaf(key_l3.clone(), vec![3]);
 
         let key_l4: KeyNibbles = "0022".parse().unwrap();
-        let l4 = TrieNode::new_leaf(key_l4.clone(), 4);
+        let l4 = TrieNode::new_leaf(key_l4.clone(), vec![4]);
 
         let key_b2: KeyNibbles = "002".parse().unwrap();
         let mut b2 = TrieNode::new_empty(key_b2.clone());

@@ -38,7 +38,7 @@ impl AccountTransactionInteraction for BasicAccount {
     ) -> Result<AccountInfo, AccountError> {
         let key = KeyNibbles::from(&transaction.recipient);
 
-        let leaf = accounts_tree.get(db_txn, &key);
+        let leaf = accounts_tree.get::<Account>(db_txn, &key);
 
         // Implicitly also checks that the address is in fact from a basic account.
         let current_balance = match leaf {
@@ -80,11 +80,12 @@ impl AccountTransactionInteraction for BasicAccount {
 
         let key = KeyNibbles::from(&transaction.recipient);
 
-        let account = accounts_tree
-            .get(db_txn, &key)
-            .ok_or(AccountError::NonExistentAddress {
-                address: transaction.recipient.clone(),
-            })?;
+        let account =
+            accounts_tree
+                .get::<Account>(db_txn, &key)
+                .ok_or(AccountError::NonExistentAddress {
+                    address: transaction.recipient.clone(),
+                })?;
 
         let new_balance = Account::balance_sub(account.balance(), transaction.value)?;
 
@@ -113,7 +114,7 @@ impl AccountTransactionInteraction for BasicAccount {
         let key = KeyNibbles::from(&transaction.sender);
 
         let account = accounts_tree
-            .get(db_txn, &key)
+            .get::<Account>(db_txn, &key)
             .or_else(|| {
                 if transaction.total_value() != Coin::ZERO {
                     None
@@ -172,7 +173,7 @@ impl AccountTransactionInteraction for BasicAccount {
 
         let key = KeyNibbles::from(&transaction.sender);
 
-        let leaf = accounts_tree.get(db_txn, &key);
+        let leaf = accounts_tree.get::<Account>(db_txn, &key);
 
         let current_balance = match leaf {
             None => Coin::ZERO,
@@ -212,7 +213,7 @@ impl AccountTransactionInteraction for BasicAccount {
         let key = KeyNibbles::from(&transaction.sender);
 
         let account = accounts_tree
-            .get(db_txn, &key)
+            .get::<Account>(db_txn, &key)
             .or_else(|| {
                 if transaction.total_value() != Coin::ZERO {
                     None
@@ -266,7 +267,7 @@ impl AccountTransactionInteraction for BasicAccount {
 
         let key = KeyNibbles::from(&transaction.sender);
 
-        let leaf = accounts_tree.get(db_txn, &key);
+        let leaf = accounts_tree.get::<Account>(db_txn, &key);
 
         let current_balance = match leaf {
             None => Coin::ZERO,
@@ -326,7 +327,7 @@ impl AccountInherentInteraction for BasicAccount {
 
         let key = KeyNibbles::from(&inherent.target);
 
-        let leaf = accounts_tree.get(db_txn, &key);
+        let leaf = accounts_tree.get::<Account>(db_txn, &key);
 
         let current_balance = match leaf {
             None => Coin::ZERO,
@@ -368,11 +369,12 @@ impl AccountInherentInteraction for BasicAccount {
 
         let key = KeyNibbles::from(&inherent.target);
 
-        let account = accounts_tree
-            .get(db_txn, &key)
-            .ok_or(AccountError::NonExistentAddress {
-                address: inherent.target.clone(),
-            })?;
+        let account =
+            accounts_tree
+                .get::<Account>(db_txn, &key)
+                .ok_or(AccountError::NonExistentAddress {
+                    address: inherent.target.clone(),
+                })?;
 
         let new_balance = Account::balance_sub(account.balance(), inherent.value)?;
 
