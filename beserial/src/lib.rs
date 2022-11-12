@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::hash::BuildHasher;
+use std::ops;
 use std::ops::Deref;
 use std::sync::Arc;
 
@@ -804,5 +805,21 @@ impl<T: Serialize> SerializeWithLength for [T] {
         }
 
         size
+    }
+}
+
+// Ranges
+
+impl<T: Serialize> Serialize for ops::RangeFrom<T> {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+        self.start.serialize(writer)
+    }
+    fn serialized_size(&self) -> usize {
+        self.start.serialized_size()
+    }
+}
+impl<T: Deserialize> Deserialize for ops::RangeFrom<T> {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+        Ok(T::deserialize(reader)?..)
     }
 }

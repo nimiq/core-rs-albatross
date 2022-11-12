@@ -81,10 +81,8 @@ impl KeyNibbles {
         // Get the last byte index and check if the key is an even number of nibbles.
         let end_byte = self.len() / 2;
 
-        let even_nibbles = self.length % 2 == 1;
-
         // If key ends in the middle of a byte, compare that part.
-        if even_nibbles {
+        if self.length % 2 == 1 {
             let own_nibble = (self.bytes[end_byte] >> 4) & 0xf;
 
             let other_nibble = (other.bytes[end_byte] >> 4) & 0xf;
@@ -130,7 +128,7 @@ impl KeyNibbles {
     #[must_use]
     pub fn slice(&self, start: usize, end: usize) -> Self {
         // Do some basic sanity checks.
-        if start >= self.len() || end <= start {
+        if start > self.len() || end < start {
             error!(
                 "Slice parameters don't make sense! Key length {}, start index {}, end index {}.",
                 self.len(),
@@ -197,6 +195,12 @@ impl KeyNibbles {
     #[must_use]
     pub fn suffix(&self, start: u8) -> Self {
         self.slice(start as usize, self.len())
+    }
+}
+
+impl Default for KeyNibbles {
+    fn default() -> KeyNibbles {
+        KeyNibbles::ROOT
     }
 }
 
