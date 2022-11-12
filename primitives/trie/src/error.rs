@@ -10,6 +10,8 @@ pub enum MerkleRadixTrieError {
     BranchesHaveNoValue,
     #[error("Tried to query a child that does not exist.")]
     ChildDoesNotExist,
+    #[error("Child is incomplete.")]
+    ChildIsStump,
     #[error("Tried to store a value at the root node.")]
     RootCantHaveValue,
     #[error("Failed to (de)serialize a value.")]
