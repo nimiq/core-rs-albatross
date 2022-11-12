@@ -27,6 +27,7 @@ use crate::trie_node::TrieNode;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TrieProof {
     #[beserial(len_type(u16))]
+    // TODO: for hybrid nodes, this contains data. is this bad?
     pub nodes: Vec<TrieNode>,
 }
 
@@ -121,7 +122,7 @@ impl TrieProof {
         // And must match the hash given as the root hash.
         if &root.hash_assert_complete::<Blake2bHash>() != root_hash {
             error!(
-                "The root node doesn't have the correct has! It has hash {}, but it should be {}.",
+                "The root node doesn't have the correct hash! It has hash {}, but it should be {}.",
                 root.hash_assert_complete::<Blake2bHash>(),
                 root_hash
             );

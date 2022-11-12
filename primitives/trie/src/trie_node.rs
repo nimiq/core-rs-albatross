@@ -1,4 +1,5 @@
 use std::io;
+use std::ops;
 use std::slice;
 
 use log::error;
@@ -14,7 +15,7 @@ use crate::key_nibbles::KeyNibbles;
 /// only references to its children, a leaf node, which contains a value or a hybrid node, which has
 /// both children and a value. A branch/hybrid node can have up to 16 children, since we represent
 /// the keys in hexadecimal form, each child represents a different hexadecimal character.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TrieNode {
     pub key: KeyNibbles,
     // The root data is not included when the `TrieNode` is hashed.
@@ -24,8 +25,9 @@ pub struct TrieNode {
     pub children: [Option<TrieNodeChild>; 16],
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct RootData {
+    pub incomplete: Option<ops::RangeFrom<KeyNibbles>>,
     pub num_branches: u64,
     pub num_hybrids: u64,
     pub num_leaves: u64,
@@ -35,14 +37,30 @@ pub struct RootData {
 /// child's key that is different from its parent) and its hash.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Serialize, Deserialize)]
 pub struct TrieNodeChild {
+    // An empty suffix indicates that this branch exists but isn't known.
     pub suffix: KeyNibbles,
     // An all-zero hash (the `Default::default()` value) marks an uncomputed child hash.
     pub hash: Blake2bHash,
 }
 
 impl TrieNodeChild {
-    fn has_hash(&self) -> bool {
+    pub fn stump() -> TrieNodeChild {
+        TrieNodeChild {
+            suffix: KeyNibbles::default(),
+            hash: Blake2bHash::default(),
+        }
+    }
+    pub fn is_stump(&self) -> bool {
+        self.suffix.is_empty()
+    }
+    pub fn has_hash(&self) -> bool {
         self.hash != Default::default()
+    }
+    pub fn key(&self, parent_key: &KeyNibbles) -> Result<KeyNibbles, MerkleRadixTrieError> {
+        if self.is_stump() {
+            return Err(MerkleRadixTrieError::ChildIsStump);
+        }
+        Ok(parent_key + &self.suffix)
     }
 }
 
@@ -50,6 +68,7 @@ pub const NO_CHILDREN: [Option<TrieNodeChild>; 16] = [
     None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
 ];
 
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum TrieNodeKind {
     Root,
     Branch,
@@ -70,15 +89,51 @@ impl TrieNode {
 
     /// Creates an empty root node
     pub fn new_root() -> Self {
+        Self::new_root_impl(false)
+    }
+
+    /// Creates an incomplete root node
+    pub fn new_root_incomplete() -> Self {
+        Self::new_root_impl(true)
+    }
+
+    fn new_root_impl(incomplete: bool) -> Self {
+        let children = if incomplete {
+            [
+                Some(TrieNodeChild::stump()),
+                Some(TrieNodeChild::stump()),
+                Some(TrieNodeChild::stump()),
+                Some(TrieNodeChild::stump()),
+                Some(TrieNodeChild::stump()),
+                Some(TrieNodeChild::stump()),
+                Some(TrieNodeChild::stump()),
+                Some(TrieNodeChild::stump()),
+                Some(TrieNodeChild::stump()),
+                Some(TrieNodeChild::stump()),
+                Some(TrieNodeChild::stump()),
+                Some(TrieNodeChild::stump()),
+                Some(TrieNodeChild::stump()),
+                Some(TrieNodeChild::stump()),
+                Some(TrieNodeChild::stump()),
+                Some(TrieNodeChild::stump()),
+            ]
+        } else {
+            NO_CHILDREN
+        };
         TrieNode {
             key: KeyNibbles::ROOT,
             root_data: Some(RootData {
+                incomplete: if incomplete {
+                    Some(KeyNibbles::ROOT..)
+                } else {
+                    None
+                },
                 num_branches: 0,
                 num_hybrids: 0,
                 num_leaves: 0,
             }),
             serialized_value: None,
-            children: NO_CHILDREN,
+            children,
         }
     }
 
@@ -140,7 +195,8 @@ impl TrieNode {
             return Err(MerkleRadixTrieError::WrongPrefix);
         }
 
-        // Key length has to be smaller or equal to the child prefix length, so this should never panic!
+        // Key length has to be smaller or equal to the child prefix length, so this will only panic
+        // when `child_prefix` has the same length as `self.key()`.
         Ok(child_prefix.get(self.key.len()).unwrap())
     }
 
@@ -164,7 +220,7 @@ impl TrieNode {
     }
 
     pub fn child_key(&self, child_prefix: &KeyNibbles) -> Result<KeyNibbles, MerkleRadixTrieError> {
-        Ok(&self.key + &self.child(child_prefix)?.suffix)
+        self.child(child_prefix)?.key(&self.key)
     }
 
     /// Sets the current node's child with the given prefix.
