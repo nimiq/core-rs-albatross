@@ -357,7 +357,7 @@ fn it_can_apply_and_revert_valid_transaction() {
     VestingContract::commit_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 1, 200).unwrap();
     assert_eq!(
         accounts_tree
-            .get(&db_txn, &KeyNibbles::from(&[1u8; 20][..]))
+            .get::<Account>(&db_txn, &KeyNibbles::from(&[1u8; 20][..]))
             .unwrap()
             .balance(),
         800.try_into().unwrap()
@@ -366,7 +366,7 @@ fn it_can_apply_and_revert_valid_transaction() {
         .unwrap();
     assert_eq!(
         accounts_tree
-            .get(&db_txn, &KeyNibbles::from(&[1u8; 20][..]))
+            .get::<Account>(&db_txn, &KeyNibbles::from(&[1u8; 20][..]))
             .unwrap(),
         Account::Vesting(start_contract)
     );
@@ -389,7 +389,7 @@ fn it_can_apply_and_revert_valid_transaction() {
     VestingContract::commit_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 1, 200).unwrap();
     assert_eq!(
         accounts_tree
-            .get(&db_txn, &KeyNibbles::from(&[1u8; 20][..]))
+            .get::<Account>(&db_txn, &KeyNibbles::from(&[1u8; 20][..]))
             .unwrap()
             .balance(),
         800.try_into().unwrap()
@@ -398,7 +398,7 @@ fn it_can_apply_and_revert_valid_transaction() {
         .unwrap();
     assert_eq!(
         accounts_tree
-            .get(&db_txn, &KeyNibbles::from(&[1u8; 20][..]))
+            .get::<Account>(&db_txn, &KeyNibbles::from(&[1u8; 20][..]))
             .unwrap(),
         Account::Vesting(start_contract)
     );

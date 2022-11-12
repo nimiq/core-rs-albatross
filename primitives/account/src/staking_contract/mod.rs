@@ -146,7 +146,7 @@ impl StakingContract {
         db_txn: &DBTransaction,
     ) -> StakingContract {
         let key = StakingContract::get_key_staking_contract();
-        match accounts_tree.get(db_txn, &key) {
+        match accounts_tree.get::<Account>(db_txn, &key) {
             Some(Account::Staking(contract)) => contract,
             _ => {
                 unreachable!()
@@ -162,7 +162,7 @@ impl StakingContract {
     ) -> Option<Validator> {
         let key = StakingContract::get_key_validator(validator_address);
 
-        match accounts_tree.get(db_txn, &key) {
+        match accounts_tree.get::<Account>(db_txn, &key) {
             Some(Account::StakingValidator(validator)) => Some(validator),
             None => None,
             _ => {
@@ -178,7 +178,7 @@ impl StakingContract {
         validator_address: &Address,
     ) -> Vec<Address> {
         let key = StakingContract::get_key_validator(validator_address);
-        let validator = match accounts_tree.get(db_txn, &key) {
+        let validator = match accounts_tree.get::<Account>(db_txn, &key) {
             Some(Account::StakingValidator(validator)) => validator,
             _ => return vec![],
         };
@@ -211,7 +211,7 @@ impl StakingContract {
         staker_address: &Address,
     ) -> Option<Staker> {
         let key = StakingContract::get_key_staker(staker_address);
-        match accounts_tree.get(db_txn, &key) {
+        match accounts_tree.get::<Account>(db_txn, &key) {
             Some(Account::StakingStaker(staker)) => Some(staker),
             None => None,
             _ => {
@@ -416,7 +416,7 @@ impl StakingContract {
                 // Verify we have a valid delegation address (if present)
                 if let Some(delegation) = delegation {
                     let key = StakingContract::get_key_validator(&delegation);
-                    if accounts_tree.get(db_txn, &key).is_none() {
+                    if accounts_tree.get::<Account>(db_txn, &key).is_none() {
                         return false;
                     }
                 }

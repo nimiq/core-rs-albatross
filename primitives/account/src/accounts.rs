@@ -13,7 +13,7 @@ use crate::{
 };
 
 /// An alias for the accounts tree.
-pub type AccountsTrie = MerkleRadixTrie<Account>;
+pub type AccountsTrie = MerkleRadixTrie;
 
 /// The Accounts struct is simply an wrapper containing a database environment and, more importantly,
 /// a MerkleRadixTrie with accounts as leaf values. This struct basically holds all the accounts in
