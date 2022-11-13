@@ -59,12 +59,7 @@ pub trait AbstractBlockchain {
     }
 
     /// Returns the block type of the next block.
-    fn get_next_block_type(&self, last_number: Option<u32>) -> BlockType {
-        let last_block_number = match last_number {
-            None => self.block_number(),
-            Some(n) => n,
-        };
-
+    fn get_next_block_type(last_block_number: u32) -> BlockType {
         if Policy::is_macro_block_at(last_block_number + 1) {
             BlockType::Macro
         } else {

@@ -14,8 +14,8 @@ use tokio::sync::broadcast::Sender as BroadcastSender;
 use crate::blockchain_state::BlockchainState;
 use crate::chain_info::ChainInfo;
 use crate::{
-    AbstractBlockchain, Blockchain, BlockchainEvent, ChainOrdering, ForkEvent, NextBlock,
-    PushError, PushResult,
+    AbstractBlockchain, Blockchain, BlockchainEvent, ChainOrdering, ForkEvent, PushError,
+    PushResult,
 };
 
 fn send_vec(log_notifier: &BroadcastSender<BlockLog>, logs: Vec<BlockLog>) {
@@ -77,61 +77,10 @@ impl Blockchain {
                 PushError::Orphan
             })?;
 
-        // Get the intended block proposer.
-        let offset = if let Block::Macro(macro_block) = &block {
-            macro_block.round()
-        } else {
-            // Skip and micro block offset is block number
-            block.block_number()
-        };
-        let proposer_slot = this
-            .get_proposer_at(
-                block.block_number(),
-                offset,
-                prev_info.head.seed().entropy(),
-                Some(&read_txn),
-            )
-            .ok_or_else(|| {
-                warn!(%block, reason = "failed to determine block proposer", "Rejecting block");
-                PushError::Orphan
-            })?;
-
-        // Check the header.
-        if let Err(e) = Blockchain::verify_block_header(
-            this.deref(),
-            &block.header(),
-            &proposer_slot.validator.signing_key,
-            Some(&read_txn),
-            !trusted,
-            block.is_skip(),
-            NextBlock::Subsequent,
-            &this.election_head_hash(),
-        ) {
-            warn!(%block, reason = "bad header", "Rejecting block");
-            return Err(e);
-        }
-
-        // Check the justification.
-        if let Err(e) = Blockchain::verify_block_justification(
-            &*this,
-            &block,
-            &proposer_slot.validator.signing_key,
-            !trusted,
-            &this.current_validators().unwrap(),
-        ) {
-            warn!(%block, reason = "bad justification", "Rejecting block");
-            return Err(e);
-        }
-
-        // Check the body.
-        if let Err(e) = this.verify_block_body(
-            &block.header(),
-            &block.body(),
-            Some(&read_txn),
-            block.is_skip(),
-            trusted,
-        ) {
-            warn!(%block, reason = "bad body", "Rejecting block");
+        if let Err(e) =
+            Self::verify_block_for_current_state(this.deref(), &read_txn, &block, trusted)
+        {
+            warn!(%block, reason = "Block verifications failed", "Rejecting block");
             return Err(e);
         }
 

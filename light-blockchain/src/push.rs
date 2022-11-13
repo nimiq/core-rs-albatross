@@ -1,6 +1,6 @@
 use nimiq_block::{Block, BlockError, BlockType, MacroHeader};
 use nimiq_blockchain::{
-    AbstractBlockchain, Blockchain, ChainInfo, ChainOrdering, NextBlock, PushError, PushResult,
+    AbstractBlockchain, BlockSuccessor, Blockchain, ChainInfo, ChainOrdering, PushError, PushResult,
 };
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::policy::Policy;
@@ -50,37 +50,26 @@ impl LightBlockchain {
             .get_slot_owner_at(block.block_number(), offset, None)
             .expect("Failed to find slot owner!");
 
-        // Check the header.
-        Blockchain::verify_block_header(
-            this.deref(),
-            &block.header(),
-            &slot_owner.signing_key,
-            None,
-            true,
-            block.is_skip(),
-            NextBlock::Subsequent,
-            &this.election_head_hash(),
-        )?;
-
-        // If this is an election block, check the body.
+        // Do the whole block verification for election macro blocks and only check the header for the rest
         if block.is_election() {
-            // Checks if the body exists.
-            let body = block
-                .body()
-                .ok_or(PushError::InvalidBlock(BlockError::MissingBody))?;
-
-            // Check the body root.
-            if &body.hash() != block.header().body_root() {
-                return Err(PushError::InvalidBlock(BlockError::BodyHashMismatch));
-            }
+            block.verify(false)?;
+        } else {
+            block.header().verify(block.is_skip())?;
         }
 
-        // Check the justification.
-        Blockchain::verify_block_justification(
-            this.deref(),
+        // Check block for predecessor block
+        let predecessor = &prev_info.head;
+        Blockchain::verify_block_for_predecessor(
             &block,
-            &slot_owner.signing_key,
-            true,
+            predecessor,
+            BlockSuccessor::Subsequent(this.election_head_hash()),
+        )?;
+
+        // Check block for slot owner and validators
+        Blockchain::verify_block_for_slot(
+            &block,
+            predecessor.seed(),
+            Some(&slot_owner),
             &this.current_validators().unwrap(),
         )?;
 

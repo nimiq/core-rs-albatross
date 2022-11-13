@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::{fmt, io};
 
@@ -16,7 +18,7 @@ use nimiq_vrf::VrfSeed;
 
 use crate::macro_block::{MacroBlock, MacroHeader};
 use crate::micro_block::{MicroBlock, MicroHeader};
-use crate::{MacroBody, MicroBody, MicroJustification, TendermintProof};
+use crate::{BlockError, ForkProof, MacroBody, MicroBody, MicroJustification, TendermintProof};
 
 /// Defines the type of the block, either Micro or Macro (which includes both checkpoint and
 /// election blocks).
@@ -288,7 +290,31 @@ impl Block {
         }
     }
 
-    /// Update validator keys from a public key cache.
+    /// Returns a boolean indicating if the block is the immediate successor (block number + 1)
+    /// of the provided block
+    pub fn is_immediate_successor_of(&self, predecessor: &Block) -> bool {
+        self.block_number() == predecessor.block_number() + 1
+    }
+
+    /// Returns a boolean indicating if the block is the next macro block
+    /// of the provided macro block
+    pub fn is_macro_successor_of(&self, predecessor: &Block) -> bool {
+        if !self.is_macro() || !predecessor.is_macro() {
+            return false;
+        }
+        self.block_number() >= Policy::macro_block_after(predecessor.block_number())
+    }
+
+    /// Returns a boolean indicating if the block is the next election macro block
+    /// of the provided macro block
+    pub fn is_election_successor_of(&self, predecessor: &Block) -> bool {
+        if !self.is_election() || !predecessor.is_macro() {
+            return false;
+        }
+        self.block_number() == Policy::election_block_after(predecessor.block_number())
+    }
+
+    /// Updates validator keys from a public key cache.
     pub fn update_validator_keys(&self, cache: &mut PublicKeyCache) {
         // Prepare validator keys from BLS cache.
         if let Block::Macro(MacroBlock {
@@ -304,6 +330,102 @@ impl Block {
                 cache.get_or_uncompress_lazy_public_key(&validator.voting_key);
             }
         }
+    }
+
+    /// Verifies the block
+    /// Note that only intrinsic verifications are performed and further checks
+    /// are needed when completely verifying a block.
+    pub fn verify(&self, check_pk_tree_root: bool) -> Result<(), BlockError> {
+        let header = self.header();
+
+        // Do header intrinsic verifications
+        header.verify(self.is_skip())?;
+
+        // Checks if the body exists. If yes, unwrap it.
+        let body = self.body().ok_or(BlockError::MissingBody)?;
+
+        // Check the body root.
+        let body_hash = body.hash();
+        if *header.body_root() != body_hash {
+            warn!(
+                %header,
+                body_root = %header.body_root(),
+                body_hash = %body_hash,
+                reason = "Header hash doesn't match real body hash",
+                "Invalid block"
+            );
+            return Err(BlockError::BodyHashMismatch);
+        }
+
+        // Do body intrinsic checks
+        body.verify()?;
+
+        match body {
+            BlockBody::Micro(ref body) => {
+                // Checks if the justification exists
+                self.justification().ok_or(BlockError::NoJustification)?;
+
+                // Do skip block checks:
+                // 1. Header extra data is empty
+                // 2. Body is empty
+                if self.is_skip() && (!body.fork_proofs.is_empty() || !body.transactions.is_empty())
+                {
+                    warn!(
+                        %header,
+                        body_root = %header.body_root(),
+                        body_hash = %body_hash,
+                        reason = "Skip block has a non empty body",
+                        "Invalid block"
+                    );
+                    return Err(BlockError::InvalidSkipBlockBody);
+                }
+
+                // Check that the proof is within the reporting window
+                for proof in &body.fork_proofs {
+                    if !proof.is_valid_at(header.block_number()) {
+                        return Err(BlockError::InvalidForkProof);
+                    }
+                }
+
+                // Check that the transaction is within its validity window.
+                for tx in &body.get_raw_transactions() {
+                    if !tx.is_valid_at(header.block_number()) {
+                        return Err(BlockError::ExpiredTransaction);
+                    }
+                }
+            }
+            BlockBody::Macro(ref body) => {
+                // In case of an election block make sure it contains validators and pk_tree_root,
+                // if it is not an election block make sure it doesn't contain either.
+                let is_election = Policy::is_election_block_at(header.block_number());
+
+                if is_election != body.validators.is_some() {
+                    return Err(BlockError::InvalidValidators);
+                }
+
+                if is_election != body.pk_tree_root.is_some() {
+                    return Err(BlockError::InvalidPkTreeRoot);
+                }
+
+                // If this is an election block and check_pk_tree_root is set,
+                // check if the pk_tree_root matches the validators.
+                if is_election && check_pk_tree_root {
+                    match MacroBlock::pk_tree_root(body.validators.as_ref().unwrap()) {
+                        Ok(pk_tree_root) => {
+                            if pk_tree_root != *body.pk_tree_root.as_ref().unwrap() {
+                                return Err(BlockError::InvalidPkTreeRoot);
+                            }
+                        }
+                        Err(e) => {
+                            warn!(error=%e, "PK tree root building failed");
+                            return Err(e);
+                        }
+                    }
+                }
+            }
+        };
+
+        Ok(())
     }
 }
 
@@ -511,6 +633,47 @@ impl BlockHeader {
             unreachable!()
         }
     }
+
+    /// Verifies the header.
+    /// Note that only header intrinsic verifications are performed and further checks
+    /// are needed when completely verifying a block header.
+    pub fn verify(&self, is_skip: bool) -> Result<(), BlockError> {
+        // Check the version
+        if self.version() != Policy::VERSION {
+            warn!(
+                header = %self,
+                obtained_version = self.version(),
+                expected_version = Policy::VERSION,
+                reason = "wrong version",
+                "Invalid block header"
+            );
+
+            return Err(BlockError::UnsupportedVersion);
+        }
+
+        // Check that the extra data does not exceed the permitted size.
+        // This is also checked during deserialization.
+        if self.extra_data().len() > 32 {
+            warn!(
+                header = %self,
+                reason = "too much extra data",
+                "Invalid block header"
+            );
+            return Err(BlockError::ExtraDataTooLarge);
+        }
+
+        // Check that skip blocks doesn't have any extra data
+        if is_skip && !self.extra_data().is_empty() {
+            warn!(
+                header = %self,
+                reason = "Skip block extra data is not empty",
+                "Invalid block"
+            );
+            return Err(BlockError::ExtraDataTooLarge);
+        }
+
+        Ok(())
+    }
 }
 
 impl Hash for BlockHeader {}
@@ -647,6 +810,55 @@ impl BlockBody {
         } else {
             unreachable!()
         }
+    }
+
+    /// Verifies the body.
+    /// Note that only body intrinsic verifications are performed and further checks
+    /// are needed when completely verifying a block body.
+    pub fn verify(&self) -> Result<(), BlockError> {
+        match self {
+            BlockBody::Micro(body) => {
+                // Check the size
+                let body_size = self.serialized_size();
+                if body_size > Policy::MAX_SIZE_MICRO_BODY {
+                    warn!(
+                        body_size = body_size,
+                        max_size = Policy::MAX_SIZE_MICRO_BODY,
+                        reason = "Body size exceeds maximum size",
+                        "Invalid block"
+                    );
+                    return Err(BlockError::SizeExceeded);
+                }
+                // Ensure proofs are ordered and unique
+                let mut previous_proof: Option<&ForkProof> = None;
+                for proof in &body.fork_proofs {
+                    if let Some(previous) = previous_proof {
+                        match previous.cmp(proof) {
+                            Ordering::Equal => {
+                                return Err(BlockError::DuplicateForkProof);
+                            }
+                            Ordering::Greater => {
+                                return Err(BlockError::ForkProofsNotOrdered);
+                            }
+                            _ => (),
+                        }
+                    }
+                    previous_proof = Some(proof);
+                }
+
+                // Ensure transactions are unique
+                let mut uniq = HashSet::new();
+                if !body
+                    .get_raw_transactions()
+                    .into_iter()
+                    .all(move |tx| uniq.insert(tx))
+                {
+                    return Err(BlockError::DuplicateTransaction);
+                }
+            }
+            BlockBody::Macro(_) => {}
+        }
+        Ok(())
     }
 }
 

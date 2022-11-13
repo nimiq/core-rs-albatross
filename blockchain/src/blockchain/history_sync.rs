@@ -1,5 +1,4 @@
 use std::error::Error;
-use std::ops::Deref;
 
 use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
 
@@ -7,14 +6,15 @@ use beserial::Serialize;
 use nimiq_account::{Inherent, InherentType};
 use nimiq_block::{Block, BlockError};
 use nimiq_database::WriteTransaction;
-use nimiq_keys::PublicKey;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy::Policy;
 use nimiq_transaction::Transaction;
 
 use crate::chain_info::ChainInfo;
 use crate::history::{ExtTxData, ExtendedTransaction};
-use crate::{AbstractBlockchain, Blockchain, BlockchainEvent, NextBlock, PushError, PushResult};
+use crate::{
+    AbstractBlockchain, BlockSuccessor, Blockchain, BlockchainEvent, PushError, PushResult,
+};
 
 /// Implements methods to push macro blocks into the chain when an history node is syncing. This
 /// type of syncing is called history syncing. It works by having the node get all the election
@@ -60,84 +60,29 @@ impl Blockchain {
 
         // Get the current macro head.
         let macro_head = &this.state.macro_info.head;
-
-        // Check if we have this block's parent. The checks change depending if the last macro block
-        // that we pushed was an election block or not.
-        if macro_head.is_election() {
-            // We only need to check that the parent election block of this block is the same as our
-            // head block.
-            if macro_block.header.parent_election_hash != this.state.macro_head_hash {
-                warn!(
-                    block = %macro_block,
-                    reason = "wrong parent election hash",
-                    parent_election_hash = %macro_block.header.parent_election_hash,
-                    wanted_parent_election_hash = %this.state.macro_head_hash,
-                    "Rejecting block",
-                );
-                return Err(PushError::Orphan);
-            }
-        } else {
-            // We need to check that this block and our head block have the same parent election
-            // block and are in the correct order.
-            let wanted_parent_election_hash = macro_head.parent_election_hash().unwrap();
-            if macro_block.header.parent_election_hash != *wanted_parent_election_hash {
-                warn!(
-                    block = %macro_block,
-                    reason = "wrong parent election hash",
-                    parent_election_hash = %macro_block.header.parent_election_hash,
-                    %wanted_parent_election_hash,
-                    "Rejecting block",
-                );
-                return Err(PushError::Orphan);
-            }
-
-            // FIXME Compute the expected block number and compare it to the given one.
-            if macro_block.header.block_number <= macro_head.block_number() {
-                warn!(
-                    block = %macro_block,
-                    reason = "decreasing block number",
-                    block_no = macro_block.header.block_number,
-                    previous_block_no = macro_head.block_number(),
-                    "Rejecting block",
-                );
-                return Ok(PushResult::Ignored);
-            }
+        if macro_block.block_number() <= macro_head.block_number() {
+            warn!(
+                block = %macro_block,
+                reason = "decreasing block number",
+                block_no = macro_block.header.block_number,
+                previous_block_no = macro_head.block_number(),
+                "Rejecting block",
+            );
+            return Ok(PushResult::Ignored);
         }
 
-        // Check the header. Signing key is not necessary since we can't check the seed
-        if let Err(e) = Blockchain::verify_block_header(
-            this.deref(),
-            &block.header(),
-            &PublicKey::default(),
-            Some(&read_txn),
-            false, // Can't check seed since we don't have the previous block info to get the proposer's signing key
-            false,
-            NextBlock::HistoryChunkMacro,
-            &this.election_head_hash(),
-        ) {
-            warn!(%block, reason = "bad header", "Rejecting block");
-            return Err(e);
-        }
+        // Do block intrinsic checks
+        block.verify(true)?;
 
-        // Check the justification. Signing key is not necessary since it isn't needed for macro blocks
-        if let Err(e) = Blockchain::verify_block_justification(
-            &*this,
+        // Check block for predecessor block
+        Self::verify_block_for_predecessor(&block, macro_head, BlockSuccessor::Macro)?;
+
+        Self::verify_block_for_slot(
             &block,
-            &PublicKey::default(),
-            true,
+            macro_head.seed(), // Seed can't and won't be checked since we don't have the previous block info to get the proposer's signing key
+            None,              // Thus pass `None` to the signing key.
             &this.current_validators().unwrap(),
-        ) {
-            warn!(%block, reason = "bad justification", "Rejecting block");
-            return Err(e);
-        }
-
-        // Check the body.
-        if let Err(e) =
-            this.verify_block_body(&block.header(), &block.body(), Some(&read_txn), false, true)
-        {
-            warn!(%block, reason = "bad body", "Rejecting block");
-            return Err(e);
-        }
+        )?;
 
         drop(read_txn);
 

@@ -89,10 +89,11 @@ pub enum Direction {
 }
 
 //// Next Block type used for sequence/order checks of blocks
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
-pub enum NextBlock {
-    /// Block is the next macro block that terminates a history chunk
-    HistoryChunkMacro,
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub enum BlockSuccessor {
+    /// Block is the next macro block
+    Macro,
     /// Block is the next block in the chain (block number + 1)
-    Subsequent,
+    /// It must carry the expected election hash for the block
+    Subsequent(Blake2bHash),
 }

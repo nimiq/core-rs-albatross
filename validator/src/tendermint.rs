@@ -1,4 +1,3 @@
-use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -8,11 +7,11 @@ use futures::{future::BoxFuture, stream::BoxStream, FutureExt, StreamExt};
 use parking_lot::RwLock;
 
 use nimiq_block::{
-    Block, BlockHeader, MacroBlock, MacroBody, MacroHeader, MultiSignature,
-    SignedTendermintProposal, TendermintProof, TendermintProposal,
+    Block, MacroBlock, MacroBody, MacroHeader, MultiSignature, SignedTendermintProposal,
+    TendermintProof, TendermintProposal,
 };
 use nimiq_block_production::BlockProducer;
-use nimiq_blockchain::{AbstractBlockchain, Blockchain, NextBlock};
+use nimiq_blockchain::{AbstractBlockchain, BlockSuccessor, Blockchain};
 use nimiq_bls::PublicKey;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_network_interface::network::MsgAcceptance;
@@ -337,21 +336,33 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
                 proposer_signing_key
             };
 
+            // Create a block with just our header.
+            let block = Block::Macro(MacroBlock {
+                header: header.clone(),
+                body: None,
+                justification: None,
+            });
+
             // Check the validity of the block header. If it is invalid, we return a proposal timeout
             // right here. This doesn't check anything that depends on the blockchain state.
-            if Blockchain::verify_block_header(
-                blockchain.deref(),
-                &BlockHeader::Macro(header.clone()),
-                &vrf_key,
-                None,
-                true,
-                false,
-                NextBlock::Subsequent,
-                &blockchain.election_head_hash(),
+            if block.header().verify(false).is_err() {
+                debug!("Tendermint - await_proposal: Invalid block header");
+                (MsgAcceptance::Reject, valid_round, None, None)
+            } else if Blockchain::verify_block_for_predecessor(
+                &block,
+                &blockchain.head(),
+                BlockSuccessor::Subsequent(blockchain.election_head_hash()),
             )
             .is_err()
             {
-                debug!("Tendermint - await_proposal: Invalid block header");
+                debug!("Tendermint - await_proposal: Invalid block header for blockchain head");
+                (MsgAcceptance::Reject, valid_round, None, None)
+            } else if block
+                .seed()
+                .verify(blockchain.head().seed(), &vrf_key)
+                .is_err()
+            {
+                debug!("Tendermint - await_proposal: Invalid block header, VRF seed verification failed");
                 (MsgAcceptance::Reject, valid_round, None, None)
             } else {
                 // Get a write transaction to the database.
@@ -359,13 +370,6 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
 
                 // Get the blockchain state.
                 let state = blockchain.state();
-
-                // Create a block with just our header.
-                let block = Block::Macro(MacroBlock {
-                    header: header.clone(),
-                    body: None,
-                    justification: None,
-                });
 
                 // Update our blockchain state using the received proposal. If we can't update the state, we
                 // return a proposal timeout.

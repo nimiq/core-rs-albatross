@@ -1,72 +1,133 @@
-use std::cmp::Ordering;
-
-use beserial::Serialize;
 use nimiq_block::{
-    Block, BlockBody, BlockError, BlockHeader, BlockType, ForkProof, MacroBlock, MacroBody,
-    MicroJustification, SkipBlockInfo, TendermintProof,
+    Block, BlockError, MacroBlock, MacroBody, MicroJustification, SkipBlockInfo, TendermintProof,
 };
-use nimiq_database::Transaction as DBtx;
+use nimiq_database::{ReadTransaction, Transaction as DBtx};
 use nimiq_hash::{Blake2bHash, Hash};
-use nimiq_keys::PublicKey as SchnorrPublicKey;
+use nimiq_primitives::slots::Validator;
 use nimiq_primitives::{policy::Policy, slots::Validators};
-use nimiq_transaction::Transaction;
+use nimiq_vrf::VrfSeed;
 
 use crate::blockchain_state::BlockchainState;
-use crate::{AbstractBlockchain, Blockchain, BlockchainError, NextBlock, PushError};
+use crate::{AbstractBlockchain, BlockSuccessor, Blockchain, PushError};
 
 /// Implements methods to verify the validity of blocks.
 impl Blockchain {
-    /// Verifies the header of a block.
-    /// This only performs checks that can be made BEFORE the state is updated with the block. All
-    /// checks that require the updated state (ex: if an account has enough funds) are made on the
-    /// verify_block_state method.
+    /// Verifies a block for the current blockchain state.
+    /// This method does a full verification on the block except for the block state checks.
+    /// See `verify_block_state` for these type of checks.
     // Note: This is an associated method because we need to use it on the light-blockchain. There
     //       might be a better way to do this though.
-    pub fn verify_block_header<B: AbstractBlockchain>(
+    pub fn verify_block_for_current_state<B: AbstractBlockchain>(
         blockchain: &B,
-        header: &BlockHeader,
-        signing_key: &SchnorrPublicKey,
-        txn_opt: Option<&DBtx>,
-        check_seed: bool,
-        skip_block: bool,
-        next_block_type: NextBlock,
-        expected_election_hash: &Blake2bHash,
+        read_txn: &ReadTransaction,
+        block: &Block,
+        trusted: bool,
     ) -> Result<(), PushError> {
-        // Check the version
-        if header.version() != Policy::VERSION {
-            warn!(
-                header = %header,
-                obtained_version = header.version(),
-                expected_version = Policy::VERSION,
-                reason = "wrong version",
-                "Rejecting block"
-            );
+        // Do block intrinsic checks
+        block.verify(!trusted)?;
 
-            return Err(PushError::InvalidBlock(BlockError::UnsupportedVersion));
+        // Check block for predecessor block
+        let prev_info = blockchain
+            .get_chain_info(block.parent_hash(), false, Some(read_txn))
+            .ok_or(PushError::Orphan)?;
+        let predecessor = prev_info.head;
+        Self::verify_block_for_predecessor(
+            block,
+            &predecessor,
+            BlockSuccessor::Subsequent(blockchain.election_head_hash()),
+        )?;
+
+        // Check block for slot and validators
+        // Get the intended block proposer.
+        let offset = if let Block::Macro(macro_block) = &block {
+            macro_block.round()
+        } else {
+            // Skip and micro block offset is block number
+            block.block_number()
+        };
+
+        // In trusted don't do slot related checks since they are mostly signature verifications and are slow.
+        if !trusted {
+            let (proposer_slot, _) = blockchain
+                .get_slot_owner_at(block.block_number(), offset, Some(read_txn))
+                .ok_or_else(|| {
+                    warn!(%block, reason = "failed to determine block proposer", "Rejecting block");
+                    PushError::Orphan
+                })?;
+
+            Self::verify_block_for_slot(
+                block,
+                predecessor.seed(),
+                Some(&proposer_slot),
+                &blockchain.current_validators().unwrap(),
+            )?;
         }
 
-        // Check that the extra data does not exceed the permitted size.
-        // This is also checked during deserialization.
-        // Skip blocks should not have extra data
-        if header.extra_data().len() > 32 || (skip_block && !header.extra_data().is_empty()) {
+        Ok(())
+    }
+
+    /// Verifies a block given its predecessor.
+    /// This only performs verifications where the predecessor is needed.
+    /// Check Block.verify() or verify_block_for_slot for further checks.
+    pub fn verify_block_for_predecessor(
+        block: &Block,
+        predecessor: &Block,
+        sequence_type: BlockSuccessor,
+    ) -> Result<(), PushError> {
+        let header = block.header();
+
+        // Check that the current block timestamp is equal or greater than the timestamp of the
+        // previous block.
+        if header.timestamp() < predecessor.timestamp() {
             warn!(
                 header = %header,
-                reason = "too much extra data",
+                obtained_timestamp = header.timestamp(),
+                parent_timestamp   = predecessor.timestamp(),
+                reason = "Block timestamp precedes predecessor timestamp",
                 "Rejecting block"
             );
-            return Err(PushError::InvalidBlock(BlockError::ExtraDataTooLarge));
+            return Err(PushError::InvalidSuccessor);
         }
 
-        match next_block_type {
-            NextBlock::Subsequent => {
-                // Check if the block's immediate predecessor is part of the chain.
-                let prev_info = blockchain
-                    .get_chain_info(header.parent_hash(), false, txn_opt)
-                    .ok_or(PushError::Orphan)?;
+        // Check that skip blocks has the expected timestamp and that the VRF seed is carried over
+        if block.is_skip() {
+            if header.timestamp() != predecessor.timestamp() + Policy::BLOCK_PRODUCER_TIMEOUT {
+                warn!(
+                    header = %header,
+                    obtained_timestamp = header.timestamp(),
+                    expected_timestamp   = predecessor.timestamp() + Policy::BLOCK_PRODUCER_TIMEOUT,
+                    reason = "Unexpected timestamp for a skip block",
+                    "Rejecting block"
+                );
+                return Err(PushError::InvalidBlock(
+                    BlockError::InvalidSkipBlockTimestamp,
+                ));
+            }
+            // In skip blocks the VRF seed must be carried over (because a new VRF seed requires a new leader)
+            if header.seed() != predecessor.seed() {
+                warn!(header = %header,
+                    reason = "Invalid seed",
+                    "Rejecting skip block");
+                return Err(PushError::InvalidBlock(BlockError::InvalidSeed));
+            }
+        }
+
+        match sequence_type {
+            BlockSuccessor::Subsequent(ref exp_parent_election_hash) => {
+                // Check that blocks are actually subsequent
+                if *block.parent_hash() != predecessor.hash() {
+                    warn!(
+                        header = %header,
+                        reason = "Wrong parent hash",
+                        parent_hash = %block.parent_hash(),
+                        expected_parent_hash = %predecessor.hash(),
+                        "Rejecting block",
+                    );
+                    return Err(PushError::InvalidSuccessor);
+                }
 
                 // Check that the block is a valid successor of its predecessor.
-                let next_block_type =
-                    blockchain.get_next_block_type(Some(prev_info.head.block_number()));
+                let next_block_type = Self::get_next_block_type(predecessor.block_number());
                 if header.ty() != next_block_type {
                     warn!(
                         header = %header,
@@ -77,154 +138,120 @@ impl Blockchain {
                 }
 
                 // Check the block number.
-                let next_block_number = prev_info.head.block_number() + 1;
-                if header.block_number() != next_block_number {
+                if !block.is_immediate_successor_of(predecessor) {
                     warn!(
                         header = %header,
-                        obtained_block_number = header.block_number(),
-                        expected_block_number = next_block_number,
+                        obtained_block_number = block.block_number(),
+                        expected_block_number = predecessor.block_number() + 1,
                         reason = "Wrong block number",
                         "Rejecting block"
                     );
                     return Err(PushError::InvalidSuccessor);
                 }
 
-                // Check that the current block timestamp is equal or greater than the timestamp of the
-                // previous block.
-                if header.timestamp() < prev_info.head.timestamp() {
-                    warn!(
-                        header = %header,
-                        obtained_timestamp = header.timestamp(),
-                        parent_timestamp   = prev_info.head.timestamp(),
-                        reason = "Block timestamp precedes parent timestamp",
-                        "Rejecting block"
-                    );
-                    return Err(PushError::InvalidSuccessor);
-                }
-
-                // Check that skip blocks has the expected timestamp
-                if skip_block
-                    && header.timestamp()
-                        != prev_info.head.timestamp() + Policy::BLOCK_PRODUCER_TIMEOUT
-                {
-                    warn!(
-                        header = %header,
-                        obtained_timestamp = header.timestamp(),
-                        expected_timestamp   = prev_info.head.timestamp() + Policy::BLOCK_PRODUCER_TIMEOUT,
-                        reason = "Unexpected timestamp for a skip block",
-                        "Rejecting block"
-                    );
-                    return Err(PushError::InvalidBlock(
-                        BlockError::InvalidSkipBlockTimestamp,
-                    ));
-                }
-
-                // Check that the current block timestamp subtracting the node's current time is less than or equal
-                // to the allowed maximum drift. Basically, we check that the block isn't from the future.
-                // Both times are given in Unix time standard in millisecond precision.
-                let timestamp_diff = header.timestamp().saturating_sub(blockchain.now());
-                if timestamp_diff > Policy::TIMESTAMP_MAX_DRIFT {
-                    warn!(
-                        header = %header,
-                        block_timestamp = header.timestamp(),
-                        obtained_timestamp_diff = timestamp_diff,
-                        max_timestamp_drift     = Policy::TIMESTAMP_MAX_DRIFT,
-                        reason = "Block timestamp exceeds allowed maximum drift",
-                        "Rejecting block"
-                    );
-                    return Err(PushError::InvalidBlock(BlockError::FromTheFuture));
-                }
-
-                // Check if the seed was signed by the intended producer.
-                if check_seed {
-                    if skip_block {
-                        // In skip blocks the VRF seed must be carried over (because a new VRF seed requires a new leader)
-                        if header.seed() != prev_info.head.seed() {
-                            warn!(header = %header,
-                        reason = "Invalid seed",
-                        "Rejecting skip block");
-                            return Err(PushError::InvalidBlock(BlockError::InvalidSeed));
-                        }
-                    } else if let Err(e) = header.seed().verify(prev_info.head.seed(), signing_key)
-                    {
-                        warn!(header = %header,
-                      reason = "Invalid seed",
-                      "Rejecting block vrf_error={:?}", e);
-                        return Err(PushError::InvalidBlock(BlockError::InvalidSeed));
+                // Check if the parent election hash matches the expected election head hash
+                if block.is_macro() {
+                    let parent_election_hash = header.parent_election_hash().unwrap();
+                    if parent_election_hash != exp_parent_election_hash {
+                        warn!(
+                            header = %header,
+                            parent_election_hash = %parent_election_hash,
+                            expected_hash = %exp_parent_election_hash,
+                            reason = "Wrong parent election hash",
+                            "Rejecting block"
+                        );
+                        return Err(PushError::InvalidSuccessor);
                     }
                 }
             }
-            NextBlock::HistoryChunkMacro => {
-                // Check that the block is a macro block
-                if header.ty() != BlockType::Macro {
+            BlockSuccessor::Macro => {
+                // Check that blocks are macro block successors
+                if block.is_election()
+                    && predecessor.is_election()
+                    && !block.is_election_successor_of(predecessor)
+                {
                     warn!(
                         header = %header,
-                        reason = "Wrong block type",
-                        "Rejecting block obtained_type={:?} expected_type=macro", header.ty()
+                        predecessor = %predecessor,
+                        reason = "Election blocks are not macro block successors",
+                        "Rejecting block"
+                    );
+                    return Err(PushError::InvalidSuccessor);
+                } else if !block.is_macro_successor_of(predecessor) {
+                    warn!(
+                        header = %header,
+                        predecessor = %predecessor,
+                        reason = "Blocks are not macro block successors",
+                        "Rejecting block"
                     );
                     return Err(PushError::InvalidSuccessor);
                 }
-
-                let head = blockchain.head();
-                let prev_info = blockchain
-                    .get_chain_info(&head.hash(), false, txn_opt)
-                    .ok_or(PushError::BlockchainError(
-                        BlockchainError::InconsistentState,
-                    ))?;
-
-                // Check the block number.
-                if header.block_number() <= head.block_number() {
+                // Check the block number is a non decreasing block number
+                if header.block_number() <= predecessor.block_number() {
                     warn!(
                         header = %header,
                         obtained_block_number = header.block_number(),
-                        reason = "Wrong block number",
+                        checked_block_number = predecessor.block_number(),
+                        reason = "Decreasing block number",
                         "Rejecting block"
                     );
                     return Err(PushError::InvalidSuccessor);
                 }
-                // Check that the current block timestamp is equal or greater than the timestamp of the
-                // previous block.
-                if header.timestamp() < prev_info.head.timestamp() {
+
+                // The expected parent election hash depends on the predecessor:
+                // - Predecessor is an election macro block: this block must have its hash as
+                //   parent election hash
+                // - Predecessor is a checkpoint macro block: this block must have the same
+                //   parent election hash
+                let predecessor_hash = predecessor.hash();
+                let exp_parent_election_hash = if predecessor.is_election() {
+                    &predecessor_hash
+                } else {
+                    predecessor.parent_election_hash().unwrap()
+                };
+                // Check that the blocks have the same parent election hash
+                // Check if the parent election hash matches the current election head hash
+                let parent_election_hash = block.parent_election_hash().unwrap();
+                if parent_election_hash != exp_parent_election_hash {
                     warn!(
                         header = %header,
-                        obtained_timestamp = header.timestamp(),
-                        parent_timestamp   = prev_info.head.timestamp(),
-                        reason = "Block timestamp precedes parent timestamp",
+                        parent_election_hash = %parent_election_hash,
+                        blockchain_election_hash = %predecessor.parent_election_hash().unwrap(),
+                        reason = "Wrong parent election hash",
                         "Rejecting block"
                     );
                     return Err(PushError::InvalidSuccessor);
                 }
             }
         }
-
-        if header.ty() == BlockType::Macro {
-            // Check if the parent election hash matches the current election head hash
-            let parent_election_hash = header.parent_election_hash().unwrap();
-            if parent_election_hash != expected_election_hash {
-                warn!(
-                    header = %header,
-                    parent_election_hash = %parent_election_hash,
-                    blockchain_election_hash = %blockchain.election_head_hash(),
-                    reason = "Wrong parent election hash",
-                    "Rejecting block"
-                );
-                return Err(PushError::InvalidSuccessor);
-            }
-        }
-
         Ok(())
     }
 
-    /// Verifies the justification of a block.
-    // Note: This is an associated method because we need to use it on the light-blockchain. There
-    //       might be a better way to do this though.
-    pub fn verify_block_justification<B: AbstractBlockchain>(
-        blockchain: &B,
+    /// Verifies a block given the slot.
+    /// This only performs verifications where the slot or the set of current validators are needed.
+    /// Check Block.verify() or verify_block_for_predecessor for further checks.
+    /// Notes: Passing `None` to `proposer` skips the VRF seed and the MicroJustification verification.
+    pub fn verify_block_for_slot(
         block: &Block,
-        signing_key: &SchnorrPublicKey,
-        check_signature: bool,
-        current_validators: &Validators,
+        prev_seed: &VrfSeed,
+        proposer: Option<&Validator>,
+        validators: &Validators,
     ) -> Result<(), PushError> {
+        // Check if the seed was signed by the intended producer.
+        if let Some(validator) = proposer {
+            // Skip block seeds are carried from the previous block and this is checked in
+            // `verify_block_for_predecessor`.
+            if !block.is_skip() {
+                if let Err(e) = block.seed().verify(prev_seed, &validator.signing_key) {
+                    warn!(header = %block.header(),
+                  reason = "Invalid seed",
+                  "Rejecting block vrf_error={:?}", e);
+                    return Err(PushError::InvalidBlock(BlockError::InvalidSeed));
+                }
+            }
+        }
+
+        // Verify the block justification
         match block {
             Block::Micro(micro_block) => {
                 // Checks if the justification exists. If yes, unwrap it.
@@ -233,11 +260,12 @@ impl Blockchain {
                     .as_ref()
                     .ok_or(PushError::InvalidBlock(BlockError::NoJustification))?;
 
-                if check_signature {
-                    // Verify the signature on the justification.
-                    match justification {
-                        MicroJustification::Micro(justification) => {
+                // Verify the signature on the justification.
+                match justification {
+                    MicroJustification::Micro(justification) => {
+                        if let Some(validator) = proposer {
                             let hash = block.hash();
+                            let signing_key = validator.signing_key;
                             if !signing_key.verify(justification, hash.as_slice()) {
                                 warn!(
                                     %block,
@@ -250,30 +278,26 @@ impl Blockchain {
                                 ));
                             }
                         }
-                        MicroJustification::Skip(justification) => {
-                            let skip_block_info = SkipBlockInfo {
-                                block_number: micro_block.header.block_number,
-                                vrf_entropy: micro_block.header.seed.entropy(),
-                            };
+                    }
+                    MicroJustification::Skip(justification) => {
+                        let skip_block_info = SkipBlockInfo {
+                            block_number: micro_block.header.block_number,
+                            vrf_entropy: micro_block.header.seed.entropy(),
+                        };
 
-                            if !justification
-                                .verify(&skip_block_info, &blockchain.current_validators().unwrap())
-                            {
-                                warn!(
+                        if !justification.verify(&skip_block_info, validators) {
+                            warn!(
                                     %block,
                                     reason = "Bad skip block proof",
                                     "Rejecting block");
-                                return Err(PushError::InvalidBlock(
-                                    BlockError::InvalidSkipBlockProof,
-                                ));
-                            }
+                            return Err(PushError::InvalidBlock(BlockError::InvalidSkipBlockProof));
                         }
                     }
                 }
             }
             Block::Macro(macro_block) => {
                 // Verify the Tendermint proof.
-                if check_signature && !TendermintProof::verify(macro_block, current_validators) {
+                if !TendermintProof::verify(macro_block, validators) {
                     warn!(
                         %block,
                         reason = "Macro block with bad justification",
@@ -283,190 +307,6 @@ impl Blockchain {
                 }
             }
         }
-
-        Ok(())
-    }
-
-    /// Verifies the body of a block.
-    /// This only performs checks that can be made BEFORE the state is updated with the block. All
-    /// checks that require the updated state (ex: if an account has enough funds) are made on the
-    /// verify_block_state method.
-    pub fn verify_block_body(
-        &self,
-        header: &BlockHeader,
-        body_opt: &Option<BlockBody>,
-        txn_opt: Option<&DBtx>,
-        skip_block: bool,
-        trusted: bool,
-    ) -> Result<(), PushError> {
-        // Checks if the body exists. If yes, unwrap it.
-        let body = body_opt
-            .as_ref()
-            .ok_or(PushError::InvalidBlock(BlockError::MissingBody))?;
-
-        match body {
-            BlockBody::Micro(body) => {
-                // Check the size of the body.
-                let body_size = body.serialized_size();
-                if body_size > Policy::MAX_SIZE_MICRO_BODY {
-                    warn!(
-                        %header,
-                        body_size = body_size,
-                        max_size  = Policy::MAX_SIZE_MICRO_BODY,
-                        reason = "Micro Body size exceeds maximum size",
-                        "Rejecting block"
-                    );
-                    return Err(PushError::InvalidBlock(BlockError::SizeExceeded));
-                }
-
-                // Check the body root.
-                let body_hash = body.hash::<Blake2bHash>();
-                if *header.body_root() != body_hash {
-                    warn!(
-                        %header,
-                        body_root = %header.body_root(),
-                        body_hash = %body_hash,
-                        reason = "Header microbody hash doesn't match real microbody hash",
-                        "Rejecting block"
-                    );
-                    return Err(PushError::InvalidBlock(BlockError::BodyHashMismatch));
-                }
-
-                // Check if we have an empty body if this is a skip block
-                if skip_block && (!body.fork_proofs.is_empty() || !body.transactions.is_empty()) {
-                    warn!(
-                        %header,
-                        body_root = %header.body_root(),
-                        body_hash = %body_hash,
-                        reason = "Skip block has a non empty body",
-                        "Rejecting block"
-                    );
-                    return Err(PushError::InvalidBlock(BlockError::InvalidSkipBlockBody));
-                }
-
-                // Validate the fork proofs.
-                let mut previous_proof: Option<&ForkProof> = None;
-
-                for proof in &body.fork_proofs {
-                    // Ensure proofs are ordered and unique.
-                    if let Some(previous) = previous_proof {
-                        match previous.cmp(proof) {
-                            Ordering::Equal => {
-                                return Err(PushError::InvalidBlock(
-                                    BlockError::DuplicateForkProof,
-                                ));
-                            }
-                            Ordering::Greater => {
-                                return Err(PushError::InvalidBlock(
-                                    BlockError::ForkProofsNotOrdered,
-                                ));
-                            }
-                            _ => (),
-                        }
-                    }
-
-                    // Check that the proof is within the reporting window.
-                    if !proof.is_valid_at(header.block_number()) {
-                        return Err(PushError::InvalidBlock(BlockError::InvalidForkProof));
-                    }
-
-                    // Get intended slot owner for that block.
-                    if let Some(slot) = self.get_proposer_at(
-                        proof.header1.block_number,
-                        proof.header1.block_number,
-                        proof.prev_vrf_seed.entropy(),
-                        txn_opt,
-                    ) {
-                        // Verify fork proof.
-                        if let Err(e) = proof.verify(&slot.validator.signing_key) {
-                            warn!(
-                                %header,
-                                reason = "Bad fork proof",
-                                "Rejecting block, fork_proof_error={:?}", e
-                            );
-                            return Err(PushError::InvalidBlock(BlockError::InvalidForkProof));
-                        }
-                        previous_proof = Some(proof);
-                    } else {
-                        warn!(
-                            %header,
-                            reason = "Bad fork proof: Couldn't calculate slot owner",
-                            "Rejecting block"
-                        );
-                        return Err(PushError::InvalidBlock(BlockError::InvalidForkProof));
-                    }
-                }
-
-                // Verify transactions.
-                let mut previous_tx: Option<&Transaction> = None;
-
-                for tx in &body.get_raw_transactions() {
-                    // Ensure transactions are ordered and unique.
-                    if let Some(previous) = previous_tx {
-                        if previous.cmp(tx) == Ordering::Equal {
-                            return Err(PushError::InvalidBlock(BlockError::DuplicateTransaction));
-                        }
-                    }
-
-                    // Check that the transaction is within its validity window.
-                    if !tx.is_valid_at(header.block_number()) {
-                        return Err(PushError::InvalidBlock(BlockError::ExpiredTransaction));
-                    }
-
-                    if !trusted && !self.tx_verification_cache.is_known(&tx.hash()) {
-                        // Check intrinsic transaction invariants.
-                        if let Err(e) = tx.verify(self.network_id) {
-                            return Err(PushError::InvalidBlock(BlockError::InvalidTransaction(e)));
-                        }
-                    }
-
-                    previous_tx = Some(tx);
-                }
-            }
-            BlockBody::Macro(body) => {
-                // Check the body root.
-                let body_hash = body.hash::<Blake2bHash>();
-                if *header.body_root() != body_hash {
-                    warn!(
-                        %header,
-                        body_root = %header.body_root(),
-                        body_hash = %body_hash,
-                        reason = "header macrobody hash doesn't match real body hash",
-                        "Rejecting block"
-                    );
-                    return Err(PushError::InvalidBlock(BlockError::BodyHashMismatch));
-                }
-
-                // In case of an election block make sure it contains validators and pk_tree_root,
-                // if it is not an election block make sure it doesn't contain either.
-                let is_election = Policy::is_election_block_at(header.block_number());
-
-                if is_election != body.validators.is_some() {
-                    return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
-                }
-
-                if is_election != body.pk_tree_root.is_some() {
-                    return Err(PushError::InvalidBlock(BlockError::InvalidPkTreeRoot));
-                }
-
-                // If this is an election block and we are not in trust mode (we produced the block or already checked it),
-                // check if the pk_tree_root matches the validators.
-                if is_election && !trusted {
-                    match MacroBlock::pk_tree_root(body.validators.as_ref().unwrap()) {
-                        Ok(pk_tree_root) => {
-                            if pk_tree_root != *body.pk_tree_root.as_ref().unwrap() {
-                                return Err(PushError::InvalidBlock(BlockError::InvalidPkTreeRoot));
-                            }
-                        }
-                        Err(e) => {
-                            warn!(%e, "PK tree root building failed");
-                            return Err(PushError::InvalidBlock(e));
-                        }
-                    }
-                }
-            }
-        }
-
         Ok(())
     }
 
