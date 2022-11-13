@@ -1,7 +1,7 @@
 use std::{
     collections::HashMap,
     sync::Arc,
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use bitflags::bitflags;
@@ -95,9 +95,6 @@ pub struct PeerContact {
     /// Services supported by this peer.
     pub services: Services,
 
-    /// Services needed by this peer for its operation
-    pub needed_services: Services,
-
     /// Timestamp when this peer contact was created in *seconds* since unix epoch. `None` if this is a seed.
     pub timestamp: Option<u64>,
 }
@@ -107,7 +104,6 @@ impl PeerContact {
         addresses: I,
         public_key: PublicKey,
         services: Services,
-        needed_services: Services,
         timestamp: Option<u64>,
     ) -> Self {
         let mut addresses = addresses.into_iter().collect::<Vec<Multiaddr>>();
@@ -118,7 +114,6 @@ impl PeerContact {
             addresses,
             public_key,
             services,
-            needed_services,
             timestamp,
         }
     }
@@ -266,6 +261,15 @@ impl PeerContactInfo {
         self.contact.inner.timestamp.is_none()
     }
 
+    pub fn exceeds_age(&self, max_age: Duration, unix_time: Duration) -> bool {
+        if let Some(timestamp) = self.contact.inner.timestamp {
+            if let Some(age) = unix_time.checked_sub(Duration::from_secs(timestamp)) {
+                return age > max_age;
+            }
+        }
+        false
+    }
+
     /// Returns true if the services provided are interesting to me
     pub fn matches(&self, services: Services) -> bool {
         self.services().contains(services)
@@ -387,6 +391,28 @@ impl PeerContactBook {
 
     pub fn get_own_contact(&self) -> &PeerContactInfo {
         &self.own_peer_contact
+    }
+
+    pub fn house_keeping(&mut self) {
+        if let Ok(unix_time) = SystemTime::now().duration_since(UNIX_EPOCH) {
+            let delete_peers = self
+                .peer_contacts
+                .iter()
+                .filter_map(|(peer_id, peer_contact)| {
+                    if peer_contact.exceeds_age(Duration::from_secs(60 * 15), unix_time) {
+                        debug!(%peer_id, "Removing peer contact because of old age");
+                        Some(peer_id)
+                    } else {
+                        None
+                    }
+                })
+                .cloned()
+                .collect::<Vec<PeerId>>();
+
+            for peer_id in delete_peers {
+                self.peer_contacts.remove(&peer_id);
+            }
+        }
     }
 }
 

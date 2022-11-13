@@ -84,7 +84,7 @@ pub(crate) struct ClientInner {
 }
 
 /// This function is used to generate the serices flags (provided, needed) based upon the configured sync mode
-pub fn generate_services_flags(sync_mode: SyncMode) -> (Services, Services) {
+pub fn generate_service_flags(sync_mode: SyncMode) -> (Services, Services) {
     let provided_services = match sync_mode {
         // Services provided by history nodes
         crate::config::config::SyncMode::History => {
@@ -104,7 +104,7 @@ pub fn generate_services_flags(sync_mode: SyncMode) -> (Services, Services) {
         crate::config::config::SyncMode::Nano => Services::empty(),
     };
 
-    let needed_services = match sync_mode {
+    let required_services = match sync_mode {
         // Services provided by history nodes
         crate::config::config::SyncMode::History => Services::HISTORY | Services::FULL_BLOCKS,
         // Services provided by full nodes
@@ -112,7 +112,7 @@ pub fn generate_services_flags(sync_mode: SyncMode) -> (Services, Services) {
         // Services provided by nano nodes
         crate::config::config::SyncMode::Nano => Services::CHAIN_PROOF | Services::ACCOUNTS_PROOF,
     };
-    (provided_services, needed_services)
+    (provided_services, required_services)
 }
 
 impl ClientInner {
@@ -163,8 +163,8 @@ impl ClientInner {
             identity_keypair.public().to_peer_id().to_base58()
         );
 
-        let (mut provided_services, needed_services) =
-            generate_services_flags(config.consensus.sync_mode);
+        let (mut provided_services, required_services) =
+            generate_service_flags(config.consensus.sync_mode);
 
         // TODO: This flag should be used internally to, apart from announcing the service, properly control the mechanism
         if config.zkp_propagation {
@@ -176,7 +176,6 @@ impl ClientInner {
             config.network.listen_addresses.clone(),
             identity_keypair.public(),
             provided_services,
-            needed_services,
             None,
         );
         peer_contact.set_current_time();
@@ -196,6 +195,7 @@ impl ClientInner {
             seeds,
             network_info.genesis_hash().clone(),
             false,
+            required_services,
         );
 
         log::debug!("listen_addresses = {:?}", config.network.listen_addresses);

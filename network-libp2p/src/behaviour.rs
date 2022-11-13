@@ -138,7 +138,7 @@ impl NimiqBehaviour {
             config.peer_contact.sign(&config.keypair),
         )));
         let discovery = DiscoveryBehaviour::new(
-            config.discovery,
+            config.discovery.clone(),
             config.keypair.clone(),
             Arc::clone(&contacts),
             clock,
@@ -162,7 +162,11 @@ impl NimiqBehaviour {
         let identify = Identify::new(identify_config);
 
         // Connection pool behaviour
-        let pool = ConnectionPoolBehaviour::new(Arc::clone(&contacts), config.seeds);
+        let pool = ConnectionPoolBehaviour::new(
+            Arc::clone(&contacts),
+            config.seeds,
+            config.discovery.required_services,
+        );
 
         // Request Response behaviour
         let codec = MessageCodec::default();

@@ -58,7 +58,7 @@ impl TestNode {
             update_interval: Duration::from_secs(10),
             min_send_update_interval: Duration::from_secs(5),
             update_limit: 64,
-            services_filter: Services::FULL_BLOCKS,
+            required_services: Services::FULL_BLOCKS,
             min_recv_update_interval: Duration::from_secs(1),
             house_keeping_interval: Duration::from_secs(1),
             keep_alive: KeepAlive::Yes,
@@ -67,8 +67,7 @@ impl TestNode {
         let peer_contact = PeerContact {
             addresses: Some(address.clone()).into_iter().collect(),
             public_key: keypair.public(),
-            services: config.services_filter,
-            needed_services: config.services_filter,
+            services: config.required_services,
             timestamp: None,
         }
         .sign(&keypair);
@@ -111,7 +110,6 @@ fn random_peer_contact(n: usize, services: Services) -> SignedPeerContact {
         addresses: vec![format!("/dns/test{}.local/tcp/443/wss", n).parse().unwrap()],
         public_key: keypair.public(),
         services,
-        needed_services: services,
         timestamp: None,
     };
 

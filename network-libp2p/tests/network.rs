@@ -31,7 +31,6 @@ fn network_config(address: Multiaddr) -> Config {
         addresses: vec![address],
         public_key: keypair.public(),
         services: Services::all(),
-        needed_services: Services::all(),
         timestamp: None,
     };
     peer_contact.set_current_time();
@@ -50,7 +49,7 @@ fn network_config(address: Multiaddr) -> Config {
             update_interval: Duration::from_secs(60),
             min_recv_update_interval: Duration::from_secs(30),
             update_limit: 64,
-            services_filter: Services::all(),
+            required_services: Services::all(),
             min_send_update_interval: Duration::from_secs(30),
             house_keeping_interval: Duration::from_secs(60),
             keep_alive: KeepAlive::No,
@@ -58,6 +57,7 @@ fn network_config(address: Multiaddr) -> Config {
         kademlia: Default::default(),
         gossipsub,
         memory_transport: true,
+        required_services: Services::all(),
     }
 }
 

@@ -60,7 +60,6 @@ impl TestNetwork for Network {
             vec![peer_address.clone()],
             peer_key.public(),
             Services::all(),
-            Services::all(),
             None,
         );
         peer_contact.set_current_time();
@@ -70,6 +69,7 @@ impl TestNetwork for Network {
             Vec::new(),
             genesis_hash.clone(),
             true,
+            Services::all(),
         );
         let network = Arc::new(Network::new(clock, config).await);
         network.listen_on(vec![peer_address]).await;

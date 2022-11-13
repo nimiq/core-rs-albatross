@@ -163,6 +163,8 @@ pub struct ConnectionPoolBehaviour {
     pub contacts: Arc<RwLock<PeerContactBook>>,
     seeds: Vec<Multiaddr>,
 
+    required_services: Services,
+
     peer_ids: ConnectionState<PeerId>,
     addresses: ConnectionState<Multiaddr>,
 
@@ -178,7 +180,11 @@ pub struct ConnectionPoolBehaviour {
 }
 
 impl ConnectionPoolBehaviour {
-    pub fn new(contacts: Arc<RwLock<PeerContactBook>>, seeds: Vec<Multiaddr>) -> Self {
+    pub fn new(
+        contacts: Arc<RwLock<PeerContactBook>>,
+        seeds: Vec<Multiaddr>,
+        required_services: Services,
+    ) -> Self {
         let limits = ConnectionPoolLimits {
             ip_count: HashMap::new(),
             ipv4_count: 0,
@@ -190,6 +196,7 @@ impl ConnectionPoolBehaviour {
         Self {
             contacts,
             seeds,
+            required_services,
             peer_ids: ConnectionState::new(2, config.retry_down_after),
             addresses: ConnectionState::new(4, config.retry_down_after),
             actions: VecDeque::new(),
@@ -262,9 +269,8 @@ impl ConnectionPoolBehaviour {
         let own_contact = contacts.get_own_contact();
         let own_peer_id = own_contact.peer_id();
 
-        // TODO Services
         contacts
-            .query(Services::all()) // TODO Services
+            .query(self.required_services)
             .filter_map(|contact| {
                 let peer_id = contact.peer_id();
                 if peer_id != own_peer_id && self.peer_ids.can_dial(peer_id) {

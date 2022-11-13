@@ -199,6 +199,8 @@ pub struct Network {
     // Metrics used for data analysis
     #[cfg(feature = "metrics")]
     metrics: Arc<NetworkMetrics>,
+    // Required services from other peeers. This is defined on init, based on our client type
+    required_services: Services,
 }
 
 impl Network {
@@ -211,6 +213,7 @@ impl Network {
     ///  - `config`: The network configuration, containing key pair, and other behavior-specific configuration.
     ///
     pub async fn new(clock: Arc<OffsetTime>, config: Config) -> Self {
+        let required_services = config.required_services;
         let swarm = Self::new_swarm(clock, config);
 
         let local_peer_id = *Swarm::local_peer_id(&swarm);
@@ -246,6 +249,7 @@ impl Network {
             peer_request_limits,
             #[cfg(feature = "metrics")]
             metrics,
+            required_services,
         }
     }
 
@@ -1534,6 +1538,15 @@ impl NetworkInterface for Network {
 
     fn has_peer(&self, peer_id: PeerId) -> bool {
         self.connected_peers.read().contains_key(&peer_id)
+    }
+
+    fn peer_provides_required_services(&self, peer_id: PeerId) -> bool {
+        if let Some(Some(contact)) = self.connected_peers.read().get(&peer_id) {
+            contact.services.contains(self.required_services)
+        } else {
+            // If we dont know the peer we return false
+            false
+        }
     }
 
     fn peer_provides_history(&self, peer_id: PeerId) -> bool {

@@ -12,7 +12,10 @@ use std::{
 
 use nimiq_hash::Blake2bHash;
 
-use crate::discovery::{behaviour::DiscoveryConfig, peer_contacts::PeerContact};
+use crate::discovery::{
+    behaviour::DiscoveryConfig,
+    peer_contacts::{PeerContact, Services},
+};
 
 pub struct Config {
     pub keypair: Keypair,
@@ -22,6 +25,7 @@ pub struct Config {
     pub kademlia: KademliaConfig,
     pub gossipsub: GossipsubConfig,
     pub memory_transport: bool,
+    pub required_services: Services,
 }
 
 impl Config {
@@ -31,6 +35,7 @@ impl Config {
         seeds: Vec<Multiaddr>,
         genesis_hash: Blake2bHash,
         memory_transport: bool,
+        required_services: Services,
     ) -> Self {
         // Hardcoding the minimum number of peers in mesh network before adding more
         // TODO: Maybe change this to a mesh limits configuration argument of this function
@@ -61,12 +66,13 @@ impl Config {
 
         Self {
             keypair,
-            peer_contact: peer_contact.clone(),
+            peer_contact,
             seeds,
-            discovery: DiscoveryConfig::new(genesis_hash, peer_contact.needed_services),
+            discovery: DiscoveryConfig::new(genesis_hash, required_services),
             kademlia,
             gossipsub,
             memory_transport,
+            required_services,
         }
     }
 }

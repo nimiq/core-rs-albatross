@@ -336,7 +336,7 @@ impl ConnectionHandler for DiscoveryHandler {
                         challenge_nonce: self.challenge_nonce.clone(),
                         genesis_hash: self.config.genesis_hash.clone(),
                         limit: self.config.update_limit,
-                        services: self.config.services_filter,
+                        services: self.config.required_services,
                         // TODO: If we really include this here, put this in `DiscoveryConfig`
                         user_agent: "TODO".to_string(),
                     };
@@ -472,7 +472,7 @@ impl ConnectionHandler for DiscoveryHandler {
                                     // Insert the peer into the peer contact book.
                                     peer_contact_book.insert_filtered(
                                         peer_contact.clone(),
-                                        self.config.services_filter,
+                                        self.config.required_services,
                                     );
 
                                     // Insert the initial set of peer contacts into the peer contact book.
@@ -556,7 +556,7 @@ impl ConnectionHandler for DiscoveryHandler {
                                     // Insert the new peer contacts into the peer contact book.
                                     self.peer_contact_book.write().insert_all_filtered(
                                         peer_contacts,
-                                        self.config.services_filter,
+                                        self.config.required_services,
                                     );
 
                                     return Poll::Ready(ConnectionHandlerEvent::Custom(
