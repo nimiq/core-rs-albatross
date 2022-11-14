@@ -18,7 +18,7 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 futures = "0.3"
-hyper = { version = "0.14.22", features = ["server", "tcp", "http2"] }
+hyper = { version = "0.14.23", features = ["server", "tcp", "http2"] }
 log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
 prometheus-client = "0.18.1"
