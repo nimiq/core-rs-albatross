@@ -458,11 +458,13 @@ fn inactivate_validator_works() {
         .parked_set
         .insert(validator_address.clone());
 
-    accounts_tree.put(
-        &mut db_txn,
-        &StakingContract::get_key_staking_contract(),
-        Account::Staking(staking_contract),
-    );
+    accounts_tree
+        .put(
+            &mut db_txn,
+            &StakingContract::get_key_staking_contract(),
+            Account::Staking(staking_contract),
+        )
+        .expect("complete trie");
 
     // Works in the valid case.
     let tx = make_signed_incoming_transaction(
@@ -819,11 +821,13 @@ fn unpark_validator_works() {
         .previous_disabled_slots
         .insert(validator_address.clone(), slots.clone());
 
-    accounts_tree.put(
-        &mut db_txn,
-        &StakingContract::get_key_staking_contract(),
-        Account::Staking(staking_contract),
-    );
+    accounts_tree
+        .put(
+            &mut db_txn,
+            &StakingContract::get_key_staking_contract(),
+            Account::Staking(staking_contract),
+        )
+        .expect("complete trie");
 
     // Works in the valid case.
     let tx = make_signed_incoming_transaction(
@@ -1047,10 +1051,12 @@ fn delete_validator_works() {
     );
 
     assert_eq!(
-        accounts_tree.get::<Account>(
-            &db_txn,
-            &StakingContract::get_key_validator_staker(&validator_address, &staker_address)
-        ),
+        accounts_tree
+            .get::<Account>(
+                &db_txn,
+                &StakingContract::get_key_validator_staker(&validator_address, &staker_address)
+            )
+            .expect("complete trie"),
         None
     );
 
@@ -1114,10 +1120,12 @@ fn delete_validator_works() {
     assert_eq!(validator.inactivity_flag, Some(2));
 
     assert_eq!(
-        accounts_tree.get::<Account>(
-            &db_txn,
-            &StakingContract::get_key_validator_staker(&validator_address, &staker_address)
-        ),
+        accounts_tree
+            .get::<Account>(
+                &db_txn,
+                &StakingContract::get_key_validator_staker(&validator_address, &staker_address)
+            )
+            .expect("complete trie"),
         Some(Account::StakingValidatorsStaker(staker_address.clone()))
     );
 
@@ -1186,10 +1194,12 @@ fn create_staker_works() {
     assert_eq!(validator.num_stakers, 1);
 
     assert_eq!(
-        accounts_tree.get::<Account>(
-            &db_txn,
-            &StakingContract::get_key_validator_staker(&validator_address, &staker_address)
-        ),
+        accounts_tree
+            .get::<Account>(
+                &db_txn,
+                &StakingContract::get_key_validator_staker(&validator_address, &staker_address)
+            )
+            .expect("complete trie"),
         Some(Account::StakingValidatorsStaker(staker_address.clone()))
     );
 
@@ -1241,10 +1251,12 @@ fn create_staker_works() {
     assert_eq!(validator.num_stakers, 0);
 
     assert_eq!(
-        accounts_tree.get::<Account>(
-            &db_txn,
-            &StakingContract::get_key_validator_staker(&validator_address, &staker_address)
-        ),
+        accounts_tree
+            .get::<Account>(
+                &db_txn,
+                &StakingContract::get_key_validator_staker(&validator_address, &staker_address)
+            )
+            .expect("complete trie"),
         None
     );
 
@@ -1451,10 +1463,15 @@ fn update_staker_works() {
     assert_eq!(new_validator.num_stakers, 1);
 
     assert_eq!(
-        accounts_tree.get::<Account>(
-            &db_txn,
-            &StakingContract::get_key_validator_staker(&other_validator_address, &staker_address)
-        ),
+        accounts_tree
+            .get::<Account>(
+                &db_txn,
+                &StakingContract::get_key_validator_staker(
+                    &other_validator_address,
+                    &staker_address
+                )
+            )
+            .expect("complete trie"),
         Some(Account::StakingValidatorsStaker(staker_address.clone()))
     );
 
@@ -1576,10 +1593,15 @@ fn update_staker_works() {
     assert_eq!(validator.num_stakers, 1);
 
     assert_eq!(
-        accounts_tree.get::<Account>(
-            &db_txn,
-            &StakingContract::get_key_validator_staker(&other_validator_address, &staker_address)
-        ),
+        accounts_tree
+            .get::<Account>(
+                &db_txn,
+                &StakingContract::get_key_validator_staker(
+                    &other_validator_address,
+                    &staker_address
+                )
+            )
+            .expect("complete trie"),
         Some(Account::StakingValidatorsStaker(staker_address.clone()))
     );
 
@@ -1676,10 +1698,12 @@ fn unstake_works() {
     );
     assert_eq!(validator.num_stakers, 1);
     assert_eq!(
-        accounts_tree.get::<Account>(
-            &db_txn,
-            &StakingContract::get_key_validator_staker(&validator_address, &staker_address)
-        ),
+        accounts_tree
+            .get::<Account>(
+                &db_txn,
+                &StakingContract::get_key_validator_staker(&validator_address, &staker_address)
+            )
+            .expect("complete trie"),
         Some(Account::StakingValidatorsStaker(staker_address.clone()))
     );
 
@@ -1746,10 +1770,12 @@ fn unstake_works() {
     );
     assert_eq!(validator.num_stakers, 0);
     assert_eq!(
-        accounts_tree.get::<Account>(
-            &db_txn,
-            &StakingContract::get_key_validator_staker(&validator_address, &staker_address)
-        ),
+        accounts_tree
+            .get::<Account>(
+                &db_txn,
+                &StakingContract::get_key_validator_staker(&validator_address, &staker_address)
+            )
+            .expect("complete trie"),
         None
     );
 
@@ -1810,10 +1836,12 @@ fn unstake_works() {
     );
     assert_eq!(validator.num_stakers, 1);
     assert_eq!(
-        accounts_tree.get::<Account>(
-            &db_txn,
-            &StakingContract::get_key_validator_staker(&validator_address, &staker_address)
-        ),
+        accounts_tree
+            .get::<Account>(
+                &db_txn,
+                &StakingContract::get_key_validator_staker(&validator_address, &staker_address)
+            )
+            .expect("complete trie"),
         Some(Account::StakingValidatorsStaker(staker_address.clone()))
     );
 
@@ -2112,11 +2140,13 @@ fn finalize_batch_inherents_work() {
     staking_contract.current_lost_rewards.insert(0);
     staking_contract.previous_lost_rewards.insert(1);
 
-    accounts_tree.put(
-        &mut db_txn,
-        &StakingContract::get_key_staking_contract(),
-        Account::Staking(staking_contract),
-    );
+    accounts_tree
+        .put(
+            &mut db_txn,
+            &StakingContract::get_key_staking_contract(),
+            Account::Staking(staking_contract),
+        )
+        .expect("complete trie");
 
     // Wrong data.
     let inherent = Inherent {
@@ -2188,11 +2218,13 @@ fn finalize_epoch_inherents_work() {
         .previous_disabled_slots
         .insert(validator_address.clone(), set_p);
 
-    accounts_tree.put(
-        &mut db_txn,
-        &StakingContract::get_key_staking_contract(),
-        Account::Staking(staking_contract),
-    );
+    accounts_tree
+        .put(
+            &mut db_txn,
+            &StakingContract::get_key_staking_contract(),
+            Account::Staking(staking_contract),
+        )
+        .expect("complete trie");
 
     // Wrong data.
     let inherent = Inherent {

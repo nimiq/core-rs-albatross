@@ -170,7 +170,10 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
 
         let contract_key = KeyNibbles::from(&transaction.contract_creation_address());
 
-        let previous_balance = match accounts_tree.get::<Account>(db_txn, &contract_key) {
+        let previous_balance = match accounts_tree
+            .get::<Account>(db_txn, &contract_key)
+            .expect("temporary until accounts rewrite")
+        {
             None => Coin::ZERO,
             Some(account) => account.balance(),
         };
@@ -186,7 +189,9 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
             transaction.value,
         );
 
-        accounts_tree.put(db_txn, &contract_key, Account::HTLC(contract.clone()));
+        accounts_tree
+            .put(db_txn, &contract_key, Account::HTLC(contract.clone()))
+            .expect("temporary until accounts rewrite");
         let logs = vec![Log::HTLCCreate {
             contract_address: transaction.recipient.clone(),
             sender: contract.sender,
@@ -231,12 +236,12 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
     ) -> Result<AccountInfo, AccountError> {
         let key = KeyNibbles::from(&transaction.sender);
 
-        let account =
-            accounts_tree
-                .get::<Account>(db_txn, &key)
-                .ok_or(AccountError::NonExistentAddress {
-                    address: transaction.sender.clone(),
-                })?;
+        let account = accounts_tree
+            .get::<Account>(db_txn, &key)
+            .expect("temporary until accounts rewrite")
+            .ok_or(AccountError::NonExistentAddress {
+                address: transaction.sender.clone(),
+            })?;
 
         let htlc = match account {
             Account::HTLC(ref value) => value,
@@ -299,11 +304,13 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
 
             Some(HTLCReceipt::from(htlc.clone()).serialize_to_vec())
         } else {
-            accounts_tree.put(
-                db_txn,
-                &key,
-                Account::HTLC(htlc.change_balance(new_balance)),
-            );
+            accounts_tree
+                .put(
+                    db_txn,
+                    &key,
+                    Account::HTLC(htlc.change_balance(new_balance)),
+                )
+                .expect("temporary until accounts rewrite");
 
             None
         };
@@ -323,11 +330,12 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
 
         let htlc = match receipt {
             None => {
-                let account = accounts_tree.get::<Account>(db_txn, &key).ok_or(
-                    AccountError::NonExistentAddress {
+                let account = accounts_tree
+                    .get::<Account>(db_txn, &key)
+                    .expect("temporary until accounts rewrite")
+                    .ok_or(AccountError::NonExistentAddress {
                         address: transaction.sender.clone(),
-                    },
-                )?;
+                    })?;
 
                 if let Account::HTLC(contract) = account {
                     contract
@@ -347,11 +355,13 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
 
         let new_balance = Account::balance_add(htlc.balance, transaction.total_value())?;
 
-        accounts_tree.put(
-            db_txn,
-            &key,
-            Account::HTLC(htlc.change_balance(new_balance)),
-        );
+        accounts_tree
+            .put(
+                db_txn,
+                &key,
+                Account::HTLC(htlc.change_balance(new_balance)),
+            )
+            .expect("temporary until accounts rewrite");
 
         // Build the revert logs
         let mut logs = vec![
@@ -397,12 +407,12 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
     ) -> Result<AccountInfo, AccountError> {
         let key = KeyNibbles::from(&transaction.sender);
 
-        let account =
-            accounts_tree
-                .get::<Account>(db_txn, &key)
-                .ok_or(AccountError::NonExistentAddress {
-                    address: transaction.sender.clone(),
-                })?;
+        let account = accounts_tree
+            .get::<Account>(db_txn, &key)
+            .expect("temporary until accounts rewrite")
+            .ok_or(AccountError::NonExistentAddress {
+                address: transaction.sender.clone(),
+            })?;
 
         let htlc = match account {
             Account::HTLC(ref value) => value,
@@ -428,11 +438,13 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
 
             Some(HTLCReceipt::from(htlc.clone()).serialize_to_vec())
         } else {
-            accounts_tree.put(
-                db_txn,
-                &key,
-                Account::HTLC(htlc.change_balance(new_balance)),
-            );
+            accounts_tree
+                .put(
+                    db_txn,
+                    &key,
+                    Account::HTLC(htlc.change_balance(new_balance)),
+                )
+                .expect("temporary until accounts rewrite");
 
             None
         };
@@ -450,11 +462,12 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
 
         let htlc = match receipt {
             None => {
-                let account = accounts_tree.get::<Account>(db_txn, &key).ok_or(
-                    AccountError::NonExistentAddress {
+                let account = accounts_tree
+                    .get::<Account>(db_txn, &key)
+                    .expect("temporary until accounts rewrite")
+                    .ok_or(AccountError::NonExistentAddress {
                         address: transaction.sender.clone(),
-                    },
-                )?;
+                    })?;
 
                 if let Account::HTLC(contract) = account {
                     contract
@@ -474,11 +487,13 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
 
         let new_balance = Account::balance_add(htlc.balance, transaction.fee)?;
 
-        accounts_tree.put(
-            db_txn,
-            &key,
-            Account::HTLC(htlc.change_balance(new_balance)),
-        );
+        accounts_tree
+            .put(
+                db_txn,
+                &key,
+                Account::HTLC(htlc.change_balance(new_balance)),
+            )
+            .expect("temporary until accounts rewrite");
 
         // Build the revert logs
         let logs = vec![Log::PayFee {
@@ -513,12 +528,12 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
     ) -> Result<Vec<Log>, AccountError> {
         let key = KeyNibbles::from(&transaction.contract_creation_address());
 
-        let account =
-            accounts_tree
-                .get::<Account>(db_txn, &key)
-                .ok_or(AccountError::NonExistentAddress {
-                    address: transaction.sender.clone(),
-                })?;
+        let account = accounts_tree
+            .get::<Account>(db_txn, &key)
+            .expect("temporary until accounts rewrite")
+            .ok_or(AccountError::NonExistentAddress {
+                address: transaction.sender.clone(),
+            })?;
 
         let htlc = match account {
             Account::HTLC(ref value) => value,
@@ -537,13 +552,15 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
             accounts_tree.remove(db_txn, &key);
         } else {
             // If the previous balance was not zero, we need to restore the basic account with the previous balance
-            accounts_tree.put(
-                db_txn,
-                &key,
-                Account::Basic(BasicAccount {
-                    balance: previous_balance,
-                }),
-            );
+            accounts_tree
+                .put(
+                    db_txn,
+                    &key,
+                    Account::Basic(BasicAccount {
+                        balance: previous_balance,
+                    }),
+                )
+                .expect("temporary until accounts rewrite");
         }
         Ok(Vec::new())
     }

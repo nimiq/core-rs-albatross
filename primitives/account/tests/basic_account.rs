@@ -84,6 +84,7 @@ fn basic_transfer_works() {
     assert_eq!(
         accounts_tree
             .get::<Account>(&db_txn, &key_sender)
+            .expect("complete trie")
             .unwrap()
             .balance(),
         Coin::from_u64_unchecked(899)
@@ -92,6 +93,7 @@ fn basic_transfer_works() {
     assert_eq!(
         accounts_tree
             .get::<Account>(&db_txn, &key_recipient)
+            .expect("complete trie")
             .unwrap()
             .balance(),
         Coin::from_u64_unchecked(1100)
@@ -145,6 +147,7 @@ fn basic_transfer_works() {
     assert_eq!(
         accounts_tree
             .get::<Account>(&db_txn, &key_sender)
+            .expect("complete trie")
             .unwrap()
             .balance(),
         Coin::from_u64_unchecked(1000)
@@ -153,6 +156,7 @@ fn basic_transfer_works() {
     assert_eq!(
         accounts_tree
             .get::<Account>(&db_txn, &key_recipient)
+            .expect("complete trie")
             .unwrap()
             .balance(),
         Coin::from_u64_unchecked(1000)
@@ -198,11 +202,17 @@ fn create_and_prune_works() {
     assert_eq!(account_info.receipt, None);
     assert!(account_info.logs.is_empty());
 
-    assert_eq!(accounts_tree.get::<Account>(&db_txn, &key_sender), None);
+    assert_eq!(
+        accounts_tree
+            .get::<Account>(&db_txn, &key_sender)
+            .expect("complete trie"),
+        None
+    );
 
     assert_eq!(
         accounts_tree
             .get::<Account>(&db_txn, &key_recipient)
+            .expect("complete trie")
             .unwrap()
             .balance(),
         Coin::from_u64_unchecked(999)
@@ -235,33 +245,43 @@ fn create_and_prune_works() {
     assert_eq!(
         accounts_tree
             .get::<Account>(&db_txn, &key_sender)
+            .expect("complete trie")
             .unwrap()
             .balance(),
         Coin::from_u64_unchecked(1000)
     );
 
-    assert_eq!(accounts_tree.get::<Account>(&db_txn, &key_recipient), None);
+    assert_eq!(
+        accounts_tree
+            .get::<Account>(&db_txn, &key_recipient)
+            .expect("complete trie"),
+        None
+    );
 }
 
 fn init_tree(accounts_tree: &AccountsTrie, db_txn: &mut WriteTransaction) {
     let key_1 = KeyNibbles::from(&Address::from_any_str(ADDRESS_1).unwrap());
     let key_2 = KeyNibbles::from(&Address::from_any_str(ADDRESS_2).unwrap());
 
-    accounts_tree.put(
-        db_txn,
-        &key_1,
-        Account::Basic(BasicAccount {
-            balance: Coin::from_u64_unchecked(1000),
-        }),
-    );
+    accounts_tree
+        .put(
+            db_txn,
+            &key_1,
+            Account::Basic(BasicAccount {
+                balance: Coin::from_u64_unchecked(1000),
+            }),
+        )
+        .expect("complete trie");
 
-    accounts_tree.put(
-        db_txn,
-        &key_2,
-        Account::Basic(BasicAccount {
-            balance: Coin::from_u64_unchecked(1000),
-        }),
-    );
+    accounts_tree
+        .put(
+            db_txn,
+            &key_2,
+            Account::Basic(BasicAccount {
+                balance: Coin::from_u64_unchecked(1000),
+            }),
+        )
+        .expect("complete trie");
 }
 
 fn make_signed_transaction(value: u64, recipient: Address) -> Transaction {

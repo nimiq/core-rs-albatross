@@ -161,10 +161,13 @@ fn it_can_create_contract_from_transaction() {
 
     VestingContract::create(&accounts_tree, &mut db_txn, &transaction, 0, 0);
 
-    match accounts_tree.get(
-        &db_txn,
-        &KeyNibbles::from(&transaction.contract_creation_address()),
-    ) {
+    match accounts_tree
+        .get(
+            &db_txn,
+            &KeyNibbles::from(&transaction.contract_creation_address()),
+        )
+        .expect("complete trie")
+    {
         Some(Account::Vesting(contract)) => {
             assert_eq!(contract.balance, 100.try_into().unwrap());
             assert_eq!(contract.owner, owner);
@@ -187,10 +190,13 @@ fn it_can_create_contract_from_transaction() {
 
     VestingContract::create(&accounts_tree, &mut db_txn, &transaction, 0, 0);
 
-    match accounts_tree.get(
-        &db_txn,
-        &KeyNibbles::from(&transaction.contract_creation_address()),
-    ) {
+    match accounts_tree
+        .get(
+            &db_txn,
+            &KeyNibbles::from(&transaction.contract_creation_address()),
+        )
+        .expect("complete trie")
+    {
         Some(Account::Vesting(contract)) => {
             assert_eq!(contract.balance, 100.try_into().unwrap());
             assert_eq!(contract.owner, owner);
@@ -214,10 +220,13 @@ fn it_can_create_contract_from_transaction() {
 
     VestingContract::create(&accounts_tree, &mut db_txn, &transaction, 0, 0);
 
-    match accounts_tree.get(
-        &db_txn,
-        &KeyNibbles::from(&transaction.contract_creation_address()),
-    ) {
+    match accounts_tree
+        .get(
+            &db_txn,
+            &KeyNibbles::from(&transaction.contract_creation_address()),
+        )
+        .expect("complete trie")
+    {
         Some(Account::Vesting(contract)) => {
             assert_eq!(contract.balance, 100.try_into().unwrap());
             assert_eq!(contract.owner, owner);
@@ -334,11 +343,13 @@ fn it_can_apply_and_revert_valid_transaction() {
         total_amount: 1000.try_into().unwrap(),
     };
 
-    accounts_tree.put(
-        &mut db_txn,
-        &KeyNibbles::from(&[1u8; 20][..]),
-        Account::Vesting(start_contract.clone()),
-    );
+    accounts_tree
+        .put(
+            &mut db_txn,
+            &KeyNibbles::from(&[1u8; 20][..]),
+            Account::Vesting(start_contract.clone()),
+        )
+        .expect("complete trie");
 
     let mut tx = Transaction::new_basic(
         Address::from([1u8; 20]),
@@ -358,6 +369,7 @@ fn it_can_apply_and_revert_valid_transaction() {
     assert_eq!(
         accounts_tree
             .get::<Account>(&db_txn, &KeyNibbles::from(&[1u8; 20][..]))
+            .expect("complete trie")
             .unwrap()
             .balance(),
         800.try_into().unwrap()
@@ -367,6 +379,7 @@ fn it_can_apply_and_revert_valid_transaction() {
     assert_eq!(
         accounts_tree
             .get::<Account>(&db_txn, &KeyNibbles::from(&[1u8; 20][..]))
+            .expect("complete trie")
             .unwrap(),
         Account::Vesting(start_contract)
     );
@@ -380,16 +393,19 @@ fn it_can_apply_and_revert_valid_transaction() {
         total_amount: 1000.try_into().unwrap(),
     };
 
-    accounts_tree.put(
-        &mut db_txn,
-        &KeyNibbles::from(&[1u8; 20][..]),
-        Account::Vesting(start_contract.clone()),
-    );
+    accounts_tree
+        .put(
+            &mut db_txn,
+            &KeyNibbles::from(&[1u8; 20][..]),
+            Account::Vesting(start_contract.clone()),
+        )
+        .expect("complete trie");
 
     VestingContract::commit_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 1, 200).unwrap();
     assert_eq!(
         accounts_tree
             .get::<Account>(&db_txn, &KeyNibbles::from(&[1u8; 20][..]))
+            .expect("complete trie")
             .unwrap()
             .balance(),
         800.try_into().unwrap()
@@ -399,6 +415,7 @@ fn it_can_apply_and_revert_valid_transaction() {
     assert_eq!(
         accounts_tree
             .get::<Account>(&db_txn, &KeyNibbles::from(&[1u8; 20][..]))
+            .expect("complete trie")
             .unwrap(),
         Account::Vesting(start_contract)
     );
@@ -431,11 +448,13 @@ fn it_refuses_invalid_transaction() {
         total_amount: 1000.try_into().unwrap(),
     };
 
-    accounts_tree.put(
-        &mut db_txn,
-        &KeyNibbles::from(&[1u8; 20][..]),
-        Account::Vesting(start_contract),
-    );
+    accounts_tree
+        .put(
+            &mut db_txn,
+            &KeyNibbles::from(&[1u8; 20][..]),
+            Account::Vesting(start_contract),
+        )
+        .expect("complete trie");
 
     let mut tx = Transaction::new_basic(
         Address::from([1u8; 20]),

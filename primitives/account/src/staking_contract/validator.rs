@@ -121,17 +121,21 @@ impl StakingContract {
         };
 
         // All checks passed, not allowed to fail from here on!
-        accounts_tree.put(
-            db_txn,
-            &StakingContract::get_key_staking_contract(),
-            Account::Staking(staking_contract),
-        );
+        accounts_tree
+            .put(
+                db_txn,
+                &StakingContract::get_key_staking_contract(),
+                Account::Staking(staking_contract),
+            )
+            .expect("temporary until accounts rewrite");
 
-        accounts_tree.put(
-            db_txn,
-            &StakingContract::get_key_validator(validator_address),
-            Account::StakingValidator(validator),
-        );
+        accounts_tree
+            .put(
+                db_txn,
+                &StakingContract::get_key_validator(validator_address),
+                Account::StakingValidator(validator),
+            )
+            .expect("temporary until accounts rewrite");
 
         Ok(OperationInfo {
             receipt: None,
@@ -167,11 +171,13 @@ impl StakingContract {
         staking_contract.active_validators.remove(validator_address);
 
         // All checks passed, not allowed to fail from here on!
-        accounts_tree.put(
-            db_txn,
-            &StakingContract::get_key_staking_contract(),
-            Account::Staking(staking_contract),
-        );
+        accounts_tree
+            .put(
+                db_txn,
+                &StakingContract::get_key_staking_contract(),
+                Account::Staking(staking_contract),
+            )
+            .expect("temporary until accounts rewrite");
 
         accounts_tree.remove(
             db_txn,
@@ -241,11 +247,13 @@ impl StakingContract {
         }
 
         // All checks passed, not allowed to fail from here on!
-        accounts_tree.put(
-            db_txn,
-            &StakingContract::get_key_validator(validator_address),
-            Account::StakingValidator(validator.clone()),
-        );
+        accounts_tree
+            .put(
+                db_txn,
+                &StakingContract::get_key_validator(validator_address),
+                Account::StakingValidator(validator.clone()),
+            )
+            .expect("temporary until accounts rewrite");
         let logs = vec![Log::UpdateValidator {
             validator_address: validator_address.clone(),
             old_reward_address: receipt.old_reward_address.clone(),
@@ -290,11 +298,13 @@ impl StakingContract {
         validator.signal_data = receipt.old_signal_data;
 
         // All checks passed, not allowed to fail from here on!
-        accounts_tree.put(
-            db_txn,
-            &StakingContract::get_key_validator(validator_address),
-            Account::StakingValidator(validator),
-        );
+        accounts_tree
+            .put(
+                db_txn,
+                &StakingContract::get_key_validator(validator_address),
+                Account::StakingValidator(validator),
+            )
+            .expect("temporary until accounts rewrite");
 
         Ok(vec![log])
     }
@@ -366,17 +376,21 @@ impl StakingContract {
         let parked_set = staking_contract.parked_set.remove(validator_address);
 
         // All checks passed, not allowed to fail from here on!
-        accounts_tree.put(
-            db_txn,
-            &StakingContract::get_key_staking_contract(),
-            Account::Staking(staking_contract),
-        );
+        accounts_tree
+            .put(
+                db_txn,
+                &StakingContract::get_key_staking_contract(),
+                Account::Staking(staking_contract),
+            )
+            .expect("temporary until accounts rewrite");
 
-        accounts_tree.put(
-            db_txn,
-            &StakingContract::get_key_validator(validator_address),
-            Account::StakingValidator(validator),
-        );
+        accounts_tree
+            .put(
+                db_txn,
+                &StakingContract::get_key_validator(validator_address),
+                Account::StakingValidator(validator),
+            )
+            .expect("temporary until accounts rewrite");
 
         Ok(OperationInfo::with_receipt(
             InactivateValidatorReceipt {
@@ -428,17 +442,21 @@ impl StakingContract {
         }
 
         // All checks passed, not allowed to fail from here on!
-        accounts_tree.put(
-            db_txn,
-            &StakingContract::get_key_staking_contract(),
-            Account::Staking(staking_contract),
-        );
+        accounts_tree
+            .put(
+                db_txn,
+                &StakingContract::get_key_staking_contract(),
+                Account::Staking(staking_contract),
+            )
+            .expect("temporary until accounts rewrite");
 
-        accounts_tree.put(
-            db_txn,
-            &StakingContract::get_key_validator(validator_address),
-            Account::StakingValidator(validator),
-        );
+        accounts_tree
+            .put(
+                db_txn,
+                &StakingContract::get_key_validator(validator_address),
+                Account::StakingValidator(validator),
+            )
+            .expect("temporary until accounts rewrite");
 
         Ok(vec![Log::InactivateValidator {
             validator_address: validator_address.clone(),
@@ -515,17 +533,21 @@ impl StakingContract {
             .insert(validator_address.clone(), validator.balance);
 
         // All checks passed, not allowed to fail from here on!
-        accounts_tree.put(
-            db_txn,
-            &StakingContract::get_key_staking_contract(),
-            Account::Staking(staking_contract),
-        );
+        accounts_tree
+            .put(
+                db_txn,
+                &StakingContract::get_key_staking_contract(),
+                Account::Staking(staking_contract),
+            )
+            .expect("temporary until accounts rewrite");
 
-        accounts_tree.put(
-            db_txn,
-            &StakingContract::get_key_validator(validator_address),
-            Account::StakingValidator(validator),
-        );
+        accounts_tree
+            .put(
+                db_txn,
+                &StakingContract::get_key_validator(validator_address),
+                Account::StakingValidator(validator),
+            )
+            .expect("temporary until accounts rewrite");
 
         Ok(OperationInfo::with_receipt(
             receipt,
@@ -566,17 +588,21 @@ impl StakingContract {
         staking_contract.active_validators.remove(validator_address);
 
         // All checks passed, not allowed to fail from here on!
-        accounts_tree.put(
-            db_txn,
-            &StakingContract::get_key_staking_contract(),
-            Account::Staking(staking_contract),
-        );
+        accounts_tree
+            .put(
+                db_txn,
+                &StakingContract::get_key_staking_contract(),
+                Account::Staking(staking_contract),
+            )
+            .expect("temporary until accounts rewrite");
 
-        accounts_tree.put(
-            db_txn,
-            &StakingContract::get_key_validator(validator_address),
-            Account::StakingValidator(validator),
-        );
+        accounts_tree
+            .put(
+                db_txn,
+                &StakingContract::get_key_validator(validator_address),
+                Account::StakingValidator(validator),
+            )
+            .expect("temporary until accounts rewrite");
 
         Ok(vec![Log::ReactivateValidator {
             validator_address: validator_address.clone(),
@@ -654,11 +680,13 @@ impl StakingContract {
         };
 
         // All checks passed, not allowed to fail from here on!
-        accounts_tree.put(
-            db_txn,
-            &StakingContract::get_key_staking_contract(),
-            Account::Staking(staking_contract),
-        );
+        accounts_tree
+            .put(
+                db_txn,
+                &StakingContract::get_key_staking_contract(),
+                Account::Staking(staking_contract),
+            )
+            .expect("temporary until accounts rewrite");
 
         Ok(OperationInfo::with_receipt(
             UnparkValidatorReceipt {
@@ -705,11 +733,13 @@ impl StakingContract {
         }
 
         // All checks passed, not allowed to fail from here on!
-        accounts_tree.put(
-            db_txn,
-            &StakingContract::get_key_staking_contract(),
-            Account::Staking(staking_contract),
-        );
+        accounts_tree
+            .put(
+                db_txn,
+                &StakingContract::get_key_staking_contract(),
+                Account::Staking(staking_contract),
+            )
+            .expect("temporary until accounts rewrite");
 
         Ok(vec![Log::UnparkValidator {
             validator_address: validator_address.clone(),
@@ -810,11 +840,13 @@ impl StakingContract {
 
                     staker.delegation = None;
 
-                    accounts_tree.put(
-                        db_txn,
-                        &StakingContract::get_key_staker(&staker_address),
-                        Account::StakingStaker(staker),
-                    );
+                    accounts_tree
+                        .put(
+                            db_txn,
+                            &StakingContract::get_key_staker(&staker_address),
+                            Account::StakingStaker(staker),
+                        )
+                        .expect("temporary until accounts rewrite");
 
                     // Remove the staker entry from the validator.
                     accounts_tree.remove(
@@ -844,11 +876,13 @@ impl StakingContract {
 
         staking_contract.balance = Account::balance_sub(staking_contract.balance, deposit)?;
 
-        accounts_tree.put(
-            db_txn,
-            &StakingContract::get_key_staking_contract(),
-            Account::Staking(staking_contract),
-        );
+        accounts_tree
+            .put(
+                db_txn,
+                &StakingContract::get_key_staking_contract(),
+                Account::Staking(staking_contract),
+            )
+            .expect("temporary until accounts rewrite");
 
         // Return the receipt.
         Ok(OperationInfo::with_receipt(receipt, logs))
@@ -880,18 +914,22 @@ impl StakingContract {
             // Update the staker.
             staker.delegation = Some(validator_address.clone());
 
-            accounts_tree.put(
-                db_txn,
-                &StakingContract::get_key_staker(&staker_address),
-                Account::StakingStaker(staker),
-            );
+            accounts_tree
+                .put(
+                    db_txn,
+                    &StakingContract::get_key_staker(&staker_address),
+                    Account::StakingStaker(staker),
+                )
+                .expect("temporary until accounts rewrite");
 
             // Add the staker entry to the validator.
-            accounts_tree.put(
-                db_txn,
-                &StakingContract::get_key_validator_staker(validator_address, &staker_address),
-                Account::StakingValidatorsStaker(staker_address.clone()),
-            );
+            accounts_tree
+                .put(
+                    db_txn,
+                    &StakingContract::get_key_validator_staker(validator_address, &staker_address),
+                    Account::StakingValidatorsStaker(staker_address.clone()),
+                )
+                .expect("temporary until accounts rewrite");
         }
 
         // Re-add the validator entry.
@@ -907,11 +945,13 @@ impl StakingContract {
             deposit: Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT),
         };
 
-        accounts_tree.put(
-            db_txn,
-            &StakingContract::get_key_validator(validator_address),
-            Account::StakingValidator(validator.clone()),
-        );
+        accounts_tree
+            .put(
+                db_txn,
+                &StakingContract::get_key_validator(validator_address),
+                Account::StakingValidator(validator.clone()),
+            )
+            .expect("temporary until accounts rewrite");
 
         // Get the staking contract main and update it.
         let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
@@ -920,11 +960,13 @@ impl StakingContract {
 
         staking_contract.balance = Account::balance_add(staking_contract.balance, deposit)?;
 
-        accounts_tree.put(
-            db_txn,
-            &StakingContract::get_key_staking_contract(),
-            Account::Staking(staking_contract),
-        );
+        accounts_tree
+            .put(
+                db_txn,
+                &StakingContract::get_key_staking_contract(),
+                Account::Staking(staking_contract),
+            )
+            .expect("temporary until accounts rewrite");
 
         Ok(vec![Log::DeleteValidator {
             validator_address: validator_address.clone(),

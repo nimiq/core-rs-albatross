@@ -38,7 +38,9 @@ impl AccountTransactionInteraction for BasicAccount {
     ) -> Result<AccountInfo, AccountError> {
         let key = KeyNibbles::from(&transaction.recipient);
 
-        let leaf = accounts_tree.get::<Account>(db_txn, &key);
+        let leaf = accounts_tree
+            .get::<Account>(db_txn, &key)
+            .expect("temporary until accounts rewrite");
 
         // Implicitly also checks that the address is in fact from a basic account.
         let current_balance = match leaf {
@@ -54,13 +56,15 @@ impl AccountTransactionInteraction for BasicAccount {
 
         let new_balance = Account::balance_add(current_balance, transaction.value)?;
 
-        accounts_tree.put(
-            db_txn,
-            &key,
-            Account::Basic(BasicAccount {
-                balance: new_balance,
-            }),
-        );
+        accounts_tree
+            .put(
+                db_txn,
+                &key,
+                Account::Basic(BasicAccount {
+                    balance: new_balance,
+                }),
+            )
+            .expect("temporary until accounts rewrite");
 
         Ok(AccountInfo::new(None, Vec::new()))
     }
@@ -80,25 +84,27 @@ impl AccountTransactionInteraction for BasicAccount {
 
         let key = KeyNibbles::from(&transaction.recipient);
 
-        let account =
-            accounts_tree
-                .get::<Account>(db_txn, &key)
-                .ok_or(AccountError::NonExistentAddress {
-                    address: transaction.recipient.clone(),
-                })?;
+        let account = accounts_tree
+            .get::<Account>(db_txn, &key)
+            .expect("temporary until accounts rewrite")
+            .ok_or(AccountError::NonExistentAddress {
+                address: transaction.recipient.clone(),
+            })?;
 
         let new_balance = Account::balance_sub(account.balance(), transaction.value)?;
 
         if new_balance.is_zero() {
             accounts_tree.remove(db_txn, &key);
         } else {
-            accounts_tree.put(
-                db_txn,
-                &key,
-                Account::Basic(BasicAccount {
-                    balance: new_balance,
-                }),
-            );
+            accounts_tree
+                .put(
+                    db_txn,
+                    &key,
+                    Account::Basic(BasicAccount {
+                        balance: new_balance,
+                    }),
+                )
+                .expect("temporary until accounts rewrite");
         }
 
         Ok(Vec::new())
@@ -115,6 +121,7 @@ impl AccountTransactionInteraction for BasicAccount {
 
         let account = accounts_tree
             .get::<Account>(db_txn, &key)
+            .expect("temporary until accounts rewrite")
             .or_else(|| {
                 if transaction.total_value() != Coin::ZERO {
                     None
@@ -140,13 +147,15 @@ impl AccountTransactionInteraction for BasicAccount {
         if new_balance.is_zero() {
             accounts_tree.remove(db_txn, &key);
         } else {
-            accounts_tree.put(
-                db_txn,
-                &key,
-                Account::Basic(BasicAccount {
-                    balance: new_balance,
-                }),
-            );
+            accounts_tree
+                .put(
+                    db_txn,
+                    &key,
+                    Account::Basic(BasicAccount {
+                        balance: new_balance,
+                    }),
+                )
+                .expect("temporary until accounts rewrite");
         }
 
         let logs = vec![
@@ -177,7 +186,9 @@ impl AccountTransactionInteraction for BasicAccount {
 
         let key = KeyNibbles::from(&transaction.sender);
 
-        let leaf = accounts_tree.get::<Account>(db_txn, &key);
+        let leaf = accounts_tree
+            .get::<Account>(db_txn, &key)
+            .expect("temporary until accounts rewrite");
 
         let current_balance = match leaf {
             None => Coin::ZERO,
@@ -201,13 +212,15 @@ impl AccountTransactionInteraction for BasicAccount {
             return Ok(logs);
         }
 
-        accounts_tree.put(
-            db_txn,
-            &key,
-            Account::Basic(BasicAccount {
-                balance: new_balance,
-            }),
-        );
+        accounts_tree
+            .put(
+                db_txn,
+                &key,
+                Account::Basic(BasicAccount {
+                    balance: new_balance,
+                }),
+            )
+            .expect("temporary until accounts rewrite");
 
         Ok(logs)
     }
@@ -222,6 +235,7 @@ impl AccountTransactionInteraction for BasicAccount {
 
         let account = accounts_tree
             .get::<Account>(db_txn, &key)
+            .expect("temporary until accounts rewrite")
             .or_else(|| {
                 if transaction.total_value() != Coin::ZERO {
                     None
@@ -247,13 +261,15 @@ impl AccountTransactionInteraction for BasicAccount {
         if new_balance.is_zero() {
             accounts_tree.remove(db_txn, &key);
         } else {
-            accounts_tree.put(
-                db_txn,
-                &key,
-                Account::Basic(BasicAccount {
-                    balance: new_balance,
-                }),
-            );
+            accounts_tree
+                .put(
+                    db_txn,
+                    &key,
+                    Account::Basic(BasicAccount {
+                        balance: new_balance,
+                    }),
+                )
+                .expect("temporary until accounts rewrite");
         }
 
         let logs = vec![Log::PayFee {
@@ -275,7 +291,9 @@ impl AccountTransactionInteraction for BasicAccount {
 
         let key = KeyNibbles::from(&transaction.sender);
 
-        let leaf = accounts_tree.get::<Account>(db_txn, &key);
+        let leaf = accounts_tree
+            .get::<Account>(db_txn, &key)
+            .expect("temporary until accounts rewrite");
 
         let current_balance = match leaf {
             None => Coin::ZERO,
@@ -292,13 +310,15 @@ impl AccountTransactionInteraction for BasicAccount {
             return Ok(logs);
         }
 
-        accounts_tree.put(
-            db_txn,
-            &key,
-            Account::Basic(BasicAccount {
-                balance: new_balance,
-            }),
-        );
+        accounts_tree
+            .put(
+                db_txn,
+                &key,
+                Account::Basic(BasicAccount {
+                    balance: new_balance,
+                }),
+            )
+            .expect("temporary until accounts rewrite");
 
         Ok(logs)
     }
@@ -335,7 +355,9 @@ impl AccountInherentInteraction for BasicAccount {
 
         let key = KeyNibbles::from(&inherent.target);
 
-        let leaf = accounts_tree.get::<Account>(db_txn, &key);
+        let leaf = accounts_tree
+            .get::<Account>(db_txn, &key)
+            .expect("temporary until accounts rewrite");
 
         let current_balance = match leaf {
             None => Coin::ZERO,
@@ -344,13 +366,15 @@ impl AccountInherentInteraction for BasicAccount {
 
         let new_balance = Account::balance_add(current_balance, inherent.value)?;
 
-        accounts_tree.put(
-            db_txn,
-            &key,
-            Account::Basic(BasicAccount {
-                balance: new_balance,
-            }),
-        );
+        accounts_tree
+            .put(
+                db_txn,
+                &key,
+                Account::Basic(BasicAccount {
+                    balance: new_balance,
+                }),
+            )
+            .expect("temporary until accounts rewrite");
 
         let logs = vec![Log::PayoutReward {
             to: inherent.target.clone(),
@@ -377,22 +401,24 @@ impl AccountInherentInteraction for BasicAccount {
 
         let key = KeyNibbles::from(&inherent.target);
 
-        let account =
-            accounts_tree
-                .get::<Account>(db_txn, &key)
-                .ok_or(AccountError::NonExistentAddress {
-                    address: inherent.target.clone(),
-                })?;
+        let account = accounts_tree
+            .get::<Account>(db_txn, &key)
+            .expect("temporary until accounts rewrite")
+            .ok_or(AccountError::NonExistentAddress {
+                address: inherent.target.clone(),
+            })?;
 
         let new_balance = Account::balance_sub(account.balance(), inherent.value)?;
 
-        accounts_tree.put(
-            db_txn,
-            &key,
-            Account::Basic(BasicAccount {
-                balance: new_balance,
-            }),
-        );
+        accounts_tree
+            .put(
+                db_txn,
+                &key,
+                Account::Basic(BasicAccount {
+                    balance: new_balance,
+                }),
+            )
+            .expect("temporary until accounts rewrite");
 
         Ok(vec![Log::PayoutReward {
             to: inherent.target.clone(),
