@@ -835,13 +835,16 @@ fn it_commits_valid_and_failing_txns() {
     let key_1 = KeyNibbles::from(&Address::from(&key_pair.public));
 
     // Basic account where fees are deducted for failing txns
-    accounts.tree.put(
-        &mut db_txn,
-        &key_1,
-        Account::Basic(BasicAccount {
-            balance: Coin::from_u64_unchecked(1000),
-        }),
-    );
+    accounts
+        .tree
+        .put(
+            &mut db_txn,
+            &key_1,
+            Account::Basic(BasicAccount {
+                balance: Coin::from_u64_unchecked(1000),
+            }),
+        )
+        .expect("complete trie");
 
     // Vesting Contract
     let start_contract = VestingContract {
@@ -853,11 +856,14 @@ fn it_commits_valid_and_failing_txns() {
         total_amount: 1000.try_into().unwrap(),
     };
 
-    accounts.tree.put(
-        &mut db_txn,
-        &KeyNibbles::from(&[1u8; 20][..]),
-        Account::Vesting(start_contract),
-    );
+    accounts
+        .tree
+        .put(
+            &mut db_txn,
+            &KeyNibbles::from(&[1u8; 20][..]),
+            Account::Vesting(start_contract),
+        )
+        .expect("complete trie");
 
     db_txn.commit();
 

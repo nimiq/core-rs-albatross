@@ -1,4 +1,6 @@
 use std::cmp;
+use std::error::Error;
+use std::fmt;
 use std::mem;
 use std::ops;
 use std::sync::atomic;
@@ -78,6 +80,17 @@ impl CountUpdates {
         apply_difference(&mut root_data.num_leaves, self.leaves);
     }
 }
+
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct IncompleteTrie;
+
+impl fmt::Display for IncompleteTrie {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        "the operation affects the incomplete part of the trie".fmt(f)
+    }
+}
+
+impl Error for IncompleteTrie {}
 
 impl MerkleRadixTrie {
     /// Start a new Merkle Radix Trie with the given Environment and the given name.
@@ -191,9 +204,20 @@ impl MerkleRadixTrie {
 
     /// Get the value at the given key. If there's no leaf or hybrid node at the given key then it
     /// returns None.
-    pub fn get<T: Deserialize>(&self, txn: &Transaction, key: &KeyNibbles) -> Option<T> {
+    pub fn get<T: Deserialize>(
+        &self,
+        txn: &Transaction,
+        key: &KeyNibbles,
+    ) -> Result<Option<T>, IncompleteTrie> {
+        self.check_within_complete_part(txn, key)?;
+        Ok(self
+            .get_raw(txn, key)
+            .map(|v| T::deserialize_from_vec(&v).unwrap()))
+    }
+
+    fn get_raw(&self, txn: &Transaction, key: &KeyNibbles) -> Option<Vec<u8>> {
         let node: TrieNode = txn.get(&self.db, key)?;
-        Some(T::deserialize_from_vec(&node.value?).unwrap())
+        node.value
     }
 
     /// Returns a chunk of the Merkle Radix Trie that starts at the key `start` (which might or not
@@ -214,8 +238,15 @@ impl MerkleRadixTrie {
             .collect()
     }
 
-    pub fn put<T: Serialize>(&self, txn: &mut WriteTransaction, key: &KeyNibbles, value: T) {
-        self.put_raw(txn, key, value.serialize_to_vec())
+    pub fn put<T: Serialize>(
+        &self,
+        txn: &mut WriteTransaction,
+        key: &KeyNibbles,
+        value: T,
+    ) -> Result<(), IncompleteTrie> {
+        self.check_within_complete_part(txn, key)?;
+        self.put_raw(txn, key, value.serialize_to_vec());
+        Ok(())
     }
 
     /// Insert a value into the Merkle Radix Trie at the given key. If the key already exists then
@@ -979,6 +1010,26 @@ impl MerkleRadixTrie {
         self.update_hashes(txn, &KeyNibbles::ROOT);
     }
 
+    fn check_within_complete_part(
+        &self,
+        txn: &Transaction,
+        key: &KeyNibbles,
+    ) -> Result<(), IncompleteTrie> {
+        let is_in_complete_part = self
+            .get_root(txn)
+            .expect("trie needs root node")
+            .root_data
+            .expect("root node needs root data")
+            .incomplete
+            .map(|r| r.contains(key))
+            .unwrap_or(true);
+        if is_in_complete_part {
+            Ok(())
+        } else {
+            Err(IncompleteTrie)
+        }
+    }
+
     /// Returns the root node, if there is one.
     fn get_root(&self, txn: &Transaction) -> Option<TrieNode> {
         txn.get(&self.db, &KeyNibbles::ROOT)
@@ -1176,41 +1227,41 @@ mod tests {
 
         assert_eq!(trie.count_nodes(&txn), (0, 0, 0));
 
-        trie.put(&mut txn, &key_1, 80085);
+        trie.put(&mut txn, &key_1, 80085).expect("complete trie");
         assert_eq!(trie.count_nodes(&txn), (0, 0, 1));
-        trie.put(&mut txn, &key_2, 999);
+        trie.put(&mut txn, &key_2, 999).expect("complete trie");
         assert_eq!(trie.count_nodes(&txn), (1, 0, 2));
-        trie.put(&mut txn, &key_3, 1337);
+        trie.put(&mut txn, &key_3, 1337).expect("complete trie");
 
         assert_eq!(trie.count_nodes(&txn), (2, 0, 3));
-        assert_eq!(trie.get(&txn, &key_1), Some(80085));
-        assert_eq!(trie.get(&txn, &key_2), Some(999));
-        assert_eq!(trie.get(&txn, &key_3), Some(1337));
-        assert_eq!(trie.get(&txn, &key_4), None::<i32>);
+        assert_eq!(trie.get(&txn, &key_1).expect("complete trie"), Some(80085));
+        assert_eq!(trie.get(&txn, &key_2).expect("complete trie"), Some(999));
+        assert_eq!(trie.get(&txn, &key_3).expect("complete trie"), Some(1337));
+        assert_eq!(trie.get(&txn, &key_4).expect("complete trie"), None::<i32>);
 
         trie.remove(&mut txn, &key_4);
         assert_eq!(trie.count_nodes(&txn), (2, 0, 3));
-        assert_eq!(trie.get(&txn, &key_1), Some(80085));
-        assert_eq!(trie.get(&txn, &key_2), Some(999));
-        assert_eq!(trie.get(&txn, &key_3), Some(1337));
+        assert_eq!(trie.get(&txn, &key_1).expect("complete trie"), Some(80085));
+        assert_eq!(trie.get(&txn, &key_2).expect("complete trie"), Some(999));
+        assert_eq!(trie.get(&txn, &key_3).expect("complete trie"), Some(1337));
 
         trie.remove(&mut txn, &key_1);
         assert_eq!(trie.count_nodes(&txn), (1, 0, 2));
-        assert_eq!(trie.get(&txn, &key_1), None::<i32>);
-        assert_eq!(trie.get(&txn, &key_2), Some(999));
-        assert_eq!(trie.get(&txn, &key_3), Some(1337));
+        assert_eq!(trie.get(&txn, &key_1).expect("complete trie"), None::<i32>);
+        assert_eq!(trie.get(&txn, &key_2).expect("complete trie"), Some(999));
+        assert_eq!(trie.get(&txn, &key_3).expect("complete trie"), Some(1337));
 
         trie.remove(&mut txn, &key_2);
         assert_eq!(trie.count_nodes(&txn), (0, 0, 1));
-        assert_eq!(trie.get(&txn, &key_1), None::<i32>);
-        assert_eq!(trie.get(&txn, &key_2), None::<i32>);
-        assert_eq!(trie.get(&txn, &key_3), Some(1337));
+        assert_eq!(trie.get(&txn, &key_1).expect("complete trie"), None::<i32>);
+        assert_eq!(trie.get(&txn, &key_2).expect("complete trie"), None::<i32>);
+        assert_eq!(trie.get(&txn, &key_3).expect("complete trie"), Some(1337));
 
         trie.remove(&mut txn, &key_3);
         assert_eq!(trie.count_nodes(&txn), (0, 0, 0));
-        assert_eq!(trie.get(&txn, &key_1), None::<i32>);
-        assert_eq!(trie.get(&txn, &key_2), None::<i32>);
-        assert_eq!(trie.get(&txn, &key_3), None::<i32>);
+        assert_eq!(trie.get(&txn, &key_1).expect("complete trie"), None::<i32>);
+        assert_eq!(trie.get(&txn, &key_2).expect("complete trie"), None::<i32>);
+        assert_eq!(trie.get(&txn, &key_3).expect("complete trie"), None::<i32>);
     }
 
     #[test]
@@ -1224,9 +1275,9 @@ mod tests {
         let trie = MerkleRadixTrie::new(env.clone(), "database");
         let mut txn = WriteTransaction::new(&env);
 
-        trie.put(&mut txn, &key_1, 9);
-        trie.put(&mut txn, &key_2, 8);
-        trie.put(&mut txn, &key_3, 7);
+        trie.put(&mut txn, &key_1, 9).expect("complete trie");
+        trie.put(&mut txn, &key_2, 8).expect("complete trie");
+        trie.put(&mut txn, &key_3, 7).expect("complete trie");
         trie.update_root(&mut txn);
 
         let proof = trie.get_proof(&txn, vec![&key_1, &key_2, &key_3]).unwrap();
@@ -1271,9 +1322,9 @@ mod tests {
         let trie = MerkleRadixTrie::new(env.clone(), "database");
         let mut txn = WriteTransaction::new(&env);
 
-        trie.put(&mut txn, &key_1, 9);
-        trie.put(&mut txn, &key_2, 8);
-        trie.put(&mut txn, &key_3, 7);
+        trie.put(&mut txn, &key_1, 9).expect("complete trie");
+        trie.put(&mut txn, &key_2, 8).expect("complete trie");
+        trie.put(&mut txn, &key_3, 7).expect("complete trie");
         trie.update_root(&mut txn);
 
         let chunk = trie.get_chunk_proof(&txn, &KeyNibbles::ROOT, 100).unwrap();
@@ -1311,55 +1362,55 @@ mod tests {
 
         let initial_hash = trie.root_hash(&txn);
         assert_eq!(trie.count_nodes(&txn), (0, 0, 0));
-        trie.put(&mut txn, &key_1, 80085);
+        trie.put(&mut txn, &key_1, 80085).expect("complete trie");
         assert_eq!(trie.count_nodes(&txn), (0, 0, 1));
-        trie.put(&mut txn, &key_2, 999);
+        trie.put(&mut txn, &key_2, 999).expect("complete trie");
         assert_eq!(trie.count_nodes(&txn), (0, 1, 1));
-        trie.put(&mut txn, &key_3, 1337);
+        trie.put(&mut txn, &key_3, 1337).expect("complete trie");
         assert_eq!(trie.count_nodes(&txn), (0, 2, 1));
-        trie.put(&mut txn, &key_4, 6969);
+        trie.put(&mut txn, &key_4, 6969).expect("complete trie");
 
         assert_eq!(trie.count_nodes(&txn), (0, 2, 2));
-        assert_eq!(trie.get(&txn, &key_1), Some(80085));
-        assert_eq!(trie.get(&txn, &key_2), Some(999));
-        assert_eq!(trie.get(&txn, &key_3), Some(1337));
-        assert_eq!(trie.get(&txn, &key_4), Some(6969));
-        assert_eq!(trie.get(&txn, &key_5), None::<i32>);
+        assert_eq!(trie.get(&txn, &key_1).expect("complete trie"), Some(80085));
+        assert_eq!(trie.get(&txn, &key_2).expect("complete trie"), Some(999));
+        assert_eq!(trie.get(&txn, &key_3).expect("complete trie"), Some(1337));
+        assert_eq!(trie.get(&txn, &key_4).expect("complete trie"), Some(6969));
+        assert_eq!(trie.get(&txn, &key_5).expect("complete trie"), None::<i32>);
 
         trie.remove(&mut txn, &key_5);
         assert_eq!(trie.count_nodes(&txn), (0, 2, 2));
-        assert_eq!(trie.get(&txn, &key_1), Some(80085));
-        assert_eq!(trie.get(&txn, &key_2), Some(999));
-        assert_eq!(trie.get(&txn, &key_3), Some(1337));
-        assert_eq!(trie.get(&txn, &key_4), Some(6969));
+        assert_eq!(trie.get(&txn, &key_1).expect("complete trie"), Some(80085));
+        assert_eq!(trie.get(&txn, &key_2).expect("complete trie"), Some(999));
+        assert_eq!(trie.get(&txn, &key_3).expect("complete trie"), Some(1337));
+        assert_eq!(trie.get(&txn, &key_4).expect("complete trie"), Some(6969));
 
         trie.remove(&mut txn, &key_1);
         assert_eq!(trie.count_nodes(&txn), (0, 1, 2));
-        assert_eq!(trie.get(&txn, &key_1), None::<i32>);
-        assert_eq!(trie.get(&txn, &key_2), Some(999));
-        assert_eq!(trie.get(&txn, &key_3), Some(1337));
-        assert_eq!(trie.get(&txn, &key_4), Some(6969));
+        assert_eq!(trie.get(&txn, &key_1).expect("complete trie"), None::<i32>);
+        assert_eq!(trie.get(&txn, &key_2).expect("complete trie"), Some(999));
+        assert_eq!(trie.get(&txn, &key_3).expect("complete trie"), Some(1337));
+        assert_eq!(trie.get(&txn, &key_4).expect("complete trie"), Some(6969));
 
         trie.remove(&mut txn, &key_2);
         assert_eq!(trie.count_nodes(&txn), (1, 0, 2));
-        assert_eq!(trie.get(&txn, &key_1), None::<i32>);
-        assert_eq!(trie.get(&txn, &key_2), None::<i32>);
-        assert_eq!(trie.get(&txn, &key_3), Some(1337));
-        assert_eq!(trie.get(&txn, &key_4), Some(6969));
+        assert_eq!(trie.get(&txn, &key_1).expect("complete trie"), None::<i32>);
+        assert_eq!(trie.get(&txn, &key_2).expect("complete trie"), None::<i32>);
+        assert_eq!(trie.get(&txn, &key_3).expect("complete trie"), Some(1337));
+        assert_eq!(trie.get(&txn, &key_4).expect("complete trie"), Some(6969));
 
         trie.remove(&mut txn, &key_3);
         assert_eq!(trie.count_nodes(&txn), (0, 0, 1));
-        assert_eq!(trie.get(&txn, &key_1), None::<i32>);
-        assert_eq!(trie.get(&txn, &key_2), None::<i32>);
-        assert_eq!(trie.get(&txn, &key_3), None::<i32>);
-        assert_eq!(trie.get(&txn, &key_4), Some(6969));
+        assert_eq!(trie.get(&txn, &key_1).expect("complete trie"), None::<i32>);
+        assert_eq!(trie.get(&txn, &key_2).expect("complete trie"), None::<i32>);
+        assert_eq!(trie.get(&txn, &key_3).expect("complete trie"), None::<i32>);
+        assert_eq!(trie.get(&txn, &key_4).expect("complete trie"), Some(6969));
 
         trie.remove(&mut txn, &key_4);
         assert_eq!(trie.count_nodes(&txn), (0, 0, 0));
-        assert_eq!(trie.get(&txn, &key_1), None::<i32>);
-        assert_eq!(trie.get(&txn, &key_2), None::<i32>);
-        assert_eq!(trie.get(&txn, &key_3), None::<i32>);
-        assert_eq!(trie.get(&txn, &key_4), None::<i32>);
+        assert_eq!(trie.get(&txn, &key_1).expect("complete trie"), None::<i32>);
+        assert_eq!(trie.get(&txn, &key_2).expect("complete trie"), None::<i32>);
+        assert_eq!(trie.get(&txn, &key_3).expect("complete trie"), None::<i32>);
+        assert_eq!(trie.get(&txn, &key_4).expect("complete trie"), None::<i32>);
 
         assert_eq!(trie.root_hash(&txn), initial_hash);
     }
@@ -1382,10 +1433,10 @@ mod tests {
         assert_eq!(trie.get_predecessor(&txn, &key_1), None);
         assert_eq!(trie.get_predecessor(&txn, &key_2), None);
 
-        trie.put(&mut txn, &key_1, 80085);
-        trie.put(&mut txn, &key_2, 999);
-        trie.put(&mut txn, &key_3, 1337);
-        trie.put(&mut txn, &key_4, 6969);
+        trie.put(&mut txn, &key_1, 80085).expect("complete trie");
+        trie.put(&mut txn, &key_2, 999).expect("complete trie");
+        trie.put(&mut txn, &key_3, 1337).expect("complete trie");
+        trie.put(&mut txn, &key_4, 6969).expect("complete trie");
         assert_eq!(trie.count_nodes(&txn), (0, 2, 2));
 
         assert_eq!(trie.get_predecessor(&txn, &KeyNibbles::ROOT), None);
@@ -1476,10 +1527,12 @@ mod tests {
         let original = MerkleRadixTrie::new(env.clone(), "original");
         let mut txn = WriteTransaction::new(&env);
 
-        original.put(&mut txn, &key_1, 80085);
-        original.put(&mut txn, &key_2, 999);
-        original.put(&mut txn, &key_3, 1337);
-        original.put(&mut txn, &key_4, 6969);
+        original
+            .put(&mut txn, &key_1, 80085)
+            .expect("complete trie");
+        original.put(&mut txn, &key_2, 999).expect("complete trie");
+        original.put(&mut txn, &key_3, 1337).expect("complete trie");
+        original.put(&mut txn, &key_4, 6969).expect("complete trie");
         assert_eq!(original.count_nodes(&txn), (0, 2, 2));
 
         for i in 0..10 {
@@ -1522,10 +1575,12 @@ mod tests {
         let trie = MerkleRadixTrie::new_incomplete(env.clone(), "copy");
         let mut txn = WriteTransaction::new(&env);
 
-        original.put(&mut txn, &key_1, 80085);
-        original.put(&mut txn, &key_2, 999);
-        original.put(&mut txn, &key_3, 1337);
-        original.put(&mut txn, &key_4, 6969);
+        original
+            .put(&mut txn, &key_1, 80085)
+            .expect("complete trie");
+        original.put(&mut txn, &key_2, 999).expect("complete trie");
+        original.put(&mut txn, &key_3, 1337).expect("complete trie");
+        original.put(&mut txn, &key_4, 6969).expect("complete trie");
         original.update_root(&mut txn);
         assert_eq!(original.count_nodes(&txn), (0, 2, 2));
         assert!(original.is_complete());
@@ -1603,11 +1658,11 @@ mod tests {
         assert_eq!(trie.count_nodes(&txn), (0, 2, 2));
         assert!(trie.is_complete());
 
-        assert_eq!(trie.get(&txn, &key_1), Some(80085));
-        assert_eq!(trie.get(&txn, &key_2), Some(999));
-        assert_eq!(trie.get(&txn, &key_3), Some(1337));
-        assert_eq!(trie.get(&txn, &key_4), Some(6969));
-        assert_eq!(trie.get(&txn, &key_5), None::<i32>);
+        assert_eq!(trie.get(&txn, &key_1).expect("complete trie"), Some(80085));
+        assert_eq!(trie.get(&txn, &key_2).expect("complete trie"), Some(999));
+        assert_eq!(trie.get(&txn, &key_3).expect("complete trie"), Some(1337));
+        assert_eq!(trie.get(&txn, &key_4).expect("complete trie"), Some(6969));
+        assert_eq!(trie.get(&txn, &key_5).expect("complete trie"), None::<i32>);
     }
 
     #[test]
@@ -1630,10 +1685,12 @@ mod tests {
             .collect();
         let mut txn = WriteTransaction::new(&env);
 
-        original.put(&mut txn, &key_1, 80085);
-        original.put(&mut txn, &key_2, 999);
-        original.put(&mut txn, &key_3, 1337);
-        original.put(&mut txn, &key_4, 6969);
+        original
+            .put(&mut txn, &key_1, 80085)
+            .expect("complete trie");
+        original.put(&mut txn, &key_2, 999).expect("complete trie");
+        original.put(&mut txn, &key_3, 1337).expect("complete trie");
+        original.put(&mut txn, &key_4, 6969).expect("complete trie");
         original.update_root(&mut txn);
         assert_eq!(original.count_nodes(&txn), (0, 2, 2));
         assert!(original.is_complete());
@@ -1662,11 +1719,11 @@ mod tests {
             assert!(trie.is_complete());
             assert_eq!(trie.count_nodes(&txn), (0, 2, 2));
 
-            assert_eq!(trie.get(&txn, &key_1), Some(80085));
-            assert_eq!(trie.get(&txn, &key_2), Some(999));
-            assert_eq!(trie.get(&txn, &key_3), Some(1337));
-            assert_eq!(trie.get(&txn, &key_4), Some(6969));
-            assert_eq!(trie.get(&txn, &key_5), None::<i32>);
+            assert_eq!(trie.get(&txn, &key_1).expect("complete trie"), Some(80085));
+            assert_eq!(trie.get(&txn, &key_2).expect("complete trie"), Some(999));
+            assert_eq!(trie.get(&txn, &key_3).expect("complete trie"), Some(1337));
+            assert_eq!(trie.get(&txn, &key_4).expect("complete trie"), Some(6969));
+            assert_eq!(trie.get(&txn, &key_5).expect("complete trie"), None::<i32>);
         }
     }
 }

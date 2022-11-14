@@ -174,10 +174,13 @@ fn it_can_create_contract_from_transaction() {
 
     HashedTimeLockedContract::create(&accounts_tree, &mut db_txn, &transaction, 0, 0);
 
-    match accounts_tree.get(
-        &db_txn,
-        &KeyNibbles::from(&transaction.contract_creation_address()),
-    ) {
+    match accounts_tree
+        .get(
+            &db_txn,
+            &KeyNibbles::from(&transaction.contract_creation_address()),
+        )
+        .expect("complete trie")
+    {
         Some(Account::HTLC(htlc)) => {
             assert_eq!(htlc.balance, 100.try_into().unwrap());
             assert_eq!(htlc.sender, sender);
@@ -487,11 +490,13 @@ fn it_can_apply_and_revert_valid_transaction() {
     Serialize::serialize(&recipient_signature_proof, &mut proof);
     tx.proof = proof;
 
-    accounts_tree.put(
-        &mut db_txn,
-        &KeyNibbles::from(&[0u8; 20][..]),
-        Account::HTLC(start_contract.clone()),
-    );
+    accounts_tree
+        .put(
+            &mut db_txn,
+            &KeyNibbles::from(&[0u8; 20][..]),
+            Account::HTLC(start_contract.clone()),
+        )
+        .expect("complete trie");
 
     let account_info = HashedTimeLockedContract::commit_outgoing_transaction(
         &accounts_tree,
@@ -503,7 +508,9 @@ fn it_can_apply_and_revert_valid_transaction() {
     .unwrap();
 
     assert_eq!(
-        accounts_tree.get(&db_txn, &KeyNibbles::from(&[0u8; 20][..])),
+        accounts_tree
+            .get(&db_txn, &KeyNibbles::from(&[0u8; 20][..]))
+            .expect("complete trie"),
         None::<Account>
     );
 
@@ -520,6 +527,7 @@ fn it_can_apply_and_revert_valid_transaction() {
     assert_eq!(
         accounts_tree
             .get::<Account>(&db_txn, &KeyNibbles::from(&[0u8; 20][..]))
+            .expect("complete trie")
             .unwrap(),
         Account::HTLC(start_contract.clone())
     );
@@ -533,11 +541,13 @@ fn it_can_apply_and_revert_valid_transaction() {
     Serialize::serialize(&sender_signature_proof, &mut proof);
     tx.proof = proof;
 
-    accounts_tree.put(
-        &mut db_txn,
-        &KeyNibbles::from(&[0u8; 20][..]),
-        Account::HTLC(start_contract.clone()),
-    );
+    accounts_tree
+        .put(
+            &mut db_txn,
+            &KeyNibbles::from(&[0u8; 20][..]),
+            Account::HTLC(start_contract.clone()),
+        )
+        .expect("complete trie");
 
     let account_info = HashedTimeLockedContract::commit_outgoing_transaction(
         &accounts_tree,
@@ -549,7 +559,9 @@ fn it_can_apply_and_revert_valid_transaction() {
     .unwrap();
 
     assert_eq!(
-        accounts_tree.get(&db_txn, &KeyNibbles::from(&[0u8; 20][..])),
+        accounts_tree
+            .get(&db_txn, &KeyNibbles::from(&[0u8; 20][..]))
+            .expect("complete trie"),
         None::<Account>
     );
 
@@ -566,6 +578,7 @@ fn it_can_apply_and_revert_valid_transaction() {
     assert_eq!(
         accounts_tree
             .get::<Account>(&db_txn, &KeyNibbles::from(&[0u8; 20][..]))
+            .expect("complete trie")
             .unwrap(),
         Account::HTLC(start_contract.clone())
     );
@@ -576,11 +589,13 @@ fn it_can_apply_and_revert_valid_transaction() {
     Serialize::serialize(&sender_signature_proof, &mut proof);
     tx.proof = proof;
 
-    accounts_tree.put(
-        &mut db_txn,
-        &KeyNibbles::from(&[0u8; 20][..]),
-        Account::HTLC(start_contract.clone()),
-    );
+    accounts_tree
+        .put(
+            &mut db_txn,
+            &KeyNibbles::from(&[0u8; 20][..]),
+            Account::HTLC(start_contract.clone()),
+        )
+        .expect("complete trie");
 
     let account_info = HashedTimeLockedContract::commit_outgoing_transaction(
         &accounts_tree,
@@ -592,7 +607,9 @@ fn it_can_apply_and_revert_valid_transaction() {
     .unwrap();
 
     assert_eq!(
-        accounts_tree.get(&db_txn, &KeyNibbles::from(&[0u8; 20][..])),
+        accounts_tree
+            .get(&db_txn, &KeyNibbles::from(&[0u8; 20][..]))
+            .expect("complete trie"),
         None::<Account>
     );
 
@@ -609,6 +626,7 @@ fn it_can_apply_and_revert_valid_transaction() {
     assert_eq!(
         accounts_tree
             .get::<Account>(&db_txn, &KeyNibbles::from(&[0u8; 20][..]))
+            .expect("complete trie")
             .unwrap(),
         Account::HTLC(start_contract)
     );
@@ -624,11 +642,13 @@ fn it_refuses_invalid_transaction() {
     let (start_contract, mut tx, pre_image, sender_signature_proof, recipient_signature_proof) =
         prepare_outgoing_transaction();
 
-    accounts_tree.put(
-        &mut db_txn,
-        &KeyNibbles::from(&[0u8; 20][..]),
-        Account::HTLC(start_contract.clone()),
-    );
+    accounts_tree
+        .put(
+            &mut db_txn,
+            &KeyNibbles::from(&[0u8; 20][..]),
+            Account::HTLC(start_contract.clone()),
+        )
+        .expect("complete trie");
 
     // regular transfer: timeout passed
     let mut proof =

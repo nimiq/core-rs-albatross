@@ -500,22 +500,26 @@ impl AccountTransactionInteraction for StakingContract {
                     validator.deposit = new_deposit;
                     Account::balance_sub(validator.balance, transaction.fee)?;
 
-                    accounts_tree.put(
-                        db_txn,
-                        &StakingContract::get_key_validator(&validator_address),
-                        Account::StakingValidator(validator),
-                    );
+                    accounts_tree
+                        .put(
+                            db_txn,
+                            &StakingContract::get_key_validator(&validator_address),
+                            Account::StakingValidator(validator),
+                        )
+                        .expect("temporary until accounts rewrite");
 
                     // Update the staking contract
 
                     staking_contract.balance =
                         Account::balance_sub(staking_contract.balance, transaction.fee)?;
 
-                    accounts_tree.put(
-                        db_txn,
-                        &StakingContract::get_key_staking_contract(),
-                        Account::Staking(staking_contract),
-                    );
+                    accounts_tree
+                        .put(
+                            db_txn,
+                            &StakingContract::get_key_staking_contract(),
+                            Account::Staking(staking_contract),
+                        )
+                        .expect("temporary until accounts rewrite");
                     OperationInfo::<DeleteValidatorReceipt>::new(None, vec![]).into()
                 }
             }
@@ -601,11 +605,13 @@ impl AccountTransactionInteraction for StakingContract {
                 validator.deposit = Account::balance_add(validator.deposit, transaction.fee)?;
                 validator.balance = Account::balance_add(validator.balance, transaction.fee)?;
 
-                accounts_tree.put(
-                    db_txn,
-                    &StakingContract::get_key_validator(&validator_address),
-                    Account::StakingValidator(validator),
-                );
+                accounts_tree
+                    .put(
+                        db_txn,
+                        &StakingContract::get_key_validator(&validator_address),
+                        Account::StakingValidator(validator),
+                    )
+                    .expect("temporary until accounts rewrite");
 
                 // Update the staking contract
                 // Get the staking contract main and update it.
@@ -615,11 +621,13 @@ impl AccountTransactionInteraction for StakingContract {
                 staking_contract.balance =
                     Account::balance_add(staking_contract.balance, transaction.fee)?;
 
-                accounts_tree.put(
-                    db_txn,
-                    &StakingContract::get_key_staking_contract(),
-                    Account::Staking(staking_contract),
-                );
+                accounts_tree
+                    .put(
+                        db_txn,
+                        &StakingContract::get_key_staking_contract(),
+                        Account::Staking(staking_contract),
+                    )
+                    .expect("temporary until accounts rewrite");
 
                 AccountInfo::new(None, vec![])
             }
@@ -811,11 +819,13 @@ impl AccountInherentInteraction for StakingContract {
 
                         validator.inactivity_flag = Some(block_height);
 
-                        accounts_tree.put(
-                            db_txn,
-                            &StakingContract::get_key_validator(&validator_address),
-                            Account::StakingValidator(validator),
-                        );
+                        accounts_tree
+                            .put(
+                                db_txn,
+                                &StakingContract::get_key_validator(&validator_address),
+                                Account::StakingValidator(validator),
+                            )
+                            .expect("temporary until accounts rewrite");
 
                         // Update the staking contract.
                         staking_contract
@@ -845,11 +855,13 @@ impl AccountInherentInteraction for StakingContract {
             }
         }
 
-        accounts_tree.put(
-            db_txn,
-            &StakingContract::get_key_staking_contract(),
-            Account::Staking(staking_contract),
-        );
+        accounts_tree
+            .put(
+                db_txn,
+                &StakingContract::get_key_staking_contract(),
+                Account::Staking(staking_contract),
+            )
+            .expect("temporary until accounts rewrite");
 
         Ok(AccountInfo::new(receipt, logs))
     }
@@ -951,11 +963,13 @@ impl AccountInherentInteraction for StakingContract {
             }
         }
 
-        accounts_tree.put(
-            db_txn,
-            &StakingContract::get_key_staking_contract(),
-            Account::Staking(staking_contract),
-        );
+        accounts_tree
+            .put(
+                db_txn,
+                &StakingContract::get_key_staking_contract(),
+                Account::Staking(staking_contract),
+            )
+            .expect("temporary until accounts rewrite");
 
         Ok(logs)
     }
