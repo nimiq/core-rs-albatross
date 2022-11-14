@@ -404,7 +404,10 @@ impl AccountInherentInteraction for Account {
         // non-existent account).
         let key = KeyNibbles::from(&inherent.target);
 
-        let account_type = match accounts_tree.get::<Account>(db_txn, &key) {
+        let account_type = match accounts_tree
+            .get::<Account>(db_txn, &key)
+            .expect("temporary until accounts rewrite")
+        {
             Some(x) => x.account_type(),
             None => AccountType::Basic,
         };
@@ -441,7 +444,10 @@ impl AccountInherentInteraction for Account {
         // non-existent account).
         let key = KeyNibbles::from(&inherent.target);
 
-        let account_type = match accounts_tree.get::<Account>(db_txn, &key) {
+        let account_type = match accounts_tree
+            .get::<Account>(db_txn, &key)
+            .expect("temporary until accounts rewrite")
+        {
             Some(x) => x.account_type(),
             None => AccountType::Basic,
         };

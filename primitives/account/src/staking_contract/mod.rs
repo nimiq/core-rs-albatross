@@ -146,7 +146,10 @@ impl StakingContract {
         db_txn: &DBTransaction,
     ) -> StakingContract {
         let key = StakingContract::get_key_staking_contract();
-        match accounts_tree.get::<Account>(db_txn, &key) {
+        match accounts_tree
+            .get::<Account>(db_txn, &key)
+            .expect("temporary until accounts rewrite")
+        {
             Some(Account::Staking(contract)) => contract,
             _ => {
                 unreachable!()
@@ -162,7 +165,10 @@ impl StakingContract {
     ) -> Option<Validator> {
         let key = StakingContract::get_key_validator(validator_address);
 
-        match accounts_tree.get::<Account>(db_txn, &key) {
+        match accounts_tree
+            .get::<Account>(db_txn, &key)
+            .expect("temporary until accounts rewrite")
+        {
             Some(Account::StakingValidator(validator)) => Some(validator),
             None => None,
             _ => {
@@ -178,7 +184,10 @@ impl StakingContract {
         validator_address: &Address,
     ) -> Vec<Address> {
         let key = StakingContract::get_key_validator(validator_address);
-        let validator = match accounts_tree.get::<Account>(db_txn, &key) {
+        let validator = match accounts_tree
+            .get::<Account>(db_txn, &key)
+            .expect("temporary until accounts rewrite")
+        {
             Some(Account::StakingValidator(validator)) => validator,
             _ => return vec![],
         };
@@ -211,7 +220,10 @@ impl StakingContract {
         staker_address: &Address,
     ) -> Option<Staker> {
         let key = StakingContract::get_key_staker(staker_address);
-        match accounts_tree.get::<Account>(db_txn, &key) {
+        match accounts_tree
+            .get::<Account>(db_txn, &key)
+            .expect("temporary until accounts rewrite")
+        {
             Some(Account::StakingStaker(staker)) => Some(staker),
             None => None,
             _ => {
@@ -222,11 +234,13 @@ impl StakingContract {
 
     /// Creates a new Staking contract into the given accounts tree.
     pub fn create(accounts_tree: &AccountsTrie, db_txn: &mut WriteTransaction) {
-        accounts_tree.put(
-            db_txn,
-            &StakingContract::get_key_staking_contract(),
-            Account::Staking(StakingContract::default()),
-        )
+        accounts_tree
+            .put(
+                db_txn,
+                &StakingContract::get_key_staking_contract(),
+                Account::Staking(StakingContract::default()),
+            )
+            .expect("temporary until accounts rewrite")
     }
 
     /// Given a seed, it randomly distributes the validator slots across all validators. It is
@@ -416,7 +430,11 @@ impl StakingContract {
                 // Verify we have a valid delegation address (if present)
                 if let Some(delegation) = delegation {
                     let key = StakingContract::get_key_validator(&delegation);
-                    if accounts_tree.get::<Account>(db_txn, &key).is_none() {
+                    if accounts_tree
+                        .get::<Account>(db_txn, &key)
+                        .expect("temporary until accounts rewrite")
+                        .is_none()
+                    {
                         return false;
                     }
                 }

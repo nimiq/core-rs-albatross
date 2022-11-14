@@ -41,7 +41,9 @@ impl Accounts {
                 &key,
                 &account
             );
-            self.tree.put(txn, &key, account);
+            self.tree
+                .put(txn, &key, account)
+                .expect("temporary until accounts rewrite");
         }
         self.tree.update_root(txn);
     }
@@ -58,8 +60,14 @@ impl Accounts {
 
     pub fn get(&self, key: &KeyNibbles, txn_option: Option<&DBTransaction>) -> Option<Account> {
         match txn_option {
-            Some(txn) => self.tree.get(txn, key),
-            None => self.tree.get(&ReadTransaction::new(&self.env), key),
+            Some(txn) => self
+                .tree
+                .get(txn, key)
+                .expect("temporary until accounts rewrite"),
+            None => self
+                .tree
+                .get(&ReadTransaction::new(&self.env), key)
+                .expect("temporary until accounts rewrite"),
         }
     }
 
