@@ -11,7 +11,7 @@ categories = ["cryptography::cryptocurrencies"]
 keywords = ["nimiq", "cryptocurrency", "blockchain"]
 
 [[bin]]
-name = "nimiq-prove"
+name = "nimiq-test-prove"
 
 [badges]
 travis-ci = { repository = "nimiq/core-rs", branch = "master" }

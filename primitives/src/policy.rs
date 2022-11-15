@@ -304,6 +304,13 @@ impl Default for Policy {
     }
 }
 
+pub const TEST_POLICY: Policy = Policy {
+    blocks_per_batch: 32,
+    batches_per_epoch: 4,
+    tendermint_timeout_init: 1000,
+    tendermint_timeout_delta: 1000,
+};
+
 #[cfg(test)]
 mod tests {
     use super::*;
