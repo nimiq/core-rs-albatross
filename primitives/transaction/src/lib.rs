@@ -126,14 +126,14 @@ impl Default for SignatureProof {
 #[derive(Clone, Eq, Debug, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum ExecutedTransaction {
-    /// A sucessfull executed transaction
+    /// A successful executed transaction
     Ok(Transaction),
     /// A failed transaction (only fees are deducted)
     Err(Transaction),
 }
 
 impl ExecutedTransaction {
-    //Obtains the underlaying transaction, regardless of execution result
+    /// Obtains the underlying transaction, regardless of execution result
     pub fn get_raw_transaction(&self) -> &Transaction {
         match self {
             ExecutedTransaction::Ok(txn) => txn,

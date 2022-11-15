@@ -79,7 +79,7 @@ impl<N: Network> ZKPComponentProxy<N> {
 /// ZKP Component aggregates the logic of request new proofs from peers, gossiping with peers on the most recent proofs,
 /// pushing the received or generated zk proofs into state and storing them on the db.
 ///
-/// The ZKP Compoenet has:
+/// The ZKP Component has:
 ///
 /// - The blockchain
 /// - The network
@@ -301,7 +301,7 @@ impl<N: Network> Future for ZKPComponent<N> {
             }
         }
 
-        // Exhaustes all peer gossiped proofs and tries to push them.
+        // Exhausts all peer gossiped proofs and tries to push them.
         loop {
             match this.zk_proofs_stream.as_mut().poll_next(cx) {
                 Poll::Ready(Some(proof)) => {

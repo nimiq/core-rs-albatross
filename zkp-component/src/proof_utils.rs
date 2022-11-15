@@ -19,7 +19,7 @@ use tokio::{io::AsyncWriteExt, process::Command};
 use super::types::ZKPState;
 use crate::types::*;
 
-/// Fully validates the proof by verifying both the zk proof and the blocks existance on the blockchain.
+/// Fully validates the proof by verifying both the zk proof and the blocks existence on the blockchain.
 pub fn validate_proof(
     blockchain: &Arc<RwLock<Blockchain>>,
     proof: &ZKProof,
@@ -31,7 +31,7 @@ pub fn validate_proof(
         return true;
     }
 
-    // Fetches and verfies the election blocks for the proofs and then validates the proof
+    // Fetches and verifies the election blocks for the proofs and then validates the proof
     if let Ok((new_block, genesis_block, proof)) =
         get_proof_macro_blocks(blockchain, proof, election_block)
     {
@@ -114,7 +114,7 @@ pub(crate) fn validate_proof_get_new_state(
     Err(ZKPComponentError::InvalidProof)
 }
 
-/// Generates the zk proof and sends it through the channel provided. Upon failure, the error is sent trough the channel providded.
+/// Generates the zk proof and sends it through the channel provided. Upon failure, the error is sent trough the channel provided.
 pub fn generate_new_proof(
     block: MacroBlock,
     latest_pks: Vec<G2MNT6>,
@@ -224,7 +224,7 @@ async fn parse_proof_generation_output(
 #[derive(Debug)]
 pub struct ProofStore {
     pub env: Environment,
-    // A database of the curreent zkp state.
+    // A database of the current zkp state.
     zkp_db: Database,
 }
 
