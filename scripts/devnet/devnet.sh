@@ -292,7 +292,7 @@ echo "Done."
 # Launch the seed node
 echo "Starting seed node..."
 mkdir -p temp-state/dev/seed
-$cargo --bin nimiq-client -- -c $configdir/seed/client.toml &>> $logsdir/Seed.log &
+$cargo --bin nimiq-client -- -c $configdir/seed/client.toml >> $logsdir/Seed.log 2>&1 &
 spids+=($!)
 sleep 3
 echo "Done."
@@ -302,7 +302,7 @@ echo "Starting validators..."
 for validator in ${validators[@]}; do
     echo "    Starting Validator: $validator"
     mkdir -p temp-state/dev/$validator
-    $cargo --bin nimiq-client -- -c $configdir/validator$validator/client.toml &>> $logsdir/Validator$validator.log &
+    $cargo --bin nimiq-client -- -c $configdir/validator$validator/client.toml >> $logsdir/Validator$validator.log 2>&1 &
     vpids+=($!)
     sleep 1
 done
@@ -315,7 +315,7 @@ sleep 30
 if [ "$SPAMMER" = true ] ; then
     echo "Starting spammer..."
     mkdir -p temp-state/dev/spammer
-    $cargo --bin nimiq-spammer -- -t $tpb -c $configdir/spammer/client.toml &>> $logsdir/Spammer.log &
+    $cargo --bin nimiq-spammer -- -t $tpb -c $configdir/spammer/client.toml >> $logsdir/Spammer.log 2>&1 &
     spids+=($!)
     sleep 1
     echo "Done."
@@ -372,7 +372,7 @@ do
         # Restart the ones that were killed
         for index in ${kindexes[@]}; do
             echo "  Restarting validator: $(($index + 1 ))"
-            $cargo --bin nimiq-client -- -c $configdir/validator$(($index + 1 ))/client.toml &>> $logsdir/Validator$(($index + 1 )).log &
+            $cargo --bin nimiq-client -- -c $configdir/validator$(($index + 1 ))/client.toml >> $logsdir/Validator$(($index + 1 )).log 2>&1 &
             vpids[$index]=$!
             sleep 2
         done
