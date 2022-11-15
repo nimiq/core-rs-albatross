@@ -147,7 +147,7 @@ impl ExecutedTransaction {
         }
     }
 
-    pub fn succeed(&self) -> bool {
+    pub fn succeeded(&self) -> bool {
         match self {
             ExecutedTransaction::Ok(_) => true,
             ExecutedTransaction::Err(_) => false,
