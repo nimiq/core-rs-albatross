@@ -53,7 +53,6 @@ pub trait Network: Send + Sync + Unpin + 'static {
     fn get_peers(&self) -> Vec<Self::PeerId>;
     fn has_peer(&self, peer_id: Self::PeerId) -> bool;
     fn peer_provides_required_services(&self, peer_id: Self::PeerId) -> bool;
-    fn peer_provides_history(&self, peer_id: Self::PeerId) -> bool;
     async fn disconnect_peer(&self, peer_id: Self::PeerId, close_reason: CloseReason);
 
     fn subscribe_events(&self) -> SubscribeEvents<Self::PeerId>;

@@ -1549,15 +1549,6 @@ impl NetworkInterface for Network {
         }
     }
 
-    fn peer_provides_history(&self, peer_id: PeerId) -> bool {
-        if let Some(Some(contact)) = self.connected_peers.read().get(&peer_id) {
-            contact.services.contains(Services::HISTORY)
-        } else {
-            // If we dont know the peer we return false
-            false
-        }
-    }
-
     async fn disconnect_peer(&self, peer_id: PeerId, _close_reason: CloseReason) {
         if let Err(error) = self
             .action_tx

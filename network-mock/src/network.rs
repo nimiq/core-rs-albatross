@@ -567,10 +567,6 @@ impl Network for MockNetwork {
         }
     }
 
-    fn peer_provides_history(&self, _peer_id: Self::PeerId) -> bool {
-        true
-    }
-
     fn peer_provides_required_services(&self, _peer_id: Self::PeerId) -> bool {
         true
     }
