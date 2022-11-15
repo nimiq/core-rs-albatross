@@ -452,9 +452,16 @@ impl Blockchain {
                 // If this is an election block and we are not in trust mode (we produced the block or already checked it),
                 // check if the pk_tree_root matches the validators.
                 if is_election && !trusted {
-                    let pk_tree_root = MacroBlock::pk_tree_root(body.validators.as_ref().unwrap());
-                    if pk_tree_root != *body.pk_tree_root.as_ref().unwrap() {
-                        return Err(PushError::InvalidBlock(BlockError::InvalidPkTreeRoot));
+                    match MacroBlock::pk_tree_root(body.validators.as_ref().unwrap()) {
+                        Ok(pk_tree_root) => {
+                            if pk_tree_root != *body.pk_tree_root.as_ref().unwrap() {
+                                return Err(PushError::InvalidBlock(BlockError::InvalidPkTreeRoot));
+                            }
+                        }
+                        Err(e) => {
+                            warn!(%e, "PK tree root building failed");
+                            return Err(PushError::InvalidBlock(e));
+                        }
                     }
                 }
             }
@@ -574,7 +581,9 @@ impl Blockchain {
             } else {
                 // If we were not given a body, then we construct a body from our values and check
                 // its hash against the block header.
-                let real_pk_tree_root = real_validators.as_ref().map(MacroBlock::pk_tree_root);
+                let real_pk_tree_root = real_validators
+                    .as_ref()
+                    .and_then(|validators| MacroBlock::pk_tree_root(validators).ok());
 
                 let real_body = MacroBody {
                     validators: real_validators,

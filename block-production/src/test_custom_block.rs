@@ -288,7 +288,9 @@ fn next_macro_block_proposal(
         None
     };
 
-    let pk_tree_root = validators.as_ref().map(MacroBlock::pk_tree_root);
+    let pk_tree_root = validators
+        .as_ref()
+        .and_then(|validators| MacroBlock::pk_tree_root(validators).ok());
 
     let body = MacroBody {
         validators,

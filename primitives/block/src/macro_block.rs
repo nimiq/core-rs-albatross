@@ -6,14 +6,15 @@ use thiserror::Error;
 use beserial::{Deserialize, Serialize};
 use nimiq_collections::bitset::BitSet;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, SerializeContent};
-use nimiq_nano_primitives::pk_tree_construct;
 use nimiq_nano_primitives::MacroBlock as ZKPMacroBlock;
+use nimiq_nano_primitives::{pk_tree_construct, PK_TREE_BREADTH};
 use nimiq_primitives::policy::Policy;
 use nimiq_primitives::slots::Validators;
 use nimiq_vrf::VrfSeed;
 
 use crate::signed::{Message, PREFIX_TENDERMINT_PROPOSAL};
 use crate::tendermint::TendermintProof;
+use crate::BlockError;
 
 /// The struct representing a Macro block (can be either checkpoint or election).
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
@@ -139,10 +140,12 @@ impl MacroBlock {
             // Create the tree.
             let mut pk_tree_root = self.get_pk_tree_root();
             if recalculate_pk_tree || pk_tree_root.is_none() {
-                pk_tree_root = Some(MacroBlock::pk_tree_root(&validators));
+                pk_tree_root = MacroBlock::pk_tree_root(&validators).ok();
             }
-            // Add it to the message.
-            message.append(&mut pk_tree_root.unwrap());
+            if let Some(mut pk_tree_root) = pk_tree_root {
+                // Add it to the message.
+                message.append(&mut pk_tree_root);
+            }
         }
 
         // Return the final hash.
@@ -154,16 +157,24 @@ impl MacroBlock {
     }
 
     /// Calculates the PKTree root from the given validators.
-    pub fn pk_tree_root(validators: &Validators) -> Vec<u8> {
+    pub fn pk_tree_root(validators: &Validators) -> Result<Vec<u8>, BlockError> {
         // Get the public keys.
-        let public_keys = validators
-            .voting_keys()
-            .iter()
-            .map(|pk| pk.public_key)
-            .collect();
+        let public_keys = validators.voting_keys();
+
+        // Check the expected number of validators.
+        // This must be checked before `pk_tree_construct` since it assumes a correct value.
+        if public_keys.len() != Policy::SLOTS as usize || public_keys.len() % PK_TREE_BREADTH != 0 {
+            warn!(
+                num_pks = public_keys.len(),
+                "Unexpected number of validator public keys"
+            );
+            return Err(BlockError::InvalidValidators);
+        }
 
         // Create the tree
-        pk_tree_construct(public_keys)
+        Ok(pk_tree_construct(
+            public_keys.iter().map(|pk| pk.public_key).collect(),
+        ))
     }
 
     /// Returns whether or not this macro block is an election block.
