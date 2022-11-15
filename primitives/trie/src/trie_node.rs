@@ -5,10 +5,11 @@ use std::slice;
 use log::error;
 
 use beserial::{
-    Deserialize, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, WriteBytesExt,
+    Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
+    SerializingError, WriteBytesExt,
 };
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
-use nimiq_hash::{Blake2bHash, Hash, HashOutput, Hasher, SerializeContent};
+use nimiq_hash::{Blake2bHash, HashOutput, Hasher, SerializeContent};
 
 use crate::error::MerkleRadixTrieError;
 use crate::key_nibbles::KeyNibbles;
@@ -17,12 +18,12 @@ use crate::key_nibbles::KeyNibbles;
 /// only references to its children, a leaf node, which contains a value or a hybrid node, which has
 /// both children and a value. A branch/hybrid node can have up to 16 children, since we represent
 /// the keys in hexadecimal form, each child represents a different hexadecimal character.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct TrieNode {
+    // This is not serialized.
     pub key: KeyNibbles,
     // The root data is not included when the `TrieNode` is hashed.
     pub root_data: Option<RootData>,
-    #[beserial(len_type(u16))]
     pub value: Option<Vec<u8>>,
     pub children: [Option<TrieNodeChild>; 16],
 }
@@ -272,6 +273,73 @@ impl TrieNode {
     pub fn hash_assert_complete<H: HashOutput>(&self) -> H {
         self.hash_if_complete()
             .expect("can only hash TrieNode with complete information about children")
+    }
+}
+
+impl Deserialize for TrieNode {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+        let flags = reader.read_u8()?;
+        let has_root_data = flags & 0x1 != 0;
+        let has_value = flags & 0x2 != 0;
+        let has_children = flags & 0x4 != 0;
+        let root_data = if has_root_data {
+            Some(Deserialize::deserialize(reader)?)
+        } else {
+            None
+        };
+        let value = if has_value {
+            Some(DeserializeWithLength::deserialize::<u16, _>(reader)?)
+        } else {
+            None
+        };
+        let children = if has_children {
+            Deserialize::deserialize(reader)?
+        } else {
+            NO_CHILDREN
+        };
+        Ok(TrieNode {
+            // Make it clear that the key needs to be changed after deserialization.
+            key: KeyNibbles::BADBADBAD,
+            root_data,
+            value,
+            children,
+        })
+    }
+}
+
+impl Serialize for TrieNode {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+        let has_root_data = self.root_data.is_some();
+        let has_value = self.value.is_some();
+        let has_children = self.has_children();
+        let flags = (has_root_data as u8) | ((has_value as u8) << 1) | ((has_children as u8) << 2);
+
+        let mut result = 1;
+        writer.write_u8(flags)?;
+        if let Some(root_data) = &self.root_data {
+            result += root_data.serialize(writer)?;
+        }
+        if let Some(value) = &self.value {
+            result += value.serialize::<u16, _>(writer)?;
+        }
+        if has_children {
+            result += self.children.serialize(writer)?;
+        }
+        Ok(result)
+    }
+
+    fn serialized_size(&self) -> usize {
+        let mut result = 1;
+        if let Some(root_data) = &self.root_data {
+            result += root_data.serialized_size();
+        }
+        if let Some(value) = &self.value {
+            result += value.serialized_size::<u16>();
+        }
+        if self.has_children() {
+            result += self.children.serialized_size();
+        }
+        result
     }
 }
 

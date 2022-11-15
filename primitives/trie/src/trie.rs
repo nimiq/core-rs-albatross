@@ -133,7 +133,7 @@ impl MerkleRadixTrie {
             } else {
                 TrieNode::new_root()
             };
-            txn.put_reserve(&tree.db, &KeyNibbles::ROOT, &root);
+            tree.put_node(&mut txn, &root);
         }
         txn.commit();
 
@@ -180,7 +180,7 @@ impl MerkleRadixTrie {
                     // If it's a stump, don't count it.
                     Err(_) => continue,
                     Ok(child_key) => {
-                        stack.push(txn.get(&self.db, &child_key)
+                        stack.push(self.get_node(txn, &child_key)
                             .expect("Failed to find the child of a Merkle Radix Trie node. The database must be corrupt!"));
                     }
                 }
@@ -202,6 +202,16 @@ impl MerkleRadixTrie {
         (num_branches, num_hybrids, num_leaves)
     }
 
+    fn get_node(&self, txn: &Transaction, key: &KeyNibbles) -> Option<TrieNode> {
+        let mut node: TrieNode = txn.get(&self.db, key)?;
+        node.key = key.clone();
+        Some(node)
+    }
+
+    fn put_node(&self, txn: &mut WriteTransaction, node: &TrieNode) {
+        txn.put_reserve(&self.db, &node.key, node);
+    }
+
     /// Get the value at the given key. If there's no leaf or hybrid node at the given key then it
     /// returns None.
     pub fn get<T: Deserialize>(
@@ -216,8 +226,7 @@ impl MerkleRadixTrie {
     }
 
     fn get_raw(&self, txn: &Transaction, key: &KeyNibbles) -> Option<Vec<u8>> {
-        let node: TrieNode = txn.get(&self.db, key)?;
-        node.value
+        self.get_node(txn, key)?.value
     }
 
     /// Returns a chunk of the Merkle Radix Trie that starts at the key `start` (which might or not
@@ -273,7 +282,7 @@ impl MerkleRadixTrie {
                     new_node
                         .put_child(&cur_node.key, Blake2bHash::default())
                         .unwrap();
-                    txn.put_reserve(&self.db, key, &new_node);
+                    self.put_node(txn, &new_node);
 
                     // Push the new node into the root path.
                     root_path.push(new_node);
@@ -284,7 +293,7 @@ impl MerkleRadixTrie {
                 } else {
                     // The new node is a sibling of the current node. Thus it is a leaf node.
                     let new_node = TrieNode::new_leaf(key.clone(), value);
-                    txn.put_reserve(&self.db, key, &new_node);
+                    self.put_node(txn, &new_node);
 
                     // We insert a new branch node as the parent of both the current node and the
                     // new node.
@@ -293,7 +302,7 @@ impl MerkleRadixTrie {
                     new_parent
                         .put_child(&new_node.key, new_node.hash_assert_complete())
                         .unwrap();
-                    txn.put_reserve(&self.db, &new_parent.key, &new_parent);
+                    self.put_node(txn, &new_parent);
 
                     count_updates = CountUpdates {
                         branches: 1,
@@ -313,7 +322,7 @@ impl MerkleRadixTrie {
                 // TODO This unwrap() will fail when attempting to store a value at the root node
                 let prev_kind = cur_node.kind();
                 cur_node.put_value(value).unwrap();
-                txn.put_reserve(&self.db, key, &cur_node);
+                self.put_node(txn, &cur_node);
 
                 count_updates = CountUpdates::from_update(prev_kind, cur_node.kind());
                 // Push the node into the root path.
@@ -327,14 +336,14 @@ impl MerkleRadixTrie {
                 Err(_) => {
                     // Create and store the new node.
                     let new_node = TrieNode::new_leaf(key.clone(), value);
-                    txn.put_reserve(&self.db, key, &new_node);
+                    self.put_node(txn, &new_node);
 
                     // Update the parent node and store it.
                     let old_kind = cur_node.kind();
                     cur_node
                         .put_child(&new_node.key, new_node.hash_assert_complete())
                         .unwrap();
-                    txn.put_reserve(&self.db, &cur_node.key, &cur_node);
+                    self.put_node(txn, &cur_node);
 
                     count_updates = CountUpdates {
                         leaves: 1,
@@ -349,7 +358,7 @@ impl MerkleRadixTrie {
                 // continue down the trie.
                 Ok(child_key) => {
                     root_path.push(cur_node);
-                    cur_node = txn.get(&self.db, &child_key).unwrap();
+                    cur_node = self.get_node(txn, &child_key).unwrap();
                 }
             }
         }
@@ -459,7 +468,7 @@ impl MerkleRadixTrie {
                     cur_node.put_child_no_hash(&only_child_key).unwrap();
                 } else {
                     count_updates.apply_update(prev_kind, cur_node.kind());
-                    txn.put_reserve(&self.db, &cur_node.key, &cur_node);
+                    self.put_node(txn, &cur_node);
                 }
             }
 
@@ -476,7 +485,7 @@ impl MerkleRadixTrie {
                 // If no matching child exists, we're done.
                 Err(_) => break,
                 // If there's a child, then we clear its stumps and continue down the trie.
-                Ok(child_key) => cur_node = txn.get(&self.db, &child_key).unwrap(),
+                Ok(child_key) => cur_node = self.get_node(txn, &child_key).unwrap(),
             }
         }
         self.update_keys(txn, root_path, count_updates);
@@ -538,7 +547,7 @@ impl MerkleRadixTrie {
             }
             count_updates.apply_update(prev_kind, cur_node.kind());
 
-            txn.put_reserve(&self.db, &cur_node.key, &cur_node);
+            self.put_node(txn, &cur_node);
 
             match last_item_proof.next() {
                 Some(n) => cur_proof = n,
@@ -555,7 +564,7 @@ impl MerkleRadixTrie {
                 // If no matching child exists, we're done.
                 Err(_) => break,
                 // If there's a child, we continue down the trie.
-                Ok(child_key) => cur_node = txn.get(&self.db, &child_key).unwrap(),
+                Ok(child_key) => cur_node = self.get_node(txn, &child_key).unwrap(),
             }
         }
 
@@ -580,7 +589,7 @@ impl MerkleRadixTrie {
         if cur_proof.key != *key {
             return Err("last item proof doesn't specify the correct items");
         }
-        let mut node: TrieNode = txn.get(&self.db, key).unwrap();
+        let mut node: TrieNode = self.get_node(txn, key).unwrap();
         let next_proof_key = rest_proof.last().map(|n| &n.key);
         let mut hash_node = node.clone();
         for i in 0..16 {
@@ -606,7 +615,7 @@ impl MerkleRadixTrie {
                 }
             }
         }
-        txn.put_reserve(&self.db, key, &node);
+        self.put_node(txn, &node);
         Ok(hash_node.hash_assert_complete())
     }
 
@@ -699,7 +708,7 @@ impl MerkleRadixTrie {
         {
             let mut root_node = self.get_root(txn).unwrap();
             root_node.root_data.as_mut().unwrap().incomplete = keys_end.clone().map(|end| end..);
-            txn.put_reserve(&self.db, &KeyNibbles::ROOT, &root_node);
+            self.put_node(txn, &root_node);
             if keys_end.is_none() {
                 self.is_complete.store(true, atomic::Ordering::Release);
             }
@@ -750,7 +759,7 @@ impl MerkleRadixTrie {
                             .key(&cur_node.key)
                             .expect("no stump");
 
-                        let only_child = txn.get(&self.db, &only_child_key).unwrap();
+                        let only_child = self.get_node(txn, &only_child_key).unwrap();
 
                         root_path.push(only_child);
 
@@ -761,7 +770,7 @@ impl MerkleRadixTrie {
                         };
                     } else {
                         // Update the node and add it to the root path.
-                        txn.put_reserve(&self.db, key, &cur_node);
+                        self.put_node(txn, &cur_node);
 
                         root_path.push(cur_node);
 
@@ -795,7 +804,7 @@ impl MerkleRadixTrie {
                 // continue down the trie.
                 Ok(child_key) => {
                     root_path.push(cur_node);
-                    cur_node = txn.get(&self.db, &child_key).unwrap();
+                    cur_node = self.get_node(txn, &child_key).unwrap();
                 }
             }
         }
@@ -825,7 +834,7 @@ impl MerkleRadixTrie {
                     .key(&parent_node.key)
                     .expect("no stump");
 
-                let only_child = txn.get(&self.db, &only_child_key).unwrap();
+                let only_child = self.get_node(txn, &only_child_key).unwrap();
 
                 root_path.push(only_child);
 
@@ -846,7 +855,7 @@ impl MerkleRadixTrie {
             // parent node in the database and the root path. Then we update the keys and hashes of
             // of the root path.
             else if num_children > 0 || parent_node.key == KeyNibbles::ROOT {
-                txn.put_reserve(&self.db, &parent_node.key, &parent_node);
+                self.put_node(txn, &parent_node);
 
                 root_path.push(parent_node);
 
@@ -950,8 +959,10 @@ impl MerkleRadixTrie {
                     // If there's a child, then we update the pointer node and the root path, and
                     // continue down the trie.
                     Ok(child_key) => {
-                        let old_pointer_node =
-                            mem::replace(&mut pointer_node, txn.get(&self.db, &child_key).unwrap());
+                        let old_pointer_node = mem::replace(
+                            &mut pointer_node,
+                            self.get_node(txn, &child_key).unwrap(),
+                        );
                         root_path.push(old_pointer_node);
                     }
                 }
@@ -1032,7 +1043,7 @@ impl MerkleRadixTrie {
 
     /// Returns the root node, if there is one.
     fn get_root(&self, txn: &Transaction) -> Option<TrieNode> {
-        txn.get(&self.db, &KeyNibbles::ROOT)
+        self.get_node(txn, &KeyNibbles::ROOT)
     }
 
     /// Updates the keys for a chain of nodes and marks those nodes as dirty. It assumes that the
@@ -1060,7 +1071,7 @@ impl MerkleRadixTrie {
                 self.num_leaves
                     .store(root_data.num_leaves, atomic::Ordering::Release);
                 if only_root_needs_update {
-                    txn.put_reserve(&self.db, &root.key, root);
+                    self.put_node(txn, root);
                     return;
                 }
             }
@@ -1077,7 +1088,7 @@ impl MerkleRadixTrie {
                 .put_child(&child_node.key, Blake2bHash::default())
                 .unwrap();
             assert_eq!(root_path.is_empty(), parent_node.is_root(),);
-            txn.put_reserve(&self.db, &parent_node.key, &parent_node);
+            self.put_node(txn, &parent_node);
 
             child_node = parent_node;
         }
@@ -1085,7 +1096,7 @@ impl MerkleRadixTrie {
 
     /// Updates the hashes of all dirty nodes in the subtree specified by `key`.
     fn update_hashes(&self, txn: &mut WriteTransaction, key: &KeyNibbles) -> Blake2bHash {
-        let mut node: TrieNode = txn.get(&self.db, key).unwrap();
+        let mut node: TrieNode = self.get_node(txn, key).unwrap();
         if !node.has_children() {
             return node.hash_assert_complete();
         }
@@ -1097,7 +1108,7 @@ impl MerkleRadixTrie {
                 child.hash = self.update_hashes(txn, &child.key(key).expect("no stump"));
             }
         }
-        txn.put_reserve(&self.db, key, &node);
+        self.put_node(txn, &node);
         node.hash_assert_complete()
     }
 
@@ -1141,15 +1152,15 @@ impl MerkleRadixTrie {
                 // If there's a child, then we update the current node and the root path, and
                 // continue down the trie.
                 Some(child) => {
-                    cur_node = txn
-                        .get(&self.db, &child.key(&cur_node.key).expect("no stump"))
+                    cur_node = self
+                        .get_node(txn, &child.key(&cur_node.key).expect("no stump"))
                         .unwrap();
                 }
             }
         }
 
-        let (mut cur_node, need_to_go_down): (TrieNode, _) = match predecessor_branch {
-            Some((key, need_to_go_down)) => (txn.get(&self.db, &key).unwrap(), need_to_go_down),
+        let (mut cur_node, need_to_go_down) = match predecessor_branch {
+            Some((key, need_to_go_down)) => (self.get_node(txn, &key).unwrap(), need_to_go_down),
             None => return None,
         };
 
@@ -1158,8 +1169,8 @@ impl MerkleRadixTrie {
             'outer: loop {
                 for maybe_child in cur_node.children.iter().rev() {
                     if let Some(child) = maybe_child {
-                        cur_node = txn
-                            .get(&self.db, &child.key(&cur_node.key).expect("no stump"))
+                        cur_node = self
+                            .get_node(txn, &child.key(&cur_node.key).expect("no stump"))
                             .unwrap();
                         continue 'outer;
                     }
@@ -1190,7 +1201,7 @@ impl MerkleRadixTrie {
                 let combined = child.key(&item.key).expect("no stump");
 
                 if combined.is_prefix_of(start) || *start <= combined {
-                    stack.push(txn.get(&self.db, &combined)
+                    stack.push(self.get_node(txn, &combined)
                         .expect("Failed to find the child of a Merkle Radix Trie node. The database must be corrupt!"));
                 }
             }
