@@ -140,6 +140,22 @@ impl Deserialize for ZKPState {
     }
 }
 
+/// Contains the id of the source of the newly pushed proof. This object is sent through the network alongside the zk proof.
+#[derive(Copy, Debug)]
+pub enum ProofSource<N: Network> {
+    PeerGenerated(N::PeerId),
+    SelfGenerated,
+}
+
+impl<N: Network> Clone for ProofSource<N> {
+    fn clone(&self) -> Self {
+        match self {
+            Self::PeerGenerated(peer_id) => Self::PeerGenerated(*peer_id),
+            Self::SelfGenerated => Self::SelfGenerated,
+        }
+    }
+}
+
 /// The ZK Proof and the respective block identifier. This object is sent though the network and stored in the zkp db.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ZKProof {
