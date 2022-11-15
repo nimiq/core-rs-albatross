@@ -198,6 +198,7 @@ impl Deserialize for bool {
 
 impl Serialize for bool {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+        #[allow(clippy::bool_to_int_with_if)]
         writer.write_u8(if *self { 1u8 } else { 0u8 })?;
         Ok(self.serialized_size())
     }
