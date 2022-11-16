@@ -55,7 +55,7 @@ function cleanup_exit() {
         echo "...FAILED..."
         exit 1
     fi
-    echo "SUCCESS" >> temp-state/RESULT.TXT
+    echo -n "SUCCESS" >> temp-state/RESULT.TXT
     exit 0
 }
 
@@ -68,7 +68,7 @@ function check_failures() {
         if grep -rin " panic " $logsdir/*.log
         then
             echo "   !!!   PANIC   !!!"
-            echo "PANIC" >> temp-state/RESULT.TXT
+            echo -n "PANIC" >> temp-state/RESULT.TXT
             fail=true
             break
         fi
@@ -88,21 +88,21 @@ function report_warnings() {
     if grep -rin "lock held for a long time" $logsdir/*.log
     then
         echo "   !!!   LONG LOCK HOLD TIME   !!!"
-        echo "LONG_LOCK_HOLD_TIME" >> temp-state/RESULT.TXT
+        echo -n "LONG_LOCK_HOLD_TIME" >> temp-state/RESULT.TXT
     fi
 
     # Search for slow lock acquisitions
     if grep -rin "slow.*took" $logsdir/*.log
     then
         echo "   !!!   SLOW LOCK ACQUISITION   !!!"
-        echo "SLOW_LOCK_ACQUISITION" >> temp-state/RESULT.TXT
+        echo -n "SLOW_LOCK_ACQUISITION" >> temp-state/RESULT.TXT
     fi
 
     # Search for deadlocks
     if grep -wrin "deadlock" $logsdir/*.log
     then
         echo "   !!!   POTENTIAL DEADLOCK DETECTED  !!!"
-        echo "DEADLOCK" >> temp-state/RESULT.TXT
+        echo -n "DEADLOCK" >> temp-state/RESULT.TXT
     fi
 }
 
@@ -433,7 +433,7 @@ do
 
     if [ $new_block_number -eq $old_block_number ] ; then
         echo "   !!!   BLOCKS ARE NOT BEING PRODUCED AFTER $sleep_time SECONDS   !!!"
-        echo "CHAIN-STALL" >> temp-state/RESULT.TXT
+        echo -n "CHAIN-STALL" >> temp-state/RESULT.TXT
         fail=true
         break
     fi

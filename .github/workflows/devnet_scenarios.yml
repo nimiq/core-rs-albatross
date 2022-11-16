@@ -65,7 +65,7 @@ jobs:
     - name: Retrieve initial timestamp
       id: initial_ts
       run: |
-         echo "::set-output name=INITIAL_TS::$(date +%s%N | cut -b1-13)"
+         echo "INITIAL_TS=$(date +%s%N | cut -b1-13)" >> $GITHUB_OUTPUT
     - name: Execute the test
       run: |          
           bash scripts/devnet/devnet.sh --run-environment ci ${{ matrix.devnet_args }}
@@ -86,22 +86,22 @@ jobs:
       if: always()
       run: |
           if [ -f temp-state/RESULT.TXT ]; then
-            echo "::set-output name=FAIL_REASON::$(cat temp-state/RESULT.TXT)"
+            echo "FAIL_REASON=$(cat temp-state/RESULT.TXT)" >> $GITHUB_OUTPUT
           else
-            echo "::set-output name=FAIL_REASON::other"
+            echo "FAIL_REASON=other" >> $GITHUB_OUTPUT
           fi
       id: reason
     - name: Retrieve final timestamp and Run ID
       if: always()
       id: final_ts_run_id
       run: |
-         echo "::set-output name=FINAL_TS::$(date +%s%N | cut -b1-13)"
-         echo "::set-output name=RUN_ID::$(cat temp-logs/*/conf/run_id.info)"
+         echo "FINAL_TS=$(date +%s%N | cut -b1-13)" >> $GITHUB_OUTPUT
+         echo "RUN_ID=$(cat temp-logs/*/conf/run_id.info)" >> $GITHUB_OUTPUT
     - name: Build Grafana dashboard link
       if: always()
       id: grafana_url
       run: |
-         echo "::set-output name=GRAFANA_URL::http://localhost:3001/d/YbjdvlU7z/nimiq-test?orgId=1&var-env=ci&var-run_id=${{steps.final_ts_run_id.outputs.RUN_ID}}&from=${{steps.initial_ts.outputs.INITIAL_TS}}&to=${{steps.final_ts_run_id.outputs.FINAL_TS}}"
+         echo "GRAFANA_URL=http://localhost:3001/d/YbjdvlU7z/nimiq-test?orgId=1&var-env=ci&var-run_id=${{steps.final_ts_run_id.outputs.RUN_ID}}&from=${{steps.initial_ts.outputs.INITIAL_TS}}&to=${{steps.final_ts_run_id.outputs.FINAL_TS}}" >> $GITHUB_OUTPUT
     - name: Report potential deadlocks to slack
       if: always() && contains(steps.reason.outputs.FAIL_REASON, 'DEADLOCK')
       uses: ravsamhq/notify-slack-action@v2
