@@ -91,8 +91,17 @@ impl ClientInner {
 
         // For the albatross dev net, we need to generate/download the test keys
         // for the zero-knowledge proofs.
-        if config.network_id == NetworkId::DevAlbatross {
-            log::info!("Setting up zero-knowledge proof keys for devnet.");
+        if config.network_id == NetworkId::DevAlbatross
+            && !NanoZKP::all_files_created(&config.zkp.setup_keys_path, config.zkp.prover_active)
+        {
+            // If the prover node is disabled, we do not generate keys
+            // but inform the user of having set a wrong location for the verifying keys.
+            if !config.zkp.prover_active {
+                log::error!("Missing ZKP verification keys. Make sure to set the correct `setup_keys_path` inside the config.");
+                return Err(Error::config_error("Missing ZKP verification keys"));
+            }
+
+            log::info!("Setting up zero-knowledge prover keys for devnet.");
             log::info!("This task only needs to be run once and might take about an hour.");
             let seed = [
                 1, 0, 52, 0, 0, 0, 0, 0, 1, 0, 10, 0, 22, 32, 0, 0, 2, 0, 55, 49, 0, 11, 0, 0, 3,

@@ -59,7 +59,7 @@ impl NanoZKP {
         Ok(())
     }
 
-    fn all_files_created(path: &Path, prover_active: bool) -> bool {
+    pub fn all_files_created(path: &Path, prover_active: bool) -> bool {
         let verifying_keys = path.join("verifying_keys");
         let proving_keys = path.join("proving_keys");
 

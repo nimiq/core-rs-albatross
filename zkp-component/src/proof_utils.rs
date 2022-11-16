@@ -158,6 +158,8 @@ pub fn generate_new_proof(
     Err(ZKProofGenerationError::InvalidBlock)
 }
 
+/// Starts the prover in a new child process.
+/// Warning: The child process will continue to run if the parent process crashes.
 pub async fn launch_generate_new_proof(
     mut recv: BroadcastReceiver<()>,
     proof_input: ProofInput,
