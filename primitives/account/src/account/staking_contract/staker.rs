@@ -3,12 +3,10 @@ use nimiq_database::WriteTransaction;
 use nimiq_keys::Address;
 use nimiq_primitives::{account::AccountError, coin::Coin};
 
-use crate::{
-    complete,
-    logs::{Log, OperationInfo},
-    staking_contract::receipts::StakerReceipt,
-    Account, AccountsTrie, Receipt, StakingContract,
-};
+use crate::complete;
+use crate::logs::{Log, OperationInfo};
+use crate::staking_contract::receipts::StakerReceipt;
+use crate::{Account, AccountError, AccountsTrie, OperationReceipt, StakingContract};
 
 /// Struct representing a staker in the staking contract.
 /// Actions concerning a staker are:
@@ -40,7 +38,7 @@ impl StakingContract {
         staker_address: &Address,
         value: Coin,
         delegation: Option<Address>,
-    ) -> Result<OperationInfo<Receipt>, AccountError> {
+    ) -> Result<OperationInfo<OperationReceipt>, AccountError> {
         // See if the staker already exists.
         if complete!(StakingContract::get_staker_or_update(
             accounts_tree,
@@ -145,7 +143,7 @@ impl StakingContract {
     }
 
     /// Reverts a create staker transaction.
-    pub(crate) fn revert_create_staker(
+    pub fn revert_create_staker(
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         staker_address: &Address,
@@ -249,12 +247,12 @@ impl StakingContract {
     /// stake for a staker.
     /// If a staker at the address doesn't exist, one will be created.
     /// The OperationInfo has always receipt = None, thus the type instationtion of the generic type to Receipt is irrelevant.
-    pub(crate) fn stake(
+    pub fn stake(
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         staker_address: &Address,
         value: Coin,
-    ) -> Result<OperationInfo<Receipt>, AccountError> {
+    ) -> Result<OperationInfo<OperationReceipt>, AccountError> {
         // Get the staker and check if it exists.
         let mut staker = match complete!(StakingContract::get_staker_or_update(
             accounts_tree,
@@ -349,7 +347,7 @@ impl StakingContract {
     }
 
     /// Reverts a stake transaction.
-    pub(crate) fn revert_stake(
+    pub fn revert_stake(
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         staker_address: &Address,
@@ -446,7 +444,7 @@ impl StakingContract {
     }
 
     /// Updates the staker details. Right now you can only update the delegation.
-    pub(crate) fn update_staker(
+    pub fn update_staker(
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         staker_address: &Address,
@@ -616,7 +614,7 @@ impl StakingContract {
     }
 
     /// Reverts updating staker details.
-    pub(crate) fn revert_update_staker(
+    pub fn revert_update_staker(
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         staker_address: &Address,
@@ -771,7 +769,7 @@ impl StakingContract {
     /// Removes coins from a staker's balance. If the entire staker's balance is unstaked then the
     /// staker is deleted.
     /// The OperationInfo has always receipt = None, thus the type instationtion of the generic type to Receipt is irrelevant.
-    pub(crate) fn unstake(
+    pub fn unstake(
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         staker_address: &Address,
@@ -896,7 +894,7 @@ impl StakingContract {
     }
 
     /// Reverts a unstake transaction.
-    pub(crate) fn revert_unstake(
+    pub fn revert_unstake(
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         staker_address: &Address,

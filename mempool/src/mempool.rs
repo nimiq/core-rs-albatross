@@ -399,7 +399,7 @@ impl Mempool {
                                     // The sender must be able to at least pay the fee (in case the tx fails)
                                     // (Assuming that all pending txns in the mempool for this sender are included in a block)
 
-                                    if !AccountTransactionInteraction::can_pay_fee(
+                                    if !AccountTransactionInteraction::has_sufficient_balance(
                                         &sender_account,
                                         old_tx,
                                         new_total + old_tx.fee,

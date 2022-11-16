@@ -12,22 +12,17 @@ pub use crate::accounts_list::AccountsList;
 pub use crate::basic_account::BasicAccount;
 pub use crate::htlc_contract::*;
 pub use crate::interaction_traits::*;
-pub use crate::logs::*;
+use crate::logs::*;
 pub use crate::receipts::*;
-pub use crate::staking_contract::*;
-pub use crate::vesting_contract::*;
 
 mod account;
 mod accounts;
 mod accounts_list;
-mod basic_account;
-mod htlc_contract;
-
+mod data_store;
+mod inherent;
 mod interaction_traits;
 mod logs;
 mod receipts;
-mod staking_contract;
-mod vesting_contract;
 
 #[macro_export]
 macro_rules! complete {

@@ -7,7 +7,7 @@ use std::str::FromStr;
 
 use lazy_static::lazy_static;
 use num_traits::identities::Zero;
-use num_traits::{SaturatingAdd, SaturatingSub};
+use num_traits::{CheckedSub, SaturatingAdd, SaturatingSub};
 use regex::Regex;
 use thiserror::Error;
 
@@ -223,11 +223,9 @@ impl PartialEq for CoinParseError {
 }
 
 lazy_static! {
-    /// This is an example for using doc comment attributes
     static ref COIN_PARSE_REGEX: Regex = {
         let r = r"^(?P<int_part>\d+)(.(?P<frac_part>\d{1,5})0*)?$";
-        Regex::new(r)
-            .unwrap_or_else(|e| panic!("Failed to compile regex: {r}: {e}"))
+        Regex::new(r).unwrap_or_else(|e| panic!("Failed to compile regex: {r}: {e}"))
     };
 }
 

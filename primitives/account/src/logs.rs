@@ -1,4 +1,4 @@
-use crate::Receipt;
+use crate::OperationReceipt;
 use beserial::Serialize as BeSerialize;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
@@ -409,14 +409,14 @@ impl<T: BeSerialize> From<OperationInfo<T>> for AccountInfo {
 // Along with the result of applying each individual transaction
 #[derive(Default, Eq, PartialEq, Debug)]
 pub struct BatchInfo {
-    pub receipts: Vec<Receipt>,
+    pub receipts: Vec<OperationReceipt>,
     pub tx_logs: Vec<TransactionLog>,
     pub inherent_logs: Vec<Log>,
 }
 
 impl BatchInfo {
     pub fn new(
-        receipts: Vec<Receipt>,
+        receipts: Vec<OperationReceipt>,
         tx_logs: Vec<TransactionLog>,
         inherent_logs: Vec<Log>,
     ) -> Self {

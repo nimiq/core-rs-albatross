@@ -30,12 +30,6 @@ pub enum AccountType {
     Vesting = 1,
     HTLC = 2,
     Staking = 3,
-    #[cfg_attr(feature = "ts-types", serde(skip))]
-    StakingValidator = 4,
-    #[cfg_attr(feature = "ts-types", serde(skip))]
-    StakingValidatorsStaker = 5,
-    #[cfg_attr(feature = "ts-types", serde(skip))]
-    StakingStaker = 6,
 }
 
 #[derive(Debug, Error)]
@@ -51,9 +45,6 @@ impl TryFrom<u8> for AccountType {
             1 => Ok(AccountType::Vesting),
             2 => Ok(AccountType::HTLC),
             3 => Ok(AccountType::Staking),
-            4 => Ok(AccountType::StakingValidator),
-            5 => Ok(AccountType::StakingValidatorsStaker),
-            6 => Ok(AccountType::StakingStaker),
             _ => Err(Error(value)),
         }
     }
@@ -66,9 +57,6 @@ impl From<AccountType> for u8 {
             AccountType::Vesting => 1,
             AccountType::HTLC => 2,
             AccountType::Staking => 3,
-            AccountType::StakingValidator => 4,
-            AccountType::StakingValidatorsStaker => 5,
-            AccountType::StakingStaker => 6,
         }
     }
 }

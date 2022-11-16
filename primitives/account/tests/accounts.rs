@@ -8,7 +8,7 @@ use beserial::{Deserialize, Serialize};
 use nimiq_account::{
     Account, Accounts, BasicAccount, BatchInfo, Log, TransactionLog, VestingContract,
 };
-use nimiq_account::{Receipt, Receipts};
+use nimiq_account::{OperationReceipt, Receipts};
 use nimiq_bls::KeyPair as BLSKeyPair;
 use nimiq_database::{mdbx::MdbxEnvironment, volatile::VolatileEnvironment, WriteTransaction};
 use nimiq_genesis_builder::GenesisBuilder;
@@ -43,7 +43,7 @@ fn it_can_commit_and_revert_a_block_body() {
         data: vec![],
     };
 
-    let mut receipts = vec![Receipt::Inherent {
+    let mut receipts = vec![OperationReceipt::Inherent {
         index: 0,
         pre_transactions: false,
         data: None,
@@ -100,7 +100,7 @@ fn it_can_commit_and_revert_a_block_body() {
 
     receipts.insert(
         0,
-        Receipt::Transaction {
+        OperationReceipt::Transaction {
             index: 0,
             sender: false,
             data: None,
@@ -109,7 +109,7 @@ fn it_can_commit_and_revert_a_block_body() {
 
     receipts.insert(
         0,
-        Receipt::Transaction {
+        OperationReceipt::Transaction {
             index: 0,
             sender: true,
             data: None,

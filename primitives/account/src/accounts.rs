@@ -2,6 +2,8 @@ use nimiq_database::{
     Environment, ReadTransaction, Transaction as DBTransaction, WriteTransaction,
 };
 use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_keys::Address;
+use nimiq_primitives::account::AccountType;
 use nimiq_primitives::{
     account::AccountError,
     key_nibbles::KeyNibbles,
@@ -10,10 +12,12 @@ use nimiq_primitives::{
 use nimiq_transaction::{inherent::Inherent, ExecutedTransaction, Transaction, TransactionFlags};
 use nimiq_trie::trie::{IncompleteTrie, MerkleRadixTrie};
 
+use crate::data_store::DataStore;
+use crate::interaction_traits::AccountPruningInteraction;
 use crate::{
-    logs::{BatchInfo, TransactionLog},
-    Account, AccountInherentInteraction, AccountTransactionInteraction, Log, Receipt, Receipts,
-    RevertTransactionLogs, TransactionInfo,
+    Account, AccountInherentInteraction, AccountReceipt, AccountTransactionInteraction, Inherent,
+    InherentOperationReceipt, OperationReceipt, Receipts, TransactionOperationReceipt,
+    TransactionReceipt,
 };
 
 /// An alias for the accounts tree.
@@ -38,13 +42,7 @@ impl Accounts {
 
     /// Initializes the Accounts struct with a given list of accounts.
     pub fn init(&self, txn: &mut WriteTransaction, genesis_accounts: Vec<(KeyNibbles, Account)>) {
-        log::debug!("Initializing Accounts");
         for (key, account) in genesis_accounts {
-            log::trace!(
-                "Adding new account: KeyNibbles: {:?}, Account: {:?}",
-                &key,
-                &account
-            );
             self.tree
                 .put(txn, &key, account)
                 .expect("temporary until accounts rewrite");
@@ -67,13 +65,79 @@ impl Accounts {
 
     pub fn get(
         &self,
-        key: &KeyNibbles,
+        address: &Address,
         txn_option: Option<&DBTransaction>,
     ) -> Result<Option<Account>, IncompleteTrie> {
+        let key = KeyNibbles::from(address);
         match txn_option {
-            Some(txn) => self.tree.get(txn, key),
-            None => self.tree.get(&ReadTransaction::new(&self.env), key),
+            Some(txn) => self.tree.get(txn, &key),
+            None => self.tree.get(&ReadTransaction::new(&self.env), &key),
         }
+    }
+
+    fn get_with_type(
+        &self,
+        txn: &DBTransaction,
+        address: &Address,
+        ty: AccountType,
+    ) -> Result<Account, AccountError> {
+        let account = self.get(address, Some(txn))?;
+        if account.account_type() != ty {
+            return Err(AccountError::TypeMismatch {
+                expected: ty,
+                got: account.account_type(),
+            });
+        }
+        Ok(account)
+    }
+
+    fn get_or_restore(
+        &self,
+        txn: &mut WriteTransaction,
+        address: &Address,
+        ty: AccountType,
+        pruned_account: Option<&AccountReceipt>,
+    ) -> Result<Account, AccountError> {
+        if let Some(account) = self.tree.get(txn, &KeyNibbles::from(address)) {
+            // TODO This check is unnecessary since we are only using this function during revert.
+            //  Replace with assert!()?
+            if account.account_type() != ty {
+                return Err(AccountError::TypeMismatch {
+                    expected: ty,
+                    got: account.account_type(),
+                });
+            }
+            Ok(account)
+        } else {
+            let store = DataStore::new(&self.tree, address);
+            Account::restore(ty, pruned_account, store.write(txn))
+        }
+    }
+
+    fn put(&self, txn: &mut WriteTransaction, address: &Address, account: Account) {
+        self.tree.put(txn, &KeyNibbles::from(address), account)
+    }
+
+    fn put_or_prune(
+        &self,
+        txn: &mut WriteTransaction,
+        address: &Address,
+        account: Account,
+    ) -> Option<AccountReceipt> {
+        if account.can_be_pruned() {
+            let store = DataStore::new(&self.tree, address);
+            let pruned_account = account.prune(store.read(txn))?;
+            self.prune(txn, address);
+            pruned_account
+        } else {
+            self.put(txn, address, account);
+            None
+        }
+    }
+
+    fn prune(&self, txn: &mut WriteTransaction, address: &Address) {
+        // TODO Remove subtree
+        self.tree.remove(txn, &KeyNibbles::from(address));
     }
 
     pub fn get_root_hash_assert(&self, txn_option: Option<&DBTransaction>) -> Blake2bHash {
@@ -108,94 +172,17 @@ impl Accounts {
         block_height: u32,
         timestamp: u64,
     ) -> Result<(Blake2bHash, Vec<ExecutedTransaction>), AccountError> {
-        let mut txn = WriteTransaction::new(&self.env);
-
-        let (_, executed_txns) =
-            self.commit(&mut txn, transactions, inherents, block_height, timestamp)?;
-
-        let hash = self.get_root_hash_assert(Some(&txn));
-
-        txn.abort();
-
-        Ok((hash, executed_txns))
-    }
-
-    /// This functions operates on a per transaction basis.
-    /// It operates atomically i.e.: either the transaction is fully committed (sender / recipient) or
-    /// it returns an error and no state is changed
-    pub fn commit_transaction(
-        &self,
-        txn: &mut WriteTransaction,
-        transaction: &Transaction,
-        block_height: u32,
-        timestamp: u64,
-    ) -> Result<TransactionInfo, AccountError> {
-        let mut transaction_info = TransactionInfo::new();
-
-        // If either of these two fails, we return
-        if transaction
-            .flags
-            .contains(TransactionFlags::CONTRACT_CREATION)
-        {
-            // If we have a contract creation we need to skip the recipients part
-            transaction_info.create_info = Some(Account::create(
-                &self.tree,
-                txn,
-                transaction,
-                block_height,
-                timestamp,
-            )?);
-        } else {
-            // Commit recipient
-            transaction_info.recipient_info = Some(Account::commit_incoming_transaction(
-                &self.tree,
-                txn,
-                transaction,
-                block_height,
-                timestamp,
-            )?);
-        }
-
-        // Commit sender
-        // If this fails, we need to revert any change that was committed to the accounts tree
-        match Account::commit_outgoing_transaction(
-            &self.tree,
-            txn,
-            transaction,
-            block_height,
-            timestamp,
-        ) {
-            Ok(account_info) => {
-                transaction_info.sender_info = Some(account_info);
-            }
-            Err(account_err) => {
-                if transaction
-                    .flags
-                    .contains(TransactionFlags::CONTRACT_CREATION)
-                {
-                    self.tree
-                        .remove(txn, &KeyNibbles::from(&transaction.recipient));
-                } else {
-                    Account::revert_incoming_transaction(
-                        &self.tree,
-                        txn,
-                        transaction,
-                        block_height,
-                        timestamp,
-                        transaction_info
-                            .recipient_info
-                            .expect("receipt is needed")
-                            .receipt
-                            .as_ref(),
-                    )
-                    .unwrap();
-                }
-                return Err(account_err);
-            }
-        };
-
-        // Return data
-        Ok(transaction_info)
+        todo!()
+        // let mut txn = WriteTransaction::new(&self.env);
+        //
+        // let (_, executed_txns) =
+        //     self.commit(&mut txn, transactions, inherents, block_height, timestamp)?;
+        //
+        // let hash = self.root_hash(Some(&txn));
+        //
+        // txn.abort();
+        //
+        // Ok((hash, executed_txns))
     }
 
     pub fn commit(
@@ -203,13 +190,11 @@ impl Accounts {
         txn: &mut WriteTransaction,
         transactions: &[Transaction],
         inherents: &[Inherent],
-        block_height: u32,
-        timestamp: u64,
-    ) -> Result<(BatchInfo, Vec<ExecutedTransaction>), AccountError> {
-        let result = self.commit_batch(txn, transactions, inherents, block_height, timestamp);
-        // It is fine to have an incomplete trie here.
-        let _ = self.tree.update_root(txn);
-        result
+        block_time: u64,
+    ) -> Result<Receipts, AccountError> {
+        let receipts = self.commit_batch(txn, transactions, inherents, block_time)?;
+        self.tree.update_root(txn);
+        Ok(receipts)
     }
 
     pub fn commit_batch(
@@ -217,404 +202,340 @@ impl Accounts {
         txn: &mut WriteTransaction,
         transactions: &[Transaction],
         inherents: &[Inherent],
-        block_height: u32,
-        timestamp: u64,
-    ) -> Result<(BatchInfo, Vec<ExecutedTransaction>), AccountError> {
-        // Fetches all pre inherents to commit.
-        let pre_inherents: Vec<Inherent> = inherents
-            .iter()
-            .filter(|i| i.is_pre_transactions())
-            .cloned()
-            .collect();
-        let mut batch_info = self.commit_inherents(txn, &pre_inherents, block_height, timestamp)?;
+        block_time: u64,
+    ) -> Result<Receipts, AccountError> {
+        let mut receipts = Receipts::default();
 
-        let mut executed_txns = Vec::new();
-
-        let mut sender_receipts = Vec::new();
-        let mut sender_logs = Vec::new();
-
-        let mut recipient_receipts = Vec::new();
-        let mut recipient_logs = Vec::new();
-
-        let mut create_logs = Vec::new();
-
-        // Commit each transaction
-        for (index, transaction) in transactions.iter().enumerate() {
-            match self.commit_transaction(txn, transaction, block_height, timestamp) {
-                Ok(txn_info) => {
-                    // Collect txn receipt/logs
-                    if let Some(sender_info) = txn_info.sender_info {
-                        // Process sender logs first
-                        sender_receipts.push(Receipt::Transaction {
-                            index: index as u16,
-                            sender: true,
-                            data: sender_info.receipt,
-                        });
-
-                        sender_logs.push(TransactionLog::new(transaction.hash(), sender_info.logs));
-                    }
-
-                    // Process recipients logs (if any)
-                    if let Some(recipient_info) = txn_info.recipient_info {
-                        recipient_receipts.push(Receipt::Transaction {
-                            index: index as u16,
-                            sender: false,
-                            data: recipient_info.receipt,
-                        });
-
-                        recipient_logs
-                            .push(TransactionLog::new(transaction.hash(), recipient_info.logs));
-                    }
-
-                    // Process create logs (if any)
-                    if let Some(info) = txn_info.create_info {
-                        // Note that create contract transactions do not generate receipts
-                        create_logs.push(TransactionLog::new(transaction.hash(), info.logs));
-                    }
-
-                    // Store the successfully executed transaction
-                    executed_txns.push(ExecutedTransaction::Ok(transaction.clone()));
-                }
-                Err(account_err) => {
-                    // Commit the failed transaction (i.e deduce fee) and collect logs
-                    match Account::commit_failed_transaction(
-                        &self.tree,
-                        txn,
-                        transaction,
-                        block_height,
-                    ) {
-                        Ok(account_info) => {
-                            // Store the reason why the transaction failed
-                            let mut logs = vec![Log::FailedTransaction {
-                                from: transaction.sender.clone(),
-                                to: transaction.recipient.clone(),
-                                failure_reason: account_err.to_string(),
-                            }];
-
-                            logs.extend(account_info.logs);
-
-                            // Store the executed failed transaction
-                            executed_txns.push(ExecutedTransaction::Err(transaction.clone()));
-
-                            // Collect receipts from applying a failed transaction (they go into the senders collection)
-                            sender_receipts.push(Receipt::Transaction {
-                                index: index as u16,
-                                sender: true,
-                                data: account_info.receipt,
-                            });
-
-                            recipient_receipts.push(Receipt::Transaction {
-                                index: index as u16,
-                                sender: false,
-                                data: None,
-                            });
-
-                            sender_logs.push(TransactionLog::new(transaction.hash(), logs));
-                        }
-                        Err(err) => {
-                            // This should not happen, as the mempool should verify that the sender can pay the fee
-                            return Err(err);
-                        }
-                    }
-                }
-            };
+        for transaction in transactions {
+            let receipt = self.commit_transaction(txn, transaction, block_time)?;
+            receipts.transactions.push(receipt);
         }
 
-        let mut senders_info = BatchInfo::new(sender_receipts, sender_logs, Vec::new());
-        batch_info.receipts.append(&mut senders_info.receipts);
+        for inherent in inherents {
+            let receipt = self.commit_inherent(txn, inherent, block_time)?;
+            receipts.inherents.push(receipt);
+        }
 
-        let mut recipients_info = BatchInfo::new(recipient_receipts, recipient_logs, Vec::new());
-        batch_info.receipts.append(&mut recipients_info.receipts);
-
-        let mut create_info = BatchInfo::new(Vec::new(), create_logs, Vec::new());
-        batch_info.receipts.append(&mut create_info.receipts);
-
-        // Fetches all pos inherents to commit.
-        let post_inherents: Vec<Inherent> = inherents
-            .iter()
-            .filter(|i| !i.is_pre_transactions())
-            .cloned()
-            .collect();
-        let mut post_inherents_info =
-            self.commit_inherents(txn, &post_inherents, block_height, timestamp)?;
-
-        // Appends newly generated inherents logs and receipts.
-        batch_info
-            .receipts
-            .append(&mut post_inherents_info.receipts);
-
-        batch_info
-            .inherent_logs
-            .append(&mut post_inherents_info.inherent_logs);
-
-        // Merges all tx_logs into batch_info.
-        Ok((
-            Self::check_merge_tx_logs(
-                batch_info,
-                senders_info.tx_logs,
-                recipients_info.tx_logs,
-                create_info.tx_logs,
-            ),
-            executed_txns,
-        ))
+        Ok(receipts)
     }
 
-    pub fn revert_transaction(
+    fn commit_transaction(
         &self,
-        db_txn: &mut WriteTransaction,
-        transaction: &ExecutedTransaction,
-        block_height: u32,
-        timestamp: u64,
-        receipts: (Receipt, Option<Receipt>),
-    ) -> RevertTransactionLogs {
-        let (sender_receipt, recipient_receipt) = receipts;
-
-        let mut logs = RevertTransactionLogs::new();
-
-        match transaction {
-            ExecutedTransaction::Ok(txn) => {
-                if let Some(recipient_receipt) = recipient_receipt {
-                    // Revert recipients
-                    match recipient_receipt {
-                        Receipt::Transaction {
-                            index: _,
-                            sender: _,
-                            data,
-                        } => {
-                            logs.recipient_log = Account::revert_incoming_transaction(
-                                &self.tree,
-                                db_txn,
-                                txn,
-                                block_height,
-                                timestamp,
-                                data.as_ref(),
-                            )
-                            .unwrap_or_else(|_| {
-                                log::error!(
-                                    " Failed to revert a successful incoming transaction: {:?}",
-                                    txn
-                                );
-                                panic!();
-                            })
-                        }
-
-                        _ => {
-                            unreachable!()
-                        }
-                    }
-                }
-
-                match sender_receipt {
-                    Receipt::Transaction {
-                        index: _,
-                        sender: _,
-                        data,
-                    } => {
-                        // Revert senders
-                        logs.sender_log = Account::revert_outgoing_transaction(
-                            &self.tree,
-                            db_txn,
-                            txn,
-                            block_height,
-                            timestamp,
-                            data.as_ref(),
-                        )
-                        .unwrap_or_else(|_| {
-                            log::error!(
-                                " Failed to revert a successful outgoing transaction: {:?}",
-                                txn
-                            );
-                            panic!();
-                        })
-                    }
-                    _ => {
-                        unreachable!()
-                    }
-                }
-            }
-            ExecutedTransaction::Err(txn) => {
-                match sender_receipt {
-                    Receipt::Transaction {
-                        index: _,
-                        sender: _,
-                        data,
-                    } => {
-                        // Revert failed transaction, logs are stored inside the senders container
-                        logs.sender_log = Account::revert_failed_transaction(
-                            &self.tree,
-                            db_txn,
-                            txn,
-                            data.as_ref(),
-                        )
-                        .unwrap_or_else(|_| {
-                            log::error!(" Failed to revert a failed transaction: {:?}", txn);
-                            panic!();
-                        })
-                    }
-                    _ => {
-                        unreachable!()
-                    }
-                }
-            }
+        txn: &mut WriteTransaction,
+        transaction: &Transaction,
+        block_time: u64,
+    ) -> Result<TransactionOperationReceipt, AccountError> {
+        if let Ok(receipt) = self.try_commit_transaction(txn, transaction, block_time) {
+            Ok(TransactionOperationReceipt::Ok(receipt))
+        } else {
+            let receipt = self.commit_failed_transaction(txn, transaction, block_time)?;
+            Ok(TransactionOperationReceipt::Err(receipt))
         }
-        logs
+    }
+
+    /// This function operates atomically i.e.: either the transaction is fully committed
+    /// (sender + recipient) or it returns an error and no state is changed
+    fn try_commit_transaction(
+        &self,
+        txn: &mut WriteTransaction,
+        transaction: &Transaction,
+        block_time: u64,
+    ) -> Result<TransactionReceipt, AccountError> {
+        // Commit sender.
+        let sender_address = &transaction.sender;
+        let mut sender_store = DataStore::new(&self.tree, sender_address);
+        let mut sender_account =
+            self.get_with_type(txn, sender_address, transaction.sender_type)?;
+
+        let mut sender_receipt = sender_account.commit_outgoing_transaction(
+            transaction,
+            block_time,
+            sender_store.write(txn),
+        )?;
+
+        // Commit recipient.
+        let recipient_address = &transaction.recipient;
+        let mut recipient_store = DataStore::new(&self.tree, recipient_address);
+        let mut recipient_account;
+
+        // Handle contract creation.
+        let recipient_result = if transaction
+            .flags
+            .contains(TransactionFlags::CONTRACT_CREATION)
+        {
+            // XXX This only checks if the recipient account is a basic account, storing the
+            // account itself is unnecessary since we are creating a new account anyways.
+            // The basic account check is redundant as well if we assume that we only process
+            // transactions here that have passed the intrinsic transaction verification and are
+            // not duplicated.
+            recipient_account = self.get_with_type(txn, recipient_address, AccountType::Basic)?;
+
+            Account::create_new_contract(
+                transaction,
+                recipient_account.balance(),
+                block_time,
+                recipient_store.write(txn),
+            )
+            .map(|account| {
+                recipient_account = account;
+                None
+            })
+        } else {
+            recipient_account =
+                self.get_with_type(txn, recipient_address, transaction.recipient_type)?;
+            recipient_account.commit_incoming_transaction(
+                transaction,
+                block_time,
+                recipient_store.write(txn),
+            )
+        };
+
+        // If recipient failed, revert sender.
+        if let Err(e) = recipient_result {
+            // TODO Log error
+
+            sender_account
+                .revert_outgoing_transaction(
+                    transaction,
+                    block_time,
+                    sender_receipt.as_ref(),
+                    sender_store.write(txn),
+                )
+                .expect("Failed to revert sender account");
+
+            return Err(e);
+        }
+
+        // Update or prune sender.
+        let pruned_account = self.put_or_prune(txn, sender_address, sender_account);
+
+        // Update recipient.
+        self.put(txn, recipient_address, recipient_account);
+
+        Ok(TransactionReceipt {
+            sender_receipt,
+            recipient_receipt: recipient_result.unwrap(),
+            pruned_account,
+        })
+    }
+
+    fn commit_failed_transaction(
+        &self,
+        txn: &mut WriteTransaction,
+        transaction: &Transaction,
+        block_time: u64,
+    ) -> Result<TransactionReceipt, AccountError> {
+        let sender_address = &transaction.sender;
+        let mut sender_store = DataStore::new(&self.tree, sender_address);
+        let mut sender_account =
+            self.get_with_type(txn, sender_address, transaction.sender_type)?;
+
+        let sender_receipt = sender_account.commit_failed_transaction(
+            transaction,
+            block_time,
+            sender_store.write(txn),
+        )?;
+
+        let pruned_account = self.put_or_prune(txn, sender_address, sender_account);
+
+        Ok(TransactionReceipt {
+            sender_receipt,
+            recipient_receipt: None,
+            pruned_account,
+        })
+    }
+
+    fn commit_inherent(
+        &self,
+        txn: &mut WriteTransaction,
+        inherent: &Inherent,
+        block_time: u64,
+    ) -> Result<InherentOperationReceipt, AccountError> {
+        let address = inherent.target();
+        let store = DataStore::new(&self.tree, address);
+        let mut account = self.get(address, Some(txn))?;
+
+        if let Ok(receipt) = account.commit_inherent(inherent, block_time, store.write(txn)) {
+            self.put(txn, address, account);
+            Ok(InherentOperationReceipt::Ok(receipt))
+        } else {
+            // TODO Log error
+            Ok(InherentOperationReceipt::Err(None))
+        }
     }
 
     pub fn revert(
         &self,
         txn: &mut WriteTransaction,
-        transactions: &[ExecutedTransaction],
+        transactions: &[Transaction],
         inherents: &[Inherent],
-        block_height: u32,
-        timestamp: u64,
+        block_time: u64,
         receipts: &Receipts,
-    ) -> Result<BatchInfo, AccountError> {
-        let logs = self.revert_batch(
-            txn,
-            transactions,
-            inherents,
-            block_height,
-            timestamp,
-            receipts,
-        )?;
+    ) -> Result<(), AccountError> {
+        self.revert_batch(txn, transactions, inherents, block_time, receipts)?;
         // It is fine to have an incomplete trie here.
         let _ = self.tree.update_root(txn);
-        Ok(logs)
+        Ok(())
     }
 
     pub fn revert_batch(
         &self,
         txn: &mut WriteTransaction,
-        transactions: &[ExecutedTransaction],
+        transactions: &[Transaction],
         inherents: &[Inherent],
-        block_height: u32,
-        timestamp: u64,
+        block_time: u64,
         receipts: &Receipts,
-    ) -> Result<BatchInfo, AccountError> {
-        // Organizes the receipts by the different types of inherents (pre or post) and transactions (senders or recipients) receipts.
-        let (
-            sender_receipts,
-            recipient_receipts,
-            pre_tx_inherent_receipts,
-            post_tx_inherent_receipts,
-        ) = Self::prepare_receipts(receipts);
+    ) -> Result<(), AccountError> {
+        // Revert inherents in reverse order.
+        assert_eq!(inherents.len(), receipts.inherents.len());
+        let iter = inherents.into_iter().zip(receipts.inherents.iter()).rev();
+        for (inherent, receipt) in iter {
+            self.revert_inherent(txn, inherent, block_time, receipt)?;
+        }
 
-        // Reverts transactions in the inverse order of the commit.
-        let logs_inherent = self.revert_inherents(
+        // Revert transactions in reverse order.
+        assert_eq!(transactions.len(), receipts.transactions.len());
+        let iter = transactions
+            .into_iter()
+            .zip(receipts.transactions.iter())
+            .rev();
+        for (transaction, receipt) in iter {
+            self.revert_transaction(txn, transaction, block_time, receipt)?;
+        }
+
+        Ok(())
+    }
+
+    fn revert_transaction(
+        &self,
+        txn: &mut WriteTransaction,
+        transaction: &Transaction,
+        block_time: u64,
+        receipt: &TransactionOperationReceipt,
+    ) -> Result<(), AccountError> {
+        match receipt {
+            OperationReceipt::Ok(receipt) => {
+                self.revert_successful_transaction(txn, transaction, block_time, receipt)
+            }
+            OperationReceipt::Err(receipt) => {
+                self.revert_failed_transaction(txn, transaction, block_time, receipt)
+            }
+        }
+    }
+
+    // TODO This function might leave the WriteTransaction in an inconsistent state if it returns an error!
+    fn revert_successful_transaction(
+        &self,
+        txn: &mut WriteTransaction,
+        transaction: &Transaction,
+        block_time: u64,
+        receipt: &TransactionReceipt,
+    ) -> Result<(), AccountError> {
+        // Revert recipient first.
+        let recipient_address = &transaction.recipient;
+        let recipient_store = DataStore::new(&self.tree, recipient_address);
+        let mut recipient_account =
+            self.get_with_type(txn, recipient_address, transaction.recipient_type)?;
+
+        // Revert contract creation.
+        if transaction
+            .flags
+            .contains(TransactionFlags::CONTRACT_CREATION)
+        {
+            recipient_account.revert_new_contract(
+                transaction,
+                block_time,
+                recipient_store.write(txn),
+            )?;
+
+            recipient_account = Account::default_with_balance(recipient_account.balance());
+        } else {
+            recipient_account.revert_incoming_transaction(
+                transaction,
+                block_time,
+                receipt.recipient_receipt.as_ref(),
+                recipient_store.write(txn),
+            )?;
+        }
+
+        // Revert sender. It might need to be restored first if it was pruned.
+        let sender_address = &transaction.sender;
+        let sender_store = DataStore::new(&self.tree, sender_address);
+        let mut sender_account = self.get_or_restore(
             txn,
-            inherents,
-            block_height,
-            timestamp,
-            post_tx_inherent_receipts,
+            sender_address,
+            transaction.sender_type,
+            receipt.pruned_account.as_ref(),
         )?;
 
-        // Complete batch_info for the revert. This batch_info has the receipts always empty, since there is nothing else to revert.
-        let mut batch_info = BatchInfo::new(Vec::new(), Vec::new(), logs_inherent);
-        let mut recipients_logs = Vec::new();
-        let mut senders_logs = Vec::new();
-        let mut contracts_logs = Vec::new();
+        sender_account.revert_outgoing_transaction(
+            transaction,
+            block_time,
+            receipt.sender_receipt.as_ref(),
+            sender_store.write(txn),
+        )?;
 
-        let mut recipient_index = 0_usize;
-        let mut recipient_receipt;
+        // Store sender.
+        self.put(txn, sender_address, sender_account);
 
-        // Safety check, we should always have one sender receipt per transaction
-        if transactions.len() != sender_receipts.len() {
-            panic!(" The number of sender receipts does not match the number of transactions");
-        }
+        // Update or prune recipient.
+        // The recipient account might have been created by the incoming transaction.
+        self.put_or_prune(txn, recipient_address, recipient_account);
 
-        //Iterate the transactions in the reverse order they were applied
-        for (index, transaction) in transactions.iter().rev().enumerate() {
-            // Sender receipts are always present, however a recipient receipt might or might not be present:
-            // it is not present when the transaction is a contract creation transaction, so we need to track
-            // recipient receipts using a different index,
-            let sender_receipt = sender_receipts[index].clone();
+        Ok(())
+    }
 
-            match sender_receipt {
-                Receipt::Transaction {
-                    index: receipt_index,
-                    sender: _,
-                    data: _,
-                } => {
-                    assert_eq!((transactions.len() - 1) - index, receipt_index as usize)
-                }
-                _ => panic!(" Only transaction receipts should be present "),
-            }
-
-            if transaction
-                .get_raw_transaction()
-                .flags
-                .contains(TransactionFlags::CONTRACT_CREATION)
-            {
-                match transaction {
-                    ExecutedTransaction::Ok(transaction) => {
-                        Account::delete(&self.tree, txn, transaction).unwrap();
-
-                        contracts_logs.push(TransactionLog::new(
-                            transaction.hash(),
-                            vec![Log::RevertContract {
-                                contract_address: transaction.recipient.clone(),
-                            }],
-                        ));
-                    }
-                    ExecutedTransaction::Err(_) => {
-                        // If the contract creation failed, we have nothing to do
-                    }
-                }
-
-                recipient_receipt = None;
-            } else {
-                let receipt = recipient_receipts[recipient_index].clone();
-                match receipt {
-                    Receipt::Transaction {
-                        index: receipt_index,
-                        sender: _,
-                        data: _,
-                    } => {
-                        assert_eq!((transactions.len() - 1) - index, receipt_index as usize)
-                    }
-                    _ => panic!(" Only transaction receipts should be present "),
-                }
-                recipient_receipt = Some(receipt);
-                recipient_index += 1;
-            }
-
-            let logs = self.revert_transaction(
-                txn,
-                transaction,
-                block_height,
-                timestamp,
-                (sender_receipt, recipient_receipt),
-            );
-
-            if !logs.recipient_log.is_empty() {
-                recipients_logs.push(TransactionLog::new(
-                    transaction.get_raw_transaction().hash(),
-                    logs.recipient_log,
-                ));
-            }
-
-            senders_logs.push(TransactionLog::new(
-                transaction.get_raw_transaction().hash(),
-                logs.sender_log,
-            ));
-        }
-
-        // Gathers all the inherent_logs into the batch_info return object.
-        batch_info.inherent_logs.append(&mut self.revert_inherents(
+    fn revert_failed_transaction(
+        &self,
+        txn: &mut WriteTransaction,
+        transaction: &Transaction,
+        block_time: u64,
+        receipt: &TransactionReceipt,
+    ) -> Result<(), AccountError> {
+        let sender_address = &transaction.sender;
+        let mut sender_store = DataStore::new(&self.tree, sender_address);
+        let mut sender_account = self.get_or_restore(
             txn,
-            inherents,
-            block_height,
-            timestamp,
-            pre_tx_inherent_receipts,
-        )?);
+            sender_address,
+            transaction.sender_type,
+            receipt.pruned_account.as_ref(),
+        )?;
 
-        // Merges all tx_logs into batch_info.
-        Ok(Self::check_merge_tx_logs(
-            batch_info,
-            senders_logs,
-            recipients_logs,
-            contracts_logs,
-        ))
+        sender_account.revert_failed_transaction(
+            transaction,
+            block_time,
+            receipt.sender_receipt.as_ref(),
+            sender_store.write(txn),
+        )?;
+
+        self.put(txn, sender_address, sender_account);
+
+        Ok(())
+    }
+
+    fn revert_inherent(
+        &self,
+        txn: &mut WriteTransaction,
+        inherent: &Inherent,
+        block_time: u64,
+        receipt: &InherentOperationReceipt,
+    ) -> Result<(), AccountError> {
+        // If the inherent operation failed, there is nothing to revert.
+        let receipt = match receipt {
+            OperationReceipt::Ok(receipt) => receipt,
+            OperationReceipt::Err(_) => return Ok(()),
+        };
+
+        let address = inherent.target();
+        let store = DataStore::new(&self.tree, address);
+        let mut account = self.get(address, Some(txn))?;
+
+        account.revert_inherent(inherent, block_time, receipt.as_ref(), store.write(txn))?;
+
+        // The account might have been created by the inherent (i.e. reward inherent).
+        self.put_or_prune(txn, address, account);
+
+        Ok(())
     }
 
     pub fn finalize_batch(&self, txn: &mut WriteTransaction) {
@@ -656,149 +577,5 @@ impl Accounts {
                     .get_chunk_with_proof(&ReadTransaction::new(&self.env), start_key.., limit)
             }
         }
-    }
-
-    fn commit_inherents(
-        &self,
-        txn: &mut WriteTransaction,
-        inherents: &[Inherent],
-        block_height: u32,
-        timestamp: u64,
-    ) -> Result<BatchInfo, AccountError> {
-        let mut receipts = Vec::new();
-        let mut logs = Vec::new();
-
-        for (index, inherent) in inherents.iter().enumerate() {
-            let mut account_info =
-                Account::commit_inherent(&self.tree, txn, inherent, block_height, timestamp)?;
-
-            receipts.push(Receipt::Inherent {
-                index: index as u16,
-                pre_transactions: inherent.is_pre_transactions(),
-                data: account_info.receipt,
-            });
-
-            logs.append(&mut account_info.logs);
-        }
-
-        Ok(BatchInfo::new(receipts, Vec::new(), logs))
-    }
-
-    fn revert_inherents(
-        &self,
-        txn: &mut WriteTransaction,
-        inherents: &[Inherent],
-        block_height: u32,
-        timestamp: u64,
-        receipts: Vec<Receipt>,
-    ) -> Result<Vec<Log>, AccountError> {
-        let mut inherent_logs = Vec::new();
-
-        for receipt in receipts {
-            inherent_logs.append(&mut match receipt {
-                Receipt::Inherent { index, data, .. } => Account::revert_inherent(
-                    &self.tree,
-                    txn,
-                    &inherents[index as usize],
-                    block_height,
-                    timestamp,
-                    data.as_ref(),
-                )?,
-                _ => {
-                    unreachable!()
-                }
-            });
-        }
-
-        Ok(inherent_logs)
-    }
-
-    fn prepare_receipts(
-        receipts: &Receipts,
-    ) -> (Vec<Receipt>, Vec<Receipt>, Vec<Receipt>, Vec<Receipt>) {
-        let mut sender_receipts = Vec::new();
-        let mut recipient_receipts = Vec::new();
-        let mut pre_tx_inherent_receipts = Vec::new();
-        let mut post_tx_inherent_receipts = Vec::new();
-
-        for receipt in &receipts.receipts {
-            match receipt {
-                Receipt::Transaction { sender, .. } => {
-                    if *sender {
-                        sender_receipts.push(receipt.clone());
-                    } else {
-                        recipient_receipts.push(receipt.clone());
-                    }
-                }
-                Receipt::Inherent {
-                    pre_transactions, ..
-                } => {
-                    if *pre_transactions {
-                        pre_tx_inherent_receipts.push(receipt.clone());
-                    } else {
-                        post_tx_inherent_receipts.push(receipt.clone());
-                    }
-                }
-            }
-        }
-
-        // We put the vector in reverse order so that it reverse matches the order in which they
-        // were applied to the block. The performance of sorting then reversing is actually quite
-        // good.
-        sender_receipts.sort();
-        sender_receipts.reverse();
-        recipient_receipts.sort();
-        recipient_receipts.reverse();
-        pre_tx_inherent_receipts.sort();
-        pre_tx_inherent_receipts.reverse();
-        post_tx_inherent_receipts.sort();
-        post_tx_inherent_receipts.reverse();
-
-        (
-            sender_receipts,
-            recipient_receipts,
-            pre_tx_inherent_receipts,
-            post_tx_inherent_receipts,
-        )
-    }
-
-    /// Merges the log transactions from senders, recipients and create_contracts and returns batch_info containing the merged tx_logs.
-    /// This means that the batch_info inherent_logs and receipts are preserved and returned by this method.
-    /// The batch_info provided as argument is expected to have its tx_logs vec empty, otherwise its content will get overwritten.
-    fn check_merge_tx_logs(
-        mut batch_info: BatchInfo,
-        mut senders_logs: Vec<TransactionLog>,
-        mut recipients_logs: Vec<TransactionLog>,
-        mut create_logs: Vec<TransactionLog>,
-    ) -> BatchInfo {
-        // The senders has all transaction log entries. We iterate over it and append the remaining logs to the respective tx_log of sender_logs.
-        let mut tx_logs_recipients = recipients_logs.iter_mut().peekable();
-        let mut tx_logs_create = create_logs.iter_mut().peekable();
-
-        for tx_log_sender in senders_logs.iter_mut() {
-            if let Some(tx_log) = tx_logs_recipients.peek_mut() {
-                if tx_log.tx_hash == tx_log_sender.tx_hash {
-                    tx_log_sender.logs.append(&mut tx_log.logs);
-                    tx_logs_recipients.next();
-                    // The transactions are wither a create or anything else (mutually exclusive), thus we can avoid comparing to the tx_create.
-                    continue;
-                }
-            }
-
-            if let Some(tx_log) = tx_logs_create.peek_mut() {
-                if tx_log.tx_hash == tx_log_sender.tx_hash {
-                    tx_log_sender.logs.append(&mut tx_log.logs);
-                    tx_logs_create.next();
-                }
-            }
-        }
-
-        // All recipients and create tx_logs should have a matching tx_log from the senders.
-        // Therefore, all tx_logs of these two vecs are now expected to be processed and appended senders_logs tx_logs.
-        assert_eq!(None, tx_logs_recipients.peek(), "recipients tx_logs were not fully processed. Possible cause is a ordering difference compared to senders_logs tx_logs");
-        assert_eq!(None, tx_logs_create.peek(), "create tx_logs were not fully processed. Possible cause is a ordering difference compared to senders_logs tx_logs");
-
-        batch_info.tx_logs = senders_logs.to_vec();
-        batch_info
     }
 }

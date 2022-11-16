@@ -16,7 +16,7 @@ use crate::{
         DeleteValidatorReceipt, InactivateValidatorReceipt, ReactivateValidatorReceipt,
         UnparkValidatorReceipt, UpdateValidatorReceipt,
     },
-    Account, AccountsTrie, Receipt, StakingContract,
+    Account, AccountsTrie, OperationReceipt, StakingContract,
 };
 
 /// Struct representing a validator in the staking contract.
@@ -92,7 +92,7 @@ impl StakingContract {
         reward_address: Address,
         signal_data: Option<Blake2bHash>,
         deposit: Coin,
-    ) -> Result<OperationInfo<Receipt>, AccountError> {
+    ) -> Result<OperationInfo<OperationReceipt>, AccountError> {
         // See if the validator already exists.
         if complete!(StakingContract::get_validator_or_update(
             accounts_tree,
@@ -159,7 +159,7 @@ impl StakingContract {
     }
 
     /// Reverts creating a new validator entry.
-    pub(crate) fn revert_create_validator(
+    pub fn revert_create_validator(
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         validator_address: &Address,
@@ -212,7 +212,7 @@ impl StakingContract {
     }
 
     /// Updates some of the validator details (signing key, voting key, reward address and/or signal data).
-    pub(crate) fn update_validator(
+    pub fn update_validator(
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         validator_address: &Address,
@@ -288,7 +288,7 @@ impl StakingContract {
     }
 
     /// Reverts updating validator details.
-    pub(crate) fn revert_update_validator(
+    pub fn revert_update_validator(
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         validator_address: &Address,
@@ -338,7 +338,7 @@ impl StakingContract {
 
     /// Inactivates a validator. It is necessary to retire a validator before dropping it. This also
     /// removes the validator from the parking set.
-    pub(crate) fn inactivate_validator(
+    pub fn inactivate_validator(
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         validator_address: &Address,
@@ -437,7 +437,7 @@ impl StakingContract {
     }
 
     /// Reverts inactivating a validator.
-    pub(crate) fn revert_inactivate_validator(
+    pub fn revert_inactivate_validator(
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         validator_address: &Address,
@@ -503,7 +503,7 @@ impl StakingContract {
     }
 
     /// Reactivates a validator.
-    pub(crate) fn reactivate_validator(
+    pub fn reactivate_validator(
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         validator_address: &Address,
@@ -603,7 +603,7 @@ impl StakingContract {
     }
 
     /// Reverts reactivating a validator.
-    pub(crate) fn revert_reactivate_validator(
+    pub fn revert_reactivate_validator(
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         validator_address: &Address,
@@ -662,7 +662,7 @@ impl StakingContract {
 
     /// Removes a validator from the parked set and the disabled slots. This is used by validators
     /// after they get slashed so that they can produce blocks again.
-    pub(crate) fn unpark_validator(
+    pub fn unpark_validator(
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         validator_address: &Address,
@@ -757,7 +757,7 @@ impl StakingContract {
     }
 
     /// Reverts an unparking transaction.
-    pub(crate) fn revert_unpark_validator(
+    pub fn revert_unpark_validator(
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         validator_address: &Address,
@@ -811,7 +811,7 @@ impl StakingContract {
     /// epoch in order to be able to be deleted. This is necessary because if the validator was an
     /// elected validator when it was inactivated then it might receive rewards until the end of the
     /// first batch of the next epoch. So it needs to be available.
-    pub(crate) fn delete_validator(
+    pub fn delete_validator(
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         validator_address: &Address,
@@ -955,7 +955,7 @@ impl StakingContract {
     }
 
     /// Reverts deleting a validator.
-    pub(crate) fn revert_delete_validator(
+    pub fn revert_delete_validator(
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         validator_address: &Address,

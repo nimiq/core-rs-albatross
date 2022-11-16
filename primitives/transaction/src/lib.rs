@@ -160,7 +160,7 @@ impl Default for SignatureProof {
 #[derive(Clone, Eq, Debug, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum ExecutedTransaction {
-    /// A successful executed transaction
+    /// A successfully executed transaction
     Ok(Transaction),
     /// A failed transaction (only fees are deducted)
     Err(Transaction),

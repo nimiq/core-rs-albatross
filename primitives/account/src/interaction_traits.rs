@@ -1,95 +1,104 @@
-use nimiq_database::WriteTransaction;
+use nimiq_primitives::account::AccountType;
 use nimiq_primitives::{account::AccountError, coin::Coin};
 use nimiq_transaction::{inherent::Inherent, Transaction};
 
-use crate::{logs::AccountInfo, AccountsTrie, Log};
+use crate::data_store::{DataStoreRead, DataStoreWrite};
+use crate::{Account, AccountError, AccountReceipt, Inherent};
 
 pub trait AccountTransactionInteraction: Sized {
-    fn can_pay_fee(
-        &self,
+    fn create_new_contract(
         transaction: &Transaction,
-        current_balance: Coin,
+        initial_balance: Coin,
         block_time: u64,
-    ) -> bool;
+        data_store: DataStoreWrite,
+    ) -> Result<Account, AccountError>;
 
-    fn create(
-        accounts_tree: &AccountsTrie,
-        db_txn: &mut WriteTransaction,
+    fn revert_new_contract(
+        &mut self,
         transaction: &Transaction,
-        block_height: u32,
         block_time: u64,
-    ) -> Result<AccountInfo, AccountError>;
-
-    fn delete(
-        accounts_tree: &AccountsTrie,
-        db_txn: &mut WriteTransaction,
-        transaction: &Transaction,
-    ) -> Result<Vec<Log>, AccountError>;
+        data_store: DataStoreWrite,
+    ) -> Result<(), AccountError>;
 
     fn commit_incoming_transaction(
-        accounts_tree: &AccountsTrie,
-        db_txn: &mut WriteTransaction,
+        &mut self,
         transaction: &Transaction,
-        block_height: u32,
         block_time: u64,
-    ) -> Result<AccountInfo, AccountError>;
+        data_store: DataStoreWrite,
+    ) -> Result<Option<AccountReceipt>, AccountError>;
 
     fn revert_incoming_transaction(
-        accounts_tree: &AccountsTrie,
-        db_txn: &mut WriteTransaction,
+        &mut self,
         transaction: &Transaction,
-        block_height: u32,
         block_time: u64,
-        receipt: Option<&Vec<u8>>,
-    ) -> Result<Vec<Log>, AccountError>;
+        receipt: Option<&AccountReceipt>,
+        data_store: DataStoreWrite,
+    ) -> Result<(), AccountError>;
 
     fn commit_outgoing_transaction(
-        accounts_tree: &AccountsTrie,
-        db_txn: &mut WriteTransaction,
+        &mut self,
         transaction: &Transaction,
-        block_height: u32,
         block_time: u64,
-    ) -> Result<AccountInfo, AccountError>;
+        data_store: DataStoreWrite,
+    ) -> Result<Option<AccountReceipt>, AccountError>;
 
     fn revert_outgoing_transaction(
-        accounts_tree: &AccountsTrie,
-        db_txn: &mut WriteTransaction,
+        &mut self,
         transaction: &Transaction,
-        block_height: u32,
         block_time: u64,
-        receipt: Option<&Vec<u8>>,
-    ) -> Result<Vec<Log>, AccountError>;
+        receipt: Option<&AccountReceipt>,
+        data_store: DataStoreWrite,
+    ) -> Result<(), AccountError>;
 
     fn commit_failed_transaction(
-        accounts_tree: &AccountsTrie,
-        db_txn: &mut WriteTransaction,
+        &mut self,
         transaction: &Transaction,
-        block_height: u32,
-    ) -> Result<AccountInfo, AccountError>;
+        block_time: u64,
+        data_store: DataStoreWrite,
+    ) -> Result<Option<AccountReceipt>, AccountError>;
 
     fn revert_failed_transaction(
-        accounts_tree: &AccountsTrie,
-        db_txn: &mut WriteTransaction,
+        &mut self,
         transaction: &Transaction,
-        receipt: Option<&Vec<u8>>,
-    ) -> Result<Vec<Log>, AccountError>;
+        block_time: u64,
+        receipt: Option<&AccountReceipt>,
+        data_store: DataStoreWrite,
+    ) -> Result<(), AccountError>;
+
+    fn has_sufficient_balance(
+        &self,
+        transaction: &Transaction,
+        reserved_balance: Coin,
+        block_time: u64,
+        data_store: DataStoreRead,
+    ) -> Result<bool, AccountError>;
 }
 
 pub trait AccountInherentInteraction: Sized {
     fn commit_inherent(
-        accounts_tree: &AccountsTrie,
-        db_txn: &mut WriteTransaction,
+        &mut self,
         inherent: &Inherent,
-        block_height: u32,
         block_time: u64,
-    ) -> Result<AccountInfo, AccountError>;
+        data_store: DataStoreWrite,
+    ) -> Result<Option<AccountReceipt>, AccountError>;
 
     fn revert_inherent(
-        accounts_tree: &AccountsTrie,
-        db_txn: &mut WriteTransaction,
+        &mut self,
         inherent: &Inherent,
-        block_height: u32,
         block_time: u64,
-        receipt: Option<&Vec<u8>>,
-    ) -> Result<Vec<Log>, AccountError>;
+        receipt: Option<&AccountReceipt>,
+        data_store: DataStoreWrite,
+    ) -> Result<(), AccountError>;
+}
+
+pub trait AccountPruningInteraction: Sized {
+    fn can_be_pruned(&self) -> bool;
+
+    fn prune(self, data_store: DataStoreRead) -> Result<Option<AccountReceipt>, AccountError>;
+
+    fn restore(
+        ty: AccountType,
+        pruned_account: Option<&AccountReceipt>,
+        data_store: DataStoreWrite,
+    ) -> Result<Account, AccountError>;
 }

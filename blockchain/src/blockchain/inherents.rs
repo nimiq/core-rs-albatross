@@ -254,11 +254,11 @@ impl Blockchain {
             // Compute reward from slot reward and number of eligible slots. Also update the burned
             // reward from the number of slashed slots.
             let reward = slot_reward
-                .checked_mul(num_eligible_slots as u64)
+                .safe_mul(num_eligible_slots as u64)
                 .expect("Overflow in reward");
 
             burned_reward += slot_reward
-                .checked_mul(num_slashed_slots as u64)
+                .safe_mul(num_slashed_slots as u64)
                 .expect("Overflow in reward");
 
             // Create inherent for the reward.

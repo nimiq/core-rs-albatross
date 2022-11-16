@@ -13,7 +13,10 @@ use nimiq_transaction::{
 
 use crate::{
     complete, get_or_update_account,
-    interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction},
+    inherent::Inherent,
+    interaction_traits::{
+        AccountInherentInteraction, AccountPruningInteraction, AccountTransactionInteraction,
+    },
     logs::{AccountInfo, Log},
     Account, AccountsTrie, BasicAccount,
 };

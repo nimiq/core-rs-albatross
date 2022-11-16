@@ -279,7 +279,7 @@ pub(crate) async fn verify_tx<'a>(
     }
 
     // The sender must be able to at least pay the fee (in case the tx fails), assumming all pending txns in the mempool for this sender are included in a block
-    if !AccountTransactionInteraction::can_pay_fee(
+    if !AccountTransactionInteraction::has_sufficient_balance(
         &sender_account,
         transaction,
         sender_current_balance + transaction.fee,
