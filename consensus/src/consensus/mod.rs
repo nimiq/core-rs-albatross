@@ -24,8 +24,10 @@ use crate::messages::{
 };
 
 use crate::consensus::head_requests::{HeadRequests, HeadRequestsResult};
-use crate::sync::block_queue::{BlockQueue, BlockQueueConfig, BlockQueueEvent};
-use crate::sync::request_component::{BlockRequestComponent, HistorySyncStream};
+use crate::sync::follow::block_queue::{BlockQueue, BlockQueueConfig};
+use crate::sync::follow::request_component::BlockRequestComponent;
+use crate::sync::follow::FollowMode;
+use crate::sync::syncer::{LiveSyncPushEvent, MacroSyncStream, Syncer};
 
 use self::consensus_proxy::ConsensusProxy;
 
@@ -43,7 +45,7 @@ pub struct Consensus<N: Network> {
     pub network: Arc<N>,
     pub env: Environment,
 
-    block_queue: BlockQueue<N, BlockRequestComponent<N>>,
+    sync: Syncer<N, BlockRequestComponent<N>>,
 
     /// A Delay which exists purely for the waker on its poll to reactivate the task running Consensus::poll
     /// FIXME Remove this
@@ -80,7 +82,7 @@ impl<N: Network> Consensus<N> {
         env: Environment,
         blockchain: BlockchainProxy,
         network: Arc<N>,
-        sync_protocol: Pin<Box<dyn HistorySyncStream<N::PeerId>>>,
+        sync_protocol: Pin<Box<dyn MacroSyncStream<N::PeerId>>>,
         zkp_proxy: ZKPComponentProxy<N>,
         bls_cache: Arc<Mutex<PublicKeyCache>>,
     ) -> Self {
@@ -100,34 +102,45 @@ impl<N: Network> Consensus<N> {
         env: Environment,
         blockchain: BlockchainProxy,
         network: Arc<N>,
-        sync_protocol: Pin<Box<dyn HistorySyncStream<N::PeerId>>>,
+        sync_protocol: Pin<Box<dyn MacroSyncStream<N::PeerId>>>,
         min_peers: usize,
         zkp_proxy: ZKPComponentProxy<N>,
         bls_cache: Arc<Mutex<PublicKeyCache>>,
     ) -> Self {
-        let request_component = BlockRequestComponent::new(
-            sync_protocol,
-            network.subscribe_events(),
-            Arc::clone(&network),
-        );
+        let request_component =
+            BlockRequestComponent::new(network.subscribe_events(), Arc::clone(&network));
 
         let block_queue = BlockQueue::new(
-            BlockQueueConfig::default(),
             Arc::clone(&network),
             blockchain.clone(),
             request_component,
-            bls_cache,
+            BlockQueueConfig::default(),
         )
         .await;
 
-        Self::new(env, blockchain, network, block_queue, min_peers, zkp_proxy)
+        let live_sync = FollowMode::new(
+            blockchain.clone(),
+            Arc::clone(&network),
+            block_queue,
+            bls_cache,
+        );
+
+        let syncer = Syncer::new(
+            blockchain.clone(),
+            Arc::clone(&network),
+            live_sync,
+            sync_protocol,
+        )
+        .await;
+
+        Self::new(env, blockchain, network, syncer, min_peers, zkp_proxy)
     }
 
     pub fn new(
         env: Environment,
         blockchain: BlockchainProxy,
         network: Arc<N>,
-        block_queue: BlockQueue<N, BlockRequestComponent<N>>,
+        syncer: Syncer<N, BlockRequestComponent<N>>,
         min_peers: usize,
         zkp_proxy: ZKPComponentProxy<N>,
     ) -> Self {
@@ -144,7 +157,7 @@ impl<N: Network> Consensus<N> {
             blockchain,
             network,
             env,
-            block_queue,
+            sync: syncer,
             events: tx,
             next_execution_timer: Some(timer),
             established_flag,
@@ -189,7 +202,7 @@ impl<N: Network> Consensus<N> {
     }
 
     pub fn num_agents(&self) -> usize {
-        self.block_queue.num_peers()
+        self.sync.num_peers()
     }
 
     pub fn proxy(&self) -> ConsensusProxy<N> {
@@ -243,7 +256,7 @@ impl<N: Network> Consensus<N> {
             // - accepted a minimum number of block announcements, or
             // - know the head state of a majority of our peers
             if self.num_agents() >= self.min_peers {
-                if self.block_queue.accepted_block_announcements() >= Self::MIN_BLOCKS_ESTABLISHED {
+                if self.sync.accepted_block_announcements() >= Self::MIN_BLOCKS_ESTABLISHED {
                     info!("Consensus established, number of accepted announcements satisfied.");
                     self.established_flag.swap(true, Ordering::Release);
 
@@ -251,7 +264,7 @@ impl<N: Network> Consensus<N> {
                     self.head_requests = None;
                     self.head_requests_time = None;
                     self.zkp_proxy
-                        .request_zkp_from_peers(self.block_queue.peers(), false);
+                        .request_zkp_from_peers(self.sync.peers(), false);
                     return Some(ConsensusEvent::Established);
                 } else {
                     // The head state check is carried out immediately after we reach the minimum
@@ -264,7 +277,7 @@ impl<N: Network> Consensus<N> {
                             info!("Consensus established, 2/3 of heads known.");
                             self.established_flag.swap(true, Ordering::Release);
                             self.zkp_proxy
-                                .request_zkp_from_peers(self.block_queue.peers(), false);
+                                .request_zkp_from_peers(self.sync.peers(), false);
                             return Some(ConsensusEvent::Established);
                         }
                     }
@@ -287,9 +300,12 @@ impl<N: Network> Consensus<N> {
                 .map(|time| time.elapsed() >= Self::HEAD_REQUESTS_TIMEOUT)
                 .unwrap_or(true);
             if should_start_request {
-                debug!("Initiating head requests");
+                debug!(
+                    "Initiating head requests (to {} peers)",
+                    self.sync.num_peers()
+                );
                 self.head_requests = Some(HeadRequests::new(
-                    self.block_queue.peers(),
+                    self.sync.peers(),
                     Arc::clone(&self.network),
                     self.blockchain.clone(),
                 ));
@@ -304,13 +320,13 @@ impl<N: Network> Future for Consensus<N> {
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         // 1. Poll and advance block queue
-        while let Poll::Ready(Some(event)) = self.block_queue.poll_next_unpin(cx) {
+        while let Poll::Ready(Some(event)) = self.sync.poll_next_unpin(cx) {
             match event {
-                BlockQueueEvent::AcceptedAnnouncedBlock(_) => {
+                LiveSyncPushEvent::AcceptedAnnouncedBlock(_) => {
                     // Reset the head request timer when an announced block was accepted.
                     self.head_requests_time = Some(Instant::now());
                 }
-                BlockQueueEvent::AcceptedBufferedBlock(_, remaining_in_buffer) => {
+                LiveSyncPushEvent::AcceptedBufferedBlock(_, remaining_in_buffer) => {
                     if !self.is_established() {
                         // Note: this output is parsed by our testing infrastructure (specifically devnet.sh),
                         // so please test that nothing breaks in there if you change this.
@@ -329,14 +345,14 @@ impl<N: Network> Future for Consensus<N> {
                         }
                     }
                 }
-                BlockQueueEvent::ReceivedMissingBlocks(_, _) => {
+                LiveSyncPushEvent::ReceivedMissingBlocks(_, _) => {
                     if !self.is_established() {
                         // When syncing a stopped chain, we want to immediately start a new head request
                         // after receiving blocks for the current epoch.
                         self.head_requests_time = None;
                     }
                 }
-                BlockQueueEvent::RejectedBlock(hash) => {
+                LiveSyncPushEvent::RejectedBlock(hash) => {
                     warn!("Rejected block {}", hash);
                 }
             }
@@ -356,8 +372,8 @@ impl<N: Network> Future for Consensus<N> {
                 self.head_requests = None;
 
                 // Push unknown blocks to the block queue, trying to sync.
-                for (block, peer) in result.unknown_blocks.drain(..) {
-                    self.block_queue.push_block(block, peer);
+                for (block, peer_id) in result.unknown_blocks.drain(..) {
+                    self.sync.push_block(block, peer_id, None);
                 }
 
                 // Update established state using the result.

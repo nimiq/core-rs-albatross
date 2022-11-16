@@ -11,15 +11,15 @@ use nimiq_macros::store_waker;
 use nimiq_network_interface::network::{Network, NetworkEvent};
 
 use crate::sync::history::cluster::{SyncCluster, SyncClusterResult};
-use crate::sync::history::sync::{HistorySyncReturn, Job};
+use crate::sync::history::sync::{Job, MacroSyncReturn};
 use crate::sync::history::HistorySync;
-use crate::sync::request_component::HistorySyncStream;
+use crate::sync::syncer::MacroSyncStream;
 
 impl<TNetwork: Network> HistorySync<TNetwork> {
     fn poll_network_events(
         &mut self,
         cx: &mut Context<'_>,
-    ) -> Poll<Option<HistorySyncReturn<TNetwork::PeerId>>> {
+    ) -> Poll<Option<MacroSyncReturn<TNetwork::PeerId>>> {
         while let Poll::Ready(Some(result)) = self.network_event_rx.poll_next_unpin(cx) {
             match result {
                 Ok(NetworkEvent::PeerLeft(peer_id)) => {
@@ -41,7 +41,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
     fn poll_epoch_ids(
         &mut self,
         cx: &mut Context<'_>,
-    ) -> Poll<Option<HistorySyncReturn<TNetwork::PeerId>>> {
+    ) -> Poll<Option<MacroSyncReturn<TNetwork::PeerId>>> {
         // TODO We might want to not send an epoch_id request in the first place if we're at the
         //  cluster limit.
         while self.epoch_clusters.len() < Self::MAX_CLUSTERS {
@@ -60,16 +60,16 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                         "Peer is behind or on different chain: {:?}",
                         epoch_ids.sender
                     );
-                    return Poll::Ready(Some(HistorySyncReturn::Outdated(epoch_ids.sender)));
+                    return Poll::Ready(Some(MacroSyncReturn::Outdated(epoch_ids.sender)));
                 } else if epoch_ids.ids.is_empty() && epoch_ids.checkpoint.is_none() {
                     // We are synced with this peer.
                     debug!("Finished syncing with peer: {:?}", epoch_ids.sender);
-                    return Poll::Ready(Some(HistorySyncReturn::Good(epoch_ids.sender)));
+                    return Poll::Ready(Some(MacroSyncReturn::Good(epoch_ids.sender)));
                 }
 
                 // If the clustering deems a peer useless, it is returned here and we emit it.
                 if let Some(agent) = self.cluster_epoch_ids(epoch_ids) {
-                    return Poll::Ready(Some(HistorySyncReturn::Outdated(agent)));
+                    return Poll::Ready(Some(MacroSyncReturn::Outdated(agent)));
                 }
             }
         }
@@ -213,7 +213,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
 }
 
 impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
-    type Item = HistorySyncReturn<TNetwork::PeerId>;
+    type Item = MacroSyncReturn<TNetwork::PeerId>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         store_waker!(self, waker, cx);
@@ -255,7 +255,7 @@ mod tests {
     use nimiq_utils::time::OffsetTime;
 
     use crate::messages::{RequestBatchSet, RequestHistoryChunk, RequestMacroChain};
-    use crate::sync::history::{HistorySync, HistorySyncReturn};
+    use crate::sync::history::{HistorySync, MacroSyncReturn};
 
     fn blockchain() -> Arc<RwLock<Blockchain>> {
         let time = Arc::new(OffsetTime::new());
@@ -342,7 +342,7 @@ mod tests {
         net1.dial_mock(&net2);
 
         match sync.next().await {
-            Some(HistorySyncReturn::Good(_)) => {
+            Some(MacroSyncReturn::Good(_)) => {
                 assert_eq!(chain.read().block_number(), 0);
             }
             res => panic!("Unexpected HistorySyncReturn: {:?}", res),
@@ -378,7 +378,7 @@ mod tests {
         net1.dial_mock(&net2);
 
         match sync.next().await {
-            Some(HistorySyncReturn::Good(_)) => {
+            Some(MacroSyncReturn::Good(_)) => {
                 assert_eq!(chain1.read().head(), chain2.read().head());
             }
             res => panic!("Unexpected HistorySyncReturn: {:?}", res),
@@ -418,7 +418,7 @@ mod tests {
         net1.dial_mock(&net2);
 
         match sync.next().await {
-            Some(HistorySyncReturn::Good(_)) => {
+            Some(MacroSyncReturn::Good(_)) => {
                 assert_eq!(chain1.read().head(), chain2.read().head());
             }
             res => panic!("Unexpected HistorySyncReturn: {:?}", res),
@@ -448,7 +448,7 @@ mod tests {
         net1.dial_mock(&net2);
 
         match sync.next().await {
-            Some(HistorySyncReturn::Good(_)) => {
+            Some(MacroSyncReturn::Good(_)) => {
                 assert_eq!(chain1.read().head(), chain2.read().head());
             }
             res => panic!("Unexpected HistorySyncReturn: {:?}", res),
@@ -482,7 +482,7 @@ mod tests {
         net1.dial_mock(&net2);
 
         match sync.next().await {
-            Some(HistorySyncReturn::Good(_)) => {
+            Some(MacroSyncReturn::Good(_)) => {
                 assert_eq!(chain1.read().head(), chain2.read().head());
             }
             _ => panic!("Unexpected HistorySyncReturn"),
@@ -520,7 +520,7 @@ mod tests {
         net1.dial_mock(&net2);
 
         match sync.next().await {
-            Some(HistorySyncReturn::Good(_)) => {
+            Some(MacroSyncReturn::Good(_)) => {
                 assert_eq!(chain1.read().head(), chain2.read().head());
             }
             _ => panic!("Unexpected HistorySyncReturn"),
@@ -567,15 +567,15 @@ mod tests {
         net1.dial_mock(&net4);
 
         match sync.next().await {
-            Some(HistorySyncReturn::Good(peer_id)) if peer_id == net4.peer_id() => {}
+            Some(MacroSyncReturn::Good(peer_id)) if peer_id == net4.peer_id() => {}
             res => panic!("Unexpected HistorySyncReturn: {:?}", res),
         }
         match sync.next().await {
-            Some(HistorySyncReturn::Outdated(peer_id)) if peer_id == net3.peer_id() => {}
+            Some(MacroSyncReturn::Outdated(peer_id)) if peer_id == net3.peer_id() => {}
             res => panic!("Unexpected HistorySyncReturn: {:?}", res),
         }
         match sync.next().await {
-            Some(HistorySyncReturn::Outdated(peer_id)) if peer_id == net2.peer_id() => {}
+            Some(MacroSyncReturn::Outdated(peer_id)) if peer_id == net2.peer_id() => {}
             res => panic!("Unexpected HistorySyncReturn: {:?}", res),
         }
 
@@ -649,7 +649,7 @@ mod tests {
             cx: &mut std::task::Context<'_>,
         ) -> Poll<Option<Self::Item>> {
             match self.sync.poll_next_unpin(cx) {
-                Poll::Ready(Some(HistorySyncReturn::Good(_))) => {
+                Poll::Ready(Some(MacroSyncReturn::Good(_))) => {
                     assert_eq!(
                         self.chain_sync.read().head(),
                         self.chain_up2date.read().head()

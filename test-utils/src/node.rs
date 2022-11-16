@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::pin::Pin;
 use std::sync::Arc;
 
 use nimiq_bls::cache::PublicKeyCache;
@@ -58,16 +59,16 @@ impl<N: NetworkInterface + TestNetwork> Node<N> {
         )
         .await;
 
-        let sync_protocol = HistorySync::<N>::new(
+        let sync_protocol = Pin::new(Box::new(HistorySync::<N>::new(
             Arc::clone(&blockchain),
             Arc::clone(&network),
             network.subscribe_events(),
-        );
+        )));
         let consensus = AbstractConsensus::<N>::with_min_peers(
             env,
             BlockchainProxy::Full(Arc::clone(&blockchain)),
             Arc::clone(&network),
-            Box::pin(sync_protocol),
+            sync_protocol,
             1,
             zkp_proxy.proxy(),
             Arc::new(Mutex::new(PublicKeyCache::new(

@@ -11,7 +11,7 @@ use nimiq_network_interface::network::{Network, SubscribeEvents};
 
 use crate::messages::Checkpoint;
 use crate::sync::history::cluster::{SyncCluster, SyncClusterResult};
-use crate::sync::request_component::HistorySyncStream;
+use crate::sync::syncer::MacroSyncStream;
 
 #[derive(Clone)]
 pub(crate) struct EpochIds<T> {
@@ -54,7 +54,7 @@ pub struct HistorySync<TNetwork: Network> {
 }
 
 #[derive(Debug)]
-pub enum HistorySyncReturn<T> {
+pub enum MacroSyncReturn<T> {
     Good(T),
     Outdated(T),
 }
@@ -104,9 +104,9 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
     }
 }
 
-impl<TNetwork: Network> HistorySyncStream<TNetwork::PeerId> for HistorySync<TNetwork> {
+impl<TNetwork: Network> MacroSyncStream<TNetwork::PeerId> for HistorySync<TNetwork> {
     fn add_peer(&self, peer_id: TNetwork::PeerId) {
-        trace!("Requesting epoch ids for peer: {:?}", peer_id);
+        debug!("Requesting epoch ids for peer: {:?}", peer_id);
         let future = Self::request_epoch_ids(
             Arc::clone(&self.blockchain),
             Arc::clone(&self.network),
