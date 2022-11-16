@@ -199,6 +199,13 @@ pub async fn launch_generate_new_proof(
 async fn parse_proof_generation_output(
     output: Vec<u8>,
 ) -> Result<ZKPState, ZKProofGenerationError> {
+    // We need at least two bytes to proceed.
+    if output.len() < 2 {
+        return Err(ZKProofGenerationError::ProcessError(
+            "Did not receive enough output from process".to_owned(),
+        ));
+    }
+
     // We read until the two delimiter bytes.
     let mut mid = 0;
     for i in 0..output.len() - 2 {
