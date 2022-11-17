@@ -1,10 +1,8 @@
 use beserial::{Deserialize, Serialize};
-use nimiq_database::WriteTransaction;
 use nimiq_keys::Address;
 use nimiq_primitives::{
     account::{AccountError, AccountType},
     coin::Coin,
-    key_nibbles::KeyNibbles,
 };
 use nimiq_transaction::{
     account::vesting_contract::CreationTransactionData, inherent::Inherent, SignatureProof,
@@ -12,13 +10,12 @@ use nimiq_transaction::{
 };
 
 use crate::{
-    complete, get_or_update_account,
+    data_store::{DataStoreRead, DataStoreWrite},
     inherent::Inherent,
     interaction_traits::{
         AccountInherentInteraction, AccountPruningInteraction, AccountTransactionInteraction,
     },
-    logs::{AccountInfo, Log},
-    Account, AccountsTrie, BasicAccount,
+    Account, AccountReceipt,
 };
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
@@ -34,37 +31,34 @@ pub struct VestingContract {
 }
 
 impl VestingContract {
-    pub fn new(
-        balance: Coin,
-        owner: Address,
-        start_time: u64,
-        time_step: u64,
-        step_amount: Coin,
-        total_amount: Coin,
-    ) -> Self {
-        VestingContract {
-            balance,
-            owner,
-            start_time,
-            time_step,
-            step_amount,
-            total_amount,
+    fn can_change_balance(
+        &self,
+        transaction: &Transaction,
+        new_balance: Coin,
+        block_time: u64,
+    ) -> Result<(), AccountError> {
+        // Check vesting min cap.
+        let min_cap = self.min_cap(block_time);
+
+        if new_balance < min_cap {
+            return Err(AccountError::InsufficientFunds {
+                balance: new_balance,
+                needed: min_cap,
+            });
         }
+
+        // Check transaction signer is contract owner.
+        let signature_proof: SignatureProof =
+            Deserialize::deserialize(&mut &transaction.proof[..])?;
+
+        if !signature_proof.is_signed_by(&self.owner) {
+            return Err(AccountError::InvalidSignature);
+        }
+
+        Ok(())
     }
 
-    #[must_use]
-    pub fn change_balance(&self, balance: Coin) -> Self {
-        VestingContract {
-            balance,
-            owner: self.owner.clone(),
-            start_time: self.start_time,
-            time_step: self.time_step,
-            step_amount: self.step_amount,
-            total_amount: self.total_amount,
-        }
-    }
-
-    pub fn min_cap(&self, time: u64) -> Coin {
+    fn min_cap(&self, time: u64) -> Coin {
         if self.time_step > 0 && self.step_amount > Coin::ZERO {
             let steps = (time as i128 - self.start_time as i128) / self.time_step as i128;
             let min_cap =
@@ -78,427 +72,163 @@ impl VestingContract {
 }
 
 impl AccountTransactionInteraction for VestingContract {
-    fn create(
-        accounts_tree: &AccountsTrie,
-        db_txn: &mut WriteTransaction,
+    fn create_new_contract(
         transaction: &Transaction,
-        _block_height: u32,
+        initial_balance: Coin,
         _block_time: u64,
-    ) -> Result<AccountInfo, AccountError> {
+        _data_store: DataStoreWrite,
+    ) -> Result<Account, AccountError> {
         let data = CreationTransactionData::parse(transaction)?;
+        Ok(Account::Vesting(VestingContract {
+            balance: Account::balance_add(initial_balance, transaction.value)?,
+            owner: data.owner,
+            start_time: data.start_time,
+            time_step: data.time_step,
+            step_amount: data.step_amount,
+            total_amount: data.total_amount,
+        }))
+    }
 
-        let contract_key = KeyNibbles::from(&transaction.contract_creation_address());
-
-        let previous_balance = match complete!(get_or_update_account::<Account>(
-            accounts_tree,
-            db_txn,
-            &contract_key
-        )) {
-            None => Coin::ZERO,
-            Some(account) => account.balance(),
-        };
-
-        let contract = VestingContract::new(
-            previous_balance + transaction.value,
-            data.owner,
-            data.start_time,
-            data.time_step,
-            data.step_amount,
-            data.total_amount,
-        );
-
-        accounts_tree
-            .put(db_txn, &contract_key, Account::Vesting(contract.clone()))
-            .expect("temporary until accounts rewrite");
-
-        let logs = vec![Log::VestingCreate {
-            contract_address: transaction.recipient.clone(),
-            owner: contract.owner,
-            start_time: contract.start_time,
-            time_step: contract.time_step,
-            step_amount: contract.step_amount,
-            total_amount: contract.total_amount,
-        }];
-        Ok(AccountInfo::with_receipt(None, logs))
+    fn revert_new_contract(
+        &mut self,
+        transaction: &Transaction,
+        _block_time: u64,
+        _data_store: DataStoreWrite,
+    ) -> Result<(), AccountError> {
+        Account::balance_sub_assign(&mut self.balance, transaction.value)
     }
 
     fn commit_incoming_transaction(
-        _accounts_tree: &AccountsTrie,
-        _db_txn: &mut WriteTransaction,
+        &mut self,
         _transaction: &Transaction,
-        _block_height: u32,
         _block_time: u64,
-    ) -> Result<AccountInfo, AccountError> {
+        _data_store: DataStoreWrite,
+    ) -> Result<Option<AccountReceipt>, AccountError> {
         Err(AccountError::InvalidForRecipient)
     }
 
     fn revert_incoming_transaction(
-        _accounts_tree: &AccountsTrie,
-        _db_txn: &mut WriteTransaction,
+        &mut self,
         _transaction: &Transaction,
-        _block_height: u32,
         _block_time: u64,
-        _receipt: Option<&Vec<u8>>,
-    ) -> Result<Vec<Log>, AccountError> {
+        _receipt: Option<&AccountReceipt>,
+        _data_store: DataStoreWrite,
+    ) -> Result<(), AccountError> {
         Err(AccountError::InvalidForRecipient)
     }
 
     fn commit_outgoing_transaction(
-        accounts_tree: &AccountsTrie,
-        db_txn: &mut WriteTransaction,
+        &mut self,
         transaction: &Transaction,
-        _block_height: u32,
         block_time: u64,
-    ) -> Result<AccountInfo, AccountError> {
-        let key = KeyNibbles::from(&transaction.sender);
-
-        let account = match complete!(get_or_update_account::<Account>(
-            accounts_tree,
-            db_txn,
-            &key
-        )) {
-            Some(account) => account,
-            None => {
-                return Err(AccountError::NonExistentAddress {
-                    address: transaction.sender.clone(),
-                });
-            }
-        };
-
-        let vesting = match account {
-            Account::Vesting(ref value) => value,
-            _ => {
-                return Err(AccountError::TypeMismatch {
-                    expected: AccountType::Vesting,
-                    got: account.account_type(),
-                })
-            }
-        };
-
-        let new_balance = Account::balance_sub(account.balance(), transaction.total_value())?;
-
-        // Check vesting min cap.
-        let min_cap = vesting.min_cap(block_time);
-
-        if new_balance < min_cap {
-            return Err(AccountError::InsufficientFunds {
-                balance: new_balance,
-                needed: min_cap,
-            });
-        }
-
-        // Check transaction signer is contract owner.
-        let signature_proof: SignatureProof =
-            Deserialize::deserialize(&mut &transaction.proof[..])?;
-
-        if !signature_proof.is_signed_by(&vesting.owner) {
-            return Err(AccountError::InvalidSignature);
-        }
-
-        // Store the account or prune if necessary.
-        let receipt = if new_balance.is_zero() {
-            accounts_tree.remove(db_txn, &key);
-
-            Some(VestingReceipt::from(vesting.clone()).serialize_to_vec())
-        } else {
-            accounts_tree
-                .put(
-                    db_txn,
-                    &key,
-                    Account::Vesting(vesting.change_balance(new_balance)),
-                )
-                .expect("temporary until accounts rewrite");
-
-            None
-        };
-        let logs = vec![
-            Log::PayFee {
-                from: transaction.sender.clone(),
-                fee: transaction.fee,
-            },
-            Log::transfer_log_from_transaction(transaction),
-        ];
-        Ok(AccountInfo::with_receipt(receipt, logs))
+        _data_store: DataStoreWrite,
+    ) -> Result<Option<AccountReceipt>, AccountError> {
+        let new_balance = Account::balance_sub(self.balance, transaction.total_value())?;
+        self.can_change_balance(transaction, new_balance, block_time)?;
+        self.balance = new_balance;
+        Ok(None)
     }
 
     fn revert_outgoing_transaction(
-        accounts_tree: &AccountsTrie,
-        db_txn: &mut WriteTransaction,
+        &mut self,
         transaction: &Transaction,
-        _block_height: u32,
         _block_time: u64,
-        receipt: Option<&Vec<u8>>,
-    ) -> Result<Vec<Log>, AccountError> {
-        let key = KeyNibbles::from(&transaction.sender);
-
-        let vesting = match receipt {
-            None => {
-                let account = match complete!(get_or_update_account::<Account>(
-                    accounts_tree,
-                    db_txn,
-                    &key
-                )) {
-                    Some(account) => account,
-                    None => {
-                        return Err(AccountError::NonExistentAddress {
-                            address: transaction.sender.clone(),
-                        });
-                    }
-                };
-
-                if let Account::Vesting(contract) = account {
-                    contract
-                } else {
-                    return Err(AccountError::TypeMismatch {
-                        expected: AccountType::Vesting,
-                        got: account.account_type(),
-                    });
-                }
-            }
-            Some(r) => {
-                let receipt: VestingReceipt = Deserialize::deserialize_from_vec(r)?;
-
-                VestingContract::from(receipt)
-            }
-        };
-
-        let new_balance = Account::balance_add(vesting.balance, transaction.total_value())?;
-
-        accounts_tree
-            .put(
-                db_txn,
-                &key,
-                Account::Vesting(vesting.change_balance(new_balance)),
-            )
-            .expect("temporary until accounts rewrite");
-
-        Ok(vec![
-            Log::PayFee {
-                from: transaction.sender.clone(),
-                fee: transaction.fee,
-            },
-            Log::transfer_log_from_transaction(transaction),
-        ])
+        _receipt: Option<&AccountReceipt>,
+        _data_store: DataStoreWrite,
+    ) -> Result<(), AccountError> {
+        Account::balance_add_assign(&mut self.balance, transaction.total_value())
     }
+
     fn commit_failed_transaction(
-        accounts_tree: &AccountsTrie,
-        db_txn: &mut WriteTransaction,
+        &mut self,
         transaction: &Transaction,
-        _block_height: u32,
-    ) -> Result<AccountInfo, AccountError> {
-        let key = KeyNibbles::from(&transaction.sender);
-
-        let account = match complete!(get_or_update_account::<Account>(
-            accounts_tree,
-            db_txn,
-            &key
-        )) {
-            Some(account) => account,
-            None => {
-                return Err(AccountError::NonExistentAddress {
-                    address: transaction.sender.clone(),
-                });
-            }
-        };
-
-        let vesting = match account {
-            Account::Vesting(ref value) => value,
-            _ => {
-                return Err(AccountError::TypeMismatch {
-                    expected: AccountType::Vesting,
-                    got: account.account_type(),
-                })
-            }
-        };
-
-        // Note that in this type of transactions the fee is paid (deducted) from the contract balance
-        let new_balance = Account::balance_sub(account.balance(), transaction.fee)?;
-
-        // Store the account or prune if necessary.
-        let receipt = if new_balance.is_zero() {
-            accounts_tree.remove(db_txn, &key);
-
-            Some(VestingReceipt::from(vesting.clone()).serialize_to_vec())
-        } else {
-            accounts_tree
-                .put(
-                    db_txn,
-                    &key,
-                    Account::Vesting(vesting.change_balance(new_balance)),
-                )
-                .expect("temporary until accounts rewrite");
-
-            None
-        };
-        let logs = vec![Log::PayFee {
-            from: transaction.sender.clone(),
-            fee: transaction.fee,
-        }];
-        Ok(AccountInfo::with_receipt(receipt, logs))
+        block_time: u64,
+        _data_store: DataStoreWrite,
+    ) -> Result<Option<AccountReceipt>, AccountError> {
+        let new_balance = Account::balance_sub(self.balance, transaction.fee)?;
+        // XXX This check should not be necessary since are also checking this in has_sufficient_balance()
+        self.can_change_balance(transaction, new_balance, block_time)?;
+        self.balance = new_balance;
+        Ok(None)
     }
+
     fn revert_failed_transaction(
-        accounts_tree: &AccountsTrie,
-        db_txn: &mut WriteTransaction,
+        &mut self,
         transaction: &Transaction,
-        receipt: Option<&Vec<u8>>,
-    ) -> Result<Vec<Log>, AccountError> {
-        let key = KeyNibbles::from(&transaction.sender);
-
-        let vesting = match receipt {
-            None => {
-                let account = match complete!(get_or_update_account::<Account>(
-                    accounts_tree,
-                    db_txn,
-                    &key
-                )) {
-                    Some(account) => account,
-                    None => {
-                        return Err(AccountError::NonExistentAddress {
-                            address: transaction.sender.clone(),
-                        });
-                    }
-                };
-
-                if let Account::Vesting(contract) = account {
-                    contract
-                } else {
-                    return Err(AccountError::TypeMismatch {
-                        expected: AccountType::Vesting,
-                        got: account.account_type(),
-                    });
-                }
-            }
-            Some(r) => {
-                let receipt: VestingReceipt = Deserialize::deserialize_from_vec(r)?;
-
-                VestingContract::from(receipt)
-            }
-        };
-
-        let new_balance = Account::balance_add(vesting.balance, transaction.fee)?;
-
-        accounts_tree
-            .put(
-                db_txn,
-                &key,
-                Account::Vesting(vesting.change_balance(new_balance)),
-            )
-            .expect("temporary until accounts rewrite");
-
-        Ok(vec![Log::PayFee {
-            from: transaction.sender.clone(),
-            fee: transaction.fee,
-        }])
+        _block_time: u64,
+        _receipt: Option<&AccountReceipt>,
+        _data_store: DataStoreWrite,
+    ) -> Result<(), AccountError> {
+        Account::balance_add_assign(&mut self.balance, transaction.fee)
     }
 
-    fn can_pay_fee(
+    fn has_sufficient_balance(
         &self,
         transaction: &Transaction,
-        mempool_balance: Coin,
+        reserved_balance: Coin,
         block_time: u64,
-    ) -> bool {
-        let new_balance = match Account::balance_sub(self.balance, mempool_balance) {
-            Ok(new_balance) => new_balance,
-            Err(_) => return false,
-        };
-
-        // Check vesting min cap.
-        let min_cap = self.min_cap(block_time);
-
-        if new_balance < min_cap {
-            return false;
+        _data_store: DataStoreRead,
+    ) -> Result<bool, AccountError> {
+        let needed = reserved_balance
+            .checked_add(transaction.total_value())
+            .ok_or(AccountError::InvalidCoinValue)?;
+        if self.balance < needed {
+            return Ok(false);
         }
 
-        // Check transaction signer is contract owner.
-        let signature_proof: SignatureProof =
-            match Deserialize::deserialize(&mut &transaction.proof[..]) {
-                Ok(proof) => proof,
-                Err(_) => return false,
-            };
+        // XXX We could also assert here (or not use checked_sub) since we know that balance >= needed.
+        let new_balance = self
+            .balance
+            .checked_sub(needed)
+            .ok_or(AccountError::InvalidCoinValue)?;
+        self.can_change_balance(transaction, new_balance, block_time)?;
 
-        if !signature_proof.is_signed_by(&self.owner) {
-            return false;
-        }
-
-        true
-    }
-
-    fn delete(
-        accounts_tree: &AccountsTrie,
-        db_txn: &mut WriteTransaction,
-        transaction: &Transaction,
-    ) -> Result<Vec<Log>, AccountError> {
-        let key = KeyNibbles::from(&transaction.contract_creation_address());
-
-        let account = match complete!(get_or_update_account::<Account>(
-            accounts_tree,
-            db_txn,
-            &key
-        )) {
-            Some(account) => account,
-            None => {
-                return Err(AccountError::NonExistentAddress {
-                    address: transaction.sender.clone(),
-                });
-            }
-        };
-
-        let vesting = match account {
-            Account::Vesting(ref value) => value,
-            _ => {
-                return Err(AccountError::TypeMismatch {
-                    expected: AccountType::Vesting,
-                    got: account.account_type(),
-                })
-            }
-        };
-
-        let previous_balance = Account::balance_sub(vesting.balance, transaction.value)?;
-
-        if previous_balance == Coin::ZERO {
-            // If the previous balance was zero, we just remove the account from the accounts tree
-            accounts_tree.remove(db_txn, &key);
-        } else {
-            // If the previous balance was not zero, we need to restore the basic account with the previous balance
-            accounts_tree
-                .put(
-                    db_txn,
-                    &key,
-                    Account::Basic(BasicAccount {
-                        balance: previous_balance,
-                    }),
-                )
-                .expect("temporary until accounts rewrite");
-        }
-        Ok(Vec::new())
+        Ok(true)
     }
 }
 
 impl AccountInherentInteraction for VestingContract {
     fn commit_inherent(
-        _accounts_tree: &AccountsTrie,
-        _db_txn: &mut WriteTransaction,
+        &mut self,
         _inherent: &Inherent,
-        _block_height: u32,
         _block_time: u64,
-    ) -> Result<AccountInfo, AccountError> {
-        Err(AccountError::InvalidInherent)
+        _data_store: DataStoreWrite,
+    ) -> Result<Option<AccountReceipt>, AccountError> {
+        Err(AccountError::InvalidForTarget)
     }
 
     fn revert_inherent(
-        _accounts_tree: &AccountsTrie,
-        _db_txn: &mut WriteTransaction,
+        &mut self,
         _inherent: &Inherent,
-        _block_height: u32,
         _block_time: u64,
-        _receipt: Option<&Vec<u8>>,
-    ) -> Result<Vec<Log>, AccountError> {
-        Err(AccountError::InvalidInherent)
+        _receipt: Option<&AccountReceipt>,
+        _data_store: DataStoreWrite,
+    ) -> Result<(), AccountError> {
+        Err(AccountError::InvalidForTarget)
+    }
+}
+
+impl AccountPruningInteraction for VestingContract {
+    fn can_be_pruned(&self) -> bool {
+        self.balance.is_zero()
+    }
+
+    fn prune(self, _data_store: DataStoreRead) -> Result<Option<AccountReceipt>, AccountError> {
+        Ok(Some(PrunedVestingContract::from(self).into()))
+    }
+
+    fn restore(
+        _ty: AccountType,
+        pruned_account: Option<&AccountReceipt>,
+        _data_store: DataStoreWrite,
+    ) -> Result<Account, AccountError> {
+        let receipt = pruned_account.ok_or(AccountError::InvalidReceipt)?;
+        Ok(Account::Vesting(VestingContract::from(receipt.into())))
     }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub struct VestingReceipt {
+struct PrunedVestingContract {
     pub owner: Address,
     pub start_time: u64,
     pub time_step: u64,
@@ -506,9 +236,9 @@ pub struct VestingReceipt {
     pub total_amount: Coin,
 }
 
-impl From<VestingContract> for VestingReceipt {
+impl From<VestingContract> for PrunedVestingContract {
     fn from(contract: VestingContract) -> Self {
-        VestingReceipt {
+        PrunedVestingContract {
             owner: contract.owner,
             start_time: contract.start_time,
             time_step: contract.time_step,
@@ -518,8 +248,8 @@ impl From<VestingContract> for VestingReceipt {
     }
 }
 
-impl From<VestingReceipt> for VestingContract {
-    fn from(receipt: VestingReceipt) -> Self {
+impl From<PrunedVestingContract> for VestingContract {
+    fn from(receipt: PrunedVestingContract) -> Self {
         VestingContract {
             balance: Coin::ZERO,
             owner: receipt.owner,

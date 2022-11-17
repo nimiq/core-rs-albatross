@@ -1,5 +1,6 @@
 use beserial::{Deserialize, Serialize};
 use nimiq_keys::Address;
+use nimiq_primitives::account::AccountType;
 use nimiq_primitives::coin::Coin;
 use nimiq_transaction::account::htlc_contract::{
     AnyHash, CreationTransactionData, HashAlgorithm, ProofType,
@@ -30,11 +31,11 @@ pub struct HashedTimeLockedContract {
 impl HashedTimeLockedContract {
     fn can_change_balance(
         &self,
-        proof: Vec<u8>,
+        transaction: &Transaction,
         new_balance: Coin,
         block_time: u64,
-    ) -> Result<bool, AccountError> {
-        let proof_buf = &mut &proof[..];
+    ) -> Result<(), AccountError> {
+        let proof_buf = &mut &transaction.proof[..];
         let proof_type: ProofType = Deserialize::deserialize(proof_buf)?;
 
         match proof_type {
@@ -115,7 +116,7 @@ impl HashedTimeLockedContract {
             }
         };
 
-        Ok(true)
+        Ok(())
     }
 }
 
@@ -174,7 +175,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         _data_store: DataStoreWrite,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         let new_balance = Account::balance_sub(self.balance, transaction.total_value())?;
-        self.can_change_balance(transaction.proof.clone(), new_balance, block_time)?;
+        self.can_change_balance(transaction, new_balance, block_time)?;
         self.balance = new_balance;
         Ok(None)
     }
@@ -197,7 +198,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
     ) -> Result<Option<AccountReceipt>, AccountError> {
         let new_balance = Account::balance_sub(self.balance, transaction.fee)?;
         // XXX This check should not be necessary since are also checking this in has_sufficient_balance()
-        self.can_change_balance(transaction.proof.clone(), new_balance, block_time)?;
+        self.can_change_balance(transaction, new_balance, block_time)?;
         self.balance = new_balance;
         Ok(None)
     }
@@ -231,7 +232,9 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
             .balance
             .checked_sub(needed)
             .ok_or(AccountError::InvalidCoinValue)?;
-        self.can_change_balance(transaction.proof.clone(), new_balance, block_time)
+        self.can_change_balance(transaction, new_balance, block_time)?;
+
+        Ok(true)
     }
 }
 
@@ -278,7 +281,7 @@ impl AccountPruningInteraction for HashedTimeLockedContract {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct PrunedHashedTimeLockContract {
+struct PrunedHashedTimeLockContract {
     pub sender: Address,
     pub recipient: Address,
     pub hash_algorithm: HashAlgorithm,
