@@ -1,6 +1,5 @@
 use crate::sync::follow::request_component::RequestComponent;
 use crate::sync::follow::FollowMode;
-use crate::sync::history::MacroSyncReturn;
 use futures::{Stream, StreamExt};
 use nimiq_block::Block;
 use nimiq_blockchain_proxy::BlockchainProxy;
@@ -13,60 +12,114 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 
-pub trait MacroSyncStream<TPeerId>: Stream<Item = MacroSyncReturn<TPeerId>> + Unpin + Send {
+/// Trait that defines how a node synchronizes macro blocks
+/// The expected functionality is that there could be different methods of syncing but they
+/// all must synchronize to the latest macro block. An implementation of this trait requests,
+/// process and validates these macro blocks.
+/// The quantity of macro blocks needed or extra metadata associated are defined by each
+/// implementor of these trait.
+pub trait MacroSync<TPeerId>: Stream<Item = MacroSyncReturn<TPeerId>> + Unpin + Send {
+    /// Adds a peer to synchronize macro blocks
     fn add_peer(&self, peer_id: TPeerId);
 }
 
-pub trait LiveSyncStream<N: Network>:
-    Stream<Item = LiveSyncEvent<N::PeerId>> + Unpin + Send
-{
+/// Trait that defines how a node synchronizes receiving the blocks the peers are currently
+/// processing.
+/// The expected functionality is that there could be different methods of syncing but they
+/// all must synchronize to the latest macro block. Once that happened, an implementation of
+/// this trait comes into play to start receiving or processing the blocks that the peers are
+/// currently processing and/or synchronize micro blocks.
+pub trait LiveSync<N: Network>: Stream<Item = LiveSyncEvent<N::PeerId>> + Unpin + Send {
+    /// This function will be called each time a Block is received or announced by any of the
+    /// peers added into the LiveSync.
     fn on_block_announced(
         &mut self,
         block: Block,
         peer_id: N::PeerId,
         pubsub_id: Option<<N as Network>::PubsubId>,
     );
+    /// Adds a peer to receive or request blocks from it.
     fn add_peer(&mut self, peer_id: N::PeerId);
+    /// Returns the number of peers that are being sync'ed with
     fn num_peers(&self) -> usize;
+    /// Returns the list of peers that are being sync'ed with
     fn peers(&self) -> Vec<N::PeerId>;
 }
 
+#[derive(Debug)]
+/// Return type for a `MacroSync`
+pub enum MacroSyncReturn<T> {
+    /// Macro Sync returned a good type
+    Good(T),
+    /// Macro Sync returned an outdated type
+    Outdated(T),
+}
+
 #[derive(Clone, Debug)]
+/// Enumeration for events emitted by the Live Sync stream
 pub enum LiveSyncEvent<TPeerId> {
+    /// Events related to received/accepted or rejected blocks.
     PushEvent(LiveSyncPushEvent),
+    /// Events related to peer qualifications in the sync.
     PeerEvent(LiveSyncPeerEvent<TPeerId>),
 }
 
 #[derive(Clone, Debug)]
+/// Enumeration for the LiveSync stream events related to blocks
 pub enum LiveSyncPushEvent {
+    /// An announced block has been accepted
     AcceptedAnnouncedBlock(Blake2bHash),
+    /// A buffered block has been accepted
     AcceptedBufferedBlock(Blake2bHash, usize),
+    /// Missing blocks were received
     ReceivedMissingBlocks(Blake2bHash, usize),
+    /// Block was rejected
     RejectedBlock(Blake2bHash),
 }
 
 #[derive(Clone, Debug)]
+/// Enumeration for the LiveSync stream events related to peers
 pub enum LiveSyncPeerEvent<TPeerId> {
+    /// Peer is in the past (outdated)
     OutdatedPeer(TPeerId),
+    /// Peer is in the future (advanced)
     AdvancedPeer(TPeerId),
 }
 
 #[pin_project]
+/// Syncer is the main synchronization object inside `Consensus`
+/// It has a reference to the main blockchain and network and has two dynamic
+/// trait objects:
+/// - Macro sync: Synchronizes up to the last macro block
+/// - Live Sync: Synchronizes the blockchain to the blocks being processed/announced
+///   by the peers.
+/// These two dynamic trait objects are necessary to implement the different types of
+/// synchronization such as: history sync, full sync and light sync.
+/// The Syncer handles the interactions between these trait objects, the blockchain and
+/// the network.
 pub struct Syncer<N: Network, TReq: RequestComponent<N>> {
+    /// Reference to the blockchain
     blockchain: BlockchainProxy,
 
+    /// Reference to the network
     network: Arc<N>,
 
     #[pin]
+    /// Dynamic trait object that synchronizes the blockchain to the blocks being processed/announced
+    /// by the peers
     pub live_sync: FollowMode<N, TReq>,
 
-    macro_sync: Pin<Box<dyn MacroSyncStream<N::PeerId>>>,
+    /// Dynamic trait object that synchronizes the blockchain to the latest macro blocks of the peers
+    macro_sync: Pin<Box<dyn MacroSync<N::PeerId>>>,
 
-    /// The number of extended blocks through announcements.
+    /// The number of extended blocks through announcements
     accepted_announcements: usize,
 
+    /// Hash set with the set of peers that have been qualified as outdated
     outdated_peers: HashSet<N::PeerId>,
 
+    /// Hash set with the peer ID as key containing the elapsed time when a peer
+    /// was qualified as outdated
     outdated_timeouts: HashMap<N::PeerId, Instant>,
 }
 
@@ -77,13 +130,13 @@ impl<N: Network, TReq: RequestComponent<N>> Syncer<N, TReq> {
         blockchain: BlockchainProxy,
         network: Arc<N>,
         live_sync: FollowMode<N, TReq>,
-        history_sync: Pin<Box<dyn MacroSyncStream<N::PeerId>>>,
+        macro_sync: Pin<Box<dyn MacroSync<N::PeerId>>>,
     ) -> Syncer<N, TReq> {
         Syncer {
             blockchain,
             network,
             live_sync,
-            macro_sync: history_sync,
+            macro_sync,
             accepted_announcements: 0,
             outdated_peers: Default::default(),
             outdated_timeouts: Default::default(),
@@ -162,7 +215,7 @@ impl<N: Network, TReq: RequestComponent<N>> Stream for Syncer<N, TReq> {
 }
 
 impl<N: Network, TReq: RequestComponent<N>> Syncer<N, TReq> {
-    /// Adds all outdated peers that were checked more than TIMEOUT ago to history sync
+    /// Adds all outdated peers that were checked more than TIMEOUT ago to macro sync
     fn check_peers_up_to_date(&mut self) {
         let mut peers_todo = Vec::new();
         self.outdated_timeouts.retain(|&peer_id, last_checked| {

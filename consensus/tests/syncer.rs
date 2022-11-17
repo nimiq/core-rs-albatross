@@ -20,8 +20,7 @@ use nimiq_blockchain::{AbstractBlockchain, Blockchain, Direction};
 use nimiq_consensus::sync::follow::block_queue::{BlockQueue, BlockQueueConfig};
 use nimiq_consensus::sync::follow::request_component::{RequestComponent, RequestComponentEvent};
 use nimiq_consensus::sync::follow::FollowMode;
-use nimiq_consensus::sync::history::MacroSyncReturn;
-use nimiq_consensus::sync::syncer::{MacroSyncStream, Syncer};
+use nimiq_consensus::sync::syncer::{MacroSync, MacroSyncReturn, Syncer};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::network::Network;
@@ -89,7 +88,7 @@ impl Stream for MockHistorySyncStream {
     }
 }
 
-impl MacroSyncStream<MockPeerId> for MockHistorySyncStream {
+impl MacroSync<MockPeerId> for MockHistorySyncStream {
     fn add_peer(&self, peer_id: MockPeerId) {
         self.peers.write().push(peer_id);
     }

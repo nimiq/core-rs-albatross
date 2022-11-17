@@ -16,8 +16,8 @@ use parking_lot::{Mutex, RwLock};
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_consensus::consensus::Consensus;
-use nimiq_consensus::sync::history::{cluster::SyncCluster, HistorySync, MacroSyncReturn};
-use nimiq_consensus::sync::syncer::MacroSyncStream;
+use nimiq_consensus::sync::history::{cluster::SyncCluster, HistorySync};
+use nimiq_consensus::sync::syncer::{MacroSync, MacroSyncReturn};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
 use nimiq_network_interface::network::Network as NetworkInterface;
@@ -34,9 +34,7 @@ pub struct MockHistorySyncStream<TNetwork: NetworkInterface> {
     _network: Arc<TNetwork>,
 }
 
-impl<TNetwork: NetworkInterface> MacroSyncStream<TNetwork::PeerId>
-    for MockHistorySyncStream<TNetwork>
-{
+impl<TNetwork: NetworkInterface> MacroSync<TNetwork::PeerId> for MockHistorySyncStream<TNetwork> {
     fn add_peer(&self, _peer_id: TNetwork::PeerId) {}
 }
 

@@ -11,7 +11,7 @@ use nimiq_network_interface::network::{Network, SubscribeEvents};
 
 use crate::messages::Checkpoint;
 use crate::sync::history::cluster::{SyncCluster, SyncClusterResult};
-use crate::sync::syncer::MacroSyncStream;
+use crate::sync::syncer::MacroSync;
 
 #[derive(Clone)]
 pub(crate) struct EpochIds<T> {
@@ -51,12 +51,6 @@ pub struct HistorySync<TNetwork: Network> {
     pub(crate) active_cluster: Option<SyncCluster<TNetwork>>,
     pub(crate) job_queue: VecDeque<Job<TNetwork>>,
     pub(crate) waker: Option<Waker>,
-}
-
-#[derive(Debug)]
-pub enum MacroSyncReturn<T> {
-    Good(T),
-    Outdated(T),
 }
 
 impl<TNetwork: Network> HistorySync<TNetwork> {
@@ -104,7 +98,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
     }
 }
 
-impl<TNetwork: Network> MacroSyncStream<TNetwork::PeerId> for HistorySync<TNetwork> {
+impl<TNetwork: Network> MacroSync<TNetwork::PeerId> for HistorySync<TNetwork> {
     fn add_peer(&self, peer_id: TNetwork::PeerId) {
         debug!("Requesting epoch ids for peer: {:?}", peer_id);
         let future = Self::request_epoch_ids(

@@ -27,7 +27,7 @@ use crate::consensus::head_requests::{HeadRequests, HeadRequestsResult};
 use crate::sync::follow::block_queue::{BlockQueue, BlockQueueConfig};
 use crate::sync::follow::request_component::BlockRequestComponent;
 use crate::sync::follow::FollowMode;
-use crate::sync::syncer::{LiveSyncPushEvent, MacroSyncStream, Syncer};
+use crate::sync::syncer::{LiveSyncPushEvent, MacroSync, Syncer};
 
 use self::consensus_proxy::ConsensusProxy;
 
@@ -82,7 +82,7 @@ impl<N: Network> Consensus<N> {
         env: Environment,
         blockchain: BlockchainProxy,
         network: Arc<N>,
-        sync_protocol: Pin<Box<dyn MacroSyncStream<N::PeerId>>>,
+        sync_protocol: Pin<Box<dyn MacroSync<N::PeerId>>>,
         zkp_proxy: ZKPComponentProxy<N>,
         bls_cache: Arc<Mutex<PublicKeyCache>>,
     ) -> Self {
@@ -102,7 +102,7 @@ impl<N: Network> Consensus<N> {
         env: Environment,
         blockchain: BlockchainProxy,
         network: Arc<N>,
-        sync_protocol: Pin<Box<dyn MacroSyncStream<N::PeerId>>>,
+        sync_protocol: Pin<Box<dyn MacroSync<N::PeerId>>>,
         min_peers: usize,
         zkp_proxy: ZKPComponentProxy<N>,
         bls_cache: Arc<Mutex<PublicKeyCache>>,

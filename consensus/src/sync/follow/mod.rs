@@ -3,7 +3,7 @@ pub mod request_component;
 
 use crate::sync::follow::block_queue::{BlockQueue, BlockTopic, QueuedBlock};
 use crate::sync::follow::request_component::RequestComponent;
-use crate::sync::syncer::{LiveSyncEvent, LiveSyncPeerEvent, LiveSyncPushEvent, LiveSyncStream};
+use crate::sync::syncer::{LiveSync, LiveSyncEvent, LiveSyncPeerEvent, LiveSyncPushEvent};
 use futures::future::BoxFuture;
 use futures::{FutureExt, Stream, StreamExt};
 use nimiq_block::Block;
@@ -49,7 +49,7 @@ pub struct FollowMode<N: Network, TReq: RequestComponent<N>> {
     bls_cache: Arc<Mutex<PublicKeyCache>>,
 }
 
-impl<N: Network, TReq: RequestComponent<N>> LiveSyncStream<N> for FollowMode<N, TReq> {
+impl<N: Network, TReq: RequestComponent<N>> LiveSync<N> for FollowMode<N, TReq> {
     fn on_block_announced(
         &mut self,
         block: Block,

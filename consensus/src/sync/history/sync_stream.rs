@@ -11,9 +11,9 @@ use nimiq_macros::store_waker;
 use nimiq_network_interface::network::{Network, NetworkEvent};
 
 use crate::sync::history::cluster::{SyncCluster, SyncClusterResult};
-use crate::sync::history::sync::{Job, MacroSyncReturn};
+use crate::sync::history::sync::Job;
 use crate::sync::history::HistorySync;
-use crate::sync::syncer::MacroSyncStream;
+use crate::sync::syncer::{MacroSync, MacroSyncReturn};
 
 impl<TNetwork: Network> HistorySync<TNetwork> {
     fn poll_network_events(
@@ -255,7 +255,7 @@ mod tests {
     use nimiq_utils::time::OffsetTime;
 
     use crate::messages::{RequestBatchSet, RequestHistoryChunk, RequestMacroChain};
-    use crate::sync::history::{HistorySync, MacroSyncReturn};
+    use crate::sync::{history::HistorySync, syncer::MacroSyncReturn};
 
     fn blockchain() -> Arc<RwLock<Blockchain>> {
         let time = Arc::new(OffsetTime::new());

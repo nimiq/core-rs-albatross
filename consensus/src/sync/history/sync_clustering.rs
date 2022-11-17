@@ -13,7 +13,7 @@ use crate::sync::history::cluster::{SyncCluster, SyncClusterResult};
 use crate::sync::history::sync::{EpochIds, Job};
 use crate::sync::history::HistorySync;
 use crate::sync::sync_queue::SyncQueuePeer;
-use crate::sync::syncer::MacroSyncStream;
+use crate::sync::syncer::MacroSync;
 
 impl<TNetwork: Network> HistorySync<TNetwork> {
     pub(crate) async fn request_epoch_ids(
