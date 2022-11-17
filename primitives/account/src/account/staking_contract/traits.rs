@@ -183,13 +183,15 @@ impl AccountTransactionInteraction for StakingContract {
                 )?
                 .into())
             }
-            IncomingStakingTransactionData::Stake { staker_address } => Ok(StakingContract::stake(
-                accounts_tree,
-                db_txn,
-                &staker_address,
-                transaction.value,
-            )?
-            .into()),
+            IncomingStakingTransactionData::Stake { staker_address } => {
+                Ok(StakingContract::add_stake(
+                    accounts_tree,
+                    db_txn,
+                    &staker_address,
+                    transaction.value,
+                )?
+                .into())
+            }
             IncomingStakingTransactionData::UpdateStaker {
                 new_delegation,
                 proof,
@@ -304,7 +306,7 @@ impl AccountTransactionInteraction for StakingContract {
                 )?)
             }
             IncomingStakingTransactionData::Stake { staker_address } => {
-                Ok(StakingContract::revert_stake(
+                Ok(StakingContract::revert_add_stake(
                     accounts_tree,
                     db_txn,
                     &staker_address,
@@ -363,7 +365,7 @@ impl AccountTransactionInteraction for StakingContract {
                 // Get the staker address from the proof.
                 let staker_address = proof.compute_signer();
 
-                StakingContract::unstake(
+                StakingContract::remove_stake(
                     accounts_tree,
                     db_txn,
                     &staker_address,
@@ -430,7 +432,7 @@ impl AccountTransactionInteraction for StakingContract {
                     None => None,
                 };
 
-                logs.append(&mut StakingContract::revert_unstake(
+                logs.append(&mut StakingContract::revert_remove_stake(
                     accounts_tree,
                     db_txn,
                     &staker_address,
@@ -535,8 +537,13 @@ impl AccountTransactionInteraction for StakingContract {
                 let staker_address = proof.compute_signer();
 
                 // This is similar to an unstake operation except that what we deduct from the stake is the fee
-                StakingContract::unstake(accounts_tree, db_txn, &staker_address, transaction.fee)?
-                    .into()
+                StakingContract::remove_stake(
+                    accounts_tree,
+                    db_txn,
+                    &staker_address,
+                    transaction.fee,
+                )?
+                .into()
             }
         };
 
@@ -645,7 +652,7 @@ impl AccountTransactionInteraction for StakingContract {
                 let staker_address = proof.compute_signer();
 
                 // This is similar to a stake operation where we add the fee
-                StakingContract::stake(accounts_tree, db_txn, &staker_address, transaction.fee)?
+                StakingContract::add_stake(accounts_tree, db_txn, &staker_address, transaction.fee)?
                     .into()
             }
         };

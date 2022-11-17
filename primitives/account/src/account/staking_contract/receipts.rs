@@ -58,6 +58,5 @@ pub struct DeleteValidatorReceipt {
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct StakerReceipt {
-    pub no_op: bool,
     pub delegation: Option<Address>,
 }
