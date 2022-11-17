@@ -22,7 +22,7 @@ pub mod staking_contract;
 /// - [`HtlcProofBuilder`] (for HTLC sender accounts)
 /// - [`StakingProofBuilder`] (for outgoing staking transactions)
 ///
-/// [`SignallingProofBuilder`]: staking_contract/struct.StakingDataBuilder.html
+/// [`SignalingProofBuilder`]: staking_contract/struct.StakingDataBuilder.html
 /// [`BasicProofBuilder`]: struct.BasicProofBuilder.html
 /// [`HtlcProofBuilder`]: htlc_contract/struct.HtlcProofBuilder.html
 /// [`StakingProofBuilder`]: staking_contract/struct.StakingProofBuilder.html
@@ -103,7 +103,7 @@ impl TransactionProofBuilder {
         }
     }
 
-    /// This method can be used for non-signalling transactions where the sender is
+    /// This method can be used for non-signaling transactions where the sender is
     /// a basic account or a vesting contract.
     /// It immediately returns the underlying [`BasicProofBuilder`].
     ///
@@ -141,7 +141,7 @@ impl TransactionProofBuilder {
         }
     }
 
-    /// This method can be used for non-signalling transactions where the sender is a HTLC contract.
+    /// This method can be used for non-signaling transactions where the sender is a HTLC contract.
     /// It immediately returns the underlying [`HtlcProofBuilder`].
     ///
     /// # Examples
@@ -201,10 +201,10 @@ impl TransactionProofBuilder {
         }
     }
 
-    /// This method has to be used for signalling transactions.
-    /// It is used to populate the required signalling proof in the data field and can generate
+    /// This method has to be used for signaling transactions.
+    /// It is used to populate the required signaling proof in the data field and can generate
     /// another proof builder for the actual proof field.
-    /// This method returns the underlying [`SignallingProofBuilder`].
+    /// This method returns the underlying [`SignalingProofBuilder`].
     ///
     /// # Examples
     ///
@@ -228,17 +228,17 @@ impl TransactionProofBuilder {
     /// let tx_builder = TransactionBuilder::with_required(
     ///     sender_address,
     ///     recipient.generate().unwrap(),
-    ///     Coin::from_u64_unchecked(0), // must be zero because of signalling transaction
+    ///     Coin::from_u64_unchecked(0), // must be zero because of signaling transaction
     ///     1,
     ///     NetworkId::Main
     /// );
     ///
     /// let proof_builder = tx_builder.generate().unwrap();
     /// // Unwrap in staking proof builder first.
-    /// let mut signalling_proof_builder = proof_builder.unwrap_in_staking();
-    /// signalling_proof_builder.sign_with_key_pair(&cold_key_pair);
+    /// let mut signaling_proof_builder = proof_builder.unwrap_in_staking();
+    /// signaling_proof_builder.sign_with_key_pair(&cold_key_pair);
     ///
-    /// let proof_builder = signalling_proof_builder.generate().unwrap();
+    /// let proof_builder = signaling_proof_builder.generate().unwrap();
     /// // Unwrap basic proof builder now.
     /// let mut basic_proof_builder = proof_builder.unwrap_basic();
     /// basic_proof_builder.sign_with_key_pair(&cold_key_pair);
@@ -248,7 +248,7 @@ impl TransactionProofBuilder {
     /// assert!(final_transaction.unwrap().verify(NetworkId::Main).is_ok());
     /// ```
     ///
-    /// [`SignallingProofBuilder`]: staking_contract/struct.SignallingProofBuilder.html
+    /// [`SignalingProofBuilder`]: staking_contract/struct.SignalingProofBuilder.html
     pub fn unwrap_in_staking(self) -> StakingDataBuilder {
         match self {
             TransactionProofBuilder::InStaking(builder) => builder,

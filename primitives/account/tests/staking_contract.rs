@@ -2421,7 +2421,7 @@ fn make_incoming_transaction(data: IncomingStakingTransactionData, value: u64) -
             1,
             NetworkId::Dummy,
         ),
-        _ => Transaction::new_signalling(
+        _ => Transaction::new_signaling(
             Address::from_any_str(STAKER_ADDRESS).unwrap(),
             AccountType::Basic,
             Policy::STAKING_CONTRACT_ADDRESS,

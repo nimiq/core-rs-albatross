@@ -11,20 +11,20 @@ use crate::recipient::Recipient;
 /// Transactions that have the staking contract as a recipient:
 ///     - Validator
 ///         * Create
-///         * Update (signalling)
-///         * Inactivate (signalling)
-///         * Reactivate (signalling)
-///         * Unpark (signalling)
+///         * Update (signaling)
+///         * Inactivate (signaling)
+///         * Reactivate (signaling)
+///         * Unpark (signaling)
 ///     - Staker
 ///         * Create
 ///         * Stake
-///         * Update (signalling)
+///         * Update (signaling)
 ///
-/// Signalling transactions have a special status as they require a zero value
+/// Signaling transactions have a special status as they require a zero value
 /// as well as an additional step during the proof generation.
-/// Also see [`SignallingProofBuilder`].
+/// Also see [`SignalingProofBuilder`].
 ///
-/// [`SignallingProofBuilder`]: ../../proof/staking_contract/struct.SignallingProofBuilder.html
+/// [`SignalingProofBuilder`]: ../../proof/staking_contract/struct.SignalingProofBuilder.html
 #[derive(Clone, Debug, Default)]
 pub struct StakingRecipientBuilder {
     data: Option<IncomingStakingTransactionData>,
@@ -111,7 +111,7 @@ impl StakingRecipientBuilder {
     /// After misbehavior or being offline, a validator might be slashed.
     /// This automatically moves a validator into a *parked* state. This means that
     /// this validator will be automatically retired on the next election block.
-    /// This signalling transaction will prevent the automatic retirement.
+    /// This signaling transaction will prevent the automatic retirement.
     /// It needs to be signed by the key pair corresponding to the signing key.
     pub fn unpark_validator(&mut self, validator_address: Address) -> &mut Self {
         self.data = Some(IncomingStakingTransactionData::UnparkValidator {

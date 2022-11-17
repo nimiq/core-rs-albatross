@@ -37,9 +37,9 @@ impl AccountTransactionVerification for HashedTimeLockedContractVerifier {
             return Err(TransactionError::InvalidForRecipient);
         }
 
-        if transaction.flags.contains(TransactionFlags::SIGNALLING) {
+        if transaction.flags.contains(TransactionFlags::SIGNALING) {
             error!(
-                "Signalling not allowed for the following transaction:\n{:?}",
+                "Signaling not allowed for the following transaction:\n{:?}",
                 transaction
             );
             return Err(TransactionError::InvalidForRecipient);

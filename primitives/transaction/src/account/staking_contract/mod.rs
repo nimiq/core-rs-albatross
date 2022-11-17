@@ -30,13 +30,13 @@ impl AccountTransactionVerification for StakingContractVerifier {
         // and we perform static signature checks here.
         let data = IncomingStakingTransactionData::parse(transaction)?;
 
-        if data.is_signalling() != transaction.flags.contains(TransactionFlags::SIGNALLING) {
-            error!("Signalling must be set for signalling transactions. The offending transaction is the following:\n{:?}", transaction);
+        if data.is_signaling() != transaction.flags.contains(TransactionFlags::SIGNALING) {
+            error!("Signaling must be set for signaling transactions. The offending transaction is the following:\n{:?}", transaction);
             return Err(TransactionError::InvalidForRecipient);
         }
 
-        if data.is_signalling() && !transaction.value.is_zero() {
-            error!("Signalling transactions must have a value of zero. The offending transaction is the following:\n{:?}", transaction);
+        if data.is_signaling() && !transaction.value.is_zero() {
+            error!("Signaling transactions must have a value of zero. The offending transaction is the following:\n{:?}", transaction);
             return Err(TransactionError::InvalidValue);
         }
 

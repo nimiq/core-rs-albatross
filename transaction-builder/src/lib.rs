@@ -63,10 +63,10 @@ pub enum TransactionBuilderError {
     #[error("The sender is invalid for this recipient.")]
     InvalidSender,
     /// Some transactions require the value to be set to zero (whereas most transactions require a non-zero value).
-    /// Zero value transactions are called [`signalling transaction`] (also see there for a list of signalling transactions).
+    /// Zero value transactions are called [`signaling transaction`] (also see there for a list of signaling transactions).
     ///
-    /// [`signalling transaction`]: struct.TransactionBuilder.html#method.with_value
-    #[error("The value must be zero for signalling transactions and cannot be zero for others.")]
+    /// [`signaling transaction`]: struct.TransactionBuilder.html#method.with_value
+    #[error("The value must be zero for signaling transactions and cannot be zero for others.")]
     InvalidValue,
 }
 
@@ -169,7 +169,7 @@ impl TransactionBuilder {
     /// The value is a *required* field and must always be set.
     ///
     /// Most transactions have to have non-zero transaction values.
-    /// The only exceptions are signalling transactions to:
+    /// The only exceptions are signaling transactions to:
     /// * `update validator details`
     /// * `retire validators`
     /// * `re-activate validators`
@@ -178,9 +178,8 @@ impl TransactionBuilder {
     /// * `retire staker funds`
     /// * `re-activate staker funds`
     ///
-    /// Signalling transactions have a special status as they also require an additional step
-    /// during the proof generation (see
-    /// [`StakingProofBuilder`](proof::staking_contract::StakingProofBuilder)).
+    /// Signaling transactions have a special status as they also require an additional step
+    /// during the proof generation (see [`SignalingProofBuilder`]).
     ///
     /// # Examples
     ///
@@ -259,7 +258,7 @@ impl TransactionBuilder {
     /// it is essential to set it to the correct type.
     ///
     /// The proof builder can be determined as follows:
-    /// 1. If the transaction is a `signalling transaction`, it will be a [`StakingProofBuilder`].
+    /// 1. If the transaction is a `signaling transaction`, it will be a [`SignalingProofBuilder`].
     /// 2. Otherwise, the following mapping holds depending on `sender_type`:
     ///     - `AccountType::Basic`: [`BasicProofBuilder`]
     ///     - `AccountType::Vesting`: [`BasicProofBuilder`]
@@ -429,11 +428,11 @@ impl TransactionBuilder {
             .network_id
             .ok_or(TransactionBuilderError::NoNetworkId)?;
 
-        if recipient.is_signalling() != value.is_zero() {
+        if recipient.is_signaling() != value.is_zero() {
             return Err(TransactionBuilderError::InvalidValue);
         }
 
-        // Currently, the flags for creation & signalling can never occur at the same time.
+        // Currently, the flags for creation & signaling can never occur at the same time.
         let tx = if recipient.is_creation() {
             Transaction::new_contract_creation(
                 recipient.data(),
@@ -445,8 +444,8 @@ impl TransactionBuilder {
                 validity_start_height,
                 network_id,
             )
-        } else if recipient.is_signalling() {
-            Transaction::new_signalling(
+        } else if recipient.is_signaling() {
+            Transaction::new_signaling(
                 sender,
                 self.sender_type.unwrap_or(AccountType::Basic),
                 recipient.address().unwrap(), // For non-creation recipients, this should never return None.
@@ -1067,7 +1066,7 @@ impl TransactionBuilder {
     ///
     /// # Note
     ///
-    /// This is a *signalling transaction*.
+    /// This is a *signaling transaction*.
     ///
     pub fn new_update_staker(
         key_pair: Option<&KeyPair>,
@@ -1244,7 +1243,7 @@ impl TransactionBuilder {
     ///
     /// # Note
     ///
-    /// This is a *signalling transaction*.
+    /// This is a *signaling transaction*.
     ///
     pub fn new_update_validator(
         key_pair: &KeyPair,
@@ -1305,7 +1304,7 @@ impl TransactionBuilder {
     ///
     /// # Note
     ///
-    /// This is a *signalling transaction*.
+    /// This is a *signaling transaction*.
     ///
     pub fn new_inactivate_validator(
         key_pair: &KeyPair,
@@ -1358,7 +1357,7 @@ impl TransactionBuilder {
     ///
     /// # Note
     ///
-    /// This is a *signalling transaction*.
+    /// This is a *signaling transaction*.
     ///
     pub fn new_reactivate_validator(
         key_pair: &KeyPair,
@@ -1411,7 +1410,7 @@ impl TransactionBuilder {
     ///
     /// # Note
     ///
-    /// This is a *signalling transaction*.
+    /// This is a *signaling transaction*.
     ///
     pub fn new_unpark_validator(
         key_pair: &KeyPair,

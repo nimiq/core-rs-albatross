@@ -209,7 +209,7 @@ fn update_validator() {
     // Works in the valid case.
     assert_eq!(AccountType::verify_incoming_transaction(&tx), Ok(()));
 
-    // Signalling transaction with a non-zero value.
+    // Signaling transaction with a non-zero value.
     tx.value = Coin::from_u64_unchecked(1);
 
     assert_eq!(
@@ -316,7 +316,7 @@ fn retire_validator() {
     // Works in the valid case.
     assert_eq!(AccountType::verify_incoming_transaction(&tx), Ok(()));
 
-    // Signalling transaction with a non-zero value.
+    // Signaling transaction with a non-zero value.
     tx.value = Coin::from_u64_unchecked(1);
 
     assert_eq!(
@@ -372,7 +372,7 @@ fn reactivate_validator() {
     // Works in the valid case.
     assert_eq!(AccountType::verify_incoming_transaction(&tx), Ok(()));
 
-    // Signalling transaction with a non-zero value.
+    // Signaling transaction with a non-zero value.
     tx.value = Coin::from_u64_unchecked(1);
 
     assert_eq!(
@@ -428,7 +428,7 @@ fn unpark_validator() {
     // Works in the valid case.
     assert_eq!(AccountType::verify_incoming_transaction(&tx), Ok(()));
 
-    // Signalling transaction with a non-zero value.
+    // Signaling transaction with a non-zero value.
     tx.value = Coin::from_u64_unchecked(1);
 
     assert_eq!(
@@ -569,7 +569,7 @@ fn update_staker() {
     // Works in the valid case.
     assert_eq!(AccountType::verify_incoming_transaction(&tx), Ok(()));
 
-    // Signalling transaction with a non-zero value.
+    // Signaling transaction with a non-zero value.
     tx.value = Coin::from_u64_unchecked(1);
 
     assert_eq!(
@@ -677,7 +677,7 @@ fn make_incoming_tx(data: IncomingStakingTransactionData, value: u64) -> Transac
             1,
             NetworkId::Dummy,
         ),
-        _ => Transaction::new_signalling(
+        _ => Transaction::new_signaling(
             Address::from_any_str(STAKER_ADDRESS).unwrap(),
             AccountType::Basic,
             Policy::STAKING_CONTRACT_ADDRESS,

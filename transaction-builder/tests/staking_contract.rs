@@ -313,7 +313,7 @@ fn make_incoming_transaction(data: IncomingStakingTransactionData, value: u64) -
             1,
             NetworkId::Dummy,
         ),
-        _ => Transaction::new_signalling(
+        _ => Transaction::new_signaling(
             Address::from_any_str(ADDRESS).unwrap(),
             AccountType::Basic,
             Policy::STAKING_CONTRACT_ADDRESS,
@@ -384,7 +384,7 @@ fn make_delete_transaction(key_pair: &KeyPair, value: u64) -> Transaction {
 }
 
 fn make_self_transaction(data: IncomingStakingTransactionData, key_pair: &KeyPair) -> Transaction {
-    let mut tx = Transaction::new_signalling(
+    let mut tx = Transaction::new_signaling(
         Policy::STAKING_CONTRACT_ADDRESS,
         AccountType::Staking,
         Policy::STAKING_CONTRACT_ADDRESS,

@@ -35,9 +35,9 @@ impl AccountTransactionVerification for VestingContractVerifier {
             return Err(TransactionError::InvalidForRecipient);
         }
 
-        if transaction.flags.contains(TransactionFlags::SIGNALLING) {
+        if transaction.flags.contains(TransactionFlags::SIGNALING) {
             error!(
-                "Signalling not allowed for this transaction:\n{:?}",
+                "Signaling not allowed for this transaction:\n{:?}",
                 transaction
             );
             return Err(TransactionError::InvalidForRecipient);

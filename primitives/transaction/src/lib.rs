@@ -87,7 +87,7 @@ bitflags! {
     #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize), serde(try_from = "u8", into = "u8"))]
     pub struct TransactionFlags: u8 {
         const CONTRACT_CREATION = 0b1;
-        const SIGNALLING = 0b10;
+        const SIGNALING = 0b10;
     }
 }
 
@@ -284,7 +284,7 @@ impl Transaction {
         }
     }
 
-    pub fn new_signalling(
+    pub fn new_signaling(
         sender: Address,
         sender_type: AccountType,
         recipient: Address,
@@ -305,7 +305,7 @@ impl Transaction {
             fee,
             validity_start_height,
             network_id,
-            flags: TransactionFlags::SIGNALLING,
+            flags: TransactionFlags::SIGNALING,
             proof: Vec::new(),
             valid: false,
         }
@@ -387,8 +387,8 @@ impl Transaction {
             return Err(TransactionError::ForeignNetwork);
         }
 
-        // Check that value > 0 except if it is a signalling transaction.
-        if self.flags.contains(TransactionFlags::SIGNALLING) {
+        // Check that value > 0 except if it is a signaling transaction.
+        if self.flags.contains(TransactionFlags::SIGNALING) {
             if self.value != Coin::ZERO {
                 return Err(TransactionError::InvalidForRecipient);
             }

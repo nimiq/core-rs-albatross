@@ -33,10 +33,10 @@ impl AccountTransactionVerification for BasicAccountVerifier {
         if transaction
             .flags
             .contains(TransactionFlags::CONTRACT_CREATION)
-            || transaction.flags.contains(TransactionFlags::SIGNALLING)
+            || transaction.flags.contains(TransactionFlags::SIGNALING)
         {
             error!(
-                "Contract creation and signalling not allowed for this transaction:\n{:?}",
+                "Contract creation and signaling not allowed for this transaction:\n{:?}",
                 transaction
             );
             return Err(TransactionError::InvalidForRecipient);

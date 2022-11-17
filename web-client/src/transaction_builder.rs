@@ -185,7 +185,7 @@ impl TransactionBuilder {
     }
 
     /// Updates a staker in the staking contract to stake for a different validator. This is a
-    /// signalling transaction and as such does not transfer any value.
+    /// signaling transaction and as such does not transfer any value.
     ///
     /// The returned transaction is not yet signed. You can sign it e.g. with `tx.sign(keyPair)`.
     ///

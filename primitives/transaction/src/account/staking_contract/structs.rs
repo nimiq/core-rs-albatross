@@ -46,7 +46,7 @@ pub enum IncomingStakingTransactionType {
 }
 
 impl IncomingStakingTransactionType {
-    pub fn is_signalling(&self) -> bool {
+    pub fn is_signaling(&self) -> bool {
         matches!(
             self,
             IncomingStakingTransactionType::UpdateValidator
@@ -118,7 +118,7 @@ pub enum IncomingStakingTransactionData {
 }
 
 impl IncomingStakingTransactionData {
-    pub fn is_signalling(&self) -> bool {
+    pub fn is_signaling(&self) -> bool {
         matches!(
             self,
             IncomingStakingTransactionData::UpdateValidator { .. }
@@ -167,7 +167,7 @@ impl IncomingStakingTransactionData {
                     && new_reward_address.is_none()
                     && new_signal_data.is_none()
                 {
-                    error!("Signalling update transactions must actually update something. The offending transaction is the following:\n{:?}", transaction);
+                    error!("Signaling update transactions must actually update something. The offending transaction is the following:\n{:?}", transaction);
                     return Err(TransactionError::InvalidData);
                 }
 

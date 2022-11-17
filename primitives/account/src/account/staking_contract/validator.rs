@@ -62,7 +62,7 @@ pub struct Validator {
     pub voting_key: BlsPublicKey,
     // The reward address of the validator. All the block rewards are paid to this address.
     pub reward_address: Address,
-    // Signalling field. Can be used to do chain upgrades or for any other purpose that requires
+    // Signaling field. Can be used to do chain upgrades or for any other purpose that requires
     // validators to coordinate among themselves.
     pub signal_data: Option<Blake2bHash>,
     // The amount of coins held by this validator. It also includes the coins delegated to him by

@@ -176,9 +176,9 @@ impl Recipient {
         )
     }
 
-    /// This method checks whether the transaction is a signalling transaction
+    /// This method checks whether the transaction is a signaling transaction
     /// (i.e., requires a zero value).
-    /// Only the following transactions on the staking contract are signalling transactions:
+    /// Only the following transactions on the staking contract are signaling transactions:
     /// * [`update validator`]
     /// * [`retire validator`]
     /// * [`re-activate validator`]
@@ -186,9 +186,9 @@ impl Recipient {
     /// * [`update staker`]
     /// * [`retire staker`]
     /// * [`re-activate staker`]
-    pub fn is_signalling(&self) -> bool {
+    pub fn is_signaling(&self) -> bool {
         match self {
-            Recipient::Staking { data } => data.is_signalling(),
+            Recipient::Staking { data } => data.is_signaling(),
             _ => false,
         }
     }
