@@ -157,7 +157,7 @@ fn can_get_it() {
     .unwrap();
 
     assert_eq!(
-        validator.balance,
+        validator.total_stake,
         Coin::from_u64_unchecked(150_000_000 + Policy::VALIDATOR_DEPOSIT)
     );
 
@@ -233,11 +233,11 @@ fn create_validator_works() {
     assert_eq!(validator.reward_address, Address::from([3u8; 20]));
     assert_eq!(validator.signal_data, None);
     assert_eq!(
-        validator.balance,
+        validator.total_stake,
         Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT)
     );
     assert_eq!(validator.num_stakers, 0);
-    assert_eq!(validator.inactivity_flag, None);
+    assert_eq!(validator.inactive_since, None);
 
     let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &db_txn).unwrap();
 
@@ -361,11 +361,11 @@ fn update_validator_works() {
     assert_eq!(validator.reward_address, Address::from([77u8; 20]));
     assert_eq!(validator.signal_data, Some(Blake2bHash::default()));
     assert_eq!(
-        validator.balance,
+        validator.total_stake,
         Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 150_000_000)
     );
     assert_eq!(validator.num_stakers, 1);
-    assert_eq!(validator.inactivity_flag, None);
+    assert_eq!(validator.inactive_since, None);
 
     // Can revert the transaction.
     let logs = StakingContract::revert_incoming_transaction(
@@ -396,11 +396,11 @@ fn update_validator_works() {
     assert_eq!(validator.reward_address, old_reward_address);
     assert_eq!(validator.signal_data, None);
     assert_eq!(
-        validator.balance,
+        validator.total_stake,
         Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 150_000_000)
     );
     assert_eq!(validator.num_stakers, 1);
-    assert_eq!(validator.inactivity_flag, None);
+    assert_eq!(validator.inactive_since, None);
 
     // Works when the validator doesn't exist.
     let keypair = ed25519_key_pair(STAKER_PRIVATE_KEY);
@@ -486,7 +486,7 @@ fn inactivate_validator_works() {
 
     let receipt = InactivateValidatorReceipt {
         no_op: false,
-        parked_set: true,
+        was_parked: true,
     }
     .serialize_to_vec();
 
@@ -511,11 +511,11 @@ fn inactivate_validator_works() {
     assert_eq!(validator.reward_address, validator_address);
     assert_eq!(validator.signal_data, None);
     assert_eq!(
-        validator.balance,
+        validator.total_stake,
         Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 150_000_000)
     );
     assert_eq!(validator.num_stakers, 1);
-    assert_eq!(validator.inactivity_flag, Some(2));
+    assert_eq!(validator.inactive_since, Some(2));
 
     let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &db_txn).unwrap();
 
@@ -536,7 +536,7 @@ fn inactivate_validator_works() {
 
     let no_op_receipt = InactivateValidatorReceipt {
         no_op: true,
-        parked_set: false,
+        was_parked: false,
     }
     .serialize_to_vec();
 
@@ -590,11 +590,11 @@ fn inactivate_validator_works() {
     assert_eq!(validator.reward_address, validator_address);
     assert_eq!(validator.signal_data, None);
     assert_eq!(
-        validator.balance,
+        validator.total_stake,
         Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 150_000_000)
     );
     assert_eq!(validator.num_stakers, 1);
-    assert_eq!(validator.inactivity_flag, None);
+    assert_eq!(validator.inactive_since, None);
 
     let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &db_txn).unwrap();
 
@@ -667,7 +667,7 @@ fn reactivate_validator_works() {
 
     let receipt = ReactivateValidatorReceipt {
         no_op: false,
-        retire_time: 2,
+        was_inactive_since: 2,
     }
     .serialize_to_vec();
 
@@ -692,11 +692,11 @@ fn reactivate_validator_works() {
     assert_eq!(validator.reward_address, validator_address);
     assert_eq!(validator.signal_data, None);
     assert_eq!(
-        validator.balance,
+        validator.total_stake,
         Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 150_000_000)
     );
     assert_eq!(validator.num_stakers, 1);
-    assert_eq!(validator.inactivity_flag, None);
+    assert_eq!(validator.inactive_since, None);
 
     let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &db_txn).unwrap();
 
@@ -719,7 +719,7 @@ fn reactivate_validator_works() {
 
     let no_op_receipt = ReactivateValidatorReceipt {
         no_op: true,
-        retire_time: 0,
+        was_inactive_since: 0,
     }
     .serialize_to_vec();
 
@@ -772,11 +772,11 @@ fn reactivate_validator_works() {
     assert_eq!(validator.reward_address, validator_address);
     assert_eq!(validator.signal_data, None);
     assert_eq!(
-        validator.balance,
+        validator.total_stake,
         Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 150_000_000)
     );
     assert_eq!(validator.num_stakers, 1);
-    assert_eq!(validator.inactivity_flag, Some(2));
+    assert_eq!(validator.inactive_since, Some(2));
 
     let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &db_txn).unwrap();
 
@@ -856,7 +856,7 @@ fn unpark_validator_works() {
 
     let receipt = UnparkValidatorReceipt {
         no_op: false,
-        parked_set: true,
+        was_parked: true,
         current_disabled_slots: Some(slots.clone()),
         previous_disabled_slots: Some(slots),
     }
@@ -895,7 +895,7 @@ fn unpark_validator_works() {
 
     let no_op_receipt = UnparkValidatorReceipt {
         no_op: true,
-        parked_set: false,
+        was_parked: false,
         current_disabled_slots: None,
         previous_disabled_slots: None,
     }
@@ -1027,7 +1027,7 @@ fn delete_validator_works() {
         voting_key: voting_key.clone(),
         reward_address: reward_address.clone(),
         signal_data: None,
-        retire_time: 2,
+        inactive_since: 2,
         stakers: vec![staker_address.clone()],
     }
     .serialize_to_vec();
@@ -1133,11 +1133,11 @@ fn delete_validator_works() {
     assert_eq!(validator.reward_address, reward_address);
     assert_eq!(validator.signal_data, None);
     assert_eq!(
-        validator.balance,
+        validator.total_stake,
         Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 150_000_000)
     );
     assert_eq!(validator.num_stakers, 1);
-    assert_eq!(validator.inactivity_flag, Some(2));
+    assert_eq!(validator.inactive_since, Some(2));
 
     assert_eq!(
         accounts_tree
@@ -1213,7 +1213,7 @@ fn create_staker_works() {
         .unwrap();
 
     assert_eq!(
-        validator.balance,
+        validator.total_stake,
         Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 150_000_000)
     );
     assert_eq!(validator.num_stakers, 1);
@@ -1273,7 +1273,7 @@ fn create_staker_works() {
         .unwrap();
 
     assert_eq!(
-        validator.balance,
+        validator.total_stake,
         Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT)
     );
     assert_eq!(validator.num_stakers, 0);
@@ -1350,7 +1350,7 @@ fn stake_works() {
         .unwrap();
 
     assert_eq!(
-        validator.balance,
+        validator.total_stake,
         Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 300_000_000)
     );
 
@@ -1394,7 +1394,7 @@ fn stake_works() {
         .unwrap();
 
     assert_eq!(
-        validator.balance,
+        validator.total_stake,
         Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 150_000_000)
     );
 
@@ -1489,7 +1489,7 @@ fn update_staker_works() {
         .unwrap();
 
     assert_eq!(
-        old_validator.balance,
+        old_validator.total_stake,
         Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT)
     );
     assert_eq!(old_validator.num_stakers, 0);
@@ -1500,7 +1500,7 @@ fn update_staker_works() {
             .unwrap();
 
     assert_eq!(
-        new_validator.balance,
+        new_validator.total_stake,
         Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 150_000_000)
     );
     assert_eq!(new_validator.num_stakers, 1);
@@ -1599,7 +1599,7 @@ fn update_staker_works() {
             .unwrap();
 
     assert_eq!(
-        other_validator.balance,
+        other_validator.total_stake,
         Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT)
     );
     assert_eq!(other_validator.num_stakers, 0);
@@ -1638,7 +1638,7 @@ fn update_staker_works() {
             .unwrap();
 
     assert_eq!(
-        validator.balance,
+        validator.total_stake,
         Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 150_000_000)
     );
     assert_eq!(validator.num_stakers, 1);
@@ -1750,7 +1750,7 @@ fn unstake_works() {
         .unwrap();
 
     assert_eq!(
-        validator.balance,
+        validator.total_stake,
         Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 50_000_000)
     );
     assert_eq!(validator.num_stakers, 1);
@@ -1826,7 +1826,7 @@ fn unstake_works() {
         .unwrap();
 
     assert_eq!(
-        validator.balance,
+        validator.total_stake,
         Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT)
     );
     assert_eq!(validator.num_stakers, 0);
@@ -1896,7 +1896,7 @@ fn unstake_works() {
         .unwrap();
 
     assert_eq!(
-        validator.balance,
+        validator.total_stake,
         Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 50_000_000)
     );
     assert_eq!(validator.num_stakers, 1);
@@ -2352,7 +2352,7 @@ fn finalize_epoch_inherents_work() {
         .unwrap()
         .unwrap();
 
-    assert_eq!(validator.inactivity_flag, Some(1));
+    assert_eq!(validator.inactive_since, Some(1));
 
     // Cannot revert the inherent.
     assert_eq!(

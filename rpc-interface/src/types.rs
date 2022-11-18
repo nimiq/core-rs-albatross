@@ -717,9 +717,9 @@ impl Validator {
             voting_key: validator.voting_key.clone(),
             reward_address: validator.reward_address.clone(),
             signal_data: validator.signal_data.clone(),
-            balance: validator.balance,
+            balance: validator.total_stake,
             num_stakers: validator.num_stakers,
-            inactivity_flag: validator.inactivity_flag,
+            inactivity_flag: validator.inactive_since,
             stakers,
         }
     }

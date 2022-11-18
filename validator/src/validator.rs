@@ -643,7 +643,7 @@ where
         if let Some(validator) =
             StakingContract::get_validator(accounts_tree, &db_txn, &validator_address).unwrap()
         {
-            if validator.inactivity_flag.is_some() {
+            if validator.inactive_since.is_some() {
                 ValidatorStakingState::Inactive
             } else {
                 ValidatorStakingState::Active

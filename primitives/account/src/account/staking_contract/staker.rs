@@ -56,7 +56,7 @@ impl StakingContract {
             delegation,
         };
 
-        // If we are staking for a validator, we need to update it.
+        // If we are delegating to a validator, we need to update it.
         if staker.delegation.is_some() {
             self.add_staker_to_validator(store, &staker)?;
         }
@@ -91,7 +91,7 @@ impl StakingContract {
         assert_eq!(value, staker.balance);
         Account::balance_sub_assign(&mut self.balance, value)?;
 
-        // If we are staking for a validator, we need to update it.
+        // If we are delegating to a validator, we need to update it.
         if staker.delegation.is_some() {
             self.remove_staker_from_validator(store, &staker)
                 .expect("inconsistent contract state");
@@ -120,7 +120,7 @@ impl StakingContract {
         // Update our balance.
         Account::balance_add_assign(&mut self.balance, value)?;
 
-        // If we are staking for a validator, we need to update it too.
+        // If we are delegating to a validator, we need to update it too.
         if let Some(validator_address) = &staker.delegation {
             self.add_stake_to_validator(store, validator_address, value)
                 .expect("inconsistent contract state");
@@ -155,7 +155,7 @@ impl StakingContract {
         // Update our balance.
         Account::balance_sub_assign(&mut self.balance, value)?;
 
-        // If we are staking for a validator, we need to update it too.
+        // If we are delegating to a validator, we need to update it too.
         if let Some(validator_address) = &staker.delegation {
             self.remove_stake_from_validator(store, validator_address, value)
                 .expect("inconsistent contract state");
@@ -198,7 +198,7 @@ impl StakingContract {
             delegation: staker.delegation.clone(),
         };
 
-        // If we were staking for a validator, we remove ourselves from it.
+        // If we were delegating to a validator, we remove ourselves from it.
         if staker.delegation.is_some() {
             self.remove_staker_from_validator(store, &staker)
                 .expect("inconsistent contract state");
@@ -207,7 +207,7 @@ impl StakingContract {
         // Update the staker's delegation.
         staker.delegation = delegation;
 
-        // If we are now staking for a validator, we add ourselves to it.
+        // If we are now delegating to a validator, we add ourselves to it.
         if staker.delegation.is_some() {
             self.add_staker_to_validator(store, &staker)
                 .expect("inconsistent contract state");
@@ -276,7 +276,7 @@ impl StakingContract {
         // Update our balance.
         Account::balance_sub_assign(&mut self.balance, value)?;
 
-        // If we are staking for a validator, we update it.
+        // If we are delegating to a validator, we update it.
         if let Some(validator_address) = &staker.delegation {
             if staker.balance.is_zero() {
                 self.remove_staker_from_validator(store, &staker)
@@ -319,7 +319,7 @@ impl StakingContract {
                         delegation: receipt.delegation,
                     };
 
-                    // If we are staking for a validator, re-add the staker to it.
+                    // If we are delegating to a validator, re-add the staker to it.
                     if staker.delegation.is_some() {
                         self.add_staker_to_validator(store, &staker)
                             .expect("inconsistent contract state");
@@ -336,7 +336,7 @@ impl StakingContract {
         // Update our balance.
         Account::balance_add_assign(&mut self.balance, value)?;
 
-        // If we are staking for a validator, we update it.
+        // If we are delegating to a validator, we update it.
         if let Some(validator_address) = &staker.delegation {
             self.add_stake_to_validator(store, validator_address, value)
                 .expect("inconsistent contract state");
@@ -360,11 +360,11 @@ impl StakingContract {
         let mut validator = store.expect_validator(validator_address)?;
 
         // Update it.
-        Account::balance_add_assign(&mut validator.balance, staker.balance)?;
+        Account::balance_add_assign(&mut validator.total_stake, staker.balance)?;
 
-        if validator.inactivity_flag.is_none() {
+        if validator.inactive_since.is_none() {
             self.active_validators
-                .insert(validator_address.clone(), validator.balance);
+                .insert(validator_address.clone(), validator.total_stake);
         }
 
         validator.num_stakers += 1;
@@ -390,11 +390,11 @@ impl StakingContract {
         let mut validator = store.expect_validator(validator_address)?;
 
         // Update it.
-        Account::balance_sub_assign(&mut validator.balance, staker.balance)?;
+        Account::balance_sub_assign(&mut validator.total_stake, staker.balance)?;
 
-        if validator.inactivity_flag.is_none() {
+        if validator.inactive_since.is_none() {
             self.active_validators
-                .insert(validator_address.clone(), validator.balance);
+                .insert(validator_address.clone(), validator.total_stake);
         }
 
         validator.num_stakers -= 1;
@@ -419,11 +419,11 @@ impl StakingContract {
         let mut validator = store.expect_validator(validator_address)?;
 
         // Update it.
-        Account::balance_add_assign(&mut validator.balance, value)?;
+        Account::balance_add_assign(&mut validator.total_stake, value)?;
 
-        if validator.inactivity_flag.is_none() {
+        if validator.inactive_since.is_none() {
             self.active_validators
-                .insert(validator_address.clone(), validator.balance);
+                .insert(validator_address.clone(), validator.total_stake);
         }
 
         // Update the validator entry.
@@ -443,11 +443,11 @@ impl StakingContract {
         let mut validator = store.expect_validator(validator_address)?;
 
         // Update it.
-        Account::balance_sub_assign(&mut validator.balance, value)?;
+        Account::balance_sub_assign(&mut validator.total_stake, value)?;
 
-        if validator.inactivity_flag.is_none() {
+        if validator.inactive_since.is_none() {
             self.active_validators
-                .insert(validator_address.clone(), validator.balance);
+                .insert(validator_address.clone(), validator.total_stake);
         }
 
         // Update the validator entry.

@@ -1222,7 +1222,7 @@ fn it_can_revert_failed_delete_validator() {
             Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT - 100)
         );
         //Now the validator should be inactive because of the failing txn..
-        assert_eq!(validator.inactivity_flag, Some(1));
+        assert_eq!(validator.inactive_since, Some(1));
     }
 
     let blockchain = blockchain.upgradable_read();

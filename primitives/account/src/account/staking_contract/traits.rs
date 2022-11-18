@@ -484,7 +484,7 @@ impl AccountTransactionInteraction for StakingContract {
                     }
                 };
 
-                validator.inactivity_flag = Some(block_height);
+                validator.inactive_since = Some(block_height);
 
                 staking_contract
                     .active_validators
@@ -507,7 +507,7 @@ impl AccountTransactionInteraction for StakingContract {
                 } else {
                     // Update the validator balance
                     validator.deposit = new_deposit;
-                    Account::balance_sub(validator.balance, transaction.fee)?;
+                    Account::balance_sub(validator.total_stake, transaction.fee)?;
 
                     accounts_tree
                         .put(
@@ -618,7 +618,8 @@ impl AccountTransactionInteraction for StakingContract {
                 .unwrap();
 
                 validator.deposit = Account::balance_add(validator.deposit, transaction.fee)?;
-                validator.balance = Account::balance_add(validator.balance, transaction.fee)?;
+                validator.total_stake =
+                    Account::balance_add(validator.total_stake, transaction.fee)?;
 
                 accounts_tree
                     .put(
@@ -840,7 +841,7 @@ impl AccountInherentInteraction for StakingContract {
                         ))
                         .ok_or(AccountError::InvalidInherent)?;
 
-                        validator.inactivity_flag = Some(block_height);
+                        validator.inactive_since = Some(block_height);
 
                         accounts_tree
                             .put(

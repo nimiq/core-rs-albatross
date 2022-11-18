@@ -63,6 +63,9 @@ impl Blockchain {
     ) -> Result<Slot, BlockchainError> {
         // Fetch the latest macro block that precedes the block at the given block_number.
         // We use the disabled_slots set from that macro block for the slot selection.
+        // FIXME This has the issue that slots are not immediately disabled once they are slashed.
+        //  An offline validator will thus continue to delay the chain as his slot(s) will still
+        //  be selected until the end of the batch.
         let macro_block = self.get_block_at(Policy::macro_block_before(block_number), true, txn)?;
         let disabled_slots = macro_block.unwrap_macro().body.unwrap().disabled_set;
 
