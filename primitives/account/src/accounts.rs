@@ -233,8 +233,8 @@ impl Accounts {
         }
     }
 
-    /// This function operates atomically i.e.: either the transaction is fully committed
-    /// (sender + recipient) or it returns an error and no state is changed
+    /// This function operates atomically i.e. either the transaction is fully committed
+    /// (sender + recipient) or it returns an error and no state is changed.
     fn try_commit_transaction(
         &self,
         txn: &mut WriteTransaction,
@@ -256,19 +256,16 @@ impl Accounts {
         // Commit recipient.
         let recipient_address = &transaction.recipient;
         let mut recipient_store = DataStore::new(&self.tree, recipient_address);
-        let mut recipient_account;
+        let mut recipient_account = Account::default();
 
         // Handle contract creation.
         let recipient_result = if transaction
             .flags
             .contains(TransactionFlags::CONTRACT_CREATION)
         {
-            // XXX This only checks if the recipient account is a basic account, storing the
-            // account itself is unnecessary since we are creating a new account anyways.
-            // The basic account check is redundant as well if we assume that we only process
-            // transactions here that have passed the intrinsic transaction verification and are
-            // not duplicated.
-            recipient_account = self.get_with_type(txn, recipient_address, AccountType::Basic)?;
+            recipient_account = self
+                .get_with_type(txn, recipient_address, AccountType::Basic)
+                .expect("contract creation target must be a basic account");
 
             Account::create_new_contract(
                 transaction,
@@ -281,13 +278,15 @@ impl Accounts {
                 None
             })
         } else {
-            recipient_account =
-                self.get_with_type(txn, recipient_address, transaction.recipient_type)?;
-            recipient_account.commit_incoming_transaction(
-                transaction,
-                block_time,
-                recipient_store.write(txn),
-            )
+            self.get_with_type(txn, recipient_address, transaction.recipient_type)
+                .and_then(|mut account| {
+                    recipient_account = account;
+                    recipient_account.commit_incoming_transaction(
+                        transaction,
+                        block_time,
+                        recipient_store.write(txn),
+                    )
+                })
         };
 
         // If recipient failed, revert sender.
@@ -301,7 +300,7 @@ impl Accounts {
                     sender_receipt.as_ref(),
                     sender_store.write(txn),
                 )
-                .expect("Failed to revert sender account");
+                .expect("failed to revert sender account");
 
             return Err(e);
         }
@@ -310,6 +309,7 @@ impl Accounts {
         let pruned_account = self.put_or_prune(txn, sender_address, sender_account);
 
         // Update recipient.
+        assert!(!recipient_account.can_be_pruned());
         self.put(txn, recipient_address, recipient_account);
 
         Ok(TransactionReceipt {
@@ -423,7 +423,7 @@ impl Accounts {
         }
     }
 
-    // TODO This function might leave the WriteTransaction in an inconsistent state if it returns an error!
+    /// TODO This function might leave the WriteTransaction in an inconsistent state if it returns an error!
     fn revert_successful_transaction(
         &self,
         txn: &mut WriteTransaction,

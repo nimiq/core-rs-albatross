@@ -1,7 +1,3 @@
-use std::cmp::min;
-
-use log::error;
-
 use beserial::{Deserialize, Serialize};
 use nimiq_bls::CompressedPublicKey as BlsPublicKey;
 use nimiq_hash::Blake2bHash;
@@ -15,7 +11,6 @@ use crate::account::staking_contract::receipts::{
 use crate::account::staking_contract::store::{
     StakingContractStoreReadOps, StakingContractStoreReadOpsExt, StakingContractStoreWrite,
 };
-use crate::logs::{Log, OperationInfo};
 use crate::{account::staking_contract::StakingContract, Account};
 
 /// Struct representing a validator in the staking contract.
@@ -78,9 +73,15 @@ pub struct Validator {
 }
 
 impl Validator {
-    fn is_active(&self) -> bool {
+    pub fn is_active(&self) -> bool {
         self.inactive_since.is_none()
     }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Tombstone {
+    pub remaining_stake: Coin,
+    pub num_remaining_stakers: u64,
 }
 
 impl StakingContract {
@@ -388,18 +389,24 @@ impl StakingContract {
         Ok(())
     }
 
-    /// Delete a validator and returns its deposit. This can only be used on inactive validators!
+    /// Deletes a validator and returns its deposit. This can only be used on inactive validators!
     /// After the validator gets inactivated, it needs to wait until the second batch of the next
     /// epoch in order to be able to be deleted. This is necessary because if the validator was an
     /// elected validator when it was inactivated then it might receive rewards until the end of the
     /// first batch of the next epoch. So it needs to be available.
+    ///
+    /// When a validator is deleted, the stakers delegating to it will NOT be updated. If there is
+    /// at least one staker for a validator, we leave a tombstone for it behind that tracks the
+    /// remaining total_stake. This is necessary to be able to correctly restore the validator entry
+    /// in case it is created again. The tombstone is deleted once the last delegation to the
+    /// deleted validator is removed (e.g. by update_staker or remove_stake).
     pub fn delete_validator(
         &mut self,
         store: &StakingContractStoreWrite,
         validator_address: &Address,
         block_number: u32,
         transaction_total_value: Coin,
-    ) -> Result<OperationInfo<DeleteValidatorReceipt>, AccountError> {
+    ) -> Result<DeleteValidatorReceipt, AccountError> {
         // Get the validator.
         let validator = store.expect_validator(validator_address)?;
 
@@ -423,99 +430,35 @@ impl StakingContract {
 
         // All checks passed, not allowed to fail from here on!
 
-        // Initialize receipt.
-        let mut receipt = DeleteValidatorReceipt {
-            signing_key: validator.signing_key,
-            voting_key: validator.voting_key,
-            reward_address: validator.reward_address,
-            signal_data: validator.signal_data,
-            inactive_since: validator.inactive_since.expect("validator is inactive"),
-            stakers: vec![],
-        };
+        // Update our balance.
+        Account::balance_sub_assign(&mut self.balance, validator.deposit)?;
+
+        // If there are stakers remaining, create a tombstone for this validator.
+        if validator.num_stakers > 0 {
+            assert!(validator.total_stake > validator.deposit);
+            let tombstone = Tombstone {
+                remaining_stake: validator.total_stake - validator.deposit,
+                num_remaining_stakers: validator.num_stakers,
+            };
+            store.put_tombstone(validator_address, tombstone);
+        }
+
+        // Remove the validator entry.
+        store.remove_validator(validator_address);
 
         // let logs = vec![Log::DeleteValidator {
         //     validator_address: validator_address.clone(),
         //     reward_address: validator.reward_address,
         // }];
 
-        // Remove the validator from all its stakers.
-        // Also delete all the validator's delegation entries.
-        let empty_staker_key =
-            StakingContract::get_key_validator_staker(validator_address, &Address::from([0; 20]));
-
-        let mut remaining_stakers = validator.num_stakers as usize;
-
-        // Here we use a chunk size of 100. It's completely arbitrary, we just don't want to
-        // download the entire staker list into memory since it might be huge.
-        let chunk_size = 100;
-
-        while remaining_stakers > 0 {
-            // Get chunk of stakers.
-            let chunk = accounts_tree.get_chunk(
-                db_txn,
-                &empty_staker_key,
-                min(remaining_stakers, chunk_size),
-            );
-
-            // Update the number of stakers.
-            remaining_stakers -= chunk.len();
-
-            for account in chunk {
-                if let Account::StakingValidatorsStaker(staker_address) = account {
-                    // Update the staker.
-                    let mut staker = StakingContract::get_staker(accounts_tree, db_txn, &staker_address).expect("A validator had an staker delegating to it that doesn't exist in the Accounts Tree!");
-
-                    staker.delegation = None;
-
-                    accounts_tree
-                        .put(
-                            db_txn,
-                            &StakingContract::get_key_staker(&staker_address),
-                            Account::StakingStaker(staker),
-                        )
-                        .expect("temporary until accounts rewrite");
-
-                    // Remove the staker entry from the validator.
-                    accounts_tree.remove(
-                        db_txn,
-                        &StakingContract::get_key_validator_staker(
-                            validator_address,
-                            &staker_address,
-                        ),
-                    );
-
-                    // Update the receipt.
-                    receipt.stakers.push(staker_address);
-                } else {
-                    panic!("When trying to fetch a staker for a validator we got a different type of account. This should never happen!");
-                }
-            }
-        }
-
-        // Remove the validator entry.
-        accounts_tree.remove(
-            db_txn,
-            &StakingContract::get_key_validator(validator_address),
-        );
-
-        // Get the staking contract main and update it.
-        let mut staking_contract = complete!(StakingContract::get_staking_contract_or_update(
-            accounts_tree,
-            db_txn
-        ));
-
-        staking_contract.balance = Account::balance_sub(staking_contract.balance, deposit)?;
-
-        accounts_tree
-            .put(
-                db_txn,
-                &StakingContract::get_key_staking_contract(),
-                Account::Staking(staking_contract),
-            )
-            .expect("temporary until accounts rewrite");
-
         // Return the receipt.
-        Ok(OperationInfo::with_receipt(receipt, logs))
+        Ok(DeleteValidatorReceipt {
+            signing_key: validator.signing_key,
+            voting_key: validator.voting_key,
+            reward_address: validator.reward_address,
+            signal_data: validator.signal_data,
+            inactive_since: validator.inactive_since.unwrap(), // we checked above that this is Some
+        })
     }
 
     /// Reverts deleting a validator.
@@ -523,88 +466,38 @@ impl StakingContract {
         &mut self,
         store: &StakingContractStoreWrite,
         validator_address: &Address,
+        transaction_total_value: Coin,
         receipt: DeleteValidatorReceipt,
-    ) -> Result<Vec<Log>, AccountError> {
-        // Re-add the validator to all its stakers. Also create all the validator's stakers entries.
-        let mut num_stakers = 0;
+    ) -> Result<(), AccountError> {
+        // Update our balance.
+        Account::balance_add_assign(&mut self.balance, transaction_total_value)?;
 
-        let mut balance = 0;
-
-        for staker_address in receipt.stakers {
-            // Get the staker.
-            let mut staker = StakingContract::get_staker(accounts_tree, db_txn, &staker_address)
-                .expect(
-                "A validator had an staker delegating to it that doesn't exist in the Accounts Tree!",
-            );
-
-            // Update the counters.
-            num_stakers += 1;
-            balance += u64::from(staker.balance);
-
-            // Update the staker.
-            staker.delegation = Some(validator_address.clone());
-
-            accounts_tree
-                .put(
-                    db_txn,
-                    &StakingContract::get_key_staker(&staker_address),
-                    Account::StakingStaker(staker),
-                )
-                .expect("temporary until accounts rewrite");
-
-            // Add the staker entry to the validator.
-            accounts_tree
-                .put(
-                    db_txn,
-                    &StakingContract::get_key_validator_staker(validator_address, &staker_address),
-                    Account::StakingValidatorsStaker(staker_address.clone()),
-                )
-                .expect("temporary until accounts rewrite");
-        }
-
-        // Re-add the validator entry.
-        let validator = Validator {
+        // Initialize validator.
+        let mut validator = Validator {
             address: validator_address.clone(),
             signing_key: receipt.signing_key,
             voting_key: receipt.voting_key,
             reward_address: receipt.reward_address,
             signal_data: receipt.signal_data,
-            total_stake: Coin::from_u64_unchecked(balance + policy::VALIDATOR_DEPOSIT),
-            num_stakers,
+            total_stake: transaction_total_value,
+            num_stakers: 0,
             inactive_since: Some(receipt.inactive_since),
-            deposit: Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT),
+            deposit: transaction_total_value,
         };
 
-        accounts_tree
-            .put(
-                db_txn,
-                &StakingContract::get_key_validator(validator_address),
-                Account::StakingValidator(validator.clone()),
-            )
-            .expect("temporary until accounts rewrite");
+        // If there is a tombstone for this validator, add the remaining staker and stakers.
+        if let Some(tombstone) = store.get_tombstone(validator_address) {
+            Account::balance_add_assign(&mut validator.total_stake, tombstone.remaining_stake)?;
+            validator.num_stakers += tombstone.num_remaining_stakers;
 
-        // Get the staking contract main and update it.
-        let mut staking_contract = complete!(StakingContract::get_staking_contract_or_update(
-            accounts_tree,
-            db_txn
-        ));
+            // Remove the tombstone entry.
+            store.remove_tombstone(validator_address);
+        }
 
-        let deposit = Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT);
+        // Re-add the validator entry.
+        store.put_validator(validator_address, validator);
 
-        staking_contract.balance = Account::balance_add(staking_contract.balance, deposit)?;
-
-        accounts_tree
-            .put(
-                db_txn,
-                &StakingContract::get_key_staking_contract(),
-                Account::Staking(staking_contract),
-            )
-            .expect("temporary until accounts rewrite");
-
-        Ok(vec![Log::DeleteValidator {
-            validator_address: validator_address.clone(),
-            reward_address: validator.reward_address,
-        }])
+        Ok(())
     }
 }
 

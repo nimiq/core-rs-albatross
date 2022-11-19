@@ -47,8 +47,6 @@ pub struct DeleteValidatorReceipt {
     pub reward_address: Address,
     pub signal_data: Option<Blake2bHash>,
     pub inactive_since: u32,
-    #[beserial(len_type(u32))]
-    pub stakers: Vec<Address>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]

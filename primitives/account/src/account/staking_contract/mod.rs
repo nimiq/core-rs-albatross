@@ -107,10 +107,10 @@ impl StakingContract {
     /// Get a list containing the addresses of all stakers that are delegating for a given validator.
     pub fn get_stakers_for_validator(
         &self,
-        data_store: &DataStoreRead,
-        address: &Address,
+        _data_store: &DataStoreRead,
+        _address: &Address,
     ) -> Vec<Address> {
-        StakingContractStoreRead::new(data_store).get_delegations(address)
+        todo!()
     }
 
     /// Given a seed, it randomly distributes the validator slots across all validators. It is

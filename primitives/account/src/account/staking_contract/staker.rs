@@ -362,7 +362,7 @@ impl StakingContract {
         // Update it.
         Account::balance_add_assign(&mut validator.total_stake, staker.balance)?;
 
-        if validator.inactive_since.is_none() {
+        if validator.is_active() {
             self.active_validators
                 .insert(validator_address.clone(), validator.total_stake);
         }
@@ -371,9 +371,6 @@ impl StakingContract {
 
         // Update the validator entry.
         store.put_validator(validator_address, validator);
-
-        // Add the staker entry to the validator.
-        store.add_delegation(validator_address, &staker.address);
 
         Ok(())
     }
@@ -385,27 +382,45 @@ impl StakingContract {
         store: &StakingContractStoreWrite,
         staker: &Staker,
     ) -> Result<(), AccountError> {
-        // Get the validator.
         let validator_address = &staker.delegation.expect("Staker has no delegation");
-        let mut validator = store.expect_validator(validator_address)?;
 
-        // Update it.
-        Account::balance_sub_assign(&mut validator.total_stake, staker.balance)?;
+        // Try to get the validator. It might have been deleted.
+        if let Some(mut validator) = store.get_validator(validator_address) {
+            // Validator exists, update it.
+            Account::balance_sub_assign(&mut validator.total_stake, staker.balance)?;
 
-        if validator.inactive_since.is_none() {
-            self.active_validators
-                .insert(validator_address.clone(), validator.total_stake);
+            if validator.is_active() {
+                self.active_validators
+                    .insert(validator_address.clone(), validator.total_stake);
+            }
+
+            validator.num_stakers -= 1;
+
+            // Update the validator entry.
+            store.put_validator(validator_address, validator);
+
+            return Ok(());
         }
 
-        validator.num_stakers -= 1;
+        // Validator doesn't exist, check for tombstone.
+        if let Some(mut tombstone) = store.get_tombstone(validator_address) {
+            // Tombstone exists, update it.
+            Account::balance_sub_assign(&mut tombstone.total_stake, staker.balance)?;
 
-        // Update the validator entry.
-        store.put_validator(validator_address, validator);
+            tombstone.num_remaining_stakers -= 1;
 
-        // Remove the delegation entry from the validator.
-        store.remove_delegation(validator_address, &staker.address);
+            // Delete the tombstone if this was the last remaining staker, update it otherwise.
+            if tombstone.num_remaining_stakers == 0 {
+                store.remove_tombstone(validator_address);
+            } else {
+                store.put_tombstone(validator_address, tombstone);
+            }
 
-        Ok(())
+            return Ok(());
+        }
+
+        // Neither validator nor tombstone exist, this is an error.
+        panic!("inconsistent contract state");
     }
 
     /// Adds `value` coins to a given validator's total stake.
@@ -421,7 +436,7 @@ impl StakingContract {
         // Update it.
         Account::balance_add_assign(&mut validator.total_stake, value)?;
 
-        if validator.inactive_since.is_none() {
+        if validator.is_active() {
             self.active_validators
                 .insert(validator_address.clone(), validator.total_stake);
         }
@@ -439,20 +454,34 @@ impl StakingContract {
         validator_address: &Address,
         value: Coin,
     ) -> Result<(), AccountError> {
-        // Get the validator.
-        let mut validator = store.expect_validator(validator_address)?;
+        // Try to get the validator. It might have been deleted.
+        if let Some(mut validator) = store.get_validator(validator_address) {
+            // Validator exists, update it.
+            Account::balance_sub_assign(&mut validator.total_stake, value)?;
 
-        // Update it.
-        Account::balance_sub_assign(&mut validator.total_stake, value)?;
+            if validator.is_active() {
+                self.active_validators
+                    .insert(validator_address.clone(), validator.total_stake);
+            }
 
-        if validator.inactive_since.is_none() {
-            self.active_validators
-                .insert(validator_address.clone(), validator.total_stake);
+            // Update the validator entry.
+            store.put_validator(validator_address, validator);
+
+            return Ok(());
         }
 
-        // Update the validator entry.
-        store.put_validator(validator_address, validator);
+        // Validator doesn't exist, check for tombstone.
+        if let Some(mut tombstone) = store.get_tombstone(validator_address) {
+            // Tombstone exists, update it.
+            Account::balance_sub_assign(&mut tombstone.total_stake, value)?;
 
-        Ok(())
+            // Update the tombstone entry.
+            store.put_tombstone(validator_address, tombstone);
+
+            return Ok(());
+        }
+
+        // Neither validator nor tombstone exist, this is an error.
+        panic!("inconsistent contract state");
     }
 }

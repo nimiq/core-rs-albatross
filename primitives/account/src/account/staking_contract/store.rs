@@ -1,33 +1,33 @@
-use crate::data_store::{DataStoreRead, DataStoreWrite};
-use crate::{AccountError, Staker, Validator};
 use nimiq_keys::Address;
 use nimiq_trie::key_nibbles::KeyNibbles;
+
+use crate::account::staking_contract::validator::Tombstone;
+use crate::data_store::{DataStoreRead, DataStoreWrite};
+use crate::{AccountError, Staker, Validator};
 
 struct StakingContractStore {}
 
 impl StakingContractStore {
     const PREFIX_VALIDATOR: u8 = 0;
     const PREFIX_STAKER: u8 = 1;
+    const PREFIX_TOMBSTONE: u8 = 2;
 
     fn validator_key(address: &Address) -> KeyNibbles {
-        let mut key = Vec::with_capacity(21);
-        key.push(Self::PREFIX_VALIDATOR);
-        key.extend(address.as_slice());
-        KeyNibbles::from(key)
+        Self::prefixed_address(Self::PREFIX_VALIDATOR, address)
     }
 
     fn staker_key(address: &Address) -> KeyNibbles {
-        let mut key = Vec::with_capacity(21);
-        key.push(Self::PREFIX_STAKER);
-        key.extend(address.as_slice());
-        KeyNibbles::from(key)
+        Self::prefixed_address(Self::PREFIX_STAKER, address)
     }
 
-    fn delegation_key(validator_address: &Address, staker_address: &Address) -> KeyNibbles {
-        let mut key = Vec::with_capacity(41);
-        key.push(Self::PREFIX_VALIDATOR);
-        key.extend(validator_address.as_slice());
-        key.extend(staker_address.as_slice());
+    fn tombstone_key(address: &Address) -> KeyNibbles {
+        Self::prefixed_address(Self::PREFIX_TOMBSTONE, address)
+    }
+
+    fn prefixed_address(prefix: u8, address: &Address) -> KeyNibbles {
+        let mut key = Vec::with_capacity(21);
+        key.push(prefix);
+        key.extend(address.as_slice());
         KeyNibbles::from(key)
     }
 }
@@ -37,7 +37,7 @@ pub trait StakingContractStoreReadOps {
 
     fn get_staker(&self, address: &Address) -> Option<Staker>;
 
-    fn get_delegations(&self, address: &Address) -> Vec<Address>;
+    fn get_tombstone(&self, address: &Address) -> Option<Tombstone>;
 }
 
 pub(crate) struct StakingContractStoreRead<'read, 'store, 'tree, 'txn, 'env>(
@@ -61,8 +61,8 @@ impl<'read, 'store, 'tree, 'txn, 'env> StakingContractStoreReadOps
         self.0.get(&StakingContractStore::staker_key(address))
     }
 
-    fn get_delegations(&self, address: &Address) -> Vec<Address> {
-        todo!()
+    fn get_tombstone(&self, address: &Address) -> Option<Tombstone> {
+        self.0.get(&StakingContractStore::tombstone_key(address))
     }
 }
 
@@ -95,18 +95,13 @@ impl<'write, 'store, 'tree, 'txn, 'env>
         self.0.remove(&StakingContractStore::staker_key(address))
     }
 
-    pub fn add_delegation(&self, validator_address: &Address, staker_address: &Address) {
-        self.0.put(
-            &StakingContractStore::delegation_key(validator_address, staker_address),
-            (),
-        )
+    pub fn put_tombstone(&self, address: &Address, tombstone: Tombstone) {
+        self.0
+            .put(&StakingContractStore::tombstone_key(address), tombstone)
     }
 
-    pub fn remove_delegation(self, validator_address: &Address, staker_address: &Address) {
-        self.0.remove(&StakingContractStore::delegation_key(
-            validator_address,
-            staker_address,
-        ))
+    pub fn remove_tombstone(self, address: &Address) {
+        self.0.remove(&StakingContractStore::tombstone_key(address))
     }
 }
 
@@ -121,8 +116,8 @@ impl<'write, 'store, 'tree, 'txn, 'env> StakingContractStoreReadOps
         self.0.get(&StakingContractStore::staker_key(address))
     }
 
-    fn get_delegations(&self, address: &Address) -> Vec<Address> {
-        todo!()
+    fn get_tombstone(&self, address: &Address) -> Option<Tombstone> {
+        self.0.get(&StakingContractStore::tombstone_key(address))
     }
 }
 
