@@ -39,7 +39,7 @@ impl AbstractBlockchain for LightBlockchain {
     }
 
     fn contains(&self, hash: &Blake2bHash, include_forks: bool) -> bool {
-        match self.chain_store.read().unwrap().get_chain_info(hash) {
+        match self.chain_store.get_chain_info(hash) {
             Some(chain_info) => include_forks || chain_info.on_main_chain,
             None => false,
         }
@@ -52,8 +52,6 @@ impl AbstractBlockchain for LightBlockchain {
         _txn_option: Option<&Transaction>,
     ) -> Option<Block> {
         self.chain_store
-            .read()
-            .unwrap()
             .get_chain_info_at(height)
             .map(|chain_info| chain_info.head)
     }
@@ -65,8 +63,6 @@ impl AbstractBlockchain for LightBlockchain {
         _txn_option: Option<&Transaction>,
     ) -> Option<Block> {
         self.chain_store
-            .read()
-            .unwrap()
             .get_chain_info(hash)
             .map(|chain_info| chain_info.head.clone())
     }
@@ -77,11 +73,7 @@ impl AbstractBlockchain for LightBlockchain {
         _include_body: bool,
         _txn_option: Option<&Transaction>,
     ) -> Option<ChainInfo> {
-        self.chain_store
-            .read()
-            .unwrap()
-            .get_chain_info(hash)
-            .cloned()
+        self.chain_store.get_chain_info(hash).cloned()
     }
 
     fn get_slot_owner_at(

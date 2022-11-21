@@ -1,4 +1,4 @@
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use nimiq_block::{Block, MacroBlock};
 use nimiq_blockchain::ChainInfo;
@@ -27,7 +27,7 @@ pub struct LightBlockchain {
     // The genesis block.
     pub genesis_block: Block,
     // The chain store is a database containing all of the chain infos in the current batch.
-    pub chain_store: RwLock<ChainStore>,
+    pub chain_store: ChainStore,
 }
 
 /// Implements methods to start a Blockchain.
@@ -57,7 +57,7 @@ impl LightBlockchain {
             election_head: genesis_block.clone().unwrap_macro(),
             current_validators: genesis_block.validators(),
             genesis_block,
-            chain_store: RwLock::new(chain_store),
+            chain_store,
         }
     }
 }

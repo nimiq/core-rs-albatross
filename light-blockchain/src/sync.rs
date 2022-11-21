@@ -4,6 +4,7 @@ use nimiq_block::{Block, BlockError, TendermintProof};
 use nimiq_blockchain::{AbstractBlockchain, ChainInfo, PushError, PushResult};
 use nimiq_nano_zkp::{NanoProof, NanoZKP};
 use nimiq_primitives::policy::Policy;
+use parking_lot::RwLockUpgradableReadGuard;
 
 use crate::blockchain::LightBlockchain;
 
@@ -13,7 +14,11 @@ impl LightBlockchain {
     /// a valid chain between the genesis block and that block.
     /// This brings the node from the genesis block all the way to the most recent election block.
     /// It is the default way to sync for a nano node.
-    pub fn push_zkp(&mut self, block: Block, proof: NanoProof) -> Result<PushResult, PushError> {
+    pub fn push_zkp(
+        this: RwLockUpgradableReadGuard<Self>,
+        block: Block,
+        proof: NanoProof,
+    ) -> Result<PushResult, PushError> {
         // Must be an election block.
         assert!(block.is_election());
 
@@ -33,11 +38,11 @@ impl LightBlockchain {
         }
 
         // Prepare the inputs to verify the proof.
-        let initial_block_number = self.genesis_block.block_number();
+        let initial_block_number = this.genesis_block.block_number();
 
-        let initial_header_hash = <[u8; 32]>::from(self.genesis_block.hash());
+        let initial_header_hash = <[u8; 32]>::from(this.genesis_block.hash());
 
-        let initial_public_keys = self
+        let initial_public_keys = this
             .genesis_block
             .validators()
             .unwrap()
@@ -76,33 +81,31 @@ impl LightBlockchain {
 
         // At this point we know that the block is correct. We just have to push it.
 
-        // Get write transaction for ChainStore.
-        let mut chain_store_w = self
-            .chain_store
-            .write()
-            .expect("Couldn't acquire write lock to ChainStore!");
+        // Upgrade the blockchain lock
+        let mut this = RwLockUpgradableReadGuard::upgrade_untimed(this);
 
         // Create the chain info for the new block.
         let chain_info = ChainInfo::new(block.clone(), true);
 
         // Since it's a macro block, we have to clear the ChainStore. If we are syncing for the first
         // time, this should be empty. But we clear it just in case it's not our first time.
-        chain_store_w.clear();
+        this.chain_store.clear();
 
         // Store the block chain info.
-        chain_store_w.put_chain_info(chain_info);
+        this.chain_store.put_chain_info(chain_info);
 
         // Store the election block header.
-        chain_store_w.put_election(block.unwrap_macro_ref().header.clone());
+        this.chain_store
+            .put_election(block.unwrap_macro_ref().header.clone());
 
         // Update the blockchain.
-        self.head = block.clone();
+        this.head = block.clone();
 
-        self.macro_head = block.clone().unwrap_macro();
+        this.macro_head = block.clone().unwrap_macro();
 
-        self.election_head = block.clone().unwrap_macro();
+        this.election_head = block.clone().unwrap_macro();
 
-        self.current_validators = block.validators();
+        this.current_validators = block.validators();
 
         Ok(PushResult::Extended)
     }
@@ -111,7 +114,10 @@ impl LightBlockchain {
     /// most recent election block and now need to push a checkpoint block.
     /// But this function is general enough to allow pushing any macro block (checkpoint or election)
     /// at any state of the node (synced, partially synced, not synced).
-    pub fn push_macro(&mut self, block: Block) -> Result<PushResult, PushError> {
+    pub fn push_macro(
+        this: RwLockUpgradableReadGuard<Self>,
+        block: Block,
+    ) -> Result<PushResult, PushError> {
         // Must be a macro block.
         assert!(block.is_macro());
 
@@ -135,18 +141,18 @@ impl LightBlockchain {
 
         // Check if we have this block's parent. The checks change depending if the last macro block
         // that we pushed was an election block or not.
-        if Policy::is_election_block_at(self.block_number()) {
+        if Policy::is_election_block_at(this.block_number()) {
             // We only need to check that the parent election block of this block is the same as our
             // head block.
-            if block.header().parent_election_hash().unwrap() != &self.head_hash() {
+            if block.header().parent_election_hash().unwrap() != &this.head_hash() {
                 return Err(PushError::Orphan);
             }
         } else {
             // We need to check that this block and our head block have the same parent election
             // block and are in the correct order.
             if block.header().parent_election_hash().unwrap()
-                != self.head().parent_election_hash().unwrap()
-                || block.block_number() <= self.head.block_number()
+                != this.head().parent_election_hash().unwrap()
+                || block.block_number() <= this.head.block_number()
             {
                 return Err(PushError::Orphan);
             }
@@ -155,41 +161,38 @@ impl LightBlockchain {
         // Verify the justification.
         if !TendermintProof::verify(
             block.unwrap_macro_ref(),
-            &self.current_validators().unwrap(),
+            &this.current_validators().unwrap(),
         ) {
             return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
         }
 
         // At this point we know that the block is correct. We just have to push it.
 
-        // Get write transaction for ChainStore.
-        let mut chain_store_w = self
-            .chain_store
-            .write()
-            .expect("Couldn't acquire write lock to ChainStore!");
+        // Upgrade the blockchain lock
+        let mut this = RwLockUpgradableReadGuard::upgrade_untimed(this);
 
         // Create the chain info for the new block.
         let chain_info = ChainInfo::new(block.clone(), true);
 
         // Since it's a macro block, we have to clear the ChainStore.
-        chain_store_w.clear();
+        this.chain_store.clear();
 
         // Store the block chain info.
-        chain_store_w.put_chain_info(chain_info);
+        this.chain_store.put_chain_info(chain_info);
 
         // Update the blockchain.
-        self.head = block.clone();
+        this.head = block.clone();
 
-        self.macro_head = block.clone().unwrap_macro();
+        this.macro_head = block.clone().unwrap_macro();
 
         // If it's an election block, you have more steps.
         if block.is_election() {
-            self.election_head = block.unwrap_macro_ref().clone();
+            this.election_head = block.unwrap_macro_ref().clone();
 
-            self.current_validators = block.validators();
+            this.current_validators = block.validators();
 
             // Store the election block header.
-            chain_store_w.put_election(block.unwrap_macro().header);
+            this.chain_store.put_election(block.unwrap_macro().header);
         }
 
         Ok(PushResult::Extended)

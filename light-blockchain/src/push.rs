@@ -4,6 +4,8 @@ use nimiq_blockchain::{
 };
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::policy::Policy;
+use parking_lot::RwLockUpgradableReadGuard;
+use std::ops::Deref;
 
 use crate::blockchain::LightBlockchain;
 
@@ -12,19 +14,22 @@ use crate::blockchain::LightBlockchain;
 /// when the node is just receiving micro blocks.
 impl LightBlockchain {
     /// Pushes a block into the chain.
-    pub fn push(&mut self, block: Block) -> Result<PushResult, PushError> {
+    pub fn push(
+        this: RwLockUpgradableReadGuard<Self>,
+        block: Block,
+    ) -> Result<PushResult, PushError> {
         // Check if we already know this block.
-        if self.get_chain_info(&block.hash(), false, None).is_some() {
+        if this.get_chain_info(&block.hash(), false, None).is_some() {
             return Ok(PushResult::Known);
         }
 
         // Check if we have this block's parent.
-        let prev_info = self
+        let prev_info = this
             .get_chain_info(block.parent_hash(), false, None)
             .ok_or(PushError::Orphan)?;
 
         // Calculate chain ordering.
-        let chain_order = ChainOrdering::order_chains(self, &block, &prev_info, None);
+        let chain_order = ChainOrdering::order_chains(this.deref(), &block, &prev_info, None);
 
         // If it is an inferior chain, we ignore it as it cannot become better at any point in time.
         if chain_order == ChainOrdering::Inferior {
@@ -41,20 +46,20 @@ impl LightBlockchain {
         } else {
             block.block_number()
         };
-        let (slot_owner, _) = self
+        let (slot_owner, _) = this
             .get_slot_owner_at(block.block_number(), offset, None)
             .expect("Failed to find slot owner!");
 
         // Check the header.
         Blockchain::verify_block_header(
-            self,
+            this.deref(),
             &block.header(),
             &slot_owner.signing_key,
             None,
             true,
             block.is_skip(),
             NextBlock::Subsequent,
-            &self.election_head_hash(),
+            &this.election_head_hash(),
         )?;
 
         // If this is an election block, check the body.
@@ -72,11 +77,11 @@ impl LightBlockchain {
 
         // Check the justification.
         Blockchain::verify_block_justification(
-            self,
+            this.deref(),
             &block,
             &slot_owner.signing_key,
             true,
-            &self.current_validators().unwrap(),
+            &this.current_validators().unwrap(),
         )?;
 
         // Create the chaininfo for the new block.
@@ -85,87 +90,81 @@ impl LightBlockchain {
         // More chain ordering.
         match chain_order {
             ChainOrdering::Extend => {
-                return self.extend(chain_info, prev_info);
+                return LightBlockchain::extend(this, chain_info, prev_info);
             }
             ChainOrdering::Superior => {
-                return self.rebranch(chain_info, prev_info);
+                return LightBlockchain::rebranch(this, chain_info, prev_info);
             }
             ChainOrdering::Inferior => unreachable!(),
             ChainOrdering::Unknown => {}
         }
-
+        let mut this = RwLockUpgradableReadGuard::upgrade_untimed(this);
         // Otherwise, we are creating/extending a fork. Store ChainInfo.
-        self.chain_store.write().unwrap().put_chain_info(chain_info);
+        this.chain_store.put_chain_info(chain_info);
 
         Ok(PushResult::Forked)
     }
 
     /// Extends the current main chain.
     fn extend(
-        &mut self,
+        this: RwLockUpgradableReadGuard<Self>,
         mut chain_info: ChainInfo,
         mut prev_info: ChainInfo,
     ) -> Result<PushResult, PushError> {
+        // Upgrade the blockchain lock
+        let mut this = RwLockUpgradableReadGuard::upgrade_untimed(this);
+
         // Update chain infos.
         chain_info.on_main_chain = true;
         prev_info.main_chain_successor = Some(chain_info.head.hash());
 
-        // Get write transaction for ChainStore.
-        let mut chain_store_w = self
-            .chain_store
-            .write()
-            .expect("Couldn't acquire write lock to ChainStore!");
-
         // If it's a macro block then we need to clear the ChainStore (since we only want to keep
         // the current batch in memory). Otherwise, we need to update the previous ChainInfo.
         if chain_info.head.is_macro() {
-            chain_store_w.clear();
+            this.chain_store.clear();
         } else {
-            chain_store_w.put_chain_info(prev_info);
+            this.chain_store.put_chain_info(prev_info);
         }
 
         // Update the head of the blockchain.
-        self.head = chain_info.head.clone();
+        this.head = chain_info.head.clone();
 
         // If the block is a macro block then we also need to update the macro head.
         if let Block::Macro(ref macro_block) = chain_info.head {
-            self.macro_head = macro_block.clone();
+            this.macro_head = macro_block.clone();
 
             // If the block is also an election block, then we have more fields to update.
             if macro_block.is_election_block() {
-                self.election_head = macro_block.clone();
+                this.election_head = macro_block.clone();
 
-                self.current_validators = macro_block.get_validators();
+                this.current_validators = macro_block.get_validators();
 
                 // Store the election block header.
-                chain_store_w.put_election(macro_block.header.clone());
+                this.chain_store.put_election(macro_block.header.clone());
             }
         }
 
         // Store the current chain info.
-        chain_store_w.put_chain_info(chain_info);
+        this.chain_store.put_chain_info(chain_info);
 
         Ok(PushResult::Extended)
     }
 
     /// Rebranches the current main chain.
     fn rebranch(
-        &mut self,
+        this: RwLockUpgradableReadGuard<Self>,
         mut chain_info: ChainInfo,
         mut prev_info: ChainInfo,
     ) -> Result<PushResult, PushError> {
         // You can't rebranch a macro block.
         assert!(chain_info.head.is_micro());
 
+        // Upgrade the blockchain lock
+        let mut this = RwLockUpgradableReadGuard::upgrade_untimed(this);
+
         // Update chain infos.
         chain_info.on_main_chain = true;
         prev_info.main_chain_successor = Some(chain_info.head.hash());
-
-        // Get write transaction for ChainStore.
-        let mut chain_store_w = self
-            .chain_store
-            .write()
-            .expect("Couldn't acquire write lock to ChainStore!");
 
         // Find the common ancestor between our current main chain and the fork chain.
         // Walk up the fork chain until we find a block that is part of the main chain.
@@ -178,7 +177,7 @@ impl LightBlockchain {
             assert_eq!(current.head.ty(), BlockType::Micro);
 
             // Get previous chain info.
-            let prev_info = self
+            let prev_info = this
                 .get_chain_info(current.head.parent_hash(), false, None)
                 .expect("Corrupted store: Failed to find fork predecessor while rebranching");
 
@@ -186,7 +185,7 @@ impl LightBlockchain {
             current.on_main_chain = true;
 
             // Store the chain info.
-            chain_store_w.put_chain_info(current);
+            this.chain_store.put_chain_info(current);
 
             current = prev_info;
         }
@@ -195,13 +194,13 @@ impl LightBlockchain {
         let ancestor = current;
 
         // Go back from the head of the forked chain until the ancestor, updating it along the way.
-        current = self
-            .get_chain_info(&self.head_hash(), false, None)
+        current = this
+            .get_chain_info(&this.head_hash(), false, None)
             .expect("Couldn't find the head chain info!");
 
         while current != ancestor {
             // Get previous chain info.
-            let prev_info = self
+            let prev_info = this
                 .get_chain_info(current.head.parent_hash(), false, None)
                 .expect("Corrupted store: Failed to find fork predecessor while rebranching");
 
@@ -209,13 +208,13 @@ impl LightBlockchain {
             current.on_main_chain = false;
 
             // Store the chain info.
-            chain_store_w.put_chain_info(current);
+            this.chain_store.put_chain_info(current);
 
             current = prev_info;
         }
 
         // Update the head of the blockchain.
-        self.head = chain_info.head;
+        this.head = chain_info.head;
 
         Ok(PushResult::Rebranched)
     }
@@ -225,25 +224,20 @@ impl LightBlockchain {
     /// for a transaction in a past epoch, in that case the simplest course of action is to "walk"
     /// backwards from our current election block until we get to the desired epoch.
     pub fn push_election_backwards(
-        &mut self,
+        this: RwLockUpgradableReadGuard<Self>,
         header: MacroHeader,
     ) -> Result<PushResult, PushError> {
         // Get epoch number.
         let epoch = Policy::epoch_at(header.block_number);
 
-        // Get read transaction for ChainStore.
-        let chain_store_r = self
-            .chain_store
-            .read()
-            .expect("Couldn't acquire read lock to ChainStore!");
-
         // Check if we already know this block.
-        if chain_store_r.get_election(epoch).is_some() {
+        if this.chain_store.get_election(epoch).is_some() {
             return Ok(PushResult::Known);
         }
 
         // Check if we have this block's successor.
-        let prev_block = chain_store_r
+        let prev_block = this
+            .chain_store
             .get_election(epoch + Policy::blocks_per_epoch())
             .ok_or(PushError::InvalidSuccessor)?;
 
@@ -252,11 +246,11 @@ impl LightBlockchain {
             return Err(PushError::InvalidPredecessor);
         }
 
+        // Upgrade the blockchain lock
+        let mut this = RwLockUpgradableReadGuard::upgrade_untimed(this);
+
         // Store the election block header.
-        self.chain_store
-            .write()
-            .expect("Couldn't acquire write lock for ChainStore!")
-            .put_election(header);
+        this.chain_store.put_election(header);
 
         Ok(PushResult::Extended)
     }
