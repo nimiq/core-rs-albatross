@@ -6,10 +6,10 @@ use nimiq_genesis::NetworkId;
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::slots::{Validator, Validators};
 
-use crate::blockchain::NanoBlockchain;
+use crate::blockchain::LightBlockchain;
 
 /// Implements several basic methods for blockchains.
-impl AbstractBlockchain for NanoBlockchain {
+impl AbstractBlockchain for LightBlockchain {
     fn network_id(&self) -> NetworkId {
         self.network_id
     }

@@ -36,7 +36,7 @@ pub static NIMIQ_MODULES: &[&str] = &[
     "nimiq_mempool",
     "nimiq_mmr",
     "nimiq_mnemonic",
-    "nimiq_nano_blockchain",
+    "nimiq_light_blockchain",
     "nimiq_nano_primitives",
     "nimiq_nano_zkp",
     "nimiq_network_interface",

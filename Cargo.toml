@@ -18,6 +18,7 @@ members = [
   "key-derivation",
   "keys",
   "lib",
+  "light-blockchain",
   "log",
   "macros",
   "mempool",
@@ -26,7 +27,6 @@ members = [
   "nano-primitives",
   "nano-primitives/pedersen-generators",
   "nano-zkp",
-  "nano-blockchain",
   "network-interface",
   "network-libp2p",
   "network-mock",
@@ -96,8 +96,8 @@ opt-level = 2
 lto = "thin"
 
 [profile.release-with-debug]
-inherits = "release"
 debug = true
+inherits = "release"
 
 # Force arkworks to be built with optimization level 2.
 [profile.dev.package.ark-ff]

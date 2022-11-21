@@ -1,5 +1,7 @@
-use futures::stream::BoxStream;
 use std::sync::Arc;
+
+use futures::stream::BoxStream;
+use parking_lot::{RwLock, RwLockReadGuard};
 
 use nimiq_block::{Block, MacroBlock};
 use nimiq_blockchain::ChainInfo;
@@ -7,29 +9,31 @@ use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainEvent};
 use nimiq_database::Transaction;
 use nimiq_genesis::NetworkId;
 use nimiq_hash::Blake2bHash;
+use nimiq_light_blockchain::LightBlockchain;
 use nimiq_primitives::slots::{Validator, Validators};
-use parking_lot::{RwLock, RwLockReadGuard};
 
 macro_rules! gen_blockchain_match {
     ($self: ident, $t: ident, $f: ident $(, $arg:expr )*) => {
         match $self {
             $t::Full(ref blockchain) => AbstractBlockchain::$f(&***blockchain, $( $arg ),*),
+            $t::Light(ref nano_blockchain) => AbstractBlockchain::$f(&***nano_blockchain, $( $arg ),*),
         }
     };
 }
 
 /// The `BlockchainProxy` is our abstraction over multiple types of blockchains.
-/// Currently, it holds the:
-/// - (Full)Blockchain, which is capable of storing the full history, transactions, and full blocks.
 pub enum BlockchainProxy {
-    /// (Full)Blockchain, stores the full history, transactions, and full blocks.
+    /// Full Blockchain, stores the full history, transactions, and full blocks.
     Full(Arc<RwLock<Blockchain>>),
+    /// Light Blockchain, stores only ZKPs, election macro blocks, and block header and their justification.
+    Light(Arc<RwLock<LightBlockchain>>),
 }
 
 impl Clone for BlockchainProxy {
     fn clone(&self) -> Self {
         match self {
             Self::Full(blockchain) => Self::Full(Arc::clone(blockchain)),
+            Self::Light(nano_blockchain) => Self::Light(Arc::clone(nano_blockchain)),
         }
     }
 }
@@ -40,9 +44,21 @@ impl From<Arc<RwLock<Blockchain>>> for BlockchainProxy {
     }
 }
 
+impl From<Arc<RwLock<LightBlockchain>>> for BlockchainProxy {
+    fn from(nano_blockchain: Arc<RwLock<LightBlockchain>>) -> Self {
+        Self::Light(nano_blockchain)
+    }
+}
+
 impl<'a> From<&'a Arc<RwLock<Blockchain>>> for BlockchainProxy {
     fn from(blockchain: &'a Arc<RwLock<Blockchain>>) -> Self {
         Self::Full(Arc::clone(blockchain))
+    }
+}
+
+impl<'a> From<&'a Arc<RwLock<LightBlockchain>>> for BlockchainProxy {
+    fn from(nano_blockchain: &'a Arc<RwLock<LightBlockchain>>) -> Self {
+        Self::Light(Arc::clone(nano_blockchain))
     }
 }
 
@@ -54,6 +70,9 @@ impl BlockchainProxy {
             BlockchainProxy::Full(blockchain) => {
                 BlockchainReadProxy::Full(Arc::new(blockchain.read()))
             }
+            BlockchainProxy::Light(nano_blockchain) => {
+                BlockchainReadProxy::Light(Arc::new(nano_blockchain.read()))
+            }
         }
     }
 }
@@ -61,7 +80,10 @@ impl BlockchainProxy {
 /// The `BlockchainReadProxy` implements `AbstractBlockchain` and allows to access common blockchain functions.
 /// It is a wrapper around read locked versions of our blockchain types.
 pub enum BlockchainReadProxy<'a> {
+    // Read locked access to a Full Blockchain
     Full(Arc<RwLockReadGuard<'a, Blockchain>>),
+    // Read locked access to a Light Blockchain
+    Light(Arc<RwLockReadGuard<'a, LightBlockchain>>),
 }
 
 impl<'a> AbstractBlockchain for BlockchainReadProxy<'a> {

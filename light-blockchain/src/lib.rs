@@ -1,4 +1,4 @@
-pub use blockchain::NanoBlockchain;
+pub use blockchain::LightBlockchain;
 pub use chain_store::ChainStore;
 
 pub(crate) mod abstract_blockchain;
