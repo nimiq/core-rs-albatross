@@ -13,7 +13,7 @@ use crate::messages::{MacroChain, RequestMacroChain};
 use crate::sync::history::cluster::{SyncCluster, SyncClusterResult};
 use crate::sync::history::sync::{EpochIds, Job};
 use crate::sync::history::HistoryMacroSync;
-use crate::sync::sync_queue::SyncQueuePeer;
+use crate::sync::peer_list::PeerList;
 use crate::sync::syncer::MacroSync;
 
 impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
@@ -325,12 +325,12 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
 
         // Add remaining ids to a new cluster with only the sending peer in it.
         if id_index < epoch_ids.ids.len() {
+            let mut peers = PeerList::default();
+            peers.add_peer(sender_peer_id);
             new_clusters.push_back(SyncCluster::for_epoch(
                 Arc::clone(&self.blockchain),
                 Arc::clone(&self.network),
-                vec![SyncQueuePeer {
-                    peer_id: sender_peer_id,
-                }],
+                peers,
                 Vec::from(&epoch_ids.ids[id_index..]),
                 epoch_ids.first_epoch_number + id_index,
             ));
@@ -366,12 +366,12 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
 
             // If there was no suitable cluster, add a new one.
             if !found_cluster {
+                let mut peers = PeerList::default();
+                peers.add_peer(sender_peer_id);
                 let cluster = SyncCluster::for_checkpoint(
                     Arc::clone(&self.blockchain),
                     Arc::clone(&self.network),
-                    vec![SyncQueuePeer {
-                        peer_id: sender_peer_id,
-                    }],
+                    peers,
                     checkpoint.hash,
                     checkpoint_epoch,
                     checkpoint.block_number as usize,
@@ -388,11 +388,8 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
         for cluster in &new_clusters {
             debug!("Adding new cluster: {:#?}", cluster);
             for peer in cluster.peers() {
-                let pair = self.peers.get_mut(&peer.peer_id).unwrap_or_else(|| {
-                    panic!(
-                        "Peer should be present {:?} cluster {}",
-                        peer.peer_id, cluster.id
-                    )
+                let pair = self.peers.get_mut(&peer).unwrap_or_else(|| {
+                    panic!("Peer should be present {:?} cluster {}", peer, cluster.id)
                 });
                 *pair = pair.saturating_add(1);
             }
@@ -501,11 +498,8 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
         // Decrement the cluster count for all peers in the cluster.
         for peer in cluster.peers() {
             let cluster_count = {
-                let pair = self.peers.get_mut(&peer.peer_id).unwrap_or_else(|| {
-                    panic!(
-                        "Peer should be present {:?} cluster {}",
-                        peer.peer_id, cluster.id
-                    )
+                let pair = self.peers.get_mut(&peer).unwrap_or_else(|| {
+                    panic!("Peer should be present {:?} cluster {}", peer, cluster.id)
                 });
                 *pair = pair.saturating_sub(1);
                 pair
@@ -516,14 +510,14 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
             if *cluster_count == 0 {
                 // Always remove peer from peers map. It will be re-added if it returns more
                 // epoch_ids and dropped otherwise.
-                self.peers.remove(&peer.peer_id);
+                self.peers.remove(&peer);
 
                 if result != SyncClusterResult::Error {
-                    self.add_peer(peer.peer_id);
+                    self.add_peer(peer);
                 } else {
                     debug!(
                         "Closing connection to peer {:?} after cluster {} failed",
-                        peer.peer_id, cluster.id
+                        peer, cluster.id
                     );
                 }
             }
@@ -686,7 +680,7 @@ mod tests {
                 assert_eq!(sync.epoch_clusters.len(), 1);
                 assert_eq!(sync.epoch_clusters[0].epoch_ids.len(), 10);
                 assert_eq!(sync.epoch_clusters[0].first_epoch_number, 1);
-                assert_eq!(sync.epoch_clusters[0].batch_set_queue.peers.len(), 2);
+                assert_eq!(sync.epoch_clusters[0].batch_set_queue.peers.read().len(), 2);
             },
             true,
         );
@@ -705,8 +699,8 @@ mod tests {
                 assert_eq!(sync.epoch_clusters[1].epoch_ids.len(), 10);
                 assert_eq!(sync.epoch_clusters[0].first_epoch_number, 1);
                 assert_eq!(sync.epoch_clusters[1].first_epoch_number, 1);
-                assert_eq!(sync.epoch_clusters[0].batch_set_queue.peers.len(), 1);
-                assert_eq!(sync.epoch_clusters[1].batch_set_queue.peers.len(), 1);
+                assert_eq!(sync.epoch_clusters[0].batch_set_queue.peers.read().len(), 1);
+                assert_eq!(sync.epoch_clusters[1].batch_set_queue.peers.read().len(), 1);
             },
             true,
         );
@@ -723,10 +717,10 @@ mod tests {
                 assert_eq!(sync.epoch_clusters.len(), 2);
                 assert_eq!(sync.epoch_clusters[0].epoch_ids.len(), 8);
                 assert_eq!(sync.epoch_clusters[0].first_epoch_number, 1);
-                assert_eq!(sync.epoch_clusters[0].batch_set_queue.peers.len(), 2);
+                assert_eq!(sync.epoch_clusters[0].batch_set_queue.peers.read().len(), 2);
                 assert_eq!(sync.epoch_clusters[1].epoch_ids.len(), 2);
                 assert_eq!(sync.epoch_clusters[1].first_epoch_number, 9);
-                assert_eq!(sync.epoch_clusters[1].batch_set_queue.peers.len(), 1);
+                assert_eq!(sync.epoch_clusters[1].batch_set_queue.peers.read().len(), 1);
             },
             true,
         );
@@ -743,10 +737,10 @@ mod tests {
                 assert_eq!(sync.epoch_clusters.len(), 2);
                 assert_eq!(sync.epoch_clusters[0].epoch_ids.len(), 10);
                 assert_eq!(sync.epoch_clusters[0].first_epoch_number, 1);
-                assert_eq!(sync.epoch_clusters[0].batch_set_queue.peers.len(), 2);
+                assert_eq!(sync.epoch_clusters[0].batch_set_queue.peers.read().len(), 2);
                 assert_eq!(sync.epoch_clusters[1].epoch_ids.len(), 2);
                 assert_eq!(sync.epoch_clusters[1].first_epoch_number, 11);
-                assert_eq!(sync.epoch_clusters[1].batch_set_queue.peers.len(), 1);
+                assert_eq!(sync.epoch_clusters[1].batch_set_queue.peers.read().len(), 1);
             },
             false,
         ); // TODO: for a symmetric check, blockchain state would need to change
@@ -777,10 +771,10 @@ mod tests {
                 assert_eq!(sync.epoch_clusters.len(), 2);
                 assert_eq!(sync.epoch_clusters[0].epoch_ids.len(), 7);
                 assert_eq!(sync.epoch_clusters[0].first_epoch_number, 1);
-                assert_eq!(sync.epoch_clusters[0].batch_set_queue.peers.len(), 2);
+                assert_eq!(sync.epoch_clusters[0].batch_set_queue.peers.read().len(), 2);
                 assert_eq!(sync.epoch_clusters[1].epoch_ids.len(), 3);
                 assert_eq!(sync.epoch_clusters[1].first_epoch_number, 8);
-                assert_eq!(sync.epoch_clusters[1].batch_set_queue.peers.len(), 1);
+                assert_eq!(sync.epoch_clusters[1].batch_set_queue.peers.read().len(), 1);
             },
             false,
         ); // TODO: for a symmetric check, blockchain state would need to change
@@ -797,13 +791,13 @@ mod tests {
                 assert_eq!(sync.epoch_clusters.len(), 3);
                 assert_eq!(sync.epoch_clusters[0].epoch_ids.len(), 9);
                 assert_eq!(sync.epoch_clusters[0].first_epoch_number, 1);
-                assert_eq!(sync.epoch_clusters[0].batch_set_queue.peers.len(), 2);
+                assert_eq!(sync.epoch_clusters[0].batch_set_queue.peers.read().len(), 2);
                 assert_eq!(sync.epoch_clusters[1].epoch_ids.len(), 1);
                 assert_eq!(sync.epoch_clusters[1].first_epoch_number, 10);
-                assert_eq!(sync.epoch_clusters[1].batch_set_queue.peers.len(), 1);
+                assert_eq!(sync.epoch_clusters[1].batch_set_queue.peers.read().len(), 1);
                 assert_eq!(sync.epoch_clusters[2].epoch_ids.len(), 2);
                 assert_eq!(sync.epoch_clusters[2].first_epoch_number, 10);
-                assert_eq!(sync.epoch_clusters[2].batch_set_queue.peers.len(), 1);
+                assert_eq!(sync.epoch_clusters[2].batch_set_queue.peers.read().len(), 1);
             },
             false,
         ); // TODO: for a symmetric check, blockchain state would need to change
@@ -848,7 +842,14 @@ mod tests {
                 assert_eq!(sync.checkpoint_clusters.len(), 1);
                 assert_eq!(sync.checkpoint_clusters[0].epoch_ids.len(), 1);
                 assert_eq!(sync.checkpoint_clusters[0].first_epoch_number, 1);
-                assert_eq!(sync.checkpoint_clusters[0].batch_set_queue.peers.len(), 2);
+                assert_eq!(
+                    sync.checkpoint_clusters[0]
+                        .batch_set_queue
+                        .peers
+                        .read()
+                        .len(),
+                    2
+                );
             },
             true,
         );
@@ -866,10 +867,24 @@ mod tests {
                 assert_eq!(sync.checkpoint_clusters.len(), 2);
                 assert_eq!(sync.checkpoint_clusters[0].epoch_ids.len(), 1);
                 assert_eq!(sync.checkpoint_clusters[0].first_epoch_number, 1);
-                assert_eq!(sync.checkpoint_clusters[0].batch_set_queue.peers.len(), 1);
+                assert_eq!(
+                    sync.checkpoint_clusters[0]
+                        .batch_set_queue
+                        .peers
+                        .read()
+                        .len(),
+                    1
+                );
                 assert_eq!(sync.checkpoint_clusters[1].epoch_ids.len(), 1);
                 assert_eq!(sync.checkpoint_clusters[1].first_epoch_number, 1);
-                assert_eq!(sync.checkpoint_clusters[1].batch_set_queue.peers.len(), 1);
+                assert_eq!(
+                    sync.checkpoint_clusters[1]
+                        .batch_set_queue
+                        .peers
+                        .read()
+                        .len(),
+                    1
+                );
             },
             true,
         );
@@ -887,10 +902,24 @@ mod tests {
                 assert_eq!(sync.checkpoint_clusters.len(), 2);
                 assert_eq!(sync.checkpoint_clusters[0].epoch_ids.len(), 1);
                 assert_eq!(sync.checkpoint_clusters[0].first_epoch_number, 1);
-                assert_eq!(sync.checkpoint_clusters[0].batch_set_queue.peers.len(), 1);
+                assert_eq!(
+                    sync.checkpoint_clusters[0]
+                        .batch_set_queue
+                        .peers
+                        .read()
+                        .len(),
+                    1
+                );
                 assert_eq!(sync.checkpoint_clusters[1].epoch_ids.len(), 1);
                 assert_eq!(sync.checkpoint_clusters[1].first_epoch_number, 3);
-                assert_eq!(sync.checkpoint_clusters[1].batch_set_queue.peers.len(), 1);
+                assert_eq!(
+                    sync.checkpoint_clusters[1]
+                        .batch_set_queue
+                        .peers
+                        .read()
+                        .len(),
+                    1
+                );
             },
             false,
         ); // TODO: for a symmetric check, blockchain state would need to change
@@ -907,11 +936,18 @@ mod tests {
                 assert_eq!(sync.epoch_clusters.len(), 1);
                 assert_eq!(sync.epoch_clusters[0].epoch_ids.len(), 10);
                 assert_eq!(sync.epoch_clusters[0].first_epoch_number, 1);
-                assert_eq!(sync.epoch_clusters[0].batch_set_queue.peers.len(), 2);
+                assert_eq!(sync.epoch_clusters[0].batch_set_queue.peers.read().len(), 2);
                 assert_eq!(sync.checkpoint_clusters.len(), 1);
                 assert_eq!(sync.checkpoint_clusters[0].epoch_ids.len(), 1);
                 assert_eq!(sync.checkpoint_clusters[0].first_epoch_number, 11);
-                assert_eq!(sync.checkpoint_clusters[0].batch_set_queue.peers.len(), 2);
+                assert_eq!(
+                    sync.checkpoint_clusters[0]
+                        .batch_set_queue
+                        .peers
+                        .read()
+                        .len(),
+                    2
+                );
             },
             true,
         );
@@ -928,14 +964,28 @@ mod tests {
                 assert_eq!(sync.epoch_clusters.len(), 1);
                 assert_eq!(sync.epoch_clusters[0].epoch_ids.len(), 10);
                 assert_eq!(sync.epoch_clusters[0].first_epoch_number, 1);
-                assert_eq!(sync.epoch_clusters[0].batch_set_queue.peers.len(), 2);
+                assert_eq!(sync.epoch_clusters[0].batch_set_queue.peers.read().len(), 2);
                 assert_eq!(sync.checkpoint_clusters.len(), 2);
                 assert_eq!(sync.checkpoint_clusters[0].epoch_ids.len(), 1);
                 assert_eq!(sync.checkpoint_clusters[0].first_epoch_number, 11);
-                assert_eq!(sync.checkpoint_clusters[0].batch_set_queue.peers.len(), 1);
+                assert_eq!(
+                    sync.checkpoint_clusters[0]
+                        .batch_set_queue
+                        .peers
+                        .read()
+                        .len(),
+                    1
+                );
                 assert_eq!(sync.checkpoint_clusters[1].epoch_ids.len(), 1);
                 assert_eq!(sync.checkpoint_clusters[1].first_epoch_number, 11);
-                assert_eq!(sync.checkpoint_clusters[1].batch_set_queue.peers.len(), 1);
+                assert_eq!(
+                    sync.checkpoint_clusters[1]
+                        .batch_set_queue
+                        .peers
+                        .read()
+                        .len(),
+                    1
+                );
             },
             true,
         );
@@ -952,11 +1002,18 @@ mod tests {
                 assert_eq!(sync.epoch_clusters.len(), 1);
                 assert_eq!(sync.epoch_clusters[0].epoch_ids.len(), 10);
                 assert_eq!(sync.epoch_clusters[0].first_epoch_number, 1);
-                assert_eq!(sync.epoch_clusters[0].batch_set_queue.peers.len(), 2);
+                assert_eq!(sync.epoch_clusters[0].batch_set_queue.peers.read().len(), 2);
                 assert_eq!(sync.checkpoint_clusters.len(), 1);
                 assert_eq!(sync.checkpoint_clusters[0].epoch_ids.len(), 1);
                 assert_eq!(sync.checkpoint_clusters[0].first_epoch_number, 11);
-                assert_eq!(sync.checkpoint_clusters[0].batch_set_queue.peers.len(), 1);
+                assert_eq!(
+                    sync.checkpoint_clusters[0]
+                        .batch_set_queue
+                        .peers
+                        .read()
+                        .len(),
+                    1
+                );
             },
             true,
         );
@@ -973,11 +1030,18 @@ mod tests {
                 assert_eq!(sync.epoch_clusters.len(), 1);
                 assert_eq!(sync.epoch_clusters[0].epoch_ids.len(), 10);
                 assert_eq!(sync.epoch_clusters[0].first_epoch_number, 1);
-                assert_eq!(sync.epoch_clusters[0].batch_set_queue.peers.len(), 2);
+                assert_eq!(sync.epoch_clusters[0].batch_set_queue.peers.read().len(), 2);
                 assert_eq!(sync.checkpoint_clusters.len(), 1);
                 assert_eq!(sync.checkpoint_clusters[0].epoch_ids.len(), 1);
                 assert_eq!(sync.checkpoint_clusters[0].first_epoch_number, 11);
-                assert_eq!(sync.checkpoint_clusters[0].batch_set_queue.peers.len(), 2);
+                assert_eq!(
+                    sync.checkpoint_clusters[0]
+                        .batch_set_queue
+                        .peers
+                        .read()
+                        .len(),
+                    2
+                );
             },
             false,
         ); // TODO: for a symmetric check, blockchain state would need to change
@@ -994,20 +1058,34 @@ mod tests {
                 assert_eq!(sync.epoch_clusters.len(), 3);
                 assert_eq!(sync.epoch_clusters[0].epoch_ids.len(), 9);
                 assert_eq!(sync.epoch_clusters[0].first_epoch_number, 1);
-                assert_eq!(sync.epoch_clusters[0].batch_set_queue.peers.len(), 2);
+                assert_eq!(sync.epoch_clusters[0].batch_set_queue.peers.read().len(), 2);
                 assert_eq!(sync.epoch_clusters[1].epoch_ids.len(), 1);
                 assert_eq!(sync.epoch_clusters[1].first_epoch_number, 10);
-                assert_eq!(sync.epoch_clusters[1].batch_set_queue.peers.len(), 1);
+                assert_eq!(sync.epoch_clusters[1].batch_set_queue.peers.read().len(), 1);
                 assert_eq!(sync.epoch_clusters[2].epoch_ids.len(), 2);
                 assert_eq!(sync.epoch_clusters[2].first_epoch_number, 10);
-                assert_eq!(sync.epoch_clusters[2].batch_set_queue.peers.len(), 1);
+                assert_eq!(sync.epoch_clusters[2].batch_set_queue.peers.read().len(), 1);
                 assert_eq!(sync.checkpoint_clusters.len(), 2);
                 assert_eq!(sync.checkpoint_clusters[0].epoch_ids.len(), 1);
                 assert_eq!(sync.checkpoint_clusters[0].first_epoch_number, 11);
-                assert_eq!(sync.checkpoint_clusters[0].batch_set_queue.peers.len(), 1);
+                assert_eq!(
+                    sync.checkpoint_clusters[0]
+                        .batch_set_queue
+                        .peers
+                        .read()
+                        .len(),
+                    1
+                );
                 assert_eq!(sync.checkpoint_clusters[1].epoch_ids.len(), 1);
                 assert_eq!(sync.checkpoint_clusters[1].first_epoch_number, 12);
-                assert_eq!(sync.checkpoint_clusters[1].batch_set_queue.peers.len(), 1);
+                assert_eq!(
+                    sync.checkpoint_clusters[1]
+                        .batch_set_queue
+                        .peers
+                        .read()
+                        .len(),
+                    1
+                );
             },
             false,
         ); // TODO: for a symmetric check, blockchain state would need to change
@@ -1051,10 +1129,10 @@ mod tests {
         assert_eq!(sync.epoch_clusters.len(), 2);
         assert_eq!(sync.epoch_clusters[0].epoch_ids.len(), 6);
         assert_eq!(sync.epoch_clusters[0].first_epoch_number, 1);
-        assert_eq!(sync.epoch_clusters[0].batch_set_queue.peers.len(), 3);
+        assert_eq!(sync.epoch_clusters[0].batch_set_queue.peers.read().len(), 3);
         assert_eq!(sync.epoch_clusters[1].epoch_ids.len(), 4);
         assert_eq!(sync.epoch_clusters[1].first_epoch_number, 7);
-        assert_eq!(sync.epoch_clusters[1].batch_set_queue.peers.len(), 2);
+        assert_eq!(sync.epoch_clusters[1].batch_set_queue.peers.read().len(), 2);
 
         // Three identical chains, different lengths and offsets.
         let mut sync = HistoryMacroSync::<MockNetwork>::new(
@@ -1074,12 +1152,12 @@ mod tests {
         assert_eq!(sync.epoch_clusters.len(), 3);
         assert_eq!(sync.epoch_clusters[0].epoch_ids.len(), 6);
         assert_eq!(sync.epoch_clusters[0].first_epoch_number, 1);
-        assert_eq!(sync.epoch_clusters[0].batch_set_queue.peers.len(), 3);
+        assert_eq!(sync.epoch_clusters[0].batch_set_queue.peers.read().len(), 3);
         assert_eq!(sync.epoch_clusters[1].epoch_ids.len(), 3);
         assert_eq!(sync.epoch_clusters[1].first_epoch_number, 7);
-        assert_eq!(sync.epoch_clusters[1].batch_set_queue.peers.len(), 2);
+        assert_eq!(sync.epoch_clusters[1].batch_set_queue.peers.read().len(), 2);
         assert_eq!(sync.epoch_clusters[2].epoch_ids.len(), 1);
         assert_eq!(sync.epoch_clusters[2].first_epoch_number, 10);
-        assert_eq!(sync.epoch_clusters[2].batch_set_queue.peers.len(), 1);
+        assert_eq!(sync.epoch_clusters[2].batch_set_queue.peers.read().len(), 1);
     }
 }

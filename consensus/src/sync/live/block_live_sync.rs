@@ -21,7 +21,7 @@ use nimiq_network_interface::network::{MsgAcceptance, Network};
 use crate::sync::{
     live::{
         block_queue::{BlockQueue, QueuedBlock},
-        request_component::RequestComponent,
+        block_request_component::RequestComponent,
     },
     syncer::{LiveSync, LiveSyncEvent, LiveSyncPeerEvent, LiveSyncPushEvent},
 };
@@ -139,7 +139,7 @@ impl<N: Network, TReq: RequestComponent<N>> BlockLiveSync<N, TReq> {
             let blockchain1 = this.blockchain.clone();
             let bls_cache1 = Arc::clone(this.bls_cache);
             let network1 = Arc::clone(this.network);
-            let include_micro_bodies = this.block_queue.includes_micro_bodies();
+            let include_micro_bodies = this.block_queue.include_micro_bodies();
 
             let is_head = matches!(queued_block, QueuedBlock::Head(..));
             match queued_block {
@@ -295,7 +295,7 @@ impl<N: Network, TReq: RequestComponent<N>> BlockLiveSync<N, TReq> {
                         )));
                     }
                 }
-                PushOpResult::Missing(result, mut adopted_blocks, invalid_blocks) => {
+                PushOpResult::Missing(result, mut adopted_blocks, mut invalid_blocks) => {
                     for hash in &adopted_blocks {
                         this.block_queue.on_block_processed(hash);
                     }
@@ -303,7 +303,7 @@ impl<N: Network, TReq: RequestComponent<N>> BlockLiveSync<N, TReq> {
                         this.block_queue.on_block_processed(hash);
                     }
 
-                    this.block_queue.remove_invalid_blocks(invalid_blocks);
+                    this.block_queue.remove_invalid_blocks(&mut invalid_blocks);
                     this.block_queue.on_block_accepted();
 
                     if result.is_ok() && !adopted_blocks.is_empty() {

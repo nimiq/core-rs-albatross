@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -11,11 +10,15 @@ use nimiq_network_interface::{
     network::{Network, NetworkEvent, SubscribeEvents},
     request::RequestError,
 };
+use parking_lot::RwLock;
 
-use crate::{messages::RequestMissingBlocks, sync::sync_queue::SyncQueue};
+use crate::{
+    messages::RequestMissingBlocks,
+    sync::{peer_list::PeerList, sync_queue::SyncQueue},
+};
 
 pub trait RequestComponent<N: Network>:
-    Stream<Item = RequestComponentEvent> + Unpin + Send
+    Stream<Item = BlockRequestComponentEvent> + Unpin + Send
 {
     fn add_peer(&mut self, peer_id: N::PeerId);
 
@@ -33,7 +36,7 @@ pub trait RequestComponent<N: Network>:
 }
 
 #[derive(Debug)]
-pub enum RequestComponentEvent {
+pub enum BlockRequestComponentEvent {
     ReceivedBlocks(Vec<Block>),
 }
 
@@ -48,7 +51,7 @@ pub enum RequestComponentEvent {
 /// The blocks instead are returned by polling the component.
 pub struct BlockRequestComponent<TNetwork: Network + 'static> {
     sync_queue: SyncQueue<TNetwork, (Blake2bHash, Vec<Blake2bHash>, bool), Vec<Block>>, // requesting missing blocks from peers
-    peers: HashSet<TNetwork::PeerId>, // this map holds the strong references to up-to-date peers
+    pub(crate) peers: Arc<RwLock<PeerList<TNetwork>>>,
     network_event_rx: SubscribeEvents<TNetwork::PeerId>,
     include_micro_bodies: bool,
 }
@@ -61,11 +64,12 @@ impl<TNetwork: Network + 'static> BlockRequestComponent<TNetwork> {
         network: Arc<TNetwork>,
         include_micro_bodies: bool,
     ) -> Self {
+        let peers = Arc::new(RwLock::new(PeerList::default()));
         Self {
             sync_queue: SyncQueue::new(
                 network,
                 vec![],
-                vec![],
+                Arc::clone(&peers),
                 Self::NUM_PENDING_BLOCKS,
                 |(target_block_hash, locators, include_micro_bodies), network, peer_id| {
                     async move {
@@ -86,7 +90,7 @@ impl<TNetwork: Network + 'static> BlockRequestComponent<TNetwork> {
                     .boxed()
                 },
             ),
-            peers: Default::default(),
+            peers,
             network_event_rx,
             include_micro_bodies,
         }
@@ -115,8 +119,7 @@ impl<TNetwork: Network + 'static> BlockRequestComponent<TNetwork> {
 
 impl<TNetwork: 'static + Network> RequestComponent<TNetwork> for BlockRequestComponent<TNetwork> {
     fn add_peer(&mut self, peer_id: TNetwork::PeerId) {
-        self.peers.insert(peer_id);
-        self.sync_queue.add_peer(peer_id);
+        self.peers.write().add_peer(peer_id);
     }
 
     fn request_missing_blocks(
@@ -132,27 +135,30 @@ impl<TNetwork: 'static + Network> RequestComponent<TNetwork> for BlockRequestCom
     }
 
     fn num_peers(&self) -> usize {
-        self.peers.len()
+        self.peers.read().len()
     }
 
     fn peers(&self) -> Vec<TNetwork::PeerId> {
-        self.peers.iter().cloned().collect()
+        self.peers.read().peers().clone()
     }
 
     fn take_peer(&mut self, peer_id: &TNetwork::PeerId) -> Option<TNetwork::PeerId> {
-        self.peers.take(peer_id)
+        if self.peers.write().remove_peer(peer_id) {
+            return Some(*peer_id);
+        }
+        None
     }
 }
 
 impl<TNetwork: Network + 'static> Stream for BlockRequestComponent<TNetwork> {
-    type Item = RequestComponentEvent;
+    type Item = BlockRequestComponentEvent;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
         // 1. Poll network events to remove peers.
         while let Poll::Ready(Some(result)) = self.network_event_rx.poll_next_unpin(cx) {
             if let Ok(NetworkEvent::PeerLeft(peer_id)) = result {
                 // Remove peers that left.
-                self.peers.remove(&peer_id);
+                self.peers.write().remove_peer(&peer_id);
             }
         }
 
@@ -160,7 +166,7 @@ impl<TNetwork: Network + 'static> Stream for BlockRequestComponent<TNetwork> {
         while let Poll::Ready(Some(result)) = self.sync_queue.poll_next_unpin(cx) {
             match result {
                 Ok(blocks) => {
-                    return Poll::Ready(Some(RequestComponentEvent::ReceivedBlocks(blocks)))
+                    return Poll::Ready(Some(BlockRequestComponentEvent::ReceivedBlocks(blocks)))
                 }
                 Err((target_hash, _, _)) => {
                     debug!(

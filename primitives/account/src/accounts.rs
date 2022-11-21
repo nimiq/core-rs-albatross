@@ -3,8 +3,8 @@ use nimiq_database::{
 };
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_transaction::{ExecutedTransaction, Transaction, TransactionFlags};
-use nimiq_trie::key_nibbles::KeyNibbles;
 use nimiq_trie::trie::MerkleRadixTrie;
+use nimiq_trie::{key_nibbles::KeyNibbles, trie::TrieChunk};
 
 use crate::{
     logs::{BatchInfo, TransactionLog},
@@ -23,13 +23,18 @@ pub type AccountsTrie = MerkleRadixTrie;
 pub struct Accounts {
     pub env: Environment,
     pub tree: AccountsTrie,
+    pub keys_end: Option<KeyNibbles>,
 }
 
 impl Accounts {
     /// Creates a new, completely empty Accounts.
     pub fn new(env: Environment) -> Self {
         let tree = AccountsTrie::new(env.clone(), "AccountsTrie");
-        Accounts { env, tree }
+        Accounts {
+            env,
+            tree,
+            keys_end: None,
+        }
     }
 
     /// Initializes the Accounts struct with a given list of accounts.
@@ -594,6 +599,36 @@ impl Accounts {
 
     pub fn finalize_batch(&self, txn: &mut WriteTransaction) {
         self.tree.update_root(txn);
+    }
+
+    pub fn commit_chunk(
+        &mut self,
+        txn: &mut WriteTransaction,
+        chunk: TrieChunk,
+        expected_hash: Blake2bHash,
+    ) -> Result<(), AccountError> {
+        let keys_end = chunk.keys_end.clone();
+        self.tree
+            .put_chunk(
+                txn,
+                self.keys_end.clone().unwrap_or(KeyNibbles::ROOT),
+                chunk,
+                expected_hash,
+            )
+            .map_err(AccountError::ChunkError)?;
+        self.keys_end = keys_end;
+        Ok(())
+    }
+
+    pub fn revert_chunk(
+        &mut self,
+        _txn: &mut WriteTransaction,
+        _chunk: TrieChunk,
+        _expected_hash: Blake2bHash,
+    ) -> Result<(), AccountError> {
+        // PITODO: implement revert on trie and think about what we need to do that
+        // PITODO: update self.keys_end
+        Ok(())
     }
 
     fn commit_inherents(

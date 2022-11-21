@@ -11,10 +11,13 @@ use std::task::{Context, Poll, Waker};
 use futures::{
     future, future::BoxFuture, ready, stream::FuturesUnordered, FutureExt, Stream, StreamExt,
 };
+use parking_lot::RwLock;
 use pin_project::pin_project;
 
 use nimiq_macros::store_waker;
 use nimiq_network_interface::network::Network;
+
+use super::peer_list::PeerList;
 
 #[pin_project]
 #[derive(Debug)]
@@ -68,16 +71,11 @@ impl<TOutput> Ord for QueuedOutput<TOutput> {
     }
 }
 
-#[derive(Clone)]
-pub struct SyncQueuePeer<T> {
-    pub(crate) peer_id: T,
-}
-
 /// The SyncQueue will request a list of ids from a set of peers
 /// and implements an ordered stream over the resulting objects.
 /// The stream returns an error if an id could not be resolved.
 pub struct SyncQueue<TNetwork: Network, TId, TOutput: 'static> {
-    pub(crate) peers: Vec<SyncQueuePeer<TNetwork::PeerId>>,
+    pub(crate) peers: Arc<RwLock<PeerList<TNetwork>>>,
     network: Arc<TNetwork>,
     desired_pending_size: usize,
     ids_to_request: VecDeque<TId>,
@@ -99,7 +97,7 @@ where
     pub fn new(
         network: Arc<TNetwork>,
         ids: Vec<TId>,
-        peers: Vec<SyncQueuePeer<TNetwork::PeerId>>,
+        peers: Arc<RwLock<PeerList<TNetwork>>>,
         desired_pending_size: usize,
         request_fn: fn(TId, Arc<TNetwork>, TNetwork::PeerId) -> BoxFuture<'static, Option<TOutput>>,
     ) -> Self {
@@ -107,7 +105,7 @@ where
             "Creating SyncQueue for {} with {} ids and {} peers",
             std::any::type_name::<TOutput>(),
             ids.len(),
-            peers.len(),
+            peers.read().len(),
         );
 
         SyncQueue {
@@ -126,10 +124,10 @@ where
     }
 
     fn get_next_peer(&mut self, start_index: usize) -> Option<TNetwork::PeerId> {
-        if !self.peers.is_empty() {
-            let index = start_index % self.peers.len();
+        if !self.peers.read().is_empty() {
+            let index = start_index % self.peers.read().len();
             // TODO: Maybe check if the peer connection is closed.
-            return Some(self.peers[index].peer_id);
+            return Some(self.peers.read()[index]);
         }
         None
     }
@@ -166,7 +164,8 @@ where
                         num_tries: 1,
                     };
 
-                    self.current_peer_index = (self.current_peer_index + 1) % self.peers.len();
+                    self.current_peer_index =
+                        (self.current_peer_index + 1) % self.peers.read().len();
 
                     wrapper
                 }
@@ -193,7 +192,7 @@ where
                     .saturating_sub(self.pending_futures.len() + self.queued_outputs.len()),
                 self.pending_futures.len(),
                 self.queued_outputs.len(),
-                self.peers.len(),
+                self.peers.read().len(),
             );
 
             if let Some(waker) = self.waker.take() {
@@ -202,16 +201,12 @@ where
         }
     }
 
-    pub fn add_peer(&mut self, peer_id: TNetwork::PeerId) {
-        self.peers.push(SyncQueuePeer { peer_id });
+    pub fn add_peer(&mut self, peer_id: TNetwork::PeerId) -> bool {
+        self.peers.write().add_peer(peer_id)
     }
 
     pub fn remove_peer(&mut self, peer_id: &TNetwork::PeerId) {
-        self.peers.retain(|element| element.peer_id != *peer_id)
-    }
-
-    pub fn has_peer(&self, peer_id: TNetwork::PeerId) -> bool {
-        self.peers.iter().any(|o_peer| o_peer.peer_id == peer_id)
+        self.peers.write().remove_peer(peer_id);
     }
 
     pub fn add_ids(&mut self, ids: Vec<TId>) {
@@ -233,7 +228,7 @@ where
     }
 
     pub fn num_peers(&self) -> usize {
-        self.peers.len()
+        self.peers.read().len()
     }
 
     pub fn len(&self) -> usize {
@@ -286,12 +281,12 @@ where
                         None => {
                             // If we tried all peers for this hash, return an error.
                             // TODO max number of tries
-                            if result.num_tries >= self.peers.len() {
+                            if result.num_tries >= self.peers.read().len() {
                                 return Poll::Ready(Some(Err(result.id)));
                             }
 
                             // Re-request from different peer. Return an error if there are no more peers.
-                            let next_peer = (result.peer + 1) % self.peers.len();
+                            let next_peer = (result.peer + 1) % self.peers.read().len();
                             let peer = match self.get_next_peer(next_peer) {
                                 Some(peer) => peer,
                                 None => return Poll::Ready(Some(Err(result.id))),
@@ -321,7 +316,7 @@ where
                     }
                 }
                 None => {
-                    return if self.ids_to_request.is_empty() || self.peers.is_empty() {
+                    return if self.ids_to_request.is_empty() || self.peers.read().is_empty() {
                         Poll::Ready(None)
                     } else {
                         self.try_push_futures();
@@ -354,10 +349,13 @@ mod tests {
         let mut hub = MockHub::new();
         let network = Arc::new(hub.new_network());
 
-        let mut queue: SyncQueue<_, _, i32> =
-            SyncQueue::new(network, vec![1, 2, 3, 4], vec![], 1, |_, _, _| {
-                future::ready(None).boxed()
-            });
+        let mut queue: SyncQueue<_, _, i32> = SyncQueue::new(
+            network,
+            vec![1, 2, 3, 4],
+            Default::default(),
+            1,
+            |_, _, _| future::ready(None).boxed(),
+        );
 
         match queue.poll_next_unpin(&mut Context::from_waker(noop_waker_ref())) {
             Poll::Ready(Some(Err(id))) => assert_eq!(id, 1),

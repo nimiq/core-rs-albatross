@@ -3533,6 +3533,7 @@ dependencies = [
  "nimiq-test-log",
  "nimiq-test-utils",
  "nimiq-transaction",
+ "nimiq-trie",
  "nimiq-utils",
  "nimiq-validator-network",
  "nimiq-zkp-component",
