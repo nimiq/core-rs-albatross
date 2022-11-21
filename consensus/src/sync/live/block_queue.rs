@@ -15,7 +15,10 @@ use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::network::{MsgAcceptance, Network, PubsubId, Topic};
 use nimiq_primitives::policy::Policy;
 
-use crate::sync::live::request_component::{RequestComponent, RequestComponentEvent};
+use super::{
+    block_request_component::{BlockRequestComponentEvent, RequestComponent},
+    BlockQueueConfig,
+};
 
 #[derive(Clone, Debug, Default)]
 pub struct BlockTopic;
@@ -43,32 +46,6 @@ pub type BlockStream<N> = BoxStream<'static, (Block, <N as Network>::PubsubId)>;
 
 type BlockAndId<N> = (Block, Option<<N as Network>::PubsubId>);
 
-#[derive(Clone, Debug)]
-pub struct BlockQueueConfig {
-    /// Buffer size limit
-    pub buffer_max: usize,
-
-    /// How many blocks ahead we will buffer.
-    pub window_ahead_max: u32,
-
-    /// How many blocks back into the past we tolerate without returning a peer as Outdated.
-    pub tolerate_past_max: u32,
-
-    /// Flag to indicate if micro blocks should carry a body
-    pub include_micro_bodies: bool,
-}
-
-impl Default for BlockQueueConfig {
-    fn default() -> Self {
-        Self {
-            buffer_max: 4 * Policy::blocks_per_batch() as usize,
-            window_ahead_max: 2 * Policy::blocks_per_batch(),
-            tolerate_past_max: Policy::blocks_per_batch(),
-            include_micro_bodies: true,
-        }
-    }
-}
-
 pub enum QueuedBlock<N: Network> {
     Head(BlockAndId<N>),
     Buffered(BlockAndId<N>),
@@ -77,7 +54,121 @@ pub enum QueuedBlock<N: Network> {
     TooDistantPast(Block, N::PeerId),
 }
 
+pub struct BlockQueue<N: Network, TReq: RequestComponent<N>> {
+    /// Configuration for the block queue
+    config: BlockQueueConfig,
+
+    /// Reference to the blockchain
+    blockchain: BlockchainProxy,
+
+    /// Reference to the network
+    network: Arc<N>,
+
+    /// The Peer Tracking and Request Component.
+    request_component: TReq,
+
+    /// The blocks received via gossipsub.
+    block_stream: BlockStream<N>,
+
+    /// Buffered blocks - `block_height -> block_hash -> BlockAndId`.
+    /// There can be multiple blocks at a height if there are forks.
+    pub(crate) buffer: BTreeMap<u32, HashMap<Blake2bHash, BlockAndId<N>>>,
+
+    // Blocks to be returned by the stream
+    blocks: Vec<QueuedBlock<N>>,
+
+    /// Hashes of blocks that are pending to be pushed to the chain.
+    pending_blocks: BTreeSet<Blake2bHash>,
+
+    waker: Option<Waker>,
+
+    /// The block number of the latest macro block. We prune the block buffer when it changes.
+    current_macro_height: u32,
+}
+
 impl<N: Network, TReq: RequestComponent<N>> BlockQueue<N, TReq> {
+    pub async fn new(
+        network: Arc<N>,
+        blockchain: BlockchainProxy,
+        request_component: TReq,
+        config: BlockQueueConfig,
+    ) -> Self {
+        let block_stream = if config.include_micro_bodies {
+            network.subscribe::<BlockTopic>().await.unwrap().boxed()
+        } else {
+            network
+                .subscribe::<BlockHeaderTopic>()
+                .await
+                .unwrap()
+                .boxed()
+        };
+        Self::with_block_stream(blockchain, network, request_component, block_stream, config)
+    }
+
+    pub fn with_block_stream(
+        blockchain: BlockchainProxy,
+        network: Arc<N>,
+        request_component: TReq,
+        block_stream: BlockStream<N>,
+        config: BlockQueueConfig,
+    ) -> Self {
+        let current_macro_height = Policy::last_macro_block(blockchain.read().block_number());
+        Self {
+            config,
+            blockchain,
+            network,
+            request_component,
+            block_stream,
+            buffer: BTreeMap::new(),
+            blocks: Vec::new(),
+            pending_blocks: BTreeSet::new(),
+            waker: None,
+            current_macro_height,
+        }
+    }
+
+    /// Returns an iterator over the buffered blocks
+    pub fn buffered_blocks(&self) -> impl Iterator<Item = (u32, Vec<&Block>)> {
+        self.buffer.iter().map(|(block_number, blocks)| {
+            (
+                *block_number,
+                blocks.values().map(|(block, _pubsub_id)| block).collect(),
+            )
+        })
+    }
+
+    pub fn buffered_blocks_len(&self) -> usize {
+        self.buffer.len()
+    }
+
+    pub fn on_block_processed(&mut self, block_hash: &Blake2bHash) {
+        self.pending_blocks.remove(block_hash);
+    }
+
+    pub fn on_block_accepted(&mut self) {
+        self.push_buffered();
+    }
+
+    pub fn num_peers(&self) -> usize {
+        self.request_component.num_peers()
+    }
+
+    pub fn include_micro_bodies(&self) -> bool {
+        self.config.include_micro_bodies
+    }
+
+    pub fn peers(&self) -> Vec<N::PeerId> {
+        self.request_component.peers()
+    }
+
+    pub fn request_component(&self) -> &TReq {
+        &self.request_component
+    }
+
+    pub fn request_component_mut(&mut self) -> &mut TReq {
+        &mut self.request_component
+    }
+
     /// Handles a block announcement.
     pub fn on_block_announced(
         &mut self,
@@ -138,6 +229,7 @@ impl<N: Network, TReq: RequestComponent<N>> BlockQueue<N, TReq> {
                 self.request_component.take_peer(&peer_id);
             }
         } else if self.buffer.len() >= self.config.buffer_max {
+            // TODO: This does not account for the nested map
             log::warn!(
                 "Discarding block {}, buffer full (max {})",
                 block,
@@ -332,7 +424,7 @@ impl<N: Network, TReq: RequestComponent<N>> BlockQueue<N, TReq> {
         }
     }
 
-    pub fn remove_invalid_blocks(&mut self, mut invalid_blocks: HashSet<Blake2bHash>) {
+    pub fn remove_invalid_blocks(&mut self, invalid_blocks: &mut HashSet<Blake2bHash>) {
         if invalid_blocks.is_empty() {
             return;
         }
@@ -408,122 +500,6 @@ impl<N: Network, TReq: RequestComponent<N>> BlockQueue<N, TReq> {
     }
 }
 
-pub struct BlockQueue<N: Network, TReq: RequestComponent<N>> {
-    /// Configuration for the block queue
-    config: BlockQueueConfig,
-
-    /// Reference to the blockchain
-    blockchain: BlockchainProxy,
-
-    /// Reference to the network
-    network: Arc<N>,
-
-    /// The Peer Tracking and Request Component.
-    request_component: TReq,
-
-    /// The blocks received via gossipsub.
-    block_stream: BlockStream<N>,
-
-    /// Buffered blocks - `block_height -> block_hash -> BlockAndId`.
-    /// There can be multiple blocks at a height if there are forks.
-    pub(crate) buffer: BTreeMap<u32, HashMap<Blake2bHash, BlockAndId<N>>>,
-
-    // Blocks to be returned by the stream
-    blocks: Vec<QueuedBlock<N>>,
-
-    /// Hashes of blocks that are pending to be pushed to the chain.
-    pending_blocks: BTreeSet<Blake2bHash>,
-
-    waker: Option<Waker>,
-
-    /// The block number of the latest macro block. We prune the block buffer when it changes.
-    current_macro_height: u32,
-}
-
-impl<N: Network, TReq: RequestComponent<N>> BlockQueue<N, TReq> {
-    pub async fn new(
-        network: Arc<N>,
-        blockchain: BlockchainProxy,
-        request_component: TReq,
-        config: BlockQueueConfig,
-    ) -> Self {
-        let block_stream = if config.include_micro_bodies {
-            network.subscribe::<BlockTopic>().await.unwrap().boxed()
-        } else {
-            network
-                .subscribe::<BlockHeaderTopic>()
-                .await
-                .unwrap()
-                .boxed()
-        };
-        Self::with_block_stream(blockchain, network, request_component, block_stream, config)
-    }
-
-    pub fn with_block_stream(
-        blockchain: BlockchainProxy,
-        network: Arc<N>,
-        request_component: TReq,
-        block_stream: BlockStream<N>,
-        config: BlockQueueConfig,
-    ) -> Self {
-        let current_macro_height = Policy::last_macro_block(blockchain.read().block_number());
-        Self {
-            config,
-            blockchain,
-            network,
-            request_component,
-            block_stream,
-            buffer: BTreeMap::new(),
-            blocks: Vec::new(),
-            pending_blocks: BTreeSet::new(),
-            waker: None,
-            current_macro_height,
-        }
-    }
-
-    /// Returns an iterator over the buffered blocks
-    pub fn buffered_blocks(&self) -> impl Iterator<Item = (u32, Vec<&Block>)> {
-        self.buffer.iter().map(|(block_number, blocks)| {
-            (
-                *block_number,
-                blocks.values().map(|(block, _pubsub_id)| block).collect(),
-            )
-        })
-    }
-
-    pub fn buffered_blocks_len(&self) -> usize {
-        self.buffer.len()
-    }
-
-    pub fn on_block_processed(&mut self, block_hash: &Blake2bHash) {
-        self.pending_blocks.remove(block_hash);
-    }
-
-    pub fn on_block_accepted(&mut self) {
-        self.push_buffered();
-    }
-
-    pub fn num_peers(&self) -> usize {
-        self.request_component.num_peers()
-    }
-
-    pub fn includes_micro_bodies(&self) -> bool {
-        self.config.include_micro_bodies
-    }
-
-    pub fn peers(&self) -> Vec<N::PeerId> {
-        self.request_component.peers()
-    }
-
-    pub fn request_component(&self) -> &TReq {
-        &self.request_component
-    }
-
-    pub fn request_component_mut(&mut self) -> &mut TReq {
-        &mut self.request_component
-    }
-}
-
 impl<N: Network, TReq: RequestComponent<N>> Stream for BlockQueue<N, TReq> {
     type Item = QueuedBlock<N>;
 
@@ -552,7 +528,7 @@ impl<N: Network, TReq: RequestComponent<N>> Stream for BlockQueue<N, TReq> {
         loop {
             let poll_res = self.request_component.poll_next_unpin(cx);
             match poll_res {
-                Poll::Ready(Some(RequestComponentEvent::ReceivedBlocks(blocks))) => {
+                Poll::Ready(Some(BlockRequestComponentEvent::ReceivedBlocks(blocks))) => {
                     self.on_missing_blocks_received(blocks);
                 }
                 Poll::Ready(None) => unreachable!(),

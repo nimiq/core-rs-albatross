@@ -18,9 +18,10 @@ use nimiq_network_interface::{network::Network, request::RequestError};
 use nimiq_primitives::{policy::Policy, slots::Validators};
 use nimiq_utils::math::CeilingDiv;
 
+use crate::sync::peer_list::PeerList;
 use crate::{
     messages::{BatchSetInfo, HistoryChunk, RequestBatchSet, RequestHistoryChunk},
-    sync::sync_queue::{SyncQueue, SyncQueuePeer},
+    sync::sync_queue::SyncQueue,
 };
 
 /// Error enumeration for history sync request
@@ -94,6 +95,7 @@ pub struct SyncCluster<TNetwork: Network> {
     pub first_epoch_number: usize,
     pub first_block_number: usize,
 
+    // Both batch_set_queue and the history_queue share the same peers.
     pub(crate) batch_set_queue: SyncQueue<TNetwork, Blake2bHash, BatchSetInfo>,
     history_queue: SyncQueue<TNetwork, (u32, u32, usize), (u32, u32, usize, HistoryTreeChunk)>,
 
@@ -111,14 +113,14 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
     pub(crate) fn for_epoch(
         blockchain: Arc<RwLock<Blockchain>>,
         network: Arc<TNetwork>,
-        peers: Vec<SyncQueuePeer<TNetwork::PeerId>>,
+        peers: PeerList<TNetwork>,
         epoch_ids: Vec<Blake2bHash>,
         first_epoch_number: usize,
     ) -> Self {
         Self::new(
             blockchain,
             network,
-            peers,
+            Arc::new(RwLock::new(peers)),
             epoch_ids,
             first_epoch_number,
             first_epoch_number * Policy::blocks_per_epoch() as usize,
@@ -128,7 +130,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
     pub(crate) fn for_checkpoint(
         blockchain: Arc<RwLock<Blockchain>>,
         network: Arc<TNetwork>,
-        peers: Vec<SyncQueuePeer<TNetwork::PeerId>>,
+        peers: PeerList<TNetwork>,
         checkpoint_id: Blake2bHash,
         epoch_number: usize,
         block_number: usize,
@@ -136,7 +138,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         Self::new(
             blockchain,
             network,
-            peers,
+            Arc::new(RwLock::new(peers)),
             vec![checkpoint_id],
             epoch_number,
             block_number,
@@ -146,7 +148,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
     fn new(
         blockchain: Arc<RwLock<Blockchain>>,
         network: Arc<TNetwork>,
-        peers: Vec<SyncQueuePeer<TNetwork::PeerId>>,
+        peers: Arc<RwLock<PeerList<TNetwork>>>,
         epoch_ids: Vec<Blake2bHash>,
         first_epoch_number: usize,
         first_block_number: usize,
@@ -492,24 +494,19 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         Ok(())
     }
 
+    /// Adds the peer to both queues (history and batch set).
     pub(crate) fn add_peer(&mut self, peer_id: TNetwork::PeerId) -> bool {
-        // TODO keep only one list of peers
-        if !self.batch_set_queue.has_peer(peer_id) {
-            self.batch_set_queue.add_peer(peer_id);
-            self.history_queue.add_peer(peer_id);
-
-            return true;
-        }
-        false
+        self.batch_set_queue.add_peer(peer_id)
     }
 
+    /// Removes the peer from both queues (history and batch set).
     pub(crate) fn remove_peer(&mut self, peer_id: &TNetwork::PeerId) {
         self.batch_set_queue.remove_peer(peer_id);
-        self.history_queue.remove_peer(peer_id);
     }
 
-    pub(crate) fn peers(&self) -> &Vec<SyncQueuePeer<TNetwork::PeerId>> {
-        &self.batch_set_queue.peers
+    /// Returns the shared list of peers of both queues (history and batch set).
+    pub(crate) fn peers(&self) -> Vec<<TNetwork as Network>::PeerId> {
+        self.batch_set_queue.peers.read().peers().clone()
     }
 
     pub(crate) fn split_off(&mut self, at: usize) -> Self {
@@ -530,7 +527,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         Self::for_epoch(
             Arc::clone(&self.blockchain),
             Arc::clone(&self.network),
-            self.batch_set_queue.peers.clone(),
+            self.batch_set_queue.peers.read().clone(), // makes sure we have a hard copy
             ids,
             first_epoch_number,
         )

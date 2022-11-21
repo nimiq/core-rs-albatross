@@ -15,9 +15,8 @@ use pin_project::pin_project;
 use crate::sync::{
     history::HistoryMacroSync,
     live::{
-        block_queue::{BlockQueue, BlockQueueConfig},
-        request_component::BlockRequestComponent,
-        BlockLiveSync,
+        block_queue::BlockQueue, block_request_component::BlockRequestComponent, BlockLiveSync,
+        BlockQueueConfig,
     },
     syncer::{LiveSyncPushEvent, Syncer},
 };

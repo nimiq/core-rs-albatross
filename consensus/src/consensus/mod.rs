@@ -21,7 +21,8 @@ use crate::messages::{
     RequestBatchSet, RequestBlock, RequestHead, RequestHistoryChunk, RequestMacroChain,
     RequestMissingBlocks,
 };
-use crate::sync::{syncer::LiveSyncPushEvent, syncer_proxy::SyncerProxy};
+use crate::sync::syncer::LiveSyncPushEvent;
+use crate::sync::syncer_proxy::SyncerProxy;
 
 use self::consensus_proxy::ConsensusProxy;
 
@@ -99,7 +100,7 @@ impl<N: Network> Consensus<N> {
     ) -> Self {
         let (tx, _rx) = broadcast(256);
 
-        // IPTODO
+        // PITODO
         Self::init_network_request_receivers(&network, &blockchain);
 
         let established_flag = Arc::new(AtomicBool::new(false));

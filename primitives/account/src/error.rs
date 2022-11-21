@@ -41,4 +41,6 @@ pub enum AccountError {
     NonExistentAddress { address: Address },
     #[error("There is already an account at address {address} in the Accounts Tree.")]
     AlreadyExistentAddress { address: Address },
+    #[error("Error during chunk processing: {0}")]
+    ChunkError(&'static str),
 }

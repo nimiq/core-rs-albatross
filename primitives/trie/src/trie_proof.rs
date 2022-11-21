@@ -24,7 +24,7 @@ use crate::trie_node::TrieNode;
 /// If any of the given keys doesn't exist this function just returns None.
 /// The exclusion (non-inclusion) of keys in the Merkle Radix Trie could also be proven, but it
 /// requires some light refactoring to the way proofs work.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TrieProof {
     #[beserial(len_type(u16))]
     // TODO: for hybrid nodes, this contains data. is this bad?

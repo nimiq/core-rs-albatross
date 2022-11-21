@@ -6,6 +6,7 @@ use std::{
 };
 
 use futures::{task::noop_waker_ref, Stream, StreamExt};
+use nimiq_blockchain_interface::{AbstractBlockchain, Direction};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
 use parking_lot::{Mutex, RwLock};
@@ -17,10 +18,12 @@ use tokio_stream::wrappers::ReceiverStream;
 use nimiq_block::Block;
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
-use nimiq_blockchain_interface::{AbstractBlockchain, Direction};
-use nimiq_consensus::sync::live::block_queue::{BlockQueue, BlockQueueConfig};
-use nimiq_consensus::sync::live::request_component::{RequestComponent, RequestComponentEvent};
+use nimiq_consensus::sync::live::block_queue::BlockQueue;
+use nimiq_consensus::sync::live::block_request_component::{
+    BlockRequestComponentEvent, RequestComponent,
+};
 use nimiq_consensus::sync::live::BlockLiveSync;
+use nimiq_consensus::sync::live::BlockQueueConfig;
 use nimiq_consensus::sync::syncer::{MacroSync, MacroSyncReturn, Syncer};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_hash::Blake2bHash;
@@ -127,12 +130,12 @@ impl RequestComponent<MockNetwork> for MockRequestComponent {
 }
 
 impl Stream for MockRequestComponent {
-    type Item = RequestComponentEvent;
+    type Item = BlockRequestComponentEvent;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
         match self.project().rx.poll_recv(cx) {
             Poll::Ready(Some(blocks)) => {
-                Poll::Ready(Some(RequestComponentEvent::ReceivedBlocks(blocks)))
+                Poll::Ready(Some(BlockRequestComponentEvent::ReceivedBlocks(blocks)))
             }
             _ => Poll::Pending,
         }
@@ -454,7 +457,7 @@ async fn send_invalid_block() {
     block_tx.send((block1.clone(), mock_id)).await.unwrap();
 
     // run the block_queue until is has produced two events.
-    // The second block will be rejected due to an Invalid Sucessor event
+    // The second block will be rejected due to an Invalid Successor event
     syncer.next().await;
     syncer.next().await;
 
