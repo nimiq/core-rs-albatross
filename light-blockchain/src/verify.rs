@@ -3,13 +3,13 @@ use nimiq_blockchain::{AbstractBlockchain, HistoryTreeProof};
 use nimiq_hash::Blake2bHash;
 use nimiq_trie::trie_proof::TrieProof;
 
-use crate::blockchain::NanoBlockchain;
+use crate::blockchain::LightBlockchain;
 use crate::error::NanoError;
 
 /// Implements methods to verify data from the blocks, like accounts and transactions. Nano nodes
 /// can request proofs of inclusion for given accounts or transactions and they can use these methods
 /// to verify those proofs.
-impl NanoBlockchain {
+impl LightBlockchain {
     /// Verify a Merkle proof for an account. It checks if the account is part of the Accounts Tree
     /// at the block with the given hash. It returns Ok if the proof is valid.
     pub fn check_account(

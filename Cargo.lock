@@ -2581,7 +2581,7 @@ dependencies = [
  "nimiq-database",
  "nimiq-genesis",
  "nimiq-hash",
- "nimiq-nano-blockchain",
+ "nimiq-light-blockchain",
  "nimiq-primitives",
  "nimiq-transaction",
  "parking_lot 0.12.0",
@@ -2944,6 +2944,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "nimiq-light-blockchain"
+version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "nimiq-account",
+ "nimiq-block",
+ "nimiq-blockchain",
+ "nimiq-database",
+ "nimiq-genesis",
+ "nimiq-hash",
+ "nimiq-nano-zkp",
+ "nimiq-primitives",
+ "nimiq-test-log",
+ "nimiq-trie",
+ "nimiq-utils",
+ "parking_lot 0.12.0",
+ "rand 0.8.5",
+ "thiserror",
+ "tokio-stream",
+]
+
+[[package]]
 name = "nimiq-log"
 version = "0.1.0"
 dependencies = [
@@ -3036,28 +3058,6 @@ dependencies = [
  "nimiq-test-log",
  "nimiq-utils",
  "unicode-normalization",
-]
-
-[[package]]
-name = "nimiq-nano-blockchain"
-version = "0.1.0"
-dependencies = [
- "futures-util",
- "nimiq-account",
- "nimiq-block",
- "nimiq-blockchain",
- "nimiq-database",
- "nimiq-genesis",
- "nimiq-hash",
- "nimiq-nano-zkp",
- "nimiq-primitives",
- "nimiq-test-log",
- "nimiq-trie",
- "nimiq-utils",
- "parking_lot 0.12.0",
- "rand 0.8.5",
- "thiserror",
- "tokio-stream",
 ]
 
 [[package]]

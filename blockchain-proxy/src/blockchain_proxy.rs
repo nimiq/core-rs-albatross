@@ -9,7 +9,7 @@ use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainEvent};
 use nimiq_database::Transaction;
 use nimiq_genesis::NetworkId;
 use nimiq_hash::Blake2bHash;
-use nimiq_nano_blockchain::NanoBlockchain;
+use nimiq_light_blockchain::LightBlockchain;
 use nimiq_primitives::slots::{Validator, Validators};
 
 macro_rules! gen_blockchain_match {
@@ -26,7 +26,7 @@ pub enum BlockchainProxy {
     /// Full Blockchain, stores the full history, transactions, and full blocks.
     Full(Arc<RwLock<Blockchain>>),
     /// Light Blockchain, stores only ZKPs, election macro blocks, and block header and their justification.
-    Light(Arc<RwLock<NanoBlockchain>>),
+    Light(Arc<RwLock<LightBlockchain>>),
 }
 
 impl Clone for BlockchainProxy {
@@ -44,8 +44,8 @@ impl From<Arc<RwLock<Blockchain>>> for BlockchainProxy {
     }
 }
 
-impl From<Arc<RwLock<NanoBlockchain>>> for BlockchainProxy {
-    fn from(nano_blockchain: Arc<RwLock<NanoBlockchain>>) -> Self {
+impl From<Arc<RwLock<LightBlockchain>>> for BlockchainProxy {
+    fn from(nano_blockchain: Arc<RwLock<LightBlockchain>>) -> Self {
         Self::Light(nano_blockchain)
     }
 }
@@ -56,8 +56,8 @@ impl<'a> From<&'a Arc<RwLock<Blockchain>>> for BlockchainProxy {
     }
 }
 
-impl<'a> From<&'a Arc<RwLock<NanoBlockchain>>> for BlockchainProxy {
-    fn from(nano_blockchain: &'a Arc<RwLock<NanoBlockchain>>) -> Self {
+impl<'a> From<&'a Arc<RwLock<LightBlockchain>>> for BlockchainProxy {
+    fn from(nano_blockchain: &'a Arc<RwLock<LightBlockchain>>) -> Self {
         Self::Light(Arc::clone(nano_blockchain))
     }
 }
@@ -83,7 +83,7 @@ pub enum BlockchainReadProxy<'a> {
     // Read locked access to a Full Blockchain
     Full(Arc<RwLockReadGuard<'a, Blockchain>>),
     // Read locked access to a Light Blockchain
-    Light(Arc<RwLockReadGuard<'a, NanoBlockchain>>),
+    Light(Arc<RwLockReadGuard<'a, LightBlockchain>>),
 }
 
 impl<'a> AbstractBlockchain for BlockchainReadProxy<'a> {

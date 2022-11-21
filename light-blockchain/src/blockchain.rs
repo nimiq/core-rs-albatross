@@ -11,7 +11,7 @@ use crate::chain_store::ChainStore;
 
 /// The Blockchain struct. It stores all information of the blockchain that is known to the Nano
 /// nodes.
-pub struct NanoBlockchain {
+pub struct LightBlockchain {
     // The network ID. It determines if this is the mainnet or one of the testnets.
     pub network_id: NetworkId,
     // The OffsetTime struct. It allows us to query the current time.
@@ -31,7 +31,7 @@ pub struct NanoBlockchain {
 }
 
 /// Implements methods to start a Blockchain.
-impl NanoBlockchain {
+impl LightBlockchain {
     /// Creates a new blockchain from a given network ID.
     pub fn new(network_id: NetworkId) -> Self {
         let network_info = NetworkInfo::from_network_id(network_id);
@@ -49,7 +49,7 @@ impl NanoBlockchain {
 
         chain_store.put_chain_info(chain_info);
 
-        NanoBlockchain {
+        LightBlockchain {
             network_id,
             time,
             head: genesis_block.clone(),

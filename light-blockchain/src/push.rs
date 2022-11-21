@@ -5,12 +5,12 @@ use nimiq_blockchain::{
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::policy::Policy;
 
-use crate::blockchain::NanoBlockchain;
+use crate::blockchain::LightBlockchain;
 
 /// Implements methods to push blocks into the chain. This is used when the node has already synced
 /// and is just receiving newly produced blocks. It is also used for the final phase of syncing,
 /// when the node is just receiving micro blocks.
-impl NanoBlockchain {
+impl LightBlockchain {
     /// Pushes a block into the chain.
     pub fn push(&mut self, block: Block) -> Result<PushResult, PushError> {
         // Check if we already know this block.

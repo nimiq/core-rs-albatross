@@ -20,7 +20,7 @@ impl Blockchain {
     /// This only performs checks that can be made BEFORE the state is updated with the block. All
     /// checks that require the updated state (ex: if an account has enough funds) are made on the
     /// verify_block_state method.
-    // Note: This is an associated method because we need to use it on the nano-blockchain. There
+    // Note: This is an associated method because we need to use it on the light-blockchain. There
     //       might be a better way to do this though.
     pub fn verify_block_header<B: AbstractBlockchain>(
         blockchain: &B,
@@ -216,7 +216,7 @@ impl Blockchain {
     }
 
     /// Verifies the justification of a block.
-    // Note: This is an associated method because we need to use it on the nano-blockchain. There
+    // Note: This is an associated method because we need to use it on the light-blockchain. There
     //       might be a better way to do this though.
     pub fn verify_block_justification<B: AbstractBlockchain>(
         blockchain: &B,

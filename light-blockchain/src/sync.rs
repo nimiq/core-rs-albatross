@@ -5,10 +5,10 @@ use nimiq_blockchain::{AbstractBlockchain, ChainInfo, PushError, PushResult};
 use nimiq_nano_zkp::{NanoProof, NanoZKP};
 use nimiq_primitives::policy::Policy;
 
-use crate::blockchain::NanoBlockchain;
+use crate::blockchain::LightBlockchain;
 
 /// Implements methods to sync a nano node.
-impl NanoBlockchain {
+impl LightBlockchain {
     /// Syncs using a zero-knowledge proof. It receives an election block and a proof that there is
     /// a valid chain between the genesis block and that block.
     /// This brings the node from the genesis block all the way to the most recent election block.
