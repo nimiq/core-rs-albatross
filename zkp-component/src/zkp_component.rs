@@ -7,7 +7,7 @@ use futures::{Future, StreamExt};
 use nimiq_block::Block;
 use nimiq_database::Environment;
 use nimiq_genesis::NetworkInfo;
-use nimiq_network_interface::network::PubsubId;
+use nimiq_network_interface::network::{MsgAcceptance, PubsubId};
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 
 use nimiq_block::MacroBlock;
@@ -304,22 +304,32 @@ impl<N: Network> Future for ZKPComponent<N> {
         // Exhausts all peer gossiped proofs and tries to push them.
         loop {
             match this.zk_proofs_stream.as_mut().poll_next(cx) {
-                Poll::Ready(Some(proof)) => {
-                    log::debug!("Received zk proof via gossipsub {:?}", proof.0);
-                    if let Err(e) = Self::push_proof_from_peers(
+                Poll::Ready(Some((proof, pub_id))) => {
+                    log::debug!("Received zk proof via gossipsub {:?}", proof);
+                    let acceptance = match Self::push_proof_from_peers(
                         this.blockchain,
                         this.zkp_state,
-                        proof.0,
+                        proof,
                         None,
                         this.zk_prover,
                         this.proof_storage,
                         this.zkp_events_notifier,
                         true,
                         this.keys_path,
-                        ProofSource::PeerGenerated(proof.1.propagation_source()),
+                        ProofSource::PeerGenerated(pub_id.propagation_source()),
                     ) {
-                        log::error!("Error pushing the zk proof - {} ", e);
-                    }
+                        Err(ZKPComponentError::OutdatedProof) => {
+                            log::trace!("ZK Proof was outdated");
+                            MsgAcceptance::Ignore
+                        }
+                        Err(e) => {
+                            log::error!("Error pushing the zk proof - {} ", e);
+                            MsgAcceptance::Reject
+                        }
+                        Ok(()) => MsgAcceptance::Accept,
+                    };
+                    this.network
+                        .validate_message::<ZKProofTopic>(pub_id, acceptance);
                 }
                 Poll::Ready(None) => {
                     // The stream was closed so we quit as well.
