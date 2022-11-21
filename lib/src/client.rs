@@ -10,7 +10,7 @@ use nimiq_block::Block;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 
 use nimiq_consensus::{
-    sync::history::HistorySync, Consensus as AbstractConsensus,
+    sync::history::HistoryMacroSync, Consensus as AbstractConsensus,
     ConsensusProxy as AbstractConsensusProxy,
 };
 use nimiq_database::Environment;
@@ -191,7 +191,7 @@ impl ClientInner {
         let bls_cache = Arc::new(Mutex::new(PublicKeyCache::new(
             Policy::BLS_CACHE_MAX_CAPACITY,
         )));
-        let sync = HistorySync::<Network>::new(
+        let sync = HistoryMacroSync::<Network>::new(
             Arc::clone(&blockchain),
             Arc::clone(&network),
             network_events,
@@ -200,7 +200,7 @@ impl ClientInner {
             environment.clone(),
             BlockchainProxy::Full(Arc::clone(&blockchain)),
             Arc::clone(&network),
-            Box::pin(sync),
+            sync,
             config.consensus.min_peers,
             zkp_component.proxy(),
             bls_cache,

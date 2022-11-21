@@ -1,8 +1,5 @@
-pub mod block_queue;
-pub mod request_component;
-
-use crate::sync::follow::block_queue::{BlockQueue, BlockTopic, QueuedBlock};
-use crate::sync::follow::request_component::RequestComponent;
+use crate::sync::live::block_queue::{BlockQueue, BlockTopic, QueuedBlock};
+use crate::sync::live::request_component::RequestComponent;
 use crate::sync::syncer::{LiveSync, LiveSyncEvent, LiveSyncPeerEvent, LiveSyncPushEvent};
 use futures::future::BoxFuture;
 use futures::{FutureExt, Stream, StreamExt};
@@ -31,7 +28,7 @@ enum PushOpResult {
 }
 
 #[pin_project]
-pub struct FollowMode<N: Network, TReq: RequestComponent<N>> {
+pub struct BlockLiveSync<N: Network, TReq: RequestComponent<N>> {
     blockchain: BlockchainProxy,
 
     network: Arc<N>,
@@ -49,7 +46,7 @@ pub struct FollowMode<N: Network, TReq: RequestComponent<N>> {
     bls_cache: Arc<Mutex<PublicKeyCache>>,
 }
 
-impl<N: Network, TReq: RequestComponent<N>> LiveSync<N> for FollowMode<N, TReq> {
+impl<N: Network, TReq: RequestComponent<N>> LiveSync<N> for BlockLiveSync<N, TReq> {
     fn on_block_announced(
         &mut self,
         block: Block,
@@ -73,14 +70,14 @@ impl<N: Network, TReq: RequestComponent<N>> LiveSync<N> for FollowMode<N, TReq> 
     }
 }
 
-impl<N: Network, TReq: RequestComponent<N>> FollowMode<N, TReq> {
+impl<N: Network, TReq: RequestComponent<N>> BlockLiveSync<N, TReq> {
     pub fn new(
         blockchain: BlockchainProxy,
         network: Arc<N>,
         block_queue: BlockQueue<N, TReq>,
         bls_cache: Arc<Mutex<PublicKeyCache>>,
-    ) -> FollowMode<N, TReq> {
-        FollowMode {
+    ) -> BlockLiveSync<N, TReq> {
+        BlockLiveSync {
             blockchain,
             network,
             block_queue,
@@ -107,7 +104,7 @@ impl<N: Network, TReq: RequestComponent<N>> FollowMode<N, TReq> {
     }
 }
 
-impl<N: Network, TReq: RequestComponent<N>> Stream for FollowMode<N, TReq> {
+impl<N: Network, TReq: RequestComponent<N>> Stream for BlockLiveSync<N, TReq> {
     type Item = LiveSyncEvent<N::PeerId>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
@@ -122,7 +119,7 @@ impl<N: Network, TReq: RequestComponent<N>> Stream for FollowMode<N, TReq> {
     }
 }
 
-impl<N: Network, TReq: RequestComponent<N>> FollowMode<N, TReq> {
+impl<N: Network, TReq: RequestComponent<N>> BlockLiveSync<N, TReq> {
     fn poll_block_queue(
         self: Pin<&mut Self>,
         cx: &mut Context,

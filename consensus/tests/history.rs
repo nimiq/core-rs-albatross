@@ -1,10 +1,8 @@
 use std::path::PathBuf;
-use std::pin::Pin;
 use std::sync::Arc;
-use std::task::{Context, Poll};
 use std::time::Duration;
 
-use futures::{Stream, StreamExt};
+use futures::StreamExt;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_test_log::test;
@@ -16,8 +14,7 @@ use parking_lot::{Mutex, RwLock};
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_consensus::consensus::Consensus;
-use nimiq_consensus::sync::history::{cluster::SyncCluster, HistorySync};
-use nimiq_consensus::sync::syncer::{MacroSync, MacroSyncReturn};
+use nimiq_consensus::sync::history::{cluster::SyncCluster, HistoryMacroSync};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
 use nimiq_network_interface::network::Network as NetworkInterface;
@@ -29,22 +26,6 @@ use nimiq_test_utils::{
     test_network::TestNetwork,
 };
 use nimiq_utils::time::OffsetTime;
-
-pub struct MockHistorySyncStream<TNetwork: NetworkInterface> {
-    _network: Arc<TNetwork>,
-}
-
-impl<TNetwork: NetworkInterface> MacroSync<TNetwork::PeerId> for MockHistorySyncStream<TNetwork> {
-    fn add_peer(&self, _peer_id: TNetwork::PeerId) {}
-}
-
-impl<TNetwork: NetworkInterface> Stream for MockHistorySyncStream<TNetwork> {
-    type Item = MacroSyncReturn<TNetwork::PeerId>;
-
-    fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        Poll::Pending
-    }
-}
 
 #[test(tokio::test)]
 async fn peers_can_sync() {
@@ -69,7 +50,7 @@ async fn peers_can_sync() {
 
     let net1 = TestNetwork::build_network(0, Default::default(), &mut Some(hub)).await;
     networks.push(Arc::clone(&net1));
-    let sync1 = HistorySync::<Network>::new(
+    let sync1 = HistoryMacroSync::<Network>::new(
         Arc::clone(&blockchain1),
         Arc::clone(&net1),
         net1.subscribe_events(),
@@ -88,7 +69,7 @@ async fn peers_can_sync() {
         env1,
         BlockchainProxy::from(&blockchain1),
         Arc::clone(&net1),
-        Box::pin(sync1),
+        sync1,
         zkp_prover1,
         Arc::new(Mutex::new(PublicKeyCache::new(
             TESTING_BLS_CACHE_MAX_CAPACITY,
@@ -106,7 +87,7 @@ async fn peers_can_sync() {
     let net2 =
         TestNetwork::build_network(1, Default::default(), &mut Some(MockHub::default())).await;
     networks.push(Arc::clone(&net2));
-    let mut sync2 = HistorySync::<Network>::new(
+    let mut sync2 = HistoryMacroSync::<Network>::new(
         Arc::clone(&blockchain2),
         Arc::clone(&net2),
         net2.subscribe_events(),
@@ -125,9 +106,7 @@ async fn peers_can_sync() {
         env2,
         BlockchainProxy::from(&blockchain2),
         Arc::clone(&net2),
-        Box::pin(MockHistorySyncStream {
-            _network: Arc::clone(&net2),
-        }),
+        HistoryMacroSync::new(blockchain2, net2.clone(), net2.subscribe_events()),
         zkp_prover2,
         Arc::new(Mutex::new(PublicKeyCache::new(
             TESTING_BLS_CACHE_MAX_CAPACITY,
@@ -239,7 +218,8 @@ async fn sync_ingredients() {
     // Produce the blocks.
     produce_macro_blocks(&producer, &blockchain1, num_macro_blocks);
 
-    let net1 = TestNetwork::build_network(2, Default::default(), &mut Some(hub)).await;
+    let net1: Arc<Network> =
+        TestNetwork::build_network(2, Default::default(), &mut Some(hub)).await;
     networks.push(Arc::clone(&net1));
     let zkp_prover1 = ZKPComponent::new(
         Arc::clone(&blockchain1),
@@ -255,9 +235,7 @@ async fn sync_ingredients() {
         env1,
         BlockchainProxy::from(&blockchain1),
         Arc::clone(&net1),
-        Box::pin(MockHistorySyncStream {
-            _network: Arc::clone(&net1),
-        }),
+        HistoryMacroSync::new(blockchain1, net1.clone(), net1.subscribe_events()),
         zkp_prover1,
         Arc::new(Mutex::new(PublicKeyCache::new(
             TESTING_BLS_CACHE_MAX_CAPACITY,
@@ -289,9 +267,7 @@ async fn sync_ingredients() {
         env2,
         BlockchainProxy::from(&blockchain2),
         Arc::clone(&net2),
-        Box::pin(MockHistorySyncStream {
-            _network: Arc::clone(&net2),
-        }),
+        HistoryMacroSync::new(blockchain2, net2.clone(), net2.subscribe_events()),
         zkp_prover2,
         Arc::new(Mutex::new(PublicKeyCache::new(
             TESTING_BLS_CACHE_MAX_CAPACITY,
@@ -310,7 +286,7 @@ async fn sync_ingredients() {
     // Request macro chain, first request must return all epochs, but no checkpoint
     let peer_id = net2.get_peers()[0];
 
-    let macro_chain = HistorySync::request_macro_chain(
+    let macro_chain = HistoryMacroSync::request_macro_chain(
         Arc::clone(&net2),
         peer_id,
         vec![consensus2.blockchain.read().head_hash()],
@@ -363,7 +339,7 @@ async fn sync_ingredients() {
     );
 
     // Re-request macro chain. This time it must return no epochs, but the checkpoint.
-    let macro_chain = HistorySync::request_macro_chain(
+    let macro_chain = HistoryMacroSync::request_macro_chain(
         Arc::clone(&net2),
         peer_id,
         vec![consensus1.blockchain.read().election_head_hash()],
@@ -420,7 +396,7 @@ async fn sync_ingredients() {
     );
 
     // Re-request Macro chain one final time. This time it must return neither epochs, nor a checkpoint.
-    let macro_chain = HistorySync::request_macro_chain(
+    let macro_chain = HistoryMacroSync::request_macro_chain(
         Arc::clone(&net2),
         peer_id,
         vec![consensus1.blockchain.read().macro_head_hash()],

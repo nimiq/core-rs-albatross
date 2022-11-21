@@ -23,7 +23,7 @@ use nimiq_block::{Block, BlockType, SignedTendermintProposal};
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainEvent, ForkEvent, PushResult};
 use nimiq_bls::KeyPair as BlsKeyPair;
-use nimiq_consensus::sync::follow::block_queue::BlockTopic;
+use nimiq_consensus::sync::live::block_queue::BlockTopic;
 use nimiq_consensus::{Consensus, ConsensusEvent, ConsensusProxy};
 use nimiq_database::{Database, Environment, ReadTransaction, WriteTransaction};
 use nimiq_hash::{Blake2bHash, Hash};

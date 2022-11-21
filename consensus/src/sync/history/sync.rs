@@ -39,7 +39,7 @@ pub(crate) enum Job<TNetwork: Network> {
     FinishCluster(SyncCluster<TNetwork>, SyncClusterResult),
 }
 
-pub struct HistorySync<TNetwork: Network> {
+pub struct HistoryMacroSync<TNetwork: Network> {
     pub(crate) blockchain: Arc<RwLock<Blockchain>>,
     pub(crate) network: Arc<TNetwork>,
     pub(crate) network_event_rx: SubscribeEvents<TNetwork::PeerId>,
@@ -53,7 +53,7 @@ pub struct HistorySync<TNetwork: Network> {
     pub(crate) waker: Option<Waker>,
 }
 
-impl<TNetwork: Network> HistorySync<TNetwork> {
+impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
     pub(crate) const MAX_CLUSTERS: usize = 100;
     pub(crate) const MAX_QUEUED_JOBS: usize = 4;
 
@@ -98,7 +98,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
     }
 }
 
-impl<TNetwork: Network> MacroSync<TNetwork::PeerId> for HistorySync<TNetwork> {
+impl<TNetwork: Network> MacroSync<TNetwork::PeerId> for HistoryMacroSync<TNetwork> {
     fn add_peer(&self, peer_id: TNetwork::PeerId) {
         debug!("Requesting epoch ids for peer: {:?}", peer_id);
         let future = Self::request_epoch_ids(

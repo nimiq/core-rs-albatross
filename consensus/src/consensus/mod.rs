@@ -24,10 +24,11 @@ use crate::messages::{
 };
 
 use crate::consensus::head_requests::{HeadRequests, HeadRequestsResult};
-use crate::sync::follow::block_queue::{BlockQueue, BlockQueueConfig};
-use crate::sync::follow::request_component::BlockRequestComponent;
-use crate::sync::follow::FollowMode;
-use crate::sync::syncer::{LiveSyncPushEvent, MacroSync, Syncer};
+use crate::sync::history::HistoryMacroSync;
+use crate::sync::live::block_queue::{BlockQueue, BlockQueueConfig};
+use crate::sync::live::request_component::BlockRequestComponent;
+use crate::sync::live::BlockLiveSync;
+use crate::sync::syncer::{LiveSyncPushEvent, Syncer};
 
 use self::consensus_proxy::ConsensusProxy;
 
@@ -45,7 +46,7 @@ pub struct Consensus<N: Network> {
     pub network: Arc<N>,
     pub env: Environment,
 
-    sync: Syncer<N, BlockRequestComponent<N>>,
+    sync: Syncer<N, HistoryMacroSync<N>, BlockLiveSync<N, BlockRequestComponent<N>>>,
 
     /// A Delay which exists purely for the waker on its poll to reactivate the task running Consensus::poll
     /// FIXME Remove this
@@ -82,7 +83,7 @@ impl<N: Network> Consensus<N> {
         env: Environment,
         blockchain: BlockchainProxy,
         network: Arc<N>,
-        sync_protocol: Pin<Box<dyn MacroSync<N::PeerId>>>,
+        sync_protocol: HistoryMacroSync<N>,
         zkp_proxy: ZKPComponentProxy<N>,
         bls_cache: Arc<Mutex<PublicKeyCache>>,
     ) -> Self {
@@ -102,7 +103,7 @@ impl<N: Network> Consensus<N> {
         env: Environment,
         blockchain: BlockchainProxy,
         network: Arc<N>,
-        sync_protocol: Pin<Box<dyn MacroSync<N::PeerId>>>,
+        sync_protocol: HistoryMacroSync<N>,
         min_peers: usize,
         zkp_proxy: ZKPComponentProxy<N>,
         bls_cache: Arc<Mutex<PublicKeyCache>>,
@@ -118,20 +119,14 @@ impl<N: Network> Consensus<N> {
         )
         .await;
 
-        let live_sync = FollowMode::new(
+        let live_sync = BlockLiveSync::new(
             blockchain.clone(),
             Arc::clone(&network),
             block_queue,
             bls_cache,
         );
 
-        let syncer = Syncer::new(
-            blockchain.clone(),
-            Arc::clone(&network),
-            live_sync,
-            sync_protocol,
-        )
-        .await;
+        let syncer = Syncer::new(live_sync, sync_protocol);
 
         Self::new(env, blockchain, network, syncer, min_peers, zkp_proxy)
     }
@@ -140,7 +135,7 @@ impl<N: Network> Consensus<N> {
         env: Environment,
         blockchain: BlockchainProxy,
         network: Arc<N>,
-        syncer: Syncer<N, BlockRequestComponent<N>>,
+        syncer: Syncer<N, HistoryMacroSync<N>, BlockLiveSync<N, BlockRequestComponent<N>>>,
         min_peers: usize,
         zkp_proxy: ZKPComponentProxy<N>,
     ) -> Self {

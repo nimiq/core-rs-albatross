@@ -12,10 +12,10 @@ use nimiq_network_interface::network::{Network, NetworkEvent};
 
 use crate::sync::history::cluster::{SyncCluster, SyncClusterResult};
 use crate::sync::history::sync::Job;
-use crate::sync::history::HistorySync;
+use crate::sync::history::HistoryMacroSync;
 use crate::sync::syncer::{MacroSync, MacroSyncReturn};
 
-impl<TNetwork: Network> HistorySync<TNetwork> {
+impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
     fn poll_network_events(
         &mut self,
         cx: &mut Context<'_>,
@@ -212,7 +212,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
     }
 }
 
-impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
+impl<TNetwork: Network> Stream for HistoryMacroSync<TNetwork> {
     type Item = MacroSyncReturn<TNetwork::PeerId>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
@@ -255,7 +255,7 @@ mod tests {
     use nimiq_utils::time::OffsetTime;
 
     use crate::messages::{RequestBatchSet, RequestHistoryChunk, RequestMacroChain};
-    use crate::sync::{history::HistorySync, syncer::MacroSyncReturn};
+    use crate::sync::{history::HistoryMacroSync, syncer::MacroSyncReturn};
 
     fn blockchain() -> Arc<RwLock<Blockchain>> {
         let time = Arc::new(OffsetTime::new());
@@ -332,7 +332,7 @@ mod tests {
         let net2 = Arc::new(hub.new_network());
 
         let chain = blockchain();
-        let mut sync = HistorySync::<MockNetwork>::new(
+        let mut sync = HistoryMacroSync::<MockNetwork>::new(
             Arc::clone(&chain),
             Arc::clone(&net1),
             net1.subscribe_events(),
@@ -368,7 +368,7 @@ mod tests {
         );
         assert_eq!(chain2.read().block_number(), Policy::blocks_per_epoch());
 
-        let mut sync = HistorySync::<MockNetwork>::new(
+        let mut sync = HistoryMacroSync::<MockNetwork>::new(
             Arc::clone(&chain1),
             Arc::clone(&net1),
             net1.subscribe_events(),
@@ -408,7 +408,7 @@ mod tests {
             num_epochs as u32 * Policy::blocks_per_epoch()
         );
 
-        let mut sync = HistorySync::<MockNetwork>::new(
+        let mut sync = HistoryMacroSync::<MockNetwork>::new(
             Arc::clone(&chain1),
             Arc::clone(&net1),
             net1.subscribe_events(),
@@ -438,7 +438,7 @@ mod tests {
         produce_macro_blocks_with_txns(&producer, &chain2, 1, 1, 0);
         assert_eq!(chain2.read().block_number(), Policy::blocks_per_batch());
 
-        let mut sync = HistorySync::<MockNetwork>::new(
+        let mut sync = HistoryMacroSync::<MockNetwork>::new(
             Arc::clone(&chain1),
             Arc::clone(&net1),
             net1.subscribe_events(),
@@ -472,7 +472,7 @@ mod tests {
             num_batches as u32 * Policy::blocks_per_batch()
         );
 
-        let mut sync = HistorySync::<MockNetwork>::new(
+        let mut sync = HistoryMacroSync::<MockNetwork>::new(
             Arc::clone(&chain1),
             Arc::clone(&net1),
             net1.subscribe_events(),
@@ -510,7 +510,7 @@ mod tests {
         copy_chain_with_limit(&*chain2, &*chain1, num_blocks as usize);
         assert_eq!(chain1.read().block_number(), num_blocks);
 
-        let mut sync = HistorySync::<MockNetwork>::new(
+        let mut sync = HistoryMacroSync::<MockNetwork>::new(
             Arc::clone(&chain1),
             Arc::clone(&net1),
             net1.subscribe_events(),
@@ -552,7 +552,7 @@ mod tests {
         produce_macro_blocks_with_txns(&producer, &chain4, 1, 1, 0);
         assert_eq!(chain4.read().block_number(), 3 * Policy::blocks_per_batch());
 
-        let mut sync = HistorySync::<MockNetwork>::new(
+        let mut sync = HistoryMacroSync::<MockNetwork>::new(
             Arc::clone(&chain1),
             Arc::clone(&net1),
             net1.subscribe_events(),
@@ -583,7 +583,7 @@ mod tests {
     }
 
     struct DisconnectDuringSyncStream {
-        pub sync: HistorySync<MockNetwork>,
+        pub sync: HistoryMacroSync<MockNetwork>,
         pub net_sync: Arc<MockNetwork>,
         pub net_disconnect: Arc<MockNetwork>,
         pub chain_sync: Arc<RwLock<Blockchain>>,
@@ -615,7 +615,7 @@ mod tests {
             );
             copy_chain(&chain_up2date, &chain_disconnect);
 
-            let sync = HistorySync::<MockNetwork>::new(
+            let sync = HistoryMacroSync::<MockNetwork>::new(
                 Arc::clone(&chain_sync),
                 Arc::clone(&net_sync),
                 net_sync.subscribe_events(),

@@ -8,7 +8,7 @@ use std::{
 use futures::stream::BoxStream;
 use futures::{Stream, StreamExt};
 
-use crate::sync::follow::request_component::RequestComponentEvent;
+use crate::sync::live::request_component::RequestComponentEvent;
 use nimiq_block::Block;
 use nimiq_blockchain::{AbstractBlockchain, Direction};
 use nimiq_blockchain_proxy::BlockchainProxy;

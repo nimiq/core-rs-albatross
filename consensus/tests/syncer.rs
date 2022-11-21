@@ -17,9 +17,9 @@ use tokio_stream::wrappers::ReceiverStream;
 use nimiq_block::Block;
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, Direction};
-use nimiq_consensus::sync::follow::block_queue::{BlockQueue, BlockQueueConfig};
-use nimiq_consensus::sync::follow::request_component::{RequestComponent, RequestComponentEvent};
-use nimiq_consensus::sync::follow::FollowMode;
+use nimiq_consensus::sync::live::block_queue::{BlockQueue, BlockQueueConfig};
+use nimiq_consensus::sync::live::request_component::{RequestComponent, RequestComponentEvent};
+use nimiq_consensus::sync::live::BlockLiveSync;
 use nimiq_consensus::sync::syncer::{MacroSync, MacroSyncReturn, Syncer};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_hash::Blake2bHash;
@@ -75,8 +75,8 @@ struct MockHistorySyncStream {
 }
 
 impl MockHistorySyncStream {
-    pub fn new_pinned() -> Pin<Box<MockHistorySyncStream>> {
-        Pin::new(Box::new(Default::default()))
+    pub fn new() -> MockHistorySyncStream {
+        Default::default()
     }
 }
 
@@ -170,20 +170,14 @@ async fn send_single_micro_block_to_block_queue() {
         BlockQueueConfig::default(),
     );
 
-    let live_sync = FollowMode::new(
+    let live_sync = BlockLiveSync::new(
         blockchain_proxy.clone(),
         Arc::clone(&network),
         block_queue,
         bls_cache(),
     );
 
-    let mut syncer = Syncer::new(
-        blockchain_proxy,
-        Arc::clone(&network),
-        live_sync,
-        MockHistorySyncStream::new_pinned(),
-    )
-    .await;
+    let mut syncer = Syncer::new(live_sync, MockHistorySyncStream::new());
 
     // push one micro block to the queue
     let producer = BlockProducer::new(signing_key(), voting_key());
@@ -226,20 +220,14 @@ async fn send_two_micro_blocks_out_of_order() {
         BlockQueueConfig::default(),
     );
 
-    let live_sync = FollowMode::new(
+    let live_sync = BlockLiveSync::new(
         blockchain_proxy_1.clone(),
         Arc::clone(&network),
         block_queue,
         bls_cache(),
     );
 
-    let mut syncer = Syncer::new(
-        blockchain_proxy_1,
-        Arc::clone(&network),
-        live_sync,
-        MockHistorySyncStream::new_pinned(),
-    )
-    .await;
+    let mut syncer = Syncer::new(live_sync, MockHistorySyncStream::new());
 
     let producer = BlockProducer::new(signing_key(), voting_key());
     let block1 = push_micro_block(&producer, &blockchain2);
@@ -318,20 +306,14 @@ async fn send_micro_blocks_out_of_order() {
         BlockQueueConfig::default(),
     );
 
-    let live_sync = FollowMode::new(
+    let live_sync = BlockLiveSync::new(
         blockchain_proxy_1.clone(),
         Arc::clone(&network),
         block_queue,
         bls_cache(),
     );
 
-    let mut syncer = Syncer::new(
-        blockchain_proxy_1,
-        Arc::clone(&network),
-        live_sync,
-        MockHistorySyncStream::new_pinned(),
-    )
-    .await;
+    let mut syncer = Syncer::new(live_sync, MockHistorySyncStream::new());
 
     let mut rng = rand::thread_rng();
     let mut ordered_blocks = Vec::new();
@@ -414,20 +396,14 @@ async fn send_invalid_block() {
         BlockQueueConfig::default(),
     );
 
-    let live_sync = FollowMode::new(
+    let live_sync = BlockLiveSync::new(
         blockchain_proxy_1.clone(),
         Arc::clone(&network),
         block_queue,
         bls_cache(),
     );
 
-    let mut syncer = Syncer::new(
-        blockchain_proxy_1,
-        Arc::clone(&network),
-        live_sync,
-        MockHistorySyncStream::new_pinned(),
-    )
-    .await;
+    let mut syncer = Syncer::new(live_sync, MockHistorySyncStream::new());
 
     let producer = BlockProducer::new(signing_key(), voting_key());
     let block1 = push_micro_block(&producer, &blockchain2);
@@ -513,20 +489,14 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
         BlockQueueConfig::default(),
     );
 
-    let live_sync = FollowMode::new(
+    let live_sync = BlockLiveSync::new(
         blockchain_proxy_1.clone(),
         Arc::clone(&network),
         block_queue,
         bls_cache(),
     );
 
-    let mut syncer = Syncer::new(
-        blockchain_proxy_1,
-        Arc::clone(&network),
-        live_sync,
-        MockHistorySyncStream::new_pinned(),
-    )
-    .await;
+    let mut syncer = Syncer::new(live_sync, MockHistorySyncStream::new());
 
     let producer = BlockProducer::new(signing_key(), voting_key());
     let block1 = push_micro_block(&producer, &blockchain2);
@@ -606,20 +576,14 @@ async fn request_missing_blocks_across_macro_block() {
         BlockQueueConfig::default(),
     );
 
-    let live_sync = FollowMode::new(
+    let live_sync = BlockLiveSync::new(
         blockchain_proxy_1.clone(),
         Arc::clone(&network),
         block_queue,
         bls_cache(),
     );
 
-    let mut syncer = Syncer::new(
-        blockchain_proxy_1,
-        Arc::clone(&network),
-        live_sync,
-        MockHistorySyncStream::new_pinned(),
-    )
-    .await;
+    let mut syncer = Syncer::new(live_sync, MockHistorySyncStream::new());
 
     let producer = BlockProducer::new(signing_key(), voting_key());
     produce_macro_blocks(&producer, &blockchain2, 1);
@@ -737,7 +701,7 @@ async fn put_peer_back_into_sync_mode() {
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network_with_address(1));
     let request_component = MockRequestComponent::new();
-    let history_sync = MockHistorySyncStream::new_pinned();
+    let history_sync = MockHistorySyncStream::new();
     let history_sync_peers = history_sync.peers.clone();
     let (block_tx, block_rx) = mpsc::channel(32);
 
@@ -757,20 +721,14 @@ async fn put_peer_back_into_sync_mode() {
         },
     );
 
-    let live_sync = FollowMode::new(
+    let live_sync = BlockLiveSync::new(
         blockchain_proxy_1.clone(),
         Arc::clone(&network),
         block_queue,
         bls_cache(),
     );
 
-    let mut syncer = Syncer::new(
-        blockchain_proxy_1,
-        Arc::clone(&network),
-        live_sync,
-        history_sync,
-    )
-    .await;
+    let mut syncer = Syncer::new(live_sync, history_sync);
 
     syncer.live_sync.request_component_mut().add_peer(peer_addr);
 

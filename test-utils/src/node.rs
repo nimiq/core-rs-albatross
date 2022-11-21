@@ -1,5 +1,4 @@
 use std::path::PathBuf;
-use std::pin::Pin;
 use std::sync::Arc;
 
 use nimiq_bls::cache::PublicKeyCache;
@@ -7,7 +6,7 @@ use parking_lot::{Mutex, RwLock};
 
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
-use nimiq_consensus::sync::history::HistorySync;
+use nimiq_consensus::sync::history::HistoryMacroSync;
 use nimiq_consensus::Consensus as AbstractConsensus;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis_builder::GenesisInfo;
@@ -59,11 +58,11 @@ impl<N: NetworkInterface + TestNetwork> Node<N> {
         )
         .await;
 
-        let sync_protocol = Pin::new(Box::new(HistorySync::<N>::new(
+        let sync_protocol = HistoryMacroSync::<N>::new(
             Arc::clone(&blockchain),
             Arc::clone(&network),
             network.subscribe_events(),
-        )));
+        );
         let consensus = AbstractConsensus::<N>::with_min_peers(
             env,
             BlockchainProxy::Full(Arc::clone(&blockchain)),

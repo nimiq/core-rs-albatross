@@ -11,11 +11,11 @@ use nimiq_primitives::policy::Policy;
 use crate::messages::{MacroChain, RequestMacroChain};
 use crate::sync::history::cluster::{SyncCluster, SyncClusterResult};
 use crate::sync::history::sync::{EpochIds, Job};
-use crate::sync::history::HistorySync;
+use crate::sync::history::HistoryMacroSync;
 use crate::sync::sync_queue::SyncQueuePeer;
 use crate::sync::syncer::MacroSync;
 
-impl<TNetwork: Network> HistorySync<TNetwork> {
+impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
     pub(crate) async fn request_epoch_ids(
         blockchain: Arc<RwLock<Blockchain>>,
         network: Arc<TNetwork>,
@@ -404,8 +404,10 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
     }
 
     pub(crate) fn pop_next_cluster(&mut self) -> Option<SyncCluster<TNetwork>> {
-        let cluster =
-            HistorySync::<TNetwork>::find_best_cluster(&mut self.epoch_clusters, &self.blockchain);
+        let cluster = HistoryMacroSync::<TNetwork>::find_best_cluster(
+            &mut self.epoch_clusters,
+            &self.blockchain,
+        );
 
         // If we made space in epoch_clusters, wake the task.
         if cluster.is_some() {
@@ -415,7 +417,10 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
             return cluster;
         }
 
-        HistorySync::<TNetwork>::find_best_cluster(&mut self.checkpoint_clusters, &self.blockchain)
+        HistoryMacroSync::<TNetwork>::find_best_cluster(
+            &mut self.checkpoint_clusters,
+            &self.blockchain,
+        )
     }
 
     fn find_best_cluster(
@@ -560,7 +565,7 @@ mod tests {
 
     use crate::messages::Checkpoint;
     use crate::sync::history::sync::EpochIds;
-    use crate::sync::history::HistorySync;
+    use crate::sync::history::HistoryMacroSync;
 
     fn generate_epoch_ids(
         sender: MockPeerId,
@@ -619,9 +624,9 @@ mod tests {
         test: F,
         symmetric: bool,
     ) where
-        F: Fn(HistorySync<MockNetwork>),
+        F: Fn(HistoryMacroSync<MockNetwork>),
     {
-        let mut sync = HistorySync::<MockNetwork>::new(
+        let mut sync = HistoryMacroSync::<MockNetwork>::new(
             Arc::clone(blockchain),
             Arc::clone(net),
             net.subscribe_events(),
@@ -632,7 +637,7 @@ mod tests {
 
         // Symmetric check
         if symmetric {
-            let mut sync = HistorySync::<MockNetwork>::new(
+            let mut sync = HistoryMacroSync::<MockNetwork>::new(
                 Arc::clone(blockchain),
                 Arc::clone(net),
                 net.subscribe_events(),
@@ -1010,7 +1015,7 @@ mod tests {
         let net4 = Arc::new(hub.new_network());
 
         // Three identical chains, second one is shorter.
-        let mut sync = HistorySync::<MockNetwork>::new(
+        let mut sync = HistoryMacroSync::<MockNetwork>::new(
             Arc::clone(&blockchain),
             Arc::clone(&net1),
             net1.subscribe_events(),
@@ -1033,8 +1038,11 @@ mod tests {
         assert_eq!(sync.epoch_clusters[1].batch_set_queue.peers.len(), 2);
 
         // Three identical chains, different lengths and offsets.
-        let mut sync =
-            HistorySync::<MockNetwork>::new(blockchain, Arc::clone(&net1), net1.subscribe_events());
+        let mut sync = HistoryMacroSync::<MockNetwork>::new(
+            blockchain,
+            Arc::clone(&net1),
+            net1.subscribe_events(),
+        );
 
         let epoch_ids1 = generate_epoch_ids(net2.peer_id(), 10, 1, None, false);
         let epoch_ids2 = generate_epoch_ids(net3.peer_id(), 5, 2, None, false);

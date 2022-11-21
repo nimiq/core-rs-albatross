@@ -1,14 +1,9 @@
-use crate::sync::follow::request_component::RequestComponent;
-use crate::sync::follow::FollowMode;
 use futures::{Stream, StreamExt};
 use nimiq_block::Block;
-use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::network::Network;
-use pin_project::pin_project;
 use std::collections::{HashMap, HashSet};
 use std::pin::Pin;
-use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 
@@ -86,7 +81,6 @@ pub enum LiveSyncPeerEvent<TPeerId> {
     AdvancedPeer(TPeerId),
 }
 
-#[pin_project]
 /// Syncer is the main synchronization object inside `Consensus`
 /// It has a reference to the main blockchain and network and has two dynamic
 /// trait objects:
@@ -97,20 +91,12 @@ pub enum LiveSyncPeerEvent<TPeerId> {
 /// synchronization such as: history sync, full sync and light sync.
 /// The Syncer handles the interactions between these trait objects, the blockchain and
 /// the network.
-pub struct Syncer<N: Network, TReq: RequestComponent<N>> {
-    /// Reference to the blockchain
-    blockchain: BlockchainProxy,
+pub struct Syncer<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> {
+    /// Synchronizes the blockchain to the blocks being processed/announced by the peers
+    pub live_sync: L,
 
-    /// Reference to the network
-    network: Arc<N>,
-
-    #[pin]
-    /// Dynamic trait object that synchronizes the blockchain to the blocks being processed/announced
-    /// by the peers
-    pub live_sync: FollowMode<N, TReq>,
-
-    /// Dynamic trait object that synchronizes the blockchain to the latest macro blocks of the peers
-    macro_sync: Pin<Box<dyn MacroSync<N::PeerId>>>,
+    /// Synchronizes the blockchain to the latest macro blocks of the peers
+    macro_sync: M,
 
     /// The number of extended blocks through announcements
     accepted_announcements: usize,
@@ -123,18 +109,12 @@ pub struct Syncer<N: Network, TReq: RequestComponent<N>> {
     outdated_timeouts: HashMap<N::PeerId, Instant>,
 }
 
-impl<N: Network, TReq: RequestComponent<N>> Syncer<N, TReq> {
+//livesync and
+impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Syncer<N, M, L> {
     const CHECK_OUTDATED_TIMEOUT: Duration = Duration::from_secs(20);
 
-    pub async fn new(
-        blockchain: BlockchainProxy,
-        network: Arc<N>,
-        live_sync: FollowMode<N, TReq>,
-        macro_sync: Pin<Box<dyn MacroSync<N::PeerId>>>,
-    ) -> Syncer<N, TReq> {
+    pub fn new(live_sync: L, macro_sync: M) -> Syncer<N, M, L> {
         Syncer {
-            blockchain,
-            network,
             live_sync,
             macro_sync,
             accepted_announcements: 0,
@@ -170,7 +150,7 @@ impl<N: Network, TReq: RequestComponent<N>> Syncer<N, TReq> {
     }
 }
 
-impl<N: Network, TReq: RequestComponent<N>> Stream for Syncer<N, TReq> {
+impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Stream for Syncer<N, M, L> {
     type Item = LiveSyncPushEvent;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
@@ -194,14 +174,14 @@ impl<N: Network, TReq: RequestComponent<N>> Stream for Syncer<N, TReq> {
 
         self.check_peers_up_to_date();
 
-        while let Poll::Ready(Some(result)) = self.as_mut().project().live_sync.poll_next(cx) {
+        while let Poll::Ready(Some(result)) = self.live_sync.poll_next_unpin(cx) {
             match result {
                 LiveSyncEvent::PushEvent(push_event) => {
                     return Poll::Ready(Some(push_event));
                 }
                 LiveSyncEvent::PeerEvent(peer_event) => match peer_event {
                     LiveSyncPeerEvent::OutdatedPeer(peer_id) => {
-                        self.as_mut().project().outdated_peers.insert(peer_id);
+                        self.outdated_peers.insert(peer_id);
                     }
                     LiveSyncPeerEvent::AdvancedPeer(peer_id) => {
                         self.move_peer_into_history_sync(peer_id);
@@ -214,7 +194,7 @@ impl<N: Network, TReq: RequestComponent<N>> Stream for Syncer<N, TReq> {
     }
 }
 
-impl<N: Network, TReq: RequestComponent<N>> Syncer<N, TReq> {
+impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Syncer<N, M, L> {
     /// Adds all outdated peers that were checked more than TIMEOUT ago to macro sync
     fn check_peers_up_to_date(&mut self) {
         let mut peers_todo = Vec::new();
