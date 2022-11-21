@@ -323,6 +323,7 @@ impl<N: Network, TReq: RequestComponent<N>> Inner<N, TReq> {
                         BlockchainProxy::Full(blockchain) => {
                             Blockchain::push(blockchain.upgradable_read(), block)
                         }
+                        BlockchainProxy::Light(_) => todo!(),
                     }
                 })
                 .await
@@ -375,6 +376,7 @@ impl<N: Network, TReq: RequestComponent<N>> Inner<N, TReq> {
                     BlockchainProxy::Full(blockchain) => {
                         Blockchain::push(blockchain.upgradable_read(), block)
                     }
+                    BlockchainProxy::Light(_) => todo!(),
                 }
             })
             .await

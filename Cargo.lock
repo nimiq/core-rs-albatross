@@ -2581,6 +2581,7 @@ dependencies = [
  "nimiq-database",
  "nimiq-genesis",
  "nimiq-hash",
+ "nimiq-nano-blockchain",
  "nimiq-primitives",
  "nimiq-transaction",
  "parking_lot 0.12.0",

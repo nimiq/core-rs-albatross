@@ -176,6 +176,7 @@ impl<N: Network> Consensus<N> {
                 let stream = network.receive_requests::<RequestHead>();
                 tokio::spawn(request_handler(network, stream, blockchain));
             }
+            BlockchainProxy::Light(_) => todo!(),
         }
     }
 
