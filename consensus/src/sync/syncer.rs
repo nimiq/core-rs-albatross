@@ -1,11 +1,13 @@
-use futures::{Stream, StreamExt};
-use nimiq_block::Block;
-use nimiq_hash::Blake2bHash;
-use nimiq_network_interface::network::Network;
 use std::collections::{HashMap, HashSet};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
+
+use futures::{Stream, StreamExt};
+
+use nimiq_block::Block;
+use nimiq_hash::Blake2bHash;
+use nimiq_network_interface::network::Network;
 
 /// Trait that defines how a node synchronizes macro blocks
 /// The expected functionality is that there could be different methods of syncing but they
@@ -109,7 +111,6 @@ pub struct Syncer<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> {
     outdated_timeouts: HashMap<N::PeerId, Instant>,
 }
 
-//livesync and
 impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Syncer<N, M, L> {
     const CHECK_OUTDATED_TIMEOUT: Duration = Duration::from_secs(20);
 

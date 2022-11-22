@@ -7,8 +7,6 @@ use std::time::{Duration, Instant};
 
 use futures::{FutureExt, StreamExt};
 use nimiq_blockchain_proxy::BlockchainProxy;
-use nimiq_bls::cache::PublicKeyCache;
-use parking_lot::Mutex;
 use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
 use tokio::time::Sleep;
 use tokio_stream::wrappers::BroadcastStream;
@@ -18,17 +16,12 @@ use nimiq_database::Environment;
 use nimiq_network_interface::{network::Network, request::request_handler};
 use nimiq_zkp_component::zkp_component::ZKPComponentProxy;
 
+use crate::consensus::head_requests::{HeadRequests, HeadRequestsResult};
 use crate::messages::{
     RequestBatchSet, RequestBlock, RequestHead, RequestHistoryChunk, RequestMacroChain,
     RequestMissingBlocks,
 };
-
-use crate::consensus::head_requests::{HeadRequests, HeadRequestsResult};
-use crate::sync::history::HistoryMacroSync;
-use crate::sync::live::block_queue::{BlockQueue, BlockQueueConfig};
-use crate::sync::live::request_component::BlockRequestComponent;
-use crate::sync::live::BlockLiveSync;
-use crate::sync::syncer::{LiveSyncPushEvent, Syncer};
+use crate::sync::{syncer::LiveSyncPushEvent, syncer_proxy::SyncerProxy};
 
 use self::consensus_proxy::ConsensusProxy;
 
@@ -46,7 +39,7 @@ pub struct Consensus<N: Network> {
     pub network: Arc<N>,
     pub env: Environment,
 
-    sync: Syncer<N, HistoryMacroSync<N>, BlockLiveSync<N, BlockRequestComponent<N>>>,
+    sync: SyncerProxy<N>,
 
     /// A Delay which exists purely for the waker on its poll to reactivate the task running Consensus::poll
     /// FIXME Remove this
@@ -79,63 +72,28 @@ impl<N: Network> Consensus<N> {
     /// FIXME Remove this
     const CONSENSUS_POLL_TIMER: Duration = Duration::from_secs(1);
 
-    pub async fn from_network(
+    pub fn from_network(
         env: Environment,
         blockchain: BlockchainProxy,
         network: Arc<N>,
-        sync_protocol: HistoryMacroSync<N>,
+        syncer: SyncerProxy<N>,
         zkp_proxy: ZKPComponentProxy<N>,
-        bls_cache: Arc<Mutex<PublicKeyCache>>,
     ) -> Self {
-        Self::with_min_peers(
+        Self::new(
             env,
             blockchain,
             network,
-            sync_protocol,
+            syncer,
             Self::MIN_PEERS_ESTABLISHED,
             zkp_proxy,
-            bls_cache,
         )
-        .await
-    }
-
-    pub async fn with_min_peers(
-        env: Environment,
-        blockchain: BlockchainProxy,
-        network: Arc<N>,
-        sync_protocol: HistoryMacroSync<N>,
-        min_peers: usize,
-        zkp_proxy: ZKPComponentProxy<N>,
-        bls_cache: Arc<Mutex<PublicKeyCache>>,
-    ) -> Self {
-        let request_component =
-            BlockRequestComponent::new(network.subscribe_events(), Arc::clone(&network));
-
-        let block_queue = BlockQueue::new(
-            Arc::clone(&network),
-            blockchain.clone(),
-            request_component,
-            BlockQueueConfig::default(),
-        )
-        .await;
-
-        let live_sync = BlockLiveSync::new(
-            blockchain.clone(),
-            Arc::clone(&network),
-            block_queue,
-            bls_cache,
-        );
-
-        let syncer = Syncer::new(live_sync, sync_protocol);
-
-        Self::new(env, blockchain, network, syncer, min_peers, zkp_proxy)
     }
 
     pub fn new(
         env: Environment,
         blockchain: BlockchainProxy,
         network: Arc<N>,
-        syncer: Syncer<N, HistoryMacroSync<N>, BlockLiveSync<N, BlockRequestComponent<N>>>,
+        syncer: SyncerProxy<N>,
         min_peers: usize,
         zkp_proxy: ZKPComponentProxy<N>,
     ) -> Self {

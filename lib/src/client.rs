@@ -10,7 +10,7 @@ use nimiq_block::Block;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 
 use nimiq_consensus::{
-    sync::history::HistoryMacroSync, Consensus as AbstractConsensus,
+    sync::syncer_proxy::SyncerProxy, Consensus as AbstractConsensus,
     ConsensusProxy as AbstractConsensusProxy,
 };
 use nimiq_database::Environment;
@@ -191,21 +191,22 @@ impl ClientInner {
         let bls_cache = Arc::new(Mutex::new(PublicKeyCache::new(
             Policy::BLS_CACHE_MAX_CAPACITY,
         )));
-        let sync = HistoryMacroSync::<Network>::new(
-            Arc::clone(&blockchain),
+        let blockchain_proxy = BlockchainProxy::Full(Arc::clone(&blockchain));
+        let syncer = SyncerProxy::new_history(
+            blockchain_proxy.clone(),
             Arc::clone(&network),
-            network_events,
-        );
-        let consensus = Consensus::with_min_peers(
-            environment.clone(),
-            BlockchainProxy::Full(Arc::clone(&blockchain)),
-            Arc::clone(&network),
-            sync,
-            config.consensus.min_peers,
-            zkp_component.proxy(),
             bls_cache,
+            network_events,
         )
         .await;
+        let consensus = Consensus::new(
+            environment.clone(),
+            blockchain_proxy.clone(),
+            Arc::clone(&network),
+            syncer,
+            config.consensus.min_peers,
+            zkp_component.proxy(),
+        );
 
         #[cfg(feature = "validator")]
         let (validator, validator_proxy) = match config.validator {

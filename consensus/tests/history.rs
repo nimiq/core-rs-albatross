@@ -5,6 +5,7 @@ use std::time::Duration;
 use futures::StreamExt;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
+use nimiq_consensus::sync::syncer_proxy::SyncerProxy;
 use nimiq_test_log::test;
 use nimiq_test_utils::node::TESTING_BLS_CACHE_MAX_CAPACITY;
 use nimiq_test_utils::zkp_test_data::{zkp_test_exe, KEYS_PATH};
@@ -48,13 +49,19 @@ async fn peers_can_sync() {
     // Produce the blocks.
     produce_macro_blocks(&producer, &blockchain1, num_macro_blocks);
 
-    let net1 = TestNetwork::build_network(0, Default::default(), &mut Some(hub)).await;
+    let net1: Arc<Network> =
+        TestNetwork::build_network(0, Default::default(), &mut Some(hub)).await;
     networks.push(Arc::clone(&net1));
-    let sync1 = HistoryMacroSync::<Network>::new(
-        Arc::clone(&blockchain1),
+    let blockchain1_proxy = BlockchainProxy::from(&blockchain1);
+    let syncer1 = SyncerProxy::new_history(
+        blockchain1_proxy.clone(),
         Arc::clone(&net1),
+        Arc::new(Mutex::new(PublicKeyCache::new(
+            TESTING_BLS_CACHE_MAX_CAPACITY,
+        ))),
         net1.subscribe_events(),
-    );
+    )
+    .await;
     let zkp_prover1 = ZKPComponent::new(
         BlockchainProxy::from(&blockchain1),
         Arc::clone(&net1),
@@ -69,13 +76,9 @@ async fn peers_can_sync() {
         env1,
         BlockchainProxy::from(&blockchain1),
         Arc::clone(&net1),
-        sync1,
+        syncer1,
         zkp_prover1,
-        Arc::new(Mutex::new(PublicKeyCache::new(
-            TESTING_BLS_CACHE_MAX_CAPACITY,
-        ))),
-    )
-    .await;
+    );
 
     // Setup second peer (not synced yet).
     let time = Arc::new(OffsetTime::new());
@@ -84,14 +87,27 @@ async fn peers_can_sync() {
         Blockchain::new(env2.clone(), NetworkId::UnitAlbatross, time).unwrap(),
     ));
 
-    let net2 =
+    let blockchain2_proxy = BlockchainProxy::from(&blockchain2);
+    let net2: Arc<Network> =
         TestNetwork::build_network(1, Default::default(), &mut Some(MockHub::default())).await;
     networks.push(Arc::clone(&net2));
-    let mut sync2 = HistoryMacroSync::<Network>::new(
+
+    let mut macro_sync = HistoryMacroSync::new(
         Arc::clone(&blockchain2),
         Arc::clone(&net2),
         net2.subscribe_events(),
     );
+
+    let syncer2 = SyncerProxy::new_history(
+        blockchain2_proxy.clone(),
+        Arc::clone(&net2),
+        Arc::new(Mutex::new(PublicKeyCache::new(
+            TESTING_BLS_CACHE_MAX_CAPACITY,
+        ))),
+        net2.subscribe_events(),
+    )
+    .await;
+
     let zkp_prover2 = ZKPComponent::new(
         BlockchainProxy::from(&blockchain2),
         Arc::clone(&net2),
@@ -104,19 +120,15 @@ async fn peers_can_sync() {
     .proxy();
     let consensus2 = Consensus::from_network(
         env2,
-        BlockchainProxy::from(&blockchain2),
+        blockchain2_proxy.clone(),
         Arc::clone(&net2),
-        HistoryMacroSync::new(blockchain2, net2.clone(), net2.subscribe_events()),
+        syncer2,
         zkp_prover2,
-        Arc::new(Mutex::new(PublicKeyCache::new(
-            TESTING_BLS_CACHE_MAX_CAPACITY,
-        ))),
-    )
-    .await;
+    );
 
     Network::connect_networks(&networks, 1u64).await;
     tokio::time::sleep(Duration::from_secs(1)).await;
-    let sync_result = sync2.next().await;
+    let sync_result = macro_sync.next().await;
 
     assert!(sync_result.is_some());
     assert_eq!(
@@ -231,17 +243,23 @@ async fn sync_ingredients() {
     )
     .await
     .proxy();
-    let consensus1 = Consensus::from_network(
-        env1,
-        BlockchainProxy::from(&blockchain1),
+    let blockchain1_proxy = BlockchainProxy::from(&blockchain1);
+    let syncer1 = SyncerProxy::new_history(
+        blockchain1_proxy.clone(),
         Arc::clone(&net1),
-        HistoryMacroSync::new(blockchain1, net1.clone(), net1.subscribe_events()),
-        zkp_prover1,
         Arc::new(Mutex::new(PublicKeyCache::new(
             TESTING_BLS_CACHE_MAX_CAPACITY,
         ))),
+        net1.subscribe_events(),
     )
     .await;
+    let consensus1 = Consensus::from_network(
+        env1,
+        blockchain1_proxy.clone(),
+        Arc::clone(&net1),
+        syncer1,
+        zkp_prover1,
+    );
 
     // Setup second peer (not synced yet).
     let env2 = VolatileEnvironment::new(11).unwrap();
@@ -263,17 +281,24 @@ async fn sync_ingredients() {
     )
     .await
     .proxy();
-    let consensus2 = Consensus::from_network(
-        env2,
-        BlockchainProxy::from(&blockchain2),
+    let blockchain2_proxy = BlockchainProxy::from(&blockchain2);
+    let syncer2 = SyncerProxy::new_history(
+        blockchain2_proxy.clone(),
         Arc::clone(&net2),
-        HistoryMacroSync::new(blockchain2, net2.clone(), net2.subscribe_events()),
-        zkp_prover2,
         Arc::new(Mutex::new(PublicKeyCache::new(
             TESTING_BLS_CACHE_MAX_CAPACITY,
         ))),
+        net2.subscribe_events(),
     )
     .await;
+
+    let consensus2 = Consensus::from_network(
+        env2,
+        blockchain2_proxy.clone(),
+        Arc::clone(&net2),
+        syncer2,
+        zkp_prover2,
+    );
 
     // Connect the two peers.
     let mut stream = net2.subscribe_events();

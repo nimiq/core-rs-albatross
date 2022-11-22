@@ -6,8 +6,7 @@ use parking_lot::{Mutex, RwLock};
 
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
-use nimiq_consensus::sync::history::HistoryMacroSync;
-use nimiq_consensus::Consensus as AbstractConsensus;
+use nimiq_consensus::{sync::syncer_proxy::SyncerProxy, Consensus as AbstractConsensus};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis_builder::GenesisInfo;
 use nimiq_network_interface::network::Network as NetworkInterface;
@@ -58,23 +57,24 @@ impl<N: NetworkInterface + TestNetwork> Node<N> {
         )
         .await;
 
-        let sync_protocol = HistoryMacroSync::<N>::new(
-            Arc::clone(&blockchain),
+        let blockchain_proxy = BlockchainProxy::Full(Arc::clone(&blockchain));
+        let syncer = SyncerProxy::new_history(
+            blockchain_proxy.clone(),
             Arc::clone(&network),
-            network.subscribe_events(),
-        );
-        let consensus = AbstractConsensus::<N>::with_min_peers(
-            env,
-            BlockchainProxy::Full(Arc::clone(&blockchain)),
-            Arc::clone(&network),
-            sync_protocol,
-            1,
-            zkp_proxy.proxy(),
             Arc::new(Mutex::new(PublicKeyCache::new(
                 TESTING_BLS_CACHE_MAX_CAPACITY,
             ))),
+            network.subscribe_events(),
         )
         .await;
+        let consensus = AbstractConsensus::<N>::new(
+            env,
+            blockchain_proxy,
+            Arc::clone(&network),
+            syncer,
+            1,
+            zkp_proxy.proxy(),
+        );
 
         Node {
             network,
