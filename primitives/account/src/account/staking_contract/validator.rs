@@ -11,7 +11,7 @@ use crate::account::staking_contract::receipts::{
 use crate::account::staking_contract::store::{
     StakingContractStoreReadOps, StakingContractStoreReadOpsExt, StakingContractStoreWrite,
 };
-use crate::{account::staking_contract::StakingContract, Account};
+use crate::account::staking_contract::StakingContract;
 
 /// Struct representing a validator in the staking contract.
 /// Actions concerning a validator are:
@@ -107,14 +107,8 @@ impl StakingContract {
 
         // All checks passed, not allowed to fail from here on!
 
-        // Update our balance.
-        Account::balance_add_assign(&mut self.balance, deposit)?;
-
-        self.active_validators
-            .insert(validator_address.clone(), deposit);
-
-        // Create validator struct.
-        let validator = Validator {
+        // Initialize validator.
+        let mut validator = Validator {
             address: validator_address.clone(),
             signing_key,
             voting_key,
@@ -125,6 +119,21 @@ impl StakingContract {
             inactive_since: None,
             deposit,
         };
+
+        // If a tombstone exists for this validator, restore total_stake and num_stakers from it.
+        // Also delete the tombstone.
+        if let Some(tombstone) = store.get_tombstone(validator_address) {
+            validator.total_stake += tombstone.remaining_stake;
+            validator.num_stakers += tombstone.num_remaining_stakers;
+
+            store.remove_tombstone(validator_address);
+        }
+
+        // Update our balance.
+        self.balance += deposit;
+
+        self.active_validators
+            .insert(validator_address.clone(), deposit);
 
         // Create the validator entry.
         store.put_validator(validator_address, validator);
@@ -146,7 +155,7 @@ impl StakingContract {
 
         // Update our balance.
         assert_eq!(validator.deposit, deposit);
-        Account::balance_sub_assign(&mut self.balance, deposit)?;
+        self.balance -= deposit;
 
         self.active_validators.remove(validator_address);
 
@@ -369,7 +378,7 @@ impl StakingContract {
     /// Reverts an unpark transaction.
     pub fn revert_unpark_validator(
         &mut self,
-        store: &StakingContractStoreWrite,
+        _store: &StakingContractStoreWrite,
         validator_address: &Address,
         receipt: UnparkValidatorReceipt,
     ) -> Result<(), AccountError> {
@@ -431,11 +440,10 @@ impl StakingContract {
         // All checks passed, not allowed to fail from here on!
 
         // Update our balance.
-        Account::balance_sub_assign(&mut self.balance, validator.deposit)?;
+        self.balance -= validator.deposit;
 
         // If there are stakers remaining, create a tombstone for this validator.
         if validator.num_stakers > 0 {
-            assert!(validator.total_stake > validator.deposit);
             let tombstone = Tombstone {
                 remaining_stake: validator.total_stake - validator.deposit,
                 num_remaining_stakers: validator.num_stakers,
@@ -470,7 +478,7 @@ impl StakingContract {
         receipt: DeleteValidatorReceipt,
     ) -> Result<(), AccountError> {
         // Update our balance.
-        Account::balance_add_assign(&mut self.balance, transaction_total_value)?;
+        self.balance += transaction_total_value;
 
         // Initialize validator.
         let mut validator = Validator {
@@ -487,7 +495,7 @@ impl StakingContract {
 
         // If there is a tombstone for this validator, add the remaining staker and stakers.
         if let Some(tombstone) = store.get_tombstone(validator_address) {
-            Account::balance_add_assign(&mut validator.total_stake, tombstone.remaining_stake)?;
+            validator.total_stake += tombstone.remaining_stake;
             validator.num_stakers += tombstone.num_remaining_stakers;
 
             // Remove the tombstone entry.

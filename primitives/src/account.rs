@@ -6,6 +6,7 @@ use thiserror::Error;
 use beserial::{Deserialize, Serialize, SerializingError};
 use nimiq_keys::Address;
 
+use crate::coin::CoinUnderflowError;
 use crate::{
     coin::{Coin, CoinConvertError, CoinParseError},
     transaction::TransactionError,
@@ -98,4 +99,13 @@ pub enum AccountError {
     AlreadyExistentAddress { address: Address },
     #[error("Error during chunk processing: {0}")]
     ChunkError(#[from] MerkleRadixTrieError),
+}
+
+impl From<CoinUnderflowError> for AccountError {
+    fn from(err: CoinUnderflowError) -> Self {
+        AccountError::InsufficientFunds {
+            needed: err.rhs,
+            balance: err.lhs,
+        }
+    }
 }

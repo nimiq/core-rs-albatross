@@ -129,7 +129,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
     ) -> Result<Account, AccountError> {
         let data = CreationTransactionData::parse(transaction)?;
         Ok(Account::HTLC(HashedTimeLockedContract {
-            balance: Account::balance_add(initial_balance, transaction.value)?,
+            balance: initial_balance + transaction.value,
             sender: data.sender,
             recipient: data.recipient,
             hash_algorithm: data.hash_algorithm,
@@ -146,7 +146,8 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         _block_time: u64,
         _data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
-        Account::balance_sub_assign(&mut self.balance, transaction.value)
+        self.balance -= transaction.value;
+        Ok(())
     }
 
     fn commit_incoming_transaction(
@@ -174,7 +175,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         block_time: u64,
         _data_store: DataStoreWrite,
     ) -> Result<Option<AccountReceipt>, AccountError> {
-        let new_balance = Account::balance_sub(self.balance, transaction.total_value())?;
+        let new_balance = self.balance.safe_sub(transaction.total_value())?;
         self.can_change_balance(transaction, new_balance, block_time)?;
         self.balance = new_balance;
         Ok(None)
@@ -187,7 +188,8 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         _receipt: Option<&AccountReceipt>,
         _data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
-        Account::balance_add_assign(&mut self.balance, transaction.total_value())
+        self.balance += transaction.total_value();
+        Ok(())
     }
 
     fn commit_failed_transaction(
@@ -196,7 +198,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         block_time: u64,
         _data_store: DataStoreWrite,
     ) -> Result<Option<AccountReceipt>, AccountError> {
-        let new_balance = Account::balance_sub(self.balance, transaction.fee)?;
+        let new_balance = self.balance.safe_sub(transaction.fee)?;
         // XXX This check should not be necessary since are also checking this in has_sufficient_balance()
         self.can_change_balance(transaction, new_balance, block_time)?;
         self.balance = new_balance;
@@ -210,7 +212,8 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         _receipt: Option<&AccountReceipt>,
         _data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
-        Account::balance_add_assign(&mut self.balance, transaction.fee)
+        self.balance += transaction.fee;
+        Ok(())
     }
 
     fn has_sufficient_balance(
@@ -227,11 +230,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
             return Ok(false);
         }
 
-        // XXX We could also assert here (or not use checked_sub) since we know that balance >= needed.
-        let new_balance = self
-            .balance
-            .checked_sub(needed)
-            .ok_or(AccountError::InvalidCoinValue)?;
+        let new_balance = self.balance - needed;
         self.can_change_balance(transaction, new_balance, block_time)?;
 
         Ok(true)

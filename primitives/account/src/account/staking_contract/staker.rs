@@ -45,10 +45,6 @@ impl StakingContract {
             });
         }
 
-        // Compute new balance. Don't update here yet as a subsequent failure would leave the
-        // contract in an inconsistent state.
-        let new_balance = Account::balance_add(self.balance, value)?;
-
         // Create the staker struct.
         let staker = Staker {
             address: staker_address.clone(),
@@ -62,7 +58,7 @@ impl StakingContract {
         }
 
         // Update balance.
-        self.balance = new_balance;
+        self.balance += value;
 
         // Add the staker entry.
         store.put_staker(staker_address, staker);
@@ -89,7 +85,7 @@ impl StakingContract {
 
         // Update our balance.
         assert_eq!(value, staker.balance);
-        Account::balance_sub_assign(&mut self.balance, value)?;
+        self.balance -= value;
 
         // If we are delegating to a validator, we need to update it.
         if staker.delegation.is_some() {
@@ -115,10 +111,10 @@ impl StakingContract {
         let mut staker = store.expect_staker(staker_address)?;
 
         // Update the staker's balance.
-        Account::balance_add_assign(&mut staker.balance, value)?;
+        staker.balance += value;
 
         // Update our balance.
-        Account::balance_add_assign(&mut self.balance, value)?;
+        self.balance += value;
 
         // If we are delegating to a validator, we need to update it too.
         if let Some(validator_address) = &staker.delegation {
@@ -150,10 +146,10 @@ impl StakingContract {
         let mut staker = store.expect_staker(staker_address)?;
 
         // Update the staker's balance.
-        Account::balance_sub_assign(&mut staker.balance, value)?;
+        staker.balance -= value;
 
         // Update our balance.
-        Account::balance_sub_assign(&mut self.balance, value)?;
+        self.balance -= value;
 
         // If we are delegating to a validator, we need to update it too.
         if let Some(validator_address) = &staker.delegation {
@@ -162,7 +158,6 @@ impl StakingContract {
         }
 
         // Update the staker entry.
-        assert!(staker.balance > Coin::ZERO);
         store.put_staker(staker_address, staker);
 
         Ok(())
@@ -177,14 +172,6 @@ impl StakingContract {
     ) -> Result<StakerReceipt, AccountError> {
         // Get the staker.
         let mut staker = store.expect_staker(staker_address)?;
-
-        // Shortcut: Don't do anything if the delegation doesn't change. Technically, the receipt
-        // isn't required in this case. However, it doesn't really hurt to store it.
-        if staker.delegation == delegation {
-            return Ok(StakerReceipt {
-                delegation: staker.delegation,
-            });
-        }
 
         // Check that the validator from the new delegation exists.
         if let Some(new_validator_address) = &delegation {
@@ -269,12 +256,12 @@ impl StakingContract {
         let mut staker = store.expect_staker(staker_address)?;
 
         // Update the staker's balance.
-        Account::balance_sub_assign(&mut staker.balance, value)?;
+        staker.balance.safe_sub_assign(value)?;
 
         // All checks passed, not allowed to fail from here on!
 
         // Update our balance.
-        Account::balance_sub_assign(&mut self.balance, value)?;
+        self.balance -= value;
 
         // If we are delegating to a validator, we update it.
         if let Some(validator_address) = &staker.delegation {
@@ -331,10 +318,10 @@ impl StakingContract {
             .ok_or_else(|| AccountError::InvalidReceipt)?;
 
         // Update the staker's balance.
-        Account::balance_add_assign(&mut staker.balance, value)?;
+        staker.balance += value;
 
         // Update our balance.
-        Account::balance_add_assign(&mut self.balance, value)?;
+        self.balance += value;
 
         // If we are delegating to a validator, we update it.
         if let Some(validator_address) = &staker.delegation {
@@ -360,7 +347,7 @@ impl StakingContract {
         let mut validator = store.expect_validator(validator_address)?;
 
         // Update it.
-        Account::balance_add_assign(&mut validator.total_stake, staker.balance)?;
+        validator.total_stake += staker.balance;
 
         if validator.is_active() {
             self.active_validators
@@ -387,7 +374,7 @@ impl StakingContract {
         // Try to get the validator. It might have been deleted.
         if let Some(mut validator) = store.get_validator(validator_address) {
             // Validator exists, update it.
-            Account::balance_sub_assign(&mut validator.total_stake, staker.balance)?;
+            validator.total_stake -= staker.balance;
 
             if validator.is_active() {
                 self.active_validators
@@ -405,7 +392,7 @@ impl StakingContract {
         // Validator doesn't exist, check for tombstone.
         if let Some(mut tombstone) = store.get_tombstone(validator_address) {
             // Tombstone exists, update it.
-            Account::balance_sub_assign(&mut tombstone.total_stake, staker.balance)?;
+            tombstone.total_stake -= staker.balance;
 
             tombstone.num_remaining_stakers -= 1;
 
@@ -434,7 +421,7 @@ impl StakingContract {
         let mut validator = store.expect_validator(validator_address)?;
 
         // Update it.
-        Account::balance_add_assign(&mut validator.total_stake, value)?;
+        validator.total_stake += value;
 
         if validator.is_active() {
             self.active_validators
@@ -457,7 +444,7 @@ impl StakingContract {
         // Try to get the validator. It might have been deleted.
         if let Some(mut validator) = store.get_validator(validator_address) {
             // Validator exists, update it.
-            Account::balance_sub_assign(&mut validator.total_stake, value)?;
+            validator.total_stake -= value;
 
             if validator.is_active() {
                 self.active_validators
@@ -473,7 +460,7 @@ impl StakingContract {
         // Validator doesn't exist, check for tombstone.
         if let Some(mut tombstone) = store.get_tombstone(validator_address) {
             // Tombstone exists, update it.
-            Account::balance_sub_assign(&mut tombstone.total_stake, value)?;
+            tombstone.total_stake -= value;
 
             // Update the tombstone entry.
             store.put_tombstone(validator_address, tombstone);

@@ -49,31 +49,6 @@ impl Account {
     pub(crate) fn default_with_balance(balance: Coin) -> Self {
         Account::Basic(BasicAccount { balance })
     }
-
-    pub(crate) fn balance_add(balance: Coin, value: Coin) -> Result<Coin, AccountError> {
-        balance
-            .checked_add(value)
-            .ok_or_else(|| AccountError::InvalidCoinValue)
-    }
-
-    pub(crate) fn balance_add_assign(balance: &mut Coin, value: Coin) -> Result<(), AccountError> {
-        *balance = Self::balance_add(*balance, value)?;
-        Ok(())
-    }
-
-    pub(crate) fn balance_sub(balance: Coin, value: Coin) -> Result<Coin, AccountError> {
-        balance
-            .checked_sub(value)
-            .ok_or_else(|| AccountError::InsufficientFunds {
-                balance: *balance,
-                needed: value,
-            })
-    }
-
-    pub(crate) fn balance_sub_assign(balance: &mut Coin, value: Coin) -> Result<(), AccountError> {
-        *balance = Self::balance_sub(*balance, value)?;
-        Ok(())
-    }
 }
 
 impl Default for Account {

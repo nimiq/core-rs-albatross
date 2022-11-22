@@ -39,7 +39,7 @@ impl AccountTransactionInteraction for BasicAccount {
         _block_time: u64,
         _data_store: DataStoreWrite,
     ) -> Result<Option<AccountReceipt>, AccountError> {
-        Account::balance_add_assign(&mut self.balance, transaction.value)?;
+        self.balance += transaction.value;
         Ok(None)
     }
 
@@ -50,7 +50,7 @@ impl AccountTransactionInteraction for BasicAccount {
         _receipt: Option<&AccountReceipt>,
         _data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
-        Account::balance_sub_assign(&mut self.balance, transaction.value)?;
+        self.balance -= transaction.value;
         Ok(())
     }
 
@@ -60,7 +60,7 @@ impl AccountTransactionInteraction for BasicAccount {
         _block_time: u64,
         _data_store: DataStoreWrite,
     ) -> Result<Option<AccountReceipt>, AccountError> {
-        Account::balance_sub_assign(&mut self.balance, transaction.total_value())?;
+        self.balance.safe_sub_assign(transaction.total_value())?;
         Ok(None)
     }
 
@@ -71,7 +71,7 @@ impl AccountTransactionInteraction for BasicAccount {
         _receipt: Option<&AccountReceipt>,
         _data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
-        Account::balance_add_assign(&mut self.balance, transaction.total_value())?;
+        self.balance += transaction.total_value()?;
         Ok(())
     }
 
@@ -81,7 +81,7 @@ impl AccountTransactionInteraction for BasicAccount {
         _block_time: u64,
         _data_store: DataStoreWrite,
     ) -> Result<Option<AccountReceipt>, AccountError> {
-        Account::balance_sub_assign(&mut self.balance, transaction.fee)?;
+        self.balance.safe_sub_assign(transaction.fee)?;
         Ok(None)
     }
 
@@ -92,7 +92,7 @@ impl AccountTransactionInteraction for BasicAccount {
         _receipt: Option<&AccountReceipt>,
         _data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
-        Account::balance_add_assign(&mut self.balance, transaction.fee)?;
+        self.balance += transaction.fee;
         Ok(())
     }
 
@@ -119,7 +119,8 @@ impl AccountInherentInteraction for BasicAccount {
     ) -> Result<Option<AccountReceipt>, AccountError> {
         match inherent {
             Inherent::Reward { value, .. } => {
-                Account::balance_add_assign(&mut self.balance, *value).map(|| None)
+                self.balance += *value;
+                Ok(None)
             }
             _ => Err(AccountError::InvalidForTarget),
         }
@@ -134,7 +135,8 @@ impl AccountInherentInteraction for BasicAccount {
     ) -> Result<(), AccountError> {
         match inherent {
             Inherent::Reward { value, .. } => {
-                Account::balance_sub_assign(&mut self.balance, *value)
+                self.balance -= *value;
+                Ok(())
             }
             _ => Err(AccountError::InvalidForTarget),
         }

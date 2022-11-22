@@ -7,7 +7,7 @@ use std::str::FromStr;
 
 use lazy_static::lazy_static;
 use num_traits::identities::Zero;
-use num_traits::{CheckedSub, SaturatingAdd, SaturatingSub};
+use num_traits::{SaturatingAdd, SaturatingSub};
 use regex::Regex;
 use thiserror::Error;
 
@@ -38,29 +38,37 @@ impl Coin {
 
     // NOTE: We implement a trait that does this, but we don't always want to have to import
     // a whole crate to check if a coin value is zero.
+    #[inline]
     pub fn is_zero(&self) -> bool {
         self.0 == 0
     }
 
-    #[inline]
     pub fn checked_add(self, rhs: Coin) -> Option<Coin> {
         self.0
             .checked_add(rhs.0)
             .and_then(|val| Coin::try_from(val).ok())
     }
 
-    #[inline]
     pub fn checked_sub(self, rhs: Coin) -> Option<Coin> {
         self.0
             .checked_sub(rhs.0)
             .and_then(|val| Coin::try_from(val).ok())
     }
 
-    #[inline]
-    pub fn checked_mul(self, times: u64) -> Option<Coin> {
+    pub fn checked_mul(self, rhs: u64) -> Option<Coin> {
         self.0
-            .checked_mul(times)
+            .checked_mul(rhs)
             .and_then(|val| Coin::try_from(val).ok())
+    }
+
+    pub fn safe_sub(self, rhs: Coin) -> Result<Coin, CoinUnderflowError> {
+        self.checked_sub(rhs)
+            .ok_or(CoinUnderflowError { lhs: self, rhs })
+    }
+
+    pub fn safe_sub_assign(&mut self, rhs: Coin) -> Result<(), CoinUnderflowError> {
+        *self = self.safe_sub(rhs)?;
+        Ok(())
     }
 }
 
@@ -69,6 +77,13 @@ impl From<Coin> for u64 {
     fn from(coin: Coin) -> Self {
         coin.0
     }
+}
+
+#[derive(Debug, Error, PartialEq, Eq)]
+#[error("Underflow: {lhs} - {rhs}")]
+pub struct CoinUnderflowError {
+    pub lhs: Coin,
+    pub rhs: Coin,
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -93,14 +108,14 @@ impl Add<Coin> for Coin {
 
     #[inline]
     fn add(self, rhs: Coin) -> Self {
-        Coin(self.0 + rhs.0)
+        self.checked_add(rhs).expect("Overflow during add()")
     }
 }
 
 impl AddAssign<Coin> for Coin {
     #[inline]
     fn add_assign(&mut self, rhs: Coin) {
-        self.0 += rhs.0;
+        *self = self.checked_add(rhs).expect("Overflow during add_assign()")
     }
 }
 
@@ -115,14 +130,16 @@ impl Sub<Coin> for Coin {
 
     #[inline]
     fn sub(self, rhs: Coin) -> Self {
-        Coin(self.0 - rhs.0)
+        self.checked_sub(rhs).expect("Underflow during sub()")
     }
 }
 
 impl SubAssign<Coin> for Coin {
     #[inline]
     fn sub_assign(&mut self, rhs: Coin) {
-        self.0 -= rhs.0;
+        *self = self
+            .checked_sub(rhs)
+            .expect("Underflow during sub_assign()")
     }
 }
 
