@@ -56,7 +56,7 @@ async fn peers_can_sync() {
         net1.subscribe_events(),
     );
     let zkp_prover1 = ZKPComponent::new(
-        Arc::clone(&blockchain1),
+        BlockchainProxy::from(&blockchain1),
         Arc::clone(&net1),
         false,
         Some(zkp_test_exe()),
@@ -93,7 +93,7 @@ async fn peers_can_sync() {
         net2.subscribe_events(),
     );
     let zkp_prover2 = ZKPComponent::new(
-        Arc::clone(&blockchain2),
+        BlockchainProxy::from(&blockchain2),
         Arc::clone(&net2),
         false,
         Some(zkp_test_exe()),
@@ -222,7 +222,7 @@ async fn sync_ingredients() {
         TestNetwork::build_network(2, Default::default(), &mut Some(hub)).await;
     networks.push(Arc::clone(&net1));
     let zkp_prover1 = ZKPComponent::new(
-        Arc::clone(&blockchain1),
+        BlockchainProxy::from(&blockchain1),
         Arc::clone(&net1),
         false,
         Some(zkp_test_exe()),
@@ -254,7 +254,7 @@ async fn sync_ingredients() {
         TestNetwork::build_network(3, Default::default(), &mut Some(MockHub::default())).await;
     networks.push(Arc::clone(&net2));
     let zkp_prover2 = ZKPComponent::new(
-        Arc::clone(&blockchain2),
+        BlockchainProxy::from(&blockchain2),
         Arc::clone(&net2),
         false,
         Some(zkp_test_exe()),

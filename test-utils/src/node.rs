@@ -49,7 +49,7 @@ impl<N: NetworkInterface + TestNetwork> Node<N> {
 
         let network = N::build_network(peer_id, genesis_info.hash, hub).await;
         let zkp_proxy = ZKPComponent::new(
-            Arc::clone(&blockchain),
+            BlockchainProxy::from(&blockchain),
             Arc::clone(&network),
             is_prover_active,
             Some(zkp_test_exe()),

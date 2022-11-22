@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use ark_groth16::Proof;
 use beserial::Deserialize;
+use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_primitives::policy::Policy;
 use nimiq_test_utils::blockchain_with_rng::produce_macro_blocks_with_rng;
 use nimiq_test_utils::zkp_test_data::{KEYS_PATH, ZKPROOF_SERIALIZED_IN_HEX};
@@ -33,7 +34,7 @@ fn blockchain() -> Arc<RwLock<Blockchain>> {
 #[test(tokio::test)]
 async fn can_detect_valid_and_invalid_genesis_proof() {
     NanoZKP::setup(get_base_seed(), Path::new(KEYS_PATH), false).unwrap();
-    let blockchain = blockchain();
+    let blockchain = BlockchainProxy::from(blockchain());
 
     let proof = ZKProof {
         block_number: 0,
@@ -74,6 +75,8 @@ async fn can_detect_invalid_proof_none_genesis_blocks() {
         block_number: block.block_number(),
         proof: Some(Proof::default()),
     };
+
+    let blockchain = BlockchainProxy::from(blockchain);
 
     assert!(
         !validate_proof(&blockchain, &zkp_proof, None, Path::new(KEYS_PATH)),
@@ -118,7 +121,12 @@ async fn can_detect_valid_proof_none_genesis_blocks() {
     let zkp_proof =
         &ZKProof::deserialize_from_vec(&hex::decode(ZKPROOF_SERIALIZED_IN_HEX).unwrap()).unwrap();
     assert!(
-        validate_proof(&blockchain, &zkp_proof, None, Path::new(KEYS_PATH)),
+        validate_proof(
+            &BlockchainProxy::from(blockchain),
+            &zkp_proof,
+            None,
+            Path::new(KEYS_PATH)
+        ),
         "The validation of a valid proof failed"
     );
 }

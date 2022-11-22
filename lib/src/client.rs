@@ -178,7 +178,7 @@ impl ClientInner {
         let wallet_store = Arc::new(WalletStore::new(environment.clone()));
 
         let zkp_component = ZKPComponent::new(
-            Arc::clone(&blockchain),
+            BlockchainProxy::from(&blockchain),
             Arc::clone(&network),
             config.zkp.prover_active,
             None,

@@ -1,5 +1,6 @@
 use beserial::Deserialize;
 use futures::StreamExt;
+use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_test_utils::blockchain_with_rng::produce_macro_blocks_with_rng;
 use nimiq_test_utils::zkp_test_data::zkp_test_exe;
 use nimiq_test_utils::zkp_test_data::KEYS_PATH;
@@ -48,7 +49,7 @@ async fn builds_valid_genesis_proof() {
     let env = VolatileEnvironment::new(10).unwrap();
 
     let zkp_prover = ZKPComponent::new(
-        Arc::clone(&blockchain),
+        BlockchainProxy::from(&blockchain),
         Arc::clone(&network),
         false,
         Some(zkp_test_exe()),
@@ -60,7 +61,7 @@ async fn builds_valid_genesis_proof() {
 
     assert!(
         validate_proof(
-            &blockchain,
+            &BlockchainProxy::from(blockchain),
             &zkp_prover.get_zkp_state().into(),
             None,
             Path::new(KEYS_PATH)
@@ -91,7 +92,7 @@ async fn loads_valid_zkp_state_from_db() {
     proof_store.set_zkp(&new_proof);
 
     let zkp_prover = ZKPComponent::new(
-        Arc::clone(&blockchain),
+        BlockchainProxy::from(&blockchain),
         Arc::clone(&network),
         false,
         Some(zkp_test_exe()),
@@ -126,7 +127,7 @@ async fn does_not_load_invalid_zkp_state_from_db() {
     proof_store.set_zkp(&new_proof);
 
     let zkp_prover = ZKPComponent::new(
-        Arc::clone(&blockchain),
+        BlockchainProxy::from(&blockchain),
         Arc::clone(&network),
         false,
         Some(zkp_test_exe()),
@@ -157,7 +158,7 @@ async fn can_produce_two_consecutive_valid_zk_proofs() {
     let env = VolatileEnvironment::new(10).unwrap();
 
     let zkp_prover = ZKPComponent::new(
-        Arc::clone(&blockchain),
+        BlockchainProxy::from(&blockchain),
         Arc::clone(&network),
         true,
         Some(zkp_test_exe()),
@@ -186,7 +187,12 @@ async fn can_produce_two_consecutive_valid_zk_proofs() {
     // Waits for the proof generation and verifies the proof.
     let (proof, _) = zk_proofs_stream.as_mut().next().await.unwrap();
     assert!(
-        validate_proof(&blockchain, &proof, None, Path::new(KEYS_PATH)),
+        validate_proof(
+            &BlockchainProxy::from(&blockchain),
+            &proof,
+            None,
+            Path::new(KEYS_PATH)
+        ),
         "Generated ZK proof for the first block should be valid"
     );
 
@@ -201,7 +207,12 @@ async fn can_produce_two_consecutive_valid_zk_proofs() {
 
     let (proof, _) = zk_proofs_stream.as_mut().next().await.unwrap();
     assert!(
-        validate_proof(&blockchain, &proof, None, Path::new(KEYS_PATH)),
+        validate_proof(
+            &BlockchainProxy::from(&blockchain),
+            &proof,
+            None,
+            Path::new(KEYS_PATH)
+        ),
         "Generated ZK proof for the second block should be valid"
     );
 }

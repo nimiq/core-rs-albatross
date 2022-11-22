@@ -12,7 +12,8 @@ use beserial::{
     SerializingError as BeserialSerializingError,
 };
 use nimiq_block::MacroBlock;
-use nimiq_blockchain::{AbstractBlockchain, Blockchain};
+use nimiq_blockchain::AbstractBlockchain;
+use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_database::{AsDatabaseBytes, FromDatabaseValue};
 use nimiq_hash::Blake2bHash;
 use nimiq_nano_primitives::MacroBlock as ZKPMacroBlock;
@@ -32,6 +33,34 @@ use thiserror::Error;
 use crate::ZKPComponent;
 
 pub const PROOF_GENERATION_OUTPUT_DELIMITER: [u8; 2] = [242, 208];
+
+/// The ZKP event returned by the stream.
+#[derive(Debug)]
+pub struct ZKPEvent<N: Network> {
+    pub source: ProofSource<N>,
+    pub proof: ZKProof,
+    pub block: MacroBlock,
+}
+
+impl<N: Network> ZKPEvent<N> {
+    pub fn new(source: ProofSource<N>, proof: ZKProof, block: MacroBlock) -> Self {
+        ZKPEvent {
+            source,
+            proof,
+            block,
+        }
+    }
+}
+
+impl<N: Network> Clone for ZKPEvent<N> {
+    fn clone(&self) -> Self {
+        Self {
+            source: self.source.clone(),
+            proof: self.proof.clone(),
+            block: self.block.clone(),
+        }
+    }
+}
 
 /// The ZK Proof state containing the pks block info and the proof.
 /// The genesis block has no zk proof.
@@ -454,14 +483,14 @@ impl RequestCommon for RequestZKP {
 #[derive(Clone)]
 pub(crate) struct ZKPStateEnvironment {
     pub(crate) zkp_state: Arc<RwLock<ZKPState>>,
-    pub(crate) blockchain: Arc<RwLock<Blockchain>>,
+    pub(crate) blockchain: BlockchainProxy,
 }
 
 impl<N: Network> From<&ZKPComponent<N>> for ZKPStateEnvironment {
     fn from(component: &ZKPComponent<N>) -> Self {
         ZKPStateEnvironment {
             zkp_state: Arc::clone(&component.zkp_state),
-            blockchain: Arc::clone(&component.blockchain),
+            blockchain: component.blockchain.clone(),
         }
     }
 }

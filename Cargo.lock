@@ -3654,6 +3654,7 @@ dependencies = [
  "nimiq-block",
  "nimiq-block-production",
  "nimiq-blockchain",
+ "nimiq-blockchain-proxy",
  "nimiq-bls",
  "nimiq-database",
  "nimiq-genesis",

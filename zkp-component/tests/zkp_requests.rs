@@ -6,6 +6,7 @@ use futures::StreamExt;
 
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::Blockchain;
+use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_nano_zkp::NanoZKP;
 use nimiq_network_interface::network::Network;
@@ -46,7 +47,7 @@ async fn peers_dont_reply_with_outdated_proof() {
     network.dial_address(network2.address()).await.unwrap();
 
     let _zkp_prover2 = ZKPComponent::new(
-        Arc::clone(&blockchain),
+        BlockchainProxy::from(&blockchain),
         Arc::clone(&network2),
         false,
         Some(zkp_test_exe()),
@@ -56,7 +57,7 @@ async fn peers_dont_reply_with_outdated_proof() {
     .await;
 
     let _zkp_prover3 = ZKPComponent::new(
-        Arc::clone(&blockchain),
+        BlockchainProxy::from(&blockchain),
         Arc::clone(&network3),
         false,
         Some(zkp_test_exe()),
@@ -117,7 +118,7 @@ async fn peers_reply_with_valid_proof() {
 
     log::info!("launching zkps");
     let _zkp_prover2 = ZKPComponent::new(
-        Arc::clone(&blockchain2),
+        BlockchainProxy::from(&blockchain2),
         Arc::clone(&network2),
         false,
         Some(zkp_test_exe()),
@@ -126,7 +127,7 @@ async fn peers_reply_with_valid_proof() {
     )
     .await;
     let _zkp_prover3 = ZKPComponent::new(
-        Arc::clone(&blockchain3),
+        BlockchainProxy::from(&blockchain3),
         Arc::clone(&network3),
         false,
         Some(zkp_test_exe()),
@@ -147,7 +148,12 @@ async fn peers_reply_with_valid_proof() {
             "Peers should not send an election block"
         );
         assert!(
-            validate_proof(&blockchain2, &proof_data.1, None, Path::new(KEYS_PATH)),
+            validate_proof(
+                &BlockchainProxy::from(&blockchain2),
+                &proof_data.1,
+                None,
+                Path::new(KEYS_PATH)
+            ),
             "Peer should sent a new proof valid proof"
         );
     }
@@ -192,7 +198,7 @@ async fn peers_reply_with_valid_proof_and_election_block() {
 
     log::info!("launching zkps");
     let _zkp_prover2 = ZKPComponent::new(
-        Arc::clone(&blockchain2),
+        BlockchainProxy::from(&blockchain2),
         Arc::clone(&network2),
         false,
         Some(zkp_test_exe()),
@@ -201,7 +207,7 @@ async fn peers_reply_with_valid_proof_and_election_block() {
     )
     .await;
     let _zkp_prover3 = ZKPComponent::new(
-        Arc::clone(&blockchain3),
+        BlockchainProxy::from(&blockchain3),
         Arc::clone(&network3),
         false,
         Some(zkp_test_exe()),
@@ -223,7 +229,7 @@ async fn peers_reply_with_valid_proof_and_election_block() {
         );
         assert!(
             validate_proof(
-                &blockchain2,
+                &BlockchainProxy::from(&blockchain2),
                 &proof_data.1,
                 proof_data.2,
                 Path::new(KEYS_PATH)

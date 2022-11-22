@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use futures::{stream, FutureExt, Stream, StreamExt};
-use nimiq_block::Block;
+use nimiq_block::{Block, MacroBlock};
 use nimiq_genesis::NetworkInfo;
 use nimiq_nano_primitives::state_commitment;
 use nimiq_network_interface::network::Network;
@@ -34,7 +34,8 @@ pub struct ZKProver<N: Network> {
     network: Arc<N>,
     zkp_state: Arc<RwLock<ZKPState>>,
     sender: BroadcastSender<()>,
-    proof_stream: Pin<Box<dyn Stream<Item = Result<ZKPState, ZKProofGenerationError>> + Send>>,
+    proof_stream:
+        Pin<Box<dyn Stream<Item = Result<(ZKPState, MacroBlock), ZKProofGenerationError>> + Send>>,
 }
 
 impl<N: Network> ZKProver<N> {
@@ -126,7 +127,7 @@ impl<N: Network> ZKProver<N> {
                     launch_generate_new_proof(
                         recv,
                         ProofInput {
-                            block,
+                            block: block.clone(),
                             latest_pks: zkp_state.latest_pks.clone(),
                             latest_header_hash: zkp_state.latest_header_hash.clone(),
                             previous_proof: zkp_state.latest_proof.clone(),
@@ -135,7 +136,7 @@ impl<N: Network> ZKProver<N> {
                         },
                         prover_path,
                     )
-                    .map(Some)
+                    .map(|res| Some(res.map(|state| (state, block))))
                     .left_future()
                 } else {
                     future::ready(None).right_future()
@@ -168,13 +169,13 @@ impl<N: Network> ZKProver<N> {
 }
 
 impl<N: Network> Stream for ZKProver<N> {
-    type Item = ZKProof;
+    type Item = (ZKProof, MacroBlock);
 
     fn poll_next(mut self: Pin<&mut ZKProver<N>>, cx: &mut Context) -> Poll<Option<Self::Item>> {
         // If a new proof was generated it sets the state and broadcasts the new proof.
         while let Poll::Ready(Some(proof)) = self.proof_stream.poll_next_unpin(cx) {
             match proof {
-                Ok(new_zkp_state) => {
+                Ok((new_zkp_state, block)) => {
                     assert!(
                         new_zkp_state.latest_proof.is_some(),
                         "The generate new proof should never produces a empty proof"
@@ -194,7 +195,7 @@ impl<N: Network> Stream for ZKProver<N> {
 
                     let proof: ZKProof = zkp_state_lock.clone().into();
                     Self::broadcast_zk_proof(&self.network, proof.clone());
-                    return Poll::Ready(Some(proof));
+                    return Poll::Ready(Some((proof, block)));
                 }
                 Err(e) => {
                     log::error!("Error generating ZK Proof for block {}", e);

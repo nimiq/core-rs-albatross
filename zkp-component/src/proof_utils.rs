@@ -1,5 +1,5 @@
 use std::path::{Path, PathBuf};
-use std::{process::Stdio, sync::Arc};
+use std::process::Stdio;
 
 use ark_groth16::Proof;
 use ark_mnt6_753::{G2Projective as G2MNT6, MNT6_753};
@@ -7,9 +7,9 @@ use beserial::{Deserialize, Serialize};
 use nimiq_block::{Block, MacroBlock};
 use nimiq_genesis::NetworkInfo;
 use nimiq_nano_primitives::MacroBlock as ZKPMacroBlock;
-use parking_lot::RwLock;
 
-use nimiq_blockchain::{AbstractBlockchain, Blockchain};
+use nimiq_blockchain::AbstractBlockchain;
+use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_database::{Database, Environment, ReadTransaction, WriteTransaction};
 use nimiq_nano_zkp::{NanoZKP, NanoZKPError};
 use tokio::io::AsyncReadExt;
@@ -21,7 +21,7 @@ use crate::types::*;
 
 /// Fully validates the proof by verifying both the zk proof and the blocks existence on the blockchain.
 pub fn validate_proof(
-    blockchain: &Arc<RwLock<Blockchain>>,
+    blockchain: &BlockchainProxy,
     proof: &ZKProof,
     election_block: Option<MacroBlock>,
     keys_path: &Path,
@@ -35,7 +35,7 @@ pub fn validate_proof(
     if let Ok((new_block, genesis_block, proof)) =
         get_proof_macro_blocks(blockchain, proof, election_block)
     {
-        return validate_proof_get_new_state(proof, new_block, genesis_block, keys_path).is_ok();
+        return validate_proof_get_new_state(proof, &new_block, genesis_block, keys_path).is_ok();
     }
     false
 }
@@ -43,7 +43,7 @@ pub fn validate_proof(
 /// Fetches both the genesis and the proof block. Fails if the proof block is not an election block or the proof is empty.
 /// If the given option already contains the new election block, we return it. Otherwise, we retrieve it from the blockchain.
 pub(crate) fn get_proof_macro_blocks(
-    blockchain: &Arc<RwLock<Blockchain>>,
+    blockchain: &BlockchainProxy,
     proof: &ZKProof,
     election_block: Option<MacroBlock>,
 ) -> Result<(MacroBlock, MacroBlock, Proof<MNT6_753>), ZKPComponentError> {
@@ -75,7 +75,7 @@ pub(crate) fn get_proof_macro_blocks(
 /// Validates proof and returns the new zkp state. Assumes the blocks provided are valid.
 pub(crate) fn validate_proof_get_new_state(
     proof: Proof<MNT6_753>,
-    new_block: MacroBlock,
+    new_block: &MacroBlock,
     genesis_block: MacroBlock,
     keys_path: &Path,
 ) -> Result<ZKPState, ZKPComponentError> {
