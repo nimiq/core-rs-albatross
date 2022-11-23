@@ -150,22 +150,31 @@ pub struct TlsSettings {
 
 #[derive(Clone, Debug, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
+/// Different knobs used to tweak the consensus mechanism and settings
 pub struct ConsensusSettings {
     #[serde(default)]
+    /// Possible synchronization modes to reach consensus according to the client type
     pub sync_mode: SyncMode,
     #[serde(default)]
+    /// The maximum amount of epochs that are stored in the client
     pub max_epochs_stored: usize,
     #[serde(default)]
+    /// Different possible networks (testing, mainnet, developer, etc)
     pub network: Network,
+    /// Minimum number of peers necessary to reach consensus
     pub min_peers: Option<usize>,
 }
 
 #[derive(Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
+/// Synchronization mode used by the client based upon its client type
 pub enum SyncMode {
+    /// Synchronization mode used by History nodes (full transaction history is mantained)
     History,
+    /// Full Nodes. They use LightMacroSync + State Sync to reach consensus
     Full,
-    Nano,
+    /// Light nodes use LightMacroSync + BlockLiveSync to reach consensus
+    Light,
 }
 impl Default for SyncMode {
     fn default() -> Self {
@@ -184,7 +193,7 @@ impl FromStr for SyncMode {
         Ok(match s.to_lowercase().as_str() {
             "history" => Self::History,
             "full" => Self::Full,
-            "nano" => Self::Nano,
+            "light" => Self::Light,
             _ => return Err(SyncModeParseError(s.to_string())),
         })
     }
@@ -195,7 +204,7 @@ impl From<SyncMode> for config::SyncMode {
         match sync_mode {
             SyncMode::History => Self::History,
             SyncMode::Full => Self::Full,
-            SyncMode::Nano => Self::Nano,
+            SyncMode::Light => Self::Light,
         }
     }
 }

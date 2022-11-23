@@ -83,7 +83,7 @@ pub(crate) struct ClientInner {
     zkp_component: ZKPComponentProxy,
 }
 
-/// This function is used to generate the serices flags (provided, needed) based upon the configured sync mode
+/// This function is used to generate the services flags (provided, needed) based upon the configured sync mode
 pub fn generate_service_flags(sync_mode: SyncMode) -> (Services, Services) {
     let provided_services = match sync_mode {
         // Services provided by history nodes
@@ -100,17 +100,20 @@ pub fn generate_service_flags(sync_mode: SyncMode) -> (Services, Services) {
             log::info!("Client configured as a full node");
             Services::ACCOUNTS_PROOF | Services::FULL_BLOCKS | Services::ACCOUNTS_CHUNKS
         }
-        // Services provided by nano nodes
-        crate::config::config::SyncMode::Nano => Services::empty(),
+        // Services provided by light nodes
+        crate::config::config::SyncMode::Light => {
+            log::info!("Client configured as a light node");
+            Services::empty()
+        }
     };
 
     let required_services = match sync_mode {
-        // Services provided by history nodes
+        // Services required by history nodes
         crate::config::config::SyncMode::History => Services::HISTORY | Services::FULL_BLOCKS,
-        // Services provided by full nodes
+        // Services required by full nodes
         crate::config::config::SyncMode::Full => Services::FULL_BLOCKS | Services::ACCOUNTS_CHUNKS,
-        // Services provided by nano nodes
-        crate::config::config::SyncMode::Nano => Services::CHAIN_PROOF | Services::ACCOUNTS_PROOF,
+        // Services required by light nodes
+        crate::config::config::SyncMode::Light => Services::CHAIN_PROOF | Services::ACCOUNTS_PROOF,
     };
     (provided_services, required_services)
 }

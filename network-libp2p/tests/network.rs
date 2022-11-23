@@ -189,7 +189,6 @@ async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
     let mut addresses = Vec::new();
     let mut events = Vec::new();
     let mut rng = rand::thread_rng();
-    let mut peer_ids = Vec::new();
 
     // Create all the networks and addresses
     for peer in 0..n_peers {
@@ -203,8 +202,6 @@ async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
         network.listen_on(vec![addr.clone()]).await;
 
         log::debug!(address = %addr, peer_id = %network.get_local_peer_id(), "Network {}", peer);
-
-        peer_ids.push(network.get_local_peer_id());
 
         events.push(network.subscribe_events());
         networks.push(network);
@@ -226,9 +223,9 @@ async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
         .for_each(|event| async move {
             match event {
                 Ok(NetworkEvent::PeerJoined(peer_id)) => {
-                    log::info!(" Received peer joined event {}", peer_id);
+                    log::info!(%peer_id, "Received peer joined event");
                 }
-                _ => log::error!("Unexpected NetworkEvent: {:?}", event),
+                _ => log::error!(?event, "Unexpected NetworkEvent"),
             };
         });
 

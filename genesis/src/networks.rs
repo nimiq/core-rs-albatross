@@ -10,7 +10,6 @@ use nimiq_account::AccountsList;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis_builder::{GenesisBuilder, GenesisBuilderError, GenesisInfo};
 use nimiq_hash::Blake2bHash;
-
 use nimiq_trie::key_nibbles::KeyNibbles;
 
 pub use nimiq_primitives::networks::NetworkId;

@@ -8,7 +8,6 @@ use nimiq_genesis::NetworkInfo;
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
-
 use nimiq_primitives::policy::Policy;
 use nimiq_primitives::slots::Validators;
 use nimiq_utils::time::OffsetTime;
@@ -28,43 +27,43 @@ const BROADCAST_MAX_CAPACITY: usize = 256;
 /// The Blockchain struct. It stores all information of the blockchain. It is the main data
 /// structure in this crate.
 pub struct Blockchain {
-    // The environment of the blockchain.
+    /// The environment of the blockchain.
     env: Environment,
-    // Blockchain configuration options
+    /// Blockchain configuration options
     pub config: BlockchainConfig,
-    // The network ID. It determines if this is the mainnet or one of the testnets.
+    /// The network ID. It determines if this is the mainnet or one of the testnets.
     pub network_id: NetworkId,
-    // The OffsetTime struct. It allows us to query the current time.
+    /// The OffsetTime struct. It allows us to query the current time.
     pub time: Arc<OffsetTime>, // shared with network
-    // The notifier processes events relative to the blockchain.
+    /// The notifier processes events relative to the blockchain.
     pub notifier: BroadcastSender<BlockchainEvent>,
-    // The fork notifier processes fork events.
+    /// The fork notifier processes fork events.
     pub fork_notifier: BroadcastSender<ForkEvent>,
-    // The log notifier processes all events regarding accounts changes.
+    /// The log notifier processes all events regarding accounts changes.
     pub log_notifier: BroadcastSender<BlockLog>,
-    // The chain store is a database containing all of the chain infos, blocks and receipts.
+    /// The chain store is a database containing all of the chain infos, blocks and receipts.
     pub chain_store: ChainStore,
-    // The history store is a database containing all of the history trees and transactions.
+    /// The history store is a database containing all of the history trees and transactions.
     pub history_store: HistoryStore,
-    // The current state of the blockchain.
+    /// The current state of the blockchain.
     pub state: BlockchainState,
-    // A reference to a "function" to test whether a given transaction is known and valid.
+    /// A reference to a "function" to test whether a given transaction is known and valid.
     pub tx_verification_cache: Arc<dyn TransactionVerificationCache>,
-    // The metrics for the blockchain. Needed for analysis.
+    /// The metrics for the blockchain. Needed for analysis.
     #[cfg(feature = "metrics")]
     pub(crate) metrics: Arc<BlockchainMetrics>,
-    // The coin supply at the genesis block. This is needed to calculate the rewards.
+    /// The coin supply at the genesis block. This is needed to calculate the rewards.
     pub(crate) genesis_supply: Coin,
-    // The timestamp at the genesis block. This is needed to calculate the rewards.
+    /// The timestamp at the genesis block. This is needed to calculate the rewards.
     pub(crate) genesis_timestamp: u64,
 }
 
 /// Contains various blockchain configuration knobs
 pub struct BlockchainConfig {
-    // Flag indicating if the full history should be stored
+    /// Flag indicating if the full history should be stored
     pub keep_history: bool,
-    // Maximum number of epochs (other than the current one) that the ChainStore will store fully.
-    // Epochs older than this number will be pruned.
+    /// Maximum number of epochs (other than the current one) that the ChainStore will store fully.
+    /// Epochs older than this number will be pruned.
     pub max_epochs_stored: u32,
 }
 

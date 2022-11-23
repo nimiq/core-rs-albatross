@@ -179,27 +179,26 @@ impl PubsubId<PeerId> for GossipsubId<PeerId> {
     }
 }
 pub struct Network {
-    // The local ID that is used to identify our peer
+    /// The local ID that is used to identify our peer
     local_peer_id: PeerId,
-    // This hash map mantains an association between PeerIds and PeerContact:
-    // If the peer is interesting, i.e.: it provides services that are interested to us,
-    //  we store a some value with the peer contact itself
-    // Otherwise,
-    //  we just store a None value
-    //
+    /// This hash map mantains an association between PeerIds and PeerContact:
+    /// If the peer is interesting, i.e.: it provides services that are interested to us,
+    ///  we store a some value with the peer contact itself
+    /// Otherwise,
+    ///  we just store a None value
     connected_peers: Arc<RwLock<HashMap<PeerId, Option<PeerContact>>>>,
-    // Stream used to send event messages
+    /// Stream used to send event messages
     events_tx: broadcast::Sender<NetworkEvent<PeerId>>,
-    // Stream used to send action messages
+    /// Stream used to send action messages
     action_tx: mpsc::Sender<NetworkAction>,
-    // Stream used to send validation messages
+    /// Stream used to send validation messages
     validate_tx: mpsc::UnboundedSender<ValidateMessage<PeerId>>,
-    // Rate limiting capabilities
+    /// Rate limiting capabilities
     peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<u16, RateLimit>>>>,
-    // Metrics used for data analysis
+    /// Metrics used for data analysis
     #[cfg(feature = "metrics")]
     metrics: Arc<NetworkMetrics>,
-    // Required services from other peeers. This is defined on init, based on our client type
+    /// Required services from other peers. This is defined on init, based on our client type
     required_services: Services,
 }
 

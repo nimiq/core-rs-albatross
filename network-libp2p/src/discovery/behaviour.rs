@@ -251,6 +251,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                 debug!("Doing house-keeping in peer address book");
                 let mut peer_address_book = self.peer_contact_book.write();
                 peer_address_book.update_own_contact(&self.keypair);
+                peer_address_book.house_keeping();
             }
             Poll::Ready(None) => unreachable!(),
             Poll::Pending => {}

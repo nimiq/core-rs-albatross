@@ -32,7 +32,7 @@ bitflags! {
         ///
         const HISTORY = 1 << 1;
 
-        /// The ZKP that proves the latest election block
+        /// The node provides the ZKP for the latest election block
         ///
         const CHAIN_PROOF = 1 << 2;
 
@@ -260,7 +260,7 @@ impl PeerContactInfo {
     pub fn is_seed(&self) -> bool {
         self.contact.inner.timestamp.is_none()
     }
-
+    /// Returns whether the peer contact exceeds its age limit
     pub fn exceeds_age(&self, max_age: Duration, unix_time: Duration) -> bool {
         if let Some(timestamp) = self.contact.inner.timestamp {
             if let Some(age) = unix_time.checked_sub(Duration::from_secs(timestamp)) {
@@ -292,6 +292,9 @@ pub struct PeerContactBook {
 }
 
 impl PeerContactBook {
+    /// If a peer's age exceeds this value in seconds, it is removed (30 minutes)
+    pub const MAX_PEER_AGE: u64 = 30 * 60;
+
     pub fn new(own_peer_contact: SignedPeerContact) -> Self {
         Self {
             own_peer_contact: own_peer_contact.into(),
@@ -318,9 +321,11 @@ impl PeerContactBook {
         let info = PeerContactInfo::from(contact);
         if info.matches(services_filter) {
             log::debug!(
-                " Inserting peer_id: {} into my peer contacts, because is interesting to me, it provides: {:?}",
-                info.peer_id,info.services()
+                added_peer = %info.peer_id,
+                services = ?info.services(),
+                "Inserting into my peer contacts, because is interesting to me",
             );
+
             let peer_id = info.peer_id;
             self.peer_contacts.insert(peer_id, Arc::new(info));
         }
@@ -335,7 +340,6 @@ impl PeerContactBook {
     pub fn insert_all_filtered<I: IntoIterator<Item = SignedPeerContact>>(
         &mut self,
         contacts: I,
-
         services_filter: Services,
     ) {
         for contact in contacts {
@@ -399,7 +403,10 @@ impl PeerContactBook {
                 .peer_contacts
                 .iter()
                 .filter_map(|(peer_id, peer_contact)| {
-                    if peer_contact.exceeds_age(Duration::from_secs(60 * 15), unix_time) {
+                    if peer_contact.exceeds_age(
+                        Duration::from_secs(PeerContactBook::MAX_PEER_AGE),
+                        unix_time,
+                    ) {
                         debug!(%peer_id, "Removing peer contact because of old age");
                         Some(peer_id)
                     } else {

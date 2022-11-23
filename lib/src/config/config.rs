@@ -50,9 +50,12 @@ use crate::{
 ///
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Display)]
 pub enum SyncMode {
+    /// History nodes: They use HistoryMacroSync + BlockLiveSync
     History,
+    /// Full nodes: They use LightMacroSync + StateLiveSync
     Full,
-    Nano,
+    /// Light nodes: They use LightMacroSync + BlockLiveSync
+    Light,
 }
 
 impl Default for SyncMode {
@@ -63,12 +66,16 @@ impl Default for SyncMode {
 
 #[derive(Debug, Clone, Builder)]
 #[builder(setter(into))]
+/// Client Consensus settings configuration
 pub struct ConsensusConfig {
     #[builder(default)]
+    /// Sync mode used based upon its client type
     pub sync_mode: SyncMode,
     #[builder(default = "3")]
+    /// Mininum number of peers necessary to reach consensus
     pub min_peers: usize,
     #[builder(default = "1")]
+    /// Maximum number of epochs that are stored in the client
     pub max_epochs_stored: u32,
 }
 
@@ -761,7 +768,18 @@ impl ClientConfigBuilder {
         #[cfg(feature = "rpc-server")]
         {
             if let Some(rpc_config) = &config_file.rpc_server {
-                let bind_to = rpc_config.bind.as_ref().map(|addr| addr.parse().unwrap());
+                let bind_to = match rpc_config.bind.as_ref() {
+                    Some(ip_string) => match ip_string.parse::<IpAddr>() {
+                        Ok(parsed) => Some(parsed),
+                        Err(err) => {
+                            return Err(Error::config_error(format!(
+                                "Failed parsing RPC server address {}",
+                                err
+                            )))
+                        }
+                    },
+                    None => None,
+                };
 
                 let allow_ips = if rpc_config.allowip.is_empty() {
                     None
@@ -802,10 +820,18 @@ impl ClientConfigBuilder {
         #[cfg(feature = "metrics-server")]
         {
             if let Some(metrics_config) = &config_file.metrics_server {
-                let ip = metrics_config
-                    .bind
-                    .as_ref()
-                    .map(|addr| addr.parse().unwrap());
+                let ip = match metrics_config.bind.as_ref() {
+                    Some(ip_string) => match ip_string.parse::<IpAddr>() {
+                        Ok(parsed) => Some(parsed),
+                        Err(err) => {
+                            return Err(Error::config_error(format!(
+                                "Failed parsing metrics server address {}",
+                                err
+                            )))
+                        }
+                    },
+                    None => None,
+                };
 
                 let addr = SocketAddr::new(
                     ip.unwrap_or_else(default_bind),
@@ -856,7 +882,7 @@ pub struct ZKPConfig {
     /// ZKP prover path for verifying and proving keys.
     pub setup_keys_path: PathBuf,
 
-    /// ZKP propagation
+    /// Flag for enabling the propagation of ZK proofs
     pub zkp_propagation: bool,
 }
 

@@ -59,6 +59,8 @@ seed_nodes = [
 # Possible values: "main", "test", "dev", "test-albatross", "dev-albatross"
 # Default: "dev-albatross"
 #network = "main"
+# Specify the sync menchanism according to the client type
+# Possible values: history, full or light
 sync_mode = "full"
 
 ##############################################################################

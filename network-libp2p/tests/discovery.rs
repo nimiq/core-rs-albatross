@@ -227,3 +227,57 @@ pub async fn test_dialing_peer_from_contacts() {
         assert_eq!(peer2_id, peer_id);
     }
 }
+
+#[test]
+fn test_housekeeping() {
+    let mut peer_contact_book = PeerContactBook::new(random_peer_contact(1, Services::FULL_BLOCKS));
+
+    let fresh_contact = random_peer_contact(1, Services::FULL_BLOCKS);
+
+    let old_contact = {
+        let keypair = Keypair::generate_ed25519();
+
+        let mut peer_contact = PeerContact {
+            addresses: vec!["/dns/test_old.local/tcp/443/wss".parse().unwrap()],
+            public_key: keypair.public(),
+            services: Services::FULL_BLOCKS,
+            timestamp: None,
+        };
+
+        peer_contact.set_current_time();
+        peer_contact
+            .timestamp
+            .as_mut()
+            .map(|t| *t -= PeerContactBook::MAX_PEER_AGE * 2); // twice as older
+
+        peer_contact.sign(&keypair)
+    };
+
+    // Insert fresh contact and check that it was inserted
+    peer_contact_book.insert(fresh_contact.clone());
+    let peer_contact = peer_contact_book
+        .get(&fresh_contact.public_key().clone().to_peer_id())
+        .unwrap();
+    assert_eq!(peer_contact.contact(), &fresh_contact.inner);
+
+    // Insert old contact and check that it was inserted
+    peer_contact_book.insert(old_contact.clone());
+    let peer_contact = peer_contact_book
+        .get(&old_contact.public_key().clone().to_peer_id())
+        .unwrap();
+    assert_eq!(peer_contact.contact(), &old_contact.inner);
+
+    // Call house-keeping on peer contact book
+    peer_contact_book.house_keeping();
+
+    // Check that fresh contact is still in there
+    let peer_contact = peer_contact_book
+        .get(&fresh_contact.public_key().clone().to_peer_id())
+        .unwrap();
+    assert_eq!(peer_contact.contact(), &fresh_contact.inner);
+
+    // Check that old contact is not in there
+    assert!(peer_contact_book
+        .get(&old_contact.public_key().clone().to_peer_id())
+        .is_none());
+}

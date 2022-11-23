@@ -383,7 +383,7 @@ for i in range(num_validators):
 
 # Create history node
 create_history_node(
-    output / "history{:d}".format(0+1), 0, min_peers, args.metrics)
+    output / "history1", 0, min_peers, args.metrics)
 print("Created history node")
 
 # Create seed node configuration
