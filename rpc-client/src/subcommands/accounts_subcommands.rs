@@ -90,7 +90,7 @@ pub enum AccountCommand {
         public_key: PublicKey,
 
         /// The signature returned upon signing the message. The r and s bytes should be all concatenated
-        /// into one continuos input.
+        /// into one continuous input.
         #[clap(short, long)]
         signature: Signature,
 

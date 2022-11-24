@@ -10,8 +10,8 @@ use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::policy::Policy;
 use nimiq_rpc_interface::types::{
-    is_of_log_type_and_related_to_addresses, BlockLog, BlockNumberOrHash, BlockchainState,
-    ParkedSet, RPCData, RPCResult, Validator,
+    is_of_log_type_and_related_to_addresses, BlockLog, BlockchainState, ParkedSet, RPCData,
+    RPCResult, Validator,
 };
 use nimiq_rpc_interface::{
     blockchain::BlockchainInterface,
@@ -49,7 +49,7 @@ fn get_block_by_hash(
             )
             .into()
         })
-        .ok_or_else(|| Error::BlockNotFound(hash.clone().into()))
+        .ok_or_else(|| Error::BlockNotFoundByHash(hash.clone()))
 }
 
 /// Tries to fetch a validator information given its address. It has an option to include a collection
@@ -136,7 +136,7 @@ impl BlockchainInterface for BlockchainDispatcher {
 
         let block = blockchain
             .get_block_at(block_number, true, None)
-            .ok_or_else(|| Error::BlockNotFound(block_number.into()))?;
+            .ok_or(Error::BlockNotFound(block_number))?;
 
         Ok(Block::from_block(
             blockchain.deref(),
@@ -178,14 +178,12 @@ impl BlockchainInterface for BlockchainDispatcher {
         } else {
             let block = blockchain
                 .get_block_at(block_number, true, None)
-                .ok_or_else(|| Error::BlockNotFound(block_number.into()))?;
+                .ok_or(Error::BlockNotFound(block_number))?;
             if let nimiq_block::Block::Macro(macro_block) = block {
                 if let Some(proof) = macro_block.justification {
                     proof.round
                 } else {
-                    return Err(Error::UnexpectedMacroBlock(BlockNumberOrHash::Number(
-                        block_number,
-                    )));
+                    return Err(Error::UnexpectedMacroBlock(block_number));
                 }
             } else {
                 // Skip and micro block offset is block number
@@ -357,7 +355,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         // Check the batch's macro block to see if the batch includes slashes.
         let macro_block = blockchain
             .get_block_at(macro_block_number, true, None) // The lost_reward_set is in the MacroBody
-            .ok_or_else(|| Error::BlockNotFound(macro_block_number.into()))?;
+            .ok_or(Error::BlockNotFound(macro_block_number))?;
 
         let mut inherent_tx_vec = vec![];
 

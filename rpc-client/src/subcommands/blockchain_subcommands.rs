@@ -6,7 +6,7 @@ use futures::StreamExt;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_rpc_interface::blockchain::BlockchainInterface;
-use nimiq_rpc_interface::types::{BlockNumberOrHash, LogType};
+use nimiq_rpc_interface::types::LogType;
 
 use crate::Client;
 
@@ -23,10 +23,21 @@ pub enum BlockchainCommand {
     /// Returns the epoch number for the current head.
     EpochNumber {},
 
-    /// Query a block from the blockchain.
+    /// Query a block from the blockchain either by block number or block hash.
+    /// If omitted, the last block is queried.
+    #[clap(group(
+        ArgGroup::new("hash_or_number")
+        .required(false)
+        .args(&["block_hash", "block_number"]),
+        ))]
     Block {
-        /// Either a block hash or number. If omitted, the last block is queried.
-        hash_or_number: Option<BlockNumberOrHash>,
+        /// The block hash of the desired block.
+        #[clap(conflicts_with = "block_number", long)]
+        block_hash: Option<Blake2bHash>,
+
+        /// The block number of the desired block.
+        #[clap(long)]
+        block_number: Option<u32>,
 
         /// Include transactions
         #[clap(short = 't')]
@@ -162,28 +173,25 @@ impl HandleSubcommand for BlockchainCommand {
     async fn handle_subcommand(self, mut client: Client) -> Result<(), Error> {
         match self {
             BlockchainCommand::Block {
-                hash_or_number,
+                block_hash,
+                block_number,
                 include_transactions,
             } => {
-                let block = match hash_or_number {
-                    Some(BlockNumberOrHash::Hash(hash)) => {
-                        client
-                            .blockchain
-                            .get_block_by_hash(hash, Some(include_transactions))
-                            .await
-                    }
-                    Some(BlockNumberOrHash::Number(number)) => {
-                        client
-                            .blockchain
-                            .get_block_by_number(number, Some(include_transactions))
-                            .await
-                    }
-                    None => {
-                        client
-                            .blockchain
-                            .get_latest_block(Some(include_transactions))
-                            .await
-                    }
+                let block = if let Some(block_hash) = block_hash {
+                    client
+                        .blockchain
+                        .get_block_by_hash(block_hash, Some(include_transactions))
+                        .await
+                } else if let Some(block_number) = block_number {
+                    client
+                        .blockchain
+                        .get_block_by_number(block_number, Some(include_transactions))
+                        .await
+                } else {
+                    client
+                        .blockchain
+                        .get_latest_block(Some(include_transactions))
+                        .await
                 }?;
                 println!("{:#?}", block)
             }

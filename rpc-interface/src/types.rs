@@ -46,47 +46,6 @@ impl From<nimiq_transaction::Transaction> for HashOrTx {
     }
 }
 
-#[derive(Clone, Debug)]
-pub enum BlockNumberOrHash {
-    Number(u32),
-    Hash(Blake2bHash),
-}
-
-impl From<u32> for BlockNumberOrHash {
-    fn from(block_number: u32) -> Self {
-        BlockNumberOrHash::Number(block_number)
-    }
-}
-
-impl From<Blake2bHash> for BlockNumberOrHash {
-    fn from(block_hash: Blake2bHash) -> Self {
-        BlockNumberOrHash::Hash(block_hash)
-    }
-}
-
-impl Display for BlockNumberOrHash {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        match self {
-            BlockNumberOrHash::Number(block_number) => write!(f, "{}", block_number),
-            BlockNumberOrHash::Hash(block_hash) => write!(f, "{}", block_hash),
-        }
-    }
-}
-
-impl FromStr for BlockNumberOrHash {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if let Ok(n) = s.parse::<u32>() {
-            Ok(BlockNumberOrHash::Number(n))
-        } else {
-            Ok(BlockNumberOrHash::Hash(s.parse().map_err(|_| {
-                Error::InvalidBlockNumberOrHash(s.to_owned())
-            })?))
-        }
-    }
-}
-
 #[derive(Copy, Clone, Debug, SerializeDisplay, DeserializeFromStr)]
 pub enum ValidityStartHeight {
     Absolute(u32),

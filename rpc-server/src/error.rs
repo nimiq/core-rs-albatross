@@ -4,7 +4,6 @@ use thiserror::Error;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_mempool::verify::VerifyErr;
-use nimiq_rpc_interface::types::BlockNumberOrHash;
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -18,7 +17,10 @@ pub enum Error {
     MempoolError(VerifyErr),
 
     #[error("Block not found: {0}")]
-    BlockNotFound(BlockNumberOrHash),
+    BlockNotFound(u32),
+
+    #[error("Block not found: {0}")]
+    BlockNotFoundByHash(Blake2bHash),
 
     #[error("Block number is not allowed to be 0")]
     BlockNumberNotZero,
@@ -30,7 +32,10 @@ pub enum Error {
     BatchNumberNotZero,
 
     #[error("Unexpected macro block: {0}")]
-    UnexpectedMacroBlock(BlockNumberOrHash),
+    UnexpectedMacroBlock(u32),
+
+    #[error("Unexpected macro block: {0}")]
+    UnexpectedMacroBlockByHash(Blake2bHash),
 
     #[error("Method not implemented")]
     NotImplemented,
