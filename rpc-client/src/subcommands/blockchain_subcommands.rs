@@ -35,7 +35,7 @@ pub enum BlockchainCommand {
 
     /// Query a transaction from the blockchain.
     Transaction {
-        /// The transation hash.
+        /// The transaction hash.
         hash: Blake2bHash,
     },
 
@@ -44,11 +44,11 @@ pub enum BlockchainCommand {
     #[clap(group(
     ArgGroup::new("block_or_batch")
     .required(true)
-    .args(&["block-number", "batch-number"]),
+    .args(&["block_number", "batch_number"]),
     ))]
     Transactions {
         /// The block number to fetch all its transactions.
-        #[clap(conflicts_with = "batch-number", long)]
+        #[clap(conflicts_with = "batch_number", long)]
         block_number: Option<u32>,
         /// The batch number to fetch all its transactions.
         #[clap(long)]
@@ -60,11 +60,11 @@ pub enum BlockchainCommand {
     #[clap(group(
     ArgGroup::new("block_or_batch")
     .required(true)
-    .args(&["block-number", "batch-number"]),
+    .args(&["block_number", "batch_number"]),
     ))]
     Inherents {
         /// The block number to fetch all its inherents.
-        #[clap(conflicts_with = "batch-number", long)]
+        #[clap(conflicts_with = "batch_number", long)]
         block_number: Option<u32>,
 
         /// The batch number to fetch all its inherents.
@@ -145,7 +145,7 @@ pub enum BlockchainCommand {
     },
 
     /// Follow the logs associated with the specified addresses and of any of the log types given.
-    /// If no addresses or no logtypes are provided it fetches all logs.
+    /// If no addresses or no log types are provided it fetches all logs.
     FollowLogsOfAddressesAndTypes {
         /// List of all address to follow. If empty it does not filter by address.
         #[clap(short = 'a', long)]

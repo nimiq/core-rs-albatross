@@ -29,7 +29,7 @@ pub enum AccountCommand {
         password: Option<String>,
     },
 
-    /// Imports an existing account and unlocks it.
+    /// Imports an existing account. The account remains locked after this operation.
     Import {
         #[clap(short = 'P', long)]
         password: Option<String>,
@@ -79,7 +79,7 @@ pub enum AccountCommand {
         is_hex: bool,
     },
 
-    /// Verfies if the message was signed by specified account. The account must already be unlocked.
+    /// Verifies if the message was signed by specified account. The account must already be unlocked.
     VerifySignature {
         /// The signed message to be verified.
         #[clap(short, long)]
@@ -90,7 +90,7 @@ pub enum AccountCommand {
         public_key: PublicKey,
 
         /// The signature returned upon signing the message. The r and s bytes should be all concatenated
-        /// into one continous input.
+        /// into one continuos input.
         #[clap(short, long)]
         signature: Signature,
 
