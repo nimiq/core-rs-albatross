@@ -1317,7 +1317,7 @@ fn stake_works() {
 
     // Works in the valid case.
     let tx = make_signed_incoming_transaction(
-        IncomingStakingTransactionData::Stake {
+        IncomingStakingTransactionData::AddStake {
             staker_address: staker_address.clone(),
         },
         150_000_000,
@@ -2410,7 +2410,7 @@ fn make_incoming_transaction(data: IncomingStakingTransactionData, value: u64) -
     match data {
         IncomingStakingTransactionData::CreateValidator { .. }
         | IncomingStakingTransactionData::CreateStaker { .. }
-        | IncomingStakingTransactionData::Stake { .. } => Transaction::new_extended(
+        | IncomingStakingTransactionData::AddStake { .. } => Transaction::new_extended(
             Address::from_any_str(STAKER_ADDRESS).unwrap(),
             AccountType::Basic,
             Policy::STAKING_CONTRACT_ADDRESS,
@@ -2512,7 +2512,7 @@ fn make_unstake_transaction(value: u64) -> Transaction {
 
     let sig = SignatureProof::from(key_pair.public, key_pair.sign(&tx.serialize_content()));
 
-    let proof = OutgoingStakingTransactionProof::Unstake { proof: sig };
+    let proof = OutgoingStakingTransactionProof::RemoveStake { proof: sig };
 
     tx.proof = proof.serialize_to_vec();
 

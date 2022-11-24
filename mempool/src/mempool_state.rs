@@ -120,7 +120,7 @@ impl MempoolState {
                         None
                     );
                 }
-                OutgoingStakingTransactionProof::Unstake { proof } => {
+                OutgoingStakingTransactionProof::RemoveStake { proof } => {
                     assert_eq!(
                         self.outgoing_stakers
                             .insert(proof.compute_signer(), tx.clone()),
@@ -230,7 +230,7 @@ impl MempoolState {
                         None
                     );
                 }
-                OutgoingStakingTransactionProof::Unstake { proof } => {
+                OutgoingStakingTransactionProof::RemoveStake { proof } => {
                     assert_ne!(self.outgoing_stakers.remove(&proof.compute_signer()), None);
                 }
             }

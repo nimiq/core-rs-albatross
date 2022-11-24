@@ -31,7 +31,7 @@ pub trait AccountTransactionInteraction: Sized {
         &mut self,
         transaction: &Transaction,
         block_time: u64,
-        receipt: Option<&AccountReceipt>,
+        receipt: Option<AccountReceipt>,
         data_store: DataStoreWrite,
     ) -> Result<(), AccountError>;
 
@@ -46,7 +46,7 @@ pub trait AccountTransactionInteraction: Sized {
         &mut self,
         transaction: &Transaction,
         block_time: u64,
-        receipt: Option<&AccountReceipt>,
+        receipt: Option<AccountReceipt>,
         data_store: DataStoreWrite,
     ) -> Result<(), AccountError>;
 
@@ -61,7 +61,7 @@ pub trait AccountTransactionInteraction: Sized {
         &mut self,
         transaction: &Transaction,
         block_time: u64,
-        receipt: Option<&AccountReceipt>,
+        receipt: Option<AccountReceipt>,
         data_store: DataStoreWrite,
     ) -> Result<(), AccountError>;
 
@@ -86,7 +86,7 @@ pub trait AccountInherentInteraction: Sized {
         &mut self,
         inherent: &Inherent,
         block_time: u64,
-        receipt: Option<&AccountReceipt>,
+        receipt: Option<AccountReceipt>,
         data_store: DataStoreWrite,
     ) -> Result<(), AccountError>;
 }

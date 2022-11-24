@@ -517,7 +517,7 @@ fn stake() {
 
     // Test serialization and deserialization.
     let tx = make_signed_incoming_tx(
-        IncomingStakingTransactionData::Stake {
+        IncomingStakingTransactionData::AddStake {
             staker_address: STAKER_ADDRESS.parse().unwrap(),
         },
         100,
@@ -666,7 +666,7 @@ fn make_incoming_tx(data: IncomingStakingTransactionData, value: u64) -> Transac
     match data {
         IncomingStakingTransactionData::CreateValidator { .. }
         | IncomingStakingTransactionData::CreateStaker { .. }
-        | IncomingStakingTransactionData::Stake { .. } => Transaction::new_extended(
+        | IncomingStakingTransactionData::AddStake { .. } => Transaction::new_extended(
             Address::from_any_str(STAKER_ADDRESS).unwrap(),
             AccountType::Basic,
             Policy::STAKING_CONTRACT_ADDRESS,
@@ -794,7 +794,7 @@ fn make_unstake_tx(wrong_sig: bool) -> Transaction {
         key_pair.sign(&tx.serialize_content()),
     );
 
-    let proof = OutgoingStakingTransactionProof::Unstake { proof: sig };
+    let proof = OutgoingStakingTransactionProof::RemoveStake { proof: sig };
 
     tx.proof = proof.serialize_to_vec();
 

@@ -112,7 +112,7 @@ impl AccountTransactionInteraction for VestingContract {
         &mut self,
         _transaction: &Transaction,
         _block_time: u64,
-        _receipt: Option<&AccountReceipt>,
+        _receipt: Option<AccountReceipt>,
         _data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
         Err(AccountError::InvalidForRecipient)
@@ -134,7 +134,7 @@ impl AccountTransactionInteraction for VestingContract {
         &mut self,
         transaction: &Transaction,
         _block_time: u64,
-        _receipt: Option<&AccountReceipt>,
+        _receipt: Option<AccountReceipt>,
         _data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
         self.balance += transaction.total_value();
@@ -158,7 +158,7 @@ impl AccountTransactionInteraction for VestingContract {
         &mut self,
         transaction: &Transaction,
         _block_time: u64,
-        _receipt: Option<&AccountReceipt>,
+        _receipt: Option<AccountReceipt>,
         _data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
         self.balance += transaction.fee;
@@ -200,7 +200,7 @@ impl AccountInherentInteraction for VestingContract {
         &mut self,
         _inherent: &Inherent,
         _block_time: u64,
-        _receipt: Option<&AccountReceipt>,
+        _receipt: Option<AccountReceipt>,
         _data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
         Err(AccountError::InvalidForTarget)

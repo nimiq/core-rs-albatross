@@ -398,6 +398,34 @@ impl StakingContract {
         Ok(())
     }
 
+    /// Checks if a validator can be deleted.
+    pub fn can_delete_validator(
+        &self,
+        validator: &Validator,
+        block_number: u32,
+        transaction_total_value: Coin,
+    ) -> Result<(), AccountError> {
+        // Check that the validator has been inactive for long enough.
+        if let Some(inactive_since) = validator.inactive_since {
+            let deadline =
+                Policy::election_block_after(inactive_since) + Policy::blocks_per_batch();
+            if block_number <= deadline {
+                debug!("Tried to delete validator {} too soon", validator.address);
+                return Err(AccountError::InvalidForSender);
+            }
+        } else {
+            debug!("Tried to delete active validator {}", validator.address);
+            return Err(AccountError::InvalidForSender);
+        }
+
+        // The transaction value + fee must be equal to the validator deposit
+        if transaction_total_value != validator.deposit {
+            return Err(AccountError::InvalidCoinValue);
+        }
+
+        Ok(())
+    }
+
     /// Deletes a validator and returns its deposit. This can only be used on inactive validators!
     /// After the validator gets inactivated, it needs to wait until the second batch of the next
     /// epoch in order to be able to be deleted. This is necessary because if the validator was an
@@ -419,23 +447,8 @@ impl StakingContract {
         // Get the validator.
         let validator = store.expect_validator(validator_address)?;
 
-        // Check that the validator has been inactive for long enough.
-        if let Some(inactive_since) = validator.inactive_since {
-            let deadline =
-                Policy::election_block_after(inactive_since) + Policy::blocks_per_batch();
-            if block_number <= deadline {
-                debug!("Tried to delete validator {} too soon", validator_address);
-                return Err(AccountError::InvalidForSender);
-            }
-        } else {
-            debug!("Tried to delete active validator {}", validator_address);
-            return Err(AccountError::InvalidForSender);
-        }
-
-        // The transaction value + fee must be equal to the validator deposit
-        if transaction_total_value != validator.deposit {
-            return Err(AccountError::InvalidCoinValue);
-        }
+        // Check that the validator can be deleted.
+        self.can_delete_validator(&validator, block_number, transaction_total_value)?;
 
         // All checks passed, not allowed to fail from here on!
 

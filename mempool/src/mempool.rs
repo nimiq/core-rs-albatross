@@ -444,7 +444,7 @@ impl Mempool {
                                     .outgoing_validators
                                     .get(&proof.compute_signer())
                             }
-                            OutgoingStakingTransactionProof::Unstake { proof } => {
+                            OutgoingStakingTransactionProof::RemoveStake { proof } => {
                                 mempool_state.outgoing_stakers.get(&proof.compute_signer())
                             }
                         };

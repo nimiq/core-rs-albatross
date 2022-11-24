@@ -92,7 +92,7 @@ impl AccountTransactionInteraction for Account {
         &mut self,
         transaction: &Transaction,
         block_time: u64,
-        receipt: Option<&AccountReceipt>,
+        receipt: Option<AccountReceipt>,
         data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
         todo!()
@@ -111,7 +111,7 @@ impl AccountTransactionInteraction for Account {
         &mut self,
         transaction: &Transaction,
         block_time: u64,
-        receipt: Option<&AccountReceipt>,
+        receipt: Option<AccountReceipt>,
         data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
         todo!()
@@ -130,7 +130,7 @@ impl AccountTransactionInteraction for Account {
         &mut self,
         transaction: &Transaction,
         block_time: u64,
-        receipt: Option<&AccountReceipt>,
+        receipt: Option<AccountReceipt>,
         data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
         todo!()
@@ -459,7 +459,7 @@ impl AccountInherentInteraction for Account {
         &mut self,
         inherent: &Inherent,
         block_time: u64,
-        receipt: Option<&AccountReceipt>,
+        receipt: Option<AccountReceipt>,
         data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
         todo!()

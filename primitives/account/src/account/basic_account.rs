@@ -47,7 +47,7 @@ impl AccountTransactionInteraction for BasicAccount {
         &mut self,
         transaction: &Transaction,
         _block_time: u64,
-        _receipt: Option<&AccountReceipt>,
+        _receipt: Option<AccountReceipt>,
         _data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
         self.balance -= transaction.value;
@@ -68,7 +68,7 @@ impl AccountTransactionInteraction for BasicAccount {
         &mut self,
         transaction: &Transaction,
         _block_time: u64,
-        _receipt: Option<&AccountReceipt>,
+        _receipt: Option<AccountReceipt>,
         _data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
         self.balance += transaction.total_value()?;
@@ -89,7 +89,7 @@ impl AccountTransactionInteraction for BasicAccount {
         &mut self,
         transaction: &Transaction,
         _block_time: u64,
-        _receipt: Option<&AccountReceipt>,
+        _receipt: Option<AccountReceipt>,
         _data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
         self.balance += transaction.fee;
@@ -130,7 +130,7 @@ impl AccountInherentInteraction for BasicAccount {
         &mut self,
         inherent: &Inherent,
         _block_time: u64,
-        _receipt: Option<&AccountReceipt>,
+        _receipt: Option<AccountReceipt>,
         _data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
         match inherent {

@@ -37,7 +37,7 @@ impl StakingDataBuilder {
 
         // If this is a stake transaction, we don't need to sign it.
         match data {
-            IncomingStakingTransactionData::Stake { .. } => {}
+            IncomingStakingTransactionData::AddStake { .. } => {}
             _ => {
                 let signature = key_pair.sign(self.transaction.serialize_content().as_slice());
                 let proof = SignatureProof::from(key_pair.public, signature);
@@ -94,7 +94,7 @@ impl StakingProofBuilder {
     pub fn unstake(&mut self, key_pair: &KeyPair) -> &mut Self {
         let signature = key_pair.sign(self.transaction.serialize_content().as_slice());
         let proof = SignatureProof::from(key_pair.public, signature);
-        self.proof = Some(OutgoingStakingTransactionProof::Unstake { proof });
+        self.proof = Some(OutgoingStakingTransactionProof::RemoveStake { proof });
         self
     }
 

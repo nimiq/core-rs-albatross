@@ -204,7 +204,7 @@ pub(crate) async fn verify_tx<'a>(
             OutgoingStakingTransactionProof::DeleteValidator { proof } => mempool_state
                 .outgoing_validators
                 .contains_key(&proof.compute_signer()),
-            OutgoingStakingTransactionProof::Unstake { proof } => mempool_state
+            OutgoingStakingTransactionProof::RemoveStake { proof } => mempool_state
                 .outgoing_stakers
                 .contains_key(&proof.compute_signer()),
         };

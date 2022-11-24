@@ -297,7 +297,7 @@ impl Accounts {
                 .revert_outgoing_transaction(
                     transaction,
                     block_time,
-                    sender_receipt.as_ref(),
+                    sender_receipt,
                     sender_store.write(txn),
                 )
                 .expect("failed to revert sender account");
@@ -370,7 +370,7 @@ impl Accounts {
         transactions: &[Transaction],
         inherents: &[Inherent],
         block_time: u64,
-        receipts: &Receipts,
+        receipts: Receipts,
     ) -> Result<(), AccountError> {
         self.revert_batch(txn, transactions, inherents, block_time, receipts)?;
         // It is fine to have an incomplete trie here.
@@ -384,11 +384,14 @@ impl Accounts {
         transactions: &[Transaction],
         inherents: &[Inherent],
         block_time: u64,
-        receipts: &Receipts,
+        receipts: Receipts,
     ) -> Result<(), AccountError> {
         // Revert inherents in reverse order.
         assert_eq!(inherents.len(), receipts.inherents.len());
-        let iter = inherents.into_iter().zip(receipts.inherents.iter()).rev();
+        let iter = inherents
+            .into_iter()
+            .zip(receipts.inherents.into_iter())
+            .rev();
         for (inherent, receipt) in iter {
             self.revert_inherent(txn, inherent, block_time, receipt)?;
         }
@@ -397,7 +400,7 @@ impl Accounts {
         assert_eq!(transactions.len(), receipts.transactions.len());
         let iter = transactions
             .into_iter()
-            .zip(receipts.transactions.iter())
+            .zip(receipts.transactions.into_iter())
             .rev();
         for (transaction, receipt) in iter {
             self.revert_transaction(txn, transaction, block_time, receipt)?;
@@ -411,7 +414,7 @@ impl Accounts {
         txn: &mut WriteTransaction,
         transaction: &Transaction,
         block_time: u64,
-        receipt: &TransactionOperationReceipt,
+        receipt: TransactionOperationReceipt,
     ) -> Result<(), AccountError> {
         match receipt {
             OperationReceipt::Ok(receipt) => {
@@ -429,7 +432,7 @@ impl Accounts {
         txn: &mut WriteTransaction,
         transaction: &Transaction,
         block_time: u64,
-        receipt: &TransactionReceipt,
+        receipt: TransactionReceipt,
     ) -> Result<(), AccountError> {
         // Revert recipient first.
         let recipient_address = &transaction.recipient;
@@ -453,7 +456,7 @@ impl Accounts {
             recipient_account.revert_incoming_transaction(
                 transaction,
                 block_time,
-                receipt.recipient_receipt.as_ref(),
+                receipt.recipient_receipt,
                 recipient_store.write(txn),
             )?;
         }
@@ -471,7 +474,7 @@ impl Accounts {
         sender_account.revert_outgoing_transaction(
             transaction,
             block_time,
-            receipt.sender_receipt.as_ref(),
+            receipt.sender_receipt,
             sender_store.write(txn),
         )?;
 
@@ -490,7 +493,7 @@ impl Accounts {
         txn: &mut WriteTransaction,
         transaction: &Transaction,
         block_time: u64,
-        receipt: &TransactionReceipt,
+        receipt: TransactionReceipt,
     ) -> Result<(), AccountError> {
         let sender_address = &transaction.sender;
         let mut sender_store = DataStore::new(&self.tree, sender_address);
@@ -504,7 +507,7 @@ impl Accounts {
         sender_account.revert_failed_transaction(
             transaction,
             block_time,
-            receipt.sender_receipt.as_ref(),
+            receipt.sender_receipt,
             sender_store.write(txn),
         )?;
 
@@ -518,7 +521,7 @@ impl Accounts {
         txn: &mut WriteTransaction,
         inherent: &Inherent,
         block_time: u64,
-        receipt: &InherentOperationReceipt,
+        receipt: InherentOperationReceipt,
     ) -> Result<(), AccountError> {
         // If the inherent operation failed, there is nothing to revert.
         let receipt = match receipt {
@@ -530,7 +533,7 @@ impl Accounts {
         let store = DataStore::new(&self.tree, address);
         let mut account = self.get(address, Some(txn))?;
 
-        account.revert_inherent(inherent, block_time, receipt.as_ref(), store.write(txn))?;
+        account.revert_inherent(inherent, block_time, receipt, store.write(txn))?;
 
         // The account might have been created by the inherent (i.e. reward inherent).
         self.put_or_prune(txn, address, account);

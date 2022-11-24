@@ -51,7 +51,7 @@ fn it_can_create_staker_transactions() {
 
     // Stake
     let tx = make_signed_incoming_transaction(
-        IncomingStakingTransactionData::Stake {
+        IncomingStakingTransactionData::AddStake {
             staker_address: address.clone(),
         },
         100_000_000,
@@ -301,7 +301,7 @@ fn it_can_create_validator_transactions() {
 fn make_incoming_transaction(data: IncomingStakingTransactionData, value: u64) -> Transaction {
     match data {
         IncomingStakingTransactionData::CreateStaker { .. }
-        | IncomingStakingTransactionData::Stake { .. }
+        | IncomingStakingTransactionData::AddStake { .. }
         | IncomingStakingTransactionData::CreateValidator { .. } => Transaction::new_extended(
             Address::from_any_str(ADDRESS).unwrap(),
             AccountType::Basic,
@@ -356,7 +356,7 @@ fn make_unstake_transaction(key_pair: &KeyPair, value: u64) -> Transaction {
         1,
         NetworkId::Dummy,
     );
-    let proof = OutgoingStakingTransactionProof::Unstake {
+    let proof = OutgoingStakingTransactionProof::RemoveStake {
         proof: SignatureProof::from(key_pair.public, key_pair.sign(&tx.serialize_content())),
     };
     tx.proof = proof.serialize_to_vec();
@@ -400,7 +400,7 @@ fn make_self_transaction(data: IncomingStakingTransactionData, key_pair: &KeyPai
         SignatureProof::from(key_pair.public, key_pair.sign(&tx.serialize_content())),
     )
     .unwrap();
-    let proof = OutgoingStakingTransactionProof::Unstake {
+    let proof = OutgoingStakingTransactionProof::RemoveStake {
         proof: SignatureProof::from(key_pair.public, key_pair.sign(&tx.serialize_content())),
     };
     tx.proof = proof.serialize_to_vec();

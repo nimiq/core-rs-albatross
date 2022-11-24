@@ -107,7 +107,7 @@ pub enum IncomingStakingTransactionData {
         #[cfg_attr(feature = "serde-derive", serde(skip))]
         proof: SignatureProof,
     },
-    Stake {
+    AddStake {
         staker_address: Address,
     },
     UpdateStaker {
@@ -203,7 +203,7 @@ impl IncomingStakingTransactionData {
                 // Check that the signature is correct.
                 verify_transaction_signature(transaction, proof, true)?
             }
-            IncomingStakingTransactionData::Stake { .. } => {
+            IncomingStakingTransactionData::AddStake { .. } => {
                 // No checks needed.
             }
             IncomingStakingTransactionData::UpdateStaker { proof, .. } => {
@@ -327,7 +327,7 @@ impl Serialize for IncomingStakingTransactionData {
                 size += Serialize::serialize(delegation, writer)?;
                 size += Serialize::serialize(proof, writer)?;
             }
-            IncomingStakingTransactionData::Stake { staker_address } => {
+            IncomingStakingTransactionData::AddStake { staker_address } => {
                 size += Serialize::serialize(&IncomingStakingTransactionType::Stake, writer)?;
                 size += Serialize::serialize(staker_address, writer)?;
             }
@@ -415,7 +415,7 @@ impl Serialize for IncomingStakingTransactionData {
                 size += Serialize::serialized_size(delegation);
                 size += Serialize::serialized_size(proof);
             }
-            IncomingStakingTransactionData::Stake { staker_address } => {
+            IncomingStakingTransactionData::AddStake { staker_address } => {
                 size += Serialize::serialized_size(&IncomingStakingTransactionType::Stake);
                 size += Serialize::serialized_size(staker_address);
             }
@@ -480,7 +480,7 @@ impl Deserialize for IncomingStakingTransactionData {
                     proof: Deserialize::deserialize(reader)?,
                 })
             }
-            IncomingStakingTransactionType::Stake => Ok(IncomingStakingTransactionData::Stake {
+            IncomingStakingTransactionType::Stake => Ok(IncomingStakingTransactionData::AddStake {
                 staker_address: Deserialize::deserialize(reader)?,
             }),
             IncomingStakingTransactionType::UpdateStaker => {
@@ -506,7 +506,7 @@ pub enum OutgoingStakingTransactionProof {
         // This proof is signed with the validator cold key.
         proof: SignatureProof,
     },
-    Unstake {
+    RemoveStake {
         proof: SignatureProof,
     },
 }
@@ -522,7 +522,7 @@ impl OutgoingStakingTransactionProof {
                 // Check that the signature is correct.
                 verify_transaction_signature(transaction, proof, false)?
             }
-            OutgoingStakingTransactionProof::Unstake { proof } => {
+            OutgoingStakingTransactionProof::RemoveStake { proof } => {
                 // Check that the signature is correct.
                 verify_transaction_signature(transaction, proof, false)?
             }
@@ -541,7 +541,7 @@ impl Serialize for OutgoingStakingTransactionProof {
                     Serialize::serialize(&OutgoingStakingTransactionType::DeleteValidator, writer)?;
                 size += Serialize::serialize(signature, writer)?;
             }
-            OutgoingStakingTransactionProof::Unstake { proof: signature } => {
+            OutgoingStakingTransactionProof::RemoveStake { proof: signature } => {
                 size += Serialize::serialize(&OutgoingStakingTransactionType::Unstake, writer)?;
                 size += Serialize::serialize(signature, writer)?;
             }
@@ -557,7 +557,7 @@ impl Serialize for OutgoingStakingTransactionProof {
                     Serialize::serialized_size(&OutgoingStakingTransactionType::DeleteValidator);
                 size += Serialize::serialized_size(signature);
             }
-            OutgoingStakingTransactionProof::Unstake { proof: signature } => {
+            OutgoingStakingTransactionProof::RemoveStake { proof: signature } => {
                 size += Serialize::serialized_size(&OutgoingStakingTransactionType::Unstake);
                 size += Serialize::serialized_size(signature);
             }
@@ -576,7 +576,7 @@ impl Deserialize for OutgoingStakingTransactionProof {
                 })
             }
             OutgoingStakingTransactionType::Unstake => {
-                Ok(OutgoingStakingTransactionProof::Unstake {
+                Ok(OutgoingStakingTransactionProof::RemoveStake {
                     proof: Deserialize::deserialize(reader)?,
                 })
             }

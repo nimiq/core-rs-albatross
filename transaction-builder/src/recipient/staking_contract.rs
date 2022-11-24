@@ -133,7 +133,7 @@ impl StakingRecipientBuilder {
 
     /// This method allows to add to a staker's balance.
     pub fn stake(&mut self, staker_address: Address) -> &mut Self {
-        self.data = Some(IncomingStakingTransactionData::Stake { staker_address });
+        self.data = Some(IncomingStakingTransactionData::AddStake { staker_address });
         self
     }
 
