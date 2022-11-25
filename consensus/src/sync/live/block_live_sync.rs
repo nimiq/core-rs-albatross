@@ -14,7 +14,6 @@ use nimiq_blockchain_interface::{PushError, PushResult};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_hash::Blake2bHash;
-use nimiq_light_blockchain::LightBlockchain;
 use nimiq_network_interface::network::{MsgAcceptance, Network};
 
 use crate::sync::{
@@ -33,6 +32,121 @@ enum PushOpResult {
         Vec<Blake2bHash>,
         HashSet<Blake2bHash>,
     ),
+}
+
+/// Pushes a single block into the blockchain.
+/// TODO We should limit the number of push operations we queue here.
+async fn push_single_block<N: Network>(
+    blockchain: BlockchainProxy,
+    bls_cache: Arc<Mutex<PublicKeyCache>>,
+    network: Arc<N>,
+    block: Block,
+    pubsub_id: Option<N::PubsubId>,
+    is_head: bool,
+    include_body: bool,
+) -> PushOpResult {
+    let block_hash = block.hash();
+    let push_result = spawn_blocking(move || {
+        // Update validator keys from BLS public key cache.
+        block.update_validator_keys(&mut bls_cache.lock());
+        match blockchain {
+            BlockchainProxy::Full(blockchain) => {
+                Blockchain::push(blockchain.upgradable_read(), block)
+            }
+            BlockchainProxy::Light(_) => todo!(),
+        }
+    })
+    .await
+    .expect("blockchain.push() should not panic");
+
+    let acceptance = match &push_result {
+        Ok(result) => match result {
+            PushResult::Known | PushResult::Extended | PushResult::Rebranched => {
+                MsgAcceptance::Accept
+            }
+            PushResult::Forked | PushResult::Ignored => MsgAcceptance::Ignore,
+        },
+        Err(_) => {
+            // TODO Ban peer
+            MsgAcceptance::Reject
+        }
+    };
+
+    if let Some(id) = pubsub_id {
+        if include_body {
+            network.validate_message::<BlockTopic>(id, acceptance);
+        } else {
+            network.validate_message::<BlockHeaderTopic>(id, acceptance);
+        }
+    }
+
+    if is_head {
+        PushOpResult::Head(push_result, block_hash)
+    } else {
+        PushOpResult::Buffered(push_result, block_hash)
+    }
+}
+
+/// Pushes a sequence of blocks to the blockchain.
+/// This case is different from pushing single blocks in a for loop,
+/// because an invalid block automatically invalidates the remainder of the sequence.
+///
+/// TODO We should limit the number of push operations we queue here.
+async fn push_missing_blocks(
+    blockchain: BlockchainProxy,
+    bls_cache: Arc<Mutex<PublicKeyCache>>,
+    blocks: Vec<Block>,
+) -> PushOpResult {
+    let mut block_iter = blocks.into_iter();
+
+    // Hashes of adopted blocks
+    let mut adopted_blocks = Vec::new();
+
+    // Hashes of invalid blocks
+    let mut invalid_blocks = HashSet::new();
+
+    // Initialize push_result to some random value.
+    // It is always overwritten in the first loop iteration.
+    let mut push_result = Err(PushError::Orphan);
+
+    // Try to push blocks, until we encounter an invalid block.
+    #[allow(clippy::while_let_on_iterator)]
+    while let Some(block) = block_iter.next() {
+        let block_hash = block.hash();
+
+        log::debug!("Pushing block {} from missing blocks response", block);
+        let blockchain2 = blockchain.clone();
+        let bls_cache2 = Arc::clone(&bls_cache);
+        push_result = spawn_blocking(move || {
+            // Update validator keys from BLS public key cache.
+            block.update_validator_keys(&mut bls_cache2.lock());
+            match blockchain2 {
+                BlockchainProxy::Full(blockchain) => {
+                    Blockchain::push(blockchain.upgradable_read(), block)
+                }
+                BlockchainProxy::Light(_) => todo!(),
+            }
+        })
+        .await
+        .expect("blockchain.push() should not panic");
+        match &push_result {
+            Err(e) => {
+                log::warn!("Failed to push missing block {}: {}", block_hash, e);
+                invalid_blocks.insert(block_hash);
+                break;
+            }
+            Ok(_) => {
+                adopted_blocks.push(block_hash);
+            }
+        }
+    }
+
+    // If there are remaining blocks in the iterator, those are invalid.
+    for block in block_iter {
+        invalid_blocks.insert(block.hash());
+    }
+
+    PushOpResult::Missing(push_result, adopted_blocks, invalid_blocks)
 }
 
 #[pin_project]
@@ -62,7 +176,7 @@ impl<N: Network, TReq: RequestComponent<N>> LiveSync<N> for BlockLiveSync<N, TRe
         pubsub_id: Option<N::PubsubId>,
     ) {
         self.block_queue
-            .on_block_announced(block, peer_id, pubsub_id);
+            .check_announced_block(block, peer_id, pubsub_id);
     }
 
     fn add_peer(&mut self, peer_id: N::PeerId) {
@@ -110,24 +224,7 @@ impl<N: Network, TReq: RequestComponent<N>> BlockLiveSync<N, TReq> {
     pub fn request_component_mut(&mut self) -> &mut TReq {
         self.block_queue.request_component_mut()
     }
-}
 
-impl<N: Network, TReq: RequestComponent<N>> Stream for BlockLiveSync<N, TReq> {
-    type Item = LiveSyncEvent<N::PeerId>;
-
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-        if let Poll::Ready(Some(result)) = self.as_mut().poll_block_queue(cx) {
-            return Poll::Ready(Some(LiveSyncEvent::PeerEvent(result)));
-        }
-
-        if let Poll::Ready(Some(result)) = self.process_push_results(cx) {
-            return Poll::Ready(Some(LiveSyncEvent::PushEvent(result)));
-        }
-        Poll::Pending
-    }
-}
-
-impl<N: Network, TReq: RequestComponent<N>> BlockLiveSync<N, TReq> {
     fn poll_block_queue(
         self: Pin<&mut Self>,
         cx: &mut Context,
@@ -135,122 +232,40 @@ impl<N: Network, TReq: RequestComponent<N>> BlockLiveSync<N, TReq> {
         let mut this = self.project();
 
         while let Poll::Ready(Some(queued_block)) = this.block_queue.poll_next_unpin(cx) {
-            let blockchain1 = this.blockchain.clone();
-            let bls_cache1 = Arc::clone(this.bls_cache);
-            let network1 = Arc::clone(this.network);
-            let include_micro_bodies = this.block_queue.include_micro_bodies();
-
-            let is_head = matches!(queued_block, QueuedBlock::Head(..));
+            let include_body = this.block_queue.include_micro_bodies();
             match queued_block {
-                QueuedBlock::Head((block, pubsub_id))
-                | QueuedBlock::Buffered((block, pubsub_id)) => {
-                    let future = async move {
-                        let block_hash = block.hash();
-                        let push_result = spawn_blocking(move || {
-                            // Update validator keys from BLS public key cache.
-                            block.update_validator_keys(&mut bls_cache1.lock());
-                            match blockchain1 {
-                                #[cfg(not(target_family = "wasm"))]
-                                BlockchainProxy::Full(blockchain) => {
-                                    Blockchain::push(blockchain.upgradable_read(), block)
-                                }
-                                BlockchainProxy::Light(blockchain) => {
-                                    LightBlockchain::push(blockchain.upgradable_read(), block)
-                                }
-                            }
-                        })
-                        .await
-                        .expect("blockchain.push() should not panic");
-
-                        let acceptance = match &push_result {
-                            Ok(result) => match result {
-                                PushResult::Known
-                                | PushResult::Extended
-                                | PushResult::Rebranched => MsgAcceptance::Accept,
-                                PushResult::Forked | PushResult::Ignored => MsgAcceptance::Ignore,
-                            },
-                            Err(_) => {
-                                // TODO Ban peer
-                                MsgAcceptance::Reject
-                            }
-                        };
-
-                        if let Some(id) = pubsub_id {
-                            if include_micro_bodies {
-                                network1.validate_message::<BlockTopic>(id, acceptance);
-                            } else {
-                                network1.validate_message::<BlockHeaderTopic>(id, acceptance);
-                            }
-                        }
-
-                        if is_head {
-                            PushOpResult::Head(push_result, block_hash)
-                        } else {
-                            PushOpResult::Buffered(push_result, block_hash)
-                        }
-                    };
+                QueuedBlock::Head((block, pubsub_id)) => {
+                    let future = push_single_block(
+                        this.blockchain.clone(),
+                        Arc::clone(this.bls_cache),
+                        Arc::clone(this.network),
+                        block,
+                        pubsub_id,
+                        true,
+                        include_body,
+                    );
                     this.push_ops.push_back(future.boxed());
                 }
+                QueuedBlock::Buffered(buffered_blocks) => {
+                    for (block, pubsub_id) in buffered_blocks {
+                        let future = push_single_block(
+                            this.blockchain.clone(),
+                            Arc::clone(this.bls_cache),
+                            Arc::clone(this.network),
+                            block,
+                            pubsub_id,
+                            true,
+                            include_body,
+                        );
+                        this.push_ops.push_back(future.boxed());
+                    }
+                }
                 QueuedBlock::Missing(blocks) => {
-                    let future = async move {
-                        let mut block_iter = blocks.into_iter();
-
-                        // Hashes of adopted blocks
-                        let mut adopted_blocks = Vec::new();
-
-                        // Hashes of invalid blocks
-                        let mut invalid_blocks = HashSet::new();
-
-                        // Initialize push_result to some random value.
-                        // It is always overwritten in the first loop iteration.
-                        let mut push_result = Err(PushError::Orphan);
-
-                        // Try to push blocks, until we encounter an invalid block.
-                        #[allow(clippy::while_let_on_iterator)]
-                        while let Some(block) = block_iter.next() {
-                            let block_hash = block.hash();
-
-                            log::debug!("Pushing block {} from missing blocks response", block);
-                            let blockchain2 = blockchain1.clone();
-                            let bls_cache2 = Arc::clone(&bls_cache1);
-                            push_result = spawn_blocking(move || {
-                                // Update validator keys from BLS public key cache.
-                                block.update_validator_keys(&mut bls_cache2.lock());
-                                match blockchain2 {
-                                    #[cfg(not(target_family = "wasm"))]
-                                    BlockchainProxy::Full(blockchain) => {
-                                        Blockchain::push(blockchain.upgradable_read(), block)
-                                    }
-                                    BlockchainProxy::Light(blockchain) => {
-                                        LightBlockchain::push(blockchain.upgradable_read(), block)
-                                    }
-                                }
-                            })
-                            .await
-                            .expect("blockchain.push() should not panic");
-                            match &push_result {
-                                Err(e) => {
-                                    log::warn!(
-                                        "Failed to push missing block {}: {}",
-                                        block_hash,
-                                        e
-                                    );
-                                    invalid_blocks.insert(block_hash);
-                                    break;
-                                }
-                                Ok(_) => {
-                                    adopted_blocks.push(block_hash);
-                                }
-                            }
-                        }
-
-                        // If there are remaining blocks in the iterator, those are invalid.
-                        for block in block_iter {
-                            invalid_blocks.insert(block.hash());
-                        }
-
-                        PushOpResult::Missing(push_result, adopted_blocks, invalid_blocks)
-                    };
+                    let future = push_missing_blocks(
+                        this.blockchain.clone(),
+                        Arc::clone(this.bls_cache),
+                        blocks,
+                    );
                     this.push_ops.push_back(future.boxed());
                 }
                 QueuedBlock::TooFarFuture(_, peer_id) => {
@@ -277,7 +292,6 @@ impl<N: Network, TReq: RequestComponent<N>> BlockLiveSync<N, TReq> {
             match result {
                 PushOpResult::Head(Ok(result), hash) => {
                     this.block_queue.on_block_processed(&hash);
-                    this.block_queue.on_block_accepted();
                     if result == PushResult::Extended || result == PushResult::Rebranched {
                         *this.accepted_announcements =
                             this.accepted_announcements.saturating_add(1);
@@ -286,7 +300,6 @@ impl<N: Network, TReq: RequestComponent<N>> BlockLiveSync<N, TReq> {
                 }
                 PushOpResult::Buffered(Ok(result), hash) => {
                     this.block_queue.on_block_processed(&hash);
-                    this.block_queue.on_block_accepted();
                     if result == PushResult::Extended || result == PushResult::Rebranched {
                         return Poll::Ready(Some(LiveSyncPushEvent::AcceptedBufferedBlock(
                             hash,
@@ -303,7 +316,6 @@ impl<N: Network, TReq: RequestComponent<N>> BlockLiveSync<N, TReq> {
                     }
 
                     this.block_queue.remove_invalid_blocks(&mut invalid_blocks);
-                    this.block_queue.on_block_accepted();
 
                     if result.is_ok() && !adopted_blocks.is_empty() {
                         let hash = adopted_blocks.pop().expect("adopted_blocks not empty");
@@ -323,6 +335,21 @@ impl<N: Network, TReq: RequestComponent<N>> BlockLiveSync<N, TReq> {
             }
         }
 
+        Poll::Pending
+    }
+}
+
+impl<N: Network, TReq: RequestComponent<N>> Stream for BlockLiveSync<N, TReq> {
+    type Item = LiveSyncEvent<N::PeerId>;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+        if let Poll::Ready(Some(result)) = self.as_mut().poll_block_queue(cx) {
+            return Poll::Ready(Some(LiveSyncEvent::PeerEvent(result)));
+        }
+
+        if let Poll::Ready(Some(result)) = self.process_push_results(cx) {
+            return Poll::Ready(Some(LiveSyncEvent::PushEvent(result)));
+        }
         Poll::Pending
     }
 }
