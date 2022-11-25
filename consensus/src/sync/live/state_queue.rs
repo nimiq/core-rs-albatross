@@ -200,8 +200,10 @@ impl<N: Network, TReq: RequestComponent<N>> StateQueue<N, TReq> {
     fn on_blocks_received(&mut self, queued_block: QueuedBlock<N>) -> Option<QueuedStateChunks<N>> {
         let chunks = match queued_block {
             // Received a single block and retrieve the corresponding chunks
-            QueuedBlock::Head((ref block, ref _peer_id))
-            | QueuedBlock::Buffered((ref block, ref _peer_id)) => self.get_block_chunks(&block),
+            QueuedBlock::Head((ref block, ref _peer_id)) => self.get_block_chunks(&block),
+            QueuedBlock::Buffered(blocks) => {
+                todo!() // PITODO: Handle this case
+            }
             QueuedBlock::Missing(mut missing_blocks) => {
                 // Received multiple blocks, get the chunks avl for the first and queue the remaining blocks
                 if let Some(block) = missing_blocks.pop() {
