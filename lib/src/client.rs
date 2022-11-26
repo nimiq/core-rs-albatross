@@ -71,7 +71,7 @@ pub(crate) struct ClientInner {
     /// reach consensus.
     consensus: ConsensusProxy,
 
-    blockchain: Arc<RwLock<Blockchain>>,
+    blockchain: BlockchainProxy,
 
     #[cfg(feature = "validator")]
     validator: Option<ValidatorProxy>,
@@ -238,8 +238,9 @@ impl ClientInner {
         #[cfg(feature = "wallet")]
         let wallet_store = Arc::new(WalletStore::new(environment.clone()));
 
+        let blockchain_proxy = BlockchainProxy::from(&blockchain);
         let zkp_component = ZKPComponent::new(
-            BlockchainProxy::from(&blockchain),
+            blockchain_proxy.clone(),
             Arc::clone(&network),
             config.zkp.prover_active,
             None,
@@ -252,7 +253,6 @@ impl ClientInner {
         let bls_cache = Arc::new(Mutex::new(PublicKeyCache::new(
             Policy::BLS_CACHE_MAX_CAPACITY,
         )));
-        let blockchain_proxy = BlockchainProxy::Full(Arc::clone(&blockchain));
         let syncer = SyncerProxy::new_history(
             blockchain_proxy.clone(),
             Arc::clone(&network),
@@ -320,7 +320,7 @@ impl ClientInner {
                 environment,
                 network,
                 consensus: consensus.proxy(),
-                blockchain,
+                blockchain: blockchain_proxy,
                 #[cfg(feature = "validator")]
                 validator: validator_proxy,
                 #[cfg(feature = "wallet")]
@@ -381,8 +381,8 @@ impl Client {
     }
 
     /// Returns a reference to the blockchain
-    pub fn blockchain(&self) -> Arc<RwLock<Blockchain>> {
-        Arc::clone(&self.inner.blockchain)
+    pub fn blockchain(&self) -> BlockchainProxy {
+        self.inner.blockchain.clone()
     }
 
     /// Returns the blockchain head

@@ -40,6 +40,9 @@ pub enum Error {
     #[error("Method not implemented")]
     NotImplemented,
 
+    #[error("Method not supported for a light blockchain")]
+    NotSupportedForLightBlockchain,
+
     #[error("Invalid combination of transaction parameters")]
     InvalidTransactionParameters,
 

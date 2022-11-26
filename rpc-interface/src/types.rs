@@ -13,7 +13,8 @@ use serde_with::{serde_as, DeserializeFromStr, DisplayFromStr, SerializeDisplay}
 use beserial::Serialize as BeSerialize;
 use nimiq_account::{BlockLog as BBlockLog, Log, TransactionLog};
 use nimiq_block::{MicroJustification, MultiSignature};
-use nimiq_blockchain::{AbstractBlockchain, Blockchain};
+use nimiq_blockchain::AbstractBlockchain;
+use nimiq_blockchain_proxy::BlockchainReadProxy;
 use nimiq_bls::CompressedPublicKey;
 use nimiq_collections::BitSet;
 use nimiq_hash::{Blake2bHash, Hash};
@@ -167,7 +168,7 @@ pub enum BlockAdditionalFields {
 
 impl Block {
     pub fn from_block(
-        blockchain: &Blockchain,
+        blockchain: &BlockchainReadProxy,
         block: nimiq_block::Block,
         include_transactions: bool,
     ) -> Self {
@@ -187,27 +188,31 @@ impl Block {
                 };
 
                 // Get the reward inherents and convert them to reward transactions.
-                let transactions = if include_transactions {
-                    let ext_txs = blockchain
-                        .history_store
-                        .get_block_transactions(block_number, None);
+                let transactions = if let BlockchainReadProxy::Full(blockchain) = blockchain {
+                    if include_transactions {
+                        let ext_txs = blockchain
+                            .history_store
+                            .get_block_transactions(block_number, None);
 
-                    let mut txs = vec![];
+                        let mut txs = vec![];
 
-                    for ext_tx in ext_txs {
-                        if ext_tx.is_inherent() {
-                            if let Ok(tx) = ext_tx.into_transaction() {
-                                txs.push(ExecutedTransaction::from_blockchain(
-                                    tx,
-                                    block_number,
-                                    timestamp,
-                                    blockchain.block_number(),
-                                ));
+                        for ext_tx in ext_txs {
+                            if ext_tx.is_inherent() {
+                                if let Ok(tx) = ext_tx.into_transaction() {
+                                    txs.push(ExecutedTransaction::from_blockchain(
+                                        tx,
+                                        block_number,
+                                        timestamp,
+                                        blockchain.block_number(),
+                                    ));
+                                }
                             }
                         }
-                    }
 
-                    Some(txs)
+                        Some(txs)
+                    } else {
+                        None
+                    }
                 } else {
                     None
                 };
@@ -250,7 +255,7 @@ impl Block {
                                 .collect(),
                         ),
                         if include_transactions {
-                            let head_height = blockchain.block_number();
+                            let head_height = blockchain.head().block_number();
                             Some(
                                 body.transactions
                                     .clone()
@@ -340,7 +345,7 @@ pub struct Slot {
 }
 
 impl Slot {
-    pub fn from(blockchain: &Blockchain, block_number: u32, offset: u32) -> Self {
+    pub fn from(blockchain: &BlockchainReadProxy, block_number: u32, offset: u32) -> Self {
         let (validator, slot_number) = blockchain
             .get_slot_owner_at(block_number, offset, None)
             .expect("Couldn't calculate slot owner!");
@@ -735,7 +740,10 @@ impl<T, S> RPCData<T, S> {
 }
 
 impl<T> RPCData<T, BlockchainState> {
-    pub fn with_blockchain(data: T, blockchain: &Blockchain) -> RPCData<T, BlockchainState> {
+    pub fn with_blockchain(
+        data: T,
+        blockchain: &BlockchainReadProxy,
+    ) -> RPCData<T, BlockchainState> {
         RPCData {
             data,
             metadata: BlockchainState::with_blockchain(blockchain),
@@ -805,7 +813,7 @@ impl BlockchainState {
         }
     }
 
-    pub fn with_blockchain(blockchain: &Blockchain) -> Self {
+    pub fn with_blockchain(blockchain: &BlockchainReadProxy) -> Self {
         let block = blockchain.head();
         BlockchainState::new(block.block_number(), block.hash())
     }

@@ -32,6 +32,7 @@ tokio-stream = "0.1"
 beserial = { path = "../beserial" }
 nimiq-account = { path = "../primitives/account", features = ["serde-derive"] }
 nimiq-block = { path = "../primitives/block", features = ["serde-derive"] }
+nimiq-blockchain-proxy = { path = "../blockchain-proxy" }
 nimiq-blockchain = { path = "../blockchain" }
 nimiq-bls = { path = "../bls", features = ["serde-derive"] }
 nimiq-collections = { path = "../collections" }

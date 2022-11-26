@@ -14,7 +14,7 @@ use crate::server::metrics_server;
 #[cfg(tokio_unstable)]
 use crate::tokio_runtime::TokioRuntimeMetrics;
 use crate::tokio_task::TokioTaskMetrics;
-use nimiq_blockchain::Blockchain;
+use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_consensus::ConsensusProxy;
 use nimiq_mempool::mempool::Mempool;
 use nimiq_network_interface::network::Network;
@@ -77,7 +77,7 @@ impl<T: Encode + Sized> EncodeMetric for NumericClosureMetric<T> {
 
 pub fn start_metrics_server<TNetwork: Network>(
     addr: SocketAddr,
-    blockchain: Arc<RwLock<Blockchain>>,
+    blockchain_proxy: BlockchainProxy,
     mempool: Option<Arc<Mempool>>,
     consensus_proxy: ConsensusProxy<TNetwork>,
     network: Arc<nimiq_network_libp2p::Network>,
@@ -86,7 +86,7 @@ pub fn start_metrics_server<TNetwork: Network>(
     let mut registry = Registry::default();
     let nimiq_registry = registry.sub_registry_with_prefix("nimiq");
 
-    BlockMetrics::register(nimiq_registry, blockchain);
+    BlockMetrics::register(nimiq_registry, blockchain_proxy);
     ConsensusMetrics::register(nimiq_registry, consensus_proxy);
     NetworkMetrics::register(nimiq_registry, network);
 
