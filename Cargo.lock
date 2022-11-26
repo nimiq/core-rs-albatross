@@ -2911,6 +2911,7 @@ dependencies = [
  "nimiq-jsonrpc-core",
  "nimiq-jsonrpc-server",
  "nimiq-keys",
+ "nimiq-light-blockchain",
  "nimiq-log",
  "nimiq-mempool",
  "nimiq-metrics-server",

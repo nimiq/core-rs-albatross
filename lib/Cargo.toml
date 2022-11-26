@@ -54,6 +54,7 @@ nimiq-genesis = { path = "../genesis" }
 nimiq-jsonrpc-core = { git = "https://github.com/nimiq/jsonrpc.git" }
 nimiq-jsonrpc-server = { git = "https://github.com/nimiq/jsonrpc.git" }
 nimiq-keys = { path = "../keys" }
+nimiq-light-blockchain = { path = "../light-blockchain" }
 nimiq-log = { path = "../log", optional = true }
 nimiq-mempool = { path = "../mempool" }
 nimiq-metrics-server = { path = "../metrics-server" }
