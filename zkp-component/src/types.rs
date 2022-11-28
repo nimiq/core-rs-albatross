@@ -64,9 +64,9 @@ impl<N: Network> Clone for ZKPEvent<N> {
 
 /// The ZKP event returned for individual requests by the ZKP requests component.
 #[derive(Debug)]
-pub enum ZKPRequestEvent<N: Network> {
+pub enum ZKPRequestEvent {
     /// A valid proof that has been pushed to the ZKP state.
-    Proof(ZKPEvent<N>),
+    Proof { proof: ZKProof, block: MacroBlock },
     /// The peer does not have a more recent proof.
     OutdatedProof,
 }
@@ -190,6 +190,15 @@ impl<N: Network> Clone for ProofSource<N> {
         match self {
             Self::PeerGenerated(peer_id) => Self::PeerGenerated(*peer_id),
             Self::SelfGenerated => Self::SelfGenerated,
+        }
+    }
+}
+
+impl<N: Network> ProofSource<N> {
+    pub fn unwrap_peer_id(&self) -> N::PeerId {
+        match self {
+            Self::PeerGenerated(peer_id) => *peer_id,
+            Self::SelfGenerated => panic!("Called unwrap_peer_id on a self generated proof source"),
         }
     }
 }
