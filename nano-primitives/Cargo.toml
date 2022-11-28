@@ -13,7 +13,7 @@ nimiq-pedersen-generators = { path = "pedersen-generators" }
 
 [dependencies]
 num-traits = "0.2"
-rayon = "^1.5"
+rayon = "^1.6"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 lazy_static = "1.4"
 beserial = { path = "../beserial", features = ["derive"] }
