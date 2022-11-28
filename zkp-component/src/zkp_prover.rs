@@ -89,6 +89,7 @@ impl<N: Network> ZKProver<N> {
                     true,
                     Direction::Forward,
                     true,
+                    None,
                 )
                 .expect("Fetching election blocks for zkp prover initialization failed")
                 .drain(..)

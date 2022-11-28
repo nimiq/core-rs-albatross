@@ -32,27 +32,6 @@ impl Blockchain {
             .get_blocks(start_block_hash, count, include_body, direction, None)
     }
 
-    /// Fetches a given number of macro blocks, starting at a specific block (by its hash).
-    /// It can fetch only election macro blocks if desired.
-    /// Returns None if given start_block_hash is not a macro block.
-    pub fn get_macro_blocks(
-        &self,
-        start_block_hash: &Blake2bHash,
-        count: u32,
-        include_body: bool,
-        direction: Direction,
-        election_blocks_only: bool,
-    ) -> Option<Vec<Block>> {
-        self.chain_store.get_macro_blocks(
-            start_block_hash,
-            count,
-            include_body,
-            direction,
-            election_blocks_only,
-            None,
-        )
-    }
-
     /// Returns the current staking contract.
     pub fn get_staking_contract(&self) -> StakingContract {
         let staking_contract_address = StakingContract::get_key_staking_contract();

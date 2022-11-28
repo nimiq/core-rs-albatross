@@ -1,6 +1,6 @@
 use futures::stream::BoxStream;
 use nimiq_block::{Block, MacroBlock};
-use nimiq_blockchain::{AbstractBlockchain, BlockchainEvent, ChainInfo};
+use nimiq_blockchain::{AbstractBlockchain, BlockchainEvent, ChainInfo, Direction};
 use nimiq_database::Transaction;
 use nimiq_genesis::NetworkId;
 use nimiq_hash::Blake2bHash;
@@ -99,16 +99,36 @@ impl AbstractBlockchain for LightBlockchain {
 
     fn get_blocks(
         &self,
-        _start_block_hash: &Blake2bHash,
-        _count: u32,
+        start_block_hash: &Blake2bHash,
+        count: u32,
         include_body: bool,
-        _direction: nimiq_blockchain::Direction,
+        direction: nimiq_blockchain::Direction,
         _txn_option: Option<&Transaction>,
     ) -> Vec<Block> {
         // Light Blockchain can't return blocks with body
         if include_body {
             return vec![];
         }
-        todo!() // IPTODO
+        self.chain_store
+            .get_blocks(start_block_hash, count, direction)
+    }
+
+    /// Fetches a given number of macro blocks, starting at a specific block (by its hash).
+    /// It can fetch only election macro blocks if desired.
+    /// Returns None if given start_block_hash is not a macro block.
+    fn get_macro_blocks(
+        &self,
+        start_block_hash: &Blake2bHash,
+        count: u32,
+        include_body: bool,
+        direction: Direction,
+        election_blocks_only: bool,
+        _txn_option: Option<&Transaction>,
+    ) -> Option<Vec<Block>> {
+        if include_body {
+            return Some(vec![]);
+        }
+        self.chain_store
+            .get_macro_blocks(start_block_hash, count, direction, election_blocks_only)
     }
 }

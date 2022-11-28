@@ -124,6 +124,19 @@ pub trait AbstractBlockchain {
         txn_option: Option<&Transaction>,
     ) -> Option<(Validator, u16)>;
 
+    /// Fetches a given number of macro blocks, starting at a specific block (by its hash).
+    /// It can fetch only election macro blocks if desired.
+    /// Returns None if given start_block_hash is not a macro block.
+    fn get_macro_blocks(
+        &self,
+        start_block_hash: &Blake2bHash,
+        count: u32,
+        include_body: bool,
+        direction: Direction,
+        election_blocks_only: bool,
+        txn_option: Option<&Transaction>,
+    ) -> Option<Vec<Block>>;
+
     /// Stream of Blockchain Events.
     fn notifier_as_stream(&self) -> BoxStream<'static, BlockchainEvent>;
 }
@@ -225,6 +238,25 @@ impl AbstractBlockchain for Blockchain {
     ) -> Vec<Block> {
         self.chain_store
             .get_blocks(start_block_hash, count, include_body, direction, txn_option)
+    }
+
+    fn get_macro_blocks(
+        &self,
+        start_block_hash: &Blake2bHash,
+        count: u32,
+        include_body: bool,
+        direction: Direction,
+        election_blocks_only: bool,
+        txn_option: Option<&Transaction>,
+    ) -> Option<Vec<Block>> {
+        self.chain_store.get_macro_blocks(
+            start_block_hash,
+            count,
+            include_body,
+            direction,
+            election_blocks_only,
+            txn_option,
+        )
     }
 
     fn notifier_as_stream(&self) -> BoxStream<'static, BlockchainEvent> {

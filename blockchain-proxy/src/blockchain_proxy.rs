@@ -5,7 +5,7 @@ use parking_lot::{RwLock, RwLockReadGuard};
 
 use nimiq_block::{Block, MacroBlock};
 use nimiq_blockchain::ChainInfo;
-use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainEvent};
+use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainEvent, Direction};
 use nimiq_database::Transaction;
 use nimiq_genesis::NetworkId;
 use nimiq_hash::Blake2bHash;
@@ -199,6 +199,28 @@ impl<'a> AbstractBlockchain for BlockchainReadProxy<'a> {
             get_slot_owner_at,
             block_number,
             offset,
+            txn_option
+        )
+    }
+
+    fn get_macro_blocks(
+        &self,
+        start_block_hash: &Blake2bHash,
+        count: u32,
+        include_body: bool,
+        direction: Direction,
+        election_blocks_only: bool,
+        txn_option: Option<&Transaction>,
+    ) -> Option<Vec<Block>> {
+        gen_blockchain_match!(
+            self,
+            BlockchainReadProxy,
+            get_macro_blocks,
+            start_block_hash,
+            count,
+            include_body,
+            direction,
+            election_blocks_only,
             txn_option
         )
     }

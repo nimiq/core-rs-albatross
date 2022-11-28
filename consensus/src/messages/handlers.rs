@@ -43,6 +43,7 @@ impl Handle<MacroChain, Arc<RwLock<Blockchain>>> for RequestMacroChain {
                 false,
                 Direction::Forward,
                 true,
+                None,
             )
             .unwrap(); // We made sure that start_block_hash is on our chain.
         let epochs: Vec<_> = election_blocks.iter().map(|block| block.hash()).collect();
