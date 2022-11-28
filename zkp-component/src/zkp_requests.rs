@@ -18,7 +18,7 @@ pub struct ZKPRequestsItem<N: Network> {
     pub peer_id: N::PeerId,
     pub proof: ZKProof,
     pub election_block: Option<MacroBlock>,
-    pub response_channel: Option<Sender<Result<ZKPRequestEvent<N>, Error>>>,
+    pub response_channel: Option<Sender<Result<ZKPRequestEvent, Error>>>,
 }
 
 /// This component handles the requests to a given set of peers.
@@ -38,7 +38,7 @@ pub struct ZKPRequests<N: Network + 'static> {
             (
                 N::PeerId,
                 bool,
-                Option<Sender<Result<ZKPRequestEvent<N>, Error>>>,
+                Option<Sender<Result<ZKPRequestEvent, Error>>>,
                 Result<(Option<ZKProof>, Option<MacroBlock>), RequestError>,
             ),
         >,
@@ -76,7 +76,7 @@ impl<N: Network + 'static> ZKPRequests<N> {
         peer_id: N::PeerId,
         block_number: u32,
         request_election_block: bool,
-    ) -> Receiver<Result<ZKPRequestEvent<N>, Error>> {
+    ) -> Receiver<Result<ZKPRequestEvent, Error>> {
         let (tx, rx) = channel();
         self.push_request(peer_id, block_number, request_election_block, Some(tx));
 
@@ -88,7 +88,7 @@ impl<N: Network + 'static> ZKPRequests<N> {
         peer_id: N::PeerId,
         block_number: u32,
         request_election_block: bool,
-        response_channel: Option<Sender<Result<ZKPRequestEvent<N>, Error>>>,
+        response_channel: Option<Sender<Result<ZKPRequestEvent, Error>>>,
     ) {
         let network = Arc::clone(&self.network);
         self.zkp_request_results.push(

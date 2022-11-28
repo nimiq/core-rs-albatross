@@ -17,7 +17,7 @@ use nimiq_network_interface::{network::Network, request::request_handler};
 
 use pin_project::pin_project;
 use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
-use tokio::sync::oneshot::Receiver;
+use tokio::sync::oneshot::error::RecvError;
 use tokio_stream::wrappers::BroadcastStream;
 
 use crate::proof_utils::*;
@@ -73,14 +73,17 @@ impl<N: Network> ZKPComponentProxy<N> {
         false
     }
 
-    pub fn request_zkp_from_peer(
+    pub async fn request_zkp_from_peer(
         &self,
         peer_id: N::PeerId,
         request_election_block: bool,
-    ) -> Receiver<Result<ZKPRequestEvent<N>, Error>> {
+    ) -> (Result<Result<ZKPRequestEvent, Error>, RecvError>, N::PeerId) {
         let block_number = self.zkp_state.read().latest_block_number;
-        let mut zkp_requests_l = self.zkp_requests.lock();
-        zkp_requests_l.request_zkp(peer_id, block_number, request_election_block)
+        let request =
+            self.zkp_requests
+                .lock()
+                .request_zkp(peer_id, block_number, request_election_block);
+        (request.await, peer_id)
     }
 
     pub fn subscribe_zkps(&self) -> BroadcastStream<ZKPEvent<N>> {
@@ -319,7 +322,10 @@ impl<N: Network> Future for ZKPComponent<N> {
 
             // Return verification result if channel exists.
             if let Some(tx) = requests_item.response_channel {
-                let _ = tx.send(result.map(ZKPRequestEvent::Proof));
+                let _ = tx.send(result.map(|event| ZKPRequestEvent::Proof {
+                    proof: event.proof,
+                    block: event.block,
+                }));
             }
         }
 
