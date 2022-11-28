@@ -125,8 +125,8 @@ impl<N: Network + 'static> Stream for ZKPRequests<N> {
                         // Check that the response is in-line with whether we asked for the election block or not.
                         if request_election_block {
                             if election_block.is_none() {
-                                if let Some(rx) = response_channel {
-                                    let _ = rx.send(Err(Error::InvalidBlock));
+                                if let Some(tx) = response_channel {
+                                    let _ = tx.send(Err(Error::InvalidBlock));
                                 }
                                 continue;
                             }
@@ -142,14 +142,14 @@ impl<N: Network + 'static> Stream for ZKPRequests<N> {
                     }
                     Ok((None, _)) => {
                         // This happens when the peer does not have a more recent proof than us.
-                        if let Some(rx) = response_channel {
-                            let _ = rx.send(Ok(ZKPRequestEvent::OutdatedProof));
+                        if let Some(tx) = response_channel {
+                            let _ = tx.send(Ok(ZKPRequestEvent::OutdatedProof));
                         }
                     }
                     Err(e) => {
                         log::trace!("Failed zkp request");
-                        if let Some(rx) = response_channel {
-                            let _ = rx.send(Err(Error::Request(e)));
+                        if let Some(tx) = response_channel {
+                            let _ = tx.send(Err(Error::Request(e)));
                         }
                     }
                 },

@@ -318,8 +318,8 @@ impl<N: Network> Future for ZKPComponent<N> {
             }
 
             // Return verification result if channel exists.
-            if let Some(rx) = requests_item.response_channel {
-                let _ = rx.send(result.map(ZKPRequestEvent::Proof));
+            if let Some(tx) = requests_item.response_channel {
+                let _ = tx.send(result.map(ZKPRequestEvent::Proof));
             }
         }
 
