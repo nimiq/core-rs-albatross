@@ -45,7 +45,7 @@ prometheus-client = { version = "0.18.1", optional = true}
 rand = "0.8"
 serde = { version = "1.0", features = ["derive"], optional = true }
 thiserror = "1.0"
-tokio = { version = "1.21", features = ["macros", "rt", "tracing"] }
+tokio = { version = "1.22", features = ["macros", "rt", "tracing"] }
 tokio-stream = "0.1"
 tokio-util = { version = "0.7", features = ["codec"] }
 tracing-attributes = "0.1"
