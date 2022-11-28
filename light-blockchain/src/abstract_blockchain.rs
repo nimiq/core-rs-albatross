@@ -48,9 +48,13 @@ impl AbstractBlockchain for LightBlockchain {
     fn get_block_at(
         &self,
         height: u32,
-        _include_body: bool,
+        include_body: bool,
         _txn_option: Option<&Transaction>,
     ) -> Option<Block> {
+        // Light Blockchain can't return blocks with body
+        if include_body {
+            return None;
+        }
         self.chain_store
             .get_chain_info_at(height)
             .map(|chain_info| chain_info.head)
@@ -59,9 +63,13 @@ impl AbstractBlockchain for LightBlockchain {
     fn get_block(
         &self,
         hash: &Blake2bHash,
-        _include_body: bool,
+        include_body: bool,
         _txn_option: Option<&Transaction>,
     ) -> Option<Block> {
+        // Light Blockchain can't return blocks with body
+        if include_body {
+            return None;
+        }
         self.chain_store
             .get_chain_info(hash)
             .map(|chain_info| chain_info.head.clone())
@@ -93,10 +101,14 @@ impl AbstractBlockchain for LightBlockchain {
         &self,
         _start_block_hash: &Blake2bHash,
         _count: u32,
-        _include_body: bool,
+        include_body: bool,
         _direction: nimiq_blockchain::Direction,
         _txn_option: Option<&Transaction>,
     ) -> Vec<Block> {
+        // Light Blockchain can't return blocks with body
+        if include_body {
+            return vec![];
+        }
         todo!() // IPTODO
     }
 }
