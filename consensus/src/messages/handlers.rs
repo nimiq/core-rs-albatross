@@ -4,19 +4,20 @@ use parking_lot::RwLock;
 
 use nimiq_block::Block;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, Direction, CHUNK_SIZE};
+use nimiq_blockchain_proxy::BlockchainProxy;
 
 use crate::messages::*;
 use nimiq_network_interface::request::Handle;
 
-impl Handle<MacroChain, Arc<RwLock<Blockchain>>> for RequestMacroChain {
-    fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> MacroChain {
+impl Handle<MacroChain, BlockchainProxy> for RequestMacroChain {
+    fn handle(&self, blockchain: &BlockchainProxy) -> MacroChain {
         let blockchain = blockchain.read();
 
         // A peer has the macro chain. Check all block locator hashes in the given order and pick
         // the first hash that is found on our main chain, ignore the rest.
         let mut start_block_hash = None;
         for locator in self.locators.iter() {
-            let chain_info = blockchain.chain_store.get_chain_info(locator, false, None);
+            let chain_info = blockchain.get_chain_info(locator, false, None);
             if let Some(chain_info) = chain_info {
                 if chain_info.on_main_chain {
                     // We found a block, ignore remaining block locator hashes.
@@ -147,14 +148,16 @@ impl Handle<HistoryChunk, Arc<RwLock<Blockchain>>> for RequestHistoryChunk {
     }
 }
 
-impl Handle<Option<Block>, Arc<RwLock<Blockchain>>> for RequestBlock {
-    fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> Option<Block> {
-        blockchain.read().get_block(&self.hash, true, None)
+impl Handle<Option<Block>, BlockchainProxy> for RequestBlock {
+    fn handle(&self, blockchain: &BlockchainProxy) -> Option<Block> {
+        blockchain
+            .read()
+            .get_block(&self.hash, self.include_body, None)
     }
 }
 
-impl Handle<ResponseBlocks, Arc<RwLock<Blockchain>>> for RequestMissingBlocks {
-    fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> ResponseBlocks {
+impl Handle<ResponseBlocks, BlockchainProxy> for RequestMissingBlocks {
+    fn handle(&self, blockchain: &BlockchainProxy) -> ResponseBlocks {
         let blockchain = blockchain.read();
 
         // TODO We might want to do a sanity check on the locator hashes and reject the request if
@@ -170,7 +173,7 @@ impl Handle<ResponseBlocks, Arc<RwLock<Blockchain>>> for RequestMissingBlocks {
         let mut blocks = Vec::new();
         let mut block_hash = self.target_hash.clone();
         while !locators.contains(&block_hash) {
-            let block = blockchain.get_block(&block_hash, true, None);
+            let block = blockchain.get_block(&block_hash, self.include_body, None);
             if let Some(block) = block {
                 let is_macro = block.is_macro();
 
@@ -201,8 +204,8 @@ impl Handle<ResponseBlocks, Arc<RwLock<Blockchain>>> for RequestMissingBlocks {
     }
 }
 
-impl Handle<Blake2bHash, Arc<RwLock<Blockchain>>> for RequestHead {
-    fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> Blake2bHash {
+impl Handle<Blake2bHash, BlockchainProxy> for RequestHead {
+    fn handle(&self, blockchain: &BlockchainProxy) -> Blake2bHash {
         blockchain.read().head_hash()
     }
 }

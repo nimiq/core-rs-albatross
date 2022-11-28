@@ -122,27 +122,26 @@ impl<N: Network> Consensus<N> {
     }
 
     fn init_network_request_receivers(network: &Arc<N>, blockchain: &BlockchainProxy) {
+        let stream = network.receive_requests::<RequestMacroChain>();
+        tokio::spawn(request_handler(network, stream, blockchain));
+
+        let stream = network.receive_requests::<RequestBlock>();
+        tokio::spawn(request_handler(network, stream, blockchain));
+
+        let stream = network.receive_requests::<RequestMissingBlocks>();
+        tokio::spawn(request_handler(network, stream, blockchain));
+
+        let stream = network.receive_requests::<RequestHead>();
+        tokio::spawn(request_handler(network, stream, blockchain));
         match blockchain {
             BlockchainProxy::Full(blockchain) => {
-                let stream = network.receive_requests::<RequestMacroChain>();
-                tokio::spawn(request_handler(network, stream, blockchain));
-
                 let stream = network.receive_requests::<RequestBatchSet>();
                 tokio::spawn(request_handler(network, stream, blockchain));
 
                 let stream = network.receive_requests::<RequestHistoryChunk>();
                 tokio::spawn(request_handler(network, stream, blockchain));
-
-                let stream = network.receive_requests::<RequestBlock>();
-                tokio::spawn(request_handler(network, stream, blockchain));
-
-                let stream = network.receive_requests::<RequestMissingBlocks>();
-                tokio::spawn(request_handler(network, stream, blockchain));
-
-                let stream = network.receive_requests::<RequestHead>();
-                tokio::spawn(request_handler(network, stream, blockchain));
             }
-            BlockchainProxy::Light(_) => todo!(),
+            BlockchainProxy::Light(_) => {}
         }
     }
 

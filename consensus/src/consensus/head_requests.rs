@@ -87,7 +87,13 @@ impl<TNetwork: Network + 'static> HeadRequests<TNetwork> {
         hash: Blake2bHash,
     ) -> Result<Option<Block>, RequestError> {
         network
-            .request::<RequestBlock>(RequestBlock { hash }, peer_id)
+            .request::<RequestBlock>(
+                RequestBlock {
+                    hash,
+                    include_body: true,
+                },
+                peer_id,
+            )
             .await
     }
 }

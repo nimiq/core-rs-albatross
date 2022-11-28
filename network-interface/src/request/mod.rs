@@ -200,24 +200,24 @@ pub trait Handle<Response, T> {
 const MAX_CONCURRENT_HANDLERS: usize = 64;
 
 pub fn request_handler<
-    T: Send + Sync + 'static,
-    Req: Handle<Req::Response, Arc<T>> + Request,
+    T: Send + Sync + Clone + 'static,
+    Req: Handle<Req::Response, T> + Request,
     N: Network,
 >(
     network: &Arc<N>,
     stream: BoxStream<'static, (Req, N::RequestId, N::PeerId)>,
-    req_environment: &Arc<T>,
+    req_environment: &T,
 ) -> impl Future<Output = ()> {
-    let blockchain = Arc::clone(req_environment);
+    let blockchain = req_environment.clone();
     let network = Arc::clone(network);
     async move {
         stream
             .for_each_concurrent(MAX_CONCURRENT_HANDLERS, |(msg, request_id, peer_id)| {
                 let request_id = request_id;
                 let network = Arc::clone(&network);
-                let blockchain = Arc::clone(&blockchain);
+                let blockchain = blockchain.clone();
                 async move {
-                    let blockchain = Arc::clone(&blockchain);
+                    let blockchain = blockchain.clone();
                     let network = Arc::clone(&network);
                     let request_id = request_id;
                     tokio::spawn(async move {

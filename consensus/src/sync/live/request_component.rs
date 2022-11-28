@@ -100,6 +100,7 @@ impl<TNetwork: Network + 'static> BlockRequestComponent<TNetwork> {
                 RequestMissingBlocks {
                     locators,
                     target_hash: target_block_hash,
+                    include_body: true,
                 },
                 peer_id,
             )

@@ -245,6 +245,7 @@ mod tests {
     use parking_lot::RwLock;
 
     use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainConfig};
+    use nimiq_blockchain_proxy::BlockchainProxy;
     use nimiq_database::volatile::VolatileEnvironment;
     use nimiq_network_interface::network::Network;
     use nimiq_network_mock::{MockHub, MockNetwork};
@@ -317,7 +318,7 @@ mod tests {
         tokio::spawn(request_handler(
             network,
             network.receive_requests::<RequestMacroChain>(),
-            blockchain,
+            &BlockchainProxy::from(blockchain),
         ));
         tokio::spawn(request_handler(
             network,
