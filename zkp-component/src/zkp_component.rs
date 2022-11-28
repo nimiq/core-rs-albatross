@@ -17,6 +17,7 @@ use nimiq_network_interface::{network::Network, request::request_handler};
 
 use pin_project::pin_project;
 use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
+use tokio::sync::oneshot::Receiver;
 use tokio_stream::wrappers::BroadcastStream;
 
 use crate::proof_utils::*;
@@ -70,6 +71,16 @@ impl<N: Network> ZKPComponentProxy<N> {
             return true;
         }
         false
+    }
+
+    pub fn request_zkp_from_peer(
+        &self,
+        peer_id: N::PeerId,
+        request_election_block: bool,
+    ) -> Receiver<Result<ZKPRequestEvent<N>, Error>> {
+        let block_number = self.zkp_state.read().latest_block_number;
+        let mut zkp_requests_l = self.zkp_requests.lock();
+        zkp_requests_l.request_zkp(peer_id, block_number, request_election_block)
     }
 
     pub fn subscribe_zkps(&self) -> BroadcastStream<ZKPEvent<N>> {
@@ -240,7 +251,7 @@ impl<N: Network> ZKPComponent<N> {
         add_to_storage: bool,
         keys_path: &Path,
         proof_source: ProofSource<N>,
-    ) -> Result<(), ZKPComponentError> {
+    ) -> Result<ZKPEvent<N>, Error> {
         // Gets the relevant election blocks.
         let (new_block, genesis_block, proof) =
             get_proof_macro_blocks(blockchain, &zk_proof, election_block)?;
@@ -248,7 +259,7 @@ impl<N: Network> ZKPComponent<N> {
 
         // Ensures that the proof is more recent than our current state and validates the proof.
         if new_block.block_number() <= zkp_state_lock.latest_block_number {
-            return Err(ZKPComponentError::OutdatedProof);
+            return Err(Error::OutdatedProof);
         }
         let new_zkp_state =
             validate_proof_get_new_state(proof, &new_block, genesis_block, keys_path)?;
@@ -267,14 +278,15 @@ impl<N: Network> ZKPComponent<N> {
         }
 
         // Sends the new event to the notifier stream.
-        if let Err(e) = zkp_events_notifier.send(ZKPEvent::new(proof_source, zk_proof, new_block)) {
+        let event = ZKPEvent::new(proof_source, zk_proof, new_block);
+        if let Err(e) = zkp_events_notifier.send(event.clone()) {
             log::error!(
                 "Error sending the proof (from peer) to the events notifier {}",
                 e
             );
         }
 
-        Ok(())
+        Ok(event)
     }
 }
 
@@ -285,23 +297,29 @@ impl<N: Network> Future for ZKPComponent<N> {
         let this = self.project();
 
         // Check if we have requested zkps rom peers. Goes over all received proofs and tries to update state.
-        // Stays with the first most recent valid zproof it gets.
-        while let Poll::Ready(Some((peer_id, proof, election_block))) =
-            this.zkp_requests.lock().poll_next_unpin(cx)
-        {
-            if let Err(e) = Self::push_proof_from_peers(
+        // Stays with the first most recent valid zk proof it gets.
+        while let Poll::Ready(Some(requests_item)) = this.zkp_requests.lock().poll_next_unpin(cx) {
+            let result = Self::push_proof_from_peers(
                 this.blockchain,
                 this.zkp_state,
-                proof,
-                election_block,
+                requests_item.proof,
+                requests_item.election_block,
                 this.zk_prover,
                 this.proof_storage,
                 this.zkp_events_notifier,
                 true,
                 this.keys_path,
-                ProofSource::PeerGenerated(peer_id),
-            ) {
+                ProofSource::PeerGenerated(requests_item.peer_id),
+            );
+
+            // Log errors.
+            if let Err(ref e) = result {
                 log::error!("Error pushing the new zk proof {}", e);
+            }
+
+            // Return verification result if channel exists.
+            if let Some(rx) = requests_item.response_channel {
+                let _ = rx.send(result.map(ZKPRequestEvent::Proof));
             }
         }
 
@@ -322,7 +340,7 @@ impl<N: Network> Future for ZKPComponent<N> {
                         this.keys_path,
                         ProofSource::PeerGenerated(pub_id.propagation_source()),
                     ) {
-                        Err(ZKPComponentError::OutdatedProof) => {
+                        Err(Error::OutdatedProof) => {
                             log::trace!("ZK Proof was outdated");
                             MsgAcceptance::Ignore
                         }
@@ -330,7 +348,7 @@ impl<N: Network> Future for ZKPComponent<N> {
                             log::error!("Error pushing the zk proof - {} ", e);
                             MsgAcceptance::Reject
                         }
-                        Ok(()) => MsgAcceptance::Accept,
+                        Ok(_) => MsgAcceptance::Accept,
                     };
                     this.network
                         .validate_message::<ZKProofTopic>(pub_id, acceptance);

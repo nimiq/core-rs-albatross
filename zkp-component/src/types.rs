@@ -18,7 +18,7 @@ use nimiq_database::{AsDatabaseBytes, FromDatabaseValue};
 use nimiq_hash::Blake2bHash;
 use nimiq_nano_primitives::MacroBlock as ZKPMacroBlock;
 use nimiq_network_interface::network::Network;
-use nimiq_network_interface::request::Handle;
+use nimiq_network_interface::request::{Handle, RequestError};
 use nimiq_network_interface::{
     network::Topic,
     request::{RequestCommon, RequestMarker},
@@ -62,6 +62,15 @@ impl<N: Network> Clone for ZKPEvent<N> {
     }
 }
 
+/// The ZKP event returned for individual requests by the ZKP requests component.
+#[derive(Debug)]
+pub enum ZKPRequestEvent<N: Network> {
+    /// A valid proof that has been pushed to the ZKP state.
+    Proof(ZKPEvent<N>),
+    /// The peer does not have a more recent proof.
+    OutdatedProof,
+}
+
 /// The ZK Proof state containing the pks block info and the proof.
 /// The genesis block has no zk proof.
 #[derive(Clone, Debug, PartialEq)]
@@ -73,17 +82,17 @@ pub struct ZKPState {
 }
 
 impl ZKPState {
-    pub fn with_genesis(genesis_block: &MacroBlock) -> Result<Self, ZKPComponentError> {
+    pub fn with_genesis(genesis_block: &MacroBlock) -> Result<Self, Error> {
         let latest_pks: Vec<_> = genesis_block
             .get_validators()
-            .ok_or(ZKPComponentError::InvalidBlock)?
+            .ok_or(Error::InvalidBlock)?
             .voting_keys()
             .into_iter()
             .map(|pub_key| pub_key.public_key)
             .collect();
 
         let genesis_block =
-            ZKPMacroBlock::try_from(genesis_block).map_err(|_| ZKPComponentError::InvalidBlock)?;
+            ZKPMacroBlock::try_from(genesis_block).map_err(|_| Error::InvalidBlock)?;
 
         Ok(ZKPState {
             latest_pks,
@@ -409,8 +418,8 @@ impl Topic for ZKProofTopic {
 }
 
 #[derive(Error, Debug)]
-pub enum ZKPComponentError {
-    #[error("Nano Zkp Error")]
+pub enum Error {
+    #[error("Nano Zkp Error: {0}")]
     NanoZKP(#[from] NanoZKPError),
 
     #[error("Proof's blocks are not valid")]
@@ -421,6 +430,9 @@ pub enum ZKPComponentError {
 
     #[error("Invalid proof")]
     InvalidProof,
+
+    #[error("Request Error: {0}")]
+    Request(#[from] RequestError),
 }
 
 #[derive(Error, Debug, Serialize, Deserialize, PartialEq, Eq)]

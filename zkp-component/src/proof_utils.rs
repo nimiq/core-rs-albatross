@@ -46,7 +46,7 @@ pub(crate) fn get_proof_macro_blocks(
     blockchain: &BlockchainProxy,
     proof: &ZKProof,
     election_block: Option<MacroBlock>,
-) -> Result<(MacroBlock, MacroBlock, Proof<MNT6_753>), ZKPComponentError> {
+) -> Result<(MacroBlock, MacroBlock, Proof<MNT6_753>), Error> {
     let block_number = proof.block_number;
     let proof = proof.proof.clone().ok_or(NanoZKPError::EmptyProof)?;
 
@@ -57,10 +57,10 @@ pub(crate) fn get_proof_macro_blocks(
         let new_block = blockchain
             .read()
             .get_block_at(block_number, true, None)
-            .ok_or(ZKPComponentError::InvalidBlock)?;
+            .ok_or(Error::InvalidBlock)?;
 
         if !new_block.is_election() {
-            return Err(ZKPComponentError::InvalidBlock);
+            return Err(Error::InvalidBlock);
         }
         new_block.unwrap_macro()
     };
@@ -78,17 +78,17 @@ pub(crate) fn validate_proof_get_new_state(
     new_block: &MacroBlock,
     genesis_block: MacroBlock,
     keys_path: &Path,
-) -> Result<ZKPState, ZKPComponentError> {
+) -> Result<ZKPState, Error> {
     let genesis_pks: Vec<G2MNT6> = genesis_block
         .get_validators()
-        .ok_or(ZKPComponentError::InvalidBlock)?
+        .ok_or(Error::InvalidBlock)?
         .voting_keys()
         .into_iter()
         .map(|pub_key| pub_key.public_key)
         .collect();
     let new_pks: Vec<G2MNT6> = new_block
         .get_validators()
-        .ok_or(ZKPComponentError::InvalidBlock)?
+        .ok_or(Error::InvalidBlock)?
         .voting_keys()
         .into_iter()
         .map(|pub_key| pub_key.public_key)
@@ -111,7 +111,7 @@ pub(crate) fn validate_proof_get_new_state(
             latest_proof: Some(proof),
         });
     }
-    Err(ZKPComponentError::InvalidProof)
+    Err(Error::InvalidProof)
 }
 
 /// Generates the zk proof and sends it through the channel provided. Upon failure, the error is sent trough the channel provided.

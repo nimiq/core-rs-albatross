@@ -150,13 +150,13 @@ async fn peers_reply_with_valid_proof() {
     for _ in 0..2 {
         let proof_data = zkp_requests.next().await.unwrap();
         assert!(
-            proof_data.2.is_none(),
+            proof_data.election_block.is_none(),
             "Peers should not send an election block"
         );
         assert!(
             validate_proof(
                 &BlockchainProxy::from(&blockchain2),
-                &proof_data.1,
+                &proof_data.proof,
                 None,
                 Path::new(KEYS_PATH)
             ),
@@ -230,14 +230,14 @@ async fn peers_reply_with_valid_proof_and_election_block() {
     for _ in 0..2 {
         let proof_data = zkp_requests.next().await.unwrap();
         assert!(
-            proof_data.2.is_some(),
+            proof_data.election_block.is_some(),
             "Peers should send an election block"
         );
         assert!(
             validate_proof(
                 &BlockchainProxy::from(&blockchain2),
-                &proof_data.1,
-                proof_data.2,
+                &proof_data.proof,
+                proof_data.election_block,
                 Path::new(KEYS_PATH)
             ),
             "Peer should sent a new proof valid proof"
