@@ -71,7 +71,7 @@ jobs:
       uses: actions-rs/cargo@v1
       with:
         command: llvm-cov
-        args: --no-run --lcov --output-path coverage.lcov
+        args: report --lcov --output-path coverage.lcov
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
       with:
