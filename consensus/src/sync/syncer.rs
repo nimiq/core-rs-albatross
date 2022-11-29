@@ -29,7 +29,7 @@ pub trait MacroSync<TPeerId>: Stream<Item = MacroSyncReturn<TPeerId>> + Unpin + 
 pub trait LiveSync<N: Network>: Stream<Item = LiveSyncEvent<N::PeerId>> + Unpin + Send {
     /// This function will be called each time a Block is received or announced by any of the
     /// peers added into the LiveSync.
-    fn on_block_announced(
+    fn push_block(
         &mut self,
         block: Block,
         peer_id: N::PeerId,
@@ -125,7 +125,7 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Syncer<N, M, L> {
     }
 
     pub fn push_block(&mut self, block: Block, peer_id: N::PeerId, pubsub_id: Option<N::PubsubId>) {
-        self.live_sync.on_block_announced(block, peer_id, pubsub_id);
+        self.live_sync.push_block(block, peer_id, pubsub_id);
     }
 
     fn move_peer_into_history_sync(&mut self, peer_id: N::PeerId) {

@@ -49,19 +49,19 @@ pub enum BlockRequestComponentEvent {
 ///
 /// Outside has a request blocks method, which doesn’t return the blocks.
 /// The blocks instead are returned by polling the component.
-pub struct BlockRequestComponent<TNetwork: Network + 'static> {
-    sync_queue: SyncQueue<TNetwork, (Blake2bHash, Vec<Blake2bHash>, bool), Vec<Block>>, // requesting missing blocks from peers
-    pub(crate) peers: Arc<RwLock<PeerList<TNetwork>>>,
-    network_event_rx: SubscribeEvents<TNetwork::PeerId>,
+pub struct BlockRequestComponent<N: Network + 'static> {
+    sync_queue: SyncQueue<N, (Blake2bHash, Vec<Blake2bHash>, bool), Vec<Block>>, // requesting missing blocks from peers
+    pub(crate) peers: Arc<RwLock<PeerList<N>>>,
+    network_event_rx: SubscribeEvents<N::PeerId>,
     include_micro_bodies: bool,
 }
 
-impl<TNetwork: Network + 'static> BlockRequestComponent<TNetwork> {
+impl<N: Network + 'static> BlockRequestComponent<N> {
     const NUM_PENDING_BLOCKS: usize = 5;
 
     pub fn new(
-        network_event_rx: SubscribeEvents<TNetwork::PeerId>,
-        network: Arc<TNetwork>,
+        network_event_rx: SubscribeEvents<N::PeerId>,
+        network: Arc<N>,
         include_micro_bodies: bool,
     ) -> Self {
         let peers = Arc::new(RwLock::new(PeerList::default()));
@@ -97,8 +97,8 @@ impl<TNetwork: Network + 'static> BlockRequestComponent<TNetwork> {
     }
 
     pub async fn request_missing_blocks_from_peer(
-        network: Arc<TNetwork>,
-        peer_id: TNetwork::PeerId,
+        network: Arc<N>,
+        peer_id: N::PeerId,
         target_block_hash: Blake2bHash,
         locators: Vec<Blake2bHash>,
         include_micro_bodies: bool,
@@ -117,8 +117,8 @@ impl<TNetwork: Network + 'static> BlockRequestComponent<TNetwork> {
     }
 }
 
-impl<TNetwork: 'static + Network> RequestComponent<TNetwork> for BlockRequestComponent<TNetwork> {
-    fn add_peer(&mut self, peer_id: TNetwork::PeerId) {
+impl<N: 'static + Network> RequestComponent<N> for BlockRequestComponent<N> {
+    fn add_peer(&mut self, peer_id: N::PeerId) {
         self.peers.write().add_peer(peer_id);
     }
 
@@ -138,11 +138,11 @@ impl<TNetwork: 'static + Network> RequestComponent<TNetwork> for BlockRequestCom
         self.peers.read().len()
     }
 
-    fn peers(&self) -> Vec<TNetwork::PeerId> {
+    fn peers(&self) -> Vec<N::PeerId> {
         self.peers.read().peers().clone()
     }
 
-    fn take_peer(&mut self, peer_id: &TNetwork::PeerId) -> Option<TNetwork::PeerId> {
+    fn take_peer(&mut self, peer_id: &N::PeerId) -> Option<N::PeerId> {
         if self.peers.write().remove_peer(peer_id) {
             return Some(*peer_id);
         }
@@ -150,7 +150,7 @@ impl<TNetwork: 'static + Network> RequestComponent<TNetwork> for BlockRequestCom
     }
 }
 
-impl<TNetwork: Network + 'static> Stream for BlockRequestComponent<TNetwork> {
+impl<N: Network + 'static> Stream for BlockRequestComponent<N> {
     type Item = BlockRequestComponentEvent;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
