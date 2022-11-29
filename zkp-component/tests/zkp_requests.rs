@@ -88,6 +88,7 @@ async fn peers_dont_reply_with_outdated_proof() {
 }
 
 #[test(tokio::test)]
+#[ignore]
 async fn peers_reply_with_valid_proof() {
     NanoZKP::setup(get_base_seed(), Path::new(KEYS_PATH), false).unwrap();
     let blockchain2 = blockchain();
@@ -170,6 +171,7 @@ async fn peers_reply_with_valid_proof() {
 }
 
 #[test(tokio::test)]
+#[ignore]
 async fn peers_reply_with_valid_proof_and_election_block() {
     NanoZKP::setup(get_base_seed(), Path::new(KEYS_PATH), false).unwrap();
     let blockchain2 = blockchain();

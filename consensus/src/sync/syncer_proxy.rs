@@ -74,7 +74,7 @@ impl<N: Network> SyncerProxy<N> {
                 )
                 .await;
 
-                let live_sync = BlockLiveSync::new(
+                let live_sync = BlockLiveSync::with_block_queue(
                     blockchain_proxy.clone(),
                     Arc::clone(&network),
                     block_queue,
@@ -114,7 +114,7 @@ impl<N: Network> SyncerProxy<N> {
         )
         .await;
 
-        let live_sync = BlockLiveSync::new(
+        let live_sync = BlockLiveSync::with_block_queue(
             blockchain_proxy.clone(),
             Arc::clone(&network),
             block_queue,

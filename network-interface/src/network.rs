@@ -38,7 +38,7 @@ pub enum MsgAcceptance {
     Ignore,
 }
 
-pub trait PubsubId<PeerId>: Clone + Send + Sync {
+pub trait PubsubId<PeerId>: Clone + Send + Sync + Debug {
     fn propagation_source(&self) -> PeerId;
 }
 

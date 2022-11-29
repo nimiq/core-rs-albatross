@@ -6,7 +6,11 @@ use std::task::{ready, Context, Poll};
 use futures::{future::BoxFuture, FutureExt, Stream, StreamExt};
 use parking_lot::Mutex;
 use pin_project::pin_project;
-use tokio::task::spawn_blocking;
+use tokio::{
+    sync::mpsc::{channel as mpsc, Sender as MpscSender},
+    task::spawn_blocking,
+};
+use tokio_stream::wrappers::ReceiverStream;
 
 use nimiq_block::{Block, BlockHeaderTopic, BlockTopic};
 #[cfg(feature = "full")]
@@ -34,6 +38,9 @@ enum PushOpResult {
         HashSet<Blake2bHash>,
     ),
 }
+
+/// The maximum capacity of the external block stream passed into the block queue.
+const MAX_BLOCK_STREAM_BUFFER: usize = 256;
 
 /// Pushes a single block into the blockchain.
 /// TODO We should limit the number of push operations we queue here.
@@ -167,17 +174,18 @@ pub struct BlockLiveSync<N: Network, TReq: RequestComponent<N>> {
 
     /// Cache for BLS public keys to avoid repetitive uncompressing.
     bls_cache: Arc<Mutex<PublicKeyCache>>,
+
+    /// Channel used to communicate additional blocks to the block queue.
+    /// We use this to wake up the block queue and pass in new, unknown blocks
+    /// received in the consensus as part of the head requests.
+    block_queue_tx: MpscSender<(Block, N::PeerId, Option<N::PubsubId>)>,
 }
 
 impl<N: Network, TReq: RequestComponent<N>> LiveSync<N> for BlockLiveSync<N, TReq> {
-    fn on_block_announced(
-        &mut self,
-        block: Block,
-        peer_id: N::PeerId,
-        pubsub_id: Option<N::PubsubId>,
-    ) {
-        self.block_queue
-            .check_announced_block(block, peer_id, pubsub_id);
+    fn push_block(&mut self, block: Block, peer_id: N::PeerId, pubsub_id: Option<N::PubsubId>) {
+        if let Err(e) = self.block_queue_tx.try_send((block, peer_id, pubsub_id)) {
+            error!("Block queue not ready to receive data: {}", e);
+        }
     }
 
     fn add_peer(&mut self, peer_id: N::PeerId) {
@@ -194,12 +202,14 @@ impl<N: Network, TReq: RequestComponent<N>> LiveSync<N> for BlockLiveSync<N, TRe
 }
 
 impl<N: Network, TReq: RequestComponent<N>> BlockLiveSync<N, TReq> {
-    pub fn new(
+    pub fn with_block_queue(
         blockchain: BlockchainProxy,
         network: Arc<N>,
-        block_queue: BlockQueue<N, TReq>,
+        mut block_queue: BlockQueue<N, TReq>,
         bls_cache: Arc<Mutex<PublicKeyCache>>,
     ) -> BlockLiveSync<N, TReq> {
+        let (tx, rx) = mpsc(MAX_BLOCK_STREAM_BUFFER);
+        block_queue.add_block_stream(ReceiverStream::new(rx));
         BlockLiveSync {
             blockchain,
             network,
@@ -207,6 +217,7 @@ impl<N: Network, TReq: RequestComponent<N>> BlockLiveSync<N, TReq> {
             accepted_announcements: 0,
             push_ops: Default::default(),
             bls_cache,
+            block_queue_tx: tx,
         }
     }
 

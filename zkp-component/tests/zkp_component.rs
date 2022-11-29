@@ -74,6 +74,7 @@ async fn builds_valid_genesis_proof() {
 }
 
 #[test(tokio::test)]
+#[ignore]
 async fn loads_valid_zkp_state_from_db() {
     NanoZKP::setup(get_base_seed(), Path::new(KEYS_PATH), false).unwrap();
     let blockchain = blockchain();

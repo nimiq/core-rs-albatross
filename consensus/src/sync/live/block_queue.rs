@@ -1,11 +1,12 @@
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    mem,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
 };
 
-use futures::stream::BoxStream;
+use futures::stream::{empty, select, BoxStream};
 use futures::{Stream, StreamExt};
 
 use nimiq_block::{Block, BlockHeaderTopic, BlockTopic};
@@ -21,7 +22,15 @@ use super::{
     BlockQueueConfig,
 };
 
-pub type BlockStream<N> = BoxStream<'static, (Block, <N as Network>::PubsubId)>;
+pub type BlockStream<N> = BoxStream<
+    'static,
+    (
+        Block,
+        <N as Network>::PeerId,
+        Option<<N as Network>::PubsubId>,
+    ),
+>;
+pub type GossipSubBlockStream<N> = BoxStream<'static, (Block, <N as Network>::PubsubId)>;
 
 type BlockAndId<N> = (Block, Option<<N as Network>::PubsubId>);
 
@@ -46,7 +55,8 @@ pub struct BlockQueue<N: Network, TReq: RequestComponent<N>> {
     /// The Peer Tracking and Request Component.
     request_component: TReq,
 
-    /// The blocks received via gossipsub.
+    /// A stream of blocks.
+    /// This includes blocks received via gossipsub, but can also include other sources.
     block_stream: BlockStream<N>,
 
     /// Buffered blocks - `block_height -> block_hash -> BlockAndId`.
@@ -79,6 +89,26 @@ impl<N: Network, TReq: RequestComponent<N>> BlockQueue<N, TReq> {
                 .unwrap()
                 .boxed()
         };
+
+        Self::with_gossipsub_block_stream(
+            blockchain,
+            network,
+            request_component,
+            block_stream,
+            config,
+        )
+    }
+
+    pub fn with_gossipsub_block_stream(
+        blockchain: BlockchainProxy,
+        network: Arc<N>,
+        request_component: TReq,
+        block_stream: GossipSubBlockStream<N>,
+        config: BlockQueueConfig,
+    ) -> Self {
+        let block_stream = block_stream
+            .map(|(block, pubsub_id)| (block, pubsub_id.propagation_source(), Some(pubsub_id)))
+            .boxed();
         Self::with_block_stream(blockchain, network, request_component, block_stream, config)
     }
 
@@ -102,6 +132,16 @@ impl<N: Network, TReq: RequestComponent<N>> BlockQueue<N, TReq> {
             blocks_pending_push: BTreeSet::new(),
             current_macro_height,
         }
+    }
+
+    /// Adds an additional block stream by replacing the current block stream with a `select` of both streams.
+    pub fn add_block_stream<S>(&mut self, block_stream: S)
+    where
+        S: Stream<Item = (Block, N::PeerId, Option<N::PubsubId>)> + Send + 'static,
+    {
+        // We need to safely remove the old block stream first.
+        let prev_block_stream = mem::replace(&mut self.block_stream, empty().boxed());
+        self.block_stream = select(prev_block_stream, block_stream).boxed();
     }
 
     /// Returns an iterator over the buffered blocks
@@ -143,7 +183,7 @@ impl<N: Network, TReq: RequestComponent<N>> BlockQueue<N, TReq> {
     }
 
     /// Handles a block announcement.
-    pub fn check_announced_block(
+    fn check_announced_block(
         &mut self,
         block: Block,
         peer_id: N::PeerId,
@@ -497,15 +537,11 @@ impl<N: Network, TReq: RequestComponent<N>> Stream for BlockQueue<N, TReq> {
         // Get as many blocks from the gossipsub stream as possible.
         loop {
             match self.block_stream.poll_next_unpin(cx) {
-                Poll::Ready(Some((block, pubsub_id))) => {
+                Poll::Ready(Some((block, peer_id, pubsub_id))) => {
                     // Ignore all block announcements until there is at least one synced peer.
                     if self.num_peers() > 0 {
                         log::debug!(%block, "Received block via gossipsub");
-                        if let Some(block) = self.check_announced_block(
-                            block,
-                            pubsub_id.propagation_source(),
-                            Some(pubsub_id),
-                        ) {
+                        if let Some(block) = self.check_announced_block(block, peer_id, pubsub_id) {
                             return Poll::Ready(Some(block));
                         }
                     }

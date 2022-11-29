@@ -172,7 +172,7 @@ async fn send_single_micro_block_to_block_queue() {
     let (request_component, _, _) = MockRequestComponent::new_mutex();
     let (block_tx, block_rx) = mpsc::channel(32);
 
-    let block_queue = BlockQueue::with_block_stream(
+    let block_queue = BlockQueue::with_gossipsub_block_stream(
         blockchain_proxy.clone(),
         Arc::clone(&network),
         request_component,
@@ -180,7 +180,7 @@ async fn send_single_micro_block_to_block_queue() {
         BlockQueueConfig::default(),
     );
 
-    let live_sync = BlockLiveSync::new(
+    let live_sync = BlockLiveSync::with_block_queue(
         blockchain_proxy.clone(),
         Arc::clone(&network),
         block_queue,
@@ -222,7 +222,7 @@ async fn send_two_micro_blocks_out_of_order() {
     let (request_component, mut missing_blocks_request_rx, _) = MockRequestComponent::new_mutex();
     let (block_tx, block_rx) = mpsc::channel(32);
 
-    let block_queue = BlockQueue::with_block_stream(
+    let block_queue = BlockQueue::with_gossipsub_block_stream(
         blockchain_proxy_1.clone(),
         Arc::clone(&network),
         request_component,
@@ -230,7 +230,7 @@ async fn send_two_micro_blocks_out_of_order() {
         BlockQueueConfig::default(),
     );
 
-    let live_sync = BlockLiveSync::new(
+    let live_sync = BlockLiveSync::with_block_queue(
         blockchain_proxy_1.clone(),
         Arc::clone(&network),
         block_queue,
@@ -308,7 +308,7 @@ async fn send_micro_blocks_out_of_order() {
     let request_component = MockRequestComponent::new();
     let (block_tx, block_rx) = mpsc::channel(32);
 
-    let block_queue = BlockQueue::with_block_stream(
+    let block_queue = BlockQueue::with_gossipsub_block_stream(
         blockchain_proxy_1.clone(),
         Arc::clone(&network),
         request_component,
@@ -316,7 +316,7 @@ async fn send_micro_blocks_out_of_order() {
         BlockQueueConfig::default(),
     );
 
-    let live_sync = BlockLiveSync::new(
+    let live_sync = BlockLiveSync::with_block_queue(
         blockchain_proxy_1.clone(),
         Arc::clone(&network),
         block_queue,
@@ -398,7 +398,7 @@ async fn send_invalid_block() {
     let (request_component, mut missing_blocks_request_rx, _) = MockRequestComponent::new_mutex();
     let (block_tx, block_rx) = mpsc::channel(32);
 
-    let block_queue = BlockQueue::with_block_stream(
+    let block_queue = BlockQueue::with_gossipsub_block_stream(
         blockchain_proxy_1.clone(),
         Arc::clone(&network),
         request_component,
@@ -406,7 +406,7 @@ async fn send_invalid_block() {
         BlockQueueConfig::default(),
     );
 
-    let live_sync = BlockLiveSync::new(
+    let live_sync = BlockLiveSync::with_block_queue(
         blockchain_proxy_1.clone(),
         Arc::clone(&network),
         block_queue,
@@ -491,7 +491,7 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
         MockRequestComponent::new_mutex();
     let (block_tx, block_rx) = mpsc::channel(32);
 
-    let block_queue = BlockQueue::with_block_stream(
+    let block_queue = BlockQueue::with_gossipsub_block_stream(
         blockchain_proxy_1.clone(),
         Arc::clone(&network),
         request_component,
@@ -499,7 +499,7 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
         BlockQueueConfig::default(),
     );
 
-    let live_sync = BlockLiveSync::new(
+    let live_sync = BlockLiveSync::with_block_queue(
         blockchain_proxy_1.clone(),
         Arc::clone(&network),
         block_queue,
@@ -578,7 +578,7 @@ async fn request_missing_blocks_across_macro_block() {
         MockRequestComponent::new_mutex();
     let (block_tx, block_rx) = mpsc::channel(32);
 
-    let block_queue = BlockQueue::with_block_stream(
+    let block_queue = BlockQueue::with_gossipsub_block_stream(
         blockchain_proxy_1.clone(),
         Arc::clone(&network),
         request_component,
@@ -586,7 +586,7 @@ async fn request_missing_blocks_across_macro_block() {
         BlockQueueConfig::default(),
     );
 
-    let live_sync = BlockLiveSync::new(
+    let live_sync = BlockLiveSync::with_block_queue(
         blockchain_proxy_1.clone(),
         Arc::clone(&network),
         block_queue,
@@ -723,7 +723,7 @@ async fn put_peer_back_into_sync_mode() {
     let mock_id = MockId::new(peer_addr);
     network.dial_peer(peer_addr.clone()).await.unwrap();
 
-    let block_queue = BlockQueue::with_block_stream(
+    let block_queue = BlockQueue::with_gossipsub_block_stream(
         blockchain_proxy_1.clone(),
         Arc::clone(&network),
         request_component,
@@ -736,7 +736,7 @@ async fn put_peer_back_into_sync_mode() {
         },
     );
 
-    let live_sync = BlockLiveSync::new(
+    let live_sync = BlockLiveSync::with_block_queue(
         blockchain_proxy_1.clone(),
         Arc::clone(&network),
         block_queue,
