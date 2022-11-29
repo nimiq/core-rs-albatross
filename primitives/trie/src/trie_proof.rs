@@ -76,7 +76,7 @@ impl TrieProof {
                     if node.key.is_prefix_of(&child.key) {
                         // Get the hash and key of the child from the parent node.
                         let (child_hash, child_key) =
-                            match (node.child(&child.key), node.child_key(&child.key)) {
+                            match (node.child(&child.key), node.child_key(&child.key, &None)) {
                                 (Ok(c), Ok(k)) => (&c.hash, k),
                                 _ => return false,
                             };

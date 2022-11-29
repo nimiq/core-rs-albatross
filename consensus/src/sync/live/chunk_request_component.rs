@@ -40,6 +40,10 @@ impl<N: Network> ChunkRequestComponent<N> {
         self.len() == 0
     }
 
+    pub fn has_pending_requests(&self) -> bool {
+        !self.sync_queue.is_empty()
+    }
+
     pub fn request_chunk(&mut self, request: RequestChunk) {
         self.sync_queue.add_ids(vec![request]);
     }

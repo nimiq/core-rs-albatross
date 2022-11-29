@@ -55,12 +55,12 @@ impl Accounts {
 
     /// Returns the number of accounts in the Accounts Trie.
     pub fn size(&self) -> u64 {
-        self.tree.num_leaves()
+        self.tree.num_leaves(&ReadTransaction::new(&self.env))
     }
 
     /// Returns the number of branch nodes in the Accounts Trie.
     pub fn num_branches(&self) -> u64 {
-        self.tree.num_branches()
+        self.tree.num_branches(&ReadTransaction::new(&self.env))
     }
 
     pub fn get(&self, key: &KeyNibbles, txn_option: Option<&DBTransaction>) -> Option<Account> {
@@ -608,14 +608,12 @@ impl Accounts {
         expected_hash: Blake2bHash,
     ) -> Result<(), AccountError> {
         let keys_end = chunk.keys_end.clone();
-        self.tree
-            .put_chunk(
-                txn,
-                self.keys_end.clone().unwrap_or(KeyNibbles::ROOT),
-                chunk,
-                expected_hash,
-            )
-            .map_err(AccountError::ChunkError)?;
+        self.tree.put_chunk(
+            txn,
+            self.keys_end.clone().unwrap_or(KeyNibbles::ROOT),
+            chunk,
+            expected_hash,
+        )?;
         self.keys_end = keys_end;
         Ok(())
     }

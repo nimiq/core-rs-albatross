@@ -1,3 +1,4 @@
+use nimiq_trie::error::MerkleRadixTrieError;
 use thiserror::Error;
 
 use beserial::SerializingError;
@@ -42,5 +43,5 @@ pub enum AccountError {
     #[error("There is already an account at address {address} in the Accounts Tree.")]
     AlreadyExistentAddress { address: Address },
     #[error("Error during chunk processing: {0}")]
-    ChunkError(&'static str),
+    ChunkError(#[from] MerkleRadixTrieError),
 }

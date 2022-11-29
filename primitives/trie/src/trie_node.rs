@@ -1,5 +1,6 @@
 use std::io;
 use std::ops;
+use std::ops::RangeFrom;
 use std::slice;
 
 use log::error;
@@ -47,20 +48,27 @@ pub struct TrieNodeChild {
 }
 
 impl TrieNodeChild {
-    pub fn stump() -> TrieNodeChild {
-        TrieNodeChild {
-            suffix: KeyNibbles::default(),
-            hash: Blake2bHash::default(),
-        }
+    pub fn is_stump(
+        &self,
+        parent_key: &KeyNibbles,
+        missing_range: &Option<RangeFrom<KeyNibbles>>,
+    ) -> bool {
+        missing_range
+            .as_ref()
+            .map(|range| range.contains(&(parent_key + &self.suffix)))
+            .unwrap_or(false)
     }
-    pub fn is_stump(&self) -> bool {
-        self.suffix.is_empty()
-    }
+
     pub fn has_hash(&self) -> bool {
         self.hash != Default::default()
     }
-    pub fn key(&self, parent_key: &KeyNibbles) -> Result<KeyNibbles, MerkleRadixTrieError> {
-        if self.is_stump() {
+
+    pub fn key(
+        &self,
+        parent_key: &KeyNibbles,
+        missing_range: &Option<RangeFrom<KeyNibbles>>,
+    ) -> Result<KeyNibbles, MerkleRadixTrieError> {
+        if self.is_stump(parent_key, missing_range) {
             return Err(MerkleRadixTrieError::ChildIsStump);
         }
         Ok(parent_key + &self.suffix)
@@ -101,28 +109,7 @@ impl TrieNode {
     }
 
     fn new_root_impl(incomplete: bool) -> Self {
-        let children = if incomplete {
-            [
-                Some(TrieNodeChild::stump()),
-                Some(TrieNodeChild::stump()),
-                Some(TrieNodeChild::stump()),
-                Some(TrieNodeChild::stump()),
-                Some(TrieNodeChild::stump()),
-                Some(TrieNodeChild::stump()),
-                Some(TrieNodeChild::stump()),
-                Some(TrieNodeChild::stump()),
-                Some(TrieNodeChild::stump()),
-                Some(TrieNodeChild::stump()),
-                Some(TrieNodeChild::stump()),
-                Some(TrieNodeChild::stump()),
-                Some(TrieNodeChild::stump()),
-                Some(TrieNodeChild::stump()),
-                Some(TrieNodeChild::stump()),
-                Some(TrieNodeChild::stump()),
-            ]
-        } else {
-            NO_CHILDREN
-        };
+        let children = NO_CHILDREN;
         TrieNode {
             key: KeyNibbles::ROOT,
             root_data: Some(RootData {
@@ -156,6 +143,10 @@ impl TrieNode {
 
     pub fn is_root(&self) -> bool {
         self.root_data.is_some()
+    }
+
+    pub fn is_hybrid(&self) -> bool {
+        !self.is_root() && self.value.is_some() && self.has_children()
     }
 
     pub fn has_children(&self) -> bool {
@@ -210,8 +201,12 @@ impl TrieNode {
         Err(MerkleRadixTrieError::ChildDoesNotExist)
     }
 
-    pub fn child_key(&self, child_prefix: &KeyNibbles) -> Result<KeyNibbles, MerkleRadixTrieError> {
-        self.child(child_prefix)?.key(&self.key)
+    pub fn child_key(
+        &self,
+        child_prefix: &KeyNibbles,
+        missing_range: &Option<RangeFrom<KeyNibbles>>,
+    ) -> Result<KeyNibbles, MerkleRadixTrieError> {
+        self.child(child_prefix)?.key(&self.key, missing_range)
     }
 
     /// Sets the current node's child with the given prefix.
@@ -579,24 +574,36 @@ mod tests {
             .put_child(&child_key_4, "child_4".hash())
             .unwrap();
 
-        assert_eq!(branch_node.child_key(&child_key_1), Ok(child_key_1.clone()));
-        assert_eq!(branch_node.child_key(&child_key_2), Ok(child_key_2.clone()));
-        assert_eq!(branch_node.child_key(&child_key_3), Ok(child_key_3.clone()));
-        assert_eq!(branch_node.child_key(&child_key_4), Ok(child_key_4.clone()));
+        assert_eq!(
+            branch_node.child_key(&child_key_1, &None),
+            Ok(child_key_1.clone())
+        );
+        assert_eq!(
+            branch_node.child_key(&child_key_2, &None),
+            Ok(child_key_2.clone())
+        );
+        assert_eq!(
+            branch_node.child_key(&child_key_3, &None),
+            Ok(child_key_3.clone())
+        );
+        assert_eq!(
+            branch_node.child_key(&child_key_4, &None),
+            Ok(child_key_4.clone())
+        );
 
         assert_eq!(
-            branch_node.child_key(&child_key_1.slice(0, 7)),
+            branch_node.child_key(&child_key_1.slice(0, 7), &None),
             Ok(child_key_1)
         );
 
         assert_eq!(
-            leaf_node.child_key(&child_key_2),
+            leaf_node.child_key(&child_key_2, &None),
             Err(MerkleRadixTrieError::ChildDoesNotExist)
         );
 
         let child_key_5 = "c0b986d50".parse().unwrap();
         assert_eq!(
-            branch_node.child_key(&child_key_5),
+            branch_node.child_key(&child_key_5, &None),
             Err(MerkleRadixTrieError::WrongPrefix)
         );
     }
