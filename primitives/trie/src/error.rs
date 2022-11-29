@@ -16,6 +16,14 @@ pub enum MerkleRadixTrieError {
     RootCantHaveValue,
     #[error("Failed to (de)serialize a value.")]
     SerializationFailed(SerializingError),
+    #[error("Tree is already complete.")]
+    TreeAlreadyComplete,
+    #[error("Chunk does not match tree state.")]
+    NonMatchingChunk,
+    #[error("Root hash does not match expected hash after applying chunk.")]
+    ChunkHashMismatch,
+    #[error("Chunk is invalid: {0}")]
+    InvalidChunk(&'static str),
 }
 
 impl From<SerializingError> for MerkleRadixTrieError {

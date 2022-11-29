@@ -4,12 +4,12 @@ use std::sync::Arc;
 use nimiq_account::{Account, StakingContract};
 use nimiq_block::Block;
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainError, ChainInfo, Direction};
-use nimiq_database::Transaction;
+use nimiq_database::{ReadTransaction, Transaction};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
-use nimiq_primitives::policy::Policy;
-use nimiq_primitives::slots::Validator;
+use nimiq_primitives::{policy::Policy, slots::Validator};
 use nimiq_trie::key_nibbles::KeyNibbles;
+use std::ops::RangeFrom;
 
 use crate::blockchain_state::BlockchainState;
 #[cfg(feature = "metrics")]
@@ -172,5 +172,23 @@ impl Blockchain {
     #[cfg(feature = "metrics")]
     pub fn metrics(&self) -> Arc<BlockchainMetrics> {
         self.metrics.clone()
+    }
+
+    /// Retrieves the missing range of the accounts trie when it's incomplete.
+    /// This function returns `None` when the trie is complete.
+    pub fn get_missing_accounts_range(
+        &self,
+        txn_opt: Option<&Transaction>,
+    ) -> Option<RangeFrom<KeyNibbles>> {
+        let read_txn: ReadTransaction;
+        let txn = match txn_opt {
+            Some(txn) => txn,
+            None => {
+                read_txn = self.read_transaction();
+                &read_txn
+            }
+        };
+
+        self.state().accounts.tree.get_missing_range(txn)
     }
 }

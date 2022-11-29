@@ -106,9 +106,13 @@ impl Policy {
     /// The maximum size of the BLS public key cache.
     pub const BLS_CACHE_MAX_CAPACITY: usize = 1000;
 
-    /// Maximum size of history chunks
-    /// 25 MB
+    /// Maximum size of history chunks.
+    /// 25 MB.
     pub const HISTORY_CHUNKS_MAX_SIZE: u64 = 25 * 1024 * 1024;
+
+    /// Maximum size of accounts trie chunks.
+    /// #Nodes/accounts 200.
+    pub const STATE_CHUNKS_MAX_SIZE: u32 = 200; // TODO: Simulate with different sizes
 
     #[inline]
     fn get_blocks_per_epoch(&self) -> u32 {
