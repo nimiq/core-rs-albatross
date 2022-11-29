@@ -724,6 +724,7 @@ async fn put_peer_back_into_sync_mode() {
             buffer_max: 10,
             window_ahead_max: 10,
             tolerate_past_max: 100,
+            include_body: true,
         },
     );
 

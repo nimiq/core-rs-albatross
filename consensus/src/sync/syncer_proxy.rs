@@ -51,8 +51,11 @@ impl<N: Network> SyncerProxy<N> {
 
         match blockchain_proxy {
             BlockchainProxy::Full(ref blockchain) => {
-                let request_component =
-                    BlockRequestComponent::new(network.subscribe_events(), Arc::clone(&network));
+                let request_component = BlockRequestComponent::new(
+                    network.subscribe_events(),
+                    Arc::clone(&network),
+                    true,
+                );
 
                 let block_queue = BlockQueue::new(
                     Arc::clone(&network),

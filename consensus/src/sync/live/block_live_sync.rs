@@ -1,4 +1,4 @@
-use crate::sync::live::block_queue::{BlockQueue, BlockTopic, QueuedBlock};
+use crate::sync::live::block_queue::{BlockHeaderTopic, BlockQueue, BlockTopic, QueuedBlock};
 use crate::sync::live::request_component::RequestComponent;
 use crate::sync::syncer::{LiveSync, LiveSyncEvent, LiveSyncPeerEvent, LiveSyncPushEvent};
 use futures::future::BoxFuture;
@@ -130,6 +130,7 @@ impl<N: Network, TReq: RequestComponent<N>> BlockLiveSync<N, TReq> {
             let blockchain1 = this.blockchain.clone();
             let bls_cache1 = Arc::clone(this.bls_cache);
             let network1 = Arc::clone(this.network);
+            let include_body = this.block_queue.includes_body();
 
             let is_head = matches!(queued_block, QueuedBlock::Head(..));
             match queued_block {
@@ -164,7 +165,11 @@ impl<N: Network, TReq: RequestComponent<N>> BlockLiveSync<N, TReq> {
                         };
 
                         if let Some(id) = pubsub_id {
-                            network1.validate_message::<BlockTopic>(id, acceptance);
+                            if include_body {
+                                network1.validate_message::<BlockTopic>(id, acceptance);
+                            } else {
+                                network1.validate_message::<BlockHeaderTopic>(id, acceptance);
+                            }
                         }
 
                         if is_head {

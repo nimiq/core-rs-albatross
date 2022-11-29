@@ -29,6 +29,17 @@ impl Topic for BlockTopic {
     const VALIDATE: bool = true;
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct BlockHeaderTopic;
+
+impl Topic for BlockHeaderTopic {
+    type Item = Block;
+
+    const BUFFER_SIZE: usize = 16;
+    const NAME: &'static str = "block-headers";
+    const VALIDATE: bool = true;
+}
+
 pub type BlockStream<N> = BoxStream<'static, (Block, <N as Network>::PubsubId)>;
 
 type BlockAndId<N> = (Block, Option<<N as Network>::PubsubId>);
@@ -43,6 +54,9 @@ pub struct BlockQueueConfig {
 
     /// How many blocks back into the past we tolerate without returning a peer as Outdated.
     pub tolerate_past_max: u32,
+
+    /// Flag to indicate if blocks should carry a body
+    pub include_body: bool,
 }
 
 impl Default for BlockQueueConfig {
@@ -51,6 +65,7 @@ impl Default for BlockQueueConfig {
             buffer_max: 4 * Policy::blocks_per_batch() as usize,
             window_ahead_max: 2 * Policy::blocks_per_batch(),
             tolerate_past_max: Policy::blocks_per_batch(),
+            include_body: true,
         }
     }
 }
@@ -331,8 +346,15 @@ impl<N: Network, TReq: RequestComponent<N>> BlockQueue<N, TReq> {
                     invalid_blocks.insert(hash.clone());
 
                     if let Some(id) = pubsub_id {
-                        self.network
-                            .validate_message::<BlockTopic>(id.clone(), MsgAcceptance::Reject);
+                        if self.config.include_body {
+                            self.network
+                                .validate_message::<BlockTopic>(id.clone(), MsgAcceptance::Reject);
+                        } else {
+                            self.network.validate_message::<BlockHeaderTopic>(
+                                id.clone(),
+                                MsgAcceptance::Reject,
+                            );
+                        }
                     }
 
                     false
@@ -354,8 +376,15 @@ impl<N: Network, TReq: RequestComponent<N>> BlockQueue<N, TReq> {
             for (_, pubsub_id) in blocks.values() {
                 // Inline `report_validation_result` here, because it solves the borrow issue:
                 if let Some(id) = pubsub_id {
-                    self.network
-                        .validate_message::<BlockTopic>(id.clone(), MsgAcceptance::Ignore);
+                    if self.config.include_body {
+                        self.network
+                            .validate_message::<BlockTopic>(id.clone(), MsgAcceptance::Ignore);
+                    } else {
+                        self.network.validate_message::<BlockHeaderTopic>(
+                            id.clone(),
+                            MsgAcceptance::Ignore,
+                        );
+                    }
                 }
             }
             false
@@ -369,7 +398,12 @@ impl<N: Network, TReq: RequestComponent<N>> BlockQueue<N, TReq> {
         acceptance: MsgAcceptance,
     ) {
         if let Some(id) = pubsub_id {
-            self.network.validate_message::<BlockTopic>(id, acceptance);
+            if self.config.include_body {
+                self.network.validate_message::<BlockTopic>(id, acceptance);
+            } else {
+                self.network
+                    .validate_message::<BlockHeaderTopic>(id, acceptance);
+            }
         }
     }
 }
@@ -413,7 +447,15 @@ impl<N: Network, TReq: RequestComponent<N>> BlockQueue<N, TReq> {
         request_component: TReq,
         config: BlockQueueConfig,
     ) -> Self {
-        let block_stream = network.subscribe::<BlockTopic>().await.unwrap().boxed();
+        let block_stream = if config.include_body {
+            network.subscribe::<BlockTopic>().await.unwrap().boxed()
+        } else {
+            network
+                .subscribe::<BlockHeaderTopic>()
+                .await
+                .unwrap()
+                .boxed()
+        };
         Self::with_block_stream(blockchain, network, request_component, block_stream, config)
     }
 
@@ -463,6 +505,10 @@ impl<N: Network, TReq: RequestComponent<N>> BlockQueue<N, TReq> {
 
     pub fn num_peers(&self) -> usize {
         self.request_component.num_peers()
+    }
+
+    pub fn includes_body(&self) -> bool {
+        self.config.include_body
     }
 
     pub fn peers(&self) -> Vec<N::PeerId> {
