@@ -129,10 +129,10 @@ impl ExtendedTransaction {
     /// their transaction hash.
     pub fn tx_hash(&self) -> Blake2bHash {
         match &self.data {
-            ExtTxData::Basic(tx) => tx.get_hash(),
+            ExtTxData::Basic(tx) => tx.hash(),
             ExtTxData::Inherent(v) => {
                 if v.ty == InherentType::Reward {
-                    self.clone().into_transaction().unwrap().get_hash()
+                    self.clone().into_transaction().unwrap().hash()
                 } else {
                     v.hash()
                 }

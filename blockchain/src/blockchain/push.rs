@@ -5,10 +5,11 @@ use std::ops::Deref;
 use nimiq_account::BlockLog;
 use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
 
-use nimiq_block::{Block, ForkProof};
-use nimiq_database::WriteTransaction;
+use nimiq_block::{Block, ForkProof, MicroBlock};
+use nimiq_database::{ReadTransaction, WriteTransaction};
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::policy::Policy;
+use nimiq_vrf::VrfSeed;
 use tokio::sync::broadcast::Sender as BroadcastSender;
 
 use crate::blockchain_state::BlockchainState;
@@ -77,70 +78,15 @@ impl Blockchain {
                 PushError::Orphan
             })?;
 
-        if let Err(e) =
-            Self::verify_block_for_current_state(this.deref(), &read_txn, &block, trusted)
-        {
+        // Verify the block.
+        if let Err(e) = this.verify_block(&read_txn, &block, trusted) {
             warn!(%block, reason = "Block verifications failed", "Rejecting block");
             return Err(e);
         }
 
-        // Detect forks in micro blocks other than skip block
-        if !block.is_skip() {
-            if let Block::Micro(micro_block) = &block {
-                // Check if there are two blocks in the same slot and with the same height. Since we already
-                // verified the validator for the current slot, this is enough to check for fork proofs.
-                // Note: We don't verify the justifications for the other blocks here, since they had to
-                // already be verified in order to be added to the blockchain.
-                // Count the micro blocks after the last macro block.
-                let mut micro_blocks: Vec<Block> =
-                    this.chain_store
-                        .get_blocks_at(block.block_number(), false, Some(&read_txn));
-
-                micro_blocks.retain(|block| block.is_micro() && !block.is_skip());
-
-                // Get the micro header from the block
-                let micro_header1 = &micro_block.header;
-
-                // Get the justification for the block. We assume that the
-                // validator's signature is valid.
-                let justification1 = match micro_block
-                    .justification
-                    .clone()
-                    .expect("Missing justification!")
-                {
-                    nimiq_block::MicroJustification::Micro(signature) => signature,
-                    nimiq_block::MicroJustification::Skip(_) => {
-                        unreachable!("Skip blocks are already filtered")
-                    }
-                };
-
-                for micro_block in micro_blocks.drain(..).map(|block| block.unwrap_micro()) {
-                    // If there's another micro block set to this block height, which also has the same
-                    // VrfSeed entropy we notify the fork event.
-                    if block.seed().entropy() == micro_block.header.seed.entropy() {
-                        let micro_header2 = micro_block.header;
-                        let justification2 =
-                            match micro_block.justification.expect("Missing justification!") {
-                                nimiq_block::MicroJustification::Micro(signature) => signature,
-                                nimiq_block::MicroJustification::Skip(_) => {
-                                    unreachable!("Skip blocks are already filtered")
-                                }
-                            };
-
-                        let proof = ForkProof {
-                            header1: micro_header1.clone(),
-                            header2: micro_header2,
-                            justification1: justification1.clone(),
-                            justification2,
-                            prev_vrf_seed: prev_info.head.seed().clone(),
-                        };
-
-                        if let Err(e) = this.fork_notifier.send(ForkEvent::Detected(proof)) {
-                            log::error!(error = ?e,"Error sending the Fork event to the forks notifier");
-                        }
-                    }
-                }
-            }
+        // Detect forks in non-skip micro blocks.
+        if block.is_micro() && !block.is_skip() {
+            this.detect_forks(&read_txn, block.unwrap_micro_ref(), prev_info.head.seed());
         }
 
         // Calculate chain ordering.
@@ -610,5 +556,51 @@ impl Blockchain {
         }
 
         block_log
+    }
+
+    fn detect_forks(&self, txn: &ReadTransaction, block: &MicroBlock, prev_vrf_seed: &VrfSeed) {
+        assert!(!block.is_skip_block());
+
+        // Check if there are two blocks in the same slot and with the same height. Since we already
+        // verified the validator for the current slot, this is enough to check for fork proofs.
+        // Note: We don't verify the justifications for the other blocks here, since they had to
+        // already be verified in order to be added to the blockchain.
+        let mut micro_blocks: Vec<Block> =
+            self.chain_store
+                .get_blocks_at(block.header.block_number, false, Some(txn));
+
+        // Filter out any skip blocks.
+        micro_blocks.retain(|block| block.is_micro() && !block.is_skip());
+
+        for micro_block in micro_blocks.drain(..).map(|block| block.unwrap_micro()) {
+            // If there's another micro block set to this block height, which also has the same
+            // VrfSeed entropy we notify the fork event.
+            if block.header.seed.entropy() == micro_block.header.seed.entropy() {
+                // Get the justification for the block. We assume that the
+                // validator's signature is valid.
+                let justification1 = block
+                    .justification
+                    .clone()
+                    .expect("Missing justification")
+                    .unwrap_micro();
+
+                let justification2 = micro_block
+                    .justification
+                    .expect("Missing justification")
+                    .unwrap_micro();
+
+                let proof = ForkProof {
+                    header1: block.header.clone(),
+                    header2: micro_block.header,
+                    justification1,
+                    justification2,
+                    prev_vrf_seed: prev_vrf_seed.clone(),
+                };
+
+                if let Err(e) = self.fork_notifier.send(ForkEvent::Detected(proof)) {
+                    log::error!(error = ?e,"Error sending the Fork event to the forks notifier");
+                }
+            }
+        }
     }
 }

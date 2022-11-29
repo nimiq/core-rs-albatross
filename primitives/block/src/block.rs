@@ -1,5 +1,3 @@
-use std::cmp::Ordering;
-use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::{fmt, io};
 
@@ -10,6 +8,7 @@ use nimiq_bls::cache::PublicKeyCache;
 use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, SerializeContent};
 use nimiq_hash_derive::SerializeContent;
+use nimiq_keys::PublicKey;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy::Policy;
 use nimiq_primitives::slots::Validators;
@@ -18,7 +17,7 @@ use nimiq_vrf::VrfSeed;
 
 use crate::macro_block::{MacroBlock, MacroHeader};
 use crate::micro_block::{MicroBlock, MicroHeader};
-use crate::{BlockError, ForkProof, MacroBody, MicroBody, MicroJustification, TendermintProof};
+use crate::{BlockError, MacroBody, MicroBody, MicroJustification, TendermintProof};
 
 /// Defines the type of the block, either Micro or Macro (which includes both checkpoint and
 /// election blocks).
@@ -27,6 +26,16 @@ use crate::{BlockError, ForkProof, MacroBody, MicroBody, MicroJustification, Ten
 pub enum BlockType {
     Macro = 1,
     Micro = 2,
+}
+
+impl BlockType {
+    pub fn of(block_number: u32) -> Self {
+        if Policy::is_macro_block_at(block_number) {
+            BlockType::Macro
+        } else {
+            BlockType::Micro
+        }
+    }
 }
 
 /// The enum representing a block. Blocks can either be Micro blocks or Macro blocks (which includes
@@ -290,30 +299,6 @@ impl Block {
         }
     }
 
-    /// Returns a boolean indicating if the block is the immediate successor (block number + 1)
-    /// of the provided block
-    pub fn is_immediate_successor_of(&self, predecessor: &Block) -> bool {
-        self.block_number() == predecessor.block_number() + 1
-    }
-
-    /// Returns a boolean indicating if the block is the next macro block
-    /// of the provided macro block
-    pub fn is_macro_successor_of(&self, predecessor: &Block) -> bool {
-        if !self.is_macro() || !predecessor.is_macro() {
-            return false;
-        }
-        self.block_number() >= Policy::macro_block_after(predecessor.block_number())
-    }
-
-    /// Returns a boolean indicating if the block is the next election macro block
-    /// of the provided macro block
-    pub fn is_election_successor_of(&self, predecessor: &Block) -> bool {
-        if !self.is_election() || !predecessor.is_macro() {
-            return false;
-        }
-        self.block_number() == Policy::election_block_after(predecessor.block_number())
-    }
-
     /// Updates validator keys from a public key cache.
     pub fn update_validator_keys(&self, cache: &mut PublicKeyCache) {
         // Prepare validator keys from BLS cache.
@@ -332,100 +317,199 @@ impl Block {
         }
     }
 
-    /// Verifies the block
+    /// Verifies the block.
     /// Note that only intrinsic verifications are performed and further checks
     /// are needed when completely verifying a block.
     pub fn verify(&self, check_pk_tree_root: bool) -> Result<(), BlockError> {
-        let header = self.header();
-
-        // Do header intrinsic verifications
-        header.verify(self.is_skip())?;
-
-        // Checks if the body exists. If yes, unwrap it.
-        let body = self.body().ok_or(BlockError::MissingBody)?;
-
-        // Check the body root.
-        let body_hash = body.hash();
-        if *header.body_root() != body_hash {
-            warn!(
-                %header,
-                body_root = %header.body_root(),
-                body_hash = %body_hash,
-                reason = "Header hash doesn't match real body hash",
-                "Invalid block"
-            );
-            return Err(BlockError::BodyHashMismatch);
+        // Check the block type.
+        if self.ty() != BlockType::of(self.header().block_number()) {
+            return Err(BlockError::InvalidBlockType);
         }
 
-        // Do body intrinsic checks
-        body.verify()?;
+        // Perform header intrinsic verification.
+        let header = self.header();
+        header.verify(self.is_skip())?;
 
-        match body {
-            BlockBody::Micro(ref body) => {
-                // Checks if the justification exists
-                self.justification().ok_or(BlockError::NoJustification)?;
-
-                // Do skip block checks:
-                // 1. Header extra data is empty
-                // 2. Body is empty
-                if self.is_skip() && (!body.fork_proofs.is_empty() || !body.transactions.is_empty())
-                {
-                    warn!(
-                        %header,
-                        body_root = %header.body_root(),
-                        body_hash = %body_hash,
-                        reason = "Skip block has a non empty body",
-                        "Invalid block"
-                    );
-                    return Err(BlockError::InvalidSkipBlockBody);
-                }
-
-                // Check that the proof is within the reporting window
-                for proof in &body.fork_proofs {
-                    if !proof.is_valid_at(header.block_number()) {
-                        return Err(BlockError::InvalidForkProof);
-                    }
-                }
-
-                // Check that the transaction is within its validity window.
-                for tx in &body.get_raw_transactions() {
-                    if !tx.is_valid_at(header.block_number()) {
-                        return Err(BlockError::ExpiredTransaction);
-                    }
-                }
+        // Verify body if it exists.
+        if let Some(body) = self.body() {
+            // Check the body root.
+            let body_hash = body.hash();
+            if *header.body_root() != body_hash {
+                warn!(
+                    %header,
+                    body_root = %header.body_root(),
+                    expected_body_hash = %body_hash,
+                    reason = "Header body_root doesn't match actual body hash",
+                    "Invalid block"
+                );
+                return Err(BlockError::BodyHashMismatch);
             }
-            BlockBody::Macro(ref body) => {
-                // In case of an election block make sure it contains validators and pk_tree_root,
-                // if it is not an election block make sure it doesn't contain either.
-                let is_election = Policy::is_election_block_at(header.block_number());
 
-                if is_election != body.validators.is_some() {
-                    return Err(BlockError::InvalidValidators);
-                }
-
-                if is_election != body.pk_tree_root.is_some() {
-                    return Err(BlockError::InvalidPkTreeRoot);
-                }
-
-                // If this is an election block and check_pk_tree_root is set,
-                // check if the pk_tree_root matches the validators.
-                if is_election && check_pk_tree_root {
-                    match MacroBlock::pk_tree_root(body.validators.as_ref().unwrap()) {
-                        Ok(pk_tree_root) => {
-                            if pk_tree_root != *body.pk_tree_root.as_ref().unwrap() {
-                                return Err(BlockError::InvalidPkTreeRoot);
-                            }
-                        }
-                        Err(e) => {
-                            warn!(error=%e, "PK tree root building failed");
-                            return Err(e);
-                        }
-                    }
-                }
-            }
-        };
+            // Perform block type specific body verification.
+            match body {
+                BlockBody::Micro(body) => body.verify(self.is_skip(), header.block_number())?,
+                BlockBody::Macro(body) => body.verify(self.is_election(), check_pk_tree_root)?,
+            };
+        }
 
         Ok(())
+    }
+
+    /// Verifies that the block is a valid immediate successor of the given block.
+    pub fn verify_immediate_successor(&self, predecessor: &Block) -> Result<(), BlockError> {
+        // Check block number.
+        if self.block_number() != predecessor.block_number() + 1 {
+            debug!(
+                block = %self,
+                reason = "Wrong block number",
+                block_number = self.block_number(),
+                expected_block_number = predecessor.block_number(),
+                "Rejecting block",
+            );
+            return Err(BlockError::InvalidBlockNumber);
+        }
+
+        // Check parent hash.
+        if *self.parent_hash() != predecessor.hash() {
+            debug!(
+                block = %self,
+                reason = "Wrong parent hash",
+                parent_hash = %self.parent_hash(),
+                expected_parent_hash = %predecessor.hash(),
+                "Rejecting block",
+            );
+            return Err(BlockError::InvalidParentHash);
+        }
+
+        // Handle skip blocks.
+        if self.is_skip() {
+            // Check that skip block has the expected timestamp.
+            let expected_timestamp = predecessor.timestamp() + Policy::BLOCK_PRODUCER_TIMEOUT;
+            if self.timestamp() != expected_timestamp {
+                debug!(
+                    block = %self,
+                    timestamp = self.timestamp(),
+                    expected_timestamp,
+                    reason = "Unexpected timestamp for a skip block",
+                    "Rejecting block"
+                );
+                return Err(BlockError::InvalidTimestamp);
+            }
+
+            // In skip blocks the VRF seed must be carried over (because a new VRF seed requires a
+            // new leader).
+            if self.seed() != predecessor.seed() {
+                debug!(
+                    block = %self,
+                    reason = "Invalid seed",
+                    "Rejecting skip block"
+                );
+                return Err(BlockError::InvalidSeed);
+            }
+        } else {
+            // Check that the timestamp is non-decreasing.
+            if self.timestamp() < predecessor.timestamp() {
+                debug!(
+                    block = %self,
+                    reason = "Timestamp is decreasing",
+                    timestamp = %self.timestamp(),
+                    previous_timestamp = %predecessor.timestamp(),
+                    "Rejecting block",
+                );
+                return Err(BlockError::InvalidTimestamp);
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Verifies that the block is valid macro successor to the given macro block.
+    /// A macro successor is any macro block between the given macro block (exclusive) and the next
+    /// election block (inclusive).
+    pub fn verify_macro_successor(&self, predecessor: &MacroBlock) -> Result<(), BlockError> {
+        // Check block type.
+        if !self.is_macro() {
+            return Err(BlockError::InvalidBlockType);
+        }
+
+        // Check parent election hash.
+        // The expected parent election hash depends on the predecessor:
+        // - Predecessor is an election block: this block must have its hash as
+        //   parent election hash
+        // - Predecessor is a checkpoint block: this block must have the same
+        //   parent election hash
+        let expected_parent_election_hash = if predecessor.is_election_block() {
+            predecessor.hash()
+        } else {
+            predecessor.header.parent_election_hash.clone()
+        };
+
+        let parent_election_hash = self.parent_election_hash().unwrap();
+        if *parent_election_hash != expected_parent_election_hash {
+            warn!(
+                block = %self,
+                %parent_election_hash,
+                %expected_parent_election_hash,
+                reason = "Wrong parent election hash",
+                "Rejecting block"
+            );
+            return Err(BlockError::InvalidParentElectionHash);
+        }
+
+        // Check that block number is in the allowed range.
+        let predecessor_block = predecessor.block_number();
+        let next_election_block = Policy::election_block_after(predecessor_block);
+        if self.block_number() <= predecessor_block || self.block_number() > next_election_block {
+            return Err(BlockError::InvalidBlockNumber);
+        }
+
+        // Check that the timestamp is non-decreasing.
+        // XXX This is also checked in verify_immediate_successor().
+        if self.timestamp() < predecessor.header.timestamp {
+            debug!(
+                block = %self,
+                reason = "Timestamp is decreasing",
+                timestamp = %self.timestamp(),
+                previous_timestamp = %predecessor.header.timestamp,
+                "Rejecting block",
+            );
+            return Err(BlockError::InvalidTimestamp);
+        }
+
+        Ok(())
+    }
+
+    /// Verifies that the block is valid for the given proposer and VRF seed.
+    pub fn verify_proposer(
+        &self,
+        signing_key: &PublicKey,
+        prev_seed: &VrfSeed,
+    ) -> Result<(), BlockError> {
+        // Verify VRF seed.
+        if !self.is_skip() {
+            self.seed()
+                .verify(prev_seed, signing_key)
+                .map_err(|_| BlockError::InvalidSeed)?;
+        } else {
+            // XXX This is also checked in `verify_immediate_successor`.
+            if self.seed() != prev_seed {
+                return Err(BlockError::InvalidSeed);
+            }
+        }
+
+        // Verify justification for micro blocks.
+        match self {
+            Block::Micro(block) => block.verify_proposer(signing_key),
+            Block::Macro(_) => Ok(()),
+        }
+    }
+
+    /// Verifies that the block is valid for the given validators.
+    pub fn verify_validators(&self, validators: &Validators) -> Result<(), BlockError> {
+        match self {
+            Block::Micro(block) => block.verify_validators(validators),
+            Block::Macro(block) => block.verify_validators(validators),
+        }
     }
 }
 
@@ -810,55 +894,6 @@ impl BlockBody {
         } else {
             unreachable!()
         }
-    }
-
-    /// Verifies the body.
-    /// Note that only body intrinsic verifications are performed and further checks
-    /// are needed when completely verifying a block body.
-    pub fn verify(&self) -> Result<(), BlockError> {
-        match self {
-            BlockBody::Micro(body) => {
-                // Check the size
-                let body_size = self.serialized_size();
-                if body_size > Policy::MAX_SIZE_MICRO_BODY {
-                    warn!(
-                        body_size = body_size,
-                        max_size = Policy::MAX_SIZE_MICRO_BODY,
-                        reason = "Body size exceeds maximum size",
-                        "Invalid block"
-                    );
-                    return Err(BlockError::SizeExceeded);
-                }
-                // Ensure proofs are ordered and unique
-                let mut previous_proof: Option<&ForkProof> = None;
-                for proof in &body.fork_proofs {
-                    if let Some(previous) = previous_proof {
-                        match previous.cmp(proof) {
-                            Ordering::Equal => {
-                                return Err(BlockError::DuplicateForkProof);
-                            }
-                            Ordering::Greater => {
-                                return Err(BlockError::ForkProofsNotOrdered);
-                            }
-                            _ => (),
-                        }
-                    }
-                    previous_proof = Some(proof);
-                }
-
-                // Ensure transactions are unique
-                let mut uniq = HashSet::new();
-                if !body
-                    .get_raw_transactions()
-                    .into_iter()
-                    .all(move |tx| uniq.insert(tx))
-                {
-                    return Err(BlockError::DuplicateTransaction);
-                }
-            }
-            BlockBody::Macro(_) => {}
-        }
-        Ok(())
     }
 }
 

@@ -87,13 +87,3 @@ pub enum Direction {
     Forward,
     Backward,
 }
-
-//// Next Block type used for sequence/order checks of blocks
-#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
-pub enum BlockSuccessor {
-    /// Block is the next macro block
-    Macro,
-    /// Block is the next block in the chain (block number + 1)
-    /// It must carry the expected election hash for the block
-    Subsequent(Blake2bHash),
-}

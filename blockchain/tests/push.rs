@@ -265,7 +265,7 @@ fn it_validates_block_number() {
             block_number_offset: 1,
             ..Default::default()
         },
-        Err(PushError::InvalidSuccessor),
+        Err(InvalidBlock(BlockError::InvalidBlockNumber)),
     );
 }
 
@@ -276,7 +276,7 @@ fn it_validates_block_time() {
             timestamp_offset: -2,
             ..Default::default()
         },
-        Err(PushError::InvalidSuccessor),
+        Err(InvalidBlock(BlockError::InvalidTimestamp)),
     );
 }
 
@@ -287,7 +287,7 @@ fn it_validates_body_hash() {
             body_hash: Some(Blake2bHash::default()),
             ..Default::default()
         },
-        Err(PushError::InvalidBlock(BlockError::BodyHashMismatch)),
+        Err(InvalidBlock(BlockError::BodyHashMismatch)),
     );
 
     expect_push_micro_block(
@@ -349,7 +349,9 @@ fn it_validates_parent_election_hash() {
             parent_election_hash: Some(Blake2bHash::default()),
             ..Default::default()
         },
-        Err(PushError::InvalidSuccessor),
+        Err(PushError::InvalidBlock(
+            BlockError::InvalidParentElectionHash,
+        )),
     );
 }
 

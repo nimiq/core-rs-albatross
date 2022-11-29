@@ -13,8 +13,8 @@ use parking_lot::RwLock;
 
 use nimiq_block::{Block, MacroBlock};
 use nimiq_blockchain::{
-    AbstractBlockchain, BlockSuccessor, Blockchain, ExtendedTransaction, HistoryTreeChunk,
-    PushError, PushResult, CHUNK_SIZE,
+    AbstractBlockchain, Blockchain, ExtendedTransaction, HistoryTreeChunk, PushError, PushResult,
+    CHUNK_SIZE,
 };
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{network::Network, request::RequestError};
@@ -222,29 +222,18 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         macro_predecessor: &Block,
         validators: &Validators,
     ) -> Result<(), HistoryRequestError> {
-        // Do block intrinsic checks
-        if block.verify(true).is_err() {
-            warn!(%block, reason = "Block intrinsic checks failed", "Invalid macro block");
+        if let Err(error) = block.verify(true) {
+            warn!(%block, %error, reason = "Block intrinsic checks failed", "Invalid macro block");
             return Err(HistoryRequestError::InvalidMacroBlock);
         }
 
-        if Blockchain::verify_block_for_predecessor(block, macro_predecessor, BlockSuccessor::Macro)
-            .is_err()
-        {
-            warn!(%block, reason = "Block predecessor checks failed", "Invalid macro block");
+        if let Err(error) = block.verify_macro_successor(macro_predecessor.unwrap_macro_ref()) {
+            warn!(%block, %error, reason = "Block predecessor checks failed", "Invalid macro block");
             return Err(HistoryRequestError::InvalidMacroBlock);
-        };
+        }
 
-        // Check block the last known validators
-        if Blockchain::verify_block_for_slot(
-            block,
-            macro_predecessor.seed(), // Can't check seed since we don't have the previous block info to get the proposer's signing key
-            None,                     // This we pass None to the proposer
-            validators,
-        )
-        .is_err()
-        {
-            warn!(%block, reason = "Block verification for slot failed", "Invalid macro block");
+        if let Err(error) = block.verify_validators(validators) {
+            warn!(%block, %error, reason = "Block verification for slot failed", "Invalid macro block");
             return Err(HistoryRequestError::InvalidMacroBlock);
         }
 

@@ -154,7 +154,7 @@ impl ExecutedTransaction {
         }
     }
 
-    pub fn get_hash(&self) -> Blake2bHash {
+    pub fn hash(&self) -> Blake2bHash {
         match self {
             ExecutedTransaction::Ok(txn) => txn.hash(),
             ExecutedTransaction::Err(txn) => txn.hash(),

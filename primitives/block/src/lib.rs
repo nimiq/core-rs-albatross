@@ -25,24 +25,35 @@ mod tendermint;
 /// Enum containing a variety of block error types.
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum BlockError {
+    #[error("Invalid block type for this block number")]
+    InvalidBlockType,
     #[error("Unsupported version")]
     UnsupportedVersion,
+    #[error("Invalid block number")]
+    InvalidBlockNumber,
+    #[error("Invalid timestamp")]
+    InvalidTimestamp,
+    #[error("Invalid parent hash")]
+    InvalidParentHash,
+    #[error("Invalid parent election hash")]
+    InvalidParentElectionHash,
+    #[error("Contains an invalid seed")]
+    InvalidSeed,
     #[error("Extra data too large")]
     ExtraDataTooLarge,
-    #[error("Block is from the future")]
-    FromTheFuture,
-    #[error("Block size exceeded")]
-    SizeExceeded,
 
     #[error("Body hash mismatch")]
     BodyHashMismatch,
     #[error("Accounts hash mismatch")]
     AccountsHashMismatch,
+    #[error("Invalid history root")]
+    InvalidHistoryRoot,
+
+    #[error("Block size exceeded")]
+    SizeExceeded,
 
     #[error("Missing justification")]
-    NoJustification,
-    #[error("Missing skip block proof")]
-    NoSkipBlockProof,
+    MissingJustification,
     #[error("Missing body")]
     MissingBody,
 
@@ -62,27 +73,16 @@ pub enum BlockError {
     #[error("Transactions execution result mismatch")]
     TransactionExecutionMismatch,
 
-    #[error("Duplicate receipt in block")]
-    DuplicateReceipt,
-    #[error("Invalid receipt in block")]
-    InvalidReceipt,
-    #[error("Receipts incorrectly ordered")]
-    ReceiptsNotOrdered,
-
     #[error("Justification is invalid")]
     InvalidJustification,
     #[error("Skip block proof is invalid")]
     InvalidSkipBlockProof,
-    #[error("Contains an invalid seed")]
-    InvalidSeed,
-    #[error("Invalid history root")]
-    InvalidHistoryRoot,
+
     #[error("Incorrect validators")]
     InvalidValidators,
     #[error("Incorrect PK Tree root")]
     InvalidPkTreeRoot,
-    #[error("Invalid skip block timestamp")]
-    InvalidSkipBlockTimestamp,
+
     #[error("Skip block contains a non empty body")]
     InvalidSkipBlockBody,
 }

@@ -11,7 +11,7 @@ use nimiq_block::{
     TendermintProof, TendermintProposal,
 };
 use nimiq_block_production::BlockProducer;
-use nimiq_blockchain::{AbstractBlockchain, BlockSuccessor, Blockchain};
+use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_bls::PublicKey;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_network_interface::network::MsgAcceptance;
@@ -321,7 +321,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
 
             // In case the proposal has a valid round, the original proposer signed the VRF Seed,
             // so the original slot owners key must be retrieved for header verification.
-            let vrf_key = if valid_round.is_some() {
+            let proposer_key = if valid_round.is_some() {
                 let proposer_slot = blockchain
                     .get_proposer_at(
                         self.block_height,
@@ -345,24 +345,18 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
 
             // Check the validity of the block header. If it is invalid, we return a proposal timeout
             // right here. This doesn't check anything that depends on the blockchain state.
-            if block.header().verify(false).is_err() {
-                debug!("Tendermint - await_proposal: Invalid block header");
+            let head = blockchain.head();
+            if let Err(error) = block.header().verify(false) {
+                debug!(%error, "Tendermint - await_proposal: Invalid block header");
                 (MsgAcceptance::Reject, valid_round, None, None)
-            } else if Blockchain::verify_block_for_predecessor(
-                &block,
-                &blockchain.head(),
-                BlockSuccessor::Subsequent(blockchain.election_head_hash()),
-            )
-            .is_err()
-            {
-                debug!("Tendermint - await_proposal: Invalid block header for blockchain head");
+            } else if let Err(error) = block.verify_immediate_successor(&head) {
+                debug!(%error, "Tendermint - await_proposal: Invalid block header for blockchain head");
                 (MsgAcceptance::Reject, valid_round, None, None)
-            } else if block
-                .seed()
-                .verify(blockchain.head().seed(), &vrf_key)
-                .is_err()
-            {
-                debug!("Tendermint - await_proposal: Invalid block header, VRF seed verification failed");
+            } else if let Err(error) = block.verify_macro_successor(&blockchain.macro_head()) {
+                debug!(%error, "Tendermint - await_proposal: Invalid block header for blockchain macro head");
+                (MsgAcceptance::Reject, valid_round, None, None)
+            } else if let Err(error) = block.verify_proposer(&proposer_key, head.seed()) {
+                debug!(%error, "Tendermint - await_proposal: Invalid block header, VRF seed verification failed");
                 (MsgAcceptance::Reject, valid_round, None, None)
             } else {
                 // Get a write transaction to the database.

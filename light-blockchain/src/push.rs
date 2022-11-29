@@ -1,7 +1,5 @@
 use nimiq_block::{Block, BlockError, BlockType, MacroHeader};
-use nimiq_blockchain::{
-    AbstractBlockchain, BlockSuccessor, Blockchain, ChainInfo, ChainOrdering, PushError, PushResult,
-};
+use nimiq_blockchain::{AbstractBlockchain, ChainInfo, ChainOrdering, PushError, PushResult};
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::policy::Policy;
 use parking_lot::RwLockUpgradableReadGuard;
@@ -41,7 +39,7 @@ impl LightBlockchain {
             if let Some(proof) = &macro_block.justification {
                 proof.round
             } else {
-                return Err(PushError::InvalidBlock(BlockError::NoJustification));
+                return Err(PushError::InvalidBlock(BlockError::MissingJustification));
             }
         } else {
             block.block_number()
@@ -50,28 +48,23 @@ impl LightBlockchain {
             .get_slot_owner_at(block.block_number(), offset, None)
             .expect("Failed to find slot owner!");
 
-        // Do the whole block verification for election macro blocks and only check the header for the rest
-        if block.is_election() {
-            block.verify(false)?;
-        } else {
-            block.header().verify(block.is_skip())?;
+        // Perform block intrinsic checks.
+        block.verify(false)?;
+
+        // Verify that the block is a valid immediate successor to its predecessor.
+        let predecessor = &prev_info.head;
+        block.verify_immediate_successor(predecessor)?;
+
+        // Verify that the block is a valid macro successor to our current macro head.
+        if block.is_macro() {
+            block.verify_macro_successor(&this.macro_head)?;
         }
 
-        // Check block for predecessor block
-        let predecessor = &prev_info.head;
-        Blockchain::verify_block_for_predecessor(
-            &block,
-            predecessor,
-            BlockSuccessor::Subsequent(this.election_head_hash()),
-        )?;
+        // Verify that the block is valid for the given proposer.
+        block.verify_proposer(&slot_owner.signing_key, predecessor.seed())?;
 
-        // Check block for slot owner and validators
-        Blockchain::verify_block_for_slot(
-            &block,
-            predecessor.seed(),
-            Some(&slot_owner),
-            &this.current_validators().unwrap(),
-        )?;
+        // Verify that the block is valid for the current validators.
+        block.verify_validators(&this.current_validators().unwrap())?;
 
         // Create the chaininfo for the new block.
         let chain_info = ChainInfo::from_block(block, &prev_info);

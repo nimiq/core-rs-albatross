@@ -358,7 +358,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         self.macro_producer = None;
         self.micro_producer = None;
 
-        match Blockchain::get_next_block_type(head.block_number()) {
+        match BlockType::of(next_block_number) {
             BlockType::Macro => {
                 let active_validators = blockchain.current_validators().unwrap();
                 let proposal_stream = self.proposal_receiver.clone().boxed();

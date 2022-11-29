@@ -12,9 +12,7 @@ use nimiq_transaction::Transaction;
 
 use crate::chain_info::ChainInfo;
 use crate::history::{ExtTxData, ExtendedTransaction};
-use crate::{
-    AbstractBlockchain, BlockSuccessor, Blockchain, BlockchainEvent, PushError, PushResult,
-};
+use crate::{AbstractBlockchain, Blockchain, BlockchainEvent, PushError, PushResult};
 
 /// Implements methods to push macro blocks into the chain when an history node is syncing. This
 /// type of syncing is called history syncing. It works by having the node get all the election
@@ -71,18 +69,14 @@ impl Blockchain {
             return Ok(PushResult::Ignored);
         }
 
-        // Do block intrinsic checks
+        // Perform block intrinsic checks.
         block.verify(true)?;
 
-        // Check block for predecessor block
-        Self::verify_block_for_predecessor(&block, macro_head, BlockSuccessor::Macro)?;
+        // Verify that the block is a valid successor to the current macro head.
+        block.verify_macro_successor(this.state.macro_info.head.unwrap_macro_ref())?;
 
-        Self::verify_block_for_slot(
-            &block,
-            macro_head.seed(), // Seed can't and won't be checked since we don't have the previous block info to get the proposer's signing key
-            None,              // Thus pass `None` to the signing key.
-            &this.current_validators().unwrap(),
-        )?;
+        // Verify that the block is valid for the current validators.
+        block.verify_validators(&this.current_validators().unwrap())?;
 
         drop(read_txn);
 

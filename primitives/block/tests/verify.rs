@@ -103,15 +103,6 @@ fn test_verify_body_root() {
 
     let micro_justification = MicroJustification::Micro(Signature::default());
 
-    // Build a block without body
-    let block = Block::Micro(MicroBlock {
-        header: micro_header.clone(),
-        justification: Some(micro_justification.clone()),
-        body: None,
-    });
-
-    assert_eq!(block.verify(false), Err(BlockError::MissingBody));
-
     let micro_body = MicroBody {
         fork_proofs: [].to_vec(),
         transactions: [].to_vec(),
