@@ -23,7 +23,7 @@ use nimiq_block::{Block, BlockType, SignedTendermintProposal};
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainEvent, ForkEvent, PushResult};
 use nimiq_bls::KeyPair as BlsKeyPair;
-use nimiq_consensus::sync::live::block_queue::BlockTopic;
+use nimiq_consensus::sync::live::block_queue::{BlockHeaderTopic, BlockTopic};
 use nimiq_consensus::{Consensus, ConsensusEvent, ConsensusProxy};
 use nimiq_database::{Database, Environment, ReadTransaction, WriteTransaction};
 use nimiq_hash::{Blake2bHash, Hash};
@@ -506,19 +506,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                         // todo get rid of spawn
                         let network = Arc::clone(&self.network);
                         tokio::spawn(async move {
-                            let block_number = block_copy.header.block_number;
-                            trace!(block_number = block_number, "Publishing macro block");
-
-                            if let Err(e) = network
-                                .publish::<BlockTopic>(Block::Macro(block_copy))
-                                .await
-                            {
-                                warn!(
-                                    block_number = block_number,
-                                    error = &e as &dyn Error,
-                                    "Failed to publish macro block"
-                                );
-                            }
+                            Self::publish_block(network, Block::Macro(block_copy)).await;
                         });
                     }
                 }
@@ -563,21 +551,39 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                         // Todo get rid of spawn
                         let network = self.network.clone();
                         tokio::spawn(async move {
-                            let block_number = block.header.block_number;
-                            trace!(block_number = block_number, "Publishing micro block");
-
-                            if let Err(e) = network.publish::<BlockTopic>(Block::Micro(block)).await
-                            {
-                                warn!(
-                                    block_number = block_number,
-                                    error = &e as &dyn Error,
-                                    "Failed to publish micro block"
-                                );
-                            }
+                            Self::publish_block(network, Block::Micro(block)).await;
                         });
                     }
                 }
             }
+        }
+    }
+
+    async fn publish_block(network: Arc<TValidatorNetwork>, mut block: Block) {
+        trace!(%block, "Publishing block");
+        if let Err(e) = network.publish::<BlockTopic>(block.clone()).await {
+            warn!(
+                %block,
+                error = &e as &dyn Error,
+                "Failed to publish block"
+            );
+        }
+        // Empty body before publishing to the block header topic
+        match block {
+            Block::Micro(ref mut micro_block) => micro_block.body = None,
+            Block::Macro(ref mut macro_block) => {
+                // Macro blocks must be always sent with body
+                if !macro_block.is_election_block() {
+                    macro_block.body = None
+                }
+            }
+        }
+        if let Err(e) = network.publish::<BlockHeaderTopic>(block.clone()).await {
+            warn!(
+                %block,
+                error = &e as &dyn Error,
+                "Failed to publish block header"
+            );
         }
     }
 
