@@ -19,7 +19,7 @@ use crate::PublicKey;
 create_typed_array!(Address, u8, 20);
 hash_typed_array!(Address);
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Eq, PartialEq)]
 pub enum AddressParseError {
     // User-friendly
     #[error("Wrong country code")]
@@ -50,7 +50,7 @@ impl Address {
         if friendly_addr_wospace.len() != 36 {
             return Err(AddressParseError::WrongLength);
         }
-        if friendly_addr_wospace[0..2].to_uppercase() != Address::CCODE {
+        if &friendly_addr_wospace[0..2] != Address::CCODE {
             return Err(AddressParseError::WrongCountryCode);
         }
         let mut twisted_str = String::with_capacity(friendly_addr_wospace.len());
@@ -66,7 +66,7 @@ impl Address {
 
         let b_vec = encoding
             .decode(friendly_addr_wospace[4..].as_bytes())
-            .unwrap();
+            .map_err(|_| AddressParseError::UnknownFormat)?;
         let mut b = [0; 20];
         b.copy_from_slice(&b_vec[..b_vec.len()]);
         Ok(Address(b))

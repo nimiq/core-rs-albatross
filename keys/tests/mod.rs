@@ -1,4 +1,6 @@
-use nimiq_keys::{Address, KeyPair, PrivateKey, PublicKey, SecureGenerate, Signature};
+use nimiq_keys::{
+    Address, AddressParseError, KeyPair, PrivateKey, PublicKey, SecureGenerate, Signature,
+};
 use nimiq_test_log::test;
 
 mod multisig;
@@ -126,4 +128,59 @@ fn it_computes_friendly_addresses() {
         addr.to_user_friendly_address(),
         addr2.to_user_friendly_address()
     );
+}
+
+#[test]
+fn it_parses_friendly_addresses() {
+    let addr = Address::from_user_friendly_address(
+        &"NQ05 563U 530Y XDRT L7GQ M6HE YRNU 20FE 4PNR".to_string(),
+    );
+    assert!(addr.is_ok());
+
+    // Not having spaces should be ok
+    let addr =
+        Address::from_user_friendly_address(&"NQ05563U530YXDRTL7GQM6HEYRNU20FE4PNR".to_string());
+    assert!(addr.is_ok());
+
+    // Not having some spaces should be ok
+    let addr = Address::from_user_friendly_address(
+        &"NQ05 563U 530Y XDRTL7GQ M6HE YRNU 20FE 4PNR".to_string(),
+    );
+    assert!(addr.is_ok());
+
+    // Having NQ in lowercase at the beggining should not be ok
+    let addr = Address::from_user_friendly_address(
+        &"nq05 563U 530Y XDRT L7GQ M6HE YRNU 20FE 4PNR".to_string(),
+    );
+    assert_eq!(addr, Err(AddressParseError::WrongCountryCode));
+
+    // Wrong Country Code
+    let addr = Address::from_user_friendly_address(
+        &"SQ05 563U 530Y XDRT L7GQ M6HE YRNU 20FE 4PNR".to_string(),
+    );
+    assert_eq!(addr, Err(AddressParseError::WrongCountryCode));
+
+    // Wrong Length
+    let addr = Address::from_user_friendly_address(
+        &"SQ05 563U 530Y XDRT L7GQ M6HE YRNU 20FE 4PNRS".to_string(),
+    );
+    assert_eq!(addr, Err(AddressParseError::WrongLength));
+
+    // Wrong alphabet (lowercase -> L7gq)
+    let addr = Address::from_user_friendly_address(
+        &"NQ05 563U 530Y XDRT L7gq M6HE YRNU 20FE 4PNR".to_string(),
+    );
+    assert_eq!(addr, Err(AddressParseError::UnknownFormat));
+
+    // Wrong checksum
+    let addr = Address::from_user_friendly_address(
+        &"NQ05 563U 530Y XDRT L7IQ M6HE YRNU 20FE 4PNR".to_string(),
+    );
+    assert_eq!(addr, Err(AddressParseError::InvalidChecksum));
+
+    // Wrong alphabet (VIDM)
+    let addr = Address::from_user_friendly_address(
+        &"NQ16 GB8S Q5QR MAVN MR3C VIDM 62G6 NL0D ANYX".to_string(),
+    );
+    assert_eq!(addr, Err(AddressParseError::UnknownFormat));
 }
