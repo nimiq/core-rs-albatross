@@ -120,7 +120,9 @@ impl<N: Network> ZKProver<N> {
                 assert!(
                     zkp_state.latest_block_number
                         >= block.block_number() - Policy::blocks_per_epoch(),
-                    "The current state should never lag behind more than one epoch"
+                    "The current state (block height: {}) should never lag behind more than one epoch. Current height: {}",
+                    zkp_state.latest_block_number,
+                    block.block_number(),
                 );
                 if zkp_state.latest_block_number
                     == block.block_number() - Policy::blocks_per_epoch()

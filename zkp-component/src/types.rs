@@ -447,10 +447,10 @@ pub enum Error {
 #[derive(Error, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[repr(u8)]
 pub enum ZKProofGenerationError {
-    #[error("Nano Zkp Error")]
+    #[error("Nano Zkp Error: {0}")]
     NanoZKP(#[beserial(len_type(u32))] String),
 
-    #[error("Serialization Error")]
+    #[error("Serialization Error: {0}")]
     SerializingError(#[beserial(len_type(u16))] String),
 
     #[error("Proof's blocks are not valid")]
@@ -459,7 +459,7 @@ pub enum ZKProofGenerationError {
     #[error("Channel error")]
     ChannelError,
 
-    #[error("Process launching error")]
+    #[error("Process launching error: {0}")]
     ProcessError(#[beserial(len_type(u16))] String),
 }
 
