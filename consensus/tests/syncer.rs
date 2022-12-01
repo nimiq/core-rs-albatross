@@ -654,12 +654,15 @@ async fn request_missing_blocks_across_macro_block() {
         .read()
         .get_block(&target_block_hash, true, None)
         .unwrap();
-    let mut blocks = blockchain2.read().get_blocks(
-        &target_block_hash,
-        macro_head.block_number() - 2,
-        true,
-        Direction::Backward,
-    );
+    let mut blocks = blockchain2
+        .read()
+        .get_blocks(
+            &target_block_hash,
+            macro_head.block_number() - 2,
+            true,
+            Direction::Backward,
+        )
+        .unwrap();
     blocks.reverse();
     blocks.push(target_block);
     missing_blocks_request_tx.send(blocks).unwrap();

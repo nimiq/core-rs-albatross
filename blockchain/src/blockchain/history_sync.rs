@@ -51,7 +51,7 @@ impl Blockchain {
         if this
             .chain_store
             .get_chain_info(&macro_block.hash(), false, Some(&read_txn))
-            .is_some()
+            .is_ok()
         {
             return Ok(PushResult::Known);
         }

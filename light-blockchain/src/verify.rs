@@ -20,7 +20,7 @@ impl LightBlockchain {
         // Get the block.
         let block = self
             .get_block(&block_hash, false, None)
-            .ok_or(NanoError::MissingBlock)?;
+            .map_err(|_| NanoError::MissingBlock)?;
 
         // Verify the account proof.
         if !account_proof.verify(block.state_root()) {
@@ -40,7 +40,7 @@ impl LightBlockchain {
         // Get the block.
         let block = self
             .get_block(&block_hash, false, None)
-            .ok_or(NanoError::MissingBlock)?;
+            .map_err(|_| NanoError::MissingBlock)?;
 
         // Verify the History Tree proof.
         if !tx_proof

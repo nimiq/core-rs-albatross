@@ -286,7 +286,7 @@ mod tests {
                 .chain_store
                 .get_chain_info(&to.read().head_hash(), false, None);
         let mut block_hash = match chain_info {
-            Some(chain_info) if chain_info.on_main_chain => chain_info.main_chain_successor,
+            Ok(chain_info) if chain_info.on_main_chain => chain_info.main_chain_successor,
             _ => panic!("Chains have diverged"),
         };
 

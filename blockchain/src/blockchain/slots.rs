@@ -5,7 +5,7 @@ use nimiq_primitives::policy::Policy;
 use nimiq_primitives::slots::{Validator, Validators};
 use nimiq_vrf::{Rng, VrfEntropy, VrfSeed, VrfUseCase};
 
-use crate::{AbstractBlockchain, Blockchain};
+use crate::{AbstractBlockchain, Blockchain, BlockchainError};
 
 pub struct Slot {
     pub number: u16,
@@ -20,20 +20,27 @@ impl Blockchain {
         &self,
         epoch: u32,
         txn: Option<&Transaction>,
-    ) -> Option<Validators> {
+    ) -> Result<Validators, BlockchainError> {
         let current_epoch = Policy::epoch_at(self.state.main_chain.head.block_number());
 
         if epoch == current_epoch {
-            self.state.current_slots.clone()
+            self.state
+                .current_slots
+                .clone()
+                .ok_or(BlockchainError::NoValidatorsFound)
         } else if epoch + 1 == current_epoch {
-            self.state.previous_slots.clone()
+            self.state
+                .previous_slots
+                .clone()
+                .ok_or(BlockchainError::NoValidatorsFound)
         } else if epoch == 0 {
-            None
+            Err(BlockchainError::InvalidEpoch)
         } else {
             self.chain_store
                 .get_block_at(Policy::election_block_of(epoch - 1), true, txn)?
                 .unwrap_macro()
                 .get_validators()
+                .ok_or(BlockchainError::NoValidatorsFound)
         }
     }
 
@@ -52,7 +59,7 @@ impl Blockchain {
         offset: u32,
         vrf_entropy: VrfEntropy,
         txn: Option<&Transaction>,
-    ) -> Option<Slot> {
+    ) -> Result<Slot, BlockchainError> {
         // Fetch the latest macro block that precedes the block at the given block_number.
         // We use the disabled_slots set from that macro block for the slot selection.
         let macro_block = self.get_block_at(Policy::macro_block_before(block_number), true, txn)?;
@@ -71,7 +78,7 @@ impl Blockchain {
         // Also get the slot band for convenient access.
         let slot_band = validators.get_band_from_slot(slot_number);
 
-        Some(Slot {
+        Ok(Slot {
             number: slot_number,
             band: slot_band,
             validator: validator.clone(),

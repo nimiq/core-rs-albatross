@@ -161,7 +161,7 @@ impl Blockchain {
         // Load main chain from store.
         let main_chain = chain_store
             .get_chain_info(&head_hash, true, None)
-            .ok_or(BlockchainError::FailedLoadingMainChain)?;
+            .map_err(|_| BlockchainError::FailedLoadingMainChain)?;
 
         // Check that chain/accounts state is consistent.
         let accounts = Accounts::new(env.clone());
@@ -182,7 +182,7 @@ impl Blockchain {
                 true,
                 None,
             )
-            .ok_or(BlockchainError::FailedLoadingMainChain)?;
+            .map_err(|_| BlockchainError::FailedLoadingMainChain)?;
 
         let macro_head = match macro_chain_info.head {
             Block::Macro(ref macro_head) => macro_head,
@@ -198,7 +198,7 @@ impl Blockchain {
                 true,
                 None,
             )
-            .ok_or(BlockchainError::FailedLoadingMainChain)?;
+            .map_err(|_| BlockchainError::FailedLoadingMainChain)?;
 
         let election_head = match election_chain_info.head {
             Block::Macro(macro_head) => macro_head,
@@ -219,9 +219,15 @@ impl Blockchain {
             chain_store.get_block(&election_head.header.parent_election_hash, true, None);
 
         let last_slots = match prev_block {
-            Some(Block::Macro(prev_election_block)) => prev_election_block.get_validators(),
-            None => None,
-            _ => return Err(BlockchainError::InconsistentState),
+            Ok(Block::Macro(prev_election_block)) => prev_election_block.get_validators(),
+            Ok(_) => {
+                // Expected a macro block and received a micro block
+                return Err(BlockchainError::InconsistentState);
+            }
+            Err(_) => {
+                // Block wasn't found
+                None
+            }
         };
 
         let (tx, _rx) = broadcast(BROADCAST_MAX_CAPACITY);

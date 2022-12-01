@@ -17,14 +17,14 @@ impl LightBlockchain {
         block: Block,
     ) -> Result<PushResult, PushError> {
         // Check if we already know this block.
-        if this.get_chain_info(&block.hash(), false, None).is_some() {
+        if this.get_chain_info(&block.hash(), false, None).is_ok() {
             return Ok(PushResult::Known);
         }
 
         // Check if we have this block's parent.
         let prev_info = this
             .get_chain_info(block.parent_hash(), false, None)
-            .ok_or(PushError::Orphan)?;
+            .map_err(|_| PushError::Orphan)?;
 
         // Calculate chain ordering.
         let chain_order = ChainOrdering::order_chains(this.deref(), &block, &prev_info, None);

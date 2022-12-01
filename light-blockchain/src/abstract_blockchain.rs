@@ -1,6 +1,8 @@
 use futures::stream::BoxStream;
 use nimiq_block::{Block, MacroBlock};
-use nimiq_blockchain::{AbstractBlockchain, BlockchainEvent, ChainInfo, Direction};
+use nimiq_blockchain::{
+    AbstractBlockchain, BlockchainError, BlockchainEvent, ChainInfo, Direction,
+};
 use nimiq_database::Transaction;
 use nimiq_genesis::NetworkId;
 use nimiq_hash::Blake2bHash;
@@ -39,9 +41,9 @@ impl AbstractBlockchain for LightBlockchain {
     }
 
     fn contains(&self, hash: &Blake2bHash, include_forks: bool) -> bool {
-        match self.chain_store.get_chain_info(hash) {
-            Some(chain_info) => include_forks || chain_info.on_main_chain,
-            None => false,
+        match self.chain_store.get_chain_info(hash, false) {
+            Ok(chain_info) => include_forks || chain_info.on_main_chain,
+            Err(_) => false,
         }
     }
 
@@ -50,13 +52,9 @@ impl AbstractBlockchain for LightBlockchain {
         height: u32,
         include_body: bool,
         _txn_option: Option<&Transaction>,
-    ) -> Option<Block> {
-        // Light Blockchain can't return blocks with body
-        if include_body {
-            return None;
-        }
+    ) -> Result<Block, BlockchainError> {
         self.chain_store
-            .get_chain_info_at(height)
+            .get_chain_info_at(height, include_body)
             .map(|chain_info| chain_info.head)
     }
 
@@ -65,23 +63,19 @@ impl AbstractBlockchain for LightBlockchain {
         hash: &Blake2bHash,
         include_body: bool,
         _txn_option: Option<&Transaction>,
-    ) -> Option<Block> {
-        // Light Blockchain can't return blocks with body
-        if include_body {
-            return None;
-        }
+    ) -> Result<Block, BlockchainError> {
         self.chain_store
-            .get_chain_info(hash)
+            .get_chain_info(hash, include_body)
             .map(|chain_info| chain_info.head.clone())
     }
 
     fn get_chain_info(
         &self,
         hash: &Blake2bHash,
-        _include_body: bool,
+        include_body: bool,
         _txn_option: Option<&Transaction>,
-    ) -> Option<ChainInfo> {
-        self.chain_store.get_chain_info(hash).cloned()
+    ) -> Result<ChainInfo, BlockchainError> {
+        self.chain_store.get_chain_info(hash, include_body).cloned()
     }
 
     fn get_slot_owner_at(
@@ -89,7 +83,7 @@ impl AbstractBlockchain for LightBlockchain {
         _block_number: u32,
         _offset: u32,
         _txn_option: Option<&Transaction>,
-    ) -> Option<(Validator, u16)> {
+    ) -> Result<(Validator, u16), BlockchainError> {
         todo!() // IPTODO
     }
 
@@ -104,13 +98,9 @@ impl AbstractBlockchain for LightBlockchain {
         include_body: bool,
         direction: nimiq_blockchain::Direction,
         _txn_option: Option<&Transaction>,
-    ) -> Vec<Block> {
-        // Light Blockchain can't return blocks with body
-        if include_body {
-            return vec![];
-        }
+    ) -> Result<Vec<Block>, BlockchainError> {
         self.chain_store
-            .get_blocks(start_block_hash, count, direction)
+            .get_blocks(start_block_hash, count, direction, include_body)
     }
 
     /// Fetches a given number of macro blocks, starting at a specific block (by its hash).
@@ -124,11 +114,13 @@ impl AbstractBlockchain for LightBlockchain {
         direction: Direction,
         election_blocks_only: bool,
         _txn_option: Option<&Transaction>,
-    ) -> Option<Vec<Block>> {
-        if include_body {
-            return Some(vec![]);
-        }
-        self.chain_store
-            .get_macro_blocks(start_block_hash, count, direction, election_blocks_only)
+    ) -> Result<Vec<Block>, BlockchainError> {
+        self.chain_store.get_macro_blocks(
+            start_block_hash,
+            count,
+            direction,
+            election_blocks_only,
+            include_body,
+        )
     }
 }

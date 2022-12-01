@@ -9,7 +9,7 @@ use nimiq_primitives::policy::Policy;
 use nimiq_primitives::slots::{Validator, Validators};
 use tokio_stream::wrappers::BroadcastStream;
 
-use crate::{Blockchain, BlockchainEvent, ChainInfo, Direction};
+use crate::{Blockchain, BlockchainError, BlockchainEvent, ChainInfo, Direction};
 
 /// Defines several basic methods for blockchains.
 pub trait AbstractBlockchain {
@@ -82,7 +82,7 @@ pub trait AbstractBlockchain {
         height: u32,
         include_body: bool,
         txn_option: Option<&Transaction>,
-    ) -> Option<Block>;
+    ) -> Result<Block, BlockchainError>;
 
     /// Fetches a given block, by its hash.
     fn get_block(
@@ -90,7 +90,7 @@ pub trait AbstractBlockchain {
         hash: &Blake2bHash,
         include_body: bool,
         txn_option: Option<&Transaction>,
-    ) -> Option<Block>;
+    ) -> Result<Block, BlockchainError>;
 
     /// Get several blocks.
     fn get_blocks(
@@ -100,7 +100,7 @@ pub trait AbstractBlockchain {
         include_body: bool,
         direction: Direction,
         txn_option: Option<&Transaction>,
-    ) -> Vec<Block>;
+    ) -> Result<Vec<Block>, BlockchainError>;
 
     /// Fetches a given chain info, by its hash.
     fn get_chain_info(
@@ -108,7 +108,7 @@ pub trait AbstractBlockchain {
         hash: &Blake2bHash,
         include_body: bool,
         txn_option: Option<&Transaction>,
-    ) -> Option<ChainInfo>;
+    ) -> Result<ChainInfo, BlockchainError>;
 
     /// Calculates the slot owner (represented as the validator plus the slot number) at a given
     /// block number and offset.
@@ -117,11 +117,10 @@ pub trait AbstractBlockchain {
         block_number: u32,
         offset: u32,
         txn_option: Option<&Transaction>,
-    ) -> Option<(Validator, u16)>;
+    ) -> Result<(Validator, u16), BlockchainError>;
 
     /// Fetches a given number of macro blocks, starting at a specific block (by its hash).
     /// It can fetch only election macro blocks if desired.
-    /// Returns None if given start_block_hash is not a macro block.
     fn get_macro_blocks(
         &self,
         start_block_hash: &Blake2bHash,
@@ -130,7 +129,7 @@ pub trait AbstractBlockchain {
         direction: Direction,
         election_blocks_only: bool,
         txn_option: Option<&Transaction>,
-    ) -> Option<Vec<Block>>;
+    ) -> Result<Vec<Block>, BlockchainError>;
 
     /// Stream of Blockchain Events.
     fn notifier_as_stream(&self) -> BoxStream<'static, BlockchainEvent>;
@@ -175,8 +174,8 @@ impl AbstractBlockchain for Blockchain {
 
     fn contains(&self, hash: &Blake2bHash, include_forks: bool) -> bool {
         match self.chain_store.get_chain_info(hash, false, None) {
-            Some(chain_info) => include_forks || chain_info.on_main_chain,
-            None => false,
+            Ok(chain_info) => include_forks || chain_info.on_main_chain,
+            Err(_) => false,
         }
     }
 
@@ -185,7 +184,7 @@ impl AbstractBlockchain for Blockchain {
         height: u32,
         include_body: bool,
         txn_option: Option<&Transaction>,
-    ) -> Option<Block> {
+    ) -> Result<Block, BlockchainError> {
         self.chain_store
             .get_block_at(height, include_body, txn_option)
     }
@@ -195,7 +194,7 @@ impl AbstractBlockchain for Blockchain {
         hash: &Blake2bHash,
         include_body: bool,
         txn_option: Option<&Transaction>,
-    ) -> Option<Block> {
+    ) -> Result<Block, BlockchainError> {
         self.chain_store.get_block(hash, include_body, txn_option)
     }
 
@@ -204,7 +203,7 @@ impl AbstractBlockchain for Blockchain {
         hash: &Blake2bHash,
         include_body: bool,
         txn_option: Option<&Transaction>,
-    ) -> Option<ChainInfo> {
+    ) -> Result<ChainInfo, BlockchainError> {
         self.chain_store
             .get_chain_info(hash, include_body, txn_option)
     }
@@ -214,7 +213,7 @@ impl AbstractBlockchain for Blockchain {
         block_number: u32,
         offset: u32,
         txn_option: Option<&Transaction>,
-    ) -> Option<(Validator, u16)> {
+    ) -> Result<(Validator, u16), BlockchainError> {
         let vrf_entropy = self
             .get_block_at(block_number - 1, false, txn_option)?
             .seed()
@@ -230,7 +229,7 @@ impl AbstractBlockchain for Blockchain {
         include_body: bool,
         direction: Direction,
         txn_option: Option<&Transaction>,
-    ) -> Vec<Block> {
+    ) -> Result<Vec<Block>, BlockchainError> {
         self.chain_store
             .get_blocks(start_block_hash, count, include_body, direction, txn_option)
     }
@@ -243,7 +242,7 @@ impl AbstractBlockchain for Blockchain {
         direction: Direction,
         election_blocks_only: bool,
         txn_option: Option<&Transaction>,
-    ) -> Option<Vec<Block>> {
+    ) -> Result<Vec<Block>, BlockchainError> {
         self.chain_store.get_macro_blocks(
             start_block_hash,
             count,

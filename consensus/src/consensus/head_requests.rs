@@ -107,12 +107,7 @@ impl<TNetwork: Network + 'static> Future for HeadRequests<TNetwork> {
             // If we got a result, check it and classify it as known block/unknown block.
             match result {
                 Ok(hash) => {
-                    if self
-                        .blockchain
-                        .read()
-                        .get_block(&hash, false, None)
-                        .is_some()
-                    {
+                    if self.blockchain.read().get_block(&hash, false, None).is_ok() {
                         self.num_known_blocks += 1;
                     } else {
                         // Request unknown blocks from peer that gave it to us.

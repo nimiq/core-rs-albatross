@@ -49,6 +49,16 @@ pub enum BlockchainError {
     InconsistentState,
     #[error("No network for: {:?}", _0)]
     NoNetwork(NetworkId),
+    #[error("Block not found")]
+    BlockNotFound,
+    #[error("Block body not found")]
+    BlockBodyNotFound,
+    #[error("Block is not a macro block")]
+    BlockIsNotMacro,
+    #[error("No validators found")]
+    NoValidatorsFound,
+    #[error("Invalid epoch ID")]
+    InvalidEpoch,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

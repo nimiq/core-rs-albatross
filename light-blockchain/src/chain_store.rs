@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use nimiq_block::{Block, MacroHeader};
-use nimiq_blockchain::{ChainInfo, Direction};
+use nimiq_blockchain::{BlockchainError, ChainInfo, Direction};
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::policy::Policy;
 
@@ -18,8 +18,19 @@ pub struct ChainStore {
 
 impl ChainStore {
     /// Gets a chain info by its hash. Returns None if the chain info doesn't exist.
-    pub fn get_chain_info(&self, hash: &Blake2bHash) -> Option<&ChainInfo> {
-        self.chain_db.get(hash)
+    pub fn get_chain_info(
+        &self,
+        hash: &Blake2bHash,
+        include_body: bool,
+    ) -> Result<&ChainInfo, BlockchainError> {
+        let chain_info = self
+            .chain_db
+            .get(hash)
+            .ok_or(BlockchainError::BlockBodyNotFound)?;
+        if include_body && chain_info.head.body().is_none() {
+            return Err(BlockchainError::BlockBodyNotFound);
+        }
+        Ok(chain_info)
     }
 
     /// Gets all the stored block hashes for a given block number (you can have several micro blocks
@@ -32,21 +43,27 @@ impl ChainStore {
     /// Gets a chain info by its block number. Returns None if the chain info doesn't exist.
     /// If there are multiple blocks at that block number, it will return the block that is on the
     /// main chain.
-    pub fn get_chain_info_at(&self, block_height: u32) -> Option<ChainInfo> {
+    pub fn get_chain_info_at(
+        &self,
+        block_height: u32,
+        include_body: bool,
+    ) -> Result<ChainInfo, BlockchainError> {
         // Get block hashes at the given height.
-        let block_hashes = self.get_block_hashes(&block_height)?;
+        let block_hashes = self
+            .get_block_hashes(&block_height)
+            .ok_or(BlockchainError::BlockNotFound)?;
 
         // Iterate until we find the main chain block.
         for hash in block_hashes {
-            let chain_info = self.get_chain_info(hash)?;
+            let chain_info = self.get_chain_info(hash, include_body)?;
 
             // If it's on the main chain we can return from loop
             if chain_info.on_main_chain {
-                return Some(chain_info.clone());
+                return Ok(chain_info.clone());
             }
         }
 
-        None
+        Err(BlockchainError::BlockNotFound)
     }
 
     /// Adds a chain info to the ChainStore.
@@ -98,14 +115,21 @@ impl ChainStore {
         count: u32,
         direction: Direction,
         election_blocks_only: bool,
-    ) -> Option<Vec<Block>> {
+        include_body: bool,
+    ) -> Result<Vec<Block>, BlockchainError> {
         match direction {
-            Direction::Forward => {
-                self.get_macro_blocks_forward(start_block_hash, count, election_blocks_only)
-            }
-            Direction::Backward => {
-                self.get_macro_blocks_backward(start_block_hash, count, election_blocks_only)
-            }
+            Direction::Forward => self.get_macro_blocks_forward(
+                start_block_hash,
+                count,
+                election_blocks_only,
+                include_body,
+            ),
+            Direction::Backward => self.get_macro_blocks_backward(
+                start_block_hash,
+                count,
+                election_blocks_only,
+                include_body,
+            ),
         }
     }
 
@@ -115,7 +139,8 @@ impl ChainStore {
         start_block_hash: &Blake2bHash,
         count: u32,
         election_blocks_only: bool,
-    ) -> Option<Vec<Block>> {
+        include_body: bool,
+    ) -> Result<Vec<Block>, BlockchainError> {
         let mut blocks = Vec::new();
         let start_block = match self
             .chain_db
@@ -123,8 +148,11 @@ impl ChainStore {
             .map(|chain_info| chain_info.head.clone())
         {
             Some(Block::Macro(block)) => block,
-            Some(_) => return None,
-            None => return Some(blocks),
+            Some(_) => {
+                // Expected a macro block and received a micro block
+                return Err(BlockchainError::BlockIsNotMacro);
+            }
+            None => return Err(BlockchainError::BlockNotFound),
         };
 
         let mut hash = if election_blocks_only {
@@ -143,13 +171,16 @@ impl ChainStore {
                 } else {
                     block.header.parent_hash.clone()
                 };
+                if include_body && block.body.is_none() {
+                    return Err(BlockchainError::BlockBodyNotFound);
+                }
                 blocks.push(Block::Macro(block));
             } else {
                 break;
             }
         }
 
-        Some(blocks)
+        Ok(blocks)
     }
 
     /// Returns None if given start_block_hash is not a macro block.
@@ -158,7 +189,8 @@ impl ChainStore {
         start_block_hash: &Blake2bHash,
         count: u32,
         election_blocks_only: bool,
-    ) -> Option<Vec<Block>> {
+        include_body: bool,
+    ) -> Result<Vec<Block>, BlockchainError> {
         let mut blocks = Vec::new();
         let block = match self
             .chain_db
@@ -166,8 +198,11 @@ impl ChainStore {
             .map(|chain_info| chain_info.head.clone())
         {
             Some(Block::Macro(block)) => block,
-            Some(_) => return None,
-            None => return Some(blocks),
+            Some(_) => {
+                // Expected a macro block and received a micro block
+                return Err(BlockchainError::BlockIsNotMacro);
+            }
+            None => return Err(BlockchainError::BlockNotFound),
         };
 
         let mut next_macro_block = if election_blocks_only {
@@ -176,22 +211,31 @@ impl ChainStore {
             Policy::macro_block_after(block.header.block_number)
         };
         while (blocks.len() as u32) < count {
-            let block_opt = self
-                .get_chain_info_at(next_macro_block)
+            let block_result = self
+                .get_chain_info_at(next_macro_block, include_body)
                 .map(|chain_info| chain_info.head);
-            if let Some(Block::Macro(block)) = block_opt {
-                next_macro_block = if election_blocks_only {
-                    Policy::election_block_after(block.header.block_number)
-                } else {
-                    Policy::macro_block_after(block.header.block_number)
-                };
-                blocks.push(Block::Macro(block));
-            } else {
-                break;
+            match block_result {
+                Ok(Block::Macro(block)) => {
+                    next_macro_block = if election_blocks_only {
+                        Policy::election_block_after(block.header.block_number)
+                    } else {
+                        Policy::macro_block_after(block.header.block_number)
+                    };
+                    blocks.push(Block::Macro(block));
+                }
+                Ok(_) => {
+                    // Expected a macro block and received a micro block
+                    return Err(BlockchainError::InconsistentState);
+                }
+                Err(BlockchainError::BlockBodyNotFound) => {
+                    return Err(BlockchainError::BlockBodyNotFound)
+                }
+                Err(BlockchainError::BlockNotFound) => break,
+                Err(e) => return Err(e),
             }
         }
 
-        Some(blocks)
+        Ok(blocks)
     }
 
     pub fn get_blocks(
@@ -199,10 +243,11 @@ impl ChainStore {
         start_block_hash: &Blake2bHash,
         count: u32,
         direction: Direction,
-    ) -> Vec<Block> {
+        include_body: bool,
+    ) -> Result<Vec<Block>, BlockchainError> {
         match direction {
-            Direction::Forward => self.get_blocks_forward(start_block_hash, count),
-            Direction::Backward => self.get_blocks_backward(start_block_hash, count),
+            Direction::Forward => self.get_blocks_forward(start_block_hash, count, include_body),
+            Direction::Backward => self.get_blocks_backward(start_block_hash, count, include_body),
         }
     }
 
@@ -226,16 +271,18 @@ impl ChainStore {
         blocks
     }
 
-    fn get_blocks_backward(&self, start_block_hash: &Blake2bHash, count: u32) -> Vec<Block> {
+    fn get_blocks_backward(
+        &self,
+        start_block_hash: &Blake2bHash,
+        count: u32,
+        include_body: bool,
+    ) -> Result<Vec<Block>, BlockchainError> {
         let mut blocks = Vec::new();
-        let start_block = match self
+        let start_block = self
             .chain_db
             .get(start_block_hash)
             .map(|chain_info| chain_info.head.clone())
-        {
-            Some(block) => block,
-            None => return blocks,
-        };
+            .ok_or(BlockchainError::BlockNotFound)?;
 
         let mut hash = start_block.parent_hash().clone();
         while (blocks.len() as u32) < count {
@@ -244,6 +291,9 @@ impl ChainStore {
                 .get(&hash)
                 .map(|chain_info| chain_info.head.clone())
             {
+                if include_body && block.body().is_none() {
+                    return Err(BlockchainError::BlockBodyNotFound);
+                }
                 hash = block.parent_hash().clone();
                 blocks.push(block);
             } else {
@@ -251,15 +301,20 @@ impl ChainStore {
             }
         }
 
-        blocks
+        Ok(blocks)
     }
 
-    fn get_blocks_forward(&self, start_block_hash: &Blake2bHash, count: u32) -> Vec<Block> {
+    fn get_blocks_forward(
+        &self,
+        start_block_hash: &Blake2bHash,
+        count: u32,
+        include_body: bool,
+    ) -> Result<Vec<Block>, BlockchainError> {
         let mut blocks = Vec::new();
-        let mut chain_info = match self.chain_db.get(start_block_hash) {
-            Some(chain_info) => chain_info,
-            None => return blocks,
-        };
+        let mut chain_info = self
+            .chain_db
+            .get(start_block_hash)
+            .ok_or(BlockchainError::BlockNotFound)?;
 
         while (blocks.len() as u32) < count {
             if let Some(ref successor) = chain_info.main_chain_successor {
@@ -269,13 +324,17 @@ impl ChainStore {
                 }
 
                 chain_info = chain_info_opt.unwrap();
-                blocks.push(chain_info.head.clone());
+                let block = chain_info.head.clone();
+                if include_body && block.body().is_none() {
+                    return Err(BlockchainError::BlockBodyNotFound);
+                }
+                blocks.push(block);
             } else {
                 break;
             }
         }
 
-        blocks
+        Ok(blocks)
     }
 
     /// Adds an election block header to the ChainStore.
@@ -357,11 +416,11 @@ mod tests {
         store.put_chain_info(ChainInfo::new(block_1.clone(), true));
         store.put_chain_info(ChainInfo::new(block_2.clone(), false));
 
-        match store.get_chain_info_at(0) {
-            None => {
-                panic!()
+        match store.get_chain_info_at(0, false) {
+            Err(e) => {
+                assert!(true, "Error getting chain info: {}", e)
             }
-            Some(info) => {
+            Ok(info) => {
                 assert!(info.on_main_chain);
                 assert!(info.head.body().is_none());
                 assert!(info.head.justification().is_none());
@@ -375,11 +434,11 @@ mod tests {
         store.put_chain_info(ChainInfo::new(block_1.clone(), true));
         store.put_chain_info(ChainInfo::new(block_2.clone(), true));
 
-        match store.get_chain_info_at(0) {
-            None => {
-                panic!()
+        match store.get_chain_info_at(0, false) {
+            Err(e) => {
+                assert!(true, "Error getting chain info: {}", e)
             }
-            Some(info) => {
+            Ok(info) => {
                 assert!(info.on_main_chain);
                 assert!(info.head.body().is_none());
                 assert!(info.head.justification().is_none());
@@ -391,10 +450,10 @@ mod tests {
         store.put_chain_info(ChainInfo::new(block_1, false));
         store.put_chain_info(ChainInfo::new(block_2, false));
 
-        match store.get_chain_info_at(0) {
-            None => {}
-            Some(_) => {
-                panic!()
+        match store.get_chain_info_at(0, false) {
+            Err(_) => {}
+            Ok(_) => {
+                assert!(true, "Expected error but found Ok instead")
             }
         }
     }

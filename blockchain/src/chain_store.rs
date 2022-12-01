@@ -8,7 +8,7 @@ use nimiq_hash::Blake2bHash;
 use nimiq_primitives::policy::Policy;
 
 use crate::chain_info::ChainInfo;
-use crate::Direction;
+use crate::{BlockchainError, Direction};
 
 #[derive(Debug)]
 pub struct ChainStore {
@@ -67,7 +67,7 @@ impl ChainStore {
         hash: &Blake2bHash,
         include_body: bool,
         txn_option: Option<&Transaction>,
-    ) -> Option<ChainInfo> {
+    ) -> Result<ChainInfo, BlockchainError> {
         let read_txn: ReadTransaction;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -79,7 +79,7 @@ impl ChainStore {
 
         let mut chain_info: ChainInfo = match txn.get(&self.chain_db, hash) {
             Some(data) => data,
-            None => return None,
+            None => return Err(BlockchainError::BlockNotFound),
         };
 
         if include_body {
@@ -90,7 +90,7 @@ impl ChainStore {
             }
         }
 
-        Some(chain_info)
+        Ok(chain_info)
     }
 
     pub fn get_chain_info_at(
@@ -98,7 +98,7 @@ impl ChainStore {
         block_height: u32,
         include_body: bool,
         txn_option: Option<&Transaction>,
-    ) -> Option<ChainInfo> {
+    ) -> Result<ChainInfo, BlockchainError> {
         let read_txn: ReadTransaction;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -110,7 +110,9 @@ impl ChainStore {
 
         // Seek to the first block at the given height.
         let mut cursor = txn.cursor(&self.height_idx);
-        let mut block_hash = cursor.seek_key::<u32, Blake2bHash>(&block_height)?;
+        let mut block_hash = cursor
+            .seek_key::<u32, Blake2bHash>(&block_height)
+            .ok_or(BlockchainError::BlockNotFound)?;
 
         // Iterate until we find the main chain block.
         let mut chain_info = loop {
@@ -126,7 +128,7 @@ impl ChainStore {
             // Get next block hash
             block_hash = match cursor.next_duplicate::<u32, Blake2bHash>() {
                 Some((_, hash)) => hash,
-                None => return None,
+                None => return Err(BlockchainError::BlockNotFound),
             };
         };
 
@@ -138,7 +140,7 @@ impl ChainStore {
             }
         }
 
-        Some(chain_info)
+        Ok(chain_info)
     }
 
     pub fn put_chain_info(
@@ -166,7 +168,7 @@ impl ChainStore {
         &self,
         block_height: u32,
         txn_option: Option<&Transaction>,
-    ) -> Option<Vec<Blake2bHash>> {
+    ) -> Result<Vec<Blake2bHash>, BlockchainError> {
         let read_txn: ReadTransaction;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -183,7 +185,9 @@ impl ChainStore {
         let mut blocks = vec![block.hash()];
         let mut cursor = txn.cursor(&self.height_idx);
         // First block is the last one inserted
-        let (first_block_number, _) = cursor.first::<u32, Blake2bHash>()?;
+        let (first_block_number, _) = cursor
+            .first::<u32, Blake2bHash>()
+            .ok_or(BlockchainError::BlockNotFound)?;
         let mut last_block_number = block_height;
 
         // Iterate until we find all blocks at the same epoch.
@@ -195,7 +199,7 @@ impl ChainStore {
                     if Policy::is_macro_block_at(block_number)
                         && Policy::epoch_at(block_number) == epoch_number
                     {
-                        if let Some(chain_info) = self.get_chain_info(&hash, false, Some(txn)) {
+                        if let Ok(chain_info) = self.get_chain_info(&hash, false, Some(txn)) {
                             if !chain_info.prunable {
                                 blocks.push(hash);
                             }
@@ -206,7 +210,7 @@ impl ChainStore {
                 None => break,
             }
         }
-        Some(blocks.into_iter().rev().collect())
+        Ok(blocks.into_iter().rev().collect())
     }
 
     pub fn remove_chain_info(&self, txn: &mut WriteTransaction, hash: &Blake2bHash, height: u32) {
@@ -220,7 +224,7 @@ impl ChainStore {
         hash: &Blake2bHash,
         include_body: bool,
         txn_option: Option<&Transaction>,
-    ) -> Option<Block> {
+    ) -> Result<Block, BlockchainError> {
         let read_txn: ReadTransaction;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -232,9 +236,11 @@ impl ChainStore {
 
         if include_body {
             txn.get(&self.block_db, hash)
+                .ok_or(BlockchainError::BlockNotFound)
         } else {
             txn.get(&self.chain_db, hash)
                 .map(|chain_info: ChainInfo| chain_info.head)
+                .ok_or(BlockchainError::BlockNotFound)
         }
     }
 
@@ -243,7 +249,7 @@ impl ChainStore {
         block_height: u32,
         include_body: bool,
         txn_option: Option<&Transaction>,
-    ) -> Option<Block> {
+    ) -> Result<Block, BlockchainError> {
         self.get_chain_info_at(block_height, include_body, txn_option)
             .map(|chain_info| chain_info.head)
     }
@@ -255,7 +261,7 @@ impl ChainStore {
         include_body: bool,
         direction: Direction,
         txn_option: Option<&Transaction>,
-    ) -> Vec<Block> {
+    ) -> Result<Vec<Block>, BlockchainError> {
         match direction {
             Direction::Forward => {
                 self.get_blocks_forward(start_block_hash, count, include_body, txn_option)
@@ -271,7 +277,7 @@ impl ChainStore {
         block_height: u32,
         include_body: bool,
         txn_option: Option<&Transaction>,
-    ) -> Vec<Block> {
+    ) -> Result<Vec<Block>, BlockchainError> {
         let read_txn: ReadTransaction;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -286,11 +292,11 @@ impl ChainStore {
         let mut cursor = txn.cursor(&self.height_idx);
         let mut block_hash = match cursor.seek_key::<u32, Blake2bHash>(&block_height) {
             Some(hash) => hash,
-            None => return blocks,
+            None => return Err(BlockchainError::BlockNotFound),
         };
 
         // Iterate until we find all blocks at the same height.
-        while let Some(block) = self.get_block(&block_hash, include_body, Some(txn)) {
+        while let Ok(block) = self.get_block(&block_hash, include_body, Some(txn)) {
             blocks.push(block);
 
             // Get next block hash
@@ -300,7 +306,7 @@ impl ChainStore {
             };
         }
 
-        blocks
+        Ok(blocks)
     }
 
     fn get_blocks_backward(
@@ -309,7 +315,7 @@ impl ChainStore {
         count: u32,
         include_body: bool,
         txn_option: Option<&Transaction>,
-    ) -> Vec<Block> {
+    ) -> Result<Vec<Block>, BlockchainError> {
         let read_txn: ReadTransaction;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -320,14 +326,11 @@ impl ChainStore {
         };
 
         let mut blocks = Vec::new();
-        let start_block = match self.get_block(start_block_hash, false, Some(txn)) {
-            Some(block) => block,
-            None => return blocks,
-        };
+        let start_block = self.get_block(start_block_hash, false, Some(txn))?;
 
         let mut hash = start_block.parent_hash().clone();
         while (blocks.len() as u32) < count {
-            if let Some(block) = self.get_block(&hash, include_body, Some(txn)) {
+            if let Ok(block) = self.get_block(&hash, include_body, Some(txn)) {
                 hash = block.parent_hash().clone();
                 blocks.push(block);
             } else {
@@ -335,7 +338,7 @@ impl ChainStore {
             }
         }
 
-        blocks
+        Ok(blocks)
     }
 
     fn get_blocks_forward(
@@ -344,7 +347,7 @@ impl ChainStore {
         count: u32,
         include_body: bool,
         txn_option: Option<&Transaction>,
-    ) -> Vec<Block> {
+    ) -> Result<Vec<Block>, BlockchainError> {
         let read_txn: ReadTransaction;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -355,15 +358,12 @@ impl ChainStore {
         };
 
         let mut blocks = Vec::new();
-        let mut chain_info = match self.get_chain_info(start_block_hash, false, Some(txn)) {
-            Some(chain_info) => chain_info,
-            None => return blocks,
-        };
+        let mut chain_info = self.get_chain_info(start_block_hash, false, Some(txn))?;
 
         while (blocks.len() as u32) < count {
             if let Some(ref successor) = chain_info.main_chain_successor {
                 let chain_info_opt = self.get_chain_info(successor, include_body, Some(txn));
-                if chain_info_opt.is_none() {
+                if chain_info_opt.is_err() {
                     break;
                 }
 
@@ -374,7 +374,7 @@ impl ChainStore {
             }
         }
 
-        blocks
+        Ok(blocks)
     }
 
     /// Returns None if given start_block_hash is not a macro block.
@@ -386,7 +386,7 @@ impl ChainStore {
         direction: Direction,
         election_blocks_only: bool,
         txn_option: Option<&Transaction>,
-    ) -> Option<Vec<Block>> {
+    ) -> Result<Vec<Block>, BlockchainError> {
         match direction {
             Direction::Forward => self.get_macro_blocks_forward(
                 start_block_hash,
@@ -405,7 +405,6 @@ impl ChainStore {
         }
     }
 
-    /// Returns None if given start_block_hash is not a macro block.
     fn get_macro_blocks_backward(
         &self,
         start_block_hash: &Blake2bHash,
@@ -413,7 +412,7 @@ impl ChainStore {
         election_blocks_only: bool,
         include_body: bool,
         txn_option: Option<&Transaction>,
-    ) -> Option<Vec<Block>> {
+    ) -> Result<Vec<Block>, BlockchainError> {
         let read_txn: ReadTransaction;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -425,9 +424,9 @@ impl ChainStore {
 
         let mut blocks = Vec::new();
         let start_block = match self.get_block(start_block_hash, false, Some(txn)) {
-            Some(Block::Macro(block)) => block,
-            Some(_) => return None,
-            None => return Some(blocks),
+            Ok(Block::Macro(block)) => block,
+            Ok(_) => return Err(BlockchainError::BlockIsNotMacro),
+            Err(e) => return Err(e),
         };
 
         let mut hash = if election_blocks_only {
@@ -436,8 +435,8 @@ impl ChainStore {
             start_block.header.parent_hash
         };
         while (blocks.len() as u32) < count {
-            let block_opt = self.get_block(&hash, include_body, Some(txn));
-            if let Some(Block::Macro(block)) = block_opt {
+            let block_result = self.get_block(&hash, include_body, Some(txn));
+            if let Ok(Block::Macro(block)) = block_result {
                 hash = if election_blocks_only {
                     block.header.parent_election_hash.clone()
                 } else {
@@ -449,7 +448,7 @@ impl ChainStore {
             }
         }
 
-        Some(blocks)
+        Ok(blocks)
     }
 
     /// Returns None if given start_block_hash is not a macro block.
@@ -460,7 +459,7 @@ impl ChainStore {
         election_blocks_only: bool,
         include_body: bool,
         txn_option: Option<&Transaction>,
-    ) -> Option<Vec<Block>> {
+    ) -> Result<Vec<Block>, BlockchainError> {
         let read_txn: ReadTransaction;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -472,9 +471,9 @@ impl ChainStore {
 
         let mut blocks = Vec::new();
         let block = match self.get_block(start_block_hash, false, Some(txn)) {
-            Some(Block::Macro(block)) => block,
-            Some(_) => return None,
-            None => return Some(blocks),
+            Ok(Block::Macro(block)) => block,
+            Ok(_) => return Err(BlockchainError::BlockIsNotMacro),
+            Err(e) => return Err(e),
         };
 
         let mut next_macro_block = if election_blocks_only {
@@ -483,20 +482,26 @@ impl ChainStore {
             Policy::macro_block_after(block.header.block_number)
         };
         while (blocks.len() as u32) < count {
-            let block_opt = self.get_block_at(next_macro_block, include_body, Some(txn));
-            if let Some(Block::Macro(block)) = block_opt {
-                next_macro_block = if election_blocks_only {
-                    Policy::election_block_after(block.header.block_number)
-                } else {
-                    Policy::macro_block_after(block.header.block_number)
-                };
-                blocks.push(Block::Macro(block));
-            } else {
-                break;
+            let block_result = self.get_block_at(next_macro_block, include_body, Some(txn));
+            match block_result {
+                Ok(Block::Macro(block)) => {
+                    next_macro_block = if election_blocks_only {
+                        Policy::election_block_after(block.header.block_number)
+                    } else {
+                        Policy::macro_block_after(block.header.block_number)
+                    };
+                    blocks.push(Block::Macro(block));
+                }
+                Ok(_) => {
+                    // Expected a macro block and received a micro block
+                    return Err(BlockchainError::InconsistentState);
+                }
+                Err(BlockchainError::BlockNotFound) => break,
+                Err(e) => return Err(e),
             }
         }
 
-        Some(blocks)
+        Ok(blocks)
     }
 
     pub fn prune_epoch(&self, epoch_number: u32, txn: &mut WriteTransaction) {

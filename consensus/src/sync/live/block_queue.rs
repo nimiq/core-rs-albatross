@@ -231,23 +231,25 @@ impl<N: Network, TReq: RequestComponent<N>> BlockQueue<N, TReq> {
 
         // Get block locators. The blocks returned by `get_blocks` do *not* include the start block.
         // FIXME We don't want to send the full batch as locators here.
-        let block_locators = blockchain
-            .get_blocks(
-                &head_hash,
-                head_height - macro_height,
-                false,
-                Direction::Backward,
-                None,
-            )
-            .into_iter()
-            .map(|block| block.hash());
+        let blocks = blockchain.get_blocks(
+            &head_hash,
+            head_height - macro_height,
+            false,
+            Direction::Backward,
+            None,
+        );
+        if let Ok(blocks) = blocks {
+            let block_locators = blocks.into_iter().map(|block| block.hash());
 
-        // Prepend our current head hash.
-        let block_locators = vec![head_hash].into_iter().chain(block_locators).collect();
+            // Prepend our current head hash.
+            let block_locators = vec![head_hash].into_iter().chain(block_locators).collect();
 
-        // FIXME Send missing blocks request to the peer that announced the block (first).
-        self.request_component
-            .request_missing_blocks(block_hash, block_locators);
+            // FIXME Send missing blocks request to the peer that announced the block (first).
+            self.request_component
+                .request_missing_blocks(block_hash, block_locators);
+        } else {
+            log::error!(start_block = %head_hash, count = head_height - macro_height, "Couldn't get blocks")
+        }
     }
 
     fn on_missing_blocks_received(&mut self, blocks: Vec<Block>) {

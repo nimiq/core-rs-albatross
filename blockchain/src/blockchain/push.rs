@@ -59,7 +59,7 @@ impl Blockchain {
         if this
             .chain_store
             .get_chain_info(&block.hash(), false, Some(&read_txn))
-            .is_some()
+            .is_ok()
         {
             return Ok(PushResult::Known);
         }
@@ -68,8 +68,9 @@ impl Blockchain {
         let prev_info = this
             .chain_store
             .get_chain_info(block.parent_hash(), false, Some(&read_txn))
-            .ok_or_else(|| {
+            .map_err(|error| {
                 warn!(
+                    %error,
                     %block,
                     reason = "parent block is unknown",
                     parent_block_hash = %block.parent_hash(),
@@ -566,8 +567,13 @@ impl Blockchain {
         // Note: We don't verify the justifications for the other blocks here, since they had to
         // already be verified in order to be added to the blockchain.
         let mut micro_blocks: Vec<Block> =
-            self.chain_store
-                .get_blocks_at(block.header.block_number, false, Some(txn));
+            match self
+                .chain_store
+                .get_blocks_at(block.header.block_number, false, Some(txn))
+            {
+                Ok(blocks) => blocks,
+                Err(_) => vec![],
+            };
 
         // Filter out any skip blocks.
         micro_blocks.retain(|block| block.is_micro() && !block.is_skip());

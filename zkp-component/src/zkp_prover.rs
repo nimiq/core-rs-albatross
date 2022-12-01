@@ -64,7 +64,7 @@ impl<N: Network> ZKProver<N> {
             let result = match event {
                 BlockchainEvent::EpochFinalized(hash) => {
                     let block = blockchain2.read().get_block(&hash, true, None);
-                    if let Some(Block::Macro(block)) = block {
+                    if let Ok(Block::Macro(block)) = block {
                         Some(block)
                     } else {
                         None

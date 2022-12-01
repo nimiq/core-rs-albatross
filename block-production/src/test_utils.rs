@@ -91,7 +91,7 @@ impl TemporaryBlockProducer {
             // Get validator set and make sure it exists.
             let validators = blockchain
                 .get_validators_for_epoch(Policy::epoch_at(blockchain.block_number() + 1), None);
-            assert!(validators.is_some());
+            assert!(validators.is_ok());
 
             Block::Macro(TemporaryBlockProducer::finalize_macro_block(
                 TendermintProposal {

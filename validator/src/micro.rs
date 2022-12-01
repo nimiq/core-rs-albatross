@@ -254,11 +254,11 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         );
 
         match proposer_slot {
-            Some(slot) => slot.band == self.validator_slot_band,
-            None => {
+            Ok(slot) => slot.band == self.validator_slot_band,
+            Err(error) => {
                 // The only scenario where this could potentially fail is if the macro block that
                 // precedes self.block_number is pruned while we're initializing ProduceMicroBlock.
-                warn!("Failed to find next proposer");
+                warn!(%error, "Failed to find next proposer");
                 false
             }
         }

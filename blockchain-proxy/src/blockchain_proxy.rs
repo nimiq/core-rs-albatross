@@ -4,8 +4,8 @@ use futures::stream::BoxStream;
 use parking_lot::{RwLock, RwLockReadGuard};
 
 use nimiq_block::{Block, MacroBlock};
-use nimiq_blockchain::ChainInfo;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainEvent, Direction};
+use nimiq_blockchain::{BlockchainError, ChainInfo};
 use nimiq_database::Transaction;
 use nimiq_genesis::NetworkId;
 use nimiq_hash::Blake2bHash;
@@ -124,7 +124,7 @@ impl<'a> AbstractBlockchain for BlockchainReadProxy<'a> {
         height: u32,
         include_body: bool,
         txn_option: Option<&Transaction>,
-    ) -> Option<Block> {
+    ) -> Result<Block, BlockchainError> {
         gen_blockchain_match!(
             self,
             BlockchainReadProxy,
@@ -140,7 +140,7 @@ impl<'a> AbstractBlockchain for BlockchainReadProxy<'a> {
         hash: &Blake2bHash,
         include_body: bool,
         txn_option: Option<&Transaction>,
-    ) -> Option<Block> {
+    ) -> Result<Block, BlockchainError> {
         gen_blockchain_match!(
             self,
             BlockchainReadProxy,
@@ -158,7 +158,7 @@ impl<'a> AbstractBlockchain for BlockchainReadProxy<'a> {
         include_body: bool,
         direction: nimiq_blockchain::Direction,
         txn_option: Option<&Transaction>,
-    ) -> Vec<Block> {
+    ) -> Result<Vec<Block>, BlockchainError> {
         gen_blockchain_match!(
             self,
             BlockchainReadProxy,
@@ -176,7 +176,7 @@ impl<'a> AbstractBlockchain for BlockchainReadProxy<'a> {
         hash: &Blake2bHash,
         include_body: bool,
         txn_option: Option<&Transaction>,
-    ) -> Option<ChainInfo> {
+    ) -> Result<ChainInfo, BlockchainError> {
         gen_blockchain_match!(
             self,
             BlockchainReadProxy,
@@ -192,7 +192,7 @@ impl<'a> AbstractBlockchain for BlockchainReadProxy<'a> {
         block_number: u32,
         offset: u32,
         txn_option: Option<&Transaction>,
-    ) -> Option<(Validator, u16)> {
+    ) -> Result<(Validator, u16), BlockchainError> {
         gen_blockchain_match!(
             self,
             BlockchainReadProxy,
@@ -211,7 +211,7 @@ impl<'a> AbstractBlockchain for BlockchainReadProxy<'a> {
         direction: Direction,
         election_blocks_only: bool,
         txn_option: Option<&Transaction>,
-    ) -> Option<Vec<Block>> {
+    ) -> Result<Vec<Block>, BlockchainError> {
         gen_blockchain_match!(
             self,
             BlockchainReadProxy,

@@ -37,12 +37,15 @@ fn get_block_by_hash(
     hash: &Blake2bHash,
     include_transactions: Option<bool>,
 ) -> RPCResult<Block, (), Error> {
+    let include_body =
+        include_transactions.unwrap_or(matches!(blockchain, BlockchainReadProxy::Full(_)));
+
     blockchain
-        .get_block(hash, true, None)
+        .get_block(hash, include_body, None)
         .map(|block| {
             Block::from_block(blockchain, block, include_transactions.unwrap_or(false)).into()
         })
-        .ok_or_else(|| Error::BlockNotFoundByHash(hash.clone()))
+        .map_err(|_| Error::BlockNotFoundByHash(hash.clone()))
 }
 
 /// Tries to fetch a validator information given its address. It has an option to include a collection
@@ -130,9 +133,12 @@ impl BlockchainInterface for BlockchainDispatcher {
     ) -> RPCResult<Block, (), Self::Error> {
         let blockchain = self.blockchain.read();
 
+        let include_body =
+            include_transactions.unwrap_or(matches!(blockchain, BlockchainReadProxy::Full(_)));
+
         let block = blockchain
-            .get_block_at(block_number, true, None)
-            .ok_or(Error::BlockNotFound(block_number))?;
+            .get_block_at(block_number, include_body, None)
+            .map_err(|_| Error::BlockNotFound(block_number))?;
 
         Ok(Block::from_block(&blockchain, block, include_transactions.unwrap_or(false)).into())
     }
@@ -163,8 +169,8 @@ impl BlockchainInterface for BlockchainDispatcher {
             offset
         } else {
             let block = blockchain
-                .get_block_at(block_number, true, None)
-                .ok_or(Error::BlockNotFound(block_number))?;
+                .get_block_at(block_number, false, None)
+                .map_err(|_| Error::BlockNotFound(block_number))?;
             if let nimiq_block::Block::Macro(macro_block) = block {
                 if let Some(proof) = macro_block.justification {
                     proof.round
@@ -348,7 +354,7 @@ impl BlockchainInterface for BlockchainDispatcher {
             // Check the batch's macro block to see if the batch includes slashes.
             let macro_block = blockchain
                 .get_block_at(macro_block_number, true, None) // The lost_reward_set is in the MacroBody
-                .ok_or(Error::BlockNotFound(macro_block_number))?;
+                .map_err(|_| Error::BlockNotFound(macro_block_number))?;
 
             let mut inherent_tx_vec = vec![];
 

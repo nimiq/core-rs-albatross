@@ -7,9 +7,9 @@ use nimiq_primitives::policy::Policy;
 #[cfg(feature = "metrics")]
 use std::sync::Arc;
 
-use crate::blockchain_state::BlockchainState;
 #[cfg(feature = "metrics")]
 use crate::chain_metrics::BlockchainMetrics;
+use crate::{blockchain_state::BlockchainState, BlockchainError};
 use crate::{AbstractBlockchain, Blockchain, Direction};
 use nimiq_trie::key_nibbles::KeyNibbles;
 
@@ -27,7 +27,7 @@ impl Blockchain {
         count: u32,
         include_body: bool,
         direction: Direction,
-    ) -> Vec<Block> {
+    ) -> Result<Vec<Block>, BlockchainError> {
         self.chain_store
             .get_blocks(start_block_hash, count, include_body, direction, None)
     }

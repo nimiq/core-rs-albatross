@@ -541,6 +541,7 @@ impl Handle<RequestZKPResponse, Arc<ZKPStateEnvironment>> for RequestZKP {
             env.blockchain
                 .read()
                 .get_block_at(latest_block_number, true, None)
+                .ok()
                 .map(|block| block.unwrap_macro())
         } else {
             None

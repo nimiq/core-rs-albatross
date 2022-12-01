@@ -18,7 +18,7 @@ impl Handle<MacroChain, BlockchainProxy> for RequestMacroChain {
         let mut start_block_hash = None;
         for locator in self.locators.iter() {
             let chain_info = blockchain.get_chain_info(locator, false, None);
-            if let Some(chain_info) = chain_info {
+            if let Ok(chain_info) = chain_info {
                 if chain_info.on_main_chain {
                     // We found a block, ignore remaining block locator hashes.
                     trace!("Start block found: {:?}", &locator);
@@ -78,8 +78,8 @@ impl Handle<BatchSetInfo, Arc<RwLock<Blockchain>>> for RequestBatchSet {
     fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> BatchSetInfo {
         let blockchain = blockchain.read();
 
-        if let Some(Block::Macro(block)) = blockchain.get_block(&self.hash, true, None) {
-            let (batch_sets, total_history_len) = if let Some(macro_hashes) = blockchain
+        if let Ok(Block::Macro(block)) = blockchain.get_block(&self.hash, true, None) {
+            let (batch_sets, total_history_len) = if let Ok(macro_hashes) = blockchain
                 .chain_store
                 .get_epoch_chunks(block.block_number(), None)
             {
@@ -153,6 +153,7 @@ impl Handle<Option<Block>, BlockchainProxy> for RequestBlock {
         blockchain
             .read()
             .get_block(&self.hash, self.include_body, None)
+            .ok()
     }
 }
 
@@ -174,7 +175,7 @@ impl Handle<ResponseBlocks, BlockchainProxy> for RequestMissingBlocks {
         let mut block_hash = self.target_hash.clone();
         while !locators.contains(&block_hash) {
             let block = blockchain.get_block(&block_hash, self.include_body, None);
-            if let Some(block) = block {
+            if let Ok(block) = block {
                 let is_macro = block.is_macro();
 
                 block_hash = block.parent_hash().clone();

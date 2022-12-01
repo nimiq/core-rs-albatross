@@ -28,7 +28,7 @@ impl Blockchain {
         let predecessor = self
             .get_chain_info(block.parent_hash(), false, Some(txn))
             .map(|info| info.head)
-            .ok_or(PushError::Orphan)?;
+            .map_err(|_| PushError::Orphan)?;
 
         // Verify that the block is a valid immediate successor to its predecessor.
         block.verify_immediate_successor(&predecessor)?;
@@ -53,8 +53,8 @@ impl Blockchain {
 
             let (proposer_slot, _) = self
                 .get_slot_owner_at(block.block_number(), offset, Some(txn))
-                .ok_or_else(|| {
-                    warn!(%block, reason = "failed to determine block proposer", "Rejecting block");
+                .map_err(|error| {
+                    warn!(%error, %block, reason = "failed to determine block proposer", "Rejecting block");
                     PushError::Orphan
                 })?;
 
