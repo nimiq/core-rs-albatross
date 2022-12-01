@@ -39,7 +39,7 @@ pub struct ZKPRequests<N: Network + 'static> {
                 N::PeerId,
                 bool,
                 Option<Sender<Result<ZKPRequestEvent, Error>>>,
-                Result<(Option<ZKProof>, Option<MacroBlock>), RequestError>,
+                Result<RequestZKPResponse, RequestError>,
             ),
         >,
     >,
@@ -121,7 +121,7 @@ impl<N: Network + 'static> Stream for ZKPRequests<N> {
         while let Poll::Ready(result) = self.zkp_request_results.poll_next_unpin(cx) {
             match result {
                 Some((peer_id, request_election_block, response_channel, result)) => match result {
-                    Ok((Some(proof), mut election_block)) => {
+                    Ok(RequestZKPResponse::Proof(proof, mut election_block)) => {
                         // Check that the response is in-line with whether we asked for the election block or not.
                         if request_election_block {
                             if election_block.is_none() {
@@ -140,10 +140,10 @@ impl<N: Network + 'static> Stream for ZKPRequests<N> {
                             response_channel,
                         }));
                     }
-                    Ok((None, _)) => {
+                    Ok(RequestZKPResponse::Outdated(block_height)) => {
                         // This happens when the peer does not have a more recent proof than us.
                         if let Some(tx) = response_channel {
-                            let _ = tx.send(Ok(ZKPRequestEvent::OutdatedProof));
+                            let _ = tx.send(Ok(ZKPRequestEvent::OutdatedProof { block_height }));
                         }
                     }
                     Err(e) => {
