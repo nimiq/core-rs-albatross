@@ -68,7 +68,7 @@ pub enum ZKPRequestEvent {
     /// A valid proof that has been pushed to the ZKP state.
     Proof { proof: ZKProof, block: MacroBlock },
     /// The peer does not have a more recent proof.
-    OutdatedProof,
+    OutdatedProof { block_height: u32 },
 }
 
 /// The ZK Proof state containing the pks block info and the proof.
@@ -496,9 +496,18 @@ pub struct RequestZKP {
 impl RequestCommon for RequestZKP {
     type Kind = RequestMarker;
     const TYPE_ID: u16 = 211;
-    type Response = (Option<ZKProof>, Option<MacroBlock>);
+    type Response = RequestZKPResponse;
 
     const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_ZKP;
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[repr(u8)]
+pub enum RequestZKPResponse {
+    #[beserial(discriminant = 1)]
+    Proof(ZKProof, Option<MacroBlock>),
+    #[beserial(discriminant = 2)]
+    Outdated(u32),
 }
 
 #[derive(Clone)]
@@ -516,26 +525,26 @@ impl<N: Network> From<&ZKPComponent<N>> for ZKPStateEnvironment {
     }
 }
 
-impl Handle<(Option<ZKProof>, Option<MacroBlock>), Arc<ZKPStateEnvironment>> for RequestZKP {
-    fn handle(&self, env: &Arc<ZKPStateEnvironment>) -> (Option<ZKProof>, Option<MacroBlock>) {
+impl Handle<RequestZKPResponse, Arc<ZKPStateEnvironment>> for RequestZKP {
+    fn handle(&self, env: &Arc<ZKPStateEnvironment>) -> RequestZKPResponse {
         // First retrieve the ZKP proof and release the lock again.
         let zkp_state = env.zkp_state.read();
-        if zkp_state.latest_block_number <= self.block_number {
-            return (None, None);
+        let latest_block_number = zkp_state.latest_block_number;
+        if latest_block_number <= self.block_number {
+            return RequestZKPResponse::Outdated(latest_block_number);
         }
         let zkp_proof = (*zkp_state).clone().into();
-        let block_number = zkp_state.latest_block_number;
         drop(zkp_state);
 
         // Then get the corresponding block if necessary.
         let block = if self.request_election_block {
             env.blockchain
                 .read()
-                .get_block_at(block_number, true, None)
+                .get_block_at(latest_block_number, true, None)
                 .map(|block| block.unwrap_macro())
         } else {
             None
         };
-        (Some(zkp_proof), block)
+        RequestZKPResponse::Proof(zkp_proof, block)
     }
 }
