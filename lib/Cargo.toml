@@ -21,7 +21,7 @@ maintenance = { status = "experimental" }
 [dependencies]
 clap = { version = "4.0", features = ["derive"] }
 console-subscriber = { version = "0.1", features = ["parking_lot"], optional = true }
-derive_builder = "0.11"
+derive_builder = "0.12"
 directories = "4.0"
 file-rotate = { version = "0.7" }
 hex = "0.4"
