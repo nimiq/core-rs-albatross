@@ -1,9 +1,8 @@
 use std::path::PathBuf;
 
-use nimiq_block::{Block, BlockError, TendermintProof};
+use nimiq_block::{Block, BlockError};
 use nimiq_blockchain::{AbstractBlockchain, ChainInfo, PushError, PushResult};
 use nimiq_nano_zkp::{NanoProof, NanoZKP};
-use nimiq_primitives::policy::Policy;
 use parking_lot::RwLockUpgradableReadGuard;
 
 use crate::blockchain::LightBlockchain;
@@ -22,20 +21,26 @@ impl LightBlockchain {
         // Must be an election block.
         assert!(block.is_election());
 
-        // Check the version
-        if block.header().version() != Policy::VERSION {
-            return Err(PushError::InvalidBlock(BlockError::UnsupportedVersion));
-        }
-
         // Checks if the body exists.
-        let body = block
+        block
             .body()
             .ok_or(PushError::InvalidBlock(BlockError::MissingBody))?;
 
-        // Check the body root.
-        if &body.hash() != block.header().body_root() {
-            return Err(PushError::InvalidBlock(BlockError::BodyHashMismatch));
+        // Check if we already know this block.
+        if this
+            .chain_store
+            .get_chain_info(&block.hash(), false)
+            .is_ok()
+        {
+            return Ok(PushResult::Known);
         }
+
+        if block.block_number() <= this.macro_head.block_number() {
+            return Ok(PushResult::Ignored);
+        }
+
+        // Perform block intrinsic checks.
+        block.verify(false)?;
 
         // Prepare the inputs to verify the proof.
         let initial_block_number = this.genesis_block.block_number();
@@ -121,50 +126,32 @@ impl LightBlockchain {
         // Must be a macro block.
         assert!(block.is_macro());
 
-        // Check the version
-        if block.header().version() != Policy::VERSION {
-            return Err(PushError::InvalidBlock(BlockError::UnsupportedVersion));
+        // Checks if the body exists.
+        block
+            .body()
+            .ok_or(PushError::InvalidBlock(BlockError::MissingBody))?;
+
+        // Check if we already know this block.
+        if this
+            .chain_store
+            .get_chain_info(&block.hash(), false)
+            .is_ok()
+        {
+            return Ok(PushResult::Known);
         }
 
-        // If this is an election block, check the body.
-        if block.is_election() {
-            // Checks if the body exists.
-            let body = block
-                .body()
-                .ok_or(PushError::InvalidBlock(BlockError::MissingBody))?;
-
-            // Check the body root.
-            if &body.hash() != block.header().body_root() {
-                return Err(PushError::InvalidBlock(BlockError::BodyHashMismatch));
-            }
+        if block.block_number() <= this.macro_head.block_number() {
+            return Ok(PushResult::Ignored);
         }
 
-        // Check if we have this block's parent. The checks change depending if the last macro block
-        // that we pushed was an election block or not.
-        if Policy::is_election_block_at(this.block_number()) {
-            // We only need to check that the parent election block of this block is the same as our
-            // head block.
-            if block.header().parent_election_hash().unwrap() != &this.head_hash() {
-                return Err(PushError::Orphan);
-            }
-        } else {
-            // We need to check that this block and our head block have the same parent election
-            // block and are in the correct order.
-            if block.header().parent_election_hash().unwrap()
-                != this.head().parent_election_hash().unwrap()
-                || block.block_number() <= this.head.block_number()
-            {
-                return Err(PushError::Orphan);
-            }
-        }
+        // Perform block intrinsic checks.
+        block.verify(false)?;
 
-        // Verify the justification.
-        if !TendermintProof::verify(
-            block.unwrap_macro_ref(),
-            &this.current_validators().unwrap(),
-        ) {
-            return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
-        }
+        // Verify that the block is a valid macro successor to our current macro head.
+        block.verify_macro_successor(&this.macro_head)?;
+
+        // Verify that the block is valid for the current validators.
+        block.verify_validators(&this.current_validators().unwrap())?;
 
         // At this point we know that the block is correct. We just have to push it.
 

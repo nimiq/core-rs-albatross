@@ -568,15 +568,11 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                 "Failed to publish block"
             );
         }
-        // Empty body before publishing to the block header topic
+        // Empty body for Micro blocks before publishing to the block header topic
+        // Macro blocks must be always sent with body
         match block {
             Block::Micro(ref mut micro_block) => micro_block.body = None,
-            Block::Macro(ref mut macro_block) => {
-                // Macro blocks must be always sent with body
-                if !macro_block.is_election_block() {
-                    macro_block.body = None
-                }
-            }
+            Block::Macro(_) => {}
         }
         if let Err(e) = network.publish::<BlockHeaderTopic>(block.clone()).await {
             warn!(

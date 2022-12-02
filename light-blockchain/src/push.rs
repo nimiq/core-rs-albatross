@@ -48,6 +48,18 @@ impl LightBlockchain {
             .get_slot_owner_at(block.block_number(), offset, None)
             .expect("Failed to find slot owner!");
 
+        // We expect full blocks (with body) for macro blocks and no body for micro blocks.
+        if block.is_macro() {
+            block
+                .body()
+                .ok_or(PushError::InvalidBlock(BlockError::MissingBody))?;
+        } else {
+            assert!(
+                block.body().is_none(),
+                "Light blockchain expects micro blocks without body"
+            )
+        }
+
         // Perform block intrinsic checks.
         block.verify(false)?;
 
