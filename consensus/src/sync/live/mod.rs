@@ -2,10 +2,12 @@ pub mod block_live_sync;
 pub mod block_queue;
 pub mod block_request_component;
 pub mod chunk_request_component;
+pub mod state_live_sync;
 pub mod state_queue;
 
 pub use block_live_sync::BlockLiveSync;
 use nimiq_primitives::policy::Policy;
+pub use state_live_sync::StateLiveSync;
 
 #[derive(Clone, Debug)]
 pub struct BlockQueueConfig {

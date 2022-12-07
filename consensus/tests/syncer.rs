@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::{
     pin::Pin,
     sync::Arc,
@@ -9,6 +8,7 @@ use futures::{task::noop_waker_ref, Stream, StreamExt};
 use nimiq_blockchain_interface::{AbstractBlockchain, Direction};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
+use nimiq_consensus::sync::peer_list::PeerList;
 use parking_lot::{Mutex, RwLock};
 use pin_project::pin_project;
 use rand::Rng;
@@ -24,7 +24,7 @@ use nimiq_consensus::sync::live::block_request_component::{
 };
 use nimiq_consensus::sync::live::BlockLiveSync;
 use nimiq_consensus::sync::live::BlockQueueConfig;
-use nimiq_consensus::sync::syncer::{MacroSync, MacroSyncReturn, Syncer};
+use nimiq_consensus::sync::syncer::{LiveSync, MacroSync, MacroSyncReturn, Syncer};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::network::Network;
@@ -42,7 +42,7 @@ use nimiq_utils::time::OffsetTime;
 #[pin_project]
 #[derive(Debug)]
 pub struct MockRequestComponent {
-    pub peers: HashSet<MockPeerId>,
+    pub peers: Arc<RwLock<PeerList<MockNetwork>>>,
     pub tx: mpsc::UnboundedSender<(Blake2bHash, Vec<Blake2bHash>)>,
     #[pin]
     pub rx: mpsc::UnboundedReceiver<Vec<Block>>,
@@ -99,8 +99,8 @@ impl MacroSync<MockPeerId> for MockHistorySyncStream {
 }
 
 impl RequestComponent<MockNetwork> for MockRequestComponent {
-    fn add_peer(&mut self, peer_id: MockPeerId) {
-        self.peers.insert(peer_id);
+    fn add_peer(&self, peer_id: MockPeerId) {
+        self.peers.write().add_peer(peer_id);
     }
 
     fn request_missing_blocks(
@@ -117,15 +117,19 @@ impl RequestComponent<MockNetwork> for MockRequestComponent {
     }
 
     fn num_peers(&self) -> usize {
+        // We pretend to have a peer.
         1
     }
 
     fn peers(&self) -> Vec<MockPeerId> {
-        unimplemented!()
+        self.peers.read().peers().clone()
     }
 
-    fn take_peer(&mut self, peer_id: &MockPeerId) -> Option<MockPeerId> {
-        self.peers.take(peer_id)
+    fn take_peer(&self, peer_id: &MockPeerId) -> Option<MockPeerId> {
+        if self.peers.write().remove_peer(peer_id) {
+            return Some(*peer_id);
+        }
+        None
     }
 }
 
@@ -745,7 +749,7 @@ async fn put_peer_back_into_sync_mode() {
 
     let mut syncer = Syncer::new(live_sync, history_sync);
 
-    syncer.live_sync.request_component_mut().add_peer(peer_addr);
+    syncer.live_sync.add_peer(peer_addr);
 
     let producer = BlockProducer::new(signing_key(), voting_key());
     for _ in 1..11 {

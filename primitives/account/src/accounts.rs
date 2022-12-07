@@ -23,18 +23,13 @@ pub type AccountsTrie = MerkleRadixTrie;
 pub struct Accounts {
     pub env: Environment,
     pub tree: AccountsTrie,
-    pub keys_end: Option<KeyNibbles>,
 }
 
 impl Accounts {
     /// Creates a new, completely empty Accounts.
     pub fn new(env: Environment) -> Self {
         let tree = AccountsTrie::new(env.clone(), "AccountsTrie");
-        Accounts {
-            env,
-            tree,
-            keys_end: None,
-        }
+        Accounts { env, tree }
     }
 
     /// Initializes the Accounts struct with a given list of accounts.
@@ -602,30 +597,22 @@ impl Accounts {
     }
 
     pub fn commit_chunk(
-        &mut self,
+        &self,
         txn: &mut WriteTransaction,
         chunk: TrieChunk,
         expected_hash: Blake2bHash,
+        start_key: KeyNibbles,
     ) -> Result<(), AccountError> {
-        let keys_end = chunk.keys_end.clone();
-        self.tree.put_chunk(
-            txn,
-            self.keys_end.clone().unwrap_or(KeyNibbles::ROOT),
-            chunk,
-            expected_hash,
-        )?;
-        self.keys_end = keys_end;
+        self.tree.put_chunk(txn, start_key, chunk, expected_hash)?;
         Ok(())
     }
 
     pub fn revert_chunk(
-        &mut self,
-        _txn: &mut WriteTransaction,
-        _chunk: TrieChunk,
-        _expected_hash: Blake2bHash,
+        &self,
+        txn: &mut WriteTransaction,
+        start_key: KeyNibbles,
     ) -> Result<(), AccountError> {
-        // PITODO: implement revert on trie and think about what we need to do that
-        // PITODO: update self.keys_end
+        self.tree.remove_chunk(txn, start_key)?;
         Ok(())
     }
 

@@ -189,15 +189,15 @@ impl<N: Network, TReq: RequestComponent<N>> LiveSync<N> for BlockLiveSync<N, TRe
     }
 
     fn add_peer(&mut self, peer_id: N::PeerId) {
-        self.request_component_mut().add_peer(peer_id);
+        self.block_queue.add_peer(peer_id);
     }
 
     fn num_peers(&self) -> usize {
-        self.block_queue.request_component().num_peers()
+        self.block_queue.num_peers()
     }
 
     fn peers(&self) -> Vec<N::PeerId> {
-        self.block_queue.request_component().peers()
+        self.block_queue.peers()
     }
 }
 
@@ -221,20 +221,8 @@ impl<N: Network, TReq: RequestComponent<N>> BlockLiveSync<N, TReq> {
         }
     }
 
-    pub fn num_peers(&self) -> usize {
-        self.block_queue.request_component().num_peers()
-    }
-
     pub fn accepted_block_announcements(&self) -> usize {
         self.accepted_announcements
-    }
-
-    pub fn request_component(&self) -> &TReq {
-        self.block_queue.request_component()
-    }
-
-    pub fn request_component_mut(&mut self) -> &mut TReq {
-        self.block_queue.request_component_mut()
     }
 
     fn poll_block_queue(
