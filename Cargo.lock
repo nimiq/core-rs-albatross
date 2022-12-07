@@ -2656,6 +2656,7 @@ dependencies = [
  "nimiq-genesis-builder",
  "nimiq-hash",
  "nimiq-keys",
+ "nimiq-light-blockchain",
  "nimiq-macros",
  "nimiq-mempool",
  "nimiq-nano-primitives",

@@ -8,6 +8,7 @@ use nimiq_blockchain::{Blockchain, PushError, PushResult};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_hash::Blake2bHash;
+use nimiq_light_blockchain::LightBlockchain;
 use nimiq_network_interface::network::{MsgAcceptance, Network};
 use parking_lot::Mutex;
 use pin_project::pin_project;
@@ -209,7 +210,9 @@ impl<N: Network, TReq: RequestComponent<N>> BlockLiveSync<N, TReq> {
                                     BlockchainProxy::Full(blockchain) => {
                                         Blockchain::push(blockchain.upgradable_read(), block)
                                     }
-                                    BlockchainProxy::Light(_) => todo!(),
+                                    BlockchainProxy::Light(blockchain) => {
+                                        LightBlockchain::push(blockchain.upgradable_read(), block)
+                                    }
                                 }
                             })
                             .await

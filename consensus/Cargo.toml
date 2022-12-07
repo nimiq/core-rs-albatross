@@ -37,6 +37,7 @@ nimiq-database = { path = "../database" }
 nimiq-genesis = { path = "../genesis" }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
+nimiq-light-blockchain = { path = "../light-blockchain" }
 nimiq-macros = { path = "../macros" }
 nimiq-mempool = { path = "../mempool" }
 nimiq-nano-primitives = { path = "../nano-primitives" }
