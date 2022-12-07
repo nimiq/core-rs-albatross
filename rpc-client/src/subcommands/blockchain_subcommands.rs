@@ -116,6 +116,7 @@ pub enum BlockchainCommand {
     /// and that were disabled.
     SlashedSlots {
         /// To retrieve the previously slashed slots instead.
+        #[clap(short, long)]
         previous_slashed: bool,
     },
 

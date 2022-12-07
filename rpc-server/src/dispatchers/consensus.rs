@@ -735,10 +735,10 @@ impl ConsensusInterface for ConsensusDispatcher {
 
     /// Returns a serialized `new_validator` transaction. You need to provide the address of a basic
     /// account (the sender wallet) to pay the transaction fee and the validator deposit.
-    ///  Since JSON doesn't have a primitive for Option (it just has the null primitive), we can't
+    /// Since JSON doesn't have a primitive for Option (it just has the null primitive), we can't
     /// have a double Option. So we use the following work-around for the signal data:
-    ///  "" = Set the signal data field to None.
-    ///  "0x29a4b..." = Set the signal data field to Some(0x29a4b...).
+    /// "" = Set the signal data field to None.
+    /// "0x29a4b..." = Set the signal data field to Some(0x29a4b...).
     async fn create_new_validator_transaction(
         &mut self,
         sender_wallet: Address,
@@ -787,10 +787,10 @@ impl ConsensusInterface for ConsensusDispatcher {
 
     /// Sends a `new_validator` transaction to the network. You need to provide the address of a basic
     /// account (the sender wallet) to pay the transaction fee and the validator deposit.
-    ///  Since JSON doesn't have a primitive for Option (it just has the null primitive), we can't
+    /// Since JSON doesn't have a primitive for Option (it just has the null primitive), we can't
     /// have a double Option. So we use the following work-around for the signal data:
-    ///  "" = Set the signal data field to None.
-    ///  "0x29a4b..." = Set the signal data field to Some(0x29a4b...).
+    /// "" = Set the signal data field to None.
+    /// "0x29a4b..." = Set the signal data field to Some(0x29a4b...).
     async fn send_new_validator_transaction(
         &mut self,
         sender_wallet: Address,
@@ -820,11 +820,11 @@ impl ConsensusInterface for ConsensusDispatcher {
 
     /// Returns a serialized `update_validator` transaction. You need to provide the address of a basic
     /// account (the sender wallet) to pay the transaction fee.
-    ///  Since JSON doesn't have a primitive for Option (it just has the null primitive), we can't
+    /// Since JSON doesn't have a primitive for Option (it just has the null primitive), we can't
     /// have a double Option. So we use the following work-around for the signal data:
-    ///  null = No change in the signal data field.
-    ///  "" = Change the signal data field to None.
-    ///  "0x29a4b..." = Change the signal data field to Some(0x29a4b...).
+    /// null = No change in the signal data field.
+    /// "" = Change the signal data field to None.
+    /// "0x29a4b..." = Change the signal data field to Some(0x29a4b...).
     async fn create_update_validator_transaction(
         &mut self,
         sender_wallet: Address,

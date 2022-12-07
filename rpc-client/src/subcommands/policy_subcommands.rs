@@ -202,16 +202,13 @@ impl HandleSubcommand for PolicyCommand {
             PolicyCommand::MacroBlockAfter { block_number } => {
                 println!(
                     "{:#?}",
-                    client.policy.get_election_block_after(block_number).await?
+                    client.policy.get_macro_block_after(block_number).await?
                 );
             }
             PolicyCommand::MacroBlockBefore { block_number } => {
                 println!(
                     "{:#?}",
-                    client
-                        .policy
-                        .get_election_block_before(block_number)
-                        .await?
+                    client.policy.get_macro_block_before(block_number).await?
                 );
             }
             PolicyCommand::LastMacroBlock { block_number } => {

@@ -33,9 +33,8 @@ use nimiq_validator_network::network_impl::ValidatorNetworkImpl;
 #[cfg(feature = "wallet")]
 use nimiq_wallet::WalletStore;
 
-use nimiq_zkp_component::zkp_component::{
-    ZKPComponent as AbstractZKPComponent, ZKPComponentProxy as AbstractZKPComponentProxy,
-};
+use nimiq_zkp_component::zkp_component::ZKPComponent as AbstractZKPComponent;
+use nimiq_zkp_component::zkp_component::ZKPComponentProxy as AbstractZKPComponentProxy;
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 
@@ -77,7 +76,7 @@ pub(crate) struct ClientInner {
     #[cfg(feature = "validator")]
     validator: Option<ValidatorProxy>,
 
-    /// Wallet that stores keypairs for transaction signing
+    /// Wallet that stores key pairs for transaction signing
     #[cfg(feature = "wallet")]
     wallet_store: Arc<WalletStore>,
 

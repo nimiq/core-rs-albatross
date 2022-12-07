@@ -34,9 +34,11 @@ pub enum ValidatorCommand {
     /// prior to this command.
     /// The sender_wallet must be unlocked prior to this command.
     /// Since JSON doesn't have a primitive for Option (it just has the null primitive), we can't
-    /// have a double Option. So we use the following work-around for the signal data:
-    ///  "" = Set the signal data field to None.
-    ///  "0x29a4b..." = Set the signal data field to Some(0x29a4b...).
+    /// have a double Option. This becomes an issue when creating an update_validator transaction.
+    /// Instead we use the following work-around. We define the empty String to be None. So, in
+    /// this situation we have:
+    /// "" = None
+    /// "0x29a4b..." = Some(hash)
     CreateNewValidator {
         /// The fee will be payed from this address. This address must be already unlocked.
         #[clap(long)]
@@ -68,11 +70,11 @@ pub enum ValidatorCommand {
 
     /// Sends a transaction to the network to update this validator. You need to provide the address of a basic
     /// account (the sender wallet) to pay the transaction fee and the sender wallet must be unlocked prior to this command.
-    ///  Since JSON doesn't have a primitive for Option (it just has the null primitive), we can't
+    /// Since JSON doesn't have a primitive for Option (it just has the null primitive), we can't
     /// have a double Option. So we use the following work-around for the signal data:
-    ///  null = No change in the signal data field.
-    ///  "" = Change the signal data field to None.
-    ///  "0x29a4b..." = Change the signal data field to Some(0x29a4b...).
+    /// null = No change in the signal data field.
+    /// "" = Change the signal data field to None.
+    /// "0x29a4b..." = Change the signal data field to Some(0x29a4b...).
     UpdateValidator {
         /// The fee will be payed from this address. This wallet must be already unlocked.
         #[clap(long)]
@@ -99,7 +101,7 @@ pub enum ValidatorCommand {
     },
 
     /// Sends a transaction to inactivate this validator. In order to avoid having the validator reactivated soon after
-    /// this transacation takes effect, use the command set-auto-reactivate-validator to make sure the automatic reactivation
+    /// this transaction takes effect, use the command set-auto-reactivate-validator to make sure the automatic reactivation
     /// configuration is turned off.
     /// The sender wallet must be unlocked prior to this command.
     InactivateValidator {
@@ -170,7 +172,7 @@ impl HandleSubcommand for ValidatorCommand {
                     .validator
                     .set_automatic_reactivation(automatic_reactivate)
                     .await?;
-                println!("Auto reacivate set to {}", automatic_reactivate);
+                println!("Auto reactivate set to {}", automatic_reactivate);
             }
 
             ValidatorCommand::CreateNewValidator {

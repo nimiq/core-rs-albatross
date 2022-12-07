@@ -61,6 +61,8 @@ pub fn initialize_rpc_server(
     }
     dispatcher.add(wallet_dispatcher);
 
+    dispatcher.add(ZKPComponentDispatcher::new(client.zkp_component()));
+
     Ok(Server::new(
         Config {
             bind_to: (config.bind_to.unwrap_or_else(default_bind), config.port).into(),

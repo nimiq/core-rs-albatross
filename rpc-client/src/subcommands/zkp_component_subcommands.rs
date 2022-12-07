@@ -8,16 +8,16 @@ use crate::Client;
 use super::accounts_subcommands::HandleSubcommand;
 
 #[derive(Debug, Parser)]
-pub enum ZKProverCommand {
+pub enum ZKPComponentCommand {
     /// Returns the current zkp state.
-    ZKPState {},
+    ZkpState {},
 }
 
 #[async_trait]
-impl HandleSubcommand for ZKProverCommand {
+impl HandleSubcommand for ZKPComponentCommand {
     async fn handle_subcommand(self, mut client: Client) -> Result<(), Error> {
         match self {
-            ZKProverCommand::ZKPState {} => {
+            ZKPComponentCommand::ZkpState {} => {
                 println!("{:?}", client.zkp_component.get_zkp_state().await?);
             }
         }

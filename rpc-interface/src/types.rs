@@ -905,7 +905,7 @@ pub fn is_of_log_type_and_related_to_addresses(
     addresses: &Vec<Address>,
     log_types: &Vec<LogType>,
 ) -> bool {
-    // If addresses are empty, it tries to find a matchinf log_type and early return. Otherwise, it will finish and return false.
+    // If addresses are empty, it tries to find a matching log_types and early return. Otherwise, it will finish and return false.
     if addresses.is_empty() {
         for log_type in log_types {
             if log_type.eq(&LogType::with_log(log)) {

@@ -46,7 +46,7 @@ enum Command {
     #[clap(name = "tx", flatten)]
     Transaction(TransactionCommand),
 
-    /// Shows local mempool information and pushs tranactions to the mempool.
+    /// Shows local mempool information and push transactions to the mempool.
     #[clap(flatten)]
     Mempool(MempoolCommand),
 
@@ -55,13 +55,13 @@ enum Command {
     Network(NetworkCommand),
 
     /// Shows and modifies validator information.
-    /// Create, signs and send transactions reffering to the local validator.
+    /// Create, signs and send transactions referring to the local validator.
     #[clap(flatten)]
     Validator(ValidatorCommand),
 
     /// Shows the zkp information.
     #[clap(flatten)]
-    ZKPComponent(ZKProverCommand),
+    Zkp(ZKPComponentCommand),
 }
 
 impl Command {
@@ -74,7 +74,7 @@ impl Command {
             Command::Network(command) => command.handle_subcommand(client).await,
             Command::Mempool(command) => command.handle_subcommand(client).await,
             Command::Validator(command) => command.handle_subcommand(client).await,
-            Command::ZKPComponent(command) => command.handle_subcommand(client).await,
+            Command::Zkp(command) => command.handle_subcommand(client).await,
         }
     }
 }

@@ -640,7 +640,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         let stream = self.subscribe_for_head_block_hash().await?;
 
         // Uses the stream to receive hashes of blocks and then requests the actual block.
-        // If the block was reverted in between these steps, the stream won't emmit any event.
+        // If the block was reverted in between these steps, the stream won't emit any event.
         Ok(stream
             .filter_map(move |rpc_result| {
                 let blockchain_rg = blockchain.read();
@@ -655,7 +655,7 @@ impl BlockchainInterface for BlockchainDispatcher {
             .boxed())
     }
 
-    /// Subscribes to new block events (only retrieves the blockhash).
+    /// Subscribes to new block events (only retrieves the block hash).
     #[stream]
     async fn subscribe_for_head_block_hash(
         &mut self,
@@ -740,7 +740,7 @@ impl BlockchainInterface for BlockchainDispatcher {
                                     )
                                 });
                                 // Since each TransactionLog has its own vec of logs, we iterate over each tx_logs and filter their logs,
-                                // if a tx_log has no logs after filtering, it will be filtered out completly.
+                                // if a tx_log has no logs after filtering, it will be filtered out completely.
                                 let tx_logs: Vec<TransactionLog> = tx_logs
                                     .into_iter()
                                     .filter_map(|mut tx_log| {
@@ -758,7 +758,7 @@ impl BlockchainInterface for BlockchainDispatcher {
                                     .collect();
 
                                 // If this block has no transaction logs or inherent logs of interest, we return None. Otherwise, we return the filtered BlockLog.
-                                // This way the stream only emmits an event if a block has at least one log fulfilling the specified criteria.
+                                // This way the stream only emits an event if a block has at least one log fulfilling the specified criteria.
                                 if !inherent_logs.is_empty() || !tx_logs.is_empty() {
                                     Some(RPCData::new(
                                         BlockLog::AppliedBlock {

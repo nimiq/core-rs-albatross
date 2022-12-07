@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 
 use nimiq_network_libp2p::Network;
+use nimiq_rpc_interface::types::RPCResult;
 use nimiq_rpc_interface::types::ZKPState;
 use nimiq_rpc_interface::zkp_component::ZKPComponentInterface;
 use nimiq_zkp_component::zkp_component::ZKPComponentProxy;
@@ -23,9 +24,7 @@ impl ZKPComponentInterface for ZKPComponentDispatcher {
     type Error = Error;
 
     /// Returns the peer ID for our local peer.
-    async fn get_zkp_state(&mut self) -> Result<ZKPState, Self::Error> {
-        Ok(ZKPState::with_zkp_state(
-            &self.zkp_component.get_zkp_state(),
-        ))
+    async fn get_zkp_state(&mut self) -> RPCResult<ZKPState, (), Self::Error> {
+        Ok(ZKPState::with_zkp_state(&self.zkp_component.get_zkp_state()).into())
     }
 }
