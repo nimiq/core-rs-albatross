@@ -80,11 +80,16 @@ impl AbstractBlockchain for LightBlockchain {
 
     fn get_slot_owner_at(
         &self,
-        _block_number: u32,
-        _offset: u32,
+        block_number: u32,
+        offset: u32,
         _txn_option: Option<&Transaction>,
     ) -> Result<(Validator, u16), BlockchainError> {
-        todo!() // IPTODO
+        let vrf_entropy = self
+            .get_block_at(block_number - 1, false, None)?
+            .seed()
+            .entropy();
+
+        self.get_proposer_at(block_number, offset, vrf_entropy)
     }
 
     fn notifier_as_stream(&self) -> BoxStream<'static, BlockchainEvent> {

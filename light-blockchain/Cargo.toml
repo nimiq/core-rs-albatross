@@ -17,6 +17,7 @@ tokio-stream = { version = "0.1", features = ["sync"] }
 nimiq-account = { path = "../primitives/account" }
 nimiq-block = { path = "../primitives/block" }
 nimiq-blockchain = { path = "../blockchain" }
+nimiq-collections = { path = "../collections" }
 nimiq-database = { path = "../database" }
 nimiq-genesis = { path = "../genesis" }
 nimiq-hash = { path = "../hash" }
@@ -24,6 +25,7 @@ nimiq-nano-zkp = { path = "../nano-zkp" }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }
 nimiq-trie = { path = "../primitives/trie" }
 nimiq-utils = { path = "../utils", features = ["time"] }
+nimiq-vrf = { path = "../vrf" }
 
 [dev-dependencies]
 nimiq-test-log = { path = "../test-log" }
