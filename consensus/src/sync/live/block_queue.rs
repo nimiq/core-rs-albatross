@@ -195,12 +195,8 @@ impl<N: Network, TReq: RequestComponent<N>> BlockQueue<N, TReq> {
         self.request_component.peers()
     }
 
-    pub fn request_component(&self) -> &TReq {
-        &self.request_component
-    }
-
-    pub fn request_component_mut(&mut self) -> &mut TReq {
-        &mut self.request_component
+    pub fn add_peer(&self, peer_id: N::PeerId) {
+        self.request_component.add_peer(peer_id)
     }
 
     /// Handles a block announcement.

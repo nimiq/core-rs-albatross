@@ -26,7 +26,21 @@ use super::{
     BlockQueueConfig,
 };
 
-pub(crate) type ChunkAndId<N> = (TrieChunk, <N as Network>::PeerId);
+pub struct ChunkAndId<N: Network> {
+    pub chunk: TrieChunk,
+    pub start_key: KeyNibbles,
+    pub peer_id: N::PeerId,
+}
+
+impl<N: Network> ChunkAndId<N> {
+    pub fn new(chunk: TrieChunk, start_key: KeyNibbles, peer_id: N::PeerId) -> Self {
+        Self {
+            chunk,
+            start_key,
+            peer_id,
+        }
+    }
+}
 
 /// The max number of chunk requests per peer.
 pub const MAX_REQUEST_RESPONSE_CHUNKS: u32 = 100;
@@ -35,17 +49,17 @@ pub const MAX_REQUEST_RESPONSE_CHUNKS: u32 = 100;
 /// The request specifies a limit on the number of nodes in the chunk.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestChunk {
-    start_key: KeyNibbles,
-    limit: u32,
+    pub start_key: KeyNibbles,
+    pub limit: u32,
 }
 
 /// The response for trie chunk requests.
 /// In addition to the chunk, we also return the block hash and number.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResponseChunk {
-    block_number: u32,
-    block_hash: Blake2bHash,
-    chunk: TrieChunk,
+    pub block_number: u32,
+    pub block_hash: Blake2bHash,
+    pub chunk: TrieChunk,
 }
 
 impl RequestCommon for RequestChunk {
@@ -138,6 +152,25 @@ pub struct StateQueue<N: Network, TReq: RequestComponent<N>> {
 }
 
 impl<N: Network, TReq: RequestComponent<N>> StateQueue<N, TReq> {
+    pub fn num_peers(&self) -> usize {
+        self.block_queue.num_peers()
+    }
+
+    pub fn peers(&self) -> Vec<N::PeerId> {
+        self.block_queue.peers()
+    }
+
+    pub fn add_peer(&self, peer_id: N::PeerId) {
+        self.block_queue.add_peer(peer_id)
+    }
+
+    pub fn add_block_stream<S>(&mut self, block_stream: S)
+    where
+        S: Stream<Item = (Block, N::PeerId, Option<N::PubsubId>)> + Send + 'static,
+    {
+        self.block_queue.add_block_stream(block_stream)
+    }
+
     pub fn remove_invalid_blocks(&mut self, invalid_blocks: &mut HashSet<Blake2bHash>) {
         // First we remove invalid blocks from the blockqueue.
         self.block_queue.remove_invalid_blocks(invalid_blocks);
@@ -166,6 +199,14 @@ impl<N: Network, TReq: RequestComponent<N>> StateQueue<N, TReq> {
         self.start_key = ChunkRequestState::Reset;
     }
 
+    pub fn on_block_processed(&mut self, hash: &Blake2bHash) {
+        self.block_queue.on_block_processed(hash)
+    }
+
+    pub fn buffered_blocks_len(&self) -> usize {
+        self.block_queue.buffered_blocks_len()
+    }
+
     /// Requests a chunk from the peers starting at the starting key from this queue.
     /// If no starting key is supplied we start at the missing range from the blockchain.
     /// If no starting key is supplied and the trie is already complete no request is being made.
@@ -191,13 +232,18 @@ impl<N: Network, TReq: RequestComponent<N>> StateQueue<N, TReq> {
         false
     }
 
-    fn insert_chunk_into_buffer(&mut self, response: ResponseChunk, peer_id: N::PeerId) {
+    fn insert_chunk_into_buffer(
+        &mut self,
+        response: ResponseChunk,
+        start_key: KeyNibbles,
+        peer_id: N::PeerId,
+    ) {
         self.buffer
             .entry(response.block_number)
             .or_default()
             .entry(response.block_hash)
             .or_default()
-            .push((response.chunk, peer_id));
+            .push(ChunkAndId::new(response.chunk, start_key, peer_id));
         self.buffer_size += 1;
     }
 
@@ -205,6 +251,7 @@ impl<N: Network, TReq: RequestComponent<N>> StateQueue<N, TReq> {
     fn on_chunk_received(
         &mut self,
         chunk: ResponseChunk,
+        start_key: KeyNibbles,
         peer_id: N::PeerId,
     ) -> Option<QueuedStateChunks<N>> {
         let blockchain = self.blockchain.read();
@@ -229,7 +276,11 @@ impl<N: Network, TReq: RequestComponent<N>> StateQueue<N, TReq> {
 
             if self.network.has_peer(peer_id) {
                 self.chunk_request_component.remove_peer(&peer_id);
-                return Some(QueuedStateChunks::TooDistantPast((chunk.chunk, peer_id)));
+                return Some(QueuedStateChunks::TooDistantPast(ChunkAndId::new(
+                    chunk.chunk,
+                    start_key,
+                    peer_id,
+                )));
             }
         } else if chunk.block_number > current_block_height + self.config.window_ahead_max {
             log::warn!(
@@ -240,7 +291,11 @@ impl<N: Network, TReq: RequestComponent<N>> StateQueue<N, TReq> {
 
             if self.network.has_peer(peer_id) {
                 self.chunk_request_component.remove_peer(&peer_id);
-                return Some(QueuedStateChunks::TooFarFuture((chunk.chunk, peer_id)));
+                return Some(QueuedStateChunks::TooFarFuture(ChunkAndId::new(
+                    chunk.chunk,
+                    start_key,
+                    peer_id,
+                )));
             }
         } else if self.buffer_size >= self.config.buffer_max {
             log::warn!(
@@ -258,8 +313,9 @@ impl<N: Network, TReq: RequestComponent<N>> StateQueue<N, TReq> {
         } else if chunk.block_hash == current_block_hash {
             // Immediately return chunks for the current head blockchain.
             self.set_start_key(&chunk.chunk.keys_end);
-            return Some(QueuedStateChunks::HeadStateChunk(vec![(
+            return Some(QueuedStateChunks::HeadStateChunk(vec![ChunkAndId::new(
                 chunk.chunk,
+                start_key,
                 peer_id,
             )]));
         } else if contains_block {
@@ -268,7 +324,7 @@ impl<N: Network, TReq: RequestComponent<N>> StateQueue<N, TReq> {
         } else {
             // Chunk is inside the buffer window, put it in the buffer.
             self.set_start_key(&chunk.chunk.keys_end);
-            self.insert_chunk_into_buffer(chunk, peer_id);
+            self.insert_chunk_into_buffer(chunk, start_key, peer_id);
         }
         None
     }
@@ -329,7 +385,7 @@ impl<N: Network, TReq: RequestComponent<N>> StateQueue<N, TReq> {
         Some(QueuedStateChunks::StateChunk(queued_block, chunks))
     }
 
-    fn get_block_chunks(&mut self, block: &Block) -> Vec<(TrieChunk, N::PeerId)> {
+    fn get_block_chunks(&mut self, block: &Block) -> Vec<ChunkAndId<N>> {
         let mut chunks = vec![];
         let mut is_empty = false;
         if let Some(blocks) = self.buffer.get_mut(&block.block_number()) {
@@ -395,8 +451,8 @@ impl<N: Network, TReq: RequestComponent<N>> Stream for StateQueue<N, TReq> {
         // 1. Receive chunks from ChunkRequestComponent.
         loop {
             match self.chunk_request_component.poll_next_unpin(cx) {
-                Poll::Ready(Some((chunk, peer_id))) => {
-                    if let Some(state_chunks) = self.on_chunk_received(chunk, peer_id) {
+                Poll::Ready(Some((chunk, start_key, peer_id))) => {
+                    if let Some(state_chunks) = self.on_chunk_received(chunk, start_key, peer_id) {
                         return Poll::Ready(Some(state_chunks));
                     }
                 }

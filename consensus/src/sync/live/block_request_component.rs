@@ -20,7 +20,7 @@ use crate::{
 pub trait RequestComponent<N: Network>:
     Stream<Item = BlockRequestComponentEvent> + Unpin + Send
 {
-    fn add_peer(&mut self, peer_id: N::PeerId);
+    fn add_peer(&self, peer_id: N::PeerId);
 
     fn request_missing_blocks(
         &mut self,
@@ -32,7 +32,7 @@ pub trait RequestComponent<N: Network>:
 
     fn peers(&self) -> Vec<N::PeerId>;
 
-    fn take_peer(&mut self, peer_id: &N::PeerId) -> Option<N::PeerId>;
+    fn take_peer(&self, peer_id: &N::PeerId) -> Option<N::PeerId>;
 }
 
 #[derive(Debug)]
@@ -40,14 +40,17 @@ pub enum BlockRequestComponentEvent {
     ReceivedBlocks(Vec<Block>),
 }
 
-/// Peer Tracking & Request Component
+/// Peer Tracking & Block Request Component.
+/// We use this component to request missing blocks from peers.
 ///
-/// - Has sync queue
-/// - Polls synced peers from history sync
-/// - Puts peers to sync queue
-/// - Removal happens automatically by the SyncQueue
+/// This component has:
 ///
-/// Outside has a request blocks method, which doesn’t return the blocks.
+/// - The sync queue which manages the requests and responses.
+/// - The peers list.
+/// - The network stream of events used to remove the peers that have left.  
+/// - Weather we include the body of a block.
+///
+/// The public interface allows to request blocks, which are not immediately returned.
 /// The blocks instead are returned by polling the component.
 pub struct BlockRequestComponent<N: Network + 'static> {
     sync_queue: SyncQueue<N, (Blake2bHash, Vec<Blake2bHash>, bool), Vec<Block>>, // requesting missing blocks from peers
@@ -96,7 +99,7 @@ impl<N: Network + 'static> BlockRequestComponent<N> {
         }
     }
 
-    pub async fn request_missing_blocks_from_peer(
+    async fn request_missing_blocks_from_peer(
         network: Arc<N>,
         peer_id: N::PeerId,
         target_block_hash: Blake2bHash,
@@ -118,7 +121,7 @@ impl<N: Network + 'static> BlockRequestComponent<N> {
 }
 
 impl<N: 'static + Network> RequestComponent<N> for BlockRequestComponent<N> {
-    fn add_peer(&mut self, peer_id: N::PeerId) {
+    fn add_peer(&self, peer_id: N::PeerId) {
         self.peers.write().add_peer(peer_id);
     }
 
@@ -142,7 +145,7 @@ impl<N: 'static + Network> RequestComponent<N> for BlockRequestComponent<N> {
         self.peers.read().peers().clone()
     }
 
-    fn take_peer(&mut self, peer_id: &N::PeerId) -> Option<N::PeerId> {
+    fn take_peer(&self, peer_id: &N::PeerId) -> Option<N::PeerId> {
         if self.peers.write().remove_peer(peer_id) {
             return Some(*peer_id);
         }
