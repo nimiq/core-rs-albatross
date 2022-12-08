@@ -2911,6 +2911,7 @@ dependencies = [
  "nimiq-jsonrpc-core",
  "nimiq-jsonrpc-server",
  "nimiq-keys",
+ "nimiq-light-blockchain",
  "nimiq-log",
  "nimiq-mempool",
  "nimiq-metrics-server",
@@ -2964,6 +2965,17 @@ dependencies = [
  "rand 0.8.5",
  "thiserror",
  "tokio-stream",
+]
+
+[[package]]
+name = "nimiq-light-client"
+version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "nimiq-lib",
+ "tokio",
+ "tokio-metrics",
+ "tracing",
 ]
 
 [[package]]

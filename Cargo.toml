@@ -19,6 +19,7 @@ members = [
   "keys",
   "lib",
   "light-blockchain",
+  "light-client",
   "log",
   "macros",
   "mempool",

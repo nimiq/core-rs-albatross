@@ -71,22 +71,20 @@ impl ChainStore {
         // Get the block hash.
         let hash = chain_info.head.hash();
 
-        // Delete the body and the justification, if they exist. We only store headers in the ChainStore.
-        if chain_info.head.body().is_some() || chain_info.head.justification().is_some() {
-            match &mut chain_info.head {
-                Block::Macro(ref mut block) => {
-                    block.body = None;
-                    block.justification = None
-                }
-                Block::Micro(ref mut block) => {
-                    block.body = None;
-                    block.justification = None
-                }
+        // We only store in the ChainStore:
+        // - Micro blocks: Headers.
+        // - Macro blocks: Headers and bodies.
+        // Note that in both cases we don't store justifications so they are emptied out
+        match &mut chain_info.head {
+            Block::Macro(ref mut block) => {
+                assert!(block.body.is_some());
+                block.justification = None;
+            }
+            Block::Micro(ref mut block) => {
+                assert!(block.body.is_none());
+                block.justification = None;
             }
         }
-
-        assert!(chain_info.head.body().is_none());
-        assert!(chain_info.head.justification().is_none());
 
         // Add the chain info to the chain_db. If there was already a chain info at the same hash, it
         // will return an Option with the previous chain info.
@@ -353,7 +351,7 @@ impl ChainStore {
 
 #[cfg(test)]
 mod tests {
-    use nimiq_block::{MicroBlock, MicroBody, MicroHeader, MicroJustification};
+    use nimiq_block::{MicroBlock, MicroHeader, MicroJustification};
     use nimiq_test_log::test;
 
     use rand::{random, RngCore};
@@ -380,10 +378,7 @@ mod tests {
                 history_root: hash_1,
             },
             justification: Some(MicroJustification::Micro(Default::default())),
-            body: Some(MicroBody {
-                fork_proofs: vec![],
-                transactions: vec![],
-            }),
+            body: None,
         });
 
         let mut data = [0u8; 32];
@@ -403,10 +398,7 @@ mod tests {
                 history_root: hash_2,
             },
             justification: Some(MicroJustification::Micro(Default::default())),
-            body: Some(MicroBody {
-                fork_proofs: vec![],
-                transactions: vec![],
-            }),
+            body: None,
         });
 
         // Create chain store.

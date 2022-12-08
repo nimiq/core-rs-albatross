@@ -8,6 +8,7 @@ use parking_lot::{Mutex, RwLock};
 
 use nimiq_block::Block;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainConfig};
+use nimiq_light_blockchain::LightBlockchain;
 
 use nimiq_consensus::{
     sync::syncer_proxy::SyncerProxy, Consensus as AbstractConsensus,
@@ -32,12 +33,12 @@ use nimiq_validator_network::network_impl::ValidatorNetworkImpl;
 #[cfg(feature = "wallet")]
 use nimiq_wallet::WalletStore;
 
-use nimiq_zkp_component::zkp_component::ZKPComponent as AbstractZKPComponent;
-use nimiq_zkp_component::zkp_component::ZKPComponentProxy as AbstractZKPComponentProxy;
+use nimiq_zkp_component::zkp_component::{
+    ZKPComponent as AbstractZKPComponent, ZKPComponentProxy as AbstractZKPComponentProxy,
+};
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 
-use crate::config::config::SyncMode::History;
 use crate::config::config::{ClientConfig, SyncMode};
 use crate::error::Error;
 
@@ -215,56 +216,81 @@ impl ClientInner {
             config.database,
         )?;
 
+        let bls_cache = Arc::new(Mutex::new(PublicKeyCache::new(
+            Policy::BLS_CACHE_MAX_CAPACITY,
+        )));
+
         let mut blockchain_config = BlockchainConfig {
             max_epochs_stored: config.consensus.max_epochs_stored,
             ..Default::default()
         };
 
-        if config.consensus.sync_mode == History {
-            blockchain_config.keep_history = true;
-        }
-
-        let blockchain = Arc::new(RwLock::new(
-            Blockchain::new(
-                environment.clone(),
-                blockchain_config,
-                config.network_id,
-                time,
-            )
-            .unwrap(),
-        ));
+        let (blockchain_proxy, syncer_proxy, zkp_component) = match config.consensus.sync_mode {
+            SyncMode::History => {
+                blockchain_config.keep_history = true;
+                let blockchain = Arc::new(RwLock::new(
+                    Blockchain::new(
+                        environment.clone(),
+                        blockchain_config,
+                        config.network_id,
+                        time,
+                    )
+                    .unwrap(),
+                ));
+                let blockchain_proxy = BlockchainProxy::from(&blockchain);
+                let zkp_component = ZKPComponent::new(
+                    blockchain_proxy.clone(),
+                    Arc::clone(&network),
+                    config.zkp.prover_active,
+                    None,
+                    environment.clone(),
+                    config.zkp.setup_keys_path,
+                )
+                .await;
+                let syncer = SyncerProxy::new_history(
+                    blockchain_proxy.clone(),
+                    Arc::clone(&network),
+                    bls_cache,
+                    network_events,
+                )
+                .await;
+                (blockchain_proxy, syncer, zkp_component)
+            }
+            SyncMode::Full => todo!(),
+            SyncMode::Light => {
+                let blockchain = Arc::new(RwLock::new(LightBlockchain::new(config.network_id)));
+                let blockchain_proxy = BlockchainProxy::from(&blockchain);
+                let zkp_component = ZKPComponent::new(
+                    blockchain_proxy.clone(),
+                    Arc::clone(&network),
+                    config.zkp.prover_active,
+                    None,
+                    environment.clone(),
+                    config.zkp.setup_keys_path,
+                )
+                .await;
+                let syncer = SyncerProxy::new_light(
+                    blockchain_proxy.clone(),
+                    Arc::clone(&network),
+                    bls_cache,
+                    Arc::new(zkp_component.proxy()),
+                    network_events,
+                )
+                .await;
+                (blockchain_proxy, syncer, zkp_component)
+            }
+        };
 
         // Open wallet
         #[cfg(feature = "wallet")]
         let wallet_store = Arc::new(WalletStore::new(environment.clone()));
 
-        let blockchain_proxy = BlockchainProxy::from(&blockchain);
-        let zkp_component = ZKPComponent::new(
-            blockchain_proxy.clone(),
-            Arc::clone(&network),
-            config.zkp.prover_active,
-            None,
-            environment.clone(),
-            config.zkp.setup_keys_path,
-        )
-        .await;
-
         // Initialize consensus
-        let bls_cache = Arc::new(Mutex::new(PublicKeyCache::new(
-            Policy::BLS_CACHE_MAX_CAPACITY,
-        )));
-        let syncer = SyncerProxy::new_history(
-            blockchain_proxy.clone(),
-            Arc::clone(&network),
-            bls_cache,
-            network_events,
-        )
-        .await;
         let consensus = Consensus::new(
             environment.clone(),
             blockchain_proxy.clone(),
             Arc::clone(&network),
-            syncer,
+            syncer_proxy,
             config.consensus.min_peers,
             zkp_component.proxy(),
         );
@@ -272,41 +298,46 @@ impl ClientInner {
         #[cfg(feature = "validator")]
         let (validator, validator_proxy) = match config.validator {
             Some(validator_config) => {
-                // Load validator address
-                let validator_address = validator_config.validator_address;
+                if let BlockchainProxy::Full(ref blockchain) = blockchain_proxy {
+                    // Load validator address
+                    let validator_address = validator_config.validator_address;
 
-                // Load validator address
-                let automatic_reactivate = validator_config.automatic_reactivate;
+                    // Load validator address
+                    let automatic_reactivate = validator_config.automatic_reactivate;
 
-                // Load signing key (before we give away ownership of the storage config)
-                let signing_key = config.storage.signing_keypair()?;
+                    // Load signing key (before we give away ownership of the storage config)
+                    let signing_key = config.storage.signing_keypair()?;
 
-                // Load validator key (before we give away ownership of the storage config)
-                let voting_key = config.storage.voting_keypair()?;
+                    // Load validator key (before we give away ownership of the storage config)
+                    let voting_key = config.storage.voting_keypair()?;
 
-                // Load fee key (before we give away ownership of the storage config)
-                let fee_key = config.storage.fee_keypair()?;
+                    // Load fee key (before we give away ownership of the storage config)
+                    let fee_key = config.storage.fee_keypair()?;
 
-                let validator_network = Arc::new(ValidatorNetworkImpl::new(Arc::clone(&network)));
+                    let validator_network =
+                        Arc::new(ValidatorNetworkImpl::new(Arc::clone(&network)));
 
-                let validator = Validator::new(
-                    &consensus,
-                    Arc::clone(&blockchain),
-                    validator_network,
-                    validator_address,
-                    automatic_reactivate,
-                    signing_key,
-                    voting_key,
-                    fee_key,
-                    config.mempool,
-                );
+                    let validator = Validator::new(
+                        &consensus,
+                        Arc::clone(blockchain),
+                        validator_network,
+                        validator_address,
+                        automatic_reactivate,
+                        signing_key,
+                        voting_key,
+                        fee_key,
+                        config.mempool,
+                    );
 
-                // Use the validator's mempool as TransactionVerificationCache in the blockchain.
-                blockchain.write().tx_verification_cache =
-                    Arc::<Mempool>::clone(&validator.mempool);
+                    // Use the validator's mempool as TransactionVerificationCache in the blockchain.
+                    blockchain.write().tx_verification_cache =
+                        Arc::<Mempool>::clone(&validator.mempool);
 
-                let validator_proxy = validator.proxy();
-                (Some(validator), Some(validator_proxy))
+                    let validator_proxy = validator.proxy();
+                    (Some(validator), Some(validator_proxy))
+                } else {
+                    (None, None)
+                }
             }
             None => (None, None),
         };
