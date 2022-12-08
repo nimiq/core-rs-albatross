@@ -5,13 +5,11 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
-use futures::future::BoxFuture;
-use futures::stream::FuturesUnordered;
-use futures::{FutureExt, StreamExt};
-use nimiq_blockchain_proxy::BlockchainProxy;
+use futures::{future::BoxFuture, stream::FuturesUnordered, FutureExt, StreamExt};
 
 use nimiq_block::Block;
 use nimiq_blockchain::AbstractBlockchain;
+use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{network::Network, request::RequestError};
 
@@ -31,6 +29,7 @@ pub struct HeadRequests<TNetwork: Network + 'static> {
     num_known_blocks: usize,
     num_unknown_blocks: usize,
     unknown_blocks: Vec<(Block, TNetwork::PeerId)>,
+    include_micro_bodies: bool,
 }
 
 pub struct HeadRequestsResult<TNetwork: Network + 'static> {
@@ -55,6 +54,8 @@ impl<TNetwork: Network + 'static> HeadRequests<TNetwork> {
             })
             .collect();
 
+        let include_micro_bodies = matches!(blockchain, BlockchainProxy::Full(_));
+
         HeadRequests {
             peers,
             head_hashes,
@@ -65,6 +66,7 @@ impl<TNetwork: Network + 'static> HeadRequests<TNetwork> {
             num_known_blocks: 0,
             num_unknown_blocks: 0,
             unknown_blocks: Default::default(),
+            include_micro_bodies,
         }
     }
 
@@ -85,12 +87,13 @@ impl<TNetwork: Network + 'static> HeadRequests<TNetwork> {
         network: Arc<TNetwork>,
         peer_id: TNetwork::PeerId,
         hash: Blake2bHash,
+        include_micro_bodies: bool,
     ) -> Result<Option<Block>, RequestError> {
         network
             .request::<RequestBlock>(
                 RequestBlock {
                     hash,
-                    include_body: true,
+                    include_micro_bodies,
                 },
                 peer_id,
             )
@@ -116,9 +119,19 @@ impl<TNetwork: Network + 'static> Future for HeadRequests<TNetwork> {
                             self.requested_hashes.insert(hash.clone());
                             let network = Arc::clone(&self.network);
                             let peer_id = self.peers[i];
+                            let include_micro_bodies = self.include_micro_bodies;
                             self.head_blocks.push(
                                 async move {
-                                    (Self::request_block(network, peer_id, hash).await, peer_id)
+                                    (
+                                        Self::request_block(
+                                            network,
+                                            peer_id,
+                                            hash,
+                                            include_micro_bodies,
+                                        )
+                                        .await,
+                                        peer_id,
+                                    )
                                 }
                                 .boxed(),
                             );

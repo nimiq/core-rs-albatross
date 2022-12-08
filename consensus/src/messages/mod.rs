@@ -140,7 +140,7 @@ pub struct HistoryChunk {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestBlock {
     pub hash: Blake2bHash,
-    pub include_body: bool,
+    pub include_micro_bodies: bool,
 }
 
 impl RequestCommon for RequestBlock {

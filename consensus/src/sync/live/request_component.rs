@@ -12,8 +12,7 @@ use nimiq_network_interface::{
     request::RequestError,
 };
 
-use crate::messages::RequestMissingBlocks;
-use crate::sync::sync_queue::SyncQueue;
+use crate::{messages::RequestMissingBlocks, sync::sync_queue::SyncQueue};
 
 pub trait RequestComponent<N: Network>:
     Stream<Item = RequestComponentEvent> + Unpin + Send

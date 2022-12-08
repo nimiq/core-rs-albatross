@@ -1,8 +1,8 @@
-use futures::{FutureExt, Stream, StreamExt};
-
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
+
+use futures::{FutureExt, Stream, StreamExt};
 
 use nimiq_blockchain::AbstractBlockchain;
 use nimiq_light_blockchain::LightBlockchain;
@@ -10,9 +10,10 @@ use nimiq_macros::store_waker;
 use nimiq_network_interface::network::{Network, NetworkEvent};
 use nimiq_zkp_component::types::ZKPRequestEvent::{OutdatedProof, Proof};
 
-use crate::sync::syncer::{MacroSync, MacroSyncReturn};
-
-use super::LightMacroSync;
+use crate::sync::{
+    light::LightMacroSync,
+    syncer::{MacroSync, MacroSyncReturn},
+};
 
 impl<TNetwork: Network> LightMacroSync<TNetwork> {
     // This function is the one that starts the LightMacroSync process,

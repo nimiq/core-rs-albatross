@@ -8,7 +8,6 @@ use std::{
 use futures::stream::BoxStream;
 use futures::{Stream, StreamExt};
 
-use crate::sync::live::request_component::RequestComponentEvent;
 use nimiq_block::Block;
 use nimiq_blockchain::{AbstractBlockchain, Direction};
 use nimiq_blockchain_proxy::BlockchainProxy;
@@ -16,7 +15,7 @@ use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::network::{MsgAcceptance, Network, PubsubId, Topic};
 use nimiq_primitives::policy::Policy;
 
-use super::request_component::RequestComponent;
+use crate::sync::live::request_component::{RequestComponent, RequestComponentEvent};
 
 #[derive(Clone, Debug, Default)]
 pub struct BlockTopic;

@@ -5,9 +5,9 @@ use parking_lot::RwLock;
 use nimiq_block::Block;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, Direction, CHUNK_SIZE};
 use nimiq_blockchain_proxy::BlockchainProxy;
+use nimiq_network_interface::request::Handle;
 
 use crate::messages::*;
-use nimiq_network_interface::request::Handle;
 
 impl Handle<MacroChain, BlockchainProxy> for RequestMacroChain {
     fn handle(&self, blockchain: &BlockchainProxy) -> MacroChain {
@@ -150,10 +150,29 @@ impl Handle<HistoryChunk, Arc<RwLock<Blockchain>>> for RequestHistoryChunk {
 
 impl Handle<Option<Block>, BlockchainProxy> for RequestBlock {
     fn handle(&self, blockchain: &BlockchainProxy) -> Option<Block> {
-        blockchain
-            .read()
-            .get_block(&self.hash, self.include_body, None)
-            .ok()
+        if let Ok(block) = blockchain.read().get_block(&self.hash, false, None) {
+            let block = match block {
+                // Macro bodies are always needed
+                Block::Macro(_) => match blockchain.read().get_block(&self.hash, true, None) {
+                    Ok(block) => block,
+                    Err(_) => return None,
+                },
+                // Micro bodies are requested based on `include_micro_bodies`
+                Block::Micro(_) => {
+                    if self.include_micro_bodies {
+                        match blockchain.read().get_block(&self.hash, true, None) {
+                            Ok(block) => block,
+                            Err(_) => return None,
+                        }
+                    } else {
+                        block
+                    }
+                }
+            };
+            Some(block)
+        } else {
+            None
+        }
     }
 }
 

@@ -5,11 +5,10 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
-use thiserror::Error;
-
 use futures::{FutureExt, Stream, StreamExt};
 use lazy_static::lazy_static;
 use parking_lot::RwLock;
+use thiserror::Error;
 
 use nimiq_block::{Block, MacroBlock};
 use nimiq_blockchain::{
@@ -21,8 +20,10 @@ use nimiq_network_interface::{network::Network, request::RequestError};
 use nimiq_primitives::{policy::Policy, slots::Validators};
 use nimiq_utils::math::CeilingDiv;
 
-use crate::messages::{BatchSetInfo, HistoryChunk, RequestBatchSet, RequestHistoryChunk};
-use crate::sync::sync_queue::{SyncQueue, SyncQueuePeer};
+use crate::{
+    messages::{BatchSetInfo, HistoryChunk, RequestBatchSet, RequestHistoryChunk},
+    sync::sync_queue::{SyncQueue, SyncQueuePeer},
+};
 
 /// Error enumeration for history sync request
 #[derive(Clone, Debug, Error, Eq, PartialEq)]
