@@ -87,13 +87,8 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                         }
                     }
                 }
-                OutdatedProof { block_height } => {
-                    if block_height < self.blockchain.read().block_number() {
-                        // The peer is behind us, so we emit it
-                        return Poll::Ready(Some(MacroSyncReturn::Outdated(peer_id)));
-                    }
-
-                    // If the peer has the same ZKP level as us, then we request epoch ids from this peer
+                OutdatedProof { block_height: _ } => {
+                    // We need to request epoch ids from this peer to know if it is outdated or not
                     let future = Self::request_epoch_ids(
                         Arc::clone(&self.blockchain),
                         Arc::clone(&self.network),

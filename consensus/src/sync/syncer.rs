@@ -159,13 +159,11 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Stream for Syncer<N, M
         while let Poll::Ready(result) = self.macro_sync.poll_next_unpin(cx) {
             match result {
                 Some(MacroSyncReturn::Good(peer_id)) => {
+                    debug!(%peer_id, "Macro sync returned good peer");
                     self.move_peer_into_live_sync(peer_id);
                 }
                 Some(MacroSyncReturn::Outdated(peer_id)) => {
-                    debug!(
-                        "History sync returned outdated peer {:?}. Waiting.",
-                        peer_id
-                    );
+                    debug!(%peer_id,"Macro sync returned outdated peer. Waiting.");
                     self.outdated_timeouts.insert(peer_id, Instant::now());
                     self.outdated_peers.insert(peer_id);
                 }
