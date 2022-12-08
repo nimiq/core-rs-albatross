@@ -57,7 +57,7 @@ impl<N: Network> ZKPComponentProxy<N> {
     /// Sends zkp request to all given peers. If no requests are ongoing, we request and return true,
     /// otherwise no requests will be sent.
     pub fn request_zkp_from_peers(
-        &mut self,
+        &self,
         peers: Vec<N::PeerId>,
         request_election_block: bool,
     ) -> bool {
