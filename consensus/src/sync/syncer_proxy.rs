@@ -108,11 +108,16 @@ impl<N: Network> SyncerProxy<N> {
                     false,
                 );
 
+                let block_queue_config = BlockQueueConfig {
+                    include_body: false,
+                    ..Default::default()
+                };
+
                 let block_queue = BlockQueue::new(
                     Arc::clone(&network),
                     blockchain_proxy.clone(),
                     request_component,
-                    BlockQueueConfig::default(),
+                    block_queue_config,
                 )
                 .await;
 
