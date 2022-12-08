@@ -131,7 +131,7 @@ impl<N: Network, TReq: RequestComponent<N>> BlockLiveSync<N, TReq> {
             let blockchain1 = this.blockchain.clone();
             let bls_cache1 = Arc::clone(this.bls_cache);
             let network1 = Arc::clone(this.network);
-            let include_body = this.block_queue.includes_body();
+            let include_micro_bodies = this.block_queue.includes_micro_bodies();
 
             let is_head = matches!(queued_block, QueuedBlock::Head(..));
             match queued_block {
@@ -168,7 +168,7 @@ impl<N: Network, TReq: RequestComponent<N>> BlockLiveSync<N, TReq> {
                         };
 
                         if let Some(id) = pubsub_id {
-                            if include_body {
+                            if include_micro_bodies {
                                 network1.validate_message::<BlockTopic>(id, acceptance);
                             } else {
                                 network1.validate_message::<BlockHeaderTopic>(id, acceptance);

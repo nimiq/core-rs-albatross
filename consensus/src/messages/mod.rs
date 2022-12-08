@@ -177,7 +177,7 @@ impl Debug for ResponseBlocks {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestMissingBlocks {
     pub target_hash: Blake2bHash,
-    pub include_body: bool,
+    pub include_micro_bodies: bool,
     #[beserial(len_type(u16, limit = 128))]
     pub locators: Vec<Blake2bHash>,
 }

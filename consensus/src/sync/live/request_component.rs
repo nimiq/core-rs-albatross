@@ -51,7 +51,7 @@ pub struct BlockRequestComponent<TNetwork: Network + 'static> {
     sync_queue: SyncQueue<TNetwork, (Blake2bHash, Vec<Blake2bHash>, bool), Vec<Block>>, // requesting missing blocks from peers
     peers: HashSet<TNetwork::PeerId>, // this map holds the strong references to up-to-date peers
     network_event_rx: SubscribeEvents<TNetwork::PeerId>,
-    include_body: bool,
+    include_micro_bodies: bool,
 }
 
 impl<TNetwork: Network + 'static> BlockRequestComponent<TNetwork> {
@@ -60,7 +60,7 @@ impl<TNetwork: Network + 'static> BlockRequestComponent<TNetwork> {
     pub fn new(
         network_event_rx: SubscribeEvents<TNetwork::PeerId>,
         network: Arc<TNetwork>,
-        include_body: bool,
+        include_micro_bodies: bool,
     ) -> Self {
         Self {
             sync_queue: SyncQueue::new(
@@ -68,14 +68,14 @@ impl<TNetwork: Network + 'static> BlockRequestComponent<TNetwork> {
                 vec![],
                 vec![],
                 Self::NUM_PENDING_BLOCKS,
-                |(target_block_hash, locators, include_body), network, peer_id| {
+                |(target_block_hash, locators, include_micro_bodies), network, peer_id| {
                     async move {
                         let res = Self::request_missing_blocks_from_peer(
                             network,
                             peer_id,
                             target_block_hash,
                             locators,
-                            include_body,
+                            include_micro_bodies,
                         )
                         .await;
                         if let Ok(Some(missing_blocks)) = res {
@@ -89,7 +89,7 @@ impl<TNetwork: Network + 'static> BlockRequestComponent<TNetwork> {
             ),
             peers: Default::default(),
             network_event_rx,
-            include_body,
+            include_micro_bodies,
         }
     }
 
@@ -98,14 +98,14 @@ impl<TNetwork: Network + 'static> BlockRequestComponent<TNetwork> {
         peer_id: TNetwork::PeerId,
         target_block_hash: Blake2bHash,
         locators: Vec<Blake2bHash>,
-        include_body: bool,
+        include_micro_bodies: bool,
     ) -> Result<Option<Vec<Block>>, RequestError> {
         network
             .request::<RequestMissingBlocks>(
                 RequestMissingBlocks {
                     locators,
                     target_hash: target_block_hash,
-                    include_body,
+                    include_micro_bodies,
                 },
                 peer_id,
             )
@@ -125,8 +125,11 @@ impl<TNetwork: 'static + Network> RequestComponent<TNetwork> for BlockRequestCom
         target_block_hash: Blake2bHash,
         locators: Vec<Blake2bHash>,
     ) {
-        self.sync_queue
-            .add_ids(vec![(target_block_hash, locators, self.include_body)]);
+        self.sync_queue.add_ids(vec![(
+            target_block_hash,
+            locators,
+            self.include_micro_bodies,
+        )]);
     }
 
     fn num_peers(&self) -> usize {
