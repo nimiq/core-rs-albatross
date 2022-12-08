@@ -146,7 +146,9 @@ impl<N: Network, TReq: RequestComponent<N>> BlockLiveSync<N, TReq> {
                                 BlockchainProxy::Full(blockchain) => {
                                     Blockchain::push(blockchain.upgradable_read(), block)
                                 }
-                                BlockchainProxy::Light(_) => todo!(),
+                                BlockchainProxy::Light(blockchain) => {
+                                    LightBlockchain::push(blockchain.upgradable_read(), block)
+                                }
                             }
                         })
                         .await
