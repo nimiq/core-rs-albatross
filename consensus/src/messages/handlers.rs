@@ -5,9 +5,9 @@ use parking_lot::RwLock;
 use nimiq_block::Block;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, Direction, CHUNK_SIZE};
 use nimiq_blockchain_proxy::BlockchainProxy;
+use nimiq_network_interface::request::Handle;
 
 use crate::messages::*;
-use nimiq_network_interface::request::Handle;
 
 impl Handle<MacroChain, BlockchainProxy> for RequestMacroChain {
     fn handle(&self, blockchain: &BlockchainProxy) -> MacroChain {
@@ -150,10 +150,29 @@ impl Handle<HistoryChunk, Arc<RwLock<Blockchain>>> for RequestHistoryChunk {
 
 impl Handle<Option<Block>, BlockchainProxy> for RequestBlock {
     fn handle(&self, blockchain: &BlockchainProxy) -> Option<Block> {
-        blockchain
-            .read()
-            .get_block(&self.hash, self.include_body, None)
-            .ok()
+        if let Ok(block) = blockchain.read().get_block(&self.hash, false, None) {
+            let block = match block {
+                // Macro bodies are always needed
+                Block::Macro(_) => match blockchain.read().get_block(&self.hash, true, None) {
+                    Ok(block) => block,
+                    Err(_) => return None,
+                },
+                // Micro bodies are requested based on `include_micro_bodies`
+                Block::Micro(_) => {
+                    if self.include_micro_bodies {
+                        match blockchain.read().get_block(&self.hash, true, None) {
+                            Ok(block) => block,
+                            Err(_) => return None,
+                        }
+                    } else {
+                        block
+                    }
+                }
+            };
+            Some(block)
+        } else {
+            None
+        }
     }
 }
 
@@ -174,8 +193,44 @@ impl Handle<ResponseBlocks, BlockchainProxy> for RequestMissingBlocks {
         let mut blocks = Vec::new();
         let mut block_hash = self.target_hash.clone();
         while !locators.contains(&block_hash) {
-            let block = blockchain.get_block(&block_hash, self.include_body, None);
+            let block = blockchain.get_block(&block_hash, false, None);
             if let Ok(block) = block {
+                let block = match block {
+                    // Macro bodies are always needed
+                    Block::Macro(_) => match blockchain.get_block(&block_hash, true, None) {
+                        Ok(block) => block,
+                        Err(error) => {
+                            debug!(
+                                %error,
+                                blocks_found = blocks.len(),
+                                block_hash = %block_hash,
+                                "ResponseBlocks - Failed to get macro block",
+                            );
+                            return ResponseBlocks { blocks: None };
+                        }
+                    },
+                    // Micro bodies are requested based on `include_micro_bodies`
+                    Block::Micro(_) => {
+                        if self.include_micro_bodies {
+                            match blockchain.get_block(&block_hash, true, None) {
+                                Ok(block) => block,
+                                Err(error) => {
+                                    debug!(
+                                        %error,
+                                        include_body = self.include_micro_bodies,
+                                        blocks_found = blocks.len(),
+                                        block_hash = %block_hash,
+                                        "ResponseBlocks - Failed to get micro block",
+                                    );
+                                    return ResponseBlocks { blocks: None };
+                                }
+                            }
+                        } else {
+                            // Micro bodies are not requested, so we can return the already block obtained
+                            block
+                        }
+                    }
+                };
                 let is_macro = block.is_macro();
 
                 block_hash = block.parent_hash().clone();
@@ -188,9 +243,9 @@ impl Handle<ResponseBlocks, BlockchainProxy> for RequestMissingBlocks {
                 // This can only happen if the target hash is unknown or after the chain was pruned.
                 // TODO Return the blocks we found instead of failing here?
                 debug!(
-                    "ResponseBlocks - unknown target block/predecessor {} ({} blocks found)",
-                    block_hash,
-                    blocks.len(),
+                    blocks_found = blocks.len(),
+                    unknown_block_hash = %block_hash,
+                    "ResponseBlocks - unknown target block/predecessor",
                 );
                 return ResponseBlocks { blocks: None };
             }

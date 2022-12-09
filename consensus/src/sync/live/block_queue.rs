@@ -8,7 +8,6 @@ use std::{
 use futures::stream::BoxStream;
 use futures::{Stream, StreamExt};
 
-use crate::sync::live::request_component::RequestComponentEvent;
 use nimiq_block::Block;
 use nimiq_blockchain::{AbstractBlockchain, Direction};
 use nimiq_blockchain_proxy::BlockchainProxy;
@@ -16,7 +15,7 @@ use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::network::{MsgAcceptance, Network, PubsubId, Topic};
 use nimiq_primitives::policy::Policy;
 
-use super::request_component::RequestComponent;
+use crate::sync::live::request_component::{RequestComponent, RequestComponentEvent};
 
 #[derive(Clone, Debug, Default)]
 pub struct BlockTopic;
@@ -55,8 +54,8 @@ pub struct BlockQueueConfig {
     /// How many blocks back into the past we tolerate without returning a peer as Outdated.
     pub tolerate_past_max: u32,
 
-    /// Flag to indicate if blocks should carry a body
-    pub include_body: bool,
+    /// Flag to indicate if micro blocks should carry a body
+    pub include_micro_bodies: bool,
 }
 
 impl Default for BlockQueueConfig {
@@ -65,7 +64,7 @@ impl Default for BlockQueueConfig {
             buffer_max: 4 * Policy::blocks_per_batch() as usize,
             window_ahead_max: 2 * Policy::blocks_per_batch(),
             tolerate_past_max: Policy::blocks_per_batch(),
-            include_body: true,
+            include_micro_bodies: true,
         }
     }
 }
@@ -348,7 +347,7 @@ impl<N: Network, TReq: RequestComponent<N>> BlockQueue<N, TReq> {
                     invalid_blocks.insert(hash.clone());
 
                     if let Some(id) = pubsub_id {
-                        if self.config.include_body {
+                        if self.config.include_micro_bodies {
                             self.network
                                 .validate_message::<BlockTopic>(id.clone(), MsgAcceptance::Reject);
                         } else {
@@ -378,7 +377,7 @@ impl<N: Network, TReq: RequestComponent<N>> BlockQueue<N, TReq> {
             for (_, pubsub_id) in blocks.values() {
                 // Inline `report_validation_result` here, because it solves the borrow issue:
                 if let Some(id) = pubsub_id {
-                    if self.config.include_body {
+                    if self.config.include_micro_bodies {
                         self.network
                             .validate_message::<BlockTopic>(id.clone(), MsgAcceptance::Ignore);
                     } else {
@@ -400,7 +399,7 @@ impl<N: Network, TReq: RequestComponent<N>> BlockQueue<N, TReq> {
         acceptance: MsgAcceptance,
     ) {
         if let Some(id) = pubsub_id {
-            if self.config.include_body {
+            if self.config.include_micro_bodies {
                 self.network.validate_message::<BlockTopic>(id, acceptance);
             } else {
                 self.network
@@ -449,7 +448,7 @@ impl<N: Network, TReq: RequestComponent<N>> BlockQueue<N, TReq> {
         request_component: TReq,
         config: BlockQueueConfig,
     ) -> Self {
-        let block_stream = if config.include_body {
+        let block_stream = if config.include_micro_bodies {
             network.subscribe::<BlockTopic>().await.unwrap().boxed()
         } else {
             network
@@ -509,8 +508,8 @@ impl<N: Network, TReq: RequestComponent<N>> BlockQueue<N, TReq> {
         self.request_component.num_peers()
     }
 
-    pub fn includes_body(&self) -> bool {
-        self.config.include_body
+    pub fn includes_micro_bodies(&self) -> bool {
+        self.config.include_micro_bodies
     }
 
     pub fn peers(&self) -> Vec<N::PeerId> {

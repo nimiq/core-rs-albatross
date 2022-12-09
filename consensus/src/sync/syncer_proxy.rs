@@ -109,7 +109,7 @@ impl<N: Network> SyncerProxy<N> {
                 );
 
                 let block_queue_config = BlockQueueConfig {
-                    include_body: false,
+                    include_micro_bodies: false,
                     ..Default::default()
                 };
 

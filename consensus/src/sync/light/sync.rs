@@ -1,9 +1,9 @@
-use futures::{future::BoxFuture, stream::FuturesUnordered, FutureExt};
-use parking_lot::RwLock;
-
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::task::Waker;
+
+use futures::{future::BoxFuture, stream::FuturesUnordered, FutureExt};
+use parking_lot::RwLock;
 
 use nimiq_block::Block;
 use nimiq_hash::Blake2bHash;

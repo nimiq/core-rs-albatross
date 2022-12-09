@@ -1,7 +1,7 @@
+use std::sync::Arc;
+
 use futures::FutureExt;
 use parking_lot::RwLock;
-
-use std::sync::Arc;
 
 use nimiq_block::Block;
 use nimiq_blockchain::AbstractBlockchain;
@@ -21,10 +21,10 @@ use nimiq_zkp_component::{
 };
 
 use crate::messages::{MacroChain, RequestBlock, RequestMacroChain};
-use crate::sync::light::sync::EpochIds;
-use crate::sync::light::LightMacroSync;
-
-use super::sync::PeerMacroRequests;
+use crate::sync::light::{
+    sync::{EpochIds, PeerMacroRequests},
+    LightMacroSync,
+};
 
 impl<TNetwork: Network> LightMacroSync<TNetwork> {
     pub(crate) async fn request_zkps(
@@ -208,7 +208,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
             self.block_headers.push(
                 async move {
                     (
-                        Self::request_block(network, peer_id, block_hash).await,
+                        Self::request_macro_block(network, peer_id, block_hash).await,
                         peer_id,
                     )
                 }
@@ -225,7 +225,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
             self.block_headers.push(
                 async move {
                     (
-                        Self::request_block(network, peer_id, block_hash).await,
+                        Self::request_macro_block(network, peer_id, block_hash).await,
                         peer_id,
                     )
                 }
@@ -238,7 +238,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         None
     }
 
-    pub async fn request_block(
+    pub async fn request_macro_block(
         network: Arc<TNetwork>,
         peer_id: TNetwork::PeerId,
         hash: Blake2bHash,
@@ -248,7 +248,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
             .request::<RequestBlock>(
                 RequestBlock {
                     hash,
-                    include_body: true,
+                    include_micro_bodies: false,
                 },
                 peer_id,
             )

@@ -1,8 +1,13 @@
-use crate::sync::live::block_queue::{BlockHeaderTopic, BlockQueue, BlockTopic, QueuedBlock};
-use crate::sync::live::request_component::RequestComponent;
-use crate::sync::syncer::{LiveSync, LiveSyncEvent, LiveSyncPeerEvent, LiveSyncPushEvent};
-use futures::future::BoxFuture;
-use futures::{FutureExt, Stream, StreamExt};
+use std::collections::{HashSet, VecDeque};
+use std::pin::Pin;
+use std::sync::Arc;
+use std::task::{ready, Context, Poll};
+
+use futures::{future::BoxFuture, FutureExt, Stream, StreamExt};
+use parking_lot::Mutex;
+use pin_project::pin_project;
+use tokio::task::spawn_blocking;
+
 use nimiq_block::Block;
 use nimiq_blockchain::{Blockchain, PushError, PushResult};
 use nimiq_blockchain_proxy::BlockchainProxy;
@@ -10,13 +15,14 @@ use nimiq_bls::cache::PublicKeyCache;
 use nimiq_hash::Blake2bHash;
 use nimiq_light_blockchain::LightBlockchain;
 use nimiq_network_interface::network::{MsgAcceptance, Network};
-use parking_lot::Mutex;
-use pin_project::pin_project;
-use std::collections::{HashSet, VecDeque};
-use std::pin::Pin;
-use std::sync::Arc;
-use std::task::{ready, Context, Poll};
-use tokio::task::spawn_blocking;
+
+use crate::sync::{
+    live::{
+        block_queue::{BlockHeaderTopic, BlockQueue, BlockTopic, QueuedBlock},
+        request_component::RequestComponent,
+    },
+    syncer::{LiveSync, LiveSyncEvent, LiveSyncPeerEvent, LiveSyncPushEvent},
+};
 
 enum PushOpResult {
     Head(Result<PushResult, PushError>, Blake2bHash),
@@ -131,7 +137,7 @@ impl<N: Network, TReq: RequestComponent<N>> BlockLiveSync<N, TReq> {
             let blockchain1 = this.blockchain.clone();
             let bls_cache1 = Arc::clone(this.bls_cache);
             let network1 = Arc::clone(this.network);
-            let include_body = this.block_queue.includes_body();
+            let include_micro_bodies = this.block_queue.includes_micro_bodies();
 
             let is_head = matches!(queued_block, QueuedBlock::Head(..));
             match queued_block {
@@ -168,7 +174,7 @@ impl<N: Network, TReq: RequestComponent<N>> BlockLiveSync<N, TReq> {
                         };
 
                         if let Some(id) = pubsub_id {
-                            if include_body {
+                            if include_micro_bodies {
                                 network1.validate_message::<BlockTopic>(id, acceptance);
                             } else {
                                 network1.validate_message::<BlockHeaderTopic>(id, acceptance);
