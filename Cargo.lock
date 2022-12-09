@@ -3673,7 +3673,6 @@ dependencies = [
  "nimiq-utils",
  "nimiq-validator-network",
  "parking_lot 0.12.0",
- "pin-project",
  "rand 0.8.5",
  "tempfile",
  "thiserror",

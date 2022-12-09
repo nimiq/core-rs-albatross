@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -15,7 +15,6 @@ use nimiq_blockchain::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_network_interface::{network::Network, request::request_handler};
 
-use pin_project::pin_project;
 use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
 use tokio::sync::oneshot::error::RecvError;
 use tokio_stream::wrappers::BroadcastStream;
@@ -106,7 +105,6 @@ impl<N: Network> ZKPComponentProxy<N> {
 /// - The zkp events notifies newly stored proofs.
 ///
 /// Awaiting this future ensures that the zkp component works, this component should run forever.
-#[pin_project]
 pub struct ZKPComponent<N: Network> {
     pub(crate) blockchain: BlockchainProxy,
     network: Arc<N>,
@@ -138,25 +136,34 @@ impl<N: Network> ZKPComponent<N> {
         // Creates the zk proofs events notifier.
         let (zkp_events_notifier, _rx) = broadcast(BROADCAST_MAX_CAPACITY);
 
-        // Loads the proof from the db if any.
+        // Gets the stream zkps gossiped by peers.
+        let zk_proofs_stream = network.subscribe::<ZKProofTopic>().await.unwrap().boxed();
         let proof_storage = ProofStore::new(env.clone());
-        Self::load_proof_from_db(
-            &blockchain,
-            &zkp_state,
-            &proof_storage,
-            &zkp_events_notifier,
-            &keys_path,
-        );
+
+        let mut zkp_component = Self {
+            blockchain,
+            network: Arc::clone(&network),
+            zkp_state,
+            zk_prover: None,
+            zk_proofs_stream,
+            proof_storage,
+            zkp_requests: Arc::new(Mutex::new(ZKPRequests::new(network))),
+            zkp_events_notifier,
+            keys_path,
+        };
+
+        // Loads the proof from the db if any.
+        zkp_component.load_proof_from_db();
 
         // Activates the prover based on the configuration provided.
-        let zk_prover = match (is_prover_active, &blockchain) {
+        zkp_component.zk_prover = match (is_prover_active, &zkp_component.blockchain) {
             (true, BlockchainProxy::Full(ref blockchain)) => Some(
                 ZKProver::new(
                     Arc::clone(blockchain),
-                    Arc::clone(&network),
-                    Arc::clone(&zkp_state),
+                    Arc::clone(&zkp_component.network),
+                    Arc::clone(&zkp_component.zkp_state),
                     prover_path,
-                    keys_path.clone(),
+                    zkp_component.keys_path.clone(),
                 )
                 .await,
             ),
@@ -165,21 +172,6 @@ impl<N: Network> ZKPComponent<N> {
                 None
             }
             _ => None,
-        };
-
-        // Gets the stream zkps gossiped by peers.
-        let zk_proofs_stream = network.subscribe::<ZKProofTopic>().await.unwrap().boxed();
-
-        let zkp_component = Self {
-            blockchain,
-            network: Arc::clone(&network),
-            zkp_state,
-            zk_prover,
-            zk_proofs_stream,
-            proof_storage,
-            zkp_requests: Arc::new(Mutex::new(ZKPRequests::new(network))),
-            zkp_events_notifier,
-            keys_path,
         };
 
         // The handler for zkp request is launched.
@@ -211,28 +203,19 @@ impl<N: Network> ZKPComponent<N> {
 
     /// Loads the proof from the database into the current state. It does all verification steps before loading it into
     /// our state. In case of failure, it replaces the db proof with the current state.
-    fn load_proof_from_db(
-        blockchain: &BlockchainProxy,
-        zkp_state: &Arc<RwLock<ZKPState>>,
-        proof_storage: &ProofStore,
-        zkp_events_notifier: &BroadcastSender<ZKPEvent<N>>,
-        keys_path: &Path,
-    ) {
-        if let Some(loaded_proof) = proof_storage.get_zkp() {
-            if let Err(e) = Self::push_proof_from_peers(
-                blockchain,
-                zkp_state,
+    fn load_proof_from_db(&mut self) {
+        if let Some(loaded_proof) = self.proof_storage.get_zkp() {
+            let mut this = Pin::new(self);
+
+            if let Err(e) = this.as_mut().push_proof_from_peers(
                 loaded_proof,
                 None,
-                &mut None,
-                proof_storage,
-                zkp_events_notifier,
                 false,
-                keys_path,
                 ProofSource::SelfGenerated,
             ) {
                 log::error!("Error pushing the zk proof load from disk {}", e);
-                proof_storage.set_zkp(&zkp_state.read().clone().into());
+                this.proof_storage
+                    .set_zkp(&this.zkp_state.read().clone().into());
             } else {
                 log::info!("The zk proof was successfully load from disk");
             }
@@ -244,45 +227,41 @@ impl<N: Network> ZKPComponent<N> {
     /// Pushes the proof sent from an peer into our own state. If the proof is invalid or it's older than the
     /// current state it fails.
     fn push_proof_from_peers(
-        blockchain: &BlockchainProxy,
-        zkp_state: &Arc<RwLock<ZKPState>>,
+        mut self: Pin<&mut Self>,
         zk_proof: ZKProof,
         election_block: Option<MacroBlock>,
-        zk_prover: &mut Option<ZKProver<N>>,
-        proof_storage: &ProofStore,
-        zkp_events_notifier: &BroadcastSender<ZKPEvent<N>>,
         add_to_storage: bool,
-        keys_path: &Path,
         proof_source: ProofSource<N>,
     ) -> Result<ZKPEvent<N>, Error> {
         // Gets the relevant election blocks.
         let (new_block, genesis_block, proof) =
-            get_proof_macro_blocks(blockchain, &zk_proof, election_block)?;
-        let zkp_state_lock = zkp_state.upgradable_read();
+            get_proof_macro_blocks(&self.blockchain, &zk_proof, election_block)?;
+        let zkp_state_lock = self.zkp_state.upgradable_read();
 
         // Ensures that the proof is more recent than our current state and validates the proof.
         if new_block.block_number() <= zkp_state_lock.latest_block_number {
             return Err(Error::OutdatedProof);
         }
         let new_zkp_state =
-            validate_proof_get_new_state(proof, &new_block, genesis_block, keys_path)?;
+            validate_proof_get_new_state(proof, &new_block, genesis_block, &self.keys_path)?;
 
         let mut zkp_state_lock = RwLockUpgradableReadGuard::upgrade(zkp_state_lock);
         *zkp_state_lock = new_zkp_state;
 
-        // Since someone else generate a valid proof faster, we will terminate our own proof generation process.
-        if let Some(zk_prover) = zk_prover {
-            zk_prover.cancel_current_proof_production();
-        }
-
         // Adds the new proof to storage.
         if add_to_storage {
-            proof_storage.set_zkp(&zkp_state_lock.clone().into())
+            self.proof_storage.set_zkp(&zkp_state_lock.clone().into())
+        }
+        drop(zkp_state_lock);
+
+        // Since someone else generate a valid proof faster, we will terminate our own proof generation process.
+        if let Some(ref mut zk_prover) = self.zk_prover {
+            zk_prover.cancel_current_proof_production();
         }
 
         // Sends the new event to the notifier stream.
         let event = ZKPEvent::new(proof_source, zk_proof, new_block);
-        if let Err(e) = zkp_events_notifier.send(event.clone()) {
+        if let Err(e) = self.zkp_events_notifier.send(event.clone()) {
             log::error!(
                 "Error sending the proof (from peer) to the events notifier {}",
                 e
@@ -296,54 +275,48 @@ impl<N: Network> ZKPComponent<N> {
 impl<N: Network> Future for ZKPComponent<N> {
     type Output = ();
 
-    fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-        let this = self.project();
-
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
         // Check if we have requested zkps rom peers. Goes over all received proofs and tries to update state.
         // Stays with the first most recent valid zk proof it gets.
-        while let Poll::Ready(Some(requests_item)) = this.zkp_requests.lock().poll_next_unpin(cx) {
-            let result = Self::push_proof_from_peers(
-                this.blockchain,
-                this.zkp_state,
-                requests_item.proof,
-                requests_item.election_block,
-                this.zk_prover,
-                this.proof_storage,
-                this.zkp_events_notifier,
-                true,
-                this.keys_path,
-                ProofSource::PeerGenerated(requests_item.peer_id),
-            );
+        loop {
+            let zkp_result = self.zkp_requests.lock().poll_next_unpin(cx);
+            match zkp_result {
+                Poll::Ready(Some(requests_item)) => {
+                    let result = self.as_mut().push_proof_from_peers(
+                        requests_item.proof,
+                        requests_item.election_block,
+                        true,
+                        ProofSource::PeerGenerated(requests_item.peer_id),
+                    );
 
-            // Log errors.
-            if let Err(ref e) = result {
-                log::error!("Error pushing the new zk proof {}", e);
-            }
+                    // Log errors.
+                    if let Err(ref e) = result {
+                        log::error!("Error pushing the new zk proof {}", e);
+                    }
 
-            // Return verification result if channel exists.
-            if let Some(tx) = requests_item.response_channel {
-                let _ = tx.send(result.map(|event| ZKPRequestEvent::Proof {
-                    proof: event.proof,
-                    block: event.block,
-                }));
+                    // Return verification result if channel exists.
+                    if let Some(tx) = requests_item.response_channel {
+                        let _ = tx.send(result.map(|event| ZKPRequestEvent::Proof {
+                            proof: event.proof,
+                            block: event.block,
+                        }));
+                    }
+                }
+                _ => {
+                    break;
+                }
             }
         }
 
         // Exhausts all peer gossiped proofs and tries to push them.
         loop {
-            match this.zk_proofs_stream.as_mut().poll_next(cx) {
+            match self.zk_proofs_stream.as_mut().poll_next_unpin(cx) {
                 Poll::Ready(Some((proof, pub_id))) => {
                     log::debug!("Received zk proof via gossipsub {:?}", proof);
-                    let acceptance = match Self::push_proof_from_peers(
-                        this.blockchain,
-                        this.zkp_state,
+                    let acceptance = match self.as_mut().push_proof_from_peers(
                         proof,
                         None,
-                        this.zk_prover,
-                        this.proof_storage,
-                        this.zkp_events_notifier,
                         true,
-                        this.keys_path,
                         ProofSource::PeerGenerated(pub_id.propagation_source()),
                     ) {
                         Err(Error::OutdatedProof) => {
@@ -356,7 +329,7 @@ impl<N: Network> Future for ZKPComponent<N> {
                         }
                         Ok(_) => MsgAcceptance::Accept,
                     };
-                    this.network
+                    self.network
                         .validate_message::<ZKProofTopic>(pub_id, acceptance);
                 }
                 Poll::Ready(None) => {
@@ -372,11 +345,11 @@ impl<N: Network> Future for ZKPComponent<N> {
         }
 
         // Polls prover for new proofs and notifies the new event to the zkp events notifier.
-        if let Some(ref mut zk_prover) = this.zk_prover {
+        if let Some(ref mut zk_prover) = self.zk_prover {
             match zk_prover.poll_next_unpin(cx) {
                 Poll::Ready(Some((zk_proof, block))) => {
                     log::info!("New ZK Proof generated by us");
-                    if let Err(e) = this.zkp_events_notifier.send(ZKPEvent::new(
+                    if let Err(e) = self.zkp_events_notifier.send(ZKPEvent::new(
                         ProofSource::SelfGenerated,
                         zk_proof,
                         block,
