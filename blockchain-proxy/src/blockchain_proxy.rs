@@ -7,7 +7,7 @@ use nimiq_block::{Block, MacroBlock};
 #[cfg(feature = "full")]
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::{
-    AbstractBlockchain, BlockchainError, BlockchainEvent, ChainInfo, Direction,
+    AbstractBlockchain, BlockchainError, BlockchainEvent, ChainInfo, Direction, ForkEvent,
 };
 use nimiq_hash::Blake2bHash;
 use nimiq_light_blockchain::LightBlockchain;
@@ -212,5 +212,9 @@ impl<'a> AbstractBlockchain for BlockchainReadProxy<'a> {
 
     fn notifier_as_stream(&self) -> BoxStream<'static, BlockchainEvent> {
         gen_blockchain_match!(self, BlockchainReadProxy, notifier_as_stream)
+    }
+
+    fn fork_notifier_as_stream(&self) -> BoxStream<'static, ForkEvent> {
+        gen_blockchain_match!(self, BlockchainReadProxy, fork_notifier_as_stream)
     }
 }

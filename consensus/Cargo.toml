@@ -55,7 +55,7 @@ nimiq-zkp-component = { path = "../zkp-component" }
 [dev-dependencies]
 hex = "0.4"
 
-nimiq-block-production = { path = "../block-production" }
+nimiq-block-production = { path = "../block-production", features = ["test-utils"] }
 nimiq-bls = { path = "../bls" }
 nimiq-database = { path = "../database" }
 nimiq-genesis = { path = "../genesis" }

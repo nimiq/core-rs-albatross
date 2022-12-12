@@ -20,6 +20,7 @@ nimiq-database = { path = "../../database" }
 nimiq-database-value = { path = "../../database/database-value" }
 nimiq-hash = { path = "../../hash" }
 nimiq-keys = { path = "../../keys" }
+nimiq-primitives = { path = "..", features = ["key-nibbles"] }
 
 [dev-dependencies]
 nimiq-test-log = { path = "../../test-log" }

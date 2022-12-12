@@ -179,6 +179,7 @@ impl TrieNode {
 
         // Key length has to be smaller or equal to the child prefix length, so this will only panic
         // when `child_prefix` has the same length as `self.key()`.
+        // PITODO: return error instead of unwrapping
         Ok(child_prefix.get(self.key.len()).unwrap())
     }
 
@@ -253,20 +254,20 @@ impl TrieNode {
         self.into_iter()
     }
 
-    fn is_complete(&self) -> bool {
+    fn can_hash(&self) -> bool {
         self.iter_children().all(|child| child.has_hash())
     }
 
-    pub fn hash_if_complete<H: HashOutput>(&self) -> Option<H> {
-        self.is_complete().then(|| {
+    pub fn hash<H: HashOutput>(&self) -> Option<H> {
+        self.can_hash().then(|| {
             let mut hasher = H::Builder::default();
             self.serialize_content(&mut hasher).unwrap();
             hasher.finish()
         })
     }
 
-    pub fn hash_assert_complete<H: HashOutput>(&self) -> H {
-        self.hash_if_complete()
+    pub fn hash_assert<H: HashOutput>(&self) -> H {
+        self.hash()
             .expect("can only hash TrieNode with complete information about children")
     }
 }

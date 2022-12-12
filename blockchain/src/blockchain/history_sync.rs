@@ -122,6 +122,7 @@ impl Blockchain {
             cum_tx_fees,
             cum_ext_tx_size,
             prunable: false,
+            prev_missing_range: None,
         };
 
         this.chain_store
@@ -243,7 +244,7 @@ impl Blockchain {
         let macro_block = block.unwrap_macro_ref();
 
         // Check the state_root hash against the one in the block.
-        let wanted_state_root = this.state.accounts.get_root(Some(&txn));
+        let wanted_state_root = this.state.accounts.get_root_hash_assert(Some(&txn));
         if macro_block.header.state_root != wanted_state_root {
             warn!(
                 block = %macro_block,

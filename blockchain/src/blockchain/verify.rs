@@ -103,18 +103,28 @@ impl Blockchain {
     ) -> Result<Option<MacroBody>, PushError> {
         let accounts = &state.accounts;
 
-        // Verify accounts hash.
-        let accounts_hash = accounts.get_root(txn_opt);
+        // Use a common read transaction for the whole function if none was given.
+        let read_txn;
+        let txn_opt = Some(match txn_opt {
+            Some(txn) => txn,
+            None => {
+                read_txn = self.read_transaction();
+                &read_txn
+            }
+        });
 
-        if *block.state_root() != accounts_hash {
-            warn!(
-                %block,
-                header_root = %block.state_root(),
-                accounts_root = %accounts_hash,
-                reason = "Header accounts hash doesn't match real accounts hash",
-                "Rejecting block"
-            );
-            return Err(PushError::InvalidBlock(BlockError::AccountsHashMismatch));
+        // Verify accounts hash if the tree is complete or changes only happened in the complete part.
+        if let Some(accounts_hash) = accounts.get_root_hash(txn_opt) {
+            if *block.state_root() != accounts_hash {
+                warn!(
+                    %block,
+                    header_root = %block.state_root(),
+                    accounts_root = %accounts_hash,
+                    reason = "Header accounts hash doesn't match real accounts hash",
+                    "Rejecting block"
+                );
+                return Err(PushError::InvalidBlock(BlockError::AccountsHashMismatch));
+            }
         }
 
         // Verify the history root.

@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::{
     pin::Pin,
     sync::Arc,
@@ -5,10 +6,12 @@ use std::{
 };
 
 use futures::{task::noop_waker_ref, Stream, StreamExt};
-use nimiq_blockchain_interface::{AbstractBlockchain, Direction};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
-use nimiq_consensus::sync::peer_list::PeerList;
+use nimiq_consensus::sync::live::block_queue::block_request_component::{
+    BlockRequestComponentEvent, RequestComponent,
+};
+use nimiq_consensus::sync::live::queue::QueueConfig;
 use parking_lot::{Mutex, RwLock};
 use pin_project::pin_project;
 use rand::Rng;
@@ -18,13 +21,10 @@ use tokio_stream::wrappers::ReceiverStream;
 use nimiq_block::Block;
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
+use nimiq_blockchain_interface::{AbstractBlockchain, Direction};
 use nimiq_consensus::sync::live::block_queue::BlockQueue;
-use nimiq_consensus::sync::live::block_request_component::{
-    BlockRequestComponentEvent, RequestComponent,
-};
 use nimiq_consensus::sync::live::BlockLiveSync;
-use nimiq_consensus::sync::live::BlockQueueConfig;
-use nimiq_consensus::sync::syncer::{LiveSync, MacroSync, MacroSyncReturn, Syncer};
+use nimiq_consensus::sync::syncer::{MacroSync, MacroSyncReturn, Syncer};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::network::Network;
@@ -42,7 +42,7 @@ use nimiq_utils::time::OffsetTime;
 #[pin_project]
 #[derive(Debug)]
 pub struct MockRequestComponent {
-    pub peers: Arc<RwLock<PeerList<MockNetwork>>>,
+    pub peers: HashSet<MockPeerId>,
     pub tx: mpsc::UnboundedSender<(Blake2bHash, Vec<Blake2bHash>)>,
     #[pin]
     pub rx: mpsc::UnboundedReceiver<Vec<Block>>,
@@ -100,7 +100,7 @@ impl MacroSync<MockPeerId> for MockHistorySyncStream {
 
 impl RequestComponent<MockNetwork> for MockRequestComponent {
     fn add_peer(&self, peer_id: MockPeerId) {
-        self.peers.write().add_peer(peer_id);
+        self.peers.insert(peer_id);
     }
 
     fn request_missing_blocks(
@@ -117,19 +117,19 @@ impl RequestComponent<MockNetwork> for MockRequestComponent {
     }
 
     fn num_peers(&self) -> usize {
-        // We pretend to have a peer.
         1
     }
 
     fn peers(&self) -> Vec<MockPeerId> {
-        self.peers.read().peers().clone()
+        unimplemented!()
     }
 
     fn take_peer(&self, peer_id: &MockPeerId) -> Option<MockPeerId> {
-        if self.peers.write().remove_peer(peer_id) {
-            return Some(*peer_id);
-        }
-        None
+        self.peers.take(peer_id)
+    }
+
+    fn peer_list(&self) -> Arc<RwLock<nimiq_consensus::sync::peer_list::PeerList<MockNetwork>>> {
+        todo!()
     }
 }
 
@@ -181,10 +181,10 @@ async fn send_single_micro_block_to_block_queue() {
         Arc::clone(&network),
         request_component,
         ReceiverStream::new(block_rx).boxed(),
-        BlockQueueConfig::default(),
+        QueueConfig::default(),
     );
 
-    let live_sync = BlockLiveSync::with_block_queue(
+    let live_sync = BlockLiveSync::with_queue(
         blockchain_proxy.clone(),
         Arc::clone(&network),
         block_queue,
@@ -207,12 +207,7 @@ async fn send_single_micro_block_to_block_queue() {
 
     // The produced block is without gap and should go right into the blockchain
     assert_eq!(blockchain.read().block_number(), 1);
-    assert!(syncer
-        .live_sync
-        .block_queue
-        .buffered_blocks()
-        .next()
-        .is_none());
+    assert!(syncer.live_sync.queue().buffered_blocks().next().is_none());
 }
 
 #[test(tokio::test)]
@@ -226,15 +221,15 @@ async fn send_two_micro_blocks_out_of_order() {
     let (request_component, mut missing_blocks_request_rx, _) = MockRequestComponent::new_mutex();
     let (block_tx, block_rx) = mpsc::channel(32);
 
-    let block_queue = BlockQueue::with_gossipsub_block_stream(
+    let block_queue = BlockQueue::with_block_stream(
         blockchain_proxy_1.clone(),
         Arc::clone(&network),
         request_component,
         ReceiverStream::new(block_rx).boxed(),
-        BlockQueueConfig::default(),
+        QueueConfig::default(),
     );
 
-    let live_sync = BlockLiveSync::with_block_queue(
+    let live_sync = BlockLiveSync::with_queue(
         blockchain_proxy_1.clone(),
         Arc::clone(&network),
         block_queue,
@@ -264,7 +259,7 @@ async fn send_two_micro_blocks_out_of_order() {
     assert_eq!(blockchain1.read().block_number(), 0);
     let blocks = syncer
         .live_sync
-        .block_queue
+        .queue()
         .buffered_blocks()
         .collect::<Vec<_>>();
     assert_eq!(blocks.len(), 1);
@@ -285,12 +280,7 @@ async fn send_two_micro_blocks_out_of_order() {
 
     // now both blocks should've been pushed to the blockchain
     assert_eq!(blockchain1.read().block_number(), 2);
-    assert!(syncer
-        .live_sync
-        .block_queue
-        .buffered_blocks()
-        .next()
-        .is_none());
+    assert!(syncer.live_sync.queue().buffered_blocks().next().is_none());
     assert_eq!(
         blockchain1.read().get_block_at(1, true, None).unwrap(),
         block1
@@ -312,15 +302,15 @@ async fn send_micro_blocks_out_of_order() {
     let request_component = MockRequestComponent::new();
     let (block_tx, block_rx) = mpsc::channel(32);
 
-    let block_queue = BlockQueue::with_gossipsub_block_stream(
+    let block_queue = BlockQueue::with_block_stream(
         blockchain_proxy_1.clone(),
         Arc::clone(&network),
         request_component,
         ReceiverStream::new(block_rx).boxed(),
-        BlockQueueConfig::default(),
+        QueueConfig::default(),
     );
 
-    let live_sync = BlockLiveSync::with_block_queue(
+    let live_sync = BlockLiveSync::with_queue(
         blockchain_proxy_1.clone(),
         Arc::clone(&network),
         block_queue,
@@ -360,7 +350,7 @@ async fn send_micro_blocks_out_of_order() {
 
     // Obtain the buffered blocks
     assert_eq!(
-        syncer.live_sync.block_queue.buffered_blocks().count() as u64,
+        syncer.live_sync.queue().buffered_blocks().count() as u64,
         n_blocks - 1
     );
 
@@ -383,12 +373,7 @@ async fn send_micro_blocks_out_of_order() {
     }
 
     // No blocks buffered
-    assert!(syncer
-        .live_sync
-        .block_queue
-        .buffered_blocks()
-        .next()
-        .is_none());
+    assert!(syncer.live_sync.queue().buffered_blocks().next().is_none());
 }
 
 #[test(tokio::test)]
@@ -407,10 +392,10 @@ async fn send_invalid_block() {
         Arc::clone(&network),
         request_component,
         ReceiverStream::new(block_rx).boxed(),
-        BlockQueueConfig::default(),
+        QueueConfig::default(),
     );
 
-    let live_sync = BlockLiveSync::with_block_queue(
+    let live_sync = BlockLiveSync::with_queue(
         blockchain_proxy_1.clone(),
         Arc::clone(&network),
         block_queue,
@@ -446,7 +431,7 @@ async fn send_invalid_block() {
     assert_eq!(blockchain1.read().block_number(), 0);
     let blocks = syncer
         .live_sync
-        .block_queue
+        .queue()
         .buffered_blocks()
         .collect::<Vec<_>>();
     assert_eq!(blocks.len(), 1);
@@ -467,12 +452,7 @@ async fn send_invalid_block() {
 
     // Only Block 1 should be pushed to the blockchain
     assert_eq!(blockchain1.read().block_number(), 1);
-    assert!(syncer
-        .live_sync
-        .block_queue
-        .buffered_blocks()
-        .next()
-        .is_none());
+    assert!(syncer.live_sync.queue().buffered_blocks().next().is_none());
     assert_eq!(
         blockchain1.read().get_block_at(1, true, None).unwrap(),
         block1
@@ -500,10 +480,10 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
         Arc::clone(&network),
         request_component,
         ReceiverStream::new(block_rx).boxed(),
-        BlockQueueConfig::default(),
+        QueueConfig::default(),
     );
 
-    let live_sync = BlockLiveSync::with_block_queue(
+    let live_sync = BlockLiveSync::with_queue(
         blockchain_proxy_1.clone(),
         Arc::clone(&network),
         block_queue,
@@ -530,7 +510,7 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
     assert_eq!(blockchain1.read().block_number(), 0);
     let blocks = syncer
         .live_sync
-        .block_queue
+        .queue()
         .buffered_blocks()
         .collect::<Vec<_>>();
     assert_eq!(blocks.len(), 1);
@@ -554,12 +534,7 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
 
     // now both blocks should've been pushed to the blockchain
     assert_eq!(blockchain1.read().block_number(), 2);
-    assert!(syncer
-        .live_sync
-        .block_queue
-        .buffered_blocks()
-        .next()
-        .is_none());
+    assert!(syncer.live_sync.queue().buffered_blocks().next().is_none());
     assert_eq!(
         blockchain1.read().get_block_at(1, true, None).unwrap(),
         block1
@@ -587,10 +562,10 @@ async fn request_missing_blocks_across_macro_block() {
         Arc::clone(&network),
         request_component,
         ReceiverStream::new(block_rx).boxed(),
-        BlockQueueConfig::default(),
+        QueueConfig::default(),
     );
 
-    let live_sync = BlockLiveSync::with_block_queue(
+    let live_sync = BlockLiveSync::with_queue(
         blockchain_proxy_1.clone(),
         Arc::clone(&network),
         block_queue,
@@ -618,7 +593,7 @@ async fn request_missing_blocks_across_macro_block() {
     assert_eq!(blockchain1.read().block_number(), 0);
     let blocks = syncer
         .live_sync
-        .block_queue
+        .queue()
         .buffered_blocks()
         .collect::<Vec<_>>();
     assert_eq!(blocks.len(), 1);
@@ -644,7 +619,7 @@ async fn request_missing_blocks_across_macro_block() {
     assert_eq!(blockchain1.read().block_number(), 0);
     let blocks = syncer
         .live_sync
-        .block_queue
+        .queue()
         .buffered_blocks()
         .collect::<Vec<_>>();
     assert_eq!(blocks.len(), 3);
@@ -688,12 +663,7 @@ async fn request_missing_blocks_across_macro_block() {
 
     // Now all blocks should've been pushed to the blockchain.
     assert_eq!(blockchain1.read().block_number(), block2.block_number());
-    assert!(syncer
-        .live_sync
-        .block_queue
-        .buffered_blocks()
-        .next()
-        .is_none());
+    assert!(syncer.live_sync.queue().buffered_blocks().next().is_none());
     assert_eq!(
         blockchain1
             .read()
@@ -732,15 +702,10 @@ async fn put_peer_back_into_sync_mode() {
         Arc::clone(&network),
         request_component,
         ReceiverStream::new(block_rx).boxed(),
-        BlockQueueConfig {
-            buffer_max: 10,
-            window_ahead_max: 10,
-            tolerate_past_max: 100,
-            include_micro_bodies: true,
-        },
+        QueueConfig::default(),
     );
 
-    let live_sync = BlockLiveSync::with_block_queue(
+    let live_sync = BlockLiveSync::with_queue(
         blockchain_proxy_1.clone(),
         Arc::clone(&network),
         block_queue,
@@ -749,7 +714,7 @@ async fn put_peer_back_into_sync_mode() {
 
     let mut syncer = Syncer::new(live_sync, history_sync);
 
-    syncer.live_sync.add_peer(peer_addr);
+    syncer.live_sync.request_component_mut().add_peer(peer_addr);
 
     let producer = BlockProducer::new(signing_key(), voting_key());
     for _ in 1..11 {

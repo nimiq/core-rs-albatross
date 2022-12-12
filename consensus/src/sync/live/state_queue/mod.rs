@@ -1,5 +1,9 @@
+pub mod chunk_request_component;
+pub mod live_sync;
+
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
+    fmt::{self, Display},
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
@@ -16,14 +20,13 @@ use nimiq_network_interface::{
     request::{RequestCommon, RequestMarker},
 };
 use nimiq_primitives::policy::Policy;
-use nimiq_trie::{key_nibbles::KeyNibbles, trie::TrieChunk};
+use nimiq_trie::{key_nibbles::KeyNibbles, trie::TrieChunk, trie_chunk::TrieChunkWithStart};
 use parking_lot::RwLock;
 
+use self::chunk_request_component::ChunkRequestComponent;
 use super::{
-    block_queue::{BlockQueue, QueuedBlock},
-    block_request_component::RequestComponent,
-    chunk_request_component::ChunkRequestComponent,
-    BlockQueueConfig,
+    block_queue::{block_request_component::RequestComponent, BlockAndId, BlockQueue, QueuedBlock},
+    queue::QueueConfig,
 };
 
 pub struct ChunkAndId<N: Network> {
@@ -39,6 +42,16 @@ impl<N: Network> ChunkAndId<N> {
             start_key,
             peer_id,
         }
+    }
+
+    pub fn into_pair(self) -> (TrieChunkWithStart, N::PeerId) {
+        (
+            TrieChunkWithStart {
+                chunk: self.chunk,
+                start_key: self.start_key,
+            },
+            self.peer_id,
+        )
     }
 }
 
@@ -62,6 +75,16 @@ pub struct ResponseChunk {
     pub chunk: TrieChunk,
 }
 
+impl Display for ResponseChunk {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "ResponseChunk {{ block_number: {}, block_hahs: {:?}, chunk: {} }}",
+            self.block_number, self.block_hash, self.chunk
+        )
+    }
+}
+
 impl RequestCommon for RequestChunk {
     type Kind = RequestMarker;
     const TYPE_ID: u16 = 212;
@@ -71,10 +94,14 @@ impl RequestCommon for RequestChunk {
 }
 
 pub enum QueuedStateChunks<N: Network> {
-    StateChunk(QueuedBlock<N>, Vec<ChunkAndId<N>>),
+    Head(BlockAndId<N>, Vec<ChunkAndId<N>>),
+    Buffered(Vec<(BlockAndId<N>, Vec<ChunkAndId<N>>)>),
+    Missing(Vec<(Block, Vec<ChunkAndId<N>>)>),
     HeadStateChunk(Vec<ChunkAndId<N>>),
-    TooFarFuture(ChunkAndId<N>),
-    TooDistantPast(ChunkAndId<N>),
+    TooFarFutureBlock(Block, N::PeerId),
+    TooDistantPastBlock(Block, N::PeerId),
+    TooFarFutureChunk(ChunkAndId<N>),
+    TooDistantPastChunk(ChunkAndId<N>),
 }
 
 /// This represents the behavior for the next chunk request. When the accounts trie is:
@@ -82,14 +109,14 @@ pub enum QueuedStateChunks<N: Network> {
 /// Reset: the next request should start based on the blockchain accounts trie state.
 /// Continue: the next request should start on the specified key, which is the end of the previous request.
 #[derive(Clone)]
-enum ChunkRequestState {
+pub enum ChunkRequestState {
     Complete,
     Reset,
     Continue(KeyNibbles),
 }
 
 impl ChunkRequestState {
-    fn is_complete(&self) -> bool {
+    pub fn is_complete(&self) -> bool {
         matches!(self, ChunkRequestState::Complete)
     }
 
@@ -101,14 +128,14 @@ impl ChunkRequestState {
         }
     }
 
-    fn should_continue(&self) -> bool {
+    pub fn should_continue(&self) -> bool {
         matches!(self, ChunkRequestState::Continue(_))
     }
 }
 
 pub struct StateQueue<N: Network, TReq: RequestComponent<N>> {
     /// Configuration for the block queue.
-    config: BlockQueueConfig,
+    config: QueueConfig,
 
     /// Reference to the blockchain.
     blockchain: Arc<RwLock<Blockchain>>,
@@ -130,13 +157,6 @@ pub struct StateQueue<N: Network, TReq: RequestComponent<N>> {
 
     buffer_size: usize,
 
-    /// Blocks to be processed and returned by the stream.
-    pending_blocks: Option<QueuedBlock<N>>,
-
-    /// Hashes of blocks that are pending to be pushed to the chain.
-    // pending_chunks: BTreeSet<Blake2bHash>,
-    // waker: Option<Waker>,
-
     /// The block number of the latest macro block. We prune the block buffer when it changes.
     current_macro_height: u32,
 
@@ -152,23 +172,31 @@ pub struct StateQueue<N: Network, TReq: RequestComponent<N>> {
 }
 
 impl<N: Network, TReq: RequestComponent<N>> StateQueue<N, TReq> {
-    pub fn num_peers(&self) -> usize {
-        self.block_queue.num_peers()
-    }
-
-    pub fn peers(&self) -> Vec<N::PeerId> {
-        self.block_queue.peers()
-    }
-
-    pub fn add_peer(&self, peer_id: N::PeerId) {
-        self.block_queue.add_peer(peer_id)
-    }
-
-    pub fn add_block_stream<S>(&mut self, block_stream: S)
-    where
-        S: Stream<Item = (Block, N::PeerId, Option<N::PubsubId>)> + Send + 'static,
-    {
-        self.block_queue.add_block_stream(block_stream)
+    pub fn with_block_queue(
+        blockchain: Arc<RwLock<Blockchain>>,
+        network: Arc<N>,
+        block_queue: BlockQueue<N, TReq>,
+        config: QueueConfig,
+    ) -> Self {
+        let chunk_request_component = ChunkRequestComponent::new(
+            Arc::clone(&network),
+            network.subscribe_events(),
+            block_queue.request_component.peer_list(),
+        );
+        let current_macro_height = Policy::last_macro_block(blockchain.read().block_number());
+        let blockchain_rx = blockchain.read().notifier_as_stream();
+        Self {
+            config,
+            blockchain,
+            network,
+            block_queue,
+            chunk_request_component,
+            buffer: Default::default(),
+            buffer_size: 0,
+            current_macro_height,
+            start_key: ChunkRequestState::Reset,
+            blockchain_rx,
+        }
     }
 
     pub fn remove_invalid_blocks(&mut self, invalid_blocks: &mut HashSet<Blake2bHash>) {
@@ -203,8 +231,16 @@ impl<N: Network, TReq: RequestComponent<N>> StateQueue<N, TReq> {
         self.block_queue.on_block_processed(hash)
     }
 
+    pub fn buffered_chunks_len(&self) -> usize {
+        self.buffer_size
+    }
+
     pub fn buffered_blocks_len(&self) -> usize {
         self.block_queue.buffered_blocks_len()
+    }
+
+    pub fn chunk_request_state(&self) -> &ChunkRequestState {
+        &self.start_key
     }
 
     /// Requests a chunk from the peers starting at the starting key from this queue.
@@ -223,10 +259,11 @@ impl<N: Network, TReq: RequestComponent<N>> StateQueue<N, TReq> {
 
         if let Some(start_key) = start_key {
             let req = RequestChunk {
-                start_key,
-                limit: Policy::STATE_CHUNKS_MAX_SIZE,
+                start_key: start_key.clone(),
+                limit: Policy::state_chunks_max_size(),
             };
             self.chunk_request_component.request_chunk(req);
+            self.start_key = ChunkRequestState::Continue(start_key);
             return true;
         }
         false
@@ -238,12 +275,30 @@ impl<N: Network, TReq: RequestComponent<N>> StateQueue<N, TReq> {
         start_key: KeyNibbles,
         peer_id: N::PeerId,
     ) {
-        self.buffer
+        let chunks = self
+            .buffer
             .entry(response.block_number)
             .or_default()
-            .entry(response.block_hash)
-            .or_default()
-            .push(ChunkAndId::new(response.chunk, start_key, peer_id));
+            .entry(response.block_hash.clone())
+            .or_default();
+
+        // We try to avoid duplicate chunks by checking start and end key
+        // as well as items length for efficiency reasons.
+        if chunks.iter().any(|chunk| {
+            chunk.start_key == start_key
+                && chunk.chunk.items.len() == response.chunk.items.len()
+                && chunk.chunk.keys_end == response.chunk.keys_end
+        }) {
+            log::debug!(
+                "Discarding duplicate chunk {} for block (#{}, hash {})",
+                response.chunk,
+                response.block_number,
+                response.block_hash
+            );
+            return;
+        }
+
+        chunks.push(ChunkAndId::new(response.chunk, start_key, peer_id));
         self.buffer_size += 1;
     }
 
@@ -269,14 +324,14 @@ impl<N: Network, TReq: RequestComponent<N>> StateQueue<N, TReq> {
 
         if chunk.block_number < current_block_height.saturating_sub(self.config.tolerate_past_max) {
             log::warn!(
-                "Discarding chunk {:?} earlier than toleration window (max {})",
+                "Discarding chunk {} earlier than toleration window (max {})",
                 chunk,
                 current_block_height.saturating_sub(self.config.tolerate_past_max),
             );
 
             if self.network.has_peer(peer_id) {
                 self.chunk_request_component.remove_peer(&peer_id);
-                return Some(QueuedStateChunks::TooDistantPast(ChunkAndId::new(
+                return Some(QueuedStateChunks::TooDistantPastChunk(ChunkAndId::new(
                     chunk.chunk,
                     start_key,
                     peer_id,
@@ -284,14 +339,14 @@ impl<N: Network, TReq: RequestComponent<N>> StateQueue<N, TReq> {
             }
         } else if chunk.block_number > current_block_height + self.config.window_ahead_max {
             log::warn!(
-                "Discarding chunk {:?} outside of buffer window (max {})",
+                "Discarding chunk {} outside of buffer window (max {})",
                 chunk,
                 current_block_height + self.config.window_ahead_max,
             );
 
             if self.network.has_peer(peer_id) {
                 self.chunk_request_component.remove_peer(&peer_id);
-                return Some(QueuedStateChunks::TooFarFuture(ChunkAndId::new(
+                return Some(QueuedStateChunks::TooFarFutureChunk(ChunkAndId::new(
                     chunk.chunk,
                     start_key,
                     peer_id,
@@ -299,14 +354,14 @@ impl<N: Network, TReq: RequestComponent<N>> StateQueue<N, TReq> {
             }
         } else if self.buffer_size >= self.config.buffer_max {
             log::warn!(
-                "Discarding chunk {:?}, buffer full (max {})",
+                "Discarding chunk {}, buffer full (max {})",
                 chunk,
                 self.buffer_size,
             );
         } else if chunk.block_number <= macro_height {
             // Chunk is from a previous batch/epoch, discard it.
             log::warn!(
-                "Discarding chunk {:?}, we're already at macro block #{}",
+                "Discarding chunk {}, we're already at macro block #{}",
                 chunk,
                 macro_height
             );
@@ -320,7 +375,7 @@ impl<N: Network, TReq: RequestComponent<N>> StateQueue<N, TReq> {
             )]));
         } else if contains_block {
             // Block is already in blockchain, cannot apply chunk so we discard it.
-            log::debug!("Discarding chunk {:?}, block already applied", chunk);
+            log::debug!("Discarding chunk {}, block already applied", chunk);
         } else {
             // Chunk is inside the buffer window, put it in the buffer.
             self.set_start_key(&chunk.chunk.keys_end);
@@ -332,57 +387,44 @@ impl<N: Network, TReq: RequestComponent<N>> StateQueue<N, TReq> {
     /// Handles blocks received from the blockqueue.
     /// Upon a new block, we return it with any chunks we already have.
     /// If we receive multiple blocks at once, we always return the first and buffer the rest.
-    fn on_blocks_received(&mut self, queued_block: QueuedBlock<N>) -> Option<QueuedStateChunks<N>> {
-        let chunks = match queued_block {
+    fn on_blocks_received(&mut self, queued_block: QueuedBlock<N>) -> QueuedStateChunks<N> {
+        match queued_block {
             // Received a single block and retrieve the corresponding chunks.
-            QueuedBlock::Head((ref block, ref _peer_id)) => self.get_block_chunks(block),
-            QueuedBlock::Buffered(mut blocks) => {
-                // Received multiple blocks, get the chunks avl for the first and queue the remaining blocks.
-                if let Some((block, pubsub_id)) = blocks.pop() {
-                    let chunks = self.get_block_chunks(&block);
-                    if !blocks.is_empty() {
-                        assert!(
-                            self.pending_blocks.is_none(),
-                            "We always handle pending blocks before polling new ones."
-                        );
-                        self.pending_blocks = Some(QueuedBlock::Buffered(blocks));
-                    }
-
-                    return Some(QueuedStateChunks::StateChunk(
-                        QueuedBlock::Buffered(vec![(block, pubsub_id)]),
-                        chunks,
-                    ));
-                } else {
-                    log::error!("Received empty buffered blocks from block queue");
-                    return None;
-                };
+            QueuedBlock::Head((block, pubsub_id)) => {
+                let chunks = self.get_block_chunks(&block);
+                QueuedStateChunks::Head((block, pubsub_id), chunks)
             }
-            QueuedBlock::Missing(mut missing_blocks) => {
-                // Received multiple blocks, get the chunks avl for the first and queue the remaining blocks.
-                if let Some(block) = missing_blocks.pop() {
-                    let chunks = self.get_block_chunks(&block);
-                    if !missing_blocks.is_empty() {
-                        assert!(
-                            self.pending_blocks.is_none(),
-                            "We always handle pending blocks before polling new ones."
-                        );
-                        self.pending_blocks = Some(QueuedBlock::Missing(missing_blocks));
-                    }
-
-                    return Some(QueuedStateChunks::StateChunk(
-                        QueuedBlock::Missing(vec![block]),
-                        chunks,
-                    ));
-                } else {
-                    log::error!("Received empty missing blocks from block queue");
-                    return None;
-                };
+            QueuedBlock::Buffered(blocks) => {
+                // Received multiple blocks, get the chunks avl for all blocks.
+                let blocks_and_chunks = blocks
+                    .into_iter()
+                    .map(|(block, pubsub_id)| {
+                        let chunks = self.get_block_chunks(&block);
+                        ((block, pubsub_id), chunks)
+                    })
+                    .collect();
+                QueuedStateChunks::Buffered(blocks_and_chunks)
             }
-            // Received too far away blocks (future or past). We forward the block queue event without chunks.
-            _ => vec![],
-        };
-
-        Some(QueuedStateChunks::StateChunk(queued_block, chunks))
+            QueuedBlock::Missing(missing_blocks) => {
+                // Received multiple blocks, get the chunks avl for all blocks.
+                let blocks_and_chunks = missing_blocks
+                    .into_iter()
+                    .map(|block| {
+                        let chunks = self.get_block_chunks(&block);
+                        (block, chunks)
+                    })
+                    .collect();
+                QueuedStateChunks::Missing(blocks_and_chunks)
+            }
+            // Received too far away blocks (past). We forward the block queue event without chunks.
+            QueuedBlock::TooDistantPast(block, peer_id) => {
+                QueuedStateChunks::TooDistantPastBlock(block, peer_id)
+            }
+            // Received too far away blocks (future). We forward the block queue event without chunks.
+            QueuedBlock::TooFarFuture(block, peer_id) => {
+                QueuedStateChunks::TooFarFutureBlock(block, peer_id)
+            }
+        }
     }
 
     fn get_block_chunks(&mut self, block: &Block) -> Vec<ChunkAndId<N>> {
@@ -432,12 +474,8 @@ impl<N: Network, TReq: RequestComponent<N>> Stream for StateQueue<N, TReq> {
             if !self.start_key.is_complete() {
                 match event {
                     BlockchainEvent::Finalized(_) | BlockchainEvent::EpochFinalized(_) => {
-                        if self
-                            .blockchain
-                            .read()
-                            .get_missing_accounts_range(None)
-                            .is_none()
-                        {
+                        if self.blockchain.read().state.accounts.is_complete(None) {
+                            info!("Finished state sync, trie complete.");
                             self.start_key = ChunkRequestState::Complete;
                             self.buffer.clear();
                             self.buffer_size = 0;
@@ -462,30 +500,19 @@ impl<N: Network, TReq: RequestComponent<N>> Stream for StateQueue<N, TReq> {
             }
         }
 
-        // 2. Process and return buffered blocks (can happen if block queue returns a vector of blocks).
-        if let Some(queued_block) = self.pending_blocks.take() {
-            if let Some(state_chunks) = self.on_blocks_received(queued_block) {
-                return Poll::Ready(Some(state_chunks));
-            }
-        }
-
-        // 3. Request chunks via ChunkRequestComponent.
+        // 2. Request chunks via ChunkRequestComponent.
         if !self.chunk_request_component.has_pending_requests() {
             self.request_chunk();
         }
 
-        // 4. Receive blocks from BlockQueue.
-        loop {
-            let poll_res = self.block_queue.poll_next_unpin(cx);
-            match poll_res {
-                Poll::Ready(Some(queued_block)) => {
-                    if let Some(state_chunks) = self.on_blocks_received(queued_block) {
-                        return Poll::Ready(Some(state_chunks));
-                    }
-                }
-                Poll::Ready(None) => return Poll::Ready(None),
-                Poll::Pending => break,
+        // 3. Receive blocks from BlockQueue.
+        let poll_res = self.block_queue.poll_next_unpin(cx);
+        match poll_res {
+            Poll::Ready(Some(queued_block)) => {
+                return Poll::Ready(Some(self.on_blocks_received(queued_block)));
             }
+            Poll::Ready(None) => return Poll::Ready(None),
+            Poll::Pending => {}
         }
 
         Poll::Pending

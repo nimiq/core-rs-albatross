@@ -25,5 +25,5 @@ tokio-stream = { version = "0.1", features = ["sync"] }
 nimiq-block = { path = "../primitives/block" }
 nimiq-database-value = { path = "../database/database-value" }
 nimiq-hash = { path = "../hash" }
-nimiq-primitives = { path = "../primitives" }
+nimiq-primitives = { path = "../primitives", features = ["coin", "key-nibbles", "policy"] }
 nimiq-transaction = { path = "../primitives/transaction" }

@@ -2,6 +2,7 @@
 extern crate log;
 
 pub use blockchain::blockchain::{Blockchain, BlockchainConfig, TransactionVerificationCache};
+pub use blockchain::error::*;
 pub use history::*;
 
 pub(crate) mod blockchain;

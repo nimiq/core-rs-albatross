@@ -19,6 +19,8 @@ pub struct Policy {
     /// Tendermint's timeout delta, in milliseconds.
     /// See https://arxiv.org/abs/1807.04938v3 for more information.
     pub tendermint_timeout_delta: u64,
+    /// Maximum size of accounts trie chunks.
+    pub state_chunks_max_size: u32,
 }
 
 impl Policy {
@@ -110,10 +112,6 @@ impl Policy {
     /// 25 MB.
     pub const HISTORY_CHUNKS_MAX_SIZE: u64 = 25 * 1024 * 1024;
 
-    /// Maximum size of accounts trie chunks.
-    /// #Nodes/accounts 200.
-    pub const STATE_CHUNKS_MAX_SIZE: u32 = 200; // TODO: Simulate with different sizes
-
     #[inline]
     fn get_blocks_per_epoch(&self) -> u32 {
         self.blocks_per_batch * self.batches_per_epoch as u32
@@ -148,6 +146,13 @@ impl Policy {
         GLOBAL_POLICY
             .get_or_init(Self::default)
             .tendermint_timeout_delta
+    }
+
+    #[inline]
+    pub fn state_chunks_max_size() -> u32 {
+        GLOBAL_POLICY
+            .get_or_init(Policy::default)
+            .state_chunks_max_size
     }
 
     /// Returns the epoch number at a given block number (height).
@@ -327,6 +332,7 @@ impl Default for Policy {
             batches_per_epoch: 360,
             tendermint_timeout_init: 1000,
             tendermint_timeout_delta: 1000,
+            state_chunks_max_size: 200, // #Nodes/accounts 200, TODO: Simulate with different sizes
         }
     }
 }
@@ -336,6 +342,7 @@ pub const TEST_POLICY: Policy = Policy {
     batches_per_epoch: 4,
     tendermint_timeout_init: 1000,
     tendermint_timeout_delta: 1000,
+    state_chunks_max_size: 2,
 };
 
 #[cfg(test)]
@@ -349,6 +356,7 @@ mod tests {
             batches_per_epoch: 4,
             tendermint_timeout_init: 1000,
             tendermint_timeout_delta: 1000,
+            state_chunks_max_size: 2,
         };
         let _ = Policy::get_or_init(policy);
     }

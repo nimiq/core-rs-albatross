@@ -6,6 +6,8 @@ use nimiq_database::Environment;
 use nimiq_zkp_component::proof_store::ProofStore;
 use parking_lot::{Mutex, RwLock};
 
+use nimiq_account::Account;
+use nimiq_block::Block;
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_consensus::{sync::syncer_proxy::SyncerProxy, Consensus};
@@ -14,6 +16,7 @@ use nimiq_genesis_builder::GenesisInfo;
 use nimiq_network_interface::network::Network as NetworkInterface;
 use nimiq_network_mock::MockHub;
 use nimiq_primitives::networks::NetworkId;
+use nimiq_trie::key_nibbles::KeyNibbles;
 use nimiq_utils::time::OffsetTime;
 use nimiq_zkp_component::{proof_store::DBProofStore, ZKPComponent};
 
@@ -30,12 +33,30 @@ pub struct Node<N: NetworkInterface + TestNetwork> {
 }
 
 impl<N: NetworkInterface + TestNetwork> Node<N> {
-    pub async fn new(
+    pub async fn history_with_genesis_info(
         peer_id: u64,
         genesis_info: GenesisInfo,
         hub: &mut Option<MockHub>,
         is_prover_active: bool,
     ) -> Self {
+        Self::new_history(
+            peer_id,
+            genesis_info.block,
+            genesis_info.accounts,
+            hub,
+            is_prover_active,
+        )
+        .await
+    }
+
+    pub async fn new_history(
+        peer_id: u64,
+        block: Block,
+        accounts: Vec<(KeyNibbles, Account)>,
+        hub: &mut Option<MockHub>,
+        is_prover_active: bool,
+    ) -> Self {
+        let block_hash = block.hash();
         let env = VolatileEnvironment::new(14).unwrap();
         let clock = Arc::new(OffsetTime::new());
         let blockchain = Arc::new(RwLock::new(
@@ -44,13 +65,13 @@ impl<N: NetworkInterface + TestNetwork> Node<N> {
                 BlockchainConfig::default(),
                 Arc::clone(&clock),
                 NetworkId::UnitAlbatross,
-                genesis_info.block,
-                genesis_info.accounts,
+                block,
+                accounts,
             )
             .unwrap(),
         ));
 
-        let network = N::build_network(peer_id, genesis_info.hash, hub).await;
+        let network = N::build_network(peer_id, block_hash, hub).await;
         let zkp_storage: Option<Box<dyn ProofStore>> =
             Some(Box::new(DBProofStore::new(env.clone())));
         let zkp_proxy = ZKPComponent::new(

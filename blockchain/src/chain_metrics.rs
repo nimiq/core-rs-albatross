@@ -7,6 +7,8 @@ use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;
 use prometheus_client::registry::Registry;
 
+use crate::blockchain::error::{ChunksPushError, ChunksPushResult};
+
 #[derive(Default)]
 pub struct BlockchainMetrics {
     block_push_counts: Family<PushResultLabels, Counter>,
@@ -56,13 +58,16 @@ impl BlockchainMetrics {
     }
 
     #[inline]
-    pub fn note_push_result(&self, push_result: &Result<PushResult, PushError>) {
+    pub fn note_push_result(
+        &self,
+        push_result: &Result<(PushResult, Result<ChunksPushResult, ChunksPushError>), PushError>,
+    ) {
         let push_result = match push_result {
-            Ok(PushResult::Known) => BlockPushResult::Known,
-            Ok(PushResult::Extended) => BlockPushResult::Extended,
-            Ok(PushResult::Rebranched) => BlockPushResult::Rebranched,
-            Ok(PushResult::Forked) => BlockPushResult::Forked,
-            Ok(PushResult::Ignored) => BlockPushResult::Ignored,
+            Ok((PushResult::Known, _)) => BlockPushResult::Known,
+            Ok((PushResult::Extended, _)) => BlockPushResult::Extended,
+            Ok((PushResult::Rebranched, _)) => BlockPushResult::Rebranched,
+            Ok((PushResult::Forked, _)) => BlockPushResult::Forked,
+            Ok((PushResult::Ignored, _)) => BlockPushResult::Ignored,
             Err(PushError::Orphan) => BlockPushResult::Orphan,
             Err(_) => {
                 self.note_invalid_block();

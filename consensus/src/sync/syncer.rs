@@ -55,9 +55,9 @@ pub enum MacroSyncReturn<T> {
 #[derive(Clone, Debug)]
 /// Enumeration for events emitted by the Live Sync stream
 pub enum LiveSyncEvent<TPeerId> {
-    /// Events related to received/accepted or rejected blocks.
+    /// Events related to received/accepted or rejected blocks
     PushEvent(LiveSyncPushEvent),
-    /// Events related to peer qualifications in the sync.
+    /// Events related to peer qualifications in the sync
     PeerEvent(LiveSyncPeerEvent<TPeerId>),
 }
 
@@ -71,7 +71,11 @@ pub enum LiveSyncPushEvent {
     /// Missing blocks were received
     ReceivedMissingBlocks(Blake2bHash, usize),
     /// Block was rejected
+    /// (this is only returned in *some* cases blocks were rejected)
     RejectedBlock(Blake2bHash),
+    /// Chunks have been accepted for the head block
+    /// (note that other accepted chunks won't be announced)
+    AcceptedChunks(Blake2bHash),
 }
 
 #[derive(Clone, Debug)]

@@ -38,7 +38,8 @@ where
     N::Error: Send,
     N::PeerId: Deserialize + Serialize,
 {
-    let node = Node::<N>::new(peer_id, genesis_info, hub, is_prover_active).await;
+    let node =
+        Node::<N>::history_with_genesis_info(peer_id, genesis_info, hub, is_prover_active).await;
     let consensus = node.consensus.expect("Could not create consensus");
     let validator_network = Arc::new(ValidatorNetworkImpl::new(Arc::clone(&consensus.network)));
     (
