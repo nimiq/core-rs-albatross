@@ -32,6 +32,8 @@ pub trait RequestComponent<N: Network>:
 
     fn peers(&self) -> Vec<N::PeerId>;
 
+    fn peer_list(&self) -> Arc<RwLock<PeerList<N>>>;
+
     fn take_peer(&self, peer_id: &N::PeerId) -> Option<N::PeerId>;
 }
 
@@ -150,6 +152,10 @@ impl<N: 'static + Network> RequestComponent<N> for BlockRequestComponent<N> {
             return Some(*peer_id);
         }
         None
+    }
+
+    fn peer_list(&self) -> Arc<RwLock<PeerList<N>>> {
+        Arc::clone(&self.peers)
     }
 }
 

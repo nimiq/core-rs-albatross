@@ -17,13 +17,15 @@ pub enum MerkleRadixTrieError {
     #[error("Failed to (de)serialize a value.")]
     SerializationFailed(SerializingError),
     #[error("Tree is already complete.")]
-    TreeAlreadyComplete,
+    TrieAlreadyComplete,
     #[error("Chunk does not match tree state.")]
     NonMatchingChunk,
     #[error("Root hash does not match expected hash after applying chunk.")]
     ChunkHashMismatch,
     #[error("Chunk is invalid: {0}")]
     InvalidChunk(&'static str),
+    #[error("Trie is not complete")]
+    IncompleteTrie,
 }
 
 impl From<SerializingError> for MerkleRadixTrieError {

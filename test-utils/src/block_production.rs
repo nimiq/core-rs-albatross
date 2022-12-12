@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use nimiq_transaction::Transaction;
+use nimiq_trie::{key_nibbles::KeyNibbles, trie_chunk::TrieChunkWithStart};
 use parking_lot::RwLock;
 
 use beserial::Deserialize;
@@ -10,7 +12,9 @@ use nimiq_block::{
 };
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
-use nimiq_blockchain_interface::{AbstractBlockchain, PushError, PushResult};
+use nimiq_blockchain_interface::{
+    AbstractBlockchain, ChunksPushError, ChunksPushResult, PushError, PushResult,
+};
 use nimiq_bls::{AggregateSignature, KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
 use nimiq_collections::BitSet;
 use nimiq_database::volatile::VolatileEnvironment;
@@ -36,6 +40,23 @@ impl Default for TemporaryBlockProducer {
 }
 
 impl TemporaryBlockProducer {
+    pub fn new_incomplete() -> Self {
+        let producer = Self::new();
+
+        // Reset accounts trie.
+        {
+            let blockchain_rg = producer.blockchain.read();
+            let mut txn = blockchain_rg.write_transaction();
+            blockchain_rg
+                .state
+                .accounts
+                .reinitialize_as_incomplete(&mut txn);
+            txn.commit();
+        }
+
+        producer
+    }
+
     pub fn new() -> Self {
         let time = Arc::new(OffsetTime::new());
         let env = VolatileEnvironment::new(10).unwrap();
@@ -66,13 +87,49 @@ impl TemporaryBlockProducer {
         Blockchain::push(self.blockchain.upgradable_read(), block)
     }
 
+    pub fn push_with_chunks(
+        &self,
+        block: Block,
+        chunks: Vec<TrieChunkWithStart>,
+    ) -> Result<(PushResult, Result<ChunksPushResult, ChunksPushError>), PushError> {
+        Blockchain::push_with_chunks(self.blockchain.upgradable_read(), block, chunks)
+    }
+
+    pub fn get_chunk(&self, start_key: KeyNibbles, limit: usize) -> TrieChunkWithStart {
+        let chunk = self
+            .blockchain
+            .read()
+            .state
+            .accounts
+            .get_chunk(start_key.clone(), limit, None);
+        TrieChunkWithStart { chunk, start_key }
+    }
+
     pub fn next_block(&self, extra_data: Vec<u8>, skip_block: bool) -> Block {
-        let block = self.next_block_no_push(extra_data, skip_block);
+        self.next_block_with_txs(extra_data, skip_block, vec![])
+    }
+
+    pub fn next_block_with_txs(
+        &self,
+        extra_data: Vec<u8>,
+        skip_block: bool,
+        transactions: Vec<Transaction>,
+    ) -> Block {
+        let block = self.next_block_no_push_with_txs(extra_data, skip_block, transactions);
         assert_eq!(self.push(block.clone()), Ok(PushResult::Extended));
         block
     }
 
     pub fn next_block_no_push(&self, extra_data: Vec<u8>, skip_block: bool) -> Block {
+        self.next_block_no_push_with_txs(extra_data, skip_block, vec![])
+    }
+
+    pub fn next_block_no_push_with_txs(
+        &self,
+        extra_data: Vec<u8>,
+        skip_block: bool,
+        transactions: Vec<Transaction>,
+    ) -> Block {
         let blockchain = self.blockchain.read();
 
         let height = blockchain.block_number() + 1;
@@ -119,7 +176,7 @@ impl TemporaryBlockProducer {
                 &blockchain,
                 blockchain.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
                 vec![],
-                vec![],
+                transactions,
                 extra_data,
                 None,
             ))

@@ -148,6 +148,10 @@ impl<'env> VolatileWriteTransaction<'env> {
     ) -> VolatileWriteCursor<'txn> {
         VolatileWriteCursor(self.0.write_cursor(db))
     }
+
+    pub(super) fn clear_database(&mut self, db: &VolatileDatabase) {
+        self.0.clear_database(&db.0)
+    }
 }
 
 pub struct VolatileCursor<'txn>(MdbxCursor<'txn>);

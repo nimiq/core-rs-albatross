@@ -2,7 +2,7 @@ use futures::stream::BoxStream;
 
 use nimiq_block::{Block, MacroBlock};
 use nimiq_blockchain_interface::{
-    AbstractBlockchain, BlockchainError, BlockchainEvent, ChainInfo, Direction,
+    AbstractBlockchain, BlockchainError, BlockchainEvent, ChainInfo, Direction, ForkEvent,
 };
 use nimiq_genesis::NetworkId;
 use nimiq_hash::Blake2bHash;
@@ -110,5 +110,9 @@ impl AbstractBlockchain for LightBlockchain {
             election_blocks_only,
             include_body,
         )
+    }
+
+    fn fork_notifier_as_stream(&self) -> BoxStream<'static, ForkEvent> {
+        todo!()
     }
 }

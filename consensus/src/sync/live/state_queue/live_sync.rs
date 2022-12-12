@@ -1,0 +1,224 @@
+use std::{
+    collections::{HashSet, VecDeque},
+    sync::Arc,
+};
+
+use futures::{
+    future::{self, BoxFuture},
+    FutureExt, Stream,
+};
+use nimiq_block::Block;
+use nimiq_blockchain_interface::{ChunksPushError, ChunksPushResult, PushError, PushResult};
+use nimiq_blockchain_proxy::BlockchainProxy;
+use nimiq_bls::cache::PublicKeyCache;
+use nimiq_hash::Blake2bHash;
+use nimiq_network_interface::network::Network;
+use parking_lot::Mutex;
+
+use super::{ChunkAndId, QueuedStateChunks, StateQueue};
+use crate::sync::{
+    live::{
+        block_queue::{
+            block_request_component::RequestComponent, live_sync::PushOpResult as BlockPushOpResult,
+        },
+        queue::{self, LiveSyncQueue},
+    },
+    syncer::{LiveSyncEvent, LiveSyncPeerEvent, LiveSyncPushEvent},
+};
+
+pub enum PushOpResult<N: Network> {
+    Head(
+        Result<PushResult, PushError>,
+        Result<ChunksPushResult, ChunksPushError>,
+        Blake2bHash,
+    ),
+    HeadChunk(Result<ChunksPushResult, ChunksPushError>, Blake2bHash),
+    Buffered(
+        Result<PushResult, PushError>,
+        Result<ChunksPushResult, ChunksPushError>,
+        Blake2bHash,
+    ),
+    Missing(
+        Result<PushResult, PushError>,
+        Result<ChunksPushResult, ChunksPushError>,
+        Vec<Blake2bHash>,
+        HashSet<Blake2bHash>,
+    ),
+    PeerEvent(LiveSyncPeerEvent<N::PeerId>),
+}
+
+impl<N: Network> PushOpResult<N> {
+    pub fn get_push_chunk_error(&self) -> Option<&ChunksPushError> {
+        match self {
+            PushOpResult::Head(_, Err(e), _)
+            | PushOpResult::HeadChunk(Err(e), _)
+            | PushOpResult::Buffered(_, Err(e), _)
+            | PushOpResult::Missing(_, Err(e), _, _) => Some(e),
+            _ => None,
+        }
+    }
+
+    pub fn get_push_block_error(&self) -> Option<&PushError> {
+        match self {
+            PushOpResult::Head(Err(push_error), _, _)
+            | PushOpResult::Buffered(Err(push_error), _, _)
+            | PushOpResult::Missing(Err(push_error), _, _, _) => Some(push_error),
+            _ => None,
+        }
+    }
+
+    fn into_block_push_result(self) -> Option<BlockPushOpResult<N>> {
+        match self {
+            PushOpResult::Head(push_result, _, block_hash) => {
+                Some(BlockPushOpResult::Head(push_result, block_hash))
+            }
+            PushOpResult::HeadChunk(_, _) => None,
+            PushOpResult::Buffered(push_result, _, block_hash) => {
+                Some(BlockPushOpResult::Buffered(push_result, block_hash))
+            }
+            PushOpResult::Missing(push_result, _, adopted_blocks, invalid_blocks) => Some(
+                BlockPushOpResult::Missing(push_result, adopted_blocks, invalid_blocks),
+            ),
+            PushOpResult::PeerEvent(event) => Some(BlockPushOpResult::PeerEvent(event)),
+        }
+    }
+}
+
+impl<N: Network, TReq: RequestComponent<N>> LiveSyncQueue<N> for StateQueue<N, TReq> {
+    type QueueResult = QueuedStateChunks<N>;
+    type PushResult = PushOpResult<N>;
+
+    fn push_queue_result(
+        network: Arc<N>,
+        blockchain: BlockchainProxy,
+        bls_cache: Arc<Mutex<PublicKeyCache>>,
+        result: Self::QueueResult,
+        _include_body: bool,
+    ) -> VecDeque<BoxFuture<'static, Self::PushResult>> {
+        let mut future_results = VecDeque::new();
+        match result {
+            QueuedStateChunks::Head((block, pubsub_id), chunks) => {
+                // Push block.
+                future_results.push_back(
+                    queue::push_block_and_chunks(
+                        network, blockchain, bls_cache, pubsub_id, block, chunks,
+                    )
+                    .map(|(push_result, push_chunk_error, hash)| {
+                        PushOpResult::Head(push_result, push_chunk_error, hash)
+                    })
+                    .boxed(),
+                );
+            }
+            QueuedStateChunks::Buffered(buffered_blocks) => {
+                for ((block, pubsub_id), chunks) in buffered_blocks {
+                    let res = queue::push_block_and_chunks(
+                        Arc::clone(&network),
+                        blockchain.clone(),
+                        Arc::clone(&bls_cache),
+                        pubsub_id,
+                        block,
+                        chunks,
+                    )
+                    .map(|(push_result, push_chunk_error, hash)| {
+                        PushOpResult::Buffered(push_result, push_chunk_error, hash)
+                    })
+                    .boxed();
+                    future_results.push_back(res);
+                }
+            }
+            QueuedStateChunks::Missing(blocks) => {
+                // Pushes multiple blocks.
+                future_results.push_back(
+                    queue::push_multiple_blocks_with_chunks::<N>(blockchain, bls_cache, blocks)
+                        .map(
+                            |(push_result, push_chunk_error, adopted_blocks, invalid_blocks)| {
+                                PushOpResult::Missing(
+                                    push_result,
+                                    push_chunk_error,
+                                    adopted_blocks,
+                                    invalid_blocks,
+                                )
+                            },
+                        )
+                        .boxed(),
+                );
+            }
+            QueuedStateChunks::HeadStateChunk(chunks) => {
+                // Chunks only.
+                future_results.push_back(
+                    queue::push_chunks_only::<N>(blockchain, bls_cache, chunks)
+                        .map(|(push_chunk_error, block_hash)| {
+                            PushOpResult::HeadChunk(push_chunk_error, block_hash)
+                        })
+                        .boxed(),
+                );
+            }
+            QueuedStateChunks::TooFarFutureBlock(_, peer_id)
+            | QueuedStateChunks::TooFarFutureChunk(ChunkAndId { peer_id, .. }) => {
+                // Peer is too far ahead.
+                future_results.push_back(
+                    future::ready(PushOpResult::PeerEvent(LiveSyncPeerEvent::AdvancedPeer(
+                        peer_id,
+                    )))
+                    .boxed(),
+                );
+            }
+            QueuedStateChunks::TooDistantPastBlock(_, peer_id)
+            | QueuedStateChunks::TooDistantPastChunk(ChunkAndId { peer_id, .. }) => {
+                // Peer is too far behind.
+                future_results.push_back(
+                    future::ready(PushOpResult::PeerEvent(LiveSyncPeerEvent::OutdatedPeer(
+                        peer_id,
+                    )))
+                    .boxed(),
+                );
+            }
+        }
+        future_results
+    }
+
+    fn process_push_result(&mut self, item: Self::PushResult) -> Option<LiveSyncEvent<N::PeerId>> {
+        // PITODO Avoid resetting the chunk request chain if a block error occurred on a block
+        // that did not have any chunks in the current chunk chain.
+        if item.get_push_chunk_error().is_some() || item.get_push_block_error().is_some() {
+            self.reset_chunk_request_chain();
+        }
+
+        match item {
+            PushOpResult::HeadChunk(Ok(ChunksPushResult::Chunks), block_hash) => {
+                // If we accepted chunks for the head block without error, we emit an event.
+                // If there was an error, we do not know for sure whether or not a chunk was accepted.
+                Some(LiveSyncEvent::PushEvent(LiveSyncPushEvent::AcceptedChunks(
+                    block_hash,
+                )))
+            }
+            item => self
+                .block_queue
+                .process_push_result(item.into_block_push_result()?),
+        }
+    }
+
+    fn num_peers(&self) -> usize {
+        self.block_queue.num_peers()
+    }
+
+    fn include_micro_bodies(&self) -> bool {
+        true
+    }
+
+    fn peers(&self) -> Vec<N::PeerId> {
+        self.block_queue.peers()
+    }
+
+    fn add_peer(&self, peer_id: N::PeerId) {
+        self.block_queue.add_peer(peer_id)
+    }
+
+    /// Adds an additional block stream by replacing the current block stream with a `select` of both streams.
+    fn add_block_stream<S>(&mut self, block_stream: S)
+    where
+        S: Stream<Item = (Block, N::PeerId, Option<N::PubsubId>)> + Send + 'static,
+    {
+        self.block_queue.add_block_stream(block_stream)
+    }
+}

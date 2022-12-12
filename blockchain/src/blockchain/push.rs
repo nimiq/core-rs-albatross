@@ -3,19 +3,21 @@ use std::cmp;
 use std::error::Error;
 use std::ops::Deref;
 
+use tokio::sync::broadcast::Sender as BroadcastSender;
+
 use nimiq_account::BlockLog;
 use nimiq_block::{Block, ForkProof, MicroBlock};
 use nimiq_blockchain_interface::{
-    AbstractBlockchain, BlockchainEvent, ChainInfo, ChainOrdering, ForkEvent, PushError, PushResult,
+    AbstractBlockchain, BlockchainEvent, ChainInfo, ChainOrdering, ChunksPushError,
+    ChunksPushResult, ForkEvent, PushError, PushResult,
 };
 use nimiq_database::{ReadTransaction, WriteTransaction};
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::policy::Policy;
+use nimiq_trie::trie_chunk::{TrieChunkPushResult, TrieChunkWithStart};
 use nimiq_vrf::VrfSeed;
-use tokio::sync::broadcast::Sender as BroadcastSender;
 
-use crate::blockchain_state::BlockchainState;
-use crate::Blockchain;
+use crate::{blockchain_state::BlockchainState, Blockchain};
 
 fn send_vec(log_notifier: &BroadcastSender<BlockLog>, logs: Vec<BlockLog>) {
     for log in logs {
@@ -36,7 +38,8 @@ impl Blockchain {
         this: RwLockUpgradableReadGuard<Self>,
         block: Block,
         trusted: bool,
-    ) -> Result<PushResult, PushError> {
+        chunks: Vec<TrieChunkWithStart>,
+    ) -> Result<(PushResult, Result<ChunksPushResult, ChunksPushError>), PushError> {
         // Ignore all blocks that precede (or are at the same height) as the most recent accepted
         // macro block.
         let last_macro_block = Policy::last_macro_block(this.block_number());
@@ -47,7 +50,7 @@ impl Blockchain {
                 last_macro_block_no = last_macro_block,
                 "Ignoring block",
             );
-            return Ok(PushResult::Ignored);
+            return Ok((PushResult::Ignored, Ok(ChunksPushResult::NoChunks)));
         }
 
         // TODO: We might want to pass this as argument to this method.
@@ -59,7 +62,7 @@ impl Blockchain {
             .get_chain_info(&block.hash(), false, Some(&read_txn))
             .is_ok()
         {
-            return Ok(PushResult::Known);
+            return Ok((PushResult::Known, Ok(ChunksPushResult::NoChunks)));
         }
 
         // Check if we have this block's parent.
@@ -96,18 +99,25 @@ impl Blockchain {
             |hash, include_body| this.get_chain_info(hash, include_body, Some(&read_txn)),
             |height, include_body| this.get_block_at(height, include_body, Some(&read_txn)),
         );
+        let prev_missing_range = this.get_missing_accounts_range(Some(&read_txn));
 
         read_txn.close();
 
-        let chain_info = ChainInfo::from_block(block, &prev_info);
+        let chain_info = ChainInfo::from_block(block, &prev_info, prev_missing_range);
 
         // Extend, rebranch or just store the block depending on the chain ordering.
         let result = match chain_order {
             ChainOrdering::Extend => {
-                return Blockchain::extend(this, chain_info.head.hash(), chain_info, prev_info);
+                return Blockchain::extend(
+                    this,
+                    chain_info.head.hash(),
+                    chain_info,
+                    prev_info,
+                    chunks,
+                );
             }
             ChainOrdering::Superior => {
-                return Blockchain::rebranch(this, chain_info.head.hash(), chain_info);
+                return Blockchain::rebranch(this, chain_info.head.hash(), chain_info, chunks);
             }
             ChainOrdering::Inferior => {
                 debug!(block = %chain_info.head, "Storing block - on inferior chain");
@@ -124,7 +134,7 @@ impl Blockchain {
             .put_chain_info(&mut txn, &chain_info.head.hash(), &chain_info, true);
         txn.commit();
 
-        Ok(result)
+        Ok((result, Ok(ChunksPushResult::NoChunks)))
     }
 
     // To retain the option of having already taken a lock before this call the self was exchanged.
@@ -137,7 +147,15 @@ impl Blockchain {
         this: RwLockUpgradableReadGuard<Self>,
         block: Block,
     ) -> Result<PushResult, PushError> {
-        Self::push_wrapperfn(this, block, false)
+        Self::push_wrapperfn(this, block, false, vec![]).map(|res| res.0)
+    }
+
+    pub fn push_with_chunks(
+        this: RwLockUpgradableReadGuard<Self>,
+        block: Block,
+        chunks: Vec<TrieChunkWithStart>,
+    ) -> Result<(PushResult, Result<ChunksPushResult, ChunksPushError>), PushError> {
+        Self::push_wrapperfn(this, block, false, chunks)
     }
 
     // To retain the option of having already taken a lock before this call the self was exchanged.
@@ -152,22 +170,67 @@ impl Blockchain {
         this: RwLockUpgradableReadGuard<Self>,
         block: Block,
     ) -> Result<PushResult, PushError> {
-        Self::push_wrapperfn(this, block, true)
+        Self::push_wrapperfn(this, block, true, vec![]).map(|res| res.0)
+    }
+
+    /// Commits a set of chunks to the blockchain.
+    pub fn commit_chunks(
+        &self,
+        chunks: Vec<TrieChunkWithStart>,
+        block_hash: &Blake2bHash,
+    ) -> Result<ChunksPushResult, ChunksPushError> {
+        let state_root = self.state.main_chain.head.state_root();
+        let mut chunk_result = Ok(ChunksPushResult::NoChunks);
+        for (i, chunk_data) in chunks.into_iter().enumerate() {
+            let mut txn = self.write_transaction();
+            log::trace!(
+                "Committing chunk for block: {} chunk: {} start_key: {}",
+                block_hash,
+                chunk_data.chunk,
+                chunk_data.start_key
+            );
+            let result = self.state.accounts.commit_chunk(
+                &mut txn,
+                chunk_data.chunk,
+                state_root.clone(),
+                chunk_data.start_key,
+            );
+            match result {
+                Err(e) => {
+                    txn.abort();
+                    log::warn!("Commit chunk for block {} failed: {}", block_hash, e,);
+                    chunk_result = Err(ChunksPushError::AccountsError(i, e));
+                    break;
+                }
+                Ok(TrieChunkPushResult::Applied) => {
+                    chunk_result = Ok(ChunksPushResult::Chunks);
+                }
+                Ok(TrieChunkPushResult::Ignored) => {
+                    log::debug!("Commit chunk for block {} was ignored.", block_hash,);
+
+                    // The chunk has been ignored, but might still have been valid.
+                }
+            };
+
+            txn.commit();
+        }
+        chunk_result
     }
 
     fn push_wrapperfn(
         this: RwLockUpgradableReadGuard<Self>,
         block: Block,
         trust: bool,
-    ) -> Result<PushResult, PushError> {
+        chunks: Vec<TrieChunkWithStart>,
+    ) -> Result<(PushResult, Result<ChunksPushResult, ChunksPushError>), PushError> {
         #[cfg(not(feature = "metrics"))]
         {
-            Self::do_push(this, block, trust)
+            Self::do_push(this, block, trust, chunks)
         }
         #[cfg(feature = "metrics")]
         {
             let metrics = this.metrics.clone();
-            let res = Self::do_push(this, block, trust);
+            let res = Self::do_push(this, block, trust, chunks);
             metrics.note_push_result(&res);
             res
         }
@@ -179,7 +242,8 @@ impl Blockchain {
         block_hash: Blake2bHash,
         mut chain_info: ChainInfo,
         mut prev_info: ChainInfo,
-    ) -> Result<PushResult, PushError> {
+        chunks: Vec<TrieChunkWithStart>,
+    ) -> Result<(PushResult, Result<ChunksPushResult, ChunksPushError>), PushError> {
         let mut txn = this.write_transaction();
 
         let block_number = this.block_number() + 1;
@@ -252,6 +316,9 @@ impl Blockchain {
         // Downgrade the lock again as the notify listeners might want to acquire read access themselves.
         let this = RwLockWriteGuard::downgrade_to_upgradable(this);
 
+        // Try to apply any chunks we received.
+        let chunk_result = this.commit_chunks(chunks, &block_hash);
+
         let num_transactions = this.state.main_chain.head.num_transactions();
         #[cfg(feature = "metrics")]
         this.metrics.note_extend(num_transactions);
@@ -277,7 +344,7 @@ impl Blockchain {
         // Therefore, no error logs should be produced in this case.
         _ = this.log_notifier.send(block_log);
 
-        Ok(PushResult::Extended)
+        Ok((PushResult::Extended, chunk_result))
     }
 
     /// Rebranches the current main chain.
@@ -285,7 +352,8 @@ impl Blockchain {
         this: RwLockUpgradableReadGuard<Blockchain>,
         block_hash: Blake2bHash,
         chain_info: ChainInfo,
-    ) -> Result<PushResult, PushError> {
+        chunks: Vec<TrieChunkWithStart>,
+    ) -> Result<(PushResult, Result<ChunksPushResult, ChunksPushError>), PushError> {
         let target_block = chain_info.head.header();
         debug!(block = %target_block, "Rebranching");
 
@@ -351,13 +419,21 @@ impl Blockchain {
                 .get_chain_info(&prev_hash, true, Some(&write_txn))
                 .expect("Corrupted store: Failed to find main chain predecessor while rebranching");
 
+            if let Some(ref prev_missing_range) = current.1.prev_missing_range {
+                this.state
+                    .accounts
+                    .revert_chunk(&mut write_txn, prev_missing_range.start.clone())?;
+            }
             block_logs.push(this.revert_accounts(&this.state.accounts, &mut write_txn, &block)?);
 
-            assert_eq!(
-                prev_info.head.state_root(),
-                &this.state.accounts.get_root(Some(&write_txn)),
-                "Failed to revert main chain while rebranching - inconsistent state"
-            );
+            // Verify accounts hash if the tree is complete or changes only happened in the complete part.
+            if let Some(accounts_hash) = this.state.accounts.get_root_hash(Some(&write_txn)) {
+                assert_eq!(
+                    prev_info.head.state_root(),
+                    &accounts_hash,
+                    "Failed to revert main chain while rebranching - inconsistent state"
+                );
+            }
 
             revert_chain.push(current);
 
@@ -465,6 +541,9 @@ impl Blockchain {
         // Downgrade the lock again as the notified listeners might want to acquire read themselves.
         let this = RwLockWriteGuard::downgrade_to_upgradable(this);
 
+        // Try to apply any chunks we received.
+        let chunk_result = this.commit_chunks(chunks, new_head_hash);
+
         let mut reverted_blocks = Vec::with_capacity(revert_chain.len());
         for (hash, chain_info) in revert_chain.into_iter().rev() {
             debug!(
@@ -503,7 +582,7 @@ impl Blockchain {
 
         send_vec(&this.log_notifier, block_logs);
 
-        Ok(PushResult::Rebranched)
+        Ok((PushResult::Rebranched, chunk_result))
     }
 
     fn check_and_commit(

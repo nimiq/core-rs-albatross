@@ -57,12 +57,14 @@ impl KeyNibbles {
     /// character.
     pub fn get(&self, index: usize) -> Option<usize> {
         if index >= self.len() {
-            error!(
-                "Index {} exceeds the length of KeyNibbles {}, which has length {}.",
-                index,
-                self,
-                self.len()
-            );
+            if index != 0 {
+                error!(
+                    "Index {} exceeds the length of KeyNibbles {}, which has length {}.",
+                    index,
+                    self,
+                    self.len()
+                );
+            }
             return None;
         }
 

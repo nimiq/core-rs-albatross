@@ -313,6 +313,12 @@ impl<'env> MdbxWriteTransaction<'env> {
             raw: RawWriteLmdbCursor { cursor },
         }
     }
+
+    pub(super) fn clear_database(&mut self, db: &MdbxDatabase) {
+        let db = self.txn.create_db(Some(&db.db), db.flags).unwrap();
+
+        self.txn.clear_db(&db).unwrap();
+    }
 }
 
 impl<'env> fmt::Debug for MdbxWriteTransaction<'env> {

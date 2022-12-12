@@ -15,8 +15,9 @@ use pin_project::pin_project;
 use crate::sync::{
     history::HistoryMacroSync,
     live::{
-        block_queue::BlockQueue, block_request_component::BlockRequestComponent, BlockLiveSync,
-        BlockQueueConfig,
+        block_queue::{block_request_component::BlockRequestComponent, BlockQueue},
+        queue::QueueConfig,
+        BlockLiveSync,
     },
     syncer::{LiveSyncPushEvent, Syncer},
 };
@@ -67,11 +68,11 @@ impl<N: Network> SyncerProxy<N> {
                     Arc::clone(&network),
                     blockchain_proxy.clone(),
                     request_component,
-                    BlockQueueConfig::default(),
+                    QueueConfig::default(),
                 )
                 .await;
 
-                let live_sync = BlockLiveSync::with_block_queue(
+                let live_sync = BlockLiveSync::with_queue(
                     blockchain_proxy.clone(),
                     Arc::clone(&network),
                     block_queue,
@@ -108,7 +109,7 @@ impl<N: Network> SyncerProxy<N> {
                     false,
                 );
 
-                let block_queue_config = BlockQueueConfig {
+                let block_queue_config = QueueConfig {
                     include_micro_bodies: false,
                     ..Default::default()
                 };
@@ -121,7 +122,7 @@ impl<N: Network> SyncerProxy<N> {
                 )
                 .await;
 
-                let live_sync = BlockLiveSync::with_block_queue(
+                let live_sync = BlockLiveSync::with_queue(
                     blockchain_proxy.clone(),
                     Arc::clone(&network),
                     block_queue,

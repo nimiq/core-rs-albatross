@@ -34,6 +34,7 @@ nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-primitives = { path = "../primitives" }
 nimiq-transaction = { path = "../primitives/transaction" }
+nimiq-trie = { path = "../primitives/trie" }
 nimiq-vrf = { path = "../vrf" }
 nimiq-utils = { path = "../utils"}
 rand = "0.8"
@@ -45,10 +46,9 @@ nimiq-test-log = { path = "../test-log" }
 nimiq-genesis-builder = { path = "../genesis-builder" }
 nimiq-test-utils = { path = "../test-utils" }
 nimiq-transaction-builder = { path = "../transaction-builder" }
-nimiq-trie = { path = "../primitives/trie" }
-nimiq-keys = { path = "../keys" }
 tempfile = "3.3"
 rand = "0.8"
+
 [features]
 default = []
 test-utils = []

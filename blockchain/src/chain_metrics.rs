@@ -1,6 +1,6 @@
 use nimiq_block::Block;
 use nimiq_block::BlockBody::Micro;
-use nimiq_blockchain_interface::{PushError, PushResult};
+use nimiq_blockchain_interface::{ChunksPushError, ChunksPushResult, PushError, PushResult};
 use nimiq_hash::Blake2bHash;
 use prometheus_client::encoding::text::Encode;
 use prometheus_client::metrics::counter::Counter;
@@ -56,13 +56,16 @@ impl BlockchainMetrics {
     }
 
     #[inline]
-    pub fn note_push_result(&self, push_result: &Result<PushResult, PushError>) {
+    pub fn note_push_result(
+        &self,
+        push_result: &Result<(PushResult, Result<ChunksPushResult, ChunksPushError>), PushError>,
+    ) {
         let push_result = match push_result {
-            Ok(PushResult::Known) => BlockPushResult::Known,
-            Ok(PushResult::Extended) => BlockPushResult::Extended,
-            Ok(PushResult::Rebranched) => BlockPushResult::Rebranched,
-            Ok(PushResult::Forked) => BlockPushResult::Forked,
-            Ok(PushResult::Ignored) => BlockPushResult::Ignored,
+            Ok((PushResult::Known, _)) => BlockPushResult::Known,
+            Ok((PushResult::Extended, _)) => BlockPushResult::Extended,
+            Ok((PushResult::Rebranched, _)) => BlockPushResult::Rebranched,
+            Ok((PushResult::Forked, _)) => BlockPushResult::Forked,
+            Ok((PushResult::Ignored, _)) => BlockPushResult::Ignored,
             Err(PushError::Orphan) => BlockPushResult::Orphan,
             Err(_) => {
                 self.note_invalid_block();

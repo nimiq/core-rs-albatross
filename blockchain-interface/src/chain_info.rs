@@ -1,5 +1,6 @@
 use std::convert::TryInto;
 use std::io;
+use std::ops::RangeFrom;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use nimiq_block::{
@@ -9,27 +10,33 @@ use nimiq_block::{
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::coin::Coin;
+use nimiq_primitives::key_nibbles::KeyNibbles;
 use nimiq_primitives::policy::Policy;
 
 /// Struct that, for each block, keeps information relative to the chain the block is on.
 #[derive(Clone, Debug)]
 pub struct ChainInfo {
-    // This is the block (excluding the body).
+    /// This is the block (excluding the body).
     pub head: Block,
-    // A boolean stating if this block is in the main chain.
+    /// A boolean stating if this block is in the main chain.
     pub on_main_chain: bool,
-    // The hash of next block in the chain.
+    /// The hash of next block in the chain.
     pub main_chain_successor: Option<Blake2bHash>,
-    // The sum of all transaction fees in this chain. It resets every batch.
+    /// The sum of all transaction fees in this chain. It resets every batch.
     pub cum_tx_fees: Coin,
-    // The accumulated extended transaction size. It resets every other macro block.
+    /// The accumulated extended transaction size. It resets every other macro block.
     pub cum_ext_tx_size: u64,
-    // A boolean stating if this block can be pruned
+    /// A boolean stating if this block can be pruned.
     pub prunable: bool,
+    /// Missing range of the accounts before this block.
+    #[cfg(not(target_family = "wasm"))]
+    pub prev_missing_range: Option<RangeFrom<KeyNibbles>>,
 }
 
 impl ChainInfo {
     /// Creates a new ChainInfo. Without successor and cumulative transaction fees.
+    /// Note: This sets the previous missing range to none. This is ok since this function
+    /// is only used for the genesis block.
     pub fn new(head: Block, on_main_chain: bool) -> Self {
         let prunable = !head.is_election();
         ChainInfo {
@@ -39,11 +46,17 @@ impl ChainInfo {
             cum_tx_fees: Coin::ZERO,
             cum_ext_tx_size: 0,
             prunable,
+            #[cfg(not(target_family = "wasm"))]
+            prev_missing_range: None,
         }
     }
 
     /// Creates a new ChainInfo for a block given its predecessor.
-    pub fn from_block(block: Block, prev_info: &ChainInfo) -> Self {
+    pub fn from_block(
+        block: Block,
+        prev_info: &ChainInfo,
+        prev_missing_range: Option<RangeFrom<KeyNibbles>>,
+    ) -> Self {
         assert_eq!(prev_info.head.block_number(), block.block_number() - 1);
 
         // Reset the transaction fee accumulator if this is the first block of a batch. Otherwise,
@@ -63,6 +76,7 @@ impl ChainInfo {
             cum_tx_fees,
             cum_ext_tx_size: 0,
             prunable,
+            prev_missing_range,
         }
     }
 
@@ -122,6 +136,8 @@ impl Serialize for ChainInfo {
         size += Serialize::serialize(&self.cum_tx_fees, writer)?;
         size += Serialize::serialize(&self.cum_ext_tx_size, writer)?;
         size += Serialize::serialize(&self.prunable, writer)?;
+        size += Serialize::serialize(&self.prev_missing_range, writer)?;
+
         Ok(size)
     }
 
@@ -145,6 +161,7 @@ impl Serialize for ChainInfo {
         size += Serialize::serialized_size(&self.cum_tx_fees);
         size += Serialize::serialized_size(&self.cum_ext_tx_size);
         size += Serialize::serialized_size(&self.prunable);
+        size += Serialize::serialized_size(&self.prev_missing_range);
         size
     }
 }
@@ -191,6 +208,7 @@ impl Deserialize for ChainInfo {
         let cum_tx_fees = Deserialize::deserialize(reader)?;
         let cum_ext_tx_size = Deserialize::deserialize(reader)?;
         let prunable = Deserialize::deserialize(reader)?;
+        let prev_missing_range = Deserialize::deserialize(reader)?;
 
         Ok(ChainInfo {
             head,
@@ -199,6 +217,7 @@ impl Deserialize for ChainInfo {
             cum_tx_fees,
             cum_ext_tx_size,
             prunable,
+            prev_missing_range,
         })
     }
 }

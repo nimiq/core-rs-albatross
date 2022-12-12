@@ -1,4 +1,4 @@
-use std::{collections::HashSet, sync::Arc};
+use std::{cmp, collections::HashSet, sync::Arc};
 
 use nimiq_blockchain_interface::{AbstractBlockchain, Direction};
 use parking_lot::RwLock;
@@ -7,8 +7,12 @@ use nimiq_block::Block;
 use nimiq_blockchain::{Blockchain, CHUNK_SIZE};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_network_interface::request::Handle;
+use nimiq_primitives::policy::Policy;
 
-use crate::messages::*;
+use crate::{
+    messages::*,
+    sync::live::state_queue::{RequestChunk, ResponseChunk},
+};
 
 impl Handle<MacroChain, BlockchainProxy> for RequestMacroChain {
     fn handle(&self, blockchain: &BlockchainProxy) -> MacroChain {
@@ -264,5 +268,21 @@ impl Handle<ResponseBlocks, BlockchainProxy> for RequestMissingBlocks {
 impl Handle<Blake2bHash, BlockchainProxy> for RequestHead {
     fn handle(&self, blockchain: &BlockchainProxy) -> Blake2bHash {
         blockchain.read().head_hash()
+    }
+}
+
+impl Handle<ResponseChunk, Arc<RwLock<Blockchain>>> for RequestChunk {
+    fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> ResponseChunk {
+        let blockchain_rg = blockchain.read();
+        let chunk = blockchain_rg.state.accounts.get_chunk(
+            self.start_key.clone(),
+            cmp::min(self.limit, Policy::state_chunks_max_size()) as usize,
+            None,
+        );
+        ResponseChunk {
+            block_number: blockchain_rg.block_number(),
+            block_hash: blockchain_rg.head_hash(),
+            chunk,
+        }
     }
 }

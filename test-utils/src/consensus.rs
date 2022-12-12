@@ -16,7 +16,8 @@ pub async fn consensus<N: TestNetwork + NetworkInterface>(
     hub: &mut Option<MockHub>,
     is_prover_active: bool,
 ) -> (AbstractConsensus<N>, Arc<RwLock<Blockchain>>) {
-    let node = Node::<N>::new(peer_id, genesis_info, hub, is_prover_active).await;
+    let node =
+        Node::<N>::history_with_genesis_info(peer_id, genesis_info, hub, is_prover_active).await;
     (
         node.consensus.expect("Could not create consensus"),
         node.blockchain,

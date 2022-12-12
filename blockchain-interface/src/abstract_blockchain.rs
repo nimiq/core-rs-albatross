@@ -7,7 +7,7 @@ use nimiq_primitives::policy::Policy;
 use nimiq_primitives::slots::{Validator, Validators};
 
 use crate::error::{BlockchainError, BlockchainEvent, Direction};
-use crate::ChainInfo;
+use crate::{ChainInfo, ForkEvent};
 
 /// Defines several basic methods for blockchains.
 pub trait AbstractBlockchain {
@@ -117,4 +117,7 @@ pub trait AbstractBlockchain {
 
     /// Stream of Blockchain Events.
     fn notifier_as_stream(&self) -> BoxStream<'static, BlockchainEvent>;
+
+    /// Stream of Fork Events.
+    fn fork_notifier_as_stream(&self) -> BoxStream<'static, ForkEvent>;
 }

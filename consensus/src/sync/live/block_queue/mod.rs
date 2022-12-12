@@ -1,24 +1,26 @@
+pub mod block_request_component;
+pub mod live_sync;
+
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
-    mem,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
 };
 
-use futures::stream::{empty, select, BoxStream};
+use futures::stream::BoxStream;
 use futures::{Stream, StreamExt};
 
 use nimiq_block::Block;
-use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent, Direction};
+use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent, Direction, ForkEvent};
 use nimiq_blockchain_proxy::BlockchainProxy;
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_network_interface::network::{MsgAcceptance, Network, PubsubId, Topic};
 use nimiq_primitives::policy::Policy;
 
 use super::{
-    block_request_component::{BlockRequestComponentEvent, RequestComponent},
-    BlockQueueConfig,
+    block_queue::block_request_component::{BlockRequestComponentEvent, RequestComponent},
+    queue::{LiveSyncQueue, QueueConfig},
 };
 
 #[derive(Clone, Debug, Default)]
@@ -53,7 +55,7 @@ pub type BlockStream<N> = BoxStream<
 >;
 pub type GossipSubBlockStream<N> = BoxStream<'static, (Block, <N as Network>::PubsubId)>;
 
-type BlockAndId<N> = (Block, Option<<N as Network>::PubsubId>);
+pub type BlockAndId<N> = (Block, Option<<N as Network>::PubsubId>);
 
 pub enum QueuedBlock<N: Network> {
     Head(BlockAndId<N>),
@@ -65,7 +67,7 @@ pub enum QueuedBlock<N: Network> {
 
 pub struct BlockQueue<N: Network, TReq: RequestComponent<N>> {
     /// Configuration for the block queue
-    config: BlockQueueConfig,
+    config: QueueConfig,
 
     /// Reference to the blockchain
     blockchain: BlockchainProxy,
@@ -74,7 +76,7 @@ pub struct BlockQueue<N: Network, TReq: RequestComponent<N>> {
     network: Arc<N>,
 
     /// The Peer Tracking and Request Component.
-    request_component: TReq,
+    pub(crate) request_component: TReq,
 
     /// A stream of blocks.
     /// This includes blocks received via gossipsub, but can also include other sources.
@@ -90,6 +92,9 @@ pub struct BlockQueue<N: Network, TReq: RequestComponent<N>> {
     /// The blockchain event stream.
     blockchain_rx: BoxStream<'static, BlockchainEvent>,
 
+    /// The blockchain event stream.
+    fork_rx: BoxStream<'static, ForkEvent>,
+
     /// The block number of the latest macro block. We prune the block buffer when it changes.
     current_macro_height: u32,
 }
@@ -99,7 +104,7 @@ impl<N: Network, TReq: RequestComponent<N>> BlockQueue<N, TReq> {
         network: Arc<N>,
         blockchain: BlockchainProxy,
         request_component: TReq,
-        config: BlockQueueConfig,
+        config: QueueConfig,
     ) -> Self {
         let block_stream = if config.include_micro_bodies {
             network.subscribe::<BlockTopic>().await.unwrap().boxed()
@@ -125,7 +130,7 @@ impl<N: Network, TReq: RequestComponent<N>> BlockQueue<N, TReq> {
         network: Arc<N>,
         request_component: TReq,
         block_stream: GossipSubBlockStream<N>,
-        config: BlockQueueConfig,
+        config: QueueConfig,
     ) -> Self {
         let block_stream = block_stream
             .map(|(block, pubsub_id)| (block, pubsub_id.propagation_source(), Some(pubsub_id)))
@@ -138,14 +143,16 @@ impl<N: Network, TReq: RequestComponent<N>> BlockQueue<N, TReq> {
         network: Arc<N>,
         request_component: TReq,
         block_stream: BlockStream<N>,
-        config: BlockQueueConfig,
+        config: QueueConfig,
     ) -> Self {
         let current_macro_height = Policy::last_macro_block(blockchain.read().block_number());
         let blockchain_rx = blockchain.read().notifier_as_stream();
+        let fork_rx = blockchain.read().fork_notifier_as_stream();
         Self {
             config,
             blockchain,
             blockchain_rx,
+            fork_rx,
             network,
             request_component,
             block_stream,
@@ -153,16 +160,6 @@ impl<N: Network, TReq: RequestComponent<N>> BlockQueue<N, TReq> {
             blocks_pending_push: BTreeSet::new(),
             current_macro_height,
         }
-    }
-
-    /// Adds an additional block stream by replacing the current block stream with a `select` of both streams.
-    pub fn add_block_stream<S>(&mut self, block_stream: S)
-    where
-        S: Stream<Item = (Block, N::PeerId, Option<N::PubsubId>)> + Send + 'static,
-    {
-        // We need to safely remove the old block stream first.
-        let prev_block_stream = mem::replace(&mut self.block_stream, empty().boxed());
-        self.block_stream = select(prev_block_stream, block_stream).boxed();
     }
 
     /// Returns an iterator over the buffered blocks
@@ -181,22 +178,6 @@ impl<N: Network, TReq: RequestComponent<N>> BlockQueue<N, TReq> {
 
     pub fn on_block_processed(&mut self, block_hash: &Blake2bHash) {
         self.blocks_pending_push.remove(block_hash);
-    }
-
-    pub fn num_peers(&self) -> usize {
-        self.request_component.num_peers()
-    }
-
-    pub fn include_micro_bodies(&self) -> bool {
-        self.config.include_micro_bodies
-    }
-
-    pub fn peers(&self) -> Vec<N::PeerId> {
-        self.request_component.peers()
-    }
-
-    pub fn add_peer(&self, peer_id: N::PeerId) {
-        self.request_component.add_peer(peer_id)
     }
 
     /// Handles a block announcement.
@@ -411,10 +392,14 @@ impl<N: Network, TReq: RequestComponent<N>> BlockQueue<N, TReq> {
         Some(QueuedBlock::Missing(blocks))
     }
 
-    /// Removes and returns all buffered blocks whose parent is known to the blockchain.
-    fn remove_applicable_blocks(&mut self, event: BlockchainEvent) -> Vec<BlockAndId<N>> {
+    /// Fetches the block information for the new blocks.
+    fn get_new_blocks_from_blockchain_event(
+        &self,
+        event: BlockchainEvent,
+    ) -> Vec<(u32, Blake2bHash)> {
         // Collect block numbers and hashes of newly added blocks first.
         let mut block_infos = vec![];
+
         match event {
             BlockchainEvent::Extended(block_hash)
             | BlockchainEvent::HistoryAdopted(block_hash)
@@ -430,7 +415,28 @@ impl<N: Network, TReq: RequestComponent<N>> BlockQueue<N, TReq> {
                 }
             }
         }
+        block_infos
+    }
 
+    /// Fetches the block information for the new blocks.
+    fn get_new_blocks_from_fork_event(&self, event: ForkEvent) -> Vec<(u32, Blake2bHash)> {
+        // Collect block numbers and hashes of newly added blocks first.
+        let mut block_infos = vec![];
+
+        match event {
+            ForkEvent::Detected(proof) => {
+                block_infos.push((proof.header1.block_number, proof.header1.hash()));
+                block_infos.push((proof.header2.block_number, proof.header2.hash()));
+            }
+        }
+        block_infos
+    }
+
+    /// Removes and returns all buffered blocks whose parent is known to the blockchain.
+    fn remove_applicable_blocks(
+        &mut self,
+        block_infos: Vec<(u32, Blake2bHash)>,
+    ) -> Vec<BlockAndId<N>> {
         // The only blocks that can now be applied but couldn't be before
         // are those whose parent is one of the newly added blocks.
         // So, we specifically collect and remove those.
@@ -545,7 +551,17 @@ impl<N: Network, TReq: RequestComponent<N>> Stream for BlockQueue<N, TReq> {
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
         // Poll the blockchain stream and return blocks that can now possibly be pushed by the blockchain.
         while let Poll::Ready(Some(event)) = self.blockchain_rx.poll_next_unpin(cx) {
-            let buffered_blocks = self.remove_applicable_blocks(event);
+            let block_infos = self.get_new_blocks_from_blockchain_event(event);
+            let buffered_blocks = self.remove_applicable_blocks(block_infos);
+            if !buffered_blocks.is_empty() {
+                return Poll::Ready(Some(QueuedBlock::Buffered(buffered_blocks)));
+            }
+        }
+
+        // Poll the fork stream and return blocks that can now possibly be pushed by the blockchain.
+        while let Poll::Ready(Some(event)) = self.fork_rx.poll_next_unpin(cx) {
+            let block_infos = self.get_new_blocks_from_fork_event(event);
+            let buffered_blocks = self.remove_applicable_blocks(block_infos);
             if !buffered_blocks.is_empty() {
                 return Poll::Ready(Some(QueuedBlock::Buffered(buffered_blocks)));
             }

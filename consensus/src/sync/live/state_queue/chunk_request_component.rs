@@ -14,7 +14,7 @@ use parking_lot::RwLock;
 
 use crate::sync::{peer_list::PeerList, sync_queue::SyncQueue};
 
-use super::state_queue::{RequestChunk, ResponseChunk};
+use super::{RequestChunk, ResponseChunk};
 
 /// Peer Tracking & Chunk Request Component.
 /// This component returns only the responses that respect the size limit specified on
@@ -134,7 +134,7 @@ impl<N: Network> Stream for ChunkRequestComponent<N> {
                 }
                 Err(req) => {
                     debug!(
-                        "Failed to retrieve missing blocks for target hash {:?}",
+                        "Failed to retrieve missing chunks for target hash {:?}",
                         req
                     );
                     // TODO: Do we need to do anything else?

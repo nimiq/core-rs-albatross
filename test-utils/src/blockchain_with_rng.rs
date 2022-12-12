@@ -88,9 +88,7 @@ pub fn fill_micro_blocks_with_rng<R: Rng + CryptoRng>(
 ) {
     let init_height = blockchain.read().block_number();
 
-    assert!(Policy::is_macro_block_at(init_height));
-
-    let macro_block_number = init_height + Policy::blocks_per_batch();
+    let macro_block_number = Policy::macro_block_after(init_height);
 
     for _ in (init_height + 1)..macro_block_number {
         push_micro_block_with_rng(producer, blockchain, rng);

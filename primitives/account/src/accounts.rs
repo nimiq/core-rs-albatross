@@ -4,6 +4,7 @@ use nimiq_database::{
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_transaction::{ExecutedTransaction, Transaction, TransactionFlags};
 use nimiq_trie::trie::MerkleRadixTrie;
+use nimiq_trie::trie_chunk::TrieChunkPushResult;
 use nimiq_trie::{key_nibbles::KeyNibbles, trie::TrieChunk};
 
 use crate::{
@@ -26,7 +27,7 @@ pub struct Accounts {
 }
 
 impl Accounts {
-    /// Creates a new, completely empty Accounts.
+    /// Creates a new Accounts.
     pub fn new(env: Environment) -> Self {
         let tree = AccountsTrie::new(env.clone(), "AccountsTrie");
         Accounts { env, tree }
@@ -45,12 +46,15 @@ impl Accounts {
                 .put(txn, &key, account)
                 .expect("temporary until accounts rewrite");
         }
-        self.tree.update_root(txn);
+        self.tree
+            .update_root(txn)
+            .expect("should be a complete trie");
     }
 
-    /// Returns the number of accounts in the Accounts Trie.
+    /// Returns the number of accounts (incl. hybrid nodes) in the Accounts Trie.
     pub fn size(&self) -> u64 {
-        self.tree.num_leaves(&ReadTransaction::new(&self.env))
+        let txn = ReadTransaction::new(&self.env);
+        self.tree.num_leaves(&txn) + self.tree.num_hybrids(&txn)
     }
 
     /// Returns the number of branch nodes in the Accounts Trie.
@@ -71,10 +75,28 @@ impl Accounts {
         }
     }
 
-    pub fn get_root(&self, txn_option: Option<&DBTransaction>) -> Blake2bHash {
+    pub fn get_root_hash_assert(&self, txn_option: Option<&DBTransaction>) -> Blake2bHash {
+        match txn_option {
+            Some(txn) => self.tree.root_hash_assert(txn),
+            None => self.tree.root_hash_assert(&ReadTransaction::new(&self.env)),
+        }
+    }
+
+    pub fn get_root_hash(&self, txn_option: Option<&DBTransaction>) -> Option<Blake2bHash> {
         match txn_option {
             Some(txn) => self.tree.root_hash(txn),
             None => self.tree.root_hash(&ReadTransaction::new(&self.env)),
+        }
+    }
+
+    pub fn reinitialize_as_incomplete(&self, txn: &mut WriteTransaction) {
+        self.tree.reinitialize_as_incomplete(txn)
+    }
+
+    pub fn is_complete(&self, txn_option: Option<&DBTransaction>) -> bool {
+        match txn_option {
+            Some(txn) => self.tree.is_complete(txn),
+            None => self.tree.is_complete(&ReadTransaction::new(&self.env)),
         }
     }
 
@@ -90,7 +112,7 @@ impl Accounts {
         let (_, executed_txns) =
             self.commit(&mut txn, transactions, inherents, block_height, timestamp)?;
 
-        let hash = self.get_root(Some(&txn));
+        let hash = self.get_root_hash_assert(Some(&txn));
 
         txn.abort();
 
@@ -184,7 +206,8 @@ impl Accounts {
         timestamp: u64,
     ) -> Result<(BatchInfo, Vec<ExecutedTransaction>), AccountError> {
         let result = self.commit_batch(txn, transactions, inherents, block_height, timestamp);
-        self.tree.update_root(txn);
+        // It is fine to have an incomplete trie here.
+        let _ = self.tree.update_root(txn);
         result
     }
 
@@ -453,7 +476,8 @@ impl Accounts {
             timestamp,
             receipts,
         )?;
-        self.tree.update_root(txn);
+        // It is fine to have an incomplete trie here.
+        let _ = self.tree.update_root(txn);
         Ok(logs)
     }
 
@@ -593,7 +617,8 @@ impl Accounts {
     }
 
     pub fn finalize_batch(&self, txn: &mut WriteTransaction) {
-        self.tree.update_root(txn);
+        // It is fine to have an incomplete trie here.
+        let _ = self.tree.update_root(txn);
     }
 
     pub fn commit_chunk(
@@ -602,9 +627,10 @@ impl Accounts {
         chunk: TrieChunk,
         expected_hash: Blake2bHash,
         start_key: KeyNibbles,
-    ) -> Result<(), AccountError> {
-        self.tree.put_chunk(txn, start_key, chunk, expected_hash)?;
-        Ok(())
+    ) -> Result<TrieChunkPushResult, AccountError> {
+        self.tree
+            .put_chunk(txn, start_key, chunk, expected_hash)
+            .map_err(AccountError::from)
     }
 
     pub fn revert_chunk(
@@ -614,6 +640,21 @@ impl Accounts {
     ) -> Result<(), AccountError> {
         self.tree.remove_chunk(txn, start_key)?;
         Ok(())
+    }
+
+    pub fn get_chunk(
+        &self,
+        start_key: KeyNibbles,
+        limit: usize,
+        txn_option: Option<&DBTransaction>,
+    ) -> TrieChunk {
+        match txn_option {
+            Some(txn) => self.tree.get_chunk_with_proof(txn, start_key.., limit),
+            None => {
+                self.tree
+                    .get_chunk_with_proof(&ReadTransaction::new(&self.env), start_key.., limit)
+            }
+        }
     }
 
     fn commit_inherents(

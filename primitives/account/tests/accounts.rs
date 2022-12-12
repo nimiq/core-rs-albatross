@@ -84,7 +84,7 @@ fn it_can_commit_and_revert_a_block_body() {
         Coin::from_u64_unchecked(10000)
     );
 
-    let hash1 = accounts.get_root(None);
+    let hash1 = accounts.get_root_hash_assert(None);
 
     let tx = Transaction::new_basic(
         address_validator.clone(),
@@ -165,7 +165,7 @@ fn it_can_commit_and_revert_a_block_body() {
         Coin::from_u64_unchecked(10000 + 10000 - 10)
     );
 
-    assert_ne!(hash1, accounts.get_root(None));
+    assert_ne!(hash1, accounts.get_root_hash_assert(None));
 
     let mut txn = WriteTransaction::new(&env);
 
@@ -196,7 +196,7 @@ fn it_can_commit_and_revert_a_block_body() {
         Coin::from_u64_unchecked(10000)
     );
 
-    assert_eq!(hash1, accounts.get_root(None));
+    assert_eq!(hash1, accounts.get_root_hash_assert(None));
 }
 
 #[test]
@@ -347,7 +347,7 @@ fn it_checks_for_sufficient_funds() {
         data: vec![],
     };
 
-    let hash1 = accounts.get_root(None);
+    let hash1 = accounts.get_root_hash_assert(None);
 
     assert_eq!(accounts.get(&KeyNibbles::from(&address_sender), None), None);
 
@@ -373,7 +373,7 @@ fn it_checks_for_sufficient_funds() {
         None
     );
 
-    assert_eq!(hash1, accounts.get_root(None));
+    assert_eq!(hash1, accounts.get_root_hash_assert(None));
 
     // Give address_sender one block reward.
 
@@ -398,7 +398,7 @@ fn it_checks_for_sufficient_funds() {
         None
     );
 
-    let hash2 = accounts.get_root(None);
+    let hash2 = accounts.get_root_hash_assert(None);
 
     assert_ne!(hash1, hash2);
 
@@ -428,7 +428,7 @@ fn it_checks_for_sufficient_funds() {
         None
     );
 
-    assert_eq!(hash2, accounts.get_root(None));
+    assert_eq!(hash2, accounts.get_root_hash_assert(None));
 
     // Multiple transactions exceeding funds.
     tx.value = Coin::from_u64_unchecked(5010);
@@ -466,7 +466,7 @@ fn it_checks_for_sufficient_funds() {
         None
     );
 
-    assert_eq!(hash2, accounts.get_root(None));
+    assert_eq!(hash2, accounts.get_root_hash_assert(None));
 }
 
 #[test]

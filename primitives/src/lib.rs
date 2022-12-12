@@ -2,6 +2,8 @@
 pub mod account;
 #[cfg(feature = "coin")]
 pub mod coin;
+#[cfg(feature = "key-nibbles")]
+pub mod key_nibbles;
 #[cfg(feature = "networks")]
 pub mod networks;
 #[cfg(feature = "policy")]

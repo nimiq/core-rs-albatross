@@ -7,16 +7,17 @@ use std::mem;
 use std::ops;
 use std::ops::RangeFrom;
 
-use beserial::DeserializeWithLength;
-use beserial::SerializeWithLength;
 use log::error;
 
-use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
+use beserial::{Deserialize, Serialize};
 use nimiq_database::{Database, Environment, Transaction, WriteTransaction};
 use nimiq_hash::Blake2bHash;
 
 use crate::error::MerkleRadixTrieError;
 use crate::key_nibbles::KeyNibbles;
+use crate::network_trie_node::NetworkTrieNode;
+pub use crate::trie_chunk::TrieChunk;
+use crate::trie_chunk::TrieChunkPushResult;
 use crate::trie_node::{RootData, TrieNode, TrieNodeKind};
 use crate::trie_proof::TrieProof;
 
@@ -34,80 +35,6 @@ use crate::trie_proof::TrieProof;
 #[derive(Debug)]
 pub struct MerkleRadixTrie {
     db: Database,
-}
-
-/// Common data structure for holding chunk items and proof.
-#[derive(Debug, Clone)]
-pub struct TrieChunk {
-    pub keys_end: Option<KeyNibbles>,
-    pub items: Vec<(KeyNibbles, Vec<u8>)>,
-    pub proof: TrieProof,
-}
-
-impl TrieChunk {
-    pub fn new(
-        keys_end: Option<KeyNibbles>,
-        items: Vec<(KeyNibbles, Vec<u8>)>,
-        proof: TrieProof,
-    ) -> Self {
-        Self {
-            keys_end,
-            items,
-            proof,
-        }
-    }
-}
-
-impl Serialize for TrieChunk {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        let mut size = 0;
-        size += self.keys_end.serialize(writer)?;
-
-        size += Serialize::serialize(&(self.items.len() as u32), writer)?;
-        for item in self.items.iter() {
-            size += item.0.serialize(writer)?;
-            size += SerializeWithLength::serialize::<u16, _>(&item.1, writer)?;
-        }
-
-        size += self.proof.serialize(writer)?;
-        Ok(size)
-    }
-
-    fn serialized_size(&self) -> usize {
-        let mut size = 0;
-        size += self.keys_end.serialized_size();
-
-        size += Serialize::serialized_size(&(self.items.len() as u32));
-        for item in self.items.iter() {
-            size += item.0.serialized_size();
-            size += SerializeWithLength::serialized_size::<u16>(&item.1);
-        }
-
-        size += self.proof.serialized_size();
-        size
-    }
-}
-
-impl Deserialize for TrieChunk {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        let keys_end = Deserialize::deserialize(reader)?;
-
-        let num_items: u32 = Deserialize::deserialize(reader)?;
-        let mut items = Vec::with_capacity(num_items as usize);
-        for _ in 0..num_items {
-            let key = Deserialize::deserialize(reader)?;
-            let data = DeserializeWithLength::deserialize::<u16, _>(reader)?;
-            items.push((key, data));
-        }
-
-        let proof = Deserialize::deserialize(reader)?;
-
-        Ok(TrieChunk {
-            keys_end,
-            items,
-            proof,
-        })
-    }
 }
 
 /// Counts the number of updates performed.
@@ -185,22 +112,54 @@ impl MerkleRadixTrie {
         let tree = MerkleRadixTrie { db };
 
         let mut txn = WriteTransaction::new(&env);
-        if tree.get_root(&txn).is_none() {
-            let root = if incomplete {
-                TrieNode::new_root_incomplete()
-            } else {
-                TrieNode::new_root()
-            };
-            tree.put_node(&mut txn, &root);
-        }
+        tree.init_root(&mut txn, incomplete);
         txn.commit();
 
         tree
     }
 
+    fn init_root(&self, txn: &mut WriteTransaction, incomplete: bool) {
+        if self.get_root(txn).is_none() {
+            let root = if incomplete {
+                TrieNode::new_root_incomplete()
+            } else {
+                TrieNode::new_root()
+            };
+            self.put_node(txn, &root);
+        }
+    }
+
+    /// Clears the database and initializes it as incomplete.
+    pub fn reinitialize_as_incomplete(&self, txn: &mut WriteTransaction) {
+        txn.clear_database(&self.db);
+        self.init_root(txn, true);
+    }
+
     /// Returns the root hash of the Merkle Radix Trie.
-    pub fn root_hash(&self, txn: &Transaction) -> Blake2bHash {
-        self.get_root(txn).unwrap().hash_assert_complete()
+    pub fn root_hash_assert(&self, txn: &Transaction) -> Blake2bHash {
+        self.get_root(txn).unwrap().hash_assert()
+    }
+
+    /// Returns the root hash of the Merkle Radix Trie if the trie is complete.
+    pub fn root_hash(&self, txn: &Transaction) -> Option<Blake2bHash> {
+        let root = self.get_root(txn).unwrap();
+        let is_incomplete = root
+            .root_data
+            .as_ref()
+            .map(|data| data.incomplete.is_some())
+            .unwrap_or(false);
+
+        // We should refuse to return a hash for a completely empty but incomplete trie.
+        if is_incomplete && !root.has_children() {
+            return None;
+        }
+
+        let root_hash = root.hash();
+
+        // Make sure the root hash can only be None if the trie is incomplete.
+        assert!(root_hash.is_some() || is_incomplete);
+
+        root_hash
     }
 
     pub fn is_complete(&self, txn: &Transaction) -> bool {
@@ -292,7 +251,10 @@ impl MerkleRadixTrie {
         txn: &Transaction,
         key: &KeyNibbles,
     ) -> Result<Option<T>, IncompleteTrie> {
-        self.check_within_complete_part(txn, key)?;
+        let missing_range = self.get_missing_range(txn);
+        if !self.is_within_complete_part(key, &missing_range) {
+            return Err(IncompleteTrie);
+        }
         Ok(self
             .get_raw(txn, key)
             .map(|v| T::deserialize_from_vec(&v).unwrap()))
@@ -320,15 +282,37 @@ impl MerkleRadixTrie {
             .collect()
     }
 
+    /// Insert a value into the Merkle Radix Trie at the given key. If the key already exists then
+    /// it will overwrite it. You can't use this function to check the existence of a given key.
     pub fn put<T: Serialize>(
         &self,
         txn: &mut WriteTransaction,
         key: &KeyNibbles,
         value: T,
-    ) -> Result<(), IncompleteTrie> {
-        let missing_range = self.check_within_complete_part(txn, key)?;
-        self.put_raw(txn, key, value.serialize_to_vec(), &missing_range);
+    ) -> Result<(), MerkleRadixTrieError> {
+        // PITODO: Return value needs to change, we don't need the error anymore
+        let missing_range = self.get_missing_range(txn);
+        if self.is_within_complete_part(key, &missing_range) {
+            self.put_raw(txn, key, value.serialize_to_vec(), &missing_range);
+        } else {
+            self.update_within_missing_part(txn, key, &missing_range)?;
+        }
+
         Ok(())
+    }
+
+    /// Removes the value in the Merkle Radix Trie at the given key. If the key doesn't exist
+    /// then this function just returns silently. You can't use this to check the existence of a
+    /// given prefix.
+    pub fn remove(&self, txn: &mut WriteTransaction, key: &KeyNibbles) {
+        let missing_range = self.get_missing_range(txn);
+        if self.is_within_complete_part(key, &missing_range) {
+            self.remove_raw(txn, key, &missing_range);
+        } else {
+            // PITODO: return error
+            self.update_within_missing_part(txn, key, &missing_range)
+                .expect("should not happen or be returned");
+        }
     }
 
     /// Insert a value into the Merkle Radix Trie at the given key. If the key already exists then
@@ -379,7 +363,7 @@ impl MerkleRadixTrie {
                     let mut new_parent = TrieNode::new_empty(cur_node.key.common_prefix(key));
                     new_parent.put_child_no_hash(&cur_node.key).unwrap();
                     new_parent
-                        .put_child(&new_node.key, new_node.hash_assert_complete())
+                        .put_child(&new_node.key, new_node.hash_assert())
                         .unwrap();
                     self.put_node(txn, &new_parent);
 
@@ -420,7 +404,7 @@ impl MerkleRadixTrie {
                     // Update the parent node and store it.
                     let old_kind = cur_node.kind();
                     cur_node
-                        .put_child(&new_node.key, new_node.hash_assert_complete())
+                        .put_child(&new_node.key, new_node.hash_assert())
                         .unwrap();
                     self.put_node(txn, &cur_node);
 
@@ -431,19 +415,73 @@ impl MerkleRadixTrie {
                     count_updates.apply_update(old_kind, cur_node.kind());
                     // Push the parent node into the root path.
                     root_path.push(cur_node);
+
                     break;
                 }
                 // If there's a child, then we update the current node and the root path, and
                 // continue down the trie.
                 Ok(child_key) => {
                     root_path.push(cur_node);
+
                     cur_node = self.get_node(txn, &child_key).unwrap();
                 }
             }
         }
-
         // Update the keys and hashes of the nodes that we modified.
         self.update_keys(txn, root_path, count_updates);
+    }
+
+    /// Resets the hashes for a path to a node in the missing part of the tree.
+    /// This is used to indicate that the corresponding branch's hash has changed,
+    /// but we cannot provide the accurate hash until a new chunk has been pushed.
+    fn update_within_missing_part(
+        &self,
+        txn: &mut WriteTransaction,
+        key: &KeyNibbles,
+        missing_range: &Option<RangeFrom<KeyNibbles>>,
+    ) -> Result<(), MerkleRadixTrieError> {
+        let mut node = self
+            .get_root(txn)
+            .expect("The Merkle Radix Trie didn't have a root node!");
+
+        let mut root_path = Vec::new();
+        // Descend down the tree and collect nodes to be updated.
+        loop {
+            // This function should only be called with keys in the missing range.
+            assert_ne!(&node.key, key);
+
+            // Check that the key we are trying to update can exist in this part of the tree.
+            if !node.key.is_prefix_of(key) {
+                return Err(MerkleRadixTrieError::ChildDoesNotExist);
+            }
+
+            // Descend to the corresponding child.
+            match node.child_key(key, missing_range) {
+                Ok(child_key) => {
+                    let child = self
+                        .get_node(txn, &child_key)
+                        .expect("Child should be present");
+                    let parent = mem::replace(&mut node, child);
+                    root_path.push(parent);
+                }
+                Err(MerkleRadixTrieError::ChildIsStump) => {
+                    // We cannot continue further down as the next node is outside our trie.
+                    // Update this node prior to `update_keys` (which only updates the other nodes in the root path).
+                    node.put_child_no_hash(key).expect("Prefix must be correct");
+                    self.put_node(txn, &node);
+
+                    root_path.push(node);
+                    break;
+                }
+                Err(e) => {
+                    return Err(e);
+                }
+            }
+        }
+
+        self.update_keys(txn, root_path, CountUpdates::default());
+
+        Ok(())
     }
 
     pub fn get_chunk_with_proof(
@@ -562,8 +600,8 @@ impl MerkleRadixTrie {
                     cur_node.put_child_no_hash(&only_child_key).unwrap();
                 } else {
                     count_updates.apply_update(prev_kind, cur_node.kind());
-                    self.put_node(txn, &cur_node);
                 }
+                self.put_node(txn, &cur_node);
             }
 
             if cur_node.key.len() == keys.start.len() {
@@ -582,6 +620,7 @@ impl MerkleRadixTrie {
                 Ok(child_key) => cur_node = self.get_node(txn, &child_key).unwrap(),
             }
         }
+
         self.update_keys(txn, root_path, count_updates);
     }
 
@@ -592,7 +631,7 @@ impl MerkleRadixTrie {
         &self,
         txn: &mut WriteTransaction,
         keys: ops::RangeFrom<KeyNibbles>,
-        last_item_proof: &[TrieNode],
+        last_item_proof: &[NetworkTrieNode],
     ) -> Result<(), MerkleRadixTrieError> {
         let mut last_item_proof = last_item_proof.iter().rev();
         let missing_range = Some(keys.clone());
@@ -666,9 +705,11 @@ impl MerkleRadixTrie {
 
         // Update the keys and hashes of the nodes that we modified.
         self.update_keys(txn, root_path, count_updates);
+
         Ok(())
     }
 
+    /// When pushing a chunk the correct behavior may result in an applied chunk or in an ignored chunk.
     /// `start_key` is inclusive and is meant to check if the chunk is a consecutive chunk.
     /// `keys_end` is exclusive.
     pub fn put_chunk(
@@ -677,11 +718,11 @@ impl MerkleRadixTrie {
         start_key: KeyNibbles,
         chunk: TrieChunk,
         expected_hash: Blake2bHash,
-    ) -> Result<(), MerkleRadixTrieError> {
+    ) -> Result<TrieChunkPushResult, MerkleRadixTrieError> {
         match self.get_root(txn).unwrap().root_data.unwrap().incomplete {
             Some(i) if i.start == start_key => {}
-            Some(_) => return Err(MerkleRadixTrieError::NonMatchingChunk),
-            None => return Err(MerkleRadixTrieError::TreeAlreadyComplete),
+            Some(_) => return Ok(TrieChunkPushResult::Ignored),
+            None => return Err(MerkleRadixTrieError::TrieAlreadyComplete),
         }
 
         if let Some(keys_end) = &chunk.keys_end {
@@ -758,7 +799,9 @@ impl MerkleRadixTrie {
         }
 
         // Update the hashes and check that we're good.
-        let actual_hash = self.update_hashes(txn, &KeyNibbles::ROOT, &missing_range);
+        let actual_hash = self
+            .update_hashes(txn, &KeyNibbles::ROOT, &missing_range)
+            .map_err(|_| MerkleRadixTrieError::ChunkHashMismatch)?;
 
         if actual_hash != expected_hash {
             error!(
@@ -772,7 +815,7 @@ impl MerkleRadixTrie {
         root_node.root_data.as_mut().unwrap().incomplete = chunk.keys_end.clone().map(|end| end..);
         self.put_node(txn, &root_node);
 
-        Ok(())
+        Ok(TrieChunkPushResult::Applied)
     }
 
     /// `start_key` is inclusive and marks the first key to be removed.
@@ -833,18 +876,17 @@ impl MerkleRadixTrie {
     /// Removes the value in the Merkle Radix Trie at the given key. If the key doesn't exist
     /// then this function just returns silently. You can't use this to check the existence of a
     /// given prefix.
-    pub fn remove(&self, txn: &mut WriteTransaction, key: &KeyNibbles) {
+    fn remove_raw(
+        &self,
+        txn: &mut WriteTransaction,
+        key: &KeyNibbles,
+        missing_range: &Option<RangeFrom<KeyNibbles>>,
+    ) {
         // PITODO: add result type
         // Start by getting the root node.
         let mut cur_node = self
             .get_root(txn)
             .expect("Patricia Trie must have a root node!");
-
-        let missing_range = cur_node
-            .root_data
-            .clone()
-            .expect("root node needs root data")
-            .incomplete;
 
         // And initialize the root path.
         let mut root_path: Vec<TrieNode> = vec![];
@@ -877,7 +919,7 @@ impl MerkleRadixTrie {
                             .iter_children()
                             .next()
                             .unwrap()
-                            .key(&cur_node.key, &missing_range)
+                            .key(&cur_node.key, missing_range)
                             .expect("no stump");
 
                         let only_child = self.get_node(txn, &only_child_key).unwrap();
@@ -918,7 +960,7 @@ impl MerkleRadixTrie {
             }
 
             // Try to find a child of the current node that matches our key.
-            match cur_node.child_key(key, &missing_range) {
+            match cur_node.child_key(key, missing_range) {
                 // If no matching child exists, then the key doesn't exist and we stop here.
                 Err(_) => {
                     return;
@@ -961,7 +1003,7 @@ impl MerkleRadixTrie {
                     .iter_children()
                     .next()
                     .unwrap()
-                    .key(&parent_node.key, &missing_range)
+                    .key(&parent_node.key, missing_range)
                     .expect("no stump");
 
                 let only_child = self.get_node(txn, &only_child_key).unwrap();
@@ -1140,26 +1182,22 @@ impl MerkleRadixTrie {
         self.get_proof(txn, chunk_keys)
     }
 
-    pub fn update_root(&self, txn: &mut WriteTransaction) {
+    pub fn update_root(&self, txn: &mut WriteTransaction) -> Result<(), MerkleRadixTrieError> {
         let missing_range = self.get_missing_range(txn);
-        self.update_hashes(txn, &KeyNibbles::ROOT, &missing_range);
+        self.update_hashes(txn, &KeyNibbles::ROOT, &missing_range)
+            .map_err(|_| MerkleRadixTrieError::IncompleteTrie)?;
+        Ok(())
     }
 
-    fn check_within_complete_part(
+    fn is_within_complete_part(
         &self,
-        txn: &Transaction,
         key: &KeyNibbles,
-    ) -> Result<Option<RangeFrom<KeyNibbles>>, IncompleteTrie> {
-        let missing_range = self.get_missing_range(txn);
-        let is_in_complete_part = missing_range
+        missing_range: &Option<RangeFrom<KeyNibbles>>,
+    ) -> bool {
+        missing_range
             .as_ref()
             .map(|r| !r.contains(key))
-            .unwrap_or(true);
-        if is_in_complete_part {
-            Ok(missing_range)
-        } else {
-            Err(IncompleteTrie)
-        }
+            .unwrap_or(true)
     }
 
     /// Returns the range of missing keys in the partial tree.
@@ -1213,7 +1251,7 @@ impl MerkleRadixTrie {
                 // Also updates the child key.
                 .put_child(&child_node.key, Blake2bHash::default())
                 .unwrap();
-            assert_eq!(root_path.is_empty(), parent_node.is_root(),);
+            assert_eq!(root_path.is_empty(), parent_node.is_root());
             self.put_node(txn, &parent_node);
 
             child_node = parent_node;
@@ -1226,25 +1264,30 @@ impl MerkleRadixTrie {
         txn: &mut WriteTransaction,
         key: &KeyNibbles,
         missing_range: &Option<RangeFrom<KeyNibbles>>,
-    ) -> Blake2bHash {
+    ) -> Result<Blake2bHash, IncompleteTrie> {
         let mut node: TrieNode = self.get_node(txn, key).unwrap();
         if !node.has_children() {
-            return node.hash_assert_complete();
+            return node.hash().ok_or(IncompleteTrie);
         }
 
         // Compute sub hashes if necessary.
+        // Update everything that is possible to be updated and only return the potential error afterwards.
         for child in node.iter_children_mut() {
             if !child.has_hash() {
+                // We only update the hashes for non-stump children.
+                let child_key = match child.key(key, missing_range) {
+                    Ok(key) => key,
+                    Err(MerkleRadixTrieError::ChildIsStump) => continue,
+                    _ => unreachable!(),
+                };
                 // TODO This could be parallelized.
-                child.hash = self.update_hashes(
-                    txn,
-                    &child.key(key, missing_range).expect("no stump"),
-                    missing_range,
-                );
+                if let Ok(hash) = self.update_hashes(txn, &child_key, missing_range) {
+                    child.hash = hash;
+                }
             }
         }
         self.put_node(txn, &node);
-        node.hash_assert_complete()
+        node.hash().ok_or(IncompleteTrie)
     }
 
     /// Returns the last key containing a value before the given key.
@@ -1451,31 +1494,31 @@ mod tests {
         trie.put(&mut txn, &key_1, 9).expect("complete trie");
         trie.put(&mut txn, &key_2, 8).expect("complete trie");
         trie.put(&mut txn, &key_3, 7).expect("complete trie");
-        trie.update_root(&mut txn);
+        trie.update_root(&mut txn).expect("complete trie");
 
         let proof = trie.get_proof(&txn, vec![&key_1, &key_2, &key_3]).unwrap();
         assert_eq!(proof.nodes.len(), 6);
-        assert_eq!(proof.verify(&trie.root_hash(&txn)), true);
+        assert_eq!(proof.verify(&trie.root_hash_assert(&txn)), true);
 
         let proof = trie.get_proof(&txn, vec![&key_3, &key_1, &key_2]).unwrap();
         assert_eq!(proof.nodes.len(), 6);
-        assert_eq!(proof.verify(&trie.root_hash(&txn)), true);
+        assert_eq!(proof.verify(&trie.root_hash_assert(&txn)), true);
 
         let proof = trie.get_proof(&txn, vec![&key_1, &key_3]).unwrap();
         assert_eq!(proof.nodes.len(), 5);
-        assert_eq!(proof.verify(&trie.root_hash(&txn)), true);
+        assert_eq!(proof.verify(&trie.root_hash_assert(&txn)), true);
 
         let proof = trie.get_proof(&txn, vec![&key_1, &key_2]).unwrap();
         assert_eq!(proof.nodes.len(), 5);
-        assert_eq!(proof.verify(&trie.root_hash(&txn)), true);
+        assert_eq!(proof.verify(&trie.root_hash_assert(&txn)), true);
 
         let proof = trie.get_proof(&txn, vec![&key_1]).unwrap();
         assert_eq!(proof.nodes.len(), 4);
-        assert_eq!(proof.verify(&trie.root_hash(&txn)), true);
+        assert_eq!(proof.verify(&trie.root_hash_assert(&txn)), true);
 
         let proof = trie.get_proof(&txn, vec![&key_3]).unwrap();
         assert_eq!(proof.nodes.len(), 3);
-        assert_eq!(proof.verify(&trie.root_hash(&txn)), true);
+        assert_eq!(proof.verify(&trie.root_hash_assert(&txn)), true);
 
         let proof = trie.get_proof(&txn, vec![&key_4, &key_2]);
         assert!(proof.is_none());
@@ -1498,27 +1541,27 @@ mod tests {
         trie.put(&mut txn, &key_1, 9).expect("complete trie");
         trie.put(&mut txn, &key_2, 8).expect("complete trie");
         trie.put(&mut txn, &key_3, 7).expect("complete trie");
-        trie.update_root(&mut txn);
+        trie.update_root(&mut txn).expect("complete trie");
 
         let chunk = trie.get_chunk_proof(&txn, &KeyNibbles::ROOT, 100).unwrap();
         assert_eq!(chunk.nodes.len(), 6);
-        assert_eq!(chunk.verify(&trie.root_hash(&txn)), true);
+        assert_eq!(chunk.verify(&trie.root_hash_assert(&txn)), true);
 
         let chunk = trie.get_chunk_proof(&txn, &KeyNibbles::ROOT, 3).unwrap();
         assert_eq!(chunk.nodes.len(), 6);
-        assert_eq!(chunk.verify(&trie.root_hash(&txn)), true);
+        assert_eq!(chunk.verify(&trie.root_hash_assert(&txn)), true);
 
         let chunk = trie.get_chunk_proof(&txn, &KeyNibbles::ROOT, 2).unwrap();
         assert_eq!(chunk.nodes.len(), 5);
-        assert_eq!(chunk.verify(&trie.root_hash(&txn)), true);
+        assert_eq!(chunk.verify(&trie.root_hash_assert(&txn)), true);
 
         let chunk = trie.get_chunk_proof(&txn, &key_3, 100).unwrap();
         assert_eq!(chunk.nodes.len(), 3);
-        assert_eq!(chunk.verify(&trie.root_hash(&txn)), true);
+        assert_eq!(chunk.verify(&trie.root_hash_assert(&txn)), true);
 
         let chunk = trie.get_chunk_proof(&txn, &key_4, 100).unwrap();
         assert_eq!(chunk.nodes.len(), 3);
-        assert_eq!(chunk.verify(&trie.root_hash(&txn)), true);
+        assert_eq!(chunk.verify(&trie.root_hash_assert(&txn)), true);
     }
 
     #[test]
@@ -1533,7 +1576,7 @@ mod tests {
         let trie = MerkleRadixTrie::new(env.clone(), "database");
         let mut txn = WriteTransaction::new(&env);
 
-        let initial_hash = trie.root_hash(&txn);
+        let initial_hash = trie.root_hash_assert(&txn);
         assert_eq!(trie.count_nodes(&txn), (0, 0, 0));
         trie.put(&mut txn, &key_1, 80085).expect("complete trie");
         assert_eq!(trie.count_nodes(&txn), (0, 0, 1));
@@ -1585,7 +1628,7 @@ mod tests {
         assert_eq!(trie.get(&txn, &key_3).expect("complete trie"), None::<i32>);
         assert_eq!(trie.get(&txn, &key_4).expect("complete trie"), None::<i32>);
 
-        assert_eq!(trie.root_hash(&txn), initial_hash);
+        assert_eq!(trie.root_hash_assert(&txn), initial_hash);
     }
 
     #[test]
@@ -1631,7 +1674,7 @@ mod tests {
         let proof_value_2 = TrieNode::new_leaf(key_2.clone(), vec![99]);
         let mut proof_root = TrieNode::new_root();
         proof_root
-            .put_child(&proof_value_2.key, proof_value_2.hash_assert_complete())
+            .put_child(&proof_value_2.key, proof_value_2.hash_assert())
             .unwrap();
 
         let env = nimiq_database::volatile::VolatileEnvironment::new(10).unwrap();
@@ -1647,7 +1690,7 @@ mod tests {
                 Vec::new(),
                 TrieProof::new(vec![TrieNode::new_root()]),
             ),
-            TrieNode::new_root().hash_assert_complete(),
+            TrieNode::new_root().hash_assert(),
         )
         .unwrap();
         assert_eq!(trie.count_nodes(&txn), (0, 0, 0));
@@ -1661,7 +1704,7 @@ mod tests {
                 Vec::new(),
                 TrieProof::new(vec![proof_root.clone()]),
             ),
-            proof_root.hash_assert_complete(),
+            proof_root.hash_assert(),
         )
         .unwrap();
         assert_eq!(trie.count_nodes(&txn), (0, 0, 0));
@@ -1675,7 +1718,7 @@ mod tests {
                 vec![(key_2.clone(), vec![99])],
                 TrieProof::new(vec![proof_value_2.clone(), proof_root.clone()]),
             ),
-            proof_root.hash_assert_complete(),
+            proof_root.hash_assert(),
         )
         .unwrap();
         assert_eq!(trie.count_nodes(&txn), (0, 0, 1));
@@ -1689,7 +1732,7 @@ mod tests {
                 Vec::new(),
                 TrieProof::new(vec![proof_value_2.clone(), proof_root.clone()]),
             ),
-            proof_root.hash_assert_complete(),
+            proof_root.hash_assert(),
         )
         .unwrap();
         assert_eq!(trie.count_nodes(&txn), (0, 0, 1));
@@ -1733,12 +1776,12 @@ mod tests {
         let trie = MerkleRadixTrie::new(env.clone(), "copy");
         let mut txn = WriteTransaction::new(&env);
 
-        let hash = original.root_hash(&txn);
+        let hash = original.root_hash_assert(&txn);
 
         let chunk = original.get_chunk_with_proof(&txn, KeyNibbles::ROOT.., 100);
         assert_eq!(
             trie.put_chunk(&mut txn, KeyNibbles::ROOT, chunk, hash),
-            Err(MerkleRadixTrieError::TreeAlreadyComplete)
+            Err(MerkleRadixTrieError::TrieAlreadyComplete)
         );
     }
 
@@ -1761,11 +1804,11 @@ mod tests {
         original.put(&mut txn, &key_2, 999).expect("complete trie");
         original.put(&mut txn, &key_3, 1337).expect("complete trie");
         original.put(&mut txn, &key_4, 6969).expect("complete trie");
-        original.update_root(&mut txn);
+        original.update_root(&mut txn).expect("complete trie");
         assert_eq!(original.count_nodes(&txn), (0, 2, 2));
         assert!(original.is_complete(&txn));
 
-        let hash = original.root_hash(&txn);
+        let hash = original.root_hash_assert(&txn);
         let end = Some(KeyNibbles::ROOT);
 
         let start = end.unwrap();
@@ -1836,11 +1879,11 @@ mod tests {
         original.put(&mut txn, &key_2, 999).expect("complete trie");
         original.put(&mut txn, &key_3, 1337).expect("complete trie");
         original.put(&mut txn, &key_4, 6969).expect("complete trie");
-        original.update_root(&mut txn);
+        original.update_root(&mut txn).expect("complete trie");
         assert_eq!(original.count_nodes(&txn), (0, 2, 2));
         assert!(original.is_complete(&txn));
 
-        let hash = original.root_hash(&txn);
+        let hash = original.root_hash_assert(&txn);
         for (chunk_size, trie) in tries {
             let mut next_start = KeyNibbles::ROOT;
             for _ in 0..10 {
@@ -1867,6 +1910,63 @@ mod tests {
     }
 
     #[test]
+    fn partial_tree_put_chunks_of_different_sizes_2() {
+        let key_1 = "1a".parse().unwrap();
+        let key_2 = "1b1a".parse().unwrap();
+        let key_3 = "1b1b".parse().unwrap();
+        let key_4 = "1c".parse().unwrap();
+        let key_5 = "81".parse().unwrap();
+
+        let env = nimiq_database::volatile::VolatileEnvironment::new(10).unwrap();
+        let original = MerkleRadixTrie::new(env.clone(), "original");
+        let tries: Vec<_> = (1..5)
+            .map(|i| {
+                (
+                    i,
+                    MerkleRadixTrie::new_incomplete(env.clone(), &format!("copy{}", i)),
+                )
+            })
+            .collect();
+        let mut txn = WriteTransaction::new(&env);
+
+        original
+            .put(&mut txn, &key_1, 80085)
+            .expect("complete trie");
+        original.put(&mut txn, &key_2, 999).expect("complete trie");
+        original.put(&mut txn, &key_3, 1337).expect("complete trie");
+        original.put(&mut txn, &key_4, 6969).expect("complete trie");
+        original.put(&mut txn, &key_5, 2969).expect("complete trie");
+        original.update_root(&mut txn).expect("complete trie");
+        assert_eq!(original.count_nodes(&txn), (2, 0, 5));
+        assert!(original.is_complete(&txn));
+
+        let hash = original.root_hash_assert(&txn);
+        for (chunk_size, trie) in tries {
+            let mut next_start = KeyNibbles::ROOT;
+            for _ in 0..10 {
+                let start = next_start;
+                let chunk = original.get_chunk_with_proof(&txn, start.clone().., chunk_size);
+
+                trie.put_chunk(&mut txn, start, chunk.clone(), hash.clone())
+                    .unwrap();
+
+                if trie.is_complete(&txn) {
+                    break;
+                }
+                next_start = chunk.keys_end.unwrap();
+            }
+            assert!(trie.is_complete(&txn));
+            assert_eq!(trie.count_nodes(&txn), (2, 0, 5));
+
+            assert_eq!(trie.get(&txn, &key_1).expect("complete trie"), Some(80085));
+            assert_eq!(trie.get(&txn, &key_2).expect("complete trie"), Some(999));
+            assert_eq!(trie.get(&txn, &key_3).expect("complete trie"), Some(1337));
+            assert_eq!(trie.get(&txn, &key_4).expect("complete trie"), Some(6969));
+            assert_eq!(trie.get(&txn, &key_5).expect("complete trie"), Some(2969));
+        }
+    }
+
+    #[test]
     fn partial_tree_remove_chunks_of_different_sizes() {
         let key_1 = "413f22".parse().unwrap();
         let key_2 = "413".parse().unwrap();
@@ -1884,7 +1984,7 @@ mod tests {
                 trie.put(&mut txn, &key_2, 999).expect("complete trie");
                 trie.put(&mut txn, &key_3, 1337).expect("complete trie");
                 trie.put(&mut txn, &key_4, 6969).expect("complete trie");
-                trie.update_root(&mut txn);
+                trie.update_root(&mut txn).expect("complete trie");
                 assert_eq!(trie.count_nodes(&txn), (0, 2, 2));
                 assert!(trie.is_complete(&txn));
                 txn.commit();
@@ -1900,7 +2000,7 @@ mod tests {
         original.put(&mut txn, &key_2, 999).expect("complete trie");
         original.put(&mut txn, &key_3, 1337).expect("complete trie");
         original.put(&mut txn, &key_4, 6969).expect("complete trie");
-        original.update_root(&mut txn);
+        original.update_root(&mut txn).expect("complete trie");
         assert_eq!(original.count_nodes(&txn), (0, 2, 2));
         assert!(original.is_complete(&txn));
 
@@ -1966,7 +2066,7 @@ mod tests {
         original.put(&mut txn, &key_2, 999).expect("complete trie");
         original.put(&mut txn, &key_3, 1337).expect("complete trie");
         original.put(&mut txn, &key_4, 6969).expect("complete trie");
-        original.update_root(&mut txn);
+        original.update_root(&mut txn).expect("complete trie");
         assert_eq!(original.count_nodes(&txn), (0, 2, 2));
         assert!(original.is_complete(&txn));
 
@@ -2012,7 +2112,7 @@ mod tests {
         original.put(&mut txn, &key_3, 1337).expect("complete trie"); // 413f227fa
         assert_eq!(original.count_nodes(&txn), (0, 2, 1));
         original.put(&mut txn, &key_4, 6969).expect("complete trie"); // 413b391
-        original.update_root(&mut txn);
+        original.update_root(&mut txn).expect("complete trie");
         assert_eq!(original.count_nodes(&txn), (0, 2, 2));
         assert!(original.is_complete(&txn));
 
@@ -2059,7 +2159,7 @@ mod tests {
         original.put(&mut txn, &key_2, 999).expect("complete trie");
         original.put(&mut txn, &key_3, 1337).expect("complete trie");
         original.put(&mut txn, &key_4, 6969).expect("complete trie");
-        original.update_root(&mut txn);
+        original.update_root(&mut txn).expect("complete trie");
         assert_eq!(original.count_nodes(&txn), (0, 2, 2));
         assert!(original.is_complete(&txn));
 
@@ -2095,11 +2195,11 @@ mod tests {
         original.put(&mut txn, &key_2, 999).expect("complete trie");
         original.put(&mut txn, &key_3, 1337).expect("complete trie");
         original.put(&mut txn, &key_4, 6969).expect("complete trie");
-        original.update_root(&mut txn);
+        original.update_root(&mut txn).expect("complete trie");
         assert_eq!(original.count_nodes(&txn), (0, 2, 2));
         assert!(original.is_complete(&txn));
 
-        let hash = original.root_hash(&txn);
+        let hash = original.root_hash_assert(&txn);
         let chunk = original.get_chunk_with_proof(&txn, key_1.clone().., 2);
 
         original.remove_chunk(&mut txn, key_1.clone()).unwrap();

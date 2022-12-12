@@ -22,6 +22,7 @@ tokio-stream = "0.1"
 rand_chacha = "0.3.1"
 
 beserial = { path = "../beserial" }
+nimiq-account = { path = "../primitives/account" }
 nimiq-block = { path = "../primitives/block" }
 nimiq-blockchain = { path = "../blockchain" }
 nimiq-blockchain-interface = { path = "../blockchain-interface" }
@@ -38,6 +39,7 @@ nimiq-keys = { path = "../keys" }
 nimiq-mempool = { path = "../mempool" }
 nimiq-nano-primitives = { path = "../nano-primitives" }
 nimiq-transaction-builder = { path = "../transaction-builder" }
+nimiq-trie = { path = "../primitives/trie" }
 nimiq-network-interface = { path = "../network-interface" }
 nimiq-network-libp2p = { path = "../network-libp2p" }
 nimiq-network-mock = { path = "../network-mock" }

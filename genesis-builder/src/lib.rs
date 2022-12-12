@@ -249,7 +249,7 @@ impl GenesisBuilder {
         debug!("Body root: {}", &body_root);
 
         // State root
-        let state_root = accounts.get_root(Some(&txn));
+        let state_root = accounts.get_root_hash_assert(Some(&txn));
         debug!("State root: {}", &state_root);
         txn.abort();
 

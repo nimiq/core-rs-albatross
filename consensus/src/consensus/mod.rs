@@ -21,6 +21,7 @@ use crate::messages::{
     RequestBatchSet, RequestBlock, RequestHead, RequestHistoryChunk, RequestMacroChain,
     RequestMissingBlocks,
 };
+use crate::sync::live::state_queue::RequestChunk;
 use crate::sync::syncer::LiveSyncPushEvent;
 use crate::sync::syncer_proxy::SyncerProxy;
 
@@ -141,6 +142,10 @@ impl<N: Network> Consensus<N> {
                 tokio::spawn(request_handler(network, stream, blockchain));
 
                 let stream = network.receive_requests::<RequestHistoryChunk>();
+                tokio::spawn(request_handler(network, stream, blockchain));
+
+                // PITODO: Only spawn once accounts are complete.
+                let stream = network.receive_requests::<RequestChunk>();
                 tokio::spawn(request_handler(network, stream, blockchain));
             }
             BlockchainProxy::Light(_) => {}
@@ -309,6 +314,7 @@ impl<N: Network> Future for Consensus<N> {
                 LiveSyncPushEvent::RejectedBlock(hash) => {
                     warn!("Rejected block {}", hash);
                 }
+                LiveSyncPushEvent::AcceptedChunks(_) => {}
             }
         }
 
