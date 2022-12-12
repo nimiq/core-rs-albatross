@@ -26,7 +26,7 @@ impl ChainStore {
         let chain_info = self
             .chain_db
             .get(hash)
-            .ok_or(BlockchainError::BlockBodyNotFound)?;
+            .ok_or(BlockchainError::BlockNotFound)?;
         if include_body && chain_info.head.body().is_none() {
             return Err(BlockchainError::BlockBodyNotFound);
         }
