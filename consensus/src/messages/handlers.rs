@@ -150,17 +150,18 @@ impl Handle<HistoryChunk, Arc<RwLock<Blockchain>>> for RequestHistoryChunk {
 
 impl Handle<Option<Block>, BlockchainProxy> for RequestBlock {
     fn handle(&self, blockchain: &BlockchainProxy) -> Option<Block> {
-        if let Ok(block) = blockchain.read().get_block(&self.hash, false, None) {
+        let blockchain = blockchain.read();
+        if let Ok(block) = blockchain.get_block(&self.hash, false, None) {
             let block = match block {
                 // Macro bodies are always needed
-                Block::Macro(_) => match blockchain.read().get_block(&self.hash, true, None) {
+                Block::Macro(_) => match blockchain.get_block(&self.hash, true, None) {
                     Ok(block) => block,
                     Err(_) => return None,
                 },
                 // Micro bodies are requested based on `include_micro_bodies`
                 Block::Micro(_) => {
                     if self.include_micro_bodies {
-                        match blockchain.read().get_block(&self.hash, true, None) {
+                        match blockchain.get_block(&self.hash, true, None) {
                             Ok(block) => block,
                             Err(_) => return None,
                         }
