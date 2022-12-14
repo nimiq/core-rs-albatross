@@ -1,4 +1,7 @@
 [workspace]
+##
+## !!! NOTE: If you add a nimiq module here, also add it to log/src/lib.rs !!!
+##
 members = [
   "beserial",
   "beserial/beserial_derive",
