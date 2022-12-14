@@ -186,7 +186,7 @@ pub struct Network {
     ///  we store a some value with the peer contact itself
     /// Otherwise,
     ///  we just store a None value
-    connected_peers: Arc<RwLock<HashMap<PeerId, Option<PeerContact>>>>,
+    connected_peers: Arc<RwLock<HashMap<PeerId, PeerContact>>>,
     /// Stream used to send event messages
     events_tx: broadcast::Sender<NetworkEvent<PeerId>>,
     /// Stream used to send action messages
@@ -330,7 +330,7 @@ impl Network {
         events_tx: broadcast::Sender<NetworkEvent<PeerId>>,
         mut action_rx: mpsc::Receiver<NetworkAction>,
         mut validate_rx: mpsc::UnboundedReceiver<ValidateMessage<PeerId>>,
-        connected_peers: Arc<RwLock<HashMap<PeerId, Option<PeerContact>>>>,
+        connected_peers: Arc<RwLock<HashMap<PeerId, PeerContact>>>,
         peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<u16, RateLimit>>>>,
         rate_limits_pending_deletion: Arc<Mutex<VecDeque<((PeerId, u16), TokioInstant)>>>,
         #[cfg(feature = "metrics")] metrics: Arc<NetworkMetrics>,
@@ -388,7 +388,7 @@ impl Network {
         events_tx: &broadcast::Sender<NetworkEvent<PeerId>>,
         swarm: &mut NimiqSwarm,
         state: &mut TaskState,
-        connected_peers: &RwLock<HashMap<PeerId, Option<PeerContact>>>,
+        connected_peers: &RwLock<HashMap<PeerId, PeerContact>>,
         peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<u16, RateLimit>>>>,
         rate_limits_pending_deletion: Arc<Mutex<VecDeque<((PeerId, u16), TokioInstant)>>>,
         #[cfg(feature = "metrics")] metrics: &Arc<NetworkMetrics>,
@@ -1540,7 +1540,7 @@ impl NetworkInterface for Network {
     }
 
     fn peer_provides_required_services(&self, peer_id: PeerId) -> bool {
-        if let Some(Some(contact)) = self.connected_peers.read().get(&peer_id) {
+        if let Some(contact) = self.connected_peers.read().get(&peer_id) {
             contact.services.contains(self.required_services)
         } else {
             // If we dont know the peer we return false

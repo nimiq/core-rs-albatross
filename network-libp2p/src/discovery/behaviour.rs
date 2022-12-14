@@ -73,7 +73,7 @@ impl DiscoveryConfig {
 pub enum DiscoveryEvent {
     Established {
         peer_id: PeerId,
-        peer_contact: Option<PeerContact>,
+        peer_contact: PeerContact,
     },
     Update,
 }
@@ -210,17 +210,17 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         trace!(%peer_id, ?event, "inject_event");
 
         match event {
-            HandlerOutEvent::PeerExchangeEstablished { peer_contact } => {
-                self.events.push_back(NetworkBehaviourAction::GenerateEvent(
-                    DiscoveryEvent::Established {
-                        peer_id: peer_contact.public_key().clone().to_peer_id(),
-                        peer_contact: self
-                            .peer_contact_book
-                            .read()
-                            .get(&peer_id)
-                            .map(|peer_contact_info| peer_contact_info.contact().clone()),
-                    },
-                ));
+            HandlerOutEvent::PeerExchangeEstablished {
+                peer_contact: signed_peer_contact,
+            } => {
+                if let Some(peer_contact) = self.peer_contact_book.read().get(&peer_id) {
+                    self.events.push_back(NetworkBehaviourAction::GenerateEvent(
+                        DiscoveryEvent::Established {
+                            peer_id: signed_peer_contact.public_key().clone().to_peer_id(),
+                            peer_contact: peer_contact.contact().clone(),
+                        },
+                    ));
+                }
             }
             HandlerOutEvent::ObservedAddresses { observed_addresses } => {
                 let score = AddressScore::Infinite;

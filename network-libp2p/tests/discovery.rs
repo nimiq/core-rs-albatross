@@ -153,10 +153,7 @@ pub async fn test_exchanging_peers() {
     let mut node2_peer_contacts = vec![
         random_peer_contact(13, Services::FULL_BLOCKS),
         random_peer_contact(14, Services::FULL_BLOCKS | Services::HISTORY),
-        random_peer_contact(
-            15,
-            Services::FULL_BLOCKS | Services::CHAIN_PROOF | Services::ACCOUNTS_PROOF,
-        ),
+        random_peer_contact(15, Services::FULL_BLOCKS | Services::ACCOUNTS_PROOF),
     ];
 
     // insert peers into node's contact books
