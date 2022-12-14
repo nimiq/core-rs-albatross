@@ -475,9 +475,11 @@ impl ConnectionHandler for DiscoveryHandler {
                                         self.config.required_services,
                                     );
 
-                                    // Insert the initial set of peer contacts into the peer contact book.
-                                    // TODO: This doesn't actually filter and just assumes the peer already filtered.
-                                    peer_contact_book.insert_all(peer_contacts);
+                                    // Insert the peer's contacts (filtered) into my contact book
+                                    peer_contact_book.insert_all_filtered(
+                                        peer_contacts,
+                                        self.config.required_services,
+                                    );
 
                                     // Store peer contact in handler
                                     self._peer_contact = Some(peer_contact.clone());

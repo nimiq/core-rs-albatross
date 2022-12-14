@@ -114,7 +114,7 @@ pub fn generate_service_flags(sync_mode: SyncMode) -> (Services, Services) {
         // Services required by full nodes
         crate::config::config::SyncMode::Full => Services::FULL_BLOCKS | Services::ACCOUNTS_CHUNKS,
         // Services required by light nodes
-        crate::config::config::SyncMode::Light => Services::CHAIN_PROOF | Services::ACCOUNTS_PROOF,
+        crate::config::config::SyncMode::Light => Services::ACCOUNTS_PROOF,
     };
     (provided_services, required_services)
 }
@@ -167,13 +167,8 @@ impl ClientInner {
             identity_keypair.public().to_peer_id().to_base58()
         );
 
-        let (mut provided_services, required_services) =
+        let (provided_services, required_services) =
             generate_service_flags(config.consensus.sync_mode);
-
-        // TODO: This flag should be used internally to, apart from announcing the service, properly control the mechanism
-        if config.zkp_propagation {
-            provided_services |= Services::CHAIN_PROOF;
-        }
 
         // Generate my peer contact from identity keypair and my provided services
         let mut peer_contact = PeerContact::new(

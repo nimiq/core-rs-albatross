@@ -760,7 +760,6 @@ impl ClientConfigBuilder {
             self.zkp = Some(ZKPConfig {
                 prover_active: zkp_settings.prover_active,
                 setup_keys_path,
-                zkp_propagation: zkp_settings.zkp_propagation,
             });
         }
 
@@ -881,9 +880,6 @@ pub struct ZKPConfig {
 
     /// ZKP prover path for verifying and proving keys.
     pub setup_keys_path: PathBuf,
-
-    /// Flag for enabling the propagation of ZK proofs
-    pub zkp_propagation: bool,
 }
 
 impl Default for ZKPConfig {
@@ -891,7 +887,6 @@ impl Default for ZKPConfig {
         ZKPConfig {
             prover_active: false,
             setup_keys_path: PathBuf::from(".zkp"),
-            zkp_propagation: false,
         }
     }
 }

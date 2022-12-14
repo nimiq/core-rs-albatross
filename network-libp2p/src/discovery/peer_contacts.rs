@@ -32,10 +32,6 @@ bitflags! {
         ///
         const HISTORY = 1 << 1;
 
-        /// The node provides the ZKP for the latest election block
-        ///
-        const CHAIN_PROOF = 1 << 2;
-
         /// The node provides inclusion and exclusion proofs for accounts that are necessary to verify active accounts as
         /// well as accounts in all transactions it provided from its mempool.
         ///
