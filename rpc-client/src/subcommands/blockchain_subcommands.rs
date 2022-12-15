@@ -40,7 +40,7 @@ pub enum BlockchainCommand {
         block_number: Option<u32>,
 
         /// Include transactions
-        #[clap(short = 't')]
+        #[clap(short = 't', long)]
         include_transactions: bool,
     },
 
@@ -96,7 +96,7 @@ pub enum BlockchainCommand {
         max: Option<u16>,
 
         /// If set true only the hash of the transactions will be fetched. Otherwise the full transactions will be retrieved.
-        #[clap(short = 't')]
+        #[clap(short = 'h')]
         just_hash: bool,
     },
 

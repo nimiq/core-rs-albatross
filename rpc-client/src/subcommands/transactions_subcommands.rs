@@ -34,7 +34,6 @@ pub struct TxCommon {
 #[derive(Debug, Args)]
 pub struct TxCommonWithValue {
     /// The amount of NIM to be used by the transaction.
-    #[clap(long)]
     pub value: Coin,
 
     #[clap(flatten)]
@@ -46,11 +45,9 @@ pub enum TransactionCommand {
     /// Sends a simple transaction from the wallet `wallet` to a basic `recipient`.
     Basic {
         /// Transaction will be sent from this address. The sender wallet must be unlocked prior to this action.
-        #[clap(long)]
         sender_wallet: Address,
 
         /// Recipient for this transaction. This must be a basic account.
-        #[clap(short, long)]
         recipient: Address,
 
         #[clap(flatten)]
@@ -62,11 +59,9 @@ pub enum TransactionCommand {
     /// account (the sender wallet) to pay the transaction fee.
     NewStaker {
         /// The stake will be sent from this wallet. The sender wallet must be unlocked prior to this action.
-        #[clap(long)]
         sender_wallet: Address,
 
-        /// The staker address. This wallet must be unlocked prior to this action.
-        #[clap(long)]
+        /// The staker address. This wallet must be unlocked prior to this action.        
         staker_wallet: Address,
 
         /// Validator address to delegate stake to. If empty, no delegation will occur.
@@ -80,11 +75,9 @@ pub enum TransactionCommand {
     /// Sends a staking transaction from the address of a given `wallet` to a given `staker_address`.
     Stake {
         /// The stake will be sent from this wallet. The sender wallet must be unlocked prior to this action.
-        #[clap(long)]
         sender_wallet: Address,
 
         /// Destination address for the stake.
-        #[clap(long)]
         staker_address: Address,
 
         #[clap(flatten)]
@@ -94,6 +87,7 @@ pub enum TransactionCommand {
     /// Sends a `update_staker` transaction to the network. You can pay the transaction fee from a basic
     /// account (by providing the sender wallet) or from the staker account's balance (by not
     /// providing a sender wallet).
+    /// Note: If no new delegation is provided, the transaction will set the delegation to none.
     UpdateStaker {
         /// The fee will be payed by this wallet if any is provided. In such case the sender wallet must be unlocked prior to this action.
         /// If absent the fee is payed by the stakers account.
@@ -101,7 +95,6 @@ pub enum TransactionCommand {
         sender_wallet: Option<Address>,
 
         /// Destination address for the update. This wallet must be already unlocked.
-        #[clap(long)]
         staker_wallet: Address,
 
         /// The new address for the delegation.
@@ -116,11 +109,9 @@ pub enum TransactionCommand {
     /// being unstaked.
     Unstake {
         /// The stake will be sent from this wallet. The sender wallet must be unlocked prior to this action.
-        #[clap(long)]
         sender_wallet: Address,
 
         /// The recipients of the previously staked coins.
-        #[clap(long)]
         recipient: Address,
 
         /// The amount of NIM to unstake.
@@ -133,21 +124,16 @@ pub enum TransactionCommand {
     VestingCreate {
         /// The wallet used to sign the transaction. The vesting contract value is sent from the basic account
         /// belonging to this wallet. The sender wallet must be unlocked prior to this action.
-        #[clap(long)]
         sender_wallet: Address,
 
         /// The owner of the vesting contract.
-        #[clap(long)]
         owner: Address,
 
-        #[clap(long)]
         start_time: u64,
 
-        #[clap(long)]
         time_step: u64,
 
         /// Create a release schedule of `num_steps` payouts of value starting at `start_time + time_step`.
-        #[clap(long)]
         num_steps: u32,
 
         #[clap(flatten)]
@@ -158,15 +144,12 @@ pub enum TransactionCommand {
     VestingRedeem {
         /// The address to sign the transaction. This address should be the owner of the vesting contract.
         /// The sender wallet must be unlocked prior to this action.
-        #[clap(long)]
         sender_wallet: Address,
 
         /// The vesting contract address.
-        #[clap(long)]
         contract_address: Address,
 
         /// The address of the basic account that will receive the funds.
-        #[clap(long)]
         recipient: Address,
 
         #[clap(flatten)]
@@ -178,31 +161,25 @@ pub enum TransactionCommand {
     CreateHTLC {
         /// The wallet to sign the transaction. The HTLC contract value is sent from the basic account belonging to this wallet.
         /// The sender wallet must be unlocked prior to this action.
-        #[clap(long)]
         sender_wallet: Address,
 
         /// The address of the sender in the HTLC contract.
-        #[clap(long)]
         htlc_sender: Address,
 
         /// The address of the recipient in the HTLC contract.
-        #[clap(long)]
         htlc_recipient: Address,
 
         /// The result of hashing the pre-image hash `hash_count` times.
-        #[clap(short = 'r', long)]
         hash_root: AnyHash,
 
         /// Number of times the pre-image was hashed.
-        #[clap(short = 'c', long)]
         hash_count: u8,
 
         /// The hashing algorithm used.
-        #[clap(short = 'a', long, value_enum)]
+        #[clap(value_enum)]
         hash_algorithm: HashAlgorithm,
 
         /// Sets the blockchain height at which the `htlc_sender` automatically gains control over the funds.
-        #[clap(long)]
         timeout: u64,
 
         #[clap(flatten)]
@@ -214,30 +191,24 @@ pub enum TransactionCommand {
     RedeemRegularHTLC {
         /// This address corresponds to the `htlc_recipient` in the HTLC contract.
         /// The sender wallet must be unlocked prior to this action.
-        #[clap(long)]
         sender_wallet: Address,
 
         /// The address of the HTLC contract.
-        #[clap(long)]
         contract_address: Address,
 
         /// The address of the basic account that will receive the funds.
-        #[clap(long)]
         htlc_recipient: Address,
 
-        #[clap(long)]
         pre_image: AnyHash,
 
         /// The result of hashing the pre-image hash `hash_count` times.
-        #[clap(short = 'r', long)]
         hash_root: AnyHash,
 
         /// Number of times the pre-image was hashed.
-        #[clap(short = 'c', long)]
         hash_count: u8,
 
         /// The `hash_root` is the result of hashing the `pre_image` `hash_count` times using `hash_algorithm`.
-        #[clap(short = 'a', long, value_enum)]
+        #[clap(value_enum)]
         hash_algorithm: HashAlgorithm,
 
         #[clap(flatten)]
@@ -249,15 +220,12 @@ pub enum TransactionCommand {
     RedeemHTLCTimeout {
         /// This address corresponds to the `htlc_recipient` in the HTLC contract.
         /// The sender wallet must be unlocked prior to this action.
-        #[clap(long)]
         sender_wallet: Address,
 
         /// The address of the HTLC contract.
-        #[clap(long)]
         contract_address: Address,
 
         /// The address of the basic account that will receive the funds.
-        #[clap(long)]
         htlc_recipient: Address,
 
         #[clap(flatten)]
@@ -268,19 +236,15 @@ pub enum TransactionCommand {
     /// network.
     RedeemHTLCEarly {
         /// The address of the HTLC contract.
-        #[clap(long)]
         contract_address: Address,
 
         /// The address of the basic account that will receive the funds.
-        #[clap(long)]
         htlc_recipient: Address,
 
         /// The signature corresponding to the `htlc_sender` in the HTLC contract.
-        #[clap(long)]
         htlc_sender_signature: String,
 
         /// The signature corresponding to the `htlc_recipient` in the HTLC contract.
-        #[clap(long)]
         htlc_recipient_signature: String,
 
         #[clap(flatten)]
@@ -293,19 +257,15 @@ pub enum TransactionCommand {
         /// This is the address used to sign the transaction. It corresponds either to the `htlc_sender` or the `htlc_recipient`
         /// in the HTLC contract.
         /// The sender wallet must be unlocked prior to this action.
-        #[clap(long)]
         sender_wallet: Address,
 
         /// The address of the HTLC contract.
-        #[clap(long)]
         contract_address: Address,
 
         /// The address of the basic account that will receive the funds.
-        #[clap(long)]
         htlc_recipient: Address,
 
         /// The amount of NIM to be used by the transaction.
-        #[clap(long)]
         value: Coin,
 
         /// The associated transaction fee to be payed. If absent it defaults to 0 NIM.

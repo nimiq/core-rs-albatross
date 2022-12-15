@@ -136,13 +136,12 @@ pub enum PolicyCommand {
     /// 'genesis_supply' is the supply at the genesis of the Nimiq 2.0 chain.
     SupplyAt {
         /// The supply at genesis.
-        #[clap(long)]
         genesis_supply: u64,
+
         /// The time of genesis.
-        #[clap(long)]
         genesis_time: u64,
+
         /// The current time.
-        #[clap(long)]
         current_time: u64,
     },
 }

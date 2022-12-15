@@ -41,27 +41,21 @@ pub enum ValidatorCommand {
     /// "0x29a4b..." = Some(hash)
     CreateNewValidator {
         /// The fee will be payed from this address. This address must be already unlocked.
-        #[clap(long)]
         sender_wallet: Address,
 
         /// The new validator address. This wallet must be already unlocked.
-        #[clap(long)]
         validator_wallet: Address,
 
         /// The Schnorr signing key used by the validator.
-        #[clap(long)]
         signing_secret_key: String,
 
         /// The BLS key used by the validator.
-        #[clap(long)]
         voting_secret_key: String,
 
         /// The address to which the staking rewards are sent.
-        #[clap(long)]
         reward_address: Address,
 
         /// The signal data showed by the validator.
-        #[clap(short = 'd', long)]
         signal_data: String,
 
         #[clap(flatten)]
@@ -77,7 +71,6 @@ pub enum ValidatorCommand {
     /// "0x29a4b..." = Change the signal data field to Some(0x29a4b...).
     UpdateValidator {
         /// The fee will be payed from this address. This wallet must be already unlocked.
-        #[clap(long)]
         sender_wallet: Address,
 
         /// The new Schnorr signing key used by the validator.
@@ -106,7 +99,6 @@ pub enum ValidatorCommand {
     /// The sender wallet must be unlocked prior to this command.
     InactivateValidator {
         /// The fee will be payed from this address. This wallet must be already unlocked.
-        #[clap(long)]
         sender_wallet: Address,
 
         #[clap(flatten)]
@@ -118,7 +110,6 @@ pub enum ValidatorCommand {
     /// The sender wallet must be unlocked prior to this command.
     ReactivateValidator {
         /// The fee will be payed from this address. This wallet must be already unlocked.
-        #[clap(long)]
         sender_wallet: Address,
 
         #[clap(flatten)]
@@ -130,7 +121,6 @@ pub enum ValidatorCommand {
     /// The sender wallet must be unlocked prior to this command.
     UnparkValidator {
         /// The fee will be payed from this address. This wallet must be already unlocked.
-        #[clap(long)]
         sender_wallet: Address,
 
         #[clap(flatten)]
@@ -141,7 +131,6 @@ pub enum ValidatorCommand {
     /// validator deposit that is being returned.
     DeleteValidator {
         /// The address to receive the balance of the validator.
-        #[clap(long)]
         recipient_address: Address,
 
         #[clap(flatten)]
