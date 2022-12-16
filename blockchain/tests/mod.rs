@@ -4,13 +4,14 @@ use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::StreamExt;
 
 use nimiq_block::Block;
-use nimiq_block_production::{test_utils::TemporaryBlockProducer, BlockProducer};
+use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::PushResult;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainConfig};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
 use nimiq_primitives::policy::Policy;
 use nimiq_test_log::test;
+use nimiq_test_utils::block_production::TemporaryBlockProducer;
 use nimiq_test_utils::blockchain::{signing_key, voting_key};
 use nimiq_utils::time::OffsetTime;
 

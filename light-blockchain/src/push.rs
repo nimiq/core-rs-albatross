@@ -16,6 +16,19 @@ impl LightBlockchain {
         this: RwLockUpgradableReadGuard<Self>,
         block: Block,
     ) -> Result<PushResult, PushError> {
+        // Ignore all blocks that precede (or are at the same height) as the most recent accepted
+        // macro block.
+        let last_macro_block = Policy::last_macro_block(this.block_number());
+        if block.block_number() <= last_macro_block {
+            log::debug!(
+                block_no = block.block_number(),
+                reason = "we have already finalized an earlier macro block",
+                last_macro_block_no = last_macro_block,
+                "Ignoring block",
+            );
+            return Ok(PushResult::Ignored);
+        }
+
         // Check if we already know this block.
         if this.get_chain_info(&block.hash(), false, None).is_ok() {
             return Ok(PushResult::Known);
@@ -44,9 +57,6 @@ impl LightBlockchain {
         } else {
             block.block_number()
         };
-        let (slot_owner, _) = this
-            .get_slot_owner_at(block.block_number(), offset, None)
-            .expect("Failed to find slot owner!");
 
         // We expect full blocks (with body) for macro blocks and no body for micro blocks.
         if block.is_macro() {
@@ -71,6 +81,10 @@ impl LightBlockchain {
         if block.is_macro() {
             block.verify_macro_successor(&this.macro_head)?;
         }
+
+        let (slot_owner, _) = this
+            .get_slot_owner_at(block.block_number(), offset, None)
+            .expect("Failed to find slot owner!");
 
         // Verify that the block is valid for the given proposer.
         block.verify_proposer(&slot_owner.signing_key, predecessor.seed())?;
@@ -148,7 +162,7 @@ impl LightBlockchain {
     fn rebranch(
         this: RwLockUpgradableReadGuard<Self>,
         mut chain_info: ChainInfo,
-        mut prev_info: ChainInfo,
+        prev_info: ChainInfo,
     ) -> Result<PushResult, PushError> {
         // You can't rebranch a macro block.
         assert!(chain_info.head.is_micro());
@@ -158,7 +172,6 @@ impl LightBlockchain {
 
         // Update chain infos.
         chain_info.on_main_chain = true;
-        prev_info.main_chain_successor = Some(chain_info.head.hash());
 
         // Find the common ancestor between our current main chain and the fork chain.
         // Walk up the fork chain until we find a block that is part of the main chain.

@@ -13,6 +13,7 @@ futures = { package = "futures-util", version = "0.3" }
 thiserror = "1.0"
 parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
 tokio-stream = { version = "0.1", features = ["sync"] }
+log = { package = "tracing", version = "0.1", features = ["log"] }
 
 nimiq-account = { path = "../primitives/account" }
 nimiq-block = { path = "../primitives/block" }
@@ -28,5 +29,7 @@ nimiq-utils = { path = "../utils", features = ["time"] }
 nimiq-vrf = { path = "../vrf" }
 
 [dev-dependencies]
+nimiq-block-production = { path = "../block-production", features = ["test-utils"] }
+nimiq-test-utils = { path= "../test-utils" }
 nimiq-test-log = { path = "../test-log" }
 rand = "^0.8"

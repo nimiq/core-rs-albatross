@@ -2950,6 +2950,7 @@ dependencies = [
  "futures-util",
  "nimiq-account",
  "nimiq-block",
+ "nimiq-block-production",
  "nimiq-blockchain",
  "nimiq-collections",
  "nimiq-database",
@@ -2958,6 +2959,7 @@ dependencies = [
  "nimiq-nano-zkp",
  "nimiq-primitives",
  "nimiq-test-log",
+ "nimiq-test-utils",
  "nimiq-trie",
  "nimiq-utils",
  "nimiq-vrf",
@@ -2965,6 +2967,7 @@ dependencies = [
  "rand 0.8.5",
  "thiserror",
  "tokio-stream",
+ "tracing",
 ]
 
 [[package]]

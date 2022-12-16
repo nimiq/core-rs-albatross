@@ -8,6 +8,7 @@ use nimiq_block::{
     SkipBlockProof, TendermintIdentifier, TendermintProof, TendermintProposal, TendermintStep,
     TendermintVote,
 };
+use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainConfig, PushError, PushResult};
 use nimiq_bls::{AggregateSignature, KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
 use nimiq_collections::BitSet;
@@ -17,8 +18,6 @@ use nimiq_hash::Blake2sHash;
 use nimiq_keys::{KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey};
 use nimiq_primitives::policy::Policy;
 use nimiq_utils::time::OffsetTime;
-
-use crate::BlockProducer;
 
 /// Secret keys of validator. Tests run with `genesis/src/genesis/unit-albatross.toml`
 const SIGNING_KEY: &str = "041580cc67e66e9e08b68fd9e4c9deb68737168fbe7488de2638c2e906c2f5ad";

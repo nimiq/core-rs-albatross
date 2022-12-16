@@ -1,14 +1,91 @@
-use nimiq_block::Block;
-use nimiq_block::BlockError;
-use nimiq_block_production::test_custom_block::next_skip_block;
-use nimiq_block_production::test_custom_block::{next_macro_block, next_micro_block, BlockConfig};
-use nimiq_blockchain::PushError::InvalidBlock;
-use nimiq_blockchain::{PushError, PushResult};
+use std::sync::Arc;
+
+use nimiq_block::{Block, BlockError, SkipBlockProof};
+use nimiq_block_production::{
+    test_custom_block::{next_macro_block, next_micro_block, next_skip_block, BlockConfig},
+    BlockProducer,
+};
+use nimiq_blockchain::{Blockchain, PushError, PushError::InvalidBlock, PushResult};
+use nimiq_genesis::NetworkId;
 use nimiq_hash::Blake2bHash;
+use nimiq_light_blockchain::LightBlockchain;
 use nimiq_primitives::policy::Policy;
 use nimiq_test_log::test;
 use nimiq_test_utils::block_production::TemporaryBlockProducer;
 use nimiq_vrf::VrfSeed;
+use parking_lot::RwLock;
+
+fn remove_micro_body(block: Block) -> Block {
+    let block = match block {
+        Block::Macro(macro_block) => Block::Macro(macro_block),
+        Block::Micro(mut micro_block) => {
+            micro_block.body = None;
+            Block::Micro(micro_block)
+        }
+    };
+    block
+}
+
+/// This is just a wrapper around the TemporaryBlockProducer to incorporate the light blockchain
+/// The regular blockchain takes care of producing blocks
+pub struct TemporaryLightBlockProducer {
+    pub temp_producer: TemporaryBlockProducer,
+    pub light_blockchain: Arc<RwLock<LightBlockchain>>,
+    pub blockchain: Arc<RwLock<Blockchain>>,
+    pub producer: BlockProducer,
+}
+
+impl Default for TemporaryLightBlockProducer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl TemporaryLightBlockProducer {
+    pub fn new() -> Self {
+        let light_blockchain =
+            Arc::new(RwLock::new(LightBlockchain::new(NetworkId::UnitAlbatross)));
+
+        let temp_producer = TemporaryBlockProducer::new();
+        let blockchain = Arc::clone(&temp_producer.blockchain);
+        let producer = temp_producer.producer.clone();
+        TemporaryLightBlockProducer {
+            temp_producer,
+            light_blockchain,
+            blockchain,
+            producer,
+        }
+    }
+
+    pub fn push(&self, block: Block) -> Result<PushResult, PushError> {
+        let regular_result = self.temp_producer.push(block.clone());
+
+        let light_result = LightBlockchain::push(
+            self.light_blockchain.upgradable_read(),
+            remove_micro_body(block),
+        );
+
+        // We expect both results to be equal:
+        assert_eq!(regular_result, light_result);
+
+        regular_result
+    }
+
+    pub fn next_block(&self, extra_data: Vec<u8>, skip_block: bool) -> Block {
+        let block = self.next_block_no_push(extra_data, skip_block);
+        assert_eq!(self.push(block.clone()), Ok(PushResult::Extended));
+        block
+    }
+
+    pub fn next_block_no_push(&self, extra_data: Vec<u8>, skip_block: bool) -> Block {
+        self.temp_producer
+            .next_block_no_push(extra_data, skip_block)
+    }
+
+    pub fn create_skip_block_proof(&self) -> SkipBlockProof {
+        self.temp_producer.create_skip_block_proof()
+    }
+}
 
 pub fn expect_push_micro_block(config: BlockConfig, expected_res: Result<PushResult, PushError>) {
     if !config.macro_only {
@@ -27,7 +104,7 @@ pub fn expect_push_micro_block(config: BlockConfig, expected_res: Result<PushRes
 }
 
 fn push_micro_after_macro(config: &BlockConfig, expected_res: &Result<PushResult, PushError>) {
-    let temp_producer = TemporaryBlockProducer::new();
+    let temp_producer = TemporaryLightBlockProducer::new();
 
     let micro_block = {
         let blockchain = &temp_producer.blockchain.read();
@@ -38,7 +115,7 @@ fn push_micro_after_macro(config: &BlockConfig, expected_res: &Result<PushResult
 }
 
 fn push_micro_after_micro(config: &BlockConfig, expected_res: &Result<PushResult, PushError>) {
-    let temp_producer = TemporaryBlockProducer::new();
+    let temp_producer = TemporaryLightBlockProducer::new();
     temp_producer.next_block(vec![], false);
 
     let micro_block = {
@@ -53,7 +130,7 @@ fn push_simple_skip_block(config: &BlockConfig, expected_res: &Result<PushResult
     // (Numbers denote accumulated skip blocks)
     // [0] - [0]
     //    \- [1] - [1]
-    let temp_producer1 = TemporaryBlockProducer::new();
+    let temp_producer1 = TemporaryLightBlockProducer::new();
 
     temp_producer1.next_block(vec![], false);
     temp_producer1.next_block(vec![], true);
@@ -70,8 +147,8 @@ fn push_rebranch(config: BlockConfig, expected_res: &Result<PushResult, PushErro
     // (Numbers denote accumulated skip blocks)
     // [0] - [0]
     //    \- [1]
-    let temp_producer1 = TemporaryBlockProducer::new();
-    let temp_producer2 = TemporaryBlockProducer::new();
+    let temp_producer1 = TemporaryLightBlockProducer::new();
+    let temp_producer2 = TemporaryLightBlockProducer::new();
 
     let block = temp_producer1.next_block(vec![], false);
     assert_eq!(temp_producer2.push(block), Ok(PushResult::Extended));
@@ -104,8 +181,8 @@ fn push_fork(config: &BlockConfig, expected_res: &Result<PushResult, PushError>)
     // (Numbers denote accumulated skip blocks)
     // [0] - [0]
     //    \- [0]
-    let temp_producer1 = TemporaryBlockProducer::new();
-    let temp_producer2 = TemporaryBlockProducer::new();
+    let temp_producer1 = TemporaryLightBlockProducer::new();
+    let temp_producer2 = TemporaryLightBlockProducer::new();
 
     let block = temp_producer1.next_block(vec![], false);
     assert_eq!(temp_producer2.push(block), Ok(PushResult::Extended));
@@ -124,8 +201,8 @@ fn push_fork(config: &BlockConfig, expected_res: &Result<PushResult, PushError>)
 
 fn push_rebranch_fork(config: &BlockConfig, expected_res: &Result<PushResult, PushError>) {
     // Build forks using two producers.
-    let temp_producer1 = TemporaryBlockProducer::new();
-    let temp_producer2 = TemporaryBlockProducer::new();
+    let temp_producer1 = TemporaryLightBlockProducer::new();
+    let temp_producer2 = TemporaryLightBlockProducer::new();
 
     // Case 1: easy rebranch
     // [0] - [0] - [0] - [0]
@@ -152,8 +229,8 @@ fn push_rebranch_fork(config: &BlockConfig, expected_res: &Result<PushResult, Pu
 /// Check that it doesn't rebranch across epochs. This push should always result in OK::Ignored.
 fn push_rebranch_across_epochs(config: BlockConfig) {
     // Build forks using two producers.
-    let temp_producer1 = TemporaryBlockProducer::new();
-    let temp_producer2 = TemporaryBlockProducer::new();
+    let temp_producer1 = TemporaryLightBlockProducer::new();
+    let temp_producer2 = TemporaryLightBlockProducer::new();
 
     // The number in [_] represents the epoch number
     //              a
@@ -181,7 +258,7 @@ fn push_rebranch_across_epochs(config: BlockConfig) {
 }
 
 fn simply_push_macro_block(config: &BlockConfig, expected_res: &Result<PushResult, PushError>) {
-    let temp_producer = TemporaryBlockProducer::new();
+    let temp_producer = TemporaryLightBlockProducer::new();
 
     for _ in 0..Policy::blocks_per_batch() - 1 {
         let block = temp_producer.next_block(vec![], false);
@@ -281,25 +358,6 @@ fn it_validates_block_time() {
 }
 
 #[test]
-fn it_validates_body_hash() {
-    expect_push_micro_block(
-        BlockConfig {
-            body_hash: Some(Blake2bHash::default()),
-            ..Default::default()
-        },
-        Err(InvalidBlock(BlockError::BodyHashMismatch)),
-    );
-
-    expect_push_micro_block(
-        BlockConfig {
-            missing_body: true,
-            ..Default::default()
-        },
-        Err(InvalidBlock(BlockError::MissingBody)),
-    );
-}
-
-#[test]
 fn it_validates_seed() {
     expect_push_micro_block(
         BlockConfig {
@@ -308,37 +366,6 @@ fn it_validates_seed() {
         },
         Err(InvalidBlock(BlockError::InvalidSeed)),
     );
-}
-
-#[test]
-fn it_validates_state_root() {
-    let config = BlockConfig {
-        state_root: Some(Blake2bHash::default()),
-        ..Default::default()
-    };
-
-    // This does not fail since now the state root is properly calculated from strach
-    push_micro_after_micro(&config.clone(), &Ok(PushResult::Extended));
-
-    push_rebranch(config.clone(), &Err(PushError::InvalidFork));
-
-    push_rebranch_across_epochs(config.clone());
-}
-
-#[test]
-fn it_validates_history_root() {
-    let config = BlockConfig {
-        history_root: Some(Blake2bHash::default()),
-        ..Default::default()
-    };
-    push_micro_after_micro(
-        &config.clone(),
-        &Err(PushError::InvalidBlock(BlockError::InvalidHistoryRoot)),
-    );
-
-    push_rebranch(config.clone(), &Err(PushError::InvalidFork));
-
-    push_rebranch_across_epochs(config.clone());
 }
 
 #[test]

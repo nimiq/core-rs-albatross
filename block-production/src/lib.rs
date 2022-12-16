@@ -331,5 +331,3 @@ impl BlockProducer {
 
 #[cfg(any(test, feature = "test-utils"))]
 pub mod test_custom_block;
-#[cfg(any(test, feature = "test-utils"))]
-pub mod test_utils;
