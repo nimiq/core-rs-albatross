@@ -110,17 +110,17 @@ impl StakingContract {
         // Get the staker.
         let mut staker = store.expect_staker(staker_address)?;
 
+        // If we are delegating to a validator, we need to update it too.
+        // The validator might have been deleted, in which case `add_stake_to_validator` will fail.
+        if let Some(validator_address) = &staker.delegation {
+            self.add_stake_to_validator(store, validator_address, value)?;
+        }
+
         // Update the staker's balance.
         staker.balance += value;
 
         // Update our balance.
         self.balance += value;
-
-        // If we are delegating to a validator, we need to update it too.
-        if let Some(validator_address) = &staker.delegation {
-            self.add_stake_to_validator(store, validator_address, value)
-                .expect("inconsistent contract state");
-        }
 
         // Update the staker entry.
         store.put_staker(staker_address, staker);
@@ -145,17 +145,17 @@ impl StakingContract {
         // Get the staker.
         let mut staker = store.expect_staker(staker_address)?;
 
-        // Update the staker's balance.
-        staker.balance -= value;
-
-        // Update our balance.
-        self.balance -= value;
-
         // If we are delegating to a validator, we need to update it too.
         if let Some(validator_address) = &staker.delegation {
             self.remove_stake_from_validator(store, validator_address, value)
                 .expect("inconsistent contract state");
         }
+
+        // Update the staker's balance.
+        staker.balance -= value;
+
+        // Update our balance.
+        self.balance -= value;
 
         // Update the staker entry.
         store.put_staker(staker_address, staker);
@@ -244,7 +244,7 @@ impl StakingContract {
         Ok(())
     }
 
-    /// Removes coins from a staker's balance. If the entire staker's balance is unstaked then the
+    /// Removes coins from a staker's balance. If the entire staker's balance is removed then the
     /// staker is deleted.
     pub fn remove_stake(
         &mut self,

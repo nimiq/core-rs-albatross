@@ -426,7 +426,7 @@ impl Accounts {
         }
     }
 
-    /// TODO This function might leave the WriteTransaction in an inconsistent state if it returns an error!
+    /// FIXME This function might leave the WriteTransaction in an inconsistent state if it returns an error!
     fn revert_successful_transaction(
         &self,
         txn: &mut WriteTransaction,

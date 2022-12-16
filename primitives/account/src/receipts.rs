@@ -1,7 +1,6 @@
 use std::fmt::Debug;
 use std::io;
 
-use crate::Account;
 use beserial::{Deserialize, Serialize};
 use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
 
