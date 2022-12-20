@@ -14,3 +14,5 @@ proving_keys
 temp-logs
 temp-state
 .vscode
+# Python
+__pycache__/

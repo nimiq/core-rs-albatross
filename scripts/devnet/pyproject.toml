@@ -1,0 +1,29 @@
+[project]
+name = "devnet"
+version = "0.1"
+description = "Script for running a devnet topology"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {file = "../LICENSE.md"}
+keywords = ["devnet", "topology", "validator", "node", "spammer", "seed"]
+authors = [
+  {email = "info@nimiq.com"},
+  {name = "Nimiq Core Development team"}
+]
+maintainers = [
+  {name = "JD", email = "jd@nimiq.com"},
+  {name = "Claudio", email = "claudio@nimiq.com"},
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Programming Language :: Python"
+]
+
+dependencies = [
+  "argparse",
+  "jinja2",
+  "tomli",
+]
+
+[project.scripts]
+spam-cli = "devnet:devnet"

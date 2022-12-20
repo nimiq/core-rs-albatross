@@ -1,0 +1,39 @@
+name = "dev-albatross"
+seed_message = "Albatross DevNet"
+timestamp = "2021-07-15T00:00:00.000+00:00"
+vrf_seed = "e8c7f2f3935da9ca39419aa7d2cc90817245f75e58cc543f2b9478766308e8a50fffccb09e2df3546f5a0c0059d73a506c48fa2b546f15b511d0f7a63f0ee20cd510a87f520e26478bb687ca31a08db8b02921f9a22e32a790c07f16dbdf4501"
+
+
+{% for validator in validators %}
+[[validators]]
+validator_address = "{{ validator['validator_address'] }}"
+signing_key = "{{ validator['signing_key'] }}"
+voting_key = "{{ validator['voting_key'] }}"
+reward_address = "{{ validator['reward_address'] }}"
+{% endfor %}
+
+{% for validator in validators %}
+[[stakers]]
+staker_address = "{{ validator['reward_address'] }}"
+balance = 1_000_000
+delegation = "{{ validator['validator_address'] }}"
+
+[[accounts]]
+address = "{{ validator['reward_address'] }}"
+balance = 10_000_000_00000
+{% endfor %}
+
+[[accounts]]
+address = "NQ37 7C3V VMN8 FRPN FXS9 PLAG JMRE 8SC6 KUSQ"
+balance = 10_000_000_00000
+
+[[accounts]]
+address = "NQ87 HKRC JYGR PJN5 KQYQ 5TM1 26XX 7TNG YT27"
+# private_key = "3336f25f5b4272a280c8eb8c1288b39bd064dfb32ebc799459f707a0e88c4e5f"
+balance = 10_000_000_00000
+
+{% for spammer in spammers %}
+[[accounts]]
+address = "{{ spammer['address'] }}"
+balance = 10_000_000_000_000
+{% endfor %}

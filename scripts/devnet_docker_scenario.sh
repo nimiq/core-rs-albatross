@@ -43,7 +43,24 @@ tmp_dir=`mktemp -d -t docker_devnet.XXXXXXXXXX`
 
 # Create devnet configuration
 echo "Creating devnet configuration... "
-python3 scripts/devnet/python/devnet_create.py $MAX_VALIDATORS -o $tmp_dir -s -a
+echo "[[seed]]
+restartable = false
+sync_mode = \"history\"
+
+[[spammer]]
+restartable = false
+sync_mode = \"history\"
+tpb = 15
+" > $tmp_dir/topology.toml
+for _ in {0..$MAX_VALIDATORS}
+do
+  echo "[[validator]]
+restartable = true
+sync_mode = \"history\"
+" >> $tmp_dir/topology.toml
+done
+  
+python3 scripts/devnet/devnet.py -t $tmp_dir/topology.toml --dry -o $tmp_dir
 
 # Clone the albatross generator repo
 git clone https://github.com/redmaner/albatross_generator.git $tmp_dir/albatross_generator --depth 1

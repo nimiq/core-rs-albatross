@@ -1,0 +1,71 @@
+[network]
+peer_key_file = "{{ state_path }}/peer_key.dat"
+listen_addresses = [
+    "/ip4/127.0.0.1/tcp/{{ port }}/ws",
+]
+
+{% if seed_ports is defined %}
+seed_nodes = [
+    {% for seed_port in seed_ports %}
+        {{ '{' }} address = "/ip4/127.0.0.1/tcp/{{ seed_port }}/ws" {{ '}' }}
+    {% endfor %}
+]
+{% endif %}
+
+[consensus]
+network = "dev-albatross"
+sync_mode = "{{ sync_mode }}"
+min_peers = {{ min_peers }}
+
+[database]
+path = "{{ state_path }}"
+
+[log]
+level = "trace"
+timestamps = true
+
+{% if loki is not none %}
+[log.loki]
+url = "{{ loki['url'] }}"
+
+    {% if loki.labels %}
+[log.loki.labels]
+        {% for label in loki['labels'] %}
+{{ label }} = "{{ loki['labels'][label] }}"
+        {% endfor %}
+    {% endif %}
+    {% if loki.extra_fields %}
+[log.loki.extra_fields]
+        {% for extra_field in loki['extra_fields'] %}
+{{ extra_field }} = "{{ loki['extra_fields'][extra_field] }}"
+        {% endfor %}
+    {% endif %}
+{% endif %}
+
+[log.tags]
+libp2p_swarm = "debug"
+lock_api = "trace"
+
+{% if metrics is defined %}
+[metrics-server]
+bind="127.0.0.1"
+port = {{ metrics['port'] }}
+{% endif %}
+
+{% if validator is defined %}
+[validator]
+validator_address = "{{ validator['validator_address'] }}"
+signing_key_file = "{{ state_path }}/signing_key.dat"
+signing_key = "{{ validator['signing_key'] }}"
+voting_key_file = "{{ state_path }}/voting_key.dat"
+voting_key = "{{ validator['voting_key'] }}"
+fee_key_file = "{{ state_path }}/fee_key.dat"
+fee_key = "{{ validator['fee_key'] }}"
+{% endif %}
+{% if spammer is defined %}
+[validator]
+validator_address = "NQ07 0000 0000 0000 0000 0000 0000 0000 0000"
+signing_key_file = "{{ state_path }}/signing_key.dat"
+voting_key_file = "{{ state_path }}/voting_key.dat"
+fee_key_file = "{{ state_path }}/fee_key.dat"
+{% endif %}
