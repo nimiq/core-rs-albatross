@@ -118,6 +118,8 @@ jobs:
     - uses: actions/setup-python@v4
       with:
         python-version: '3.8'
+    - name: Install python dependencies
+      run: pip install scripts/devnet
     - uses: actions/cache@v3
       with:
         path:
@@ -138,7 +140,7 @@ jobs:
         command: build
     - name: Executes the 4 validators reconnecting scenario
       run: |
-          bash scripts/devnet/devnet.sh -r 1
+          python3 scripts/devnet/devnet.py -t .github/devnet_topologies/four_validators.toml -r 1
     - name: Archive test results
       if: always()
       uses: actions/upload-artifact@v3

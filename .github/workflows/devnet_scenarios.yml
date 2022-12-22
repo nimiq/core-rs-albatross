@@ -21,21 +21,21 @@ jobs:
 
         include:
         - test: FourValidatorsReconnect
-          devnet_args:
+          devnet_args: -t .github/devnet_topologies/four_validators.toml
         - test: MultipleValidatorsDown
-          devnet_args: -k 2 -u 100
+          devnet_args: -t .github/devnet_topologies/four_validators.toml -k 2 -ut 100
         - test: FourValidatorsReconnectRmDatabase
-          devnet_args: -d -u 100
+          devnet_args: -t .github/devnet_topologies/four_validators.toml -d -ut 100
         - test: FourValidatorsReconnectSpammer
-          devnet_args: -s 50 -u 100
+          devnet_args: -t .github/devnet_topologies/four_validators_spammer_1.toml -ut 100
         - test: MacroBlockProduction
           pre: "sed -i 's/BLOCKS_PER_BATCH: u32 = 32;/BLOCKS_PER_BATCH: u32 = 2;/g' primitives/src/policy.rs"
-          devnet_args: -k 0 -s 15 -u 100
+          devnet_args: -t .github/devnet_topologies/four_validators_spammer_0.toml -k 0 -ut 100
         - test: Validators90sDown
-          devnet_args: -s 50 -t 90 -u 100
+          devnet_args: -t .github/devnet_topologies/four_validators_spammer_1.toml -dt 90 -ut 100
         - test: LowBlockProducerTimeout
           pre: "sed -i 's/BLOCK_PRODUCER_TIMEOUT: u64 = 4 * 1000;/BLOCK_PRODUCER_TIMEOUT: u64 = 2 * 1000;/g' primitives/src/policy.rs"
-          devnet_args: -k 0 -s 15 -u 100
+          devnet_args: -t .github/devnet_topologies/four_validators_spammer_0.toml -k 0 -ut 100
 
     runs-on: ubuntu-20.04
 
@@ -44,6 +44,8 @@ jobs:
     - uses: actions/setup-python@v4
       with:
         python-version: '3.8'
+    - name: Install python dependencies
+      run: pip install scripts/devnet
     - uses: actions/cache@v3
       with:
         path:
@@ -70,13 +72,13 @@ jobs:
          echo "INITIAL_TS=$(date +%s%N | cut -b1-13)" >> $GITHUB_OUTPUT
     - name: Execute the test
       run: |          
-          bash scripts/devnet/devnet.sh --run-environment ci ${{ matrix.devnet_args }}
+          python3 scripts/devnet/devnet.py --run-environment ci ${{ matrix.devnet_args }}
       env:
         NIMIQ_LOKI_URL: ${{ secrets.LOKI_URL }}
         NIMIQ_LOKI_EXTRA_FIELDS: nimiq_ci_name=${{ github.workflow }}:nimiq_ci_run=${{ github.run_number }}:nimiq_test=${{ matrix.test }}
     - name: Redact Loki URL
       if: always()
-      run: sed -i 's/url = "[^"]*"/url = "<redacted>"/g' temp-logs/*/conf/*/client.toml
+      run: sed -i 's/url = "[^"]*"/url = "<redacted>"/g' temp-logs/*/conf/*/*.toml
     - name: Archive test results
       if: always()
       uses: actions/upload-artifact@v3
