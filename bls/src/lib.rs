@@ -28,4 +28,5 @@ pub mod rand_gen;
 pub type SigHash = Blake2sHash;
 
 // A simple cache implementation for the (un)compressed keys.
+#[cfg(feature = "cache")]
 pub mod cache;

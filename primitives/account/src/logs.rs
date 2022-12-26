@@ -28,7 +28,10 @@ pub enum Log {
         from: Address,
         to: Address,
         amount: Coin,
-        #[serde(skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(
+            feature = "serde-derive",
+            serde(skip_serializing_if = "Option::is_none")
+        )]
         data: Option<Vec<u8>>,
     },
 

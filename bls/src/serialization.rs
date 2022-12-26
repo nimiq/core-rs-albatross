@@ -1,14 +1,15 @@
 use std::io;
 
 use ark_ff::{FromBytes, ToBytes};
-use ark_mnt6_753::Fr;
+use ark_mnt6_753::{Fr, G1Projective};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use nimiq_hash::{Hash, SerializeContent};
 
 use crate::{
-    AggregatePublicKey, AggregateSignature, CompressedPublicKey, CompressedSignature, KeyPair,
-    PublicKey, SecretKey, Signature,
+    pedersen::PedersenGenerator, AggregatePublicKey, AggregateSignature, CompressedPublicKey,
+    CompressedSignature, KeyPair, PublicKey, SecretKey, Signature,
 };
 
 impl Serialize for CompressedPublicKey {
@@ -200,5 +201,41 @@ impl Deserialize for KeyPair {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let secret: SecretKey = Deserialize::deserialize(reader)?;
         Ok(KeyPair::from(secret))
+    }
+}
+
+fn ark_to_bserial_error(error: ark_serialize::SerializationError) -> beserial::SerializingError {
+    match error {
+        ark_serialize::SerializationError::NotEnoughSpace => beserial::SerializingError::Overflow,
+        ark_serialize::SerializationError::InvalidData => beserial::SerializingError::InvalidValue,
+        ark_serialize::SerializationError::UnexpectedFlags => {
+            beserial::SerializingError::InvalidValue
+        }
+        ark_serialize::SerializationError::IoError(e) => beserial::SerializingError::IoError(e),
+    }
+}
+
+impl Serialize for PedersenGenerator {
+    fn serialize<W: beserial::WriteBytesExt>(
+        &self,
+        writer: &mut W,
+    ) -> Result<usize, beserial::SerializingError> {
+        let size = CanonicalSerialize::uncompressed_size(&self.0);
+        CanonicalSerialize::serialize_unchecked(&self.0, writer).map_err(ark_to_bserial_error)?;
+        Ok(size)
+    }
+
+    fn serialized_size(&self) -> usize {
+        CanonicalSerialize::uncompressed_size(&self.0)
+    }
+}
+
+impl Deserialize for PedersenGenerator {
+    fn deserialize<R: beserial::ReadBytesExt>(
+        reader: &mut R,
+    ) -> Result<Self, beserial::SerializingError> {
+        let g1: G1Projective =
+            CanonicalDeserialize::deserialize_unchecked(reader).map_err(ark_to_bserial_error)?;
+        Ok(PedersenGenerator(g1))
     }
 }

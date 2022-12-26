@@ -2,8 +2,6 @@ use ark_crypto_primitives::prf::Blake2sWithParameterBlock;
 use ark_ec::group::Group;
 use ark_ff::{FpParameters, One, PrimeField};
 use ark_mnt6_753::{Fq, FqParameters, G1Affine, G1Projective};
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use beserial::{Deserialize, Serialize};
 use blake2_rfc::blake2s::Blake2s;
 
 use crate::rand_gen::generate_random_seed;
@@ -104,45 +102,9 @@ pub fn pedersen_generators(number: usize) -> Vec<G1Projective> {
     generators
 }
 
-fn ark_to_bserial_error(error: ark_serialize::SerializationError) -> beserial::SerializingError {
-    match error {
-        ark_serialize::SerializationError::NotEnoughSpace => beserial::SerializingError::Overflow,
-        ark_serialize::SerializationError::InvalidData => beserial::SerializingError::InvalidValue,
-        ark_serialize::SerializationError::UnexpectedFlags => {
-            beserial::SerializingError::InvalidValue
-        }
-        ark_serialize::SerializationError::IoError(e) => beserial::SerializingError::IoError(e),
-    }
-}
-
 /// This is a wrapper for the G1 projective.
 /// Note: This should only be used when getting the generators from a trusted source.
-pub struct PedersenGenerator(G1Projective);
-
-impl Serialize for PedersenGenerator {
-    fn serialize<W: beserial::WriteBytesExt>(
-        &self,
-        writer: &mut W,
-    ) -> Result<usize, beserial::SerializingError> {
-        let size = CanonicalSerialize::uncompressed_size(&self.0);
-        CanonicalSerialize::serialize_unchecked(&self.0, writer).map_err(ark_to_bserial_error)?;
-        Ok(size)
-    }
-
-    fn serialized_size(&self) -> usize {
-        CanonicalSerialize::uncompressed_size(&self.0)
-    }
-}
-
-impl Deserialize for PedersenGenerator {
-    fn deserialize<R: beserial::ReadBytesExt>(
-        reader: &mut R,
-    ) -> Result<Self, beserial::SerializingError> {
-        let g1: G1Projective =
-            CanonicalDeserialize::deserialize_unchecked(reader).map_err(ark_to_bserial_error)?;
-        Ok(PedersenGenerator(g1))
-    }
-}
+pub struct PedersenGenerator(pub(crate) G1Projective);
 
 pub fn pedersen_generator_powers(number: usize) -> Vec<Vec<PedersenGenerator>> {
     let generators = pedersen_generators(number);

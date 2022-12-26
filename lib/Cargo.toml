@@ -47,7 +47,7 @@ beserial = { path = "../beserial" }
 nimiq-block = { path = "../primitives/block" }
 nimiq-blockchain = { path = "../blockchain" }
 nimiq-blockchain-proxy = { path = "../blockchain-proxy" }
-nimiq-bls = { path = "../bls", optional = true }
+nimiq-bls = { path = "../bls" }
 nimiq-consensus = { path = "../consensus" }
 nimiq-database = { path = "../database" }
 nimiq-genesis = { path = "../genesis" }
@@ -81,5 +81,5 @@ logging = ["console-subscriber", "nimiq-log", "serde_json", "tokio", "tracing-lo
 metrics-server = ["nimiq-validator/metrics"]
 panic = ["log-panics"]
 rpc-server = ["validator", "nimiq-rpc-server", "nimiq-wallet"]
-validator = ["nimiq-validator", "nimiq-validator-network", "nimiq-bls", "nimiq-rpc-server"]
+validator = ["nimiq-validator", "nimiq-validator-network", "nimiq-rpc-server"]
 wallet = ["nimiq-wallet"]

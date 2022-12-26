@@ -34,6 +34,7 @@ nimiq-utils = { path = "../utils", features = ["key-rng"] }
 nimiq-test-log = { path = "../test-log" }
 
 [features]
+cache = ["lazy"]
 default = ["beserial", "lazy"]
 lazy = ["parking_lot"]
 serde-derive = ["serde", "beserial"]

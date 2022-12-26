@@ -1,4 +1,4 @@
-#[cfg(feature = "rpc-server")]
+#[cfg(any(feature = "rpc-server", feature = "metrics-server"))]
 use std::net::IpAddr;
 #[cfg(feature = "metrics-server")]
 use std::net::SocketAddr;
