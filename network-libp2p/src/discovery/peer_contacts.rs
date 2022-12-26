@@ -439,7 +439,7 @@ mod serde_public_key {
     {
         let hex_encoded: String = Deserialize::deserialize(deserializer)?;
 
-        let raw = hex::decode(&hex_encoded).map_err(D::Error::custom)?;
+        let raw = hex::decode(hex_encoded).map_err(D::Error::custom)?;
 
         beserial::Deserialize::deserialize_from_vec(&raw).map_err(D::Error::custom)
     }

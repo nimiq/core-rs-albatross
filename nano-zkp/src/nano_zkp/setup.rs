@@ -64,8 +64,8 @@ impl NanoZKP {
         let proving_keys = path.join("proving_keys");
 
         for i in 0..5 {
-            if !verifying_keys.join(&format!("pk_tree_{}.bin", i)).exists()
-                || (prover_active && !proving_keys.join(&format!("pk_tree_{}.bin", i)).exists())
+            if !verifying_keys.join(format!("pk_tree_{}.bin", i)).exists()
+                || (prover_active && !proving_keys.join(format!("pk_tree_{}.bin", i)).exists())
             {
                 return false;
             }

@@ -268,7 +268,7 @@ impl<A: Serialize + Deserialize + Clone> Serialize for TrieNode<A> {
             TrieNode::BranchNode { ref children, .. } => {
                 let child_count: u8 = children
                     .iter()
-                    .fold(0, |acc, child| acc + if child.is_none() { 0 } else { 1 });
+                    .fold(0, |acc, child| acc + u8::from(!child.is_none()));
                 Serialize::serialize(&child_count, writer)?;
 
                 for child in children.iter().flatten() {

@@ -64,7 +64,7 @@ impl ConsensusDispatcher {
 }
 
 fn transaction_to_hex_string(transaction: &Transaction) -> String {
-    hex::encode(&transaction.serialize_to_vec())
+    hex::encode(transaction.serialize_to_vec())
 }
 
 #[nimiq_jsonrpc_derive::service(rename_all = "camelCase")]
@@ -82,7 +82,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         &mut self,
         raw_tx: String,
     ) -> RPCResult<RPCTransaction, (), Self::Error> {
-        let transaction: Transaction = Deserialize::deserialize_from_vec(&hex::decode(&raw_tx)?)?;
+        let transaction: Transaction = Deserialize::deserialize_from_vec(&hex::decode(raw_tx)?)?;
         Ok(RPCTransaction::from_transaction(transaction).into())
     }
 
@@ -544,7 +544,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             self.get_network_id(),
         )?;
 
-        Ok(hex::encode(&sig.serialize_to_vec()).into())
+        Ok(hex::encode(sig.serialize_to_vec()).into())
     }
 
     /// Returns a serialized `new_staker` transaction. You need to provide the address of a basic

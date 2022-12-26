@@ -309,7 +309,7 @@ mod serde_tagged_signature {
         {
             let hex_encoded: String = Deserialize::deserialize(deserializer)?;
 
-            let data = hex::decode(&hex_encoded).map_err(D::Error::custom)?;
+            let data = hex::decode(hex_encoded).map_err(D::Error::custom)?;
 
             Ok(TaggedSignature::from_bytes(data))
         }

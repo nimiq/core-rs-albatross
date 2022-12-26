@@ -303,7 +303,7 @@ impl StorageConfig {
                     })?
                     .to_string();
                 MdbxEnvironment::new_with_max_readers(
-                    &db_path,
+                    db_path,
                     db_config.size,
                     db_config.max_dbs,
                     db_config.max_readers,

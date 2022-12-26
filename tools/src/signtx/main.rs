@@ -118,7 +118,7 @@ fn run_app() -> Result<(), Error> {
         let key_pair: KeyPair = PrivateKey::deserialize_from_vec(&raw_secret_key)?.into();
         let signature = key_pair.sign(tx.serialize_content().as_slice());
         let raw_signature = signature.serialize_to_vec();
-        println!("{}", hex::encode(&raw_signature));
+        println!("{}", hex::encode(raw_signature));
         Ok(())
     } else {
         Err(AppError::SecretKey.into())

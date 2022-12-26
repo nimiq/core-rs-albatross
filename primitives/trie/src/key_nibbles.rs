@@ -326,7 +326,7 @@ impl Serialize for KeyNibbles {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let mut size = 2;
         writer.write_u8(self.length)?;
-        writer.write_u8(self.bytes_length as u8)?;
+        writer.write_u8(self.bytes_length)?;
         size += writer.write(&self.bytes[..self.bytes_length as usize])?;
         Ok(size)
     }
