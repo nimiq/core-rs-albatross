@@ -89,6 +89,10 @@ impl<N: Network, Q: LiveSyncQueue<N>> LiveSync<N> for LiveSyncer<N, Q> {
     fn peers(&self) -> Vec<N::PeerId> {
         self.queue.peers()
     }
+
+    fn state_complete(&self) -> bool {
+        self.queue.state_complete()
+    }
 }
 
 impl<N: Network, Q: LiveSyncQueue<N>> Stream for LiveSyncer<N, Q> {

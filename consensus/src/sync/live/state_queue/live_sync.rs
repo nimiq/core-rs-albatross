@@ -222,4 +222,8 @@ impl<N: Network, TReq: RequestComponent<N>> LiveSyncQueue<N> for StateQueue<N, T
     {
         self.block_queue.add_block_stream(block_stream)
     }
+
+    fn state_complete(&self) -> bool {
+        self.start_key.is_complete()
+    }
 }

@@ -46,6 +46,10 @@ pub trait LiveSyncQueue<N: Network>: Stream<Item = Self::QueueResult> + Send + U
     fn add_block_stream<S>(&mut self, block_stream: S)
     where
         S: Stream<Item = (Block, N::PeerId, Option<N::PubsubId>)> + Send + 'static;
+
+    fn state_complete(&self) -> bool {
+        true
+    }
 }
 
 #[derive(Clone, Debug)]

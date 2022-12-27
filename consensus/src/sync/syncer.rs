@@ -41,6 +41,10 @@ pub trait LiveSync<N: Network>: Stream<Item = LiveSyncEvent<N::PeerId>> + Unpin 
     fn num_peers(&self) -> usize;
     /// Returns the list of peers that are being sync'ed with
     fn peers(&self) -> Vec<N::PeerId>;
+    /// Returns whether the state sync has finished (or `true` if there is no state sync required)
+    fn state_complete(&self) -> bool {
+        true
+    }
 }
 
 #[derive(Debug)]
@@ -152,6 +156,10 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Syncer<N, M, L> {
 
     pub fn accepted_block_announcements(&self) -> usize {
         self.accepted_announcements
+    }
+
+    pub fn state_complete(&self) -> bool {
+        self.live_sync.state_complete()
     }
 }
 

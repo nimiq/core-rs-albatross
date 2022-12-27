@@ -202,12 +202,13 @@ impl<N: Network> Consensus<N> {
                 return Some(ConsensusEvent::Lost);
             }
         } else {
-            // We have two conditions on whether we move to the established state.
+            // We have three conditions on whether we move to the established state.
             // First, we always need a minimum number of peers connected.
+            // Second, the state must always be complete.
             // Then, we check that we either:
             // - accepted a minimum number of block announcements, or
             // - know the head state of a majority of our peers
-            if self.num_agents() >= self.min_peers {
+            if self.num_agents() >= self.min_peers && self.sync.state_complete() {
                 if self.sync.accepted_block_announcements() >= Self::MIN_BLOCKS_ESTABLISHED {
                     info!("Consensus established, number of accepted announcements satisfied.");
                     self.established_flag.swap(true, Ordering::Release);
