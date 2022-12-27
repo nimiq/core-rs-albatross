@@ -161,6 +161,11 @@ impl<N: Network> SyncerProxy<N> {
     pub fn accepted_block_announcements(&self) -> usize {
         gen_syncer_match!(self, accepted_block_announcements)
     }
+
+    /// Returns whether the state sync has finished (or `true` if there is no state sync required)
+    pub fn state_complete(&self) -> bool {
+        gen_syncer_match!(self, state_complete)
+    }
 }
 
 impl<N: Network> Stream for SyncerProxy<N> {
