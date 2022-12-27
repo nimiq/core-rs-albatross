@@ -59,7 +59,7 @@ fn get_validator_by_address(
     if let BlockchainReadProxy::Full(blockchain) = blockchain_proxy {
         let accounts_tree = &blockchain.state().accounts.tree;
         let db_txn = blockchain.read_transaction();
-        let validator = StakingContract::get_validator(accounts_tree, &db_txn, address);
+        let validator = StakingContract::get_validator(accounts_tree, &db_txn, address).unwrap();
 
         if validator.is_none() {
             return Err(Error::ValidatorNotFound(address.clone()));
@@ -74,8 +74,9 @@ fn get_validator_by_address(
             let mut stakers_list: Vec<Staker> = vec![];
 
             for address in staker_addresses {
-                let mut staker =
-                    StakingContract::get_staker(accounts_tree, &db_txn, &address).unwrap();
+                let mut staker = StakingContract::get_staker(accounts_tree, &db_txn, &address)
+                    .unwrap()
+                    .unwrap();
                 // Delegation is unnecessary because the address is in the parent struct.
                 staker.delegation = None;
                 stakers_list.push(Staker::from_staker(&staker));
@@ -616,7 +617,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         if let BlockchainReadProxy::Full(ref blockchain) = blockchain_proxy {
             let accounts_tree = &blockchain.state().accounts.tree;
             let db_txn = blockchain.read_transaction();
-            let staker = StakingContract::get_staker(accounts_tree, &db_txn, &address);
+            let staker = StakingContract::get_staker(accounts_tree, &db_txn, &address).unwrap();
 
             match staker {
                 Some(s) => Ok(RPCData::with_blockchain(

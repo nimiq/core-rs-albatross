@@ -14,7 +14,7 @@ use crate::staking_contract::receipts::{
     DeleteValidatorReceipt, InactivateValidatorReceipt, ReactivateValidatorReceipt,
     UnparkValidatorReceipt, UpdateValidatorReceipt,
 };
-use crate::{Account, AccountError, AccountsTrie, Receipt, StakingContract};
+use crate::{complete, Account, AccountError, AccountsTrie, Receipt, StakingContract};
 
 /// Struct representing a validator in the staking contract.
 /// Actions concerning a validator are:
@@ -91,14 +91,23 @@ impl StakingContract {
         deposit: Coin,
     ) -> Result<OperationInfo<Receipt>, AccountError> {
         // See if the validator already exists.
-        if StakingContract::get_validator(accounts_tree, db_txn, validator_address).is_some() {
+        if complete!(StakingContract::get_validator_or_update(
+            accounts_tree,
+            db_txn,
+            validator_address
+        ))
+        .is_some()
+        {
             return Err(AccountError::AlreadyExistentAddress {
                 address: validator_address.clone(),
             });
         }
 
         // Get the staking contract main and update it.
-        let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
+        let mut staking_contract = complete!(StakingContract::get_staking_contract_or_update(
+            accounts_tree,
+            db_txn
+        ));
 
         staking_contract.balance = Account::balance_add(staking_contract.balance, deposit)?;
 
@@ -136,13 +145,14 @@ impl StakingContract {
             )
             .expect("temporary until accounts rewrite");
 
-        Ok(OperationInfo {
-            receipt: None,
-            logs: vec![Log::CreateValidator {
+        Ok(OperationInfo::new(
+            None,
+            vec![Log::CreateValidator {
                 validator_address: validator_address.clone(),
                 reward_address,
             }],
-        })
+            false,
+        ))
     }
 
     /// Reverts creating a new validator entry.
@@ -156,14 +166,23 @@ impl StakingContract {
         let deposit = Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT);
 
         // See if the validator does not exist.
-        if StakingContract::get_validator(accounts_tree, db_txn, validator_address).is_none() {
+        if complete!(StakingContract::get_validator_or_update(
+            accounts_tree,
+            db_txn,
+            validator_address
+        ))
+        .is_none()
+        {
             return Err(AccountError::NonExistentAddress {
                 address: validator_address.clone(),
             });
         }
 
         // Get the staking contract main and update it.
-        let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
+        let mut staking_contract = complete!(StakingContract::get_staking_contract_or_update(
+            accounts_tree,
+            db_txn
+        ));
 
         staking_contract.balance = Account::balance_sub(staking_contract.balance, deposit)?;
 
@@ -200,24 +219,27 @@ impl StakingContract {
         new_signal_data: Option<Option<Blake2bHash>>,
     ) -> Result<OperationInfo<UpdateValidatorReceipt>, AccountError> {
         // Get the validator.
-        let mut validator =
-            match StakingContract::get_validator(accounts_tree, db_txn, validator_address) {
-                Some(v) => v,
-                None => {
-                    error!("Tried to update a validator that doesn't exist!");
+        let mut validator = match complete!(StakingContract::get_validator_or_update(
+            accounts_tree,
+            db_txn,
+            validator_address
+        )) {
+            Some(v) => v,
+            None => {
+                error!("Tried to update a validator that doesn't exist!");
 
-                    return Ok(OperationInfo::with_receipt(
-                        UpdateValidatorReceipt {
-                            no_op: true,
-                            old_signing_key: Default::default(),
-                            old_voting_key: CompressedPublicKey::default(),
-                            old_reward_address: Default::default(),
-                            old_signal_data: None,
-                        },
-                        vec![],
-                    ));
-                }
-            };
+                return Ok(OperationInfo::with_receipt(
+                    UpdateValidatorReceipt {
+                        no_op: true,
+                        old_signing_key: Default::default(),
+                        old_voting_key: CompressedPublicKey::default(),
+                        old_reward_address: Default::default(),
+                        old_signal_data: None,
+                    },
+                    vec![],
+                ));
+            }
+        };
 
         // Create receipt now.
         let receipt = UpdateValidatorReceipt {
@@ -274,15 +296,18 @@ impl StakingContract {
             return Ok(vec![]);
         }
         // Get the validator.
-        let mut validator =
-            match StakingContract::get_validator(accounts_tree, db_txn, validator_address) {
-                Some(v) => v,
-                None => {
-                    return Err(AccountError::NonExistentAddress {
-                        address: validator_address.clone(),
-                    });
-                }
-            };
+        let mut validator = match complete!(StakingContract::get_validator_or_update(
+            accounts_tree,
+            db_txn,
+            validator_address
+        )) {
+            Some(v) => v,
+            None => {
+                return Err(AccountError::NonExistentAddress {
+                    address: validator_address.clone(),
+                });
+            }
+        };
 
         let log = Log::UpdateValidator {
             validator_address: validator_address.clone(),
@@ -318,21 +343,24 @@ impl StakingContract {
         block_height: u32,
     ) -> Result<OperationInfo<InactivateValidatorReceipt>, AccountError> {
         // Get the validator and check that the signature is valid.
-        let mut validator =
-            match StakingContract::get_validator(accounts_tree, db_txn, validator_address) {
-                Some(v) => v,
-                None => {
-                    error!("Tried to inactivate a validator that doesn't exist!");
+        let mut validator = match complete!(StakingContract::get_validator_or_update(
+            accounts_tree,
+            db_txn,
+            validator_address
+        )) {
+            Some(v) => v,
+            None => {
+                error!("Tried to inactivate a validator that doesn't exist!");
 
-                    return Ok(OperationInfo::with_receipt(
-                        InactivateValidatorReceipt {
-                            no_op: true,
-                            parked_set: false,
-                        },
-                        vec![],
-                    ));
-                }
-            };
+                return Ok(OperationInfo::with_receipt(
+                    InactivateValidatorReceipt {
+                        no_op: true,
+                        parked_set: false,
+                    },
+                    vec![],
+                ));
+            }
+        };
 
         if *signer != Address::from(&validator.signing_key) {
             error!(
@@ -351,7 +379,10 @@ impl StakingContract {
         validator.inactivity_flag = Some(block_height);
 
         // Get the staking contract main and update it.
-        let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
+        let mut staking_contract = complete!(StakingContract::get_staking_contract_or_update(
+            accounts_tree,
+            db_txn
+        ));
 
         if staking_contract
             .active_validators
@@ -415,20 +446,26 @@ impl StakingContract {
         }
 
         // Get the validator and update it.
-        let mut validator =
-            match StakingContract::get_validator(accounts_tree, db_txn, validator_address) {
-                Some(v) => v,
-                None => {
-                    return Err(AccountError::NonExistentAddress {
-                        address: validator_address.clone(),
-                    });
-                }
-            };
+        let mut validator = match complete!(StakingContract::get_validator_or_update(
+            accounts_tree,
+            db_txn,
+            validator_address
+        )) {
+            Some(v) => v,
+            None => {
+                return Err(AccountError::NonExistentAddress {
+                    address: validator_address.clone(),
+                });
+            }
+        };
 
         validator.inactivity_flag = None;
 
         // Get the staking contract main and update it.
-        let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
+        let mut staking_contract = complete!(StakingContract::get_staking_contract_or_update(
+            accounts_tree,
+            db_txn
+        ));
 
         staking_contract
             .active_validators
@@ -470,20 +507,23 @@ impl StakingContract {
         signer: &Address,
     ) -> Result<OperationInfo<ReactivateValidatorReceipt>, AccountError> {
         // Get the validator and check that the signature is valid.
-        let mut validator =
-            match StakingContract::get_validator(accounts_tree, db_txn, validator_address) {
-                Some(v) => v,
-                None => {
-                    error!("Tried to reactivate a validator that doesn't exist!");
-                    return Ok(OperationInfo::with_receipt(
-                        ReactivateValidatorReceipt {
-                            no_op: true,
-                            retire_time: 0,
-                        },
-                        vec![],
-                    ));
-                }
-            };
+        let mut validator = match complete!(StakingContract::get_validator_or_update(
+            accounts_tree,
+            db_txn,
+            validator_address
+        )) {
+            Some(v) => v,
+            None => {
+                error!("Tried to reactivate a validator that doesn't exist!");
+                return Ok(OperationInfo::with_receipt(
+                    ReactivateValidatorReceipt {
+                        no_op: true,
+                        retire_time: 0,
+                    },
+                    vec![],
+                ));
+            }
+        };
 
         if *signer != Address::from(&validator.signing_key) {
             error!(
@@ -525,7 +565,10 @@ impl StakingContract {
         validator.inactivity_flag = None;
 
         // Get the staking contract main and update it.
-        let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
+        let mut staking_contract = complete!(StakingContract::get_staking_contract_or_update(
+            accounts_tree,
+            db_txn
+        ));
 
         staking_contract
             .active_validators
@@ -569,20 +612,26 @@ impl StakingContract {
         }
 
         // Get the validator and update it.
-        let mut validator =
-            match StakingContract::get_validator(accounts_tree, db_txn, validator_address) {
-                Some(v) => v,
-                None => {
-                    return Err(AccountError::NonExistentAddress {
-                        address: validator_address.clone(),
-                    });
-                }
-            };
+        let mut validator = match complete!(StakingContract::get_validator_or_update(
+            accounts_tree,
+            db_txn,
+            validator_address
+        )) {
+            Some(v) => v,
+            None => {
+                return Err(AccountError::NonExistentAddress {
+                    address: validator_address.clone(),
+                });
+            }
+        };
 
         validator.inactivity_flag = Some(receipt.retire_time);
 
         // Get the staking contract main and update it.
-        let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
+        let mut staking_contract = complete!(StakingContract::get_staking_contract_or_update(
+            accounts_tree,
+            db_txn
+        ));
 
         staking_contract.active_validators.remove(validator_address);
 
@@ -617,22 +666,25 @@ impl StakingContract {
         signer: &Address,
     ) -> Result<OperationInfo<UnparkValidatorReceipt>, AccountError> {
         // Get the validator and check that the signature is valid.
-        let validator =
-            match StakingContract::get_validator(accounts_tree, db_txn, validator_address) {
-                Some(v) => v,
-                None => {
-                    error!("Tried to unpark a validator that doesn't exist!");
-                    return Ok(OperationInfo::with_receipt(
-                        UnparkValidatorReceipt {
-                            no_op: true,
-                            parked_set: false,
-                            current_disabled_slots: None,
-                            previous_disabled_slots: None,
-                        },
-                        vec![],
-                    ));
-                }
-            };
+        let validator = match complete!(StakingContract::get_validator_or_update(
+            accounts_tree,
+            db_txn,
+            validator_address
+        )) {
+            Some(v) => v,
+            None => {
+                error!("Tried to unpark a validator that doesn't exist!");
+                return Ok(OperationInfo::with_receipt(
+                    UnparkValidatorReceipt {
+                        no_op: true,
+                        parked_set: false,
+                        current_disabled_slots: None,
+                        previous_disabled_slots: None,
+                    },
+                    vec![],
+                ));
+            }
+        };
 
         if *signer != Address::from(&validator.signing_key) {
             error!(
@@ -651,7 +703,10 @@ impl StakingContract {
         }
 
         // Get the staking contract and update it.
-        let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
+        let mut staking_contract = complete!(StakingContract::get_staking_contract_or_update(
+            accounts_tree,
+            db_txn
+        ));
 
         let parked_set = staking_contract.parked_set.remove(validator_address);
 
@@ -711,7 +766,10 @@ impl StakingContract {
         }
 
         // Get the staking contract main and update it.
-        let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
+        let mut staking_contract = complete!(StakingContract::get_staking_contract_or_update(
+            accounts_tree,
+            db_txn
+        ));
 
         if receipt.parked_set {
             staking_contract
@@ -758,15 +816,18 @@ impl StakingContract {
         transaction_total_value: Coin,
     ) -> Result<OperationInfo<DeleteValidatorReceipt>, AccountError> {
         // Get the validator.
-        let validator =
-            match StakingContract::get_validator(accounts_tree, db_txn, validator_address) {
-                Some(v) => v,
-                None => {
-                    return Err(AccountError::NonExistentAddress {
-                        address: validator_address.clone(),
-                    });
-                }
-            };
+        let validator = match complete!(StakingContract::get_validator_or_update(
+            accounts_tree,
+            db_txn,
+            validator_address
+        )) {
+            Some(v) => v,
+            None => {
+                return Err(AccountError::NonExistentAddress {
+                    address: validator_address.clone(),
+                });
+            }
+        };
 
         // Check that the validator has been inactive for long enough.
         match validator.inactivity_flag {
@@ -835,7 +896,7 @@ impl StakingContract {
             for account in chunk {
                 if let Account::StakingValidatorsStaker(staker_address) = account {
                     // Update the staker.
-                    let mut staker = StakingContract::get_staker(accounts_tree, db_txn, &staker_address).expect("A validator had an staker staking for it that doesn't exist in the Accounts Tree!");
+                    let mut staker = complete!(StakingContract::get_staker_or_update(accounts_tree, db_txn, &staker_address)).expect("A validator had an staker staking for it that doesn't exist in the Accounts Tree!");
 
                     staker.delegation = None;
 
@@ -871,7 +932,10 @@ impl StakingContract {
         );
 
         // Get the staking contract main and update it.
-        let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
+        let mut staking_contract = complete!(StakingContract::get_staking_contract_or_update(
+            accounts_tree,
+            db_txn
+        ));
 
         staking_contract.balance = Account::balance_sub(staking_contract.balance, deposit)?;
 
@@ -901,8 +965,12 @@ impl StakingContract {
 
         for staker_address in receipt.stakers {
             // Get the staker.
-            let mut staker = StakingContract::get_staker(accounts_tree, db_txn, &staker_address)
-                .expect(
+            let mut staker = complete!(StakingContract::get_staker_or_update(
+                accounts_tree,
+                db_txn,
+                &staker_address
+            ))
+            .expect(
                 "A validator had an staker staking for it that doesn't exist in the Accounts Tree!",
             );
 
@@ -953,7 +1021,10 @@ impl StakingContract {
             .expect("temporary until accounts rewrite");
 
         // Get the staking contract main and update it.
-        let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
+        let mut staking_contract = complete!(StakingContract::get_staking_contract_or_update(
+            accounts_tree,
+            db_txn
+        ));
 
         let deposit = Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT);
 

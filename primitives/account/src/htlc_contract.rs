@@ -14,7 +14,7 @@ use nimiq_trie::key_nibbles::KeyNibbles;
 use crate::inherent::Inherent;
 use crate::interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction};
 use crate::logs::{AccountInfo, Log};
-use crate::{Account, AccountError, AccountsTrie, BasicAccount};
+use crate::{complete, get_or_update_account, Account, AccountError, AccountsTrie, BasicAccount};
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
@@ -170,10 +170,11 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
 
         let contract_key = KeyNibbles::from(&transaction.contract_creation_address());
 
-        let previous_balance = match accounts_tree
-            .get::<Account>(db_txn, &contract_key)
-            .expect("temporary until accounts rewrite")
-        {
+        let previous_balance = match complete!(get_or_update_account::<Account>(
+            accounts_tree,
+            db_txn,
+            &contract_key
+        )) {
             None => Coin::ZERO,
             Some(account) => account.balance(),
         };
@@ -203,7 +204,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
             total_amount: transaction.value,
         }];
 
-        Ok(AccountInfo::new(None, logs))
+        Ok(AccountInfo::with_receipt(None, logs))
     }
 
     fn commit_incoming_transaction(
@@ -236,12 +237,18 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
     ) -> Result<AccountInfo, AccountError> {
         let key = KeyNibbles::from(&transaction.sender);
 
-        let account = accounts_tree
-            .get::<Account>(db_txn, &key)
-            .expect("temporary until accounts rewrite")
-            .ok_or(AccountError::NonExistentAddress {
-                address: transaction.sender.clone(),
-            })?;
+        let account = match complete!(get_or_update_account::<Account>(
+            accounts_tree,
+            db_txn,
+            &key
+        )) {
+            Some(account) => account,
+            None => {
+                return Err(AccountError::NonExistentAddress {
+                    address: transaction.sender.clone(),
+                });
+            }
+        };
 
         let htlc = match account {
             Account::HTLC(ref value) => value,
@@ -311,7 +318,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
             None
         };
 
-        Ok(AccountInfo::new(receipt, logs))
+        Ok(AccountInfo::with_receipt(receipt, logs))
     }
 
     fn revert_outgoing_transaction(
@@ -326,12 +333,18 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
 
         let htlc = match receipt {
             None => {
-                let account = accounts_tree
-                    .get::<Account>(db_txn, &key)
-                    .expect("temporary until accounts rewrite")
-                    .ok_or(AccountError::NonExistentAddress {
-                        address: transaction.sender.clone(),
-                    })?;
+                let account = match complete!(get_or_update_account::<Account>(
+                    accounts_tree,
+                    db_txn,
+                    &key
+                )) {
+                    Some(account) => account,
+                    None => {
+                        return Err(AccountError::NonExistentAddress {
+                            address: transaction.sender.clone(),
+                        });
+                    }
+                };
 
                 if let Account::HTLC(contract) = account {
                     contract
@@ -399,12 +412,18 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
     ) -> Result<AccountInfo, AccountError> {
         let key = KeyNibbles::from(&transaction.sender);
 
-        let account = accounts_tree
-            .get::<Account>(db_txn, &key)
-            .expect("temporary until accounts rewrite")
-            .ok_or(AccountError::NonExistentAddress {
-                address: transaction.sender.clone(),
-            })?;
+        let account = match complete!(get_or_update_account::<Account>(
+            accounts_tree,
+            db_txn,
+            &key
+        )) {
+            Some(account) => account,
+            None => {
+                return Err(AccountError::NonExistentAddress {
+                    address: transaction.sender.clone(),
+                });
+            }
+        };
 
         let htlc = match account {
             Account::HTLC(ref value) => value,
@@ -441,7 +460,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
             None
         };
 
-        Ok(AccountInfo::new(receipt, logs))
+        Ok(AccountInfo::with_receipt(receipt, logs))
     }
 
     fn revert_failed_transaction(
@@ -454,12 +473,18 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
 
         let htlc = match receipt {
             None => {
-                let account = accounts_tree
-                    .get::<Account>(db_txn, &key)
-                    .expect("temporary until accounts rewrite")
-                    .ok_or(AccountError::NonExistentAddress {
-                        address: transaction.sender.clone(),
-                    })?;
+                let account = match complete!(get_or_update_account::<Account>(
+                    accounts_tree,
+                    db_txn,
+                    &key
+                )) {
+                    Some(account) => account,
+                    None => {
+                        return Err(AccountError::NonExistentAddress {
+                            address: transaction.sender.clone(),
+                        });
+                    }
+                };
 
                 if let Account::HTLC(contract) = account {
                     contract
@@ -520,12 +545,18 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
     ) -> Result<Vec<Log>, AccountError> {
         let key = KeyNibbles::from(&transaction.contract_creation_address());
 
-        let account = accounts_tree
-            .get::<Account>(db_txn, &key)
-            .expect("temporary until accounts rewrite")
-            .ok_or(AccountError::NonExistentAddress {
-                address: transaction.sender.clone(),
-            })?;
+        let account = match complete!(get_or_update_account::<Account>(
+            accounts_tree,
+            db_txn,
+            &key
+        )) {
+            Some(account) => account,
+            None => {
+                return Err(AccountError::NonExistentAddress {
+                    address: transaction.sender.clone(),
+                });
+            }
+        };
 
         let htlc = match account {
             Account::HTLC(ref value) => value,

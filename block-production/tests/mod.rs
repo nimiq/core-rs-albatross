@@ -1058,6 +1058,7 @@ fn it_can_consume_all_validator_deposit() {
             &db_txn,
             &Address::from(&key_pair.public),
         )
+        .unwrap()
         .unwrap();
 
         assert_eq!(
@@ -1115,7 +1116,8 @@ fn it_can_consume_all_validator_deposit() {
             accounts_tree,
             &db_txn,
             &Address::from(&key_pair.public),
-        );
+        )
+        .unwrap();
 
         assert_eq!(validator, None);
     }
@@ -1134,7 +1136,8 @@ fn it_can_consume_all_validator_deposit() {
 
     // The validator should be deleted.
     let validator =
-        StakingContract::get_validator(accounts_tree, &db_txn, &Address::from(&key_pair.public));
+        StakingContract::get_validator(accounts_tree, &db_txn, &Address::from(&key_pair.public))
+            .unwrap();
 
     assert!(validator.is_some());
 }
@@ -1207,6 +1210,7 @@ fn it_can_revert_failed_delete_validator() {
             &db_txn,
             &Address::from(&key_pair.public),
         )
+        .unwrap()
         .unwrap();
 
         assert_eq!(
@@ -1232,6 +1236,7 @@ fn it_can_revert_failed_delete_validator() {
     let db_txn = blockchain.read_transaction();
     let validator =
         StakingContract::get_validator(accounts_tree, &db_txn, &Address::from(&key_pair.public))
+            .unwrap()
             .unwrap();
 
     assert_eq!(

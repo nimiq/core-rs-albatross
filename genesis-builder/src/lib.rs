@@ -190,7 +190,7 @@ impl GenesisBuilder {
         // TODO: Maybe turn this code into a StakingContract method?
         genesis_accounts.push((
             StakingContract::get_key_staking_contract(),
-            Account::Staking(StakingContract::get_staking_contract(&accounts.tree, &txn)),
+            Account::Staking(StakingContract::get_staking_contract(&accounts.tree, &txn).unwrap()),
         ));
 
         for validator in &self.validators {
@@ -202,6 +202,7 @@ impl GenesisBuilder {
                         &txn,
                         &validator.validator_address,
                     )
+                    .unwrap()
                     .unwrap(),
                 ),
             ));
@@ -212,6 +213,7 @@ impl GenesisBuilder {
                 StakingContract::get_key_staker(&staker.staker_address),
                 Account::StakingStaker(
                     StakingContract::get_staker(&accounts.tree, &txn, &staker.staker_address)
+                        .unwrap()
                         .unwrap(),
                 ),
             ));

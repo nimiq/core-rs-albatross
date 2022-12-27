@@ -1,6 +1,11 @@
 #[macro_use]
 extern crate log;
 
+use beserial::Deserialize;
+use nimiq_database::WriteTransaction;
+use nimiq_trie::key_nibbles::KeyNibbles;
+use nimiq_trie::trie::IncompleteTrie;
+
 pub use crate::account::Account;
 pub use crate::accounts::{Accounts, AccountsTrie};
 pub use crate::accounts_list::AccountsList;
@@ -26,3 +31,30 @@ mod logs;
 mod receipts;
 mod staking_contract;
 mod vesting_contract;
+
+#[macro_export]
+macro_rules! complete {
+    ($account: expr) => {
+        match $account {
+            Ok(account) => account,
+            Err(nimiq_trie::trie::IncompleteTrie) => {
+                return Ok($crate::logs::MissingInfo::missing());
+            }
+        }
+    };
+}
+
+/// TODO: Function used to make the partial trees work until the accounts rewrite.
+pub(crate) fn get_or_update_account<T: Deserialize>(
+    accounts_tree: &AccountsTrie,
+    txn: &mut WriteTransaction,
+    key: &KeyNibbles,
+) -> Result<Option<T>, IncompleteTrie> {
+    match accounts_tree.get::<T>(txn, key) {
+        Err(IncompleteTrie) => {
+            accounts_tree.update_within_missing_part(txn, key).unwrap();
+            Err(IncompleteTrie)
+        }
+        account => account,
+    }
+}

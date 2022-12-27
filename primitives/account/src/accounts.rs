@@ -63,6 +63,7 @@ impl Accounts {
     }
 
     pub fn get(&self, key: &KeyNibbles, txn_option: Option<&DBTransaction>) -> Option<Account> {
+        // PITODO: handling of incomplete trie
         match txn_option {
             Some(txn) => self
                 .tree
