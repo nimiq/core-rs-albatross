@@ -295,7 +295,7 @@ impl MerkleRadixTrie {
         if self.is_within_complete_part(key, &missing_range) {
             self.put_raw(txn, key, value.serialize_to_vec(), &missing_range);
         } else {
-            self.update_within_missing_part(txn, key, &missing_range)?;
+            self.update_within_missing_part_raw(txn, key, &missing_range)?;
         }
 
         Ok(())
@@ -310,7 +310,7 @@ impl MerkleRadixTrie {
             self.remove_raw(txn, key, &missing_range);
         } else {
             // PITODO: return error
-            self.update_within_missing_part(txn, key, &missing_range)
+            self.update_within_missing_part_raw(txn, key, &missing_range)
                 .expect("should not happen or be returned");
         }
     }
@@ -431,10 +431,19 @@ impl MerkleRadixTrie {
         self.update_keys(txn, root_path, count_updates);
     }
 
+    pub fn update_within_missing_part(
+        &self,
+        txn: &mut WriteTransaction,
+        key: &KeyNibbles,
+    ) -> Result<(), MerkleRadixTrieError> {
+        let missing_range = self.get_missing_range(txn);
+        self.update_within_missing_part_raw(txn, key, &missing_range)
+    }
+
     /// Resets the hashes for a path to a node in the missing part of the tree.
     /// This is used to indicate that the corresponding branch's hash has changed,
     /// but we cannot provide the accurate hash until a new chunk has been pushed.
-    fn update_within_missing_part(
+    fn update_within_missing_part_raw(
         &self,
         txn: &mut WriteTransaction,
         key: &KeyNibbles,

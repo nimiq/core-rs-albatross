@@ -15,7 +15,8 @@ use crate::logs::{AccountInfo, Log};
 use crate::staking_contract::receipts::DeleteValidatorReceipt;
 use crate::staking_contract::SlashReceipt;
 use crate::{
-    Account, AccountError, AccountsTrie, Inherent, InherentType, OperationInfo, StakingContract,
+    complete, Account, AccountError, AccountsTrie, Inherent, InherentType, OperationInfo,
+    StakingContract,
 };
 
 /// We need to distinguish between two types of transactions:
@@ -459,21 +460,24 @@ impl AccountTransactionInteraction for StakingContract {
             // 3. If the deposit reaches 0, we delete the validator
             OutgoingStakingTransactionProof::DeleteValidator { proof } => {
                 // Get the staking contract main and update it.
-                let mut staking_contract =
-                    StakingContract::get_staking_contract(accounts_tree, db_txn);
+                let mut staking_contract = complete!(
+                    StakingContract::get_staking_contract_or_update(accounts_tree, db_txn)
+                );
 
                 let validator_address = proof.compute_signer();
 
-                let mut validator =
-                    match StakingContract::get_validator(accounts_tree, db_txn, &validator_address)
-                    {
-                        Some(v) => v,
-                        None => {
-                            return Err(AccountError::NonExistentAddress {
-                                address: validator_address.clone(),
-                            });
-                        }
-                    };
+                let mut validator = match complete!(StakingContract::get_validator_or_update(
+                    accounts_tree,
+                    db_txn,
+                    &validator_address
+                )) {
+                    Some(v) => v,
+                    None => {
+                        return Err(AccountError::NonExistentAddress {
+                            address: validator_address.clone(),
+                        });
+                    }
+                };
 
                 validator.inactivity_flag = Some(block_height);
 
@@ -520,7 +524,7 @@ impl AccountTransactionInteraction for StakingContract {
                             Account::Staking(staking_contract),
                         )
                         .expect("temporary until accounts rewrite");
-                    OperationInfo::<DeleteValidatorReceipt>::new(None, vec![]).into()
+                    OperationInfo::<DeleteValidatorReceipt>::new(None, vec![], false).into()
                 }
             }
             OutgoingStakingTransactionProof::Unstake { proof } => {
@@ -561,38 +565,39 @@ impl AccountTransactionInteraction for StakingContract {
             OutgoingStakingTransactionProof::DeleteValidator { proof } => {
                 let validator_address = proof.compute_signer();
 
-                let mut validator =
-                    match StakingContract::get_validator(accounts_tree, db_txn, &validator_address)
-                    {
-                        Some(v) => v,
-                        None => {
-                            // Receipt is only needed when the validator was deleted
-                            let receipt: DeleteValidatorReceipt =
-                                Deserialize::deserialize_from_vec(
-                                    receipt.ok_or(AccountError::InvalidReceipt)?,
-                                )?;
+                let mut validator = match complete!(StakingContract::get_validator_or_update(
+                    accounts_tree,
+                    db_txn,
+                    &validator_address
+                )) {
+                    Some(v) => v,
+                    None => {
+                        // Receipt is only needed when the validator was deleted
+                        let receipt: DeleteValidatorReceipt = Deserialize::deserialize_from_vec(
+                            receipt.ok_or(AccountError::InvalidReceipt)?,
+                        )?;
 
-                            // Need to re-create the validator with the deposit equal to fee
-                            // Need to obtain the validator info from the receipt
-                            StakingContract::create_validator(
-                                accounts_tree,
-                                db_txn,
-                                &validator_address,
-                                receipt.signing_key,
-                                receipt.voting_key,
-                                receipt.reward_address,
-                                receipt.signal_data,
-                                Coin::ZERO,
-                            )
-                            .unwrap();
-                            StakingContract::get_validator(
-                                accounts_tree,
-                                db_txn,
-                                &validator_address,
-                            )
-                            .expect("re-Creating a validator failed")
-                        }
-                    };
+                        // Need to re-create the validator with the deposit equal to fee
+                        // Need to obtain the validator info from the receipt
+                        StakingContract::create_validator(
+                            accounts_tree,
+                            db_txn,
+                            &validator_address,
+                            receipt.signing_key,
+                            receipt.voting_key,
+                            receipt.reward_address,
+                            receipt.signal_data,
+                            Coin::ZERO,
+                        )
+                        .unwrap();
+                        complete!(StakingContract::get_validator_or_update(
+                            accounts_tree,
+                            db_txn,
+                            &validator_address,
+                        ))
+                        .expect("re-Creating a validator failed")
+                    }
+                };
 
                 StakingContract::reactivate_validator(
                     accounts_tree,
@@ -615,8 +620,9 @@ impl AccountTransactionInteraction for StakingContract {
 
                 // Update the staking contract
                 // Get the staking contract main and update it.
-                let mut staking_contract =
-                    StakingContract::get_staking_contract(accounts_tree, db_txn);
+                let mut staking_contract = complete!(
+                    StakingContract::get_staking_contract_or_update(accounts_tree, db_txn)
+                );
 
                 staking_contract.balance =
                     Account::balance_add(staking_contract.balance, transaction.fee)?;
@@ -629,7 +635,7 @@ impl AccountTransactionInteraction for StakingContract {
                     )
                     .expect("temporary until accounts rewrite");
 
-                AccountInfo::new(None, vec![])
+                AccountInfo::with_receipt(None, vec![])
             }
             OutgoingStakingTransactionProof::Unstake { proof } => {
                 // Get the staker address from the proof.
@@ -690,7 +696,10 @@ impl AccountInherentInteraction for StakingContract {
         }
 
         // Get the staking contract.
-        let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
+        let mut staking_contract = complete!(StakingContract::get_staking_contract_or_update(
+            accounts_tree,
+            db_txn
+        ));
 
         let receipt;
         let mut logs = Vec::new();
@@ -706,8 +715,12 @@ impl AccountInherentInteraction for StakingContract {
                 let slot: SlashedSlot = Deserialize::deserialize(&mut &inherent.data[..])?;
 
                 // Check that the slashed validator does exist.
-                if StakingContract::get_validator(accounts_tree, db_txn, &slot.validator_address)
-                    .is_none()
+                if complete!(StakingContract::get_validator_or_update(
+                    accounts_tree,
+                    db_txn,
+                    &slot.validator_address
+                ))
+                .is_none()
                 {
                     return Err(AccountError::InvalidInherent);
                 }
@@ -810,11 +823,11 @@ impl AccountInherentInteraction for StakingContract {
                     // But first, retire all validators that have been parked this epoch.
                     for validator_address in staking_contract.parked_set {
                         // Get the validator and update it.
-                        let mut validator = StakingContract::get_validator(
+                        let mut validator = complete!(StakingContract::get_validator_or_update(
                             accounts_tree,
                             db_txn,
                             &validator_address,
-                        )
+                        ))
                         .ok_or(AccountError::InvalidInherent)?;
 
                         validator.inactivity_flag = Some(block_height);
@@ -863,7 +876,7 @@ impl AccountInherentInteraction for StakingContract {
             )
             .expect("temporary until accounts rewrite");
 
-        Ok(AccountInfo::new(receipt, logs))
+        Ok(AccountInfo::with_receipt(receipt, logs))
     }
 
     /// Reverts the commit of an inherent to the accounts trie.
@@ -876,7 +889,10 @@ impl AccountInherentInteraction for StakingContract {
         receipt: Option<&Vec<u8>>,
     ) -> Result<Vec<Log>, AccountError> {
         // Get the staking contract main.
-        let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
+        let mut staking_contract = complete!(StakingContract::get_staking_contract_or_update(
+            accounts_tree,
+            db_txn
+        ));
         let mut logs = Vec::new();
 
         match &inherent.ty {

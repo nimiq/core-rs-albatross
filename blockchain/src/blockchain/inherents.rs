@@ -238,6 +238,7 @@ impl Blockchain {
                 &self.read_transaction(),
                 &validator_slot.address,
             )
+            .unwrap()
             .expect("Couldn't find validator in the accounts trie when paying rewards!");
 
             let inherent = Inherent {

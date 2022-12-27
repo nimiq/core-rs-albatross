@@ -11,8 +11,8 @@ use crate::interaction_traits::{AccountInherentInteraction, AccountTransactionIn
 use crate::logs::AccountInfo;
 use crate::staking_contract::{Staker, Validator};
 use crate::{
-    AccountError, AccountsTrie, BasicAccount, HashedTimeLockedContract, Inherent, Log,
-    StakingContract, VestingContract,
+    complete, get_or_update_account, AccountError, AccountsTrie, BasicAccount,
+    HashedTimeLockedContract, Inherent, Log, StakingContract, VestingContract,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -404,10 +404,11 @@ impl AccountInherentInteraction for Account {
         // non-existent account).
         let key = KeyNibbles::from(&inherent.target);
 
-        let account_type = match accounts_tree
-            .get::<Account>(db_txn, &key)
-            .expect("temporary until accounts rewrite")
-        {
+        let account_type = match complete!(get_or_update_account::<Account>(
+            accounts_tree,
+            db_txn,
+            &key
+        )) {
             Some(x) => x.account_type(),
             None => AccountType::Basic,
         };
@@ -444,10 +445,11 @@ impl AccountInherentInteraction for Account {
         // non-existent account).
         let key = KeyNibbles::from(&inherent.target);
 
-        let account_type = match accounts_tree
-            .get::<Account>(db_txn, &key)
-            .expect("temporary until accounts rewrite")
-        {
+        let account_type = match complete!(get_or_update_account::<Account>(
+            accounts_tree,
+            db_txn,
+            &key
+        )) {
             Some(x) => x.account_type(),
             None => AccountType::Basic,
         };

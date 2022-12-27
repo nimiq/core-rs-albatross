@@ -582,7 +582,8 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
 
         // First, check if the validator is parked.
         let validator_address = self.validator_address();
-        let staking_contract = StakingContract::get_staking_contract(accounts_tree, &db_txn);
+        let staking_contract =
+            StakingContract::get_staking_contract(accounts_tree, &db_txn).unwrap();
         if staking_contract.parked_set.contains(&validator_address)
             || staking_contract
                 .current_disabled_slots
@@ -595,7 +596,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         }
 
         if let Some(validator) =
-            StakingContract::get_validator(accounts_tree, &db_txn, &validator_address)
+            StakingContract::get_validator(accounts_tree, &db_txn, &validator_address).unwrap()
         {
             if validator.inactivity_flag.is_some() {
                 ValidatorStakingState::Inactive

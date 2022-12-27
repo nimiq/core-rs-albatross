@@ -10,7 +10,7 @@ use nimiq_trie::key_nibbles::KeyNibbles;
 use crate::inherent::Inherent;
 use crate::interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction};
 use crate::logs::{AccountInfo, Log};
-use crate::{Account, AccountError, AccountsTrie, BasicAccount};
+use crate::{complete, get_or_update_account, Account, AccountError, AccountsTrie, BasicAccount};
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
@@ -80,10 +80,11 @@ impl AccountTransactionInteraction for VestingContract {
 
         let contract_key = KeyNibbles::from(&transaction.contract_creation_address());
 
-        let previous_balance = match accounts_tree
-            .get::<Account>(db_txn, &contract_key)
-            .expect("temporary until accounts rewrite")
-        {
+        let previous_balance = match complete!(get_or_update_account::<Account>(
+            accounts_tree,
+            db_txn,
+            &contract_key
+        )) {
             None => Coin::ZERO,
             Some(account) => account.balance(),
         };
@@ -109,7 +110,7 @@ impl AccountTransactionInteraction for VestingContract {
             step_amount: contract.step_amount,
             total_amount: contract.total_amount,
         }];
-        Ok(AccountInfo::new(None, logs))
+        Ok(AccountInfo::with_receipt(None, logs))
     }
 
     fn commit_incoming_transaction(
@@ -142,12 +143,18 @@ impl AccountTransactionInteraction for VestingContract {
     ) -> Result<AccountInfo, AccountError> {
         let key = KeyNibbles::from(&transaction.sender);
 
-        let account = accounts_tree
-            .get::<Account>(db_txn, &key)
-            .expect("temporary until accounts rewrite")
-            .ok_or(AccountError::NonExistentAddress {
-                address: transaction.sender.clone(),
-            })?;
+        let account = match complete!(get_or_update_account::<Account>(
+            accounts_tree,
+            db_txn,
+            &key
+        )) {
+            Some(account) => account,
+            None => {
+                return Err(AccountError::NonExistentAddress {
+                    address: transaction.sender.clone(),
+                });
+            }
+        };
 
         let vesting = match account {
             Account::Vesting(ref value) => value,
@@ -202,7 +209,7 @@ impl AccountTransactionInteraction for VestingContract {
             },
             Log::transfer_log_from_transaction(transaction),
         ];
-        Ok(AccountInfo::new(receipt, logs))
+        Ok(AccountInfo::with_receipt(receipt, logs))
     }
 
     fn revert_outgoing_transaction(
@@ -217,12 +224,18 @@ impl AccountTransactionInteraction for VestingContract {
 
         let vesting = match receipt {
             None => {
-                let account = accounts_tree
-                    .get::<Account>(db_txn, &key)
-                    .expect("temporary until accounts rewrite")
-                    .ok_or(AccountError::NonExistentAddress {
-                        address: transaction.sender.clone(),
-                    })?;
+                let account = match complete!(get_or_update_account::<Account>(
+                    accounts_tree,
+                    db_txn,
+                    &key
+                )) {
+                    Some(account) => account,
+                    None => {
+                        return Err(AccountError::NonExistentAddress {
+                            address: transaction.sender.clone(),
+                        });
+                    }
+                };
 
                 if let Account::Vesting(contract) = account {
                     contract
@@ -266,12 +279,18 @@ impl AccountTransactionInteraction for VestingContract {
     ) -> Result<AccountInfo, AccountError> {
         let key = KeyNibbles::from(&transaction.sender);
 
-        let account = accounts_tree
-            .get::<Account>(db_txn, &key)
-            .expect("temporary until accounts rewrite")
-            .ok_or(AccountError::NonExistentAddress {
-                address: transaction.sender.clone(),
-            })?;
+        let account = match complete!(get_or_update_account::<Account>(
+            accounts_tree,
+            db_txn,
+            &key
+        )) {
+            Some(account) => account,
+            None => {
+                return Err(AccountError::NonExistentAddress {
+                    address: transaction.sender.clone(),
+                });
+            }
+        };
 
         let vesting = match account {
             Account::Vesting(ref value) => value,
@@ -306,7 +325,7 @@ impl AccountTransactionInteraction for VestingContract {
             from: transaction.sender.clone(),
             fee: transaction.fee,
         }];
-        Ok(AccountInfo::new(receipt, logs))
+        Ok(AccountInfo::with_receipt(receipt, logs))
     }
     fn revert_failed_transaction(
         accounts_tree: &AccountsTrie,
@@ -318,12 +337,18 @@ impl AccountTransactionInteraction for VestingContract {
 
         let vesting = match receipt {
             None => {
-                let account = accounts_tree
-                    .get::<Account>(db_txn, &key)
-                    .expect("temporary until accounts rewrite")
-                    .ok_or(AccountError::NonExistentAddress {
-                        address: transaction.sender.clone(),
-                    })?;
+                let account = match complete!(get_or_update_account::<Account>(
+                    accounts_tree,
+                    db_txn,
+                    &key
+                )) {
+                    Some(account) => account,
+                    None => {
+                        return Err(AccountError::NonExistentAddress {
+                            address: transaction.sender.clone(),
+                        });
+                    }
+                };
 
                 if let Account::Vesting(contract) = account {
                     contract
@@ -396,12 +421,18 @@ impl AccountTransactionInteraction for VestingContract {
     ) -> Result<Vec<Log>, AccountError> {
         let key = KeyNibbles::from(&transaction.contract_creation_address());
 
-        let account = accounts_tree
-            .get::<Account>(db_txn, &key)
-            .expect("temporary until accounts rewrite")
-            .ok_or(AccountError::NonExistentAddress {
-                address: transaction.sender.clone(),
-            })?;
+        let account = match complete!(get_or_update_account::<Account>(
+            accounts_tree,
+            db_txn,
+            &key
+        )) {
+            Some(account) => account,
+            None => {
+                return Err(AccountError::NonExistentAddress {
+                    address: transaction.sender.clone(),
+                });
+            }
+        };
 
         let vesting = match account {
             Account::Vesting(ref value) => value,

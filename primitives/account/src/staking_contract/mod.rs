@@ -14,6 +14,7 @@ use nimiq_transaction::account::staking_contract::{
     IncomingStakingTransactionData, OutgoingStakingTransactionProof,
 };
 use nimiq_trie::key_nibbles::KeyNibbles;
+use nimiq_trie::trie::IncompleteTrie;
 use nimiq_vrf::{AliasMethod, VrfSeed, VrfUseCase};
 pub use receipts::*;
 pub use staker::Staker;
@@ -140,20 +141,54 @@ impl StakingContract {
         KeyNibbles::from(bytes.as_slice())
     }
 
+    pub(crate) fn get_staking_contract_or_update(
+        accounts_tree: &AccountsTrie,
+        db_txn: &mut WriteTransaction,
+    ) -> Result<StakingContract, IncompleteTrie> {
+        match StakingContract::get_staking_contract(accounts_tree, db_txn) {
+            Err(IncompleteTrie) => {
+                accounts_tree
+                    .update_within_missing_part(
+                        db_txn,
+                        &StakingContract::get_key_staking_contract(),
+                    )
+                    .unwrap();
+                Err(IncompleteTrie)
+            }
+            account => account,
+        }
+    }
+
     /// Get the staking contract information.
     pub fn get_staking_contract(
         accounts_tree: &AccountsTrie,
         db_txn: &DBTransaction,
-    ) -> StakingContract {
+    ) -> Result<StakingContract, IncompleteTrie> {
         let key = StakingContract::get_key_staking_contract();
-        match accounts_tree
-            .get::<Account>(db_txn, &key)
-            .expect("temporary until accounts rewrite")
-        {
-            Some(Account::Staking(contract)) => contract,
+        match accounts_tree.get::<Account>(db_txn, &key)? {
+            Some(Account::Staking(contract)) => Ok(contract),
             _ => {
                 unreachable!()
             }
+        }
+    }
+
+    pub(crate) fn get_validator_or_update(
+        accounts_tree: &AccountsTrie,
+        db_txn: &mut WriteTransaction,
+        validator_address: &Address,
+    ) -> Result<Option<Validator>, IncompleteTrie> {
+        match StakingContract::get_validator(accounts_tree, db_txn, validator_address) {
+            Err(IncompleteTrie) => {
+                accounts_tree
+                    .update_within_missing_part(
+                        db_txn,
+                        &StakingContract::get_key_validator(validator_address),
+                    )
+                    .unwrap();
+                Err(IncompleteTrie)
+            }
+            account => account,
         }
     }
 
@@ -162,15 +197,12 @@ impl StakingContract {
         accounts_tree: &AccountsTrie,
         db_txn: &DBTransaction,
         validator_address: &Address,
-    ) -> Option<Validator> {
+    ) -> Result<Option<Validator>, IncompleteTrie> {
         let key = StakingContract::get_key_validator(validator_address);
 
-        match accounts_tree
-            .get::<Account>(db_txn, &key)
-            .expect("temporary until accounts rewrite")
-        {
-            Some(Account::StakingValidator(validator)) => Some(validator),
-            None => None,
+        match accounts_tree.get::<Account>(db_txn, &key)? {
+            Some(Account::StakingValidator(validator)) => Ok(Some(validator)),
+            None => Ok(None),
             _ => {
                 unreachable!()
             }
@@ -183,6 +215,7 @@ impl StakingContract {
         db_txn: &DBTransaction,
         validator_address: &Address,
     ) -> Vec<Address> {
+        // PITODO: Handling of incomplete trie
         let key = StakingContract::get_key_validator(validator_address);
         let validator = match accounts_tree
             .get::<Account>(db_txn, &key)
@@ -213,19 +246,35 @@ impl StakingContract {
         stakers
     }
 
+    pub(crate) fn get_staker_or_update(
+        accounts_tree: &AccountsTrie,
+        db_txn: &mut WriteTransaction,
+        staker_address: &Address,
+    ) -> Result<Option<Staker>, IncompleteTrie> {
+        match StakingContract::get_staker(accounts_tree, db_txn, staker_address) {
+            Err(IncompleteTrie) => {
+                accounts_tree
+                    .update_within_missing_part(
+                        db_txn,
+                        &StakingContract::get_key_staker(staker_address),
+                    )
+                    .unwrap();
+                Err(IncompleteTrie)
+            }
+            account => account,
+        }
+    }
+
     /// Get a staker information given its address, if it exists.
     pub fn get_staker(
         accounts_tree: &AccountsTrie,
         db_txn: &DBTransaction,
         staker_address: &Address,
-    ) -> Option<Staker> {
+    ) -> Result<Option<Staker>, IncompleteTrie> {
         let key = StakingContract::get_key_staker(staker_address);
-        match accounts_tree
-            .get::<Account>(db_txn, &key)
-            .expect("temporary until accounts rewrite")
-        {
-            Some(Account::StakingStaker(staker)) => Some(staker),
-            None => None,
+        match accounts_tree.get::<Account>(db_txn, &key)? {
+            Some(Account::StakingStaker(staker)) => Ok(Some(staker)),
+            None => Ok(None),
             _ => {
                 unreachable!()
             }
@@ -250,7 +299,8 @@ impl StakingContract {
         db_txn: &DBTransaction,
         seed: &VrfSeed,
     ) -> Validators {
-        let staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
+        let staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn)
+            .expect("temporary expect, should not be called on a partial trie");
 
         let mut validator_addresses = Vec::with_capacity(staking_contract.active_validators.len());
         let mut validator_stakes = Vec::with_capacity(staking_contract.active_validators.len());
@@ -270,7 +320,7 @@ impl StakingContract {
             let index = lookup.sample(&mut rng);
 
             let chosen_validator =
-                StakingContract::get_validator(accounts_tree, db_txn, validator_addresses[index]).expect("Couldn't find in the accounts tree a validator that was in the active validators list!");
+                StakingContract::get_validator(accounts_tree, db_txn, validator_addresses[index]).unwrap().expect("Couldn't find in the accounts tree a validator that was in the active validators list!");
 
             slots_builder.push(
                 chosen_validator.address,
@@ -335,6 +385,7 @@ impl StakingContract {
                 // Get the validator.
                 let validator =
                     match StakingContract::get_validator(accounts_tree, db_txn, &validator_address)
+                        .unwrap()
                     {
                         Some(v) => v,
                         None => {
@@ -377,7 +428,9 @@ impl StakingContract {
 
                 // Get the staker.
                 let staker =
-                    match StakingContract::get_staker(accounts_tree, db_txn, &staker_address) {
+                    match StakingContract::get_staker(accounts_tree, db_txn, &staker_address)
+                        .unwrap()
+                    {
                         Some(v) => v,
                         None => {
                             warn!("Cannot pay fees for transaction because staker doesn't exist.");
@@ -411,6 +464,7 @@ impl StakingContract {
 
                 // If the validator already exists then the transaction would fail.
                 if StakingContract::get_validator(accounts_tree, db_txn, &validator_address)
+                    .unwrap()
                     .is_some()
                 {
                     warn!("Cannot create validator because validator already exists.");
@@ -422,12 +476,16 @@ impl StakingContract {
                 let staker_address = proof.compute_signer();
 
                 // If the staker already exists then the transaction would fail.
-                if StakingContract::get_staker(accounts_tree, db_txn, &staker_address).is_some() {
+                if StakingContract::get_staker(accounts_tree, db_txn, &staker_address)
+                    .unwrap()
+                    .is_some()
+                {
                     warn!("Cannot create staker because staker already exists.");
                     return false;
                 };
 
                 // Verify we have a valid delegation address (if present)
+                // PITODO: Handling of incomplete trie
                 if let Some(delegation) = delegation {
                     let key = StakingContract::get_key_validator(&delegation);
                     if accounts_tree

@@ -10,7 +10,7 @@ use nimiq_trie::key_nibbles::KeyNibbles;
 use crate::inherent::{Inherent, InherentType};
 use crate::interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction};
 use crate::logs::{AccountInfo, Log};
-use crate::{Account, AccountError, AccountsTrie};
+use crate::{complete, get_or_update_account, Account, AccountError, AccountsTrie};
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
@@ -38,9 +38,11 @@ impl AccountTransactionInteraction for BasicAccount {
     ) -> Result<AccountInfo, AccountError> {
         let key = KeyNibbles::from(&transaction.recipient);
 
-        let leaf = accounts_tree
-            .get::<Account>(db_txn, &key)
-            .expect("temporary until accounts rewrite");
+        let leaf = complete!(get_or_update_account::<Account>(
+            accounts_tree,
+            db_txn,
+            &key
+        ));
 
         // Implicitly also checks that the address is in fact from a basic account.
         let current_balance = match leaf {
@@ -66,7 +68,7 @@ impl AccountTransactionInteraction for BasicAccount {
             )
             .expect("temporary until accounts rewrite");
 
-        Ok(AccountInfo::new(None, Vec::new()))
+        Ok(AccountInfo::with_receipt(None, Vec::new()))
     }
 
     fn revert_incoming_transaction(
@@ -84,12 +86,18 @@ impl AccountTransactionInteraction for BasicAccount {
 
         let key = KeyNibbles::from(&transaction.recipient);
 
-        let account = accounts_tree
-            .get::<Account>(db_txn, &key)
-            .expect("temporary until accounts rewrite")
-            .ok_or(AccountError::NonExistentAddress {
-                address: transaction.recipient.clone(),
-            })?;
+        let account = match complete!(get_or_update_account::<Account>(
+            accounts_tree,
+            db_txn,
+            &key
+        )) {
+            Some(account) => account,
+            None => {
+                return Err(AccountError::NonExistentAddress {
+                    address: transaction.recipient.clone(),
+                })
+            }
+        };
 
         let new_balance = Account::balance_sub(account.balance(), transaction.value)?;
 
@@ -119,21 +127,24 @@ impl AccountTransactionInteraction for BasicAccount {
     ) -> Result<AccountInfo, AccountError> {
         let key = KeyNibbles::from(&transaction.sender);
 
-        let account = accounts_tree
-            .get::<Account>(db_txn, &key)
-            .expect("temporary until accounts rewrite")
-            .or_else(|| {
+        let account = match complete!(get_or_update_account::<Account>(
+            accounts_tree,
+            db_txn,
+            &key
+        )) {
+            Some(account) => account,
+            None => {
                 if transaction.total_value() != Coin::ZERO {
-                    None
+                    return Err(AccountError::NonExistentAddress {
+                        address: transaction.sender.clone(),
+                    });
                 } else {
-                    Some(Account::Basic(BasicAccount {
+                    Account::Basic(BasicAccount {
                         balance: Coin::ZERO,
-                    }))
+                    })
                 }
-            })
-            .ok_or(AccountError::NonExistentAddress {
-                address: transaction.sender.clone(),
-            })?;
+            }
+        };
 
         if account.account_type() != AccountType::Basic {
             return Err(AccountError::TypeMismatch {
@@ -165,7 +176,7 @@ impl AccountTransactionInteraction for BasicAccount {
             },
             Log::transfer_log_from_transaction(transaction),
         ];
-        Ok(AccountInfo::new(None, logs))
+        Ok(AccountInfo::with_receipt(None, logs))
     }
 
     fn revert_outgoing_transaction(
@@ -182,9 +193,11 @@ impl AccountTransactionInteraction for BasicAccount {
 
         let key = KeyNibbles::from(&transaction.sender);
 
-        let leaf = accounts_tree
-            .get::<Account>(db_txn, &key)
-            .expect("temporary until accounts rewrite");
+        let leaf = complete!(get_or_update_account::<Account>(
+            accounts_tree,
+            db_txn,
+            &key
+        ));
 
         let current_balance = match leaf {
             None => Coin::ZERO,
@@ -225,21 +238,24 @@ impl AccountTransactionInteraction for BasicAccount {
     ) -> Result<AccountInfo, AccountError> {
         let key = KeyNibbles::from(&transaction.sender);
 
-        let account = accounts_tree
-            .get::<Account>(db_txn, &key)
-            .expect("temporary until accounts rewrite")
-            .or_else(|| {
+        let account = match complete!(get_or_update_account::<Account>(
+            accounts_tree,
+            db_txn,
+            &key
+        )) {
+            Some(account) => account,
+            None => {
                 if transaction.total_value() != Coin::ZERO {
-                    None
+                    return Err(AccountError::NonExistentAddress {
+                        address: transaction.sender.clone(),
+                    });
                 } else {
-                    Some(Account::Basic(BasicAccount {
+                    Account::Basic(BasicAccount {
                         balance: Coin::ZERO,
-                    }))
+                    })
                 }
-            })
-            .ok_or(AccountError::NonExistentAddress {
-                address: transaction.sender.clone(),
-            })?;
+            }
+        };
 
         if account.account_type() != AccountType::Basic {
             return Err(AccountError::TypeMismatch {
@@ -268,7 +284,7 @@ impl AccountTransactionInteraction for BasicAccount {
             from: transaction.sender.clone(),
             fee: transaction.fee,
         }];
-        Ok(AccountInfo::new(None, logs))
+        Ok(AccountInfo::with_receipt(None, logs))
     }
 
     fn revert_failed_transaction(
@@ -283,9 +299,11 @@ impl AccountTransactionInteraction for BasicAccount {
 
         let key = KeyNibbles::from(&transaction.sender);
 
-        let leaf = accounts_tree
-            .get::<Account>(db_txn, &key)
-            .expect("temporary until accounts rewrite");
+        let leaf = complete!(get_or_update_account::<Account>(
+            accounts_tree,
+            db_txn,
+            &key
+        ));
 
         let current_balance = match leaf {
             None => Coin::ZERO,
@@ -347,9 +365,11 @@ impl AccountInherentInteraction for BasicAccount {
 
         let key = KeyNibbles::from(&inherent.target);
 
-        let leaf = accounts_tree
-            .get::<Account>(db_txn, &key)
-            .expect("temporary until accounts rewrite");
+        let leaf = complete!(get_or_update_account::<Account>(
+            accounts_tree,
+            db_txn,
+            &key
+        ));
 
         let current_balance = match leaf {
             None => Coin::ZERO,
@@ -372,7 +392,7 @@ impl AccountInherentInteraction for BasicAccount {
             to: inherent.target.clone(),
             value: inherent.value,
         }];
-        Ok(AccountInfo::new(None, logs))
+        Ok(AccountInfo::with_receipt(None, logs))
     }
 
     fn revert_inherent(
@@ -393,12 +413,18 @@ impl AccountInherentInteraction for BasicAccount {
 
         let key = KeyNibbles::from(&inherent.target);
 
-        let account = accounts_tree
-            .get::<Account>(db_txn, &key)
-            .expect("temporary until accounts rewrite")
-            .ok_or(AccountError::NonExistentAddress {
-                address: inherent.target.clone(),
-            })?;
+        let account = match complete!(get_or_update_account::<Account>(
+            accounts_tree,
+            db_txn,
+            &key
+        )) {
+            Some(account) => account,
+            None => {
+                return Err(AccountError::NonExistentAddress {
+                    address: inherent.target.clone(),
+                });
+            }
+        };
 
         let new_balance = Account::balance_sub(account.balance(), inherent.value)?;
 
