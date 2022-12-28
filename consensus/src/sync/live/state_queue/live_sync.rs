@@ -67,6 +67,18 @@ impl<N: Network> PushOpResult<N> {
         }
     }
 
+    pub fn ignored_all_chunks(&self) -> bool {
+        match self {
+            PushOpResult::Head(_, Ok(ChunksPushResult::Chunks(committed, ignored)), _)
+            | PushOpResult::HeadChunk(Ok(ChunksPushResult::Chunks(committed, ignored)), _)
+            | PushOpResult::Buffered(_, Ok(ChunksPushResult::Chunks(committed, ignored)), _)
+            | PushOpResult::Missing(_, Ok(ChunksPushResult::Chunks(committed, ignored)), _, _) => {
+                *committed == 0 && *ignored > 0
+            }
+            _ => false,
+        }
+    }
+
     fn into_block_push_result(self) -> Option<BlockPushOpResult<N>> {
         match self {
             PushOpResult::Head(push_result, _, block_hash) => {
@@ -180,17 +192,43 @@ impl<N: Network, TReq: RequestComponent<N>> LiveSyncQueue<N> for StateQueue<N, T
     fn process_push_result(&mut self, item: Self::PushResult) -> Option<LiveSyncEvent<N::PeerId>> {
         // PITODO Avoid resetting the chunk request chain if a block error occurred on a block
         // that did not have any chunks in the current chunk chain.
-        if item.get_push_chunk_error().is_some() || item.get_push_block_error().is_some() {
+
+        // Resets the chain of chunks when encountering an error or ignoring all chunks.
+        // In all these cases, subsequent chunks are likely not to match our state.
+        if item.get_push_chunk_error().is_some()
+            || item.get_push_block_error().is_some()
+            || item.ignored_all_chunks()
+        {
             self.reset_chunk_request_chain();
         }
 
         match item {
-            PushOpResult::HeadChunk(Ok(ChunksPushResult::Chunks), block_hash) => {
+            PushOpResult::HeadChunk(Ok(ChunksPushResult::Chunks(committed, _)), block_hash)
+                if committed > 0 =>
+            {
                 // If we accepted chunks for the head block without error, we emit an event.
                 // If there was an error, we do not know for sure whether or not a chunk was accepted.
                 Some(LiveSyncEvent::PushEvent(LiveSyncPushEvent::AcceptedChunks(
                     block_hash,
                 )))
+            }
+            PushOpResult::Missing(
+                result,
+                push_chunks_result,
+                adopted_blocks,
+                mut invalid_blocks,
+            ) => {
+                self.remove_invalid_blocks(&mut invalid_blocks);
+
+                self.block_queue.process_push_result(
+                    PushOpResult::Missing(
+                        result,
+                        push_chunks_result,
+                        adopted_blocks,
+                        invalid_blocks,
+                    )
+                    .into_block_push_result()?,
+                )
             }
             item => self
                 .block_queue

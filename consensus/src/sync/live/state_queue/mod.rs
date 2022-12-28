@@ -79,7 +79,7 @@ impl Display for ResponseChunk {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "ResponseChunk {{ block_number: {}, block_hahs: {:?}, chunk: {} }}",
+            "ResponseChunk {{ block_number: {}, block_hash: {:?}, chunk: {} }}",
             self.block_number, self.block_hash, self.chunk
         )
     }
@@ -108,7 +108,7 @@ pub enum QueuedStateChunks<N: Network> {
 /// Complete: there are no further requests to make. (Can only set after a macro block).
 /// Reset: the next request should start based on the blockchain accounts trie state.
 /// Continue: the next request should start on the specified key, which is the end of the previous request.
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ChunkRequestState {
     Complete,
     Reset,
@@ -358,13 +358,6 @@ impl<N: Network, TReq: RequestComponent<N>> StateQueue<N, TReq> {
                 chunk,
                 self.buffer_size,
             );
-        } else if chunk.block_number <= macro_height {
-            // Chunk is from a previous batch/epoch, discard it.
-            log::warn!(
-                "Discarding chunk {}, we're already at macro block #{}",
-                chunk,
-                macro_height
-            );
         } else if chunk.block_hash == current_block_hash {
             // Immediately return chunks for the current head blockchain.
             self.set_start_key(&chunk.chunk.keys_end);
@@ -373,6 +366,13 @@ impl<N: Network, TReq: RequestComponent<N>> StateQueue<N, TReq> {
                 start_key,
                 peer_id,
             )]));
+        } else if chunk.block_number <= macro_height {
+            // Chunk is from a previous batch/epoch, discard it.
+            log::warn!(
+                "Discarding chunk {}, we're already at macro block #{}",
+                chunk,
+                macro_height
+            );
         } else if contains_block {
             // Block is already in blockchain, cannot apply chunk so we discard it.
             log::debug!("Discarding chunk {}, block already applied", chunk);

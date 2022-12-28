@@ -94,8 +94,9 @@ pub enum PushError {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ChunksPushResult {
-    NoChunks,
-    Chunks,
+    EmptyChunks,
+    /// Contains the number of committed and ignored chunks, respectively.
+    Chunks(usize, usize),
 }
 
 #[derive(Error, Debug, PartialEq, Eq)]

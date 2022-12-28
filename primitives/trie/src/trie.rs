@@ -137,7 +137,20 @@ impl MerkleRadixTrie {
 
     /// Returns the root hash of the Merkle Radix Trie.
     pub fn root_hash_assert(&self, txn: &Transaction) -> Blake2bHash {
-        self.get_root(txn).unwrap().hash_assert()
+        let root = self.get_root(txn).unwrap();
+        let is_incomplete = root
+            .root_data
+            .as_ref()
+            .map(|data| data.incomplete.is_some())
+            .unwrap_or(false);
+
+        // We should refuse to return a hash for a completely empty but incomplete trie.
+        assert!(
+            !is_incomplete || root.has_children(),
+            "Cannot compute hash on an empty, incomplete trie"
+        );
+
+        root.hash_assert()
     }
 
     /// Returns the root hash of the Merkle Radix Trie if the trie is complete.
@@ -482,6 +495,19 @@ impl MerkleRadixTrie {
                     root_path.push(node);
                     break;
                 }
+                Err(MerkleRadixTrieError::ChildDoesNotExist) if node.is_root() => {
+                    let is_incomplete = node
+                        .root_data
+                        .as_ref()
+                        .map(|data| data.incomplete.is_some())
+                        .unwrap_or(false);
+
+                    // We should not return an error on a completely empty but incomplete trie.
+                    if is_incomplete && !node.has_children() {
+                        return Ok(());
+                    }
+                    return Err(MerkleRadixTrieError::ChildDoesNotExist);
+                }
                 Err(e) => {
                     return Err(e);
                 }
@@ -745,13 +771,27 @@ impl MerkleRadixTrie {
                     "first key is inconsistent with key range",
                 ));
             }
+            let last_item_key = chunk.items.last().unwrap().0.clone();
             if let Some(keys_end) = &chunk.keys_end {
-                if chunk.items.last().unwrap().0 >= *keys_end {
+                if last_item_key >= *keys_end {
                     return Err(MerkleRadixTrieError::InvalidChunk(
                         "last key is inconsistent with key range",
                     ));
                 }
             }
+            let keys_end_range = chunk.keys_end.clone().map(|keys_end| keys_end..);
+            for proof_node in chunk.proof.nodes.iter() {
+                for child in proof_node.iter_children() {
+                    if let Ok(key) = child.key(&proof_node.key, &keys_end_range) {
+                        if key > last_item_key {
+                            return Err(MerkleRadixTrieError::InvalidChunk(
+                                "invalid keys end, found stumps",
+                            ));
+                        }
+                    }
+                }
+            }
+
             for i in 0..chunk.items.len() - 1 {
                 if chunk.items[i].0 >= chunk.items[i + 1].0 {
                     return Err(MerkleRadixTrieError::InvalidChunk("items are not sorted"));

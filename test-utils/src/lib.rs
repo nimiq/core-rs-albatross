@@ -2,6 +2,7 @@ pub mod block_production;
 pub mod blockchain;
 pub mod blockchain_with_rng;
 pub mod consensus;
+pub mod mock_node;
 pub mod node;
 pub mod test_network;
 pub mod test_transaction;

@@ -104,7 +104,7 @@ impl<N: Network> BlockchainPushResult<N> {
             Ok((block_push_result, push_chunks_result)) => {
                 (Ok(block_push_result), push_chunks_result, None)
             }
-            Err(push_error) => (Err(push_error), Ok(ChunksPushResult::NoChunks), None),
+            Err(push_error) => (Err(push_error), Ok(ChunksPushResult::EmptyChunks), None),
         };
 
         Self {
@@ -210,7 +210,7 @@ pub async fn push_multiple_blocks_with_chunks<N: Network>(
     // Initialize push_result to some random value.
     // It is always overwritten in the first loop iteration.
     let mut push_result = Err(PushError::Orphan);
-    let mut push_chunk_result = Ok(ChunksPushResult::NoChunks);
+    let mut push_chunk_result = Ok(ChunksPushResult::EmptyChunks);
     // Try to push blocks, until we encounter an invalid block.
     for (block, mut chunks) in block_iter.by_ref() {
         log::debug!("Pushing block {} from missing blocks response", block);
@@ -235,10 +235,17 @@ pub async fn push_multiple_blocks_with_chunks<N: Network>(
         // The chunk result should give precedence to an error. Otherwise, if least one chunk was pushed,
         // the result should reflect that.
         // Errors cannot be overwritten because we will discard the subsequent chunks.
-        if push_results.push_chunks_result.is_err()
-            || push_results.push_chunks_result == Ok(ChunksPushResult::Chunks)
-        {
-            push_chunk_result = push_results.push_chunks_result;
+        match push_results.push_chunks_result {
+            Ok(ChunksPushResult::Chunks(committed, ignored)) => match push_chunk_result {
+                Ok(ChunksPushResult::Chunks(ref mut old_committed, ref mut old_ignored)) => {
+                    *old_committed += committed;
+                    *old_ignored += ignored;
+                }
+                Ok(_) => push_chunk_result = push_results.push_chunks_result,
+                Err(_) => unreachable!(),
+            },
+            Err(_) => push_chunk_result = push_results.push_chunks_result,
+            Ok(_) => {}
         }
 
         match &push_result {
