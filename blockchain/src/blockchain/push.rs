@@ -53,7 +53,7 @@ impl Blockchain {
                 last_macro_block_no = last_macro_block,
                 "Ignoring block",
             );
-            return Ok((PushResult::Ignored, Ok(ChunksPushResult::NoChunks)));
+            return Ok((PushResult::Ignored, Ok(ChunksPushResult::EmptyChunks)));
         }
 
         // TODO: We might want to pass this as argument to this method.
@@ -65,7 +65,7 @@ impl Blockchain {
             .get_chain_info(&block.hash(), false, Some(&read_txn))
             .is_ok()
         {
-            return Ok((PushResult::Known, Ok(ChunksPushResult::NoChunks)));
+            return Ok((PushResult::Known, Ok(ChunksPushResult::EmptyChunks)));
         }
 
         // Check if we have this block's parent.
@@ -137,7 +137,7 @@ impl Blockchain {
             .put_chain_info(&mut txn, &chain_info.head.hash(), &chain_info, true);
         txn.commit();
 
-        Ok((result, Ok(ChunksPushResult::NoChunks)))
+        Ok((result, Ok(ChunksPushResult::EmptyChunks)))
     }
 
     // To retain the option of having already taken a lock before this call the self was exchanged.
@@ -150,6 +150,12 @@ impl Blockchain {
         this: RwLockUpgradableReadGuard<Self>,
         block: Block,
     ) -> Result<PushResult, PushError> {
+        // The following assert requires fetching the root node from the accounts trie,
+        // which is why we opted to only run it in debug builds.
+        debug_assert!(
+            this.get_missing_accounts_range(None).is_none(),
+            "Should call push only for complete tries"
+        );
         Self::push_wrapperfn(this, block, false, vec![]).map(|res| res.0)
     }
 
@@ -183,7 +189,9 @@ impl Blockchain {
         block_hash: &Blake2bHash,
     ) -> Result<ChunksPushResult, ChunksPushError> {
         let state_root = self.state.main_chain.head.state_root();
-        let mut chunk_result = Ok(ChunksPushResult::NoChunks);
+        let mut chunk_result = Ok(ChunksPushResult::EmptyChunks);
+        let mut chunks_committed = 0;
+        let mut chunks_ignored = 0;
         for (i, chunk_data) in chunks.into_iter().enumerate() {
             let mut txn = self.write_transaction();
             log::trace!(
@@ -206,12 +214,14 @@ impl Blockchain {
                     break;
                 }
                 Ok(TrieChunkPushResult::Applied) => {
-                    chunk_result = Ok(ChunksPushResult::Chunks);
+                    chunks_committed += 1;
+                    chunk_result = Ok(ChunksPushResult::Chunks(chunks_committed, chunks_ignored));
                 }
                 Ok(TrieChunkPushResult::Ignored) => {
-                    log::debug!("Commit chunk for block {} was ignored.", block_hash,);
-
                     // The chunk has been ignored, but might still have been valid.
+                    log::debug!("Commit chunk for block {} was ignored.", block_hash,);
+                    chunks_ignored += 1;
+                    chunk_result = Ok(ChunksPushResult::Chunks(chunks_committed, chunks_ignored));
                 }
             };
 

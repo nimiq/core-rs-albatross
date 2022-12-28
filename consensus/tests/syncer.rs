@@ -24,7 +24,7 @@ use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::{AbstractBlockchain, Direction};
 use nimiq_consensus::sync::live::block_queue::BlockQueue;
 use nimiq_consensus::sync::live::BlockLiveSync;
-use nimiq_consensus::sync::syncer::{MacroSync, MacroSyncReturn, Syncer};
+use nimiq_consensus::sync::syncer::{LiveSync, MacroSync, MacroSyncReturn, Syncer};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::network::Network;
@@ -221,7 +221,7 @@ async fn send_two_micro_blocks_out_of_order() {
     let (request_component, mut missing_blocks_request_rx, _) = MockRequestComponent::new_mutex();
     let (block_tx, block_rx) = mpsc::channel(32);
 
-    let block_queue = BlockQueue::with_block_stream(
+    let block_queue = BlockQueue::with_gossipsub_block_stream(
         blockchain_proxy_1.clone(),
         Arc::clone(&network),
         request_component,
@@ -302,7 +302,7 @@ async fn send_micro_blocks_out_of_order() {
     let request_component = MockRequestComponent::new();
     let (block_tx, block_rx) = mpsc::channel(32);
 
-    let block_queue = BlockQueue::with_block_stream(
+    let block_queue = BlockQueue::with_gossipsub_block_stream(
         blockchain_proxy_1.clone(),
         Arc::clone(&network),
         request_component,
@@ -714,7 +714,7 @@ async fn put_peer_back_into_sync_mode() {
 
     let mut syncer = Syncer::new(live_sync, history_sync);
 
-    syncer.live_sync.request_component_mut().add_peer(peer_addr);
+    syncer.live_sync.add_peer(peer_addr);
 
     let producer = BlockProducer::new(signing_key(), voting_key());
     for _ in 1..11 {
