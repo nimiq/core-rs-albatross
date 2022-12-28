@@ -37,7 +37,16 @@ impl LightBlockchain {
         // Check if we have this block's parent.
         let prev_info = this
             .get_chain_info(block.parent_hash(), false, None)
-            .map_err(|_| PushError::Orphan)?;
+            .map_err(|error| {
+                log::warn!(
+                    %error,
+                    %block,
+                    reason = "parent block is unknown",
+                    parent_block_hash = %block.parent_hash(),
+                    "Rejecting block",
+                );
+                PushError::Orphan
+            })?;
 
         // Calculate chain ordering.
         let chain_order = ChainOrdering::order_chains(this.deref(), &block, &prev_info, None);

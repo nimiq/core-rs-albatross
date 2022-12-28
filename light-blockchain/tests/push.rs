@@ -393,3 +393,25 @@ fn it_validates_tendermint_round_number() {
         Err(InvalidBlock(BlockError::InvalidJustification)),
     );
 }
+
+#[test]
+fn it_can_rebranch_skip_block() {
+    // Build forks using two producers.
+    let temp_producer1 = TemporaryBlockProducer::new();
+    let temp_producer2 = TemporaryBlockProducer::new();
+
+    // Case 1: easy rebranch (number denotes accumulated skip blocks)
+    // [0] - [0] - [0] - [0]
+    //          \- [1] - [1]
+    let block = temp_producer1.next_block(vec![], false);
+    temp_producer2.push(block).unwrap();
+
+    let inferior1 = temp_producer1.next_block(vec![], false);
+    temp_producer2.next_block(vec![], true);
+
+    temp_producer1.next_block(vec![], false);
+    temp_producer2.next_block(vec![], false);
+
+    // Check that producer 2 ignores inferior chain.
+    assert_eq!(temp_producer2.push(inferior1), Ok(PushResult::Ignored));
+}

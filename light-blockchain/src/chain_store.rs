@@ -72,9 +72,8 @@ impl ChainStore {
         let hash = chain_info.head.hash();
 
         // We only store in the ChainStore:
-        // - Micro blocks: Headers.
+        // - Micro blocks: Headers and Justifications
         // - Macro blocks: Headers and bodies.
-        // Note that in both cases we don't store justifications so they are emptied out
         match &mut chain_info.head {
             Block::Macro(ref mut block) => {
                 assert!(block.body.is_some());
@@ -82,7 +81,6 @@ impl ChainStore {
             }
             Block::Micro(ref mut block) => {
                 assert!(block.body.is_none());
-                block.justification = None;
             }
         }
 
@@ -415,7 +413,6 @@ mod tests {
             Ok(info) => {
                 assert!(info.on_main_chain);
                 assert!(info.head.body().is_none());
-                assert!(info.head.justification().is_none());
                 assert_eq!(info.head.hash(), block_1.hash());
             }
         }
@@ -433,7 +430,6 @@ mod tests {
             Ok(info) => {
                 assert!(info.on_main_chain);
                 assert!(info.head.body().is_none());
-                assert!(info.head.justification().is_none());
                 assert_eq!(info.head.hash(), block_1.hash());
             }
         }
