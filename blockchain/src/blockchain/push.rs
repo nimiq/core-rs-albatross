@@ -21,9 +21,9 @@ use crate::{
 
 fn send_vec(log_notifier: &BroadcastSender<BlockLog>, logs: Vec<BlockLog>) {
     for log in logs {
-        if let Err(e) = log_notifier.send(log) {
-            log::error!(error = ?e,"Error sending the Block logs to the log notifier");
-        }
+        // The log notifier is for informational purposes only, thus may have no listeners.
+        // Therefore, no error logs should be produced in this case.
+        _ = log_notifier.send(log);
     }
 }
 
@@ -280,9 +280,10 @@ impl Blockchain {
             );
         }
 
-        if let Err(e) = this.log_notifier.send(block_log) {
-            log::error!(error = ?e,"Error sending the Block logs to the log notifier");
-        }
+        // The log notifier is for informational purposes only, thus may have no listeners.
+        // Therefore, no error logs should be produced in this case.
+        _ = this.log_notifier.send(block_log);
+
         Ok(PushResult::Extended)
     }
 
