@@ -12,6 +12,11 @@ pub async fn prover_main() -> Result<(), SerializingError> {
     let mut stdin = BufReader::new(io::stdin());
     let proof_input: Result<ProofInput, _> = Deserialize::deserialize(&mut stdin);
 
+    log::info!(
+        "Starting proof generation for block {:?}",
+        proof_input.as_ref().map(|input| &input.block)
+    );
+
     // Then generate proof.
     let result = match proof_input {
         Ok(proof_input) => generate_new_proof(
@@ -31,5 +36,7 @@ pub async fn prover_main() -> Result<(), SerializingError> {
     stdout.write_all(&PROOF_GENERATION_OUTPUT_DELIMITER)?;
 
     Serialize::serialize(&result, &mut stdout)?;
+    stdout.flush()?;
+
     Ok(())
 }

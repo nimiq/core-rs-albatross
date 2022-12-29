@@ -1,3 +1,4 @@
+use std::env;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 
@@ -152,7 +153,10 @@ pub fn generate_new_proof(
                 latest_block_number: block.block_number,
                 latest_proof: Some(proof),
             }),
-            Err(e) => Err(ZKProofGenerationError::from(e)),
+            Err(e) => {
+                log::error!("Encountered error during proving: {:?}", e);
+                Err(ZKProofGenerationError::from(e))
+            }
         };
     }
     Err(ZKProofGenerationError::InvalidBlock)
@@ -173,6 +177,7 @@ pub async fn launch_generate_new_proof(
 
     let mut child = Command::new(path)
         .arg("--prove")
+        .args(env::args())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()?;

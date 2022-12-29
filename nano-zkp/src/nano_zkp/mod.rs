@@ -21,11 +21,11 @@ pub type NanoProof = Proof<MNT6_753>;
 
 #[derive(Error, Debug)]
 pub enum NanoZKPError {
-    #[error("filesystem error")]
+    #[error("filesystem error: {0}")]
     Filesystem(#[from] io::Error),
-    #[error("serialization error")]
+    #[error("serialization error: {0}")]
     Serialization(#[from] SerializationError),
-    #[error("circuit error")]
+    #[error("circuit error: {0}")]
     Circuit(#[from] SynthesisError),
     #[error("empty proof")]
     EmptyProof,

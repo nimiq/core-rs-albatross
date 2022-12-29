@@ -95,9 +95,12 @@ pub fn initialize_logging(
     }
 
     // Set logging level for Nimiq and all other modules
+    // Creating ZKPs with a log level below WARN will consume huge amounts of memory due to tracing annotations in the dependency.
+    // That's why we specifically set its log level to WARN.
     let mut filter = Targets::new()
         .with_default(DEFAULT_LEVEL)
-        .with_nimiq_targets(settings.level.unwrap_or(DEFAULT_LEVEL));
+        .with_nimiq_targets(settings.level.unwrap_or(DEFAULT_LEVEL))
+        .with_target("r1cs", LevelFilter::WARN);
     // Set logging level for specific selected modules
     filter = filter.with_targets(settings.tags);
     // Set logging level from the environment
@@ -149,9 +152,12 @@ pub fn initialize_logging(
                 .with_ansi(false)
                 .event_format(Formatting(SystemTime))
                 .with_filter(
+                    // Creating ZKPs with a log level below WARN will consume huge amounts of memory due to tracing annotations in the dependency.
+                    // That's why we specifically set its log level to WARN.
                     Targets::new()
                         .with_default(DEFAULT_LEVEL)
-                        .with_nimiq_targets(LevelFilter::TRACE),
+                        .with_nimiq_targets(LevelFilter::TRACE)
+                        .with_target("r1cs", LevelFilter::WARN),
                 ),
         )
     } else {
@@ -165,9 +171,12 @@ pub fn initialize_logging(
             loki.extra_fields.clone(),
         )?;
         let layer = layer.with_filter(
+            // Creating ZKPs with a log level below WARN will consume huge amounts of memory due to tracing annotations in the dependency.
+            // That's why we specifically set its log level to WARN.
             Targets::new()
                 .with_default(DEFAULT_LEVEL)
-                .with_nimiq_targets(LevelFilter::TRACE),
+                .with_nimiq_targets(LevelFilter::TRACE)
+                .with_target("r1cs", LevelFilter::WARN),
         );
         (Some(layer), Some(bg_task))
     } else {

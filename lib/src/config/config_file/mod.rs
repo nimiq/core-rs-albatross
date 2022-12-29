@@ -40,6 +40,8 @@ pub struct ConfigFile {
     pub metrics_server: Option<MetricsServerSettings>,
     #[serde(default)]
     pub log: LogSettings,
+    #[serde(default)]
+    pub prover_log: LogSettings,
     pub database: Option<DatabaseSettings>,
     pub mempool: Option<MempoolSettings>,
     #[serde(default)]
@@ -315,13 +317,17 @@ impl Default for RotatingLogFileConfig {
     }
 }
 
+const fn default_true() -> bool {
+    true
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct LogSettings {
     #[serde(deserialize_with = "deserialize_string_option")]
     #[serde(default)]
     pub level: Option<LevelFilter>,
-    #[serde(default)]
+    #[serde(default = "default_true")]
     pub timestamps: bool,
     #[serde(default)]
     #[serde(deserialize_with = "deserialize_tags")]

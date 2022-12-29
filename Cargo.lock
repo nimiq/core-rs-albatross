@@ -3179,6 +3179,7 @@ dependencies = [
  "nimiq-test-log",
  "rand 0.8.5",
  "thiserror",
+ "tracing",
 ]
 
 [[package]]
@@ -3715,6 +3716,7 @@ dependencies = [
  "nimiq-genesis-builder",
  "nimiq-hash",
  "nimiq-keys",
+ "nimiq-log",
  "nimiq-macros",
  "nimiq-mempool",
  "nimiq-nano-primitives",
@@ -3735,6 +3737,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tracing",
+ "tracing-subscriber 0.3.16",
 ]
 
 [[package]]

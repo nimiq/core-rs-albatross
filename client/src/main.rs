@@ -27,34 +27,32 @@ async fn main_inner() -> Result<(), Error> {
     let command_line = CommandLine::parse();
     log::trace!("Command line: {:#?}", command_line);
 
-    // Early return in case of a proving process.
-    if command_line.prove {
-        // Initialize logging with config values.
-        initialize_logging(Some(&command_line), None)?;
-
-        // Initialize panic hook.
-        initialize_panic_reporting();
-
-        // Initialize signal handler
-        initialize_signal_handler();
-
-        info!("Starting proof generation. Waiting for input.");
-
-        return Ok(prover_main().await?);
-    }
-
     // Parse config file - this will obey the `--config` command line option.
     let config_file = ConfigFile::find(Some(&command_line))?;
     log::trace!("Config file: {:#?}", config_file);
 
     // Initialize logging with config values.
-    initialize_logging(Some(&command_line), Some(&config_file.log))?;
+    initialize_logging(
+        Some(&command_line),
+        if command_line.prove {
+            Some(&config_file.prover_log)
+        } else {
+            Some(&config_file.log)
+        },
+    )?;
 
     // Initialize panic hook.
     initialize_panic_reporting();
 
     // Initialize signal handler
     initialize_signal_handler();
+
+    // Early return in case of a proving process.
+    if command_line.prove {
+        info!("Starting proof generation. Waiting for input.");
+
+        return Ok(prover_main().await?);
+    }
 
     // Create config builder and apply command line and config file.
     // You usually want the command line to override config settings, so the order is important.
@@ -185,5 +183,7 @@ async fn main_inner() -> Result<(), Error> {
 async fn main() {
     if let Err(e) = main_inner().await {
         log_error_cause_chain(&e);
+        std::process::exit(1);
     }
+    std::process::exit(0);
 }

@@ -96,14 +96,23 @@ impl NanoZKP {
         // Calculate final public key tree root.
         let final_pk_tree_root = pk_tree_construct(final_pks.clone());
 
+        const NUM_PROOFS: usize = 67;
+        let mut current_proof = 0;
+
         // Start generating proofs for PKTree level 5.
         #[allow(clippy::needless_range_loop)]
         for i in 0..32 {
+            current_proof += 1;
             if proof_caching && proofs.join(format!("pk_tree_5_{}.bin", i)).exists() {
                 continue;
             }
 
-            eprintln!("generating pk_tree_5_{}", i);
+            log::info!(
+                "Generating sub-proof ({}/{}): pk_tree_5_{}",
+                current_proof,
+                NUM_PROOFS,
+                i
+            );
 
             NanoZKP::prove_pk_tree_leaf(
                 rng,
@@ -120,11 +129,17 @@ impl NanoZKP {
 
         // Start generating proofs for PKTree level 4.
         for i in 0..16 {
+            current_proof += 1;
             if proof_caching && proofs.join(format!("pk_tree_4_{}.bin", i)).exists() {
                 continue;
             }
 
-            eprintln!("generating pk_tree_4_{}", i);
+            log::info!(
+                "Generating sub-proof ({}/{}): pk_tree_4_{}",
+                current_proof,
+                NUM_PROOFS,
+                i
+            );
 
             NanoZKP::prove_pk_tree_node_mnt6(
                 rng,
@@ -142,11 +157,17 @@ impl NanoZKP {
 
         // Start generating proofs for PKTree level 3.
         for i in 0..8 {
+            current_proof += 1;
             if proof_caching && proofs.join(format!("pk_tree_3_{}.bin", i)).exists() {
                 continue;
             }
 
-            eprintln!("generating pk_tree_3_{}", i);
+            log::info!(
+                "Generating sub-proof ({}/{}): pk_tree_3_{}",
+                current_proof,
+                NUM_PROOFS,
+                i
+            );
 
             NanoZKP::prove_pk_tree_node_mnt4(
                 rng,
@@ -164,11 +185,17 @@ impl NanoZKP {
 
         // Start generating proofs for PKTree level 2.
         for i in 0..4 {
+            current_proof += 1;
             if proof_caching && proofs.join(format!("pk_tree_2_{}.bin", i)).exists() {
                 continue;
             }
 
-            eprintln!("generating pk_tree_2_{}", i);
+            log::info!(
+                "Generating sub-proof ({}/{}): pk_tree_2_{}",
+                current_proof,
+                NUM_PROOFS,
+                i
+            );
 
             NanoZKP::prove_pk_tree_node_mnt6(
                 rng,
@@ -186,11 +213,17 @@ impl NanoZKP {
 
         // Start generating proofs for PKTree level 1.
         for i in 0..2 {
+            current_proof += 1;
             if proof_caching && proofs.join(format!("pk_tree_1_{}.bin", i)).exists() {
                 continue;
             }
 
-            eprintln!("generating pk_tree_1_{}", i);
+            log::info!(
+                "Generating sub-proof ({}/{}): pk_tree_1_{}",
+                current_proof,
+                NUM_PROOFS,
+                i
+            );
 
             NanoZKP::prove_pk_tree_node_mnt4(
                 rng,
@@ -207,8 +240,13 @@ impl NanoZKP {
         }
 
         // Start generating proof for PKTree level 0.
+        current_proof += 1;
         if !(proof_caching && proofs.join("pk_tree_0_0.bin").exists()) {
-            eprintln!("generating pk_tree_0_0");
+            log::info!(
+                "Generating sub-proof ({}/{}): pk_tree_0_0",
+                current_proof,
+                NUM_PROOFS,
+            );
 
             NanoZKP::prove_pk_tree_node_mnt6(
                 rng,
@@ -225,8 +263,13 @@ impl NanoZKP {
         }
 
         // Start generating proof for Macro Block.
+        current_proof += 1;
         if !(proof_caching && proofs.join("macro_block.bin").exists()) {
-            eprintln!("generating macro_block");
+            log::info!(
+                "Generating sub-proof ({}/{}): macro_block",
+                current_proof,
+                NUM_PROOFS,
+            );
 
             NanoZKP::prove_macro_block(
                 rng,
@@ -242,8 +285,13 @@ impl NanoZKP {
         }
 
         // Start generating proof for Macro Block Wrapper.
+        current_proof += 1;
         if !(proof_caching && proofs.join("macro_block_wrapper.bin").exists()) {
-            eprintln!("generating macro_block_wrapper");
+            log::info!(
+                "Generating sub-proof ({}/{}): macro_block_wrapper",
+                current_proof,
+                NUM_PROOFS,
+            );
 
             NanoZKP::prove_macro_block_wrapper(
                 rng,
@@ -257,8 +305,13 @@ impl NanoZKP {
         }
 
         // Start generating proof for Merger.
+        current_proof += 1;
         if !(proof_caching && proofs.join("merger.bin").exists()) {
-            eprintln!("generating merger");
+            log::info!(
+                "Generating sub-proof ({}/{}): merger",
+                current_proof,
+                NUM_PROOFS,
+            );
 
             NanoZKP::prove_merger(
                 rng,
@@ -273,7 +326,12 @@ impl NanoZKP {
         }
 
         // Start generating proof for Merger Wrapper.
-        eprintln!("generating merger wrapper");
+        current_proof += 1;
+        log::info!(
+            "Generating sub-proof ({}/{}): merger wrapper",
+            current_proof,
+            NUM_PROOFS,
+        );
 
         let proof = NanoZKP::prove_merger_wrapper(
             rng,

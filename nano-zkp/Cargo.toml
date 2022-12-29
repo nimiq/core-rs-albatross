@@ -13,6 +13,7 @@ keywords = ["nimiq", "cryptocurrency", "blockchain"]
 [dependencies]
 thiserror = "1.0"
 rand = { version = "0.8", features = ["small_rng"] }
+log = { package = "tracing", version = "0.1", features = ["log"] }
 
 ark-crypto-primitives = "0.3"
 ark-ec = "0.3"

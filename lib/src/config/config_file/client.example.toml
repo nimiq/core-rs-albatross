@@ -220,6 +220,19 @@ level = "debug"
 
 
 ##############################################################################
+#
+# Configure log output for the prover process.
+# This section offers the same options as the [log] section.
+#
+##############################################################################
+
+# [prover-log]
+# Configure global log level.
+# Possible values: "trace", "debug", "info", "warn", "error"
+# Default: "info"
+# level = "debug"
+
+##############################################################################
 ##
 ## Configure mempool
 ##

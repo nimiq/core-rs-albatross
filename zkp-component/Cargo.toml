@@ -12,6 +12,7 @@ keywords = ["nimiq", "cryptocurrency", "blockchain"]
 
 [[bin]]
 name = "nimiq-test-prove"
+required-features = ["test-prover"]
 
 [badges]
 travis-ci = { repository = "nimiq/core-rs", branch = "master" }
@@ -33,6 +34,7 @@ rand = "0.8"
 thiserror = "1.0"
 tokio = { version = "1.23", features = ["full"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
+tracing-subscriber = { version = "0.3", optional = true }
 
 beserial = { path = "../beserial", features = ["derive"] }
 nimiq-block = { path = "../primitives/block" }
@@ -42,6 +44,7 @@ nimiq-database = { path = "../database" }
 nimiq-genesis = { path = "../genesis" }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
+nimiq-log = { path = "../log", optional = true }
 nimiq-macros = { path = "../macros" }
 nimiq-mempool = { path = "../mempool" }
 nimiq-nano-primitives = { path = "../nano-primitives" }
@@ -58,7 +61,6 @@ nimiq-validator-network = { path = "../validator-network" }
 hex = "0.4"
 
 [dev-dependencies]
-
 nimiq-block-production = { path = "../block-production" }
 nimiq-bls = { path = "../bls" }
 nimiq-genesis-builder = { path = "../genesis-builder" }
@@ -70,3 +72,6 @@ nimiq-test-log = { path = "../test-log" }
 # See https://github.com/rust-analyzer/rust-analyzer/issues/2414
 nimiq-test-utils = { path = "../test-utils" }
 tempfile = "3.3"
+
+[features]
+test-prover = ["nimiq-log", "tracing-subscriber"]
