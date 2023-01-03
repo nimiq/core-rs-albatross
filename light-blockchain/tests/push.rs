@@ -397,8 +397,8 @@ fn it_validates_tendermint_round_number() {
 #[test]
 fn it_can_rebranch_skip_block() {
     // Build forks using two producers.
-    let temp_producer1 = TemporaryBlockProducer::new();
-    let temp_producer2 = TemporaryBlockProducer::new();
+    let temp_producer1 = TemporaryLightBlockProducer::new();
+    let temp_producer2 = TemporaryLightBlockProducer::new();
 
     // Case 1: easy rebranch (number denotes accumulated skip blocks)
     // [0] - [0] - [0] - [0]
@@ -407,11 +407,15 @@ fn it_can_rebranch_skip_block() {
     temp_producer2.push(block).unwrap();
 
     let inferior1 = temp_producer1.next_block(vec![], false);
-    temp_producer2.next_block(vec![], true);
+    let fork1 = temp_producer2.next_block(vec![], true);
 
-    temp_producer1.next_block(vec![], false);
+    let inferior2 = temp_producer1.next_block(vec![], false);
     temp_producer2.next_block(vec![], false);
 
     // Check that producer 2 ignores inferior chain.
     assert_eq!(temp_producer2.push(inferior1), Ok(PushResult::Ignored));
+    assert_eq!(temp_producer2.push(inferior2), Ok(PushResult::Ignored));
+
+    // Check that producer 1 rebranches.
+    assert_eq!(temp_producer1.push(fork1), Ok(PushResult::Rebranched));
 }

@@ -51,11 +51,6 @@ impl LightBlockchain {
         // Calculate chain ordering.
         let chain_order = ChainOrdering::order_chains(this.deref(), &block, &prev_info, None);
 
-        // If it is an inferior chain, we ignore it as it cannot become better at any point in time.
-        if chain_order == ChainOrdering::Inferior {
-            return Ok(PushResult::Ignored);
-        }
-
         // Get the intended slot owner.
         let offset = if let Block::Macro(macro_block) = &block {
             if let Some(proof) = &macro_block.justification {
@@ -105,21 +100,27 @@ impl LightBlockchain {
         let chain_info = ChainInfo::from_block(block, &prev_info);
 
         // More chain ordering.
-        match chain_order {
+        let result = match chain_order {
             ChainOrdering::Extend => {
                 return LightBlockchain::extend(this, chain_info, prev_info);
             }
             ChainOrdering::Superior => {
                 return LightBlockchain::rebranch(this, chain_info, prev_info);
             }
-            ChainOrdering::Inferior => unreachable!(),
-            ChainOrdering::Unknown => {}
-        }
+            ChainOrdering::Inferior => {
+                log::debug!(block = %chain_info.head, "Storing block - on inferior chain");
+                PushResult::Ignored
+            }
+            ChainOrdering::Unknown => {
+                log::debug!(block = %chain_info.head, "Storing block - on fork");
+                PushResult::Forked
+            }
+        };
         let mut this = RwLockUpgradableReadGuard::upgrade_untimed(this);
         // Otherwise, we are creating/extending a fork. Store ChainInfo.
         this.chain_store.put_chain_info(chain_info);
 
-        Ok(PushResult::Forked)
+        Ok(result)
     }
 
     /// Extends the current main chain.
