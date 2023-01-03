@@ -316,7 +316,7 @@ impl PeerContactBook {
     pub fn insert_filtered(&mut self, contact: SignedPeerContact, services_filter: Services) {
         let info = PeerContactInfo::from(contact);
         if info.matches(services_filter) {
-            log::debug!(
+            log::trace!(
                 added_peer = %info.peer_id,
                 services = ?info.services(),
                 "Inserting into my peer contacts, because is interesting to me",
