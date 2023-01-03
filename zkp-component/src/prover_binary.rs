@@ -1,6 +1,6 @@
 use std::io::{self, BufReader, BufWriter};
 
-use crate::proof_utils::generate_new_proof;
+use crate::proof_gen_utils::generate_new_proof;
 use crate::types::{ProofInput, PROOF_GENERATION_OUTPUT_DELIMITER};
 use ark_serialize::Write;
 use beserial::{Deserialize, Serialize, SerializingError};

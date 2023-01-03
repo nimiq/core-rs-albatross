@@ -32,7 +32,7 @@ log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
 rand = "0.8"
 thiserror = "1.0"
-tokio = { version = "1.23", features = ["full"] }
+tokio = { version = "1.23", features = ["macros", "rt", "sync"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 tracing-subscriber = { version = "0.3", optional = true }
 
@@ -48,7 +48,7 @@ nimiq-log = { path = "../log", optional = true }
 nimiq-macros = { path = "../macros" }
 nimiq-mempool = { path = "../mempool" }
 nimiq-nano-primitives = { path = "../nano-primitives" }
-nimiq-nano-zkp = { path = "../nano-zkp", features = ["prover"] }
+nimiq-nano-zkp = { path = "../nano-zkp"}
 nimiq-network-interface = { path = "../network-interface" }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }
 nimiq-transaction = { path = "../primitives/transaction" }
@@ -74,4 +74,5 @@ nimiq-test-utils = { path = "../test-utils" }
 tempfile = "3.3"
 
 [features]
-test-prover = ["nimiq-log", "tracing-subscriber"]
+prover = ["nimiq-nano-zkp/prover", "tokio/io-util", "tokio/process"]
+test-prover = ["nimiq-log", "prover", "tracing-subscriber"]

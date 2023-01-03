@@ -1,7 +1,7 @@
 use nimiq_test_log::test;
 use nimiq_test_utils::zkp_test_data::zkp_test_exe;
 use nimiq_zkp_component::{
-    proof_utils::launch_generate_new_proof,
+    proof_gen_utils::launch_generate_new_proof,
     types::{ProofInput, ZKProofGenerationError},
 };
 use tokio::sync::broadcast;

@@ -18,7 +18,7 @@ use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainEvent, Directio
 
 use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
 
-use crate::proof_utils::*;
+use crate::proof_gen_utils::*;
 use crate::types::*;
 use crate::zkp_component::BROADCAST_MAX_CAPACITY;
 

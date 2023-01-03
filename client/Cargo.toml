@@ -36,4 +36,5 @@ features = [
     "signal-handling",
     "wallet",
     "panic",
+    "zkp-prover",
 ]

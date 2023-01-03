@@ -21,6 +21,7 @@ use tokio_stream::wrappers::BroadcastStream;
 
 use crate::proof_utils::*;
 use crate::types::*;
+#[cfg(feature = "prover")]
 use crate::zkp_prover::ZKProver;
 use crate::zkp_requests::ZKPRequests;
 use futures::stream::BoxStream;
@@ -109,6 +110,7 @@ pub struct ZKPComponent<N: Network> {
     pub(crate) blockchain: BlockchainProxy,
     network: Arc<N>,
     pub(crate) zkp_state: Arc<RwLock<ZKPState>>,
+    #[cfg(feature = "prover")]
     zk_prover: Option<ZKProver<N>>,
     zk_proofs_stream: ZKProofsStream<N>,
     proof_storage: ProofStore,
@@ -144,6 +146,7 @@ impl<N: Network> ZKPComponent<N> {
             blockchain,
             network: Arc::clone(&network),
             zkp_state,
+            #[cfg(feature = "prover")]
             zk_prover: None,
             zk_proofs_stream,
             proof_storage,
@@ -156,23 +159,26 @@ impl<N: Network> ZKPComponent<N> {
         zkp_component.load_proof_from_db();
 
         // Activates the prover based on the configuration provided.
-        zkp_component.zk_prover = match (is_prover_active, &zkp_component.blockchain) {
-            (true, BlockchainProxy::Full(ref blockchain)) => Some(
-                ZKProver::new(
-                    Arc::clone(blockchain),
-                    Arc::clone(&zkp_component.network),
-                    Arc::clone(&zkp_component.zkp_state),
-                    prover_path,
-                    zkp_component.keys_path.clone(),
-                )
-                .await,
-            ),
-            (true, _) => {
-                log::error!("ZKP Prover cannot be activated for a light node.");
-                None
-            }
-            _ => None,
-        };
+        #[cfg(feature = "prover")]
+        {
+            zkp_component.zk_prover = match (is_prover_active, &zkp_component.blockchain) {
+                (true, BlockchainProxy::Full(ref blockchain)) => Some(
+                    ZKProver::new(
+                        Arc::clone(blockchain),
+                        Arc::clone(&zkp_component.network),
+                        Arc::clone(&zkp_component.zkp_state),
+                        prover_path,
+                        zkp_component.keys_path.clone(),
+                    )
+                    .await,
+                ),
+                (true, _) => {
+                    log::error!("ZKP Prover cannot be activated for a light node.");
+                    None
+                }
+                _ => None,
+            };
+        }
 
         // The handler for zkp request is launched.
         zkp_component.launch_request_handler();
@@ -198,7 +204,10 @@ impl<N: Network> ZKPComponent<N> {
 
     /// Returns if the prover is activated.
     pub fn is_zkp_prover_activated(&self) -> bool {
-        self.zk_prover.is_some()
+        #[cfg(feature = "prover")]
+        return self.zk_prover.is_some();
+        #[cfg(not(feature = "prover"))]
+        false
     }
 
     /// Loads the proof from the database into the current state. It does all verification steps before loading it into
@@ -255,6 +264,7 @@ impl<N: Network> ZKPComponent<N> {
         drop(zkp_state_lock);
 
         // Since someone else generate a valid proof faster, we will terminate our own proof generation process.
+        #[cfg(feature = "prover")]
         if let Some(ref mut zk_prover) = self.zk_prover {
             zk_prover.cancel_current_proof_production();
         }
@@ -345,6 +355,7 @@ impl<N: Network> Future for ZKPComponent<N> {
         }
 
         // Polls prover for new proofs and notifies the new event to the zkp events notifier.
+        #[cfg(feature = "prover")]
         if let Some(ref mut zk_prover) = self.zk_prover {
             match zk_prover.poll_next_unpin(cx) {
                 Poll::Ready(Some((zk_proof, block))) => {
