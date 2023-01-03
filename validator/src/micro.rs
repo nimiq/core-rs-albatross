@@ -80,25 +80,17 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         };
 
         let mut delay = Duration::default();
-        let mut expected_next_block_ts;
+        let mut expected_next_ts;
 
         let return_value = loop {
             // Acquire blockchain.upgradable_read() to prevent further changes to the blockchain while
             // we're constructing the block. Check if we're still in the correct state, abort otherwise.
             {
                 let blockchain = self.blockchain.upgradable_read();
-                let last_macro_block = blockchain.macro_head();
-                // Calculate the expected block TS as expected by the reward function
-                let target_block_ts = last_macro_block.header.timestamp
-                    + self.block_separation_time.as_millis() as u64
-                        * ((blockchain.block_number() + 1)
-                            .saturating_sub(last_macro_block.block_number()))
-                            as u64;
-                // The expected next block TS is the greater of:
-                // - The previous head timestamp (this means we are behind the expected block TS).
-                //   In this case the block will be produced immediately.
-                // - The expected block TS according to the reward function
-                expected_next_block_ts = cmp::max(target_block_ts, blockchain.head().timestamp());
+
+                // Calculate the expected block time as expected by the reward function.
+                expected_next_ts = self.expected_next_timestamp(&blockchain);
+
                 if !in_current_state(&blockchain.head()) {
                     break Some(None);
                 } else if self.is_our_turn(&blockchain) {
@@ -109,7 +101,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
                     // If the expected timestamp is already in the past, produce a block immediately.
                     // If the timestamp hasn't passed, wait until the expected block timestamp
                     // to produce the block.
-                    if target_block_ts <= now {
+                    if expected_next_ts <= now {
                         info!(
                             block_number = self.block_number,
                             slot_band = self.validator_slot_band,
@@ -151,7 +143,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
                             .ok();
                         break Some(event);
                     } else {
-                        delay = Duration::from_millis(target_block_ts - now);
+                        delay = Duration::from_millis(expected_next_ts - now);
                     };
                 } else {
                     break None;
@@ -173,10 +165,13 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
             self.block_number,
         );
 
-        // Wait for the block according to the next block expected timestamp and the producer timeout
+        // Wait for the block to be produced. We wait for at least `producer_timeout` here, but can
+        // wait longer if the expected timestamp of the block is further in the future.
         let now = systemtime_to_timestamp(SystemTime::now());
-        let next_block_timeout =
-            (expected_next_block_ts + self.producer_timeout.as_millis() as u64).saturating_sub(now);
+        let wait_until_min = now + self.producer_timeout.as_millis() as u64;
+        let wait_until_expected = expected_next_ts
+            + (self.producer_timeout - self.block_separation_time).as_millis() as u64;
+        let next_block_timeout = cmp::max(wait_until_min, wait_until_expected) - now;
         time::sleep(Duration::from_millis(next_block_timeout)).await;
 
         info!(
@@ -307,6 +302,14 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
             vec![], // TODO: Allow validators to set extra data field.
             None,
         )
+    }
+
+    fn expected_next_timestamp(&self, blockchain: &Blockchain) -> u64 {
+        let last_macro_block = blockchain.macro_head();
+        let block_separation_time = self.block_separation_time.as_millis() as u64;
+        let next_block_index_in_batch =
+            (blockchain.block_number() + 1).saturating_sub(last_macro_block.block_number()) as u64;
+        last_macro_block.header.timestamp + (next_block_index_in_batch * block_separation_time)
     }
 }
 
