@@ -215,11 +215,12 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
             // Acquire blockchain.upgradable_read() to prevent further changes to the blockchain while
             // we're constructing the block. Check if we're still in the correct state, abort otherwise.
             let blockchain = self.blockchain.upgradable_read();
+            let head = blockchain.head();
 
-            if !in_current_state(&blockchain.head()) {
+            if !in_current_state(&head) {
                 None
             } else {
-                let timestamp = expected_next_block_ts + self.producer_timeout.as_millis() as u64;
+                let timestamp = head.timestamp() + self.producer_timeout.as_millis() as u64;
 
                 let block = self.block_producer.next_micro_block(
                     &blockchain,
