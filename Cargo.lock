@@ -3280,7 +3280,6 @@ dependencies = [
  "serde",
  "strum_macros",
  "thiserror",
- "tokio",
  "tracing",
 ]
 

@@ -24,12 +24,9 @@ log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
 thiserror = "1.0"
 tokio = { version = "1.23", features = [
-    "macros",
     "rt",
     "rt-multi-thread",
     "sync",
-    "time",
-    "tracing",
 ] }
 tokio-stream = "0.1"
 
