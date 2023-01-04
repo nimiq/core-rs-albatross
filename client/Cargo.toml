@@ -31,6 +31,7 @@ features = [
     "deadlock",
     "dns-tcp",
     "logging",
+    "loki",
     "metrics-server",
     "panic",
     "rpc-server",

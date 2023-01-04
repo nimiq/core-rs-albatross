@@ -23,7 +23,7 @@ clap = { version = "4.0", features = ["derive"] }
 console-subscriber = { version = "0.1", features = ["parking_lot"], optional = true }
 derive_builder = "0.12"
 directories = "4.0"
-file-rotate = { version = "0.7" }
+file-rotate = { version = "0.7", optional = true }
 hex = "0.4"
 # human-panic = { version = "1.0", optional = true } currently unused, might be used in the future
 log = { package = "tracing", version = "0.1", features = ["log"] }
@@ -51,13 +51,13 @@ nimiq-bls = { path = "../bls" }
 nimiq-consensus = { path = "../consensus" }
 nimiq-database = { path = "../database" }
 nimiq-genesis = { path = "../genesis" }
-nimiq-jsonrpc-core = { git = "https://github.com/nimiq/jsonrpc.git" }
-nimiq-jsonrpc-server = { git = "https://github.com/nimiq/jsonrpc.git" }
+nimiq-jsonrpc-core = { git = "https://github.com/nimiq/jsonrpc.git", optional=true}
+nimiq-jsonrpc-server = { git = "https://github.com/nimiq/jsonrpc.git", optional=true}
 nimiq-keys = { path = "../keys" }
 nimiq-light-blockchain = { path = "../light-blockchain" }
 nimiq-log = { path = "../log", optional = true }
 nimiq-mempool = { path = "../mempool" }
-nimiq-metrics-server = { path = "../metrics-server" }
+nimiq-metrics-server = { path = "../metrics-server", optional=true }
 nimiq-nano-zkp = { path = "../nano-zkp", features = ["prover"] }
 nimiq-network-libp2p = { path = "../network-libp2p" }
 nimiq-network-interface = { path = "../network-interface" }
@@ -78,10 +78,11 @@ default = []
 dns-tcp = ["nimiq-network-libp2p/dns-tcp"]
 launcher = []
 signal-handling = ["signal-hook", "tokio"]
-logging = ["nimiq-log", "serde_json", "tokio", "tracing-loki", "tracing-subscriber"]
-metrics-server = ["nimiq-validator/metrics", "nimiq-network-libp2p/metrics"]
+logging = ["file-rotate", "nimiq-log", "serde_json", "tokio", "tracing-subscriber"]
+loki = ["logging", "tracing-loki"]
+metrics-server = ["nimiq-metrics-server", "nimiq-network-libp2p/metrics", "nimiq-validator/metrics"]
 panic = ["log-panics"]
-rpc-server = ["validator", "nimiq-rpc-server", "nimiq-wallet"]
+rpc-server = ["nimiq-jsonrpc-core", "nimiq-jsonrpc-server", "nimiq-rpc-server", "nimiq-wallet", "validator"]
 tokio-console = ["console-subscriber", "logging", "tokio"]
 validator = ["nimiq-validator", "nimiq-validator-network", "nimiq-rpc-server"]
 wallet = ["nimiq-wallet"]

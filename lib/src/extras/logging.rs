@@ -164,6 +164,7 @@ pub fn initialize_logging(
         None
     };
 
+    #[cfg(feature = "loki")]
     let (loki_layer, loki_task) = if let Some(loki) = &settings.loki {
         let (layer, bg_task) = tracing_loki::layer(
             loki.url.clone(),
@@ -222,8 +223,27 @@ pub fn initialize_logging(
     let tokio_console_layer =
         tokio_console_bind_address.and_then(|addr| initialize_tokio_console(&addr));
 
+    #[cfg(feature = "loki")]
+    {
+        tracing_subscriber::registry()
+            .with(loki_layer)
+            .with(rotating_layer)
+            .with(tokio_console_layer)
+            .with(
+                tracing_subscriber::fmt::layer()
+                    .with_writer(out)
+                    .with_ansi(settings.file.is_none())
+                    .event_format(Formatting(MaybeSystemTime(settings.timestamps)))
+                    .with_filter(filter),
+            )
+            .init();
+
+        if let Some(task) = loki_task {
+            tokio::spawn(task);
+        }
+    }
+    #[cfg(not(feature = "loki"))]
     tracing_subscriber::registry()
-        .with(loki_layer)
         .with(rotating_layer)
         .with(tokio_console_layer)
         .with(
@@ -234,9 +254,5 @@ pub fn initialize_logging(
                 .with_filter(filter),
         )
         .init();
-
-    if let Some(task) = loki_task {
-        tokio::spawn(task);
-    }
     Ok(())
 }

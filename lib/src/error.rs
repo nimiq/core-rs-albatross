@@ -36,7 +36,7 @@ pub enum Error {
     #[error("Logger error: {0}")]
     Logging(#[from] tracing_subscriber::filter::FromEnvError),
 
-    #[cfg(feature = "logging")]
+    #[cfg(feature = "loki")]
     #[error("Loki logger error: {0}")]
     LoggingLoki(#[from] tracing_loki::Error),
 
