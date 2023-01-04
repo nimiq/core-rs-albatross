@@ -464,7 +464,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         // Verify chunk.
         if !history_chunk
             .verify(
-                batch_set.macro_block.header.history_root.clone(),
+                batch_set.macro_block.header.history_root,
                 chunk_index * CHUNK_SIZE,
             )
             .unwrap_or(false)
@@ -593,7 +593,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         hash: Blake2bHash,
     ) -> Result<BatchSetInfo, HistoryRequestError> {
         let batch_set_info = network
-            .request(RequestBatchSet { hash: hash.clone() }, peer_id)
+            .request(RequestBatchSet { hash }, peer_id)
             .await
             .map_err(HistoryRequestError::RequestError)?;
 

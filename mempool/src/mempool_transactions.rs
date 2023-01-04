@@ -149,7 +149,7 @@ impl MempoolTransactions {
                 None => {
                     break;
                 }
-                Some((tx_hash, _)) => tx_hash.clone(),
+                Some((tx_hash, _)) => *tx_hash,
             };
 
             // Get a reference to the transaction.
@@ -179,10 +179,10 @@ impl MempoolTransactions {
             return false;
         }
 
-        self.transactions.insert(tx_hash.clone(), tx.clone());
+        self.transactions.insert(tx_hash, tx.clone());
 
         self.best_transactions.push(
-            tx_hash.clone(),
+            tx_hash,
             BestTxOrder {
                 priority,
                 fee_per_byte: tx.fee_per_byte(),
@@ -190,7 +190,7 @@ impl MempoolTransactions {
             },
         );
         self.worst_transactions.push(
-            tx_hash.clone(),
+            tx_hash,
             WorstTxOrder {
                 priority,
                 fee_per_byte: tx.fee_per_byte(),

@@ -376,7 +376,7 @@ impl AccountTransactionInteraction for StakingContract {
         acc_info.logs.insert(
             0,
             Log::PayFee {
-                from: transaction.sender.clone(),
+                from: transaction.sender,
                 fee: transaction.fee,
             },
         );
@@ -396,7 +396,7 @@ impl AccountTransactionInteraction for StakingContract {
         let data = OutgoingStakingTransactionProof::parse(transaction)?;
         let mut logs = vec![
             Log::PayFee {
-                from: transaction.sender.clone(),
+                from: transaction.sender,
                 fee: transaction.fee,
             },
             Log::transfer_log_from_transaction(transaction),
@@ -470,7 +470,7 @@ impl AccountTransactionInteraction for StakingContract {
                         Some(v) => v,
                         None => {
                             return Err(AccountError::NonExistentAddress {
-                                address: validator_address.clone(),
+                                address: validator_address,
                             });
                         }
                     };
@@ -532,7 +532,7 @@ impl AccountTransactionInteraction for StakingContract {
         acc_info.logs.insert(
             0,
             Log::PayFee {
-                from: transaction.sender.clone(),
+                from: transaction.sender,
                 fee: transaction.fee,
             },
         );
@@ -636,7 +636,7 @@ impl AccountTransactionInteraction for StakingContract {
         acc_info.logs.insert(
             0,
             Log::PayFee {
-                from: transaction.sender.clone(),
+                from: transaction.sender,
                 fee: transaction.fee,
             },
         );
@@ -707,9 +707,7 @@ impl AccountInherentInteraction for StakingContract {
                 // Add the validator address to the parked set.
                 // TODO: The inherent might have originated from a fork proof for the previous epoch.
                 //  Right now, we don't care and start the parking period in the epoch the proof has been submitted.
-                let newly_parked = staking_contract
-                    .parked_set
-                    .insert(slot.validator_address.clone());
+                let newly_parked = staking_contract.parked_set.insert(slot.validator_address);
 
                 // Fork proof from previous epoch should affect:
                 // - previous_lost_rewards
@@ -744,7 +742,7 @@ impl AccountInherentInteraction for StakingContract {
 
                     newly_disabled = staking_contract
                         .current_disabled_slots
-                        .entry(slot.validator_address.clone())
+                        .entry(slot.validator_address)
                         .or_insert_with(BTreeSet::new)
                         .insert(slot.slot);
                 } else {
@@ -758,7 +756,7 @@ impl AccountInherentInteraction for StakingContract {
 
                     newly_disabled = staking_contract
                         .current_disabled_slots
-                        .entry(slot.validator_address.clone())
+                        .entry(slot.validator_address)
                         .or_insert_with(BTreeSet::new)
                         .insert(slot.slot);
                 }
@@ -774,7 +772,7 @@ impl AccountInherentInteraction for StakingContract {
 
                 if newly_lost_rewards {
                     logs.push(Log::Slash {
-                        validator_address: slot.validator_address.clone(),
+                        validator_address: slot.validator_address,
                         event_block: slot.event_block,
                         slot: slot.slot,
                         newly_disabled,
@@ -822,9 +820,7 @@ impl AccountInherentInteraction for StakingContract {
                             .active_validators
                             .remove(&validator_address);
 
-                        logs.push(Log::InactivateValidator {
-                            validator_address: validator_address.clone(),
-                        });
+                        logs.push(Log::InactivateValidator { validator_address });
                     }
 
                     // Now we clear the parking set.
@@ -884,7 +880,7 @@ impl AccountInherentInteraction for StakingContract {
                         return Err(AccountError::InvalidInherent);
                     }
                     logs.push(Log::Park {
-                        validator_address: slot.validator_address.clone(),
+                        validator_address: slot.validator_address,
                         event_block: block_height,
                     });
                 }

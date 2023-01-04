@@ -101,7 +101,7 @@ impl Blockchain {
             .get_proposer_at(
                 skip_block_info.block_number,
                 skip_block_info.block_number,
-                skip_block_info.vrf_entropy.clone(),
+                skip_block_info.vrf_entropy,
                 txn_option,
             )
             .expect("Couldn't calculate slot owner!");
@@ -242,7 +242,7 @@ impl Blockchain {
 
             let inherent = Inherent {
                 ty: InherentType::Reward,
-                target: validator.reward_address.clone(),
+                target: validator.reward_address,
                 value: reward,
                 data: vec![],
             };

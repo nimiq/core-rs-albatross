@@ -50,7 +50,7 @@ impl WalletInterface for WalletDispatcher {
 
         let wallet_account = WalletAccount::from(KeyPair::from(private_key));
 
-        let address = wallet_account.address.clone();
+        let address = wallet_account.address;
 
         let wallet_account = Locked::with_defaults(wallet_account, passphrase.as_bytes())?;
 
@@ -82,8 +82,8 @@ impl WalletInterface for WalletDispatcher {
     ) -> RPCResult<ReturnAccount, (), Self::Error> {
         let passphrase = passphrase.unwrap_or_default();
         let account = WalletAccount::generate();
-        let address = account.address.clone();
-        let locked_account = Locked::with_defaults(account.clone(), passphrase.as_bytes())?;
+        let address = account.address;
+        let locked_account = Locked::with_defaults(account, passphrase.as_bytes())?;
 
         let mut txn = self.wallet_store.create_write_transaction();
         self.wallet_store.put(&address, &locked_account, &mut txn);
@@ -153,7 +153,6 @@ impl WalletInterface for WalletDispatcher {
                 .unlock(passphrase.as_bytes())
                 .map_err(|_locked| Error::WrongPassphrase)?
                 .key_pair
-                .clone()
                 .into();
             &wallet_account
         };

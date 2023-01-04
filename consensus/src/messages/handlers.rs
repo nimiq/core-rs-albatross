@@ -22,7 +22,7 @@ impl Handle<MacroChain, BlockchainProxy> for RequestMacroChain {
                 if chain_info.on_main_chain {
                     // We found a block, ignore remaining block locator hashes.
                     trace!("Start block found: {:?}", &locator);
-                    start_block_hash = Some(locator.clone());
+                    start_block_hash = Some(*locator);
                     break;
                 }
             }
@@ -192,7 +192,7 @@ impl Handle<ResponseBlocks, BlockchainProxy> for RequestMissingBlocks {
         // target block (inclusive). If we stopped at a macro block instead of a locator, the macro
         // block is included in the result.
         let mut blocks = Vec::new();
-        let mut block_hash = self.target_hash.clone();
+        let mut block_hash = self.target_hash;
         while !locators.contains(&block_hash) {
             let block = blockchain.get_block(&block_hash, false, None);
             if let Ok(block) = block {
@@ -234,7 +234,7 @@ impl Handle<ResponseBlocks, BlockchainProxy> for RequestMissingBlocks {
                 };
                 let is_macro = block.is_macro();
 
-                block_hash = block.parent_hash().clone();
+                block_hash = *block.parent_hash();
                 blocks.push(block);
 
                 if is_macro {

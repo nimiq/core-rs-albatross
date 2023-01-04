@@ -50,10 +50,7 @@ pub fn next_micro_block(
 
     let timestamp = (blockchain.head().timestamp() as i64 + 1 + config.timestamp_offset) as u64;
 
-    let parent_hash = config
-        .parent_hash
-        .clone()
-        .unwrap_or_else(|| blockchain.head_hash());
+    let parent_hash = config.parent_hash.unwrap_or_else(|| blockchain.head_hash());
 
     let prev_seed = blockchain.head().seed().clone();
     let seed = config
@@ -82,7 +79,7 @@ pub fn next_micro_block(
 
     let mut txn = blockchain.write_transaction();
 
-    let history_root = config.history_root.clone().unwrap_or_else(|| {
+    let history_root = config.history_root.unwrap_or_else(|| {
         blockchain
             .history_store
             .add_to_history(&mut txn, Policy::epoch_at(block_number), &ext_txs)
@@ -105,7 +102,7 @@ pub fn next_micro_block(
         seed,
         extra_data: config.extra_data.clone(),
         state_root,
-        body_root: config.body_hash.clone().unwrap_or_else(|| body.hash()),
+        body_root: config.body_hash.unwrap_or_else(|| body.hash()),
         history_root,
     };
 
@@ -137,10 +134,7 @@ pub fn next_skip_block(
         blockchain.head().timestamp() + Policy::BLOCK_PRODUCER_TIMEOUT
     };
 
-    let parent_hash = config
-        .parent_hash
-        .clone()
-        .unwrap_or_else(|| blockchain.head_hash());
+    let parent_hash = config.parent_hash.unwrap_or_else(|| blockchain.head_hash());
 
     let prev_seed = blockchain.head().seed().clone();
 
@@ -152,7 +146,7 @@ pub fn next_skip_block(
     // Create the inherents from the skip block info.
     let inherents = blockchain.create_slash_inherents(&[], Some(skip_block_info), None);
 
-    let state_root = config.state_root.clone().unwrap_or_else(|| {
+    let state_root = config.state_root.unwrap_or_else(|| {
         let (state_root, _) = blockchain
             .state()
             .accounts
@@ -171,7 +165,7 @@ pub fn next_skip_block(
 
     let mut txn = blockchain.write_transaction();
 
-    let history_root = config.history_root.clone().unwrap_or_else(|| {
+    let history_root = config.history_root.unwrap_or_else(|| {
         blockchain
             .history_store
             .add_to_history(&mut txn, Policy::epoch_at(block_number), &ext_txs)
@@ -194,7 +188,7 @@ pub fn next_skip_block(
         seed: prev_seed,
         extra_data: config.extra_data.clone(),
         state_root,
-        body_root: config.body_hash.clone().unwrap_or_else(|| body.hash()),
+        body_root: config.body_hash.unwrap_or_else(|| body.hash()),
         history_root,
     };
 
@@ -220,14 +214,10 @@ fn next_macro_block_proposal(
 
     let timestamp = (blockchain.head().timestamp() as i64 + config.timestamp_offset) as u64;
 
-    let parent_hash = config
-        .parent_hash
-        .clone()
-        .unwrap_or_else(|| blockchain.head_hash());
+    let parent_hash = config.parent_hash.unwrap_or_else(|| blockchain.head_hash());
 
     let parent_election_hash = config
         .parent_election_hash
-        .clone()
         .unwrap_or_else(|| blockchain.election_head_hash());
 
     let seed = config
@@ -299,7 +289,7 @@ fn next_macro_block_proposal(
         disabled_set,
     };
 
-    header.body_root = config.body_hash.clone().unwrap_or_else(|| body.hash());
+    header.body_root = config.body_hash.unwrap_or_else(|| body.hash());
 
     MacroBlock {
         header,

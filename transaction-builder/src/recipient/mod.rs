@@ -206,7 +206,7 @@ impl Recipient {
     /// Returns the recipient address if this is not a contract creation.
     pub fn address(&self) -> Option<Address> {
         match self {
-            Recipient::Basic { address, .. } => Some(address.clone()),
+            Recipient::Basic { address, .. } => Some(*address),
             Recipient::Staking { .. } => Some(Policy::STAKING_CONTRACT_ADDRESS),
             _ => None,
         }

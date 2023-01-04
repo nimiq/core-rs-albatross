@@ -158,7 +158,7 @@ impl<N: ValidatorNetwork + 'static> BackgroundTask<N> {
                 .iter()
                 .map(|(hash, contribution)| {
                     (
-                        hash.clone(),
+                        *hash,
                         (
                             contribution.clone(),
                             u16::try_from(self.signature_weight(contribution))

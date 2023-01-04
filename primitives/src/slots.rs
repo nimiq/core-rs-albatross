@@ -93,7 +93,7 @@ impl Validators {
         let mut validator_map = BTreeMap::new();
 
         for (i, validator) in validators.iter().enumerate() {
-            validator_map.insert(validator.address.clone(), i as u16);
+            validator_map.insert(validator.address, i as u16);
         }
 
         Self {

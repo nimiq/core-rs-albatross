@@ -285,15 +285,15 @@ impl Blockchain {
         // Update the blockchain state.
         let mut this = RwLockUpgradableReadGuard::upgrade(this);
         this.state.main_chain = chain_info.clone();
-        this.state.head_hash = block_hash.clone();
+        this.state.head_hash = block_hash;
         this.state.macro_info = chain_info;
-        this.state.macro_head_hash = block_hash.clone();
+        this.state.macro_head_hash = block_hash;
 
         // Check if this block is an election block.
         let is_election_block = macro_block.is_election_block();
         if is_election_block {
             this.state.election_head = macro_block.clone();
-            this.state.election_head_hash = block_hash.clone();
+            this.state.election_head_hash = block_hash;
             this.state.previous_slots = this.state.current_slots.take();
             this.state.current_slots = macro_block.get_validators();
         }
@@ -317,7 +317,7 @@ impl Blockchain {
         // Notify the mempool about a new history adopted
         if let Err(e) = this
             .notifier
-            .send(BlockchainEvent::HistoryAdopted(block_hash.clone()))
+            .send(BlockchainEvent::HistoryAdopted(block_hash))
         {
             log::error!(
                 error = ?e,

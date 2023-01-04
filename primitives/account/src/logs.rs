@@ -157,8 +157,8 @@ pub enum Log {
 impl Log {
     pub fn transfer_log_from_transaction(transaction: &Transaction) -> Self {
         Log::Transfer {
-            from: transaction.sender.clone(),
-            to: transaction.recipient.clone(),
+            from: transaction.sender,
+            to: transaction.recipient,
             amount: transaction.value,
             data: if !transaction.data.is_empty()
                 && transaction.recipient_type == AccountType::Basic

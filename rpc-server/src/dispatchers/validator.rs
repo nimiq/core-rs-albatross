@@ -27,7 +27,7 @@ impl ValidatorInterface for ValidatorDispatcher {
 
     /// Returns our validator address.
     async fn get_address(&mut self) -> RPCResult<Address, (), Self::Error> {
-        Ok(self.validator.validator_address.read().clone().into())
+        Ok((*self.validator.validator_address.read()).into())
     }
 
     /// Returns our validator signing key.

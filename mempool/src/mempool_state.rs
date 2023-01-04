@@ -93,7 +93,7 @@ impl MempoolState {
                 txns.insert(tx_hash);
 
                 self.state_by_sender.insert(
-                    tx.sender.clone(),
+                    tx.sender,
                     SenderPendingState {
                         total: tx.total_value(),
                         txns,

@@ -221,7 +221,7 @@ impl GenesisBuilder {
                     &staker.delegation,
                     &staker.staker_address,
                 ),
-                Account::StakingValidatorsStaker(staker.staker_address.clone()),
+                Account::StakingValidatorsStaker(staker.staker_address),
             ));
         }
 
@@ -300,7 +300,7 @@ impl GenesisBuilder {
                 &validator.validator_address,
                 validator.signing_key,
                 validator.voting_key.compress(),
-                validator.reward_address.clone(),
+                validator.reward_address,
                 None,
                 deposit,
             )?;
@@ -312,7 +312,7 @@ impl GenesisBuilder {
                 txn,
                 &staker.staker_address,
                 staker.balance,
-                Some(staker.delegation.clone()),
+                Some(staker.delegation),
             )?;
         }
 

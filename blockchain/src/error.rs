@@ -22,7 +22,7 @@ pub enum BlockchainEvent {
 
 impl BlockchainEvent {
     pub fn get_newest_hash(&self) -> Blake2bHash {
-        match self {
+        *match self {
             Self::Extended(h) => h,
             Self::HistoryAdopted(h) => h,
             Self::Rebranched(_, new_chain) => {
@@ -35,7 +35,6 @@ impl BlockchainEvent {
             Self::Finalized(h) => h,
             Self::EpochFinalized(h) => h,
         }
-        .clone()
     }
 }
 

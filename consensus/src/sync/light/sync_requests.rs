@@ -203,7 +203,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
             let network = Arc::clone(&self.network);
             let peer_id = epoch_ids.sender;
 
-            peer_requests.push_request(block_hash.clone());
+            peer_requests.push_request(block_hash);
 
             self.block_headers.push(
                 async move {
@@ -221,7 +221,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
             let block_hash = checkpoint.clone().hash;
             let network = Arc::clone(&self.network);
             let peer_id = epoch_ids.sender;
-            peer_requests.push_request(block_hash.clone());
+            peer_requests.push_request(block_hash);
             self.block_headers.push(
                 async move {
                     (

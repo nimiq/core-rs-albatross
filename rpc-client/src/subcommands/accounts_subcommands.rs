@@ -111,10 +111,7 @@ impl HandleSubcommand for AccountCommand {
                     if short {
                         println!("{}", address.to_user_friendly_address());
                     } else {
-                        let account = client
-                            .blockchain
-                            .get_account_by_address(address.clone())
-                            .await?;
+                        let account = client.blockchain.get_account_by_address(*address).await?;
                         println!("{}: {:#?}", address.to_user_friendly_address(), account);
                     }
                 }

@@ -63,7 +63,7 @@ impl AggregatableContribution for TendermintContribution {
                 // for every entry there
                 self.contributions
                     // get the entry here
-                    .entry(hash.clone())
+                    .entry(*hash)
                     // and update it
                     .and_modify(|sig|
                         // by combining both Multisigs

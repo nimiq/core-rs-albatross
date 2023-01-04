@@ -436,7 +436,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         // Update mempool and blockchain state
         self.blockchain_state.fork_proofs.apply_block(&block);
         self.mempool
-            .mempool_update(&vec![(hash.clone(), block)], [].as_ref());
+            .mempool_update(&vec![(*hash, block)], [].as_ref());
     }
 
     fn on_blockchain_rebranched(
@@ -702,7 +702,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
     }
 
     pub fn validator_address(&self) -> Address {
-        self.validator_address.read().clone()
+        *self.validator_address.read()
     }
 
     pub fn voting_key(&self) -> BlsKeyPair {
@@ -710,11 +710,11 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
     }
 
     pub fn signing_key(&self) -> SchnorrKeyPair {
-        self.signing_key.read().clone()
+        *self.signing_key.read()
     }
 
     pub fn fee_key(&self) -> SchnorrKeyPair {
-        self.fee_key.read().clone()
+        *self.fee_key.read()
     }
 
     pub fn proxy(&self) -> ValidatorProxy {

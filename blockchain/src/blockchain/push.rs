@@ -229,11 +229,11 @@ impl Blockchain {
 
         if let Block::Macro(ref macro_block) = chain_info.head {
             this.state.macro_info = chain_info.clone();
-            this.state.macro_head_hash = block_hash.clone();
+            this.state.macro_head_hash = block_hash;
 
             if is_election_block {
                 this.state.election_head = macro_block.clone();
-                this.state.election_head_hash = block_hash.clone();
+                this.state.election_head_hash = block_hash;
 
                 let old_slots = this.state.current_slots.take().unwrap();
                 this.state.previous_slots.replace(old_slots);
@@ -244,7 +244,7 @@ impl Blockchain {
         }
 
         this.state.main_chain = chain_info;
-        this.state.head_hash = block_hash.clone();
+        this.state.head_hash = block_hash;
 
         // Downgrade the lock again as the notify listeners might want to acquire read access themselves.
         let this = RwLockWriteGuard::downgrade_to_upgradable(this);
@@ -305,7 +305,7 @@ impl Blockchain {
         let mut current: (Blake2bHash, ChainInfo) = (block_hash, chain_info);
 
         while !current.1.on_main_chain {
-            let prev_hash = current.1.head.parent_hash().clone();
+            let prev_hash = *current.1.head.parent_hash();
 
             let prev_info = this
                 .chain_store
@@ -342,7 +342,7 @@ impl Blockchain {
 
         let mut write_txn = this.write_transaction();
 
-        current = (this.state.head_hash.clone(), this.state.main_chain.clone());
+        current = (this.state.head_hash, this.state.main_chain.clone());
         let mut block_logs = Vec::new();
 
         while current.0 != ancestor.0 {
@@ -351,7 +351,7 @@ impl Blockchain {
                 panic!("Trying to rebranch across macro block");
             }
 
-            let prev_hash = block.parent_hash().clone();
+            let prev_hash = *block.parent_hash();
 
             let prev_info = this
                 .chain_store
@@ -420,14 +420,14 @@ impl Blockchain {
         }
 
         // Update the mainChainSuccessor of the common ancestor block.
-        ancestor.1.main_chain_successor = Some(fork_chain.last().unwrap().0.clone());
+        ancestor.1.main_chain_successor = Some(fork_chain.last().unwrap().0);
         this.chain_store
             .put_chain_info(&mut write_txn, &ancestor.0, &ancestor.1, false);
 
         // Set onMainChain flag / mainChainSuccessor on the fork.
         for i in (0..fork_chain.len()).rev() {
             let main_chain_successor = if i > 0 {
-                Some(fork_chain[i - 1].0.clone())
+                Some(fork_chain[i - 1].0)
             } else {
                 None
             };
@@ -452,11 +452,11 @@ impl Blockchain {
 
         if let Block::Macro(ref macro_block) = new_head_info.head {
             this.state.macro_info = new_head_info.clone();
-            this.state.macro_head_hash = new_head_hash.clone();
+            this.state.macro_head_hash = *new_head_hash;
 
             if Policy::is_election_block_at(new_head_info.head.block_number()) {
                 this.state.election_head = macro_block.clone();
-                this.state.election_head_hash = new_head_hash.clone();
+                this.state.election_head_hash = *new_head_hash;
 
                 let old_slots = this.state.current_slots.take().unwrap();
                 this.state.previous_slots.replace(old_slots);
@@ -467,7 +467,7 @@ impl Blockchain {
         }
 
         this.state.main_chain = new_head_info.clone();
-        this.state.head_hash = new_head_hash.clone();
+        this.state.head_hash = *new_head_hash;
 
         // Downgrade the lock again as the notified listeners might want to acquire read themselves.
         let this = RwLockWriteGuard::downgrade_to_upgradable(this);

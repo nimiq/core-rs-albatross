@@ -54,7 +54,7 @@ impl<I: IdentityRegistry + Sync + Send + 'static> Verifier for TendermintVerifie
             let contribution = multi_sig.clone();
             let vote = TendermintVote {
                 id: self.id.clone(),
-                proposal_hash: hash.clone(),
+                proposal_hash: *hash,
             };
 
             results.push(task::spawn_blocking(move || {

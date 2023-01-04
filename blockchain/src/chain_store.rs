@@ -328,10 +328,10 @@ impl ChainStore {
         let mut blocks = Vec::new();
         let start_block = self.get_block(start_block_hash, false, Some(txn))?;
 
-        let mut hash = start_block.parent_hash().clone();
+        let mut hash = *start_block.parent_hash();
         while (blocks.len() as u32) < count {
             if let Ok(block) = self.get_block(&hash, include_body, Some(txn)) {
-                hash = block.parent_hash().clone();
+                hash = *block.parent_hash();
                 blocks.push(block);
             } else {
                 break;
@@ -438,9 +438,9 @@ impl ChainStore {
             let block_result = self.get_block(&hash, include_body, Some(txn));
             if let Ok(Block::Macro(block)) = block_result {
                 hash = if election_blocks_only {
-                    block.header.parent_election_hash.clone()
+                    block.header.parent_election_hash
                 } else {
-                    block.header.parent_hash.clone()
+                    block.header.parent_hash
                 };
                 blocks.push(Block::Macro(block));
             } else {

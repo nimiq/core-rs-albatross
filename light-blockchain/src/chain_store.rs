@@ -86,7 +86,7 @@ impl ChainStore {
 
         // Add the chain info to the chain_db. If there was already a chain info at the same hash, it
         // will return an Option with the previous chain info.
-        let previous = self.chain_db.insert(hash.clone(), chain_info.clone());
+        let previous = self.chain_db.insert(hash, chain_info.clone());
 
         // If the block was already in the ChainStore then we don't need to modify the height index.
         // Otherwise, we need to add this block hash at the block height.
@@ -163,9 +163,9 @@ impl ChainStore {
                 .map(|chain_info| chain_info.head.clone());
             if let Some(Block::Macro(block)) = block_opt {
                 hash = if election_blocks_only {
-                    block.header.parent_election_hash.clone()
+                    block.header.parent_election_hash
                 } else {
-                    block.header.parent_hash.clone()
+                    block.header.parent_hash
                 };
                 if include_body && block.body.is_none() {
                     return Err(BlockchainError::BlockBodyNotFound);
@@ -280,7 +280,7 @@ impl ChainStore {
             .map(|chain_info| chain_info.head.clone())
             .ok_or(BlockchainError::BlockNotFound)?;
 
-        let mut hash = start_block.parent_hash().clone();
+        let mut hash = *start_block.parent_hash();
         while (blocks.len() as u32) < count {
             if let Some(block) = self
                 .chain_db
@@ -290,7 +290,7 @@ impl ChainStore {
                 if include_body && block.body().is_none() {
                     return Err(BlockchainError::BlockBodyNotFound);
                 }
-                hash = block.parent_hash().clone();
+                hash = *block.parent_hash();
                 blocks.push(block);
             } else {
                 break;
@@ -368,11 +368,11 @@ mod tests {
                 version: random(),
                 block_number: 0,
                 timestamp: random(),
-                parent_hash: hash_1.clone(),
+                parent_hash: hash_1,
                 seed: Default::default(),
                 extra_data: vec![],
-                state_root: hash_1.clone(),
-                body_root: hash_1.clone(),
+                state_root: hash_1,
+                body_root: hash_1,
                 history_root: hash_1,
             },
             justification: Some(MicroJustification::Micro(Default::default())),
@@ -388,11 +388,11 @@ mod tests {
                 version: random(),
                 block_number: 0,
                 timestamp: random(),
-                parent_hash: hash_2.clone(),
+                parent_hash: hash_2,
                 seed: Default::default(),
                 extra_data: vec![],
-                state_root: hash_2.clone(),
-                body_root: hash_2.clone(),
+                state_root: hash_2,
+                body_root: hash_2,
                 history_root: hash_2,
             },
             justification: Some(MicroJustification::Micro(Default::default())),

@@ -191,7 +191,7 @@ impl ClientInner {
             identity_keypair,
             peer_contact,
             seeds,
-            network_info.genesis_hash().clone(),
+            *network_info.genesis_hash(),
             false,
             required_services,
         );

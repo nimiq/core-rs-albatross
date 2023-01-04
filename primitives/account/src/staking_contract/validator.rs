@@ -93,7 +93,7 @@ impl StakingContract {
         // See if the validator already exists.
         if StakingContract::get_validator(accounts_tree, db_txn, validator_address).is_some() {
             return Err(AccountError::AlreadyExistentAddress {
-                address: validator_address.clone(),
+                address: *validator_address,
             });
         }
 
@@ -104,14 +104,14 @@ impl StakingContract {
 
         staking_contract
             .active_validators
-            .insert(validator_address.clone(), deposit);
+            .insert(*validator_address, deposit);
 
         // Create validator struct.
         let validator = Validator {
-            address: validator_address.clone(),
+            address: *validator_address,
             signing_key,
             voting_key,
-            reward_address: reward_address.clone(),
+            reward_address,
             signal_data,
             balance: deposit,
             num_stakers: 0,
@@ -135,7 +135,7 @@ impl StakingContract {
         Ok(OperationInfo {
             receipt: None,
             logs: vec![Log::CreateValidator {
-                validator_address: validator_address.clone(),
+                validator_address: *validator_address,
                 reward_address,
             }],
         })
@@ -154,7 +154,7 @@ impl StakingContract {
         // See if the validator does not exist.
         if StakingContract::get_validator(accounts_tree, db_txn, validator_address).is_none() {
             return Err(AccountError::NonExistentAddress {
-                address: validator_address.clone(),
+                address: *validator_address,
             });
         }
 
@@ -178,7 +178,7 @@ impl StakingContract {
         );
 
         Ok(vec![Log::CreateValidator {
-            validator_address: validator_address.clone(),
+            validator_address: *validator_address,
             reward_address,
         }])
     }
@@ -218,8 +218,8 @@ impl StakingContract {
             no_op: false,
             old_signing_key: validator.signing_key,
             old_voting_key: validator.voting_key.clone(),
-            old_reward_address: validator.reward_address.clone(),
-            old_signal_data: validator.signal_data.clone(),
+            old_reward_address: validator.reward_address,
+            old_signal_data: validator.signal_data,
         };
 
         // Update validator info.
@@ -246,8 +246,8 @@ impl StakingContract {
             Account::StakingValidator(validator.clone()),
         );
         let logs = vec![Log::UpdateValidator {
-            validator_address: validator_address.clone(),
-            old_reward_address: receipt.old_reward_address.clone(),
+            validator_address: *validator_address,
+            old_reward_address: receipt.old_reward_address,
             new_reward_address: Some(validator.reward_address),
         }];
 
@@ -271,14 +271,14 @@ impl StakingContract {
                 Some(v) => v,
                 None => {
                     return Err(AccountError::NonExistentAddress {
-                        address: validator_address.clone(),
+                        address: *validator_address,
                     });
                 }
             };
 
         let log = Log::UpdateValidator {
-            validator_address: validator_address.clone(),
-            old_reward_address: receipt.old_reward_address.clone(),
+            validator_address: *validator_address,
+            old_reward_address: receipt.old_reward_address,
             new_reward_address: Some(validator.reward_address),
         };
 
@@ -383,7 +383,7 @@ impl StakingContract {
                 parked_set,
             },
             vec![Log::InactivateValidator {
-                validator_address: validator_address.clone(),
+                validator_address: *validator_address,
             }],
         ))
     }
@@ -406,7 +406,7 @@ impl StakingContract {
                 Some(v) => v,
                 None => {
                     return Err(AccountError::NonExistentAddress {
-                        address: validator_address.clone(),
+                        address: *validator_address,
                     });
                 }
             };
@@ -418,12 +418,10 @@ impl StakingContract {
 
         staking_contract
             .active_validators
-            .insert(validator_address.clone(), validator.balance);
+            .insert(*validator_address, validator.balance);
 
         if receipt.parked_set {
-            staking_contract
-                .parked_set
-                .insert(validator_address.clone());
+            staking_contract.parked_set.insert(*validator_address);
         }
 
         // All checks passed, not allowed to fail from here on!
@@ -440,7 +438,7 @@ impl StakingContract {
         );
 
         Ok(vec![Log::InactivateValidator {
-            validator_address: validator_address.clone(),
+            validator_address: *validator_address,
         }])
     }
 
@@ -511,7 +509,7 @@ impl StakingContract {
 
         staking_contract
             .active_validators
-            .insert(validator_address.clone(), validator.balance);
+            .insert(*validator_address, validator.balance);
 
         // All checks passed, not allowed to fail from here on!
         accounts_tree.put(
@@ -529,7 +527,7 @@ impl StakingContract {
         Ok(OperationInfo::with_receipt(
             receipt,
             vec![Log::ReactivateValidator {
-                validator_address: validator_address.clone(),
+                validator_address: *validator_address,
             }],
         ))
     }
@@ -552,7 +550,7 @@ impl StakingContract {
                 Some(v) => v,
                 None => {
                     return Err(AccountError::NonExistentAddress {
-                        address: validator_address.clone(),
+                        address: *validator_address,
                     });
                 }
             };
@@ -578,7 +576,7 @@ impl StakingContract {
         );
 
         Ok(vec![Log::ReactivateValidator {
-            validator_address: validator_address.clone(),
+            validator_address: *validator_address,
         }])
     }
 
@@ -647,7 +645,7 @@ impl StakingContract {
             true
         } else {
             logs.push(Log::UnparkValidator {
-                validator_address: validator_address.clone(),
+                validator_address: *validator_address,
             });
             false
         };
@@ -686,21 +684,19 @@ impl StakingContract {
         let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
 
         if receipt.parked_set {
-            staking_contract
-                .parked_set
-                .insert(validator_address.clone());
+            staking_contract.parked_set.insert(*validator_address);
         }
 
         if let Some(slots) = receipt.current_disabled_slots {
             staking_contract
                 .current_disabled_slots
-                .insert(validator_address.clone(), slots);
+                .insert(*validator_address, slots);
         }
 
         if let Some(slots) = receipt.previous_disabled_slots {
             staking_contract
                 .previous_disabled_slots
-                .insert(validator_address.clone(), slots);
+                .insert(*validator_address, slots);
         }
 
         // All checks passed, not allowed to fail from here on!
@@ -711,7 +707,7 @@ impl StakingContract {
         );
 
         Ok(vec![Log::UnparkValidator {
-            validator_address: validator_address.clone(),
+            validator_address: *validator_address,
         }])
     }
 
@@ -733,7 +729,7 @@ impl StakingContract {
                 Some(v) => v,
                 None => {
                     return Err(AccountError::NonExistentAddress {
-                        address: validator_address.clone(),
+                        address: *validator_address,
                     });
                 }
             };
@@ -770,7 +766,7 @@ impl StakingContract {
         let mut receipt = DeleteValidatorReceipt {
             signing_key: validator.signing_key,
             voting_key: validator.voting_key,
-            reward_address: validator.reward_address.clone(),
+            reward_address: validator.reward_address,
             signal_data: validator.signal_data,
             retire_time: validator.inactivity_flag.expect(
                 "This can't fail since we already checked above that the inactivity flag is Some.",
@@ -778,7 +774,7 @@ impl StakingContract {
             stakers: vec![],
         };
         let logs = vec![Log::DeleteValidator {
-            validator_address: validator_address.clone(),
+            validator_address: *validator_address,
             reward_address: validator.reward_address,
         }];
         // Remove the validator from all its stakers. Also delete all the validator's stakers entries.
@@ -877,7 +873,7 @@ impl StakingContract {
             balance += u64::from(staker.balance);
 
             // Update the staker.
-            staker.delegation = Some(validator_address.clone());
+            staker.delegation = Some(*validator_address);
 
             accounts_tree.put(
                 db_txn,
@@ -889,13 +885,13 @@ impl StakingContract {
             accounts_tree.put(
                 db_txn,
                 &StakingContract::get_key_validator_staker(validator_address, &staker_address),
-                Account::StakingValidatorsStaker(staker_address.clone()),
+                Account::StakingValidatorsStaker(staker_address),
             );
         }
 
         // Re-add the validator entry.
         let validator = Validator {
-            address: validator_address.clone(),
+            address: *validator_address,
             signing_key: receipt.signing_key,
             voting_key: receipt.voting_key,
             reward_address: receipt.reward_address,
@@ -926,7 +922,7 @@ impl StakingContract {
         );
 
         Ok(vec![Log::DeleteValidator {
-            validator_address: validator_address.clone(),
+            validator_address: *validator_address,
             reward_address: validator.reward_address,
         }])
     }

@@ -200,7 +200,7 @@ impl<N: ValidatorNetwork + 'static> HandelTendermintAdapter<N> {
 
         // Construct the vote so it can be hashed and signed
         let vote = TendermintVote {
-            proposal_hash: proposal_hash.clone(),
+            proposal_hash,
             id: id.clone(),
         };
 
@@ -390,7 +390,7 @@ impl<N: ValidatorNetwork + 'static> HandelTendermintAdapter<N> {
                     .iter()
                     .map(|(hash, contribution)| {
                         (
-                            hash.clone(),
+                            *hash,
                             (
                                 contribution.clone(),
                                 u16::try_from(

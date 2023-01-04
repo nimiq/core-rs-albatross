@@ -43,7 +43,7 @@ impl WalletAccount {
         network_id: NetworkId,
     ) -> Transaction {
         let mut transaction = Transaction::new_basic(
-            self.address.clone(),
+            self.address,
             recipient,
             value,
             fee,

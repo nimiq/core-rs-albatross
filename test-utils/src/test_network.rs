@@ -67,7 +67,7 @@ impl TestNetwork for Network {
             peer_key,
             peer_contact,
             Vec::new(),
-            genesis_hash.clone(),
+            genesis_hash,
             true,
             Services::all(),
         );

@@ -83,7 +83,7 @@ impl AccountTransactionInteraction for BasicAccount {
         let account = accounts_tree
             .get(db_txn, &key)
             .ok_or(AccountError::NonExistentAddress {
-                address: transaction.recipient.clone(),
+                address: transaction.recipient,
             })?;
 
         let new_balance = Account::balance_sub(account.balance(), transaction.value)?;
@@ -124,7 +124,7 @@ impl AccountTransactionInteraction for BasicAccount {
                 }
             })
             .ok_or(AccountError::NonExistentAddress {
-                address: transaction.sender.clone(),
+                address: transaction.sender,
             })?;
 
         if account.account_type() != AccountType::Basic {
@@ -150,7 +150,7 @@ impl AccountTransactionInteraction for BasicAccount {
 
         let logs = vec![
             Log::PayFee {
-                from: transaction.sender.clone(),
+                from: transaction.sender,
                 fee: transaction.fee,
             },
             Log::transfer_log_from_transaction(transaction),
@@ -182,7 +182,7 @@ impl AccountTransactionInteraction for BasicAccount {
         let new_balance = Account::balance_add(current_balance, transaction.total_value())?;
         let logs = vec![
             Log::PayFee {
-                from: transaction.sender.clone(),
+                from: transaction.sender,
                 fee: transaction.fee,
             },
             Log::transfer_log_from_transaction(transaction),
@@ -223,7 +223,7 @@ impl AccountTransactionInteraction for BasicAccount {
                 }
             })
             .ok_or(AccountError::NonExistentAddress {
-                address: transaction.sender.clone(),
+                address: transaction.sender,
             })?;
 
         if account.account_type() != AccountType::Basic {
@@ -248,7 +248,7 @@ impl AccountTransactionInteraction for BasicAccount {
         }
 
         let logs = vec![Log::PayFee {
-            from: transaction.sender.clone(),
+            from: transaction.sender,
             fee: transaction.fee,
         }];
         Ok(AccountInfo::new(None, logs))
@@ -275,7 +275,7 @@ impl AccountTransactionInteraction for BasicAccount {
 
         let new_balance = Account::balance_add(current_balance, transaction.fee)?;
         let logs = vec![Log::PayFee {
-            from: transaction.sender.clone(),
+            from: transaction.sender,
             fee: transaction.fee,
         }];
         // If the new balance is zero, it means this account didnt exist before, so we don't need to create it.
@@ -344,7 +344,7 @@ impl AccountInherentInteraction for BasicAccount {
         );
 
         let logs = vec![Log::PayoutReward {
-            to: inherent.target.clone(),
+            to: inherent.target,
             value: inherent.value,
         }];
         Ok(AccountInfo::new(None, logs))
@@ -371,7 +371,7 @@ impl AccountInherentInteraction for BasicAccount {
         let account = accounts_tree
             .get(db_txn, &key)
             .ok_or(AccountError::NonExistentAddress {
-                address: inherent.target.clone(),
+                address: inherent.target,
             })?;
 
         let new_balance = Account::balance_sub(account.balance(), inherent.value)?;
@@ -385,7 +385,7 @@ impl AccountInherentInteraction for BasicAccount {
         );
 
         Ok(vec![Log::PayoutReward {
-            to: inherent.target.clone(),
+            to: inherent.target,
             value: inherent.value,
         }])
     }

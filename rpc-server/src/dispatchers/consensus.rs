@@ -43,12 +43,11 @@ impl ConsensusDispatcher {
         Ok(self
             .unlocked_wallets
             .as_ref()
-            .ok_or_else(|| Error::UnlockedWalletNotFound(address.clone()))?
+            .ok_or_else(|| Error::UnlockedWalletNotFound(*address))?
             .read()
             .get(address)
-            .ok_or_else(|| Error::UnlockedWalletNotFound(address.clone()))?
-            .key_pair
-            .clone())
+            .ok_or_else(|| Error::UnlockedWalletNotFound(*address))?
+            .key_pair)
     }
 
     /// Returns the network ID for our current blockchain.

@@ -291,7 +291,7 @@ async fn main_inner() -> Result<(), Error> {
                     spam(
                         std::sync::Arc::clone(&mempool),
                         consensus.clone(),
-                        key_pair.clone(),
+                        key_pair,
                         conf_options.clone(),
                         std::sync::Arc::clone(&state),
                     )
@@ -549,7 +549,7 @@ fn generate_vesting_contracts(
         } else {
             let tx = TransactionBuilder::new_redeem_vesting(
                 &contract.key_pair,
-                contract.address.clone(),
+                contract.address,
                 Address::from(&contract.key_pair),
                 Coin::from_u64_unchecked(10),
                 Coin::ZERO,
@@ -582,7 +582,7 @@ fn generate_vesting_contracts(
         state.vesting_contracs.push(SpammerContracts {
             block_number: current_block_number,
             key_pair: new_kp,
-            address: tx.recipient.clone(),
+            address: tx.recipient,
         });
 
         txs.push(tx);

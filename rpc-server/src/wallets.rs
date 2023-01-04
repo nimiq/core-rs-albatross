@@ -12,7 +12,7 @@ pub struct UnlockedWallets {
 impl UnlockedWallets {
     pub fn insert(&mut self, wallet: Unlocked<WalletAccount>) {
         log::info!("Unlocking {:?}", &wallet.address);
-        self.unlocked_wallets.insert(wallet.address.clone(), wallet);
+        self.unlocked_wallets.insert(wallet.address, wallet);
     }
 
     pub fn get(&self, address: &Address) -> Option<&WalletAccount> {

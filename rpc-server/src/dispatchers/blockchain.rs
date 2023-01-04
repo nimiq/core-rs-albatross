@@ -45,7 +45,7 @@ fn get_block_by_hash(
         .map(|block| {
             Block::from_block(blockchain, block, include_transactions.unwrap_or(false)).into()
         })
-        .map_err(|_| Error::BlockNotFoundByHash(hash.clone()))
+        .map_err(|_| Error::BlockNotFoundByHash(*hash))
 }
 
 /// Tries to fetch a validator information given its address. It has an option to include a collection
@@ -62,7 +62,7 @@ fn get_validator_by_address(
         let validator = StakingContract::get_validator(accounts_tree, &db_txn, address);
 
         if validator.is_none() {
-            return Err(Error::ValidatorNotFound(address.clone()));
+            return Err(Error::ValidatorNotFound(*address));
         }
 
         let mut stakers = None;

@@ -43,10 +43,7 @@ impl LightBlockchain {
             .map_err(|_| NanoError::MissingBlock)?;
 
         // Verify the History Tree proof.
-        if !tx_proof
-            .verify(block.history_root().clone())
-            .unwrap_or(false)
-        {
+        if !tx_proof.verify(*block.history_root()).unwrap_or(false) {
             return Err(NanoError::WrongProof);
         }
 

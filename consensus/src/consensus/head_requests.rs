@@ -116,7 +116,7 @@ impl<TNetwork: Network + 'static> Future for HeadRequests<TNetwork> {
                         // Request unknown blocks from peer that gave it to us.
                         self.num_unknown_blocks += 1;
                         if !self.requested_hashes.contains(&hash) {
-                            self.requested_hashes.insert(hash.clone());
+                            self.requested_hashes.insert(hash);
                             let network = Arc::clone(&self.network);
                             let peer_id = self.peers[i];
                             let include_micro_bodies = self.include_micro_bodies;

@@ -165,7 +165,7 @@ impl<N: Network, TReq: RequestComponent<N>> BlockQueue<N, TReq> {
             return;
         }
 
-        let parent_hash = block.parent_hash().clone();
+        let parent_hash = *block.parent_hash();
 
         // Insert block into buffer. If we already know the block, we're done.
         let block_known = self.insert_block_into_buffer(block, pubsub_id);
@@ -344,7 +344,7 @@ impl<N: Network, TReq: RequestComponent<N>> BlockQueue<N, TReq> {
             blocks.retain(|hash, (block, pubsub_id)| {
                 if invalid_blocks.contains(block.parent_hash()) {
                     log::trace!("Removing block because parent is invalid: {}", hash);
-                    invalid_blocks.insert(hash.clone());
+                    invalid_blocks.insert(*hash);
 
                     if let Some(id) = pubsub_id {
                         if self.config.include_micro_bodies {

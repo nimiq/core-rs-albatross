@@ -47,7 +47,7 @@ impl VestingContract {
     pub fn change_balance(&self, balance: Coin) -> Self {
         VestingContract {
             balance,
-            owner: self.owner.clone(),
+            owner: self.owner,
             start_time: self.start_time,
             time_step: self.time_step,
             step_amount: self.step_amount,
@@ -97,7 +97,7 @@ impl AccountTransactionInteraction for VestingContract {
         accounts_tree.put(db_txn, &contract_key, Account::Vesting(contract.clone()));
 
         let logs = vec![Log::VestingCreate {
-            contract_address: transaction.recipient.clone(),
+            contract_address: transaction.recipient,
             owner: contract.owner,
             start_time: contract.start_time,
             time_step: contract.time_step,
@@ -140,7 +140,7 @@ impl AccountTransactionInteraction for VestingContract {
         let account = accounts_tree
             .get(db_txn, &key)
             .ok_or(AccountError::NonExistentAddress {
-                address: transaction.sender.clone(),
+                address: transaction.sender,
             })?;
 
         let vesting = match account {
@@ -189,7 +189,7 @@ impl AccountTransactionInteraction for VestingContract {
         };
         let logs = vec![
             Log::PayFee {
-                from: transaction.sender.clone(),
+                from: transaction.sender,
                 fee: transaction.fee,
             },
             Log::transfer_log_from_transaction(transaction),
@@ -213,7 +213,7 @@ impl AccountTransactionInteraction for VestingContract {
                     accounts_tree
                         .get(db_txn, &key)
                         .ok_or(AccountError::NonExistentAddress {
-                            address: transaction.sender.clone(),
+                            address: transaction.sender,
                         })?;
 
                 if let Account::Vesting(contract) = account {
@@ -242,7 +242,7 @@ impl AccountTransactionInteraction for VestingContract {
 
         Ok(vec![
             Log::PayFee {
-                from: transaction.sender.clone(),
+                from: transaction.sender,
                 fee: transaction.fee,
             },
             Log::transfer_log_from_transaction(transaction),
@@ -259,7 +259,7 @@ impl AccountTransactionInteraction for VestingContract {
         let account = accounts_tree
             .get(db_txn, &key)
             .ok_or(AccountError::NonExistentAddress {
-                address: transaction.sender.clone(),
+                address: transaction.sender,
             })?;
 
         let vesting = match account {
@@ -290,7 +290,7 @@ impl AccountTransactionInteraction for VestingContract {
             None
         };
         let logs = vec![Log::PayFee {
-            from: transaction.sender.clone(),
+            from: transaction.sender,
             fee: transaction.fee,
         }];
         Ok(AccountInfo::new(receipt, logs))
@@ -309,7 +309,7 @@ impl AccountTransactionInteraction for VestingContract {
                     accounts_tree
                         .get(db_txn, &key)
                         .ok_or(AccountError::NonExistentAddress {
-                            address: transaction.sender.clone(),
+                            address: transaction.sender,
                         })?;
 
                 if let Account::Vesting(contract) = account {
@@ -337,7 +337,7 @@ impl AccountTransactionInteraction for VestingContract {
         );
 
         Ok(vec![Log::PayFee {
-            from: transaction.sender.clone(),
+            from: transaction.sender,
             fee: transaction.fee,
         }])
     }
@@ -384,7 +384,7 @@ impl AccountTransactionInteraction for VestingContract {
         let account = accounts_tree
             .get(db_txn, &key)
             .ok_or(AccountError::NonExistentAddress {
-                address: transaction.sender.clone(),
+                address: transaction.sender,
             })?;
 
         let vesting = match account {

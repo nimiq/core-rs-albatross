@@ -252,8 +252,8 @@ impl Accounts {
                         Ok(account_info) => {
                             // Store the reason why the transaction failed
                             let mut logs = vec![Log::FailedTransaction {
-                                from: transaction.sender.clone(),
-                                to: transaction.recipient.clone(),
+                                from: transaction.sender,
+                                to: transaction.recipient,
                                 failure_reason: account_err.to_string(),
                             }];
 
@@ -517,7 +517,7 @@ impl Accounts {
                         contracts_logs.push(TransactionLog::new(
                             transaction.hash(),
                             vec![Log::RevertContract {
-                                contract_address: transaction.recipient.clone(),
+                                contract_address: transaction.recipient,
                             }],
                         ));
                     }

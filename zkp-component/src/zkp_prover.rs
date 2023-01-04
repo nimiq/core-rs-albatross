@@ -132,7 +132,7 @@ impl<N: Network> ZKProver<N> {
                         ProofInput {
                             block: block.clone(),
                             latest_pks: zkp_state.latest_pks.clone(),
-                            latest_header_hash: zkp_state.latest_header_hash.clone(),
+                            latest_header_hash: zkp_state.latest_header_hash,
                             previous_proof: zkp_state.latest_proof.clone(),
                             genesis_state: genesis_state3,
                             keys_path: keys_path2,

@@ -57,10 +57,10 @@ impl HashedTimeLockedContract {
     pub fn change_balance(&self, balance: Coin) -> Self {
         HashedTimeLockedContract {
             balance,
-            sender: self.sender.clone(),
-            recipient: self.recipient.clone(),
+            sender: self.sender,
+            recipient: self.recipient,
             hash_algorithm: self.hash_algorithm,
-            hash_root: self.hash_root.clone(),
+            hash_root: self.hash_root,
             hash_count: self.hash_count,
             timeout: self.timeout,
             total_amount: self.total_amount,
@@ -177,10 +177,10 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
 
         let contract = HashedTimeLockedContract::new(
             previous_balance + transaction.value,
-            data.sender.clone(),
-            data.recipient.clone(),
+            data.sender,
+            data.recipient,
             data.hash_algorithm,
-            data.hash_root.clone(),
+            data.hash_root,
             data.hash_count,
             data.timeout,
             transaction.value,
@@ -188,7 +188,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
 
         accounts_tree.put(db_txn, &contract_key, Account::HTLC(contract.clone()));
         let logs = vec![Log::HTLCCreate {
-            contract_address: transaction.recipient.clone(),
+            contract_address: transaction.recipient,
             sender: contract.sender,
             recipient: contract.recipient,
             hash_algorithm: contract.hash_algorithm,
@@ -234,7 +234,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         let account = accounts_tree
             .get(db_txn, &key)
             .ok_or(AccountError::NonExistentAddress {
-                address: transaction.sender.clone(),
+                address: transaction.sender,
             })?;
 
         let htlc = match account {
@@ -258,7 +258,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         // Create the contract logs
         let mut logs = vec![
             Log::PayFee {
-                from: transaction.sender.clone(),
+                from: transaction.sender,
                 fee: transaction.fee,
             },
             Log::transfer_log_from_transaction(transaction),
@@ -271,19 +271,19 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
                 let hash_depth: u8 = Deserialize::deserialize(proof_buf)?;
 
                 logs.push(Log::HTLCRegularTransfer {
-                    contract_address: transaction.sender.clone(),
+                    contract_address: transaction.sender,
                     pre_image,
                     hash_depth,
                 });
             }
             ProofType::EarlyResolve => {
                 logs.push(Log::HTLCEarlyResolve {
-                    contract_address: transaction.sender.clone(),
+                    contract_address: transaction.sender,
                 });
             }
             ProofType::TimeoutResolve => {
                 logs.push(Log::HTLCTimeoutResolve {
-                    contract_address: transaction.sender.clone(),
+                    contract_address: transaction.sender,
                 });
             }
         }
@@ -322,7 +322,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
                     accounts_tree
                         .get(db_txn, &key)
                         .ok_or(AccountError::NonExistentAddress {
-                            address: transaction.sender.clone(),
+                            address: transaction.sender,
                         })?;
 
                 if let Account::HTLC(contract) = account {
@@ -352,7 +352,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         // Build the revert logs
         let mut logs = vec![
             Log::PayFee {
-                from: transaction.sender.clone(),
+                from: transaction.sender,
                 fee: transaction.fee,
             },
             Log::transfer_log_from_transaction(transaction),
@@ -392,7 +392,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         let account = accounts_tree
             .get(db_txn, &key)
             .ok_or(AccountError::NonExistentAddress {
-                address: transaction.sender.clone(),
+                address: transaction.sender,
             })?;
 
         let htlc = match account {
@@ -409,7 +409,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         let new_balance = Account::balance_sub(account.balance(), transaction.fee)?;
 
         let logs = vec![Log::PayFee {
-            from: transaction.sender.clone(),
+            from: transaction.sender,
             fee: transaction.fee,
         }];
 
@@ -445,7 +445,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
                     accounts_tree
                         .get(db_txn, &key)
                         .ok_or(AccountError::NonExistentAddress {
-                            address: transaction.sender.clone(),
+                            address: transaction.sender,
                         })?;
 
                 if let Account::HTLC(contract) = account {
@@ -474,7 +474,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
 
         // Build the revert logs
         let logs = vec![Log::PayFee {
-            from: transaction.sender.clone(),
+            from: transaction.sender,
             fee: transaction.fee,
         }];
 
@@ -508,7 +508,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         let account = accounts_tree
             .get(db_txn, &key)
             .ok_or(AccountError::NonExistentAddress {
-                address: transaction.sender.clone(),
+                address: transaction.sender,
             })?;
 
         let htlc = match account {

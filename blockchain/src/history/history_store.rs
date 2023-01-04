@@ -185,7 +185,7 @@ impl HistoryStore {
                 &tx_hash,
                 &OrderedHash {
                     index: leaf_index as u32,
-                    hash: leaf_hash.clone(),
+                    hash: leaf_hash,
                 },
             );
 
@@ -211,11 +211,11 @@ impl HistoryStore {
             match &ext_tx.data {
                 ExtTxData::Basic(tx) => {
                     let tx = tx.get_raw_transaction();
-                    affected_addresses.insert(tx.sender.clone());
-                    affected_addresses.insert(tx.recipient.clone());
+                    affected_addresses.insert(tx.sender);
+                    affected_addresses.insert(tx.recipient);
                 }
                 ExtTxData::Inherent(tx) => {
-                    affected_addresses.insert(tx.target.clone());
+                    affected_addresses.insert(tx.target);
                 }
             }
         }
@@ -859,7 +859,7 @@ impl HistoryStore {
             &tx_hash,
             &OrderedHash {
                 index: leaf_index,
-                hash: leaf_hash.clone(),
+                hash: *leaf_hash,
             },
         );
 
@@ -882,7 +882,7 @@ impl HistoryStore {
                     &tx.sender,
                     &OrderedHash {
                         index: index_tx_sender,
-                        hash: tx_hash.clone(),
+                        hash: tx_hash,
                     },
                 );
 

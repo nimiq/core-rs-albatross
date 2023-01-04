@@ -176,7 +176,7 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
         let checkpoint_id = epoch_ids
             .checkpoint
             .as_ref()
-            .map(|checkpoint| checkpoint.hash.clone());
+            .map(|checkpoint| checkpoint.hash);
         let id_iter = epoch_ids.ids.iter().chain(checkpoint_id.iter());
         let mut job_iter = self.job_queue.iter_mut();
 

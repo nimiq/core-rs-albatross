@@ -333,8 +333,8 @@ impl ConnectionHandler for DiscoveryHandler {
 
                     let msg = DiscoveryMessage::Handshake {
                         observed_addresses: self.observed_addresses.clone(),
-                        challenge_nonce: self.challenge_nonce.clone(),
-                        genesis_hash: self.config.genesis_hash.clone(),
+                        challenge_nonce: self.challenge_nonce,
+                        genesis_hash: self.config.genesis_hash,
                         limit: self.config.update_limit,
                         services: self.config.required_services,
                         // TODO: If we really include this here, put this in `DiscoveryConfig`
@@ -365,7 +365,7 @@ impl ConnectionHandler for DiscoveryHandler {
                                     if genesis_hash != self.config.genesis_hash {
                                         return Poll::Ready(ConnectionHandlerEvent::Close(
                                             HandlerError::GenesisHashMismatch {
-                                                expected: self.config.genesis_hash.clone(),
+                                                expected: self.config.genesis_hash,
                                                 received: genesis_hash,
                                             },
                                         ));

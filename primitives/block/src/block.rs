@@ -441,7 +441,7 @@ impl Block {
         let expected_parent_election_hash = if predecessor.is_election_block() {
             predecessor.hash()
         } else {
-            predecessor.header.parent_election_hash.clone()
+            predecessor.header.parent_election_hash
         };
 
         let parent_election_hash = self.parent_election_hash().unwrap();

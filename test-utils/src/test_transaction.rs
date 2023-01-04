@@ -30,10 +30,7 @@ pub fn generate_accounts(
         // Generate the txns_sender and txns_rec vectors to later generate transactions
         let keypair = SchnorrKeyPair::generate_default_csprng();
         let address = Address::from(&keypair.public);
-        let mempool_account = TestAccount {
-            keypair,
-            address: address.clone(),
-        };
+        let mempool_account = TestAccount { keypair, address };
         mempool_accounts.push(mempool_account);
 
         if add_to_genesis {
@@ -54,8 +51,8 @@ pub fn generate_transactions(
     for mempool_transaction in mempool_transactions {
         // Generate transactions
         let mut txn = Transaction::new_basic(
-            mempool_transaction.sender.address.clone(),
-            mempool_transaction.recipient.address.clone(),
+            mempool_transaction.sender.address,
+            mempool_transaction.recipient.address,
             Coin::from_u64_unchecked(mempool_transaction.value),
             Coin::from_u64_unchecked(mempool_transaction.fee),
             1,

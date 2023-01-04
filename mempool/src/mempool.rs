@@ -606,7 +606,7 @@ impl Mempool {
                 None => {
                     break;
                 }
-                Some((tx_hash, _)) => tx_hash.clone(),
+                Some((tx_hash, _)) => *tx_hash,
             };
 
             // Get the transaction.
@@ -672,7 +672,7 @@ impl Mempool {
                 None => {
                     break;
                 }
-                Some((tx_hash, _)) => tx_hash.clone(),
+                Some((tx_hash, _)) => *tx_hash,
             };
 
             // Get the transaction.

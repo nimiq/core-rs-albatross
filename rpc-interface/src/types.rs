@@ -375,7 +375,7 @@ impl Slots {
             slots.push(Slots {
                 first_slot_number: validator.slot_range.0,
                 num_slots: validator.num_slots(),
-                validator: validator.address.clone(),
+                validator: validator.address,
                 public_key: validator.voting_key.compressed().clone(),
             })
         }
@@ -681,9 +681,9 @@ pub struct Staker {
 impl Staker {
     pub fn from_staker(staker: &nimiq_account::Staker) -> Self {
         Staker {
-            address: staker.address.clone(),
+            address: staker.address,
             balance: staker.balance,
-            delegation: staker.delegation.clone(),
+            delegation: staker.delegation,
         }
     }
 }
@@ -711,11 +711,11 @@ impl Validator {
         stakers: Option<Vec<Staker>>,
     ) -> Self {
         Validator {
-            address: validator.address.clone(),
+            address: validator.address,
             signing_key: validator.signing_key,
             voting_key: validator.voting_key.clone(),
-            reward_address: validator.reward_address.clone(),
-            signal_data: validator.signal_data.clone(),
+            reward_address: validator.reward_address,
+            signal_data: validator.signal_data,
             balance: validator.balance,
             num_stakers: validator.num_stakers,
             inactivity_flag: validator.inactivity_flag,
@@ -947,7 +947,7 @@ impl ZKPState {
             .as_ref()
             .map(|latest_proof| format!("{:?}", latest_proof));
         Self {
-            latest_header_hash: zkp_state.latest_header_hash.clone(),
+            latest_header_hash: zkp_state.latest_header_hash,
             latest_block_number: zkp_state.latest_block_number,
             latest_proof,
         }

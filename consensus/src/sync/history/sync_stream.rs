@@ -514,7 +514,7 @@ mod tests {
         );
 
         let num_blocks = Policy::blocks_per_batch() + Policy::blocks_per_batch() / 2;
-        copy_chain_with_limit(&*chain2, &*chain1, num_blocks as usize);
+        copy_chain_with_limit(&chain2, &chain1, num_blocks as usize);
         assert_eq!(chain1.read().block_number(), num_blocks);
 
         let mut sync = HistoryMacroSync::<MockNetwork>::new(
@@ -551,11 +551,11 @@ mod tests {
         produce_macro_blocks_with_txns(&producer, &chain2, 1, 1, 0);
         assert_eq!(chain2.read().block_number(), Policy::blocks_per_batch());
 
-        copy_chain(&*chain2, &*chain3);
+        copy_chain(&chain2, &chain3);
         produce_macro_blocks_with_txns(&producer, &chain3, 1, 1, 0);
         assert_eq!(chain3.read().block_number(), 2 * Policy::blocks_per_batch());
 
-        copy_chain(&*chain3, &*chain4);
+        copy_chain(&chain3, &chain4);
         produce_macro_blocks_with_txns(&producer, &chain4, 1, 1, 0);
         assert_eq!(chain4.read().block_number(), 3 * Policy::blocks_per_batch());
 

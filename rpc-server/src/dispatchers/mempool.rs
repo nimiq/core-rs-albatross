@@ -79,7 +79,7 @@ impl MempoolInterface for MempoolDispatcher {
                 .mempool
                 .get_transaction_hashes()
                 .iter()
-                .map(|hash| HashOrTx::from(hash.clone()))
+                .map(|hash| HashOrTx::from(*hash))
                 .collect::<Vec<_>>()
                 .into()),
         };

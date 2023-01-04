@@ -41,7 +41,7 @@ impl StakingContract {
         // See if the staker already exists.
         if StakingContract::get_staker(accounts_tree, db_txn, staker_address).is_some() {
             return Err(AccountError::AlreadyExistentAddress {
-                address: staker_address.clone(),
+                address: *staker_address,
             });
         }
 
@@ -52,15 +52,15 @@ impl StakingContract {
 
         // Create the staker struct.
         let staker = Staker {
-            address: staker_address.clone(),
+            address: *staker_address,
             balance: value,
-            delegation: delegation.clone(),
+            delegation,
         };
 
         // Build the return logs
         let logs = vec![Log::CreateStaker {
-            staker_address: staker_address.clone(),
-            validator_address: delegation.clone(),
+            staker_address: *staker_address,
+            validator_address: delegation,
             value,
         }];
 
@@ -72,7 +72,7 @@ impl StakingContract {
                     Some(v) => v,
                     None => {
                         return Err(AccountError::NonExistentAddress {
-                            address: validator_address.clone(),
+                            address: validator_address,
                         });
                     }
                 };
@@ -83,7 +83,7 @@ impl StakingContract {
             if validator.inactivity_flag.is_none() {
                 staking_contract
                     .active_validators
-                    .insert(validator_address.clone(), validator.balance);
+                    .insert(validator_address, validator.balance);
             }
 
             validator.num_stakers += 1;
@@ -101,7 +101,7 @@ impl StakingContract {
             accounts_tree.put(
                 db_txn,
                 &StakingContract::get_key_validator_staker(&validator_address, staker_address),
-                Account::StakingValidatorsStaker(staker_address.clone()),
+                Account::StakingValidatorsStaker(*staker_address),
             );
         }
 
@@ -135,7 +135,7 @@ impl StakingContract {
         let staker = match StakingContract::get_staker(accounts_tree, db_txn, staker_address) {
             None => {
                 return Err(AccountError::NonExistentAddress {
-                    address: staker_address.clone(),
+                    address: *staker_address,
                 });
             }
             Some(x) => x,
@@ -155,14 +155,14 @@ impl StakingContract {
         staking_contract.balance = Account::balance_sub(staking_contract.balance, staker.balance)?;
 
         // If we are staking for a validator, we need to update it.
-        if let Some(validator_address) = staker.delegation.clone() {
+        if let Some(validator_address) = staker.delegation {
             // Get the validator.
             let mut validator =
                 match StakingContract::get_validator(accounts_tree, db_txn, &validator_address) {
                     Some(v) => v,
                     None => {
                         return Err(AccountError::NonExistentAddress {
-                            address: validator_address.clone(),
+                            address: validator_address,
                         });
                     }
                 };
@@ -173,7 +173,7 @@ impl StakingContract {
             if validator.inactivity_flag.is_none() {
                 staking_contract
                     .active_validators
-                    .insert(validator_address.clone(), validator.balance);
+                    .insert(validator_address, validator.balance);
             }
 
             validator.num_stakers -= 1;
@@ -205,7 +205,7 @@ impl StakingContract {
         accounts_tree.remove(db_txn, &StakingContract::get_key_staker(staker_address));
 
         Ok(vec![Log::CreateStaker {
-            staker_address: staker_address.clone(),
+            staker_address: *staker_address,
             validator_address: staker.delegation,
             value,
         }])
@@ -227,7 +227,7 @@ impl StakingContract {
                 error!("Couldn't find the staker to which a stake transaction was destined. Plan B: Create a new staker at this address!");
 
                 Staker {
-                    address: staker_address.clone(),
+                    address: *staker_address,
                     balance: Coin::ZERO,
                     delegation: None,
                 }
@@ -245,8 +245,8 @@ impl StakingContract {
 
         // Build the return logs
         let logs = vec![Log::Stake {
-            staker_address: staker_address.clone(),
-            validator_address: staker.delegation.clone(),
+            staker_address: *staker_address,
+            validator_address: staker.delegation,
             value,
         }];
 
@@ -258,7 +258,7 @@ impl StakingContract {
                     Some(v) => v,
                     None => {
                         return Err(AccountError::NonExistentAddress {
-                            address: validator_address.clone(),
+                            address: *validator_address,
                         });
                     }
                 };
@@ -269,7 +269,7 @@ impl StakingContract {
             if validator.inactivity_flag.is_none() {
                 staking_contract
                     .active_validators
-                    .insert(validator_address.clone(), validator.balance);
+                    .insert(*validator_address, validator.balance);
             }
 
             // All checks passed, not allowed to fail from here on!
@@ -312,7 +312,7 @@ impl StakingContract {
         let mut staker = match StakingContract::get_staker(accounts_tree, db_txn, staker_address) {
             None => {
                 return Err(AccountError::NonExistentAddress {
-                    address: staker_address.clone(),
+                    address: *staker_address,
                 });
             }
             Some(x) => x,
@@ -333,7 +333,7 @@ impl StakingContract {
                     Some(v) => v,
                     None => {
                         return Err(AccountError::NonExistentAddress {
-                            address: validator_address.clone(),
+                            address: *validator_address,
                         });
                     }
                 };
@@ -344,7 +344,7 @@ impl StakingContract {
             if validator.inactivity_flag.is_none() {
                 staking_contract
                     .active_validators
-                    .insert(validator_address.clone(), validator.balance);
+                    .insert(*validator_address, validator.balance);
             }
 
             // All checks passed, not allowed to fail from here on!
@@ -376,7 +376,7 @@ impl StakingContract {
         }
 
         Ok(vec![Log::Stake {
-            staker_address: staker_address.clone(),
+            staker_address: *staker_address,
             validator_address: staker.delegation,
             value,
         }])
@@ -430,13 +430,13 @@ impl StakingContract {
         // Create the receipt and logs.
         let receipt = StakerReceipt {
             no_op: false,
-            delegation: staker.delegation.clone(),
+            delegation: staker.delegation,
         };
 
         let logs = vec![Log::UpdateStaker {
-            staker_address: staker_address.clone(),
-            old_validator_address: staker.delegation.clone(),
-            new_validator_address: delegation.clone(),
+            staker_address: *staker_address,
+            old_validator_address: staker.delegation,
+            new_validator_address: delegation,
         }];
 
         // If we were staking for a validator, we remove ourselves from it.
@@ -452,7 +452,7 @@ impl StakingContract {
             if old_validator.inactivity_flag.is_none() {
                 staking_contract
                     .active_validators
-                    .insert(old_validator_address.clone(), old_validator.balance);
+                    .insert(*old_validator_address, old_validator.balance);
             }
 
             old_validator.num_stakers -= 1;
@@ -484,7 +484,7 @@ impl StakingContract {
             if new_validator.inactivity_flag.is_none() {
                 staking_contract
                     .active_validators
-                    .insert(new_validator_address.clone(), new_validator.balance);
+                    .insert(*new_validator_address, new_validator.balance);
             }
 
             new_validator.num_stakers += 1;
@@ -500,7 +500,7 @@ impl StakingContract {
             accounts_tree.put(
                 db_txn,
                 &StakingContract::get_key_validator_staker(new_validator_address, staker_address),
-                Account::StakingValidatorsStaker(staker_address.clone()),
+                Account::StakingValidatorsStaker(*staker_address),
             );
         }
 
@@ -541,16 +541,16 @@ impl StakingContract {
         let mut staker = match StakingContract::get_staker(accounts_tree, db_txn, staker_address) {
             None => {
                 return Err(AccountError::NonExistentAddress {
-                    address: staker_address.clone(),
+                    address: *staker_address,
                 });
             }
             Some(x) => x,
         };
 
         let log = Log::UpdateStaker {
-            staker_address: staker_address.clone(),
-            old_validator_address: receipt.delegation.clone(),
-            new_validator_address: staker.delegation.clone(),
+            staker_address: *staker_address,
+            old_validator_address: receipt.delegation,
+            new_validator_address: staker.delegation,
         };
 
         // Remove ourselves from the current delegation, if it exists.
@@ -562,7 +562,7 @@ impl StakingContract {
                     Some(v) => v,
                     None => {
                         return Err(AccountError::NonExistentAddress {
-                            address: new_validator_address.clone(),
+                            address: new_validator_address,
                         });
                     }
                 };
@@ -573,7 +573,7 @@ impl StakingContract {
             if new_validator.inactivity_flag.is_none() {
                 staking_contract
                     .active_validators
-                    .insert(new_validator_address.clone(), new_validator.balance);
+                    .insert(new_validator_address, new_validator.balance);
             }
 
             new_validator.num_stakers -= 1;
@@ -593,7 +593,7 @@ impl StakingContract {
         }
 
         // Add ourselves to the previous delegation, if it existed.
-        if let Some(old_validator_address) = receipt.delegation.clone() {
+        if let Some(old_validator_address) = receipt.delegation {
             // Get the validator.
             let mut old_validator =
                 match StakingContract::get_validator(accounts_tree, db_txn, &old_validator_address)
@@ -601,7 +601,7 @@ impl StakingContract {
                     Some(v) => v,
                     None => {
                         return Err(AccountError::NonExistentAddress {
-                            address: old_validator_address.clone(),
+                            address: old_validator_address,
                         });
                     }
                 };
@@ -612,7 +612,7 @@ impl StakingContract {
             if old_validator.inactivity_flag.is_none() {
                 staking_contract
                     .active_validators
-                    .insert(old_validator_address.clone(), old_validator.balance);
+                    .insert(old_validator_address, old_validator.balance);
             }
 
             old_validator.num_stakers += 1;
@@ -628,7 +628,7 @@ impl StakingContract {
             accounts_tree.put(
                 db_txn,
                 &StakingContract::get_key_validator_staker(&old_validator_address, staker_address),
-                Account::StakingValidatorsStaker(staker_address.clone()),
+                Account::StakingValidatorsStaker(*staker_address),
             );
         }
 
@@ -667,7 +667,7 @@ impl StakingContract {
         let mut staker = match StakingContract::get_staker(accounts_tree, db_txn, staker_address) {
             None => {
                 return Err(AccountError::NonExistentAddress {
-                    address: staker_address.clone(),
+                    address: *staker_address,
                 });
             }
             Some(x) => x,
@@ -686,7 +686,7 @@ impl StakingContract {
                     Some(v) => v,
                     None => {
                         return Err(AccountError::NonExistentAddress {
-                            address: validator_address.clone(),
+                            address: *validator_address,
                         });
                     }
                 };
@@ -697,7 +697,7 @@ impl StakingContract {
             if validator.inactivity_flag.is_none() {
                 staking_contract
                     .active_validators
-                    .insert(validator_address.clone(), validator.balance);
+                    .insert(*validator_address, validator.balance);
             }
 
             // If the staker balance is depleted, we have some extra updates for the validator.
@@ -735,10 +735,10 @@ impl StakingContract {
             Ok(OperationInfo {
                 receipt: Some(StakerReceipt {
                     no_op: false,
-                    delegation: staker.delegation.clone(),
+                    delegation: staker.delegation,
                 }),
                 logs: vec![Log::Unstake {
-                    staker_address: staker_address.clone(),
+                    staker_address: *staker_address,
                     validator_address: staker.delegation,
                     value,
                 }],
@@ -753,7 +753,7 @@ impl StakingContract {
             Ok(OperationInfo {
                 receipt: None,
                 logs: vec![Log::Unstake {
-                    staker_address: staker_address.clone(),
+                    staker_address: *staker_address,
                     validator_address: staker.delegation,
                     value,
                 }],
@@ -782,7 +782,7 @@ impl StakingContract {
                         Some(v) => v,
                         None => {
                             return Err(AccountError::NonExistentAddress {
-                                address: validator_address.clone(),
+                                address: *validator_address,
                             });
                         }
                     };
@@ -793,7 +793,7 @@ impl StakingContract {
                     if validator.inactivity_flag.is_none() {
                         staking_contract
                             .active_validators
-                            .insert(validator_address.clone(), validator.balance);
+                            .insert(*validator_address, validator.balance);
                     }
 
                     accounts_tree.put(
@@ -808,12 +808,12 @@ impl StakingContract {
                             validator_address,
                             staker_address,
                         ),
-                        Account::StakingValidatorsStaker(staker_address.clone()),
+                        Account::StakingValidatorsStaker(*staker_address),
                     );
                 }
 
                 Staker {
-                    address: staker_address.clone(),
+                    address: *staker_address,
                     balance: value,
                     delegation: receipt.delegation,
                 }
@@ -821,7 +821,7 @@ impl StakingContract {
             None => {
                 let mut staker = StakingContract::get_staker(accounts_tree, db_txn, staker_address)
                     .ok_or(AccountError::NonExistentAddress {
-                        address: staker_address.clone(),
+                        address: *staker_address,
                     })?;
 
                 staker.balance = Account::balance_add(staker.balance, value)?;
@@ -845,7 +845,7 @@ impl StakingContract {
         );
 
         Ok(vec![Log::Unstake {
-            staker_address: staker_address.clone(),
+            staker_address: *staker_address,
             validator_address: staker.delegation,
             value,
         }])
