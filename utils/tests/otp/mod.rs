@@ -1,12 +1,16 @@
+use zeroize::DefaultIsZeroes;
+
 use beserial::{Deserialize, Serialize};
 use nimiq_test_log::test;
 use nimiq_utils::otp::*;
 
-#[derive(Default, Serialize, Deserialize, Eq, PartialEq, Clone)]
+#[derive(Default, Serialize, Deserialize, Eq, PartialEq, Copy, Clone)]
 struct DummyU32 {
     value: u32,
     checksum: u32,
 }
+
+impl DefaultIsZeroes for DummyU32 {}
 
 impl DummyU32 {
     fn new(value: u32) -> Self {

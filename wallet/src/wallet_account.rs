@@ -1,5 +1,7 @@
 use std::io;
 
+use zeroize::DefaultIsZeroes;
+
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError};
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Hash, HashOutput, Sha256Hash};
@@ -11,12 +13,14 @@ use nimiq_utils::otp::Verify;
 
 pub const NIMIQ_SIGN_MESSAGE_PREFIX: &[u8] = b"\x16Nimiq Signed Message:\n";
 
-#[derive(Default, Debug, Clone, Serialize, Eq, PartialEq)]
+#[derive(Default, Debug, Clone, Copy, Serialize, Eq, PartialEq)]
 pub struct WalletAccount {
     pub key_pair: KeyPair,
     #[beserial(skip)]
     pub address: Address,
 }
+
+impl DefaultIsZeroes for WalletAccount {}
 
 impl Verify for WalletAccount {
     fn verify(&self) -> bool {

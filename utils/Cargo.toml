@@ -17,7 +17,6 @@ is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
-clear_on_drop = { version = "0.2", optional = true }
 futures = { package = "futures-util", version = "0.3" }
 hex = { version = "0.4", optional = true }
 libp2p = { version = "0.46", default-features = false, optional = true }
@@ -27,6 +26,7 @@ rand = { version = "0.8", optional = true }
 rand_core = { version = "0.6", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 thiserror = { version = "1.0", optional = true }
+zeroize = { version = "1.5", optional = true }
 
 beserial = { path = "../beserial", features = ["derive"], optional = true }
 nimiq-collections = { path = "../collections", optional = true }
@@ -46,7 +46,7 @@ merkle = [
     "nimiq-collections",
     "nimiq-hash",
 ]
-otp = ["beserial", "clear_on_drop", "nimiq-hash", "rand"]
+otp = ["beserial", "zeroize", "nimiq-hash", "rand"]
 time = []
 tagged-signing = ["beserial", "hex"]
 math = []

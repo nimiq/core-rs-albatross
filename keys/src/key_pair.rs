@@ -6,7 +6,7 @@ use nimiq_utils::key_rng::SecureGenerate;
 
 use crate::{PrivateKey, PublicKey, Signature};
 
-#[derive(Default, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Default, Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct KeyPair {
     pub public: PublicKey,
     pub private: PrivateKey,

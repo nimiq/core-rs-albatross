@@ -1,9 +1,9 @@
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 
-use clear_on_drop::clear::Clear;
 use rand::rngs::OsRng;
 use rand::RngCore;
+use zeroize::{DefaultIsZeroes, Zeroize};
 
 use beserial::ReadBytesExt;
 use beserial::SerializingError;
@@ -18,11 +18,11 @@ pub trait Verify {
 }
 
 // Own ClearOnDrop
-struct ClearOnDrop<T: Clear> {
+struct ClearOnDrop<T: Zeroize> {
     place: Option<T>,
 }
 
-impl<T: Clear> ClearOnDrop<T> {
+impl<T: Zeroize> ClearOnDrop<T> {
     #[inline]
     fn new(place: T) -> Self {
         ClearOnDrop { place: Some(place) }
@@ -35,17 +35,17 @@ impl<T: Clear> ClearOnDrop<T> {
     }
 }
 
-impl<T: Clear> Drop for ClearOnDrop<T> {
+impl<T: Zeroize> Drop for ClearOnDrop<T> {
     #[inline]
     fn drop(&mut self) {
         // Make sure to drop the unlocked data.
         if let Some(ref mut data) = self.place {
-            data.clear();
+            data.zeroize();
         }
     }
 }
 
-impl<T: Clear> Deref for ClearOnDrop<T> {
+impl<T: Zeroize> Deref for ClearOnDrop<T> {
     type Target = T;
 
     #[inline]
@@ -55,7 +55,7 @@ impl<T: Clear> Deref for ClearOnDrop<T> {
     }
 }
 
-impl<T: Clear> DerefMut for ClearOnDrop<T> {
+impl<T: Zeroize> DerefMut for ClearOnDrop<T> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         // By invariance, c.place must be Some(...).
@@ -63,7 +63,7 @@ impl<T: Clear> DerefMut for ClearOnDrop<T> {
     }
 }
 
-impl<T: Clear> AsRef<T> for ClearOnDrop<T> {
+impl<T: Zeroize> AsRef<T> for ClearOnDrop<T> {
     #[inline]
     fn as_ref(&self) -> &T {
         // By invariance, c.place must be Some(...).
@@ -72,12 +72,12 @@ impl<T: Clear> AsRef<T> for ClearOnDrop<T> {
 }
 
 // Unlocked container
-pub struct Unlocked<T: Clear + Deserialize + Serialize> {
+pub struct Unlocked<T: Zeroize + Deserialize + Serialize> {
     data: ClearOnDrop<T>,
     lock: Locked<T>,
 }
 
-impl<T: Clear + Deserialize + Serialize> Unlocked<T> {
+impl<T: Zeroize + Deserialize + Serialize> Unlocked<T> {
     /// Calling code should make sure to clear the password from memory after use.
     pub fn new(
         secret: T,
@@ -124,7 +124,7 @@ impl<T: Clear + Deserialize + Serialize> Unlocked<T> {
     }
 }
 
-impl<T: Clear + Deserialize + Serialize> Deref for Unlocked<T> {
+impl<T: Zeroize + Deserialize + Serialize> Deref for Unlocked<T> {
     type Target = T;
 
     #[inline]
@@ -134,14 +134,14 @@ impl<T: Clear + Deserialize + Serialize> Deref for Unlocked<T> {
 }
 
 // Locked container
-pub struct Locked<T: Clear + Deserialize + Serialize> {
+pub struct Locked<T: Zeroize + Deserialize + Serialize> {
     lock: Vec<u8>,
     salt: Vec<u8>,
     iterations: u32,
     phantom: PhantomData<T>,
 }
 
-impl<T: Clear + Deserialize + Serialize> Locked<T> {
+impl<T: Zeroize + Deserialize + Serialize> Locked<T> {
     /// Calling code should make sure to clear the password from memory after use.
     pub fn new(
         mut secret: T,
@@ -152,7 +152,7 @@ impl<T: Clear + Deserialize + Serialize> Locked<T> {
         let result = Locked::create(&secret, password, iterations, salt_length)?;
 
         // Remove secret from memory.
-        secret.clear();
+        secret.zeroize();
 
         Ok(result)
     }
@@ -181,7 +181,7 @@ impl<T: Clear + Deserialize + Serialize> Locked<T> {
 
         // Always overwrite unencrypted vector.
         for byte in key.iter_mut() {
-            byte.clear();
+            byte.zeroize();
         }
 
         if let Some(data) = result {
@@ -221,7 +221,7 @@ impl<T: Clear + Deserialize + Serialize> Locked<T> {
 
         // Always overwrite unencrypted vector.
         for byte in data.iter_mut() {
-            byte.clear();
+            byte.zeroize();
         }
 
         Ok(Locked {
@@ -248,7 +248,7 @@ impl<T: Clear + Deserialize + Serialize> Locked<T> {
     }
 }
 
-impl<T: Clear + Deserialize + Serialize + Verify> Locked<T> {
+impl<T: Zeroize + Deserialize + Serialize + Verify> Locked<T> {
     /// Verifies integrity of data upon unlock.
     pub fn unlock(self, password: &[u8]) -> Result<Unlocked<T>, Locked<T>> {
         let unlocked = self.unlock_unchecked(password);
@@ -265,7 +265,7 @@ impl<T: Clear + Deserialize + Serialize + Verify> Locked<T> {
     }
 }
 
-impl<T: Clear + Deserialize + Serialize> Serialize for Locked<T> {
+impl<T: Zeroize + Deserialize + Serialize> Serialize for Locked<T> {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let mut size = 0;
         size += SerializeWithLength::serialize::<u32, _>(&self.lock, writer)?;
@@ -284,7 +284,7 @@ impl<T: Clear + Deserialize + Serialize> Serialize for Locked<T> {
     }
 }
 
-impl<T: Clear + Deserialize + Serialize> Deserialize for Locked<T> {
+impl<T: Zeroize + Deserialize + Serialize> Deserialize for Locked<T> {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let lock: Vec<u8> = DeserializeWithLength::deserialize::<u32, _>(reader)?;
         let salt: Vec<u8> = DeserializeWithLength::deserialize::<u16, _>(reader)?;
@@ -298,7 +298,7 @@ impl<T: Clear + Deserialize + Serialize> Deserialize for Locked<T> {
     }
 }
 
-impl<T: Default + Deserialize + Serialize> IntoDatabaseValue for Locked<T> {
+impl<T: Default + DefaultIsZeroes + Deserialize + Serialize> IntoDatabaseValue for Locked<T> {
     fn database_byte_size(&self) -> usize {
         self.serialized_size()
     }
@@ -308,7 +308,7 @@ impl<T: Default + Deserialize + Serialize> IntoDatabaseValue for Locked<T> {
     }
 }
 
-impl<T: Default + Deserialize + Serialize> FromDatabaseValue for Locked<T> {
+impl<T: Default + DefaultIsZeroes + Deserialize + Serialize> FromDatabaseValue for Locked<T> {
     fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
     where
         Self: Sized,
@@ -319,12 +319,12 @@ impl<T: Default + Deserialize + Serialize> FromDatabaseValue for Locked<T> {
 }
 
 // Generic container
-pub enum OtpLock<T: Clear + Deserialize + Serialize> {
+pub enum OtpLock<T: Zeroize + Deserialize + Serialize> {
     Unlocked(Unlocked<T>),
     Locked(Locked<T>),
 }
 
-impl<T: Clear + Deserialize + Serialize> OtpLock<T> {
+impl<T: Zeroize + Deserialize + Serialize> OtpLock<T> {
     // Taken from Nimiq's JS implementation.
     // TODO: Adjust.
     pub const DEFAULT_ITERATIONS: u32 = 256;

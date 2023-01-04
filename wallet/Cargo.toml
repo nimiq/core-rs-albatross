@@ -13,6 +13,8 @@ travis-ci = { repository = "nimiq/core-rs", branch = "master" }
 maintenance = { status = "experimental" }
 
 [dependencies]
+zeroize = { version = "1.5" }
+
 beserial = { path = "../beserial", features = ["derive"] }
 nimiq-database = { path = "../database" }
 nimiq-database-value = { path = "../database/database-value" }

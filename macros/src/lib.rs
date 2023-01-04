@@ -5,7 +5,7 @@ pub extern crate hex;
 macro_rules! create_typed_array {
     ($name: ident, $t: ty, $len: expr) => {
         #[repr(C)]
-        #[derive(Default, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+        #[derive(Default, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
         pub struct $name(pub [$t; $len]);
 
         impl<'a> From<&'a [$t]> for $name {
