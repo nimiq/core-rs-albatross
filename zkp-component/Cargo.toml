@@ -47,7 +47,6 @@ nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-log = { path = "../log", optional = true }
 nimiq-macros = { path = "../macros" }
-nimiq-mempool = { path = "../mempool" }
 nimiq-nano-primitives = { path = "../nano-primitives" }
 nimiq-nano-zkp = { path = "../nano-zkp"}
 nimiq-network-interface = { path = "../network-interface" }
