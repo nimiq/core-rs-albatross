@@ -80,7 +80,7 @@ pub async fn launch_generate_new_proof(
 
     let mut child = Command::new(path)
         .arg("--prove")
-        .args(env::args())
+        .args(env::args().skip(1))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()?;
