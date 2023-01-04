@@ -26,14 +26,12 @@ futures = { package = "futures-util", version = "0.3" }
 hex = "0.4"
 ip_network = "0.4"
 libp2p = { version = "0.46", default-features = false, features = [
-    "dns-tokio",
     "gossipsub",
     "identify",
     "kad",
     "noise",
     "ping",
     "request-response",
-    "tcp-tokio",
     "websocket",
     "yamux",
 ] }
@@ -70,5 +68,10 @@ nimiq-test-log = { path = "../test-log" }
 
 [features]
 default = ["peer-contact-book-persistence"]
+dns-tcp = ["libp2p/dns-tokio", "libp2p/tcp-tokio"]
 metrics = ["prometheus-client"]
 peer-contact-book-persistence = ["serde"]
+
+
+[target.'cfg(target_family = "wasm")'.dependencies]
+getrandom = { version = "0.2.3", features = ["js"] }

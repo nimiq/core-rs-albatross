@@ -1,7 +1,7 @@
 use std::env;
 use std::fs::{self, File};
 use std::io;
-#[cfg(tokio_unstable)]
+#[cfg(all(tokio_unstable, feature = "tokio-console"))]
 use std::net::ToSocketAddrs;
 use std::sync::Arc;
 
@@ -183,7 +183,7 @@ pub fn initialize_logging(
         (None, None)
     };
 
-    #[cfg(tokio_unstable)]
+    #[cfg(all(tokio_unstable, feature = "tokio-console"))]
     fn initialize_tokio_console<S>(bind_address: &str) -> Option<Box<dyn Layer<S> + Send + Sync>>
     where
         S: Subscriber + for<'a> LookupSpan<'a>,
@@ -198,7 +198,7 @@ pub fn initialize_logging(
                 .spawn(),
         ))
     }
-    #[cfg(not(tokio_unstable))]
+    #[cfg(not(all(tokio_unstable, feature = "tokio-console")))]
     fn initialize_tokio_console<S>(bind_address: &str) -> Option<Box<dyn Layer<S> + Send + Sync>>
     where
         S: Subscriber + for<'a> LookupSpan<'a>,

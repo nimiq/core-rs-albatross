@@ -28,13 +28,15 @@ package = "nimiq-lib"
 path = "../lib"
 version = "0.1"
 features = [
-    "validator",
-    "rpc-server",
     "deadlock",
+    "dns-tcp",
     "logging",
     "metrics-server",
-    "signal-handling",
-    "wallet",
     "panic",
+    "rpc-server",
+    "signal-handling",
+    "tokio-console",
+    "validator",
+    "wallet",
     "zkp-prover",
 ]

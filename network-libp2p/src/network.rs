@@ -13,7 +13,6 @@ use libp2p::core::transport::MemoryTransport;
 use libp2p::{
     core,
     core::{muxing::StreamMuxerBox, transport::Boxed},
-    dns,
     gossipsub::{
         error::PublishError, GossipsubEvent, GossipsubMessage, IdentTopic, MessageAcceptance,
         MessageId, TopicHash, TopicScoreParams,
@@ -27,8 +26,10 @@ use libp2p::{
     noise,
     request_response::{OutboundFailure, RequestId, RequestResponseMessage, ResponseChannel},
     swarm::{dial_opts::DialOpts, ConnectionLimits, NetworkInfo, SwarmBuilder, SwarmEvent},
-    tcp, websocket, yamux, Multiaddr, PeerId, Swarm, Transport,
+    websocket, yamux, Multiaddr, PeerId, Swarm, Transport,
 };
+#[cfg(feature = "dns-tcp")]
+use libp2p::{dns, tcp};
 use log::Instrument;
 use parking_lot::{Mutex, RwLock};
 use tokio::sync::{broadcast, mpsc, oneshot};
@@ -259,10 +260,15 @@ impl Network {
         if memory_transport {
             // Memory transport primary for testing
             // TODO: Use websocket over the memory transport
+
+            #[cfg(feature = "dns-tcp")]
             let transport = websocket::WsConfig::new(dns::TokioDnsConfig::system(
                 tcp::TokioTcpTransport::new(tcp::GenTcpConfig::default().nodelay(true)),
             )?)
             .or_transport(MemoryTransport::default());
+            #[cfg(not(feature = "dns-tcp"))]
+            let transport = MemoryTransport::default();
+            // Fixme: Handle wasm compatible transport
 
             let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
                 .into_authentic(keypair)
@@ -278,9 +284,13 @@ impl Network {
                 .timeout(std::time::Duration::from_secs(20))
                 .boxed())
         } else {
+            #[cfg(feature = "dns-tcp")]
             let transport = websocket::WsConfig::new(dns::TokioDnsConfig::system(
                 tcp::TokioTcpTransport::new(tcp::GenTcpConfig::default().nodelay(true)),
             )?);
+            #[cfg(not(feature = "dns-tcp"))]
+            let transport = MemoryTransport::default();
+            // Fixme: Handle wasm compatible transport
 
             let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
                 .into_authentic(keypair)

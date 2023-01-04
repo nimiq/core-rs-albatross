@@ -28,11 +28,11 @@ package = "nimiq-lib"
 path = "../lib"
 version = "0.1"
 features = [
-    "rpc-server",
     "deadlock",
     "logging",
     "metrics-server",
+    "panic",
+    "rpc-server",
     "signal-handling",
     "wallet",
-    "panic",
 ]
