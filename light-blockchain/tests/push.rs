@@ -5,7 +5,9 @@ use nimiq_block_production::{
     test_custom_block::{next_macro_block, next_micro_block, next_skip_block, BlockConfig},
     BlockProducer,
 };
-use nimiq_blockchain::{Blockchain, PushError, PushError::InvalidBlock, PushResult};
+use nimiq_blockchain::{
+    AbstractBlockchain, Blockchain, PushError, PushError::InvalidBlock, PushResult,
+};
 use nimiq_genesis::NetworkId;
 use nimiq_hash::Blake2bHash;
 use nimiq_light_blockchain::LightBlockchain;
@@ -410,7 +412,7 @@ fn it_can_rebranch_skip_block() {
     let fork1 = temp_producer2.next_block(vec![], true);
 
     let inferior2 = temp_producer1.next_block(vec![], false);
-    temp_producer2.next_block(vec![], false);
+    let fork2 = temp_producer2.next_block(vec![], false);
 
     // Check that producer 2 ignores inferior chain.
     assert_eq!(temp_producer2.push(inferior1), Ok(PushResult::Ignored));
@@ -418,4 +420,126 @@ fn it_can_rebranch_skip_block() {
 
     // Check that producer 1 rebranches.
     assert_eq!(temp_producer1.push(fork1), Ok(PushResult::Rebranched));
+    assert_eq!(temp_producer1.push(fork2), Ok(PushResult::Extended));
+
+    // Case 2: not obvious rebranch rebranch (number denotes accumulated skip block)
+    // ... - [1] - [1] - [2]
+    //          \- [2] - [2]
+    let block = temp_producer1.next_block(vec![], false);
+    temp_producer2.push(block).unwrap();
+
+    let inferior1 = temp_producer1.next_block(vec![], false);
+    let fork1 = temp_producer2.next_block(vec![], true);
+
+    let inferior2 = temp_producer1.next_block(vec![], true);
+    let fork2 = temp_producer2.next_block(vec![], false);
+
+    // Check that producer 2 ignores inferior chain.
+    assert_eq!(temp_producer2.push(inferior1), Ok(PushResult::Ignored));
+    assert_eq!(temp_producer2.push(inferior2), Ok(PushResult::Ignored));
+
+    // Check that producer 1 rebranches.
+    assert_eq!(temp_producer1.push(fork1), Ok(PushResult::Rebranched));
+    assert_eq!(temp_producer1.push(fork2), Ok(PushResult::Extended));
+}
+
+#[test]
+fn micro_block_works_after_macro_block() {
+    let temp_producer = TemporaryLightBlockProducer::new();
+
+    // apply an entire batch including macro block on view_number/round_number zero
+    for _ in 0..Policy::blocks_per_batch() {
+        temp_producer.next_block(vec![], false);
+    }
+    // make sure we are at the beginning of the batch and all block were applied
+    assert_eq!(
+        temp_producer.blockchain.read().block_number(),
+        Policy::blocks_per_batch()
+    );
+
+    // Test if a micro block can be rebranched immediately after
+    // a round_number 0 macro block
+
+    // create a couple of skip blocks
+    let block = temp_producer.next_block_no_push(vec![], true);
+    let rebranch = temp_producer.next_block_no_push(vec![], true);
+    // push first skip block
+    temp_producer.push(block).unwrap();
+    // make sure this was an extend
+    assert_eq!(
+        temp_producer.blockchain.read().block_number(),
+        Policy::blocks_per_batch() + 1
+    );
+    // and rebranch it to block the chain with only one skip block
+    temp_producer.push(rebranch).unwrap();
+    // make sure this was a rebranch
+    assert_eq!(
+        temp_producer.blockchain.read().block_number(),
+        Policy::blocks_per_batch() + 1
+    );
+
+    // apply the rest of the batch including macro block on view_number/round_number one
+    for _ in 0..Policy::blocks_per_batch() - 1 {
+        temp_producer.next_block(vec![], false);
+    }
+    // make sure we are at the beginning of the batch
+    assert_eq!(
+        temp_producer.blockchain.read().block_number(),
+        Policy::blocks_per_batch() * 2
+    );
+
+    // Test if a micro block can be rebranched immediately after
+    // a round_number non 0 macro block
+
+    // create blocks for a chain with accumulated skip blocks after the batch of 0, 1 and 2
+    let block = temp_producer.next_block_no_push(vec![], true);
+    let rebranch1 = temp_producer.next_block_no_push(vec![], true);
+    // let rebranch2 = temp_producer.next_block_no_push(2, vec![]);
+    // apply them each rebranching the previous one
+    temp_producer.push(block).unwrap();
+    temp_producer.push(rebranch1).unwrap();
+    // temp_producer.push(rebranch2).unwrap();
+
+    assert_eq!(
+        temp_producer.blockchain.read().block_number(),
+        Policy::blocks_per_batch() * 2 + 1
+    );
+}
+
+#[test]
+fn it_can_rebranch_forks() {
+    let temp_producer1 = TemporaryLightBlockProducer::new();
+    let temp_producer2 = TemporaryLightBlockProducer::new();
+
+    // Case 2: more difficult rebranch
+    //              a     b     c     d
+    // [0] - [0] - [0] - [0] - [0] - [0]
+    //          \- [0] - [0] - [1] - [1]
+    let block = temp_producer1.next_block(vec![], false);
+    temp_producer2.push(block).unwrap();
+
+    let fork1a = temp_producer1.next_block(vec![0x48], false);
+    let fork2a = temp_producer2.next_block(vec![], false);
+
+    let fork1b = temp_producer1.next_block(vec![], false);
+    let fork2b = temp_producer2.next_block(vec![], false);
+
+    let fork1c = temp_producer1.next_block(vec![], false);
+    let fork2c = temp_producer2.next_block(vec![], true);
+
+    let fork1d = temp_producer1.next_block(vec![], false);
+    let fork2d = temp_producer2.next_block(vec![], false);
+
+    // Check that each one accepts other fork.
+    assert_eq!(temp_producer1.push(fork2a), Ok(PushResult::Forked));
+    assert_eq!(temp_producer2.push(fork1a), Ok(PushResult::Forked));
+    assert_eq!(temp_producer1.push(fork2b), Ok(PushResult::Forked));
+    assert_eq!(temp_producer2.push(fork1b), Ok(PushResult::Forked));
+
+    // Check that producer 1 rebranches.
+    assert_eq!(temp_producer1.push(fork2c), Ok(PushResult::Rebranched));
+    assert_eq!(temp_producer2.push(fork1c), Ok(PushResult::Ignored));
+
+    assert_eq!(temp_producer1.push(fork2d), Ok(PushResult::Extended));
+    assert_eq!(temp_producer2.push(fork1d), Ok(PushResult::Ignored));
 }

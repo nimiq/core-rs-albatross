@@ -1,4 +1,4 @@
-use nimiq_block::{Block, BlockError, BlockType, MacroHeader};
+use nimiq_block::{Block, BlockError, MacroHeader};
 use nimiq_blockchain::{AbstractBlockchain, ChainInfo, ChainOrdering, PushError, PushResult};
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::policy::Policy;
@@ -105,7 +105,7 @@ impl LightBlockchain {
                 return LightBlockchain::extend(this, chain_info, prev_info);
             }
             ChainOrdering::Superior => {
-                return LightBlockchain::rebranch(this, chain_info, prev_info);
+                return LightBlockchain::rebranch(this, chain_info);
             }
             ChainOrdering::Inferior => {
                 log::debug!(block = %chain_info.head, "Storing block - on inferior chain");
@@ -165,14 +165,19 @@ impl LightBlockchain {
         // Store the current chain info.
         this.chain_store.put_chain_info(chain_info);
 
+        log::debug!(
+            block = %this.head,
+            kind = "extend",
+            "Accepted block",
+        );
+
         Ok(PushResult::Extended)
     }
 
     /// Rebranches the current main chain.
     fn rebranch(
         this: RwLockUpgradableReadGuard<Self>,
-        mut chain_info: ChainInfo,
-        prev_info: ChainInfo,
+        chain_info: ChainInfo,
     ) -> Result<PushResult, PushError> {
         // You can't rebranch a macro block.
         assert!(chain_info.head.is_micro());
@@ -180,58 +185,133 @@ impl LightBlockchain {
         // Upgrade the blockchain lock
         let mut this = RwLockUpgradableReadGuard::upgrade_untimed(this);
 
-        // Update chain infos.
-        chain_info.on_main_chain = true;
+        let target_block = chain_info.head.header();
+        log::debug!(block = %target_block, "Rebranching");
 
         // Find the common ancestor between our current main chain and the fork chain.
         // Walk up the fork chain until we find a block that is part of the main chain.
-        // Update the fork chain along the way.
-        let mut current = prev_info;
+        // Store the chain along the way.
 
-        while !current.on_main_chain {
-            // A fork can't contain a macro block. We already received that macro block, thus it must be on our
-            // main chain.
-            assert_eq!(current.head.ty(), BlockType::Micro);
+        let mut fork_chain: Vec<(Blake2bHash, ChainInfo)> = vec![];
+        let mut current: (Blake2bHash, ChainInfo) = (chain_info.head.hash(), chain_info);
 
-            // Get previous chain info.
+        while !current.1.on_main_chain {
+            let prev_hash = current.1.head.parent_hash().clone();
+
             let prev_info = this
-                .get_chain_info(current.head.parent_hash(), false, None)
+                .get_chain_info(&prev_hash, false, None)
                 .expect("Corrupted store: Failed to find fork predecessor while rebranching");
 
-            // Update the chain info.
-            current.on_main_chain = true;
+            fork_chain.push(current);
 
-            // Store the chain info.
-            this.chain_store.put_chain_info(current);
-
-            current = prev_info;
+            current = (prev_hash, prev_info);
         }
 
-        // Remember the ancestor block.
-        let ancestor = current;
+        log::debug!(
+            block = %target_block,
+            common_ancestor = %current.1.head,
+            no_blocks_up = fork_chain.len(),
+            "Found common ancestor",
+        );
 
-        // Go back from the head of the forked chain until the ancestor, updating it along the way.
-        current = this
-            .get_chain_info(&this.head_hash(), false, None)
-            .expect("Couldn't find the head chain info!");
+        // Revert AccountsTree & TransactionCache to the common ancestor state.
+        let mut revert_chain: Vec<(Blake2bHash, ChainInfo)> = vec![];
+        let mut ancestor = current;
 
-        while current != ancestor {
-            // Get previous chain info.
+        // Check if ancestor is in current batch.
+        if ancestor.1.head.block_number() < this.macro_head.block_number() {
+            log::warn!(
+                block = %target_block,
+                reason = "ancestor block already finalized",
+                ancestor_block = %ancestor.1.head,
+                "Rejecting block",
+            );
+            return Err(PushError::InvalidFork);
+        }
+
+        current = (
+            this.head_hash(),
+            this.get_chain_info(&this.head_hash(), false, None)
+                .expect("Couldn't find the head chain info!"),
+        );
+
+        while current.0 != ancestor.0 {
+            let block = current.1.head.clone();
+            if block.is_macro() {
+                panic!("Trying to rebranch across macro block");
+            }
+
+            let prev_hash = block.parent_hash().clone();
+
             let prev_info = this
-                .get_chain_info(current.head.parent_hash(), false, None)
-                .expect("Corrupted store: Failed to find fork predecessor while rebranching");
+                .get_chain_info(&prev_hash, false, None)
+                .expect("Corrupted store: Failed to find main chain predecessor while rebranching");
 
-            // Update the chain info.
-            current.on_main_chain = false;
+            revert_chain.push(current);
 
-            // Store the chain info.
-            this.chain_store.put_chain_info(current);
-
-            current = prev_info;
+            current = (prev_hash, prev_info);
         }
 
-        // Update the head of the blockchain.
-        this.head = chain_info.head;
+        // Unset onMainChain flag / mainChainSuccessor on the current main chain up to (excluding) the common ancestor.
+        for reverted_block in revert_chain.iter_mut() {
+            reverted_block.1.on_main_chain = false;
+            reverted_block.1.main_chain_successor = None;
+
+            this.chain_store.put_chain_info(reverted_block.1.clone());
+        }
+
+        // Update the mainChainSuccessor of the common ancestor block.
+        ancestor.1.main_chain_successor = Some(fork_chain.last().unwrap().0.clone());
+        this.chain_store.put_chain_info(ancestor.1);
+
+        // Set onMainChain flag / mainChainSuccessor on the fork.
+        for i in (0..fork_chain.len()).rev() {
+            let main_chain_successor = if i > 0 {
+                Some(fork_chain[i - 1].0.clone())
+            } else {
+                None
+            };
+
+            let fork_block = &mut fork_chain[i];
+            fork_block.1.on_main_chain = true;
+            fork_block.1.main_chain_successor = main_chain_successor;
+
+            // Include the body of the new block (at position 0).
+            this.chain_store.put_chain_info(fork_block.1.clone());
+        }
+
+        // Update head.
+        let new_head_info = &fork_chain[0].1;
+
+        this.head = new_head_info.head.clone();
+
+        let mut reverted_blocks = Vec::with_capacity(revert_chain.len());
+        for (hash, chain_info) in revert_chain.into_iter().rev() {
+            log::debug!(
+                block = %chain_info.head,
+                num_transactions = chain_info.head.num_transactions(),
+                "Reverted block",
+            );
+            reverted_blocks.push((hash, chain_info.head));
+        }
+
+        let mut adopted_blocks = Vec::with_capacity(fork_chain.len());
+        for (hash, chain_info) in fork_chain.into_iter().rev() {
+            log::debug!(
+                block = %chain_info.head,
+                num_transactions = chain_info.head.num_transactions(),
+                kind = "rebranch",
+                "Accepted block",
+            );
+            adopted_blocks.push((hash, chain_info.head));
+        }
+
+        log::debug!(
+            block = %this.head,
+            num_reverted_blocks = reverted_blocks.len(),
+            num_adopted_blocks = adopted_blocks.len(),
+            "Rebranched",
+        );
 
         Ok(PushResult::Rebranched)
     }
