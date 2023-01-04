@@ -6,7 +6,7 @@ use nimiq_block::{
     Block, BlockBody, BlockComponents, BlockHeader, BlockJustification, BlockType, MacroBody,
     MacroHeader, MicroBody, MicroHeader, MicroJustification, TendermintProof,
 };
-use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
+use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy::Policy;

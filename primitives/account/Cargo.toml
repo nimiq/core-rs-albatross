@@ -24,6 +24,7 @@ beserial = { path = "../../beserial", features = ["derive"] }
 nimiq-bls = { path = "../../bls" }
 nimiq-collections = { path = "../../collections" }
 nimiq-database = { path = "../../database" }
+nimiq-database-value = { path = "../../database/database-value" }
 nimiq-hash = { path = "../../hash" }
 nimiq-keys = { path = "../../keys", features = ["serde-derive"] }
 nimiq-macros = { path = "../../macros" }

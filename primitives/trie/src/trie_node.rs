@@ -5,7 +5,7 @@ use std::slice;
 use log::error;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
-use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
+use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
 
 use crate::error::MerkleRadixTrieError;

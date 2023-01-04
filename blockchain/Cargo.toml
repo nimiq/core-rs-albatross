@@ -32,6 +32,7 @@ nimiq-block = { path = "../primitives/block" }
 nimiq-bls = { path = "../bls", features = ["beserial"] }
 nimiq-collections = { path = "../collections" }
 nimiq-database = { path = "../database" }
+nimiq-database-value = { path = "../database/database-value" }
 nimiq-genesis = { path = "../genesis" }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }

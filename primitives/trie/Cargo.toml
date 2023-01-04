@@ -17,6 +17,7 @@ thiserror = "1.0"
 
 beserial = { path = "../../beserial", features = ["derive"] }
 nimiq-database = { path = "../../database" }
+nimiq-database-value = { path = "../../database/database-value" }
 nimiq-hash = { path = "../../hash" }
 nimiq-keys = { path = "../../keys" }
 

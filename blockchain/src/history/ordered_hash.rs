@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::convert::TryInto;
 use std::io;
 
-use nimiq_database::{AsDatabaseBytes, FromDatabaseValue};
+use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue};
 use nimiq_hash::{Blake2bHash, HashOutput};
 
 /// A wrapper for an u32 and a Blake2bHash. We use it to for two different functions:

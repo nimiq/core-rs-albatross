@@ -10,13 +10,13 @@ use std::ops::Deref;
 use bitflags::bitflags;
 
 use crate::cursor::{ReadCursor, WriteCursor as WriteCursorTrait};
-pub use crate::traits::{AsDatabaseBytes, FromDatabaseValue, IntoDatabaseValue};
 
 #[macro_use]
 pub mod cursor;
 pub mod mdbx;
-pub mod traits;
 pub mod volatile;
+
+use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue, IntoDatabaseValue};
 
 #[derive(Debug)]
 pub enum Error {

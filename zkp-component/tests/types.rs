@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use ark_groth16::Proof;
 use beserial::{Deserialize, Serialize};
 use nimiq_block::MacroBlock;
-use nimiq_database::{AsDatabaseBytes, FromDatabaseValue};
+use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue};
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::policy::Policy;
 use nimiq_test_utils::zkp_test_data::KEYS_PATH;

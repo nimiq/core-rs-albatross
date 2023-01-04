@@ -2510,6 +2510,7 @@ dependencies = [
  "nimiq-bls",
  "nimiq-collections",
  "nimiq-database",
+ "nimiq-database-value",
  "nimiq-genesis-builder",
  "nimiq-hash",
  "nimiq-keys",
@@ -2540,7 +2541,7 @@ dependencies = [
  "hex",
  "nimiq-bls",
  "nimiq-collections",
- "nimiq-database",
+ "nimiq-database-value",
  "nimiq-handel",
  "nimiq-hash",
  "nimiq-hash_derive",
@@ -2603,6 +2604,7 @@ dependencies = [
  "nimiq-bls",
  "nimiq-collections",
  "nimiq-database",
+ "nimiq-database-value",
  "nimiq-genesis",
  "nimiq-hash",
  "nimiq-keys",
@@ -2738,8 +2740,16 @@ version = "0.1.0"
 dependencies = [
  "bitflags",
  "libmdbx",
+ "nimiq-database-value",
  "nimiq-test-log",
  "tempfile",
+ "tracing",
+]
+
+[[package]]
+name = "nimiq-database-value"
+version = "0.1.0"
+dependencies = [
  "tracing",
 ]
 
@@ -2825,7 +2835,7 @@ dependencies = [
  "blake2-rfc",
  "byteorder",
  "hex",
- "nimiq-database",
+ "nimiq-database-value",
  "nimiq-macros",
  "nimiq-mmr",
  "nimiq-test-log",
@@ -2930,7 +2940,7 @@ dependencies = [
  "data-encoding",
  "ed25519-zebra",
  "hex",
- "nimiq-database",
+ "nimiq-database-value",
  "nimiq-hash",
  "nimiq-macros",
  "nimiq-test-log",
@@ -3566,6 +3576,7 @@ dependencies = [
  "beserial",
  "hex",
  "nimiq-database",
+ "nimiq-database-value",
  "nimiq-hash",
  "nimiq-keys",
  "nimiq-test-log",
@@ -3583,7 +3594,7 @@ dependencies = [
  "hex",
  "libp2p",
  "nimiq-collections",
- "nimiq-database",
+ "nimiq-database-value",
  "nimiq-hash",
  "nimiq-keys",
  "nimiq-test-log",
@@ -3613,6 +3624,7 @@ dependencies = [
  "nimiq-collections",
  "nimiq-consensus",
  "nimiq-database",
+ "nimiq-database-value",
  "nimiq-genesis",
  "nimiq-genesis-builder",
  "nimiq-handel",
@@ -3684,6 +3696,7 @@ dependencies = [
  "hex",
  "lazy_static",
  "nimiq-database",
+ "nimiq-database-value",
  "nimiq-hash",
  "nimiq-keys",
  "nimiq-primitives",
@@ -3711,6 +3724,7 @@ dependencies = [
  "nimiq-blockchain-proxy",
  "nimiq-bls",
  "nimiq-database",
+ "nimiq-database-value",
  "nimiq-genesis",
  "nimiq-genesis-builder",
  "nimiq-hash",

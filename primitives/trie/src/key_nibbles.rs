@@ -8,7 +8,7 @@ use std::usize;
 use log::error;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
-use nimiq_database::AsDatabaseBytes;
+use nimiq_database_value::AsDatabaseBytes;
 use nimiq_keys::Address;
 
 /// A compact representation of a node's key. It stores the key in big endian. Each byte

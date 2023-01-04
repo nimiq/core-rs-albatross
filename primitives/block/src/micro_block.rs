@@ -5,7 +5,7 @@ use std::{fmt, io};
 
 use crate::{BlockError, SkipBlockInfo};
 use beserial::{Deserialize, Serialize};
-use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
+use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
 use nimiq_hash_derive::SerializeContent;
 use nimiq_keys::{PublicKey, Signature};

@@ -4,7 +4,7 @@ use std::io;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use nimiq_account::{Inherent, InherentType};
-use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
+use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_mmr::hash::Hash as MMRHash;
 use nimiq_primitives::coin::Coin;

@@ -33,6 +33,7 @@ nimiq-bls = { path = "../bls" }
 nimiq-collections = { path = "../collections" }
 nimiq-consensus = { path = "../consensus" }
 nimiq-database = { path = "../database" }
+nimiq-database-value = { path = "../database/database-value" }
 nimiq-genesis = { path = "../genesis" }
 nimiq-handel = { path = "../handel" }
 nimiq-hash = { path = "../hash" }

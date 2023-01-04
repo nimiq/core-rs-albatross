@@ -13,6 +13,7 @@ members = [
   "collections",
   "consensus",
   "database",
+  "database/database-value",
   "genesis",
   "genesis-builder",
   "handel",

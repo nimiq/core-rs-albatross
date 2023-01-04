@@ -9,7 +9,7 @@ use std::str::FromStr;
 use hex::FromHex;
 use thiserror::Error;
 
-use nimiq_database::{AsDatabaseBytes, FromDatabaseValue};
+use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue};
 use nimiq_hash::{hash_typed_array, Blake2bHash, Blake2bHasher, Hasher};
 use nimiq_macros::create_typed_array;
 

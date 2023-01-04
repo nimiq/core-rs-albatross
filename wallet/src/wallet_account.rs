@@ -1,7 +1,7 @@
 use std::io;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError};
-use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
+use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Hash, HashOutput, Sha256Hash};
 use nimiq_keys::{Address, KeyPair, PublicKey, SecureGenerate, Signature};
 use nimiq_primitives::coin::Coin;

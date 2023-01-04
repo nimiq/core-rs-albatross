@@ -1,4 +1,4 @@
-use crate::{AsDatabaseBytes, FromDatabaseValue};
+use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue};
 
 pub(crate) trait RawReadCursor {
     fn first<K, V>(&mut self) -> Option<(K, V)>

@@ -14,7 +14,7 @@ use beserial::{
 use nimiq_block::MacroBlock;
 use nimiq_blockchain::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
-use nimiq_database::{AsDatabaseBytes, FromDatabaseValue};
+use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue};
 use nimiq_hash::Blake2bHash;
 use nimiq_nano_primitives::MacroBlock as ZKPMacroBlock;
 use nimiq_network_interface::network::Network;

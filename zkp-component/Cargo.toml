@@ -41,6 +41,7 @@ nimiq-block = { path = "../primitives/block" }
 nimiq-blockchain = { path = "../blockchain" }
 nimiq-blockchain-proxy = { path = "../blockchain-proxy" }
 nimiq-database = { path = "../database" }
+nimiq-database-value = { path = "../database/database-value" }
 nimiq-genesis = { path = "../genesis" }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }

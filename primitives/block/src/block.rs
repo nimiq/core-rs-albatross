@@ -5,7 +5,7 @@ use bitflags::bitflags;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use nimiq_bls::cache::PublicKeyCache;
-use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
+use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, SerializeContent};
 use nimiq_hash_derive::SerializeContent;
 use nimiq_keys::PublicKey;

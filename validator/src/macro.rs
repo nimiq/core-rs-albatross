@@ -10,7 +10,7 @@ use beserial::{Deserialize, Serialize};
 use nimiq_block::SignedTendermintProposal;
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::Blockchain;
-use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
+use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_primitives::slots::Validators;
 use nimiq_tendermint::{TendermintOutsideDeps, TendermintReturn, TendermintState};
 use nimiq_validator_network::ValidatorNetwork;

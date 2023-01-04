@@ -4,7 +4,7 @@ use beserial::{
     Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
     SerializingError, WriteBytesExt,
 };
-use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
+use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Hash, HashOutput, Hasher, SerializeContent};
 
 #[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
