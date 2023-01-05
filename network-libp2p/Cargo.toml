@@ -25,10 +25,11 @@ derive_more = "0.99"
 futures = { package = "futures-util", version = "0.3" }
 hex = "0.4"
 ip_network = "0.4"
-libp2p = { version = "0.46", default-features = false, features = [
+libp2p = { version = "0.50", default-features = false, features = [
     "gossipsub",
     "identify",
     "kad",
+    "macros",
     "noise",
     "ping",
     "request-response",
@@ -64,11 +65,14 @@ nimiq-utils = { path = "../utils", features = [
 nimiq-validator-network = { path = "../validator-network" }
 
 [dev-dependencies]
+# In dev/testing we require more tokio features
+tokio = { version = "1.24", features = ["macros", "rt", "rt-multi-thread", "test-util", "tracing"] }
+
 nimiq-test-log = { path = "../test-log" }
 
 [features]
 default = ["peer-contact-book-persistence"]
-dns-tcp = ["libp2p/dns-tokio", "libp2p/tcp-tokio"]
+websocket = ["libp2p/dns", "libp2p/tcp", "libp2p/tokio"]
 metrics = ["prometheus-client"]
 peer-contact-book-persistence = ["serde"]
 

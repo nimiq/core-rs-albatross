@@ -78,7 +78,7 @@ impl TestNode {
         let behaviour =
             DiscoveryBehaviour::new(config, keypair, Arc::clone(&peer_contact_book), clock);
 
-        let mut swarm = Swarm::new(transport, behaviour, peer_id);
+        let mut swarm = Swarm::with_threadpool_executor(transport, behaviour, peer_id);
 
         Swarm::listen_on(&mut swarm, address.clone()).unwrap();
 

@@ -49,6 +49,8 @@ jobs:
         toolchain: stable
         override: true
         components: llvm-tools-preview
+    - name: Install Protoc
+      run: sudo apt-get install protobuf-compiler
     - name: Install cargo-llvm-cov
       uses: actions-rs/cargo@v1
       with:
@@ -100,6 +102,8 @@ jobs:
         toolchain: stable
         override: true
         components: clippy
+    - name: Install Protoc
+      run: sudo apt-get install protobuf-compiler
     - uses: actions-rs/clippy-check@v1
       with:
         name: Clippy Report
@@ -127,6 +131,8 @@ jobs:
         profile: minimal
         toolchain: stable
         override: true
+    - name: Install Protoc
+      run: sudo apt-get install protobuf-compiler
     - uses: actions-rs/cargo@v1
       with:
         command: build

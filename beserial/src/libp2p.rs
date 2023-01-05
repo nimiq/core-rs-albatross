@@ -38,7 +38,6 @@ impl Serialize for PublicKey {
                 writer.write_all(&pk.encode())?;
                 Ok(32) // `PublicKey::encode` always returns a `[u8; 32]`.
             }
-            _ => panic!("Only ed25519 keys are currently supported for serialization."),
         }
     }
 
@@ -81,7 +80,6 @@ impl Serialize for Keypair {
                 writer.write_all(&keypair.encode())?;
                 Ok(64)
             }
-            _ => panic!("Only ed25519 keys are currently supported for serialization."),
         }
     }
 

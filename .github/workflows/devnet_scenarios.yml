@@ -59,6 +59,8 @@ jobs:
         override: true
     - name: Optionally patch the source
       run: ${{ matrix.pre }}
+    - name: Install Protoc
+      run: sudo apt-get install protobuf-compiler
     - uses: actions-rs/cargo@v1
       with:
         command: build

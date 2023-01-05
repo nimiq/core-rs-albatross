@@ -52,8 +52,9 @@ the following packages are required to be able to compile the source code:
 
 - `clang`
 - `cmake`
-- `pkg-config`
 - `libssl-dev` (in Debian/Ubuntu) or `openssl-devel` (in Fedora/Red Hat)
+- `pkg-config`
+- `protobuf-compiler`
 
 
 After installing the previous packages, compiling the project is achieved through [`cargo`](https://doc.rust-lang.org/cargo/):
