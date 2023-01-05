@@ -3734,7 +3734,6 @@ dependencies = [
  "nimiq-keys",
  "nimiq-log",
  "nimiq-macros",
- "nimiq-mempool",
  "nimiq-nano-primitives",
  "nimiq-nano-zkp",
  "nimiq-network-interface",
