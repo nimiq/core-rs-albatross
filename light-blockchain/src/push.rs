@@ -179,9 +179,6 @@ impl LightBlockchain {
         this: RwLockUpgradableReadGuard<Self>,
         chain_info: ChainInfo,
     ) -> Result<PushResult, PushError> {
-        // You can't rebranch a macro block.
-        assert!(chain_info.head.is_micro());
-
         // Upgrade the blockchain lock
         let mut this = RwLockUpgradableReadGuard::upgrade_untimed(this);
 
@@ -214,7 +211,7 @@ impl LightBlockchain {
             "Found common ancestor",
         );
 
-        // Revert AccountsTree & TransactionCache to the common ancestor state.
+        // Revert to the common ancestor.
         let mut revert_chain: Vec<(Blake2bHash, ChainInfo)> = vec![];
         let mut ancestor = current;
 
@@ -252,7 +249,7 @@ impl LightBlockchain {
             current = (prev_hash, prev_info);
         }
 
-        // Unset onMainChain flag / mainChainSuccessor on the current main chain up to (excluding) the common ancestor.
+        // Unset on_main_chain flag / main_chain_successor on the current main chain up to (excluding) the common ancestor.
         for reverted_block in revert_chain.iter_mut() {
             reverted_block.1.on_main_chain = false;
             reverted_block.1.main_chain_successor = None;
@@ -260,11 +257,11 @@ impl LightBlockchain {
             this.chain_store.put_chain_info(reverted_block.1.clone());
         }
 
-        // Update the mainChainSuccessor of the common ancestor block.
+        // Update the main_chain_successor of the common ancestor block.
         ancestor.1.main_chain_successor = Some(fork_chain.last().unwrap().0.clone());
         this.chain_store.put_chain_info(ancestor.1);
 
-        // Set onMainChain flag / mainChainSuccessor on the fork.
+        // Set on_main_chain flag / main_chain_successor on the fork.
         for i in (0..fork_chain.len()).rev() {
             let main_chain_successor = if i > 0 {
                 Some(fork_chain[i - 1].0.clone())
