@@ -74,4 +74,4 @@ peer-contact-book-persistence = ["serde"]
 
 
 [target.'cfg(target_family = "wasm")'.dependencies]
-getrandom = { version = "0.2.3", features = ["js"] }
+getrandom = { version = "0.2.8", features = ["js"] }
