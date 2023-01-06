@@ -314,30 +314,17 @@ impl Blockchain {
             "Accepted epoch",
         );
 
-        // Notify the mempool about a new history adopted
-        if let Err(e) = this
+        // If there are no listeners we do not log errors
+        _ = this
             .notifier
-            .send(BlockchainEvent::HistoryAdopted(block_hash.clone()))
-        {
-            log::error!(
-                error = ?e,
-                "Error sending the History Adopted event to the events notifier",
-            );
-        }
+            .send(BlockchainEvent::HistoryAdopted(block_hash.clone()));
 
         if is_election_block {
-            if let Err(e) = this
+            _ = this
                 .notifier
-                .send(BlockchainEvent::EpochFinalized(block_hash))
-            {
-                log::error!(error = ?e,
-                    "Error sending the Epoch Finalized event to the events notifier",
-                );
-            }
-        } else if let Err(e) = this.notifier.send(BlockchainEvent::Finalized(block_hash)) {
-            log::error!(
-                error = ?e,"Error sending the Finalized event to the events notifier",
-            );
+                .send(BlockchainEvent::EpochFinalized(block_hash));
+        } else {
+            _ = this.notifier.send(BlockchainEvent::Finalized(block_hash));
         }
 
         // Return result.
