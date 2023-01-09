@@ -259,25 +259,15 @@ impl Blockchain {
             "Accepted block",
         );
 
+        // We shouldn't log errors if there are no listeners
         if is_election_block {
-            if let Err(e) = this
+            _ = this
                 .notifier
-                .send(BlockchainEvent::EpochFinalized(block_hash))
-            {
-                log::error!(error = ?e,
-                    "Error sending the Epoch Finalized event to the events notifier",
-                );
-            }
+                .send(BlockchainEvent::EpochFinalized(block_hash));
         } else if is_macro_block {
-            if let Err(e) = this.notifier.send(BlockchainEvent::Finalized(block_hash)) {
-                log::error!(error = ?e,
-                    "Error sending the Finalized event to the events notifier",
-                );
-            }
-        } else if let Err(e) = this.notifier.send(BlockchainEvent::Extended(block_hash)) {
-            log::error!(error = ?e,
-                "Error sending the Extended event to the events notifier",
-            );
+            _ = this.notifier.send(BlockchainEvent::Finalized(block_hash));
+        } else {
+            _ = this.notifier.send(BlockchainEvent::Extended(block_hash));
         }
 
         // The log notifier is for informational purposes only, thus may have no listeners.
@@ -503,14 +493,11 @@ impl Blockchain {
         this.metrics
             .note_rebranch(&reverted_blocks, &adopted_blocks);
 
-        if let Err(e) = this
+        // We do not log errors if there are no listeners
+        _ = this
             .notifier
-            .send(BlockchainEvent::Rebranched(reverted_blocks, adopted_blocks))
-        {
-            log::error!(error = ?e,
-                "Error sending the Rebranched event to the events notifier"
-            );
-        }
+            .send(BlockchainEvent::Rebranched(reverted_blocks, adopted_blocks));
+
         send_vec(&this.log_notifier, block_logs);
 
         Ok(PushResult::Rebranched)
