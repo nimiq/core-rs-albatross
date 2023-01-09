@@ -134,6 +134,7 @@ impl<N: Network> Consensus<N> {
         let stream = network.receive_requests::<RequestHead>();
         tokio::spawn(request_handler(network, stream, blockchain));
         match blockchain {
+            #[cfg(not(target_family = "wasm"))]
             BlockchainProxy::Full(blockchain) => {
                 let stream = network.receive_requests::<RequestBatchSet>();
                 tokio::spawn(request_handler(network, stream, blockchain));

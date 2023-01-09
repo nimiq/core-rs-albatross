@@ -20,10 +20,12 @@ tokio-stream = { version = "0.1", features = ["sync"] }
 futures = { package = "futures-util", version = "0.3" }
 
 nimiq-block = { path = "../primitives/block" }
-nimiq-blockchain = { path = "../blockchain" }
 nimiq-light-blockchain = { path = "../light-blockchain" }
 nimiq-database = { path = "../database" }
 nimiq-genesis = { path = "../genesis" }
 nimiq-hash = { path = "../hash" }
 nimiq-primitives = { path = "../primitives" }
 nimiq-transaction = { path = "../primitives/transaction" }
+
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+nimiq-blockchain = { path = "../blockchain" }
