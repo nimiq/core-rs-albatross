@@ -17,7 +17,7 @@ maintenance = { status = "experimental" }
 [dependencies]
 futures = { package = "futures-util", version = "0.3" }
 thiserror = "1.0"
-tokio = { version = "1.23", features = ["sync"] }
+tokio = { version = "1.24", features = ["sync"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 hex = "0.4"
 log = { package = "tracing", version = "0.1", features = ["log"] }
