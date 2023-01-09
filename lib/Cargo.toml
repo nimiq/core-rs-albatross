@@ -39,7 +39,7 @@ strum_macros = "0.24"
 toml = "0.5"
 url = { version = "2.3", features = ["serde"] }
 thiserror = "1.0"
-tokio = { version = "1.23", features = ["rt", "tracing"], optional = true }
+tokio = { version = "1.24", features = ["rt", "tracing"], optional = true }
 tracing-loki = { version = "0.2.1", optional = true }
 tracing-subscriber = { version = "0.3", optional = true }
 
