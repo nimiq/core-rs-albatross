@@ -1,11 +1,106 @@
-use nimiq_block::{Block, BlockError, MacroHeader};
+use nimiq_block::{Block, BlockError, BlockType, MacroHeader};
 use nimiq_blockchain::{AbstractBlockchain, ChainInfo, ChainOrdering, PushError, PushResult};
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::policy::Policy;
 use parking_lot::RwLockUpgradableReadGuard;
-use std::ops::Deref;
+use std::{cmp, ops::Deref};
 
 use crate::blockchain::LightBlockchain;
+
+/// Warning: The logic of this function is a duplicate of order_chains within the regular blockchain implementation
+/// adapted for the light blockchain
+/// If this function is modified the other one should be modified accordingly
+pub fn order_chains(
+    blockchain: &LightBlockchain,
+    block: &Block,
+    prev_info: &ChainInfo,
+) -> ChainOrdering {
+    let mut chain_order = ChainOrdering::Unknown;
+
+    if block.parent_hash() == &blockchain.head_hash() {
+        chain_order = ChainOrdering::Extend;
+    } else if block.is_macro() && block.block_number() > blockchain.block_number() {
+        chain_order = ChainOrdering::Superior;
+    } else {
+        // To compare two chains, we need to compare and find which chain has an earlier
+        // skip block. For example (numbers denotes accumulated skip block):
+        //   [2] - [2] - [3] - [4]
+        //      \- [3] - [3] - [3]
+        // The example above illustrates that you actually want to choose the lower chain,
+        // since its skip block happened way earlier.
+        // Let's thus find the first block on the branch (not on the main chain).
+        // If there is a malicious fork, it might happen that the two skip blocks before
+        // the branch are the same. Then, we need to follow and compare.
+        let mut blocks = vec![block.clone()];
+
+        let mut current = ChainInfo::new(block.clone(), false);
+        let mut prev = prev_info.clone();
+
+        while !prev.on_main_chain {
+            // Macro blocks are final
+            assert!(
+                prev.head.ty() != BlockType::Macro,
+                "Trying to rebranch across macro block"
+            );
+
+            let prev_hash = prev.head.parent_hash();
+            blocks.push(prev.head.clone());
+
+            let prev_info = blockchain
+                .get_chain_info(prev_hash, false)
+                .expect("Corrupted store: Failed to find fork predecessor while rebranching");
+
+            current = prev;
+
+            prev = prev_info;
+        }
+
+        // Now go forward from the first block on the branch and detect which chain has an earlier
+        // skip block.
+        // Example (skip blocks noted as '1'):
+        // [0] - [0] - [1]  *correct chain*
+        //    \- [0] - [0]
+        // Otherwise take the longest:
+        // [0] - [0] - [1] - [0]  *correct chain*
+        //    \- [0] - [1]
+        let current_height = current.head.block_number();
+        let min_height = cmp::min(blockchain.block_number(), block.block_number());
+
+        // Iterate over common block heights starting from right after the intersection.
+        for h in current_height..=min_height {
+            let current_block = blocks.pop().unwrap();
+
+            // Get equivalent block on main chain.
+            let current_on_main_chain = blockchain
+                .get_block_at(h, false)
+                .expect("Corrupted store: Failed to find main chain equivalent of fork");
+
+            if current_block.is_skip() && !current_on_main_chain.is_skip() {
+                chain_order = ChainOrdering::Superior;
+                break;
+            } else if !current_block.is_skip() && current_on_main_chain.is_skip() {
+                chain_order = ChainOrdering::Inferior;
+                break;
+            }
+        }
+
+        // If they were all equal, choose the longer one.
+        if chain_order == ChainOrdering::Unknown && blockchain.block_number() < block.block_number()
+        {
+            chain_order = ChainOrdering::Superior;
+        }
+
+        log::info!(
+            fork_block_number = current_height - 1,
+            current_block_number = blockchain.block_number(),
+            new_block_number = block.block_number(),
+            "New block in {:?} chain",
+            chain_order
+        );
+    }
+
+    chain_order
+}
 
 /// Implements methods to push blocks into the chain. This is used when the node has already synced
 /// and is just receiving newly produced blocks. It is also used for the final phase of syncing,
@@ -30,13 +125,13 @@ impl LightBlockchain {
         }
 
         // Check if we already know this block.
-        if this.get_chain_info(&block.hash(), false, None).is_ok() {
+        if this.get_chain_info(&block.hash(), false).is_ok() {
             return Ok(PushResult::Known);
         }
 
         // Check if we have this block's parent.
         let prev_info = this
-            .get_chain_info(block.parent_hash(), false, None)
+            .get_chain_info(block.parent_hash(), false)
             .map_err(|error| {
                 log::warn!(
                     %error,
@@ -49,7 +144,7 @@ impl LightBlockchain {
             })?;
 
         // Calculate chain ordering.
-        let chain_order = ChainOrdering::order_chains(this.deref(), &block, &prev_info, None);
+        let chain_order = order_chains(this.deref(), &block, &prev_info);
 
         // Get the intended slot owner.
         let offset = if let Block::Macro(macro_block) = &block {
@@ -87,7 +182,7 @@ impl LightBlockchain {
         }
 
         let (slot_owner, _) = this
-            .get_slot_owner_at(block.block_number(), offset, None)
+            .get_slot_owner_at(block.block_number(), offset)
             .expect("Failed to find slot owner!");
 
         // Verify that the block is valid for the given proposer.
@@ -196,7 +291,7 @@ impl LightBlockchain {
             let prev_hash = current.1.head.parent_hash().clone();
 
             let prev_info = this
-                .get_chain_info(&prev_hash, false, None)
+                .get_chain_info(&prev_hash, false)
                 .expect("Corrupted store: Failed to find fork predecessor while rebranching");
 
             fork_chain.push(current);
@@ -228,7 +323,7 @@ impl LightBlockchain {
 
         current = (
             this.head_hash(),
-            this.get_chain_info(&this.head_hash(), false, None)
+            this.get_chain_info(&this.head_hash(), false)
                 .expect("Couldn't find the head chain info!"),
         );
 
@@ -241,8 +336,8 @@ impl LightBlockchain {
             let prev_hash = block.parent_hash().clone();
 
             let prev_info = this
-                .get_chain_info(&prev_hash, false, None)
-                .expect("Corrupted store: Failed to find main chain predecessor while rebranching");
+                .get_chain_info(&prev_hash, false)
+                .expect("Corrupted store: Failed to find fork predecessor while rebranching");
 
             revert_chain.push(current);
 

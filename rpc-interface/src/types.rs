@@ -347,7 +347,7 @@ pub struct Slot {
 impl Slot {
     pub fn from(blockchain: &BlockchainReadProxy, block_number: u32, offset: u32) -> Self {
         let (validator, slot_number) = blockchain
-            .get_slot_owner_at(block_number, offset, None)
+            .get_slot_owner_at(block_number, offset)
             .expect("Couldn't calculate slot owner!");
 
         Slot {

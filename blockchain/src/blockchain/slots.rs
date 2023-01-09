@@ -5,7 +5,7 @@ use nimiq_primitives::policy::Policy;
 use nimiq_primitives::slots::{Validator, Validators};
 use nimiq_vrf::{Rng, VrfEntropy, VrfSeed, VrfUseCase};
 
-use crate::{AbstractBlockchain, Blockchain, BlockchainError};
+use crate::{Blockchain, BlockchainError};
 
 pub struct Slot {
     pub number: u16,

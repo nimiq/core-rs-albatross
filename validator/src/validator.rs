@@ -430,7 +430,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             .consensus
             .blockchain
             .read()
-            .get_block(hash, true, None)
+            .get_block(hash, true)
             .expect("Head block not found");
 
         // Update mempool and blockchain state

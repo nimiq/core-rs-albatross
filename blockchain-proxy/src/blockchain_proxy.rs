@@ -9,7 +9,6 @@ use nimiq_blockchain::Blockchain;
 use nimiq_blockchain::{
     AbstractBlockchain, BlockchainError, BlockchainEvent, ChainInfo, Direction,
 };
-use nimiq_database::Transaction;
 use nimiq_genesis::NetworkId;
 use nimiq_hash::Blake2bHash;
 use nimiq_light_blockchain::LightBlockchain;
@@ -128,36 +127,18 @@ impl<'a> AbstractBlockchain for BlockchainReadProxy<'a> {
         gen_blockchain_match!(self, BlockchainReadProxy, contains, hash, include_forks)
     }
 
-    fn get_block_at(
-        &self,
-        height: u32,
-        include_body: bool,
-        txn_option: Option<&Transaction>,
-    ) -> Result<Block, BlockchainError> {
+    fn get_block_at(&self, height: u32, include_body: bool) -> Result<Block, BlockchainError> {
         gen_blockchain_match!(
             self,
             BlockchainReadProxy,
             get_block_at,
             height,
-            include_body,
-            txn_option
+            include_body
         )
     }
 
-    fn get_block(
-        &self,
-        hash: &Blake2bHash,
-        include_body: bool,
-        txn_option: Option<&Transaction>,
-    ) -> Result<Block, BlockchainError> {
-        gen_blockchain_match!(
-            self,
-            BlockchainReadProxy,
-            get_block,
-            hash,
-            include_body,
-            txn_option
-        )
+    fn get_block(&self, hash: &Blake2bHash, include_body: bool) -> Result<Block, BlockchainError> {
+        gen_blockchain_match!(self, BlockchainReadProxy, get_block, hash, include_body)
     }
 
     fn get_blocks(
@@ -166,7 +147,6 @@ impl<'a> AbstractBlockchain for BlockchainReadProxy<'a> {
         count: u32,
         include_body: bool,
         direction: nimiq_blockchain::Direction,
-        txn_option: Option<&Transaction>,
     ) -> Result<Vec<Block>, BlockchainError> {
         gen_blockchain_match!(
             self,
@@ -175,8 +155,7 @@ impl<'a> AbstractBlockchain for BlockchainReadProxy<'a> {
             start_block_hash,
             count,
             include_body,
-            direction,
-            txn_option
+            direction
         )
     }
 
@@ -184,15 +163,13 @@ impl<'a> AbstractBlockchain for BlockchainReadProxy<'a> {
         &self,
         hash: &Blake2bHash,
         include_body: bool,
-        txn_option: Option<&Transaction>,
     ) -> Result<ChainInfo, BlockchainError> {
         gen_blockchain_match!(
             self,
             BlockchainReadProxy,
             get_chain_info,
             hash,
-            include_body,
-            txn_option
+            include_body
         )
     }
 
@@ -200,15 +177,13 @@ impl<'a> AbstractBlockchain for BlockchainReadProxy<'a> {
         &self,
         block_number: u32,
         offset: u32,
-        txn_option: Option<&Transaction>,
     ) -> Result<(Validator, u16), BlockchainError> {
         gen_blockchain_match!(
             self,
             BlockchainReadProxy,
             get_slot_owner_at,
             block_number,
-            offset,
-            txn_option
+            offset
         )
     }
 
@@ -219,7 +194,6 @@ impl<'a> AbstractBlockchain for BlockchainReadProxy<'a> {
         include_body: bool,
         direction: Direction,
         election_blocks_only: bool,
-        txn_option: Option<&Transaction>,
     ) -> Result<Vec<Block>, BlockchainError> {
         gen_blockchain_match!(
             self,
@@ -229,8 +203,7 @@ impl<'a> AbstractBlockchain for BlockchainReadProxy<'a> {
             count,
             include_body,
             direction,
-            election_blocks_only,
-            txn_option
+            election_blocks_only
         )
     }
 

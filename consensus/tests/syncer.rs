@@ -661,6 +661,7 @@ async fn request_missing_blocks_across_macro_block() {
             macro_head.block_number() - 2,
             true,
             Direction::Backward,
+            None,
         )
         .unwrap();
     blocks.reverse();

@@ -50,7 +50,7 @@ pub(crate) fn get_proof_macro_blocks(
     } else {
         let new_block = blockchain
             .read()
-            .get_block_at(block_number, true, None)
+            .get_block_at(block_number, true)
             .map_err(|_| Error::InvalidBlock)?;
 
         if !new_block.is_election() {

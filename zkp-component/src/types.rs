@@ -540,7 +540,7 @@ impl Handle<RequestZKPResponse, Arc<ZKPStateEnvironment>> for RequestZKP {
         let block = if self.request_election_block {
             env.blockchain
                 .read()
-                .get_block_at(latest_block_number, true, None)
+                .get_block_at(latest_block_number, true)
                 .ok()
                 .map(|block| block.unwrap_macro())
         } else {

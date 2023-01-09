@@ -41,7 +41,7 @@ fn get_block_by_hash(
         include_transactions.unwrap_or(matches!(blockchain, BlockchainReadProxy::Full(_)));
 
     blockchain
-        .get_block(hash, include_body, None)
+        .get_block(hash, include_body)
         .map(|block| {
             Block::from_block(blockchain, block, include_transactions.unwrap_or(false)).into()
         })
@@ -137,7 +137,7 @@ impl BlockchainInterface for BlockchainDispatcher {
             include_transactions.unwrap_or(matches!(blockchain, BlockchainReadProxy::Full(_)));
 
         let block = blockchain
-            .get_block_at(block_number, include_body, None)
+            .get_block_at(block_number, include_body)
             .map_err(|_| Error::BlockNotFound(block_number))?;
 
         Ok(Block::from_block(&blockchain, block, include_transactions.unwrap_or(false)).into())
@@ -169,7 +169,7 @@ impl BlockchainInterface for BlockchainDispatcher {
             offset
         } else {
             let block = blockchain
-                .get_block_at(block_number, false, None)
+                .get_block_at(block_number, false)
                 .map_err(|_| Error::BlockNotFound(block_number))?;
             if let nimiq_block::Block::Macro(macro_block) = block {
                 if let Some(proof) = macro_block.justification {

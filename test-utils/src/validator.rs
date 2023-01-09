@@ -156,7 +156,7 @@ where
     let (slot, _) = consensus
         .blockchain
         .read()
-        .get_slot_owner_at(block_number, offset, None)
+        .get_slot_owner_at(block_number, offset)
         .expect("Couldn't find slot owner!");
 
     validators
@@ -181,7 +181,7 @@ where
     let (slot, _) = consensus
         .blockchain
         .read()
-        .get_slot_owner_at(block_number, offset, None)
+        .get_slot_owner_at(block_number, offset)
         .expect("Couldn't find slot owner!");
 
     let index = validators

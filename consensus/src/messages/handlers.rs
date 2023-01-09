@@ -17,7 +17,7 @@ impl Handle<MacroChain, BlockchainProxy> for RequestMacroChain {
         // the first hash that is found on our main chain, ignore the rest.
         let mut start_block_hash = None;
         for locator in self.locators.iter() {
-            let chain_info = blockchain.get_chain_info(locator, false, None);
+            let chain_info = blockchain.get_chain_info(locator, false);
             if let Ok(chain_info) = chain_info {
                 if chain_info.on_main_chain {
                     // We found a block, ignore remaining block locator hashes.
@@ -44,7 +44,6 @@ impl Handle<MacroChain, BlockchainProxy> for RequestMacroChain {
                 false,
                 Direction::Forward,
                 true,
-                None,
             )
             .unwrap(); // We made sure that start_block_hash is on our chain.
         let epochs: Vec<_> = election_blocks.iter().map(|block| block.hash()).collect();
@@ -151,17 +150,17 @@ impl Handle<HistoryChunk, Arc<RwLock<Blockchain>>> for RequestHistoryChunk {
 impl Handle<Option<Block>, BlockchainProxy> for RequestBlock {
     fn handle(&self, blockchain: &BlockchainProxy) -> Option<Block> {
         let blockchain = blockchain.read();
-        if let Ok(block) = blockchain.get_block(&self.hash, false, None) {
+        if let Ok(block) = blockchain.get_block(&self.hash, false) {
             let block = match block {
                 // Macro bodies are always needed
-                Block::Macro(_) => match blockchain.get_block(&self.hash, true, None) {
+                Block::Macro(_) => match blockchain.get_block(&self.hash, true) {
                     Ok(block) => block,
                     Err(_) => return None,
                 },
                 // Micro bodies are requested based on `include_micro_bodies`
                 Block::Micro(_) => {
                     if self.include_micro_bodies {
-                        match blockchain.get_block(&self.hash, true, None) {
+                        match blockchain.get_block(&self.hash, true) {
                             Ok(block) => block,
                             Err(_) => return None,
                         }
@@ -194,11 +193,11 @@ impl Handle<ResponseBlocks, BlockchainProxy> for RequestMissingBlocks {
         let mut blocks = Vec::new();
         let mut block_hash = self.target_hash.clone();
         while !locators.contains(&block_hash) {
-            let block = blockchain.get_block(&block_hash, false, None);
+            let block = blockchain.get_block(&block_hash, false);
             if let Ok(block) = block {
                 let block = match block {
                     // Macro bodies are always needed
-                    Block::Macro(_) => match blockchain.get_block(&block_hash, true, None) {
+                    Block::Macro(_) => match blockchain.get_block(&block_hash, true) {
                         Ok(block) => block,
                         Err(error) => {
                             debug!(
@@ -213,7 +212,7 @@ impl Handle<ResponseBlocks, BlockchainProxy> for RequestMissingBlocks {
                     // Micro bodies are requested based on `include_micro_bodies`
                     Block::Micro(_) => {
                         if self.include_micro_bodies {
-                            match blockchain.get_block(&block_hash, true, None) {
+                            match blockchain.get_block(&block_hash, true) {
                                 Ok(block) => block,
                                 Err(error) => {
                                     debug!(

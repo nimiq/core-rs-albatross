@@ -3,7 +3,6 @@ use nimiq_block::{Block, MacroBlock};
 use nimiq_blockchain::{
     AbstractBlockchain, BlockchainError, BlockchainEvent, ChainInfo, Direction,
 };
-use nimiq_database::Transaction;
 use nimiq_genesis::NetworkId;
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::slots::{Validator, Validators};
@@ -47,23 +46,13 @@ impl AbstractBlockchain for LightBlockchain {
         }
     }
 
-    fn get_block_at(
-        &self,
-        height: u32,
-        include_body: bool,
-        _txn_option: Option<&Transaction>,
-    ) -> Result<Block, BlockchainError> {
+    fn get_block_at(&self, height: u32, include_body: bool) -> Result<Block, BlockchainError> {
         self.chain_store
             .get_chain_info_at(height, include_body)
             .map(|chain_info| chain_info.head)
     }
 
-    fn get_block(
-        &self,
-        hash: &Blake2bHash,
-        include_body: bool,
-        _txn_option: Option<&Transaction>,
-    ) -> Result<Block, BlockchainError> {
+    fn get_block(&self, hash: &Blake2bHash, include_body: bool) -> Result<Block, BlockchainError> {
         self.chain_store
             .get_chain_info(hash, include_body)
             .map(|chain_info| chain_info.head.clone())
@@ -73,7 +62,6 @@ impl AbstractBlockchain for LightBlockchain {
         &self,
         hash: &Blake2bHash,
         include_body: bool,
-        _txn_option: Option<&Transaction>,
     ) -> Result<ChainInfo, BlockchainError> {
         self.chain_store.get_chain_info(hash, include_body).cloned()
     }
@@ -82,12 +70,8 @@ impl AbstractBlockchain for LightBlockchain {
         &self,
         block_number: u32,
         offset: u32,
-        _txn_option: Option<&Transaction>,
     ) -> Result<(Validator, u16), BlockchainError> {
-        let vrf_entropy = self
-            .get_block_at(block_number - 1, false, None)?
-            .seed()
-            .entropy();
+        let vrf_entropy = self.get_block_at(block_number - 1, false)?.seed().entropy();
 
         self.get_proposer_at(block_number, offset, vrf_entropy)
     }
@@ -102,7 +86,6 @@ impl AbstractBlockchain for LightBlockchain {
         count: u32,
         include_body: bool,
         direction: nimiq_blockchain::Direction,
-        _txn_option: Option<&Transaction>,
     ) -> Result<Vec<Block>, BlockchainError> {
         self.chain_store
             .get_blocks(start_block_hash, count, direction, include_body)
@@ -118,7 +101,6 @@ impl AbstractBlockchain for LightBlockchain {
         include_body: bool,
         direction: Direction,
         election_blocks_only: bool,
-        _txn_option: Option<&Transaction>,
     ) -> Result<Vec<Block>, BlockchainError> {
         self.chain_store.get_macro_blocks(
             start_block_hash,

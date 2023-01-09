@@ -2,7 +2,6 @@ use futures::future;
 use futures::stream::BoxStream;
 use futures::StreamExt;
 use nimiq_block::{Block, BlockType, MacroBlock};
-use nimiq_database::Transaction;
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_primitives::policy::Policy;
@@ -77,20 +76,10 @@ pub trait AbstractBlockchain {
     fn contains(&self, hash: &Blake2bHash, include_forks: bool) -> bool;
 
     /// Fetches a given block, by its block number.
-    fn get_block_at(
-        &self,
-        height: u32,
-        include_body: bool,
-        txn_option: Option<&Transaction>,
-    ) -> Result<Block, BlockchainError>;
+    fn get_block_at(&self, height: u32, include_body: bool) -> Result<Block, BlockchainError>;
 
     /// Fetches a given block, by its hash.
-    fn get_block(
-        &self,
-        hash: &Blake2bHash,
-        include_body: bool,
-        txn_option: Option<&Transaction>,
-    ) -> Result<Block, BlockchainError>;
+    fn get_block(&self, hash: &Blake2bHash, include_body: bool) -> Result<Block, BlockchainError>;
 
     /// Get several blocks.
     fn get_blocks(
@@ -99,7 +88,6 @@ pub trait AbstractBlockchain {
         count: u32,
         include_body: bool,
         direction: Direction,
-        txn_option: Option<&Transaction>,
     ) -> Result<Vec<Block>, BlockchainError>;
 
     /// Fetches a given chain info, by its hash.
@@ -107,7 +95,6 @@ pub trait AbstractBlockchain {
         &self,
         hash: &Blake2bHash,
         include_body: bool,
-        txn_option: Option<&Transaction>,
     ) -> Result<ChainInfo, BlockchainError>;
 
     /// Calculates the slot owner (represented as the validator plus the slot number) at a given
@@ -116,7 +103,6 @@ pub trait AbstractBlockchain {
         &self,
         block_number: u32,
         offset: u32,
-        txn_option: Option<&Transaction>,
     ) -> Result<(Validator, u16), BlockchainError>;
 
     /// Fetches a given number of macro blocks, starting at a specific block (by its hash).
@@ -128,7 +114,6 @@ pub trait AbstractBlockchain {
         include_body: bool,
         direction: Direction,
         election_blocks_only: bool,
-        txn_option: Option<&Transaction>,
     ) -> Result<Vec<Block>, BlockchainError>;
 
     /// Stream of Blockchain Events.
@@ -179,47 +164,28 @@ impl AbstractBlockchain for Blockchain {
         }
     }
 
-    fn get_block_at(
-        &self,
-        height: u32,
-        include_body: bool,
-        txn_option: Option<&Transaction>,
-    ) -> Result<Block, BlockchainError> {
-        self.chain_store
-            .get_block_at(height, include_body, txn_option)
+    fn get_block_at(&self, height: u32, include_body: bool) -> Result<Block, BlockchainError> {
+        self.get_block_at(height, include_body, None)
     }
 
-    fn get_block(
-        &self,
-        hash: &Blake2bHash,
-        include_body: bool,
-        txn_option: Option<&Transaction>,
-    ) -> Result<Block, BlockchainError> {
-        self.chain_store.get_block(hash, include_body, txn_option)
+    fn get_block(&self, hash: &Blake2bHash, include_body: bool) -> Result<Block, BlockchainError> {
+        self.get_block(hash, include_body, None)
     }
 
     fn get_chain_info(
         &self,
         hash: &Blake2bHash,
         include_body: bool,
-        txn_option: Option<&Transaction>,
     ) -> Result<ChainInfo, BlockchainError> {
-        self.chain_store
-            .get_chain_info(hash, include_body, txn_option)
+        self.get_chain_info(hash, include_body, None)
     }
 
     fn get_slot_owner_at(
         &self,
         block_number: u32,
         offset: u32,
-        txn_option: Option<&Transaction>,
     ) -> Result<(Validator, u16), BlockchainError> {
-        let vrf_entropy = self
-            .get_block_at(block_number - 1, false, txn_option)?
-            .seed()
-            .entropy();
-        self.get_proposer_at(block_number, offset, vrf_entropy, txn_option)
-            .map(|slot| (slot.validator, slot.number))
+        self.get_slot_owner_at(block_number, offset, None)
     }
 
     fn get_blocks(
@@ -228,10 +194,8 @@ impl AbstractBlockchain for Blockchain {
         count: u32,
         include_body: bool,
         direction: Direction,
-        txn_option: Option<&Transaction>,
     ) -> Result<Vec<Block>, BlockchainError> {
-        self.chain_store
-            .get_blocks(start_block_hash, count, include_body, direction, txn_option)
+        self.get_blocks(start_block_hash, count, include_body, direction, None)
     }
 
     fn get_macro_blocks(
@@ -241,15 +205,14 @@ impl AbstractBlockchain for Blockchain {
         include_body: bool,
         direction: Direction,
         election_blocks_only: bool,
-        txn_option: Option<&Transaction>,
     ) -> Result<Vec<Block>, BlockchainError> {
-        self.chain_store.get_macro_blocks(
+        self.get_macro_blocks(
             start_block_hash,
             count,
             include_body,
             direction,
             election_blocks_only,
-            txn_option,
+            None,
         )
     }
 

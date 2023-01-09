@@ -4,7 +4,7 @@ use nimiq_block::{Block, BlockType};
 use nimiq_database::Transaction;
 
 use crate::chain_info::ChainInfo;
-use crate::AbstractBlockchain;
+use crate::{AbstractBlockchain, Blockchain};
 
 /// Enum describing all the possible ways of comparing one chain to the main chain.
 #[derive(Debug, Eq, PartialEq)]
@@ -20,11 +20,13 @@ pub enum ChainOrdering {
 }
 
 /// Implements method to calculate chain ordering.
+/// Warning: The logic of this function is duplicated in the light blockchain
+/// If this function is modified the other one should be modified accordingly
 impl ChainOrdering {
     /// Given a block and some chain, it returns the ordering of the new chain relative to the given
     /// chain.
-    pub fn order_chains<B: AbstractBlockchain>(
-        blockchain: &B,
+    pub fn order_chains(
+        blockchain: &Blockchain,
         block: &Block,
         prev_info: &ChainInfo,
         txn_option: Option<&Transaction>,

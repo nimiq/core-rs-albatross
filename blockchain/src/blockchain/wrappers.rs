@@ -4,13 +4,14 @@ use nimiq_database::Transaction;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::policy::Policy;
+use nimiq_primitives::slots::Validator;
 #[cfg(feature = "metrics")]
 use std::sync::Arc;
 
 #[cfg(feature = "metrics")]
 use crate::chain_metrics::BlockchainMetrics;
 use crate::{blockchain_state::BlockchainState, BlockchainError};
-use crate::{AbstractBlockchain, Blockchain, Direction};
+use crate::{AbstractBlockchain, Blockchain, ChainInfo, Direction};
 use nimiq_trie::key_nibbles::KeyNibbles;
 
 /// Implements several wrapper functions.
@@ -20,16 +21,78 @@ impl Blockchain {
         &self.state
     }
 
-    /// Fetches a given number of blocks, starting at a specific block (by its hash).
+    pub fn get_block_at(
+        &self,
+        height: u32,
+        include_body: bool,
+        txn_option: Option<&Transaction>,
+    ) -> Result<Block, BlockchainError> {
+        self.chain_store
+            .get_block_at(height, include_body, txn_option)
+    }
+
+    pub fn get_block(
+        &self,
+        hash: &Blake2bHash,
+        include_body: bool,
+        txn_option: Option<&Transaction>,
+    ) -> Result<Block, BlockchainError> {
+        self.chain_store.get_block(hash, include_body, txn_option)
+    }
+
     pub fn get_blocks(
         &self,
         start_block_hash: &Blake2bHash,
         count: u32,
         include_body: bool,
         direction: Direction,
+        txn_option: Option<&Transaction>,
     ) -> Result<Vec<Block>, BlockchainError> {
         self.chain_store
-            .get_blocks(start_block_hash, count, include_body, direction, None)
+            .get_blocks(start_block_hash, count, include_body, direction, txn_option)
+    }
+
+    pub fn get_chain_info(
+        &self,
+        hash: &Blake2bHash,
+        include_body: bool,
+        txn_option: Option<&Transaction>,
+    ) -> Result<ChainInfo, BlockchainError> {
+        self.chain_store
+            .get_chain_info(hash, include_body, txn_option)
+    }
+
+    pub fn get_slot_owner_at(
+        &self,
+        block_number: u32,
+        offset: u32,
+        txn_option: Option<&Transaction>,
+    ) -> Result<(Validator, u16), BlockchainError> {
+        let vrf_entropy = self
+            .get_block_at(block_number - 1, false, txn_option)?
+            .seed()
+            .entropy();
+        self.get_proposer_at(block_number, offset, vrf_entropy, txn_option)
+            .map(|slot| (slot.validator, slot.number))
+    }
+
+    pub fn get_macro_blocks(
+        &self,
+        start_block_hash: &Blake2bHash,
+        count: u32,
+        include_body: bool,
+        direction: Direction,
+        election_blocks_only: bool,
+        txn_option: Option<&Transaction>,
+    ) -> Result<Vec<Block>, BlockchainError> {
+        self.chain_store.get_macro_blocks(
+            start_block_hash,
+            count,
+            include_body,
+            direction,
+            election_blocks_only,
+            txn_option,
+        )
     }
 
     /// Returns the current staking contract.

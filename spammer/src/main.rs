@@ -282,7 +282,7 @@ async fn main_inner() -> Result<(), Error> {
                 let block = {
                     let blockchain = consensus.blockchain.read();
                     blockchain
-                        .get_block(&hash, true, None)
+                        .get_block(&hash, true)
                         .expect("Failed to get latest block")
                 };
 

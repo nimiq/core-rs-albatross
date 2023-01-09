@@ -77,7 +77,7 @@ impl LightBlockchain {
         } else if epoch == 0 {
             Err(BlockchainError::InvalidEpoch)
         } else {
-            self.get_block_at(Policy::election_block_of(epoch - 1), true, None)?
+            self.get_block_at(Policy::election_block_of(epoch - 1), true)?
                 .unwrap_macro()
                 .get_validators()
                 .ok_or(BlockchainError::NoValidatorsFound)
@@ -92,8 +92,7 @@ impl LightBlockchain {
     ) -> Result<(Validator, u16), BlockchainError> {
         // Fetch the latest macro block that precedes the block at the given block_number.
         // We use the disabled_slots set from that macro block for the slot selection.
-        let macro_block =
-            self.get_block_at(Policy::macro_block_before(block_number), true, None)?;
+        let macro_block = self.get_block_at(Policy::macro_block_before(block_number), true)?;
         let disabled_slots = macro_block.unwrap_macro().body.unwrap().disabled_set;
 
         // Compute the slot number of the next proposer.

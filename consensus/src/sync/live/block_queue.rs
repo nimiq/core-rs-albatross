@@ -235,7 +235,6 @@ impl<N: Network, TReq: RequestComponent<N>> BlockQueue<N, TReq> {
             head_height - macro_height,
             false,
             Direction::Backward,
-            None,
         );
         if let Ok(blocks) = blocks {
             let block_locators = blocks.into_iter().map(|block| block.hash());
