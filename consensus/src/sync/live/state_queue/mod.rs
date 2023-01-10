@@ -25,7 +25,7 @@ use parking_lot::RwLock;
 
 use self::chunk_request_component::ChunkRequestComponent;
 use super::{
-    block_queue::{block_request_component::RequestComponent, BlockAndId, BlockQueue, QueuedBlock},
+    block_queue::{BlockAndId, BlockQueue, QueuedBlock},
     queue::QueueConfig,
 };
 
@@ -133,7 +133,7 @@ impl ChunkRequestState {
     }
 }
 
-pub struct StateQueue<N: Network, TReq: RequestComponent<N>> {
+pub struct StateQueue<N: Network> {
     /// Configuration for the block queue.
     config: QueueConfig,
 
@@ -144,7 +144,7 @@ pub struct StateQueue<N: Network, TReq: RequestComponent<N>> {
     network: Arc<N>,
 
     /// The BlockQueue component.
-    block_queue: BlockQueue<N, TReq>,
+    block_queue: BlockQueue<N>,
 
     /// The chunk request component.
     /// We use it to request chunks from up-to-date peers
@@ -171,11 +171,11 @@ pub struct StateQueue<N: Network, TReq: RequestComponent<N>> {
     blockchain_rx: BoxStream<'static, BlockchainEvent>,
 }
 
-impl<N: Network, TReq: RequestComponent<N>> StateQueue<N, TReq> {
+impl<N: Network> StateQueue<N> {
     pub fn with_block_queue(
         blockchain: Arc<RwLock<Blockchain>>,
         network: Arc<N>,
-        block_queue: BlockQueue<N, TReq>,
+        block_queue: BlockQueue<N>,
         config: QueueConfig,
     ) -> Self {
         let chunk_request_component = ChunkRequestComponent::new(
@@ -464,7 +464,7 @@ impl<N: Network, TReq: RequestComponent<N>> StateQueue<N, TReq> {
     }
 }
 
-impl<N: Network, TReq: RequestComponent<N>> Stream for StateQueue<N, TReq> {
+impl<N: Network> Stream for StateQueue<N> {
     type Item = QueuedStateChunks<N>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {

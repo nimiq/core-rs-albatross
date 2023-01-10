@@ -328,7 +328,7 @@ impl ops::Add<&KeyNibbles> for &KeyNibbles {
 
             if other.length % 2 == 0 {
                 // Push next_byte
-                bytes[bytes_length as usize] = next_byte;
+                bytes[bytes_length] = next_byte;
             }
         }
 

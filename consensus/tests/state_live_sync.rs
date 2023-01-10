@@ -5,8 +5,6 @@ use nimiq_consensus::messages::RequestMissingBlocks;
 use nimiq_consensus::sync::live::state_queue::{ChunkRequestState, RequestChunk, ResponseChunk};
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::request::{Handle, RequestCommon};
-use nimiq_test_utils::block_production::TemporaryBlockProducer;
-use nimiq_test_utils::mock_node::MockNode;
 use nimiq_trie::key_nibbles::KeyNibbles;
 use parking_lot::{Mutex, RwLock};
 use std::sync::Arc;
@@ -36,9 +34,10 @@ use nimiq_network_interface::network::Network;
 use nimiq_network_mock::{MockHub, MockId, MockNetwork, MockPeerId};
 use nimiq_primitives::policy::Policy;
 use nimiq_test_log::test;
-use nimiq_test_utils::blockchain::produce_macro_blocks;
 use nimiq_test_utils::{
-    blockchain::{push_micro_block, signing_key, voting_key},
+    block_production::TemporaryBlockProducer,
+    blockchain::{produce_macro_blocks, push_micro_block, signing_key, voting_key},
+    mock_node::MockNode,
     node::TESTING_BLS_CACHE_MAX_CAPACITY,
 };
 use nimiq_utils::math::CeilingDiv;
@@ -77,7 +76,7 @@ fn get_incomplete_live_sync(
     hub: &mut MockHub,
 ) -> (
     Arc<RwLock<Blockchain>>,
-    StateLiveSync<MockNetwork, BlockRequestComponent<MockNetwork>>,
+    StateLiveSync<MockNetwork>,
     Arc<MockNetwork>,
     Sender<(Block, MockId<MockPeerId>)>,
 ) {

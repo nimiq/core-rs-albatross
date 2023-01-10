@@ -20,7 +20,6 @@ use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::network::Network;
 use parking_lot::Mutex;
 
-use super::block_request_component::RequestComponent;
 use super::{BlockQueue, QueuedBlock};
 use crate::sync::{
     live::queue::{self, LiveSyncQueue},
@@ -38,7 +37,7 @@ pub enum PushOpResult<N: Network> {
     PeerEvent(LiveSyncPeerEvent<N::PeerId>),
 }
 
-impl<N: Network, TReq: RequestComponent<N>> LiveSyncQueue<N> for BlockQueue<N, TReq> {
+impl<N: Network> LiveSyncQueue<N> for BlockQueue<N> {
     type QueueResult = QueuedBlock<N>;
     type PushResult = PushOpResult<N>;
 

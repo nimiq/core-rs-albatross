@@ -19,9 +19,7 @@ use parking_lot::Mutex;
 use super::{ChunkAndId, QueuedStateChunks, StateQueue};
 use crate::sync::{
     live::{
-        block_queue::{
-            block_request_component::RequestComponent, live_sync::PushOpResult as BlockPushOpResult,
-        },
+        block_queue::live_sync::PushOpResult as BlockPushOpResult,
         queue::{self, LiveSyncQueue},
     },
     syncer::{LiveSyncEvent, LiveSyncPeerEvent, LiveSyncPushEvent},
@@ -97,7 +95,7 @@ impl<N: Network> PushOpResult<N> {
     }
 }
 
-impl<N: Network, TReq: RequestComponent<N>> LiveSyncQueue<N> for StateQueue<N, TReq> {
+impl<N: Network> LiveSyncQueue<N> for StateQueue<N> {
     type QueueResult = QueuedStateChunks<N>;
     type PushResult = PushOpResult<N>;
 
