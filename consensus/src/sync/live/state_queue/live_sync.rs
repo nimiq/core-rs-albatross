@@ -174,7 +174,8 @@ impl<N: Network> LiveSyncQueue<N> for StateQueue<N> {
                     .boxed(),
                 );
             }
-            QueuedStateChunks::TooDistantPastBlock(_, peer_id)
+            QueuedStateChunks::PeerIncompleteState(peer_id)
+            | QueuedStateChunks::TooDistantPastBlock(_, peer_id)
             | QueuedStateChunks::TooDistantPastChunk(ChunkAndId { peer_id, .. }) => {
                 // Peer is too far behind.
                 future_results.push_back(

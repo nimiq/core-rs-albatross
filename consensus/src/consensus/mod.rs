@@ -95,7 +95,6 @@ impl<N: Network> Consensus<N> {
     ) -> Self {
         let (tx, _rx) = broadcast(256);
 
-        // PITODO
         Self::init_network_request_receivers(&network, &blockchain);
 
         let established_flag = Arc::new(AtomicBool::new(false));
@@ -137,7 +136,6 @@ impl<N: Network> Consensus<N> {
                 let stream = network.receive_requests::<RequestHistoryChunk>();
                 tokio::spawn(request_handler(network, stream, blockchain));
 
-                // PITODO: Only spawn once accounts are complete.
                 let stream = network.receive_requests::<RequestChunk>();
                 tokio::spawn(request_handler(network, stream, blockchain));
             }
