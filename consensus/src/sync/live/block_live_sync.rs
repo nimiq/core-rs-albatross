@@ -149,6 +149,7 @@ impl<N: Network, TReq: RequestComponent<N>> BlockLiveSync<N, TReq> {
                             // Update validator keys from BLS public key cache.
                             block.update_validator_keys(&mut bls_cache1.lock());
                             match blockchain1 {
+                                #[cfg(not(target_family = "wasm"))]
                                 BlockchainProxy::Full(blockchain) => {
                                     Blockchain::push(blockchain.upgradable_read(), block)
                                 }
@@ -215,6 +216,7 @@ impl<N: Network, TReq: RequestComponent<N>> BlockLiveSync<N, TReq> {
                                 // Update validator keys from BLS public key cache.
                                 block.update_validator_keys(&mut bls_cache2.lock());
                                 match blockchain2 {
+                                    #[cfg(not(target_family = "wasm"))]
                                     BlockchainProxy::Full(blockchain) => {
                                         Blockchain::push(blockchain.upgradable_read(), block)
                                     }

@@ -43,6 +43,7 @@ pub enum SyncerProxy<N: Network> {
 }
 
 impl<N: Network> SyncerProxy<N> {
+    #[cfg(not(target_family = "wasm"))]
     /// Creates a new instance of a `SyncerProxy` for the `History` variant
     pub async fn new_history(
         blockchain_proxy: BlockchainProxy,
