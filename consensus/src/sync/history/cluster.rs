@@ -309,7 +309,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         };
 
         info!(
-            "Syncing epoch #{}/{} ({} checkpoints, {} total history items )",
+            "Syncing epoch #{}/{} ({} checkpoints, {} total history items)",
             block.epoch_number(),
             self.first_epoch_number + self.len() - 1,
             epoch.batch_sets.len(),
@@ -319,18 +319,15 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         let epoch_number = block.epoch_number();
 
         let blockchain = self.blockchain.read();
-        let (current_block_number, current_epoch_number, num_known_txs) = {
-            let current_epoch_number = blockchain.epoch_number();
-            let num_known_txs = if epoch_number == current_epoch_number {
-                blockchain
-                    .history_store
-                    .get_final_epoch_transactions(epoch_number, None)
-                    .len()
-            } else {
-                0
-            };
-            let current_block_number = blockchain.block_number();
-            (current_block_number, current_epoch_number, num_known_txs)
+        let current_block_number = blockchain.block_number();
+        let current_epoch_number = blockchain.epoch_number();
+        let num_known_txs = if epoch_number == current_epoch_number {
+            blockchain
+                .history_store
+                .get_final_epoch_transactions(epoch_number, None)
+                .len()
+        } else {
+            0
         };
 
         if block.header.block_number <= current_block_number {
@@ -374,23 +371,24 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         let mut chunk_index_offset = 0usize;
 
         for (index, batch_set) in epoch.batch_sets.iter().enumerate() {
-            // If the block is in the same epoch, skip already known history.
-
-            let start_txn = if current_epoch_number == epoch_number {
-                num_known_txs.saturating_sub(previous_history_size)
-            } else {
-                0
-            };
-
+            // If the batch_set is in the same epoch, skip already known history.
+            // We can only skip if the batch_set is not empty, otherwise we can't tell by the
+            // history size if it was already adopted or not.
             let batch_set_epoch_boundary =
                 previous_history_size / CHUNK_SIZE * CHUNK_SIZE + batch_set.history_len as usize;
-
-            if num_known_txs >= batch_set_epoch_boundary {
+            if batch_set.history_len > 0 && num_known_txs >= batch_set_epoch_boundary {
                 // This chunk is already known to the blockchain
                 previous_history_size += batch_set.history_len as usize / CHUNK_SIZE * CHUNK_SIZE;
                 chunk_index_offset += batch_set.history_len as usize / CHUNK_SIZE;
                 continue;
             }
+
+            // Compute the index of the first transaction to download.
+            let start_txn = if current_epoch_number == epoch_number {
+                num_known_txs.saturating_sub(previous_history_size)
+            } else {
+                0
+            };
 
             // Prepare pending info.
             let pending_batch_set = PendingBatchSet {
@@ -641,6 +639,15 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
             )
             .await
     }
+
+    fn pop_complete_epoch(&mut self) -> Option<PendingBatchSet> {
+        if !self.pending_batch_sets.is_empty() && self.pending_batch_sets[0].is_complete() {
+            self.num_epochs_finished += 1;
+            Some(self.pending_batch_sets.pop_front().unwrap())
+        } else {
+            None
+        }
+    }
 }
 
 impl<TNetwork: Network + 'static> Stream for SyncCluster<TNetwork> {
@@ -664,9 +671,7 @@ impl<TNetwork: Network + 'static> Stream for SyncCluster<TNetwork> {
                     // as there are no rewards distributed in that epoch. Therefore, it is
                     // sufficient to check for this condition here as opposed to in every call
                     // to poll_next().
-                    if self.pending_batch_sets[0].is_complete() {
-                        self.num_epochs_finished += 1;
-                        let batch_set = self.pending_batch_sets.pop_front().unwrap();
+                    if let Some(batch_set) = self.pop_complete_epoch() {
                         return Poll::Ready(Some(Ok(batch_set.into())));
                     }
                 }
@@ -694,9 +699,7 @@ impl<TNetwork: Network + 'static> Stream for SyncCluster<TNetwork> {
                     }
 
                     // Emit finished epochs.
-                    if self.pending_batch_sets[0].is_complete() {
-                        self.num_epochs_finished += 1;
-                        let batch_set = self.pending_batch_sets.pop_front().unwrap();
+                    if let Some(batch_set) = self.pop_complete_epoch() {
                         return Poll::Ready(Some(Ok(batch_set.into())));
                     }
                 }
