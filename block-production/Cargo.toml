@@ -34,7 +34,6 @@ nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-primitives = { path = "../primitives" }
 nimiq-transaction = { path = "../primitives/transaction" }
-nimiq-trie = { path = "../primitives/trie" }
 nimiq-vrf = { path = "../vrf" }
 nimiq-utils = { path = "../utils"}
 rand = "0.8"
@@ -45,6 +44,7 @@ nimiq-test-log = { path = "../test-log" }
 # See https://github.com/rust-analyzer/rust-analyzer/issues/2414
 nimiq-genesis-builder = { path = "../genesis-builder" }
 nimiq-test-utils = { path = "../test-utils" }
+nimiq-trie = { path = "../primitives/trie" }
 nimiq-transaction-builder = { path = "../transaction-builder" }
 tempfile = "3.3"
 rand = "0.8"

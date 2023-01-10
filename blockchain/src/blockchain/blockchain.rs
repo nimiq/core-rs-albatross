@@ -11,6 +11,7 @@ use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_primitives::policy::Policy;
 use nimiq_primitives::slots::Validators;
+use nimiq_trie::key_nibbles::KeyNibbles;
 use nimiq_utils::time::OffsetTime;
 
 use crate::blockchain_state::BlockchainState;
@@ -19,8 +20,6 @@ use crate::chain_metrics::BlockchainMetrics;
 use crate::chain_store::ChainStore;
 use crate::history::HistoryStore;
 use crate::reward::genesis_parameters;
-
-use nimiq_trie::key_nibbles::KeyNibbles;
 
 const BROADCAST_MAX_CAPACITY: usize = 256;
 

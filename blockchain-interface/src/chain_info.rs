@@ -9,9 +9,7 @@ use nimiq_block::{
 };
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::Blake2bHash;
-use nimiq_primitives::coin::Coin;
-use nimiq_primitives::key_nibbles::KeyNibbles;
-use nimiq_primitives::policy::Policy;
+use nimiq_primitives::{coin::Coin, key_nibbles::KeyNibbles, policy::Policy};
 
 /// Struct that, for each block, keeps information relative to the chain the block is on.
 #[derive(Clone, Debug)]
@@ -29,7 +27,6 @@ pub struct ChainInfo {
     /// A boolean stating if this block can be pruned.
     pub prunable: bool,
     /// Missing range of the accounts before this block.
-    #[cfg(not(target_family = "wasm"))]
     pub prev_missing_range: Option<RangeFrom<KeyNibbles>>,
 }
 
@@ -46,7 +43,6 @@ impl ChainInfo {
             cum_tx_fees: Coin::ZERO,
             cum_ext_tx_size: 0,
             prunable,
-            #[cfg(not(target_family = "wasm"))]
             prev_missing_range: None,
         }
     }
