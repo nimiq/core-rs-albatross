@@ -681,7 +681,12 @@ async fn put_peer_back_into_sync_mode() {
         Arc::clone(&network),
         request_component,
         ReceiverStream::new(block_rx).boxed(),
-        QueueConfig::default(),
+        QueueConfig {
+            buffer_max: 10,
+            window_ahead_max: 10,
+            tolerate_past_max: 100,
+            include_micro_bodies: true,
+        },
     );
 
     let live_sync = BlockLiveSync::with_queue(
