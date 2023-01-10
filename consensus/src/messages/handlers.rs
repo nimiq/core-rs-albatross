@@ -11,7 +11,7 @@ use nimiq_primitives::policy::Policy;
 
 use crate::{
     messages::*,
-    sync::live::state_queue::{RequestChunk, ResponseChunk},
+    sync::live::state_queue::{Chunk, RequestChunk, ResponseChunk},
 };
 
 impl Handle<MacroChain, BlockchainProxy> for RequestMacroChain {
@@ -274,15 +274,22 @@ impl Handle<Blake2bHash, BlockchainProxy> for RequestHead {
 impl Handle<ResponseChunk, Arc<RwLock<Blockchain>>> for RequestChunk {
     fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> ResponseChunk {
         let blockchain_rg = blockchain.read();
+
+        // Check if our state is complete.
+        let txn = blockchain_rg.read_transaction();
+        if !blockchain_rg.state.accounts.is_complete(Some(&txn)) {
+            return ResponseChunk::IncompleteState;
+        }
+
         let chunk = blockchain_rg.state.accounts.get_chunk(
             self.start_key.clone(),
             cmp::min(self.limit, Policy::state_chunks_max_size()) as usize,
-            None,
+            Some(&txn),
         );
-        ResponseChunk {
+        ResponseChunk::Chunk(Chunk {
             block_number: blockchain_rg.block_number(),
             block_hash: blockchain_rg.head_hash(),
             chunk,
-        }
+        })
     }
 }

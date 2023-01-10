@@ -2,7 +2,9 @@ use futures::{join, poll, Future, FutureExt, StreamExt};
 use log::info;
 
 use nimiq_consensus::messages::RequestMissingBlocks;
-use nimiq_consensus::sync::live::state_queue::{ChunkRequestState, RequestChunk, ResponseChunk};
+use nimiq_consensus::sync::live::state_queue::{
+    Chunk, ChunkRequestState, RequestChunk, ResponseChunk,
+};
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::request::{Handle, RequestCommon};
 use nimiq_trie::key_nibbles::KeyNibbles;
@@ -18,7 +20,7 @@ use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
-use nimiq_consensus::sync::syncer::{LiveSyncEvent, LiveSyncPushEvent};
+use nimiq_consensus::sync::syncer::{LiveSyncEvent, LiveSyncPeerEvent, LiveSyncPushEvent};
 use nimiq_consensus::sync::{
     live::{
         block_queue::{block_request_component::BlockRequestComponent, BlockQueue},
@@ -83,7 +85,7 @@ fn get_incomplete_live_sync(
     let incomplete_blockchain = Arc::new(RwLock::new(blockchain(false)));
     let incomplete_blockchain_proxy = BlockchainProxy::from(&incomplete_blockchain);
 
-    let network = Arc::new(hub.new_network_with_address(1));
+    let network = Arc::new(hub.new_network());
     let request_component =
         BlockRequestComponent::new(network.subscribe_events(), Arc::clone(&network), true);
     let (block_tx, block_rx) = mpsc::channel(32);
@@ -611,11 +613,11 @@ async fn can_reset_chain_of_chunks() {
                     .state
                     .accounts
                     .get_chunk(KeyNibbles::ROOT, 4, None);
-                ResponseChunk {
+                ResponseChunk::Chunk(Chunk {
                     block_number: blockchain_rg.block_number(),
                     block_hash: blockchain_rg.head_hash(),
                     chunk,
-                }
+                })
             }));
         },
         |mock_id, block_tx, blockchain| async move {
@@ -635,7 +637,12 @@ async fn can_reset_chain_of_chunks() {
             mock_node.set_chunk_handler(Some(|request, blockchain| {
                 let mut chunk = request.handle(blockchain);
                 // Make chunk invalid.
-                chunk.chunk.proof.nodes.pop();
+                match chunk {
+                    ResponseChunk::Chunk(ref mut inner_chunk) => {
+                        inner_chunk.chunk.proof.nodes.pop();
+                    }
+                    _ => unreachable!(),
+                }
                 chunk
             }));
         },
@@ -809,7 +816,12 @@ async fn clears_buffer_after_macro_block() {
     // Upon first chunk request, return a chunk for a non-existent block.
     mock_node.set_chunk_handler(Some(|request, blockchain| {
         let mut chunk = request.handle(blockchain);
-        chunk.block_hash = Blake2bHash::default();
+        match chunk {
+            ResponseChunk::Chunk(ref mut inner_chunk) => {
+                inner_chunk.block_hash = Blake2bHash::default();
+            }
+            _ => unreachable!(),
+        }
         chunk
     }));
 
@@ -886,4 +898,35 @@ async fn clears_buffer_after_macro_block() {
     // Check buffer.
     assert_eq!(live_sync.queue().buffered_chunks_len(), 0);
     assert_eq!(live_sync.queue().buffered_blocks_len(), 0);
+}
+
+// Check correct reply for incomplete nodes
+#[test(tokio::test)]
+async fn replies_with_incomplete_response_chunk() {
+    let mut hub = MockHub::new();
+
+    // Setup the incomplete node.
+    let (_incomplete_blockchain, mut live_sync, network, _block_tx) =
+        get_incomplete_live_sync(&mut hub);
+
+    // Setup the complete node.
+    let mut mock_node = MockNode::<MockNetwork>::with_network_and_blockchain(
+        Arc::new(hub.new_network()),
+        Arc::new(RwLock::new(blockchain(false))),
+    );
+
+    // Connect the nodes.
+    network.dial_mock(&mock_node.network);
+    live_sync.add_peer(mock_node.network.get_local_peer_id());
+
+    assert!(
+        matches!(
+            join!(live_sync.next(), mock_node.next()),
+            (
+                Some(LiveSyncEvent::PeerEvent(LiveSyncPeerEvent::OutdatedPeer(_))),
+                Some(RequestChunk::TYPE_ID)
+            )
+        ),
+        "Should not receive chunks from a peer with incomplete state"
+    );
 }

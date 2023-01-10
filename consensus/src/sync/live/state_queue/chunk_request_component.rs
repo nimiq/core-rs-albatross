@@ -118,19 +118,22 @@ impl<N: Network> Stream for ChunkRequestComponent<N> {
         // 3. Poll self.sync_queue, return results.
         while let Poll::Ready(Some(result)) = self.sync_queue.poll_next_unpin(cx) {
             match result {
-                Ok((chunk, request, peer_id)) => {
+                Ok((response, request, peer_id)) => {
                     // Verifies the response chunk size.
-                    if chunk.chunk.items.len() > request.limit as usize {
-                        debug!(
-                            "Peer[{}] Chunk size exceeded the request limit. Req: {:?} Chunk size: {}",
-                            peer_id,
-                            request,
-                            chunk.chunk.items.len()
-                        );
-                        // TODO: Ban peer
-                        continue;
+                    if let ResponseChunk::Chunk(ref chunk) = response {
+                        if chunk.chunk.items.len() > request.limit as usize {
+                            debug!(
+                                    "Peer[{}] Chunk size exceeded the request limit. Req: {:?} Chunk size: {}",
+                                    peer_id,
+                                    request,
+                                    chunk.chunk.items.len()
+                                );
+                            // TODO: Ban peer
+                            continue;
+                        }
                     }
-                    return Poll::Ready(Some((chunk, request.start_key, peer_id)));
+
+                    return Poll::Ready(Some((response, request.start_key, peer_id)));
                 }
                 Err(req) => {
                     debug!(

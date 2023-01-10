@@ -69,19 +69,39 @@ pub struct RequestChunk {
 /// The response for trie chunk requests.
 /// In addition to the chunk, we also return the block hash and number.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ResponseChunk {
+pub struct Chunk {
     pub block_number: u32,
     pub block_hash: Blake2bHash,
     pub chunk: TrieChunk,
 }
 
-impl Display for ResponseChunk {
+impl Display for Chunk {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "ResponseChunk {{ block_number: {}, block_hash: {:?}, chunk: {} }}",
+            "Chunk {{ block_number: {}, block_hash: {:?}, chunk: {} }}",
             self.block_number, self.block_hash, self.chunk
         )
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[repr(u8)]
+pub enum ResponseChunk {
+    #[beserial(discriminant = 1)]
+    Chunk(Chunk),
+    #[beserial(discriminant = 2)]
+    IncompleteState,
+}
+
+impl Display for ResponseChunk {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ResponseChunk::Chunk(chunk) => write!(f, "ResponseChunk::Chunk({})", chunk),
+            ResponseChunk::IncompleteState => {
+                write!(f, "ResponseChunk::IncompleteState")
+            }
+        }
     }
 }
 
@@ -102,6 +122,7 @@ pub enum QueuedStateChunks<N: Network> {
     TooDistantPastBlock(Block, N::PeerId),
     TooFarFutureChunk(ChunkAndId<N>),
     TooDistantPastChunk(ChunkAndId<N>),
+    PeerIncompleteState(N::PeerId),
 }
 
 /// This represents the behavior for the next chunk request. When the accounts trie is:
@@ -271,7 +292,7 @@ impl<N: Network> StateQueue<N> {
 
     fn insert_chunk_into_buffer(
         &mut self,
-        response: ResponseChunk,
+        response: Chunk,
         start_key: KeyNibbles,
         peer_id: N::PeerId,
     ) {
@@ -309,6 +330,14 @@ impl<N: Network> StateQueue<N> {
         start_key: KeyNibbles,
         peer_id: N::PeerId,
     ) -> Option<QueuedStateChunks<N>> {
+        // Filter for peers with incomplete state first.
+        let chunk = match chunk {
+            ResponseChunk::IncompleteState => {
+                return Some(QueuedStateChunks::PeerIncompleteState(peer_id))
+            }
+            ResponseChunk::Chunk(chunk) => chunk,
+        };
+
         let blockchain = self.blockchain.read();
         let current_block_height = blockchain.block_number();
         let current_block_hash = blockchain.head_hash();
