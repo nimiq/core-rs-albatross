@@ -605,7 +605,7 @@ impl MerkleRadixTrie {
                 let cur_digit = keys.start.get(cur_node.key.len());
                 let is_last_digit = keys.start.len() <= cur_node.key.len() + 1;
                 let prune_from = cur_digit.unwrap_or(0) // can only be `None` for the root node
-                    + if is_last_digit { 0 } else { 1 };
+                    + usize::from(!is_last_digit);
                 assert!(cur_node.key.is_empty() || cur_digit.is_some());
                 let prev_kind = cur_node.kind();
                 for child in &mut cur_node.children[prune_from..16] {

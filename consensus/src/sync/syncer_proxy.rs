@@ -37,9 +37,9 @@ macro_rules! gen_syncer_match {
 /// The `SyncerProxy` is an abstraction over multiple types of `Syncer`s.
 pub enum SyncerProxy<N: Network> {
     /// History Syncer, uses history macro sync for macro sync and block live sync.
-    History(Syncer<N, HistoryMacroSync<N>, BlockLiveSync<N, BlockRequestComponent<N>>>),
+    History(Syncer<N, HistoryMacroSync<N>, BlockLiveSync<N>>),
     /// Light Syncer, uses light macro sync for macro sync and block live sync.
-    Light(Syncer<N, LightMacroSync<N>, BlockLiveSync<N, BlockRequestComponent<N>>>),
+    Light(Syncer<N, LightMacroSync<N>, BlockLiveSync<N>>),
 }
 
 impl<N: Network> SyncerProxy<N> {

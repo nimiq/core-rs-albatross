@@ -86,6 +86,7 @@ impl Default for QueueConfig {
 struct BlockchainPushResult<N: Network> {
     block_push_result: Option<Result<PushResult, PushError>>,
     push_chunks_result: Result<ChunksPushResult, ChunksPushError>,
+    #[allow(dead_code)] // TODO ban peer related
     chunk_error_peer: Option<<N as Network>::PeerId>,
     block_hash: Blake2bHash,
 }

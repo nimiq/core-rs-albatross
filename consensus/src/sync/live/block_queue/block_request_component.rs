@@ -17,26 +17,6 @@ use crate::{
     sync::{peer_list::PeerList, sync_queue::SyncQueue},
 };
 
-pub trait RequestComponent<N: Network>:
-    Stream<Item = BlockRequestComponentEvent> + Unpin + Send
-{
-    fn add_peer(&self, peer_id: N::PeerId);
-
-    fn request_missing_blocks(
-        &mut self,
-        target_block_hash: Blake2bHash,
-        locators: Vec<Blake2bHash>,
-    );
-
-    fn num_peers(&self) -> usize;
-
-    fn peers(&self) -> Vec<N::PeerId>;
-
-    fn peer_list(&self) -> Arc<RwLock<PeerList<N>>>;
-
-    fn take_peer(&self, peer_id: &N::PeerId) -> Option<N::PeerId>;
-}
-
 #[derive(Debug)]
 pub enum BlockRequestComponentEvent {
     ReceivedBlocks(Vec<Block>),
@@ -54,14 +34,14 @@ pub enum BlockRequestComponentEvent {
 ///
 /// The public interface allows to request blocks, which are not immediately returned.
 /// The blocks instead are returned by polling the component.
-pub struct BlockRequestComponent<N: Network + 'static> {
+pub struct BlockRequestComponent<N: Network> {
     sync_queue: SyncQueue<N, (Blake2bHash, Vec<Blake2bHash>, bool), Vec<Block>>, // requesting missing blocks from peers
     pub(crate) peers: Arc<RwLock<PeerList<N>>>,
     network_event_rx: SubscribeEvents<N::PeerId>,
     include_micro_bodies: bool,
 }
 
-impl<N: Network + 'static> BlockRequestComponent<N> {
+impl<N: Network> BlockRequestComponent<N> {
     const NUM_PENDING_BLOCKS: usize = 5;
 
     pub fn new(
@@ -120,14 +100,12 @@ impl<N: Network + 'static> BlockRequestComponent<N> {
             .await
             .map(|response| response.blocks)
     }
-}
 
-impl<N: 'static + Network> RequestComponent<N> for BlockRequestComponent<N> {
-    fn add_peer(&self, peer_id: N::PeerId) {
+    pub fn add_peer(&self, peer_id: N::PeerId) {
         self.peers.write().add_peer(peer_id);
     }
 
-    fn request_missing_blocks(
+    pub fn request_missing_blocks(
         &mut self,
         target_block_hash: Blake2bHash,
         locators: Vec<Blake2bHash>,
@@ -139,27 +117,27 @@ impl<N: 'static + Network> RequestComponent<N> for BlockRequestComponent<N> {
         )]);
     }
 
-    fn num_peers(&self) -> usize {
+    pub fn num_peers(&self) -> usize {
         self.peers.read().len()
     }
 
-    fn peers(&self) -> Vec<N::PeerId> {
+    pub fn peers(&self) -> Vec<N::PeerId> {
         self.peers.read().peers().clone()
     }
 
-    fn take_peer(&self, peer_id: &N::PeerId) -> Option<N::PeerId> {
+    pub fn take_peer(&self, peer_id: &N::PeerId) -> Option<N::PeerId> {
         if self.peers.write().remove_peer(peer_id) {
             return Some(*peer_id);
         }
         None
     }
 
-    fn peer_list(&self) -> Arc<RwLock<PeerList<N>>> {
+    pub fn peer_list(&self) -> Arc<RwLock<PeerList<N>>> {
         Arc::clone(&self.peers)
     }
 }
 
-impl<N: Network + 'static> Stream for BlockRequestComponent<N> {
+impl<N: Network> Stream for BlockRequestComponent<N> {
     type Item = BlockRequestComponentEvent;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {

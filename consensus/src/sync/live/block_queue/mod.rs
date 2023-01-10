@@ -18,8 +18,10 @@ use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_network_interface::network::{MsgAcceptance, Network, PubsubId, Topic};
 use nimiq_primitives::policy::Policy;
 
+use self::block_request_component::BlockRequestComponent;
+
 use super::{
-    block_queue::block_request_component::{BlockRequestComponentEvent, RequestComponent},
+    block_queue::block_request_component::BlockRequestComponentEvent,
     queue::{LiveSyncQueue, QueueConfig},
 };
 
@@ -65,7 +67,7 @@ pub enum QueuedBlock<N: Network> {
     TooDistantPast(Block, N::PeerId),
 }
 
-pub struct BlockQueue<N: Network, TReq: RequestComponent<N>> {
+pub struct BlockQueue<N: Network> {
     /// Configuration for the block queue
     config: QueueConfig,
 
@@ -76,7 +78,7 @@ pub struct BlockQueue<N: Network, TReq: RequestComponent<N>> {
     network: Arc<N>,
 
     /// The Peer Tracking and Request Component.
-    pub(crate) request_component: TReq,
+    pub(crate) request_component: BlockRequestComponent<N>,
 
     /// A stream of blocks.
     /// This includes blocks received via gossipsub, but can also include other sources.
@@ -99,11 +101,11 @@ pub struct BlockQueue<N: Network, TReq: RequestComponent<N>> {
     current_macro_height: u32,
 }
 
-impl<N: Network, TReq: RequestComponent<N>> BlockQueue<N, TReq> {
+impl<N: Network> BlockQueue<N> {
     pub async fn new(
         network: Arc<N>,
         blockchain: BlockchainProxy,
-        request_component: TReq,
+        request_component: BlockRequestComponent<N>,
         config: QueueConfig,
     ) -> Self {
         let block_stream = if config.include_micro_bodies {
@@ -128,7 +130,7 @@ impl<N: Network, TReq: RequestComponent<N>> BlockQueue<N, TReq> {
     pub fn with_gossipsub_block_stream(
         blockchain: BlockchainProxy,
         network: Arc<N>,
-        request_component: TReq,
+        request_component: BlockRequestComponent<N>,
         block_stream: GossipSubBlockStream<N>,
         config: QueueConfig,
     ) -> Self {
@@ -141,7 +143,7 @@ impl<N: Network, TReq: RequestComponent<N>> BlockQueue<N, TReq> {
     pub fn with_block_stream(
         blockchain: BlockchainProxy,
         network: Arc<N>,
-        request_component: TReq,
+        request_component: BlockRequestComponent<N>,
         block_stream: BlockStream<N>,
         config: QueueConfig,
     ) -> Self {
@@ -545,7 +547,7 @@ impl<N: Network, TReq: RequestComponent<N>> BlockQueue<N, TReq> {
     }
 }
 
-impl<N: Network, TReq: RequestComponent<N>> Stream for BlockQueue<N, TReq> {
+impl<N: Network> Stream for BlockQueue<N> {
     type Item = QueuedBlock<N>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {

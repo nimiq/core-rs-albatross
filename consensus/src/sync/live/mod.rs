@@ -22,8 +22,8 @@ use self::{block_queue::BlockQueue, queue::LiveSyncQueue, state_queue::StateQueu
 
 use super::syncer::{LiveSync, LiveSyncEvent};
 
-pub type BlockLiveSync<N, TReq> = LiveSyncer<N, BlockQueue<N, TReq>>;
-pub type StateLiveSync<N, TReq> = LiveSyncer<N, StateQueue<N, TReq>>;
+pub type BlockLiveSync<N> = LiveSyncer<N, BlockQueue<N>>;
+pub type StateLiveSync<N> = LiveSyncer<N, StateQueue<N>>;
 
 /// The maximum capacity of the external block stream passed into the block queue.
 const MAX_BLOCK_STREAM_BUFFER: usize = 256;
