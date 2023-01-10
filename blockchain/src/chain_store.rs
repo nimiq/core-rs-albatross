@@ -277,6 +277,36 @@ impl ChainStore {
         }
     }
 
+    pub fn get_block_hashes_at(
+        &self,
+        block_height: u32,
+        txn_option: Option<&Transaction>,
+    ) -> Vec<Blake2bHash> {
+        let read_txn: ReadTransaction;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = ReadTransaction::new(&self.env);
+                &read_txn
+            }
+        };
+
+        let mut hashes: Vec<Blake2bHash> = Vec::new();
+        // Seek the hash of the first block at the given height and add it to our hashes vector
+        let mut cursor = txn.cursor(&self.height_idx);
+        let mut hash = cursor
+            .seek_key::<u32, Blake2bHash>(&block_height)
+            .map(|hash| (0u32, hash));
+
+        // Get any other block hash at the given height and add them to our hashes vector
+        while let Some((_, h)) = hash {
+            hashes.push(h);
+            hash = cursor.next_duplicate::<u32, Blake2bHash>();
+        }
+
+        hashes
+    }
+
     pub fn get_blocks_at(
         &self,
         block_height: u32,
@@ -304,7 +334,7 @@ impl ChainStore {
         while let Ok(block) = self.get_block(&block_hash, include_body, Some(txn)) {
             blocks.push(block);
 
-            // Get next block hash
+            // Get next block hash.
             block_hash = match cursor.next_duplicate::<u32, Blake2bHash>() {
                 Some((_, hash)) => hash,
                 None => break,
@@ -517,12 +547,13 @@ impl ChainStore {
 
         for height in Policy::first_block_of(epoch_number)..Policy::election_block_of(epoch_number)
         {
-            if let Some(hash) = txn.get::<u32, Blake2bHash>(&self.height_idx, &height) {
-                // If we detect a block whose prunable flag is set to false, we don't prune it
-                // Then we need to keep the previous macro block
+            let hashes = self.get_block_hashes_at(height, Some(txn));
+            for hash in hashes {
                 let chain_info: ChainInfo = txn
                     .get(&self.chain_db, &hash)
                     .expect("Corrupted store: ChainInfo referenced from index not found");
+                // If we detect a block whose prunable flag is set to false, we don't prune it
+                // Then we need to keep the previous macro block
                 if chain_info.prunable {
                     txn.remove(&self.chain_db, &hash);
                     txn.remove(&self.block_db, &hash);

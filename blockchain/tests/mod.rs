@@ -140,6 +140,106 @@ fn it_can_push_consecutive_view_changes() {
 }
 
 #[test]
+fn prune_epoch_micro_blocks() {
+    // Goal: test that every MicroBlock at a given height is removed when prune_epoch is executed.
+
+    let temp_producer = TemporaryBlockProducer::new();
+    let blockchain = Arc::clone(&temp_producer.blockchain);
+    let producer = temp_producer.producer;
+
+    // Create different MicroBlocks, push them, and then check they do exist.
+    // We ensure more than one MicroBlock at same height exists.
+    let micro_block1 = {
+        let bc_read = blockchain.read();
+        producer.next_micro_block(
+            &bc_read,
+            &bc_read.time.now() + 1_u64 * 1000,
+            vec![],
+            vec![],
+            vec![0x42],
+            None,
+        )
+    };
+    let micro_block2 = {
+        let bc_read = blockchain.read();
+        producer.next_micro_block(
+            &bc_read,
+            bc_read.time.now() + 1_u64 * 100,
+            vec![],
+            vec![],
+            vec![0x32],
+            None,
+        )
+    };
+    let micro_block3 = {
+        let bc_read = blockchain.read();
+        producer.next_micro_block(
+            &bc_read,
+            bc_read.time.now() + 1_u64 * 10000,
+            vec![],
+            vec![],
+            vec![0x82],
+            None,
+        )
+    };
+
+    assert_eq!(
+        Blockchain::push(
+            blockchain.upgradable_read(),
+            Block::Micro(micro_block1.clone())
+        ),
+        Ok(PushResult::Extended)
+    );
+    assert_eq!(
+        Blockchain::push(
+            blockchain.upgradable_read(),
+            Block::Micro(micro_block2.clone())
+        ),
+        Ok(PushResult::Forked)
+    );
+    assert_eq!(
+        Blockchain::push(
+            blockchain.upgradable_read(),
+            Block::Micro(micro_block3.clone())
+        ),
+        Ok(PushResult::Forked)
+    );
+
+    let bc_read = blockchain.read();
+    assert!(bc_read
+        .chain_store
+        .get_chain_info(&micro_block1.hash(), false, None,)
+        .is_ok());
+    assert!(bc_read
+        .chain_store
+        .get_chain_info(&micro_block2.hash(), false, None,)
+        .is_ok());
+    assert!(bc_read
+        .chain_store
+        .get_chain_info(&micro_block3.hash(), false, None,)
+        .is_ok());
+    assert_eq!(bc_read.block_number(), 1);
+
+    let mut txs = bc_read.write_transaction();
+    // Prune the 3 created MicroBlocks.
+    bc_read.chain_store.prune_epoch(1, &mut txs);
+
+    // Check that they no longer exist.
+    assert!(bc_read
+        .chain_store
+        .get_chain_info(&micro_block1.hash(), false, Some(&mut txs),)
+        .is_err());
+    assert!(bc_read
+        .chain_store
+        .get_chain_info(&micro_block2.hash(), false, Some(&mut txs),)
+        .is_err());
+    assert!(bc_read
+        .chain_store
+        .get_chain_info(&micro_block3.hash(), false, Some(&mut txs),)
+        .is_err());
+}
+
+#[test]
 fn micro_block_works_after_macro_block() {
     let temp_producer = TemporaryBlockProducer::new();
 
