@@ -1,5 +1,4 @@
 use nimiq_block::{Block, BlockError, MacroHeader};
-
 use nimiq_blockchain_interface::{
     AbstractBlockchain, ChainInfo, ChainOrdering, PushError, PushResult,
 };

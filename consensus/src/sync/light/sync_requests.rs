@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use futures::FutureExt;
-
 use parking_lot::RwLock;
 
 use nimiq_block::Block;

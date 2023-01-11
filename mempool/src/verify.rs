@@ -1,5 +1,3 @@
-use nimiq_blockchain_interface::AbstractBlockchain;
-use nimiq_primitives::networks::NetworkId;
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 use std::{
     fmt::{self, Display, Formatter},
@@ -8,9 +6,11 @@ use std::{
 
 use nimiq_account::{Account, AccountTransactionInteraction, BasicAccount, StakingContract};
 use nimiq_blockchain::Blockchain;
+use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_hash::Hash;
 use nimiq_primitives::account::AccountType;
 use nimiq_primitives::coin::Coin;
+use nimiq_primitives::networks::NetworkId;
 use nimiq_transaction::account::staking_contract::{
     IncomingStakingTransactionData, OutgoingStakingTransactionProof,
 };

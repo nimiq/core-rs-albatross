@@ -1,6 +1,6 @@
 use futures::stream::BoxStream;
-use nimiq_block::{Block, MacroBlock};
 
+use nimiq_block::{Block, MacroBlock};
 use nimiq_blockchain_interface::{
     AbstractBlockchain, BlockchainError, BlockchainEvent, ChainInfo, Direction,
 };

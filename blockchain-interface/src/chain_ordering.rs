@@ -21,6 +21,9 @@ pub enum ChainOrdering {
 impl ChainOrdering {
     /// Given a block and some chain, it returns the ordering of the new chain relative to the given
     /// chain.
+    /// F and G functions are what the blockchain uses to obtain the chain_info and a block respectively
+    /// They are abstracted in such a way, because the regular blockchain uses a DB transaction
+    /// whereas the light blockchain does not, but they share all the same logic
     pub fn order_chains<B: AbstractBlockchain, F, G>(
         blockchain: &B,
         block: &Block,

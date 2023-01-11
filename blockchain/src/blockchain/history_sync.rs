@@ -1,7 +1,7 @@
-use beserial::Serialize;
 use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
 use std::error::Error;
 
+use beserial::Serialize;
 use nimiq_account::{Inherent, InherentType};
 use nimiq_block::{Block, BlockError};
 use nimiq_blockchain_interface::{

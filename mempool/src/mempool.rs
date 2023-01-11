@@ -1,7 +1,6 @@
 use futures::future::{AbortHandle, Abortable};
 use futures::lock::{Mutex, MutexGuard};
 use futures::stream::BoxStream;
-use nimiq_blockchain_interface::AbstractBlockchain;
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
@@ -11,6 +10,7 @@ use beserial::Serialize;
 use nimiq_account::{Account, AccountTransactionInteraction, BasicAccount};
 use nimiq_block::Block;
 use nimiq_blockchain::{Blockchain, TransactionVerificationCache};
+use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_network_interface::network::{Network, Topic};
 use nimiq_primitives::account::AccountType;

@@ -9,7 +9,6 @@ use futures::stream::BoxStream;
 use futures::{Stream, StreamExt};
 
 use nimiq_block::Block;
-
 use nimiq_blockchain_interface::{AbstractBlockchain, Direction};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::Blake2bHash;

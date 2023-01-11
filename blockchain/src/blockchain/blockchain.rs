@@ -1,9 +1,9 @@
-use nimiq_blockchain_interface::{BlockchainError, BlockchainEvent, ChainInfo, ForkEvent};
 use std::sync::Arc;
 use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
 
 use nimiq_account::{Account, Accounts, BlockLog};
 use nimiq_block::Block;
+use nimiq_blockchain_interface::{BlockchainError, BlockchainEvent, ChainInfo, ForkEvent};
 use nimiq_database::{Environment, ReadTransaction, WriteTransaction};
 use nimiq_genesis::NetworkInfo;
 use nimiq_hash::Blake2bHash;
