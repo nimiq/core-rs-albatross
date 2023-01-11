@@ -1,9 +1,10 @@
 use std::path::PathBuf;
 
+use parking_lot::RwLockUpgradableReadGuard;
+
 use nimiq_block::{Block, BlockError};
 use nimiq_blockchain_interface::{AbstractBlockchain, ChainInfo, PushError, PushResult};
 use nimiq_nano_zkp::{NanoProof, NanoZKP};
-use parking_lot::RwLockUpgradableReadGuard;
 
 use crate::blockchain::LightBlockchain;
 
@@ -44,29 +45,11 @@ impl LightBlockchain {
 
         // Prepare the inputs to verify the proof.
         let initial_block_number = this.genesis_block.block_number();
-
         let initial_header_hash = <[u8; 32]>::from(this.genesis_block.hash());
-
-        let initial_public_keys = this
-            .genesis_block
-            .validators()
-            .unwrap()
-            .voting_keys()
-            .iter()
-            .map(|pk| pk.public_key)
-            .collect();
-
+        let initial_public_keys = this.genesis_block.validators().unwrap().voting_keys_g2();
         let final_block_number = block.block_number();
-
         let final_header_hash = <[u8; 32]>::from(block.hash());
-
-        let final_public_keys = block
-            .validators()
-            .unwrap()
-            .voting_keys()
-            .iter()
-            .map(|pk| pk.public_key)
-            .collect();
+        let final_public_keys = block.validators().unwrap().voting_keys_g2();
 
         // Verify the zk proof.
         let verify_result = NanoZKP::verify(

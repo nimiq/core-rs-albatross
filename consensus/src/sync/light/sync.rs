@@ -3,11 +3,10 @@ use std::sync::Arc;
 use std::task::Waker;
 
 use futures::{future::BoxFuture, stream::FuturesUnordered, FutureExt};
-use parking_lot::RwLock;
 
 use nimiq_block::Block;
+use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::Blake2bHash;
-use nimiq_light_blockchain::LightBlockchain;
 use nimiq_network_interface::{
     network::{Network, SubscribeEvents},
     peer::CloseReason,
@@ -110,7 +109,7 @@ impl PeerMacroRequests {
 /// If during the process, a peer is deemed as outdated, then it is emitted
 pub struct LightMacroSync<TNetwork: Network> {
     /// The blockchain, only a light variant is supported for LightMacroSync
-    pub(crate) blockchain: Arc<RwLock<LightBlockchain>>,
+    pub(crate) blockchain: BlockchainProxy,
     /// Reference to the network
     pub(crate) network: Arc<TNetwork>,
     /// Stream for peer joined and peer left events
@@ -135,7 +134,7 @@ pub struct LightMacroSync<TNetwork: Network> {
 
 impl<TNetwork: Network> LightMacroSync<TNetwork> {
     pub fn new(
-        blockchain: Arc<RwLock<LightBlockchain>>,
+        blockchain: BlockchainProxy,
         network: Arc<TNetwork>,
         network_event_rx: SubscribeEvents<TNetwork::PeerId>,
         zkp_component_proxy: Arc<ZKPComponentProxy<TNetwork>>,

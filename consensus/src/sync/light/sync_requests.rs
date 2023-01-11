@@ -1,12 +1,11 @@
 use std::sync::Arc;
 
 use futures::FutureExt;
-use parking_lot::RwLock;
 
 use nimiq_block::Block;
 use nimiq_blockchain_interface::AbstractBlockchain;
+use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::Blake2bHash;
-use nimiq_light_blockchain::LightBlockchain;
 use nimiq_network_interface::{
     network::Network,
     peer::CloseReason,
@@ -48,7 +47,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
     }
 
     pub(crate) async fn request_epoch_ids(
-        blockchain: Arc<RwLock<LightBlockchain>>,
+        blockchain: BlockchainProxy,
         network: Arc<TNetwork>,
         peer_id: TNetwork::PeerId,
     ) -> Option<EpochIds<TNetwork::PeerId>> {

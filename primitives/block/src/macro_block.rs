@@ -77,7 +77,7 @@ impl MacroBlock {
     /// Calculates the PKTree root from the given validators.
     pub fn pk_tree_root(validators: &Validators) -> Result<Vec<u8>, BlockError> {
         // Get the public keys.
-        let public_keys = validators.voting_keys();
+        let public_keys = validators.voting_keys_g2();
 
         // Check the expected number of validators.
         // This must be checked before `pk_tree_construct` since it assumes a correct value.
@@ -90,9 +90,7 @@ impl MacroBlock {
         }
 
         // Create the tree
-        Ok(pk_tree_construct(
-            public_keys.iter().map(|pk| pk.public_key).collect(),
-        ))
+        Ok(pk_tree_construct(public_keys))
     }
 
     /// Returns whether or not this macro block is an election block.

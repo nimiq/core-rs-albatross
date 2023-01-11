@@ -96,50 +96,37 @@ impl<N: Network> SyncerProxy<N> {
         zkp_component_proxy: Arc<ZKPComponentProxy<N>>,
         network_event_rx: SubscribeEvents<N::PeerId>,
     ) -> Self {
-        assert!(
-            matches!(blockchain_proxy, BlockchainProxy::Light(_)),
-            "Light Syncer can only be created for a light blockchain"
+        let request_component =
+            BlockRequestComponent::new(network.subscribe_events(), Arc::clone(&network), false);
+
+        let block_queue_config = BlockQueueConfig {
+            include_micro_bodies: false,
+            ..Default::default()
+        };
+
+        let block_queue = BlockQueue::new(
+            Arc::clone(&network),
+            blockchain_proxy.clone(),
+            request_component,
+            block_queue_config,
+        )
+        .await;
+
+        let live_sync = BlockLiveSync::new(
+            blockchain_proxy.clone(),
+            Arc::clone(&network),
+            block_queue,
+            bls_cache,
         );
 
-        match blockchain_proxy {
-            BlockchainProxy::Light(ref blockchain) => {
-                let request_component = BlockRequestComponent::new(
-                    network.subscribe_events(),
-                    Arc::clone(&network),
-                    false,
-                );
+        let macro_sync = LightMacroSync::new(
+            blockchain_proxy,
+            network,
+            network_event_rx,
+            zkp_component_proxy,
+        );
 
-                let block_queue_config = BlockQueueConfig {
-                    include_micro_bodies: false,
-                    ..Default::default()
-                };
-
-                let block_queue = BlockQueue::new(
-                    Arc::clone(&network),
-                    blockchain_proxy.clone(),
-                    request_component,
-                    block_queue_config,
-                )
-                .await;
-
-                let live_sync = BlockLiveSync::new(
-                    blockchain_proxy.clone(),
-                    Arc::clone(&network),
-                    block_queue,
-                    bls_cache,
-                );
-
-                let macro_sync = LightMacroSync::new(
-                    Arc::clone(blockchain),
-                    network,
-                    network_event_rx,
-                    zkp_component_proxy,
-                );
-
-                Self::Light(Syncer::new(live_sync, macro_sync))
-            }
-            BlockchainProxy::Full(_) => unreachable!(),
-        }
+        Self::Light(Syncer::new(live_sync, macro_sync))
     }
 
     /// Pushes a block for the live sync method

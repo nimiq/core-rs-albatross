@@ -4,7 +4,11 @@ use std::task::{Context, Poll};
 
 use futures::{FutureExt, Stream, StreamExt};
 
+use nimiq_block::Block;
+#[cfg(not(target_family = "wasm"))]
+use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::AbstractBlockchain;
+use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_light_blockchain::LightBlockchain;
 use nimiq_macros::store_waker;
 use nimiq_network_interface::network::{Network, NetworkEvent};
@@ -60,18 +64,26 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
             (Ok(zkp_event), peer_id) => match zkp_event {
                 Proof { proof, block } => {
                     // Apply a newer proof to the blockchain
-                    let result = LightBlockchain::push_zkp(
-                        self.blockchain.upgradable_read(),
-                        nimiq_block::Block::Macro(block),
-                        proof.proof.expect("Expected a zkp proof"),
-                    );
+                    let result = match self.blockchain {
+                        #[cfg(not(target_family = "wasm"))]
+                        BlockchainProxy::Full(ref full_blockchain) => Blockchain::push_zkp(
+                            full_blockchain.upgradable_read(),
+                            Block::Macro(block),
+                            proof.proof.expect("Expected a zkp proof"),
+                        ),
+                        BlockchainProxy::Light(ref light_blockchain) => LightBlockchain::push_zkp(
+                            light_blockchain.upgradable_read(),
+                            Block::Macro(block),
+                            proof.proof.expect("Expected a zkp proof"),
+                        ),
+                    };
 
                     match result {
                         Ok(result) => {
                             log::debug!(result = ?result, "Applied ZKP proof to the blockchain");
                             // Request epoch ids with our updated state from this peer
                             let future = Self::request_epoch_ids(
-                                Arc::clone(&self.blockchain),
+                                self.blockchain.clone(),
                                 Arc::clone(&self.network),
                                 peer_id,
                             )
@@ -91,7 +103,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                 OutdatedProof { block_height: _ } => {
                     // We need to request epoch ids from this peer to know if it is outdated or not
                     let future = Self::request_epoch_ids(
-                        Arc::clone(&self.blockchain),
+                        self.blockchain.clone(),
                         Arc::clone(&self.network),
                         peer_id,
                     )
@@ -150,7 +162,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         Poll::Pending
     }
 
-    fn poll_macro_headers(
+    fn poll_macro_blocks(
         &mut self,
         cx: &mut Context<'_>,
     ) -> Poll<Option<MacroSyncReturn<TNetwork::PeerId>>> {
@@ -170,17 +182,41 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                             let block = block.expect("At this point the queue should be ready");
 
                             // Check if the block is still valid for us or if it is outdated before trying to apply it
-                            let blockchain = self.blockchain.upgradable_read();
+                            let push_result = match self.blockchain {
+                                #[cfg(not(target_family = "wasm"))]
+                                BlockchainProxy::Full(ref full_blockchain) => {
+                                    let blockchain = full_blockchain.upgradable_read();
 
-                            let latest_block_number = blockchain.block_number();
+                                    let latest_block_number = blockchain.block_number();
 
-                            if block.block_number() < latest_block_number {
-                                // The peer is outdated, so we emit it, and we remove it
-                                self.peer_requests.remove(&peer_id);
-                                return Poll::Ready(Some(MacroSyncReturn::Outdated(peer_id)));
-                            }
+                                    if block.block_number() < latest_block_number {
+                                        // The peer is outdated, so we emit it, and we remove it
+                                        self.peer_requests.remove(&peer_id);
+                                        return Poll::Ready(Some(MacroSyncReturn::Outdated(
+                                            peer_id,
+                                        )));
+                                    }
 
-                            match LightBlockchain::push_macro(blockchain, block.clone()) {
+                                    Blockchain::push_macro(blockchain, block.clone())
+                                }
+                                BlockchainProxy::Light(ref light_blockchain) => {
+                                    let blockchain = light_blockchain.upgradable_read();
+
+                                    let latest_block_number = blockchain.block_number();
+
+                                    if block.block_number() < latest_block_number {
+                                        // The peer is outdated, so we emit it, and we remove it
+                                        self.peer_requests.remove(&peer_id);
+                                        return Poll::Ready(Some(MacroSyncReturn::Outdated(
+                                            peer_id,
+                                        )));
+                                    }
+
+                                    LightBlockchain::push_macro(blockchain, block.clone())
+                                }
+                            };
+
+                            match push_result {
                                 Ok(push_result) => {
                                     log::debug!(
                                         block_number = block.block_number(),
@@ -207,7 +243,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                         // or if there is more to sync
                         // Request epoch ids with our updated state from this peer
                         let future = Self::request_epoch_ids(
-                            Arc::clone(&self.blockchain),
+                            self.blockchain.clone(),
                             Arc::clone(&self.network),
                             peer_id,
                         )
@@ -256,7 +292,7 @@ impl<TNetwork: Network> Stream for LightMacroSync<TNetwork> {
             return Poll::Ready(o);
         }
 
-        if let Poll::Ready(o) = self.poll_macro_headers(cx) {
+        if let Poll::Ready(o) = self.poll_macro_blocks(cx) {
             return Poll::Ready(o);
         }
 
@@ -291,10 +327,10 @@ mod tests {
     use crate::sync::syncer::MacroSyncReturn;
     pub const KEYS_PATH: &str = "../.zkp";
 
-    fn blockchain() -> Arc<RwLock<Blockchain>> {
+    fn blockchain() -> BlockchainProxy {
         let time = Arc::new(OffsetTime::new());
         let env = VolatileEnvironment::new(10).unwrap();
-        Arc::new(RwLock::new(
+        BlockchainProxy::Full(Arc::new(RwLock::new(
             Blockchain::new(
                 env,
                 BlockchainConfig::default(),
@@ -302,11 +338,13 @@ mod tests {
                 time,
             )
             .unwrap(),
-        ))
+        )))
     }
 
-    fn light_blockchain() -> Arc<RwLock<LightBlockchain>> {
-        Arc::new(RwLock::new(LightBlockchain::new(NetworkId::UnitAlbatross)))
+    fn light_blockchain() -> BlockchainProxy {
+        BlockchainProxy::Light(Arc::new(RwLock::new(LightBlockchain::new(
+            NetworkId::UnitAlbatross,
+        ))))
     }
 
     fn spawn_request_handlers<TNetwork: Network>(
@@ -328,297 +366,324 @@ mod tests {
 
     #[test(tokio::test)]
     async fn it_terminates_if_the_peer_does_not_answer_the_zkp_request() {
-        let mut hub = MockHub::default();
-        let net1 = Arc::new(hub.new_network());
-        let net2 = Arc::new(hub.new_network());
-        let chain = light_blockchain();
-        let chain2 = light_blockchain();
-        let env = VolatileEnvironment::new(10).unwrap();
+        async fn test(chain1: BlockchainProxy, chain2: BlockchainProxy) {
+            let mut hub = MockHub::default();
+            let net1 = Arc::new(hub.new_network());
+            let net2 = Arc::new(hub.new_network());
+            let env = VolatileEnvironment::new(10).unwrap();
 
-        let zkp_component = nimiq_zkp_component::ZKPComponent::new(
-            nimiq_blockchain_proxy::BlockchainProxy::Light(Arc::clone(&chain)),
-            Arc::clone(&net1),
-            false,
-            None,
-            env,
-            PathBuf::from(KEYS_PATH),
-        )
-        .await;
+            let zkp_component = nimiq_zkp_component::ZKPComponent::new(
+                chain1.clone(),
+                Arc::clone(&net1),
+                false,
+                None,
+                env,
+                PathBuf::from(KEYS_PATH),
+            )
+            .await;
 
-        let zkp_component_proxy = Arc::new(zkp_component.proxy());
+            let zkp_component_proxy = Arc::new(zkp_component.proxy());
 
-        tokio::spawn(zkp_component);
+            tokio::spawn(zkp_component);
 
-        let mut sync = LightMacroSync::<MockNetwork>::new(
-            Arc::clone(&chain),
-            Arc::clone(&net1),
-            net1.subscribe_events(),
-            zkp_component_proxy,
-        );
+            let mut sync = LightMacroSync::<MockNetwork>::new(
+                chain1.clone(),
+                Arc::clone(&net1),
+                net1.subscribe_events(),
+                zkp_component_proxy,
+            );
 
-        spawn_request_handlers(&net2, &BlockchainProxy::from(chain2.clone()));
-        net1.dial_mock(&net2);
+            spawn_request_handlers(&net2, &chain2.clone());
+            net1.dial_mock(&net2);
 
-        match sync.next().await {
-            // The peer does not reply to the zkp request, so we disconnect from it and do not emit it
-            None => {
-                assert_eq!(chain.read().block_number(), 0);
-                // Verify the peer was removed
-                assert_eq!(sync.peer_requests.len(), 0);
+            match sync.next().await {
+                // The peer does not reply to the zkp request, so we disconnect from it and do not emit it
+                None => {
+                    assert_eq!(chain1.read().block_number(), 0);
+                    // Verify the peer was removed
+                    assert_eq!(sync.peer_requests.len(), 0);
+                }
+                res => panic!("Unexpected MacroSyncReturn: {:?}", res),
             }
-            res => panic!("Unexpected MacroSyncReturn: {:?}", res),
         }
+
+        test(light_blockchain(), light_blockchain()).await;
+        test(blockchain(), light_blockchain()).await;
+        test(light_blockchain(), blockchain()).await;
+        test(blockchain(), blockchain()).await;
     }
 
     #[test(tokio::test)]
     async fn it_terminates_if_there_is_nothing_to_sync() {
-        let mut hub = MockHub::default();
-        let net1 = Arc::new(hub.new_network());
-        let net2 = Arc::new(hub.new_network());
-        let env = VolatileEnvironment::new(10).unwrap();
-        let env2 = VolatileEnvironment::new(10).unwrap();
+        async fn test(chain1: BlockchainProxy, chain2: BlockchainProxy) {
+            let mut hub = MockHub::default();
+            let net1 = Arc::new(hub.new_network());
+            let net2 = Arc::new(hub.new_network());
+            let env = VolatileEnvironment::new(10).unwrap();
+            let env2 = VolatileEnvironment::new(10).unwrap();
 
-        let chain1 = light_blockchain();
-        let chain2 = blockchain();
+            let zkp_component = nimiq_zkp_component::ZKPComponent::new(
+                chain1.clone(),
+                Arc::clone(&net1),
+                false,
+                None,
+                env,
+                PathBuf::from(KEYS_PATH),
+            )
+            .await;
 
-        let zkp_component = nimiq_zkp_component::ZKPComponent::new(
-            nimiq_blockchain_proxy::BlockchainProxy::Light(Arc::clone(&chain1)),
-            Arc::clone(&net1),
-            false,
-            None,
-            env,
-            PathBuf::from(KEYS_PATH),
-        )
-        .await;
+            let zkp_component_proxy = Arc::new(zkp_component.proxy());
 
-        let zkp_component_proxy = Arc::new(zkp_component.proxy());
+            tokio::spawn(zkp_component);
 
-        tokio::spawn(zkp_component);
+            let mut sync = LightMacroSync::<MockNetwork>::new(
+                chain1.clone(),
+                Arc::clone(&net1),
+                net1.subscribe_events(),
+                zkp_component_proxy,
+            );
 
-        let mut sync = LightMacroSync::<MockNetwork>::new(
-            Arc::clone(&chain1),
-            Arc::clone(&net1),
-            net1.subscribe_events(),
-            zkp_component_proxy,
-        );
+            let zkp_component2 = nimiq_zkp_component::ZKPComponent::new(
+                chain2.clone(),
+                Arc::clone(&net2),
+                false,
+                None,
+                env2,
+                PathBuf::from(KEYS_PATH),
+            )
+            .await;
 
-        let zkp_component2 = nimiq_zkp_component::ZKPComponent::new(
-            nimiq_blockchain_proxy::BlockchainProxy::Full(Arc::clone(&chain2)),
-            Arc::clone(&net2),
-            false,
-            None,
-            env2,
-            PathBuf::from(KEYS_PATH),
-        )
-        .await;
+            tokio::spawn(zkp_component2);
 
-        tokio::spawn(zkp_component2);
+            spawn_request_handlers(&net2, &chain2.clone());
+            net1.dial_mock(&net2);
 
-        spawn_request_handlers(&net2, &BlockchainProxy::from(chain2.clone()));
-        net1.dial_mock(&net2);
-
-        match sync.next().await {
-            Some(MacroSyncReturn::Good(_)) => {
-                assert_eq!(chain1.read().head(), chain2.read().head());
+            match sync.next().await {
+                Some(MacroSyncReturn::Good(_)) => {
+                    assert_eq!(chain1.read().head(), chain2.read().head());
+                }
+                res => panic!("Unexpected HistorySyncReturn: {:?}", res),
             }
-            res => panic!("Unexpected HistorySyncReturn: {:?}", res),
         }
+
+        test(light_blockchain(), light_blockchain()).await;
+        test(blockchain(), light_blockchain()).await;
+        test(light_blockchain(), blockchain()).await;
+        test(blockchain(), blockchain()).await;
     }
 
     // Tries to sync to a full blockchain.
     #[test(tokio::test)]
     async fn it_can_sync_a_single_finalized_epoch() {
-        let mut hub = MockHub::default();
-        let net1 = Arc::new(hub.new_network());
-        let net2 = Arc::new(hub.new_network());
-        let env = VolatileEnvironment::new(10).unwrap();
-        let env2 = VolatileEnvironment::new(10).unwrap();
+        async fn test(chain1: BlockchainProxy) {
+            let mut hub = MockHub::default();
+            let net1 = Arc::new(hub.new_network());
+            let net2 = Arc::new(hub.new_network());
+            let env = VolatileEnvironment::new(10).unwrap();
+            let env2 = VolatileEnvironment::new(10).unwrap();
 
-        let chain1 = light_blockchain();
-        let chain2 = blockchain();
+            let chain2 = blockchain();
 
-        let producer = BlockProducer::new(signing_key(), voting_key());
-        produce_macro_blocks_with_txns(
-            &producer,
-            &chain2,
-            Policy::batches_per_epoch() as usize,
-            1,
-            0,
-        );
-        assert_eq!(chain2.read().block_number(), Policy::blocks_per_epoch());
-
-        let zkp_component = nimiq_zkp_component::ZKPComponent::new(
-            nimiq_blockchain_proxy::BlockchainProxy::Light(Arc::clone(&chain1)),
-            Arc::clone(&net1),
-            false,
-            None,
-            env,
-            PathBuf::from(KEYS_PATH),
-        )
-        .await;
-
-        let zkp_component_proxy = Arc::new(zkp_component.proxy());
-
-        tokio::spawn(zkp_component);
-
-        let mut sync = LightMacroSync::<MockNetwork>::new(
-            Arc::clone(&chain1),
-            Arc::clone(&net1),
-            net1.subscribe_events(),
-            zkp_component_proxy,
-        );
-
-        let zkp_component2 = nimiq_zkp_component::ZKPComponent::new(
-            nimiq_blockchain_proxy::BlockchainProxy::Full(Arc::clone(&chain2)),
-            Arc::clone(&net2),
-            false,
-            None,
-            env2,
-            PathBuf::from(KEYS_PATH),
-        )
-        .await;
-
-        tokio::spawn(zkp_component2);
-
-        spawn_request_handlers(&net2, &BlockchainProxy::from(chain2.clone()));
-        net1.dial_mock(&net2);
-
-        match sync.next().await {
-            Some(MacroSyncReturn::Good(_)) => {
-                assert_eq!(chain1.read().head(), chain2.read().head());
+            let producer = BlockProducer::new(signing_key(), voting_key());
+            if let BlockchainProxy::Full(ref chain2) = chain2 {
+                produce_macro_blocks_with_txns(
+                    &producer,
+                    &chain2,
+                    Policy::batches_per_epoch() as usize,
+                    1,
+                    0,
+                );
             }
-            res => panic!("Unexpected HistorySyncReturn: {:?}", res),
+            assert_eq!(chain2.read().block_number(), Policy::blocks_per_epoch());
+
+            let zkp_component = nimiq_zkp_component::ZKPComponent::new(
+                chain1.clone(),
+                Arc::clone(&net1),
+                false,
+                None,
+                env,
+                PathBuf::from(KEYS_PATH),
+            )
+            .await;
+
+            let zkp_component_proxy = Arc::new(zkp_component.proxy());
+
+            tokio::spawn(zkp_component);
+
+            let mut sync = LightMacroSync::<MockNetwork>::new(
+                chain1.clone(),
+                Arc::clone(&net1),
+                net1.subscribe_events(),
+                zkp_component_proxy,
+            );
+
+            let zkp_component2 = nimiq_zkp_component::ZKPComponent::new(
+                chain2.clone(),
+                Arc::clone(&net2),
+                false,
+                None,
+                env2,
+                PathBuf::from(KEYS_PATH),
+            )
+            .await;
+
+            tokio::spawn(zkp_component2);
+
+            spawn_request_handlers(&net2, &chain2.clone());
+            net1.dial_mock(&net2);
+
+            match sync.next().await {
+                Some(MacroSyncReturn::Good(_)) => {
+                    assert_eq!(chain1.read().head(), chain2.read().head());
+                }
+                res => panic!("Unexpected HistorySyncReturn: {:?}", res),
+            }
         }
+
+        test(light_blockchain()).await;
+        test(blockchain()).await;
     }
 
     #[test(tokio::test)]
     async fn it_can_sync_a_single_finalized_epoch_and_batch() {
-        let mut hub = MockHub::default();
-        let net1 = Arc::new(hub.new_network());
-        let net2 = Arc::new(hub.new_network());
-        let env = VolatileEnvironment::new(10).unwrap();
-        let env2 = VolatileEnvironment::new(10).unwrap();
+        async fn test(chain1: BlockchainProxy) {
+            let mut hub = MockHub::default();
+            let net1 = Arc::new(hub.new_network());
+            let net2 = Arc::new(hub.new_network());
+            let env = VolatileEnvironment::new(10).unwrap();
+            let env2 = VolatileEnvironment::new(10).unwrap();
 
-        let chain1 = light_blockchain();
-        let chain2 = blockchain();
+            let chain2 = blockchain();
 
-        let producer = BlockProducer::new(signing_key(), voting_key());
-        produce_macro_blocks_with_txns(
-            &producer,
-            &chain2,
-            (Policy::batches_per_epoch() + 1) as usize,
-            1,
-            0,
-        );
-        assert_eq!(
-            chain2.read().block_number(),
-            Policy::blocks_per_epoch() + Policy::blocks_per_batch()
-        );
-
-        let zkp_component = nimiq_zkp_component::ZKPComponent::new(
-            nimiq_blockchain_proxy::BlockchainProxy::Light(Arc::clone(&chain1)),
-            Arc::clone(&net1),
-            false,
-            None,
-            env,
-            PathBuf::from(KEYS_PATH),
-        )
-        .await;
-
-        let zkp_component_proxy = Arc::new(zkp_component.proxy());
-
-        tokio::spawn(zkp_component);
-
-        let mut sync = LightMacroSync::<MockNetwork>::new(
-            Arc::clone(&chain1),
-            Arc::clone(&net1),
-            net1.subscribe_events(),
-            zkp_component_proxy,
-        );
-
-        let zkp_component2 = nimiq_zkp_component::ZKPComponent::new(
-            nimiq_blockchain_proxy::BlockchainProxy::Full(Arc::clone(&chain2)),
-            Arc::clone(&net2),
-            false,
-            None,
-            env2,
-            PathBuf::from(KEYS_PATH),
-        )
-        .await;
-
-        tokio::spawn(zkp_component2);
-
-        spawn_request_handlers(&net2, &BlockchainProxy::from(chain2.clone()));
-        net1.dial_mock(&net2);
-
-        match sync.next().await {
-            Some(MacroSyncReturn::Good(_)) => {
-                assert_eq!(chain1.read().head(), chain2.read().head());
+            let producer = BlockProducer::new(signing_key(), voting_key());
+            if let BlockchainProxy::Full(ref chain2) = chain2 {
+                produce_macro_blocks_with_txns(
+                    &producer,
+                    &chain2,
+                    (Policy::batches_per_epoch() + 1) as usize,
+                    1,
+                    0,
+                );
             }
-            res => panic!("Unexpected HistorySyncReturn: {:?}", res),
+            assert_eq!(
+                chain2.read().block_number(),
+                Policy::blocks_per_epoch() + Policy::blocks_per_batch()
+            );
+
+            let zkp_component = nimiq_zkp_component::ZKPComponent::new(
+                chain1.clone(),
+                Arc::clone(&net1),
+                false,
+                None,
+                env,
+                PathBuf::from(KEYS_PATH),
+            )
+            .await;
+
+            let zkp_component_proxy = Arc::new(zkp_component.proxy());
+
+            tokio::spawn(zkp_component);
+
+            let mut sync = LightMacroSync::<MockNetwork>::new(
+                chain1.clone(),
+                Arc::clone(&net1),
+                net1.subscribe_events(),
+                zkp_component_proxy,
+            );
+
+            let zkp_component2 = nimiq_zkp_component::ZKPComponent::new(
+                chain2.clone(),
+                Arc::clone(&net2),
+                false,
+                None,
+                env2,
+                PathBuf::from(KEYS_PATH),
+            )
+            .await;
+
+            tokio::spawn(zkp_component2);
+
+            spawn_request_handlers(&net2, &chain2.clone());
+            net1.dial_mock(&net2);
+
+            match sync.next().await {
+                Some(MacroSyncReturn::Good(_)) => {
+                    assert_eq!(chain1.read().head(), chain2.read().head());
+                }
+                res => panic!("Unexpected HistorySyncReturn: {:?}", res),
+            }
         }
+
+        test(light_blockchain()).await;
+        test(blockchain()).await;
     }
 
     // Tries to sync to a full blockchain.
     #[test(tokio::test)]
     async fn it_can_sync_multiple_batches() {
-        let mut hub = MockHub::default();
-        let net1 = Arc::new(hub.new_network());
-        let net2 = Arc::new(hub.new_network());
-        let env = VolatileEnvironment::new(10).unwrap();
-        let env2 = VolatileEnvironment::new(10).unwrap();
+        async fn test(chain1: BlockchainProxy) {
+            let mut hub = MockHub::default();
+            let net1 = Arc::new(hub.new_network());
+            let net2 = Arc::new(hub.new_network());
+            let env = VolatileEnvironment::new(10).unwrap();
+            let env2 = VolatileEnvironment::new(10).unwrap();
 
-        let chain1 = light_blockchain();
-        let chain2 = blockchain();
-        let num_batches = (Policy::batches_per_epoch() - 1) as usize;
-        let producer = BlockProducer::new(signing_key(), voting_key());
-        produce_macro_blocks_with_txns(&producer, &chain2, num_batches, 1, 0);
-        assert_eq!(
-            chain2.read().block_number(),
-            num_batches as u32 * Policy::blocks_per_batch()
-        );
-
-        let zkp_component = nimiq_zkp_component::ZKPComponent::new(
-            nimiq_blockchain_proxy::BlockchainProxy::Light(Arc::clone(&chain1)),
-            Arc::clone(&net1),
-            false,
-            None,
-            env,
-            PathBuf::from(KEYS_PATH),
-        )
-        .await;
-
-        let zkp_component_proxy = Arc::new(zkp_component.proxy());
-
-        tokio::spawn(zkp_component);
-
-        let mut sync = LightMacroSync::<MockNetwork>::new(
-            Arc::clone(&chain1),
-            Arc::clone(&net1),
-            net1.subscribe_events(),
-            zkp_component_proxy,
-        );
-
-        let zkp_component2 = nimiq_zkp_component::ZKPComponent::new(
-            nimiq_blockchain_proxy::BlockchainProxy::Full(Arc::clone(&chain2)),
-            Arc::clone(&net2),
-            false,
-            None,
-            env2,
-            PathBuf::from(KEYS_PATH),
-        )
-        .await;
-
-        tokio::spawn(zkp_component2);
-
-        spawn_request_handlers(&net2, &BlockchainProxy::from(chain2.clone()));
-        net1.dial_mock(&net2);
-
-        match sync.next().await {
-            Some(MacroSyncReturn::Good(_)) => {
-                assert_eq!(chain1.read().head(), chain2.read().head());
+            let chain2 = blockchain();
+            let num_batches = (Policy::batches_per_epoch() - 1) as usize;
+            let producer = BlockProducer::new(signing_key(), voting_key());
+            if let BlockchainProxy::Full(ref chain2) = chain2 {
+                produce_macro_blocks_with_txns(&producer, &chain2, num_batches, 1, 0);
             }
-            res => panic!("Unexpected HistorySyncReturn: {:?}", res),
+            assert_eq!(
+                chain2.read().block_number(),
+                num_batches as u32 * Policy::blocks_per_batch()
+            );
+
+            let zkp_component = nimiq_zkp_component::ZKPComponent::new(
+                chain1.clone(),
+                Arc::clone(&net1),
+                false,
+                None,
+                env,
+                PathBuf::from(KEYS_PATH),
+            )
+            .await;
+
+            let zkp_component_proxy = Arc::new(zkp_component.proxy());
+
+            tokio::spawn(zkp_component);
+
+            let mut sync = LightMacroSync::<MockNetwork>::new(
+                chain1.clone(),
+                Arc::clone(&net1),
+                net1.subscribe_events(),
+                zkp_component_proxy,
+            );
+
+            let zkp_component2 = nimiq_zkp_component::ZKPComponent::new(
+                chain2.clone(),
+                Arc::clone(&net2),
+                false,
+                None,
+                env2,
+                PathBuf::from(KEYS_PATH),
+            )
+            .await;
+
+            tokio::spawn(zkp_component2);
+
+            spawn_request_handlers(&net2, &chain2.clone());
+            net1.dial_mock(&net2);
+
+            match sync.next().await {
+                Some(MacroSyncReturn::Good(_)) => {
+                    assert_eq!(chain1.read().head(), chain2.read().head());
+                }
+                res => panic!("Unexpected HistorySyncReturn: {:?}", res),
+            }
         }
+
+        test(light_blockchain()).await;
+        test(blockchain()).await;
     }
 }

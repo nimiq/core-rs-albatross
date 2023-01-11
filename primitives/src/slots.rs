@@ -23,8 +23,7 @@ use beserial::{
     Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
     SerializingError, WriteBytesExt,
 };
-use nimiq_bls::lazy::LazyPublicKey as LazyBlsPublicKey;
-use nimiq_bls::PublicKey as BlsPublicKey;
+use nimiq_bls::{lazy::LazyPublicKey as LazyBlsPublicKey, G2Projective, PublicKey as BlsPublicKey};
 use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
 
 use crate::policy::Policy;
@@ -145,6 +144,11 @@ impl Validators {
     pub fn get_validator_by_address(&self, address: Address) -> Option<&Validator> {
         let band = *self.validator_map.get(&address)?;
         Some(&self.validators[band as usize])
+    }
+
+    /// Returns the G2 projective associated with each slot, in order.
+    pub fn voting_keys_g2(&self) -> Vec<G2Projective> {
+        self.voting_keys().iter().map(|pk| pk.public_key).collect()
     }
 
     /// Returns the voting key associated with each slot, in order.

@@ -212,16 +212,13 @@ impl Blockchain {
             // Calculate the epoch to be pruned. Saturate at zero.
             let pruned_epoch = Policy::epoch_at(block_number).saturating_sub(max_epochs_stored);
 
-            if this.config.keep_history {
-                // If we are a history node, we only prune the chain store
-                this.chain_store.prune_epoch(pruned_epoch, &mut txn);
-            } else {
-                // Prune the History Store, full nodes will only keep just one epoch of history
+            // Prune the Chain Store.
+            this.chain_store.prune_epoch(pruned_epoch, &mut txn);
+
+            if !this.config.keep_history {
+                // Prune the History Store.
                 this.history_store
                     .remove_history(&mut txn, Policy::epoch_at(block_number).saturating_sub(1));
-
-                // Prune the Chain Store.
-                this.chain_store.prune_epoch(pruned_epoch, &mut txn);
             }
         }
 

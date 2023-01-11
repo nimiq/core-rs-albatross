@@ -308,6 +308,18 @@ impl<'env> WriteTransaction<'env> {
             _ => unreachable!(),
         }
     }
+
+    pub fn clear_database(&mut self, db: &Database) {
+        match self.0 {
+            Transaction::VolatileWrite(ref mut txn) => txn.clear_database(db.volatile().unwrap()),
+            Transaction::PersistentWrite(ref mut txn) => {
+                txn.clear_database(db.persistent().unwrap())
+            }
+            _ => {
+                unreachable!();
+            }
+        }
+    }
 }
 
 impl<'env> Deref for WriteTransaction<'env> {

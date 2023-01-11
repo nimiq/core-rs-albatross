@@ -123,8 +123,8 @@ impl<N: Network> ZKPComponent<N> {
     pub async fn new(
         blockchain: BlockchainProxy,
         network: Arc<N>,
-        is_prover_active: bool,
-        prover_path: Option<PathBuf>,
+        #[cfg(feature = "prover")] is_prover_active: bool,
+        #[cfg(feature = "prover")] prover_path: Option<PathBuf>,
         env: Environment,
         keys_path: PathBuf,
     ) -> Self {

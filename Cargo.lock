@@ -3382,6 +3382,7 @@ dependencies = [
  "nimiq-keys",
  "nimiq-mmr",
  "nimiq-nano-primitives",
+ "nimiq-nano-zkp",
  "nimiq-primitives",
  "nimiq-test-log",
  "nimiq-test-utils",

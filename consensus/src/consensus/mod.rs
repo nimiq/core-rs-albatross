@@ -99,7 +99,7 @@ impl<N: Network> Consensus<N> {
     ) -> Self {
         let (tx, _rx) = broadcast(256);
 
-        // IPTODO
+        // PITODO
         Self::init_network_request_receivers(&network, &blockchain);
 
         let established_flag = Arc::new(AtomicBool::new(false));

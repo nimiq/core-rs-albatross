@@ -78,7 +78,7 @@ impl AbstractBlockchain for LightBlockchain {
     }
 
     fn notifier_as_stream(&self) -> BoxStream<'static, BlockchainEvent> {
-        todo!() // IPTODO
+        todo!() // PITODO
     }
 
     fn get_blocks(

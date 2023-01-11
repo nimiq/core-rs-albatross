@@ -8,3 +8,4 @@ pub mod push;
 pub mod slots;
 pub mod verify;
 pub mod wrappers;
+pub mod zkp_sync;

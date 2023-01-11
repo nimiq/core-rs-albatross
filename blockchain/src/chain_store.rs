@@ -49,6 +49,13 @@ impl ChainStore {
         }
     }
 
+    pub fn clear(&self, txn: &mut WriteTransaction) {
+        txn.clear_database(&self.chain_db);
+        txn.clear_database(&self.block_db);
+        txn.clear_database(&self.height_idx);
+        txn.clear_database(&self.receipt_db);
+    }
+
     pub fn get_head(&self, txn_option: Option<&Transaction>) -> Option<Blake2bHash> {
         match txn_option {
             Some(txn) => txn.get(&self.chain_db, ChainStore::HEAD_KEY),

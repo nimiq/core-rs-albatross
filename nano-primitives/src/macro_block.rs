@@ -146,11 +146,7 @@ mod tests {
         block.body = Some(body);
 
         // Get the pk_tree_root.
-        let public_keys = validators
-            .voting_keys()
-            .iter()
-            .map(|pk| pk.public_key)
-            .collect();
+        let public_keys = validators.voting_keys_g2();
 
         let pk_tree_root = pk_tree_construct(public_keys);
 

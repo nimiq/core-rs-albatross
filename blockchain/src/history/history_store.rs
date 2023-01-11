@@ -77,6 +77,14 @@ impl HistoryStore {
         }
     }
 
+    pub fn clear(&self, txn: &mut WriteTransaction) {
+        txn.clear_database(&self.hist_tree_db);
+        txn.clear_database(&self.ext_tx_db);
+        txn.clear_database(&self.tx_hash_db);
+        txn.clear_database(&self.last_leaf_db);
+        txn.clear_database(&self.address_db);
+    }
+
     /// Returns the length (i.e. the number of leaves) of the History Tree at a given block height.
     /// Note that this returns the number of leaves for only the epoch of the given block height,
     /// this is because we have separate History Trees for separate epochs.
