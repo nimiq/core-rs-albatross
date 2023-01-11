@@ -29,7 +29,46 @@ use nimiq_test_utils::{
 use nimiq_utils::time::OffsetTime;
 
 #[test(tokio::test)]
-async fn peers_can_sync() {
+async fn two_peers_can_sync_empty_chain() {
+    sync_two_peers(0).await
+}
+
+#[test(tokio::test)]
+async fn two_peers_can_sync_single_batch() {
+    sync_two_peers(1).await
+}
+
+#[test(tokio::test)]
+async fn two_peers_can_sync_two_batches() {
+    sync_two_peers(2).await
+}
+
+#[test(tokio::test)]
+async fn two_peers_can_sync_epoch_minus_batch() {
+    sync_two_peers((Policy::batches_per_epoch() - 1) as usize).await
+}
+
+#[test(tokio::test)]
+async fn two_peers_can_sync_epoch_plus_batch() {
+    sync_two_peers((Policy::batches_per_epoch() + 1) as usize).await
+}
+
+#[test(tokio::test)]
+async fn two_peers_can_sync_epoch_plus_two_batches() {
+    sync_two_peers((Policy::batches_per_epoch() + 2) as usize).await
+}
+
+#[test(tokio::test)]
+async fn two_peers_can_sync_single_epoch() {
+    sync_two_peers(Policy::batches_per_epoch() as usize).await
+}
+
+#[test(tokio::test)]
+async fn two_peers_can_sync_two_epochs() {
+    sync_two_peers((Policy::batches_per_epoch() * 2) as usize).await
+}
+
+async fn sync_two_peers(num_batches: usize) {
     let hub = MockHub::default();
     let mut networks = vec![];
 
@@ -46,17 +85,13 @@ async fn peers_can_sync() {
         .unwrap(),
     ));
 
-    let producer = BlockProducer::new(signing_key(), voting_key());
-
-    // The minimum number of macro blocks necessary so that we have one election block and one
-    // checkpoint block to push.
-    let num_macro_blocks = (Policy::batches_per_epoch() + 1) as usize;
-
     // Produce the blocks.
-    produce_macro_blocks(&producer, &blockchain1, num_macro_blocks);
+    let producer = BlockProducer::new(signing_key(), voting_key());
+    produce_macro_blocks(&producer, &blockchain1, num_batches);
 
     let net1: Arc<Network> =
-        TestNetwork::build_network(0, Default::default(), &mut Some(hub)).await;
+        TestNetwork::build_network(num_batches as u64 * 10, Default::default(), &mut Some(hub))
+            .await;
     networks.push(Arc::clone(&net1));
     let blockchain1_proxy = BlockchainProxy::from(&blockchain1);
     let syncer1 = SyncerProxy::new_history(
@@ -100,8 +135,12 @@ async fn peers_can_sync() {
     ));
 
     let blockchain2_proxy = BlockchainProxy::from(&blockchain2);
-    let net2: Arc<Network> =
-        TestNetwork::build_network(1, Default::default(), &mut Some(MockHub::default())).await;
+    let net2: Arc<Network> = TestNetwork::build_network(
+        num_batches as u64 * 10 + 1,
+        Default::default(),
+        &mut Some(MockHub::default()),
+    )
+    .await;
     networks.push(Arc::clone(&net2));
 
     let mut macro_sync = HistoryMacroSync::new(
@@ -138,7 +177,7 @@ async fn peers_can_sync() {
         zkp_prover2,
     );
 
-    Network::connect_networks(&networks, 1u64).await;
+    Network::connect_networks(&networks, num_batches as u64 * 10 + 1).await;
     tokio::time::sleep(Duration::from_secs(1)).await;
     let sync_result = macro_sync.next().await;
 
@@ -151,7 +190,11 @@ async fn peers_can_sync() {
         consensus2.blockchain.read().macro_head_hash(),
         consensus1.blockchain.read().macro_head_hash(),
     );
+}
 
+#[test(tokio::test)]
+#[ignore]
+async fn three_peers_can_sync() {
     // FIXME: Add more tests
     //    // Setup third peer (not synced yet).
     //    let env3 = VolatileEnvironment::new(10).unwrap();
