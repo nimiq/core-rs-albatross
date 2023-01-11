@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::fs::read_to_string;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::str::FromStr;
 
 use log::level_filters::LevelFilter;
@@ -289,27 +289,6 @@ pub struct LokiConfig {
     pub extra_fields: HashMap<String, String>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct RotatingLogFileConfig {
-    #[serde(default)]
-    pub path: PathBuf,
-    #[serde(default)]
-    pub size: usize,
-    #[serde(default)]
-    pub file_count: usize,
-}
-
-impl Default for RotatingLogFileConfig {
-    fn default() -> Self {
-        Self {
-            path: paths::home().join("logs"),
-            size: 50_000_000, // 50 MB
-            file_count: 3,
-        }
-    }
-}
-
 const fn default_true() -> bool {
     true
 }
@@ -332,8 +311,6 @@ pub struct LogSettings {
     #[serde(default)]
     pub loki: Option<LokiConfig>,
     #[serde(default)]
-    pub rotating_trace_log: Option<RotatingLogFileConfig>,
-    #[serde(default)]
     pub tokio_console_bind_address: Option<String>,
 }
 
@@ -352,7 +329,6 @@ impl Default for LogSettings {
             statistics: 10,
             file: None,
             loki: None,
-            rotating_trace_log: None,
             tokio_console_bind_address: None,
         }
     }

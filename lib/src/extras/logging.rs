@@ -1,16 +1,12 @@
+use log::{level_filters::LevelFilter, Level, Subscriber};
 use std::env;
 use std::fs::{self, File};
 use std::io;
 #[cfg(all(tokio_unstable, feature = "tokio-console"))]
 use std::net::ToSocketAddrs;
 use std::sync::Arc;
-
-use file_rotate::{compression::Compression, suffix::AppendCount, ContentLimit, FileRotate};
-use log::{level_filters::LevelFilter, Level, Subscriber};
-use parking_lot::Mutex;
 use tracing_subscriber::{
-    filter::Targets, fmt::time::SystemTime, layer::SubscriberExt, registry::LookupSpan,
-    util::SubscriberInitExt, Layer,
+    filter::Targets, layer::SubscriberExt, registry::LookupSpan, util::SubscriberInitExt, Layer,
 };
 
 use crate::{
@@ -105,7 +101,15 @@ pub fn initialize_logging(
     filter = filter.with_env();
 
     let file = match &settings.file {
-        Some(filename) => Some(Arc::new(File::open(filename)?)),
+        Some(filename) => {
+            let file = fs::OpenOptions::new()
+                .write(true)
+                .create(true)
+                .append(true)
+                .open(filename)
+                .unwrap();
+            Some(Arc::new(file))
+        }
         None => None,
     };
     let out = move || -> io::LineWriter<LoggingTarget> {
@@ -114,52 +118,6 @@ pub fn initialize_logging(
         } else {
             LoggingTarget::Stderr(io::stderr())
         })
-    };
-
-    #[derive(Clone)]
-    struct Rotating(Arc<Mutex<FileRotate<AppendCount>>>);
-
-    impl io::Write for Rotating {
-        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-            self.0.lock().write(buf)
-        }
-        fn flush(&mut self) -> io::Result<()> {
-            self.0.lock().flush()
-        }
-        fn write_vectored(&mut self, bufs: &[io::IoSlice<'_>]) -> io::Result<usize> {
-            self.0.lock().write_vectored(bufs)
-        }
-    }
-
-    let rotating_layer = if let Some(rotating_file_settings) = settings.rotating_trace_log {
-        fs::create_dir_all(&rotating_file_settings.path)?;
-
-        // Create rotating log file according to settings
-        let log = Rotating(Arc::new(Mutex::new(FileRotate::new(
-            rotating_file_settings.path.join("log.log"),
-            AppendCount::new(rotating_file_settings.file_count),
-            ContentLimit::Bytes(rotating_file_settings.size),
-            Compression::None,
-            #[cfg(unix)]
-            None,
-        ))));
-
-        Some(
-            tracing_subscriber::fmt::layer()
-                .with_writer(move || log.clone())
-                .with_ansi(false)
-                .event_format(Formatting(SystemTime))
-                .with_filter(
-                    // Creating ZKPs with a log level below WARN will consume huge amounts of memory due to tracing annotations in the dependency.
-                    // That's why we specifically set its log level to WARN.
-                    Targets::new()
-                        .with_default(DEFAULT_LEVEL)
-                        .with_nimiq_targets(LevelFilter::TRACE)
-                        .with_target("r1cs", LevelFilter::WARN),
-                ),
-        )
-    } else {
-        None
     };
 
     #[cfg(feature = "loki")]
@@ -225,7 +183,6 @@ pub fn initialize_logging(
     {
         tracing_subscriber::registry()
             .with(loki_layer)
-            .with(rotating_layer)
             .with(tokio_console_layer)
             .with(
                 tracing_subscriber::fmt::layer()
