@@ -7,7 +7,7 @@ use crate::consensus::consensus;
 use crate::test_network::TestNetwork;
 
 use beserial::{Deserialize, Serialize};
-use nimiq_blockchain::AbstractBlockchain;
+use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_consensus::{Consensus as AbstractConsensus, ConsensusEvent};
 use nimiq_database::Environment;

@@ -7,7 +7,8 @@ use nimiq_primitives::policy::Policy;
 use parking_lot::{Mutex, RwLock};
 
 use nimiq_block::Block;
-use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainConfig};
+use nimiq_blockchain::{Blockchain, BlockchainConfig};
+use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_light_blockchain::LightBlockchain;
 
 use nimiq_consensus::{

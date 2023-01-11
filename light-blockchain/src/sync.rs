@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use nimiq_block::{Block, BlockError};
-use nimiq_blockchain::{AbstractBlockchain, ChainInfo, PushError, PushResult};
+use nimiq_blockchain_interface::{AbstractBlockchain, ChainInfo, PushError, PushResult};
 use nimiq_nano_zkp::{NanoProof, NanoZKP};
 use parking_lot::RwLockUpgradableReadGuard;
 

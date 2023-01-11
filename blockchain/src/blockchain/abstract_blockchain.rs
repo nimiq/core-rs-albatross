@@ -1,17 +1,19 @@
+use futures::future;
 use futures::stream::BoxStream;
-use nimiq_block::{Block, MacroBlock};
+use futures::StreamExt;
 
+use nimiq_block::{Block, MacroBlock};
 use nimiq_blockchain_interface::{
     AbstractBlockchain, BlockchainError, BlockchainEvent, ChainInfo, Direction,
 };
 use nimiq_genesis::NetworkId;
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::slots::{Validator, Validators};
+use tokio_stream::wrappers::BroadcastStream;
 
-use crate::blockchain::LightBlockchain;
+use crate::Blockchain;
 
-/// Implements several basic methods for blockchains.
-impl AbstractBlockchain for LightBlockchain {
+impl AbstractBlockchain for Blockchain {
     fn network_id(&self) -> NetworkId {
         self.network_id
     }
@@ -21,42 +23,46 @@ impl AbstractBlockchain for LightBlockchain {
     }
 
     fn head(&self) -> Block {
-        self.head.clone()
+        self.state.main_chain.head.clone()
     }
 
     fn macro_head(&self) -> MacroBlock {
-        self.macro_head.clone()
+        self.state.macro_info.head.unwrap_macro_ref().clone()
     }
 
     fn election_head(&self) -> MacroBlock {
-        self.election_head.clone()
+        self.state.election_head.clone()
+    }
+
+    fn block_number(&self) -> u32 {
+        self.state.main_chain.head.block_number()
+    }
+
+    fn epoch_number(&self) -> u32 {
+        self.state.main_chain.head.epoch_number()
     }
 
     fn current_validators(&self) -> Option<Validators> {
-        self.current_validators.clone()
+        self.state.current_slots.clone()
     }
 
     fn previous_validators(&self) -> Option<Validators> {
-        unreachable!()
+        self.state.previous_slots.clone()
     }
 
     fn contains(&self, hash: &Blake2bHash, include_forks: bool) -> bool {
-        match self.chain_store.get_chain_info(hash, false) {
+        match self.chain_store.get_chain_info(hash, false, None) {
             Ok(chain_info) => include_forks || chain_info.on_main_chain,
             Err(_) => false,
         }
     }
 
     fn get_block_at(&self, height: u32, include_body: bool) -> Result<Block, BlockchainError> {
-        self.chain_store
-            .get_chain_info_at(height, include_body)
-            .map(|chain_info| chain_info.head)
+        self.get_block_at(height, include_body, None)
     }
 
     fn get_block(&self, hash: &Blake2bHash, include_body: bool) -> Result<Block, BlockchainError> {
-        self.chain_store
-            .get_chain_info(hash, include_body)
-            .map(|chain_info| chain_info.head.clone())
+        self.get_block(hash, include_body, None)
     }
 
     fn get_chain_info(
@@ -64,7 +70,7 @@ impl AbstractBlockchain for LightBlockchain {
         hash: &Blake2bHash,
         include_body: bool,
     ) -> Result<ChainInfo, BlockchainError> {
-        self.chain_store.get_chain_info(hash, include_body).cloned()
+        self.get_chain_info(hash, include_body, None)
     }
 
     fn get_slot_owner_at(
@@ -72,13 +78,7 @@ impl AbstractBlockchain for LightBlockchain {
         block_number: u32,
         offset: u32,
     ) -> Result<(Validator, u16), BlockchainError> {
-        let vrf_entropy = self.get_block_at(block_number - 1, false)?.seed().entropy();
-
-        self.get_proposer_at(block_number, offset, vrf_entropy)
-    }
-
-    fn notifier_as_stream(&self) -> BoxStream<'static, BlockchainEvent> {
-        todo!() // IPTODO
+        self.get_slot_owner_at(block_number, offset, None)
     }
 
     fn get_blocks(
@@ -88,13 +88,9 @@ impl AbstractBlockchain for LightBlockchain {
         include_body: bool,
         direction: Direction,
     ) -> Result<Vec<Block>, BlockchainError> {
-        self.chain_store
-            .get_blocks(start_block_hash, count, direction, include_body)
+        self.get_blocks(start_block_hash, count, include_body, direction, None)
     }
 
-    /// Fetches a given number of macro blocks, starting at a specific block (by its hash).
-    /// It can fetch only election macro blocks if desired.
-    /// Returns None if given start_block_hash is not a macro block.
     fn get_macro_blocks(
         &self,
         start_block_hash: &Blake2bHash,
@@ -103,12 +99,19 @@ impl AbstractBlockchain for LightBlockchain {
         direction: Direction,
         election_blocks_only: bool,
     ) -> Result<Vec<Block>, BlockchainError> {
-        self.chain_store.get_macro_blocks(
+        self.get_macro_blocks(
             start_block_hash,
             count,
+            include_body,
             direction,
             election_blocks_only,
-            include_body,
+            None,
         )
+    }
+
+    fn notifier_as_stream(&self) -> BoxStream<'static, BlockchainEvent> {
+        BroadcastStream::new(self.notifier.subscribe())
+            .filter_map(|x| future::ready(x.ok()))
+            .boxed()
     }
 }

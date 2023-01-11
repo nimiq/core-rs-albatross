@@ -9,8 +9,8 @@ use beserial::Deserialize;
 use nimiq_block::{Block, ForkProof, MicroJustification};
 use nimiq_block_production::BlockProducer;
 
-use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainConfig, PushResult};
-
+use nimiq_blockchain::{Blockchain, BlockchainConfig};
+use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
 use nimiq_database::{mdbx::MdbxEnvironment, volatile::VolatileEnvironment};
 use nimiq_genesis::NetworkId;
 use nimiq_hash::{Blake2bHash, Hash};

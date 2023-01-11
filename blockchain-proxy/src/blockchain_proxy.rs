@@ -6,7 +6,7 @@ use parking_lot::{RwLock, RwLockReadGuard};
 use nimiq_block::{Block, MacroBlock};
 #[cfg(not(target_family = "wasm"))]
 use nimiq_blockchain::Blockchain;
-use nimiq_blockchain::{
+use nimiq_blockchain_interface::{
     AbstractBlockchain, BlockchainError, BlockchainEvent, ChainInfo, Direction,
 };
 use nimiq_genesis::NetworkId;
@@ -146,7 +146,7 @@ impl<'a> AbstractBlockchain for BlockchainReadProxy<'a> {
         start_block_hash: &Blake2bHash,
         count: u32,
         include_body: bool,
-        direction: nimiq_blockchain::Direction,
+        direction: Direction,
     ) -> Result<Vec<Block>, BlockchainError> {
         gen_blockchain_match!(
             self,

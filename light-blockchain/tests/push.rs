@@ -5,8 +5,9 @@ use nimiq_block_production::{
     test_custom_block::{next_macro_block, next_micro_block, next_skip_block, BlockConfig},
     BlockProducer,
 };
-use nimiq_blockchain::{
-    AbstractBlockchain, Blockchain, PushError, PushError::InvalidBlock, PushResult,
+use nimiq_blockchain::Blockchain;
+use nimiq_blockchain_interface::{
+    AbstractBlockchain, PushError, PushError::InvalidBlock, PushResult,
 };
 use nimiq_genesis::NetworkId;
 use nimiq_hash::Blake2bHash;

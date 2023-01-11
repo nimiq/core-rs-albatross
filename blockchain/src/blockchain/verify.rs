@@ -1,9 +1,10 @@
 use nimiq_block::{Block, BlockError, MacroBlock, MacroBody};
+use nimiq_blockchain_interface::{AbstractBlockchain, PushError};
 use nimiq_database::Transaction as DBTransaction;
 use nimiq_hash::{Blake2bHash, Hash};
 
 use crate::blockchain_state::BlockchainState;
-use crate::{AbstractBlockchain, Blockchain, PushError};
+use crate::Blockchain;
 
 /// Implements methods to verify the validity of blocks.
 impl Blockchain {

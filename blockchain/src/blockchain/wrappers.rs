@@ -1,18 +1,20 @@
+#[cfg(feature = "metrics")]
+use std::sync::Arc;
+
 use nimiq_account::{Account, StakingContract};
 use nimiq_block::Block;
+use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainError, ChainInfo, Direction};
 use nimiq_database::Transaction;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::policy::Policy;
 use nimiq_primitives::slots::Validator;
-#[cfg(feature = "metrics")]
-use std::sync::Arc;
+use nimiq_trie::key_nibbles::KeyNibbles;
 
+use crate::blockchain_state::BlockchainState;
 #[cfg(feature = "metrics")]
 use crate::chain_metrics::BlockchainMetrics;
-use crate::{blockchain_state::BlockchainState, BlockchainError};
-use crate::{AbstractBlockchain, Blockchain, ChainInfo, Direction};
-use nimiq_trie::key_nibbles::KeyNibbles;
+use crate::Blockchain;
 
 /// Implements several wrapper functions.
 impl Blockchain {

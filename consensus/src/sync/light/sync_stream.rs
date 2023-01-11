@@ -4,7 +4,7 @@ use std::task::{Context, Poll};
 
 use futures::{FutureExt, Stream, StreamExt};
 
-use nimiq_blockchain::AbstractBlockchain;
+use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_light_blockchain::LightBlockchain;
 use nimiq_macros::store_waker;
 use nimiq_network_interface::network::{Network, NetworkEvent};
@@ -273,7 +273,8 @@ mod tests {
     use parking_lot::RwLock;
 
     use nimiq_block_production::BlockProducer;
-    use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainConfig};
+    use nimiq_blockchain::{Blockchain, BlockchainConfig};
+    use nimiq_blockchain_interface::AbstractBlockchain;
     use nimiq_blockchain_proxy::BlockchainProxy;
     use nimiq_database::volatile::VolatileEnvironment;
     use nimiq_light_blockchain::LightBlockchain;

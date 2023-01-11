@@ -1,11 +1,13 @@
+use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
 use std::cmp;
 use std::error::Error;
 use std::ops::Deref;
 
 use nimiq_account::BlockLog;
-use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
-
 use nimiq_block::{Block, ForkProof, MicroBlock};
+use nimiq_blockchain_interface::{
+    AbstractBlockchain, BlockchainEvent, ChainInfo, ChainOrdering, ForkEvent, PushError, PushResult,
+};
 use nimiq_database::{ReadTransaction, WriteTransaction};
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::policy::Policy;
@@ -13,11 +15,7 @@ use nimiq_vrf::VrfSeed;
 use tokio::sync::broadcast::Sender as BroadcastSender;
 
 use crate::blockchain_state::BlockchainState;
-use crate::chain_info::ChainInfo;
-use crate::{
-    AbstractBlockchain, Blockchain, BlockchainEvent, ChainOrdering, ForkEvent, PushError,
-    PushResult,
-};
+use crate::Blockchain;
 
 fn send_vec(log_notifier: &BroadcastSender<BlockLog>, logs: Vec<BlockLog>) {
     for log in logs {
@@ -91,8 +89,13 @@ impl Blockchain {
         }
 
         // Calculate chain ordering.
-        let chain_order =
-            ChainOrdering::order_chains(this.deref(), &block, &prev_info, Some(&read_txn));
+        let chain_order = ChainOrdering::order_chains(
+            this.deref(),
+            &block,
+            &prev_info,
+            |hash, include_body| this.get_chain_info(hash, include_body, Some(&read_txn)),
+            |height, include_body| this.get_block_at(height, include_body, Some(&read_txn)),
+        );
 
         read_txn.close();
 

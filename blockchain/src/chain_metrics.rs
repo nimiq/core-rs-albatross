@@ -1,6 +1,6 @@
-use crate::{PushError, PushResult};
 use nimiq_block::Block;
 use nimiq_block::BlockBody::Micro;
+use nimiq_blockchain_interface::{PushError, PushResult};
 use nimiq_hash::Blake2bHash;
 use prometheus_client::encoding::text::Encode;
 use prometheus_client::metrics::counter::Counter;

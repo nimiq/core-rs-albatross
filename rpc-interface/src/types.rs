@@ -7,13 +7,14 @@ use std::{
 };
 
 use clap::ValueEnum;
+use nimiq_blockchain_interface::AbstractBlockchain;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DeserializeFromStr, DisplayFromStr, SerializeDisplay};
 
 use beserial::Serialize as BeSerialize;
 use nimiq_account::{BlockLog as BBlockLog, Log, TransactionLog};
 use nimiq_block::{MicroJustification, MultiSignature};
-use nimiq_blockchain::AbstractBlockchain;
+
 use nimiq_blockchain_proxy::BlockchainReadProxy;
 use nimiq_bls::CompressedPublicKey;
 use nimiq_collections::BitSet;

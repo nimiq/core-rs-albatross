@@ -1,10 +1,9 @@
 use std::cmp;
 
 use nimiq_block::{Block, BlockType};
-use nimiq_database::Transaction;
+use nimiq_hash::Blake2bHash;
 
-use crate::chain_info::ChainInfo;
-use crate::{AbstractBlockchain, Blockchain};
+use crate::{AbstractBlockchain, BlockchainError, ChainInfo};
 
 /// Enum describing all the possible ways of comparing one chain to the main chain.
 #[derive(Debug, Eq, PartialEq)]
@@ -18,19 +17,21 @@ pub enum ChainOrdering {
     // The ordering of this chain is unknown.
     Unknown,
 }
-
 /// Implements method to calculate chain ordering.
-/// Warning: The logic of this function is duplicated in the light blockchain
-/// If this function is modified the other one should be modified accordingly
 impl ChainOrdering {
     /// Given a block and some chain, it returns the ordering of the new chain relative to the given
     /// chain.
-    pub fn order_chains(
-        blockchain: &Blockchain,
+    pub fn order_chains<B: AbstractBlockchain, F, G>(
+        blockchain: &B,
         block: &Block,
         prev_info: &ChainInfo,
-        txn_option: Option<&Transaction>,
-    ) -> ChainOrdering {
+        get_chain_info: F,
+        get_block_at: G,
+    ) -> ChainOrdering
+    where
+        F: Fn(&Blake2bHash, bool) -> Result<ChainInfo, BlockchainError>,
+        G: Fn(u32, bool) -> Result<Block, BlockchainError>,
+    {
         let mut chain_order = ChainOrdering::Unknown;
 
         if block.parent_hash() == &blockchain.head_hash() {
@@ -62,8 +63,7 @@ impl ChainOrdering {
                 let prev_hash = prev.head.parent_hash();
                 blocks.push(prev.head.clone());
 
-                let prev_info = blockchain
-                    .get_chain_info(prev_hash, false, txn_option)
+                let prev_info = get_chain_info(prev_hash, false)
                     .expect("Corrupted store: Failed to find fork predecessor while rebranching");
 
                 current = prev;
@@ -87,8 +87,7 @@ impl ChainOrdering {
                 let current_block = blocks.pop().unwrap();
 
                 // Get equivalent block on main chain.
-                let current_on_main_chain = blockchain
-                    .get_block_at(h, false, txn_option)
+                let current_on_main_chain = get_block_at(h, false)
                     .expect("Corrupted store: Failed to find main chain equivalent of fork");
 
                 if current_block.is_skip() && !current_on_main_chain.is_skip() {
@@ -107,7 +106,7 @@ impl ChainOrdering {
                 chain_order = ChainOrdering::Superior;
             }
 
-            info!(
+            log::info!(
                 fork_block_number = current_height - 1,
                 current_block_number = blockchain.block_number(),
                 new_block_number = block.block_number(),

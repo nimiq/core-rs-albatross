@@ -10,7 +10,8 @@ use tokio::time;
 
 use nimiq_block::{Block, ForkProof, MicroBlock, SkipBlockInfo};
 use nimiq_block_production::BlockProducer;
-use nimiq_blockchain::{AbstractBlockchain, Blockchain, PushResult};
+use nimiq_blockchain::Blockchain;
+use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
 use nimiq_mempool::mempool::Mempool;
 use nimiq_utils::time::systemtime_to_timestamp;
 use nimiq_validator_network::ValidatorNetwork;

@@ -5,7 +5,8 @@ use nimiq_block::{
     MicroJustification, MultiSignature, SignedSkipBlockInfo, SkipBlockInfo, SkipBlockProof,
     TendermintIdentifier, TendermintProof, TendermintProposal, TendermintStep, TendermintVote,
 };
-use nimiq_blockchain::{AbstractBlockchain, Blockchain, ExtendedTransaction};
+use nimiq_blockchain::{Blockchain, ExtendedTransaction};
+use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_bls::AggregateSignature;
 use nimiq_collections::BitSet;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};

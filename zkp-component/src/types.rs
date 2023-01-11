@@ -12,7 +12,7 @@ use beserial::{
     SerializingError as BeserialSerializingError,
 };
 use nimiq_block::MacroBlock;
-use nimiq_blockchain::AbstractBlockchain;
+use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue};
 use nimiq_hash::Blake2bHash;

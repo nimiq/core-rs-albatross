@@ -11,7 +11,7 @@ use nimiq_network_interface::network::{MsgAcceptance, PubsubId};
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 
 use nimiq_block::MacroBlock;
-use nimiq_blockchain::AbstractBlockchain;
+use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_network_interface::{network::Network, request::request_handler};
 

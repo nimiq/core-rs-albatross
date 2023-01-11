@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use parking_lot::RwLock;
 
 use beserial::{Deserialize, Serialize};
-use nimiq_blockchain::AbstractBlockchain;
+use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_bls::{KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
 use nimiq_consensus::ConsensusProxy;
 use nimiq_hash::{Blake2bHash, Hash};

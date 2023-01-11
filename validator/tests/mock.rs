@@ -2,7 +2,7 @@ use futures::{future, StreamExt};
 use tokio::time;
 
 use nimiq_block::{MultiSignature, SignedSkipBlockInfo, SkipBlockInfo};
-use nimiq_blockchain::{AbstractBlockchain, BlockchainEvent};
+use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent};
 use nimiq_bls::{AggregateSignature, KeyPair as BlsKeyPair};
 use nimiq_collections::BitSet;
 use nimiq_database::volatile::VolatileEnvironment;

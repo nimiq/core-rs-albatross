@@ -1,14 +1,12 @@
 use nimiq_account::Receipts;
 use nimiq_block::Block;
+use nimiq_blockchain_interface::{BlockchainError, ChainInfo, Direction};
 use nimiq_database::cursor::{ReadCursor, WriteCursor};
 use nimiq_database::{
     Database, DatabaseFlags, Environment, ReadTransaction, Transaction, WriteTransaction,
 };
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::policy::Policy;
-
-use crate::chain_info::ChainInfo;
-use crate::{BlockchainError, Direction};
 
 #[derive(Debug)]
 pub struct ChainStore {

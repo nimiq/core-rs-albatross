@@ -1,11 +1,12 @@
 use nimiq_account::StakingContract;
+use nimiq_blockchain_interface::BlockchainError;
 use nimiq_collections::BitSet;
 use nimiq_database::Transaction;
 use nimiq_primitives::policy::Policy;
 use nimiq_primitives::slots::{Validator, Validators};
 use nimiq_vrf::{Rng, VrfEntropy, VrfSeed, VrfUseCase};
 
-use crate::{Blockchain, BlockchainError};
+use crate::Blockchain;
 
 pub struct Slot {
     pub number: u16,

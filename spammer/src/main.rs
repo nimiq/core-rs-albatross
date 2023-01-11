@@ -29,7 +29,7 @@ pub use nimiq::{
     },
 };
 use nimiq_block::BlockType;
-use nimiq_blockchain::{AbstractBlockchain, BlockchainEvent};
+use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent};
 use nimiq_keys::{Address, KeyPair, PrivateKey, SecureGenerate};
 use nimiq_mempool::mempool::Mempool;
 use nimiq_primitives::coin::Coin;

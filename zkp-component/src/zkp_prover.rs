@@ -7,14 +7,14 @@ use std::task::{Context, Poll};
 
 use futures::{stream, FutureExt, Stream, StreamExt};
 use nimiq_block::{Block, MacroBlock};
+use nimiq_blockchain::Blockchain;
+use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent, Direction};
 use nimiq_genesis::NetworkInfo;
 use nimiq_nano_primitives::state_commitment;
 use nimiq_network_interface::network::Network;
 use nimiq_primitives::policy::Policy;
 use parking_lot::lock_api::RwLockUpgradableReadGuard;
 use parking_lot::{RwLock, RwLockWriteGuard};
-
-use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainEvent, Direction};
 
 use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
 

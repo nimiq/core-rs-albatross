@@ -17,7 +17,7 @@ log = { package = "tracing", version = "0.1", features = ["log"] }
 
 nimiq-account = { path = "../primitives/account" }
 nimiq-block = { path = "../primitives/block" }
-nimiq-blockchain = { path = "../blockchain" }
+nimiq-blockchain-interface = { path = "../blockchain-interface" }
 nimiq-collections = { path = "../collections" }
 nimiq-database = { path = "../database" }
 nimiq-genesis = { path = "../genesis" }
@@ -30,6 +30,7 @@ nimiq-vrf = { path = "../vrf" }
 
 [dev-dependencies]
 nimiq-block-production = { path = "../block-production", features = ["test-utils"] }
+nimiq-blockchain ={path="../blockchain"}
 nimiq-test-utils = { path= "../test-utils" }
 nimiq-test-log = { path = "../test-log" }
 rand = "^0.8"

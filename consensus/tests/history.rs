@@ -13,7 +13,8 @@ use nimiq_zkp_component::ZKPComponent;
 use parking_lot::{Mutex, RwLock};
 
 use nimiq_block_production::BlockProducer;
-use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainConfig};
+use nimiq_blockchain::{Blockchain, BlockchainConfig};
+use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_consensus::consensus::Consensus;
 use nimiq_consensus::sync::history::{cluster::SyncCluster, HistoryMacroSync};
 use nimiq_database::volatile::VolatileEnvironment;

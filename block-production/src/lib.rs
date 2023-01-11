@@ -3,7 +3,8 @@ use nimiq_block::{
     ForkProof, MacroBlock, MacroBody, MacroHeader, MicroBlock, MicroBody, MicroHeader,
     MicroJustification, SkipBlockInfo, SkipBlockProof,
 };
-use nimiq_blockchain::{AbstractBlockchain, Blockchain, ExtendedTransaction};
+use nimiq_blockchain::{Blockchain, ExtendedTransaction};
+use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::KeyPair as SchnorrKeyPair;

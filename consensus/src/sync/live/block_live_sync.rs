@@ -4,12 +4,13 @@ use std::sync::Arc;
 use std::task::{ready, Context, Poll};
 
 use futures::{future::BoxFuture, FutureExt, Stream, StreamExt};
+use nimiq_blockchain_interface::{PushError, PushResult};
 use parking_lot::Mutex;
 use pin_project::pin_project;
 use tokio::task::spawn_blocking;
 
 use nimiq_block::Block;
-use nimiq_blockchain::{Blockchain, PushError, PushResult};
+use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_hash::Blake2bHash;

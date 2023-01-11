@@ -5,8 +5,8 @@ use tokio_stream::StreamExt;
 
 use nimiq_block::Block;
 use nimiq_block_production::BlockProducer;
-use nimiq_blockchain::PushResult;
-use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainConfig};
+use nimiq_blockchain::{Blockchain, BlockchainConfig};
+use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
 use nimiq_primitives::policy::Policy;

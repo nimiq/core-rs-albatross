@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use futures::{future, StreamExt};
-use nimiq_blockchain::AbstractBlockchain;
+use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_network_libp2p::Network;
 use nimiq_test_log::test;

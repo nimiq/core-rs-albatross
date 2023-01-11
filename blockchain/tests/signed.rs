@@ -5,7 +5,8 @@ use nimiq_block::{
     MacroBlock, MultiSignature, SignedSkipBlockInfo, SkipBlockInfo, SkipBlockProof,
     TendermintIdentifier, TendermintProof, TendermintStep, TendermintVote,
 };
-use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainConfig};
+use nimiq_blockchain::{Blockchain, BlockchainConfig};
+use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_bls::{lazy::LazyPublicKey, AggregateSignature, KeyPair};
 use nimiq_collections::bitset::BitSet;
 use nimiq_database::volatile::VolatileEnvironment;

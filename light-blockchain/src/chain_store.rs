@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use nimiq_block::{Block, MacroHeader};
-use nimiq_blockchain::{BlockchainError, ChainInfo, Direction};
+use nimiq_blockchain_interface::{BlockchainError, ChainInfo, Direction};
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::policy::Policy;
 

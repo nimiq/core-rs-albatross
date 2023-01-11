@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use nimiq_block::{Block, MacroBlock};
-use nimiq_blockchain::{AbstractBlockchain, BlockchainError, ChainInfo};
+use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainError, ChainInfo};
 use nimiq_collections::BitSet;
 use nimiq_genesis::NetworkInfo;
 use nimiq_primitives::{

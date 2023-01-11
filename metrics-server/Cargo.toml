@@ -30,6 +30,7 @@ tokio = { version = "1.24", features = [
 tokio-metrics = "0.1"
 
 nimiq-blockchain = { path = "../blockchain", features = ["metrics"] }
+nimiq-blockchain-interface = { path = "../blockchain-interface" }
 nimiq-blockchain-proxy = { path = "../blockchain-proxy" }
 nimiq-consensus = { path = "../consensus" }
 nimiq-mempool = { path = "../mempool", features = ["metrics"] }

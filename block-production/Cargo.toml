@@ -25,6 +25,7 @@ beserial = { path = "../beserial" }
 nimiq-account = { path = "../primitives/account" }
 nimiq-block = { path = "../primitives/block" }
 nimiq-blockchain = { path = "../blockchain" }
+nimiq-blockchain-interface = {path ="../blockchain-interface"}
 nimiq-bls = { path = "../bls" }
 nimiq-collections = { path = "../collections" }
 nimiq-database = { path = "../database" }

@@ -1,9 +1,10 @@
 use std::{collections::HashSet, sync::Arc};
 
+use nimiq_blockchain_interface::{AbstractBlockchain, Direction};
 use parking_lot::RwLock;
 
 use nimiq_block::Block;
-use nimiq_blockchain::{AbstractBlockchain, Blockchain, Direction, CHUNK_SIZE};
+use nimiq_blockchain::{Blockchain, CHUNK_SIZE};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_network_interface::request::Handle;
 

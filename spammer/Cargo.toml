@@ -28,6 +28,7 @@ toml = "0.5"
 serde = "1.0.152"
 nimiq-block = { path = "../primitives/block" }
 nimiq-blockchain = { path = "../blockchain" }
+nimiq-blockchain-interface = { path = "../blockchain-interface" }
 nimiq-keys = { path = "../keys" }
 nimiq-mempool = { path = "../mempool" }
 nimiq-primitives = { path = "../primitives", features = ["coin", "networks"] }

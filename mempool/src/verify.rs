@@ -1,3 +1,4 @@
+use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_primitives::networks::NetworkId;
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 use std::{
@@ -6,7 +7,7 @@ use std::{
 };
 
 use nimiq_account::{Account, AccountTransactionInteraction, BasicAccount, StakingContract};
-use nimiq_blockchain::{AbstractBlockchain, Blockchain};
+use nimiq_blockchain::Blockchain;
 use nimiq_hash::Hash;
 use nimiq_primitives::account::AccountType;
 use nimiq_primitives::coin::Coin;

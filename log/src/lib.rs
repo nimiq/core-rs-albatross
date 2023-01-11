@@ -15,6 +15,7 @@ pub static NIMIQ_MODULES: &[&str] = &[
     "nimiq_block",
     "nimiq_block_production",
     "nimiq_blockchain",
+    "nimiq_blokchain_interface",
     "nimiq_blockchain_proxy",
     "nimiq_bls",
     "nimiq_client",

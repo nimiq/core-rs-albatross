@@ -3,7 +3,8 @@ use prometheus_client::registry::Registry;
 use parking_lot::RwLock;
 
 use crate::NumericClosureMetric;
-use nimiq_blockchain::{AbstractBlockchain, Blockchain};
+use nimiq_blockchain::Blockchain;
+use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use std::sync::Arc;
 

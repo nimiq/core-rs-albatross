@@ -7,14 +7,12 @@ use std::task::{Context, Poll};
 
 use futures::{FutureExt, Stream, StreamExt};
 use lazy_static::lazy_static;
+use nimiq_blockchain_interface::{AbstractBlockchain, PushError, PushResult};
 use parking_lot::RwLock;
 use thiserror::Error;
 
 use nimiq_block::{Block, MacroBlock};
-use nimiq_blockchain::{
-    AbstractBlockchain, Blockchain, ExtendedTransaction, HistoryTreeChunk, PushError, PushResult,
-    CHUNK_SIZE,
-};
+use nimiq_blockchain::{Blockchain, ExtendedTransaction, HistoryTreeChunk, CHUNK_SIZE};
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{network::Network, request::RequestError};
 use nimiq_primitives::{policy::Policy, slots::Validators};

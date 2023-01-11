@@ -18,7 +18,8 @@ use nimiq_zkp_component::proof_utils::ProofStore;
 use nimiq_zkp_component::types::ZKProofTopic;
 
 use nimiq_block_production::BlockProducer;
-use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainConfig};
+use nimiq_blockchain::{Blockchain, BlockchainConfig};
+use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_nano_zkp::NanoZKP;
 use nimiq_primitives::networks::NetworkId;

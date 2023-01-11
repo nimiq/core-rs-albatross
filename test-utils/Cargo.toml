@@ -24,6 +24,7 @@ rand_chacha = "0.3.1"
 beserial = { path = "../beserial" }
 nimiq-block = { path = "../primitives/block" }
 nimiq-blockchain = { path = "../blockchain" }
+nimiq-blockchain-interface = { path = "../blockchain-interface" }
 nimiq-blockchain-proxy = { path = "../blockchain-proxy" }
 nimiq-block-production = { path = "../block-production" }
 nimiq-bls = { path = "../bls" }

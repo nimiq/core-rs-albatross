@@ -12,7 +12,8 @@ use nimiq_block::{
     SkipBlockProof, TendermintIdentifier, TendermintProof, TendermintStep, TendermintVote,
 };
 use nimiq_block_production::BlockProducer;
-use nimiq_blockchain::{AbstractBlockchain, Blockchain, PushResult};
+use nimiq_blockchain::Blockchain;
+use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
 use nimiq_bls::{AggregateSignature, KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
 use nimiq_collections::BitSet;
 use nimiq_genesis::NetworkId;

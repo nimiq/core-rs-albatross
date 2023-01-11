@@ -16,7 +16,8 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use nimiq_block::Block;
 use nimiq_block_production::BlockProducer;
-use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainConfig, Direction};
+use nimiq_blockchain::{Blockchain, BlockchainConfig};
+use nimiq_blockchain_interface::{AbstractBlockchain, Direction};
 use nimiq_consensus::sync::live::block_queue::{BlockQueue, BlockQueueConfig};
 use nimiq_consensus::sync::live::request_component::{RequestComponent, RequestComponentEvent};
 use nimiq_consensus::sync::live::BlockLiveSync;

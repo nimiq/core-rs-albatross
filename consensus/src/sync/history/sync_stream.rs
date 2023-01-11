@@ -244,7 +244,8 @@ mod tests {
     use nimiq_network_interface::request::request_handler;
     use parking_lot::RwLock;
 
-    use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainConfig};
+    use nimiq_blockchain::{Blockchain, BlockchainConfig};
+    use nimiq_blockchain_interface::AbstractBlockchain;
     use nimiq_blockchain_proxy::BlockchainProxy;
     use nimiq_database::volatile::VolatileEnvironment;
     use nimiq_network_interface::network::Network;

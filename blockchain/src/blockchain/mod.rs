@@ -1,3 +1,4 @@
+pub mod abstract_blockchain;
 pub mod accounts;
 #[allow(clippy::module_inception)]
 pub mod blockchain;

@@ -11,7 +11,8 @@ use nimiq_block::{
     TendermintProof, TendermintProposal,
 };
 use nimiq_block_production::BlockProducer;
-use nimiq_blockchain::{AbstractBlockchain, Blockchain};
+use nimiq_blockchain::Blockchain;
+use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_bls::PublicKey;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_network_interface::network::MsgAcceptance;
