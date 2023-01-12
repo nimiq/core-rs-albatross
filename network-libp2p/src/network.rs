@@ -7,6 +7,7 @@ use std::task::{Context, Poll};
 use std::time::Instant;
 
 use async_trait::async_trait;
+use base64::Engine;
 use bytes::{Buf, Bytes};
 use futures::{ready, stream::BoxStream, Stream, StreamExt};
 use libp2p::core::transport::MemoryTransport;
@@ -765,7 +766,7 @@ impl Network {
                                         %request_id,
                                         %peer_id,
                                         %type_id,
-                                        content = &*base64::encode(&request),
+                                        content = &*base64::prelude::BASE64_STANDARD.encode(&request),
                                         "Incoming request from peer",
                                     );
                                     // Check if we have a receiver registered for this message type
@@ -840,7 +841,7 @@ impl Network {
                                     error!(
                                         %request_id,
                                         %peer_id,
-                                        content = &*base64::encode(&request),
+                                        content = &*base64::prelude::BASE64_STANDARD.encode(&request),
                                         "Could not parse request type",
                                     );
                                 }
