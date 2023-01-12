@@ -2,6 +2,7 @@ use std::fmt::{Debug, Formatter};
 
 use beserial::{Deserialize, Serialize};
 use nimiq_block::{Block, MacroBlock};
+#[cfg(feature = "full")]
 use nimiq_blockchain::HistoryTreeChunk;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::request::{RequestCommon, RequestMarker};
@@ -116,6 +117,7 @@ impl Debug for BatchSetInfo {
     }
 }
 
+#[cfg(feature = "full")]
 /// This message contains a chunk of the history.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestHistoryChunk {
@@ -124,6 +126,7 @@ pub struct RequestHistoryChunk {
     pub chunk_index: u64,
 }
 
+#[cfg(feature = "full")]
 impl RequestCommon for RequestHistoryChunk {
     type Kind = RequestMarker;
     const TYPE_ID: u16 = 204;
@@ -131,6 +134,7 @@ impl RequestCommon for RequestHistoryChunk {
     const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_HISTORY_CHUNK;
 }
 
+#[cfg(feature = "full")]
 /// This message contains a chunk of the history.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HistoryChunk {

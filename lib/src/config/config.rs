@@ -16,6 +16,7 @@ use nimiq_bls::{KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
 use nimiq_database::{mdbx::MdbxEnvironment, volatile::VolatileEnvironment, Environment};
 #[cfg(feature = "validator")]
 use nimiq_keys::{Address, KeyPair, PrivateKey};
+#[cfg(feature = "nimiq-mempool")]
 use nimiq_mempool::{config::MempoolConfig, filter::MempoolRules};
 use nimiq_network_libp2p::{Keypair as IdentityKeypair, Multiaddr};
 use nimiq_primitives::{networks::NetworkId, policy::Policy};
@@ -581,6 +582,7 @@ pub struct ClientConfig {
 
     /// The mempool filter rules
     ///
+    #[cfg(feature = "nimiq-mempool")]
     #[builder(default, setter(custom))]
     pub mempool: MempoolConfig,
 
@@ -656,6 +658,7 @@ impl ClientConfigBuilder {
         self
     }
 
+    #[cfg(feature = "nimiq-mempool")]
     /// Sets the mempool filter rules
     pub fn mempool(
         &mut self,

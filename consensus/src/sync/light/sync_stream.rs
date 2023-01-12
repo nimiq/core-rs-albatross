@@ -5,7 +5,7 @@ use std::task::{Context, Poll};
 use futures::{FutureExt, Stream, StreamExt};
 
 use nimiq_block::Block;
-#[cfg(not(target_family = "wasm"))]
+#[cfg(feature = "full")]
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
@@ -65,7 +65,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                 Proof { proof, block } => {
                     // Apply a newer proof to the blockchain
                     let result = match self.blockchain {
-                        #[cfg(not(target_family = "wasm"))]
+                        #[cfg(feature = "full")]
                         BlockchainProxy::Full(ref full_blockchain) => Blockchain::push_zkp(
                             full_blockchain.upgradable_read(),
                             Block::Macro(block),
@@ -183,7 +183,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
 
                             // Check if the block is still valid for us or if it is outdated before trying to apply it
                             let push_result = match self.blockchain {
-                                #[cfg(not(target_family = "wasm"))]
+                                #[cfg(feature = "full")]
                                 BlockchainProxy::Full(ref full_blockchain) => {
                                     let blockchain = full_blockchain.upgradable_read();
 

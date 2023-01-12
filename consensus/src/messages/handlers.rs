@@ -1,9 +1,12 @@
-use std::{collections::HashSet, sync::Arc};
+use std::collections::HashSet;
+#[cfg(feature = "full")]
+use std::sync::Arc;
 
 use nimiq_blockchain_interface::{AbstractBlockchain, Direction};
 use parking_lot::RwLock;
 
 use nimiq_block::Block;
+#[cfg(feature = "full")]
 use nimiq_blockchain::{Blockchain, CHUNK_SIZE};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_network_interface::request::Handle;
@@ -74,6 +77,7 @@ impl Handle<MacroChain, BlockchainProxy> for RequestMacroChain {
     }
 }
 
+#[cfg(feature = "full")]
 impl Handle<BatchSetInfo, Arc<RwLock<Blockchain>>> for RequestBatchSet {
     fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> BatchSetInfo {
         let blockchain = blockchain.read();
@@ -135,6 +139,7 @@ impl Handle<BatchSetInfo, Arc<RwLock<Blockchain>>> for RequestBatchSet {
     }
 }
 
+#[cfg(feature = "full")]
 impl Handle<HistoryChunk, Arc<RwLock<Blockchain>>> for RequestHistoryChunk {
     fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> HistoryChunk {
         let chunk = blockchain.read().history_store.prove_chunk(

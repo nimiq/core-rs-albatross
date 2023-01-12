@@ -12,8 +12,9 @@ use nimiq_bls::cache::PublicKeyCache;
 use nimiq_network_interface::network::{Network, SubscribeEvents};
 use pin_project::pin_project;
 
+#[cfg(feature = "full")]
+use crate::sync::history::HistoryMacroSync;
 use crate::sync::{
-    history::HistoryMacroSync,
     live::{
         block_queue::{BlockQueue, BlockQueueConfig},
         request_component::BlockRequestComponent,
@@ -27,6 +28,7 @@ use super::light::LightMacroSync;
 macro_rules! gen_syncer_match {
     ($self: ident, $f: ident $(, $arg:expr )*) => {
         match $self {
+            #[cfg(feature = "full")]
             SyncerProxy::History(syncer) => syncer.$f($( $arg ),*),
             SyncerProxy::Light(syncer) => syncer.$f($( $arg ),*),
         }
@@ -36,6 +38,7 @@ macro_rules! gen_syncer_match {
 #[pin_project(project = SyncerProxyProj)]
 /// The `SyncerProxy` is an abstraction over multiple types of `Syncer`s.
 pub enum SyncerProxy<N: Network> {
+    #[cfg(feature = "full")]
     /// History Syncer, uses history macro sync for macro sync and block live sync.
     History(Syncer<N, HistoryMacroSync<N>, BlockLiveSync<N, BlockRequestComponent<N>>>),
     /// Light Syncer, uses light macro sync for macro sync and block live sync.
@@ -43,7 +46,7 @@ pub enum SyncerProxy<N: Network> {
 }
 
 impl<N: Network> SyncerProxy<N> {
-    #[cfg(not(target_family = "wasm"))]
+    #[cfg(feature = "full")]
     /// Creates a new instance of a `SyncerProxy` for the `History` variant
     pub async fn new_history(
         blockchain_proxy: BlockchainProxy,
@@ -155,6 +158,7 @@ impl<N: Network> Stream for SyncerProxy<N> {
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
         match self.project() {
+            #[cfg(feature = "full")]
             SyncerProxyProj::History(syncer) => syncer.poll_next_unpin(cx),
             SyncerProxyProj::Light(syncer) => syncer.poll_next_unpin(cx),
         }

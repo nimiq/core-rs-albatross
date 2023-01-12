@@ -31,9 +31,9 @@ tokio-stream = { version = "0.1", features = ["sync"] }
 beserial = { path = "../beserial", features = ["derive"] }
 nimiq-block = { path = "../primitives/block" }
 nimiq-blockchain-interface = { path = "../blockchain-interface" }
-nimiq-blockchain-proxy = { path = "../blockchain-proxy" }
+nimiq-blockchain-proxy = { path = "../blockchain-proxy", default-features = false }
 nimiq-bls = { path = "../bls" }
-nimiq-blockchain = { path = "../blockchain" }
+nimiq-blockchain = { path = "../blockchain", optional = true }
 nimiq-database = { path = "../database" }
 nimiq-genesis = { path = "../genesis" }
 nimiq-hash = { path = "../hash" }
@@ -66,3 +66,7 @@ nimiq-test-log = { path = "../test-log" }
 # This adds a circular dev-dependency which is fine but breaks VS code rust-analyzer.
 # See https://github.com/rust-analyzer/rust-analyzer/issues/2414
 nimiq-test-utils = { path = "../test-utils" }
+
+[features]
+full = ["nimiq-blockchain", "nimiq-blockchain-proxy/full"]
+default = ["full"]

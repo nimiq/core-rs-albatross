@@ -54,9 +54,9 @@ impl<TNetwork: Network + 'static> HeadRequests<TNetwork> {
             })
             .collect();
 
-        #[cfg(not(target_family = "wasm"))]
+        #[cfg(feature = "full")]
         let include_micro_bodies = matches!(blockchain, BlockchainProxy::Full(_));
-        #[cfg(target_family = "wasm")]
+        #[cfg(not(feature = "full"))]
         let include_micro_bodies = false;
 
         HeadRequests {

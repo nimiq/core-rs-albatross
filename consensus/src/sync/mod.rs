@@ -1,3 +1,4 @@
+#[cfg(feature = "full")]
 pub mod history;
 pub mod light;
 pub mod live;

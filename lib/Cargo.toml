@@ -45,11 +45,11 @@ tracing-subscriber = { version = "0.3", optional = true }
 
 beserial = { path = "../beserial" }
 nimiq-block = { path = "../primitives/block" }
-nimiq-blockchain = { path = "../blockchain" }
+nimiq-blockchain = { path = "../blockchain", optional = true }
 nimiq-blockchain-interface = { path = "../blockchain-interface" }
-nimiq-blockchain-proxy = { path = "../blockchain-proxy" }
+nimiq-blockchain-proxy = { path = "../blockchain-proxy", default-features = false }
 nimiq-bls = { path = "../bls" }
-nimiq-consensus = { path = "../consensus" }
+nimiq-consensus = { path = "../consensus", default-features = false }
 nimiq-database = { path = "../database" }
 nimiq-genesis = { path = "../genesis" }
 nimiq-jsonrpc-core = { git = "https://github.com/nimiq/jsonrpc.git", optional=true}
@@ -57,8 +57,8 @@ nimiq-jsonrpc-server = { git = "https://github.com/nimiq/jsonrpc.git", optional=
 nimiq-keys = { path = "../keys" }
 nimiq-light-blockchain = { path = "../light-blockchain" }
 nimiq-log = { path = "../log", optional = true }
-nimiq-mempool = { path = "../mempool" }
-nimiq-metrics-server = { path = "../metrics-server", optional=true }
+nimiq-mempool = { path = "../mempool", optional = true }
+nimiq-metrics-server = { path = "../metrics-server", optional = true }
 nimiq-nano-zkp = { path = "../nano-zkp", features = ["prover"] }
 nimiq-network-libp2p = { path = "../network-libp2p" }
 nimiq-network-interface = { path = "../network-interface" }
@@ -75,7 +75,8 @@ nimiq-test-log = { path = "../test-log" }
 
 [features]
 deadlock = ["parking_lot/deadlock_detection"]
-default = []
+default = ["full-consensus"]
+full-consensus = ["nimiq-blockchain", "nimiq-consensus/full", "nimiq-mempool"]
 launcher = []
 signal-handling = ["signal-hook", "tokio"]
 logging = ["file-rotate", "nimiq-log", "serde_json", "tokio", "tracing-subscriber"]

@@ -17,10 +17,9 @@ use nimiq_network_interface::{network::Network, request::request_handler};
 use nimiq_zkp_component::zkp_component::ZKPComponentProxy;
 
 use crate::consensus::head_requests::{HeadRequests, HeadRequestsResult};
-use crate::messages::{
-    RequestBatchSet, RequestBlock, RequestHead, RequestHistoryChunk, RequestMacroChain,
-    RequestMissingBlocks,
-};
+#[cfg(feature = "full")]
+use crate::messages::{RequestBatchSet, RequestHistoryChunk};
+use crate::messages::{RequestBlock, RequestHead, RequestMacroChain, RequestMissingBlocks};
 use crate::sync::{syncer::LiveSyncPushEvent, syncer_proxy::SyncerProxy};
 
 use self::consensus_proxy::ConsensusProxy;
@@ -134,7 +133,7 @@ impl<N: Network> Consensus<N> {
         let stream = network.receive_requests::<RequestHead>();
         tokio::spawn(request_handler(network, stream, blockchain));
         match blockchain {
-            #[cfg(not(target_family = "wasm"))]
+            #[cfg(feature = "full")]
             BlockchainProxy::Full(blockchain) => {
                 let stream = network.receive_requests::<RequestBatchSet>();
                 tokio::spawn(request_handler(network, stream, blockchain));

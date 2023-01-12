@@ -29,6 +29,7 @@ path = "../lib"
 version = "0.1"
 features = [
     "deadlock",
+    "full-consensus",
     "logging",
     "loki",
     "metrics-server",

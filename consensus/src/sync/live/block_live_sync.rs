@@ -9,6 +9,7 @@ use pin_project::pin_project;
 use tokio::task::spawn_blocking;
 
 use nimiq_block::Block;
+#[cfg(feature = "full")]
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::{PushError, PushResult};
 use nimiq_blockchain_proxy::BlockchainProxy;
@@ -150,7 +151,7 @@ impl<N: Network, TReq: RequestComponent<N>> BlockLiveSync<N, TReq> {
                             // Update validator keys from BLS public key cache.
                             block.update_validator_keys(&mut bls_cache1.lock());
                             match blockchain1 {
-                                #[cfg(not(target_family = "wasm"))]
+                                #[cfg(feature = "full")]
                                 BlockchainProxy::Full(blockchain) => {
                                     Blockchain::push(blockchain.upgradable_read(), block)
                                 }
@@ -217,7 +218,7 @@ impl<N: Network, TReq: RequestComponent<N>> BlockLiveSync<N, TReq> {
                                 // Update validator keys from BLS public key cache.
                                 block.update_validator_keys(&mut bls_cache2.lock());
                                 match blockchain2 {
-                                    #[cfg(not(target_family = "wasm"))]
+                                    #[cfg(feature = "full")]
                                     BlockchainProxy::Full(blockchain) => {
                                         Blockchain::push(blockchain.upgradable_read(), block)
                                     }

@@ -7,6 +7,7 @@ use nimiq_primitives::policy::Policy;
 use parking_lot::{Mutex, RwLock};
 
 use nimiq_block::Block;
+#[cfg(feature = "full-consensus")]
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_light_blockchain::LightBlockchain;
@@ -215,12 +216,18 @@ impl ClientInner {
             Policy::BLS_CACHE_MAX_CAPACITY,
         )));
 
+        #[cfg(feature = "full-consensus")]
         let mut blockchain_config = BlockchainConfig {
             max_epochs_stored: config.consensus.max_epochs_stored,
             ..Default::default()
         };
 
         let (blockchain_proxy, syncer_proxy, zkp_component) = match config.consensus.sync_mode {
+            #[cfg(not(feature = "full-consensus"))]
+            SyncMode::History => {
+                panic!("Can't build a history node without the full-consensus feature enabled")
+            }
+            #[cfg(feature = "full-consensus")]
             SyncMode::History => {
                 blockchain_config.keep_history = true;
                 let blockchain = Arc::new(RwLock::new(
@@ -236,7 +243,9 @@ impl ClientInner {
                 let zkp_component = ZKPComponent::new(
                     blockchain_proxy.clone(),
                     Arc::clone(&network),
+                    #[cfg(feature = "zkp-prover")]
                     config.zkp.prover_active,
+                    #[cfg(feature = "zkp-prover")]
                     None,
                     environment.clone(),
                     config.zkp.setup_keys_path,
@@ -258,7 +267,9 @@ impl ClientInner {
                 let zkp_component = ZKPComponent::new(
                     blockchain_proxy.clone(),
                     Arc::clone(&network),
+                    #[cfg(feature = "zkp-prover")]
                     config.zkp.prover_active,
+                    #[cfg(feature = "zkp-prover")]
                     None,
                     environment.clone(),
                     config.zkp.setup_keys_path,

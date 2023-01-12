@@ -8,10 +8,11 @@ use serde_derive::Deserialize;
 use thiserror::Error;
 use url::Url;
 
-use nimiq_mempool::mempool::Mempool;
+#[cfg(feature = "nimiq-mempool")]
 use nimiq_mempool::{
     config::MempoolConfig,
     filter::{MempoolFilter, MempoolRules},
+    mempool::Mempool,
 };
 use nimiq_network_libp2p::Multiaddr;
 use nimiq_primitives::{coin::Coin, networks::NetworkId};
@@ -43,6 +44,7 @@ pub struct ConfigFile {
     #[serde(default)]
     pub prover_log: LogSettings,
     pub database: Option<DatabaseSettings>,
+    #[cfg(feature = "nimiq-mempool")]
     pub mempool: Option<MempoolSettings>,
     #[serde(default)]
     pub validator: Option<ValidatorSettings>,
@@ -421,6 +423,7 @@ pub struct MempoolFilterSettings {
     pub sender_balance: Coin,
 }
 
+#[cfg(feature = "nimiq-mempool")]
 impl From<MempoolSettings> for MempoolConfig {
     fn from(mempool: MempoolSettings) -> Self {
         Self {
@@ -437,6 +440,7 @@ impl From<MempoolSettings> for MempoolConfig {
 }
 
 /// Convert mempool settings
+#[cfg(feature = "nimiq-mempool")]
 impl From<MempoolFilterSettings> for MempoolRules {
     fn from(f: MempoolFilterSettings) -> MempoolRules {
         Self {
