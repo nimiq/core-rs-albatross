@@ -1,7 +1,5 @@
-use std::collections::VecDeque;
 use std::iter;
 use std::sync::Arc;
-use std::task::{Context, Poll, Waker};
 
 use libp2p::{
     core::either::EitherError,
@@ -9,22 +7,17 @@ use libp2p::{
         error::GossipsubHandlerError, Gossipsub, GossipsubEvent, MessageAuthenticity,
         PeerScoreParams, PeerScoreThresholds,
     },
-    identify::{Identify, IdentifyConfig, IdentifyEvent},
+    identify::{Behaviour as IdentifyBehaviour, Config as IdentifyConfig, Event as IdentifyEvent},
     kad::{store::MemoryStore, Kademlia, KademliaEvent},
     request_response::{
         ProtocolSupport, RequestResponse, RequestResponseConfig,
         RequestResponseEvent as ReqResEvent,
     },
-    swarm::{
-        ConnectionHandlerUpgrErr, NetworkBehaviour, NetworkBehaviourAction,
-        NetworkBehaviourEventProcess, PollParameters,
-    },
-    Multiaddr, NetworkBehaviour, PeerId,
+    swarm::{ConnectionHandlerUpgrErr, NetworkBehaviour},
+    Multiaddr, PeerId,
 };
 use parking_lot::RwLock;
-use tokio::time::Interval;
 
-use nimiq_macros::store_waker;
 use nimiq_utils::time::OffsetTime;
 
 use crate::{
@@ -101,30 +94,23 @@ impl From<RequestResponseEvent> for NimiqEvent {
 }
 
 #[derive(NetworkBehaviour)]
-#[behaviour(out_event = "NimiqEvent", poll_method = "poll_event")]
+#[behaviour(out_event = "NimiqEvent")]
 pub struct NimiqBehaviour {
     pub dht: Kademlia<MemoryStore>,
     pub discovery: DiscoveryBehaviour,
     pub gossipsub: Gossipsub,
-    pub identify: Identify,
+    pub identify: IdentifyBehaviour,
     pub pool: ConnectionPoolBehaviour,
     pub request_response: RequestResponse<MessageCodec>,
-
-    #[behaviour(ignore)]
-    contacts: Arc<RwLock<PeerContactBook>>,
-
-    #[behaviour(ignore)]
-    events: VecDeque<NimiqEvent>,
-
-    #[behaviour(ignore)]
-    update_scores: Interval,
-
-    #[behaviour(ignore)]
-    waker: Option<Waker>,
 }
 
 impl NimiqBehaviour {
-    pub fn new(config: Config, clock: Arc<OffsetTime>) -> Self {
+    pub fn new(
+        config: Config,
+        clock: Arc<OffsetTime>,
+        contacts: Arc<RwLock<PeerContactBook>>,
+        peer_score_params: PeerScoreParams,
+    ) -> Self {
         let public_key = config.keypair.public();
         let peer_id = public_key.to_peer_id();
 
@@ -133,10 +119,6 @@ impl NimiqBehaviour {
         let dht = Kademlia::with_config(peer_id, store, config.kademlia);
 
         // Discovery behaviour
-        // TODO: persist to disk
-        let contacts = Arc::new(RwLock::new(PeerContactBook::new(
-            config.peer_contact.sign(&config.keypair),
-        )));
         let discovery = DiscoveryBehaviour::new(
             config.discovery.clone(),
             config.keypair.clone(),
@@ -145,21 +127,16 @@ impl NimiqBehaviour {
         );
 
         // Gossipsub behaviour
-        let params = PeerScoreParams {
-            ip_colocation_factor_threshold: 20.0,
-            ..Default::default()
-        };
         let thresholds = PeerScoreThresholds::default();
-        let update_scores = tokio::time::interval(params.decay_interval);
         let mut gossipsub = Gossipsub::new(MessageAuthenticity::Author(peer_id), config.gossipsub)
             .expect("Wrong configuration");
         gossipsub
-            .with_peer_score(params, thresholds)
+            .with_peer_score(peer_score_params, thresholds)
             .expect("Valid score params and thresholds");
 
         // Identify behaviour
         let identify_config = IdentifyConfig::new("/albatross/2.0".to_string(), public_key);
-        let identify = Identify::new(identify_config);
+        let identify = IdentifyBehaviour::new(identify_config);
 
         // Connection pool behaviour
         let pool = ConnectionPoolBehaviour::new(
@@ -182,35 +159,7 @@ impl NimiqBehaviour {
             identify,
             pool,
             request_response,
-            events: VecDeque::new(),
-            contacts,
-            update_scores,
-            waker: None,
         }
-    }
-
-    fn poll_event(
-        &mut self,
-        cx: &mut Context,
-        _params: &mut impl PollParameters,
-    ) -> Poll<
-        NetworkBehaviourAction<
-            <Self as NetworkBehaviour>::OutEvent,
-            <Self as NetworkBehaviour>::ConnectionHandler,
-        >,
-    > {
-        if self.update_scores.poll_tick(cx).is_ready() {
-            self.contacts.read().update_scores(&self.gossipsub);
-        }
-
-        if let Some(event) = self.events.pop_front() {
-            return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event));
-        }
-
-        // Register waker, if we're waiting for an event.
-        store_waker!(self, waker, cx);
-
-        Poll::Pending
     }
 
     pub fn add_peer_address(&mut self, peer_id: PeerId, address: Multiaddr) {
@@ -227,53 +176,7 @@ impl NimiqBehaviour {
         self.dht.remove_address(&peer_id, &address);
     }
 
-    fn emit_event<E>(&mut self, event: E)
-    where
-        NimiqEvent: From<E>,
-    {
-        self.events.push_back(event.into());
-        self.wake();
-    }
-
-    fn wake(&self) {
-        if let Some(waker) = &self.waker {
-            waker.wake_by_ref();
-        }
-    }
-}
-
-impl NetworkBehaviourEventProcess<KademliaEvent> for NimiqBehaviour {
-    fn inject_event(&mut self, event: KademliaEvent) {
-        self.emit_event(event);
-    }
-}
-
-impl NetworkBehaviourEventProcess<DiscoveryEvent> for NimiqBehaviour {
-    fn inject_event(&mut self, _event: DiscoveryEvent) {
-        self.pool.maintain_peers();
-    }
-}
-
-impl NetworkBehaviourEventProcess<GossipsubEvent> for NimiqBehaviour {
-    fn inject_event(&mut self, event: GossipsubEvent) {
-        self.emit_event(event);
-    }
-}
-
-impl NetworkBehaviourEventProcess<IdentifyEvent> for NimiqBehaviour {
-    fn inject_event(&mut self, event: IdentifyEvent) {
-        self.emit_event(event);
-    }
-}
-
-impl NetworkBehaviourEventProcess<ConnectionPoolEvent> for NimiqBehaviour {
-    fn inject_event(&mut self, event: ConnectionPoolEvent) {
-        self.emit_event(event);
-    }
-}
-
-impl NetworkBehaviourEventProcess<RequestResponseEvent> for NimiqBehaviour {
-    fn inject_event(&mut self, event: RequestResponseEvent) {
-        self.emit_event(event);
+    pub fn update_scores(&self, contacts: Arc<RwLock<PeerContactBook>>) {
+        contacts.read().update_scores(&self.gossipsub);
     }
 }

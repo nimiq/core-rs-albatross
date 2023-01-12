@@ -10,6 +10,7 @@ use async_trait::async_trait;
 use bytes::{Buf, Bytes};
 use futures::{ready, stream::BoxStream, Stream, StreamExt};
 use libp2p::core::transport::MemoryTransport;
+use libp2p::gossipsub::PeerScoreParams;
 use libp2p::{
     core,
     core::{muxing::StreamMuxerBox, transport::Boxed},
@@ -17,7 +18,7 @@ use libp2p::{
         error::PublishError, GossipsubEvent, GossipsubMessage, IdentTopic, MessageAcceptance,
         MessageId, TopicHash, TopicScoreParams,
     },
-    identify::IdentifyEvent,
+    identify::Event as IdentifyEvent,
     identity::Keypair,
     kad::{
         store::RecordStore, GetRecordOk, InboundRequest, KademliaEvent, QueryId, QueryResult,
@@ -26,14 +27,14 @@ use libp2p::{
     noise,
     request_response::{OutboundFailure, RequestId, RequestResponseMessage, ResponseChannel},
     swarm::{dial_opts::DialOpts, ConnectionLimits, NetworkInfo, SwarmBuilder, SwarmEvent},
-    websocket, yamux, Multiaddr, PeerId, Swarm, Transport,
+    yamux, Multiaddr, PeerId, Swarm, Transport,
 };
-#[cfg(feature = "dns-tcp")]
-use libp2p::{dns, tcp};
+#[cfg(feature = "websocket")]
+use libp2p::{dns, tcp, websocket};
 use log::Instrument;
 use parking_lot::{Mutex, RwLock};
 use tokio::sync::{broadcast, mpsc, oneshot};
-use tokio::time::Instant as TokioInstant;
+use tokio::time::{Instant as TokioInstant, Interval};
 use tokio_stream::wrappers::{BroadcastStream, ReceiverStream};
 
 use beserial::{Deserialize, Serialize};
@@ -52,7 +53,7 @@ use nimiq_utils::time::OffsetTime;
 use nimiq_validator_network::validator_record::SignedValidatorRecord;
 
 use crate::discovery::behaviour::DiscoveryEvent;
-use crate::discovery::peer_contacts::{PeerContact, Services};
+use crate::discovery::peer_contacts::{PeerContact, PeerContactBook, Services};
 #[cfg(feature = "metrics")]
 use crate::network_metrics::NetworkMetrics;
 use crate::rate_limiting::RateLimit;
@@ -182,11 +183,9 @@ impl PubsubId<PeerId> for GossipsubId<PeerId> {
 pub struct Network {
     /// The local ID that is used to identify our peer
     local_peer_id: PeerId,
-    /// This hash map mantains an association between PeerIds and PeerContact:
+    /// This hash map maintains an association between PeerIds and PeerContact:
     /// If the peer is interesting, i.e.: it provides services that are interested to us,
-    ///  we store a some value with the peer contact itself
-    /// Otherwise,
-    ///  we just store a None value
+    /// we store an entry with the peer contact itself.
     connected_peers: Arc<RwLock<HashMap<PeerId, PeerContact>>>,
     /// Stream used to send event messages
     events_tx: broadcast::Sender<NetworkEvent<PeerId>>,
@@ -214,7 +213,16 @@ impl Network {
     ///
     pub async fn new(clock: Arc<OffsetTime>, config: Config) -> Self {
         let required_services = config.required_services;
-        let swarm = Self::new_swarm(clock, config);
+        // TODO: persist to disk
+        let own_peer_contact = config.peer_contact.clone();
+        let contacts = Arc::new(RwLock::new(PeerContactBook::new(
+            own_peer_contact.sign(&config.keypair),
+        )));
+        let params = PeerScoreParams {
+            ip_colocation_factor_threshold: 20.0,
+            ..Default::default()
+        };
+        let swarm = Self::new_swarm(clock, config, Arc::clone(&contacts), params.clone());
 
         let local_peer_id = *Swarm::local_peer_id(&swarm);
         let connected_peers = Arc::new(RwLock::new(HashMap::new()));
@@ -224,6 +232,7 @@ impl Network {
         let (validate_tx, validate_rx) = mpsc::unbounded_channel();
         let peer_request_limits = Arc::new(Mutex::new(HashMap::new()));
         let rate_limits_pending_deletion = Arc::new(Mutex::new(VecDeque::new()));
+        let update_scores = tokio::time::interval(params.decay_interval);
 
         #[cfg(feature = "metrics")]
         let metrics = Arc::new(NetworkMetrics::default());
@@ -236,6 +245,8 @@ impl Network {
             Arc::clone(&connected_peers),
             Arc::clone(&peer_request_limits),
             Arc::clone(&rate_limits_pending_deletion),
+            update_scores,
+            contacts,
             #[cfg(feature = "metrics")]
             metrics.clone(),
         ));
@@ -261,12 +272,12 @@ impl Network {
             // Memory transport primary for testing
             // TODO: Use websocket over the memory transport
 
-            #[cfg(feature = "dns-tcp")]
+            #[cfg(feature = "websocket")]
             let transport = websocket::WsConfig::new(dns::TokioDnsConfig::system(
-                tcp::TokioTcpTransport::new(tcp::GenTcpConfig::default().nodelay(true)),
+                tcp::tokio::Transport::new(tcp::Config::default().nodelay(true)),
             )?)
             .or_transport(MemoryTransport::default());
-            #[cfg(not(feature = "dns-tcp"))]
+            #[cfg(not(feature = "websocket"))]
             let transport = MemoryTransport::default();
             // Fixme: Handle wasm compatible transport
 
@@ -284,11 +295,11 @@ impl Network {
                 .timeout(std::time::Duration::from_secs(20))
                 .boxed())
         } else {
-            #[cfg(feature = "dns-tcp")]
+            #[cfg(feature = "websocket")]
             let transport = websocket::WsConfig::new(dns::TokioDnsConfig::system(
-                tcp::TokioTcpTransport::new(tcp::GenTcpConfig::default().nodelay(true)),
+                tcp::tokio::Transport::new(tcp::Config::default().nodelay(true)),
             )?);
-            #[cfg(not(feature = "dns-tcp"))]
+            #[cfg(not(feature = "websocket"))]
             let transport = MemoryTransport::default();
             // Fixme: Handle wasm compatible transport
 
@@ -308,12 +319,17 @@ impl Network {
         }
     }
 
-    fn new_swarm(clock: Arc<OffsetTime>, config: Config) -> Swarm<NimiqBehaviour> {
+    fn new_swarm(
+        clock: Arc<OffsetTime>,
+        config: Config,
+        contacts: Arc<RwLock<PeerContactBook>>,
+        peer_score_params: PeerScoreParams,
+    ) -> Swarm<NimiqBehaviour> {
         let local_peer_id = PeerId::from(config.keypair.public());
 
         let transport = Self::new_transport(&config.keypair, config.memory_transport).unwrap();
 
-        let behaviour = NimiqBehaviour::new(config, clock);
+        let behaviour = NimiqBehaviour::new(config, clock, contacts, peer_score_params);
 
         let limits = ConnectionLimits::default()
             .with_max_pending_incoming(Some(16))
@@ -323,12 +339,16 @@ impl Network {
             .with_max_established_per_peer(Some(MAX_CONNECTIONS_PER_PEER));
 
         // TODO add proper config
-        SwarmBuilder::new(transport, behaviour, local_peer_id)
-            .connection_limits(limits)
-            .executor(Box::new(|fut| {
+        SwarmBuilder::with_executor(
+            transport,
+            behaviour,
+            local_peer_id,
+            Box::new(|fut| {
                 tokio::spawn(fut);
-            }))
-            .build()
+            }),
+        )
+        .connection_limits(limits)
+        .build()
     }
 
     pub fn local_peer_id(&self) -> &PeerId {
@@ -343,6 +363,8 @@ impl Network {
         connected_peers: Arc<RwLock<HashMap<PeerId, PeerContact>>>,
         peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<u16, RateLimit>>>>,
         rate_limits_pending_deletion: Arc<Mutex<VecDeque<((PeerId, u16), TokioInstant)>>>,
+        mut update_scores: Interval,
+        contacts: Arc<RwLock<PeerContactBook>>,
         #[cfg(feature = "metrics")] metrics: Arc<NetworkMetrics>,
     ) {
         let mut task_state = TaskState::default();
@@ -385,6 +407,9 @@ impl Network {
                             // `action_rx.next()` will return `None` if all senders (i.e. the `Network` object) are dropped.
                             break;
                         }
+                    },
+                    _ = update_scores.tick() => {
+                        swarm.behaviour().update_scores(Arc::clone(&contacts));
                     },
                 };
             }
@@ -519,16 +544,16 @@ impl Network {
                 match event {
                     NimiqEvent::Dht(event) => {
                         match event {
-                            KademliaEvent::OutboundQueryCompleted { id, result, .. } => {
+                            KademliaEvent::OutboundQueryProgressed { id, result, .. } => {
                                 match result {
                                     QueryResult::GetRecord(result) => {
                                         if let Some(output) = state.dht_gets.remove(&id) {
-                                            let result = result.map_err(Into::into).map(
-                                                |GetRecordOk { mut records, .. }| {
-                                                    // TODO: What do we do, if we get multiple records?
-                                                    records.pop().map(|r| r.record.value)
-                                                },
-                                            );
+                                            let result = result
+                                                .map_err(Into::into)
+                                                .map(|record| match record {
+                                                    GetRecordOk::FoundRecord(r) => Some(r.record.value),
+                                                    GetRecordOk::FinishedWithNoAdditionalRecord { cache_candidates: _ } => None,
+                                                });
                                             if output.send(result).is_err() {
                                                 error!(query_id = ?id, error = "receiver hung up", "could not send get record query result to channel");
                                             }
@@ -607,28 +632,31 @@ impl Network {
                             _ => {}
                         }
                     }
-                    NimiqEvent::Discovery(event) => match event {
-                        DiscoveryEvent::Established {
-                            peer_id,
-                            peer_contact,
-                        } => {
-                            if connected_peers
-                                .write()
-                                .insert(peer_id, peer_contact)
-                                .is_none()
-                            {
-                                info!(%peer_id, "Peer joined");
-                                if let Err(error) =
-                                    events_tx.send(NetworkEvent::PeerJoined(peer_id))
+                    NimiqEvent::Discovery(event) => {
+                        swarm.behaviour_mut().pool.maintain_peers();
+                        match event {
+                            DiscoveryEvent::Established {
+                                peer_id,
+                                peer_contact,
+                            } => {
+                                if connected_peers
+                                    .write()
+                                    .insert(peer_id, peer_contact)
+                                    .is_none()
                                 {
-                                    error!(%peer_id, %error, "could not send peer joined event to channel");
+                                    info!(%peer_id, "Peer joined");
+                                    if let Err(error) =
+                                        events_tx.send(NetworkEvent::PeerJoined(peer_id))
+                                    {
+                                        error!(%peer_id, %error, "could not send peer joined event to channel");
+                                    }
+                                } else {
+                                    error!(%peer_id, "Peer joined but it already exists");
                                 }
-                            } else {
-                                error!(%peer_id, "Peer joined but it already exists");
                             }
+                            DiscoveryEvent::Update => {}
                         }
-                        DiscoveryEvent::Update => {}
-                    },
+                    }
                     NimiqEvent::Gossip(event) => match event {
                         GossipsubEvent::Message {
                             propagation_source,
@@ -921,10 +949,7 @@ impl Network {
                 }
             }
             NetworkAction::DhtGet { key, output } => {
-                let query_id = swarm
-                    .behaviour_mut()
-                    .dht
-                    .get_record(key.into(), Quorum::One);
+                let query_id = swarm.behaviour_mut().dht.get_record(key.into());
                 state.dht_gets.insert(query_id, output);
             }
             NetworkAction::DhtPut { key, value, output } => {

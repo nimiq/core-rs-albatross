@@ -76,7 +76,6 @@ nimiq-test-log = { path = "../test-log" }
 [features]
 deadlock = ["parking_lot/deadlock_detection"]
 default = []
-dns-tcp = ["nimiq-network-libp2p/dns-tcp"]
 launcher = []
 signal-handling = ["signal-hook", "tokio"]
 logging = ["file-rotate", "nimiq-log", "serde_json", "tokio", "tracing-subscriber"]
@@ -87,4 +86,5 @@ rpc-server = ["nimiq-jsonrpc-core", "nimiq-jsonrpc-server", "nimiq-rpc-server", 
 tokio-console = ["console-subscriber", "logging", "tokio"]
 validator = ["nimiq-validator", "nimiq-validator-network", "nimiq-rpc-server"]
 wallet = ["nimiq-wallet"]
+websocket = ["nimiq-network-libp2p/websocket"]
 zkp-prover = ["nimiq-zkp-component/prover"]

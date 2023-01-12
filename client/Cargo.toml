@@ -29,7 +29,6 @@ path = "../lib"
 version = "0.1"
 features = [
     "deadlock",
-    "dns-tcp",
     "logging",
     "loki",
     "metrics-server",
@@ -39,5 +38,6 @@ features = [
     "tokio-console",
     "validator",
     "wallet",
+    "websocket",
     "zkp-prover",
 ]

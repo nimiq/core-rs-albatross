@@ -24,6 +24,8 @@ jobs:
         profile: minimal
         toolchain: stable
         override: true
+    - name: Install Protoc
+      run: sudo apt-get install protobuf-compiler
     - name: Set up python
       uses: actions/setup-python@v4
       with:
