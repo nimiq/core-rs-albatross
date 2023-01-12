@@ -307,8 +307,7 @@ impl Policy {
         let t = delay as f64;
         let exponent = -Self::BLOCKS_DELAY_DECAY * t * t;
 
-        ((1.0 - Self::MINIMUM_REWARDS_PERCENTAGE) * exponent.exp()
-            + Self::MINIMUM_REWARDS_PERCENTAGE) as f64
+        (1.0 - Self::MINIMUM_REWARDS_PERCENTAGE) * exponent.exp() + Self::MINIMUM_REWARDS_PERCENTAGE
     }
 
     #[inline]
