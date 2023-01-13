@@ -21,7 +21,7 @@ use tokio_stream::wrappers::BroadcastStream;
 
 use crate::proof_utils::*;
 use crate::types::*;
-#[cfg(feature = "prover")]
+#[cfg(feature = "zkp-prover")]
 use crate::zkp_prover::ZKProver;
 use crate::zkp_requests::ZKPRequests;
 use futures::stream::BoxStream;
@@ -110,7 +110,7 @@ pub struct ZKPComponent<N: Network> {
     pub(crate) blockchain: BlockchainProxy,
     network: Arc<N>,
     pub(crate) zkp_state: Arc<RwLock<ZKPState>>,
-    #[cfg(feature = "prover")]
+    #[cfg(feature = "zkp-prover")]
     zk_prover: Option<ZKProver<N>>,
     zk_proofs_stream: ZKProofsStream<N>,
     proof_storage: ProofStore,
@@ -123,8 +123,8 @@ impl<N: Network> ZKPComponent<N> {
     pub async fn new(
         blockchain: BlockchainProxy,
         network: Arc<N>,
-        #[cfg(feature = "prover")] is_prover_active: bool,
-        #[cfg(feature = "prover")] prover_path: Option<PathBuf>,
+        #[cfg(feature = "zkp-prover")] is_prover_active: bool,
+        #[cfg(feature = "zkp-prover")] prover_path: Option<PathBuf>,
         env: Environment,
         keys_path: PathBuf,
     ) -> Self {
@@ -146,7 +146,7 @@ impl<N: Network> ZKPComponent<N> {
             blockchain,
             network: Arc::clone(&network),
             zkp_state,
-            #[cfg(feature = "prover")]
+            #[cfg(feature = "zkp-prover")]
             zk_prover: None,
             zk_proofs_stream,
             proof_storage,
@@ -159,7 +159,7 @@ impl<N: Network> ZKPComponent<N> {
         zkp_component.load_proof_from_db();
 
         // Activates the prover based on the configuration provided.
-        #[cfg(feature = "prover")]
+        #[cfg(feature = "zkp-prover")]
         {
             zkp_component.zk_prover = match (is_prover_active, &zkp_component.blockchain) {
                 (true, BlockchainProxy::Full(ref blockchain)) => Some(
@@ -204,9 +204,9 @@ impl<N: Network> ZKPComponent<N> {
 
     /// Returns if the prover is activated.
     pub fn is_zkp_prover_activated(&self) -> bool {
-        #[cfg(feature = "prover")]
+        #[cfg(feature = "zkp-prover")]
         return self.zk_prover.is_some();
-        #[cfg(not(feature = "prover"))]
+        #[cfg(not(feature = "zkp-prover"))]
         false
     }
 
@@ -264,7 +264,7 @@ impl<N: Network> ZKPComponent<N> {
         drop(zkp_state_lock);
 
         // Since someone else generate a valid proof faster, we will terminate our own proof generation process.
-        #[cfg(feature = "prover")]
+        #[cfg(feature = "zkp-prover")]
         if let Some(ref mut zk_prover) = self.zk_prover {
             zk_prover.cancel_current_proof_production();
         }
@@ -355,7 +355,7 @@ impl<N: Network> Future for ZKPComponent<N> {
         }
 
         // Polls prover for new proofs and notifies the new event to the zkp events notifier.
-        #[cfg(feature = "prover")]
+        #[cfg(feature = "zkp-prover")]
         while let Some(ref mut zk_prover) = self.zk_prover {
             match zk_prover.poll_next_unpin(cx) {
                 Poll::Ready(Some((zk_proof, block))) => {

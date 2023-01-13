@@ -35,14 +35,14 @@ nimiq-primitives = { path = "../primitives", features = ["policy"] }
 nimiq-test-log = { path = "../test-log" }
 
 [features]
-prover = ["ark-crypto-primitives/r1cs", "ark-mnt4-753/r1cs", "ark-mnt6-753/r1cs", "ark-groth16/r1cs"]
+zkp-prover = ["ark-crypto-primitives/r1cs", "ark-mnt4-753/r1cs", "ark-mnt6-753/r1cs", "ark-groth16/r1cs"]
 
 [[example]]
 name = "setup"
 path = "examples/prover/setup.rs"
-required-features = ["prover"]
+required-features = ["zkp-prover"]
 
 [[example]]
 name = "prove"
 path = "examples/prover/prove.rs"
-required-features = ["prover"]
+required-features = ["zkp-prover"]

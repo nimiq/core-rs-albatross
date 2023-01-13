@@ -1,4 +1,4 @@
-#[cfg(feature = "prover")]
+#[cfg(feature = "zkp-prover")]
 #[allow(dead_code)]
 mod prover;
 

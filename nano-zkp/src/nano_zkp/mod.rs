@@ -6,9 +6,9 @@ use ark_relations::r1cs::SynthesisError;
 use ark_serialize::SerializationError;
 use thiserror::Error;
 
-#[cfg(feature = "prover")]
+#[cfg(feature = "zkp-prover")]
 mod prove;
-#[cfg(feature = "prover")]
+#[cfg(feature = "zkp-prover")]
 mod setup;
 mod verify;
 

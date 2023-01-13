@@ -1,2 +1,2 @@
-#[cfg(feature = "prover")]
+#[cfg(feature = "zkp-prover")]
 mod prover;

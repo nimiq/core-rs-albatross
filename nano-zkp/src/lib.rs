@@ -1,8 +1,8 @@
 pub use nano_zkp::*;
 
-#[cfg(feature = "prover")]
+#[cfg(feature = "zkp-prover")]
 pub(crate) mod circuits;
-#[cfg(feature = "prover")]
+#[cfg(feature = "zkp-prover")]
 pub(crate) mod gadgets;
 
 pub(crate) mod nano_zkp;
