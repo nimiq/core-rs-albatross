@@ -15,16 +15,13 @@ parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
 tokio-stream = { version = "0.1", features = ["sync"] }
 log = { package = "tracing", version = "0.1", features = ["log"] }
 
-nimiq-account = { path = "../primitives/account" }
 nimiq-block = { path = "../primitives/block" }
 nimiq-blockchain-interface = { path = "../blockchain-interface" }
 nimiq-collections = { path = "../collections" }
-nimiq-database = { path = "../database" }
 nimiq-genesis = { path = "../genesis", default-features = false }
 nimiq-hash = { path = "../hash" }
 nimiq-nano-zkp = { path = "../nano-zkp" }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }
-nimiq-trie = { path = "../primitives/trie" }
 nimiq-utils = { path = "../utils", features = ["time"] }
 nimiq-vrf = { path = "../vrf" }
 

@@ -9,10 +9,12 @@ use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::{
     AbstractBlockchain, BlockchainError, BlockchainEvent, ChainInfo, Direction,
 };
-use nimiq_genesis::NetworkId;
 use nimiq_hash::Blake2bHash;
 use nimiq_light_blockchain::LightBlockchain;
-use nimiq_primitives::slots::{Validator, Validators};
+use nimiq_primitives::{
+    networks::NetworkId,
+    slots::{Validator, Validators},
+};
 
 macro_rules! gen_blockchain_match {
     ($self: ident, $t: ident, $f: ident $(, $arg:expr )*) => {
