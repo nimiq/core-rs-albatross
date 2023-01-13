@@ -51,7 +51,7 @@ nimiq-blockchain-proxy = { path = "../blockchain-proxy", default-features = fals
 nimiq-bls = { path = "../bls" }
 nimiq-consensus = { path = "../consensus", default-features = false }
 nimiq-database = { path = "../database" }
-nimiq-genesis = { path = "../genesis" }
+nimiq-genesis = { path = "../genesis", default-features = false }
 nimiq-jsonrpc-core = { git = "https://github.com/nimiq/jsonrpc.git", optional=true}
 nimiq-jsonrpc-server = { git = "https://github.com/nimiq/jsonrpc.git", optional=true}
 nimiq-keys = { path = "../keys" }

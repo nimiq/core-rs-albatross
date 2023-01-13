@@ -1,15 +1,21 @@
 use std::collections::HashMap;
 use std::env;
+#[cfg(feature = "genesis-override")]
 use std::path::Path;
 
 use lazy_static::lazy_static;
 
-use beserial::{Deserialize, Serialize};
-use nimiq_account::Account;
-use nimiq_account::AccountsList;
+use beserial::Deserialize;
+#[cfg(feature = "genesis-override")]
+use beserial::Serialize;
+#[cfg(feature = "accounts")]
+use nimiq_account::{Account, AccountsList};
+#[cfg(feature = "genesis-override")]
 use nimiq_database::volatile::VolatileEnvironment;
+#[cfg(feature = "genesis-override")]
 use nimiq_genesis_builder::{GenesisBuilder, GenesisBuilderError, GenesisInfo};
 use nimiq_hash::Blake2bHash;
+#[cfg(feature = "accounts")]
 use nimiq_trie::key_nibbles::KeyNibbles;
 
 pub use nimiq_primitives::networks::NetworkId;
@@ -51,6 +57,7 @@ impl NetworkInfo {
         &self.genesis.hash
     }
 
+    #[cfg(feature = "accounts")]
     #[inline]
     pub fn genesis_accounts(&self) -> Vec<(KeyNibbles, Account)> {
         let accounts: AccountsList = Deserialize::deserialize_from_vec(self.genesis.accounts)
@@ -65,6 +72,7 @@ impl NetworkInfo {
     }
 }
 
+#[cfg(feature = "genesis-override")]
 fn read_genesis_config(config: &Path) -> Result<GenesisData, GenesisBuilderError> {
     let env = VolatileEnvironment::new(10).expect("Could not open a volatile database");
 
@@ -75,6 +83,7 @@ fn read_genesis_config(config: &Path) -> Result<GenesisData, GenesisBuilderError
     } = GenesisBuilder::from_config_file(config)?.generate(env)?;
 
     let block = block.serialize_to_vec();
+    #[cfg(feature = "accounts")]
     let accounts = AccountsList(accounts).serialize_to_vec();
 
     Ok(GenesisData {
@@ -91,7 +100,9 @@ lazy_static! {
             m.insert(info.network_id, info);
         }
 
+        #[cfg(feature = "genesis-override")]
         let override_path = env::var_os("NIMIQ_OVERRIDE_DEVNET_CONFIG");
+        #[cfg(feature = "genesis-override")]
         let dev_genesis = if let Some(p) = override_path {
             read_genesis_config(Path::new(&p))
                 .expect("failure reading provided NIMIQ_OVERRIDE_DEVNET_CONFIG")
@@ -101,6 +112,11 @@ lazy_static! {
                 "/genesis/dev-albatross/genesis.rs"
             ))
         };
+        #[cfg(not(feature = "genesis-override"))]
+        let dev_genesis = include!(concat!(
+            env!("OUT_DIR"),
+            "/genesis/dev-albatross/genesis.rs"
+        ));
 
         add(
             &mut m,

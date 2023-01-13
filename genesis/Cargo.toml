@@ -24,18 +24,18 @@ lazy_static = "1.2"
 url = "2.3"
 
 beserial = { path = "../beserial", features = ["derive", "net"] }
-nimiq-account = { path = "../primitives/account" }
+nimiq-account = { path = "../primitives/account", optional = true }
 nimiq-block = { path = "../primitives/block" }
 nimiq-bls = { path = "../bls" }
-nimiq-database = { path = "../database" }
-nimiq-genesis-builder = { path = "../genesis-builder" }
+nimiq-database = { path = "../database", optional = true }
+nimiq-genesis-builder = { path = "../genesis-builder", optional = true }
 nimiq-hash = { path = "../hash" }
 nimiq-hash_derive = { path = "../hash/hash_derive" }
 nimiq-keys = { path = "../keys" }
 nimiq-macros = { path = "../macros" }
 nimiq-primitives = { path = "../primitives", features = ["coin", "networks"] }
 nimiq-transaction = { path = "../primitives/transaction" }
-nimiq-trie = { path = "../primitives/trie" }
+nimiq-trie = { path = "../primitives/trie", optional = true }
 nimiq-utils = { path = "../utils", features = ["time"] }
 
 [build-dependencies]
@@ -46,3 +46,8 @@ nimiq-database = { path = "../database" }
 nimiq-genesis-builder = { path = "../genesis-builder" }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
+
+[features]
+accounts = ["nimiq-account", "nimiq-trie"]
+default = ["accounts", "genesis-override"]
+genesis-override = ["accounts", "nimiq-database", "nimiq-genesis-builder"]

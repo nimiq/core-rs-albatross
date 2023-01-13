@@ -35,7 +35,6 @@ nimiq-blockchain-proxy = { path = "../blockchain-proxy", default-features = fals
 nimiq-bls = { path = "../bls" }
 nimiq-blockchain = { path = "../blockchain", optional = true }
 nimiq-database = { path = "../database" }
-nimiq-genesis = { path = "../genesis" }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-light-blockchain = { path = "../light-blockchain" }
@@ -58,6 +57,7 @@ hex = "0.4"
 
 nimiq-block-production = { path = "../block-production" }
 nimiq-bls = { path = "../bls" }
+nimiq-genesis = { path = "../genesis" }
 nimiq-genesis-builder = { path = "../genesis-builder" }
 nimiq-keys = { path = "../keys" }
 nimiq-network-mock = { path = "../network-mock" }

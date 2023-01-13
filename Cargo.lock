@@ -3408,7 +3408,6 @@ dependencies = [
  "nimiq-account",
  "nimiq-block",
  "nimiq-database-value",
- "nimiq-genesis",
  "nimiq-hash",
  "nimiq-primitives",
  "nimiq-transaction",

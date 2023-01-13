@@ -24,7 +24,7 @@ nimiq-blockchain = { path = "../blockchain", optional = true }
 nimiq-blockchain-interface = { path = "../blockchain-interface" }
 nimiq-light-blockchain = { path = "../light-blockchain" }
 nimiq-database = { path = "../database" }
-nimiq-genesis = { path = "../genesis" }
+nimiq-genesis = { path = "../genesis", default-features = false }
 nimiq-hash = { path = "../hash" }
 nimiq-primitives = { path = "../primitives" }
 nimiq-transaction = { path = "../primitives/transaction" }
