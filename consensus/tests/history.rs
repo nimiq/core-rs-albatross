@@ -1,504 +1,661 @@
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::time::Duration;
+use std::{
+    pin::Pin,
+    sync::Arc,
+    task::{Context, Poll},
+};
 
-use futures::StreamExt;
+use futures::{poll, Stream, StreamExt};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
-use nimiq_consensus::sync::syncer_proxy::SyncerProxy;
-use nimiq_test_log::test;
-use nimiq_test_utils::node::TESTING_BLS_CACHE_MAX_CAPACITY;
-use nimiq_test_utils::zkp_test_data::{zkp_test_exe, KEYS_PATH};
-use nimiq_zkp_component::ZKPComponent;
+use nimiq_consensus::messages::{RequestMissingBlocks, ResponseBlocks};
+use nimiq_consensus::sync::live::queue::QueueConfig;
+use nimiq_network_interface::request::RequestCommon;
 use parking_lot::{Mutex, RwLock};
+use rand::Rng;
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
 
+use nimiq_block::Block;
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
-use nimiq_blockchain_interface::AbstractBlockchain;
-use nimiq_consensus::consensus::Consensus;
-use nimiq_consensus::sync::history::{cluster::SyncCluster, HistoryMacroSync};
+use nimiq_blockchain_interface::{AbstractBlockchain, Direction};
+use nimiq_consensus::sync::live::block_queue::BlockQueue;
+use nimiq_consensus::sync::live::BlockLiveSync;
+use nimiq_consensus::sync::syncer::{LiveSync, MacroSync, MacroSyncReturn, Syncer};
 use nimiq_database::volatile::VolatileEnvironment;
-use nimiq_genesis::NetworkId;
-use nimiq_network_interface::network::Network as NetworkInterface;
-use nimiq_network_libp2p::Network;
-use nimiq_network_mock::MockHub;
-use nimiq_primitives::policy::Policy;
+use nimiq_network_interface::network::Network;
+use nimiq_network_mock::{MockHub, MockId, MockPeerId};
+use nimiq_primitives::networks::NetworkId;
+use nimiq_test_log::test;
 use nimiq_test_utils::{
-    blockchain::{produce_macro_blocks, signing_key, voting_key},
-    test_network::TestNetwork,
+    blockchain::{
+        next_micro_block, produce_macro_blocks, push_micro_block, signing_key, voting_key,
+    },
+    mock_node::MockNode,
+    node::TESTING_BLS_CACHE_MAX_CAPACITY,
 };
 use nimiq_utils::time::OffsetTime;
 
-#[test(tokio::test)]
-async fn two_peers_can_sync_empty_chain() {
-    sync_two_peers(0).await
+#[derive(Default)]
+struct MockHistorySyncStream {
+    pub peers: Arc<RwLock<Vec<MockPeerId>>>,
 }
 
-#[test(tokio::test)]
-async fn two_peers_can_sync_single_batch() {
-    sync_two_peers(1).await
+impl MockHistorySyncStream {
+    pub fn new() -> MockHistorySyncStream {
+        Default::default()
+    }
 }
 
-#[test(tokio::test)]
-async fn two_peers_can_sync_two_batches() {
-    sync_two_peers(2).await
+impl Stream for MockHistorySyncStream {
+    type Item = MacroSyncReturn<MockPeerId>;
+
+    fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        Poll::Pending
+    }
 }
 
-#[test(tokio::test)]
-async fn two_peers_can_sync_epoch_minus_batch() {
-    sync_two_peers((Policy::batches_per_epoch() - 1) as usize).await
+impl MacroSync<MockPeerId> for MockHistorySyncStream {
+    fn add_peer(&self, peer_id: MockPeerId) {
+        self.peers.write().push(peer_id);
+    }
 }
 
-#[test(tokio::test)]
-async fn two_peers_can_sync_epoch_plus_batch() {
-    sync_two_peers((Policy::batches_per_epoch() + 1) as usize).await
-}
-
-#[test(tokio::test)]
-async fn two_peers_can_sync_epoch_plus_two_batches() {
-    sync_two_peers((Policy::batches_per_epoch() + 2) as usize).await
-}
-
-#[test(tokio::test)]
-async fn two_peers_can_sync_single_epoch() {
-    sync_two_peers(Policy::batches_per_epoch() as usize).await
-}
-
-#[test(tokio::test)]
-async fn two_peers_can_sync_two_epochs() {
-    sync_two_peers((Policy::batches_per_epoch() * 2) as usize).await
-}
-
-async fn sync_two_peers(num_batches: usize) {
-    let hub = MockHub::default();
-    let mut networks = vec![];
-
-    // Setup first peer.
-    let env1 = VolatileEnvironment::new(11).unwrap();
+fn blockchain() -> Arc<RwLock<Blockchain>> {
     let time = Arc::new(OffsetTime::new());
-    let blockchain1 = Arc::new(RwLock::new(
+    let env = VolatileEnvironment::new(10).unwrap();
+    Arc::new(RwLock::new(
         Blockchain::new(
-            env1.clone(),
+            env,
             BlockchainConfig::default(),
             NetworkId::UnitAlbatross,
             time,
         )
         .unwrap(),
-    ));
+    ))
+}
 
-    // Produce the blocks.
+fn bls_cache() -> Arc<Mutex<PublicKeyCache>> {
+    Arc::new(Mutex::new(PublicKeyCache::new(
+        TESTING_BLS_CACHE_MAX_CAPACITY,
+    )))
+}
+
+#[test(tokio::test)]
+async fn send_single_micro_block_to_block_queue() {
+    let blockchain2 = blockchain();
+    let blockchain_proxy = BlockchainProxy::from(&blockchain2);
+
+    let mut hub = MockHub::new();
+    let network = Arc::new(hub.new_network());
+    let (block_tx, block_rx) = mpsc::channel(32);
+
+    let block_queue = BlockQueue::with_gossipsub_block_stream(
+        blockchain_proxy.clone(),
+        Arc::clone(&network),
+        ReceiverStream::new(block_rx).boxed(),
+        QueueConfig::default(),
+    );
+
+    let live_sync = BlockLiveSync::with_queue(
+        blockchain_proxy.clone(),
+        Arc::clone(&network),
+        block_queue,
+        bls_cache(),
+    );
+    let mut syncer = Syncer::new(live_sync, MockHistorySyncStream::new());
+
+    let mock_node =
+        MockNode::with_network_and_blockchain(Arc::new(hub.new_network()), blockchain());
+    network.dial_mock(&mock_node.network);
+    syncer
+        .live_sync
+        .add_peer(mock_node.network.get_local_peer_id());
+
+    // push one micro block to the queue
     let producer = BlockProducer::new(signing_key(), voting_key());
-    produce_macro_blocks(&producer, &blockchain1, num_batches);
+    let block = next_micro_block(&producer, &blockchain2);
 
-    let net1: Arc<Network> =
-        TestNetwork::build_network(num_batches as u64 * 10, Default::default(), &mut Some(hub))
-            .await;
-    networks.push(Arc::clone(&net1));
-    let blockchain1_proxy = BlockchainProxy::from(&blockchain1);
-    let syncer1 = SyncerProxy::new_history(
-        blockchain1_proxy.clone(),
-        Arc::clone(&net1),
-        Arc::new(Mutex::new(PublicKeyCache::new(
-            TESTING_BLS_CACHE_MAX_CAPACITY,
-        ))),
-        net1.subscribe_events(),
-    )
-    .await;
-    let zkp_prover1 = ZKPComponent::new(
-        BlockchainProxy::from(&blockchain1),
-        Arc::clone(&net1),
-        false,
-        Some(zkp_test_exe()),
-        PathBuf::from(KEYS_PATH),
-        None,
-    )
-    .await
-    .proxy();
-    let consensus1 = Consensus::from_network(
-        BlockchainProxy::from(&blockchain1),
-        Arc::clone(&net1),
-        syncer1,
-        zkp_prover1,
-    );
+    let mock_id = MockId::new(mock_node.network.get_local_peer_id());
+    block_tx.send((block, mock_id)).await.unwrap();
 
-    // Setup second peer (not synced yet).
-    let time = Arc::new(OffsetTime::new());
-    let env2 = VolatileEnvironment::new(11).unwrap();
-    let blockchain2 = Arc::new(RwLock::new(
-        Blockchain::new(
-            env2.clone(),
-            BlockchainConfig::default(),
-            NetworkId::UnitAlbatross,
-            time,
-        )
-        .unwrap(),
-    ));
+    assert_eq!(blockchain2.read().block_number(), 0);
 
-    let blockchain2_proxy = BlockchainProxy::from(&blockchain2);
-    let net2: Arc<Network> = TestNetwork::build_network(
-        num_batches as u64 * 10 + 1,
-        Default::default(),
-        &mut Some(MockHub::default()),
-    )
-    .await;
-    networks.push(Arc::clone(&net2));
+    // run the block_queue one iteration, i.e. until it processed one block
+    syncer.next().await;
 
-    let mut macro_sync = HistoryMacroSync::new(
-        Arc::clone(&blockchain2),
-        Arc::clone(&net2),
-        net2.subscribe_events(),
-    );
-
-    let syncer2 = SyncerProxy::new_history(
-        blockchain2_proxy.clone(),
-        Arc::clone(&net2),
-        Arc::new(Mutex::new(PublicKeyCache::new(
-            TESTING_BLS_CACHE_MAX_CAPACITY,
-        ))),
-        net2.subscribe_events(),
-    )
-    .await;
-
-    let zkp_prover2 = ZKPComponent::new(
-        BlockchainProxy::from(&blockchain2),
-        Arc::clone(&net2),
-        false,
-        Some(zkp_test_exe()),
-        PathBuf::from(KEYS_PATH),
-        None,
-    )
-    .await
-    .proxy();
-    let consensus2 = Consensus::from_network(
-        blockchain2_proxy.clone(),
-        Arc::clone(&net2),
-        syncer2,
-        zkp_prover2,
-    );
-
-    Network::connect_networks(&networks, num_batches as u64 * 10 + 1).await;
-    tokio::time::sleep(Duration::from_secs(1)).await;
-    let sync_result = macro_sync.next().await;
-
-    assert!(sync_result.is_some());
-    assert_eq!(
-        consensus2.blockchain.read().election_head_hash(),
-        consensus1.blockchain.read().election_head_hash(),
-    );
-    assert_eq!(
-        consensus2.blockchain.read().macro_head_hash(),
-        consensus1.blockchain.read().macro_head_hash(),
-    );
+    // The produced block is without gap and should go right into the blockchain
+    assert_eq!(blockchain2.read().block_number(), 1);
+    assert!(syncer.live_sync.queue().buffered_blocks().next().is_none());
 }
 
 #[test(tokio::test)]
-#[ignore]
-async fn three_peers_can_sync() {
-    // FIXME: Add more tests
-    //    // Setup third peer (not synced yet).
-    //    let env3 = VolatileEnvironment::new(10).unwrap();
-    //    let blockchain3 = Arc::new(Blockchain::new(env3.clone(), NetworkId::UnitAlbatross).unwrap());
-    //    let mempool3 = Mempool::new(Arc::clone(&blockchain3), MempoolConfig::default());
-    //
-    //    let net3 = Arc::new(MockNetwork::new(3));
-    //    let sync3 = QuickSync::default();
-    //    let consensus3 = Consensus::new(env3, blockchain3, mempool3, Arc::clone(&net3), sync3).unwrap();
-    //
-    //    // Third peer has two micro blocks that need to be reverted.
-    //    for i in 1..4 {
-    //        consensus3
-    //            .blockchain
-    //            .push(
-    //                consensus1
-    //                    .blockchain
-    //                    .chain_store
-    //                    .get_block_at(i, true, None)
-    //                    .unwrap(),
-    //            )
-    //            .unwrap();
-    //    }
-    //
-    //    // Connect the new peer with macro synced peer.
-    //    net3.connect(&net2);
-    //    // Then wait for connection to be established.
-    //    let mut stream = consensus3.subscribe_events();
-    //    stream.recv().await;
-    //
-    //    assert_eq!(consensus3.num_agents(), 1);
-    //
-    //    // Test ingredients:
-    //    // Request hashes
-    //    let agent = Arc::clone(consensus3.agents().values().next().unwrap());
-    //    let hashes = agent
-    //        .request_block_hashes(
-    //            vec![consensus3.blockchain.head_hash()],
-    //            2,
-    //            RequestBlockHashesFilter::ElectionOnly,
-    //        )
-    //        .await
-    //        .expect("Should yield hashes");
-    //    assert_eq!(hashes.hashes.len(), 1);
-    //    assert_eq!(
-    //        hashes.hashes[0].1,
-    //        consensus2.blockchain.election_head_hash()
-    //    );
-    //
-    //    // Request epoch
-    //    let epoch = agent
-    //        .request_epoch(consensus2.blockchain.election_head_hash())
-    //        .await
-    //        .expect("Should yield epoch");
-    //    assert_eq!(epoch.history_len, 0);
-    //    assert_eq!(
-    //        epoch.block.hash(),
-    //        consensus2.blockchain.election_head_hash()
-    //    );
-    //
-    //    let sync_result = Consensus::sync_blockchain(Arc::downgrade(&consensus3)).await;
-    //
-    //    assert!(sync_result.is_ok());
-    //    assert_eq!(
-    //        consensus3.blockchain.election_head_hash(),
-    //        consensus1.blockchain.election_head_hash()
-    //    );
-}
+async fn send_two_micro_blocks_out_of_order() {
+    let blockchain1 = blockchain();
+    let blockchain_proxy_1 = BlockchainProxy::from(&blockchain1);
+    let blockchain2 = blockchain();
 
-#[test(tokio::test)]
-async fn sync_ingredients() {
-    let hub = MockHub::default();
-    let mut networks = vec![];
+    let mut hub = MockHub::new();
+    let network = Arc::new(hub.new_network());
 
-    // Setup first peer.
-    let time = Arc::new(OffsetTime::new());
-    let env1 = VolatileEnvironment::new(11).unwrap();
-    let blockchain1 = Arc::new(RwLock::new(
-        Blockchain::new(
-            env1.clone(),
-            BlockchainConfig::default(),
-            NetworkId::UnitAlbatross,
-            time,
-        )
-        .unwrap(),
-    ));
+    let (block_tx, block_rx) = mpsc::channel(32);
+
+    let block_queue = BlockQueue::with_gossipsub_block_stream(
+        blockchain_proxy_1.clone(),
+        Arc::clone(&network),
+        ReceiverStream::new(block_rx).boxed(),
+        QueueConfig::default(),
+    );
+
+    let live_sync = BlockLiveSync::with_queue(
+        blockchain_proxy_1.clone(),
+        Arc::clone(&network),
+        block_queue,
+        bls_cache(),
+    );
+
+    let mut syncer = Syncer::new(live_sync, MockHistorySyncStream::new());
+
+    let mut mock_node =
+        MockNode::with_network_and_blockchain(Arc::new(hub.new_network()), blockchain());
+    network.dial_mock(&mock_node.network);
+    syncer
+        .live_sync
+        .add_peer(mock_node.network.get_local_peer_id());
 
     let producer = BlockProducer::new(signing_key(), voting_key());
+    let block1 = push_micro_block(&producer, &blockchain2);
+    let block2 = next_micro_block(&producer, &blockchain2);
 
-    // The minimum number of macro blocks necessary so that we have one election block and one
-    // checkpoint block to push.
-    let num_macro_blocks = (Policy::batches_per_epoch() + 1) as usize;
+    let mock_id = MockId::new(mock_node.network.get_local_peer_id());
 
-    // Produce the blocks.
-    produce_macro_blocks(&producer, &blockchain1, num_macro_blocks);
-
-    let net1: Arc<Network> =
-        TestNetwork::build_network(2, Default::default(), &mut Some(hub)).await;
-    networks.push(Arc::clone(&net1));
-    let zkp_prover1 = ZKPComponent::new(
-        BlockchainProxy::from(&blockchain1),
-        Arc::clone(&net1),
-        false,
-        Some(zkp_test_exe()),
-        PathBuf::from(KEYS_PATH),
-        None,
-    )
-    .await
-    .proxy();
-    let blockchain1_proxy = BlockchainProxy::from(&blockchain1);
-    let syncer1 = SyncerProxy::new_history(
-        blockchain1_proxy.clone(),
-        Arc::clone(&net1),
-        Arc::new(Mutex::new(PublicKeyCache::new(
-            TESTING_BLS_CACHE_MAX_CAPACITY,
-        ))),
-        net1.subscribe_events(),
-    )
-    .await;
-    let consensus1 = Consensus::from_network(
-        blockchain1_proxy.clone(),
-        Arc::clone(&net1),
-        syncer1,
-        zkp_prover1,
-    );
-
-    // Setup second peer (not synced yet).
-    let env2 = VolatileEnvironment::new(11).unwrap();
-    let time = Arc::new(OffsetTime::new());
-    let blockchain2 = Arc::new(RwLock::new(
-        Blockchain::new(
-            env2.clone(),
-            BlockchainConfig::default(),
-            NetworkId::UnitAlbatross,
-            time,
-        )
-        .unwrap(),
-    ));
-
-    let net2: Arc<Network> =
-        TestNetwork::build_network(3, Default::default(), &mut Some(MockHub::default())).await;
-    networks.push(Arc::clone(&net2));
-    let zkp_prover2 = ZKPComponent::new(
-        BlockchainProxy::from(&blockchain2),
-        Arc::clone(&net2),
-        false,
-        Some(zkp_test_exe()),
-        PathBuf::from(KEYS_PATH),
-        None,
-    )
-    .await
-    .proxy();
-    let blockchain2_proxy = BlockchainProxy::from(&blockchain2);
-    let syncer2 = SyncerProxy::new_history(
-        blockchain2_proxy.clone(),
-        Arc::clone(&net2),
-        Arc::new(Mutex::new(PublicKeyCache::new(
-            TESTING_BLS_CACHE_MAX_CAPACITY,
-        ))),
-        net2.subscribe_events(),
-    )
-    .await;
-
-    let consensus2 = Consensus::from_network(
-        blockchain2_proxy.clone(),
-        Arc::clone(&net2),
-        syncer2,
-        zkp_prover2,
-    );
-
-    // Connect the two peers.
-    let mut stream = net2.subscribe_events();
-    Network::connect_networks(&networks, 3u64).await;
-    // Then wait for connection to be established.
-    let _ = stream.next().await.unwrap();
-    tokio::time::sleep(Duration::from_secs(1)).await; // FIXME, Prof. Berrang told me to do this
-
-    // Test ingredients:
-    // Request macro chain, first request must return all epochs, but no checkpoint
-    let peer_id = net2.get_peers()[0];
-
-    let macro_chain = HistoryMacroSync::request_macro_chain(
-        Arc::clone(&net2),
-        peer_id,
-        vec![consensus2.blockchain.read().head_hash()],
-        3,
-    )
-    .await
-    .expect("Should yield macro chain");
-
-    let epochs = macro_chain.epochs.expect("Should contain epochs");
-    assert!(
-        macro_chain.checkpoint.is_none(),
-        "MacroChain must contain either epochs, or a checkpoint or neither"
-    );
-    let blockchain = consensus1.blockchain.read();
-    assert_eq!(epochs.len(), 1);
-    assert_eq!(epochs[0], blockchain.election_head_hash());
-
-    // Request epoch 1 using the single epochs election block returned by request_macro_chain
-    let epoch = SyncCluster::request_epoch(Arc::clone(&net2), peer_id, epochs[0].clone())
+    // send block2 first
+    block_tx
+        .send((block2.clone(), mock_id.clone()))
         .await
-        .expect("Should yield epoch");
-    let block1 = epoch.election_macro_block.expect("Should have block");
+        .unwrap();
 
-    assert_eq!(epoch.total_history_len, 3);
+    assert_eq!(blockchain1.read().block_number(), 0);
+
+    // run the block_queue one iteration, i.e. until it processed one block
+    let _ = poll!(syncer.next());
+
+    // this block should be buffered now
+    assert_eq!(blockchain1.read().block_number(), 0);
+    let blocks = syncer
+        .live_sync
+        .queue()
+        .buffered_blocks()
+        .collect::<Vec<_>>();
+    assert_eq!(blocks.len(), 1);
+    let (block_number, blocks) = blocks.get(0).unwrap();
+    assert_eq!(*block_number, 2);
+    assert_eq!(blocks[0], &block2);
+
+    // Also we should've received a request to fill this gap
+    let req = mock_node.next().await.unwrap();
+    assert_eq!(req, RequestMissingBlocks::TYPE_ID);
+
+    // now send block1 to fill the gap
+    block_tx.send((block1.clone(), mock_id)).await.unwrap();
+
+    // run the block_queue until is has produced two events.
+    syncer.next().await;
+    syncer.next().await;
+
+    // now both blocks should've been pushed to the blockchain
+    assert_eq!(blockchain1.read().block_number(), 2);
+    assert!(syncer.live_sync.queue().buffered_blocks().next().is_none());
     assert_eq!(
-        block1.hash(),
-        consensus1.blockchain.read().election_head_hash()
+        blockchain1.read().get_block_at(1, true, None).unwrap(),
+        block1
+    );
+    assert_eq!(
+        blockchain1.read().get_block_at(2, true, None).unwrap(),
+        block2
+    );
+}
+
+#[test(tokio::test)]
+async fn send_micro_blocks_out_of_order() {
+    let blockchain1 = blockchain();
+    let blockchain_proxy_1 = BlockchainProxy::from(&blockchain1);
+    let blockchain2 = blockchain();
+
+    let mut hub = MockHub::new();
+    let network = Arc::new(hub.new_network());
+    let (block_tx, block_rx) = mpsc::channel(32);
+
+    let block_queue = BlockQueue::with_gossipsub_block_stream(
+        blockchain_proxy_1.clone(),
+        Arc::clone(&network),
+        ReceiverStream::new(block_rx).boxed(),
+        QueueConfig::default(),
     );
 
-    // Request history chunk of epoch 1.
-    let chunk =
-        SyncCluster::request_history_chunk(Arc::clone(&net2), peer_id, 1, block1.block_number(), 0)
+    let live_sync = BlockLiveSync::with_queue(
+        blockchain_proxy_1.clone(),
+        Arc::clone(&network),
+        block_queue,
+        bls_cache(),
+    );
+    let mut syncer = Syncer::new(live_sync, MockHistorySyncStream::new());
+
+    let mock_node =
+        MockNode::with_network_and_blockchain(Arc::new(hub.new_network()), blockchain());
+    network.dial_mock(&mock_node.network);
+    syncer
+        .live_sync
+        .add_peer(mock_node.network.get_local_peer_id());
+
+    let mut rng = rand::thread_rng();
+    let mut ordered_blocks = Vec::new();
+
+    let mock_id = MockId::new(mock_node.network.get_local_peer_id());
+    let producer = BlockProducer::new(signing_key(), voting_key());
+    let n_blocks = rng.gen_range(2..15);
+
+    for _ in 0..n_blocks {
+        let block = push_micro_block(&producer, &blockchain2);
+        ordered_blocks.push(block);
+    }
+
+    let mut blocks = ordered_blocks.clone();
+
+    while blocks.len() > 1 {
+        let index = rng.gen_range(1..blocks.len());
+
+        block_tx
+            .send((blocks.remove(index).clone(), mock_id.clone()))
             .await
-            .expect("Should yield history chunk")
-            .chunk
-            .expect("Should yield history chunk");
+            .unwrap();
 
-    assert_eq!(chunk.history.len(), 3);
+        // run the block_queue one iteration, i.e. until it processed one block
+        let _ = poll!(syncer.next());
+    }
+
+    // All blocks should be buffered
+    assert_eq!(blockchain1.read().block_number(), 0);
+
+    // Obtain the buffered blocks
     assert_eq!(
-        chunk.verify(
-            consensus1
-                .blockchain
+        syncer.live_sync.queue().buffered_blocks().count() as u64,
+        n_blocks - 1
+    );
+
+    // now send block1 to fill the gap
+    block_tx.send((blocks[0].clone(), mock_id)).await.unwrap();
+
+    for _ in 0..n_blocks {
+        syncer.next().await;
+    }
+
+    // Verify all blocks except the genesis
+    for i in 1..=n_blocks {
+        assert_eq!(
+            blockchain1
                 .read()
-                .election_head()
-                .header
-                .history_root,
-            0
-        ),
-        Some(true)
+                .get_block_at(i as u32, true, None)
+                .unwrap(),
+            ordered_blocks[(i - 1) as usize]
+        );
+    }
+
+    // No blocks buffered
+    assert!(syncer.live_sync.queue().buffered_blocks().next().is_none());
+}
+
+#[test(tokio::test)]
+async fn send_invalid_block() {
+    let blockchain1 = blockchain();
+    let blockchain_proxy_1 = BlockchainProxy::from(&blockchain1);
+    let blockchain2 = blockchain();
+
+    let mut hub = MockHub::new();
+    let network = Arc::new(hub.new_network());
+    let (block_tx, block_rx) = mpsc::channel(32);
+
+    let block_queue = BlockQueue::with_gossipsub_block_stream(
+        blockchain_proxy_1.clone(),
+        Arc::clone(&network),
+        ReceiverStream::new(block_rx).boxed(),
+        QueueConfig::default(),
     );
 
-    // Re-request macro chain. This time it must return no epochs, but the checkpoint.
-    let macro_chain = HistoryMacroSync::request_macro_chain(
-        Arc::clone(&net2),
-        peer_id,
-        vec![consensus1.blockchain.read().election_head_hash()],
-        3,
-    )
-    .await
-    .expect("Should yield macro chain");
-    let checkpoint = macro_chain.checkpoint.expect("Should contain checkpoint");
-    assert!(
-        macro_chain.epochs.is_none() || macro_chain.epochs.unwrap().len() == 0,
-        "MacroChain must contain either epochs, or a checkpoint or neither"
+    let live_sync = BlockLiveSync::with_queue(
+        blockchain_proxy_1.clone(),
+        Arc::clone(&network),
+        block_queue,
+        bls_cache(),
     );
-    let blockchain = consensus1.blockchain.read();
-    assert_eq!(checkpoint.hash, blockchain.macro_head_hash());
+    let mut syncer = Syncer::new(live_sync, MockHistorySyncStream::new());
 
-    // request epoch 2 using the returned checkpoint
-    let epoch = SyncCluster::request_epoch(Arc::clone(&net2), peer_id, checkpoint.hash)
+    let mut mock_node =
+        MockNode::with_network_and_blockchain(Arc::new(hub.new_network()), blockchain());
+    network.dial_mock(&mock_node.network);
+    syncer
+        .live_sync
+        .add_peer(mock_node.network.get_local_peer_id());
+
+    let producer = BlockProducer::new(signing_key(), voting_key());
+    let block1 = push_micro_block(&producer, &blockchain2);
+
+    // Block2's timestamp is less than Block1's timestamp, so Block 2 will be rejected by the blockchain
+    let block2 = {
+        let mut block = next_micro_block(&producer, &blockchain2).unwrap_micro();
+        block.header.timestamp = block1.timestamp() - 5;
+        Block::Micro(block)
+    };
+
+    let mock_id = MockId::new(hub.new_address().into());
+
+    // send block2 first
+    block_tx
+        .send((block2.clone(), mock_id.clone()))
         .await
-        .expect("Should yield epoch");
-    let block2 = epoch
-        .batch_sets
-        .last()
-        .expect("Should have a batch set")
-        .macro_block
-        .clone()
-        .expect("Should have block");
+        .unwrap();
 
-    assert_eq!(epoch.total_history_len, 1);
+    assert_eq!(blockchain1.read().block_number(), 0);
+
+    // run the block_queue one iteration, i.e. until it processed one block
+    let _ = poll!(syncer.next());
+
+    // this block should be buffered now
+    assert_eq!(blockchain1.read().block_number(), 0);
+    let blocks = syncer
+        .live_sync
+        .queue()
+        .buffered_blocks()
+        .collect::<Vec<_>>();
+    assert_eq!(blocks.len(), 1);
+    let (block_number, blocks) = blocks.get(0).unwrap();
+    assert_eq!(*block_number, 2);
+    assert_eq!(blocks[0], &block2);
+
+    let req = mock_node.next().await.unwrap();
+    assert_eq!(req, RequestMissingBlocks::TYPE_ID);
+
+    // now send block1 to fill the gap
+    block_tx.send((block1.clone(), mock_id)).await.unwrap();
+
+    // run the block_queue until is has produced two events.
+    // The second block will be rejected due to an Invalid Successor event
+    syncer.next().await;
+    syncer.next().await;
+
+    // Only Block 1 should be pushed to the blockchain
+    assert_eq!(blockchain1.read().block_number(), 1);
+    assert!(syncer.live_sync.queue().buffered_blocks().next().is_none());
     assert_eq!(
-        block2.hash(),
-        consensus1.blockchain.read().macro_head_hash()
+        blockchain1.read().get_block_at(1, true, None).unwrap(),
+        block1
+    );
+    assert_ne!(
+        blockchain1.read().get_block_at(1, true, None).unwrap(),
+        block2
+    );
+}
+
+#[test(tokio::test)]
+async fn send_block_with_gap_and_respond_to_missing_request() {
+    let blockchain1 = blockchain();
+    let blockchain_proxy_1 = BlockchainProxy::from(&blockchain1);
+
+    let mut hub = MockHub::new();
+    let network = Arc::new(hub.new_network());
+    let (block_tx, block_rx) = mpsc::channel(32);
+
+    let block_queue = BlockQueue::with_gossipsub_block_stream(
+        blockchain_proxy_1.clone(),
+        Arc::clone(&network),
+        ReceiverStream::new(block_rx).boxed(),
+        QueueConfig::default(),
     );
 
-    // Request HistoryChunk for epoch 2 containing the checkpoint
-    let chunk =
-        SyncCluster::request_history_chunk(Arc::clone(&net2), peer_id, 2, block2.block_number(), 0)
-            .await
-            .expect("Should yield history chunk")
-            .chunk
-            .expect("Should yield history chunk");
+    let live_sync = BlockLiveSync::with_queue(
+        blockchain_proxy_1.clone(),
+        Arc::clone(&network),
+        block_queue,
+        bls_cache(),
+    );
+    let mut syncer = Syncer::new(live_sync, MockHistorySyncStream::new());
 
-    assert_eq!(chunk.history.len(), 1);
+    let mut mock_node =
+        MockNode::with_network_and_blockchain(Arc::new(hub.new_network()), blockchain());
+    network.dial_mock(&mock_node.network);
+    syncer
+        .live_sync
+        .add_peer(mock_node.network.get_local_peer_id());
+
+    let producer = BlockProducer::new(signing_key(), voting_key());
+    let block1 = push_micro_block(&producer, &mock_node.blockchain);
+    let block2 = next_micro_block(&producer, &mock_node.blockchain);
+
+    let mock_id = MockId::new(mock_node.network.get_local_peer_id());
+
+    // send block2 first
+    block_tx.send((block2.clone(), mock_id)).await.unwrap();
+
+    assert_eq!(blockchain1.read().block_number(), 0);
+
+    // run the block_queue one iteration, i.e. until it processed one block
+    let _ = poll!(syncer.next());
+
+    // this block should be buffered now
+    assert_eq!(blockchain1.read().block_number(), 0);
+    let blocks = syncer
+        .live_sync
+        .queue()
+        .buffered_blocks()
+        .collect::<Vec<_>>();
+    assert_eq!(blocks.len(), 1);
+    let (block_number, blocks) = blocks.get(0).unwrap();
+    assert_eq!(*block_number, 2);
+    assert_eq!(blocks[0], &block2);
+
+    // Also we should've received a request to fill this gap
+    // Instead of gossiping the block, we'll answer the missing blocks request
+    let req = mock_node.next().await.unwrap();
+    assert_eq!(req, RequestMissingBlocks::TYPE_ID);
+
+    // run the block_queue until is has produced two events.
+    syncer.next().await;
+    syncer.next().await;
+
+    // now both blocks should've been pushed to the blockchain
+    assert_eq!(blockchain1.read().block_number(), 2);
+    assert!(syncer.live_sync.queue().buffered_blocks().next().is_none());
     assert_eq!(
-        chunk.verify(
-            consensus1
-                .blockchain
-                .read()
-                .macro_head()
-                .header
-                .history_root,
-            0
-        ),
-        Some(true)
+        blockchain1.read().get_block_at(1, true, None).unwrap(),
+        block1
+    );
+    assert_eq!(
+        blockchain1.read().get_block_at(2, true, None).unwrap(),
+        block2
+    );
+}
+
+#[test(tokio::test)]
+async fn request_missing_blocks_across_macro_block() {
+    let blockchain1 = blockchain();
+    let blockchain_proxy_1 = BlockchainProxy::from(&blockchain1);
+
+    let mut hub = MockHub::new();
+    let network = Arc::new(hub.new_network());
+    let (block_tx, block_rx) = mpsc::channel(32);
+
+    let block_queue = BlockQueue::with_gossipsub_block_stream(
+        blockchain_proxy_1.clone(),
+        Arc::clone(&network),
+        ReceiverStream::new(block_rx).boxed(),
+        QueueConfig::default(),
     );
 
-    // Re-request Macro chain one final time. This time it must return neither epochs, nor a checkpoint.
-    let macro_chain = HistoryMacroSync::request_macro_chain(
-        Arc::clone(&net2),
-        peer_id,
-        vec![consensus1.blockchain.read().macro_head_hash()],
-        3,
-    )
-    .await
-    .expect("Should yield macro chain");
-    assert!(
-        macro_chain.epochs.is_none() || macro_chain.epochs.unwrap().len() == 0,
-        "Must not contain epochs"
+    let live_sync = BlockLiveSync::with_queue(
+        blockchain_proxy_1.clone(),
+        Arc::clone(&network),
+        block_queue,
+        bls_cache(),
     );
-    assert!(
-        macro_chain.checkpoint.is_none(),
-        "Must not contain a checkpoint"
+    let mut syncer = Syncer::new(live_sync, MockHistorySyncStream::new());
+
+    let mut mock_node =
+        MockNode::with_network_and_blockchain(Arc::new(hub.new_network()), blockchain());
+    network.dial_mock(&mock_node.network);
+    syncer
+        .live_sync
+        .add_peer(mock_node.network.get_local_peer_id());
+
+    let producer = BlockProducer::new(signing_key(), voting_key());
+    produce_macro_blocks(&producer, &mock_node.blockchain, 1);
+    let block1 = push_micro_block(&producer, &mock_node.blockchain);
+    let block2 = push_micro_block(&producer, &mock_node.blockchain);
+
+    let mock_id = MockId::new(mock_node.network.get_local_peer_id());
+
+    // send block2 first
+    block_tx.send((block2.clone(), mock_id)).await.unwrap();
+
+    assert_eq!(blockchain1.read().block_number(), 0);
+
+    // run the block_queue one iteration, i.e. until it processed one block
+    let _ = poll!(syncer.next());
+
+    // this block should be buffered now
+    assert_eq!(blockchain1.read().block_number(), 0);
+    let blocks = syncer
+        .live_sync
+        .queue()
+        .buffered_blocks()
+        .collect::<Vec<_>>();
+    assert_eq!(blocks.len(), 1);
+    let (block_number, blocks) = blocks.get(0).unwrap();
+    assert_eq!(*block_number, block2.block_number());
+    assert_eq!(blocks[0], &block2);
+
+    // Also we should've received a request to fill the first gap.
+    // Instead of gossiping the block, we'll answer the missing blocks request
+    mock_node.set_missing_block_handler(Some(|req, blockchain| {
+        assert_eq!(&req.target_hash, blockchain.read().head().parent_hash());
+
+        let blocks = blockchain
+            .read()
+            .get_blocks(
+                &blockchain.read().macro_head().header.parent_hash,
+                2,
+                true,
+                Direction::Forward,
+            )
+            .unwrap();
+
+        ResponseBlocks {
+            blocks: Some(blocks),
+        }
+    }));
+    let req = mock_node.next().await.unwrap();
+    assert_eq!(req, RequestMissingBlocks::TYPE_ID);
+
+    let macro_head = Block::Macro(mock_node.blockchain.read().macro_head());
+
+    // Run the block_queue one iteration, i.e. until it processed one block
+    let _ = poll!(syncer.next());
+
+    // The blocks from the first missing blocks request should be buffered now
+    assert_eq!(blockchain1.read().block_number(), 0);
+    let blocks = syncer
+        .live_sync
+        .queue()
+        .buffered_blocks()
+        .collect::<Vec<_>>();
+    assert_eq!(blocks.len(), 3);
+    let (block_number, blocks) = blocks.get(0).unwrap();
+    assert_eq!(*block_number, macro_head.block_number());
+    assert_eq!(blocks[0], &macro_head);
+
+    // Also we should've received a request to fill the second gap.
+    mock_node.set_missing_block_handler(None);
+    let req = mock_node.next().await.unwrap();
+    assert_eq!(req, RequestMissingBlocks::TYPE_ID);
+
+    // Run the block_queue until is has produced four events:
+    //   - ReceivedMissingBlocks (1-31)
+    //   - AcceptedBufferedBlock (32)
+    //   - AcceptedBufferedBlock (33)
+    //   - AcceptedBufferedBlock (34)
+    syncer.next().await;
+    syncer.next().await;
+    syncer.next().await;
+    syncer.next().await;
+
+    // Now all blocks should've been pushed to the blockchain.
+    assert_eq!(blockchain1.read().block_number(), block2.block_number());
+    assert!(syncer.live_sync.queue().buffered_blocks().next().is_none());
+    assert_eq!(
+        blockchain1
+            .read()
+            .get_block_at(block1.block_number(), true, None)
+            .unwrap(),
+        block1
     );
+    assert_eq!(
+        blockchain1
+            .read()
+            .get_block_at(block2.block_number(), true, None)
+            .unwrap(),
+        block2
+    );
+}
+
+#[test(tokio::test)]
+async fn put_peer_back_into_sync_mode() {
+    let blockchain1 = blockchain();
+    let blockchain_proxy_1 = BlockchainProxy::from(&blockchain1);
+    let blockchain2 = blockchain();
+
+    let mut hub = MockHub::new();
+    let network = Arc::new(hub.new_network());
+    let history_sync = MockHistorySyncStream::new();
+    let history_sync_peers = history_sync.peers.clone();
+    let (block_tx, block_rx) = mpsc::channel(32);
+
+    let block_queue = BlockQueue::with_gossipsub_block_stream(
+        blockchain_proxy_1.clone(),
+        Arc::clone(&network),
+        ReceiverStream::new(block_rx).boxed(),
+        QueueConfig {
+            buffer_max: 10,
+            window_ahead_max: 10,
+            tolerate_past_max: 100,
+            include_micro_bodies: true,
+        },
+    );
+
+    let live_sync = BlockLiveSync::with_queue(
+        blockchain_proxy_1.clone(),
+        Arc::clone(&network),
+        block_queue,
+        bls_cache(),
+    );
+    let mut syncer = Syncer::new(live_sync, history_sync);
+
+    let mock_node =
+        MockNode::with_network_and_blockchain(Arc::new(hub.new_network()), blockchain());
+    network.dial_mock(&mock_node.network);
+    syncer
+        .live_sync
+        .add_peer(mock_node.network.get_local_peer_id());
+    let mock_id = MockId::new(mock_node.network.get_local_peer_id());
+
+    let producer = BlockProducer::new(signing_key(), voting_key());
+    for _ in 1..11 {
+        push_micro_block(&producer, &blockchain2);
+    }
+
+    let block = next_micro_block(&producer, &blockchain2);
+    block_tx.send((block, mock_id)).await.unwrap();
+
+    // run the block_queue one iteration, i.e. until it processed one block
+    let _ = poll!(syncer.next());
+
+    assert_eq!(history_sync_peers.read().len(), 1);
 }

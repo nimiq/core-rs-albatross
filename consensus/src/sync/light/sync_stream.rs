@@ -381,7 +381,7 @@ mod tests {
             )
             .await;
 
-            let zkp_component_proxy = Arc::new(zkp_component.proxy());
+            let zkp_component_proxy = zkp_component.proxy();
 
             tokio::spawn(zkp_component);
 
@@ -429,7 +429,7 @@ mod tests {
             )
             .await;
 
-            let zkp_component_proxy = Arc::new(zkp_component.proxy());
+            let zkp_component_proxy = zkp_component.proxy();
 
             tokio::spawn(zkp_component);
 
@@ -501,7 +501,7 @@ mod tests {
             )
             .await;
 
-            let zkp_component_proxy = Arc::new(zkp_component.proxy());
+            let zkp_component_proxy = zkp_component.proxy();
 
             tokio::spawn(zkp_component);
 
@@ -573,7 +573,7 @@ mod tests {
             )
             .await;
 
-            let zkp_component_proxy = Arc::new(zkp_component.proxy());
+            let zkp_component_proxy = zkp_component.proxy();
 
             tokio::spawn(zkp_component);
 
@@ -640,7 +640,7 @@ mod tests {
             )
             .await;
 
-            let zkp_component_proxy = Arc::new(zkp_component.proxy());
+            let zkp_component_proxy = zkp_component.proxy();
 
             tokio::spawn(zkp_component);
 

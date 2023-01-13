@@ -80,12 +80,7 @@ pub struct BlockQueue<N: Network> {
 }
 
 impl<N: Network> BlockQueue<N> {
-    pub async fn new(
-        network: Arc<N>,
-        blockchain: BlockchainProxy,
-        request_component: BlockRequestComponent<N>,
-        config: QueueConfig,
-    ) -> Self {
+    pub async fn new(network: Arc<N>, blockchain: BlockchainProxy, config: QueueConfig) -> Self {
         let block_stream = if config.include_micro_bodies {
             network.subscribe::<BlockTopic>().await.unwrap().boxed()
         } else {
@@ -96,38 +91,36 @@ impl<N: Network> BlockQueue<N> {
                 .boxed()
         };
 
-        Self::with_gossipsub_block_stream(
-            blockchain,
-            network,
-            request_component,
-            block_stream,
-            config,
-        )
+        Self::with_gossipsub_block_stream(blockchain, network, block_stream, config)
     }
 
     pub fn with_gossipsub_block_stream(
         blockchain: BlockchainProxy,
         network: Arc<N>,
-        request_component: BlockRequestComponent<N>,
         block_stream: GossipSubBlockStream<N>,
         config: QueueConfig,
     ) -> Self {
         let block_stream = block_stream
             .map(|(block, pubsub_id)| (block, pubsub_id.propagation_source(), Some(pubsub_id)))
             .boxed();
-        Self::with_block_stream(blockchain, network, request_component, block_stream, config)
+        Self::with_block_stream(blockchain, network, block_stream, config)
     }
 
     pub fn with_block_stream(
         blockchain: BlockchainProxy,
         network: Arc<N>,
-        request_component: BlockRequestComponent<N>,
         block_stream: BlockStream<N>,
         config: QueueConfig,
     ) -> Self {
         let current_macro_height = Policy::last_macro_block(blockchain.read().block_number());
         let blockchain_rx = blockchain.read().notifier_as_stream();
         let fork_rx = blockchain.read().fork_notifier_as_stream();
+        let request_component = BlockRequestComponent::new(
+            network.subscribe_events(),
+            Arc::clone(&network),
+            config.include_micro_bodies,
+        );
+
         Self {
             config,
             blockchain,

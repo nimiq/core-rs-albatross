@@ -288,7 +288,7 @@ impl ClientInner {
                     blockchain_proxy.clone(),
                     Arc::clone(&network),
                     bls_cache,
-                    Arc::new(zkp_component.proxy()),
+                    zkp_component.proxy(),
                     network_events,
                 )
                 .await;

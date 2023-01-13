@@ -256,6 +256,7 @@ impl Blockchain {
                 election_head_hash,
                 current_slots: Some(current_slots),
                 previous_slots: last_slots,
+                can_verify_history: true,
             },
             tx_verification_cache: Arc::new(DEFAULT_TX_VERIFICATION_CACHE),
             #[cfg(feature = "metrics")]
@@ -319,6 +320,7 @@ impl Blockchain {
                 election_head_hash: head_hash,
                 current_slots: Some(current_slots),
                 previous_slots: Some(Validators::default()),
+                can_verify_history: true,
             },
             tx_verification_cache: Arc::new(DEFAULT_TX_VERIFICATION_CACHE),
             #[cfg(feature = "metrics")]

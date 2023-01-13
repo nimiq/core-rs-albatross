@@ -1,4 +1,5 @@
 use futures::{future::BoxFuture, FutureExt, Stream};
+use nimiq_light_blockchain::LightBlockchain;
 use nimiq_primitives::policy::Policy;
 use std::{
     collections::{HashSet, VecDeque},
@@ -87,6 +88,18 @@ struct BlockchainPushResult<N: Network> {
 }
 
 impl<N: Network> BlockchainPushResult<N> {
+    fn with_light_block_result(
+        push_result: Result<PushResult, PushError>,
+        block_hash: Blake2bHash,
+    ) -> Self {
+        Self {
+            block_push_result: Some(push_result),
+            push_chunks_result: Ok(ChunksPushResult::EmptyChunks),
+            block_hash,
+            chunk_error_peer: None,
+        }
+    }
+
     fn with_block_result(
         push_result: Result<(PushResult, Result<ChunksPushResult, ChunksPushError>), PushError>,
         block_hash: Blake2bHash,
@@ -335,9 +348,11 @@ fn blockchain_push<N: Network>(
                 blockchain_push_result =
                     BlockchainPushResult::with_block_result(push_result, block_hash, &peer_ids);
             }
-            BlockchainProxy::Light(ref _blockchain) => {
-                // TODO
-                todo!()
+            BlockchainProxy::Light(ref blockchain) => {
+                let push_result = LightBlockchain::push(blockchain.upgradable_read(), block);
+
+                blockchain_push_result =
+                    BlockchainPushResult::with_light_block_result(push_result, block_hash);
             }
         }
     } else {

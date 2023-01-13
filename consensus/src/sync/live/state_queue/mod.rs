@@ -194,8 +194,8 @@ pub struct StateQueue<N: Network> {
 
 impl<N: Network> StateQueue<N> {
     pub fn with_block_queue(
-        blockchain: Arc<RwLock<Blockchain>>,
         network: Arc<N>,
+        blockchain: Arc<RwLock<Blockchain>>,
         block_queue: BlockQueue<N>,
         config: QueueConfig,
     ) -> Self {

@@ -49,7 +49,6 @@ impl Blockchain {
         block.verify(false)?;
 
         // Prepare the inputs to verify the proof.
-        // PITODO: Should we cache the genesis block?
         let genesis_block = this
             .chain_store
             .get_block_at(0, true, Some(&read_txn))
@@ -86,6 +85,8 @@ impl Blockchain {
         read_txn.close();
         let mut txn = this.write_transaction();
 
+        this.state.accounts.reinitialize_as_incomplete(&mut txn);
+
         // Since it's a macro block, we have to clear the ChainStore. If we are syncing for the first
         // time, this should be empty. But we clear it just in case it's not our first time.
         // Prune the History Store, full nodes will only keep just one epoch of history
@@ -114,6 +115,8 @@ impl Blockchain {
 
             let new_slots = macro_block.get_validators().unwrap();
             this.state.current_slots.replace(new_slots);
+
+            this.state.can_verify_history = true;
         }
 
         this.state.main_chain = chain_info;
@@ -192,6 +195,8 @@ impl Blockchain {
         read_txn.close();
         let mut txn = this.write_transaction();
 
+        this.state.accounts.reinitialize_as_incomplete(&mut txn);
+
         let is_election_block = Policy::is_election_block_at(block_number);
 
         this.chain_store
@@ -224,6 +229,7 @@ impl Blockchain {
         if let Block::Macro(ref macro_block) = chain_info.head {
             this.state.macro_info = chain_info.clone();
             this.state.macro_head_hash = block_hash.clone();
+            this.state.can_verify_history = is_election_block;
 
             if is_election_block {
                 this.state.election_head = macro_block.clone();
@@ -249,7 +255,7 @@ impl Blockchain {
         debug!(
             block = %this.state.main_chain.head,
             num_transactions,
-            kind = "extend",
+            kind = "zkp_extend",
             "Accepted block",
         );
 

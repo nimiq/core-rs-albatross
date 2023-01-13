@@ -120,7 +120,7 @@ pub struct LightMacroSync<TNetwork: Network> {
     pub(crate) epoch_ids_stream:
         FuturesUnordered<BoxFuture<'static, Option<EpochIds<TNetwork::PeerId>>>>,
     /// Reference to the ZKP proxy used to interact with the ZKP component
-    pub(crate) zkp_component_proxy: Arc<ZKPComponentProxy<TNetwork>>,
+    pub(crate) zkp_component_proxy: ZKPComponentProxy<TNetwork>,
     /// ZKP related requests (proofs)
     pub(crate) zkp_requests:
         FuturesUnordered<BoxFuture<'static, (Result<ZKPRequestEvent, Error>, TNetwork::PeerId)>>,
@@ -137,7 +137,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         blockchain: BlockchainProxy,
         network: Arc<TNetwork>,
         network_event_rx: SubscribeEvents<TNetwork::PeerId>,
-        zkp_component_proxy: Arc<ZKPComponentProxy<TNetwork>>,
+        zkp_component_proxy: ZKPComponentProxy<TNetwork>,
     ) -> Self {
         Self {
             blockchain,
@@ -177,10 +177,10 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
 
 impl<TNetwork: Network> MacroSync<TNetwork::PeerId> for LightMacroSync<TNetwork> {
     fn add_peer(&self, peer_id: TNetwork::PeerId) {
-        trace!("Requesting zkp from peer: {:?}", peer_id);
+        info!("Requesting zkp from peer: {:?}", peer_id);
 
         self.zkp_requests
-            .push(Self::request_zkps(Arc::clone(&self.zkp_component_proxy), peer_id).boxed());
+            .push(Self::request_zkps(self.zkp_component_proxy.clone(), peer_id).boxed());
 
         // Pushing the future to FuturesUnordered above does not wake the task that
         // polls `epoch_ids_stream`. Therefore, we need to wake the task manually.

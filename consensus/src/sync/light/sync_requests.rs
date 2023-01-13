@@ -27,7 +27,7 @@ use crate::sync::light::{
 
 impl<TNetwork: Network> LightMacroSync<TNetwork> {
     pub(crate) async fn request_zkps(
-        zkp_component: Arc<ZKPComponentProxy<TNetwork>>,
+        zkp_component: ZKPComponentProxy<TNetwork>,
         peer_id: TNetwork::PeerId,
     ) -> (Result<ZKPRequestEvent, Error>, TNetwork::PeerId) {
         let zkp_result = zkp_component.request_zkp_from_peer(peer_id, true).await;

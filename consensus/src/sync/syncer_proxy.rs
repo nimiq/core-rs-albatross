@@ -15,21 +15,20 @@ use pin_project::pin_project;
 #[cfg(feature = "full")]
 use crate::sync::history::HistoryMacroSync;
 use crate::sync::{
-    live::{
-        block_queue::{block_request_component::BlockRequestComponent, BlockQueue},
-        queue::QueueConfig,
-        BlockLiveSync,
-    },
+    live::{block_queue::BlockQueue, queue::QueueConfig, BlockLiveSync},
     syncer::{LiveSyncPushEvent, Syncer},
 };
 
 use super::light::LightMacroSync;
+use super::live::state_queue::StateQueue;
+use super::live::StateLiveSync;
 
 macro_rules! gen_syncer_match {
     ($self: ident, $f: ident $(, $arg:expr )*) => {
         match $self {
             #[cfg(feature = "full")]
             SyncerProxy::History(syncer) => syncer.$f($( $arg ),*),
+            SyncerProxy::Full(syncer) => syncer.$f($( $arg ),*),
             SyncerProxy::Light(syncer) => syncer.$f($( $arg ),*),
         }
     };
@@ -41,6 +40,8 @@ pub enum SyncerProxy<N: Network> {
     #[cfg(feature = "full")]
     /// History Syncer, uses history macro sync for macro sync and block live sync.
     History(Syncer<N, HistoryMacroSync<N>, BlockLiveSync<N>>),
+    /// Full Syncer, uses light macro sync for macro sync and state live sync.
+    Full(Syncer<N, LightMacroSync<N>, StateLiveSync<N>>),
     /// Light Syncer, uses light macro sync for macro sync and block live sync.
     Light(Syncer<N, LightMacroSync<N>, BlockLiveSync<N>>),
 }
@@ -61,16 +62,9 @@ impl<N: Network> SyncerProxy<N> {
 
         match blockchain_proxy {
             BlockchainProxy::Full(ref blockchain) => {
-                let request_component = BlockRequestComponent::new(
-                    network.subscribe_events(),
-                    Arc::clone(&network),
-                    true,
-                );
-
                 let block_queue = BlockQueue::new(
                     Arc::clone(&network),
                     blockchain_proxy.clone(),
-                    request_component,
                     QueueConfig::default(),
                 )
                 .await;
@@ -92,16 +86,57 @@ impl<N: Network> SyncerProxy<N> {
     }
 
     /// Creates a new instance of a `SyncerProxy` for the `Light` variant
+    pub async fn new_full(
+        blockchain_proxy: BlockchainProxy,
+        network: Arc<N>,
+        bls_cache: Arc<Mutex<PublicKeyCache>>,
+        zkp_component_proxy: ZKPComponentProxy<N>,
+        network_event_rx: SubscribeEvents<N::PeerId>,
+    ) -> Self {
+        let queue_config = QueueConfig::default();
+
+        let block_queue = BlockQueue::new(
+            Arc::clone(&network),
+            blockchain_proxy.clone(),
+            queue_config.clone(),
+        )
+        .await;
+
+        let state_queue = match blockchain_proxy {
+            BlockchainProxy::Full(ref blockchain) => StateQueue::with_block_queue(
+                Arc::clone(&network),
+                Arc::clone(blockchain),
+                block_queue,
+                queue_config,
+            ),
+            BlockchainProxy::Light(_) => unreachable!(),
+        };
+
+        let live_sync = StateLiveSync::with_queue(
+            blockchain_proxy.clone(),
+            Arc::clone(&network),
+            state_queue,
+            bls_cache,
+        );
+
+        let macro_sync = LightMacroSync::new(
+            blockchain_proxy,
+            network,
+            network_event_rx,
+            zkp_component_proxy,
+        );
+
+        Self::Full(Syncer::new(live_sync, macro_sync))
+    }
+
+    /// Creates a new instance of a `SyncerProxy` for the `Light` variant
     pub async fn new_light(
         blockchain_proxy: BlockchainProxy,
         network: Arc<N>,
         bls_cache: Arc<Mutex<PublicKeyCache>>,
-        zkp_component_proxy: Arc<ZKPComponentProxy<N>>,
+        zkp_component_proxy: ZKPComponentProxy<N>,
         network_event_rx: SubscribeEvents<N::PeerId>,
     ) -> Self {
-        let request_component =
-            BlockRequestComponent::new(network.subscribe_events(), Arc::clone(&network), false);
-
         let block_queue_config = QueueConfig {
             include_micro_bodies: false,
             ..Default::default()
@@ -110,7 +145,6 @@ impl<N: Network> SyncerProxy<N> {
         let block_queue = BlockQueue::new(
             Arc::clone(&network),
             blockchain_proxy.clone(),
-            request_component,
             block_queue_config,
         )
         .await;
@@ -165,6 +199,7 @@ impl<N: Network> Stream for SyncerProxy<N> {
         match self.project() {
             #[cfg(feature = "full")]
             SyncerProxyProj::History(syncer) => syncer.poll_next_unpin(cx),
+            SyncerProxyProj::Full(syncer) => syncer.poll_next_unpin(cx),
             SyncerProxyProj::Light(syncer) => syncer.poll_next_unpin(cx),
         }
     }

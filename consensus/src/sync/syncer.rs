@@ -47,7 +47,7 @@ pub trait LiveSync<N: Network>: Stream<Item = LiveSyncEvent<N::PeerId>> + Unpin 
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 /// Return type for a `MacroSync`
 pub enum MacroSyncReturn<T> {
     /// Macro Sync returned a good type
@@ -106,7 +106,7 @@ pub struct Syncer<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> {
     pub live_sync: L,
 
     /// Synchronizes the blockchain to the latest macro blocks of the peers
-    macro_sync: M,
+    pub macro_sync: M,
 
     /// The number of extended blocks through announcements
     accepted_announcements: usize,
@@ -136,12 +136,12 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Syncer<N, M, L> {
         self.live_sync.push_block(block, peer_id, pubsub_id);
     }
 
-    fn move_peer_into_history_sync(&mut self, peer_id: N::PeerId) {
+    fn move_peer_into_macro_sync(&mut self, peer_id: N::PeerId) {
         debug!("Adding peer {:?} into history sync", peer_id);
         self.macro_sync.add_peer(peer_id);
     }
 
-    fn move_peer_into_live_sync(&mut self, peer_id: N::PeerId) {
+    pub fn move_peer_into_live_sync(&mut self, peer_id: N::PeerId) {
         debug!("Adding peer {:?} into live sync", peer_id);
         self.live_sync.add_peer(peer_id);
     }
@@ -195,7 +195,7 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Stream for Syncer<N, M
                         self.outdated_peers.insert(peer_id);
                     }
                     LiveSyncPeerEvent::Ahead(peer_id) => {
-                        self.move_peer_into_history_sync(peer_id);
+                        self.move_peer_into_macro_sync(peer_id);
                     }
                 },
             }

@@ -38,7 +38,7 @@ pub struct Consensus<N: Network> {
     pub blockchain: BlockchainProxy,
     pub network: Arc<N>,
 
-    sync: SyncerProxy<N>,
+    pub sync: SyncerProxy<N>,
 
     /// A Delay which exists purely for the waker on its poll to reactivate the task running Consensus::poll
     /// FIXME Remove this

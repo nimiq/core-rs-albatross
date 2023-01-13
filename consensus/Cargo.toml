@@ -50,7 +50,7 @@ nimiq-utils = { path = "../utils", features = [
     "time",
 ] }
 nimiq-validator-network = { path = "../validator-network" }
-nimiq-zkp-component = { path = "../zkp-component" }
+nimiq-zkp-component = { path = "../zkp-component", features = ["zkp-prover"] }
 
 [dev-dependencies]
 hex = "0.4"

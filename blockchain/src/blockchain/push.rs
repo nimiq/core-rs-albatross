@@ -317,6 +317,7 @@ impl Blockchain {
 
                 let new_slots = macro_block.get_validators().unwrap();
                 this.state.current_slots.replace(new_slots);
+                this.state.can_verify_history = true;
             }
         }
 

@@ -54,15 +54,19 @@ impl Blockchain {
                     vec![],
                     inherents,
                 );
-
-                let hs_result = self.history_store.add_to_history(
-                    txn,
-                    Policy::epoch_at(macro_block.header.block_number),
-                    &ext_txs,
-                );
+                let total_tx_size = if state.can_verify_history {
+                    let hs_result = self.history_store.add_to_history(
+                        txn,
+                        Policy::epoch_at(macro_block.header.block_number),
+                        &ext_txs,
+                    );
+                    let (_, total_tx_size) = hs_result.unwrap();
+                    total_tx_size
+                } else {
+                    0
+                };
 
                 let (batch_info, _) = batch_info.unwrap();
-                let (_, total_tx_size) = hs_result.unwrap();
                 Ok(BlockLog::AppliedBlock {
                     inherent_logs: batch_info.inherent_logs,
                     block_hash: macro_block.hash(),
@@ -127,14 +131,18 @@ impl Blockchain {
                     body.transactions.clone(),
                     inherents,
                 );
+                let total_tx_size = if state.can_verify_history {
+                    let hs_result = self.history_store.add_to_history(
+                        txn,
+                        Policy::epoch_at(micro_block.header.block_number),
+                        &ext_txs,
+                    );
+                    let (_, total_tx_size) = hs_result.unwrap();
+                    total_tx_size
+                } else {
+                    0
+                };
 
-                let hs_result = self.history_store.add_to_history(
-                    txn,
-                    Policy::epoch_at(micro_block.header.block_number),
-                    &ext_txs,
-                );
-
-                let total_tx_size = hs_result.unwrap().1;
                 Ok(BlockLog::AppliedBlock {
                     inherent_logs: batch_info.inherent_logs,
                     block_hash: micro_block.hash(),

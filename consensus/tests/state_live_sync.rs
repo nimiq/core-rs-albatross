@@ -22,12 +22,7 @@ use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_consensus::sync::syncer::{LiveSyncEvent, LiveSyncPeerEvent, LiveSyncPushEvent};
 use nimiq_consensus::sync::{
-    live::{
-        block_queue::{block_request_component::BlockRequestComponent, BlockQueue},
-        queue::QueueConfig,
-        state_queue::StateQueue,
-        StateLiveSync,
-    },
+    live::{block_queue::BlockQueue, queue::QueueConfig, state_queue::StateQueue, StateLiveSync},
     syncer::LiveSync,
 };
 use nimiq_database::{volatile::VolatileEnvironment, WriteTransaction};
@@ -86,21 +81,18 @@ fn get_incomplete_live_sync(
     let incomplete_blockchain_proxy = BlockchainProxy::from(&incomplete_blockchain);
 
     let network = Arc::new(hub.new_network());
-    let request_component =
-        BlockRequestComponent::new(network.subscribe_events(), Arc::clone(&network), true);
     let (block_tx, block_rx) = mpsc::channel(32);
 
     let block_queue = BlockQueue::with_gossipsub_block_stream(
         incomplete_blockchain_proxy.clone(),
         Arc::clone(&network),
-        request_component,
         ReceiverStream::new(block_rx).boxed(),
         QueueConfig::default(),
     );
 
     let state_queue = StateQueue::with_block_queue(
-        Arc::clone(&incomplete_blockchain),
         Arc::clone(&network),
+        Arc::clone(&incomplete_blockchain),
         block_queue,
         QueueConfig::default(),
     );
