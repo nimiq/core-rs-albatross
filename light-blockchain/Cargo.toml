@@ -24,6 +24,7 @@ nimiq-nano-zkp = { path = "../nano-zkp" }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }
 nimiq-utils = { path = "../utils", features = ["time"] }
 nimiq-vrf = { path = "../vrf" }
+tokio = { version = "1.24", features = ["sync"] }
 
 [dev-dependencies]
 nimiq-block-production = { path = "../block-production", features = ["test-utils"] }

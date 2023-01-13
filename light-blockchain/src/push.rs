@@ -1,11 +1,14 @@
-use nimiq_block::{Block, BlockError, MacroHeader};
+use std::ops::Deref;
+
+use parking_lot::RwLockUpgradableReadGuard;
+
+use nimiq_block::{Block, BlockError, ForkProof, MacroHeader, MicroBlock};
 use nimiq_blockchain_interface::{
-    AbstractBlockchain, ChainInfo, ChainOrdering, PushError, PushResult,
+    AbstractBlockchain, BlockchainEvent, ChainInfo, ChainOrdering, ForkEvent, PushError, PushResult,
 };
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::policy::Policy;
-use parking_lot::RwLockUpgradableReadGuard;
-use std::ops::Deref;
+use nimiq_vrf::VrfSeed;
 
 use crate::blockchain::LightBlockchain;
 
@@ -104,6 +107,11 @@ impl LightBlockchain {
         // Verify that the block is valid for the current validators.
         block.verify_validators(&this.current_validators().unwrap())?;
 
+        // Detect forks in non-skip micro blocks.
+        if block.is_micro() && !block.is_skip() {
+            this.detect_forks(block.unwrap_micro_ref(), prev_info.head.seed());
+        }
+
         // Create the chain info for the new block.
         let chain_info = ChainInfo::from_block(block, &prev_info, None);
 
@@ -140,9 +148,13 @@ impl LightBlockchain {
         // Upgrade the blockchain lock
         let mut this = RwLockUpgradableReadGuard::upgrade_untimed(this);
 
+        let is_election_block = Policy::is_election_block_at(chain_info.head.block_number());
+        let is_macro_block = Policy::is_macro_block_at(chain_info.head.block_number());
+        let block_hash = chain_info.head.hash();
+
         // Update chain infos.
         chain_info.on_main_chain = true;
-        prev_info.main_chain_successor = Some(chain_info.head.hash());
+        prev_info.main_chain_successor = Some(block_hash.clone());
 
         // If it's a macro block then we need to clear the ChainStore (since we only want to keep
         // the current batch in memory). Otherwise, we need to update the previous ChainInfo.
@@ -178,6 +190,17 @@ impl LightBlockchain {
             kind = "extend",
             "Accepted block",
         );
+
+        // We shouldn't log errors if there are no listeners.
+        if is_election_block {
+            _ = this
+                .notifier
+                .send(BlockchainEvent::EpochFinalized(block_hash));
+        } else if is_macro_block {
+            _ = this.notifier.send(BlockchainEvent::Finalized(block_hash));
+        } else {
+            _ = this.notifier.send(BlockchainEvent::Extended(block_hash));
+        }
 
         Ok(PushResult::Extended)
     }
@@ -318,6 +341,11 @@ impl LightBlockchain {
             "Rebranched",
         );
 
+        // We do not log errors if there are no listeners
+        _ = this
+            .notifier
+            .send(BlockchainEvent::Rebranched(reverted_blocks, adopted_blocks));
+
         Ok(PushResult::Rebranched)
     }
 
@@ -355,5 +383,49 @@ impl LightBlockchain {
         this.chain_store.put_election(header);
 
         Ok(PushResult::Extended)
+    }
+
+    fn detect_forks(&self, block: &MicroBlock, prev_vrf_seed: &VrfSeed) {
+        assert!(!block.is_skip_block());
+
+        // Check if there are two blocks in the same slot and with the same height. Since we already
+        // verified the validator for the current slot, this is enough to check for fork proofs.
+        // Note: We don't verify the justifications for the other blocks here, since they had to
+        // already be verified in order to be added to the blockchain.
+        let mut micro_blocks: Vec<Block> =
+            self.chain_store.get_blocks_at(block.header.block_number);
+
+        // Filter out any skip blocks.
+        micro_blocks.retain(|block| block.is_micro() && !block.is_skip());
+
+        for micro_block in micro_blocks.drain(..).map(|block| block.unwrap_micro()) {
+            // If there's another micro block set to this block height, which also has the same
+            // VrfSeed entropy we notify the fork event.
+            if block.header.seed.entropy() == micro_block.header.seed.entropy() {
+                // Get the justification for the block. We assume that the
+                // validator's signature is valid.
+                let justification1 = block
+                    .justification
+                    .clone()
+                    .expect("Missing justification")
+                    .unwrap_micro();
+
+                let justification2 = micro_block
+                    .justification
+                    .expect("Missing justification")
+                    .unwrap_micro();
+
+                let proof = ForkProof {
+                    header1: block.header.clone(),
+                    header2: micro_block.header,
+                    justification1,
+                    justification2,
+                    prev_vrf_seed: prev_vrf_seed.clone(),
+                };
+
+                // We shouldn't log errors if there are no listeners.
+                _ = self.fork_notifier.send(ForkEvent::Detected(proof));
+            }
+        }
     }
 }

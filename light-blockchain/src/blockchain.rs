@@ -1,7 +1,11 @@
 use std::sync::Arc;
 
+use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
+
 use nimiq_block::{Block, MacroBlock};
-use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainError, ChainInfo};
+use nimiq_blockchain_interface::{
+    AbstractBlockchain, BlockchainError, BlockchainEvent, ChainInfo, ForkEvent,
+};
 use nimiq_collections::BitSet;
 use nimiq_genesis::NetworkInfo;
 use nimiq_primitives::{
@@ -13,6 +17,8 @@ use nimiq_utils::time::OffsetTime;
 use nimiq_vrf::{Rng, VrfEntropy, VrfUseCase};
 
 use crate::chain_store::ChainStore;
+
+const BROADCAST_MAX_CAPACITY: usize = 256;
 
 /// The Blockchain struct. It stores all information of the blockchain that is known to the Nano
 /// nodes.
@@ -33,6 +39,10 @@ pub struct LightBlockchain {
     pub genesis_block: Block,
     // The chain store is a database containing all of the chain infos in the current batch.
     pub chain_store: ChainStore,
+    /// The notifier processes events relative to the blockchain.
+    pub notifier: BroadcastSender<BlockchainEvent>,
+    /// The fork notifier processes fork events.
+    pub fork_notifier: BroadcastSender<ForkEvent>,
 }
 
 /// Implements methods to start a Blockchain.
@@ -54,6 +64,9 @@ impl LightBlockchain {
 
         chain_store.put_chain_info(chain_info);
 
+        let (tx, _rx) = broadcast(BROADCAST_MAX_CAPACITY);
+        let (tx_fork, _rx_fork) = broadcast(BROADCAST_MAX_CAPACITY);
+
         LightBlockchain {
             network_id,
             time,
@@ -63,6 +76,8 @@ impl LightBlockchain {
             current_validators: genesis_block.validators(),
             genesis_block,
             chain_store,
+            notifier: tx,
+            fork_notifier: tx_fork,
         }
     }
 

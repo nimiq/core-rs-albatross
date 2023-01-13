@@ -339,7 +339,7 @@ impl Blockchain {
             "Accepted block",
         );
 
-        // We shouldn't log errors if there are no listeners
+        // We shouldn't log errors if there are no listeners.
         if is_election_block {
             _ = this
                 .notifier
@@ -691,9 +691,8 @@ impl Blockchain {
                     prev_vrf_seed: prev_vrf_seed.clone(),
                 };
 
-                if let Err(e) = self.fork_notifier.send(ForkEvent::Detected(proof)) {
-                    log::error!(error = ?e,"Error sending the Fork event to the forks notifier");
-                }
+                // We shouldn't log errors if there are no listeners.
+                _ = self.fork_notifier.send(ForkEvent::Detected(proof));
             }
         }
     }

@@ -1,4 +1,4 @@
-use futures::stream::BoxStream;
+use futures::{future, stream::BoxStream, StreamExt};
 
 use nimiq_block::{Block, MacroBlock};
 use nimiq_blockchain_interface::{
@@ -7,6 +7,7 @@ use nimiq_blockchain_interface::{
 use nimiq_genesis::NetworkId;
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::slots::{Validator, Validators};
+use tokio_stream::wrappers::BroadcastStream;
 
 use crate::blockchain::LightBlockchain;
 
@@ -77,10 +78,6 @@ impl AbstractBlockchain for LightBlockchain {
         self.get_proposer_at(block_number, offset, vrf_entropy)
     }
 
-    fn notifier_as_stream(&self) -> BoxStream<'static, BlockchainEvent> {
-        todo!() // PITODO
-    }
-
     fn get_blocks(
         &self,
         start_block_hash: &Blake2bHash,
@@ -112,7 +109,15 @@ impl AbstractBlockchain for LightBlockchain {
         )
     }
 
+    fn notifier_as_stream(&self) -> BoxStream<'static, BlockchainEvent> {
+        BroadcastStream::new(self.notifier.subscribe())
+            .filter_map(|x| future::ready(x.ok()))
+            .boxed()
+    }
+
     fn fork_notifier_as_stream(&self) -> BoxStream<'static, ForkEvent> {
-        todo!()
+        BroadcastStream::new(self.fork_notifier.subscribe())
+            .filter_map(|x| future::ready(x.ok()))
+            .boxed()
     }
 }

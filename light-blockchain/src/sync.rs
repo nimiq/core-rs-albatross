@@ -3,7 +3,9 @@ use std::path::PathBuf;
 use parking_lot::RwLockUpgradableReadGuard;
 
 use nimiq_block::{Block, BlockError};
-use nimiq_blockchain_interface::{AbstractBlockchain, ChainInfo, PushError, PushResult};
+use nimiq_blockchain_interface::{
+    AbstractBlockchain, BlockchainEvent, ChainInfo, PushError, PushResult,
+};
 use nimiq_nano_zkp::{NanoProof, NanoZKP};
 
 use crate::blockchain::LightBlockchain;
@@ -13,7 +15,7 @@ impl LightBlockchain {
     /// Syncs using a zero-knowledge proof. It receives an election block and a proof that there is
     /// a valid chain between the genesis block and that block.
     /// This brings the node from the genesis block all the way to the most recent election block.
-    /// It is the default way to sync for a nano node.
+    /// It is the default way to sync for a light node.
     pub fn push_zkp(
         this: RwLockUpgradableReadGuard<Self>,
         block: Block,
@@ -27,12 +29,10 @@ impl LightBlockchain {
             .body()
             .ok_or(PushError::InvalidBlock(BlockError::MissingBody))?;
 
+        let block_hash = block.hash();
+
         // Check if we already know this block.
-        if this
-            .chain_store
-            .get_chain_info(&block.hash(), false)
-            .is_ok()
-        {
+        if this.chain_store.get_chain_info(&block_hash, false).is_ok() {
             return Ok(PushResult::Known);
         }
 
@@ -48,7 +48,7 @@ impl LightBlockchain {
         let initial_header_hash = <[u8; 32]>::from(this.genesis_block.hash());
         let initial_public_keys = this.genesis_block.validators().unwrap().voting_keys_g2();
         let final_block_number = block.block_number();
-        let final_header_hash = <[u8; 32]>::from(block.hash());
+        let final_header_hash = <[u8; 32]>::from(block_hash.clone());
         let final_public_keys = block.validators().unwrap().voting_keys_g2();
 
         // Verify the zk proof.
@@ -95,6 +95,11 @@ impl LightBlockchain {
 
         this.current_validators = block.validators();
 
+        // We shouldn't log errors if there are no listeners.
+        _ = this
+            .notifier
+            .send(BlockchainEvent::EpochFinalized(block_hash));
+
         Ok(PushResult::Extended)
     }
 
@@ -113,13 +118,10 @@ impl LightBlockchain {
         block
             .body()
             .ok_or(PushError::InvalidBlock(BlockError::MissingBody))?;
+        let block_hash = block.hash();
 
         // Check if we already know this block.
-        if this
-            .chain_store
-            .get_chain_info(&block.hash(), false)
-            .is_ok()
-        {
+        if this.chain_store.get_chain_info(&block_hash, false).is_ok() {
             return Ok(PushResult::Known);
         }
 
@@ -163,6 +165,14 @@ impl LightBlockchain {
 
             // Store the election block header.
             this.chain_store.put_election(block.unwrap_macro().header);
+
+            // We shouldn't log errors if there are no listeners.
+            _ = this
+                .notifier
+                .send(BlockchainEvent::EpochFinalized(block_hash));
+        } else {
+            // We shouldn't log errors if there are no listeners.
+            _ = this.notifier.send(BlockchainEvent::Finalized(block_hash));
         }
 
         Ok(PushResult::Extended)

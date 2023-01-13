@@ -132,7 +132,7 @@ impl Blockchain {
             "Accepted block",
         );
 
-        // We shouldn't log errors if there are no listeners
+        // We shouldn't log errors if there are no listeners.
         _ = this
             .notifier
             .send(BlockchainEvent::EpochFinalized(block_hash));
@@ -253,7 +253,7 @@ impl Blockchain {
             "Accepted block",
         );
 
-        // We shouldn't log errors if there are no listeners
+        // We shouldn't log errors if there are no listeners.
         if is_election_block {
             _ = this
                 .notifier
