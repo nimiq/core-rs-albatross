@@ -5,6 +5,7 @@ use beserial::{Deserialize, Serialize};
 use nimiq_bls::AggregatePublicKey;
 use nimiq_hash::{Blake2sHash, Hash, SerializeContent};
 use nimiq_hash_derive::SerializeContent;
+use nimiq_network_interface::network::Topic;
 use nimiq_primitives::policy::Policy;
 use nimiq_primitives::slots::Validators;
 
@@ -13,6 +14,17 @@ use crate::signed::{
     PREFIX_TENDERMINT_PROPOSAL,
 };
 use crate::{MacroBlock, MacroHeader, MultiSignature};
+
+/// This topic is used to obtain tendermint proposals through the network
+pub struct ProposalTopic;
+
+impl Topic for ProposalTopic {
+    type Item = SignedTendermintProposal;
+
+    const BUFFER_SIZE: usize = 8;
+    const NAME: &'static str = "tendermint-proposal";
+    const VALIDATE: bool = true;
+}
 
 /// The proposal message sent by the Tendermint leader.
 #[derive(Clone, Debug, Serialize, Deserialize, SerializeContent, PartialEq, Eq)]

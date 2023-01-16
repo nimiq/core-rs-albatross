@@ -22,7 +22,6 @@ parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
 thiserror = "1.0"
 tokio-stream = { version = "0.1", features = ["sync"] }
 
-nimiq-account = { path = "../primitives/account" }
 nimiq-block = { path = "../primitives/block" }
 nimiq-database-value = { path = "../database/database-value" }
 nimiq-hash = { path = "../hash" }

@@ -3405,7 +3405,6 @@ version = "0.1.0"
 dependencies = [
  "beserial",
  "futures-util",
- "nimiq-account",
  "nimiq-block",
  "nimiq-database-value",
  "nimiq-hash",
@@ -3504,7 +3503,6 @@ dependencies = [
  "nimiq-keys",
  "nimiq-light-blockchain",
  "nimiq-macros",
- "nimiq-mempool",
  "nimiq-nano-primitives",
  "nimiq-network-interface",
  "nimiq-network-libp2p",
@@ -4338,6 +4336,7 @@ dependencies = [
  "nimiq-hash",
  "nimiq-keys",
  "nimiq-macros",
+ "nimiq-network-interface",
  "nimiq-primitives",
  "nimiq-test-log",
  "nimiq-utils",

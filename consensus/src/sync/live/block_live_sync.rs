@@ -8,7 +8,7 @@ use parking_lot::Mutex;
 use pin_project::pin_project;
 use tokio::task::spawn_blocking;
 
-use nimiq_block::Block;
+use nimiq_block::{Block, BlockHeaderTopic, BlockTopic};
 #[cfg(feature = "full")]
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::{PushError, PushResult};
@@ -20,7 +20,7 @@ use nimiq_network_interface::network::{MsgAcceptance, Network};
 
 use crate::sync::{
     live::{
-        block_queue::{BlockHeaderTopic, BlockQueue, BlockTopic, QueuedBlock},
+        block_queue::{BlockQueue, QueuedBlock},
         request_component::RequestComponent,
     },
     syncer::{LiveSync, LiveSyncEvent, LiveSyncPeerEvent, LiveSyncPushEvent},

@@ -24,6 +24,7 @@ nimiq-bls = { path = "../../bls", features = ["serde-derive"] }
 nimiq-hash = { path = "../../hash", features = ["serde-derive"] }
 nimiq-keys = { path = "../../keys", features = ["serde-derive"] }
 nimiq-macros = { path = "../../macros" }
+nimiq-network-interface = { path = "../../network-interface" }
 nimiq-primitives = { path = "..", features = ["account", "coin", "networks", "policy", "serde-derive"] }
 nimiq-utils = { path = "../../utils", features = ["merkle"] }
 
