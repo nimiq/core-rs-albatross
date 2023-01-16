@@ -18,7 +18,7 @@ use nimiq_primitives::coin::Coin;
 use nimiq_transaction::account::staking_contract::{
     IncomingStakingTransactionData, OutgoingStakingTransactionProof,
 };
-use nimiq_transaction::Transaction;
+use nimiq_transaction::{ControlTransactionTopic, Transaction, TransactionTopic};
 
 use crate::config::MempoolConfig;
 use crate::executor::MempoolExecutor;
@@ -28,30 +28,6 @@ use crate::mempool_metrics::MempoolMetrics;
 use crate::mempool_state::{EvictionReason, MempoolState};
 use crate::mempool_transactions::TxPriority;
 use crate::verify::{verify_tx, VerifyErr};
-
-/// Transaction topic for the Mempool to request transactions from the network
-#[derive(Clone, Debug, Default)]
-pub struct TransactionTopic;
-
-impl Topic for TransactionTopic {
-    type Item = Transaction;
-
-    const BUFFER_SIZE: usize = 1024;
-    const NAME: &'static str = "transactions";
-    const VALIDATE: bool = true;
-}
-
-/// Control Transaction topic for the Mempool to request transactions from the network
-#[derive(Clone, Debug, Default)]
-pub struct ControlTransactionTopic;
-
-impl Topic for ControlTransactionTopic {
-    type Item = Transaction;
-
-    const BUFFER_SIZE: usize = 1024;
-    const NAME: &'static str = "Controltransactions";
-    const VALIDATE: bool = true;
-}
 
 /// Struct defining the Mempool
 pub struct Mempool {

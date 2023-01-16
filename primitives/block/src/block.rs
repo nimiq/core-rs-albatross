@@ -9,6 +9,7 @@ use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, SerializeContent};
 use nimiq_hash_derive::SerializeContent;
 use nimiq_keys::PublicKey;
+use nimiq_network_interface::network::Topic;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy::Policy;
 use nimiq_primitives::slots::Validators;
@@ -18,6 +19,29 @@ use nimiq_vrf::VrfSeed;
 use crate::macro_block::{MacroBlock, MacroHeader};
 use crate::micro_block::{MicroBlock, MicroHeader};
 use crate::{BlockError, MacroBody, MicroBody, MicroJustification, TendermintProof};
+
+/// These network topics are used to subscribe and request Blocks and Block Headers respectively
+#[derive(Clone, Debug, Default)]
+pub struct BlockTopic;
+
+impl Topic for BlockTopic {
+    type Item = Block;
+
+    const BUFFER_SIZE: usize = 16;
+    const NAME: &'static str = "blocks";
+    const VALIDATE: bool = true;
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct BlockHeaderTopic;
+
+impl Topic for BlockHeaderTopic {
+    type Item = Block;
+
+    const BUFFER_SIZE: usize = 16;
+    const NAME: &'static str = "block-headers";
+    const VALIDATE: bool = true;
+}
 
 /// Defines the type of the block, either Micro or Macro (which includes both checkpoint and
 /// election blocks).

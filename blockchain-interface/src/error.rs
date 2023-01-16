@@ -1,6 +1,5 @@
 use thiserror::Error;
 
-use nimiq_account::AccountError;
 use nimiq_block::{Block, BlockError, ForkProof};
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::networks::NetworkId;
@@ -84,8 +83,8 @@ pub enum PushError {
     InvalidPredecessor,
     #[error("Duplicate transaction")]
     DuplicateTransaction,
-    #[error("Account error: {0}")]
-    AccountsError(#[from] AccountError),
+    #[error("Account error")]
+    AccountsError,
     #[error("Invalid fork")]
     InvalidFork,
     #[error("Blockchain error: {0}")]

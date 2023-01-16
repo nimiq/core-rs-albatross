@@ -8,36 +8,14 @@ use std::{
 use futures::stream::BoxStream;
 use futures::{Stream, StreamExt};
 
-use nimiq_block::Block;
+use nimiq_block::{Block, BlockHeaderTopic, BlockTopic};
 use nimiq_blockchain_interface::{AbstractBlockchain, Direction};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::Blake2bHash;
-use nimiq_network_interface::network::{MsgAcceptance, Network, PubsubId, Topic};
+use nimiq_network_interface::network::{MsgAcceptance, Network, PubsubId};
 use nimiq_primitives::policy::Policy;
 
 use crate::sync::live::request_component::{RequestComponent, RequestComponentEvent};
-
-#[derive(Clone, Debug, Default)]
-pub struct BlockTopic;
-
-impl Topic for BlockTopic {
-    type Item = Block;
-
-    const BUFFER_SIZE: usize = 16;
-    const NAME: &'static str = "blocks";
-    const VALIDATE: bool = true;
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct BlockHeaderTopic;
-
-impl Topic for BlockHeaderTopic {
-    type Item = Block;
-
-    const BUFFER_SIZE: usize = 16;
-    const NAME: &'static str = "block-headers";
-    const VALIDATE: bool = true;
-}
 
 pub type BlockStream<N> = BoxStream<'static, (Block, <N as Network>::PubsubId)>;
 

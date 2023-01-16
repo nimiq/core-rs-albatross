@@ -5,10 +5,9 @@ use tokio::sync::broadcast::Sender as BroadcastSender;
 use tokio_stream::wrappers::BroadcastStream;
 
 use nimiq_blockchain_proxy::BlockchainProxy;
-use nimiq_mempool::mempool::{ControlTransactionTopic, TransactionTopic};
 use nimiq_network_interface::network::Network;
 use nimiq_primitives::account::AccountType;
-use nimiq_transaction::Transaction;
+use nimiq_transaction::{ControlTransactionTopic, Transaction, TransactionTopic};
 
 use crate::ConsensusEvent;
 

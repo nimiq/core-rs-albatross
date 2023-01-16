@@ -19,12 +19,11 @@ use crate::micro::{ProduceMicroBlock, ProduceMicroBlockEvent};
 use crate::r#macro::{PersistedMacroState, ProduceMacroBlock};
 use crate::slash::ForkProofPool;
 use nimiq_account::StakingContract;
-use nimiq_block::{Block, BlockType, SignedTendermintProposal};
+use nimiq_block::{Block, BlockHeaderTopic, BlockTopic, BlockType, ProposalTopic};
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent, ForkEvent, PushResult};
 use nimiq_bls::KeyPair as BlsKeyPair;
-use nimiq_consensus::sync::live::block_queue::{BlockHeaderTopic, BlockTopic};
 use nimiq_consensus::{Consensus, ConsensusEvent, ConsensusProxy};
 use nimiq_database::{Database, Environment, ReadTransaction, WriteTransaction};
 use nimiq_hash::{Blake2bHash, Hash};
@@ -36,16 +35,6 @@ use nimiq_primitives::{coin::Coin, policy::Policy};
 use nimiq_tendermint::TendermintReturn;
 use nimiq_transaction_builder::TransactionBuilder;
 use nimiq_validator_network::ValidatorNetwork;
-
-pub struct ProposalTopic;
-
-impl Topic for ProposalTopic {
-    type Item = SignedTendermintProposal;
-
-    const BUFFER_SIZE: usize = 8;
-    const NAME: &'static str = "tendermint-proposal";
-    const VALIDATE: bool = true;
-}
 
 #[derive(PartialEq)]
 enum ValidatorStakingState {

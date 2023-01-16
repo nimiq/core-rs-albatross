@@ -17,6 +17,7 @@ use beserial::{
 use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
 use nimiq_keys::Address;
 use nimiq_keys::{PublicKey, Signature};
+use nimiq_network_interface::network::Topic;
 use nimiq_primitives::account::AccountType;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
@@ -27,6 +28,29 @@ use crate::account::AccountTransactionVerification;
 
 pub mod account;
 
+/// Transaction topic for the Mempool to request transactions from the network
+#[derive(Clone, Debug, Default)]
+pub struct TransactionTopic;
+
+impl Topic for TransactionTopic {
+    type Item = Transaction;
+
+    const BUFFER_SIZE: usize = 1024;
+    const NAME: &'static str = "transactions";
+    const VALIDATE: bool = true;
+}
+
+/// Control Transaction topic for the Mempool to request control transactions from the network
+#[derive(Clone, Debug, Default)]
+pub struct ControlTransactionTopic;
+
+impl Topic for ControlTransactionTopic {
+    type Item = Transaction;
+
+    const BUFFER_SIZE: usize = 1024;
+    const NAME: &'static str = "Controltransactions";
+    const VALIDATE: bool = true;
+}
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TransactionsProof {
     #[beserial(len_type(u16))]

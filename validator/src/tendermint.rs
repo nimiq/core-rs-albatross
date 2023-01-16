@@ -7,8 +7,8 @@ use futures::{future::BoxFuture, stream::BoxStream, FutureExt, StreamExt};
 use parking_lot::RwLock;
 
 use nimiq_block::{
-    Block, MacroBlock, MacroBody, MacroHeader, MultiSignature, SignedTendermintProposal,
-    TendermintProof, TendermintProposal,
+    Block, MacroBlock, MacroBody, MacroHeader, MultiSignature, ProposalTopic,
+    SignedTendermintProposal, TendermintProof, TendermintProposal,
 };
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::Blockchain;
@@ -26,7 +26,6 @@ use nimiq_validator_network::ValidatorNetwork;
 use nimiq_vrf::VrfSeed;
 
 use crate::aggregation::tendermint::HandelTendermintAdapter;
-use crate::validator::ProposalTopic;
 
 /// The struct that interfaces with the Tendermint crate. It only has to implement the
 /// TendermintOutsideDeps trait in order to do this.
