@@ -115,7 +115,6 @@ async fn sync_two_peers(num_batches: usize) {
     .await
     .proxy();
     let consensus1 = Consensus::from_network(
-        env1,
         BlockchainProxy::from(&blockchain1),
         Arc::clone(&net1),
         syncer1,
@@ -171,7 +170,6 @@ async fn sync_two_peers(num_batches: usize) {
     .await
     .proxy();
     let consensus2 = Consensus::from_network(
-        env2,
         blockchain2_proxy.clone(),
         Arc::clone(&net2),
         syncer2,
@@ -316,7 +314,6 @@ async fn sync_ingredients() {
     )
     .await;
     let consensus1 = Consensus::from_network(
-        env1,
         blockchain1_proxy.clone(),
         Arc::clone(&net1),
         syncer1,
@@ -361,7 +358,6 @@ async fn sync_ingredients() {
     .await;
 
     let consensus2 = Consensus::from_network(
-        env2,
         blockchain2_proxy.clone(),
         Arc::clone(&net2),
         syncer2,

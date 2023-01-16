@@ -12,7 +12,6 @@ use tokio::time::Sleep;
 use tokio_stream::wrappers::BroadcastStream;
 
 use nimiq_blockchain_interface::AbstractBlockchain;
-use nimiq_database::Environment;
 use nimiq_network_interface::{network::Network, request::request_handler};
 use nimiq_zkp_component::zkp_component::ZKPComponentProxy;
 
@@ -36,7 +35,6 @@ pub enum ConsensusEvent {
 pub struct Consensus<N: Network> {
     pub blockchain: BlockchainProxy,
     pub network: Arc<N>,
-    pub env: Environment,
 
     sync: SyncerProxy<N>,
 
@@ -72,14 +70,12 @@ impl<N: Network> Consensus<N> {
     const CONSENSUS_POLL_TIMER: Duration = Duration::from_secs(1);
 
     pub fn from_network(
-        env: Environment,
         blockchain: BlockchainProxy,
         network: Arc<N>,
         syncer: SyncerProxy<N>,
         zkp_proxy: ZKPComponentProxy<N>,
     ) -> Self {
         Self::new(
-            env,
             blockchain,
             network,
             syncer,
@@ -89,7 +85,6 @@ impl<N: Network> Consensus<N> {
     }
 
     pub fn new(
-        env: Environment,
         blockchain: BlockchainProxy,
         network: Arc<N>,
         syncer: SyncerProxy<N>,
@@ -108,7 +103,6 @@ impl<N: Network> Consensus<N> {
         Consensus {
             blockchain,
             network,
-            env,
             sync: syncer,
             events: tx,
             next_execution_timer: Some(timer),

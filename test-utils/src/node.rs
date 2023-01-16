@@ -2,11 +2,12 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use nimiq_bls::cache::PublicKeyCache;
+use nimiq_database::Environment;
 use parking_lot::{Mutex, RwLock};
 
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_proxy::BlockchainProxy;
-use nimiq_consensus::{sync::syncer_proxy::SyncerProxy, Consensus as AbstractConsensus};
+use nimiq_consensus::{sync::syncer_proxy::SyncerProxy, Consensus};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis_builder::GenesisInfo;
 use nimiq_network_interface::network::Network as NetworkInterface;
@@ -23,7 +24,8 @@ pub const TESTING_BLS_CACHE_MAX_CAPACITY: usize = 100;
 pub struct Node<N: NetworkInterface + TestNetwork> {
     pub network: Arc<N>,
     pub blockchain: Arc<RwLock<Blockchain>>,
-    pub consensus: Option<AbstractConsensus<N>>,
+    pub consensus: Option<Consensus<N>>,
+    pub environment: Environment,
 }
 
 impl<N: NetworkInterface + TestNetwork> Node<N> {
@@ -68,8 +70,7 @@ impl<N: NetworkInterface + TestNetwork> Node<N> {
             network.subscribe_events(),
         )
         .await;
-        let consensus = AbstractConsensus::<N>::new(
-            env,
+        let consensus = Consensus::<N>::new(
             blockchain_proxy,
             Arc::clone(&network),
             syncer,
@@ -81,6 +82,7 @@ impl<N: NetworkInterface + TestNetwork> Node<N> {
             network,
             blockchain,
             consensus: Some(consensus),
+            environment: env,
         }
     }
 

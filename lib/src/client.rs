@@ -16,7 +16,6 @@ use nimiq_consensus::{
     sync::syncer_proxy::SyncerProxy, Consensus as AbstractConsensus,
     ConsensusProxy as AbstractConsensusProxy,
 };
-use nimiq_database::Environment;
 use nimiq_genesis::{NetworkId, NetworkInfo};
 #[cfg(feature = "validator")]
 use nimiq_mempool::mempool::Mempool;
@@ -63,10 +62,6 @@ pub type ZKPComponentProxy = AbstractZKPComponentProxy<Network>;
 /// * Move Validator out of here?
 ///
 pub(crate) struct ClientInner {
-    /// The database environment. This is here to give the consumer access to the DB too. This
-    /// reference is also stored in the consensus though.
-    environment: Environment,
-
     network: Arc<Network>,
 
     /// The consensus object, which maintains the blockchain, the network and other things to
@@ -293,7 +288,6 @@ impl ClientInner {
 
         // Initialize consensus
         let consensus = Consensus::new(
-            environment.clone(),
             blockchain_proxy.clone(),
             Arc::clone(&network),
             syncer_proxy,
@@ -324,6 +318,7 @@ impl ClientInner {
                         Arc::new(ValidatorNetworkImpl::new(Arc::clone(&network)));
 
                     let validator = Validator::new(
+                        environment.clone(),
                         &consensus,
                         Arc::clone(blockchain),
                         validator_network,
@@ -354,7 +349,6 @@ impl ClientInner {
 
         Ok(Client {
             inner: Arc::new(ClientInner {
-                environment,
                 network,
                 consensus: consensus.proxy(),
                 blockchain: blockchain_proxy,
@@ -449,11 +443,6 @@ impl Client {
         self.validator
             .as_ref()
             .map(|validator| Arc::clone(&validator.mempool))
-    }
-
-    /// Returns the database environment.
-    pub fn environment(&self) -> Environment {
-        self.inner.environment.clone()
     }
 
     /// Returns a reference to the *ZKP Component* or none.

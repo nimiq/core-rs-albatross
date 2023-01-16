@@ -3,21 +3,21 @@ use rand::{rngs::StdRng, SeedableRng};
 use std::sync::Arc;
 use tokio_stream::wrappers::BroadcastStream;
 
-use crate::consensus::consensus;
-use crate::test_network::TestNetwork;
-
 use beserial::{Deserialize, Serialize};
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_bls::KeyPair as BlsKeyPair;
-use nimiq_consensus::{Consensus as AbstractConsensus, ConsensusEvent};
+use nimiq_consensus::{Consensus, ConsensusEvent};
 use nimiq_database::Environment;
 use nimiq_genesis_builder::{GenesisBuilder, GenesisInfo};
 use nimiq_keys::{Address, KeyPair as SchnorrKeyPair, SecureGenerate};
 use nimiq_mempool::config::MempoolConfig;
 use nimiq_network_interface::network::Network as NetworkInterface;
 use nimiq_network_mock::MockHub;
-use nimiq_validator::validator::Validator as AbstractValidator;
+use nimiq_validator::validator::Validator;
 use nimiq_validator_network::network_impl::ValidatorNetworkImpl;
+
+use crate::node::Node;
+use crate::test_network::TestNetwork;
 
 pub fn seeded_rng(seed: u64) -> StdRng {
     StdRng::seed_from_u64(seed)
@@ -33,20 +33,19 @@ pub async fn build_validator<N: TestNetwork + NetworkInterface>(
     genesis_info: GenesisInfo,
     hub: &mut Option<MockHub>,
     is_prover_active: bool,
-) -> (
-    AbstractValidator<N, ValidatorNetworkImpl<N>>,
-    AbstractConsensus<N>,
-)
+) -> (Validator<N, ValidatorNetworkImpl<N>>, Consensus<N>)
 where
     N::Error: Send,
     N::PeerId: Deserialize + Serialize,
 {
-    let (consensus, blockchain) = consensus(peer_id, genesis_info, hub, is_prover_active).await;
+    let node = Node::<N>::new(peer_id, genesis_info, hub, is_prover_active).await;
+    let consensus = node.consensus.expect("Could not create consensus");
     let validator_network = Arc::new(ValidatorNetworkImpl::new(Arc::clone(&consensus.network)));
     (
-        AbstractValidator::<N, ValidatorNetworkImpl<N>>::new(
+        Validator::<N, ValidatorNetworkImpl<N>>::new(
+            node.environment,
             &consensus,
-            blockchain,
+            node.blockchain,
             validator_network,
             validator_address,
             automatic_reactivate,
@@ -64,7 +63,7 @@ pub async fn build_validators<N: TestNetwork + NetworkInterface>(
     peer_ids: &[u64],
     hub: &mut Option<MockHub>,
     is_prover_active: bool,
-) -> Vec<AbstractValidator<N, ValidatorNetworkImpl<N>>>
+) -> Vec<Validator<N, ValidatorNetworkImpl<N>>>
 where
     N::Error: Send,
     N::PeerId: Deserialize + Serialize,
@@ -143,10 +142,10 @@ where
 }
 
 pub fn validator_for_slot<N: TestNetwork + NetworkInterface>(
-    validators: &[AbstractValidator<N, ValidatorNetworkImpl<N>>],
+    validators: &[Validator<N, ValidatorNetworkImpl<N>>],
     block_number: u32,
     offset: u32,
-) -> &AbstractValidator<N, ValidatorNetworkImpl<N>>
+) -> &Validator<N, ValidatorNetworkImpl<N>>
 where
     N::Error: Send,
     N::PeerId: Deserialize + Serialize,
@@ -168,10 +167,10 @@ where
 }
 
 pub fn pop_validator_for_slot<N: TestNetwork + NetworkInterface>(
-    validators: &mut Vec<AbstractValidator<N, ValidatorNetworkImpl<N>>>,
+    validators: &mut Vec<Validator<N, ValidatorNetworkImpl<N>>>,
     block_number: u32,
     offset: u32,
-) -> AbstractValidator<N, ValidatorNetworkImpl<N>>
+) -> Validator<N, ValidatorNetworkImpl<N>>
 where
     N::Error: Send,
     N::PeerId: Deserialize + Serialize,
