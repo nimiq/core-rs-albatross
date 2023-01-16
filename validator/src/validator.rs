@@ -149,6 +149,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
     const FORK_PROOFS_MAX_SIZE: usize = 1_000; // bytes
 
     pub fn new(
+        env: Environment,
         consensus: &Consensus<TNetwork>,
         blockchain: Arc<RwLock<Blockchain>>,
         network: Arc<TValidatorNetwork>,
@@ -164,14 +165,12 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         let blockchain_rg = blockchain.read();
         let blockchain_event_rx = blockchain_rg.notifier_as_stream();
         let fork_event_rx = BroadcastStream::new(blockchain_rg.fork_notifier.subscribe());
-
         drop(blockchain_rg);
 
         let blockchain_state = BlockchainState {
             fork_proofs: ForkProofPool::new(),
         };
 
-        let env = consensus.env.clone();
         let database = env.open_database(Self::MACRO_STATE_DB_NAME.to_string());
 
         let macro_state: Option<PersistedMacroState<TValidatorNetwork>> = {
