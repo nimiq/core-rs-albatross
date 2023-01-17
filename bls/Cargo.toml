@@ -18,7 +18,7 @@ parking_lot = { git = "https://github.com/styppo/parking_lot.git", optional = tr
 rand = "0.8"
 serde = { version = "1.0", features = ["derive"], optional = true }
 
-ark-std = "^0.3"
+ark-std = "^0.4"
 ark-ff = "^0.3"
 ark-ec = "^0.3"
 ark-mnt4-753 = "^0.3"
