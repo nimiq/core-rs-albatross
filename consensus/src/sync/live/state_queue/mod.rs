@@ -26,7 +26,7 @@ use parking_lot::RwLock;
 use self::chunk_request_component::ChunkRequestComponent;
 use super::{
     block_queue::{BlockAndId, BlockQueue, QueuedBlock},
-    queue::QueueConfig,
+    queue::{LiveSyncQueue, QueueConfig},
 };
 
 pub struct ChunkAndId<N: Network> {
@@ -530,7 +530,7 @@ impl<N: Network> Stream for StateQueue<N> {
         }
 
         // 2. Request chunks via ChunkRequestComponent.
-        if !self.chunk_request_component.has_pending_requests() {
+        if !self.chunk_request_component.has_pending_requests() && self.num_peers() > 0 {
             self.request_chunk();
         }
 
