@@ -6,7 +6,6 @@ use ark_mnt6_753::{G2Projective as G2MNT6, MNT6_753};
 use nimiq_block::{Block, MacroBlock};
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
-use nimiq_database::{Database, Environment, ReadTransaction, WriteTransaction};
 use nimiq_genesis::NetworkInfo;
 use nimiq_nano_zkp::{NanoZKP, NanoZKPError};
 
@@ -106,33 +105,4 @@ pub(crate) fn validate_proof_get_new_state(
         });
     }
     Err(Error::InvalidProof)
-}
-
-/// DB for storing and retrieving the ZK Proof.
-#[derive(Debug)]
-pub struct ProofStore {
-    pub env: Environment,
-    // A database of the current zkp state.
-    zkp_db: Database,
-}
-
-impl ProofStore {
-    const PROOF_DB_NAME: &'static str = "ZKPState";
-    const PROOF_KEY: &'static str = "proof";
-
-    pub fn new(env: Environment) -> Self {
-        let zkp_db = env.open_database(Self::PROOF_DB_NAME.to_string());
-
-        ProofStore { env, zkp_db }
-    }
-
-    pub fn get_zkp(&self) -> Option<ZKProof> {
-        ReadTransaction::new(&self.env).get(&self.zkp_db, ProofStore::PROOF_KEY)
-    }
-
-    pub fn set_zkp(&self, zk_proof: &ZKProof) {
-        let mut tx = WriteTransaction::new(&self.env);
-        tx.put(&self.zkp_db, ProofStore::PROOF_KEY, zk_proof);
-        tx.commit();
-    }
 }

@@ -1,34 +1,32 @@
-use beserial::Deserialize;
-use futures::StreamExt;
-use nimiq_blockchain_proxy::BlockchainProxy;
-use nimiq_test_utils::blockchain_with_rng::produce_macro_blocks_with_rng;
-use nimiq_test_utils::zkp_test_data::zkp_test_exe;
-use nimiq_test_utils::zkp_test_data::KEYS_PATH;
-use nimiq_test_utils::zkp_test_data::ZKPROOF_SERIALIZED_IN_HEX;
-use nimiq_zkp_component::types::ZKProof;
-use parking_lot::RwLock;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use nimiq_network_interface::network::Network;
-use nimiq_network_mock::{MockHub, MockNetwork};
-use nimiq_primitives::policy::Policy;
-use nimiq_zkp_component::proof_utils::ProofStore;
-use nimiq_zkp_component::types::ZKProofTopic;
+use futures::StreamExt;
+use parking_lot::RwLock;
 
+use beserial::Deserialize;
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::AbstractBlockchain;
+use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_nano_zkp::NanoZKP;
-use nimiq_primitives::networks::NetworkId;
+use nimiq_network_interface::network::Network;
+use nimiq_network_mock::{MockHub, MockNetwork};
+use nimiq_primitives::{networks::NetworkId, policy::Policy};
 use nimiq_test_log::test;
-use nimiq_test_utils::blockchain::{signing_key, voting_key};
-use nimiq_test_utils::zkp_test_data::get_base_seed;
+use nimiq_test_utils::{
+    blockchain::{signing_key, voting_key},
+    blockchain_with_rng::produce_macro_blocks_with_rng,
+    zkp_test_data::{get_base_seed, zkp_test_exe, KEYS_PATH, ZKPROOF_SERIALIZED_IN_HEX},
+};
 use nimiq_utils::time::OffsetTime;
 
+use nimiq_zkp_component::proof_store::{DBProofStore, ProofStore};
 use nimiq_zkp_component::proof_utils::validate_proof;
+use nimiq_zkp_component::types::ZKProof;
+use nimiq_zkp_component::types::ZKProofTopic;
 use nimiq_zkp_component::zkp_component::ZKPComponent;
 use nimiq_zkp_component::zkp_component::ZKProofsStream;
 
@@ -53,15 +51,13 @@ async fn builds_valid_genesis_proof() {
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
 
-    let env = VolatileEnvironment::new(10).unwrap();
-
     let zkp_prover = ZKPComponent::new(
         BlockchainProxy::from(&blockchain),
         Arc::clone(&network),
         false,
         Some(zkp_test_exe()),
-        env,
         PathBuf::from(KEYS_PATH),
+        None,
     )
     .await
     .proxy();
@@ -84,7 +80,7 @@ async fn loads_valid_zkp_state_from_db() {
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
 
-    let proof_store = ProofStore::new(VolatileEnvironment::new(1).unwrap());
+    let proof_store = DBProofStore::new(VolatileEnvironment::new(1).unwrap());
     let producer = BlockProducer::new(signing_key(), voting_key());
     produce_macro_blocks_with_rng(
         &producer,
@@ -98,13 +94,14 @@ async fn loads_valid_zkp_state_from_db() {
 
     proof_store.set_zkp(&new_proof);
 
+    let proof_store: Option<Box<dyn ProofStore>> = Some(Box::new(proof_store));
     let zkp_prover = ZKPComponent::new(
         BlockchainProxy::from(&blockchain),
         Arc::clone(&network),
         false,
         Some(zkp_test_exe()),
-        proof_store.env,
         PathBuf::from(KEYS_PATH),
+        proof_store,
     )
     .await;
 
@@ -125,7 +122,7 @@ async fn does_not_load_invalid_zkp_state_from_db() {
 
     let env = VolatileEnvironment::new(1).unwrap();
 
-    let proof_store = ProofStore::new(env);
+    let proof_store = DBProofStore::new(env);
     let new_proof = ZKProof {
         block_number: Policy::blocks_per_epoch(),
         proof: None,
@@ -133,13 +130,14 @@ async fn does_not_load_invalid_zkp_state_from_db() {
 
     proof_store.set_zkp(&new_proof);
 
+    let proof_store: Option<Box<dyn ProofStore>> = Some(Box::new(proof_store));
     let zkp_prover = ZKPComponent::new(
         BlockchainProxy::from(&blockchain),
         Arc::clone(&network),
         false,
         Some(zkp_test_exe()),
-        proof_store.env,
         PathBuf::from(KEYS_PATH),
+        proof_store,
     )
     .await;
 
@@ -162,15 +160,13 @@ async fn can_produce_two_consecutive_valid_zk_proofs() {
     network2.dial_address(network.address()).await.unwrap();
     network.dial_address(network2.address()).await.unwrap();
 
-    let env = VolatileEnvironment::new(10).unwrap();
-
     let zkp_prover = ZKPComponent::new(
         BlockchainProxy::from(&blockchain),
         Arc::clone(&network),
         true,
         Some(zkp_test_exe()),
-        env,
         PathBuf::from(KEYS_PATH),
+        None,
     )
     .await;
 

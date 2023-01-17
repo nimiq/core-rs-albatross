@@ -33,9 +33,11 @@ use nimiq_validator::validator::ValidatorProxy as AbstractValidatorProxy;
 use nimiq_validator_network::network_impl::ValidatorNetworkImpl;
 #[cfg(feature = "wallet")]
 use nimiq_wallet::WalletStore;
-
-use nimiq_zkp_component::zkp_component::ZKPComponent as AbstractZKPComponent;
-use nimiq_zkp_component::zkp_component::ZKPComponentProxy as AbstractZKPComponentProxy;
+#[cfg(feature = "zkp-storage")]
+use nimiq_zkp_component::proof_store::{DBProofStore, ProofStore};
+use nimiq_zkp_component::zkp_component::{
+    ZKPComponent as AbstractZKPComponent, ZKPComponentProxy as AbstractZKPComponentProxy,
+};
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 
@@ -217,6 +219,12 @@ impl ClientInner {
             ..Default::default()
         };
 
+        #[cfg(feature = "zkp-storage")]
+        let zkp_storage: Option<Box<dyn ProofStore>> =
+            Some(Box::new(DBProofStore::new(environment.clone())));
+        #[cfg(not(feature = "zkp-storage"))]
+        let zkp_storage = None;
+
         let (blockchain_proxy, syncer_proxy, zkp_component) = match config.consensus.sync_mode {
             #[cfg(not(feature = "full-consensus"))]
             SyncMode::History => {
@@ -242,8 +250,8 @@ impl ClientInner {
                     config.zkp.prover_active,
                     #[cfg(feature = "zkp-prover")]
                     None,
-                    environment.clone(),
                     config.zkp.setup_keys_path,
+                    zkp_storage,
                 )
                 .await;
                 let syncer = SyncerProxy::new_history(
@@ -266,8 +274,8 @@ impl ClientInner {
                     config.zkp.prover_active,
                     #[cfg(feature = "zkp-prover")]
                     None,
-                    environment.clone(),
                     config.zkp.setup_keys_path,
+                    zkp_storage,
                 )
                 .await;
                 let syncer = SyncerProxy::new_light(

@@ -2,6 +2,7 @@ pub use zkp_component::ZKPComponent;
 
 #[cfg(feature = "zkp-prover")]
 pub mod proof_gen_utils;
+pub mod proof_store;
 pub mod proof_utils;
 #[cfg(feature = "zkp-prover")]
 pub mod prover_binary;

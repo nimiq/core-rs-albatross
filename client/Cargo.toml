@@ -40,5 +40,6 @@ features = [
     "validator",
     "wallet",
     "websocket",
+    "zkp-storage",
     "zkp-prover",
 ]

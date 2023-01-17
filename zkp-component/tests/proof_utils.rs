@@ -2,26 +2,26 @@ use std::path::Path;
 use std::sync::Arc;
 
 use ark_groth16::Proof;
-use beserial::Deserialize;
-use nimiq_blockchain_proxy::BlockchainProxy;
-use nimiq_primitives::policy::Policy;
-use nimiq_test_utils::blockchain_with_rng::produce_macro_blocks_with_rng;
-use nimiq_test_utils::zkp_test_data::{KEYS_PATH, ZKPROOF_SERIALIZED_IN_HEX};
-use nimiq_zkp_component::proof_utils::ProofStore;
-use nimiq_zkp_component::types::ZKProof;
 use parking_lot::RwLock;
 
+use beserial::Deserialize;
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
+use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_nano_zkp::NanoZKP;
-use nimiq_primitives::networks::NetworkId;
+use nimiq_primitives::{networks::NetworkId, policy::Policy};
 use nimiq_test_log::test;
-use nimiq_test_utils::blockchain::{signing_key, voting_key};
-use nimiq_test_utils::zkp_test_data::get_base_seed;
+use nimiq_test_utils::{
+    blockchain::{signing_key, voting_key},
+    blockchain_with_rng::produce_macro_blocks_with_rng,
+    zkp_test_data::{get_base_seed, KEYS_PATH, ZKPROOF_SERIALIZED_IN_HEX},
+};
 use nimiq_utils::time::OffsetTime;
 
+use nimiq_zkp_component::proof_store::{DBProofStore, ProofStore};
 use nimiq_zkp_component::proof_utils::validate_proof;
+use nimiq_zkp_component::types::ZKProof;
 
 fn blockchain() -> Arc<RwLock<Blockchain>> {
     let time = Arc::new(OffsetTime::new());
@@ -141,7 +141,7 @@ async fn can_detect_valid_proof_none_genesis_blocks() {
 async fn can_store_and_load_zkp_state_from_db() {
     let env = VolatileEnvironment::new(1).unwrap();
 
-    let proof_store = ProofStore::new(env);
+    let proof_store = DBProofStore::new(env);
     let new_proof = ZKProof {
         block_number: Policy::blocks_per_epoch(),
         proof: Some(Proof::default()),

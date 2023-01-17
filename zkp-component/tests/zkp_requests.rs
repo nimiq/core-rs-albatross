@@ -1,9 +1,9 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use beserial::Deserialize;
 use futures::StreamExt;
 
+use beserial::Deserialize;
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_proxy::BlockchainProxy;
@@ -11,15 +11,17 @@ use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_nano_zkp::NanoZKP;
 use nimiq_network_interface::network::Network;
 use nimiq_network_mock::MockHub;
-use nimiq_primitives::networks::NetworkId;
-use nimiq_primitives::policy::Policy;
+use nimiq_primitives::{networks::NetworkId, policy::Policy};
 use nimiq_test_log::test;
-use nimiq_test_utils::blockchain::{signing_key, voting_key};
-use nimiq_test_utils::blockchain_with_rng::produce_macro_blocks_with_rng;
-use nimiq_test_utils::zkp_test_data::{get_base_seed, zkp_test_exe};
-use nimiq_test_utils::zkp_test_data::{KEYS_PATH, ZKPROOF_SERIALIZED_IN_HEX};
+use nimiq_test_utils::{
+    blockchain::{signing_key, voting_key},
+    blockchain_with_rng::produce_macro_blocks_with_rng,
+    zkp_test_data::{get_base_seed, zkp_test_exe},
+    zkp_test_data::{KEYS_PATH, ZKPROOF_SERIALIZED_IN_HEX},
+};
 
-use nimiq_zkp_component::proof_utils::{validate_proof, ProofStore};
+use nimiq_zkp_component::proof_store::{DBProofStore, ProofStore};
+use nimiq_zkp_component::proof_utils::validate_proof;
 use nimiq_zkp_component::types::ZKProof;
 use nimiq_zkp_component::zkp_requests::ZKPRequests;
 use nimiq_zkp_component::ZKPComponent;
@@ -57,8 +59,8 @@ async fn peers_dont_reply_with_outdated_proof() {
         Arc::clone(&network2),
         false,
         Some(zkp_test_exe()),
-        VolatileEnvironment::new(10).unwrap(),
         PathBuf::from(KEYS_PATH),
+        None,
     )
     .await;
 
@@ -67,8 +69,8 @@ async fn peers_dont_reply_with_outdated_proof() {
         Arc::clone(&network3),
         false,
         Some(zkp_test_exe()),
-        VolatileEnvironment::new(10).unwrap(),
         PathBuf::from(KEYS_PATH),
+        None,
     )
     .await;
 
@@ -99,8 +101,8 @@ async fn peers_reply_with_valid_proof() {
 
     let env2 = VolatileEnvironment::new(10).unwrap();
     let env3 = VolatileEnvironment::new(10).unwrap();
-    let store2 = ProofStore::new(env2.clone());
-    let store3 = ProofStore::new(env3.clone());
+    let store2 = DBProofStore::new(env2.clone());
+    let store3 = DBProofStore::new(env3.clone());
     let producer = BlockProducer::new(signing_key(), voting_key());
     produce_macro_blocks_with_rng(
         &producer,
@@ -123,22 +125,24 @@ async fn peers_reply_with_valid_proof() {
     store3.set_zkp(&new_proof);
 
     log::info!("launching zkps");
+    let proof_store_2: Option<Box<dyn ProofStore>> = Some(Box::new(store2));
     let _zkp_prover2 = ZKPComponent::new(
         BlockchainProxy::from(&blockchain2),
         Arc::clone(&network2),
         false,
         Some(zkp_test_exe()),
-        env2,
         PathBuf::from(KEYS_PATH),
+        proof_store_2,
     )
     .await;
+    let proof_store_3: Option<Box<dyn ProofStore>> = Some(Box::new(store3));
     let _zkp_prover3 = ZKPComponent::new(
         BlockchainProxy::from(&blockchain3),
         Arc::clone(&network3),
         false,
         Some(zkp_test_exe()),
-        env3,
         PathBuf::from(KEYS_PATH),
+        proof_store_3,
     )
     .await;
 
@@ -179,8 +183,8 @@ async fn peers_reply_with_valid_proof_and_election_block() {
 
     let env2 = VolatileEnvironment::new(10).unwrap();
     let env3 = VolatileEnvironment::new(10).unwrap();
-    let store2 = ProofStore::new(env2.clone());
-    let store3 = ProofStore::new(env3.clone());
+    let store2 = DBProofStore::new(env2.clone());
+    let store3 = DBProofStore::new(env3.clone());
     let producer = BlockProducer::new(signing_key(), voting_key());
     produce_macro_blocks_with_rng(
         &producer,
@@ -203,22 +207,24 @@ async fn peers_reply_with_valid_proof_and_election_block() {
     store3.set_zkp(&new_proof);
 
     log::info!("launching zkps");
+    let proof_store_2: Option<Box<dyn ProofStore>> = Some(Box::new(store2));
     let _zkp_prover2 = ZKPComponent::new(
         BlockchainProxy::from(&blockchain2),
         Arc::clone(&network2),
         false,
         Some(zkp_test_exe()),
-        env2,
         PathBuf::from(KEYS_PATH),
+        proof_store_2,
     )
     .await;
+    let proof_store_3: Option<Box<dyn ProofStore>> = Some(Box::new(store3));
     let _zkp_prover3 = ZKPComponent::new(
         BlockchainProxy::from(&blockchain3),
         Arc::clone(&network3),
         false,
         Some(zkp_test_exe()),
-        env3,
         PathBuf::from(KEYS_PATH),
+        proof_store_3,
     )
     .await;
 

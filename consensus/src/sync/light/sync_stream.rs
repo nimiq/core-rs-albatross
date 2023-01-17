@@ -370,15 +370,14 @@ mod tests {
             let mut hub = MockHub::default();
             let net1 = Arc::new(hub.new_network());
             let net2 = Arc::new(hub.new_network());
-            let env = VolatileEnvironment::new(10).unwrap();
 
             let zkp_component = nimiq_zkp_component::ZKPComponent::new(
                 chain1.clone(),
                 Arc::clone(&net1),
                 false,
                 None,
-                env,
                 PathBuf::from(KEYS_PATH),
+                None,
             )
             .await;
 
@@ -419,16 +418,14 @@ mod tests {
             let mut hub = MockHub::default();
             let net1 = Arc::new(hub.new_network());
             let net2 = Arc::new(hub.new_network());
-            let env = VolatileEnvironment::new(10).unwrap();
-            let env2 = VolatileEnvironment::new(10).unwrap();
 
             let zkp_component = nimiq_zkp_component::ZKPComponent::new(
                 chain1.clone(),
                 Arc::clone(&net1),
                 false,
                 None,
-                env,
                 PathBuf::from(KEYS_PATH),
+                None,
             )
             .await;
 
@@ -448,8 +445,8 @@ mod tests {
                 Arc::clone(&net2),
                 false,
                 None,
-                env2,
                 PathBuf::from(KEYS_PATH),
+                None,
             )
             .await;
 
@@ -479,8 +476,6 @@ mod tests {
             let mut hub = MockHub::default();
             let net1 = Arc::new(hub.new_network());
             let net2 = Arc::new(hub.new_network());
-            let env = VolatileEnvironment::new(10).unwrap();
-            let env2 = VolatileEnvironment::new(10).unwrap();
 
             let chain2 = blockchain();
 
@@ -501,8 +496,8 @@ mod tests {
                 Arc::clone(&net1),
                 false,
                 None,
-                env,
                 PathBuf::from(KEYS_PATH),
+                None,
             )
             .await;
 
@@ -522,8 +517,8 @@ mod tests {
                 Arc::clone(&net2),
                 false,
                 None,
-                env2,
                 PathBuf::from(KEYS_PATH),
+                None,
             )
             .await;
 
@@ -550,8 +545,6 @@ mod tests {
             let mut hub = MockHub::default();
             let net1 = Arc::new(hub.new_network());
             let net2 = Arc::new(hub.new_network());
-            let env = VolatileEnvironment::new(10).unwrap();
-            let env2 = VolatileEnvironment::new(10).unwrap();
 
             let chain2 = blockchain();
 
@@ -575,8 +568,8 @@ mod tests {
                 Arc::clone(&net1),
                 false,
                 None,
-                env,
                 PathBuf::from(KEYS_PATH),
+                None,
             )
             .await;
 
@@ -596,8 +589,8 @@ mod tests {
                 Arc::clone(&net2),
                 false,
                 None,
-                env2,
                 PathBuf::from(KEYS_PATH),
+                None,
             )
             .await;
 
@@ -625,8 +618,6 @@ mod tests {
             let mut hub = MockHub::default();
             let net1 = Arc::new(hub.new_network());
             let net2 = Arc::new(hub.new_network());
-            let env = VolatileEnvironment::new(10).unwrap();
-            let env2 = VolatileEnvironment::new(10).unwrap();
 
             let chain2 = blockchain();
             let num_batches = (Policy::batches_per_epoch() - 1) as usize;
@@ -644,8 +635,8 @@ mod tests {
                 Arc::clone(&net1),
                 false,
                 None,
-                env,
                 PathBuf::from(KEYS_PATH),
+                None,
             )
             .await;
 
@@ -665,8 +656,8 @@ mod tests {
                 Arc::clone(&net2),
                 false,
                 None,
-                env2,
                 PathBuf::from(KEYS_PATH),
+                None,
             )
             .await;
 

@@ -109,8 +109,8 @@ async fn sync_two_peers(num_batches: usize) {
         Arc::clone(&net1),
         false,
         Some(zkp_test_exe()),
-        env1.clone(),
         PathBuf::from(KEYS_PATH),
+        None,
     )
     .await
     .proxy();
@@ -164,8 +164,8 @@ async fn sync_two_peers(num_batches: usize) {
         Arc::clone(&net2),
         false,
         Some(zkp_test_exe()),
-        env2.clone(),
         PathBuf::from(KEYS_PATH),
+        None,
     )
     .await
     .proxy();
@@ -298,8 +298,8 @@ async fn sync_ingredients() {
         Arc::clone(&net1),
         false,
         Some(zkp_test_exe()),
-        env1.clone(),
         PathBuf::from(KEYS_PATH),
+        None,
     )
     .await
     .proxy();
@@ -341,8 +341,8 @@ async fn sync_ingredients() {
         Arc::clone(&net2),
         false,
         Some(zkp_test_exe()),
-        env2.clone(),
         PathBuf::from(KEYS_PATH),
+        None,
     )
     .await
     .proxy();

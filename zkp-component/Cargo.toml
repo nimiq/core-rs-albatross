@@ -41,7 +41,7 @@ nimiq-block = { path = "../primitives/block" }
 nimiq-blockchain = { path = "../blockchain", optional = true }
 nimiq-blockchain-interface = { path = "../blockchain-interface" }
 nimiq-blockchain-proxy = { path = "../blockchain-proxy", default-features = false }
-nimiq-database = { path = "../database" }
+nimiq-database = { path = "../database", optional = true }
 nimiq-database-value = { path = "../database/database-value" }
 nimiq-genesis = { path = "../genesis", default-features = false }
 nimiq-hash = { path = "../hash" }
@@ -77,3 +77,4 @@ tempfile = "3.3"
 [features]
 zkp-prover = ["nimiq-blockchain", "nimiq-nano-zkp/zkp-prover", "tokio/io-util", "tokio/process"]
 test-prover = ["nimiq-log", "zkp-prover", "tracing-subscriber"]
+zkp-storage = ["nimiq-database"]

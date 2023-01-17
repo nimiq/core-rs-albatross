@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_database::Environment;
+use nimiq_zkp_component::proof_store::ProofStore;
 use parking_lot::{Mutex, RwLock};
 
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
@@ -14,7 +15,7 @@ use nimiq_network_interface::network::Network as NetworkInterface;
 use nimiq_network_mock::MockHub;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_utils::time::OffsetTime;
-use nimiq_zkp_component::ZKPComponent;
+use nimiq_zkp_component::{proof_store::DBProofStore, ZKPComponent};
 
 use crate::test_network::TestNetwork;
 use crate::zkp_test_data::{zkp_test_exe, KEYS_PATH};
@@ -50,13 +51,15 @@ impl<N: NetworkInterface + TestNetwork> Node<N> {
         ));
 
         let network = N::build_network(peer_id, genesis_info.hash, hub).await;
+        let zkp_storage: Option<Box<dyn ProofStore>> =
+            Some(Box::new(DBProofStore::new(env.clone())));
         let zkp_proxy = ZKPComponent::new(
             BlockchainProxy::from(&blockchain),
             Arc::clone(&network),
             is_prover_active,
             Some(zkp_test_exe()),
-            env.clone(),
             PathBuf::from(KEYS_PATH),
+            zkp_storage,
         )
         .await;
 
