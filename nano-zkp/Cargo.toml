@@ -23,7 +23,7 @@ ark-mnt4-753 = "0.3"
 ark-mnt6-753 = "0.3"
 ark-relations = "0.3"
 ark-r1cs-std = "0.3.1"
-ark-serialize = "0.3"
+ark-serialize = "0.4"
 ark-std = "0.3"
 ark-sponge = { git = "https://github.com/arkworks-rs/sponge" }
 
