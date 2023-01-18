@@ -21,7 +21,7 @@ serde = { version = "1.0", features = ["derive"], optional = true }
 ark-std = "^0.3"
 ark-ff = "^0.3"
 ark-ec = "^0.3"
-ark-mnt4-753 = "^0.3"
+ark-mnt4-753 = "^0.4"
 ark-mnt6-753 = "^0.3"
 ark-crypto-primitives = "^0.3"
 ark-serialize = "^0.3"

@@ -22,7 +22,7 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 ark-groth16 = "0.3"
-ark-mnt4-753 = "0.3"
+ark-mnt4-753 = "0.4"
 ark-mnt6-753 = "0.3"
 ark-serialize = "0.3"
 async-trait = "0.1"
