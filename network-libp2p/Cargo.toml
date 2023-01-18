@@ -25,17 +25,6 @@ derive_more = "0.99"
 futures = { package = "futures-util", version = "0.3" }
 hex = "0.4"
 ip_network = "0.4"
-libp2p = { version = "0.50", default-features = false, features = [
-    "gossipsub",
-    "identify",
-    "kad",
-    "macros",
-    "noise",
-    "ping",
-    "request-response",
-    "websocket",
-    "yamux",
-] }
 log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
 pin-project = "1.0"
@@ -46,8 +35,6 @@ serde = { version = "1.0", features = ["derive"], optional = true }
 thiserror = "1.0"
 tokio = { version = "1.24", features = ["macros", "rt", "tracing"] }
 tokio-stream = "0.1"
-tokio-util = { version = "0.7", features = ["codec"] }
-tracing-attributes = "0.1"
 wasm-timer = "0.2"
 
 beserial = { path = "../beserial", features = ["derive", "libp2p"] }
@@ -64,6 +51,31 @@ nimiq-utils = { path = "../utils", features = [
 ] }
 nimiq-validator-network = { path = "../validator-network" }
 
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+libp2p = { version = "0.50", default-features = false, features = [
+    "gossipsub",
+    "identify",
+    "kad",
+    "macros",
+    "noise",
+    "ping",
+    "request-response",
+    "yamux",
+] }
+
+[target.'cfg(target_family = "wasm")'.dependencies]
+libp2p = { version = "0.50", default-features = false, features = [
+    "gossipsub",
+    "identify",
+    "kad",
+    "macros",
+    "noise",
+    "ping",
+    "request-response",
+    "yamux",
+    "wasm-bindgen",
+] }
+
 [dev-dependencies]
 # In dev/testing we require more tokio features
 tokio = { version = "1.24", features = ["macros", "rt", "rt-multi-thread", "test-util", "tracing"] }
@@ -72,10 +84,6 @@ nimiq-test-log = { path = "../test-log" }
 
 [features]
 default = ["peer-contact-book-persistence"]
-websocket = ["libp2p/dns", "libp2p/tcp", "libp2p/tokio"]
+websocket = ["libp2p/dns", "libp2p/tcp", "libp2p/tokio", "libp2p/websocket"]
 metrics = ["prometheus-client"]
 peer-contact-book-persistence = ["serde"]
-
-
-[target.'cfg(target_family = "wasm")'.dependencies]
-getrandom = { version = "0.2.8", features = ["js"] }
