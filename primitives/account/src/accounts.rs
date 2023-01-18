@@ -3,7 +3,7 @@ use nimiq_database::{
 };
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_transaction::{ExecutedTransaction, Transaction, TransactionFlags};
-use nimiq_trie::trie::MerkleRadixTrie;
+use nimiq_trie::trie::{IncompleteTrie, MerkleRadixTrie};
 use nimiq_trie::trie_chunk::TrieChunkPushResult;
 use nimiq_trie::{key_nibbles::KeyNibbles, trie::TrieChunk};
 
@@ -62,17 +62,14 @@ impl Accounts {
         self.tree.num_branches(&ReadTransaction::new(&self.env))
     }
 
-    pub fn get(&self, key: &KeyNibbles, txn_option: Option<&DBTransaction>) -> Option<Account> {
-        // PITODO: handling of incomplete trie
+    pub fn get(
+        &self,
+        key: &KeyNibbles,
+        txn_option: Option<&DBTransaction>,
+    ) -> Result<Option<Account>, IncompleteTrie> {
         match txn_option {
-            Some(txn) => self
-                .tree
-                .get(txn, key)
-                .expect("temporary until accounts rewrite"),
-            None => self
-                .tree
-                .get(&ReadTransaction::new(&self.env), key)
-                .expect("temporary until accounts rewrite"),
+            Some(txn) => self.tree.get(txn, key),
+            None => self.tree.get(&ReadTransaction::new(&self.env), key),
         }
     }
 

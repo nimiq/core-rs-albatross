@@ -259,39 +259,6 @@ impl BlockProducer {
             history_root: Blake2bHash::default(),
         };
 
-        // Get the state.
-        let state = blockchain.state();
-
-        let inherents: Vec<Inherent> = blockchain.create_macro_block_inherents(state, &header);
-
-        // Update the state and add the state root to the header.
-        let (root, _) = state
-            .accounts
-            .exercise_transactions(&[], &inherents, block_number, timestamp)
-            .expect("Failed to compute accounts hash during block production.");
-
-        header.state_root = root;
-
-        // Calculate the extended transactions from the transactions and the inherents.
-        let ext_txs = ExtendedTransaction::from(
-            blockchain.network_id,
-            block_number,
-            timestamp,
-            vec![],
-            inherents,
-        );
-
-        // Store the extended transactions into the history tree and calculate the history root.
-        let mut txn = blockchain.write_transaction();
-
-        header.history_root = blockchain
-            .history_store
-            .add_to_history(&mut txn, Policy::epoch_at(block_number), &ext_txs)
-            .expect("Failed to compute history root during block production.")
-            .0;
-
-        txn.abort();
-
         // Calculate the disabled set for the current validator set.
         // Note: We are fetching the previous disabled set here because we have already updated the
         // state. So the staking contract has already moved the disabled set for this batch into the
@@ -328,11 +295,45 @@ impl BlockProducer {
         header.body_root = body.hash();
 
         // Returns the block proposal.
-        MacroBlock {
+        let mut macro_block = MacroBlock {
             header,
             body: Some(body),
             justification: None,
-        }
+        };
+
+        // Get the state.
+        let state = blockchain.state();
+
+        let inherents: Vec<Inherent> = blockchain.create_macro_block_inherents(state, &macro_block);
+
+        // Update the state and add the state root to the header.
+        let (root, _) = state
+            .accounts
+            .exercise_transactions(&[], &inherents, block_number, timestamp)
+            .expect("Failed to compute accounts hash during block production.");
+
+        macro_block.header.state_root = root;
+
+        // Calculate the extended transactions from the transactions and the inherents.
+        let ext_txs = ExtendedTransaction::from(
+            blockchain.network_id,
+            block_number,
+            timestamp,
+            vec![],
+            inherents,
+        );
+
+        // Store the extended transactions into the history tree and calculate the history root.
+        let mut txn = blockchain.write_transaction();
+
+        macro_block.header.history_root = blockchain
+            .history_store
+            .add_to_history(&mut txn, Policy::epoch_at(block_number), &ext_txs)
+            .expect("Failed to compute history root during block production.")
+            .0;
+
+        txn.abort();
+        macro_block
     }
 }
 

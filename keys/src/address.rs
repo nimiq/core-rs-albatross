@@ -138,7 +138,7 @@ impl Address {
     /// To be clear, it's IMPOSSIBLE for ANYONE to use the funds sent to this address.
     pub fn burn_address() -> Address {
         // We use unwrap here because we know this will not produce an error.
-        Self::from_user_friendly_address("NQ07 0000 0000 0000 0000 0000 0000 0000 0000").unwrap()
+        Self::from_user_friendly_address("NQ77 0000 0000 0000 0000 0000 0000 0000 0001").unwrap()
     }
 
     pub fn to_hex(&self) -> String {

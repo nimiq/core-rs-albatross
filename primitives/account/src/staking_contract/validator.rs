@@ -79,7 +79,7 @@ impl StakingContract {
     /// Creates a new validator. The initial stake is always equal to the validator deposit
     /// and can only be retrieved by deleting the validator.
     /// This function is public to fill the genesis staking contract.
-    /// The OperationInfo has always receipt = None, thus the type instationtion of the generic type to Receipt is irrelevant.
+    /// The OperationInfo has always receipt = None, thus the type instantiation of the generic type to Receipt is irrelevant.
     pub fn create_validator(
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,

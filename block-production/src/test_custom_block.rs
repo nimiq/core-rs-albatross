@@ -252,33 +252,6 @@ fn next_macro_block_proposal(
 
     let state = blockchain.state();
 
-    let inherents: Vec<Inherent> = blockchain.create_macro_block_inherents(state, &header);
-
-    let (root, _) = state
-        .accounts
-        .exercise_transactions(&[], &inherents, block_number, timestamp)
-        .expect("Failed to compute accounts hash during block production.");
-
-    header.state_root = root;
-
-    let ext_txs = ExtendedTransaction::from(
-        blockchain.network_id,
-        block_number,
-        timestamp,
-        vec![],
-        inherents,
-    );
-
-    let mut txn = blockchain.write_transaction();
-
-    header.history_root = blockchain
-        .history_store
-        .add_to_history(&mut txn, Policy::epoch_at(block_number), &ext_txs)
-        .expect("Failed to compute history root during block production.")
-        .0;
-
-    txn.abort();
-
     let disabled_set = blockchain.get_staking_contract().previous_disabled_slots();
 
     let lost_reward_set = blockchain.get_staking_contract().previous_lost_rewards();
@@ -302,11 +275,40 @@ fn next_macro_block_proposal(
 
     header.body_root = config.body_hash.clone().unwrap_or_else(|| body.hash());
 
-    MacroBlock {
+    let mut macro_block = MacroBlock {
         header,
         body: Some(body),
         justification: None,
-    }
+    };
+
+    let inherents: Vec<Inherent> = blockchain.create_macro_block_inherents(state, &macro_block);
+
+    let (root, _) = state
+        .accounts
+        .exercise_transactions(&[], &inherents, block_number, timestamp)
+        .expect("Failed to compute accounts hash during block production.");
+
+    macro_block.header.state_root = root;
+
+    let ext_txs = ExtendedTransaction::from(
+        blockchain.network_id,
+        block_number,
+        timestamp,
+        vec![],
+        inherents,
+    );
+
+    let mut txn = blockchain.write_transaction();
+
+    macro_block.header.history_root = blockchain
+        .history_store
+        .add_to_history(&mut txn, Policy::epoch_at(block_number), &ext_txs)
+        .expect("Failed to compute history root during block production.")
+        .0;
+
+    txn.abort();
+
+    macro_block
 }
 
 pub fn finalize_macro_block(

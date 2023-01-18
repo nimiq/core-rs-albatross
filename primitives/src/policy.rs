@@ -25,11 +25,8 @@ pub struct Policy {
 
 impl Policy {
     /// This is the address for the staking contract. Corresponds to
-    /// 'NQ38 STAK 1NG0 0000 0000 C0NT RACT 0000 0000'
-    pub const STAKING_CONTRACT_ADDRESS: Address = Address([
-        0xd6, 0xd5, 0x30, 0xda, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x60, 0x2d, 0xbc, 0xa9, 0x9b,
-        0x00, 0x00, 0x00, 0x00, 0x00,
-    ]);
+    /// 'NQ07 0000 0000 0000 0000 0000 0000 0000 0000'
+    pub const STAKING_CONTRACT_ADDRESS: Address = Address([0x00; 20]);
 
     /// This is the address for the coinbase. Note that this is not a real account, it is just the
     /// address we use to denote that some coins originated from a coinbase event. Corresponds to

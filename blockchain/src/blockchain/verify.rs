@@ -157,13 +157,6 @@ impl Blockchain {
         // For macro blocks we have additional checks. We simply construct what the body should be
         // from our own state and then compare it with the body hash in the header.
         if let Block::Macro(macro_block) = block {
-            // Get the lost rewards and disabled sets.
-            let staking_contract = self.get_staking_contract();
-
-            let real_lost_rewards = staking_contract.previous_lost_rewards();
-
-            let real_disabled_slots = staking_contract.previous_disabled_slots();
-
             // Get the validators.
             let real_validators = if macro_block.is_election_block() {
                 Some(self.next_validators(&macro_block.header.seed))
@@ -173,24 +166,29 @@ impl Blockchain {
 
             // Check the real values against the block.
             if let Some(body) = &macro_block.body {
-                // If we were given a body, then check each value against the corresponding value in
-                // the body.
-                if real_lost_rewards != body.lost_reward_set {
-                    warn!(
-                        %block,
-                        reason = "lost rewards set doesn't match real lost rewards set",
-                        "Rejecting block"
-                    );
-                    return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
-                }
+                // Get the lost rewards and disabled sets.
+                if let Some(staking_contract) = self.get_staking_contract_if_complete() {
+                    let real_lost_rewards = staking_contract.previous_lost_rewards();
+                    let real_disabled_slots = staking_contract.previous_disabled_slots();
 
-                if real_disabled_slots != body.disabled_set {
-                    warn!(
-                        %block,
-                        reason = "Disabled set doesn't match real disabled set",
-                        "Rejecting block"
-                    );
-                    return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
+                    // If we were given a body, then check each value against the corresponding value in
+                    // the body.
+                    if real_lost_rewards != body.lost_reward_set {
+                        warn!(
+                            %block,
+                            reason = "lost rewards set doesn't match real lost rewards set",
+                            "Rejecting block"
+                        );
+                        return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
+                    }
+                    if real_disabled_slots != body.disabled_set {
+                        warn!(
+                            %block,
+                            reason = "Disabled set doesn't match real disabled set",
+                            "Rejecting block"
+                        );
+                        return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
+                    }
                 }
 
                 if real_validators != body.validators {
@@ -204,7 +202,11 @@ impl Blockchain {
 
                 // We don't need to check the nano_zkp_hash here since it was already checked in the
                 // `verify_block_body` method.
-            } else {
+            } else if let Some(staking_contract) = self.get_staking_contract_if_complete() {
+                // Get the lost rewards and disabled sets.
+
+                let real_lost_rewards = staking_contract.previous_lost_rewards();
+                let real_disabled_slots = staking_contract.previous_disabled_slots();
                 // If we were not given a body, then we construct a body from our values and check
                 // its hash against the block header.
                 let real_pk_tree_root = real_validators

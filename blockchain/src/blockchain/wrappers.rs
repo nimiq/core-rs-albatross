@@ -99,10 +99,17 @@ impl Blockchain {
 
     /// Returns the current staking contract.
     pub fn get_staking_contract(&self) -> StakingContract {
+        self.get_staking_contract_if_complete()
+            .expect("We should always have the staking contract.")
+    }
+
+    /// Returns the current staking contract.
+    pub fn get_staking_contract_if_complete(&self) -> Option<StakingContract> {
         let staking_contract_address = StakingContract::get_key_staking_contract();
 
         match self.state.accounts.get(&staking_contract_address, None) {
-            Some(Account::Staking(x)) => x,
+            Ok(Some(Account::Staking(x))) => Some(x),
+            Err(_) => None,
             _ => {
                 unreachable!()
             }
@@ -123,7 +130,10 @@ impl Blockchain {
             KeyNibbles::from(address)
         };
 
-        self.state.accounts.get(&key, None)
+        self.state
+            .accounts
+            .get(&key, None)
+            .expect("Incomplete trie.")
     }
 
     /// Checks if we have seen some transaction with this hash inside the a validity window.

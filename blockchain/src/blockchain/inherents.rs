@@ -1,6 +1,6 @@
 use beserial::Serialize;
 use nimiq_account::{Inherent, InherentType, StakingContract};
-use nimiq_block::{ForkProof, MacroHeader, SkipBlockInfo};
+use nimiq_block::{ForkProof, MacroBlock, SkipBlockInfo};
 use nimiq_database as db;
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
@@ -19,15 +19,15 @@ impl Blockchain {
     pub fn create_macro_block_inherents(
         &self,
         state: &BlockchainState,
-        header: &MacroHeader,
+        macro_block: &MacroBlock,
     ) -> Vec<Inherent> {
         let mut inherents: Vec<Inherent> = vec![];
 
         // Every macro block is the end of a batch, so we need to finalize the batch.
-        inherents.append(&mut self.finalize_previous_batch(state, header));
+        inherents.append(&mut self.finalize_previous_batch(state, macro_block));
 
         // If this block is an election block, we also need to finalize the epoch.
-        if Policy::is_election_block_at(header.block_number) {
+        if Policy::is_election_block_at(macro_block.block_number()) {
             // On election the previous epoch needs to be finalized.
             // We can rely on `state` here, since we cannot revert macro blocks.
             inherents.push(self.finalize_previous_epoch());
@@ -132,20 +132,21 @@ impl Blockchain {
     pub fn finalize_previous_batch(
         &self,
         state: &BlockchainState,
-        macro_header: &MacroHeader,
+        macro_block: &MacroBlock,
     ) -> Vec<Inherent> {
         let prev_macro_info = &state.macro_info;
+        let macro_body = macro_block.body.as_ref().expect("we needs it");
 
-        let staking_contract = self.get_staking_contract();
+        //let staking_contract = self.get_staking_contract();
 
         // Special case for first batch: Batch 0 is finalized by definition.
-        if Policy::batch_at(macro_header.block_number) - 1 == 0 {
+        if Policy::batch_at(macro_block.block_number()) - 1 == 0 {
             return vec![];
         }
 
         // Get validator slots
         // NOTE: Fields `current_slots` and `previous_slots` are expected to always be set.
-        let validator_slots = if Policy::first_batch_of_epoch(macro_header.block_number) {
+        let validator_slots = if Policy::first_batch_of_epoch(macro_block.block_number()) {
             state
                 .previous_slots
                 .as_ref()
@@ -161,13 +162,13 @@ impl Blockchain {
         // Rewards are for the previous batch (to give validators time to report misbehavior)
         // lost_rewards_set (clears on batch end) makes rewards being lost for at least one batch
         // disabled_set (clears on epoch end) makes rewards being lost further if validator doesn't unpark
-        let lost_rewards_set = staking_contract.previous_lost_rewards();
-        let disabled_set = staking_contract.previous_disabled_slots();
+        let lost_rewards_set = macro_body.lost_reward_set.clone();
+        let disabled_set = macro_body.disabled_set.clone();
         let slashed_set = lost_rewards_set | disabled_set;
 
         // Total reward for the previous batch
         let block_reward = block_reward_for_batch(
-            macro_header,
+            &macro_block.header,
             &prev_macro_info.head.unwrap_macro_ref().header,
             self.genesis_supply,
             self.genesis_timestamp,
@@ -233,13 +234,25 @@ impl Blockchain {
                 .expect("Overflow in reward");
 
             // Create inherent for the reward.
-            let validator = StakingContract::get_validator(
+            let validator = if let Ok(validator) = StakingContract::get_validator(
                 &self.state().accounts.tree,
                 &self.read_transaction(),
                 &validator_slot.address,
-            )
-            .unwrap()
-            .expect("Couldn't find validator in the accounts trie when paying rewards!");
+            ) {
+                validator
+                    .expect("Couldn't find validator in the accounts trie when paying rewards!")
+            } else {
+                // The staking contract is at the 0 address and is thus always downloaded first.
+                // Moreover, it makes sure that if we do not have the full staking contract yet,
+                // it is impossible that we have any other address in the known part of the tree.
+                // We can thus safely ignore the reward distribution.
+                return vec![Inherent {
+                    ty: InherentType::FinalizeBatch,
+                    target: self.staking_contract_address(),
+                    value: Coin::ZERO,
+                    data: Vec::new(),
+                }];
+            };
 
             let inherent = Inherent {
                 ty: InherentType::Reward,
@@ -252,14 +265,15 @@ impl Blockchain {
             // burned.
             let account = state
                 .accounts
-                .get(&KeyNibbles::from(&inherent.target), None);
+                .get(&KeyNibbles::from(&inherent.target), None)
+                .expect("Incomplete trie.");
 
             if account.is_none() || account.unwrap().account_type() == AccountType::Basic {
                 num_eligible_slots_for_accepted_inherent.push(num_eligible_slots);
                 inherents.push(inherent);
             } else {
                 debug!(
-                    targed_address = %inherent.target,
+                    target_address = %inherent.target,
                     reward = %inherent.value,
                     "Can't accept epoch reward"
                 );
@@ -279,7 +293,7 @@ impl Blockchain {
         );
 
         // Get RNG from last block's seed and build lookup table based on number of eligible slots.
-        let mut rng = macro_header.seed.rng(VrfUseCase::RewardDistribution);
+        let mut rng = macro_block.header.seed.rng(VrfUseCase::RewardDistribution);
         let lookup = AliasMethod::new(num_eligible_slots_for_accepted_inherent);
 
         // Randomly give remainder to one accepting slot. We don't bother to distribute it over all

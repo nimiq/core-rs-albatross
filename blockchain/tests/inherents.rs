@@ -1,6 +1,6 @@
 use beserial::Serialize;
 use nimiq_account::{Inherent, InherentType};
-use nimiq_block::MacroHeader;
+use nimiq_block::{MacroBlock, MacroBody, MacroHeader};
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_hash::{Blake2bHasher, Hasher};
@@ -45,11 +45,25 @@ fn it_can_create_batch_finalization_inherents() {
         history_root: hash,
     };
 
-    // Simple case. Expect 1x FinalizeBatch, 1x Reward to validator
-    let inherents = blockchain.finalize_previous_batch(blockchain.state(), &macro_header);
-    assert_eq!(inherents.len(), 2);
+    let staking_contract = blockchain.get_staking_contract();
+    let active_validators = staking_contract.active_validators.clone();
 
-    let active_validators = blockchain.get_staking_contract().active_validators;
+    let body = MacroBody {
+        validators: None,
+        pk_tree_root: None,
+        lost_reward_set: staking_contract.previous_lost_rewards(),
+        disabled_set: staking_contract.previous_disabled_slots(),
+    };
+
+    let macro_block = MacroBlock {
+        header: macro_header,
+        body: Some(body),
+        justification: None,
+    };
+
+    // Simple case. Expect 1x FinalizeBatch, 1x Reward to validator
+    let inherents = blockchain.finalize_previous_batch(blockchain.state(), &macro_block);
+    assert_eq!(inherents.len(), 2);
 
     let (validator_address, _) = active_validators.iter().next().unwrap();
 
@@ -99,7 +113,7 @@ fn it_can_create_batch_finalization_inherents() {
         .is_ok());
     txn.commit();
 
-    let inherents = blockchain.finalize_previous_batch(blockchain.state(), &macro_header);
+    let inherents = blockchain.finalize_previous_batch(blockchain.state(), &macro_block);
     assert_eq!(inherents.len(), 3);
     let one_slot_reward = 875 / Policy::SLOTS as u64;
     let mut got_reward = false;
@@ -157,17 +171,17 @@ fn it_can_penalize_delayed_batch() {
         + Policy::BLOCK_SEPARATION_TIME * (Policy::blocks_per_batch() as u64)
         + delay;
 
-    let (genesis_suply, genesis_timestamp) = blockchain.get_genesis_parameters();
+    let (genesis_supply, genesis_timestamp) = blockchain.get_genesis_parameters();
 
     // Total reward for the previous batch
     let prev_supply = Policy::supply_at(
-        u64::from(genesis_suply),
+        u64::from(genesis_supply),
         genesis_timestamp,
         genesis_timestamp,
     );
 
     let current_supply =
-        Policy::supply_at(u64::from(genesis_suply), genesis_timestamp, next_timestamp);
+        Policy::supply_at(u64::from(genesis_supply), genesis_timestamp, next_timestamp);
 
     let max_reward = current_supply - prev_supply;
 
@@ -195,8 +209,23 @@ fn it_can_penalize_delayed_batch() {
         history_root: hash,
     };
 
+    let staking_contract = blockchain.get_staking_contract();
+
+    let body = MacroBody {
+        validators: None,
+        pk_tree_root: None,
+        lost_reward_set: staking_contract.previous_lost_rewards(),
+        disabled_set: staking_contract.previous_disabled_slots(),
+    };
+
+    let macro_block = MacroBlock {
+        header: macro_header,
+        body: Some(body),
+        justification: None,
+    };
+
     // Simple case. Expect 1x FinalizeBatch, 1x Reward to validator
-    let inherents = blockchain.finalize_previous_batch(blockchain.state(), &macro_header);
+    let inherents = blockchain.finalize_previous_batch(blockchain.state(), &macro_block);
     assert_eq!(inherents.len(), 2);
 
     let mut got_reward = false;

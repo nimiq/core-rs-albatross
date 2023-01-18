@@ -279,6 +279,7 @@ impl<N: Network> StateQueue<N> {
         };
 
         if let Some(start_key) = start_key {
+            log::error!("+++++++ Requesting chunks {:?}", start_key);
             let req = RequestChunk {
                 start_key: start_key.clone(),
                 limit: Policy::state_chunks_max_size(),

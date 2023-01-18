@@ -59,7 +59,9 @@ fn it_can_commit_and_revert_a_block_body() {
     }];
 
     assert_eq!(
-        accounts.get(&KeyNibbles::from(&address_validator), None),
+        accounts
+            .get(&KeyNibbles::from(&address_validator), None)
+            .unwrap(),
         None
     );
 
@@ -79,6 +81,7 @@ fn it_can_commit_and_revert_a_block_body() {
     assert_eq!(
         accounts
             .get(&KeyNibbles::from(&address_validator), None)
+            .unwrap()
             .unwrap()
             .balance(),
         Coin::from_u64_unchecked(10000)
@@ -132,7 +135,9 @@ fn it_can_commit_and_revert_a_block_body() {
     ));
 
     assert_eq!(
-        accounts.get(&KeyNibbles::from(&address_recipient), None),
+        accounts
+            .get(&KeyNibbles::from(&address_recipient), None)
+            .unwrap(),
         None
     );
 
@@ -153,6 +158,7 @@ fn it_can_commit_and_revert_a_block_body() {
         accounts
             .get(&KeyNibbles::from(&address_recipient), None)
             .unwrap()
+            .unwrap()
             .balance(),
         Coin::from_u64_unchecked(10)
     );
@@ -160,6 +166,7 @@ fn it_can_commit_and_revert_a_block_body() {
     assert_eq!(
         accounts
             .get(&KeyNibbles::from(&address_validator), None)
+            .unwrap()
             .unwrap()
             .balance(),
         Coin::from_u64_unchecked(10000 + 10000 - 10)
@@ -184,13 +191,16 @@ fn it_can_commit_and_revert_a_block_body() {
     txn.commit();
 
     assert_eq!(
-        accounts.get(&KeyNibbles::from(&address_recipient), None),
+        accounts
+            .get(&KeyNibbles::from(&address_recipient), None)
+            .unwrap(),
         None
     );
 
     assert_eq!(
         accounts
             .get(&KeyNibbles::from(&address_validator), None)
+            .unwrap()
             .unwrap()
             .balance(),
         Coin::from_u64_unchecked(10000)
@@ -215,7 +225,9 @@ fn it_correctly_rewards_validators() {
 
     // Validator 1 mines first block.
     assert_eq!(
-        accounts.get(&KeyNibbles::from(&address_validator_1), None),
+        accounts
+            .get(&KeyNibbles::from(&address_validator_1), None)
+            .unwrap(),
         None
     );
 
@@ -236,6 +248,7 @@ fn it_correctly_rewards_validators() {
     assert_eq!(
         accounts
             .get(&KeyNibbles::from(&address_validator_1), None)
+            .unwrap()
             .unwrap()
             .balance(),
         Coin::from_u64_unchecked(10000)
@@ -269,7 +282,9 @@ fn it_correctly_rewards_validators() {
 
     // Validator 2 mines second block.
     assert_eq!(
-        accounts.get(&KeyNibbles::from(&address_validator_2), None),
+        accounts
+            .get(&KeyNibbles::from(&address_validator_2), None)
+            .unwrap(),
         None
     );
 
@@ -292,6 +307,7 @@ fn it_correctly_rewards_validators() {
         accounts
             .get(&KeyNibbles::from(&address_validator_1), None)
             .unwrap()
+            .unwrap()
             .balance(),
         Coin::from_u64_unchecked(10000) - value1 - fee1 - value2 - fee2
     );
@@ -299,6 +315,7 @@ fn it_correctly_rewards_validators() {
     assert_eq!(
         accounts
             .get(&KeyNibbles::from(&address_validator_2), None)
+            .unwrap()
             .unwrap()
             .balance(),
         Coin::from_u64_unchecked(10000) + fee1 + fee2
@@ -308,6 +325,7 @@ fn it_correctly_rewards_validators() {
         accounts
             .get(&KeyNibbles::from(&address_recipient_1), None)
             .unwrap()
+            .unwrap()
             .balance(),
         value1
     );
@@ -315,6 +333,7 @@ fn it_correctly_rewards_validators() {
     assert_eq!(
         accounts
             .get(&KeyNibbles::from(&address_recipient_2), None)
+            .unwrap()
             .unwrap()
             .balance(),
         value2
@@ -349,10 +368,17 @@ fn it_checks_for_sufficient_funds() {
 
     let hash1 = accounts.get_root_hash_assert(None);
 
-    assert_eq!(accounts.get(&KeyNibbles::from(&address_sender), None), None);
+    assert_eq!(
+        accounts
+            .get(&KeyNibbles::from(&address_sender), None)
+            .unwrap(),
+        None
+    );
 
     assert_eq!(
-        accounts.get(&KeyNibbles::from(&address_recipient), None),
+        accounts
+            .get(&KeyNibbles::from(&address_recipient), None)
+            .unwrap(),
         None
     );
 
@@ -366,10 +392,17 @@ fn it_checks_for_sufficient_funds() {
             .is_err());
     }
 
-    assert_eq!(accounts.get(&KeyNibbles::from(&address_sender), None), None);
+    assert_eq!(
+        accounts
+            .get(&KeyNibbles::from(&address_sender), None)
+            .unwrap(),
+        None
+    );
 
     assert_eq!(
-        accounts.get(&KeyNibbles::from(&address_recipient), None),
+        accounts
+            .get(&KeyNibbles::from(&address_recipient), None)
+            .unwrap(),
         None
     );
 
@@ -389,12 +422,15 @@ fn it_checks_for_sufficient_funds() {
         accounts
             .get(&KeyNibbles::from(&address_sender), None)
             .unwrap()
+            .unwrap()
             .balance(),
         Coin::from_u64_unchecked(10000)
     );
 
     assert_eq!(
-        accounts.get(&KeyNibbles::from(&address_recipient), None),
+        accounts
+            .get(&KeyNibbles::from(&address_recipient), None)
+            .unwrap(),
         None
     );
 
@@ -419,12 +455,15 @@ fn it_checks_for_sufficient_funds() {
         accounts
             .get(&KeyNibbles::from(&address_sender), None)
             .unwrap()
+            .unwrap()
             .balance(),
         Coin::from_u64_unchecked(10000)
     );
 
     assert_eq!(
-        accounts.get(&KeyNibbles::from(&address_recipient), None),
+        accounts
+            .get(&KeyNibbles::from(&address_recipient), None)
+            .unwrap(),
         None
     );
 
@@ -457,12 +496,15 @@ fn it_checks_for_sufficient_funds() {
         accounts
             .get(&KeyNibbles::from(&address_sender), None)
             .unwrap()
+            .unwrap()
             .balance(),
         Coin::from_u64_unchecked(10000)
     );
 
     assert_eq!(
-        accounts.get(&KeyNibbles::from(&address_recipient), None),
+        accounts
+            .get(&KeyNibbles::from(&address_recipient), None)
+            .unwrap(),
         None
     );
 
@@ -567,7 +609,7 @@ fn accounts_performance() {
     txn.commit();
     let duration = start.elapsed();
     println!(
-        "Time ellapsed after txn commit: {} ms, Accounts per second {}",
+        "Time elapsed after txn commit: {} ms, Accounts per second {}",
         duration.as_millis(),
         num_txns as f64 / (duration.as_millis() as f64 / 1000_f64),
     );
@@ -896,6 +938,7 @@ fn it_commits_valid_and_failing_txns() {
         accounts
             .get(&KeyNibbles::from(&[1u8; 20][..]), None)
             .unwrap()
+            .unwrap()
             .balance(),
         Coin::from_u64_unchecked(800)
     );
@@ -904,6 +947,7 @@ fn it_commits_valid_and_failing_txns() {
     assert_eq!(
         accounts
             .get(&KeyNibbles::from(&Address::from(&key_pair.public)), None)
+            .unwrap()
             .unwrap()
             .balance(),
         Coin::from_u64_unchecked(1000)
@@ -938,6 +982,7 @@ fn it_commits_valid_and_failing_txns() {
     assert_eq!(
         accounts
             .get(&KeyNibbles::from(&Address::from(&key_pair.public)), None)
+            .unwrap()
             .unwrap()
             .balance(),
         Coin::from_u64_unchecked(800)

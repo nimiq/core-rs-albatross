@@ -8,6 +8,7 @@ use nimiq_consensus::sync::live::block_queue::{BlockHeaderTopic, BlockTopic};
 use nimiq_consensus::sync::syncer::MacroSyncReturn;
 use nimiq_consensus::sync::syncer_proxy::SyncerProxy;
 use nimiq_light_blockchain::LightBlockchain;
+use nimiq_primitives::policy::Policy;
 use nimiq_test_utils::node::TESTING_BLS_CACHE_MAX_CAPACITY;
 use nimiq_test_utils::zkp_test_data::{zkp_test_exe, KEYS_PATH};
 use nimiq_zkp_component::ZKPComponent;
@@ -15,7 +16,7 @@ use parking_lot::{Mutex, RwLock};
 
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
-use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent};
+use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent, Direction};
 use nimiq_consensus::consensus::Consensus;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
@@ -233,10 +234,22 @@ pub async fn sync_two_peers(
     spawn(consensus2);
 
     for _ in 0..num_batches_live_sync {
+        let start_block_hash = blockchain1_proxy.read().head_hash();
         produce_macro_blocks_with_txns(&producer, &Arc::clone(&blockchain1), 1, 4, 2);
-        let block = blockchain1_proxy.read().head().clone();
-        _ = net1.publish::<BlockTopic>(block.clone()).await;
-        _ = net1.publish::<BlockHeaderTopic>(block).await;
+        let blocks = blockchain1_proxy
+            .read()
+            .get_blocks(
+                &start_block_hash,
+                Policy::blocks_per_batch(),
+                true,
+                Direction::Forward,
+            )
+            .unwrap();
+
+        for block in blocks {
+            _ = net1.publish::<BlockTopic>(block.clone()).await;
+            _ = net1.publish::<BlockHeaderTopic>(block).await;
+        }
         let sync_result = events.next().await;
         assert!(sync_result.is_some());
     }

@@ -590,6 +590,7 @@ fn it_can_revert_failed_transactions() {
         accounts
             .get(&KeyNibbles::from(&Address::from(&key_pair.public)), None)
             .unwrap()
+            .unwrap()
             .balance(),
         Coin::from_u64_unchecked(999899999700)
     );
@@ -669,6 +670,7 @@ fn it_can_revert_failed_vesting_contract_transaction() {
         accounts
             .get(&KeyNibbles::from(&tx.contract_creation_address()), None)
             .unwrap()
+            .unwrap()
             .balance(),
         Coin::from_u64_unchecked(1000)
     );
@@ -677,6 +679,7 @@ fn it_can_revert_failed_vesting_contract_transaction() {
     assert_eq!(
         accounts
             .get(&KeyNibbles::from(&Address::from(&key_pair.public)), None)
+            .unwrap()
             .unwrap()
             .balance(),
         Coin::from_u64_unchecked(999999998900)
@@ -741,6 +744,7 @@ fn it_can_revert_failed_vesting_contract_transaction() {
         accounts
             .get(&KeyNibbles::from(&tx.contract_creation_address()), None)
             .unwrap()
+            .unwrap()
             .balance(),
         Coin::from_u64_unchecked(900)
     );
@@ -749,6 +753,7 @@ fn it_can_revert_failed_vesting_contract_transaction() {
     assert_eq!(
         accounts
             .get(&KeyNibbles::from(&Address::from(&key_pair.public)), None)
+            .unwrap()
             .unwrap()
             .balance(),
         Coin::from_u64_unchecked(999999998900)
@@ -763,6 +768,7 @@ fn it_can_revert_failed_vesting_contract_transaction() {
     assert_eq!(
         accounts
             .get(&KeyNibbles::from(&tx.contract_creation_address()), None)
+            .unwrap()
             .unwrap()
             .balance(),
         Coin::from_u64_unchecked(1000)

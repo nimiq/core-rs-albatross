@@ -1271,7 +1271,7 @@ async fn mempool_update_not_enough_balance() {
     // Get txns from mempool
     let (updated_txns, _) = mempool.get_transactions_for_block(10_000);
 
-    // Expect only 20 transations because in the adopted blocks we included 10 txns that would cause the senders
+    // Expect only 20 transactions because in the adopted blocks we included 10 txns that would cause the senders
     // to not have enough balance to pay for all txns already in the mempool
     assert_eq!(
         updated_txns.len(),
@@ -1778,7 +1778,7 @@ async fn mempool_regular_and_control_tx() {
 }
 
 #[test(tokio::test(flavor = "multi_thread", worker_threads = 10))]
-async fn mempool_update_create_staker_non_existant_delegation_addr() {
+async fn mempool_update_create_staker_non_existent_delegation_addr() {
     let mut rng = StdRng::seed_from_u64(0);
     let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
@@ -1807,7 +1807,7 @@ async fn mempool_update_create_staker_non_existant_delegation_addr() {
 
     let txns = vec![tx];
 
-    // Add validator to genesis, note that the delegation adddress is not in the genesis
+    // Add validator to genesis, note that the delegation address is not in the genesis
     genesis_builder.with_genesis_validator(
         Address::from(&SchnorrKeyPair::generate(&mut rng)),
         signing_key().public,
@@ -1978,6 +1978,7 @@ async fn it_can_reject_invalid_vesting_contract_transaction() {
         accounts
             .get(&KeyNibbles::from(&tx.contract_creation_address()), None)
             .unwrap()
+            .unwrap()
             .balance(),
         Coin::from_u64_unchecked(1000)
     );
@@ -2001,7 +2002,7 @@ async fn it_can_reject_invalid_vesting_contract_transaction() {
     // Send txns to mempool
     send_txn_to_mempool(&mempool, mock_network, mock_id, transactions).await;
 
-    // The transaction should be rejected by the mempool, since the contract doesnt have enough vested funds
+    // The transaction should be rejected by the mempool, since the contract doesn't have enough vested funds
     assert_eq!(
         mempool.num_transactions(),
         0,

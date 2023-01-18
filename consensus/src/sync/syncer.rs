@@ -169,6 +169,7 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Stream for Syncer<N, M
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
         // Poll self.history_sync and add new peers to self.sync_queue.
         while let Poll::Ready(result) = self.macro_sync.poll_next_unpin(cx) {
+            log::error!("---- Macro sync");
             match result {
                 Some(MacroSyncReturn::Good(peer_id)) => {
                     debug!(%peer_id, "Macro sync returned good peer");
@@ -186,6 +187,7 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Stream for Syncer<N, M
         self.check_peers_up_to_date();
 
         while let Poll::Ready(Some(result)) = self.live_sync.poll_next_unpin(cx) {
+            log::error!("---- Live sync {:?}", result);
             match result {
                 LiveSyncEvent::PushEvent(push_event) => {
                     return Poll::Ready(Some(push_event));
