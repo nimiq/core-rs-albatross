@@ -247,8 +247,14 @@ pub async fn sync_two_peers(
             .unwrap();
 
         for block in blocks {
-            _ = net1.publish::<BlockTopic>(block.clone()).await;
-            _ = net1.publish::<BlockHeaderTopic>(block).await;
+            match sync_mode {
+                SyncMode::Light => {
+                    _ = net1.publish::<BlockHeaderTopic>(block).await;
+                }
+                SyncMode::History | SyncMode::Full => {
+                    _ = net1.publish::<BlockTopic>(block.clone()).await;
+                }
+            };
         }
         let sync_result = events.next().await;
         assert!(sync_result.is_some());

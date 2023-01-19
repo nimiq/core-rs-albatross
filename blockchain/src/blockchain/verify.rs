@@ -154,20 +154,21 @@ impl Blockchain {
             }
         }
 
-        // For macro blocks we have additional checks. We simply construct what the body should be
-        // from our own state and then compare it with the body hash in the header.
-        if let Block::Macro(macro_block) = block {
-            // Get the validators.
-            let real_validators = if macro_block.is_election_block() {
-                Some(self.next_validators(&macro_block.header.seed))
-            } else {
-                None
-            };
+        if let Some(staking_contract) = self.get_staking_contract_if_complete() {
+            // For macro blocks we have additional checks. We simply construct what the body should be
+            // from our own state and then compare it with the body hash in the header.
+            if let Block::Macro(macro_block) = block {
+                // Check the real values against the block.
+                // Get the validators.
+                let real_validators = if macro_block.is_election_block() {
+                    Some(self.next_validators(&macro_block.header.seed))
+                } else {
+                    None
+                };
 
-            // Check the real values against the block.
-            if let Some(body) = &macro_block.body {
-                // Get the lost rewards and disabled sets.
-                if let Some(staking_contract) = self.get_staking_contract_if_complete() {
+                if let Some(body) = &macro_block.body {
+                    // Get the lost rewards and disabled sets.
+
                     let real_lost_rewards = staking_contract.previous_lost_rewards();
                     let real_disabled_slots = staking_contract.previous_disabled_slots();
 
@@ -189,51 +190,50 @@ impl Blockchain {
                         );
                         return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
                     }
+                    if real_validators != body.validators {
+                        warn!(
+                            %block,
+                            reason = "Validators don't match real validators",
+                            "Rejecting block"
+                        );
+                        return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
+                    }
+                } else {
+                    // We don't need to check the nano_zkp_hash here since it was already checked in the
+                    // `verify_block_body` method.
+
+                    // Get the lost rewards and disabled sets.
+                    let real_lost_rewards = staking_contract.previous_lost_rewards();
+                    let real_disabled_slots = staking_contract.previous_disabled_slots();
+
+                    // If we were not given a body, then we construct a body from our values and check
+                    // its hash against the block header.
+                    let real_pk_tree_root = real_validators
+                        .as_ref()
+                        .and_then(|validators| MacroBlock::pk_tree_root(validators).ok());
+
+                    let real_body = MacroBody {
+                        validators: real_validators,
+                        pk_tree_root: real_pk_tree_root,
+                        lost_reward_set: real_lost_rewards,
+                        disabled_set: real_disabled_slots,
+                    };
+
+                    let real_body_hash = real_body.hash::<Blake2bHash>();
+                    if macro_block.header.body_root != real_body_hash {
+                        warn!(
+                            %block,
+                            header_root = %macro_block.header.body_root,
+                            body_hash   = %real_body_hash,
+                            reason = "Header body hash doesn't match real body hash",
+                            "Rejecting block"
+                        );
+                        return Err(PushError::InvalidBlock(BlockError::BodyHashMismatch));
+                    }
+
+                    // Since we were not given a body, we return the body that we already calculated.
+                    return Ok(Some(real_body));
                 }
-
-                if real_validators != body.validators {
-                    warn!(
-                        %block,
-                        reason = "Validators don't match real validators",
-                        "Rejecting block"
-                    );
-                    return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
-                }
-
-                // We don't need to check the nano_zkp_hash here since it was already checked in the
-                // `verify_block_body` method.
-            } else if let Some(staking_contract) = self.get_staking_contract_if_complete() {
-                // Get the lost rewards and disabled sets.
-
-                let real_lost_rewards = staking_contract.previous_lost_rewards();
-                let real_disabled_slots = staking_contract.previous_disabled_slots();
-                // If we were not given a body, then we construct a body from our values and check
-                // its hash against the block header.
-                let real_pk_tree_root = real_validators
-                    .as_ref()
-                    .and_then(|validators| MacroBlock::pk_tree_root(validators).ok());
-
-                let real_body = MacroBody {
-                    validators: real_validators,
-                    pk_tree_root: real_pk_tree_root,
-                    lost_reward_set: real_lost_rewards,
-                    disabled_set: real_disabled_slots,
-                };
-
-                let real_body_hash = real_body.hash::<Blake2bHash>();
-                if macro_block.header.body_root != real_body_hash {
-                    warn!(
-                        %block,
-                        header_root = %macro_block.header.body_root,
-                        body_hash   = %real_body_hash,
-                        reason = "Header body hash doesn't match real body hash",
-                        "Rejecting block"
-                    );
-                    return Err(PushError::InvalidBlock(BlockError::BodyHashMismatch));
-                }
-
-                // Since we were not given a body, we return the body that we already calculated.
-                return Ok(Some(real_body));
             }
         }
 

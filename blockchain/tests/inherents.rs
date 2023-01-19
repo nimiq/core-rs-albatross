@@ -56,7 +56,7 @@ fn it_can_create_batch_finalization_inherents() {
     };
 
     let macro_block = MacroBlock {
-        header: macro_header,
+        header: macro_header.clone(),
         body: Some(body),
         justification: None,
     };
@@ -112,6 +112,19 @@ fn it_can_create_batch_finalization_inherents() {
         )
         .is_ok());
     txn.commit();
+
+    let staking_contract = blockchain.get_staking_contract();
+    let body = MacroBody {
+        validators: None,
+        pk_tree_root: None,
+        lost_reward_set: staking_contract.previous_lost_rewards(),
+        disabled_set: staking_contract.previous_disabled_slots(),
+    };
+    let macro_block = MacroBlock {
+        header: macro_header,
+        body: Some(body),
+        justification: None,
+    };
 
     let inherents = blockchain.finalize_previous_batch(blockchain.state(), &macro_block);
     assert_eq!(inherents.len(), 3);

@@ -316,8 +316,8 @@ fn can_partially_apply_blocks() {
 
     let block = temp_producer1.next_block_with_txs(vec![], false, vec![]);
     // Chunk covers trie until d...
-    let chunk1 = temp_producer1.get_chunk(KeyNibbles::ROOT, 2);
-    let chunk2_start = chunk1.chunk.end_key.clone().unwrap();
+    let chunk1 = temp_producer1.get_chunk(KeyNibbles::ROOT, 4);
+    let chunk2_start = chunk1.chunk.keys_end.clone().unwrap();
     assert_eq!(
         temp_producer2.push_with_chunks(block, vec![chunk1]),
         Ok((PushResult::Extended, Ok(ChunksPushResult::Chunks(1, 0))))
@@ -340,7 +340,16 @@ fn can_partially_apply_blocks() {
 
     // Block 2, 0 Chunks, 2 txs
     let address_known = Address::from_hex("a000000000000000000000000000000000000000").unwrap();
-    let address_unknown = Address::from_hex("e000000000000000000000000000000000000000").unwrap();
+    let address_unknown = Address::from_hex("f000000000000000000000000000000000000000").unwrap();
+    assert!(
+        KeyNibbles::from(&address_known) < chunk2_start,
+        "Address should be in the known part of the trie"
+    );
+    assert!(
+        KeyNibbles::from(&address_unknown) > chunk2_start,
+        "Address should be in the unknown part of the trie"
+    );
+
     let tx1 = TransactionBuilder::new_basic(
         &key_pair,
         address_known.clone(),

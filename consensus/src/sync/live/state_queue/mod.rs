@@ -145,7 +145,7 @@ impl ChunkRequestState {
         if let Some(key) = start_key {
             Self::Continue(key.clone())
         } else {
-            Self::Reset
+            Self::Complete
         }
     }
 
@@ -245,6 +245,7 @@ impl<N: Network> StateQueue<N> {
     /// Resets the starting key for requesting the next chunks.
     /// When reset this component uses the blockchain state missing range start key.
     pub fn reset_chunk_request_chain(&mut self) {
+        log::error!("+++++ Reset of chunk request state");
         self.start_key = ChunkRequestState::Reset;
     }
 
@@ -317,7 +318,14 @@ impl<N: Network> StateQueue<N> {
                 response.block_number,
                 response.block_hash
             );
+            if response.chunk.end_key.is_none() {
+                log::error!("++++ I am at the end of the state sync!");
+            }
             return;
+        }
+
+        if response.chunk.end_key.is_none() {
+            log::error!("++++ I am at the end of the state sync!");
         }
 
         chunks.push(ChunkAndId::new(response.chunk, start_key, peer_id));

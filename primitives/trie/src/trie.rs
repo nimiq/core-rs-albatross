@@ -487,7 +487,8 @@ impl MerkleRadixTrie {
                     let parent = mem::replace(&mut node, child);
                     root_path.push(parent);
                 }
-                Err(MerkleRadixTrieError::ChildIsStump) => {
+                Err(MerkleRadixTrieError::ChildIsStump)
+                | Err(MerkleRadixTrieError::ChildDoesNotExist) => {
                     // We cannot continue further down as the next node is outside our trie.
                     // Update this node prior to `update_keys` (which only updates the other nodes in the root path).
                     node.put_child_no_hash(key).expect("Prefix must be correct");
@@ -495,19 +496,6 @@ impl MerkleRadixTrie {
 
                     root_path.push(node);
                     break;
-                }
-                Err(MerkleRadixTrieError::ChildDoesNotExist) if node.is_root() => {
-                    let is_incomplete = node
-                        .root_data
-                        .as_ref()
-                        .map(|data| data.incomplete.is_some())
-                        .unwrap_or(false);
-
-                    // We should not return an error on a completely empty but incomplete trie.
-                    if is_incomplete && !node.has_children() {
-                        return Ok(());
-                    }
-                    return Err(MerkleRadixTrieError::ChildDoesNotExist);
                 }
                 Err(e) => {
                     return Err(e);

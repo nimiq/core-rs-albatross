@@ -28,7 +28,7 @@ async fn two_peers_can_sync_epoch_minus_batch() {
         SyncMode::Full,
     )
     .await
-} //
+}
 
 #[test(tokio::test)]
 async fn two_peers_can_sync_epoch_plus_batch() {
@@ -38,7 +38,7 @@ async fn two_peers_can_sync_epoch_plus_batch() {
         SyncMode::Full,
     )
     .await
-} //
+}
 
 #[test(tokio::test)]
 async fn two_peers_can_sync_epoch_plus_two_batches() {
@@ -48,7 +48,7 @@ async fn two_peers_can_sync_epoch_plus_two_batches() {
         SyncMode::Full,
     )
     .await
-} //
+}
 
 #[test(tokio::test)]
 async fn two_peers_can_sync_single_epoch() {
