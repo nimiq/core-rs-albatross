@@ -203,6 +203,12 @@ impl ClientInner {
         let network_events = network.subscribe_events();
 
         // Open database
+        #[cfg(any(
+            feature = "full-consensus",
+            feature = "validator",
+            feature = "wallet",
+            feature = "zkp-storage"
+        ))]
         let environment = config.storage.database(
             config.network_id,
             config.consensus.sync_mode,

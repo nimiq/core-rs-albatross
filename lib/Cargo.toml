@@ -50,7 +50,7 @@ nimiq-blockchain-interface = { path = "../blockchain-interface" }
 nimiq-blockchain-proxy = { path = "../blockchain-proxy", default-features = false }
 nimiq-bls = { path = "../bls" }
 nimiq-consensus = { path = "../consensus", default-features = false }
-nimiq-database = { path = "../database" }
+nimiq-database = { path = "../database", optional = true }
 nimiq-genesis = { path = "../genesis", default-features = false }
 nimiq-jsonrpc-core = { git = "https://github.com/nimiq/jsonrpc.git", optional=true}
 nimiq-jsonrpc-server = { git = "https://github.com/nimiq/jsonrpc.git", optional=true}
@@ -76,7 +76,7 @@ nimiq-test-log = { path = "../test-log" }
 [features]
 deadlock = ["parking_lot/deadlock_detection"]
 default = ["full-consensus"]
-full-consensus = ["nimiq-blockchain", "nimiq-consensus/full", "nimiq-mempool"]
+full-consensus = ["nimiq-blockchain", "nimiq-consensus/full", "nimiq-database"]
 launcher = []
 signal-handling = ["signal-hook", "tokio"]
 logging = ["file-rotate", "nimiq-log", "serde_json", "tokio", "tracing-subscriber"]
@@ -85,8 +85,8 @@ metrics-server = ["nimiq-metrics-server", "nimiq-network-libp2p/metrics", "nimiq
 panic = ["log-panics"]
 rpc-server = ["nimiq-jsonrpc-core", "nimiq-jsonrpc-server", "nimiq-rpc-server", "nimiq-wallet", "validator"]
 tokio-console = ["console-subscriber", "logging", "tokio"]
-validator = ["nimiq-validator", "nimiq-validator-network", "nimiq-rpc-server"]
-wallet = ["nimiq-wallet"]
+validator = ["nimiq-database", "nimiq-mempool", "nimiq-validator", "nimiq-validator-network", "nimiq-rpc-server"]
+wallet = ["nimiq-database", "nimiq-wallet"]
 websocket = ["nimiq-network-libp2p/websocket"]
-zkp-storage = ["nimiq-zkp-component/zkp-storage"]
+zkp-storage = ["nimiq-database", "nimiq-zkp-component/zkp-storage"]
 zkp-prover = ["nimiq-zkp-component/zkp-prover"]
