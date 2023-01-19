@@ -86,9 +86,9 @@ pub enum LiveSyncPushEvent {
 /// Enumeration for the LiveSync stream events related to peers
 pub enum LiveSyncPeerEvent<TPeerId> {
     /// Peer is in the past (outdated)
-    OutdatedPeer(TPeerId),
+    Behind(TPeerId),
     /// Peer is in the future (advanced)
-    AdvancedPeer(TPeerId),
+    Ahead(TPeerId),
 }
 
 /// Syncer is the main synchronization object inside `Consensus`
@@ -191,10 +191,10 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Stream for Syncer<N, M
                     return Poll::Ready(Some(push_event));
                 }
                 LiveSyncEvent::PeerEvent(peer_event) => match peer_event {
-                    LiveSyncPeerEvent::OutdatedPeer(peer_id) => {
+                    LiveSyncPeerEvent::Behind(peer_id) => {
                         self.outdated_peers.insert(peer_id);
                     }
-                    LiveSyncPeerEvent::AdvancedPeer(peer_id) => {
+                    LiveSyncPeerEvent::Ahead(peer_id) => {
                         self.move_peer_into_history_sync(peer_id);
                     }
                 },

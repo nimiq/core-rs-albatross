@@ -168,10 +168,8 @@ impl<N: Network> LiveSyncQueue<N> for StateQueue<N> {
             | QueuedStateChunks::TooFarFutureChunk(ChunkAndId { peer_id, .. }) => {
                 // Peer is too far ahead.
                 future_results.push_back(
-                    future::ready(PushOpResult::PeerEvent(LiveSyncPeerEvent::AdvancedPeer(
-                        peer_id,
-                    )))
-                    .boxed(),
+                    future::ready(PushOpResult::PeerEvent(LiveSyncPeerEvent::Ahead(peer_id)))
+                        .boxed(),
                 );
             }
             QueuedStateChunks::PeerIncompleteState(peer_id)
@@ -179,10 +177,8 @@ impl<N: Network> LiveSyncQueue<N> for StateQueue<N> {
             | QueuedStateChunks::TooDistantPastChunk(ChunkAndId { peer_id, .. }) => {
                 // Peer is too far behind.
                 future_results.push_back(
-                    future::ready(PushOpResult::PeerEvent(LiveSyncPeerEvent::OutdatedPeer(
-                        peer_id,
-                    )))
-                    .boxed(),
+                    future::ready(PushOpResult::PeerEvent(LiveSyncPeerEvent::Behind(peer_id)))
+                        .boxed(),
                 );
             }
         }

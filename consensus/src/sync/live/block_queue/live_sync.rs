@@ -90,22 +90,18 @@ impl<N: Network> LiveSyncQueue<N> for BlockQueue<N> {
                         .boxed(),
                 );
             }
-            QueuedBlock::TooFarFuture(_, peer_id) => {
+            QueuedBlock::TooFarAhead(_, peer_id) => {
                 // Peer is too far ahead.
                 future_results.push_back(
-                    future::ready(PushOpResult::PeerEvent(LiveSyncPeerEvent::AdvancedPeer(
-                        peer_id,
-                    )))
-                    .boxed(),
+                    future::ready(PushOpResult::PeerEvent(LiveSyncPeerEvent::Ahead(peer_id)))
+                        .boxed(),
                 );
             }
-            QueuedBlock::TooDistantPast(_, peer_id) => {
+            QueuedBlock::TooFarBehind(_, peer_id) => {
                 // Peer is too far behind.
                 future_results.push_back(
-                    future::ready(PushOpResult::PeerEvent(LiveSyncPeerEvent::OutdatedPeer(
-                        peer_id,
-                    )))
-                    .boxed(),
+                    future::ready(PushOpResult::PeerEvent(LiveSyncPeerEvent::Behind(peer_id)))
+                        .boxed(),
                 );
             }
         }

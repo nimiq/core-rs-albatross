@@ -308,7 +308,7 @@ impl<N: Network> StateQueue<N> {
         if chunks.iter().any(|chunk| {
             chunk.start_key == start_key
                 && chunk.chunk.items.len() == response.chunk.items.len()
-                && chunk.chunk.keys_end == response.chunk.keys_end
+                && chunk.chunk.end_key == response.chunk.end_key
         }) {
             log::debug!(
                 "Discarding duplicate chunk {} for block (#{}, hash {})",
@@ -389,7 +389,7 @@ impl<N: Network> StateQueue<N> {
             );
         } else if chunk.block_hash == current_block_hash {
             // Immediately return chunks for the current head blockchain.
-            self.set_start_key(&chunk.chunk.keys_end);
+            self.set_start_key(&chunk.chunk.end_key);
             return Some(QueuedStateChunks::HeadStateChunk(vec![ChunkAndId::new(
                 chunk.chunk,
                 start_key,
@@ -407,7 +407,7 @@ impl<N: Network> StateQueue<N> {
             log::debug!("Discarding chunk {}, block already applied", chunk);
         } else {
             // Chunk is inside the buffer window, put it in the buffer.
-            self.set_start_key(&chunk.chunk.keys_end);
+            self.set_start_key(&chunk.chunk.end_key);
             self.insert_chunk_into_buffer(chunk, start_key, peer_id);
         }
         None
@@ -446,11 +446,11 @@ impl<N: Network> StateQueue<N> {
                 QueuedStateChunks::Missing(blocks_and_chunks)
             }
             // Received too far away blocks (past). We forward the block queue event without chunks.
-            QueuedBlock::TooDistantPast(block, peer_id) => {
+            QueuedBlock::TooFarBehind(block, peer_id) => {
                 QueuedStateChunks::TooDistantPastBlock(block, peer_id)
             }
             // Received too far away blocks (future). We forward the block queue event without chunks.
-            QueuedBlock::TooFarFuture(block, peer_id) => {
+            QueuedBlock::TooFarAhead(block, peer_id) => {
                 QueuedStateChunks::TooFarFutureBlock(block, peer_id)
             }
         }

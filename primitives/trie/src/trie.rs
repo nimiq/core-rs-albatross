@@ -16,6 +16,7 @@ use nimiq_hash::Blake2bHash;
 use crate::error::MerkleRadixTrieError;
 use crate::key_nibbles::KeyNibbles;
 use crate::network_trie_node::NetworkTrieNode;
+use crate::trie_chunk::Item;
 pub use crate::trie_chunk::TrieChunk;
 use crate::trie_chunk::TrieChunkPushResult;
 use crate::trie_node::{RootData, TrieNode, TrieNodeKind};
@@ -533,11 +534,11 @@ impl MerkleRadixTrie {
         };
         let chunk: Vec<_> = chunk
             .into_iter()
-            .map(|n| (n.key, n.value.unwrap()))
+            .map(|n| Item::new(n.key, n.value.unwrap()))
             .collect();
-        let proof = if let Some((last, _)) = chunk.last() {
+        let proof = if let Some(item) = chunk.last() {
             // Get the proof for the last included item if available.
-            self.get_proof(txn, vec![last])
+            self.get_proof(txn, vec![&item.key])
                 .expect("trie proof failed for last item")
         } else if let Some(pred) = self.get_predecessor(txn, &keys.start) {
             // Else for the last item already included in the trie.
@@ -554,7 +555,7 @@ impl MerkleRadixTrie {
             key.slice(0, cmp::min(key.len(), max_len))
         });
         TrieChunk {
-            keys_end: end,
+            end_key: end,
             items: chunk,
             proof,
         }
@@ -746,7 +747,7 @@ impl MerkleRadixTrie {
 
     /// When pushing a chunk the correct behavior may result in an applied chunk or in an ignored chunk.
     /// `start_key` is inclusive and is meant to check if the chunk is a consecutive chunk.
-    /// `keys_end` is exclusive.
+    /// `end_key` is exclusive.
     pub fn put_chunk(
         &self,
         txn: &mut WriteTransaction,
@@ -760,29 +761,29 @@ impl MerkleRadixTrie {
             None => return Err(MerkleRadixTrieError::TrieAlreadyComplete),
         }
 
-        if let Some(keys_end) = &chunk.keys_end {
-            if start_key > *keys_end {
+        if let Some(end_key) = &chunk.end_key {
+            if start_key > *end_key {
                 return Err(MerkleRadixTrieError::InvalidChunk("invalid keys"));
             }
         }
         if !chunk.items.is_empty() {
-            if start_key > chunk.items[0].0 {
+            if start_key > chunk.items[0].key {
                 return Err(MerkleRadixTrieError::InvalidChunk(
                     "first key is inconsistent with key range",
                 ));
             }
-            let last_item_key = chunk.items.last().unwrap().0.clone();
-            if let Some(keys_end) = &chunk.keys_end {
-                if last_item_key >= *keys_end {
+            let last_item_key = chunk.items.last().unwrap().key.clone();
+            if let Some(end_key) = &chunk.end_key {
+                if last_item_key >= *end_key {
                     return Err(MerkleRadixTrieError::InvalidChunk(
                         "last key is inconsistent with key range",
                     ));
                 }
             }
-            let keys_end_range = chunk.keys_end.clone().map(|keys_end| keys_end..);
+            let end_key_range = chunk.end_key.clone().map(|end_key| end_key..);
             for proof_node in chunk.proof.nodes.iter() {
                 for child in proof_node.iter_children() {
-                    if let Ok(key) = child.key(&proof_node.key, &keys_end_range) {
+                    if let Ok(key) = child.key(&proof_node.key, &end_key_range) {
                         if key > last_item_key {
                             return Err(MerkleRadixTrieError::InvalidChunk(
                                 "invalid keys end, found stumps",
@@ -793,7 +794,7 @@ impl MerkleRadixTrie {
             }
 
             for i in 0..chunk.items.len() - 1 {
-                if chunk.items[i].0 >= chunk.items[i + 1].0 {
+                if chunk.items[i].key >= chunk.items[i + 1].key {
                     return Err(MerkleRadixTrieError::InvalidChunk("items are not sorted"));
                 }
             }
@@ -805,17 +806,17 @@ impl MerkleRadixTrie {
         }
         // We only have a valid end if it's the proven node itself, or if it's the direct child of
         // one of the nodes of the proof.
-        if let Some(keys_end) = &chunk.keys_end {
+        if let Some(end_key) = &chunk.end_key {
             let mut is_valid_end = false;
             if let Some(last_proof_node) = chunk.proof.nodes.first() {
-                if last_proof_node.key == *keys_end {
+                if last_proof_node.key == *end_key {
                     is_valid_end = true;
                 }
             }
             if !is_valid_end {
                 for proof_node in &chunk.proof.nodes {
-                    if proof_node.key.len() + 1 == keys_end.len()
-                        && proof_node.key.is_prefix_of(keys_end)
+                    if proof_node.key.len() + 1 == end_key.len()
+                        && proof_node.key.is_prefix_of(end_key)
                     {
                         is_valid_end = true;
                         break;
@@ -826,7 +827,7 @@ impl MerkleRadixTrie {
                 return Err(MerkleRadixTrieError::InvalidChunk("invalid end key"));
             }
             if let Some(last_proof_node) = chunk.proof.nodes.first() {
-                if last_proof_node.key >= *keys_end {
+                if last_proof_node.key >= *end_key {
                     return Err(MerkleRadixTrieError::InvalidChunk(
                         "end key inconsistent with last proof node",
                     ));
@@ -837,14 +838,14 @@ impl MerkleRadixTrie {
         // First, clear the tree's stumps.
         self.clear_stumps(txn, start_key..);
         // Then, put all the new items.
-        let missing_range = chunk.keys_end.clone().map(|end| end..);
-        for (key, value) in chunk.items {
-            self.put_raw(txn, &key, value, &missing_range);
+        let missing_range = chunk.end_key.clone().map(|end| end..);
+        for item in chunk.items {
+            self.put_raw(txn, &item.key, item.values, &missing_range);
         }
 
         // Mark the remaining stumps.
-        if let Some(keys_end) = &chunk.keys_end {
-            self.mark_stumps(txn, keys_end.clone().., &chunk.proof.nodes)?;
+        if let Some(end_key) = &chunk.end_key {
+            self.mark_stumps(txn, end_key.clone().., &chunk.proof.nodes)?;
         }
 
         // Update the hashes and check that we're good.
@@ -861,7 +862,7 @@ impl MerkleRadixTrie {
         }
 
         let mut root_node = self.get_root(txn).unwrap();
-        root_node.root_data.as_mut().unwrap().incomplete = chunk.keys_end.clone().map(|end| end..);
+        root_node.root_data.as_mut().unwrap().incomplete = chunk.end_key.clone().map(|end| end..);
         self.put_node(txn, &root_node);
 
         Ok(TrieChunkPushResult::Applied)
@@ -1214,23 +1215,6 @@ impl MerkleRadixTrie {
         Some(TrieProof::new(proof_nodes))
     }
 
-    /// Creates a proof for the chunk of the Merkle Radix Trie that starts at the key `start` (which
-    /// might or not be a part of the trie, if it is then it will be part of the chunk) and contains
-    /// at most `size` leaf nodes.
-    /// PITODO: Perhaps remove this?
-    pub fn get_chunk_proof(
-        &self,
-        txn: &Transaction,
-        start: &KeyNibbles,
-        size: usize,
-    ) -> Option<TrieProof> {
-        let chunk = self.get_trie_chunk(txn, start, size);
-
-        let chunk_keys = chunk.iter().map(|node| &node.key).collect();
-
-        self.get_proof(txn, chunk_keys)
-    }
-
     pub fn update_root(&self, txn: &mut WriteTransaction) -> Result<(), MerkleRadixTrieError> {
         let missing_range = self.get_missing_range(txn);
         self.update_hashes(txn, &KeyNibbles::ROOT, &missing_range)
@@ -1577,43 +1561,6 @@ mod tests {
     }
 
     #[test]
-    fn get_chunk_works() {
-        let key_1 = "cfb986f5a".parse().unwrap();
-        let key_2 = "cfb986ab9".parse().unwrap();
-        let key_3 = "cfb98e0f6".parse().unwrap();
-        let key_4 = "cfb98e0f5".parse().unwrap();
-
-        let env = nimiq_database::volatile::VolatileEnvironment::new(10).unwrap();
-        let trie = MerkleRadixTrie::new(env.clone(), "database");
-        let mut txn = WriteTransaction::new(&env);
-
-        trie.put(&mut txn, &key_1, 9).expect("complete trie");
-        trie.put(&mut txn, &key_2, 8).expect("complete trie");
-        trie.put(&mut txn, &key_3, 7).expect("complete trie");
-        trie.update_root(&mut txn).expect("complete trie");
-
-        let chunk = trie.get_chunk_proof(&txn, &KeyNibbles::ROOT, 100).unwrap();
-        assert_eq!(chunk.nodes.len(), 6);
-        assert_eq!(chunk.verify(&trie.root_hash_assert(&txn)), true);
-
-        let chunk = trie.get_chunk_proof(&txn, &KeyNibbles::ROOT, 3).unwrap();
-        assert_eq!(chunk.nodes.len(), 6);
-        assert_eq!(chunk.verify(&trie.root_hash_assert(&txn)), true);
-
-        let chunk = trie.get_chunk_proof(&txn, &KeyNibbles::ROOT, 2).unwrap();
-        assert_eq!(chunk.nodes.len(), 5);
-        assert_eq!(chunk.verify(&trie.root_hash_assert(&txn)), true);
-
-        let chunk = trie.get_chunk_proof(&txn, &key_3, 100).unwrap();
-        assert_eq!(chunk.nodes.len(), 3);
-        assert_eq!(chunk.verify(&trie.root_hash_assert(&txn)), true);
-
-        let chunk = trie.get_chunk_proof(&txn, &key_4, 100).unwrap();
-        assert_eq!(chunk.nodes.len(), 3);
-        assert_eq!(chunk.verify(&trie.root_hash_assert(&txn)), true);
-    }
-
-    #[test]
     fn hybrid_nodes_work() {
         let key_1 = "413f22".parse().unwrap();
         let key_2 = "413".parse().unwrap();
@@ -1715,7 +1662,7 @@ mod tests {
     }
 
     #[test]
-    fn test_keys_end_on_partial_tree() {
+    fn test_end_key_on_partial_tree() {
         let key_1: KeyNibbles = "5".parse().unwrap();
         let key_2: KeyNibbles = "413b39931".parse().unwrap();
         let key_3: KeyNibbles = "4".parse().unwrap();
@@ -1764,7 +1711,7 @@ mod tests {
             key_3.clone(),
             TrieChunk::new(
                 Some(key_1.clone()),
-                vec![(key_2.clone(), vec![99])],
+                vec![Item::new(key_2.clone(), vec![99])],
                 TrieProof::new(vec![proof_value_2.clone(), proof_root.clone()]),
             ),
             proof_root.hash_assert(),
@@ -1867,28 +1814,28 @@ mod tests {
         assert_eq!(trie.count_nodes(&txn), (0, 0, 0));
         assert!(!trie.is_complete(&txn));
 
-        let start = chunk.keys_end.unwrap();
+        let start = chunk.end_key.unwrap();
         let chunk = original.get_chunk_with_proof(&txn, start.clone().., 1);
         trie.put_chunk(&mut txn, start, chunk.clone(), hash.clone())
             .unwrap();
         assert_eq!(trie.count_nodes(&txn), (0, 1, 0));
         assert!(!trie.is_complete(&txn));
 
-        let start = chunk.keys_end.unwrap();
+        let start = chunk.end_key.unwrap();
         let chunk = original.get_chunk_with_proof(&txn, start.clone().., 0);
         trie.put_chunk(&mut txn, start, chunk.clone(), hash.clone())
             .unwrap();
         assert_eq!(trie.count_nodes(&txn), (0, 1, 0));
         assert!(!trie.is_complete(&txn));
 
-        let start = chunk.keys_end.unwrap();
+        let start = chunk.end_key.unwrap();
         let chunk = original.get_chunk_with_proof(&txn, start.clone().., 2);
         trie.put_chunk(&mut txn, start, chunk.clone(), hash.clone())
             .unwrap();
         assert_eq!(trie.count_nodes(&txn), (0, 2, 1));
         assert!(!trie.is_complete(&txn));
 
-        let start = chunk.keys_end.unwrap();
+        let start = chunk.end_key.unwrap();
         let chunk = original.get_chunk_with_proof(&txn, start.clone().., 2);
         trie.put_chunk(&mut txn, start, chunk, hash.clone())
             .unwrap();
@@ -1945,7 +1892,7 @@ mod tests {
                 if trie.is_complete(&txn) {
                     break;
                 }
-                next_start = chunk.keys_end.unwrap();
+                next_start = chunk.end_key.unwrap();
             }
             assert!(trie.is_complete(&txn));
             assert_eq!(trie.count_nodes(&txn), (0, 2, 2));
@@ -2002,7 +1949,7 @@ mod tests {
                 if trie.is_complete(&txn) {
                     break;
                 }
-                next_start = chunk.keys_end.unwrap();
+                next_start = chunk.end_key.unwrap();
             }
             assert!(trie.is_complete(&txn));
             assert_eq!(trie.count_nodes(&txn), (2, 0, 5));

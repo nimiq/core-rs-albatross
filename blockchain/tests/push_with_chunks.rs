@@ -10,7 +10,9 @@ use nimiq_primitives::coin::Coin;
 use nimiq_test_utils::block_production::TemporaryBlockProducer;
 use nimiq_transaction_builder::TransactionBuilder;
 use nimiq_trie::{
-    error::MerkleRadixTrieError, key_nibbles::KeyNibbles, trie_chunk::TrieChunkWithStart,
+    error::MerkleRadixTrieError,
+    key_nibbles::KeyNibbles,
+    trie_chunk::{Item, TrieChunkWithStart},
 };
 
 macro_rules! check_invalid_chunk {
@@ -43,7 +45,7 @@ where
 
     let block = temp_producer1.next_block(vec![], false);
     let valid_chunk1 = temp_producer1.get_chunk(KeyNibbles::ROOT, 2);
-    let next_chunk_start = valid_chunk1.chunk.keys_end.clone().unwrap();
+    let next_chunk_start = valid_chunk1.chunk.end_key.clone().unwrap();
 
     // Invalid keys end
     let mut invalid_chunk = temp_producer1.get_chunk(next_chunk_start.clone(), 2);
@@ -123,8 +125,8 @@ fn can_push_valid_chunks() {
     // Block 1, 2 Chunks
     let block = temp_producer1.next_block(vec![], false);
     let chunk1 = temp_producer1.get_chunk(KeyNibbles::ROOT, 1);
-    let chunk2 = temp_producer1.get_chunk(chunk1.chunk.keys_end.clone().unwrap(), 1);
-    let chunk3_start = chunk2.chunk.keys_end.clone().unwrap();
+    let chunk2 = temp_producer1.get_chunk(chunk1.chunk.end_key.clone().unwrap(), 1);
+    let chunk3_start = chunk2.chunk.end_key.clone().unwrap();
 
     assert_eq!(
         temp_producer2.push_with_chunks(block, vec![chunk1, chunk2]),
@@ -180,7 +182,7 @@ fn can_ignore_chunks_with_invalid_start_key() {
     let block = temp_producer1.next_block(vec![], false);
     let chunk1 = temp_producer1.get_chunk(KeyNibbles::ROOT, 2);
     let chunk2 = temp_producer1.get_chunk(KeyNibbles::ROOT, 3);
-    let chunk5_start = chunk1.chunk.keys_end.clone().unwrap();
+    let chunk5_start = chunk1.chunk.end_key.clone().unwrap();
 
     assert_eq!(
         temp_producer2.push_with_chunks(block, vec![chunk1, chunk2]),
@@ -245,7 +247,7 @@ fn can_rebranch_and_revert_chunks() {
     // Block 1, 1 chunk
     let block1 = temp_producer1.next_block(vec![], false);
     let chunk1 = temp_producer1.get_chunk(KeyNibbles::ROOT, 2);
-    let chunk2_start = chunk1.chunk.keys_end.clone().unwrap();
+    let chunk2_start = chunk1.chunk.end_key.clone().unwrap();
     assert_eq!(
         temp_producer2.push_with_chunks(block1, vec![chunk1]),
         Ok((PushResult::Extended, Ok(ChunksPushResult::Chunks(1, 0))))
@@ -315,7 +317,7 @@ fn can_partially_apply_blocks() {
     let block = temp_producer1.next_block_with_txs(vec![], false, vec![]);
     // Chunk covers trie until d...
     let chunk1 = temp_producer1.get_chunk(KeyNibbles::ROOT, 2);
-    let chunk2_start = chunk1.chunk.keys_end.clone().unwrap();
+    let chunk2_start = chunk1.chunk.end_key.clone().unwrap();
     assert_eq!(
         temp_producer2.push_with_chunks(block, vec![chunk1]),
         Ok((PushResult::Extended, Ok(ChunksPushResult::Chunks(1, 0))))
@@ -402,7 +404,7 @@ fn can_partially_apply_blocks() {
 fn can_detect_invalid_chunks() {
     // Chunks whose hash does not match (items are corrupted)
     check_invalid_chunk!(
-        |invalid_chunk| invalid_chunk.chunk.items[1].1.push(1),
+        |invalid_chunk| invalid_chunk.chunk.items[1].values.push(1),
         Err(ChunksPushError::AccountsError(
             1,
             AccountError::ChunkError(MerkleRadixTrieError::ChunkHashMismatch)
@@ -442,7 +444,7 @@ fn can_detect_invalid_chunks() {
     let address_unknown = Address::from_hex("1000000000000000000000000000000000000000").unwrap();
     let unknown_key = KeyNibbles::from(&address_unknown);
     check_invalid_chunk!(
-        |invalid_chunk| invalid_chunk.chunk.keys_end = Some(unknown_key),
+        |invalid_chunk| invalid_chunk.chunk.end_key = Some(unknown_key),
         Err(ChunksPushError::AccountsError(
             1,
             AccountError::ChunkError(MerkleRadixTrieError::InvalidChunk(..))
@@ -451,7 +453,7 @@ fn can_detect_invalid_chunks() {
 
     // Invalid keys end
     check_invalid_chunk!(
-        |invalid_chunk| invalid_chunk.chunk.keys_end = Some(KeyNibbles::BADBADBAD),
+        |invalid_chunk| invalid_chunk.chunk.end_key = Some(KeyNibbles::BADBADBAD),
         Err(ChunksPushError::AccountsError(
             1,
             AccountError::ChunkError(MerkleRadixTrieError::InvalidChunk(..))
@@ -468,7 +470,10 @@ fn can_detect_invalid_chunks() {
     let address_known = Address::from_hex("1000000000000000000000000000000000000000").unwrap();
     let known_key = KeyNibbles::from(&address_known);
     check_invalid_chunk!(
-        move |invalid_chunk| invalid_chunk.chunk.items.insert(0, (known_key, vec![])),
+        move |invalid_chunk| invalid_chunk
+            .chunk
+            .items
+            .insert(0, Item::new(known_key, vec![])),
         Err(ChunksPushError::AccountsError(
             1,
             AccountError::ChunkError(MerkleRadixTrieError::InvalidChunk(..))
@@ -479,7 +484,7 @@ fn can_detect_invalid_chunks() {
     let address_unknown = Address::from_hex("ff00000000000000000000000000000000000000").unwrap();
     let unknown_key = KeyNibbles::from(&address_unknown);
     check_invalid_chunk!(
-        move |invalid_chunk| invalid_chunk.chunk.keys_end = Some(unknown_key),
+        move |invalid_chunk| invalid_chunk.chunk.end_key = Some(unknown_key),
         Err(ChunksPushError::AccountsError(
             1,
             AccountError::ChunkError(MerkleRadixTrieError::InvalidChunk(..))
@@ -499,7 +504,7 @@ fn can_detect_invalid_chunks() {
     let address_unknown = Address::from_hex("ff00000000000000000000000000000000000000").unwrap();
     let unknown_key = KeyNibbles::from(&address_unknown);
     check_invalid_chunk!(
-        move |invalid_chunk| invalid_chunk.chunk.keys_end = Some(unknown_key),
+        move |invalid_chunk| invalid_chunk.chunk.end_key = Some(unknown_key),
         Err(ChunksPushError::AccountsError(
             1,
             AccountError::ChunkError(MerkleRadixTrieError::InvalidChunk(..))
@@ -508,7 +513,7 @@ fn can_detect_invalid_chunks() {
 
     // Invalid end key (set to None)
     check_invalid_chunk!(
-        |invalid_chunk| invalid_chunk.chunk.keys_end = None,
+        |invalid_chunk| invalid_chunk.chunk.end_key = None,
         Err(ChunksPushError::AccountsError(
             1,
             AccountError::ChunkError(MerkleRadixTrieError::InvalidChunk(..))

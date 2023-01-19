@@ -41,9 +41,9 @@ pub struct RootData {
 /// child's key that is different from its parent) and its hash.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Serialize, Deserialize)]
 pub struct TrieNodeChild {
-    // An empty suffix indicates that this branch exists but isn't known.
+    /// The suffix of this child.
     pub suffix: KeyNibbles,
-    // An all-zero hash (the `Default::default()` value) marks an uncomputed child hash.
+    /// An all-zero hash (the `Default::default()` value) marks an uncomputed child hash.
     pub hash: Blake2bHash,
 }
 
@@ -277,7 +277,7 @@ impl Deserialize for TrieNode {
         let flags = reader.read_u8()?;
         let has_root_data = flags & 0x1 != 0;
         let has_value = flags & 0x2 != 0;
-        let has_children = flags & 0x4 != 0;
+
         let root_data = if has_root_data {
             Some(Deserialize::deserialize(reader)?)
         } else {
@@ -288,11 +288,21 @@ impl Deserialize for TrieNode {
         } else {
             None
         };
-        let children = if has_children {
-            Deserialize::deserialize(reader)?
-        } else {
-            NO_CHILDREN
-        };
+
+        let child_count: u8 = Deserialize::deserialize(reader)?;
+
+        let mut children = NO_CHILDREN;
+
+        for _ in 0..child_count {
+            let child: TrieNodeChild = Deserialize::deserialize(reader)?;
+
+            if let Some(i) = child.suffix.get(0) {
+                children[i] = Some(child);
+            } else {
+                return Err(io::Error::from(io::ErrorKind::InvalidData).into());
+            }
+        }
+
         Ok(TrieNode {
             // Make it clear that the key needs to be changed after deserialization.
             key: KeyNibbles::BADBADBAD,
@@ -307,50 +317,59 @@ impl Serialize for TrieNode {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let has_root_data = self.root_data.is_some();
         let has_value = self.value.is_some();
-        let has_children = self.has_children();
-        let flags = (has_root_data as u8) | ((has_value as u8) << 1) | ((has_children as u8) << 2);
 
-        let mut result = 1;
+        let flags = (has_root_data as u8) | ((has_value as u8) << 1);
+
+        let mut size = 1;
         writer.write_u8(flags)?;
         if let Some(root_data) = &self.root_data {
-            result += root_data.serialize(writer)?;
+            size += root_data.serialize(writer)?;
         }
         if let Some(value) = &self.value {
-            result += value.serialize::<u16, _>(writer)?;
+            size += value.serialize::<u16, _>(writer)?;
         }
-        if has_children {
-            result += self.children.serialize(writer)?;
+
+        let child_count: u8 = self
+            .children
+            .iter()
+            .fold(0, |acc, child| acc + u8::from(!child.is_none()));
+        Serialize::serialize(&child_count, writer)?;
+
+        for child in self.children.iter().flatten() {
+            size += Serialize::serialize(&child, writer)?;
         }
-        Ok(result)
+        Ok(size)
     }
 
     fn serialized_size(&self) -> usize {
-        let mut result = 1;
+        let mut size = 1;
         if let Some(root_data) = &self.root_data {
-            result += root_data.serialized_size();
+            size += root_data.serialized_size();
         }
         if let Some(value) = &self.value {
-            result += value.serialized_size::<u16>();
+            size += value.serialized_size::<u16>();
         }
-        if self.has_children() {
-            result += self.children.serialized_size();
+        size += 1; // count
+
+        for child in self.children.iter().flatten() {
+            size += Serialize::serialized_size(&child);
         }
-        result
+        size
     }
 }
 
 impl SerializeContent for TrieNode {
     fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
-        let mut result = 0;
-        result += self.key.serialize(writer)?;
+        let mut size = 0;
+        size += self.key.serialize(writer)?;
         if let Some(v) = &self.value {
             writer.write_u8(1)?;
-            result += v.serialize::<u16, _>(writer)?;
+            size += v.serialize::<u16, _>(writer)?;
         } else {
             writer.write_u8(0)?;
         }
-        result += self.children.serialize(writer)?;
-        Ok(result)
+        size += self.children.serialize(writer)?;
+        Ok(size)
     }
 }
 

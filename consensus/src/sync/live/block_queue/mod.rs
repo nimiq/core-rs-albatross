@@ -41,8 +41,8 @@ pub enum QueuedBlock<N: Network> {
     Head(BlockAndId<N>),
     Buffered(Vec<BlockAndId<N>>),
     Missing(Vec<Block>),
-    TooFarFuture(Block, N::PeerId),
-    TooDistantPast(Block, N::PeerId),
+    TooFarAhead(Block, N::PeerId),
+    TooFarBehind(Block, N::PeerId),
 }
 
 pub struct BlockQueue<N: Network> {
@@ -197,7 +197,7 @@ impl<N: Network> BlockQueue<N> {
 
             if self.network.has_peer(peer_id) {
                 self.request_component.take_peer(&peer_id);
-                return Some(QueuedBlock::TooDistantPast(block, peer_id));
+                return Some(QueuedBlock::TooFarBehind(block, peer_id));
             }
         } else if parent_known {
             // New head or fork block.
@@ -215,7 +215,7 @@ impl<N: Network> BlockQueue<N> {
 
             if self.network.has_peer(peer_id) {
                 self.request_component.take_peer(&peer_id);
-                return Some(QueuedBlock::TooFarFuture(block, peer_id));
+                return Some(QueuedBlock::TooFarAhead(block, peer_id));
             }
         } else if self.buffer.len() >= self.config.buffer_max {
             // TODO: This does not account for the nested map

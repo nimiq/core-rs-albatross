@@ -923,7 +923,7 @@ async fn replies_with_incomplete_response_chunk() {
         matches!(
             join!(live_sync.next(), mock_node.next()),
             (
-                Some(LiveSyncEvent::PeerEvent(LiveSyncPeerEvent::OutdatedPeer(_))),
+                Some(LiveSyncEvent::PeerEvent(LiveSyncPeerEvent::Behind(_))),
                 Some(RequestChunk::TYPE_ID)
             )
         ),
