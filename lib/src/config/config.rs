@@ -13,6 +13,12 @@ use strum_macros::Display;
 use beserial::Deserialize;
 #[cfg(feature = "validator")]
 use nimiq_bls::{KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
+#[cfg(any(
+    feature = "full-consensus",
+    feature = "validator",
+    feature = "wallet",
+    feature = "zkp-storage"
+))]
 use nimiq_database::{mdbx::MdbxEnvironment, volatile::VolatileEnvironment, Environment};
 #[cfg(feature = "validator")]
 use nimiq_keys::{Address, KeyPair, PrivateKey};
@@ -279,6 +285,12 @@ impl StorageConfig {
     ///
     /// Returns a `Result` which is either a `Environment` or a `Error`.
     ///
+    #[cfg(any(
+        feature = "full-consensus",
+        feature = "validator",
+        feature = "wallet",
+        feature = "zkp-storage"
+    ))]
     pub fn database(
         &self,
         network_id: NetworkId,

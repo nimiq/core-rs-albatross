@@ -20,13 +20,14 @@ maintenance = { status = "experimental" }
 [dependencies]
 futures = { package = "futures-util", version = "0.3" }
 log = { package = "tracing", version = "0.1", features = ["log"] }
-tokio = { version = "1.24", features = ["rt-multi-thread", "time", "tracing"] }
+tokio = { version = "1.24", features = ["macros", "rt-multi-thread", "time"] }
 tokio-metrics = "0.1"
 
 [dependencies.nimiq]
 package = "nimiq-lib"
 path = "../lib"
 version = "0.1"
+default-features = false
 features = [
     "deadlock",
     "logging",
