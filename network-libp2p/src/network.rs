@@ -3,13 +3,13 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
-#[cfg(feature = "metrics")]
-use std::time::Instant;
 
 use async_trait::async_trait;
 use base64::Engine;
 use bytes::{Buf, Bytes};
 use futures::{ready, stream::BoxStream, Stream, StreamExt};
+#[cfg(not(feature = "tokio-time"))]
+use instant::Instant;
 use libp2p::core::transport::MemoryTransport;
 use libp2p::gossipsub::PeerScoreParams;
 use libp2p::{
@@ -35,8 +35,11 @@ use libp2p::{dns, tcp, websocket};
 use log::Instrument;
 use parking_lot::{Mutex, RwLock};
 use tokio::sync::{broadcast, mpsc, oneshot};
-use tokio::time::{Instant as TokioInstant, Interval};
+#[cfg(feature = "tokio-time")]
+use tokio::time::{Instant, Interval};
 use tokio_stream::wrappers::{BroadcastStream, ReceiverStream};
+#[cfg(not(feature = "tokio-time"))]
+use wasm_timer::Interval;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_bls::CompressedPublicKey;
@@ -233,6 +236,10 @@ impl Network {
         let (validate_tx, validate_rx) = mpsc::unbounded_channel();
         let peer_request_limits = Arc::new(Mutex::new(HashMap::new()));
         let rate_limits_pending_deletion = Arc::new(Mutex::new(VecDeque::new()));
+
+        #[cfg(not(feature = "tokio-time"))]
+        let update_scores = wasm_timer::Interval::new(params.decay_interval);
+        #[cfg(feature = "tokio-time")]
         let update_scores = tokio::time::interval(params.decay_interval);
 
         #[cfg(feature = "metrics")]
@@ -356,6 +363,7 @@ impl Network {
         &self.local_peer_id
     }
 
+    #[cfg(feature = "tokio-time")]
     async fn swarm_task(
         mut swarm: NimiqSwarm,
         events_tx: broadcast::Sender<NetworkEvent<PeerId>>,
@@ -363,7 +371,7 @@ impl Network {
         mut validate_rx: mpsc::UnboundedReceiver<ValidateMessage<PeerId>>,
         connected_peers: Arc<RwLock<HashMap<PeerId, PeerContact>>>,
         peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<u16, RateLimit>>>>,
-        rate_limits_pending_deletion: Arc<Mutex<VecDeque<((PeerId, u16), TokioInstant)>>>,
+        rate_limits_pending_deletion: Arc<Mutex<VecDeque<((PeerId, u16), Instant)>>>,
         mut update_scores: Interval,
         contacts: Arc<RwLock<PeerContactBook>>,
         #[cfg(feature = "metrics")] metrics: Arc<NetworkMetrics>,
@@ -419,6 +427,74 @@ impl Network {
         .await
     }
 
+    // This is a duplicate of the previous function.
+    // This is because these two functions use different implemenation for the handling of intervals,
+    // And the tokio version (needed for some test) could  not be reconcilied  with the non tokio version
+    // Essentially the tokio select macro is not compatible with the condition compilation flag
+    #[cfg(not(feature = "tokio-time"))]
+    async fn swarm_task(
+        mut swarm: NimiqSwarm,
+        events_tx: broadcast::Sender<NetworkEvent<PeerId>>,
+        mut action_rx: mpsc::Receiver<NetworkAction>,
+        mut validate_rx: mpsc::UnboundedReceiver<ValidateMessage<PeerId>>,
+        connected_peers: Arc<RwLock<HashMap<PeerId, PeerContact>>>,
+        peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<u16, RateLimit>>>>,
+        rate_limits_pending_deletion: Arc<Mutex<VecDeque<((PeerId, u16), Instant)>>>,
+        mut update_scores: Interval,
+        contacts: Arc<RwLock<PeerContactBook>>,
+        #[cfg(feature = "metrics")] metrics: Arc<NetworkMetrics>,
+    ) {
+        let mut task_state = TaskState::default();
+
+        let peer_id = Swarm::local_peer_id(&swarm);
+        let task_span = trace_span!("swarm task", peer_id=?peer_id);
+
+        async move {
+            loop {
+                tokio::select! {
+                    validate_msg = validate_rx.recv() => {
+                        if let Some(validate_msg) = validate_msg {
+                            let topic = validate_msg.topic;
+                            let result: Result<bool, PublishError> = swarm
+                                .behaviour_mut()
+                                .gossipsub
+                                .report_message_validation_result(
+                                    &validate_msg.pubsub_id.message_id,
+                                    &validate_msg.pubsub_id.propagation_source,
+                                    validate_msg.acceptance,
+                                );
+
+                            match result {
+                                Ok(true) => {}, // success
+                                Ok(false) => debug!(topic, "Validation took too long: message is no longer in the message cache"),
+                                Err(e) => error!(topic, error = %e, "Network error while relaying message"),
+                            }
+                        }
+                    },
+                    event = swarm.next() => {
+                        if let Some(event) = event {
+                            Self::handle_event(event, &events_tx, &mut swarm, &mut task_state, &connected_peers, Arc::clone(&peer_request_limits), Arc::clone(&rate_limits_pending_deletion), #[cfg( feature = "metrics")] &metrics);
+                        }
+                    },
+                    action = action_rx.recv() => {
+                        if let Some(action) = action {
+                            Self::perform_action(action, &mut swarm, &mut task_state);
+                        }
+                        else {
+                            // `action_rx.next()` will return `None` if all senders (i.e. the `Network` object) are dropped.
+                            break;
+                        }
+                    },
+                    _ = update_scores.next() => {
+                        swarm.behaviour().update_scores(Arc::clone(&contacts));
+                    },
+                };
+            }
+        }
+        .instrument(task_span)
+        .await
+    }
+
     fn handle_event(
         event: SwarmEvent<NimiqEvent, NimiqNetworkBehaviourError>,
         events_tx: &broadcast::Sender<NetworkEvent<PeerId>>,
@@ -426,7 +502,7 @@ impl Network {
         state: &mut TaskState,
         connected_peers: &RwLock<HashMap<PeerId, PeerContact>>,
         peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<u16, RateLimit>>>>,
-        rate_limits_pending_deletion: Arc<Mutex<VecDeque<((PeerId, u16), TokioInstant)>>>,
+        rate_limits_pending_deletion: Arc<Mutex<VecDeque<((PeerId, u16), Instant)>>>,
         #[cfg(feature = "metrics")] metrics: &Arc<NetworkMetrics>,
     ) {
         match event {
@@ -1428,9 +1504,7 @@ impl Network {
             .entry(peer_id)
             .or_default()
             .entry(Req::TYPE_ID)
-            .or_insert_with(|| {
-                RateLimit::new(Req::MAX_REQUESTS, Req::TIME_WINDOW, TokioInstant::now())
-            });
+            .or_insert_with(|| RateLimit::new(Req::MAX_REQUESTS, Req::TIME_WINDOW, Instant::now()));
 
         // Ensures that the request is allowed based on the set limits and updates the counter.
         // Returns early if not allowed.
@@ -1450,7 +1524,7 @@ impl Network {
 
     fn remove_rate_limits(
         peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<u16, RateLimit>>>>,
-        rate_limits_pending_deletion: Arc<Mutex<VecDeque<((PeerId, u16), TokioInstant)>>>,
+        rate_limits_pending_deletion: Arc<Mutex<VecDeque<((PeerId, u16), Instant)>>>,
         peer_id: PeerId,
     ) {
         // Every time a peer disconnects, we delete all expired pending limits.
@@ -1467,7 +1541,7 @@ impl Network {
         if let Some(request_limits) = peer_request_limits_l.get_mut(&peer_id) {
             request_limits.retain(|req_type, rate_limit| {
                 // Gets the requests limit and deletes it if no counter info would be lost, otherwise places it as pending deletion.
-                if !rate_limit.can_delete(TokioInstant::now()) {
+                if !rate_limit.can_delete(Instant::now()) {
                     rate_limits_pending_deletion_l
                         .push_back(((peer_id, *req_type), rate_limit.next_reset_time()));
                     true
@@ -1485,7 +1559,7 @@ impl Network {
     /// Deletes the rate limits that were previously marked as pending if their expiration time has passed.
     fn clean_up(
         peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<u16, RateLimit>>>>,
-        rate_limits_pending_deletion: Arc<Mutex<VecDeque<((PeerId, u16), TokioInstant)>>>,
+        rate_limits_pending_deletion: Arc<Mutex<VecDeque<((PeerId, u16), Instant)>>>,
     ) {
         let mut rate_limits_pending_deletion_l = rate_limits_pending_deletion.lock();
 
@@ -1496,7 +1570,7 @@ impl Network {
         while let Some(((peer_id, req_type), expiration_time)) =
             rate_limits_pending_deletion_l.front()
         {
-            let current_timestamp = TokioInstant::now();
+            let current_timestamp = Instant::now();
             if expiration_time <= &current_timestamp {
                 let mut peer_request_limits_l = peer_request_limits.lock();
 

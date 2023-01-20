@@ -24,6 +24,7 @@ bytes = "1.3"
 derive_more = "0.99"
 futures = { package = "futures-util", version = "0.3" }
 hex = "0.4"
+instant = { version = "0.1", features = [ "wasm-bindgen" ] }
 ip_network = "0.4"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
@@ -79,7 +80,6 @@ libp2p = { version = "0.50", default-features = false, features = [
 [dev-dependencies]
 # In dev/testing we require more tokio features
 tokio = { version = "1.24", features = ["macros", "rt", "rt-multi-thread", "test-util", "tracing"] }
-
 nimiq-test-log = { path = "../test-log" }
 
 [features]
@@ -87,3 +87,4 @@ default = ["peer-contact-book-persistence"]
 websocket = ["libp2p/dns", "libp2p/tcp", "libp2p/tokio", "libp2p/websocket"]
 metrics = ["prometheus-client"]
 peer-contact-book-persistence = ["serde"]
+tokio-time = ["tokio/time"]

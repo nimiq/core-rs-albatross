@@ -3,11 +3,12 @@ use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::task::{Context, Poll};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use futures::{FutureExt, StreamExt};
 #[cfg(target_arch = "wasm32")]
 use gloo_timers::future::{sleep, TimeoutFuture};
+use instant::Instant;
 use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
 #[cfg(not(target_arch = "wasm32"))]
 use tokio::time::{sleep, Sleep};

@@ -1,4 +1,9 @@
-use tokio::time::{Duration, Instant};
+use std::time::Duration;
+
+#[cfg(not(feature = "tokio-time"))]
+use instant::Instant;
+#[cfg(feature = "tokio-time")]
+use tokio::time::Instant;
 
 /// The structure to be used to limit the number of requests to a limit of allowed_occurrences within a block_range.
 #[derive(Debug, Eq, Hash, PartialEq)]

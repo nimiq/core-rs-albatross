@@ -2,10 +2,11 @@ use std::{
     pin::Pin,
     sync::Arc,
     task::{Context, Poll, Waker},
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use futures::{Sink, SinkExt, StreamExt};
+use instant::Instant;
 use libp2p::{
     identity::Keypair,
     swarm::{

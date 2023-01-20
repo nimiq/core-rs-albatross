@@ -1,8 +1,11 @@
+use futures::StreamExt;
+use instant::Instant;
+
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
     sync::Arc,
     task::{Context, Poll, Waker},
-    time::{Duration, Instant, SystemTime},
+    time::{Duration, SystemTime},
 };
 
 use ip_network::IpNetwork;
@@ -18,7 +21,7 @@ use libp2p::{
 use parking_lot::RwLock;
 use rand::seq::IteratorRandom;
 use rand::thread_rng;
-use tokio::time::Interval;
+use wasm_timer::Interval;
 
 use nimiq_macros::store_waker;
 
@@ -191,7 +194,7 @@ impl ConnectionPoolBehaviour {
             ipv6_count: 0,
         };
         let config = ConnectionPoolConfig::default();
-        let housekeeping_timer = tokio::time::interval(config.housekeeping_interval);
+        let housekeeping_timer = wasm_timer::Interval::new(config.housekeeping_interval);
 
         Self {
             contacts,
@@ -596,7 +599,7 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
         }
 
         // Perform housekeeping at regular intervals.
-        if self.housekeeping_timer.poll_tick(cx).is_ready() {
+        if self.housekeeping_timer.poll_next_unpin(cx).is_ready() {
             self.housekeeping();
         }
 
