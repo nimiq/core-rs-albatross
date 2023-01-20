@@ -82,6 +82,8 @@ pub enum BlockError {
     InvalidValidators,
     #[error("Incorrect PK Tree root")]
     InvalidPkTreeRoot,
+    #[error("Incorrect reward transactions")]
+    InvalidRewardTransactions,
 
     #[error("Skip block contains a non empty body")]
     InvalidSkipBlockBody,

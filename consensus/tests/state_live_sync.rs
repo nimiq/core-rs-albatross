@@ -524,20 +524,13 @@ async fn revert_chunks_for_state_live_sync() {
     assert_eq!(live_sync.queue().buffered_blocks_len(), 0);
 
     info!("Applying chunk #{}", 3);
-    let mock_node_future = mock_node.into_future().then(|(item1, stream)| async move {
-        let (item2, stream) = stream.into_future().await;
-        (item1, item2, stream)
-    });
-    let ((item1, item2, mut mock_node), live_sync_result) =
-        join!(mock_node_future, live_sync.next());
     assert!(
         matches!(
-            (item1, item2, live_sync_result),
+            join!(mock_node.next(), live_sync.next()),
             (
                 Some(RequestChunk::TYPE_ID),
-                Some(RequestChunk::TYPE_ID),
                 Some(LiveSyncEvent::PushEvent(LiveSyncPushEvent::AcceptedChunks(
-                    _
+                    ..
                 )))
             )
         ),

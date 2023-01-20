@@ -112,7 +112,7 @@ async fn send_single_micro_block_to_block_queue() {
         .live_sync
         .add_peer(mock_node.network.get_local_peer_id());
 
-    // push one micro block to the queue
+    // Push one micro block to the queue
     let producer = BlockProducer::new(signing_key(), voting_key());
     let block = next_micro_block(&producer, &blockchain2);
 
@@ -121,7 +121,7 @@ async fn send_single_micro_block_to_block_queue() {
 
     assert_eq!(blockchain2.read().block_number(), 0);
 
-    // run the block_queue one iteration, i.e. until it processed one block
+    // Run the block_queue one iteration, i.e. until it processed one block
     syncer.next().await;
 
     // The produced block is without gap and should go right into the blockchain
@@ -169,7 +169,7 @@ async fn send_two_micro_blocks_out_of_order() {
 
     let mock_id = MockId::new(mock_node.network.get_local_peer_id());
 
-    // send block2 first
+    // Send block2 first
     block_tx
         .send((block2.clone(), mock_id.clone()))
         .await
@@ -177,10 +177,10 @@ async fn send_two_micro_blocks_out_of_order() {
 
     assert_eq!(blockchain1.read().block_number(), 0);
 
-    // run the block_queue one iteration, i.e. until it processed one block
+    // Run the block_queue one iteration, i.e. until it processed one block
     let _ = poll!(syncer.next());
 
-    // this block should be buffered now
+    // This block should be buffered now
     assert_eq!(blockchain1.read().block_number(), 0);
     let blocks = syncer
         .live_sync
@@ -196,14 +196,14 @@ async fn send_two_micro_blocks_out_of_order() {
     let req = mock_node.next().await.unwrap();
     assert_eq!(req, RequestMissingBlocks::TYPE_ID);
 
-    // now send block1 to fill the gap
+    // Now send block1 to fill the gap
     block_tx.send((block1.clone(), mock_id)).await.unwrap();
 
-    // run the block_queue until is has produced two events.
+    // Run the block_queue until is has produced two events.
     syncer.next().await;
     syncer.next().await;
 
-    // now both blocks should've been pushed to the blockchain
+    // Now both blocks should've been pushed to the blockchain
     assert_eq!(blockchain1.read().block_number(), 2);
     assert!(syncer.live_sync.queue().buffered_blocks().next().is_none());
     assert_eq!(
@@ -270,7 +270,7 @@ async fn send_micro_blocks_out_of_order() {
             .await
             .unwrap();
 
-        // run the block_queue one iteration, i.e. until it processed one block
+        // Run the block_queue one iteration, i.e. until it processed one block
         let _ = poll!(syncer.next());
     }
 
@@ -283,7 +283,7 @@ async fn send_micro_blocks_out_of_order() {
         n_blocks - 1
     );
 
-    // now send block1 to fill the gap
+    // Now send block1 to fill the gap
     block_tx.send((blocks[0].clone(), mock_id)).await.unwrap();
 
     for _ in 0..n_blocks {
@@ -349,7 +349,7 @@ async fn send_invalid_block() {
 
     let mock_id = MockId::new(hub.new_address().into());
 
-    // send block2 first
+    // Send block2 first
     block_tx
         .send((block2.clone(), mock_id.clone()))
         .await
@@ -357,10 +357,10 @@ async fn send_invalid_block() {
 
     assert_eq!(blockchain1.read().block_number(), 0);
 
-    // run the block_queue one iteration, i.e. until it processed one block
+    // Run the block_queue one iteration, i.e. until it processed one block
     let _ = poll!(syncer.next());
 
-    // this block should be buffered now
+    // This block should be buffered now
     assert_eq!(blockchain1.read().block_number(), 0);
     let blocks = syncer
         .live_sync
@@ -375,10 +375,10 @@ async fn send_invalid_block() {
     let req = mock_node.next().await.unwrap();
     assert_eq!(req, RequestMissingBlocks::TYPE_ID);
 
-    // now send block1 to fill the gap
+    // Now send block1 to fill the gap
     block_tx.send((block1.clone(), mock_id)).await.unwrap();
 
-    // run the block_queue until is has produced two events.
+    // Run the block_queue until is has produced two events.
     // The second block will be rejected due to an Invalid Successor event
     syncer.next().await;
     syncer.next().await;
@@ -433,15 +433,15 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
 
     let mock_id = MockId::new(mock_node.network.get_local_peer_id());
 
-    // send block2 first
+    // Send block2 first
     block_tx.send((block2.clone(), mock_id)).await.unwrap();
 
     assert_eq!(blockchain1.read().block_number(), 0);
 
-    // run the block_queue one iteration, i.e. until it processed one block
+    // Run the block_queue one iteration, i.e. until it processed one block
     let _ = poll!(syncer.next());
 
-    // this block should be buffered now
+    // This block should be buffered now
     assert_eq!(blockchain1.read().block_number(), 0);
     let blocks = syncer
         .live_sync
@@ -458,11 +458,11 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
     let req = mock_node.next().await.unwrap();
     assert_eq!(req, RequestMissingBlocks::TYPE_ID);
 
-    // run the block_queue until is has produced two events.
+    // Run the block_queue until is has produced two events.
     syncer.next().await;
     syncer.next().await;
 
-    // now both blocks should've been pushed to the blockchain
+    // Now both blocks should've been pushed to the blockchain
     assert_eq!(blockchain1.read().block_number(), 2);
     assert!(syncer.live_sync.queue().buffered_blocks().next().is_none());
     assert_eq!(
@@ -513,15 +513,15 @@ async fn request_missing_blocks_across_macro_block() {
 
     let mock_id = MockId::new(mock_node.network.get_local_peer_id());
 
-    // send block2 first
+    // Send block2 first
     block_tx.send((block2.clone(), mock_id)).await.unwrap();
 
     assert_eq!(blockchain1.read().block_number(), 0);
 
-    // run the block_queue one iteration, i.e. until it processed one block
+    // Run the block_queue one iteration, i.e. until it processed one block
     let _ = poll!(syncer.next());
 
-    // this block should be buffered now
+    // This block should be buffered now
     assert_eq!(blockchain1.read().block_number(), 0);
     let blocks = syncer
         .live_sync
@@ -654,7 +654,7 @@ async fn put_peer_back_into_sync_mode() {
     let block = next_micro_block(&producer, &blockchain2);
     block_tx.send((block, mock_id)).await.unwrap();
 
-    // run the block_queue one iteration, i.e. until it processed one block
+    // Run the block_queue one iteration, i.e. until it processed one block
     let _ = poll!(syncer.next());
 
     assert_eq!(history_sync_peers.read().len(), 1);

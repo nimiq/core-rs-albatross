@@ -155,6 +155,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
             let blockchain = self.blockchain.read();
 
             // The staking contract is holding the relevant informations
+            // Get the staking contract PRIOR to any state changes.
             let staking_contract = blockchain.get_staking_contract();
 
             // Compute the data for the MacroBody
@@ -165,6 +166,11 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
             } else {
                 None
             };
+            let reward_transactions = blockchain.create_reward_transactions(
+                blockchain.state(),
+                &proposal,
+                &staking_contract,
+            );
             let pk_tree_root = validators
                 .as_ref()
                 .and_then(|validators| MacroBlock::pk_tree_root(validators).ok());
@@ -175,6 +181,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
                 pk_tree_root,
                 lost_reward_set,
                 disabled_set,
+                transactions: reward_transactions,
             })
         });
 

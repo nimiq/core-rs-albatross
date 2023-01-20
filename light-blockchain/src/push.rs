@@ -390,8 +390,8 @@ impl LightBlockchain {
 
         // Check if there are two blocks in the same slot and with the same height. Since we already
         // verified the validator for the current slot, this is enough to check for fork proofs.
-        // Note: We don't verify the justifications for the other blocks here, since they had to
-        // already be verified in order to be added to the blockchain.
+        // Note: We don't verify the justifications for the other blocks here, since they already
+        // had to be verified in order to be added to the blockchain.
         let mut micro_blocks: Vec<Block> =
             self.chain_store.get_blocks_at(block.header.block_number);
 

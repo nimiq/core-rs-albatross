@@ -27,6 +27,7 @@ use nimiq_utils::merkle::{Blake2bMerklePath, Blake2bMerkleProof};
 use crate::account::AccountTransactionVerification;
 
 pub mod account;
+pub mod reward;
 
 /// Transaction topic for the Mempool to request transactions from the network
 #[derive(Clone, Debug, Default)]

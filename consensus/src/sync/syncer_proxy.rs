@@ -28,6 +28,7 @@ macro_rules! gen_syncer_match {
         match $self {
             #[cfg(feature = "full")]
             SyncerProxy::History(syncer) => syncer.$f($( $arg ),*),
+            #[cfg(feature = "full")]
             SyncerProxy::Full(syncer) => syncer.$f($( $arg ),*),
             SyncerProxy::Light(syncer) => syncer.$f($( $arg ),*),
         }
@@ -40,6 +41,7 @@ pub enum SyncerProxy<N: Network> {
     #[cfg(feature = "full")]
     /// History Syncer, uses history macro sync for macro sync and block live sync.
     History(Syncer<N, HistoryMacroSync<N>, BlockLiveSync<N>>),
+    #[cfg(feature = "full")]
     /// Full Syncer, uses light macro sync for macro sync and state live sync.
     Full(Syncer<N, LightMacroSync<N>, StateLiveSync<N>>),
     /// Light Syncer, uses light macro sync for macro sync and block live sync.
@@ -85,7 +87,8 @@ impl<N: Network> SyncerProxy<N> {
         }
     }
 
-    /// Creates a new instance of a `SyncerProxy` for the `Light` variant
+    #[cfg(feature = "full")]
+    /// Creates a new instance of a `SyncerProxy` for the `Full` variant
     pub async fn new_full(
         blockchain_proxy: BlockchainProxy,
         network: Arc<N>,
@@ -199,6 +202,7 @@ impl<N: Network> Stream for SyncerProxy<N> {
         match self.project() {
             #[cfg(feature = "full")]
             SyncerProxyProj::History(syncer) => syncer.poll_next_unpin(cx),
+            #[cfg(feature = "full")]
             SyncerProxyProj::Full(syncer) => syncer.poll_next_unpin(cx),
             SyncerProxyProj::Light(syncer) => syncer.poll_next_unpin(cx),
         }

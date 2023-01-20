@@ -4,6 +4,7 @@ use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteByte
 use nimiq_hash::{Hash, SerializeContent};
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
+use nimiq_transaction::reward::RewardTransaction;
 
 #[derive(Clone, Debug, Eq, PartialEq, Copy, Serialize, Deserialize)]
 #[repr(u8)]
@@ -38,6 +39,17 @@ impl Inherent {
     #[inline]
     pub fn is_pre_transactions(&self) -> bool {
         self.ty.is_pre_transactions()
+    }
+}
+
+impl From<&RewardTransaction> for Inherent {
+    fn from(tx: &RewardTransaction) -> Self {
+        Self {
+            ty: InherentType::Reward,
+            target: tx.recipient.clone(),
+            value: tx.value,
+            data: vec![],
+        }
     }
 }
 

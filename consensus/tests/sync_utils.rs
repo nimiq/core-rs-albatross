@@ -2,9 +2,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use futures::{future, StreamExt};
+use nimiq_block::{BlockHeaderTopic, BlockTopic};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
-use nimiq_consensus::sync::live::block_queue::{BlockHeaderTopic, BlockTopic};
 use nimiq_consensus::sync::syncer::MacroSyncReturn;
 use nimiq_consensus::sync::syncer_proxy::SyncerProxy;
 use nimiq_light_blockchain::LightBlockchain;
@@ -129,12 +129,11 @@ pub async fn sync_two_peers(
         Arc::clone(&net1),
         false,
         Some(zkp_test_exe()),
-        env1.clone(),
         PathBuf::from(KEYS_PATH),
+        None,
     )
     .await;
     let consensus1 = Consensus::from_network(
-        env1,
         BlockchainProxy::from(&blockchain1),
         Arc::clone(&net1),
         syncer1,
@@ -177,8 +176,8 @@ pub async fn sync_two_peers(
         Arc::clone(&net2),
         false,
         Some(zkp_test_exe()),
-        env2.clone(),
         PathBuf::from(KEYS_PATH),
+        None,
     )
     .await;
 
@@ -215,7 +214,6 @@ pub async fn sync_two_peers(
     );
 
     let consensus2 = Consensus::new(
-        env2,
         blockchain2_proxy.clone(),
         Arc::clone(&net2),
         syncer2,

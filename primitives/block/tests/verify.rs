@@ -395,6 +395,7 @@ fn test_verify_election_macro_body() {
         pk_tree_root: None,
         lost_reward_set: BitSet::default(),
         disabled_set: BitSet::default(),
+        transactions: vec![],
     };
     macro_header.body_root = macro_body.hash();
 

@@ -200,8 +200,8 @@ async fn sync_ingredients() {
         Arc::clone(&net1),
         false,
         Some(zkp_test_exe()),
-        env1.clone(),
         PathBuf::from(KEYS_PATH),
+        None,
     )
     .await
     .proxy();
@@ -216,7 +216,6 @@ async fn sync_ingredients() {
     )
     .await;
     let consensus1 = Consensus::from_network(
-        env1,
         blockchain1_proxy.clone(),
         Arc::clone(&net1),
         syncer1,
@@ -244,8 +243,8 @@ async fn sync_ingredients() {
         Arc::clone(&net2),
         false,
         Some(zkp_test_exe()),
-        env2.clone(),
         PathBuf::from(KEYS_PATH),
+        None,
     )
     .await
     .proxy();
@@ -261,7 +260,6 @@ async fn sync_ingredients() {
     .await;
 
     let consensus2 = Consensus::from_network(
-        env2,
         blockchain2_proxy.clone(),
         Arc::clone(&net2),
         syncer2,
@@ -348,7 +346,7 @@ async fn sync_ingredients() {
     let blockchain = consensus1.blockchain.read();
     assert_eq!(checkpoint.hash, blockchain.macro_head_hash());
 
-    // request epoch 2 using the returned checkpoint
+    // Request epoch 2 using the returned checkpoint
     let epoch = SyncCluster::request_epoch(Arc::clone(&net2), peer_id, checkpoint.hash)
         .await
         .expect("Should yield epoch");

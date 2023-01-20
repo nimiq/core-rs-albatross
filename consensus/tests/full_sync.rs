@@ -53,7 +53,7 @@ async fn two_peers_can_sync_epoch_plus_two_batches() {
 #[test(tokio::test)]
 async fn two_peers_can_sync_single_epoch() {
     sync_two_peers(Policy::batches_per_epoch() as usize, 1, SyncMode::Full).await
-} //
+}
 
 #[test(tokio::test)]
 async fn two_peers_can_sync_two_epochs() {
@@ -63,4 +63,4 @@ async fn two_peers_can_sync_two_epochs() {
         SyncMode::Full,
     )
     .await
-} //
+}

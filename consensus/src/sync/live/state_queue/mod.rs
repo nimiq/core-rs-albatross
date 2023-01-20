@@ -132,6 +132,7 @@ pub enum QueuedStateChunks<N: Network> {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ChunkRequestState {
     Complete,
+    Paused,
     Reset,
     Continue(KeyNibbles),
 }
@@ -145,7 +146,7 @@ impl ChunkRequestState {
         if let Some(key) = start_key {
             Self::Continue(key.clone())
         } else {
-            Self::Complete
+            Self::Paused
         }
     }
 
@@ -245,7 +246,6 @@ impl<N: Network> StateQueue<N> {
     /// Resets the starting key for requesting the next chunks.
     /// When reset this component uses the blockchain state missing range start key.
     pub fn reset_chunk_request_chain(&mut self) {
-        log::error!("+++++ Reset of chunk request state");
         self.start_key = ChunkRequestState::Reset;
     }
 
@@ -270,7 +270,7 @@ impl<N: Network> StateQueue<N> {
     /// If no starting key is supplied and the trie is already complete no request is being made.
     fn request_chunk(&mut self) -> bool {
         let start_key = match self.start_key {
-            ChunkRequestState::Complete => None,
+            ChunkRequestState::Complete | ChunkRequestState::Paused => None,
             ChunkRequestState::Reset => self
                 .blockchain
                 .read()
@@ -280,7 +280,6 @@ impl<N: Network> StateQueue<N> {
         };
 
         if let Some(start_key) = start_key {
-            log::error!("+++++++ Requesting chunks {:?}", start_key);
             let req = RequestChunk {
                 start_key: start_key.clone(),
                 limit: Policy::state_chunks_max_size(),
@@ -318,14 +317,7 @@ impl<N: Network> StateQueue<N> {
                 response.block_number,
                 response.block_hash
             );
-            if response.chunk.end_key.is_none() {
-                log::error!("++++ I am at the end of the state sync!");
-            }
             return;
-        }
-
-        if response.chunk.end_key.is_none() {
-            log::error!("++++ I am at the end of the state sync!");
         }
 
         chunks.push(ChunkAndId::new(response.chunk, start_key, peer_id));
@@ -508,6 +500,7 @@ impl<N: Network> Stream for StateQueue<N> {
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
         // Poll the blockchain stream and set key start to complete if the accounts trie is
         // complete and we have passed a macro block.
+        // If we have not passed the macro block yet, reset on a rebranch (since we potentially revert from an incomplete state).
         while let Poll::Ready(Some(event)) = self.blockchain_rx.poll_next_unpin(cx) {
             if !self.start_key.is_complete() {
                 match event {
@@ -517,6 +510,12 @@ impl<N: Network> Stream for StateQueue<N> {
                             self.start_key = ChunkRequestState::Complete;
                             self.buffer.clear();
                             self.buffer_size = 0;
+                        }
+                    }
+                    BlockchainEvent::Rebranched(_, _) => {
+                        if !self.blockchain.read().state.accounts.is_complete(None) {
+                            info!("Reset due to rebranch.");
+                            self.start_key = ChunkRequestState::Reset;
                         }
                     }
                     _ => {}

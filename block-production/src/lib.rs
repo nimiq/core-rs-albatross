@@ -259,17 +259,29 @@ impl BlockProducer {
             history_root: Blake2bHash::default(),
         };
 
+        // Get the staking contract PRIOR to any state changes.
+        let staking_contract = blockchain.get_staking_contract();
+
         // Calculate the disabled set for the current validator set.
+        // TODO: Update comment, see issue #1274.
         // Note: We are fetching the previous disabled set here because we have already updated the
         // state. So the staking contract has already moved the disabled set for this batch into the
         // previous disabled set.
-        let disabled_set = blockchain.get_staking_contract().previous_disabled_slots();
+        let disabled_set = staking_contract.previous_disabled_slots();
 
         // Calculate the lost reward set for the current validator set.
+        // TODO: Update comment, see issue #1274.
         // Note: We are fetching the previous lost rewards set here because we have already updated the
         // state. So the staking contract has already moved the lost rewards set for this batch into the
         // previous lost rewards set.
-        let lost_reward_set = blockchain.get_staking_contract().previous_lost_rewards();
+        let lost_reward_set = staking_contract.previous_lost_rewards();
+
+        // Get the state.
+        let state = blockchain.state();
+
+        // Calculate the reward transactions.
+        let reward_transactions =
+            blockchain.create_reward_transactions(state, &header, &staking_contract);
 
         // If this is an election block, calculate the validator set for the next epoch.
         let validators = if Policy::is_election_block_at(blockchain.block_number() + 1) {
@@ -289,6 +301,7 @@ impl BlockProducer {
             pk_tree_root,
             lost_reward_set,
             disabled_set,
+            transactions: reward_transactions,
         };
 
         // Add the root of the body to the header.
@@ -301,10 +314,7 @@ impl BlockProducer {
             justification: None,
         };
 
-        // Get the state.
-        let state = blockchain.state();
-
-        let inherents: Vec<Inherent> = blockchain.create_macro_block_inherents(state, &macro_block);
+        let inherents: Vec<Inherent> = blockchain.create_macro_block_inherents(&macro_block);
 
         // Update the state and add the state root to the header.
         let (root, _) = state

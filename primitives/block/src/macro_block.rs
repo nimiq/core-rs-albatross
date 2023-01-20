@@ -1,5 +1,6 @@
 use std::fmt;
 
+use nimiq_transaction::reward::RewardTransaction;
 use thiserror::Error;
 
 use beserial::{Deserialize, Serialize};
@@ -238,6 +239,9 @@ pub struct MacroBody {
     /// proposing macro blocks at the time when this block was produced. It is used later on for
     /// reward distribution.
     pub disabled_set: BitSet,
+    /// The reward related transactions of this block.
+    #[beserial(len_type(u16))]
+    pub transactions: Vec<RewardTransaction>,
 }
 
 impl MacroBody {

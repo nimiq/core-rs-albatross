@@ -110,7 +110,7 @@ impl Blockchain {
             this.state.election_head = macro_block.clone();
             this.state.election_head_hash = block_hash.clone();
 
-            // PITODO: Check whether this is okay, we don't have the previous slots
+            // PITODO: Fix this
             this.state.previous_slots = None;
 
             let new_slots = macro_block.get_validators().unwrap();

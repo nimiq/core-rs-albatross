@@ -154,6 +154,7 @@ impl Blockchain {
             }
         }
 
+        // Get the staking contract without using the database transaction (i.e., PRIOR to any changes).
         if let Some(staking_contract) = self.get_staking_contract_if_complete() {
             // For macro blocks we have additional checks. We simply construct what the body should be
             // from our own state and then compare it with the body hash in the header.
@@ -165,6 +166,9 @@ impl Blockchain {
                 } else {
                     None
                 };
+
+                let real_reward_transactions =
+                    self.create_reward_transactions(state, &macro_block.header, &staking_contract);
 
                 if let Some(body) = &macro_block.body {
                     // Get the lost rewards and disabled sets.
@@ -198,6 +202,16 @@ impl Blockchain {
                         );
                         return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
                     }
+                    if real_reward_transactions != body.transactions {
+                        warn!(
+                            %block,
+                            reason = "Reward transactions do not match",
+                            "Rejecting block"
+                        );
+                        return Err(PushError::InvalidBlock(
+                            BlockError::InvalidRewardTransactions,
+                        ));
+                    }
                 } else {
                     // We don't need to check the nano_zkp_hash here since it was already checked in the
                     // `verify_block_body` method.
@@ -217,6 +231,7 @@ impl Blockchain {
                         pk_tree_root: real_pk_tree_root,
                         lost_reward_set: real_lost_rewards,
                         disabled_set: real_disabled_slots,
+                        transactions: real_reward_transactions,
                     };
 
                     let real_body_hash = real_body.hash::<Blake2bHash>();

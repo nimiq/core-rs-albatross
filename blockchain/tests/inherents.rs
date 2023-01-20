@@ -47,12 +47,15 @@ fn it_can_create_batch_finalization_inherents() {
 
     let staking_contract = blockchain.get_staking_contract();
     let active_validators = staking_contract.active_validators.clone();
+    let reward_transactions =
+        blockchain.create_reward_transactions(blockchain.state(), &macro_header, &staking_contract);
 
     let body = MacroBody {
         validators: None,
         pk_tree_root: None,
         lost_reward_set: staking_contract.previous_lost_rewards(),
         disabled_set: staking_contract.previous_disabled_slots(),
+        transactions: reward_transactions,
     };
 
     let macro_block = MacroBlock {
@@ -62,7 +65,7 @@ fn it_can_create_batch_finalization_inherents() {
     };
 
     // Simple case. Expect 1x FinalizeBatch, 1x Reward to validator
-    let inherents = blockchain.finalize_previous_batch(blockchain.state(), &macro_block);
+    let inherents = blockchain.finalize_previous_batch(&macro_block);
     assert_eq!(inherents.len(), 2);
 
     let (validator_address, _) = active_validators.iter().next().unwrap();
@@ -114,11 +117,14 @@ fn it_can_create_batch_finalization_inherents() {
     txn.commit();
 
     let staking_contract = blockchain.get_staking_contract();
+    let reward_transactions =
+        blockchain.create_reward_transactions(blockchain.state(), &macro_header, &staking_contract);
     let body = MacroBody {
         validators: None,
         pk_tree_root: None,
         lost_reward_set: staking_contract.previous_lost_rewards(),
         disabled_set: staking_contract.previous_disabled_slots(),
+        transactions: reward_transactions,
     };
     let macro_block = MacroBlock {
         header: macro_header,
@@ -126,7 +132,7 @@ fn it_can_create_batch_finalization_inherents() {
         justification: None,
     };
 
-    let inherents = blockchain.finalize_previous_batch(blockchain.state(), &macro_block);
+    let inherents = blockchain.finalize_previous_batch(&macro_block);
     assert_eq!(inherents.len(), 3);
     let one_slot_reward = 875 / Policy::SLOTS as u64;
     let mut got_reward = false;
@@ -223,12 +229,15 @@ fn it_can_penalize_delayed_batch() {
     };
 
     let staking_contract = blockchain.get_staking_contract();
+    let reward_transactions =
+        blockchain.create_reward_transactions(blockchain.state(), &macro_header, &staking_contract);
 
     let body = MacroBody {
         validators: None,
         pk_tree_root: None,
         lost_reward_set: staking_contract.previous_lost_rewards(),
         disabled_set: staking_contract.previous_disabled_slots(),
+        transactions: reward_transactions,
     };
 
     let macro_block = MacroBlock {
@@ -238,7 +247,7 @@ fn it_can_penalize_delayed_batch() {
     };
 
     // Simple case. Expect 1x FinalizeBatch, 1x Reward to validator
-    let inherents = blockchain.finalize_previous_batch(blockchain.state(), &macro_block);
+    let inherents = blockchain.finalize_previous_batch(&macro_block);
     assert_eq!(inherents.len(), 2);
 
     let mut got_reward = false;

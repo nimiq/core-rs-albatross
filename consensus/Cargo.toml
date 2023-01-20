@@ -50,7 +50,7 @@ nimiq-utils = { path = "../utils", features = [
     "time",
 ] }
 nimiq-validator-network = { path = "../validator-network" }
-nimiq-zkp-component = { path = "../zkp-component", features = ["zkp-prover"] }
+nimiq-zkp-component = { path = "../zkp-component" }
 
 [dev-dependencies]
 hex = "0.4"
@@ -67,6 +67,7 @@ nimiq-test-log = { path = "../test-log" }
 # This adds a circular dev-dependency which is fine but breaks VS code rust-analyzer.
 # See https://github.com/rust-analyzer/rust-analyzer/issues/2414
 nimiq-test-utils = { path = "../test-utils" }
+nimiq-zkp-component = { path = "../zkp-component", features = ["zkp-prover"] }
 
 [features]
 full = ["nimiq-blockchain", "nimiq-blockchain-proxy/full"]

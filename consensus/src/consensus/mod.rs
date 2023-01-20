@@ -271,7 +271,6 @@ impl<N: Network> Future for Consensus<N> {
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         // 1. Poll and advance block queue
-        log::error!("===== Consensus polled");
         while let Poll::Ready(Some(event)) = self.sync.poll_next_unpin(cx) {
             match event {
                 LiveSyncPushEvent::AcceptedAnnouncedBlock(_) => {

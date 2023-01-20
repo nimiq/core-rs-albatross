@@ -24,7 +24,7 @@ impl Blockchain {
         match block {
             Block::Macro(ref macro_block) => {
                 // Initialize a vector to store the inherents
-                let inherents = self.create_macro_block_inherents(state, macro_block);
+                let inherents = self.create_macro_block_inherents(macro_block);
 
                 // Commit block to AccountsTree and create the receipts.
                 let batch_info = accounts.commit(

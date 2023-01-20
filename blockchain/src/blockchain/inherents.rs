@@ -1,11 +1,12 @@
 use beserial::Serialize;
 use nimiq_account::{Inherent, InherentType, StakingContract};
-use nimiq_block::{ForkProof, MacroBlock, SkipBlockInfo};
+use nimiq_block::{ForkProof, MacroBlock, MacroHeader, SkipBlockInfo};
 use nimiq_database as db;
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy::Policy;
 use nimiq_primitives::slots::SlashedSlot;
+use nimiq_transaction::reward::RewardTransaction;
 use nimiq_vrf::{AliasMethod, VrfUseCase};
 
 use crate::blockchain_state::BlockchainState;
@@ -16,15 +17,11 @@ use nimiq_trie::key_nibbles::KeyNibbles;
 
 /// Implements methods that create inherents.
 impl Blockchain {
-    pub fn create_macro_block_inherents(
-        &self,
-        state: &BlockchainState,
-        macro_block: &MacroBlock,
-    ) -> Vec<Inherent> {
+    pub fn create_macro_block_inherents(&self, macro_block: &MacroBlock) -> Vec<Inherent> {
         let mut inherents: Vec<Inherent> = vec![];
 
         // Every macro block is the end of a batch, so we need to finalize the batch.
-        inherents.append(&mut self.finalize_previous_batch(state, macro_block));
+        inherents.append(&mut self.finalize_previous_batch(macro_block));
 
         // If this block is an election block, we also need to finalize the epoch.
         if Policy::is_election_block_at(macro_block.block_number()) {
@@ -129,24 +126,51 @@ impl Blockchain {
 
     /// Creates the inherents to finalize a batch. The inherents are for reward distribution and
     /// updating the StakingContract.
-    pub fn finalize_previous_batch(
-        &self,
-        state: &BlockchainState,
-        macro_block: &MacroBlock,
-    ) -> Vec<Inherent> {
-        let prev_macro_info = &state.macro_info;
-        let macro_body = macro_block.body.as_ref().expect("we needs it");
-
-        //let staking_contract = self.get_staking_contract();
-
+    pub fn finalize_previous_batch(&self, macro_block: &MacroBlock) -> Vec<Inherent> {
         // Special case for first batch: Batch 0 is finalized by definition.
         if Policy::batch_at(macro_block.block_number()) - 1 == 0 {
             return vec![];
         }
 
+        // At this point we expect the body to be set and reward transactions to be present.
+        let mut inherents: Vec<Inherent> = macro_block
+            .body
+            .as_ref()
+            .expect("Macro body is missing")
+            .transactions
+            .iter()
+            .map(Inherent::from)
+            .collect();
+
+        // Push FinalizeBatch inherent to update StakingContract.
+        inherents.push(Inherent {
+            ty: InherentType::FinalizeBatch,
+            target: self.staking_contract_address(),
+            value: Coin::ZERO,
+            data: Vec::new(),
+        });
+
+        inherents
+    }
+
+    /// Creates the inherents to finalize a batch. The inherents are for reward distribution and
+    /// updating the StakingContract.
+    pub fn create_reward_transactions(
+        &self,
+        state: &BlockchainState,
+        macro_header: &MacroHeader,
+        staking_contract: &StakingContract,
+    ) -> Vec<RewardTransaction> {
+        let prev_macro_info = &state.macro_info;
+
+        // Special case for first batch: Batch 0 is finalized by definition.
+        if Policy::batch_at(macro_header.block_number) - 1 == 0 {
+            return vec![];
+        }
+
         // Get validator slots
         // NOTE: Fields `current_slots` and `previous_slots` are expected to always be set.
-        let validator_slots = if Policy::first_batch_of_epoch(macro_block.block_number()) {
+        let validator_slots = if Policy::first_batch_of_epoch(macro_header.block_number) {
             state
                 .previous_slots
                 .as_ref()
@@ -162,13 +186,13 @@ impl Blockchain {
         // Rewards are for the previous batch (to give validators time to report misbehavior)
         // lost_rewards_set (clears on batch end) makes rewards being lost for at least one batch
         // disabled_set (clears on epoch end) makes rewards being lost further if validator doesn't unpark
-        let lost_rewards_set = macro_body.lost_reward_set.clone();
-        let disabled_set = macro_body.disabled_set.clone();
+        let lost_rewards_set = staking_contract.previous_lost_rewards();
+        let disabled_set = staking_contract.previous_disabled_slots();
         let slashed_set = lost_rewards_set | disabled_set;
 
         // Total reward for the previous batch
         let block_reward = block_reward_for_batch(
-            &macro_block.header,
+            macro_header,
             &prev_macro_info.head.unwrap_macro_ref().header,
             self.genesis_supply,
             self.genesis_timestamp,
@@ -189,10 +213,10 @@ impl Blockchain {
         let mut slashed_set_iter = slashed_set.iter().peekable();
 
         // All accepted inherents.
-        let mut inherents = Vec::new();
+        let mut transactions = Vec::new();
 
         // Remember the number of eligible slots that a validator had (that was able to accept the inherent)
-        let mut num_eligible_slots_for_accepted_inherent = Vec::new();
+        let mut num_eligible_slots_for_accepted_tx = Vec::new();
 
         // Remember that the total amount of reward must be burned. The reward for a slot is burned
         // either because the slot was slashed or because the corresponding validator was unable to
@@ -234,47 +258,33 @@ impl Blockchain {
                 .expect("Overflow in reward");
 
             // Create inherent for the reward.
-            let validator = if let Ok(validator) = StakingContract::get_validator(
+            let validator = StakingContract::get_validator(
                 &self.state().accounts.tree,
                 &self.read_transaction(),
                 &validator_slot.address,
-            ) {
-                validator
-                    .expect("Couldn't find validator in the accounts trie when paying rewards!")
-            } else {
-                // The staking contract is at the 0 address and is thus always downloaded first.
-                // Moreover, it makes sure that if we do not have the full staking contract yet,
-                // it is impossible that we have any other address in the known part of the tree.
-                // We can thus safely ignore the reward distribution.
-                return vec![Inherent {
-                    ty: InherentType::FinalizeBatch,
-                    target: self.staking_contract_address(),
-                    value: Coin::ZERO,
-                    data: Vec::new(),
-                }];
-            };
+            )
+            .expect("Accounts trie must be complete.")
+            .expect("Couldn't find validator in the accounts trie when paying rewards!");
 
-            let inherent = Inherent {
-                ty: InherentType::Reward,
-                target: validator.reward_address.clone(),
+            let tx = RewardTransaction {
+                recipient: validator.reward_address.clone(),
                 value: reward,
-                data: vec![],
             };
 
             // Test whether account will accept inherent. If it can't then the reward will be
             // burned.
             let account = state
                 .accounts
-                .get(&KeyNibbles::from(&inherent.target), None)
+                .get(&KeyNibbles::from(&tx.recipient), None)
                 .expect("Incomplete trie.");
 
             if account.is_none() || account.unwrap().account_type() == AccountType::Basic {
-                num_eligible_slots_for_accepted_inherent.push(num_eligible_slots);
-                inherents.push(inherent);
+                num_eligible_slots_for_accepted_tx.push(num_eligible_slots);
+                transactions.push(tx);
             } else {
                 debug!(
-                    target_address = %inherent.target,
-                    reward = %inherent.value,
+                    target_address = %tx.recipient,
+                    reward = %tx.value,
                     "Can't accept epoch reward"
                 );
                 burned_reward += reward;
@@ -287,41 +297,28 @@ impl Blockchain {
         // Check that number of accepted inherents is equal to length of the map that gives us the
         // corresponding number of slots for that staker (which should be equal to the number of
         // validators that will receive rewards).
-        assert_eq!(
-            inherents.len(),
-            num_eligible_slots_for_accepted_inherent.len()
-        );
+        assert_eq!(transactions.len(), num_eligible_slots_for_accepted_tx.len());
 
         // Get RNG from last block's seed and build lookup table based on number of eligible slots.
-        let mut rng = macro_block.header.seed.rng(VrfUseCase::RewardDistribution);
-        let lookup = AliasMethod::new(num_eligible_slots_for_accepted_inherent);
+        let mut rng = macro_header.seed.rng(VrfUseCase::RewardDistribution);
+        let lookup = AliasMethod::new(num_eligible_slots_for_accepted_tx);
 
         // Randomly give remainder to one accepting slot. We don't bother to distribute it over all
         // accepting slots because the remainder is always at most SLOTS - 1 Lunas.
         let index = lookup.sample(&mut rng);
-        inherents[index].value += remainder;
+        transactions[index].value += remainder;
 
         // Create the inherent for the burned reward.
         if burned_reward > Coin::ZERO {
-            let inherent = Inherent {
-                ty: InherentType::Reward,
-                target: Address::burn_address(),
+            let tx = RewardTransaction {
+                recipient: Address::burn_address(),
                 value: burned_reward,
-                data: vec![],
             };
 
-            inherents.push(inherent);
+            transactions.push(tx);
         }
 
-        // Push FinalizeBatch inherent to update StakingContract.
-        inherents.push(Inherent {
-            ty: InherentType::FinalizeBatch,
-            target: self.staking_contract_address(),
-            value: Coin::ZERO,
-            data: Vec::new(),
-        });
-
-        inherents
+        transactions
     }
 
     /// Creates the inherent to finalize an epoch. The inherent is for updating the StakingContract.

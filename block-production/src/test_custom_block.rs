@@ -251,10 +251,13 @@ fn next_macro_block_proposal(
     };
 
     let state = blockchain.state();
+    // Get the staking contract PRIOR to any state changes.
+    let staking_contract = blockchain.get_staking_contract();
 
-    let disabled_set = blockchain.get_staking_contract().previous_disabled_slots();
-
-    let lost_reward_set = blockchain.get_staking_contract().previous_lost_rewards();
+    let disabled_set = staking_contract.previous_disabled_slots();
+    let lost_reward_set = staking_contract.previous_lost_rewards();
+    let reward_transactions =
+        blockchain.create_reward_transactions(state, &header, &staking_contract);
 
     let validators = if Policy::is_election_block_at(blockchain.block_number() + 1) {
         Some(blockchain.next_validators(&header.seed))
@@ -271,6 +274,7 @@ fn next_macro_block_proposal(
         pk_tree_root,
         lost_reward_set,
         disabled_set,
+        transactions: reward_transactions,
     };
 
     header.body_root = config.body_hash.clone().unwrap_or_else(|| body.hash());
@@ -281,7 +285,7 @@ fn next_macro_block_proposal(
         justification: None,
     };
 
-    let inherents: Vec<Inherent> = blockchain.create_macro_block_inherents(state, &macro_block);
+    let inherents: Vec<Inherent> = blockchain.create_macro_block_inherents(&macro_block);
 
     let (root, _) = state
         .accounts

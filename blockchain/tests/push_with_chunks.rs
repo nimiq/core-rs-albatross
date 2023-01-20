@@ -317,7 +317,7 @@ fn can_partially_apply_blocks() {
     let block = temp_producer1.next_block_with_txs(vec![], false, vec![]);
     // Chunk covers trie until d...
     let chunk1 = temp_producer1.get_chunk(KeyNibbles::ROOT, 4);
-    let chunk2_start = chunk1.chunk.keys_end.clone().unwrap();
+    let chunk2_start = chunk1.chunk.end_key.clone().unwrap();
     assert_eq!(
         temp_producer2.push_with_chunks(block, vec![chunk1]),
         Ok((PushResult::Extended, Ok(ChunksPushResult::Chunks(1, 0))))
