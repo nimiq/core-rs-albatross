@@ -39,9 +39,11 @@ strum_macros = "0.24"
 toml = "0.5"
 url = { version = "2.3", features = ["serde"] }
 thiserror = "1.0"
-tokio = { version = "1.24", features = ["rt", "tracing"], optional = true }
+time = { version = "0.3", optional = true }
+tokio = { version = "1.24", features = ["rt"], optional = true }
 tracing-loki = { version = "0.2.1", optional = true }
 tracing-subscriber = { version = "0.3", optional = true }
+tracing-web = { version = "0.1", optional = true}
 
 beserial = { path = "../beserial" }
 nimiq-block = { path = "../primitives/block" }
@@ -52,8 +54,8 @@ nimiq-bls = { path = "../bls" }
 nimiq-consensus = { path = "../consensus", default-features = false }
 nimiq-database = { path = "../database", optional = true }
 nimiq-genesis = { path = "../genesis", default-features = false }
-nimiq-jsonrpc-core = { git = "https://github.com/nimiq/jsonrpc.git", optional=true}
-nimiq-jsonrpc-server = { git = "https://github.com/nimiq/jsonrpc.git", optional=true}
+nimiq-jsonrpc-core = { git = "https://github.com/nimiq/jsonrpc.git", optional = true }
+nimiq-jsonrpc-server = { git = "https://github.com/nimiq/jsonrpc.git", optional = true }
 nimiq-keys = { path = "../keys" }
 nimiq-light-blockchain = { path = "../light-blockchain" }
 nimiq-log = { path = "../log", optional = true }
@@ -84,9 +86,10 @@ loki = ["logging", "tracing-loki"]
 metrics-server = ["nimiq-metrics-server", "nimiq-network-libp2p/metrics", "nimiq-validator/metrics"]
 panic = ["log-panics"]
 rpc-server = ["nimiq-jsonrpc-core", "nimiq-jsonrpc-server", "nimiq-rpc-server", "nimiq-wallet", "validator"]
-tokio-console = ["console-subscriber", "logging", "tokio"]
+tokio-console = ["console-subscriber", "logging", "tokio/tracing"]
 validator = ["nimiq-database", "nimiq-mempool", "nimiq-validator", "nimiq-validator-network", "nimiq-rpc-server"]
 wallet = ["nimiq-database", "nimiq-wallet"]
 websocket = ["nimiq-network-libp2p/websocket"]
+web-logging = ["nimiq-log", "time/wasm-bindgen", "tracing-subscriber", "tracing-web"]
 zkp-storage = ["nimiq-database", "nimiq-zkp-component/zkp-storage"]
 zkp-prover = ["nimiq-zkp-component/zkp-prover"]

@@ -4,7 +4,7 @@ use std::{env, fmt};
 use tracing_log::NormalizeEvent;
 use tracing_subscriber::filter::Targets;
 use tracing_subscriber::fmt::format::Writer;
-use tracing_subscriber::fmt::time::{FormatTime, SystemTime};
+use tracing_subscriber::fmt::time::{FormatTime, UtcTime};
 use tracing_subscriber::fmt::{FmtContext, FormatEvent, FormatFields, FormattedFields};
 use tracing_subscriber::registry::LookupSpan;
 
@@ -228,7 +228,7 @@ pub struct MaybeSystemTime(pub bool);
 impl FormatTime for MaybeSystemTime {
     fn format_time(&self, w: &mut Writer) -> fmt::Result {
         if self.0 {
-            SystemTime.format_time(w)
+            UtcTime::rfc_3339().format_time(w)
         } else {
             ().format_time(w)
         }

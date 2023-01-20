@@ -8,12 +8,10 @@ use std::sync::Arc;
 use file_rotate::{compression::Compression, suffix::AppendCount, ContentLimit, FileRotate};
 use log::{level_filters::LevelFilter, Level, Subscriber};
 use parking_lot::Mutex;
-use tracing_subscriber::filter::Targets;
-use tracing_subscriber::fmt::time::SystemTime;
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::registry::LookupSpan;
-use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::Layer;
+use tracing_subscriber::{
+    filter::Targets, fmt::time::SystemTime, layer::SubscriberExt, registry::LookupSpan,
+    util::SubscriberInitExt, Layer,
+};
 
 use crate::{
     config::{command_line::CommandLine, config_file::LogSettings},

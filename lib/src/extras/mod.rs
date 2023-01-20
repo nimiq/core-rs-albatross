@@ -1,5 +1,7 @@
 #[cfg(feature = "deadlock")]
 pub mod deadlock;
+#[cfg(feature = "launcher")]
+pub mod launcher;
 #[cfg(feature = "logging")]
 pub mod logging;
 #[cfg(feature = "metrics-server")]
@@ -10,6 +12,5 @@ pub mod panic;
 pub mod rpc_server;
 #[cfg(feature = "signal-handling")]
 pub mod signal_handling;
-
-#[cfg(feature = "launcher")]
-pub mod launcher;
+#[cfg(feature = "web-logging")]
+pub mod web_logging;

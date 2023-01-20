@@ -7,4 +7,4 @@ edition = "2021"
 ansi_term = "0.12"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 tracing-log = "0.1"
-tracing-subscriber = "0.3"
+tracing-subscriber = { version = "0.3", features = ["time"] }
