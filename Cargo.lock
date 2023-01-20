@@ -3850,17 +3850,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "nimiq-light-client"
-version = "0.1.0"
-dependencies = [
- "futures-util",
- "nimiq-lib",
- "tokio",
- "tokio-metrics",
- "tracing",
-]
-
-[[package]]
 name = "nimiq-log"
 version = "0.1.0"
 dependencies = [
@@ -4529,6 +4518,18 @@ dependencies = [
  "nimiq-test-log",
  "nimiq-transaction",
  "nimiq-utils",
+]
+
+[[package]]
+name = "nimiq-web-client"
+version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "gloo-timers",
+ "nimiq-lib",
+ "tracing",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
 ]
 
 [[package]]

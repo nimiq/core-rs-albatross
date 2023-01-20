@@ -31,7 +31,6 @@ pub static NIMIQ_MODULES: &[&str] = &[
     "nimiq_keys",
     "nimiq_lib",
     "nimiq_light_blockchain",
-    "nimiq_light_client",
     "nimiq_log",
     "nimiq_macros",
     "nimiq_mempool",
@@ -60,6 +59,7 @@ pub static NIMIQ_MODULES: &[&str] = &[
     "nimiq_validator_network",
     "nimiq_vrf",
     "nimiq_wallet",
+    "nimiq_web_client",
     "nimiq_zkp_component",
 ];
 

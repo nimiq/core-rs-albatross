@@ -24,7 +24,6 @@ members = [
   "keys",
   "lib",
   "light-blockchain",
-  "light-client",
   "log",
   "macros",
   "mempool",
@@ -58,6 +57,7 @@ members = [
   "validator-network",
   "vrf",
   "wallet",
+  "web-client",
   "zkp-component",
 ]
 
