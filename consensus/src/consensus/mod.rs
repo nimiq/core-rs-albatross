@@ -6,14 +6,17 @@ use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 
 use futures::{FutureExt, StreamExt};
-use nimiq_blockchain_proxy::BlockchainProxy;
-use nimiq_primitives::task_executor::TaskExecutor;
+#[cfg(target_arch = "wasm32")]
+use gloo_timers::future::{sleep, TimeoutFuture};
 use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
-use tokio::time::Sleep;
+#[cfg(not(target_arch = "wasm32"))]
+use tokio::time::{sleep, Sleep};
 use tokio_stream::wrappers::BroadcastStream;
 
 use nimiq_blockchain_interface::AbstractBlockchain;
+use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_network_interface::{network::Network, request::request_handler};
+use nimiq_primitives::task_executor::TaskExecutor;
 use nimiq_zkp_component::zkp_component::ZKPComponentProxy;
 
 use crate::consensus::head_requests::{HeadRequests, HeadRequestsResult};
@@ -43,8 +46,10 @@ pub struct Consensus<N: Network> {
 
     /// A Delay which exists purely for the waker on its poll to reactivate the task running Consensus::poll
     /// FIXME Remove this
+    #[cfg(target_arch = "wasm32")]
+    next_execution_timer: Option<Pin<Box<TimeoutFuture>>>,
+    #[cfg(not(target_arch = "wasm32"))]
     next_execution_timer: Option<Pin<Box<Sleep>>>,
-
     events: BroadcastSender<ConsensusEvent>,
     established_flag: Arc<AtomicBool>,
     head_requests: Option<HeadRequests<N>>,
@@ -104,7 +109,7 @@ impl<N: Network> Consensus<N> {
 
         let established_flag = Arc::new(AtomicBool::new(false));
 
-        let timer = Box::pin(tokio::time::sleep(Self::CONSENSUS_POLL_TIMER));
+        let timer = Box::pin(sleep(Self::CONSENSUS_POLL_TIMER));
 
         Consensus {
             blockchain,
@@ -351,7 +356,7 @@ impl<N: Network> Future for Consensus<N> {
         // was potentially awoken by the delays waker, but even then all there is to do is set up a new timer such
         // that it will wake this task again after another time frame has elapsed. No interval was used as that
         // would periodically wake the task even though it might have just executed
-        let mut timer = Box::pin(tokio::time::sleep(Self::CONSENSUS_POLL_TIMER));
+        let mut timer = Box::pin(sleep(Self::CONSENSUS_POLL_TIMER));
         // If the sleep wasn't pending anymore, it didn't register us with the waker, but we need that.
         assert!(timer.poll_unpin(cx) == Poll::Pending);
         self.next_execution_timer = Some(timer);
