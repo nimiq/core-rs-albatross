@@ -12,6 +12,7 @@ use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_light_blockchain::LightBlockchain;
 use nimiq_macros::store_waker;
 use nimiq_network_interface::network::{Network, NetworkEvent};
+use nimiq_primitives::policy::Policy;
 use nimiq_zkp_component::types::ZKPRequestEvent::{OutdatedProof, Proof};
 
 use crate::sync::{
@@ -146,6 +147,28 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                 );
                 return Poll::Ready(Some(MacroSyncReturn::Outdated(epoch_ids.sender)));
             } else if epoch_ids.ids.is_empty() && epoch_ids.checkpoint.is_none() {
+                match self.blockchain {
+                    #[cfg(feature = "full")]
+                    BlockchainProxy::Full(ref blockchain) => {
+                        // For the full sync, we need to make sure that the previous_slots have been set.
+                        // If not, we need to request the corresponding macro block and set them.
+                        let blockchain_rg = blockchain.read();
+                        if blockchain_rg.state.previous_slots.is_none()
+                            && blockchain_rg.election_head().block_number() > 0
+                        {
+                            let previous_election_block =
+                                blockchain_rg.election_head().header.parent_election_hash;
+                            drop(blockchain_rg);
+                            self.request_single_macro_block(
+                                epoch_ids.sender,
+                                previous_election_block,
+                            );
+                            // PITODO: Make sure futures convention is being followed! poll returned Some
+                            return Poll::Pending;
+                        }
+                    }
+                    _ => {}
+                }
                 // We are synced with this peer.
                 debug!(
                     peer_id = ?epoch_ids.sender,
@@ -188,16 +211,32 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                                     let blockchain = full_blockchain.upgradable_read();
 
                                     let latest_block_number = blockchain.block_number();
+                                    // Get the block number of the election block before the current election block.
+                                    let current_election_block_number =
+                                        blockchain.election_head().block_number();
+                                    let previous_election_block_number =
+                                        if current_election_block_number > 0 {
+                                            Some(Policy::election_block_before(
+                                                current_election_block_number,
+                                            ))
+                                        } else {
+                                            None
+                                        };
 
-                                    if block.block_number() < latest_block_number {
+                                    // If the block matches the previous election block, we use it to update the `previous_slots`.
+                                    // Otherwise, check if it's outdated / push the macro block.
+                                    if previous_election_block_number == Some(block.block_number())
+                                    {
+                                        Blockchain::update_previous_slots(blockchain, block.clone())
+                                    } else if block.block_number() < latest_block_number {
                                         // The peer is outdated, so we emit it, and we remove it
                                         self.peer_requests.remove(&peer_id);
                                         return Poll::Ready(Some(MacroSyncReturn::Outdated(
                                             peer_id,
                                         )));
+                                    } else {
+                                        Blockchain::push_macro(blockchain, block.clone())
                                     }
-
-                                    Blockchain::push_macro(blockchain, block.clone())
                                 }
                                 BlockchainProxy::Light(ref light_blockchain) => {
                                     let blockchain = light_blockchain.upgradable_read();

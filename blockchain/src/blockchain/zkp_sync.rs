@@ -145,6 +145,61 @@ impl Blockchain {
         Ok(PushResult::Extended)
     }
 
+    /// Pushes an election block backwards into the chain.
+    /// This is used to update the `previous_slots` if needed.
+    pub fn update_previous_slots(
+        this: RwLockUpgradableReadGuard<Self>,
+        block: Block,
+    ) -> Result<PushResult, PushError> {
+        // Must be a macro block.
+        assert!(block.is_election());
+
+        // Checks if the body exists.
+        block
+            .body()
+            .ok_or(PushError::InvalidBlock(BlockError::MissingBody))?;
+
+        let read_txn = this.read_transaction();
+
+        // Check if we already know this block.
+        if this
+            .chain_store
+            .get_chain_info(&block.hash(), false, Some(&read_txn))
+            .is_ok()
+        {
+            return Ok(PushResult::Known);
+        }
+
+        // Perform block intrinsic checks.
+        block.verify(false)?;
+
+        // Get epoch number.
+        let epoch = Policy::epoch_at(block.block_number());
+
+        // Check if we have this block's successor.
+        let prev_block = this
+            .chain_store
+            .get_block_at(epoch + Policy::blocks_per_epoch(), false, Some(&read_txn))
+            .or(Err(PushError::InvalidSuccessor))?;
+
+        // Verify that the block is indeed the predecessor.
+        if &block.hash() != prev_block.parent_election_hash().unwrap() {
+            return Err(PushError::InvalidPredecessor);
+        }
+
+        read_txn.close();
+
+        // Upgrade the blockchain lock
+        let mut this = RwLockUpgradableReadGuard::upgrade_untimed(this);
+
+        // Store the election block header.
+        if let Block::Macro(ref macro_block) = block {
+            this.state.previous_slots = macro_block.get_validators();
+        }
+
+        Ok(PushResult::Extended)
+    }
+
     /// Pushes a macro block into the blockchain. This is used when we have already synced to the
     /// most recent election block and now need to push a checkpoint block.
     /// But this function is general enough to allow pushing any macro block (checkpoint or election)

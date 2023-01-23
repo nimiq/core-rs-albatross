@@ -108,7 +108,7 @@ impl PeerMacroRequests {
 ///   3. Request the last (if any) election or checkpoint blocks
 /// If during the process, a peer is deemed as outdated, then it is emitted
 pub struct LightMacroSync<TNetwork: Network> {
-    /// The blockchain, only a light variant is supported for LightMacroSync
+    /// The blockchain
     pub(crate) blockchain: BlockchainProxy,
     /// Reference to the network
     pub(crate) network: Arc<TNetwork>,

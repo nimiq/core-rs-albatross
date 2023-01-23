@@ -136,6 +136,29 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         }
     }
 
+    pub(crate) fn request_single_macro_block(
+        &mut self,
+        peer_id: TNetwork::PeerId,
+        block_hash: Blake2bHash,
+    ) {
+        let mut peer_requests = PeerMacroRequests::new();
+        let network = Arc::clone(&self.network);
+
+        peer_requests.push_request(block_hash.clone());
+
+        self.block_headers.push(
+            async move {
+                (
+                    Self::request_macro_block(network, peer_id, block_hash).await,
+                    peer_id,
+                )
+            }
+            .boxed(),
+        );
+
+        self.peer_requests.insert(peer_id, peer_requests);
+    }
+
     pub(crate) fn request_macro_headers(
         &mut self,
         mut epoch_ids: EpochIds<TNetwork::PeerId>,
