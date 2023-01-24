@@ -39,7 +39,6 @@ nimiq-keys = { path = "../keys" }
 nimiq-mempool = { path = "../mempool" }
 nimiq-nano-primitives = { path = "../nano-primitives" }
 nimiq-transaction-builder = { path = "../transaction-builder" }
-nimiq-trie = { path = "../primitives/trie" }
 nimiq-network-interface = { path = "../network-interface" }
 nimiq-network-libp2p = { path = "../network-libp2p" }
 nimiq-network-mock = { path = "../network-mock" }

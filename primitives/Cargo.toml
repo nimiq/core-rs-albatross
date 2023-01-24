@@ -32,6 +32,7 @@ thiserror = { version = "1.0", optional = true }
 
 beserial = { path = "../beserial", features = ["derive"] }
 nimiq-bls = { path = "../bls", features = ["beserial"], optional = true }
+nimiq-hash = { path = "../hash", optional = true }
 nimiq-keys = { path = "../keys", optional = true }
 nimiq-utils = { path = "../utils", features = ["math"], optional = true }
 nimiq-database-value = { path = "../database/database-value", optional = true }
@@ -41,7 +42,7 @@ lazy_static = "1.2"
 nimiq-test-log = { path = "../test-log" }
 
 [features]
-account = ["hex", "thiserror"]
+account = ["hex", "thiserror", "transaction"]
 all = ["account", "coin", "networks", "policy", "slots", "key-nibbles"]
 coin = ["hex", "lazy_static", "num-traits", "regex", "thiserror"]
 key-nibbles = ["hex", "nimiq-keys", "nimiq-database-value"]
@@ -49,3 +50,5 @@ networks = ["thiserror"]
 policy = ["lazy_static", "nimiq-keys", "num-traits", "parking_lot"]
 serde-derive = ["serde"]
 slots = ["beserial/bitvec", "itertools", "nimiq-bls", "nimiq-keys", "nimiq-utils", "policy"]
+transaction = []
+trie = ["key-nibbles", "nimiq-hash"]

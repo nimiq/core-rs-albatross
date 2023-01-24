@@ -1,8 +1,8 @@
 use nimiq_database::WriteTransaction;
-use nimiq_primitives::coin::Coin;
+use nimiq_primitives::{account::AccountError, coin::Coin};
 use nimiq_transaction::Transaction;
 
-use crate::{logs::AccountInfo, AccountError, AccountsTrie, Inherent, Log};
+use crate::{logs::AccountInfo, AccountsTrie, Inherent, Log};
 
 pub trait AccountTransactionInteraction: Sized {
     fn can_pay_fee(

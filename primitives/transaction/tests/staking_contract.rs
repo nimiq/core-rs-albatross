@@ -1,21 +1,20 @@
 use std::convert::TryInto;
 
 use beserial::{Deserialize, Serialize};
-use nimiq_bls::CompressedPublicKey as BlsPublicKey;
-use nimiq_bls::KeyPair as BlsKeyPair;
-use nimiq_bls::SecretKey as BlsSecretKey;
+use nimiq_bls::{
+    CompressedPublicKey as BlsPublicKey, KeyPair as BlsKeyPair, SecretKey as BlsSecretKey,
+};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::{Address, KeyPair, PrivateKey, PublicKey};
-use nimiq_primitives::account::AccountType;
-use nimiq_primitives::coin::Coin;
-use nimiq_primitives::networks::NetworkId;
-use nimiq_primitives::policy::Policy;
+use nimiq_primitives::{
+    account::AccountType, coin::Coin, networks::NetworkId, policy::Policy,
+    transaction::TransactionError,
+};
 use nimiq_test_log::test;
 use nimiq_transaction::account::staking_contract::{
     IncomingStakingTransactionData, OutgoingStakingTransactionProof,
 };
-use nimiq_transaction::account::AccountTransactionVerification;
-use nimiq_transaction::{SignatureProof, Transaction, TransactionError};
+use nimiq_transaction::{account::AccountTransactionVerification, SignatureProof, Transaction};
 use nimiq_utils::key_rng::SecureGenerate;
 
 const VALIDATOR_ADDRESS: &str = "83fa05dbe31f85e719f4c4fd67ebdba2e444d9f8";

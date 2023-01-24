@@ -2,15 +2,20 @@ use std::vec;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_database::WriteTransaction;
-use nimiq_primitives::account::AccountType;
-use nimiq_primitives::coin::Coin;
+use nimiq_primitives::{
+    account::{AccountError, AccountType},
+    coin::Coin,
+    key_nibbles::KeyNibbles,
+};
 use nimiq_transaction::Transaction;
-use nimiq_trie::key_nibbles::KeyNibbles;
 
-use crate::inherent::{Inherent, InherentType};
-use crate::interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction};
-use crate::logs::{AccountInfo, Log};
-use crate::{complete, get_or_update_account, Account, AccountError, AccountsTrie};
+use crate::{
+    complete, get_or_update_account,
+    inherent::{Inherent, InherentType},
+    interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction},
+    logs::{AccountInfo, Log},
+    Account, AccountsTrie,
+};
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]

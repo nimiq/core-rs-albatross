@@ -6,20 +6,20 @@ use std::fs::{read_to_string, OpenOptions};
 use std::io::Error as IoError;
 use std::path::Path;
 
-use nimiq_primitives::policy::Policy;
 use thiserror::Error;
 use time::OffsetDateTime;
 use toml::de::Error as TomlError;
 
 use beserial::{Serialize, SerializingError};
-use nimiq_account::{Account, AccountError, Accounts, AccountsList, BasicAccount, StakingContract};
+use nimiq_account::{Account, Accounts, AccountsList, BasicAccount, StakingContract};
 use nimiq_block::{Block, MacroBlock, MacroBody, MacroHeader};
 use nimiq_bls::PublicKey as BlsPublicKey;
 use nimiq_database::{Environment, WriteTransaction};
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
-use nimiq_primitives::coin::Coin;
-use nimiq_trie::key_nibbles::KeyNibbles;
+use nimiq_primitives::{
+    account::AccountError, coin::Coin, key_nibbles::KeyNibbles, policy::Policy,
+};
 use nimiq_vrf::VrfSeed;
 
 mod config;

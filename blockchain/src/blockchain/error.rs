@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use nimiq_account::AccountError;
+use nimiq_primitives::account::AccountError;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ChunksPushResult {

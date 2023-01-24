@@ -5,12 +5,13 @@ use std::{
 };
 
 use futures::{FutureExt, Stream, StreamExt};
+use parking_lot::RwLock;
+
 use nimiq_network_interface::{
     network::{Network, NetworkEvent, SubscribeEvents},
     request::RequestError,
 };
-use nimiq_trie::key_nibbles::KeyNibbles;
-use parking_lot::RwLock;
+use nimiq_primitives::key_nibbles::KeyNibbles;
 
 use crate::sync::{peer_list::PeerList, sync_queue::SyncQueue};
 

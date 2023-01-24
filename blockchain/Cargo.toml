@@ -41,7 +41,6 @@ nimiq-mmr = { path = "../primitives/mmr" }
 nimiq-nano-zkp = { path = "../nano-zkp" }
 nimiq-primitives = { path = "../primitives" }
 nimiq-transaction = { path = "../primitives/transaction" }
-nimiq-trie = { path = "../primitives/trie" }
 nimiq-utils = { path = "../utils", features = ["math", "time"] }
 nimiq-vrf = { path = "../vrf" }
 

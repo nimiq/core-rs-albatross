@@ -1,30 +1,28 @@
-use beserial::{Deserialize, Serialize};
-use nimiq_hash::Hash;
-use nimiq_primitives::account::AccountType;
-use rand::{rngs::StdRng, SeedableRng};
 use std::convert::TryFrom;
 use std::time::Instant;
+
+use rand::{rngs::StdRng, SeedableRng};
 use tempfile::tempdir;
 
+use beserial::{Deserialize, Serialize};
 use nimiq_account::{
     Account, Accounts, BasicAccount, BatchInfo, Inherent, InherentType, Log, TransactionLog,
     VestingContract,
 };
 use nimiq_account::{Receipt, Receipts};
 use nimiq_bls::KeyPair as BLSKeyPair;
-use nimiq_database::WriteTransaction;
-use nimiq_database::{mdbx::MdbxEnvironment, volatile::VolatileEnvironment};
+use nimiq_database::{mdbx::MdbxEnvironment, volatile::VolatileEnvironment, WriteTransaction};
 use nimiq_genesis_builder::GenesisBuilder;
+use nimiq_hash::Hash;
 use nimiq_keys::{Address, KeyPair, PrivateKey, PublicKey, SecureGenerate};
-use nimiq_primitives::coin::Coin;
-use nimiq_primitives::networks::NetworkId;
-use nimiq_primitives::policy::Policy;
+use nimiq_primitives::{
+    account::AccountType, coin::Coin, key_nibbles::KeyNibbles, networks::NetworkId, policy::Policy,
+};
 use nimiq_test_log::test;
 use nimiq_test_utils::test_transaction::{
     generate_accounts, generate_transactions, TestTransaction,
 };
 use nimiq_transaction::{ExecutedTransaction, SignatureProof, Transaction};
-use nimiq_trie::key_nibbles::KeyNibbles;
 
 const VOLATILE_ENV: bool = true;
 

@@ -1,7 +1,7 @@
 use std::convert::TryFrom;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
-use nimiq_trie::key_nibbles::KeyNibbles;
+use nimiq_primitives::key_nibbles::KeyNibbles;
 
 use crate::Account;
 

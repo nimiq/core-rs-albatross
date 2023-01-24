@@ -2,20 +2,26 @@ use std::convert::TryInto;
 
 use beserial::{Deserialize, Serialize, SerializingError};
 use nimiq_account::{
-    Account, AccountError, AccountTransactionInteraction, AccountsTrie, HashedTimeLockedContract,
+    Account, AccountTransactionInteraction, AccountsTrie, HashedTimeLockedContract,
 };
-use nimiq_database::volatile::VolatileEnvironment;
-use nimiq_database::WriteTransaction;
+use nimiq_database::{volatile::VolatileEnvironment, WriteTransaction};
 use nimiq_hash::{Blake2bHasher, HashOutput, Hasher, Sha256Hasher};
 use nimiq_keys::{Address, KeyPair, PrivateKey};
-use nimiq_primitives::account::AccountType;
-use nimiq_primitives::coin::Coin;
-use nimiq_primitives::networks::NetworkId;
+use nimiq_primitives::{
+    account::{AccountError, AccountType},
+    coin::Coin,
+    key_nibbles::KeyNibbles,
+    networks::NetworkId,
+    transaction::TransactionError,
+};
 use nimiq_test_log::test;
-use nimiq_transaction::account::htlc_contract::{AnyHash, HashAlgorithm, ProofType};
-use nimiq_transaction::account::AccountTransactionVerification;
-use nimiq_transaction::{SignatureProof, Transaction, TransactionError, TransactionFlags};
-use nimiq_trie::key_nibbles::KeyNibbles;
+use nimiq_transaction::{
+    account::{
+        htlc_contract::{AnyHash, HashAlgorithm, ProofType},
+        AccountTransactionVerification,
+    },
+    SignatureProof, Transaction, TransactionFlags,
+};
 
 const HTLC: &str = "00000000000000001b215589344cf570d36bec770825eae30b73213924786862babbdb05e7c4430612135eb2a836812303daebe368963c60d22098a5e9f1ebcb8e54d0b7beca942a2a0a9d95391804fe8f0100000000000296350000000000000001";
 

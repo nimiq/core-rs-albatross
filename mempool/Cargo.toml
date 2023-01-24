@@ -57,7 +57,6 @@ nimiq-test-log = { path = "../test-log" }
 nimiq-test-utils = { path = "../test-utils" }
 nimiq-transaction-builder = { path = "../transaction-builder" }
 nimiq-vrf = { path = "../vrf" }
-nimiq-trie = { path = "../primitives/trie" }
 
 [features]
 metrics = ["prometheus-client"]

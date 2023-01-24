@@ -12,8 +12,10 @@ use nimiq_blockchain_interface::{
 };
 use nimiq_database::{ReadTransaction, WriteTransaction};
 use nimiq_hash::{Blake2bHash, Hash};
-use nimiq_primitives::policy::Policy;
-use nimiq_trie::trie_chunk::{TrieChunkPushResult, TrieChunkWithStart};
+use nimiq_primitives::{
+    policy::Policy,
+    trie::trie_chunk::{TrieChunkPushResult, TrieChunkWithStart},
+};
 use nimiq_vrf::VrfSeed;
 
 use crate::{

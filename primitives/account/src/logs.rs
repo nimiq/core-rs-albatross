@@ -2,8 +2,7 @@ use crate::Receipt;
 use beserial::Serialize as BeSerialize;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
-use nimiq_primitives::account::AccountType;
-use nimiq_primitives::coin::Coin;
+use nimiq_primitives::{account::AccountType, coin::Coin};
 use nimiq_transaction::{
     account::htlc_contract::{AnyHash, HashAlgorithm},
     Transaction,

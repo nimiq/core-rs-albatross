@@ -3,18 +3,19 @@ use std::convert::TryFrom;
 use beserial::{Deserialize, Serialize};
 use nimiq_database::WriteTransaction;
 use nimiq_keys::Address;
-use nimiq_primitives::account::*;
-use nimiq_primitives::coin::Coin;
+use nimiq_primitives::{account::*, coin::Coin, key_nibbles::KeyNibbles};
 use nimiq_transaction::account::htlc_contract::{
     AnyHash, CreationTransactionData, HashAlgorithm, ProofType,
 };
 use nimiq_transaction::{SignatureProof, Transaction};
-use nimiq_trie::key_nibbles::KeyNibbles;
 
-use crate::inherent::Inherent;
-use crate::interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction};
-use crate::logs::{AccountInfo, Log};
-use crate::{complete, get_or_update_account, Account, AccountError, AccountsTrie, BasicAccount};
+use crate::{
+    complete, get_or_update_account,
+    inherent::Inherent,
+    interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction},
+    logs::{AccountInfo, Log},
+    Account, AccountsTrie, BasicAccount,
+};
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]

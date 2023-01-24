@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut};
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 
-use crate::{key_nibbles::KeyNibbles, trie_node::TrieNode};
+use crate::{key_nibbles::KeyNibbles, trie::trie_node::TrieNode};
 
 /// A wrapper around the TrieNode to be used when we send nodes over the network.
 /// As an optimization, the TrieNode does not serialize its key,

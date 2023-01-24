@@ -2,15 +2,18 @@ use nimiq_database::{
     Environment, ReadTransaction, Transaction as DBTransaction, WriteTransaction,
 };
 use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_primitives::{
+    account::AccountError,
+    key_nibbles::KeyNibbles,
+    trie::trie_chunk::{TrieChunk, TrieChunkPushResult},
+};
 use nimiq_transaction::{ExecutedTransaction, Transaction, TransactionFlags};
 use nimiq_trie::trie::{IncompleteTrie, MerkleRadixTrie};
-use nimiq_trie::trie_chunk::TrieChunkPushResult;
-use nimiq_trie::{key_nibbles::KeyNibbles, trie::TrieChunk};
 
 use crate::{
     logs::{BatchInfo, TransactionLog},
-    Account, AccountError, AccountInherentInteraction, AccountTransactionInteraction, Inherent,
-    Log, Receipt, Receipts, RevertTransactionLogs, TransactionInfo,
+    Account, AccountInherentInteraction, AccountTransactionInteraction, Inherent, Log, Receipt,
+    Receipts, RevertTransactionLogs, TransactionInfo,
 };
 
 /// An alias for the accounts tree.

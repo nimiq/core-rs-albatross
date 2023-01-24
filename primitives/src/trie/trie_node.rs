@@ -12,8 +12,7 @@ use beserial::{
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Blake2bHash, HashOutput, Hasher, SerializeContent};
 
-use crate::error::MerkleRadixTrieError;
-use crate::key_nibbles::KeyNibbles;
+use crate::{key_nibbles::KeyNibbles, trie::error::MerkleRadixTrieError};
 
 /// A struct representing a node in the Merkle Radix Trie. It can be either a branch node, which has
 /// only references to its children, a leaf node, which contains a value or a hybrid node, which has

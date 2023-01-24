@@ -15,8 +15,7 @@ use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis_builder::GenesisInfo;
 use nimiq_network_interface::network::Network as NetworkInterface;
 use nimiq_network_mock::MockHub;
-use nimiq_primitives::networks::NetworkId;
-use nimiq_trie::key_nibbles::KeyNibbles;
+use nimiq_primitives::{key_nibbles::KeyNibbles, networks::NetworkId};
 use nimiq_utils::time::OffsetTime;
 use nimiq_zkp_component::{proof_store::DBProofStore, ZKPComponent};
 

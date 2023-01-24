@@ -12,15 +12,18 @@ use log::error;
 use beserial::{Deserialize, Serialize};
 use nimiq_database::{Database, Environment, Transaction, WriteTransaction};
 use nimiq_hash::Blake2bHash;
-
-use crate::error::MerkleRadixTrieError;
-use crate::key_nibbles::KeyNibbles;
-use crate::network_trie_node::NetworkTrieNode;
-use crate::trie_chunk::Item;
-pub use crate::trie_chunk::TrieChunk;
-use crate::trie_chunk::TrieChunkPushResult;
-use crate::trie_node::{RootData, TrieNode, TrieNodeKind};
-use crate::trie_proof::TrieProof;
+use nimiq_primitives::{
+    key_nibbles::KeyNibbles,
+    trie::{
+        error::MerkleRadixTrieError,
+        network_trie_node::NetworkTrieNode,
+        trie_chunk::Item,
+        trie_chunk::TrieChunk,
+        trie_chunk::TrieChunkPushResult,
+        trie_node::{RootData, TrieNode, TrieNodeKind},
+        trie_proof::TrieProof,
+    },
+};
 
 /// A Merkle Radix Trie is a hybrid between a Merkle tree and a Radix trie. Like a Merkle tree each
 /// node contains the hashes of all its children. That creates a tree that is resistant to

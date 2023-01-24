@@ -3,19 +3,21 @@ use std::convert::TryInto;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_account::*;
-use nimiq_bls::KeyPair as BlsKeyPair;
-use nimiq_bls::SecretKey as BlsSecretKey;
-use nimiq_bls::{CompressedPublicKey as BlsPublicKey, CompressedPublicKey};
+use nimiq_bls::{
+    CompressedPublicKey as BlsPublicKey, CompressedPublicKey, KeyPair as BlsKeyPair,
+    SecretKey as BlsSecretKey,
+};
 use nimiq_collections::BitSet;
-use nimiq_database::volatile::VolatileEnvironment;
-use nimiq_database::WriteTransaction;
+use nimiq_database::{volatile::VolatileEnvironment, WriteTransaction};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::{Address, KeyPair, PrivateKey, PublicKey};
-use nimiq_primitives::account::AccountType;
-use nimiq_primitives::coin::Coin;
-use nimiq_primitives::networks::NetworkId;
-use nimiq_primitives::policy::Policy;
-use nimiq_primitives::slots::SlashedSlot;
+use nimiq_primitives::{
+    account::{AccountError, AccountType},
+    coin::Coin,
+    networks::NetworkId,
+    policy::Policy,
+    slots::SlashedSlot,
+};
 use nimiq_test_log::test;
 use nimiq_transaction::account::staking_contract::{
     IncomingStakingTransactionData, OutgoingStakingTransactionProof,

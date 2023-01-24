@@ -1,11 +1,14 @@
 use beserial::{Deserialize, Serialize};
 use nimiq_database::WriteTransaction;
 use nimiq_keys::Address;
-use nimiq_primitives::coin::Coin;
+use nimiq_primitives::{account::AccountError, coin::Coin};
 
-use crate::logs::{Log, OperationInfo};
-use crate::staking_contract::receipts::StakerReceipt;
-use crate::{complete, Account, AccountError, AccountsTrie, Receipt, StakingContract};
+use crate::{
+    complete,
+    logs::{Log, OperationInfo},
+    staking_contract::receipts::StakerReceipt,
+    Account, AccountsTrie, Receipt, StakingContract,
+};
 
 /// Struct representing a staker in the staking contract.
 /// Actions concerning a staker are:

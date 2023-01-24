@@ -2,7 +2,7 @@ use std::fmt::{self, Display};
 
 use beserial::{Deserialize, Serialize};
 
-use crate::{key_nibbles::KeyNibbles, trie_proof::TrieProof};
+use crate::{key_nibbles::KeyNibbles, trie::trie_proof::TrieProof};
 
 /// The positive outcomes when committing a chunk.  
 #[derive(Debug, Clone, PartialEq, Eq)]

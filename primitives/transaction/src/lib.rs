@@ -18,10 +18,10 @@ use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
 use nimiq_keys::Address;
 use nimiq_keys::{PublicKey, Signature};
 use nimiq_network_interface::network::Topic;
-use nimiq_primitives::account::AccountType;
-use nimiq_primitives::coin::Coin;
-use nimiq_primitives::networks::NetworkId;
-use nimiq_primitives::policy::Policy;
+use nimiq_primitives::{
+    account::AccountType, coin::Coin, networks::NetworkId, policy::Policy,
+    transaction::TransactionError,
+};
 use nimiq_utils::merkle::{Blake2bMerklePath, Blake2bMerkleProof};
 
 use crate::account::AccountTransactionVerification;
@@ -622,28 +622,4 @@ impl Ord for Transaction {
             .then_with(|| self.data.len().cmp(&other.data.len()))
             .then_with(|| self.data.cmp(&other.data))
     }
-}
-
-#[derive(Error, Debug, PartialEq, Eq)]
-pub enum TransactionError {
-    #[error("Transaction is for a foreign network")]
-    ForeignNetwork,
-    #[error("Transaction has 0 value")]
-    ZeroValue,
-    #[error("Transaction has invalid value")]
-    InvalidValue,
-    #[error("Overflow")]
-    Overflow,
-    #[error("Sender same as recipient")]
-    SenderEqualsRecipient,
-    #[error("Transaction is invalid for sender")]
-    InvalidForSender,
-    #[error("Invalid transaction proof")]
-    InvalidProof,
-    #[error("Transaction is invalid for recipient")]
-    InvalidForRecipient,
-    #[error("Invalid transaction data")]
-    InvalidData,
-    #[error("Invalid serialization: {0}")]
-    InvalidSerialization(#[from] SerializingError),
 }

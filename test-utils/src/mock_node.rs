@@ -5,22 +5,24 @@ use std::{sync::Arc, task::Poll};
 use futures::future::BoxFuture;
 use futures::stream::BoxStream;
 use futures::{ready, FutureExt, Stream, StreamExt};
-use nimiq_database::volatile::VolatileEnvironment;
-use nimiq_primitives::networks::NetworkId;
-use nimiq_utils::time::OffsetTime;
 use parking_lot::RwLock;
 
 use nimiq_account::Account;
 use nimiq_block::Block;
-use nimiq_blockchain::Blockchain;
-use nimiq_blockchain::BlockchainConfig;
+use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_proxy::BlockchainProxy;
-use nimiq_consensus::messages::*;
-use nimiq_consensus::sync::live::state_queue::{RequestChunk, ResponseChunk};
-use nimiq_network_interface::network::Network as NetworkInterface;
-use nimiq_network_interface::request::{Handle, Request};
+use nimiq_consensus::{
+    messages::*,
+    sync::live::state_queue::{RequestChunk, ResponseChunk},
+};
+use nimiq_database::volatile::VolatileEnvironment;
+use nimiq_network_interface::{
+    network::Network as NetworkInterface,
+    request::{Handle, Request},
+};
 use nimiq_network_mock::MockHub;
-use nimiq_trie::key_nibbles::KeyNibbles;
+use nimiq_primitives::{key_nibbles::KeyNibbles, networks::NetworkId};
+use nimiq_utils::time::OffsetTime;
 
 use crate::test_network::TestNetwork;
 

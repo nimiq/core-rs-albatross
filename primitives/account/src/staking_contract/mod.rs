@@ -8,19 +8,23 @@ use beserial::{
 use nimiq_collections::BitSet;
 use nimiq_database::{Transaction as DBTransaction, WriteTransaction};
 use nimiq_keys::Address;
-use nimiq_primitives::slots::{Validators, ValidatorsBuilder};
-use nimiq_primitives::{coin::Coin, policy::Policy};
+use nimiq_primitives::{
+    coin::Coin,
+    key_nibbles::KeyNibbles,
+    policy::Policy,
+    slots::{Validators, ValidatorsBuilder},
+};
 use nimiq_transaction::account::staking_contract::{
     IncomingStakingTransactionData, OutgoingStakingTransactionProof,
 };
-use nimiq_trie::key_nibbles::KeyNibbles;
 use nimiq_trie::trie::IncompleteTrie;
 use nimiq_vrf::{AliasMethod, VrfSeed, VrfUseCase};
+
+use crate::{Account, AccountsTrie};
+
 pub use receipts::*;
 pub use staker::Staker;
 pub use validator::Validator;
-
-use crate::{Account, AccountsTrie};
 
 mod receipts;
 mod staker;
