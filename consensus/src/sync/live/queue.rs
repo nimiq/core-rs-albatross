@@ -10,16 +10,47 @@ use tokio::task::spawn_blocking;
 use parking_lot::Mutex;
 
 use nimiq_block::{Block, BlockHeaderTopic, BlockTopic};
-use nimiq_blockchain::{Blockchain, ChunksPushError, ChunksPushResult};
-use nimiq_blockchain_interface::{AbstractBlockchain, PushError, PushResult};
+#[cfg(feature = "full")]
+use nimiq_blockchain::Blockchain;
+use nimiq_blockchain_interface::{
+    AbstractBlockchain, ChunksPushError, ChunksPushResult, PushError, PushResult,
+};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::network::{MsgAcceptance, Network};
+use nimiq_primitives::{
+    key_nibbles::KeyNibbles,
+    trie::trie_chunk::{TrieChunk, TrieChunkWithStart},
+};
 
 use crate::sync::syncer::LiveSyncEvent;
 
-use super::state_queue::ChunkAndId;
+pub struct ChunkAndId<N: Network> {
+    pub chunk: TrieChunk,
+    pub start_key: KeyNibbles,
+    pub peer_id: N::PeerId,
+}
+
+impl<N: Network> ChunkAndId<N> {
+    pub fn new(chunk: TrieChunk, start_key: KeyNibbles, peer_id: N::PeerId) -> Self {
+        Self {
+            chunk,
+            start_key,
+            peer_id,
+        }
+    }
+
+    pub fn into_pair(self) -> (TrieChunkWithStart, N::PeerId) {
+        (
+            TrieChunkWithStart {
+                chunk: self.chunk,
+                start_key: self.start_key,
+            },
+            self.peer_id,
+        )
+    }
+}
 
 pub trait LiveSyncQueue<N: Network>: Stream<Item = Self::QueueResult> + Send + Unpin {
     type QueueResult;
@@ -146,6 +177,7 @@ impl<N: Network> BlockchainPushResult<N> {
 }
 
 /// Pushes a single block and respective chunks into the blockchain and validates the message.
+#[cfg(feature = "full")]
 pub async fn push_block_and_chunks<N: Network>(
     network: Arc<N>,
     blockchain: BlockchainProxy,
@@ -304,6 +336,7 @@ pub async fn push_multiple_blocks<N: Network>(
 }
 
 /// Pushes the chunks to the current blockchain state.
+#[cfg(feature = "full")]
 pub async fn push_chunks_only<N: Network>(
     blockchain: BlockchainProxy,
     bls_cache: Arc<Mutex<PublicKeyCache>>,
@@ -330,6 +363,7 @@ fn blockchain_push<N: Network>(
     block: Option<Block>,
     chunks: Vec<ChunkAndId<N>>,
 ) -> BlockchainPushResult<N> {
+    #[cfg(feature = "full")]
     let (chunks, peer_ids): (Vec<_>, Vec<N::PeerId>) =
         chunks.into_iter().map(ChunkAndId::into_pair).unzip();
 
@@ -340,6 +374,7 @@ fn blockchain_push<N: Network>(
         // Update validator keys from BLS public key cache.
         block.update_validator_keys(&mut bls_cache.lock());
         match blockchain {
+            #[cfg(feature = "full")]
             BlockchainProxy::Full(ref blockchain) => {
                 // We push the block and if it fails we return immediately, without committing chunks.
                 let push_result =
@@ -356,10 +391,10 @@ fn blockchain_push<N: Network>(
             }
         }
     } else {
-        let block_hash = blockchain.read().head_hash();
-
         match blockchain {
+            #[cfg(feature = "full")]
             BlockchainProxy::Full(ref blockchain) => {
+                let block_hash = blockchain.read().head_hash();
                 // We push the chunks.
                 let chunks_push_result = blockchain.read().commit_chunks(chunks, &block_hash);
                 blockchain_push_result = BlockchainPushResult::with_chunks_result(

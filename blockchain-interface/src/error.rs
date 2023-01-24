@@ -2,7 +2,7 @@ use thiserror::Error;
 
 use nimiq_block::{Block, BlockError, ForkProof};
 use nimiq_hash::Blake2bHash;
-use nimiq_primitives::networks::NetworkId;
+use nimiq_primitives::{account::AccountError, networks::NetworkId};
 
 /// An enum used when a fork is detected.
 #[derive(Clone, Debug)]
@@ -83,8 +83,8 @@ pub enum PushError {
     InvalidPredecessor,
     #[error("Duplicate transaction")]
     DuplicateTransaction,
-    #[error("Account error")]
-    AccountsError,
+    #[error("Account error: {0}")]
+    AccountsError(#[from] AccountError),
     #[error("Invalid fork")]
     InvalidFork,
     #[error("Blockchain error: {0}")]
@@ -95,4 +95,25 @@ pub enum PushError {
 pub enum Direction {
     Forward,
     Backward,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ChunksPushResult {
+    EmptyChunks,
+    /// Contains the number of committed and ignored chunks, respectively.
+    Chunks(usize, usize),
+}
+
+#[derive(Error, Debug, PartialEq, Eq)]
+pub enum ChunksPushError {
+    #[error("Account error in chunk {0}: {1}")]
+    AccountsError(usize, AccountError),
+}
+
+impl ChunksPushError {
+    pub fn chunk_index(&self) -> usize {
+        match self {
+            ChunksPushError::AccountsError(i, _) => *i,
+        }
+    }
 }

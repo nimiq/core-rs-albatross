@@ -9,8 +9,10 @@ use nimiq_block::{
     TendermintVote,
 };
 use nimiq_block_production::BlockProducer;
-use nimiq_blockchain::{Blockchain, BlockchainConfig, ChunksPushError, ChunksPushResult};
-use nimiq_blockchain_interface::{AbstractBlockchain, PushError, PushResult};
+use nimiq_blockchain::{Blockchain, BlockchainConfig};
+use nimiq_blockchain_interface::{
+    AbstractBlockchain, ChunksPushError, ChunksPushResult, PushError, PushResult,
+};
 use nimiq_bls::{AggregateSignature, KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
 use nimiq_collections::BitSet;
 use nimiq_database::volatile::VolatileEnvironment;

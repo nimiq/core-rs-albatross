@@ -1,8 +1,7 @@
 use beserial::Deserialize;
 use nimiq_block::Block;
 use nimiq_block_production::test_custom_block::{next_skip_block, BlockConfig};
-use nimiq_blockchain::{ChunksPushError, ChunksPushResult};
-use nimiq_blockchain_interface::PushResult;
+use nimiq_blockchain_interface::{ChunksPushError, ChunksPushResult, PushResult};
 use nimiq_genesis::NetworkId;
 use nimiq_keys::{Address, KeyPair, PrivateKey, SecureGenerate};
 use nimiq_primitives::{

@@ -2,20 +2,21 @@ use std::collections::HashSet;
 #[cfg(feature = "full")]
 use std::{cmp, sync::Arc};
 
-use nimiq_blockchain_interface::{AbstractBlockchain, Direction};
+#[cfg(feature = "full")]
 use parking_lot::RwLock;
 
 use nimiq_block::Block;
 #[cfg(feature = "full")]
 use nimiq_blockchain::{Blockchain, CHUNK_SIZE};
+use nimiq_blockchain_interface::{AbstractBlockchain, Direction};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_network_interface::request::Handle;
+#[cfg(feature = "full")]
 use nimiq_primitives::policy::Policy;
 
-use crate::{
-    messages::*,
-    sync::live::state_queue::{Chunk, RequestChunk, ResponseChunk},
-};
+use crate::messages::*;
+#[cfg(feature = "full")]
+use crate::sync::live::state_queue::{Chunk, RequestChunk, ResponseChunk};
 
 impl Handle<MacroChain, BlockchainProxy> for RequestMacroChain {
     fn handle(&self, blockchain: &BlockchainProxy) -> MacroChain {

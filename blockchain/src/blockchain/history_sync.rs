@@ -230,12 +230,7 @@ impl Blockchain {
                 txn.abort();
                 #[cfg(feature = "metrics")]
                 this.metrics.note_invalid_block();
-                // TODO: This is due to a dependency between blockchain and accounts that is not wasm friendly
-                log::error!(
-                    "Received accounts error while extending history sync: {}",
-                    e,
-                );
-                return Err(PushError::AccountsError);
+                return Err(PushError::AccountsError(e));
             }
         }
         this.state.accounts.finalize_batch(&mut txn);

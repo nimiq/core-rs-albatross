@@ -1,5 +1,6 @@
 pub mod block_queue;
 pub mod queue;
+#[cfg(feature = "full")]
 pub mod state_queue;
 
 use futures::{future::BoxFuture, Stream, StreamExt};
@@ -18,11 +19,14 @@ use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_network_interface::network::Network;
 
-use self::{block_queue::BlockQueue, queue::LiveSyncQueue, state_queue::StateQueue};
+#[cfg(feature = "full")]
+use self::state_queue::StateQueue;
+use self::{block_queue::BlockQueue, queue::LiveSyncQueue};
 
 use super::syncer::{LiveSync, LiveSyncEvent};
 
 pub type BlockLiveSync<N> = LiveSyncer<N, BlockQueue<N>>;
+#[cfg(feature = "full")]
 pub type StateLiveSync<N> = LiveSyncer<N, StateQueue<N>>;
 
 /// The maximum capacity of the external block stream passed into the block queue.

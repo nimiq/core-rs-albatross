@@ -37,9 +37,7 @@ impl Blockchain {
 
                 // Check if the receipts contain an error.
                 if let Err(e) = batch_info {
-                    // TODO: This is due to a dependency between blockchain and accounts that is not wasm friendly
-                    log::error!("Received accounts error while committing accounts: {}", e);
-                    return Err(PushError::AccountsError);
+                    return Err(PushError::AccountsError(e));
                 }
 
                 // Macro blocks are final and receipts for the previous batch are no longer necessary
@@ -105,9 +103,7 @@ impl Blockchain {
                     Ok(batch_info) => batch_info,
                     Err(e) => {
                         // Check if the receipts contain an error.
-                        // TODO: This is due to a dependency between blockchain and accounts that is not wasm friendly
-                        log::error!("Received accounts error while committing accounts: {}", e);
-                        return Err(PushError::AccountsError);
+                        return Err(PushError::AccountsError(e));
                     }
                 };
 

@@ -19,9 +19,9 @@ use crate::consensus::head_requests::{HeadRequests, HeadRequestsResult};
 #[cfg(feature = "full")]
 use crate::messages::{RequestBatchSet, RequestHistoryChunk};
 use crate::messages::{RequestBlock, RequestHead, RequestMacroChain, RequestMissingBlocks};
-use crate::sync::{
-    live::state_queue::RequestChunk, syncer::LiveSyncPushEvent, syncer_proxy::SyncerProxy,
-};
+#[cfg(feature = "full")]
+use crate::sync::live::state_queue::RequestChunk;
+use crate::sync::{syncer::LiveSyncPushEvent, syncer_proxy::SyncerProxy};
 
 use self::consensus_proxy::ConsensusProxy;
 

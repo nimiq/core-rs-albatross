@@ -19,44 +19,14 @@ use nimiq_network_interface::{
     network::Network,
     request::{RequestCommon, RequestMarker},
 };
-use nimiq_primitives::{
-    key_nibbles::KeyNibbles,
-    policy::Policy,
-    trie::{trie_chunk::TrieChunk, trie_chunk::TrieChunkWithStart},
-};
+use nimiq_primitives::{key_nibbles::KeyNibbles, policy::Policy, trie::trie_chunk::TrieChunk};
 use parking_lot::RwLock;
 
 use self::chunk_request_component::ChunkRequestComponent;
 use super::{
     block_queue::{BlockAndId, BlockQueue, QueuedBlock},
-    queue::{LiveSyncQueue, QueueConfig},
+    queue::{ChunkAndId, LiveSyncQueue, QueueConfig},
 };
-
-pub struct ChunkAndId<N: Network> {
-    pub chunk: TrieChunk,
-    pub start_key: KeyNibbles,
-    pub peer_id: N::PeerId,
-}
-
-impl<N: Network> ChunkAndId<N> {
-    pub fn new(chunk: TrieChunk, start_key: KeyNibbles, peer_id: N::PeerId) -> Self {
-        Self {
-            chunk,
-            start_key,
-            peer_id,
-        }
-    }
-
-    pub fn into_pair(self) -> (TrieChunkWithStart, N::PeerId) {
-        (
-            TrieChunkWithStart {
-                chunk: self.chunk,
-                start_key: self.start_key,
-            },
-            self.peer_id,
-        )
-    }
-}
 
 /// The max number of chunk requests per peer.
 pub const MAX_REQUEST_RESPONSE_CHUNKS: u32 = 100;

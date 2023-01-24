@@ -8,7 +8,8 @@ use tokio::sync::broadcast::Sender as BroadcastSender;
 use nimiq_account::BlockLog;
 use nimiq_block::{Block, ForkProof, MicroBlock};
 use nimiq_blockchain_interface::{
-    AbstractBlockchain, BlockchainEvent, ChainInfo, ChainOrdering, ForkEvent, PushError, PushResult,
+    AbstractBlockchain, BlockchainEvent, ChainInfo, ChainOrdering, ChunksPushError,
+    ChunksPushResult, ForkEvent, PushError, PushResult,
 };
 use nimiq_database::{ReadTransaction, WriteTransaction};
 use nimiq_hash::{Blake2bHash, Hash};
@@ -18,11 +19,7 @@ use nimiq_primitives::{
 };
 use nimiq_vrf::VrfSeed;
 
-use crate::{
-    blockchain::error::{ChunksPushError, ChunksPushResult},
-    blockchain_state::BlockchainState,
-    Blockchain,
-};
+use crate::{blockchain_state::BlockchainState, Blockchain};
 
 fn send_vec(log_notifier: &BroadcastSender<BlockLog>, logs: Vec<BlockLog>) {
     for log in logs {
@@ -440,9 +437,7 @@ impl Blockchain {
 
                 if let Err(e) = result {
                     // Check if the revert chunk failed.
-                    // TODO: This is due to a dependency between blockchain and accounts that is not wasm friendly
-                    log::error!("Received accounts error while reverting chunk: {}", e);
-                    return Err(PushError::AccountsError);
+                    return Err(PushError::AccountsError(e));
                 }
             }
             block_logs.push(this.revert_accounts(&this.state.accounts, &mut write_txn, &block)?);

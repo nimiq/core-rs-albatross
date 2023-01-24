@@ -8,8 +8,7 @@ use futures::{
     FutureExt, Stream,
 };
 use nimiq_block::Block;
-use nimiq_blockchain::{ChunksPushError, ChunksPushResult};
-use nimiq_blockchain_interface::{PushError, PushResult};
+use nimiq_blockchain_interface::{ChunksPushError, ChunksPushResult, PushError, PushResult};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_hash::Blake2bHash;

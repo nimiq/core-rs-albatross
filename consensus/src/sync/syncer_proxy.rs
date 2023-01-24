@@ -13,15 +13,15 @@ use nimiq_network_interface::network::{Network, SubscribeEvents};
 use pin_project::pin_project;
 
 #[cfg(feature = "full")]
-use crate::sync::history::HistoryMacroSync;
 use crate::sync::{
+    history::HistoryMacroSync,
+    live::{state_queue::StateQueue, StateLiveSync},
+};
+use crate::sync::{
+    light::LightMacroSync,
     live::{block_queue::BlockQueue, queue::QueueConfig, BlockLiveSync},
     syncer::{LiveSyncPushEvent, Syncer},
 };
-
-use super::light::LightMacroSync;
-use super::live::state_queue::StateQueue;
-use super::live::StateLiveSync;
 
 macro_rules! gen_syncer_match {
     ($self: ident, $f: ident $(, $arg:expr )*) => {
