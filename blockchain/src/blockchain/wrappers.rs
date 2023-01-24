@@ -7,14 +7,12 @@ use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainError, ChainInfo,
 use nimiq_database::{ReadTransaction, Transaction};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
-use nimiq_primitives::{policy::Policy, slots::Validator};
-use nimiq_trie::key_nibbles::KeyNibbles;
+use nimiq_primitives::{key_nibbles::KeyNibbles, policy::Policy, slots::Validator};
 use std::ops::RangeFrom;
 
-use crate::blockchain_state::BlockchainState;
 #[cfg(feature = "metrics")]
 use crate::chain_metrics::BlockchainMetrics;
-use crate::Blockchain;
+use crate::{blockchain_state::BlockchainState, Blockchain};
 
 /// Implements several wrapper functions.
 impl Blockchain {

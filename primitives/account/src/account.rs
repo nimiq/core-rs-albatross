@@ -1,18 +1,21 @@
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use nimiq_database::WriteTransaction;
 use nimiq_keys::Address;
-use nimiq_primitives::account::AccountType;
-use nimiq_primitives::coin::Coin;
-use nimiq_primitives::policy::Policy;
+use nimiq_primitives::{
+    account::{AccountError, AccountType},
+    coin::Coin,
+    key_nibbles::KeyNibbles,
+    policy::Policy,
+};
 use nimiq_transaction::Transaction;
-use nimiq_trie::key_nibbles::KeyNibbles;
 
-use crate::interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction};
-use crate::logs::AccountInfo;
-use crate::staking_contract::{Staker, Validator};
 use crate::{
-    complete, get_or_update_account, AccountError, AccountsTrie, BasicAccount,
-    HashedTimeLockedContract, Inherent, Log, StakingContract, VestingContract,
+    complete, get_or_update_account,
+    interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction},
+    logs::AccountInfo,
+    staking_contract::{Staker, Validator},
+    AccountsTrie, BasicAccount, HashedTimeLockedContract, Inherent, Log, StakingContract,
+    VestingContract,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]

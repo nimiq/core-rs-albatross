@@ -4,19 +4,19 @@ use beserial::{Deserialize, Serialize};
 use nimiq_collections::BitSet;
 use nimiq_database::WriteTransaction;
 use nimiq_keys::Address;
-use nimiq_primitives::{coin::Coin, policy::Policy, slots::SlashedSlot};
+use nimiq_primitives::{account::AccountError, coin::Coin, policy::Policy, slots::SlashedSlot};
 use nimiq_transaction::account::staking_contract::{
     IncomingStakingTransactionData, OutgoingStakingTransactionProof,
 };
 use nimiq_transaction::Transaction;
 
-use crate::interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction};
-use crate::logs::{AccountInfo, Log};
-use crate::staking_contract::receipts::DeleteValidatorReceipt;
-use crate::staking_contract::SlashReceipt;
 use crate::{
-    complete, Account, AccountError, AccountsTrie, Inherent, InherentType, OperationInfo,
-    StakingContract,
+    complete,
+    interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction},
+    logs::{AccountInfo, Log},
+    staking_contract::receipts::DeleteValidatorReceipt,
+    staking_contract::SlashReceipt,
+    Account, AccountsTrie, Inherent, InherentType, OperationInfo, StakingContract,
 };
 
 /// We need to distinguish between two types of transactions:

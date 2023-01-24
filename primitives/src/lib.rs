@@ -10,3 +10,7 @@ pub mod networks;
 pub mod policy;
 #[cfg(feature = "slots")]
 pub mod slots;
+#[cfg(feature = "transaction")]
+pub mod transaction;
+#[cfg(feature = "trie")]
+pub mod trie;

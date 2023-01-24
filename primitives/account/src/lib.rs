@@ -3,14 +3,13 @@ extern crate log;
 
 use beserial::Deserialize;
 use nimiq_database::WriteTransaction;
-use nimiq_trie::key_nibbles::KeyNibbles;
+use nimiq_primitives::key_nibbles::KeyNibbles;
 use nimiq_trie::trie::IncompleteTrie;
 
 pub use crate::account::Account;
 pub use crate::accounts::{Accounts, AccountsTrie};
 pub use crate::accounts_list::AccountsList;
 pub use crate::basic_account::BasicAccount;
-pub use crate::error::AccountError;
 pub use crate::htlc_contract::*;
 pub use crate::inherent::{Inherent, InherentType};
 pub use crate::interaction_traits::*;
@@ -23,7 +22,6 @@ mod account;
 mod accounts;
 mod accounts_list;
 mod basic_account;
-mod error;
 mod htlc_contract;
 mod inherent;
 mod interaction_traits;

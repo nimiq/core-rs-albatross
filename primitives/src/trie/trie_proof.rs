@@ -4,8 +4,7 @@ use beserial::{Deserialize, Serialize};
 use nimiq_hash::Blake2bHash;
 
 use crate::key_nibbles::KeyNibbles;
-use crate::network_trie_node::NetworkTrieNode;
-use crate::trie_node::TrieNode;
+use crate::trie::{network_trie_node::NetworkTrieNode, trie_node::TrieNode};
 
 /// A Merkle proof of the inclusion of some leaf nodes in the Merkle Radix Trie. The
 /// proof consists of the path from the leaves that we want to prove inclusion all the way up

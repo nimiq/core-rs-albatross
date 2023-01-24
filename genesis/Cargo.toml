@@ -35,7 +35,6 @@ nimiq-keys = { path = "../keys" }
 nimiq-macros = { path = "../macros" }
 nimiq-primitives = { path = "../primitives", features = ["coin", "networks"] }
 nimiq-transaction = { path = "../primitives/transaction" }
-nimiq-trie = { path = "../primitives/trie", optional = true }
 nimiq-utils = { path = "../utils", features = ["time"] }
 
 [build-dependencies]
@@ -48,6 +47,6 @@ nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 
 [features]
-accounts = ["nimiq-account", "nimiq-trie"]
+accounts = ["nimiq-account"]
 default = ["accounts", "genesis-override"]
 genesis-override = ["accounts", "nimiq-database", "nimiq-genesis-builder"]

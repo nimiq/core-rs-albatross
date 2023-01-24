@@ -19,8 +19,11 @@ use nimiq_network_interface::{
     network::Network,
     request::{RequestCommon, RequestMarker},
 };
-use nimiq_primitives::policy::Policy;
-use nimiq_trie::{key_nibbles::KeyNibbles, trie::TrieChunk, trie_chunk::TrieChunkWithStart};
+use nimiq_primitives::{
+    key_nibbles::KeyNibbles,
+    policy::Policy,
+    trie::{trie_chunk::TrieChunk, trie_chunk::TrieChunkWithStart},
+};
 use parking_lot::RwLock;
 
 use self::chunk_request_component::ChunkRequestComponent;

@@ -1,19 +1,21 @@
 use beserial::Deserialize;
-use nimiq_account::AccountError;
 use nimiq_block::Block;
 use nimiq_block_production::test_custom_block::{next_skip_block, BlockConfig};
 use nimiq_blockchain::{ChunksPushError, ChunksPushResult};
 use nimiq_blockchain_interface::PushResult;
 use nimiq_genesis::NetworkId;
 use nimiq_keys::{Address, KeyPair, PrivateKey, SecureGenerate};
-use nimiq_primitives::coin::Coin;
+use nimiq_primitives::{
+    account::AccountError,
+    coin::Coin,
+    key_nibbles::KeyNibbles,
+    trie::{
+        error::MerkleRadixTrieError,
+        trie_chunk::{Item, TrieChunkWithStart},
+    },
+};
 use nimiq_test_utils::block_production::TemporaryBlockProducer;
 use nimiq_transaction_builder::TransactionBuilder;
-use nimiq_trie::{
-    error::MerkleRadixTrieError,
-    key_nibbles::KeyNibbles,
-    trie_chunk::{Item, TrieChunkWithStart},
-};
 
 macro_rules! check_invalid_chunk {
     ($f: expr, $pattern: pat_param) => {

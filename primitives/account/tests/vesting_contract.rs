@@ -1,19 +1,20 @@
 use std::convert::{TryFrom, TryInto};
 
 use beserial::{Deserialize, Serialize, SerializingError};
-use nimiq_account::{
-    Account, AccountError, AccountTransactionInteraction, AccountsTrie, VestingContract,
-};
-use nimiq_database::volatile::VolatileEnvironment;
-use nimiq_database::WriteTransaction;
+use nimiq_account::{Account, AccountTransactionInteraction, AccountsTrie, VestingContract};
+use nimiq_database::{volatile::VolatileEnvironment, WriteTransaction};
 use nimiq_keys::{Address, KeyPair, PrivateKey};
-use nimiq_primitives::account::AccountType;
-use nimiq_primitives::coin::Coin;
-use nimiq_primitives::networks::NetworkId;
+use nimiq_primitives::{
+    account::{AccountError, AccountType},
+    coin::Coin,
+    key_nibbles::KeyNibbles,
+    networks::NetworkId,
+    transaction::TransactionError,
+};
 use nimiq_test_log::test;
-use nimiq_transaction::account::AccountTransactionVerification;
-use nimiq_transaction::{SignatureProof, Transaction, TransactionError, TransactionFlags};
-use nimiq_trie::key_nibbles::KeyNibbles;
+use nimiq_transaction::{
+    account::AccountTransactionVerification, SignatureProof, Transaction, TransactionFlags,
+};
 
 const CONTRACT: &str = "00002fbf9bd9c800fd34ab7265a0e48c454ccbf4c9c61dfdf68f9a220000000000000001000000000003f480000002632e314a0000002fbf9bd9c800";
 

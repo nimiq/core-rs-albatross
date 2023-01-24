@@ -7,19 +7,17 @@ use nimiq_blockchain_interface::{BlockchainError, BlockchainEvent, ChainInfo, Fo
 use nimiq_database::{Environment, ReadTransaction, WriteTransaction};
 use nimiq_genesis::NetworkInfo;
 use nimiq_hash::Blake2bHash;
-use nimiq_primitives::coin::Coin;
-use nimiq_primitives::networks::NetworkId;
-use nimiq_primitives::policy::Policy;
-use nimiq_primitives::slots::Validators;
-use nimiq_trie::key_nibbles::KeyNibbles;
+use nimiq_primitives::{
+    coin::Coin, key_nibbles::KeyNibbles, networks::NetworkId, policy::Policy, slots::Validators,
+};
 use nimiq_utils::time::OffsetTime;
 
-use crate::blockchain_state::BlockchainState;
 #[cfg(feature = "metrics")]
 use crate::chain_metrics::BlockchainMetrics;
-use crate::chain_store::ChainStore;
-use crate::history::HistoryStore;
-use crate::reward::genesis_parameters;
+use crate::{
+    blockchain_state::BlockchainState, chain_store::ChainStore, history::HistoryStore,
+    reward::genesis_parameters,
+};
 
 const BROADCAST_MAX_CAPACITY: usize = 256;
 

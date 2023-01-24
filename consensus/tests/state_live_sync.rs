@@ -1,16 +1,9 @@
-use futures::{join, poll, Future, FutureExt, StreamExt};
-use log::info;
-
-use nimiq_consensus::messages::RequestMissingBlocks;
-use nimiq_consensus::sync::live::state_queue::{
-    Chunk, ChunkRequestState, RequestChunk, ResponseChunk,
-};
-use nimiq_hash::Blake2bHash;
-use nimiq_network_interface::request::{Handle, RequestCommon};
-use nimiq_trie::key_nibbles::KeyNibbles;
-use parking_lot::{Mutex, RwLock};
 use std::sync::Arc;
 use std::task::Poll;
+
+use futures::{join, poll, Future, FutureExt, StreamExt};
+use log::info;
+use parking_lot::{Mutex, RwLock};
 use tokio::sync::mpsc::{self, Sender};
 use tokio_stream::wrappers::ReceiverStream;
 
@@ -20,16 +13,27 @@ use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
-use nimiq_consensus::sync::syncer::{LiveSyncEvent, LiveSyncPeerEvent, LiveSyncPushEvent};
-use nimiq_consensus::sync::{
-    live::{block_queue::BlockQueue, queue::QueueConfig, state_queue::StateQueue, StateLiveSync},
-    syncer::LiveSync,
+use nimiq_consensus::{
+    messages::RequestMissingBlocks,
+    sync::{
+        live::{
+            block_queue::BlockQueue,
+            queue::QueueConfig,
+            state_queue::{Chunk, ChunkRequestState, RequestChunk, ResponseChunk, StateQueue},
+            StateLiveSync,
+        },
+        syncer::{LiveSync, LiveSyncEvent, LiveSyncPeerEvent, LiveSyncPushEvent},
+    },
 };
 use nimiq_database::{volatile::VolatileEnvironment, WriteTransaction};
 use nimiq_genesis::{NetworkId, NetworkInfo};
-use nimiq_network_interface::network::Network;
+use nimiq_hash::Blake2bHash;
+use nimiq_network_interface::{
+    network::Network,
+    request::{Handle, RequestCommon},
+};
 use nimiq_network_mock::{MockHub, MockId, MockNetwork, MockPeerId};
-use nimiq_primitives::policy::Policy;
+use nimiq_primitives::{key_nibbles::KeyNibbles, policy::Policy};
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     block_production::TemporaryBlockProducer,
@@ -37,8 +41,7 @@ use nimiq_test_utils::{
     mock_node::MockNode,
     node::TESTING_BLS_CACHE_MAX_CAPACITY,
 };
-use nimiq_utils::math::CeilingDiv;
-use nimiq_utils::time::OffsetTime;
+use nimiq_utils::{math::CeilingDiv, time::OffsetTime};
 
 fn blockchain(complete: bool) -> Blockchain {
     let time = Arc::new(OffsetTime::new());

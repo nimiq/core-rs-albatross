@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use nimiq_primitives::coin::Coin;
 use parking_lot::RwLock;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
@@ -20,10 +19,9 @@ use nimiq_keys::{
     Address, KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey,
     PublicKey as SchnorrPublicKey, SecureGenerate,
 };
-use nimiq_mempool::mempool::Mempool;
-use nimiq_mempool::{config::MempoolConfig, mempool_transactions::TxPriority};
+use nimiq_mempool::{config::MempoolConfig, mempool::Mempool, mempool_transactions::TxPriority};
 use nimiq_network_mock::{MockHub, MockId, MockNetwork, MockPeerId};
-use nimiq_primitives::{networks::NetworkId, policy::Policy};
+use nimiq_primitives::{coin::Coin, key_nibbles::KeyNibbles, networks::NetworkId, policy::Policy};
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     blockchain::{produce_macro_blocks_with_txns, signing_key, voting_key},
@@ -31,7 +29,6 @@ use nimiq_test_utils::{
 };
 use nimiq_transaction::{ExecutedTransaction, Transaction};
 use nimiq_transaction_builder::TransactionBuilder;
-use nimiq_trie::key_nibbles::KeyNibbles;
 use nimiq_utils::time::OffsetTime;
 use nimiq_vrf::VrfSeed;
 

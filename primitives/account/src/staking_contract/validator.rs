@@ -7,14 +7,17 @@ use nimiq_bls::{CompressedPublicKey as BlsPublicKey, CompressedPublicKey};
 use nimiq_database::WriteTransaction;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
-use nimiq_primitives::{coin::Coin, policy::Policy};
+use nimiq_primitives::{account::AccountError, coin::Coin, policy::Policy};
 
-use crate::logs::{Log, OperationInfo};
-use crate::staking_contract::receipts::{
-    DeleteValidatorReceipt, InactivateValidatorReceipt, ReactivateValidatorReceipt,
-    UnparkValidatorReceipt, UpdateValidatorReceipt,
+use crate::{
+    complete,
+    logs::{Log, OperationInfo},
+    staking_contract::receipts::{
+        DeleteValidatorReceipt, InactivateValidatorReceipt, ReactivateValidatorReceipt,
+        UnparkValidatorReceipt, UpdateValidatorReceipt,
+    },
+    Account, AccountsTrie, Receipt, StakingContract,
 };
-use crate::{complete, Account, AccountError, AccountsTrie, Receipt, StakingContract};
 
 /// Struct representing a validator in the staking contract.
 /// Actions concerning a validator are:

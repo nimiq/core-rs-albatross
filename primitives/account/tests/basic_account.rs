@@ -1,19 +1,19 @@
 use std::convert::TryInto;
 
 use beserial::{Deserialize, Serialize};
-use nimiq_account::{
-    Account, AccountError, AccountTransactionInteraction, AccountsTrie, BasicAccount, Log,
-};
+use nimiq_account::{Account, AccountTransactionInteraction, AccountsTrie, BasicAccount, Log};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_database::WriteTransaction;
 use nimiq_keys::{Address, KeyPair, PrivateKey};
-use nimiq_primitives::account::AccountType;
-use nimiq_primitives::coin::Coin;
-use nimiq_primitives::networks::NetworkId;
+use nimiq_primitives::{
+    account::{AccountError, AccountType},
+    coin::Coin,
+    key_nibbles::KeyNibbles,
+    networks::NetworkId,
+    transaction::TransactionError,
+};
 use nimiq_test_log::test;
-use nimiq_transaction::account::AccountTransactionVerification;
-use nimiq_transaction::{SignatureProof, Transaction, TransactionError};
-use nimiq_trie::key_nibbles::KeyNibbles;
+use nimiq_transaction::{account::AccountTransactionVerification, SignatureProof, Transaction};
 
 const ADDRESS_1: &str = "83fa05dbe31f85e719f4c4fd67ebdba2e444d9f8";
 const SECRET_KEY_1: &str = "d0fbb3690f5308f457e245a3cc65ae8d6945155eadcac60d489ffc5583a60b9b";

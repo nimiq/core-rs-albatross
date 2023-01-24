@@ -1,14 +1,13 @@
-use nimiq_account::StakingContract;
-use nimiq_transaction::ExecutedTransaction;
-use parking_lot::RwLock;
 use std::convert::TryInto;
 use std::sync::Arc;
+
+use parking_lot::RwLock;
 use tempfile::tempdir;
 
 use beserial::Deserialize;
+use nimiq_account::StakingContract;
 use nimiq_block::{Block, ForkProof, MicroJustification};
 use nimiq_block_production::BlockProducer;
-
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
 use nimiq_database::{mdbx::MdbxEnvironment, volatile::VolatileEnvironment};
@@ -17,14 +16,13 @@ use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::{
     Address, KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey, SecureGenerate,
 };
-use nimiq_primitives::coin::Coin;
-use nimiq_primitives::policy::Policy;
+use nimiq_primitives::{coin::Coin, key_nibbles::KeyNibbles, policy::Policy};
 use nimiq_test_log::test;
 use nimiq_test_utils::blockchain::{
     fill_micro_blocks, fill_micro_blocks_with_txns, sign_macro_block, signing_key, voting_key,
 };
+use nimiq_transaction::ExecutedTransaction;
 use nimiq_transaction_builder::TransactionBuilder;
-use nimiq_trie::key_nibbles::KeyNibbles;
 use nimiq_utils::time::OffsetTime;
 
 const ADDRESS: &str = "NQ20TSB0DFSMUH9C15GQGAGJTTE4D3MA859E";

@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use nimiq_transaction::Transaction;
-use nimiq_trie::{key_nibbles::KeyNibbles, trie_chunk::TrieChunkWithStart};
 use parking_lot::RwLock;
 
 use beserial::Deserialize;
@@ -19,7 +17,10 @@ use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
 use nimiq_hash::Blake2sHash;
 use nimiq_keys::{KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey};
-use nimiq_primitives::policy::Policy;
+use nimiq_primitives::{
+    key_nibbles::KeyNibbles, policy::Policy, trie::trie_chunk::TrieChunkWithStart,
+};
+use nimiq_transaction::Transaction;
 use nimiq_utils::time::OffsetTime;
 
 /// Secret keys of validator. Tests run with `genesis/src/genesis/unit-albatross.toml`

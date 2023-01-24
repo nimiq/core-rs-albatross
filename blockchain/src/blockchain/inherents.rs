@@ -3,17 +3,13 @@ use nimiq_account::{Inherent, InherentType, StakingContract};
 use nimiq_block::{ForkProof, MacroBlock, MacroHeader, SkipBlockInfo};
 use nimiq_database as db;
 use nimiq_keys::Address;
-use nimiq_primitives::coin::Coin;
-use nimiq_primitives::policy::Policy;
-use nimiq_primitives::slots::SlashedSlot;
+use nimiq_primitives::{
+    account::AccountType, coin::Coin, key_nibbles::KeyNibbles, policy::Policy, slots::SlashedSlot,
+};
 use nimiq_transaction::reward::RewardTransaction;
 use nimiq_vrf::{AliasMethod, VrfUseCase};
 
-use crate::blockchain_state::BlockchainState;
-use crate::reward::block_reward_for_batch;
-use crate::Blockchain;
-use nimiq_primitives::account::AccountType;
-use nimiq_trie::key_nibbles::KeyNibbles;
+use crate::{blockchain_state::BlockchainState, reward::block_reward_for_batch, Blockchain};
 
 /// Implements methods that create inherents.
 impl Blockchain {

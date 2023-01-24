@@ -3,12 +3,13 @@ extern crate log;
 
 use thiserror::Error;
 
+use nimiq_primitives::transaction::TransactionError;
+
 pub use block::*;
 pub use fork_proof::*;
 pub use macro_block::*;
 pub use micro_block::*;
 pub use multisig::*;
-use nimiq_transaction::TransactionError;
 pub use signed::*;
 pub use skip_block::*;
 pub use tendermint::*;

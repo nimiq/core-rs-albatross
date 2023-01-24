@@ -16,7 +16,7 @@ use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis_builder::{GenesisBuilder, GenesisBuilderError, GenesisInfo};
 use nimiq_hash::Blake2bHash;
 #[cfg(feature = "accounts")]
-use nimiq_trie::key_nibbles::KeyNibbles;
+use nimiq_primitives::key_nibbles::KeyNibbles;
 
 pub use nimiq_primitives::networks::NetworkId;
 
