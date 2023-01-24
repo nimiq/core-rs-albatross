@@ -219,6 +219,9 @@ pub async fn sync_two_peers(
         syncer2,
         1,
         zkp_prover2_proxy,
+        Box::new(|fut| {
+            tokio::spawn(fut);
+        }),
     );
     let consensus2_proxy = consensus2.proxy();
     let events = blockchain2_proxy.read().notifier_as_stream();

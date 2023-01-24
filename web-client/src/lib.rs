@@ -35,9 +35,14 @@ async fn light_client() {
 
     // Create client from config.
     log::info!("Initializing light client");
-    let mut client: Client = Client::from_config(config)
-        .await
-        .expect("Build client failed");
+    let mut client: Client = Client::from_config(
+        config,
+        Box::new(|fut| {
+            spawn_local(fut);
+        }),
+    )
+    .await
+    .expect("Build client failed");
     log::info!("Web client initialized");
 
     // Start consensus.

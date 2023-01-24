@@ -14,3 +14,5 @@ pub mod slots;
 pub mod transaction;
 #[cfg(feature = "trie")]
 pub mod trie;
+
+pub mod task_executor;

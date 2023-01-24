@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 
 use futures::{FutureExt, StreamExt};
 use nimiq_blockchain_proxy::BlockchainProxy;
+use nimiq_primitives::task_executor::TaskExecutor;
 use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
 use tokio::time::Sleep;
 use tokio_stream::wrappers::BroadcastStream;
@@ -83,6 +84,9 @@ impl<N: Network> Consensus<N> {
             syncer,
             Self::MIN_PEERS_ESTABLISHED,
             zkp_proxy,
+            Box::new(|fut| {
+                tokio::spawn(fut);
+            }),
         )
     }
 
@@ -92,10 +96,11 @@ impl<N: Network> Consensus<N> {
         syncer: SyncerProxy<N>,
         min_peers: usize,
         zkp_proxy: ZKPComponentProxy<N>,
+        executor: impl TaskExecutor + Send + 'static,
     ) -> Self {
         let (tx, _rx) = broadcast(256);
 
-        Self::init_network_request_receivers(&network, &blockchain);
+        Self::init_network_request_receivers(&network, &blockchain, executor);
 
         let established_flag = Arc::new(AtomicBool::new(false));
 
@@ -115,29 +120,33 @@ impl<N: Network> Consensus<N> {
         }
     }
 
-    fn init_network_request_receivers(network: &Arc<N>, blockchain: &BlockchainProxy) {
+    fn init_network_request_receivers(
+        network: &Arc<N>,
+        blockchain: &BlockchainProxy,
+        executor: impl TaskExecutor + Send + 'static,
+    ) {
         let stream = network.receive_requests::<RequestMacroChain>();
-        tokio::spawn(request_handler(network, stream, blockchain));
+        executor.exec(Box::pin(request_handler(network, stream, blockchain)));
 
         let stream = network.receive_requests::<RequestBlock>();
-        tokio::spawn(request_handler(network, stream, blockchain));
+        executor.exec(Box::pin(request_handler(network, stream, blockchain)));
 
         let stream = network.receive_requests::<RequestMissingBlocks>();
-        tokio::spawn(request_handler(network, stream, blockchain));
+        executor.exec(Box::pin(request_handler(network, stream, blockchain)));
 
         let stream = network.receive_requests::<RequestHead>();
-        tokio::spawn(request_handler(network, stream, blockchain));
+        executor.exec(Box::pin(request_handler(network, stream, blockchain)));
         match blockchain {
             #[cfg(feature = "full")]
             BlockchainProxy::Full(blockchain) => {
                 let stream = network.receive_requests::<RequestBatchSet>();
-                tokio::spawn(request_handler(network, stream, blockchain));
+                executor.exec(Box::pin(request_handler(network, stream, blockchain)));
 
                 let stream = network.receive_requests::<RequestHistoryChunk>();
-                tokio::spawn(request_handler(network, stream, blockchain));
+                executor.exec(Box::pin(request_handler(network, stream, blockchain)));
 
                 let stream = network.receive_requests::<RequestChunk>();
-                tokio::spawn(request_handler(network, stream, blockchain));
+                executor.exec(Box::pin(request_handler(network, stream, blockchain)));
             }
             BlockchainProxy::Light(_) => {}
         }

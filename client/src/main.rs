@@ -71,7 +71,13 @@ async fn main_inner() -> Result<(), Error> {
 
     // Create client from config.
     log::info!("Initializing client");
-    let mut client: Client = Client::from_config(config).await?;
+    let mut client: Client = Client::from_config(
+        config,
+        Box::new(|fut| {
+            tokio::spawn(fut);
+        }),
+    )
+    .await?;
     log::info!("Client initialized");
 
     // Initialize RPC server

@@ -99,6 +99,9 @@ impl<N: NetworkInterface + TestNetwork> Node<N> {
             syncer,
             1,
             zkp_proxy.proxy(),
+            Box::new(|fut| {
+                tokio::spawn(fut);
+            }),
         );
 
         Node {

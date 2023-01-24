@@ -3,7 +3,7 @@ use std::sync::Arc;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_nano_zkp::NanoZKP;
-use nimiq_primitives::policy::Policy;
+use nimiq_primitives::{policy::Policy, task_executor::TaskExecutor};
 use parking_lot::{Mutex, RwLock};
 
 use nimiq_block::Block;
@@ -118,7 +118,10 @@ pub fn generate_service_flags(sync_mode: SyncMode) -> (Services, Services) {
 }
 
 impl ClientInner {
-    async fn from_config(config: ClientConfig) -> Result<Client, Error> {
+    async fn from_config(
+        config: ClientConfig,
+        executor: impl TaskExecutor + Send + 'static,
+    ) -> Result<Client, Error> {
         // Get network info (i.e. which specific blockchain we're on)
         if !config.network_id.is_albatross() {
             return Err(Error::config_error(format!(
@@ -307,6 +310,7 @@ impl ClientInner {
             syncer_proxy,
             config.consensus.min_peers,
             zkp_component.proxy(),
+            executor,
         );
 
         #[cfg(feature = "validator")]
@@ -407,8 +411,11 @@ pub struct Client {
 }
 
 impl Client {
-    pub async fn from_config(config: ClientConfig) -> Result<Self, Error> {
-        ClientInner::from_config(config).await
+    pub async fn from_config(
+        config: ClientConfig,
+        executor: impl TaskExecutor + Send + 'static,
+    ) -> Result<Self, Error> {
+        ClientInner::from_config(config, executor).await
     }
 
     pub fn take_consensus(&mut self) -> Option<Consensus> {

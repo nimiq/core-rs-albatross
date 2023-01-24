@@ -35,7 +35,6 @@ use crate::config::consts;
 #[cfg(feature = "metrics-server")]
 use crate::config::consts::default_bind;
 use crate::{
-    client::Client,
     config::{
         command_line::CommandLine,
         config_file::{self, ConfigFile, Seed},
@@ -626,12 +625,6 @@ impl ClientConfig {
     pub fn builder() -> ClientConfigBuilder {
         ClientConfigBuilder::default()
     }
-
-    /// Instantiates the Nimiq client from this configuration
-    ///
-    pub async fn instantiate_client(self) -> Result<Client, Error> {
-        Client::from_config(self).await
-    }
 }
 
 impl ClientConfigBuilder {
@@ -644,12 +637,6 @@ impl ClientConfigBuilder {
 
         self.build_internal()
             .map_err(|e| Error::config_error(e.to_string()))
-    }
-
-    /// Short cut to build the config and instantiate the client
-    ///
-    pub async fn instantiate_client(&self) -> Result<Client, Error> {
-        self.build()?.instantiate_client().await
     }
 
     /// Sets the network ID to the Albatross DevNet
