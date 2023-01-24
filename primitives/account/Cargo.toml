@@ -28,7 +28,7 @@ nimiq-database-value = { path = "../../database/database-value" }
 nimiq-hash = { path = "../../hash" }
 nimiq-keys = { path = "../../keys", features = ["serde-derive"] }
 nimiq-macros = { path = "../../macros" }
-nimiq-primitives = { path = "..", features = ["coin", "policy", "serde-derive", "slots"] }
+nimiq-primitives = { path = "..", features = ["coin", "policy", "serde-derive", "slots", "trie"] }
 nimiq-transaction = { path = "../transaction", features = ["serde-derive"] }
 nimiq-trie = { path = "../trie" }
 nimiq-utils = { path = "../../utils", features = ["key-rng"] }
