@@ -11,11 +11,7 @@ pub use nimiq::{
     config::config::ClientConfig,
     config::config_file::{ConfigFile, LogSettings, SyncMode},
     error::Error,
-    extras::{
-        deadlock::initialize_deadlock_detection, metrics_server::NimiqTaskMonitor,
-        panic::initialize_panic_reporting, signal_handling::initialize_signal_handler,
-        web_logging::initialize_web_logging,
-    },
+    extras::{panic::initialize_panic_reporting, web_logging::initialize_web_logging},
 };
 
 async fn light_client() {
