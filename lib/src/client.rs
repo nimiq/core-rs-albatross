@@ -239,6 +239,10 @@ impl ClientInner {
             SyncMode::History => {
                 panic!("Can't build a history node without the full-consensus feature enabled")
             }
+            #[cfg(not(feature = "full-consensus"))]
+            SyncMode::Full => {
+                panic!("Can't build a full node without the full-consensus feature enabled")
+            }
             #[cfg(feature = "full-consensus")]
             SyncMode::History => {
                 blockchain_config.keep_history = true;
@@ -272,7 +276,40 @@ impl ClientInner {
                 .await;
                 (blockchain_proxy, syncer, zkp_component)
             }
-            SyncMode::Full => todo!(),
+            #[cfg(feature = "full-consensus")]
+            SyncMode::Full => {
+                blockchain_config.keep_history = false;
+                let blockchain = Arc::new(RwLock::new(
+                    Blockchain::new(
+                        environment.clone(),
+                        blockchain_config,
+                        config.network_id,
+                        time,
+                    )
+                    .unwrap(),
+                ));
+                let blockchain_proxy = BlockchainProxy::from(&blockchain);
+                let zkp_component = ZKPComponent::new(
+                    blockchain_proxy.clone(),
+                    Arc::clone(&network),
+                    #[cfg(feature = "zkp-prover")]
+                    config.zkp.prover_active,
+                    #[cfg(feature = "zkp-prover")]
+                    None,
+                    config.zkp.setup_keys_path,
+                    zkp_storage,
+                )
+                .await;
+                let syncer = SyncerProxy::new_full(
+                    blockchain_proxy.clone(),
+                    Arc::clone(&network),
+                    bls_cache,
+                    zkp_component.proxy(),
+                    network_events,
+                )
+                .await;
+                (blockchain_proxy, syncer, zkp_component)
+            }
             SyncMode::Light => {
                 let blockchain = Arc::new(RwLock::new(LightBlockchain::new(config.network_id)));
                 let blockchain_proxy = BlockchainProxy::from(&blockchain);
