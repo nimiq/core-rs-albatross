@@ -345,7 +345,7 @@ mod tests {
 
     use nimiq_block_production::BlockProducer;
     use nimiq_blockchain::{Blockchain, BlockchainConfig};
-    use nimiq_blockchain_interface::AbstractBlockchain;
+    use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
     use nimiq_blockchain_proxy::BlockchainProxy;
     use nimiq_database::volatile::VolatileEnvironment;
     use nimiq_light_blockchain::LightBlockchain;
@@ -711,5 +711,114 @@ mod tests {
 
         test(light_blockchain()).await;
         test(blockchain()).await;
+    }
+
+    #[test(tokio::test)]
+    async fn it_fetches_dangling_macro_block() {
+        async fn test(num_extra_epochs: u32) {
+            let chain1 = blockchain();
+            let mut hub = MockHub::default();
+            let net1 = Arc::new(hub.new_network());
+            let net2 = Arc::new(hub.new_network());
+
+            let chain2 = blockchain();
+
+            let producer = BlockProducer::new(signing_key(), voting_key());
+            if let BlockchainProxy::Full(ref chain2) = chain2 {
+                produce_macro_blocks_with_txns(
+                    &producer,
+                    &chain2,
+                    Policy::batches_per_epoch() as usize * (num_extra_epochs + 2) as usize,
+                    1,
+                    0,
+                );
+            }
+            assert_eq!(
+                chain2.read().block_number(),
+                Policy::blocks_per_epoch() * (num_extra_epochs + 2)
+            );
+            if let BlockchainProxy::Full(ref chain1) = chain1 {
+                let block_to_delete = chain2
+                    .read()
+                    .get_block_at(Policy::blocks_per_epoch() as u32, true)
+                    .unwrap();
+
+                assert_eq!(
+                    Blockchain::push_macro(chain1.upgradable_read(), block_to_delete.clone()),
+                    Ok(PushResult::Extended),
+                );
+                assert_eq!(
+                    Blockchain::push_macro(
+                        chain1.upgradable_read(),
+                        chain2
+                            .read()
+                            .get_block_at(Policy::blocks_per_epoch() as u32 * 2, true)
+                            .unwrap(),
+                    ),
+                    Ok(PushResult::Extended),
+                );
+
+                let mut chain1_wg = chain1.write();
+                let mut txn = chain1_wg.write_transaction();
+                chain1_wg.chain_store.remove_chain_info(
+                    &mut txn,
+                    &block_to_delete.hash(),
+                    block_to_delete.block_number(),
+                );
+                txn.commit();
+                chain1_wg.state.previous_slots = None;
+            }
+
+            let zkp_component = nimiq_zkp_component::ZKPComponent::new(
+                chain1.clone(),
+                Arc::clone(&net1),
+                false,
+                None,
+                PathBuf::from(KEYS_PATH),
+                None,
+            )
+            .await;
+
+            let zkp_component_proxy = zkp_component.proxy();
+
+            tokio::spawn(zkp_component);
+
+            let mut sync = LightMacroSync::<MockNetwork>::new(
+                chain1.clone(),
+                Arc::clone(&net1),
+                net1.subscribe_events(),
+                zkp_component_proxy,
+            );
+
+            let zkp_component2 = nimiq_zkp_component::ZKPComponent::new(
+                chain2.clone(),
+                Arc::clone(&net2),
+                false,
+                None,
+                PathBuf::from(KEYS_PATH),
+                None,
+            )
+            .await;
+
+            tokio::spawn(zkp_component2);
+
+            spawn_request_handlers(&net2, &chain2.clone());
+            net1.dial_mock(&net2);
+
+            match sync.next().await {
+                Some(MacroSyncReturn::Good(_)) => {
+                    assert_eq!(chain1.read().head(), chain2.read().head());
+                }
+                res => panic!("Unexpected HistorySyncReturn: {:?}", res),
+            }
+
+            assert_eq!(
+                chain1.read().previous_validators(),
+                chain2.read().previous_validators()
+            );
+        }
+
+        test(0).await;
+        test(1).await;
     }
 }

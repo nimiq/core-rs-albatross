@@ -1,4 +1,4 @@
-use std::{cmp, path::PathBuf};
+use std::{cmp, mem, path::PathBuf};
 
 use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
 
@@ -108,10 +108,16 @@ impl Blockchain {
             this.state.macro_head_hash = block_hash.clone();
 
             this.state.election_head = macro_block.clone();
-            this.state.election_head_hash = block_hash.clone();
+            let old_election_head_hash =
+                mem::replace(&mut this.state.election_head_hash, block_hash.clone());
 
-            // PITODO: Fix this
-            this.state.previous_slots = None;
+            // If we coincidentally know the previous election block, we remember its slots.
+            if old_election_head_hash == macro_block.header.parent_election_hash {
+                let old_slots = this.state.current_slots.take().unwrap();
+                this.state.previous_slots.replace(old_slots);
+            } else {
+                this.state.previous_slots = None;
+            }
 
             let new_slots = macro_block.get_validators().unwrap();
             this.state.current_slots.replace(new_slots);
@@ -154,6 +160,10 @@ impl Blockchain {
         // Must be a macro block.
         assert!(block.is_election());
 
+        if this.state.previous_slots.is_some() {
+            return Ok(PushResult::Ignored);
+        }
+
         // Checks if the body exists.
         block
             .body()
@@ -173,17 +183,11 @@ impl Blockchain {
         // Perform block intrinsic checks.
         block.verify(false)?;
 
-        // Get epoch number.
-        let epoch = Policy::epoch_at(block.block_number());
-
         // Check if we have this block's successor.
-        let prev_block = this
-            .chain_store
-            .get_block_at(epoch + Policy::blocks_per_epoch(), false, Some(&read_txn))
-            .or(Err(PushError::InvalidSuccessor))?;
+        let prev_block = &this.state.election_head;
 
         // Verify that the block is indeed the predecessor.
-        if &block.hash() != prev_block.parent_election_hash().unwrap() {
+        if block.hash() != prev_block.header.parent_election_hash {
             return Err(PushError::InvalidPredecessor);
         }
 
@@ -196,6 +200,12 @@ impl Blockchain {
         if let Block::Macro(ref macro_block) = block {
             this.state.previous_slots = macro_block.get_validators();
         }
+
+        debug!(
+            block_number = %this.state.main_chain.head.block_number(),
+            kind = "zkp_update_slots",
+            "Updated previous slots",
+        );
 
         Ok(PushResult::Extended)
     }
