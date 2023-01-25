@@ -27,10 +27,10 @@ async fn light_client() {
     initialize_panic_reporting();
 
     // Create config builder.
-    let builder = ClientConfig::builder();
+    let mut builder = ClientConfig::builder();
 
     // Finalize config.
-    let config = builder.build().expect("Build configuration failed");
+    let config = builder.light().build().expect("Build configuration failed");
     log::debug!("Final configuration: {:#?}", config);
 
     // Create client from config.
@@ -42,7 +42,7 @@ async fn light_client() {
         }),
     )
     .await
-    .expect("Build client failed");
+    .expect("Client initialization failed ");
     log::info!("Web client initialized");
 
     // Start consensus.

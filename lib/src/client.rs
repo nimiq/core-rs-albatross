@@ -33,7 +33,7 @@ use nimiq_validator::validator::ValidatorProxy as AbstractValidatorProxy;
 use nimiq_validator_network::network_impl::ValidatorNetworkImpl;
 #[cfg(feature = "wallet")]
 use nimiq_wallet::WalletStore;
-#[cfg(feature = "zkp-storage")]
+#[cfg(feature = "database-storage")]
 use nimiq_zkp_component::proof_store::{DBProofStore, ProofStore};
 use nimiq_zkp_component::zkp_component::{
     ZKPComponent as AbstractZKPComponent, ZKPComponentProxy as AbstractZKPComponentProxy,
@@ -206,12 +206,7 @@ impl ClientInner {
         let network_events = network.subscribe_events();
 
         // Open database
-        #[cfg(any(
-            feature = "full-consensus",
-            feature = "validator",
-            feature = "wallet",
-            feature = "zkp-storage"
-        ))]
+        #[cfg(feature = "database-storage")]
         let environment = config.storage.database(
             config.network_id,
             config.consensus.sync_mode,
@@ -228,10 +223,10 @@ impl ClientInner {
             ..Default::default()
         };
 
-        #[cfg(feature = "zkp-storage")]
+        #[cfg(feature = "database-storage")]
         let zkp_storage: Option<Box<dyn ProofStore>> =
             Some(Box::new(DBProofStore::new(environment.clone())));
-        #[cfg(not(feature = "zkp-storage"))]
+        #[cfg(not(feature = "database-storage"))]
         let zkp_storage = None;
 
         let (blockchain_proxy, syncer_proxy, zkp_component) = match config.consensus.sync_mode {

@@ -1,4 +1,4 @@
-#[cfg(feature = "zkp-storage")]
+#[cfg(feature = "database-storage")]
 use nimiq_database::{Database, Environment, ReadTransaction, WriteTransaction};
 
 use crate::types::*;
@@ -12,7 +12,7 @@ pub trait ProofStore: Send {
     fn set_zkp(&self, zk_proof: &ZKProof);
 }
 
-#[cfg(feature = "zkp-storage")]
+#[cfg(feature = "database-storage")]
 /// DB implementation of a ProofStore meant for persistent storage
 #[derive(Debug)]
 pub struct DBProofStore {
@@ -22,7 +22,7 @@ pub struct DBProofStore {
     zkp_db: Database,
 }
 
-#[cfg(feature = "zkp-storage")]
+#[cfg(feature = "database-storage")]
 impl DBProofStore {
     const PROOF_DB_NAME: &'static str = "ZKPState";
     const PROOF_KEY: &'static str = "proof";
@@ -34,7 +34,7 @@ impl DBProofStore {
     }
 }
 
-#[cfg(feature = "zkp-storage")]
+#[cfg(feature = "database-storage")]
 impl ProofStore for DBProofStore {
     fn get_zkp(&self) -> Option<ZKProof> {
         ReadTransaction::new(&self.env).get(&self.zkp_db, Self::PROOF_KEY)

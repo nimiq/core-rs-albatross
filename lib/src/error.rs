@@ -7,12 +7,7 @@ pub enum Error {
     #[error("Configuration error: {0}")]
     Config(String), // TODO
 
-    #[cfg(any(
-        feature = "full-consensus",
-        feature = "validator",
-        feature = "wallet",
-        feature = "zkp-storage"
-    ))]
+    #[cfg(feature = "database-storage")]
     #[error("MDBX error: {0}")]
     Lmdb(#[from] nimiq_database::Error),
 

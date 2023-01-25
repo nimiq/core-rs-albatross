@@ -76,9 +76,10 @@ nimiq-zkp-component = { path = "../zkp-component" }
 nimiq-test-log = { path = "../test-log" }
 
 [features]
+database-storage = ["nimiq-database", "nimiq-zkp-component/database-storage"]
 deadlock = ["parking_lot/deadlock_detection"]
 default = ["full-consensus"]
-full-consensus = ["nimiq-blockchain", "nimiq-consensus/full", "nimiq-database"]
+full-consensus = ["database-storage", "nimiq-blockchain", "nimiq-consensus/full"]
 launcher = []
 signal-handling = ["signal-hook", "tokio"]
 logging = ["file-rotate", "nimiq-log", "serde_json", "tokio", "tracing-subscriber"]
@@ -87,9 +88,8 @@ metrics-server = ["nimiq-metrics-server", "nimiq-network-libp2p/metrics", "nimiq
 panic = ["log-panics"]
 rpc-server = ["nimiq-jsonrpc-core", "nimiq-jsonrpc-server", "nimiq-rpc-server", "nimiq-wallet", "validator"]
 tokio-console = ["console-subscriber", "logging", "tokio/tracing"]
-validator = ["nimiq-database", "nimiq-mempool", "nimiq-validator", "nimiq-validator-network", "nimiq-rpc-server"]
-wallet = ["nimiq-database", "nimiq-wallet"]
+validator = ["database-storage", "nimiq-mempool", "nimiq-validator", "nimiq-validator-network", "nimiq-rpc-server"]
+wallet = ["database-storage", "nimiq-wallet"]
 websocket = ["nimiq-network-libp2p/websocket"]
 web-logging = ["nimiq-log", "time/wasm-bindgen", "tracing-subscriber", "tracing-web"]
-zkp-storage = ["nimiq-database", "nimiq-zkp-component/zkp-storage"]
 zkp-prover = ["nimiq-zkp-component/zkp-prover"]

@@ -75,6 +75,6 @@ nimiq-test-utils = { path = "../test-utils" }
 tempfile = "3.3"
 
 [features]
-zkp-prover = ["nimiq-blockchain", "nimiq-nano-zkp/zkp-prover", "tokio/io-util", "tokio/process"]
+database-storage = ["nimiq-database"]
 test-prover = ["nimiq-log", "zkp-prover", "tracing-subscriber"]
-zkp-storage = ["nimiq-database"]
+zkp-prover = ["nimiq-blockchain", "nimiq-nano-zkp/zkp-prover", "tokio/io-util", "tokio/process"]

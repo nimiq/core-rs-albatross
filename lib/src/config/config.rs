@@ -13,12 +13,7 @@ use strum_macros::Display;
 use beserial::Deserialize;
 #[cfg(feature = "validator")]
 use nimiq_bls::{KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
-#[cfg(any(
-    feature = "full-consensus",
-    feature = "validator",
-    feature = "wallet",
-    feature = "zkp-storage"
-))]
+#[cfg(feature = "database-storage")]
 use nimiq_database::{mdbx::MdbxEnvironment, volatile::VolatileEnvironment, Environment};
 #[cfg(feature = "validator")]
 use nimiq_keys::{Address, KeyPair, PrivateKey};
@@ -96,7 +91,7 @@ impl Default for ConsensusConfig {
 }
 
 /// Network config
-#[derive(Debug, Clone, Builder)]
+#[derive(Debug, Clone, Builder, Default)]
 #[builder(setter(into))]
 pub struct NetworkConfig {
     #[builder(default)]
@@ -197,6 +192,7 @@ impl Default for FileStorageConfig {
 }
 
 /// Configuration options for the database
+#[cfg(feature = "database-storage")]
 #[derive(Debug, Clone, Builder, Eq, PartialEq)]
 #[builder(setter(into))]
 pub struct DatabaseConfig {
@@ -215,7 +211,7 @@ pub struct DatabaseConfig {
     #[builder(default = "600")]
     max_readers: u32,
 }
-
+#[cfg(feature = "database-storage")]
 impl Default for DatabaseConfig {
     fn default() -> Self {
         Self {
@@ -226,7 +222,7 @@ impl Default for DatabaseConfig {
         }
     }
 }
-
+#[cfg(feature = "database-storage")]
 impl From<Option<config_file::DatabaseSettings>> for DatabaseConfig {
     fn from(db_settings: Option<config_file::DatabaseSettings>) -> Self {
         let default = DatabaseConfig::default();
@@ -284,12 +280,7 @@ impl StorageConfig {
     ///
     /// Returns a `Result` which is either a `Environment` or a `Error`.
     ///
-    #[cfg(any(
-        feature = "full-consensus",
-        feature = "validator",
-        feature = "wallet",
-        feature = "zkp-storage"
-    ))]
+    #[cfg(feature = "database-storage")]
     pub fn database(
         &self,
         network_id: NetworkId,
@@ -554,10 +545,11 @@ pub struct MetricsServerConfig {
 ///
 /// * Make this implement `IntoFuture<Item=Client, Err=Error>` so you can just do
 ///   `tokio::spawn(config.and_then(|client| [...]));`
-#[derive(Clone, Debug, Builder)]
+#[derive(Clone, Debug, Builder, Default)]
 #[builder(setter(into), build_fn(private, name = "build_internal"))]
 pub struct ClientConfig {
     /// Network config
+    #[builder(default)]
     pub network: NetworkConfig,
 
     /// Consensus config
@@ -588,6 +580,7 @@ pub struct ClientConfig {
 
     /// Database-specific configuration
     ///
+    #[cfg(feature = "database-storage")]
     #[builder(default)]
     pub database: DatabaseConfig,
 
@@ -649,6 +642,15 @@ impl ClientConfigBuilder {
     ///
     pub fn test(&mut self) -> &mut Self {
         self.network_id(NetworkId::TestAlbatross)
+    }
+
+    /// Configuration for Light Client
+    pub fn light(&mut self) -> &mut Self {
+        let consensus_config = ConsensusConfig {
+            sync_mode: SyncMode::Light,
+            ..Default::default()
+        };
+        self.consensus(consensus_config)
     }
 
     /// Configures the storage to be volatile. All data will be lost after shutdown of the client.
@@ -751,6 +753,7 @@ impl ClientConfigBuilder {
         self.storage = Some(file_storage.into());
 
         // Configure database
+        #[cfg(feature = "database-storage")]
         self.database(config_file.database.clone());
 
         // Configure the zk prover

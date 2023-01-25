@@ -29,6 +29,12 @@ impl NetworkId {
     }
 }
 
+impl Default for NetworkId {
+    fn default() -> Self {
+        Self::DevAlbatross
+    }
+}
+
 #[derive(Error, Debug)]
 #[error("Input is not a valid network name: {0}")]
 pub struct NetworkIdParseError(String);
