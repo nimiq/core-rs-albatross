@@ -128,15 +128,20 @@ impl Blockchain {
             return vec![];
         }
 
-        // At this point we expect the body to be set and reward transactions to be present.
-        let mut inherents: Vec<Inherent> = macro_block
-            .body
-            .as_ref()
-            .expect("Macro body is missing")
-            .transactions
+        // To get the inherents we either fetch the reward transactions from the macro body;
+        // or we create the transactions when there is no macro body.
+        let mut inherents: Vec<Inherent> = if let Some(body) = macro_block.body.as_ref() {
+            body.transactions.iter().map(Inherent::from).collect()
+        } else {
+            self.create_reward_transactions(
+                self.state(),
+                &macro_block.header,
+                &self.get_staking_contract(),
+            )
             .iter()
             .map(Inherent::from)
-            .collect();
+            .collect()
+        };
 
         // Push FinalizeBatch inherent to update StakingContract.
         inherents.push(Inherent {

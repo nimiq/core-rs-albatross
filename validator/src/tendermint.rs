@@ -145,16 +145,16 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
         proof: Self::ProofTy,
     ) -> Result<Self::ResultTy, TendermintError> {
         // Get the body from the cache. If there is no body cached it is recreated as a fallback.
-        // However that operation is rather expensive annd should be avoided.
+        // However that operation is rather expensive and should be avoided.
         let body = proposal_cache.or_else(|| {
             // Even though this fallback exist, it is unperformant to not cache the body.
             // Print a warning instead of failing.
             log::warn!("MacroBody was not cached. Recreating the body.");
 
-            // Aquire a blockchain read lock
+            // Acquire a blockchain read lock
             let blockchain = self.blockchain.read();
 
-            // The staking contract is holding the relevant informations
+            // The staking contract is holding the relevant information
             // Get the staking contract PRIOR to any state changes.
             let staking_contract = blockchain.get_staking_contract();
 
