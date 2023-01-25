@@ -1,13 +1,12 @@
-use futures::StreamExt;
-use instant::Instant;
-
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
     sync::Arc,
     task::{Context, Poll, Waker},
-    time::{Duration, SystemTime},
+    time::Duration,
 };
 
+use futures::StreamExt;
+use instant::{Instant, SystemTime};
 use ip_network::IpNetwork;
 use libp2p::swarm::dial_opts::PeerCondition;
 use libp2p::{

@@ -1,10 +1,7 @@
-use std::{
-    collections::HashMap,
-    sync::Arc,
-    time::{Duration, SystemTime, UNIX_EPOCH},
-};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use bitflags::bitflags;
+use instant::SystemTime;
 use libp2p::{
     gossipsub::Gossipsub,
     identity::{Keypair, PublicKey},
@@ -147,7 +144,7 @@ impl PeerContact {
     pub fn set_current_time(&mut self) {
         self.timestamp = Some(
             SystemTime::now()
-                .duration_since(UNIX_EPOCH)
+                .duration_since(SystemTime::UNIX_EPOCH)
                 .unwrap()
                 .as_secs(),
         );
@@ -394,7 +391,7 @@ impl PeerContactBook {
     }
 
     pub fn house_keeping(&mut self) {
-        if let Ok(unix_time) = SystemTime::now().duration_since(UNIX_EPOCH) {
+        if let Ok(unix_time) = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
             let delete_peers = self
                 .peer_contacts
                 .iter()
