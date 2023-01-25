@@ -56,73 +56,72 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         &mut self,
         cx: &mut Context<'_>,
     ) -> Poll<Option<MacroSyncReturn<TNetwork::PeerId>>> {
-        let zkp_request_result = match self.zkp_requests.poll_next_unpin(cx) {
-            Poll::Ready(Some(zkp_request_result)) => zkp_request_result,
-            _ => return Poll::Pending,
-        };
+        while let Poll::Ready(Some(zkp_request_result)) = self.zkp_requests.poll_next_unpin(cx) {
+            match zkp_request_result {
+                (Ok(zkp_event), peer_id) => match zkp_event {
+                    Proof { proof, block } => {
+                        // Apply a newer proof to the blockchain
+                        let result = match self.blockchain {
+                            #[cfg(feature = "full")]
+                            BlockchainProxy::Full(ref full_blockchain) => Blockchain::push_zkp(
+                                full_blockchain.upgradable_read(),
+                                Block::Macro(block),
+                                proof.proof.expect("Expected a zkp proof"),
+                            ),
+                            BlockchainProxy::Light(ref light_blockchain) => {
+                                LightBlockchain::push_zkp(
+                                    light_blockchain.upgradable_read(),
+                                    Block::Macro(block),
+                                    proof.proof.expect("Expected a zkp proof"),
+                                )
+                            }
+                        };
 
-        match zkp_request_result {
-            (Ok(zkp_event), peer_id) => match zkp_event {
-                Proof { proof, block } => {
-                    // Apply a newer proof to the blockchain
-                    let result = match self.blockchain {
-                        #[cfg(feature = "full")]
-                        BlockchainProxy::Full(ref full_blockchain) => Blockchain::push_zkp(
-                            full_blockchain.upgradable_read(),
-                            Block::Macro(block),
-                            proof.proof.expect("Expected a zkp proof"),
-                        ),
-                        BlockchainProxy::Light(ref light_blockchain) => LightBlockchain::push_zkp(
-                            light_blockchain.upgradable_read(),
-                            Block::Macro(block),
-                            proof.proof.expect("Expected a zkp proof"),
-                        ),
-                    };
+                        match result {
+                            Ok(result) => {
+                                log::debug!(result = ?result, "Applied ZKP proof to the blockchain");
+                                // Request epoch ids with our updated state from this peer
+                                let future = Self::request_epoch_ids(
+                                    self.blockchain.clone(),
+                                    Arc::clone(&self.network),
+                                    peer_id,
+                                )
+                                .boxed();
+                                self.epoch_ids_stream.push(future);
+                            }
+                            Err(result) => {
+                                log::debug!(?result, "Failed applying ZKP proof to the blockchain",);
 
-                    match result {
-                        Ok(result) => {
-                            log::debug!(result = ?result, "Applied ZKP proof to the blockchain");
-                            // Request epoch ids with our updated state from this peer
-                            let future = Self::request_epoch_ids(
-                                self.blockchain.clone(),
-                                Arc::clone(&self.network),
-                                peer_id,
-                            )
-                            .boxed();
-                            self.epoch_ids_stream.push(future);
-                        }
-                        Err(result) => {
-                            log::debug!(?result, "Failed applying ZKP proof to the blockchain",);
+                                // Since it failed applying the ZKP from this peer, we disconnect
+                                self.disconnect_peer(peer_id);
 
-                            // Since it failed applying the ZKP from this peer, we disconnect
-                            self.disconnect_peer(peer_id);
-
-                            return Poll::Ready(None);
+                                return Poll::Ready(None);
+                            }
                         }
                     }
-                }
-                OutdatedProof { block_height: _ } => {
-                    // We need to request epoch ids from this peer to know if it is outdated or not
-                    let future = Self::request_epoch_ids(
-                        self.blockchain.clone(),
-                        Arc::clone(&self.network),
-                        peer_id,
-                    )
-                    .boxed();
-                    self.epoch_ids_stream.push(future);
+                    OutdatedProof { block_height: _ } => {
+                        // We need to request epoch ids from this peer to know if it is outdated or not
+                        let future = Self::request_epoch_ids(
+                            self.blockchain.clone(),
+                            Arc::clone(&self.network),
+                            peer_id,
+                        )
+                        .boxed();
+                        self.epoch_ids_stream.push(future);
 
-                    return Poll::Pending;
+                        continue;
+                    }
+                },
+                (Err(zkp_error), peer_id) => {
+                    // There was an error requesting a proof from this peer, so we disconnect it
+                    log::debug!(
+                        ?zkp_error,
+                        %peer_id,
+                        "Error requesting zkp from peer",
+                    );
+                    self.disconnect_peer(peer_id);
+                    return Poll::Ready(None);
                 }
-            },
-            (Err(zkp_error), peer_id) => {
-                // There was an error requesting a proof from this peer, so we disconnect it
-                log::debug!(
-                    ?zkp_error,
-                    %peer_id,
-                    "Error requesting zkp from peer",
-                );
-                self.disconnect_peer(peer_id);
-                return Poll::Ready(None);
             }
         }
 
@@ -133,18 +132,14 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         &mut self,
         cx: &mut Context<'_>,
     ) -> Poll<Option<MacroSyncReturn<TNetwork::PeerId>>> {
-        let epoch_ids = match self.epoch_ids_stream.poll_next_unpin(cx) {
-            Poll::Ready(Some(epoch_ids)) => epoch_ids,
-            _ => return Poll::Pending,
-        };
-
-        if let Some(epoch_ids) = epoch_ids {
+        while let Poll::Ready(Some(Some(epoch_ids))) = self.epoch_ids_stream.poll_next_unpin(cx) {
             // If the peer didn't find any of our locators, we are done with it and emit it.
             if !epoch_ids.locator_found {
                 debug!(
                     peer_id = ?epoch_ids.sender,
                     "Peer is behind or on different chain"
                 );
+
                 return Poll::Ready(Some(MacroSyncReturn::Outdated(epoch_ids.sender)));
             } else if epoch_ids.ids.is_empty() && epoch_ids.checkpoint.is_none() {
                 match self.blockchain {
@@ -163,8 +158,8 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                                 epoch_ids.sender,
                                 previous_election_block,
                             );
-                            // PITODO: Make sure futures convention is being followed! poll returned Some
-                            return Poll::Pending;
+
+                            continue;
                         }
                     }
                     _ => {}
@@ -173,6 +168,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                 debug!(
                     peer_id = ?epoch_ids.sender,
                     "Finished syncing with peer");
+
                 return Poll::Ready(Some(MacroSyncReturn::Good(epoch_ids.sender)));
             }
 
