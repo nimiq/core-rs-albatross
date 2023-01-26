@@ -110,6 +110,36 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
         args: --release --all-features
 
+  web-client:
+    runs-on: ubuntu-20.04
+
+    steps:
+    - name: "Free up disk space"
+      run: sudo rm -rf /usr/share/dotnet && sudo rm -rf /opt/ghc && sudo rm -rf "/usr/local/share/boost" && sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+    - uses: actions/checkout@v3
+    - uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: cargo-${{ hashFiles('**/Cargo.toml') }}
+    - uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+    - name: Install Protoc
+      run: sudo apt-get install protobuf-compiler
+    - name: Install wasm-pack
+      uses: actions-rs/cargo@v1
+      with:
+        command: install
+        args: wasm-pack
+    - name: Compile to wasm and generate bindings
+      working-directory: ./web-client
+      run: wasm-pack build --target web
+
   reconnect-test:
     runs-on: ubuntu-20.04
 
