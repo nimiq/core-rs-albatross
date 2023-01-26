@@ -6,6 +6,31 @@ use crate::mmr::peaks::PeakIterator;
 use crate::mmr::position::{leaf_number_to_index, Position};
 use crate::mmr::utils::bagging;
 
+#[derive(Clone, Debug)]
+pub enum SizeProof<H: Merge, T: Hash<H>> {
+    EmptyTree,
+    SingleItem(u64, T),
+    MultipleItem(u64, H, H),
+}
+
+impl<H: Merge + Eq, T: Hash<H>> SizeProof<H, T> {
+    pub fn verify(&self, hash: &H) -> bool {
+        let self_hash = match self {
+            SizeProof::EmptyTree => H::empty(0),
+            SizeProof::SingleItem(size, item) => item.hash(*size),
+            SizeProof::MultipleItem(size, left, right) => left.merge(right, *size),
+        };
+        hash == &self_hash
+    }
+
+    pub fn size(&self) -> u64 {
+        match self {
+            SizeProof::EmptyTree => 0,
+            SizeProof::SingleItem(size, _) | SizeProof::MultipleItem(size, _, _) => *size,
+        }
+    }
+}
+
 /// A Merkle proof for a MMR.
 #[derive(Clone, Debug)]
 pub struct Proof<H> {
@@ -246,7 +271,7 @@ impl<H: Merge + Clone + Eq> RangeProof<H> {
         self.proof.verify(root, leaves)
     }
 
-    /// `leaf_index` is the number of leaves preceeding this proof.
+    /// `leaf_index` is the number of leaves preceding this proof.
     pub fn verify_with_start<T>(
         &self,
         root: &H,

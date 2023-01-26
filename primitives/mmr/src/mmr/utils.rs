@@ -1,5 +1,7 @@
 use crate::error::Error;
-use crate::hash::Merge;
+use crate::hash::{Hash, Merge};
+
+use super::proof::SizeProof;
 
 const USIZE_BITS: u32 = 0usize.count_zeros();
 
@@ -29,6 +31,48 @@ pub(crate) fn bagging<H: Merge, I: Iterator<Item = Result<(H, usize), Error>>>(
 
     let (root, _) = bagging_info.ok_or(Error::ProveInvalidLeaves)?;
     Ok(root)
+}
+
+/// Computes a size proof for an iterator over peak positions.
+/// This function fails if there is less than 2 peaks.
+pub fn prove_num_leaves<
+    H: Merge + Clone,
+    T: Hash<H>,
+    I: Iterator<Item = Result<(H, usize), Error>>,
+    F: Fn(H) -> Option<T>,
+>(
+    peaks_rev: I,
+    f: F,
+) -> Result<SizeProof<H, T>, Error> {
+    // Bagging
+    let mut bagging_info = None;
+    for item in peaks_rev {
+        let (peak_hash, peak_leaves) = item?;
+
+        bagging_info = match bagging_info {
+            None => Some((peak_leaves, None, None, peak_hash)),
+            Some((root_leaves, _, _, root_hash)) => {
+                let sum_leaves: usize = root_leaves + peak_leaves;
+
+                Some((
+                    sum_leaves,
+                    Some(peak_hash.clone()),
+                    Some(root_hash.clone()),
+                    peak_hash.merge(&root_hash, sum_leaves as u64),
+                ))
+            }
+        };
+    }
+    match bagging_info {
+        Some((size, Some(left_hash), Some(right_hash), _)) => {
+            Ok(SizeProof::MultipleItem(size as u64, left_hash, right_hash))
+        }
+        Some((size, None, None, hash)) => Ok(SizeProof::SingleItem(
+            size as u64,
+            f(hash).ok_or(Error::InconsistentStore)?,
+        )),
+        _ => Err(Error::ProveInvalidLeaves),
+    }
 }
 
 #[cfg(test)]

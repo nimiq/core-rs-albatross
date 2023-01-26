@@ -12,7 +12,7 @@ use nimiq_mmr::error::Error as MMRError;
 use nimiq_mmr::hash::Hash as MMRHash;
 use nimiq_mmr::mmr::partial::PartialMerkleMountainRange;
 use nimiq_mmr::mmr::position::leaf_number_to_index;
-use nimiq_mmr::mmr::proof::RangeProof;
+use nimiq_mmr::mmr::proof::{RangeProof, SizeProof};
 use nimiq_mmr::mmr::MerkleMountainRange;
 use nimiq_mmr::store::memory::MemoryStore;
 use nimiq_primitives::policy::Policy;
@@ -1065,6 +1065,32 @@ impl HistoryStore {
             None => 0,
             Some(v) => v.index,
         }
+    }
+
+    fn prove_num_leaves(
+        &self,
+        epoch_number: u32,
+        txn_option: Option<&Transaction>,
+    ) -> Result<SizeProof<Blake2bHash, ExtendedTransaction>, MMRError> {
+        let read_txn: ReadTransaction;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = ReadTransaction::new(&self.env);
+                &read_txn
+            }
+        };
+
+        // Get the history tree.
+        let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(
+            &self.hist_tree_db,
+            txn,
+            epoch_number,
+        ));
+
+        let f = |leaf_hash| self.get_extended_tx(&leaf_hash, txn_option);
+
+        tree.prove_num_leaves(f)
     }
 }
 

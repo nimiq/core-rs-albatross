@@ -11,6 +11,9 @@ use crate::mmr::utils::bagging;
 use crate::store::memory::MemoryTransaction;
 use crate::store::Store;
 
+use self::proof::SizeProof;
+use self::utils::prove_num_leaves;
+
 pub mod partial;
 pub mod peaks;
 pub mod position;
@@ -141,6 +144,28 @@ impl<H: Merge + Clone, S: Store<H>> MerkleMountainRange<H, S> {
         });
 
         bagging(it)
+    }
+
+    /// Generates the size proof.
+    pub fn prove_num_leaves<T: Hash<H>, F: Fn(H) -> Option<T>>(
+        &self,
+        f: F,
+    ) -> Result<SizeProof<H, T>, Error> {
+        // Return the history root.
+        if self.is_empty() {
+            return Ok(SizeProof::EmptyTree);
+        }
+
+        let it = self.rev_peaks().map(|peak_pos| {
+            Ok((
+                self.store
+                    .get(peak_pos.index)
+                    .ok_or(Error::InconsistentStore)?,
+                peak_pos.num_leaves(),
+            ))
+        });
+
+        prove_num_leaves(it, f)
     }
 
     /// Returns a Merkle proof for the given positions (representing the leaf indexes).
