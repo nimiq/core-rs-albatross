@@ -30,7 +30,11 @@ async fn light_client() {
     let mut builder = ClientConfig::builder();
 
     // Finalize config.
-    let config = builder.light().build().expect("Build configuration failed");
+    let config = builder
+        .volatile()
+        .light()
+        .build()
+        .expect("Build configuration failed");
     log::debug!("Final configuration: {:#?}", config);
 
     // Create client from config.
