@@ -39,7 +39,7 @@ pub struct TrieChunk {
     /// The end of the chunk. The end key is exclusive.
     /// When set to None it means that it is the last trie chunk.
     pub end_key: Option<KeyNibbles>,
-    #[beserial(len_type(u16))]
+    #[beserial(len_type(u32))]
     pub items: Vec<Item>,
     pub proof: TrieProof,
 }
