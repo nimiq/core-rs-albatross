@@ -20,7 +20,7 @@ maintenance = { status = "experimental" }
 arrayvec = "0.7.2"
 beserial_derive = { path = "beserial_derive", version = "0.1.0", optional = true }
 bitvec = { version = "1.0", optional = true }
-libp2p = { version = "0.50", default-features = false, optional = true }
+libp2p = { git = "https://github.com/jsdanielh/rust-libp2p.git", default-features = false, optional = true }
 byteorder = "1.2"
 thiserror = "1.0"
 num-traits = "0.2"

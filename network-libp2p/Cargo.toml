@@ -53,7 +53,7 @@ nimiq-utils = { path = "../utils", features = [
 nimiq-validator-network = { path = "../validator-network" }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-libp2p = { version = "0.50", default-features = false, features = [
+libp2p = { git = "https://github.com/jsdanielh/rust-libp2p.git", default-features = false, features = [
     "gossipsub",
     "identify",
     "kad",
@@ -65,7 +65,7 @@ libp2p = { version = "0.50", default-features = false, features = [
 ] }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
-libp2p = { version = "0.50", default-features = false, features = [
+libp2p = { git = "https://github.com/jsdanielh/rust-libp2p.git", default-features = false, features = [
     "gossipsub",
     "identify",
     "kad",
