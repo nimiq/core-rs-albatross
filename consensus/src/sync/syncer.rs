@@ -189,6 +189,9 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Stream for Syncer<N, M
         while let Poll::Ready(Some(result)) = self.live_sync.poll_next_unpin(cx) {
             match result {
                 LiveSyncEvent::PushEvent(push_event) => {
+                    if let LiveSyncPushEvent::AcceptedAnnouncedBlock(..) = push_event {
+                        self.accepted_announcements = self.accepted_announcements.saturating_add(1);
+                    }
                     return Poll::Ready(Some(push_event));
                 }
                 LiveSyncEvent::PeerEvent(peer_event) => match peer_event {
