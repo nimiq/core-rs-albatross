@@ -276,12 +276,7 @@ impl<N: Network> ZKPComponent<N> {
 
         // Sends the new event to the notifier stream.
         let event = ZKPEvent::new(proof_source, zk_proof, new_block);
-        if let Err(e) = self.zkp_events_notifier.send(event.clone()) {
-            log::error!(
-                "Error sending the proof (from peer) to the events notifier {}",
-                e
-            );
-        }
+        _ = self.zkp_events_notifier.send(event.clone());
 
         Ok(event)
     }
@@ -369,13 +364,11 @@ impl<N: Network> Future for ZKPComponent<N> {
                         proof_storage.set_zkp(&self.zkp_state.read().clone().into());
                     }
 
-                    if let Err(e) = self.zkp_events_notifier.send(ZKPEvent::new(
+                    _ = self.zkp_events_notifier.send(ZKPEvent::new(
                         ProofSource::SelfGenerated,
                         zk_proof,
                         block,
-                    )) {
-                        log::error!("Error sending the proof to events notifier {}", e);
-                    }
+                    ));
                 }
                 Poll::Ready(None) => {
                     // The stream was closed so we quit as well.

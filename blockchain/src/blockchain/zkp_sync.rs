@@ -53,8 +53,9 @@ impl Blockchain {
             .chain_store
             .get_block_at(0, true, Some(&read_txn))
             .unwrap();
+        let genesis_hash = genesis_block.hash();
 
-        let initial_header_hash = <[u8; 32]>::from(genesis_block.hash());
+        let initial_header_hash = <[u8; 32]>::from(genesis_hash.clone());
         let initial_public_keys = genesis_block.validators().unwrap().voting_keys_g2();
         let final_block_number = block.block_number();
         let final_header_hash = <[u8; 32]>::from(block.hash());
@@ -93,6 +94,11 @@ impl Blockchain {
         this.history_store.clear(&mut txn);
         // Prune the Chain Store.
         this.chain_store.clear(&mut txn);
+
+        // Restore genesis block.
+        let genesis_info = ChainInfo::new(genesis_block, true);
+        this.chain_store
+            .put_chain_info(&mut txn, &genesis_hash, &genesis_info, true);
 
         this.chain_store
             .put_chain_info(&mut txn, &block_hash, &chain_info, true);
