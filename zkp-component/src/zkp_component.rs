@@ -300,8 +300,10 @@ impl<N: Network> Future for ZKPComponent<N> {
                     );
 
                     // Log errors.
-                    if let Err(ref e) = result {
-                        log::error!("Error pushing the new zk proof {}", e);
+                    match result {
+                        Err(Error::OutdatedProof) => log::trace!("ZK Proof was outdated"),
+                        Err(ref e) => log::error!("Error pushing the new zk proof {}", e),
+                        _ => {}
                     }
 
                     // Return verification result if channel exists.
