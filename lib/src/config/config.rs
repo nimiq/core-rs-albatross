@@ -249,6 +249,7 @@ impl From<Option<config_file::DatabaseSettings>> for DatabaseConfig {
 pub enum StorageConfig {
     /// This will store the database in a volatile storage. After the client shuts
     /// down all data will be lost.
+    /// This can be used for browser based environments
     ///
     Volatile,
 
@@ -256,15 +257,6 @@ pub enum StorageConfig {
     /// compiled to WebAssembly.
     ///
     Filesystem(FileStorageConfig),
-
-    /// This will store the database in the browser using *IndexedDB*, and the key files in
-    /// *LocalStorage*. This is only available when run in the browser.
-    ///
-    /// # Notes
-    ///
-    /// There no support for WebAssembly yet.
-    ///
-    Browser,
 }
 
 impl StorageConfig {
@@ -312,7 +304,6 @@ impl StorageConfig {
                     db_config.max_readers,
                 )?
             }
-            _ => return Err(self.not_available()),
         })
     }
 
@@ -346,7 +337,6 @@ impl StorageConfig {
                     }
                 })?
             }
-            _ => return Err(self.not_available()),
         })
     }
 
@@ -380,7 +370,6 @@ impl StorageConfig {
                     }
                 })?
             }
-            _ => return Err(self.not_available()),
         })
     }
 
@@ -414,7 +403,6 @@ impl StorageConfig {
                     }
                 })?
             }
-            _ => return Err(self.not_available()),
         })
     }
 
@@ -434,12 +422,7 @@ impl StorageConfig {
                     })?,
                 )
             }
-            _ => Err(self.not_available()),
         }
-    }
-
-    fn not_available(&self) -> Error {
-        Error::Config(format!("Storage backend not implemented: {:?}", self))
     }
 }
 
