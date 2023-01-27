@@ -274,6 +274,7 @@ impl ClientInner {
             #[cfg(feature = "full-consensus")]
             SyncMode::Full => {
                 blockchain_config.keep_history = false;
+                blockchain_config.keys_path = config.zkp.setup_keys_path.clone();
                 let blockchain = Arc::new(RwLock::new(
                     Blockchain::new(
                         environment.clone(),
@@ -306,7 +307,10 @@ impl ClientInner {
                 (blockchain_proxy, syncer, zkp_component)
             }
             SyncMode::Light => {
-                let blockchain = Arc::new(RwLock::new(LightBlockchain::new(config.network_id)));
+                let blockchain = Arc::new(RwLock::new(LightBlockchain::new(
+                    config.network_id,
+                    config.zkp.setup_keys_path.clone(),
+                )));
                 let blockchain_proxy = BlockchainProxy::from(&blockchain);
                 let zkp_component = ZKPComponent::new(
                     blockchain_proxy.clone(),

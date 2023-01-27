@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use nimiq_block::{Block, BlockError, SkipBlockProof};
 use nimiq_block_production::{
@@ -46,8 +46,10 @@ impl Default for TemporaryLightBlockProducer {
 
 impl TemporaryLightBlockProducer {
     pub fn new() -> Self {
-        let light_blockchain =
-            Arc::new(RwLock::new(LightBlockchain::new(NetworkId::UnitAlbatross)));
+        let light_blockchain = Arc::new(RwLock::new(LightBlockchain::new(
+            NetworkId::UnitAlbatross,
+            PathBuf::new(),
+        )));
 
         let temp_producer = TemporaryBlockProducer::new();
         let blockchain = Arc::clone(&temp_producer.blockchain);

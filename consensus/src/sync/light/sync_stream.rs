@@ -379,6 +379,7 @@ mod tests {
     fn light_blockchain() -> BlockchainProxy {
         BlockchainProxy::Light(Arc::new(RwLock::new(LightBlockchain::new(
             NetworkId::UnitAlbatross,
+            PathBuf::from(KEYS_PATH),
         ))))
     }
 

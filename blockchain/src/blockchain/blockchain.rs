@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
 
 use nimiq_account::{Account, Accounts, BlockLog};
@@ -62,6 +62,8 @@ pub struct BlockchainConfig {
     /// Maximum number of epochs (other than the current one) that the ChainStore will store fully.
     /// Epochs older than this number will be pruned.
     pub max_epochs_stored: u32,
+    /// The path for the ZKP verifying keys.
+    pub keys_path: PathBuf,
 }
 
 impl Default for BlockchainConfig {
@@ -69,6 +71,7 @@ impl Default for BlockchainConfig {
         Self {
             keep_history: true,
             max_epochs_stored: Policy::MIN_EPOCHS_STORED,
+            keys_path: PathBuf::new(),
         }
     }
 }

@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use parking_lot::RwLockUpgradableReadGuard;
 
 use nimiq_block::{Block, BlockError};
@@ -60,7 +58,7 @@ impl LightBlockchain {
             final_header_hash,
             final_public_keys,
             proof,
-            &PathBuf::new(), // use the current directory
+            &this.keys_path,
         );
 
         if verify_result.is_err() || !verify_result.unwrap() {

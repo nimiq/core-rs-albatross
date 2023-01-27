@@ -158,7 +158,10 @@ pub async fn sync_two_peers(
             BlockchainProxy::from(blockchain2)
         }
         SyncMode::Light => {
-            let blockchain2 = Arc::new(RwLock::new(LightBlockchain::new(NetworkId::UnitAlbatross)));
+            let blockchain2 = Arc::new(RwLock::new(LightBlockchain::new(
+                NetworkId::UnitAlbatross,
+                PathBuf::from(KEYS_PATH),
+            )));
             BlockchainProxy::from(blockchain2)
         }
     };

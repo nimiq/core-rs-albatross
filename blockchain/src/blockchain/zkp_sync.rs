@@ -1,4 +1,4 @@
-use std::{cmp, mem, path::PathBuf};
+use std::{cmp, mem};
 
 use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
 
@@ -69,7 +69,7 @@ impl Blockchain {
             final_header_hash,
             final_public_keys,
             proof,
-            &PathBuf::new(), // use the current directory
+            &this.config.keys_path,
         );
 
         if verify_result.is_err() || !verify_result.unwrap() {
