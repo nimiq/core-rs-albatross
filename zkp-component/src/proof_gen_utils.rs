@@ -7,7 +7,7 @@ use ark_mnt6_753::{G2Projective as G2MNT6, MNT6_753};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     process::Command,
-    sync::broadcast::Receiver as BroadcastReceiver,
+    sync::oneshot::Receiver,
 };
 
 use beserial::{Deserialize, Serialize};
@@ -68,7 +68,7 @@ pub fn generate_new_proof(
 /// Starts the prover in a new child process.
 /// Warning: The child process will continue to run if the parent process crashes.
 pub async fn launch_generate_new_proof(
-    mut recv: BroadcastReceiver<()>,
+    recv: Receiver<()>,
     proof_input: ProofInput,
     prover_path: Option<PathBuf>,
 ) -> Result<ZKPState, ZKProofGenerationError> {
@@ -100,7 +100,7 @@ pub async fn launch_generate_new_proof(
             let _ = child.wait().await;
             parse_proof_generation_output(buffer).await
         }
-        _ = recv.recv() => {
+        _ = recv => {
             child.kill().await?;
             Err(ZKProofGenerationError::ChannelError)
         },

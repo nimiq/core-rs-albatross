@@ -4,7 +4,7 @@ use nimiq_zkp_component::{
     proof_gen_utils::launch_generate_new_proof,
     types::{ProofInput, ZKProofGenerationError},
 };
-use tokio::sync::broadcast;
+use tokio::sync::oneshot;
 
 #[test]
 fn can_locate_prover_binary() {
@@ -13,7 +13,7 @@ fn can_locate_prover_binary() {
 
 #[test(tokio::test)]
 async fn can_launch_process_and_parse_output() {
-    let (_send, recv) = broadcast::channel(1);
+    let (_send, recv) = oneshot::channel();
     let proof_input: ProofInput = Default::default();
 
     let result = launch_generate_new_proof(recv, proof_input, Some(zkp_test_exe())).await;
@@ -23,7 +23,7 @@ async fn can_launch_process_and_parse_output() {
 
 #[test(tokio::test)]
 async fn can_launch_process_and_kill() {
-    let (send, recv) = broadcast::channel(1);
+    let (send, recv) = oneshot::channel();
     let proof_input: ProofInput = Default::default();
 
     let result = tokio::spawn(launch_generate_new_proof(
