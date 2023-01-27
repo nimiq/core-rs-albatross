@@ -178,7 +178,7 @@ impl<'env> MdbxReadTransaction<'env> {
         Some(FromDatabaseValue::copy_from_database(&result?).unwrap())
     }
 
-    pub(super) fn cursor<'txn, 'db>(&'txn self, db: &'db Database) -> MdbxCursor<'txn> {
+    pub(super) fn cursor<'txn>(&'txn self, db: &Database) -> MdbxCursor<'txn> {
         let db = self
             .txn
             .open_db(Some(&db.persistent().unwrap().db))
@@ -289,7 +289,7 @@ impl<'env> MdbxWriteTransaction<'env> {
         self.txn.commit().unwrap();
     }
 
-    pub(super) fn cursor<'txn, 'db>(&'txn self, db: &'db Database) -> MdbxCursor<'txn> {
+    pub(super) fn cursor<'txn>(&'txn self, db: &Database) -> MdbxCursor<'txn> {
         let db = self
             .txn
             .open_db(Some(&db.persistent().unwrap().db))
@@ -302,7 +302,7 @@ impl<'env> MdbxWriteTransaction<'env> {
         }
     }
 
-    pub(super) fn write_cursor<'txn, 'db>(&'txn self, db: &'db Database) -> MdbxWriteCursor<'txn> {
+    pub(super) fn write_cursor<'txn>(&'txn self, db: &Database) -> MdbxWriteCursor<'txn> {
         let db = self
             .txn
             .open_db(Some(&db.persistent().unwrap().db))
