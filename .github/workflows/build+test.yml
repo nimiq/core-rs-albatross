@@ -139,6 +139,9 @@ jobs:
     - name: Compile to wasm and generate bindings
       working-directory: ./web-client
       run: wasm-pack build --target web
+    - name: Execute wasm unittests
+      working-directory: ./web-client
+      run: wasm-pack test --node
 
   reconnect-test:
     runs-on: ubuntu-20.04
