@@ -170,9 +170,9 @@ impl<N: Network> ZKProver<N> {
             self.sender = Some(sender);
         } else {
             log::debug!(
-                "Won't generate zkp for a block of the past; block height: {}, current height: {}",
-                zkp_state.latest_block_number,
-                block.block_number()
+                block_height = zkp_state.latest_block_number,
+                current_height = block.block_number(),
+                "Won't generate zkp for a block of the past",
             );
         }
     }
@@ -187,7 +187,7 @@ impl<N: Network> Stream for ZKProver<N> {
             self.pending_election_blocks.push_back(block);
         }
 
-        // Launches new proof generate, if we have a pending election block are and no proof generation is launched yet.
+        // Launches new proof generation, if we have a pending election block are and no proof generation is launched yet.
         // We need to loop in case we already received a zkp for one of the blocks in the list.
         while self.proof_future.is_none() {
             if let Some(block) = self.pending_election_blocks.pop_front() {
@@ -226,7 +226,7 @@ impl<N: Network> Stream for ZKProver<N> {
                         return Poll::Ready(Some((proof, block)));
                     }
                     Err(e) => {
-                        log::error!("Error generating ZK Proof for block {}", e);
+                        log::error!(error = %e, "Error generating ZK Proof for block");
                     }
                 };
             }
