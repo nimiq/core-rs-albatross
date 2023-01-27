@@ -27,7 +27,7 @@ fn main() {
     let validators = generate_uncompressed_validators();
 
     for i in 0..50 {
-        println!("{}", i);
+        println!("{i}");
         MacroBlock::pk_tree_root(&validators).expect("PK tree root building failed");
     }
 }

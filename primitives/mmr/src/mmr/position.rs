@@ -235,16 +235,11 @@ mod tests {
                 Op::Set => Position::from(index),
             };
 
-            assert_eq!(pos.index, index, "op {}", j);
-            assert_eq!(
-                pos.height, height,
-                "wrong height @ index {}, op {}",
-                index, j
-            );
+            assert_eq!(pos.index, index, "op {j}");
+            assert_eq!(pos.height, height, "wrong height @ index {index}, op {j}");
             assert_eq!(
                 pos.right_node, right_node,
-                "wrong right_node @ index {}, op {}",
-                index, j
+                "wrong right_node @ index {index}, op {j}"
             );
 
             assert_eq!(pos.left_child().is_none(), pos.height == 0);
@@ -302,7 +297,7 @@ mod tests {
             (13, 6),
         ];
         for (right, left) in pairs {
-            assert_eq!(move_left(right + 1), left + 1, "move left from {}", right);
+            assert_eq!(move_left(right + 1), left + 1, "move left from {right}");
         }
     }
 

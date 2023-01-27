@@ -224,7 +224,7 @@ impl<
         let votes = self
             .weights
             .signature_weight(signature)
-            .unwrap_or_else(|| panic!("Missing weights for signature: {:?}", signature));
+            .unwrap_or_else(|| panic!("Missing weights for signature: {signature:?}"));
 
         trace!(
             "is_final(): votes={}, final={}",

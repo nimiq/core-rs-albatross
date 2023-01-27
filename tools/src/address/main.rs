@@ -17,7 +17,7 @@ fn main() {
         match parse_private_key(p) {
             Ok(p) => p,
             Err(e) => {
-                eprintln!("Error parsing private key: {}", e);
+                eprintln!("Error parsing private key: {e}");
                 process::exit(1);
             }
         }

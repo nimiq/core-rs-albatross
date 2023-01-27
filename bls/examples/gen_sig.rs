@@ -12,5 +12,5 @@ fn main() {
 
     let sig = keypair.sign(&message);
 
-    println!("Signature:\n {}", sig);
+    println!("Signature:\n {sig}");
 }

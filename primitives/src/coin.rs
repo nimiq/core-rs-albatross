@@ -227,7 +227,7 @@ lazy_static! {
     static ref COIN_PARSE_REGEX: Regex = {
         let r = r"^(?P<int_part>\d+)(.(?P<frac_part>\d{1,5})0*)?$";
         Regex::new(r)
-            .unwrap_or_else(|e| panic!("Failed to compile regex: {}: {}", r, e))
+            .unwrap_or_else(|e| panic!("Failed to compile regex: {r}: {e}"))
     };
 }
 

@@ -121,13 +121,13 @@ mod tests {
             let pi = PeakIterator::new(size);
             let calc_peaks: Vec<Position> = pi.collect();
             let peaks: Vec<Position> = peaks.iter().map(|i| Position::from(*i)).collect();
-            assert_eq!(calc_peaks, peaks, "Peaks for size {}", size);
+            assert_eq!(calc_peaks, peaks, "Peaks for size {size}");
 
             // Reversed peaks.
             let pi = RevPeakIterator::new(size);
             let calc_peaks: Vec<Position> = pi.collect();
             let peaks: Vec<Position> = peaks.into_iter().rev().collect();
-            assert_eq!(calc_peaks, peaks, "Rev Peaks for size {}", size);
+            assert_eq!(calc_peaks, peaks, "Rev Peaks for size {size}");
         }
 
         test_peaks(0, vec![]);

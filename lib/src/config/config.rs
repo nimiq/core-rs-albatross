@@ -279,7 +279,7 @@ impl StorageConfig {
         sync_mode: SyncMode,
         db_config: DatabaseConfig,
     ) -> Result<Environment, Error> {
-        let db_name = format!("{}-{}-consensus", network_id, sync_mode).to_lowercase();
+        let db_name = format!("{network_id}-{sync_mode}-consensus").to_lowercase();
         log::info!("Opening database: {}", db_name);
 
         Ok(match self {
@@ -760,8 +760,7 @@ impl ClientConfigBuilder {
                         Ok(parsed) => Some(parsed),
                         Err(err) => {
                             return Err(Error::config_error(format!(
-                                "Failed parsing RPC server address {}",
-                                err
+                                "Failed parsing RPC server address {err}"
                             )))
                         }
                     },
@@ -776,7 +775,7 @@ impl ClientConfigBuilder {
                         .iter()
                         .map(|s| {
                             s.parse::<IpAddr>()
-                                .map_err(|e| Error::config_error(format!("Invalid IP: {}", e)))
+                                .map_err(|e| Error::config_error(format!("Invalid IP: {e}")))
                         })
                         .collect::<Result<Vec<IpAddr>, Error>>();
                     Some(result?)
@@ -812,8 +811,7 @@ impl ClientConfigBuilder {
                         Ok(parsed) => Some(parsed),
                         Err(err) => {
                             return Err(Error::config_error(format!(
-                                "Failed parsing metrics server address {}",
-                                err
+                                "Failed parsing metrics server address {err}"
                             )))
                         }
                     },

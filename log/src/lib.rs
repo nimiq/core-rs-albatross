@@ -81,7 +81,7 @@ impl TargetsExt for Targets {
         let directives = match env::var(ENV) {
             Ok(v) => v,
             Err(env::VarError::NotPresent) => return self,
-            Err(env::VarError::NotUnicode(_)) => panic!("env var {} contains non-UTF-8 value", ENV),
+            Err(env::VarError::NotUnicode(_)) => panic!("env var {ENV} contains non-UTF-8 value"),
         };
         for dir in directives.split(',') {
             let mut iter = dir.splitn(2, '=');

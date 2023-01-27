@@ -28,7 +28,7 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use Error::*;
         match self {
-            CreateDirectory(e) => write!(f, "couldn't create directory for DB: {}", e),
+            CreateDirectory(e) => write!(f, "couldn't create directory for DB: {e}"),
             Mdbx(e) => e.fmt(f),
         }
     }

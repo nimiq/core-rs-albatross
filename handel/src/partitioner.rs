@@ -109,7 +109,7 @@ impl Partitioner for BinomialPartitioner {
         for contribution in contributions.iter().skip(1) {
             combined
                 .combine(contribution)
-                .unwrap_or_else(|e| panic!("Failed to combine contributions: {}", e));
+                .unwrap_or_else(|e| panic!("Failed to combine contributions: {e}"));
         }
 
         Some(combined)

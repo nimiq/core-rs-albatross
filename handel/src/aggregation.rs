@@ -126,7 +126,7 @@ impl<
         let level = self
             .levels
             .get(level)
-            .unwrap_or_else(|| panic!("Attempted to start invalid level {}", level));
+            .unwrap_or_else(|| panic!("Attempted to start invalid level {level}"));
         trace!("Starting level {}: Peers: {:?}", level.id, level.peer_ids);
 
         // Try to Start the level
@@ -162,12 +162,10 @@ impl<
 
     /// Check if a level was completed TODO: remove contribution parameter as it is not used at all.
     fn check_completed_level(&self, _contribution: P::Contribution, level: usize) {
-        let level = self.levels.get(level).unwrap_or_else(|| {
-            panic!(
-                "Attempted to check completeness of invalid level: {}",
-                level
-            )
-        });
+        let level = self
+            .levels
+            .get(level)
+            .unwrap_or_else(|| panic!("Attempted to check completeness of invalid level: {level}"));
 
         // check if level already is completed
         {
@@ -216,10 +214,7 @@ impl<
 
             // if there is an aggregate contribution for given level i send it out to the peers of that level.
             if let Some(multisig) = combined {
-                let level = self
-                    .levels
-                    .get(i)
-                    .unwrap_or_else(|| panic!("No level {}", i));
+                let level = self.levels.get(i).unwrap_or_else(|| panic!("No level {i}"));
                 if level.update_signature_to_send(&multisig.clone()) {
                     // XXX Do this without cloning
                     self.send_update(multisig, level, self.config.peer_count);

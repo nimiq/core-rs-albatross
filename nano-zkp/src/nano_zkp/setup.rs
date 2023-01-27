@@ -64,8 +64,8 @@ impl NanoZKP {
         let proving_keys = path.join("proving_keys");
 
         for i in 0..5 {
-            if !verifying_keys.join(format!("pk_tree_{}.bin", i)).exists()
-                || (prover_active && !proving_keys.join(format!("pk_tree_{}.bin", i)).exists())
+            if !verifying_keys.join(format!("pk_tree_{i}.bin")).exists()
+                || (prover_active && !proving_keys.join(format!("pk_tree_{i}.bin")).exists())
             {
                 return false;
             }
@@ -127,7 +127,7 @@ impl NanoZKP {
         let mut file = File::open(
             dir_path
                 .join("verifying_keys")
-                .join(format!("{}.bin", vk_file)),
+                .join(format!("{vk_file}.bin")),
         )?;
 
         let vk_child = VerifyingKey::deserialize_unchecked(&mut file)?;
@@ -185,7 +185,7 @@ impl NanoZKP {
         let mut file = File::open(
             dir_path
                 .join("verifying_keys")
-                .join(format!("{}.bin", vk_file)),
+                .join(format!("{vk_file}.bin")),
         )?;
 
         let vk_child = VerifyingKey::deserialize_unchecked(&mut file)?;
@@ -446,7 +446,7 @@ impl NanoZKP {
             DirBuilder::new().create(&proving_keys)?;
         }
 
-        let mut file = File::create(proving_keys.join(format!("{}.bin", name)))?;
+        let mut file = File::create(proving_keys.join(format!("{name}.bin")))?;
 
         pk.serialize_unchecked(&mut file)?;
 
@@ -457,7 +457,7 @@ impl NanoZKP {
             DirBuilder::new().create(&verifying_keys)?;
         }
 
-        let mut file = File::create(verifying_keys.join(format!("{}.bin", name)))?;
+        let mut file = File::create(verifying_keys.join(format!("{name}.bin")))?;
 
         vk.serialize_unchecked(&mut file)?;
 

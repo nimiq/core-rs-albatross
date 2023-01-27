@@ -95,10 +95,7 @@ impl<P: Partitioner, C: AggregatableContribution> ReplaceStore<P, C> {
             //     .unwrap_or_else(|e| trace!("check_merge: combining contributions failed: {}", e));
 
             let individual_verified = self.individual_verified.get(level).unwrap_or_else(|| {
-                panic!(
-                    "Individual verified contributions BitSet is missing for level {}",
-                    level
-                )
+                panic!("Individual verified contributions BitSet is missing for level {level}")
             });
 
             // the bits set here are verified individual signatures that can be added to `contribution`
@@ -117,20 +114,17 @@ impl<P: Partitioner, C: AggregatableContribution> ReplaceStore<P, C> {
                         .individual_contributions
                         .get(level)
                         .unwrap_or_else(|| {
-                            panic!("Individual contribution missing for level {}", level)
+                            panic!("Individual contribution missing for level {level}")
                         })
                         .get(&id)
                         .unwrap_or_else(|| {
-                            panic!(
-                                "Individual contributioon {} missing for level {}",
-                                id, level
-                            )
+                            panic!("Individual contributioon {id} missing for level {level}")
                         });
 
                     // merge individual signature into multisig
                     contribution
                         .combine(&individual.0)
-                        .unwrap_or_else(|e| panic!("Individual contribution from id={} can't be added to aggregate contributions: {}", id, e));
+                        .unwrap_or_else(|e| panic!("Individual contribution from id={id} can't be added to aggregate contributions: {e}"));
                 }
 
                 Some(contribution)
@@ -148,11 +142,11 @@ impl<P: Partitioner, C: AggregatableContribution> ContributionStore for ReplaceS
         if let Identity::Single(id) = identity {
             self.individual_verified
                 .get_mut(level)
-                .unwrap_or_else(|| panic!("Missing Level {}", level))
+                .unwrap_or_else(|| panic!("Missing Level {level}"))
                 .insert(id);
             self.individual_contributions
                 .get_mut(level)
-                .unwrap_or_else(|| panic!("Missing Level {}", level))
+                .unwrap_or_else(|| panic!("Missing Level {level}"))
                 .insert(id, (contribution.clone(), identity.clone()));
         }
 
@@ -179,13 +173,13 @@ impl<P: Partitioner, C: AggregatableContribution> ContributionStore for ReplaceS
     fn individual_verified(&self, level: usize) -> &BitSet {
         self.individual_verified
             .get(level)
-            .unwrap_or_else(|| panic!("Invalid level: {}", level))
+            .unwrap_or_else(|| panic!("Invalid level: {level}"))
     }
 
     fn individual_signature(&self, level: usize, peer_id: usize) -> Option<&Self::Contribution> {
         self.individual_contributions
             .get(level)
-            .unwrap_or_else(|| panic!("Invalid level: {}", level))
+            .unwrap_or_else(|| panic!("Invalid level: {level}"))
             .get(&peer_id)
             .map(|(c, _)| c)
     }

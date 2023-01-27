@@ -120,14 +120,14 @@ fn parse_field_attribs(attrs: &[syn::Attribute]) -> Option<FieldAttribute> {
                                                         && !cmp_ident(value, "u16")
                                                         && !cmp_ident(value, "u32")
                                                     {
-                                                        panic!("beserial(len_type) must be one of [u8, u16, u32], but was {:?}", value);
+                                                        panic!("beserial(len_type) must be one of [u8, u16, u32], but was {value:?}");
                                                     }
                                                     len_type =
                                                         Some(value.get_ident().cloned().unwrap());
                                                 }
                                                 Meta::NameValue(name_value) => {
                                                     if !cmp_ident(&name_value.path, "limit") {
-                                                        panic!("beserial(len_type) can only have an additional limit attribute, but was {:?}", name_value);
+                                                        panic!("beserial(len_type) can only have an additional limit attribute, but was {name_value:?}");
                                                     }
                                                     // We do have something like beserial(discriminant = 123).
                                                     // Parse discriminant.
@@ -177,7 +177,7 @@ fn parse_field_attribs(attrs: &[syn::Attribute]) -> Option<FieldAttribute> {
                                 } else if cmp_ident(path, "uvar") {
                                     return Some(FieldAttribute::Uvar);
                                 } else {
-                                    panic!("unknown flag for beserial: {:?}", path)
+                                    panic!("unknown flag for beserial: {path:?}")
                                 }
                             }
                             Meta::NameValue(ref name_value) => {
@@ -196,7 +196,7 @@ fn parse_field_attribs(attrs: &[syn::Attribute]) -> Option<FieldAttribute> {
                                         panic!("non-integer discriminant");
                                     }
                                 } else {
-                                    panic!("unknown flag for beserial: {:?}", name_value)
+                                    panic!("unknown flag for beserial: {name_value:?}")
                                 }
                             }
                         }
@@ -227,7 +227,7 @@ fn parse_enum_attribs(ast: &syn::DeriveInput) -> (Option<syn::Ident>, bool) {
                         if cmp_ident(attr_ident, "uvar") {
                             uvar = true;
                         } else {
-                            panic!("unknown flag for beserial: {:?}", attr_ident)
+                            panic!("unknown flag for beserial: {attr_ident:?}")
                         }
                     }
                 }
@@ -345,8 +345,7 @@ fn impl_serialize(ast: &syn::DeriveInput) -> TokenStream {
             } else {
                 enum_type.unwrap_or_else(|| {
                     panic!(
-                        "Serialize can not be derived for enum {} without repr(u*) or repr(i*)",
-                        name
+                        "Serialize can not be derived for enum {name} without repr(u*) or repr(i*)"
                     )
                 })
             };
@@ -423,7 +422,7 @@ fn impl_serialize(ast: &syn::DeriveInput) -> TokenStream {
                             let mut serialized_size_body_fields = Vec::<TokenStream>::new();
 
                             for (i, field) in fields.unnamed.iter().enumerate() {
-                                let ident = syn::Ident::new(&format!("f{}", i), Span::call_site());
+                                let ident = syn::Ident::new(&format!("f{i}"), Span::call_site());
                                 if let Some((serialize, serialized_size)) =
                                     impl_serialize_field(field, 0, Some(&ident))
                                 {
@@ -473,7 +472,7 @@ fn impl_serialize(ast: &syn::DeriveInput) -> TokenStream {
                 }
             }
         }
-        Data::Union(_) => panic!("Serialize can not be derived for Union {}", name),
+        Data::Union(_) => panic!("Serialize can not be derived for Union {name}"),
     };
 
     let gen = quote! {
@@ -571,8 +570,7 @@ fn impl_deserialize(ast: &syn::DeriveInput) -> TokenStream {
             } else {
                 enum_type.unwrap_or_else(|| {
                     panic!(
-                        "Deserialize can not be derived for enum {} without repr(u*) or repr(i*)",
-                        name
+                        "Deserialize can not be derived for enum {name} without repr(u*) or repr(i*)"
                     )
                 })
             };
@@ -703,7 +701,7 @@ fn impl_deserialize(ast: &syn::DeriveInput) -> TokenStream {
                 });
             }
         }
-        Data::Union(_) => panic!("Deserialize can not be derived for Union {}", name),
+        Data::Union(_) => panic!("Deserialize can not be derived for Union {name}"),
     };
 
     let gen = quote! {

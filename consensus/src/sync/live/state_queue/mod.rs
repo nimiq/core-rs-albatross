@@ -70,7 +70,7 @@ pub enum ResponseChunk {
 impl Display for ResponseChunk {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ResponseChunk::Chunk(chunk) => write!(f, "ResponseChunk::Chunk({})", chunk),
+            ResponseChunk::Chunk(chunk) => write!(f, "ResponseChunk::Chunk({chunk})"),
             ResponseChunk::IncompleteState => {
                 write!(f, "ResponseChunk::IncompleteState")
             }

@@ -83,10 +83,7 @@ impl MockNetwork {
 
             // Insert out peer map into global peer maps table
             if hub.peer_maps.insert(address, peers.clone()).is_some() {
-                panic!(
-                    "address/peer_id of MockNetwork must be unique: address={}",
-                    address
-                );
+                panic!("address/peer_id of MockNetwork must be unique: address={address}");
             }
 
             // Insert our is_connected bool into the hub

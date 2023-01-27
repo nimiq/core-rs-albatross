@@ -32,10 +32,10 @@ fn main() {
     let (initial_pks, initial_header_hash, _, _, _) = create_test_blocks(0);
 
     // Get final random parameters.
-    let (final_pks, final_header_hash, _, _, _) = create_test_blocks(number_epochs as u64);
+    let (final_pks, final_header_hash, _, _, _) = create_test_blocks(number_epochs);
 
     // Load the proof from file.
-    let mut file = File::open(format!("proofs/proof_epoch_{}.bin", number_epochs)).unwrap();
+    let mut file = File::open(format!("proofs/proof_epoch_{number_epochs}.bin")).unwrap();
 
     let proof = Proof::deserialize_unchecked(&mut file).unwrap();
 
@@ -56,7 +56,7 @@ fn main() {
     )
     .unwrap();
 
-    println!("Proof verification finished. It returned {}.", result);
+    println!("Proof verification finished. It returned {result}.");
 
     println!("====== Proof verification for Nano Sync finished ======");
     println!("Total time elapsed: {:?}", start.elapsed());

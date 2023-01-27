@@ -304,9 +304,7 @@ mod tests {
                         Node::Store(index) => mmr.store.get(*index).unwrap(),
                         Node::Hash(h) => h.clone(),
                     },
-                    "Proof node {} should be {:?}",
-                    i,
-                    node
+                    "Proof node {i} should be {node:?}"
                 );
             }
 
@@ -512,9 +510,7 @@ mod tests {
                         Node::Store(index) => mmr.store.get(*index).unwrap(),
                         Node::Hash(h) => h.clone(),
                     },
-                    "Proof node {} should be {:?}",
-                    i,
-                    node
+                    "Proof node {i} should be {node:?}"
                 );
             }
 

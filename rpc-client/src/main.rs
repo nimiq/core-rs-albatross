@@ -134,7 +134,7 @@ async fn run_app(opt: Opt) -> Result<(), Error> {
 async fn main() {
     if let Err(e) = dotenv::dotenv() {
         if !e.not_found() {
-            panic!("could not read .env file: {}", e);
+            panic!("could not read .env file: {e}");
         }
     }
     tracing_subscriber::fmt()
@@ -142,7 +142,7 @@ async fn main() {
         .init();
 
     if let Err(e) = run_app(Opt::parse()).await {
-        eprintln!("Error: {}", e);
+        eprintln!("Error: {e}");
         std::process::exit(1);
     }
 }

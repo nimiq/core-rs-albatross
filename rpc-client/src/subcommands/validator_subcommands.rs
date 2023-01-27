@@ -161,7 +161,7 @@ impl HandleSubcommand for ValidatorCommand {
                     .validator
                     .set_automatic_reactivation(automatic_reactivate)
                     .await?;
-                println!("Auto reactivate set to {}", automatic_reactivate);
+                println!("Auto reactivate set to {automatic_reactivate}");
             }
 
             ValidatorCommand::CreateNewValidator {
@@ -187,7 +187,7 @@ impl HandleSubcommand for ValidatorCommand {
                             tx_commons.validity_start_height,
                         )
                         .await?;
-                    println!("{:#?}", tx);
+                    println!("{tx:#?}");
                 } else {
                     let txid = client
                         .consensus
@@ -202,7 +202,7 @@ impl HandleSubcommand for ValidatorCommand {
                             tx_commons.validity_start_height,
                         )
                         .await?;
-                    println!("{:#?}", txid);
+                    println!("{txid:#?}");
                 }
             }
 
@@ -229,7 +229,7 @@ impl HandleSubcommand for ValidatorCommand {
                             tx_commons.validity_start_height,
                         )
                         .await?;
-                    println!("{:#?}", tx);
+                    println!("{tx:#?}");
                 } else {
                     let txid = client
                         .consensus
@@ -244,7 +244,7 @@ impl HandleSubcommand for ValidatorCommand {
                             tx_commons.validity_start_height,
                         )
                         .await?;
-                    println!("{:#?}", txid);
+                    println!("{txid:#?}");
                 }
             }
 
@@ -265,7 +265,7 @@ impl HandleSubcommand for ValidatorCommand {
                             tx_commons.validity_start_height,
                         )
                         .await?;
-                    println!("{:#?}", tx);
+                    println!("{tx:#?}");
                 } else {
                     let txid = client
                         .consensus
@@ -277,7 +277,7 @@ impl HandleSubcommand for ValidatorCommand {
                             tx_commons.validity_start_height,
                         )
                         .await?;
-                    println!("{:#?}", txid);
+                    println!("{txid:#?}");
                 }
             }
 
@@ -298,7 +298,7 @@ impl HandleSubcommand for ValidatorCommand {
                             tx_commons.validity_start_height,
                         )
                         .await?;
-                    println!("{:#?}", tx);
+                    println!("{tx:#?}");
                 } else {
                     let txid = client
                         .consensus
@@ -310,7 +310,7 @@ impl HandleSubcommand for ValidatorCommand {
                             tx_commons.validity_start_height,
                         )
                         .await?;
-                    println!("{:#?}", txid);
+                    println!("{txid:#?}");
                 }
             }
 
@@ -331,7 +331,7 @@ impl HandleSubcommand for ValidatorCommand {
                             tx_commons.validity_start_height,
                         )
                         .await?;
-                    println!("{:#?}", tx);
+                    println!("{tx:#?}");
                 } else {
                     let txid = client
                         .consensus
@@ -343,7 +343,7 @@ impl HandleSubcommand for ValidatorCommand {
                             tx_commons.validity_start_height,
                         )
                         .await?;
-                    println!("{:#?}", txid);
+                    println!("{txid:#?}");
                 }
             }
 
@@ -363,7 +363,7 @@ impl HandleSubcommand for ValidatorCommand {
                             tx_commons.common_tx_fields.validity_start_height,
                         )
                         .await?;
-                    println!("{:#?}", tx);
+                    println!("{tx:#?}");
                 } else {
                     let txid = client
                         .consensus
@@ -375,7 +375,7 @@ impl HandleSubcommand for ValidatorCommand {
                             tx_commons.common_tx_fields.validity_start_height,
                         )
                         .await?;
-                    println!("{:#?}", txid);
+                    println!("{txid:#?}");
                 }
             }
         }

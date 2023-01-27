@@ -72,8 +72,8 @@ impl Default for ValidityStartHeight {
 impl Display for ValidityStartHeight {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
-            Self::Absolute(n) => write!(f, "{}", n),
-            Self::Relative(n) => write!(f, "+{}", n),
+            Self::Absolute(n) => write!(f, "{n}"),
+            Self::Relative(n) => write!(f, "+{n}"),
         }
     }
 }
@@ -946,7 +946,7 @@ impl ZKPState {
         let latest_proof = zkp_state
             .latest_proof
             .as_ref()
-            .map(|latest_proof| format!("{:?}", latest_proof));
+            .map(|latest_proof| format!("{latest_proof:?}"));
         Self {
             latest_header_hash: zkp_state.latest_header_hash.clone(),
             latest_block_number: zkp_state.latest_block_number,

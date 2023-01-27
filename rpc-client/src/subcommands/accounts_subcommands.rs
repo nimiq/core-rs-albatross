@@ -124,7 +124,7 @@ impl HandleSubcommand for AccountCommand {
             }
             AccountCommand::Import { password, key_data } => {
                 let address = client.wallet.import_raw_key(key_data, password).await?;
-                println!("{:#?}", address);
+                println!("{address:#?}");
             }
             AccountCommand::IsImported { address } => {
                 println!("{:#?}", client.wallet.is_account_imported(address).await?);

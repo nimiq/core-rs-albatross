@@ -194,7 +194,7 @@ impl HandleSubcommand for BlockchainCommand {
                         .get_latest_block(Some(include_transactions))
                         .await
                 }?;
-                println!("{:#?}", block)
+                println!("{block:#?}")
             }
             BlockchainCommand::BlockNumber {} => {
                 println!("{:#?}", client.blockchain.get_block_number().await?)
@@ -333,13 +333,13 @@ impl HandleSubcommand for BlockchainCommand {
                         .await?;
 
                     while let Some(block) = stream.next().await {
-                        println!("{:#?}", block);
+                        println!("{block:#?}");
                     }
                 } else {
                     let mut stream = client.blockchain.subscribe_for_head_block_hash().await?;
 
                     while let Some(block_hash) = stream.next().await {
-                        println!("{:#?}", block_hash);
+                        println!("{block_hash:#?}");
                     }
                 }
             }
@@ -349,7 +349,7 @@ impl HandleSubcommand for BlockchainCommand {
                     .subscribe_for_validator_election_by_address(address)
                     .await?;
                 while let Some(validator) = stream.next().await {
-                    println!("{:#?}", validator);
+                    println!("{validator:#?}");
                 }
             }
             BlockchainCommand::FollowLogsOfAddressesAndTypes {
@@ -362,7 +362,7 @@ impl HandleSubcommand for BlockchainCommand {
                     .await?;
 
                 while let Some(blocklog) = stream.next().await {
-                    println!("{:#?}", blocklog);
+                    println!("{blocklog:#?}");
                 }
             }
         }

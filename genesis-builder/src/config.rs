@@ -72,7 +72,7 @@ where
     D: Deserializer<'de>,
 {
     let s: String = Deserialize::deserialize(deserializer)?;
-    Address::from_user_friendly_address(&s).map_err(|e| Error::custom(format!("{:?}", e)))
+    Address::from_user_friendly_address(&s).map_err(|e| Error::custom(format!("{e:?}")))
 }
 
 #[allow(dead_code)]
@@ -83,8 +83,7 @@ where
     let opt: Option<String> = Deserialize::deserialize(deserializer)?;
     if let Some(s) = opt {
         Ok(Some(
-            Address::from_user_friendly_address(&s)
-                .map_err(|e| Error::custom(format!("{:?}", e)))?,
+            Address::from_user_friendly_address(&s).map_err(|e| Error::custom(format!("{e:?}")))?,
         ))
     } else {
         Ok(None)
@@ -127,7 +126,7 @@ where
     if let Some(s) = opt {
         Ok(Some(
             OffsetDateTime::parse(&s, &time::format_description::well_known::Rfc3339)
-                .map_err(|e| Error::custom(format!("{:?}", e)))?,
+                .map_err(|e| Error::custom(format!("{e:?}")))?,
         ))
     } else {
         Ok(None)

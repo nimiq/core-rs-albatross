@@ -208,7 +208,7 @@ impl Blockchain {
                 let batch_info = match batch_info {
                     Ok(batch_info) => batch_info,
                     Err(e) => {
-                        panic!("Failed to revert - {:?}", e);
+                        panic!("Failed to revert - {e:?}");
                     }
                 };
 

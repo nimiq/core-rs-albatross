@@ -30,11 +30,11 @@ fn main() {
             .generate(env)
             .unwrap();
 
-        println!("Genesis Block: {}", hash);
-        println!("{:#?}", block);
+        println!("Genesis Block: {hash}");
+        println!("{block:#?}");
         println!();
         println!("Genesis Accounts:");
-        println!("{:#?}", accounts);
+        println!("{accounts:#?}");
     } else {
         usage(args);
     }

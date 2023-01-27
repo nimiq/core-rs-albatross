@@ -9,11 +9,10 @@ use nimiq_hash::Blake2bHash;
 fn write_genesis_rs(directory: &Path, name: &str, genesis_hash: &Blake2bHash) {
     let genesis_rs = format!(
         r#"GenesisData {{
-            block: include_bytes!(concat!(env!("OUT_DIR"), "/genesis/{}/block.dat")),
-            hash: "{}".into(),
-            accounts: include_bytes!(concat!(env!("OUT_DIR"), "/genesis/{}/accounts.dat")),
+            block: include_bytes!(concat!(env!("OUT_DIR"), "/genesis/{name}/block.dat")),
+            hash: "{genesis_hash}".into(),
+            accounts: include_bytes!(concat!(env!("OUT_DIR"), "/genesis/{name}/accounts.dat")),
     }}"#,
-        name, genesis_hash, name,
     );
     log::debug!("Writing genesis source code: {}", &genesis_rs);
     fs::write(directory.join("genesis.rs"), genesis_rs.as_bytes()).unwrap();
@@ -25,7 +24,7 @@ fn generate_albatross(name: &str, out_dir: &Path, src_dir: &Path) {
     let directory = out_dir.join(name);
     fs::create_dir_all(&directory).unwrap();
 
-    let genesis_config = src_dir.join(format!("{}.toml", name));
+    let genesis_config = src_dir.join(format!("{name}.toml"));
     log::info!("genesis source file: {}", genesis_config.display());
 
     let env = VolatileEnvironment::new(10).expect("Could not open a volatile database");

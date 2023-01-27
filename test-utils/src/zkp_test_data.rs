@@ -37,8 +37,7 @@ pub fn zkp_test_exe() -> std::path::PathBuf {
 
     assert!(
         path.exists(),
-        "Run `cargo test --all-features` to build the test prover binary at {:?}",
-        path
+        "Run `cargo test --all-features` to build the test prover binary at {path:?}"
     );
     path
 }

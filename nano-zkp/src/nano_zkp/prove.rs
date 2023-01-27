@@ -103,7 +103,7 @@ impl NanoZKP {
         #[allow(clippy::needless_range_loop)]
         for i in 0..32 {
             current_proof += 1;
-            if proof_caching && proofs.join(format!("pk_tree_5_{}.bin", i)).exists() {
+            if proof_caching && proofs.join(format!("pk_tree_5_{i}.bin")).exists() {
                 continue;
             }
 
@@ -130,7 +130,7 @@ impl NanoZKP {
         // Start generating proofs for PKTree level 4.
         for i in 0..16 {
             current_proof += 1;
-            if proof_caching && proofs.join(format!("pk_tree_4_{}.bin", i)).exists() {
+            if proof_caching && proofs.join(format!("pk_tree_4_{i}.bin")).exists() {
                 continue;
             }
 
@@ -158,7 +158,7 @@ impl NanoZKP {
         // Start generating proofs for PKTree level 3.
         for i in 0..8 {
             current_proof += 1;
-            if proof_caching && proofs.join(format!("pk_tree_3_{}.bin", i)).exists() {
+            if proof_caching && proofs.join(format!("pk_tree_3_{i}.bin")).exists() {
                 continue;
             }
 
@@ -186,7 +186,7 @@ impl NanoZKP {
         // Start generating proofs for PKTree level 2.
         for i in 0..4 {
             current_proof += 1;
-            if proof_caching && proofs.join(format!("pk_tree_2_{}.bin", i)).exists() {
+            if proof_caching && proofs.join(format!("pk_tree_2_{i}.bin")).exists() {
                 continue;
             }
 
@@ -214,7 +214,7 @@ impl NanoZKP {
         // Start generating proofs for PKTree level 1.
         for i in 0..2 {
             current_proof += 1;
-            if proof_caching && proofs.join(format!("pk_tree_1_{}.bin", i)).exists() {
+            if proof_caching && proofs.join(format!("pk_tree_1_{i}.bin")).exists() {
                 continue;
             }
 
@@ -363,7 +363,7 @@ impl NanoZKP {
         dir_path: &Path,
     ) -> Result<(), NanoZKPError> {
         // Load the proving key from file.
-        let mut file = File::open(dir_path.join("proving_keys").join(format!("{}.bin", name)))?;
+        let mut file = File::open(dir_path.join("proving_keys").join(format!("{name}.bin")))?;
 
         let proving_key = ProvingKey::deserialize_unchecked(&mut file)?;
 
@@ -415,11 +415,7 @@ impl NanoZKP {
         // Optionally verify the proof.
         if debug_mode {
             // Load the proving key from file.
-            let mut file = File::open(
-                dir_path
-                    .join("verifying_keys")
-                    .join(format!("{}.bin", name)),
-            )?;
+            let mut file = File::open(dir_path.join("verifying_keys").join(format!("{name}.bin")))?;
 
             let verifying_key = VerifyingKey::deserialize_unchecked(&mut file)?;
 
@@ -462,26 +458,26 @@ impl NanoZKP {
         let verifying_keys = dir_path.join("verifying_keys");
         let proofs = dir_path.join("proofs");
         // Load the proving key from file.
-        let mut file = File::open(proving_keys.join(format!("{}.bin", name)))?;
+        let mut file = File::open(proving_keys.join(format!("{name}.bin")))?;
 
         let proving_key = ProvingKey::deserialize_unchecked(&mut file)?;
 
         // Load the verifying key from file.
-        let mut file = File::open(verifying_keys.join(format!("{}.bin", vk_file)))?;
+        let mut file = File::open(verifying_keys.join(format!("{vk_file}.bin")))?;
 
         let vk_child = VerifyingKey::deserialize_unchecked(&mut file)?;
 
         // Load the left proof from file.
         let left_position = 2 * position;
 
-        let mut file = File::open(proofs.join(format!("{}_{}.bin", vk_file, left_position)))?;
+        let mut file = File::open(proofs.join(format!("{vk_file}_{left_position}.bin")))?;
 
         let left_proof = Proof::deserialize_unchecked(&mut file)?;
 
         // Load the right proof from file.
         let right_position = 2 * position + 1;
 
-        let mut file = File::open(proofs.join(format!("{}_{}.bin", vk_file, right_position)))?;
+        let mut file = File::open(proofs.join(format!("{vk_file}_{right_position}.bin")))?;
 
         let right_proof = Proof::deserialize_unchecked(&mut file)?;
 
@@ -554,7 +550,7 @@ impl NanoZKP {
         // Optionally verify the proof.
         if debug_mode {
             // Load the proving key from file.
-            let mut file = File::open(verifying_keys.join(format!("{}.bin", name)))?;
+            let mut file = File::open(verifying_keys.join(format!("{name}.bin")))?;
 
             let verifying_key = VerifyingKey::deserialize_unchecked(&mut file)?;
 
@@ -600,26 +596,26 @@ impl NanoZKP {
         let proofs = dir_path.join("proofs");
 
         // Load the proving key from file.
-        let mut file = File::open(proving_keys.join(format!("{}.bin", name)))?;
+        let mut file = File::open(proving_keys.join(format!("{name}.bin")))?;
 
         let proving_key = ProvingKey::deserialize_unchecked(&mut file)?;
 
         // Load the verifying key from file.
-        let mut file = File::open(verifying_keys.join(format!("{}.bin", vk_file)))?;
+        let mut file = File::open(verifying_keys.join(format!("{vk_file}.bin")))?;
 
         let vk_child = VerifyingKey::deserialize_unchecked(&mut file)?;
 
         // Load the left proof from file.
         let left_position = 2 * position;
 
-        let mut file = File::open(proofs.join(format!("{}_{}.bin", vk_file, left_position)))?;
+        let mut file = File::open(proofs.join(format!("{vk_file}_{left_position}.bin")))?;
 
         let left_proof = Proof::deserialize_unchecked(&mut file)?;
 
         // Load the right proof from file.
         let right_position = 2 * position + 1;
 
-        let mut file = File::open(proofs.join(format!("{}_{}.bin", vk_file, right_position)))?;
+        let mut file = File::open(proofs.join(format!("{vk_file}_{right_position}.bin")))?;
 
         let right_proof = Proof::deserialize_unchecked(&mut file)?;
 
@@ -686,7 +682,7 @@ impl NanoZKP {
         // Optionally verify the proof.
         if debug_mode {
             // Load the proving key from file.
-            let mut file = File::open(verifying_keys.join(format!("{}.bin", name)))?;
+            let mut file = File::open(verifying_keys.join(format!("{name}.bin")))?;
 
             let verifying_key = VerifyingKey::deserialize_unchecked(&mut file)?;
 
@@ -1112,10 +1108,10 @@ impl NanoZKP {
 
         let suffix = match number {
             None => "".to_string(),
-            Some(n) => format!("_{}", n),
+            Some(n) => format!("_{n}"),
         };
 
-        let mut file = File::create(proofs.join(format!("{}{}.bin", name, suffix)))?;
+        let mut file = File::create(proofs.join(format!("{name}{suffix}.bin")))?;
 
         pk.serialize_unchecked(&mut file)?;
 

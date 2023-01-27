@@ -408,7 +408,7 @@ mod tests {
 
         match store.get_chain_info_at(0, false) {
             Err(e) => {
-                assert!(true, "Error getting chain info: {}", e)
+                assert!(true, "Error getting chain info: {e}")
             }
             Ok(info) => {
                 assert!(info.on_main_chain);
@@ -425,7 +425,7 @@ mod tests {
 
         match store.get_chain_info_at(0, false) {
             Err(e) => {
-                assert!(true, "Error getting chain info: {}", e)
+                assert!(true, "Error getting chain info: {e}")
             }
             Ok(info) => {
                 assert!(info.on_main_chain);

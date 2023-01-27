@@ -92,7 +92,7 @@ impl TokioTaskMetrics {
         if let Some(gauge) = self.metric_gauges.get(&name) {
             gauge.set(value);
         } else {
-            panic!("Unexpected metric name: {}", name);
+            panic!("Unexpected metric name: {name}");
         }
     }
 

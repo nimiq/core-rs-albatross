@@ -129,7 +129,7 @@ fn main() {
     exit(match run_app() {
         Ok(_) => 0,
         Err(e) => {
-            eprintln!("Error: {}", e);
+            eprintln!("Error: {e}");
             1
         }
     });

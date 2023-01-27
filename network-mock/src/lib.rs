@@ -80,7 +80,7 @@ pub mod tests {
         if let Some(Ok(NetworkEvent::PeerJoined(peer_id))) = events.next().await {
             assert_eq!(peer_id, expected_peer_id);
         } else {
-            panic!("Expected PeerJoined event with id={}", expected_peer_id);
+            panic!("Expected PeerJoined event with id={expected_peer_id}");
         }
     }
 
@@ -91,7 +91,7 @@ pub mod tests {
         if let Some(Ok(NetworkEvent::PeerLeft(peer_id))) = events.next().await {
             assert_eq!(peer_id, expected_peer_id);
         } else {
-            panic!("Expected PeerLeft event with id={}", expected_peer_id);
+            panic!("Expected PeerLeft event with id={expected_peer_id}");
         }
     }
 

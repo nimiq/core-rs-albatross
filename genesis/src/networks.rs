@@ -68,7 +68,7 @@ impl NetworkInfo {
     pub fn from_network_id(network_id: NetworkId) -> &'static Self {
         NETWORK_MAP
             .get(&network_id)
-            .unwrap_or_else(|| panic!("No such network ID: {}", network_id))
+            .unwrap_or_else(|| panic!("No such network ID: {network_id}"))
     }
 }
 

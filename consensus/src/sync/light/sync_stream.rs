@@ -438,7 +438,7 @@ mod tests {
                     // Verify the peer was removed
                     assert_eq!(sync.peer_requests.len(), 0);
                 }
-                res => panic!("Unexpected MacroSyncReturn: {:?}", res),
+                res => panic!("Unexpected MacroSyncReturn: {res:?}"),
             }
         }
 
@@ -495,7 +495,7 @@ mod tests {
                 Some(MacroSyncReturn::Good(_)) => {
                     assert_eq!(chain1.read().head(), chain2.read().head());
                 }
-                res => panic!("Unexpected HistorySyncReturn: {:?}", res),
+                res => panic!("Unexpected HistorySyncReturn: {res:?}"),
             }
         }
 
@@ -519,7 +519,7 @@ mod tests {
             if let BlockchainProxy::Full(ref chain2) = chain2 {
                 produce_macro_blocks_with_txns(
                     &producer,
-                    &chain2,
+                    chain2,
                     Policy::batches_per_epoch() as usize,
                     1,
                     0,
@@ -567,7 +567,7 @@ mod tests {
                 Some(MacroSyncReturn::Good(_)) => {
                     assert_eq!(chain1.read().head(), chain2.read().head());
                 }
-                res => panic!("Unexpected HistorySyncReturn: {:?}", res),
+                res => panic!("Unexpected HistorySyncReturn: {res:?}"),
             }
         }
 
@@ -588,7 +588,7 @@ mod tests {
             if let BlockchainProxy::Full(ref chain2) = chain2 {
                 produce_macro_blocks_with_txns(
                     &producer,
-                    &chain2,
+                    chain2,
                     (Policy::batches_per_epoch() + 1) as usize,
                     1,
                     0,
@@ -639,7 +639,7 @@ mod tests {
                 Some(MacroSyncReturn::Good(_)) => {
                     assert_eq!(chain1.read().head(), chain2.read().head());
                 }
-                res => panic!("Unexpected HistorySyncReturn: {:?}", res),
+                res => panic!("Unexpected HistorySyncReturn: {res:?}"),
             }
         }
 
@@ -659,7 +659,7 @@ mod tests {
             let num_batches = (Policy::batches_per_epoch() - 1) as usize;
             let producer = BlockProducer::new(signing_key(), voting_key());
             if let BlockchainProxy::Full(ref chain2) = chain2 {
-                produce_macro_blocks_with_txns(&producer, &chain2, num_batches, 1, 0);
+                produce_macro_blocks_with_txns(&producer, chain2, num_batches, 1, 0);
             }
             assert_eq!(
                 chain2.read().block_number(),
@@ -706,7 +706,7 @@ mod tests {
                 Some(MacroSyncReturn::Good(_)) => {
                     assert_eq!(chain1.read().head(), chain2.read().head());
                 }
-                res => panic!("Unexpected HistorySyncReturn: {:?}", res),
+                res => panic!("Unexpected HistorySyncReturn: {res:?}"),
             }
         }
 
@@ -728,7 +728,7 @@ mod tests {
             if let BlockchainProxy::Full(ref chain2) = chain2 {
                 produce_macro_blocks_with_txns(
                     &producer,
-                    &chain2,
+                    chain2,
                     Policy::batches_per_epoch() as usize * (num_extra_epochs + 2) as usize,
                     1,
                     0,
@@ -741,7 +741,7 @@ mod tests {
             if let BlockchainProxy::Full(ref chain1) = chain1 {
                 let block_to_delete = chain2
                     .read()
-                    .get_block_at(Policy::blocks_per_epoch() as u32, true)
+                    .get_block_at(Policy::blocks_per_epoch(), true)
                     .unwrap();
 
                 assert_eq!(
@@ -753,7 +753,7 @@ mod tests {
                         chain1.upgradable_read(),
                         chain2
                             .read()
-                            .get_block_at(Policy::blocks_per_epoch() as u32 * 2, true)
+                            .get_block_at(Policy::blocks_per_epoch() * 2, true)
                             .unwrap(),
                     ),
                     Ok(PushResult::Extended),
@@ -810,7 +810,7 @@ mod tests {
                 Some(MacroSyncReturn::Good(_)) => {
                     assert_eq!(chain1.read().head(), chain2.read().head());
                 }
-                res => panic!("Unexpected HistorySyncReturn: {:?}", res),
+                res => panic!("Unexpected HistorySyncReturn: {res:?}"),
             }
 
             assert_eq!(

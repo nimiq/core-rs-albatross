@@ -1699,10 +1699,10 @@ mod tests {
 
         trie.put_chunk(
             &mut txn,
-            key_3.clone(),
+            key_3,
             TrieChunk::new(
                 Some(key_1.clone()),
-                vec![Item::new(key_2.clone(), vec![99])],
+                vec![Item::new(key_2, vec![99])],
                 TrieProof::new(vec![proof_value_2.clone(), proof_root.clone()]),
             ),
             proof_root.hash_assert(),
@@ -1713,7 +1713,7 @@ mod tests {
 
         trie.put_chunk(
             &mut txn,
-            key_1.clone(),
+            key_1,
             TrieChunk::new(
                 None,
                 Vec::new(),
@@ -1828,8 +1828,7 @@ mod tests {
 
         let start = chunk.end_key.unwrap();
         let chunk = original.get_chunk_with_proof(&txn, start.clone().., 2);
-        trie.put_chunk(&mut txn, start, chunk, hash.clone())
-            .unwrap();
+        trie.put_chunk(&mut txn, start, chunk, hash).unwrap();
         assert_eq!(trie.count_nodes(&txn), (0, 2, 2));
         assert!(trie.is_complete(&txn));
 
@@ -1854,7 +1853,7 @@ mod tests {
             .map(|i| {
                 (
                     i,
-                    MerkleRadixTrie::new_incomplete(env.clone(), &format!("copy{}", i)),
+                    MerkleRadixTrie::new_incomplete(env.clone(), &format!("copy{i}")),
                 )
             })
             .collect();
@@ -1910,7 +1909,7 @@ mod tests {
             .map(|i| {
                 (
                     i,
-                    MerkleRadixTrie::new_incomplete(env.clone(), &format!("copy{}", i)),
+                    MerkleRadixTrie::new_incomplete(env.clone(), &format!("copy{i}")),
                 )
             })
             .collect();
@@ -1965,7 +1964,7 @@ mod tests {
         let original = MerkleRadixTrie::new(env.clone(), "original");
         let tries: Vec<_> = (1..5)
             .map(|i| {
-                let trie = MerkleRadixTrie::new(env.clone(), &format!("copy{}", i));
+                let trie = MerkleRadixTrie::new(env.clone(), &format!("copy{i}"));
                 let mut txn = WriteTransaction::new(&env);
                 trie.put(&mut txn, &key_1, 80085).expect("complete trie");
                 trie.put(&mut txn, &key_2, 999).expect("complete trie");
@@ -2193,9 +2192,7 @@ mod tests {
         assert_eq!(original.count_nodes(&txn), (0, 1, 1));
         assert!(!original.is_complete(&txn));
 
-        original
-            .put_chunk(&mut txn, key_1, chunk.clone(), hash.clone())
-            .unwrap();
+        original.put_chunk(&mut txn, key_1, chunk, hash).unwrap();
         assert_eq!(original.count_nodes(&txn), (0, 2, 2));
         assert!(original.is_complete(&txn));
     }
