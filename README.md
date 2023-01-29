@@ -7,7 +7,7 @@
 [![Build Status](https://github.com/nimiq/core-rs-albatross/actions/workflows/build+test.yml/badge.svg?branch=albatross)](https://github.com/nimiq/core-rs-albatross/actions/workflows/build+test.yml?query=branch%3Aalbatross)
 [![dependency status](https://deps.rs/repo/github/nimiq/core-rs-albatross/status.svg)](https://deps.rs/repo/github/nimiq/core-rs-albatross)
 
-**[Nimiq](https://nimiq.com/)**  is a frictionless payment protocol for the web.
+**[Nimiq](https://nimiq.com/)** is a frictionless payment protocol for the web.
 
 This repository is currently under development. It contains the implementation of the Nimiq Proof-of-Stake protocol based on the [Albatross](https://arxiv.org/abs/1903.01589) consensus algorithm.
 
@@ -24,6 +24,7 @@ For more detailed information about how to connect and use the testnet network, 
 - [Usage](#usage)
 - [Configuration](#configuration)
 - [Testnet](#testnet)
+- [Docker](#docker)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -35,14 +36,13 @@ For more detailed information about how to connect and use the testnet network, 
 - [Nimiq 1.0 Developer Reference](https://nimiq-network.github.io/developer-reference/): Details of the protocol architecture.
 - [Nimiq 1.0 JavaScript implementation](https://github.com/nimiq/core-js/): Nimiq 1.0 implementation
 
-
 ## System requirements
+
 - 64-bit computing architecture.
 - File systems with sparse file support.
 - It is highly recommended to run a clock synchronization protocol such as NTP. This
   is needed for properly accept blocks according to the timestamp and it is specially
   important for validators in order to produce blocks in the expected timestamps.
-
 
 ## Installation
 
@@ -55,7 +55,6 @@ the following packages are required to be able to compile the source code:
 - `pkg-config`
 - `protobuf-compiler`
 
-
 After installing the previous packages, compiling the project is achieved through [`cargo`](https://doc.rust-lang.org/cargo/):
 
 ```bash
@@ -64,7 +63,7 @@ cd core-rs
 cargo build
 ```
 
-Note that this will build in debug mode, which is not as performant. 
+Note that this will build in debug mode, which is not as performant.
 To get the most speed out of the client, please build in release mode:
 
 ```bash
@@ -93,7 +92,7 @@ nimiq-client
 
 ### Configuration
 
-By default the client will look for a configuration file in `$HOME/.nimiq/client.toml`. 
+By default the client will look for a configuration file in `$HOME/.nimiq/client.toml`.
 In order to create this file yourself, you can use the example config file as follow:
 
 ```bash
@@ -129,6 +128,24 @@ curl -X POST -H "Content-Type: application/x-www-form-urlencoded" -d "address=NQ
 #### Becoming a validator
 
 Check [this guide](docs/becoming_validator.md) for steps on becoming a validator.
+
+## Docker (outgoing connections only)
+
+Use `docker pull ghcr.io/nimiq/core-rs-albatross:latest` to pull the latest docker image.
+Then run it:
+
+```
+mkdir data
+docker run -v $(pwd)/data:/home/nimiq/.nimiq -p 8648 -p 9200:9200 --name nimiq-rpc --rm ghcr.io/nimiq/core-rs-albatross:latest
+```
+
+Overview of exposed ports:
+| Port | Description |
+|------|--------------|
+| 8648 | RPC Port |
+| 9200 | Metrics port |
+
+As you can see, the default port (8443) for accepting connections from other nodes is not exposed, so this is an outgoing connections only container. It is intended for RPC use and metrics gathering.
 
 ## Contributing
 
