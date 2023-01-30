@@ -34,7 +34,7 @@ prometheus-client = { version = "0.18.1", optional = true}
 rand = "0.8"
 serde = { version = "1.0", features = ["derive"], optional = true }
 thiserror = "1.0"
-tokio = { version = "1.24", features = ["macros", "rt", "tracing"] }
+tokio = { version = "1.25", features = ["macros", "rt", "tracing"] }
 tokio-stream = "0.1"
 wasm-timer = "0.2"
 
@@ -79,7 +79,7 @@ libp2p = { git = "https://github.com/jsdanielh/rust-libp2p.git", default-feature
 
 [dev-dependencies]
 # In dev/testing we require more tokio features
-tokio = { version = "1.24", features = ["macros", "rt", "rt-multi-thread", "test-util", "tracing"] }
+tokio = { version = "1.25", features = ["macros", "rt", "rt-multi-thread", "test-util", "tracing"] }
 nimiq-test-log = { path = "../test-log" }
 
 [features]
