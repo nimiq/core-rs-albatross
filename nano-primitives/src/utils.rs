@@ -10,8 +10,9 @@ use ark_std::ops::MulAssign;
 use ark_std::UniformRand;
 use rand::{rngs::SmallRng, seq::SliceRandom, RngCore, SeedableRng};
 
-use nimiq_nano_primitives::{pk_tree_construct, state_commitment, MacroBlock};
 use nimiq_primitives::policy::Policy;
+
+use crate::{pk_tree_construct, state_commitment, MacroBlock};
 
 /// Takes a vector of booleans and converts it into a vector of field elements, which is the way we
 /// represent inputs to circuits (natively).

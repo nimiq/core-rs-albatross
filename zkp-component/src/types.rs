@@ -27,7 +27,7 @@ use parking_lot::RwLock;
 use std::borrow::Cow;
 use std::path::PathBuf;
 
-use nimiq_nano_zkp::NanoZKPError;
+use nimiq_nano_primitives::NanoZKPError;
 use thiserror::Error;
 
 use crate::ZKPComponent;

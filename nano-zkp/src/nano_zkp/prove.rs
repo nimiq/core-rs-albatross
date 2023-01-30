@@ -14,20 +14,21 @@ use rand::{thread_rng, CryptoRng, Rng};
 
 use nimiq_bls::pedersen::{pedersen_generator_powers, pedersen_hash};
 use nimiq_bls::utils::{byte_to_le_bits, bytes_to_bits};
-use nimiq_nano_primitives::{merkle_tree_prove, serialize_g1_mnt6, serialize_g2_mnt6};
 use nimiq_nano_primitives::{
-    pk_tree_construct, state_commitment, vk_commitment, MacroBlock, PK_TREE_BREADTH, PK_TREE_DEPTH,
+    circuits::mnt4::{
+        MacroBlockCircuit, MergerCircuit, PKTreeLeafCircuit as LeafMNT4,
+        PKTreeNodeCircuit as NodeMNT4,
+    },
+    circuits::mnt6::{
+        MacroBlockWrapperCircuit, MergerWrapperCircuit, PKTreeNodeCircuit as NodeMNT6,
+    },
+    merkle_tree_prove, pk_tree_construct, serialize_g1_mnt6, serialize_g2_mnt6, state_commitment,
+    utils::pack_inputs,
+    vk_commitment, MacroBlock, NanoZKPError, PK_TREE_BREADTH, PK_TREE_DEPTH,
 };
 use nimiq_primitives::policy::Policy;
 
-use crate::circuits::mnt4::{
-    MacroBlockCircuit, MergerCircuit, PKTreeLeafCircuit as LeafMNT4, PKTreeNodeCircuit as NodeMNT4,
-};
-use crate::circuits::mnt6::{
-    MacroBlockWrapperCircuit, MergerWrapperCircuit, PKTreeNodeCircuit as NodeMNT6,
-};
-use crate::utils::pack_inputs;
-use crate::{NanoZKP, NanoZKPError};
+use crate::{NanoZKP, ZKP_VERIFYING_KEY};
 
 impl NanoZKP {
     /// This function generates a proof for a new epoch, it uses the entire nano sync program. Note
@@ -1067,9 +1068,10 @@ impl NanoZKP {
         // Optionally verify the proof.
         if debug_mode {
             // Load the proving key from file.
-            let mut file = File::open(verifying_keys.join("merger_wrapper.bin"))?;
-
-            let verifying_key = VerifyingKey::deserialize_unchecked(&mut file)?;
+            // let mut file = File::open(verifying_keys.join("merger_wrapper.bin"))?;
+            let verifying_key_rg = ZKP_VERIFYING_KEY.read();
+            assert!(verifying_key_rg.is_some(), "Missing verifying keys! When building, make sure the verifying keys are in the default folder");
+            let verifying_key = verifying_key_rg.as_ref().unwrap();
 
             // Prepare the inputs.
             let mut inputs = vec![];
@@ -1081,11 +1083,7 @@ impl NanoZKP {
             inputs.append(&mut vk_commitment);
 
             // Verify proof.
-            assert!(Groth16::<MNT6_753>::verify(
-                &verifying_key,
-                &inputs,
-                &proof
-            )?);
+            assert!(Groth16::<MNT6_753>::verify(verifying_key, &inputs, &proof)?);
         }
 
         // Cache proof to file.

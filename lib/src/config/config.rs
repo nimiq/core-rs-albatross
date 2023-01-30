@@ -741,13 +741,8 @@ impl ClientConfigBuilder {
 
         // Configure the zk prover
         if let Some(zkp_settings) = config_file.zkp.as_ref() {
-            let mut setup_keys_path = PathBuf::from(".zkp");
-            if let Some(zkp_path) = zkp_settings.setup_keys_path.as_ref() {
-                setup_keys_path = PathBuf::from(zkp_path);
-            }
             self.zkp = Some(ZKPConfig {
                 prover_active: zkp_settings.prover_active,
-                setup_keys_path,
             });
         }
 
@@ -858,21 +853,9 @@ impl ClientConfigBuilder {
     }
 }
 
-/// Contains the configurations for the ZKP storate, verification and proof generation.
-#[derive(Debug, Clone, Builder)]
+/// Contains the configurations for the ZKP storage, verification and proof generation.
+#[derive(Debug, Clone, Builder, Default)]
 pub struct ZKPConfig {
     /// ZK Proof generation activation config.
     pub prover_active: bool,
-
-    /// ZKP prover path for verifying and proving keys.
-    pub setup_keys_path: PathBuf,
-}
-
-impl Default for ZKPConfig {
-    fn default() -> Self {
-        ZKPConfig {
-            prover_active: false,
-            setup_keys_path: PathBuf::from(".zkp"),
-        }
-    }
 }

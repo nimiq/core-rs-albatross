@@ -2,6 +2,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use ark_groth16::Proof;
+use nimiq_nano_primitives::{setup::setup, KEYS_PATH};
 use parking_lot::RwLock;
 
 use beserial::Deserialize;
@@ -9,13 +10,12 @@ use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_database::volatile::VolatileEnvironment;
-use nimiq_nano_zkp::NanoZKP;
 use nimiq_primitives::{networks::NetworkId, policy::Policy};
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     blockchain::{signing_key, voting_key},
     blockchain_with_rng::produce_macro_blocks_with_rng,
-    zkp_test_data::{get_base_seed, KEYS_PATH, ZKPROOF_SERIALIZED_IN_HEX},
+    zkp_test_data::{get_base_seed, ZKPROOF_SERIALIZED_IN_HEX},
 };
 use nimiq_utils::time::OffsetTime;
 
@@ -39,7 +39,7 @@ fn blockchain() -> Arc<RwLock<Blockchain>> {
 
 #[test(tokio::test)]
 async fn can_detect_valid_and_invalid_genesis_proof() {
-    NanoZKP::setup(get_base_seed(), Path::new(KEYS_PATH), false).unwrap();
+    setup(get_base_seed(), Path::new(KEYS_PATH), false).unwrap();
     let blockchain = BlockchainProxy::from(blockchain());
 
     let proof = ZKProof {
@@ -47,7 +47,7 @@ async fn can_detect_valid_and_invalid_genesis_proof() {
         proof: None,
     };
     assert!(
-        validate_proof(&blockchain, &proof, None, Path::new(KEYS_PATH)),
+        validate_proof(&blockchain, &proof, None),
         "The validation of a empty proof for the genesis block should succeed"
     );
 
@@ -56,14 +56,14 @@ async fn can_detect_valid_and_invalid_genesis_proof() {
         proof: Some(Proof::default()),
     };
     assert!(
-        !validate_proof(&blockchain, &proof, None, Path::new(KEYS_PATH)),
+        !validate_proof(&blockchain, &proof, None),
         "The validation of a Some() proof for a genesis block should fail"
     );
 }
 
 #[test(tokio::test)]
 async fn can_detect_invalid_proof_none_genesis_blocks() {
-    NanoZKP::setup(get_base_seed(), Path::new(KEYS_PATH), false).unwrap();
+    setup(get_base_seed(), Path::new(KEYS_PATH), false).unwrap();
     let blockchain = blockchain();
 
     let producer = BlockProducer::new(signing_key(), voting_key());
@@ -85,7 +85,7 @@ async fn can_detect_invalid_proof_none_genesis_blocks() {
     let blockchain = BlockchainProxy::from(blockchain);
 
     assert!(
-        !validate_proof(&blockchain, &zkp_proof, None, Path::new(KEYS_PATH)),
+        !validate_proof(&blockchain, &zkp_proof, None),
         "The validation of a fake proof should fail"
     );
 
@@ -95,7 +95,7 @@ async fn can_detect_invalid_proof_none_genesis_blocks() {
     };
 
     assert!(
-        !validate_proof(&blockchain, &zkp_proof, None, Path::new(KEYS_PATH)),
+        !validate_proof(&blockchain, &zkp_proof, None),
         "The validation of a empty proof for a non genesis block should fail"
     );
 
@@ -105,7 +105,7 @@ async fn can_detect_invalid_proof_none_genesis_blocks() {
     };
 
     assert!(
-        !validate_proof(&blockchain, &zkp_proof, None, Path::new(KEYS_PATH)),
+        !validate_proof(&blockchain, &zkp_proof, None),
         "The validation of a proof for a non existing block should fail"
     );
 }
@@ -113,7 +113,7 @@ async fn can_detect_invalid_proof_none_genesis_blocks() {
 #[test(tokio::test)]
 #[ignore]
 async fn can_detect_valid_proof_none_genesis_blocks() {
-    NanoZKP::setup(get_base_seed(), Path::new(KEYS_PATH), false).unwrap();
+    setup(get_base_seed(), Path::new(KEYS_PATH), false).unwrap();
     let blockchain = blockchain();
 
     let producer = BlockProducer::new(signing_key(), voting_key());
@@ -128,12 +128,7 @@ async fn can_detect_valid_proof_none_genesis_blocks() {
     let zkp_proof =
         &ZKProof::deserialize_from_vec(&hex::decode(ZKPROOF_SERIALIZED_IN_HEX).unwrap()).unwrap();
     assert!(
-        validate_proof(
-            &BlockchainProxy::from(blockchain),
-            &zkp_proof,
-            None,
-            Path::new(KEYS_PATH)
-        ),
+        validate_proof(&BlockchainProxy::from(blockchain), &zkp_proof, None,),
         "The validation of a valid proof failed"
     );
 }

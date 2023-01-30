@@ -10,14 +10,14 @@ use ark_r1cs_std::prelude::{
 };
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 
+use crate::utils::{prepare_inputs, unpack_inputs};
 use nimiq_bls::pedersen::pedersen_generators;
-use nimiq_nano_primitives::MacroBlock;
 use nimiq_primitives::policy::Policy;
 
 use crate::gadgets::mnt4::{
     MacroBlockGadget, PedersenHashGadget, SerializeGadget, StateCommitmentGadget,
 };
-use crate::utils::{prepare_inputs, unpack_inputs};
+use crate::MacroBlock;
 
 /// This is the macro block circuit. It takes as inputs an initial state commitment and final state commitment
 /// and it produces a proof that there exists a valid macro block that transforms the initial state

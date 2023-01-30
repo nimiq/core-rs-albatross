@@ -1,16 +1,12 @@
-use std::fs::File;
-use std::path::Path;
-
 use ark_crypto_primitives::SNARK;
-use ark_groth16::{Groth16, Proof, VerifyingKey};
+use ark_groth16::{Groth16, Proof};
 use ark_mnt6_753::{G2Projective as G2MNT6, MNT6_753};
-use ark_serialize::CanonicalDeserialize;
 
 use nimiq_bls::utils::bytes_to_bits;
-use nimiq_nano_primitives::{state_commitment, vk_commitment};
+use nimiq_nano_primitives::{state_commitment, utils::pack_inputs, vk_commitment, NanoZKPError};
 
-use crate::utils::pack_inputs;
-use crate::{NanoZKP, NanoZKPError};
+use crate::verifying_key::ZKP_VERIFYING_KEY;
+use crate::NanoZKP;
 
 impl NanoZKP {
     /// This function verifies a proof for the Merger Wrapper circuit, which implicitly is a proof for
@@ -36,13 +32,10 @@ impl NanoZKP {
         final_pks: Vec<G2MNT6>,
         // The SNARK proof for this circuit.
         proof: Proof<MNT6_753>,
-        // The path to where the `verifying_keys` folder is stored in.
-        path: &Path,
     ) -> Result<bool, NanoZKPError> {
-        // Load the verifying key from file.
-        let mut file = File::open(path.join("verifying_keys").join("merger_wrapper.bin"))?;
-
-        let vk = VerifyingKey::deserialize_unchecked(&mut file)?;
+        let vk_rg = ZKP_VERIFYING_KEY.read();
+        assert!(vk_rg.is_some(), "Missing verifying keys! When building, make sure the verifying keys are in the default folder");
+        let vk = vk_rg.as_ref().unwrap();
 
         // Prepare the inputs.
         let mut inputs = vec![];
@@ -62,7 +55,7 @@ impl NanoZKP {
         inputs.append(&mut pack_inputs(bytes_to_bits(&vk_commitment(vk.clone()))));
 
         // Verify proof.
-        let result = Groth16::<MNT6_753>::verify(&vk, &inputs, &proof)?;
+        let result = Groth16::<MNT6_753>::verify(vk, &inputs, &proof)?;
 
         // Return result.
         Ok(result)

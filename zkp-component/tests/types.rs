@@ -6,8 +6,8 @@ use beserial::{Deserialize, Serialize};
 use nimiq_block::MacroBlock;
 use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue};
 use nimiq_hash::Blake2bHash;
+use nimiq_nano_primitives::KEYS_PATH;
 use nimiq_primitives::policy::Policy;
-use nimiq_test_utils::zkp_test_data::KEYS_PATH;
 use nimiq_zkp_component::types::{ProofInput, ZKPState, ZKProof};
 
 #[test]

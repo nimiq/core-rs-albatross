@@ -6,7 +6,7 @@ use std::time::Instant;
 use ark_groth16::Proof;
 use ark_serialize::CanonicalSerialize;
 
-use nimiq_nano_zkp::utils::create_test_blocks;
+use nimiq_nano_primitives::utils::create_test_blocks;
 use nimiq_nano_zkp::NanoZKP;
 
 /// Generates a proof for a chain of election blocks. The random parameters generation uses always

@@ -1,6 +1,6 @@
 use std::{path::PathBuf, time::Instant};
 
-use nimiq_nano_zkp::NanoZKP;
+use nimiq_nano_primitives::setup::setup;
 use rand::thread_rng;
 
 /// Generates the parameters (proving and verifying keys) for the entire nano sync circuit.
@@ -11,7 +11,7 @@ fn main() {
     let start = Instant::now();
 
     // use the current directory
-    NanoZKP::setup(thread_rng(), &PathBuf::new(), true).unwrap();
+    setup(thread_rng(), &PathBuf::new(), true).unwrap();
 
     println!("====== Parameter generation for Nano Sync finished ======");
     println!("Total time elapsed: {:?} seconds", start.elapsed());

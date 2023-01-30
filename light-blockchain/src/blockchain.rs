@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::Arc};
+use std::sync::Arc;
 
 use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
 
@@ -43,21 +43,19 @@ pub struct LightBlockchain {
     pub notifier: BroadcastSender<BlockchainEvent>,
     /// The fork notifier processes fork events.
     pub fork_notifier: BroadcastSender<ForkEvent>,
-    /// The path to the ZKP directory needed for the verification keys.
-    pub keys_path: PathBuf,
 }
 
 /// Implements methods to start a Blockchain.
 impl LightBlockchain {
     /// Creates a new blockchain from a given network ID.
-    pub fn new(network_id: NetworkId, keys_path: PathBuf) -> Self {
+    pub fn new(network_id: NetworkId) -> Self {
         let network_info = NetworkInfo::from_network_id(network_id);
         let genesis_block = network_info.genesis_block::<Block>();
-        Self::with_genesis(network_id, genesis_block, keys_path)
+        Self::with_genesis(network_id, genesis_block)
     }
 
     /// Creates a new blockchain with a given network ID and genesis block.
-    pub fn with_genesis(network_id: NetworkId, genesis_block: Block, keys_path: PathBuf) -> Self {
+    pub fn with_genesis(network_id: NetworkId, genesis_block: Block) -> Self {
         let time = Arc::new(OffsetTime::new());
 
         let chain_info = ChainInfo::new(genesis_block.clone(), true);
@@ -80,7 +78,6 @@ impl LightBlockchain {
             chain_store,
             notifier: tx,
             fork_notifier: tx_fork,
-            keys_path,
         }
     }
 

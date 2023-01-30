@@ -5,11 +5,11 @@ use ark_r1cs_std::prelude::{AllocVar, Boolean, CondSelectGadget, CurveVar, EqGad
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 
 use nimiq_bls::pedersen::pedersen_generators;
-use nimiq_nano_primitives::{PK_TREE_BREADTH, PK_TREE_DEPTH};
 use nimiq_primitives::policy::Policy;
 
 use crate::gadgets::mnt4::{MerkleTreeGadget, PedersenHashGadget, SerializeGadget};
 use crate::utils::unpack_inputs;
+use crate::{PK_TREE_BREADTH, PK_TREE_DEPTH};
 
 /// This is the leaf subcircuit of the PKTreeCircuit. This circuit main function is to process the
 /// validator's public keys and "return" the aggregate public key for the Macro Block. At a

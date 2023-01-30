@@ -10,11 +10,11 @@ use ark_r1cs_std::ToBitsGadget;
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 
 use nimiq_bls::pedersen::pedersen_generators;
-use nimiq_nano_primitives::PK_TREE_DEPTH;
 use nimiq_primitives::policy::Policy;
 
 use crate::gadgets::mnt4::{PedersenHashGadget, SerializeGadget};
 use crate::utils::{prepare_inputs, unpack_inputs};
+use crate::PK_TREE_DEPTH;
 
 /// This is the node subcircuit of the PKTreeCircuit. See PKTreeLeafCircuit for more details.
 /// /// Its purpose it three-fold:

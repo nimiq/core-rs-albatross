@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use ark_groth16::Proof;
 use ark_mnt6_753::{G2Projective as G2MNT6, MNT6_753};
 
@@ -7,7 +5,8 @@ use nimiq_block::{Block, MacroBlock};
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_genesis::NetworkInfo;
-use nimiq_nano_zkp::{NanoZKP, NanoZKPError};
+use nimiq_nano_primitives::NanoZKPError;
+use nimiq_nano_zkp::NanoZKP;
 
 use super::types::ZKPState;
 use crate::types::*;
@@ -17,7 +16,6 @@ pub fn validate_proof(
     blockchain: &BlockchainProxy,
     proof: &ZKProof,
     election_block: Option<MacroBlock>,
-    keys_path: &Path,
 ) -> bool {
     // If it's a genesis block proof, then should have none as proof value to be valid.
     if proof.block_number == 0 && proof.proof.is_none() {
@@ -28,7 +26,7 @@ pub fn validate_proof(
     if let Ok((new_block, genesis_block, proof)) =
         get_proof_macro_blocks(blockchain, proof, election_block)
     {
-        return validate_proof_get_new_state(proof, &new_block, genesis_block, keys_path).is_ok();
+        return validate_proof_get_new_state(proof, &new_block, genesis_block).is_ok();
     }
     false
 }
@@ -70,7 +68,6 @@ pub(crate) fn validate_proof_get_new_state(
     proof: Proof<MNT6_753>,
     new_block: &MacroBlock,
     genesis_block: MacroBlock,
-    keys_path: &Path,
 ) -> Result<ZKPState, Error> {
     let genesis_pks: Vec<G2MNT6> = genesis_block
         .get_validators()
@@ -95,7 +92,6 @@ pub(crate) fn validate_proof_get_new_state(
         new_block.hash().into(),
         new_pks.clone(),
         proof.clone(),
-        keys_path,
     )? {
         return Ok(ZKPState {
             latest_pks: new_pks,

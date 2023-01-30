@@ -8,10 +8,10 @@ use ark_mnt6_753::Fr as MNT6Fr;
 use ark_r1cs_std::prelude::{AllocVar, Boolean, EqGadget};
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 
-use nimiq_nano_primitives::PK_TREE_DEPTH;
+use crate::utils::{prepare_inputs, unpack_inputs};
 use nimiq_primitives::policy::Policy;
 
-use crate::utils::{prepare_inputs, unpack_inputs};
+use crate::PK_TREE_DEPTH;
 
 /// This is the node subcircuit of the PKTreeCircuit. See PKTreeLeafCircuit for more details.
 /// Its purpose it two-fold:

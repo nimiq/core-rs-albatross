@@ -479,6 +479,4 @@ pub struct ValidatorSettings {
 pub struct ZKPSettings {
     #[serde(default)]
     pub prover_active: bool,
-    #[serde(default)]
-    pub setup_keys_path: Option<String>,
 }

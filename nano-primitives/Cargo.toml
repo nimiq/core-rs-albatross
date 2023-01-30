@@ -17,6 +17,8 @@ rayon = "^1.6"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 lazy_static = "1.4"
 beserial = { path = "../beserial", features = ["derive"] }
+rand = { version = "0.8", features = ["small_rng"] }
+thiserror = "1.0"
 
 ark-crypto-primitives = "0.3"
 ark-ec = "0.3"
@@ -24,7 +26,10 @@ ark-ff = "0.3"
 ark-groth16 = "0.3"
 ark-mnt4-753 = "0.3"
 ark-mnt6-753 = "0.3"
+ark-relations = "0.3"
+ark-r1cs-std = "0.3.1"
 ark-serialize = "0.3"
+ark-std = "0.3"
 
 nimiq-bls = { path = "../bls" }
 nimiq-hash = { path = "../hash" }
@@ -39,3 +44,6 @@ nimiq-keys = { path = "../keys" }
 nimiq-test-log = { path = "../test-log" }
 nimiq-utils = { path = "../utils" }
 nimiq-primitives = { path = "../primitives", features = ["slots"] }
+
+[features]
+zkp-prover = ["ark-crypto-primitives/r1cs", "ark-mnt4-753/r1cs", "ark-mnt6-753/r1cs", "ark-groth16/r1cs"]

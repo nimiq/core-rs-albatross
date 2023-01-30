@@ -3539,6 +3539,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "nimiq-compile-zkp-setup"
+version = "0.1.0"
+dependencies = [
+ "ark-ec",
+ "ark-groth16",
+ "ark-mnt6-753",
+ "ark-serialize",
+ "nimiq-nano-primitives",
+ "rand 0.8.5",
+ "rand_chacha 0.3.1",
+]
+
+[[package]]
 name = "nimiq-consensus"
 version = "0.1.0"
 dependencies = [
@@ -3825,6 +3838,7 @@ dependencies = [
  "nimiq-log",
  "nimiq-mempool",
  "nimiq-metrics-server",
+ "nimiq-nano-primitives",
  "nimiq-nano-zkp",
  "nimiq-network-interface",
  "nimiq-network-libp2p",
@@ -3988,7 +4002,10 @@ dependencies = [
  "ark-groth16",
  "ark-mnt4-753",
  "ark-mnt6-753",
+ "ark-r1cs-std",
+ "ark-relations",
  "ark-serialize",
+ "ark-std",
  "beserial",
  "lazy_static",
  "nimiq-block",
@@ -4003,6 +4020,7 @@ dependencies = [
  "num-traits",
  "rand 0.8.5",
  "rayon",
+ "thiserror",
  "tracing",
 ]
 
@@ -4021,10 +4039,14 @@ dependencies = [
  "ark-serialize",
  "ark-sponge",
  "ark-std",
+ "beserial",
+ "lazy_static",
  "nimiq-bls",
+ "nimiq-compile-zkp-setup",
  "nimiq-nano-primitives",
  "nimiq-primitives",
  "nimiq-test-log",
+ "parking_lot 0.12.0",
  "rand 0.8.5",
  "thiserror",
  "tracing",

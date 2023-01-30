@@ -51,7 +51,7 @@ pub enum Error {
     Serializing(#[from] beserial::SerializingError),
 
     #[error("Nano ZKP Error: {0}")]
-    NanoZKP(#[from] nimiq_nano_zkp::NanoZKPError),
+    NanoZKP(#[from] nimiq_nano_primitives::NanoZKPError),
 }
 
 impl Error {

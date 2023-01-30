@@ -66,10 +66,10 @@ mod tests {
     use ark_std::{test_rng, UniformRand};
 
     use nimiq_bls::utils::bytes_to_bits;
-    use nimiq_nano_primitives::{serialize_g1_mnt6, serialize_g2_mnt6};
     use nimiq_test_log::test;
 
     use super::*;
+    use crate::{serialize_g1_mnt6, serialize_g2_mnt6};
 
     #[test]
     fn serialization_g1_mnt6_works() {

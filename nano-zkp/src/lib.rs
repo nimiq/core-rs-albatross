@@ -1,12 +1,10 @@
 pub use nano_zkp::*;
 
-#[cfg(feature = "zkp-prover")]
-pub(crate) mod circuits;
-#[cfg(feature = "zkp-prover")]
-pub(crate) mod gadgets;
-
 pub(crate) mod nano_zkp;
-pub mod utils;
+
+pub mod verifying_key;
+
+pub use verifying_key::*;
 
 #[allow(dead_code)]
 mod poseidon;

@@ -62,6 +62,7 @@ nimiq-log = { path = "../log", optional = true }
 nimiq-mempool = { path = "../mempool", optional = true }
 nimiq-metrics-server = { path = "../metrics-server", optional = true }
 nimiq-nano-zkp = { path = "../nano-zkp", features = ["zkp-prover"] }
+nimiq-nano-primitives = { path = "../nano-primitives", features = ["zkp-prover"] }
 nimiq-network-libp2p = { path = "../network-libp2p" }
 nimiq-network-interface = { path = "../network-interface" }
 nimiq-primitives = { path = "../primitives", features = ["networks"] }

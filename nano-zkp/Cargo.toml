@@ -10,10 +10,16 @@ edition = "2021"
 categories = ["cryptography::cryptocurrencies"]
 keywords = ["nimiq", "cryptocurrency", "blockchain"]
 
+[build-dependencies]
+nimiq-compile-zkp-setup = { path = "compile-zkp-setup"}
+nimiq-nano-primitives = { path = "../nano-primitives", features = ["zkp-prover"] }
+
 [dependencies]
-thiserror = "1.0"
-rand = { version = "0.8", features = ["small_rng"] }
+beserial = { path = "../beserial", features = ["derive"]}
+lazy_static = {version = "1.4"}
 log = { package = "tracing", version = "0.1", features = ["log"] }
+rand = { version = "0.8", features = ["small_rng"] }
+thiserror = "1.0"
 
 ark-crypto-primitives = "0.3"
 ark-ec = "0.3"
@@ -30,6 +36,7 @@ ark-sponge = { git = "https://github.com/arkworks-rs/sponge" }
 nimiq-bls = { path = "../bls" }
 nimiq-nano-primitives = { path = "../nano-primitives" }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }
+parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
 
 [dev-dependencies]
 nimiq-test-log = { path = "../test-log" }

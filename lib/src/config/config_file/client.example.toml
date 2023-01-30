@@ -95,10 +95,6 @@ sync_mode = "full"
 # Default: false
 # prover_active = true
 
-# Defines the path for the proving and verifying keys folders
-# Default: ".zkp"
-# setup_keys_path = "some_folder" #defaults to .zkp folder
-
 ##############################################################################
 #
 # Configure the JSON-RPC server.

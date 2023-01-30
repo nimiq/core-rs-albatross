@@ -142,10 +142,9 @@ mod tests {
 
     use nimiq_bls::pedersen::{pedersen_generator_powers, pedersen_generators, pedersen_hash};
     use nimiq_bls::utils::{byte_from_le_bits, bytes_to_bits};
-    use nimiq_nano_primitives::{
-        merkle_tree_construct, merkle_tree_prove, merkle_tree_verify, serialize_g1_mnt6,
-    };
     use nimiq_test_log::test;
+
+    use crate::{merkle_tree_construct, merkle_tree_prove, merkle_tree_verify, serialize_g1_mnt6};
 
     use super::*;
 

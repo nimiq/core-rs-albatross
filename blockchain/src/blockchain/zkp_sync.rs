@@ -70,7 +70,6 @@ impl Blockchain {
             final_header_hash,
             final_public_keys,
             proof,
-            &this.config.keys_path,
         );
 
         if verify_result.is_err() || !verify_result.unwrap() {

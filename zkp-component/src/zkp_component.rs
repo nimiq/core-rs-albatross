@@ -1,3 +1,4 @@
+#[cfg(feature = "zkp-prover")]
 use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -117,7 +118,6 @@ pub struct ZKPComponent<N: Network> {
     proof_storage: Option<Box<dyn ProofStore>>,
     zkp_requests: Arc<Mutex<ZKPRequests<N>>>,
     zkp_events_notifier: BroadcastSender<ZKPEvent<N>>,
-    keys_path: PathBuf,
 }
 
 impl<N: Network> ZKPComponent<N> {
@@ -127,7 +127,7 @@ impl<N: Network> ZKPComponent<N> {
         executor: impl TaskExecutor + Send + 'static,
         #[cfg(feature = "zkp-prover")] is_prover_active: bool,
         #[cfg(feature = "zkp-prover")] prover_path: Option<PathBuf>,
-        keys_path: PathBuf,
+        #[cfg(feature = "zkp-prover")] keys_path: PathBuf,
         proof_storage: Option<Box<dyn ProofStore>>,
     ) -> Self {
         // Defaults zkp state to genesis.
@@ -153,7 +153,6 @@ impl<N: Network> ZKPComponent<N> {
             proof_storage,
             zkp_requests: Arc::new(Mutex::new(ZKPRequests::new(network))),
             zkp_events_notifier,
-            keys_path,
         };
 
         // Loads the proof from the db if any.
@@ -169,7 +168,7 @@ impl<N: Network> ZKPComponent<N> {
                         Arc::clone(&zkp_component.network),
                         Arc::clone(&zkp_component.zkp_state),
                         prover_path,
-                        zkp_component.keys_path.clone(),
+                        keys_path,
                     )
                     .await,
                 ),
@@ -256,8 +255,7 @@ impl<N: Network> ZKPComponent<N> {
         if new_block.block_number() <= zkp_state_lock.latest_block_number {
             return Err(Error::OutdatedProof);
         }
-        let new_zkp_state =
-            validate_proof_get_new_state(proof, &new_block, genesis_block, &self.keys_path)?;
+        let new_zkp_state = validate_proof_get_new_state(proof, &new_block, genesis_block)?;
 
         let mut zkp_state_lock = RwLockUpgradableReadGuard::upgrade(zkp_state_lock);
         *zkp_state_lock = new_zkp_state;

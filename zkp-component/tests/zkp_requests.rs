@@ -8,7 +8,7 @@ use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_database::volatile::VolatileEnvironment;
-use nimiq_nano_zkp::NanoZKP;
+use nimiq_nano_primitives::{setup::setup, KEYS_PATH};
 use nimiq_network_interface::network::Network;
 use nimiq_network_mock::MockHub;
 use nimiq_primitives::{networks::NetworkId, policy::Policy};
@@ -16,8 +16,8 @@ use nimiq_test_log::test;
 use nimiq_test_utils::{
     blockchain::{signing_key, voting_key},
     blockchain_with_rng::produce_macro_blocks_with_rng,
+    zkp_test_data::ZKPROOF_SERIALIZED_IN_HEX,
     zkp_test_data::{get_base_seed, zkp_test_exe},
-    zkp_test_data::{KEYS_PATH, ZKPROOF_SERIALIZED_IN_HEX},
 };
 
 use nimiq_zkp_component::proof_store::{DBProofStore, ProofStore};
@@ -45,7 +45,7 @@ fn blockchain() -> Arc<RwLock<Blockchain>> {
 
 #[test(tokio::test)]
 async fn peers_dont_reply_with_outdated_proof() {
-    NanoZKP::setup(get_base_seed(), Path::new(KEYS_PATH), false).unwrap();
+    setup(get_base_seed(), Path::new(KEYS_PATH), false).unwrap();
     let blockchain = blockchain();
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
@@ -96,7 +96,7 @@ async fn peers_dont_reply_with_outdated_proof() {
 #[test(tokio::test)]
 #[ignore]
 async fn peers_reply_with_valid_proof() {
-    NanoZKP::setup(get_base_seed(), Path::new(KEYS_PATH), false).unwrap();
+    setup(get_base_seed(), Path::new(KEYS_PATH), false).unwrap();
     let blockchain2 = blockchain();
     let blockchain3 = blockchain();
     let mut hub = MockHub::new();
@@ -175,7 +175,6 @@ async fn peers_reply_with_valid_proof() {
                 &BlockchainProxy::from(&blockchain2),
                 &proof_data.proof,
                 None,
-                Path::new(KEYS_PATH)
             ),
             "Peer should sent a new proof valid proof"
         );
@@ -185,7 +184,7 @@ async fn peers_reply_with_valid_proof() {
 #[test(tokio::test)]
 #[ignore]
 async fn peers_reply_with_valid_proof_and_election_block() {
-    NanoZKP::setup(get_base_seed(), Path::new(KEYS_PATH), false).unwrap();
+    setup(get_base_seed(), Path::new(KEYS_PATH), false).unwrap();
     let blockchain2 = blockchain();
     let blockchain3 = blockchain();
     let mut hub = MockHub::new();
@@ -264,7 +263,6 @@ async fn peers_reply_with_valid_proof_and_election_block() {
                 &BlockchainProxy::from(&blockchain2),
                 &proof_data.proof,
                 proof_data.election_block,
-                Path::new(KEYS_PATH)
             ),
             "Peer should sent a new proof valid proof"
         );

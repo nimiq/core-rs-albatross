@@ -15,11 +15,11 @@ use ark_r1cs_std::prelude::{
 };
 use ark_relations::r1cs::{ConstraintSystemRef, Namespace, SynthesisError};
 
-use nimiq_nano_primitives::MacroBlock;
 use nimiq_primitives::policy::Policy;
 
 use crate::gadgets::mnt4::{CheckSigGadget, HashToCurve};
 use crate::utils::reverse_inner_byte_order;
+use crate::MacroBlock;
 
 /// A gadget that contains utilities to verify the validity of a macro block. Mainly it checks that:
 ///  1. The macro block was signed by the aggregate public key.
@@ -323,7 +323,6 @@ mod tests {
     use rand::RngCore;
 
     use nimiq_bls::utils::bytes_to_bits;
-    use nimiq_nano_primitives::MacroBlock;
     use nimiq_primitives::policy::Policy;
     use nimiq_test_log::test;
 

@@ -349,6 +349,7 @@ mod tests {
     use nimiq_blockchain_proxy::BlockchainProxy;
     use nimiq_database::volatile::VolatileEnvironment;
     use nimiq_light_blockchain::LightBlockchain;
+    use nimiq_nano_primitives::KEYS_PATH;
     use nimiq_network_interface::{network::Network, request::request_handler};
     use nimiq_network_mock::{MockHub, MockNetwork};
     use nimiq_primitives::{networks::NetworkId, policy::Policy};
@@ -360,7 +361,6 @@ mod tests {
 
     use crate::sync::light::LightMacroSync;
     use crate::sync::syncer::MacroSyncReturn;
-    pub const KEYS_PATH: &str = "../.zkp";
 
     fn blockchain() -> BlockchainProxy {
         let time = Arc::new(OffsetTime::new());
@@ -379,7 +379,6 @@ mod tests {
     fn light_blockchain() -> BlockchainProxy {
         BlockchainProxy::Light(Arc::new(RwLock::new(LightBlockchain::new(
             NetworkId::UnitAlbatross,
-            PathBuf::from(KEYS_PATH),
         ))))
     }
 
