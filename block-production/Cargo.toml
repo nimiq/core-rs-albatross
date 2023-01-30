@@ -19,8 +19,7 @@ maintenance = { status = "experimental" }
 [dependencies]
 log = { package = "tracing", version = "0.1", features = ["log"] }
 hex = "0.4"
-parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
-
+parking_lot = "0.12"
 beserial = { path = "../beserial" }
 nimiq-account = { path = "../primitives/account" }
 nimiq-block = { path = "../primitives/block" }

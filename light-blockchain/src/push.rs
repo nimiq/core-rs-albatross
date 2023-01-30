@@ -132,7 +132,7 @@ impl LightBlockchain {
                 PushResult::Forked
             }
         };
-        let mut this = RwLockUpgradableReadGuard::upgrade_untimed(this);
+        let mut this = RwLockUpgradableReadGuard::upgrade(this);
         // Otherwise, we are creating/extending a fork. Store ChainInfo.
         this.chain_store.put_chain_info(chain_info);
 
@@ -146,7 +146,7 @@ impl LightBlockchain {
         mut prev_info: ChainInfo,
     ) -> Result<PushResult, PushError> {
         // Upgrade the blockchain lock
-        let mut this = RwLockUpgradableReadGuard::upgrade_untimed(this);
+        let mut this = RwLockUpgradableReadGuard::upgrade(this);
 
         let is_election_block = Policy::is_election_block_at(chain_info.head.block_number());
         let is_macro_block = Policy::is_macro_block_at(chain_info.head.block_number());
@@ -211,7 +211,7 @@ impl LightBlockchain {
         chain_info: ChainInfo,
     ) -> Result<PushResult, PushError> {
         // Upgrade the blockchain lock
-        let mut this = RwLockUpgradableReadGuard::upgrade_untimed(this);
+        let mut this = RwLockUpgradableReadGuard::upgrade(this);
 
         let target_block = chain_info.head.header();
         log::debug!(block = %target_block, "Rebranching");
@@ -377,7 +377,7 @@ impl LightBlockchain {
         }
 
         // Upgrade the blockchain lock
-        let mut this = RwLockUpgradableReadGuard::upgrade_untimed(this);
+        let mut this = RwLockUpgradableReadGuard::upgrade(this);
 
         // Store the election block header.
         this.chain_store.put_election(header);

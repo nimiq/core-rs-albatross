@@ -68,7 +68,7 @@ impl LightBlockchain {
         // At this point we know that the block is correct. We just have to push it.
 
         // Upgrade the blockchain lock
-        let mut this = RwLockUpgradableReadGuard::upgrade_untimed(this);
+        let mut this = RwLockUpgradableReadGuard::upgrade(this);
 
         // Create the chain info for the new block.
         let chain_info = ChainInfo::new(block.clone(), true);
@@ -139,7 +139,7 @@ impl LightBlockchain {
         // At this point we know that the block is correct. We just have to push it.
 
         // Upgrade the blockchain lock
-        let mut this = RwLockUpgradableReadGuard::upgrade_untimed(this);
+        let mut this = RwLockUpgradableReadGuard::upgrade(this);
 
         // Create the chain info for the new block.
         let chain_info = ChainInfo::new(block.clone(), true);

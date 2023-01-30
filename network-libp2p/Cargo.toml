@@ -28,7 +28,7 @@ instant = { version = "0.1", features = [ "wasm-bindgen" ] }
 ip_network = "0.4"
 libp2p-websys-transport = { git = "https://github.com/jsdanielh/libp2p-websys-transport.git", optional = true }
 log = { package = "tracing", version = "0.1", features = ["log"] }
-parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
+parking_lot = "0.12"
 pin-project = "1.0"
 pin-project-lite = "0.2.9"
 prometheus-client = { version = "0.18.1", optional = true}

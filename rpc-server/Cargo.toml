@@ -21,7 +21,7 @@ async-trait = "0.1"
 futures = { package = "futures-util", version = "0.3" }
 hex = "0.4.2"
 log = { package = "tracing", version = "0.1", features = ["log"] }
-parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
+parking_lot = "0.12"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_with = "2.2"

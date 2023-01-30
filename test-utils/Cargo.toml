@@ -16,7 +16,7 @@ futures = { package = "futures-util", version = "0.3" }
 hex = "0.4"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 rand = "0.8"
-parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
+parking_lot = "0.12"
 tokio = { version = "1.25", features = ["rt", "time", "tracing"] }
 tokio-stream = "0.1"
 rand_chacha = "0.3.1"

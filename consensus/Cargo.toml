@@ -23,7 +23,7 @@ gloo-timers = { version = "0.2.6" , features = [ "futures" ]}
 instant = { version = "0.1", features = [ "wasm-bindgen" ] }
 lazy_static = "1.4.0"
 log = { package = "tracing", version = "0.1", features = ["log"] }
-parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
+parking_lot = "0.12"
 pin-project = "1.0"
 rand = "0.8"
 thiserror = "1.0"

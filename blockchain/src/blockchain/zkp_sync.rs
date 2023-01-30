@@ -107,7 +107,7 @@ impl Blockchain {
         txn.commit();
 
         // Upgrade the lock as late as possible.
-        let mut this = RwLockUpgradableReadGuard::upgrade_untimed(this);
+        let mut this = RwLockUpgradableReadGuard::upgrade(this);
 
         if let Block::Macro(ref macro_block) = chain_info.head {
             this.state.macro_info = chain_info.clone();
@@ -200,7 +200,7 @@ impl Blockchain {
         read_txn.close();
 
         // Upgrade the blockchain lock
-        let mut this = RwLockUpgradableReadGuard::upgrade_untimed(this);
+        let mut this = RwLockUpgradableReadGuard::upgrade(this);
 
         // Store the election block header.
         if let Block::Macro(ref macro_block) = block {
@@ -295,7 +295,7 @@ impl Blockchain {
         txn.commit();
 
         // Upgrade the lock as late as possible.
-        let mut this = RwLockUpgradableReadGuard::upgrade_untimed(this);
+        let mut this = RwLockUpgradableReadGuard::upgrade(this);
 
         if let Block::Macro(ref macro_block) = chain_info.head {
             this.state.macro_info = chain_info.clone();

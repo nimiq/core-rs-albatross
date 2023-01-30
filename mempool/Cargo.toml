@@ -18,7 +18,7 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 log = { package = "tracing", version = "0.1", features = ["log"] }
-parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
+parking_lot = "0.12"
 prometheus-client = { version = "0.18.1", optional = true}
 futures = { package = "futures-util", version = "0.3" }
 keyed_priority_queue = "0.4"

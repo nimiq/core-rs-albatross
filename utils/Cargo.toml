@@ -22,7 +22,7 @@ futures = { package = "futures-util", version = "0.3" }
 hex = { version = "0.4", optional = true }
 libp2p = { git = "https://github.com/jsdanielh/rust-libp2p.git", default-features = false, optional = true }
 log = { package = "tracing", version = "0.1", optional = true, features = ["log"] }
-parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
+parking_lot = "0.12"
 rand = { version = "0.8", optional = true }
 rand_core = { version = "0.6", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }

@@ -8,5 +8,5 @@ log = { package = "tracing", version = "0.1", features = ["log"] }
 nimiq-log = { path = "../log" }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }
 nimiq-test-log-proc-macro = { path = "proc-macro" }
-parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
+parking_lot = "0.12"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

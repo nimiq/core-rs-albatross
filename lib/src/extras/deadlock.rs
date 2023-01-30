@@ -13,8 +13,8 @@ pub fn initialize_deadlock_detection() {
         }
 
         log::error!("{} deadlocks detected", deadlocks.len());
-        for (i, deadlock) in deadlocks.iter().enumerate() {
-            log::error!("Deadlock #{}: {:#?}", i, deadlock);
+        for (i, _deadlock) in deadlocks.iter().enumerate() {
+            log::error!("Deadlock #{}", i);
         }
     });
 }
