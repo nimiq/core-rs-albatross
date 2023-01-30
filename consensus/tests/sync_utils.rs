@@ -127,6 +127,9 @@ pub async fn sync_two_peers(
     let zkp_prover1 = ZKPComponent::new(
         BlockchainProxy::from(&blockchain1),
         Arc::clone(&net1),
+        Box::new(|fut| {
+            tokio::spawn(fut);
+        }),
         false,
         Some(zkp_test_exe()),
         PathBuf::from(KEYS_PATH),
@@ -177,6 +180,9 @@ pub async fn sync_two_peers(
     let zkp_prover2 = ZKPComponent::new(
         blockchain2_proxy.clone(),
         Arc::clone(&net2),
+        Box::new(|fut| {
+            tokio::spawn(fut);
+        }),
         false,
         Some(zkp_test_exe()),
         PathBuf::from(KEYS_PATH),

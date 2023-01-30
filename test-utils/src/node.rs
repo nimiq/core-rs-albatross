@@ -76,6 +76,9 @@ impl<N: NetworkInterface + TestNetwork> Node<N> {
         let zkp_proxy = ZKPComponent::new(
             BlockchainProxy::from(&blockchain),
             Arc::clone(&network),
+            Box::new(|fut| {
+                tokio::spawn(fut);
+            }),
             is_prover_active,
             Some(zkp_test_exe()),
             PathBuf::from(KEYS_PATH),

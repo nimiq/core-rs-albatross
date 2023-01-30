@@ -410,6 +410,9 @@ mod tests {
             let zkp_component = nimiq_zkp_component::ZKPComponent::new(
                 chain1.clone(),
                 Arc::clone(&net1),
+                Box::new(|fut| {
+                    tokio::spawn(fut);
+                }),
                 false,
                 None,
                 PathBuf::from(KEYS_PATH),
@@ -458,6 +461,9 @@ mod tests {
             let zkp_component = nimiq_zkp_component::ZKPComponent::new(
                 chain1.clone(),
                 Arc::clone(&net1),
+                Box::new(|fut| {
+                    tokio::spawn(fut);
+                }),
                 false,
                 None,
                 PathBuf::from(KEYS_PATH),
@@ -479,6 +485,9 @@ mod tests {
             let zkp_component2 = nimiq_zkp_component::ZKPComponent::new(
                 chain2.clone(),
                 Arc::clone(&net2),
+                Box::new(|fut| {
+                    tokio::spawn(fut);
+                }),
                 false,
                 None,
                 PathBuf::from(KEYS_PATH),
@@ -530,6 +539,9 @@ mod tests {
             let zkp_component = nimiq_zkp_component::ZKPComponent::new(
                 chain1.clone(),
                 Arc::clone(&net1),
+                Box::new(|fut| {
+                    tokio::spawn(fut);
+                }),
                 false,
                 None,
                 PathBuf::from(KEYS_PATH),
@@ -551,6 +563,9 @@ mod tests {
             let zkp_component2 = nimiq_zkp_component::ZKPComponent::new(
                 chain2.clone(),
                 Arc::clone(&net2),
+                Box::new(|fut| {
+                    tokio::spawn(fut);
+                }),
                 false,
                 None,
                 PathBuf::from(KEYS_PATH),
@@ -602,6 +617,9 @@ mod tests {
             let zkp_component = nimiq_zkp_component::ZKPComponent::new(
                 chain1.clone(),
                 Arc::clone(&net1),
+                Box::new(|fut| {
+                    tokio::spawn(fut);
+                }),
                 false,
                 None,
                 PathBuf::from(KEYS_PATH),
@@ -623,6 +641,9 @@ mod tests {
             let zkp_component2 = nimiq_zkp_component::ZKPComponent::new(
                 chain2.clone(),
                 Arc::clone(&net2),
+                Box::new(|fut| {
+                    tokio::spawn(fut);
+                }),
                 false,
                 None,
                 PathBuf::from(KEYS_PATH),
@@ -669,6 +690,9 @@ mod tests {
             let zkp_component = nimiq_zkp_component::ZKPComponent::new(
                 chain1.clone(),
                 Arc::clone(&net1),
+                Box::new(|fut| {
+                    tokio::spawn(fut);
+                }),
                 false,
                 None,
                 PathBuf::from(KEYS_PATH),
@@ -690,6 +714,9 @@ mod tests {
             let zkp_component2 = nimiq_zkp_component::ZKPComponent::new(
                 chain2.clone(),
                 Arc::clone(&net2),
+                Box::new(|fut| {
+                    tokio::spawn(fut);
+                }),
                 false,
                 None,
                 PathBuf::from(KEYS_PATH),
@@ -773,6 +800,9 @@ mod tests {
             let zkp_component = nimiq_zkp_component::ZKPComponent::new(
                 chain1.clone(),
                 Arc::clone(&net1),
+                Box::new(|fut| {
+                    tokio::spawn(fut);
+                }),
                 false,
                 None,
                 PathBuf::from(KEYS_PATH),
@@ -794,6 +824,9 @@ mod tests {
             let zkp_component2 = nimiq_zkp_component::ZKPComponent::new(
                 chain2.clone(),
                 Arc::clone(&net2),
+                Box::new(|fut| {
+                    tokio::spawn(fut);
+                }),
                 false,
                 None,
                 PathBuf::from(KEYS_PATH),

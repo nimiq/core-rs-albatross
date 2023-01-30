@@ -54,6 +54,9 @@ async fn builds_valid_genesis_proof() {
     let zkp_prover = ZKPComponent::new(
         BlockchainProxy::from(&blockchain),
         Arc::clone(&network),
+        Box::new(|fut| {
+            tokio::spawn(fut);
+        }),
         false,
         Some(zkp_test_exe()),
         PathBuf::from(KEYS_PATH),
@@ -99,6 +102,9 @@ async fn loads_valid_zkp_state_from_db() {
     let zkp_prover = ZKPComponent::new(
         BlockchainProxy::from(&blockchain),
         Arc::clone(&network),
+        Box::new(|fut| {
+            tokio::spawn(fut);
+        }),
         false,
         Some(zkp_test_exe()),
         PathBuf::from(KEYS_PATH),
@@ -135,6 +141,9 @@ async fn does_not_load_invalid_zkp_state_from_db() {
     let zkp_prover = ZKPComponent::new(
         BlockchainProxy::from(&blockchain),
         Arc::clone(&network),
+        Box::new(|fut| {
+            tokio::spawn(fut);
+        }),
         false,
         Some(zkp_test_exe()),
         PathBuf::from(KEYS_PATH),
@@ -164,6 +173,9 @@ async fn can_produce_two_consecutive_valid_zk_proofs() {
     let zkp_prover = ZKPComponent::new(
         BlockchainProxy::from(&blockchain),
         Arc::clone(&network),
+        Box::new(|fut| {
+            tokio::spawn(fut);
+        }),
         true,
         Some(zkp_test_exe()),
         PathBuf::from(KEYS_PATH),
