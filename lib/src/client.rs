@@ -120,7 +120,7 @@ pub fn generate_service_flags(sync_mode: SyncMode) -> (Services, Services) {
 impl ClientInner {
     async fn from_config(
         config: ClientConfig,
-        executor: impl TaskExecutor + Send + 'static,
+        executor: impl TaskExecutor + Send + 'static + Clone,
     ) -> Result<Client, Error> {
         // Get network info (i.e. which specific blockchain we're on)
         if !config.network_id.is_albatross() {
@@ -254,6 +254,7 @@ impl ClientInner {
                 let zkp_component = ZKPComponent::new(
                     blockchain_proxy.clone(),
                     Arc::clone(&network),
+                    executor.clone(),
                     #[cfg(feature = "zkp-prover")]
                     config.zkp.prover_active,
                     #[cfg(feature = "zkp-prover")]
@@ -288,6 +289,7 @@ impl ClientInner {
                 let zkp_component = ZKPComponent::new(
                     blockchain_proxy.clone(),
                     Arc::clone(&network),
+                    executor.clone(),
                     #[cfg(feature = "zkp-prover")]
                     config.zkp.prover_active,
                     #[cfg(feature = "zkp-prover")]
@@ -315,6 +317,7 @@ impl ClientInner {
                 let zkp_component = ZKPComponent::new(
                     blockchain_proxy.clone(),
                     Arc::clone(&network),
+                    executor.clone(),
                     #[cfg(feature = "zkp-prover")]
                     config.zkp.prover_active,
                     #[cfg(feature = "zkp-prover")]
@@ -449,7 +452,7 @@ pub struct Client {
 impl Client {
     pub async fn from_config(
         config: ClientConfig,
-        executor: impl TaskExecutor + Send + 'static,
+        executor: impl TaskExecutor + Send + 'static + Clone,
     ) -> Result<Self, Error> {
         ClientInner::from_config(config, executor).await
     }

@@ -7,6 +7,7 @@ use futures::{Future, StreamExt};
 use nimiq_block::Block;
 use nimiq_genesis::NetworkInfo;
 use nimiq_network_interface::network::{MsgAcceptance, PubsubId};
+use nimiq_primitives::task_executor::TaskExecutor;
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 
 use nimiq_block::MacroBlock;
@@ -123,6 +124,7 @@ impl<N: Network> ZKPComponent<N> {
     pub async fn new(
         blockchain: BlockchainProxy,
         network: Arc<N>,
+        executor: impl TaskExecutor + Send + 'static,
         #[cfg(feature = "zkp-prover")] is_prover_active: bool,
         #[cfg(feature = "zkp-prover")] prover_path: Option<PathBuf>,
         keys_path: PathBuf,
@@ -180,15 +182,15 @@ impl<N: Network> ZKPComponent<N> {
         }
 
         // The handler for zkp request is launched.
-        zkp_component.launch_request_handler();
+        zkp_component.launch_request_handler(executor);
         zkp_component
     }
 
     /// Launches thread that processes the zkp requests and replies to them.
-    fn launch_request_handler(&self) {
+    fn launch_request_handler(&self, executor: impl TaskExecutor + Send + 'static) {
         let stream = self.network.receive_requests::<RequestZKP>();
         let env = Arc::new(ZKPStateEnvironment::from(self));
-        tokio::spawn(request_handler(&self.network, stream, &env));
+        executor.exec(Box::pin(request_handler(&self.network, stream, &env)));
     }
 
     /// Gets a proxy for the current ZKP Component.
