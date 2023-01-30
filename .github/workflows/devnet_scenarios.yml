@@ -89,8 +89,8 @@ jobs:
     - name: Retrieve failure reason
       if: always()
       run: |
-          if [ -f temp-state/RESULT.TXT ]; then
-            echo "FAIL_REASON=$(cat temp-state/RESULT.TXT)" >> $GITHUB_OUTPUT
+          if [ -f temp-state/*/RESULT.TXT ]; then
+            echo "FAIL_REASON=$(cat temp-state/*/RESULT.TXT)" >> $GITHUB_OUTPUT
           else
             echo "FAIL_REASON=other" >> $GITHUB_OUTPUT
           fi
