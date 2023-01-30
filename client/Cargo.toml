@@ -28,6 +28,7 @@ package = "nimiq-lib"
 path = "../lib"
 version = "0.1"
 features = [
+    "database-storage",
     "deadlock",
     "full-consensus",
     "logging",
@@ -37,9 +38,8 @@ features = [
     "rpc-server",
     "signal-handling",
     "tokio-console",
+    "tokio-websocket",
     "validator",
     "wallet",
-    "websocket",
-    "database-storage",
     "zkp-prover",
 ]

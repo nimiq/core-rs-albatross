@@ -26,6 +26,7 @@ futures = { package = "futures-util", version = "0.3" }
 hex = "0.4"
 instant = { version = "0.1", features = [ "wasm-bindgen" ] }
 ip_network = "0.4"
+libp2p-websys-transport = { git = "https://github.com/jsdanielh/libp2p-websys-transport.git", optional = true }
 log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
 pin-project = "1.0"
@@ -84,7 +85,8 @@ nimiq-test-log = { path = "../test-log" }
 
 [features]
 default = ["peer-contact-book-persistence"]
-websocket = ["libp2p/dns", "libp2p/tcp", "libp2p/tokio", "libp2p/websocket"]
 metrics = ["prometheus-client"]
 peer-contact-book-persistence = ["serde"]
 tokio-time = ["tokio/time"]
+tokio-websocket = ["libp2p/dns", "libp2p/tcp", "libp2p/tokio", "libp2p/websocket"]
+wasm-websocket = ["libp2p-websys-transport"]
