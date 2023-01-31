@@ -81,7 +81,7 @@ impl<'env> VolatileReadTransaction<'env> {
         self.0.get(&db.0, key)
     }
 
-    pub(super) fn cursor<'txn, 'db>(&'txn self, db: &'db Database) -> VolatileCursor<'txn> {
+    pub(super) fn cursor<'txn>(&'txn self, db: &Database) -> VolatileCursor<'txn> {
         VolatileCursor(self.0.cursor(db))
     }
 }
@@ -138,14 +138,11 @@ impl<'env> VolatileWriteTransaction<'env> {
         self.0.commit()
     }
 
-    pub(super) fn cursor<'txn, 'db>(&'txn self, db: &'db Database) -> VolatileCursor<'txn> {
+    pub(super) fn cursor<'txn>(&'txn self, db: &Database) -> VolatileCursor<'txn> {
         VolatileCursor(self.0.cursor(db))
     }
 
-    pub(super) fn write_cursor<'txn, 'db>(
-        &'txn self,
-        db: &'db Database,
-    ) -> VolatileWriteCursor<'txn> {
+    pub(super) fn write_cursor<'txn>(&'txn self, db: &Database) -> VolatileWriteCursor<'txn> {
         VolatileWriteCursor(self.0.write_cursor(db))
     }
 

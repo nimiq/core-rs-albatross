@@ -138,7 +138,7 @@ impl<'env> Transaction<'env> {
         }
     }
 
-    pub fn cursor<'txn, 'db>(&'txn self, db: &'db Database) -> Cursor<'txn> {
+    pub fn cursor<'txn>(&'txn self, db: &Database) -> Cursor<'txn> {
         match *self {
             Transaction::VolatileRead(ref txn) => Cursor::VolatileCursor(txn.cursor(db)),
             Transaction::VolatileWrite(ref txn) => Cursor::VolatileCursor(txn.cursor(db)),
@@ -173,7 +173,7 @@ impl<'env> ReadTransaction<'env> {
 
     pub fn close(self) {}
 
-    pub fn cursor<'txn, 'db>(&'txn self, db: &'db Database) -> Cursor<'txn> {
+    pub fn cursor<'txn>(&'txn self, db: &Database) -> Cursor<'txn> {
         self.0.cursor(db)
     }
 }
@@ -293,11 +293,11 @@ impl<'env> WriteTransaction<'env> {
 
     pub fn abort(self) {}
 
-    pub fn cursor<'txn, 'db>(&'txn self, db: &'db Database) -> Cursor<'txn> {
+    pub fn cursor<'txn>(&'txn self, db: &Database) -> Cursor<'txn> {
         self.0.cursor(db)
     }
 
-    pub fn write_cursor<'txn, 'db>(&'txn self, db: &'db Database) -> WriteCursor<'txn> {
+    pub fn write_cursor<'txn>(&'txn self, db: &Database) -> WriteCursor<'txn> {
         match self.0 {
             Transaction::VolatileWrite(ref txn) => {
                 WriteCursor::VolatileCursor(txn.write_cursor(db))
