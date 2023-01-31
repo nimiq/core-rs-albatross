@@ -53,6 +53,7 @@ use nimiq_network_interface::{
         RequestError, RequestType,
     },
 };
+use nimiq_primitives::task_executor::TaskExecutor;
 use nimiq_utils::time::OffsetTime;
 use nimiq_validator_network::validator_record::SignedValidatorRecord;
 
@@ -215,7 +216,11 @@ impl Network {
     ///             offset by exchanging their wall-time with other peers.
     ///  - `config`: The network configuration, containing key pair, and other behavior-specific configuration.
     ///
-    pub async fn new(clock: Arc<OffsetTime>, config: Config) -> Self {
+    pub async fn new(
+        clock: Arc<OffsetTime>,
+        config: Config,
+        executor: impl TaskExecutor + Send + Clone + 'static,
+    ) -> Self {
         let required_services = config.required_services;
         // TODO: persist to disk
         let own_peer_contact = config.peer_contact.clone();
@@ -226,7 +231,13 @@ impl Network {
             ip_colocation_factor_threshold: 20.0,
             ..Default::default()
         };
-        let swarm = Self::new_swarm(clock, config, Arc::clone(&contacts), params.clone());
+        let swarm = Self::new_swarm(
+            clock,
+            config,
+            Arc::clone(&contacts),
+            params.clone(),
+            executor.clone(),
+        );
 
         let local_peer_id = *Swarm::local_peer_id(&swarm);
         let connected_peers = Arc::new(RwLock::new(HashMap::new()));
@@ -245,7 +256,7 @@ impl Network {
         #[cfg(feature = "metrics")]
         let metrics = Arc::new(NetworkMetrics::default());
 
-        tokio::spawn(Self::swarm_task(
+        executor.exec(Box::pin(Self::swarm_task(
             swarm,
             events_tx.clone(),
             action_rx,
@@ -257,7 +268,7 @@ impl Network {
             contacts,
             #[cfg(feature = "metrics")]
             metrics.clone(),
-        ));
+        )));
 
         Self {
             local_peer_id,
@@ -332,6 +343,7 @@ impl Network {
         config: Config,
         contacts: Arc<RwLock<PeerContactBook>>,
         peer_score_params: PeerScoreParams,
+        executor: impl TaskExecutor + Clone + Send + 'static,
     ) -> Swarm<NimiqBehaviour> {
         let local_peer_id = PeerId::from(config.keypair.public());
 
@@ -351,8 +363,8 @@ impl Network {
             transport,
             behaviour,
             local_peer_id,
-            Box::new(|fut| {
-                tokio::spawn(fut);
+            Box::new(move |fut| {
+                executor.exec(fut);
             }),
         )
         .connection_limits(limits)

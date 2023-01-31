@@ -96,7 +96,14 @@ impl TestNetwork {
         self.next_address += 1;
 
         let clock = Arc::new(OffsetTime::new());
-        let net = Network::new(clock, network_config(address.clone())).await;
+        let net = Network::new(
+            clock,
+            network_config(address.clone()),
+            Box::new(|fut| {
+                tokio::spawn(fut);
+            }),
+        )
+        .await;
         net.listen_on(vec![address.clone()]).await;
 
         log::debug!(address = %address, peer_id = %net.get_local_peer_id(), "Creating node");
@@ -123,10 +130,24 @@ async fn create_connected_networks() -> (Network, Network) {
     let addr1 = multiaddr![Memory(thread_rng().gen::<u64>())];
     let addr2 = multiaddr![Memory(thread_rng().gen::<u64>())];
 
-    let net1 = Network::new(Arc::new(OffsetTime::new()), network_config(addr1.clone())).await;
+    let net1 = Network::new(
+        Arc::new(OffsetTime::new()),
+        network_config(addr1.clone()),
+        Box::new(|fut| {
+            tokio::spawn(fut);
+        }),
+    )
+    .await;
     net1.listen_on(vec![addr1.clone()]).await;
 
-    let net2 = Network::new(Arc::new(OffsetTime::new()), network_config(addr2.clone())).await;
+    let net2 = Network::new(
+        Arc::new(OffsetTime::new()),
+        network_config(addr2.clone()),
+        Box::new(|fut| {
+            tokio::spawn(fut);
+        }),
+    )
+    .await;
     net2.listen_on(vec![addr2.clone()]).await;
 
     log::debug!(address = %addr1, peer_id = %net1.get_local_peer_id(), "Network 1");
@@ -156,10 +177,24 @@ async fn create_double_connected_networks() -> (Network, Network) {
     let addr1 = multiaddr![Memory(thread_rng().gen::<u64>())];
     let addr2 = multiaddr![Memory(thread_rng().gen::<u64>())];
 
-    let net1 = Network::new(Arc::new(OffsetTime::new()), network_config(addr1.clone())).await;
+    let net1 = Network::new(
+        Arc::new(OffsetTime::new()),
+        network_config(addr1.clone()),
+        Box::new(|fut| {
+            tokio::spawn(fut);
+        }),
+    )
+    .await;
     net1.listen_on(vec![addr1.clone()]).await;
 
-    let net2 = Network::new(Arc::new(OffsetTime::new()), network_config(addr2.clone())).await;
+    let net2 = Network::new(
+        Arc::new(OffsetTime::new()),
+        network_config(addr2.clone()),
+        Box::new(|fut| {
+            tokio::spawn(fut);
+        }),
+    )
+    .await;
     net2.listen_on(vec![addr2.clone()]).await;
 
     log::debug!(address = %addr1, peer_id = %net1.get_local_peer_id(), "Network 1");
@@ -198,7 +233,14 @@ async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
 
         addresses.push(addr.clone());
 
-        let network = Network::new(Arc::new(OffsetTime::new()), network_config(addr.clone())).await;
+        let network = Network::new(
+            Arc::new(OffsetTime::new()),
+            network_config(addr.clone()),
+            Box::new(|fut| {
+                tokio::spawn(fut);
+            }),
+        )
+        .await;
         network.listen_on(vec![addr.clone()]).await;
 
         log::debug!(address = %addr, peer_id = %network.get_local_peer_id(), "Network {}", peer);

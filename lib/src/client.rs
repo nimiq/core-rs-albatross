@@ -200,7 +200,8 @@ impl ClientInner {
 
         log::debug!("listen_addresses = {:?}", config.network.listen_addresses);
 
-        let network = Arc::new(Network::new(Arc::clone(&time), network_config).await);
+        let network =
+            Arc::new(Network::new(Arc::clone(&time), network_config, executor.clone()).await);
 
         // Start buffering network events as early as possible
         let network_events = network.subscribe_events();

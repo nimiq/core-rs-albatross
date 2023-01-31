@@ -71,7 +71,16 @@ impl TestNetwork for Network {
             true,
             Services::all(),
         );
-        let network = Arc::new(Network::new(clock, config).await);
+        let network = Arc::new(
+            Network::new(
+                clock,
+                config,
+                Box::new(|fut| {
+                    tokio::spawn(fut);
+                }),
+            )
+            .await,
+        );
         network.listen_on(vec![peer_address]).await;
         network
     }

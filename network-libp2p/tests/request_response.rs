@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use tokio::time::{self, *};
 
 use futures::{future::join_all, StreamExt};
 use libp2p::{
@@ -8,10 +7,12 @@ use libp2p::{
     identity::Keypair,
     swarm::KeepAlive,
 };
-
 use rand::{thread_rng, Rng};
+use tokio::time::{Duration, Instant};
 
 use beserial::{Deserialize, Serialize};
+#[cfg(feature = "tokio-time")]
+use nimiq_network_interface::peer::CloseReason;
 use nimiq_network_interface::{
     network::{Network as NetworkInterface, NetworkEvent},
     request::{
@@ -19,7 +20,6 @@ use nimiq_network_interface::{
         RequestMarker,
     },
 };
-
 use nimiq_network_libp2p::{
     discovery::{
         behaviour::DiscoveryConfig,
@@ -152,10 +152,24 @@ impl TestNetwork {
         let addr1 = multiaddr![Memory(thread_rng().gen::<u64>())];
         let addr2 = multiaddr![Memory(thread_rng().gen::<u64>())];
 
-        let net1 = Network::new(Arc::new(OffsetTime::new()), network_config(addr1.clone())).await;
+        let net1 = Network::new(
+            Arc::new(OffsetTime::new()),
+            network_config(addr1.clone()),
+            Box::new(|fut| {
+                tokio::spawn(fut);
+            }),
+        )
+        .await;
         net1.listen_on(vec![addr1.clone()]).await;
 
-        let net2 = Network::new(Arc::new(OffsetTime::new()), network_config(addr2.clone())).await;
+        let net2 = Network::new(
+            Arc::new(OffsetTime::new()),
+            network_config(addr2.clone()),
+            Box::new(|fut| {
+                tokio::spawn(fut);
+            }),
+        )
+        .await;
         net2.listen_on(vec![addr2.clone()]).await;
 
         log::debug!(address = %addr1, peer_id = %net1.get_local_peer_id(), "Network 1");
@@ -180,6 +194,7 @@ impl TestNetwork {
         (net1, net2)
     }
 
+    #[cfg(feature = "tokio-time")]
     async fn create_4_connected_networks() -> (
         (Network, Multiaddr),
         (Network, Multiaddr),
@@ -192,16 +207,44 @@ impl TestNetwork {
         let addr3 = multiaddr![Memory(thread_rng().gen::<u64>())];
         let addr4 = multiaddr![Memory(thread_rng().gen::<u64>())];
 
-        let net1 = Network::new(Arc::new(OffsetTime::new()), network_config(addr1.clone())).await;
+        let net1 = Network::new(
+            Arc::new(OffsetTime::new()),
+            network_config(addr1.clone()),
+            Box::new(|fut| {
+                tokio::spawn(fut);
+            }),
+        )
+        .await;
         net1.listen_on(vec![addr1.clone()]).await;
 
-        let net2 = Network::new(Arc::new(OffsetTime::new()), network_config(addr2.clone())).await;
+        let net2 = Network::new(
+            Arc::new(OffsetTime::new()),
+            network_config(addr2.clone()),
+            Box::new(|fut| {
+                tokio::spawn(fut);
+            }),
+        )
+        .await;
         net2.listen_on(vec![addr2.clone()]).await;
 
-        let net3 = Network::new(Arc::new(OffsetTime::new()), network_config(addr3.clone())).await;
+        let net3 = Network::new(
+            Arc::new(OffsetTime::new()),
+            network_config(addr3.clone()),
+            Box::new(|fut| {
+                tokio::spawn(fut);
+            }),
+        )
+        .await;
         net3.listen_on(vec![addr3.clone()]).await;
 
-        let net4 = Network::new(Arc::new(OffsetTime::new()), network_config(addr4.clone())).await;
+        let net4 = Network::new(
+            Arc::new(OffsetTime::new()),
+            network_config(addr4.clone()),
+            Box::new(|fut| {
+                tokio::spawn(fut);
+            }),
+        )
+        .await;
         net4.listen_on(vec![addr4.clone()]).await;
 
         log::debug!(address = %addr1, peer_id = %net1.get_local_peer_id(), "Network 1");
@@ -290,6 +333,7 @@ fn assert_peer_joined(event: &NetworkEvent<PeerId>, wanted_peer_id: &PeerId) {
     }
 }
 
+#[cfg(feature = "tokio-time")]
 fn assert_peer_left(event: &NetworkEvent<PeerId>, wanted_peer_id: &PeerId) {
     if let NetworkEvent::PeerLeft(peer_id) = event {
         assert_eq!(peer_id, wanted_peer_id);
@@ -538,8 +582,7 @@ async fn test_valid_request_no_response_no_receiver() {
     };
 }
 
-use nimiq_network_interface::peer::CloseReason;
-
+#[cfg(feature = "tokio-time")]
 async fn disconnect_successfully(net1: &Arc<Network>, net2: &Arc<Network>) {
     log::debug!("Creating connected test networks");
 
@@ -561,6 +604,7 @@ async fn disconnect_successfully(net1: &Arc<Network>, net2: &Arc<Network>) {
     assert_peer_left(&event2, &net1.get_local_peer_id());
 }
 
+#[cfg(feature = "tokio-time")]
 async fn reconnect_successfully(net1: &Arc<Network>, addr1: Multiaddr, net2: &Arc<Network>) {
     log::debug!("Creating connected test networks");
 
@@ -581,6 +625,7 @@ async fn reconnect_successfully(net1: &Arc<Network>, addr1: Multiaddr, net2: &Ar
     assert_peer_joined(&event2, &net1.get_local_peer_id());
 }
 
+#[cfg(feature = "tokio-time")]
 async fn send_n_request_to_succeed(net1: &Arc<Network>, net2: &Arc<Network>, n: u32) {
     let test_request = TestRequest4 { request: 42 };
     let test_response = TestResponse4 { response: 43 };
@@ -616,6 +661,7 @@ async fn send_n_request_to_succeed(net1: &Arc<Network>, net2: &Arc<Network>, n: 
     }
 }
 
+#[cfg(feature = "tokio-time")]
 async fn send_n_request_to_fail(net1: &Arc<Network>, net2: &Arc<Network>, n: u32) {
     for i in 0..n {
         let test_request = TestRequest4 { request: 42 };
@@ -672,16 +718,16 @@ async fn it_can_limit_requests_rate() {
     // Spawn the request listener future.
     tokio::spawn(request_listener_future);
 
-    time::sleep(Duration::from_secs(1)).await;
+    tokio::time::sleep(Duration::from_secs(1)).await;
 
-    time::pause();
+    tokio::time::pause();
     log::error!("Clock stops at {:?}", Instant::now());
 
     // The first head request is sent and this should be the only request that gets an Ok response.
     // This sets the last reset of the rate limiting to block height 1 (current block height).
     send_n_request_to_succeed(&net1, &net2, TestRequest4::MAX_REQUESTS).await;
 
-    time::advance(TestRequest4::TIME_WINDOW - Duration::from_secs(1)).await;
+    tokio::time::advance(TestRequest4::TIME_WINDOW - Duration::from_secs(1)).await;
     // Elapsed time 99 secs;
 
     log::error!("Advanced time to {:?}", Instant::now());
@@ -690,7 +736,7 @@ async fn it_can_limit_requests_rate() {
     send_n_request_to_fail(&net1, &net2, 5).await;
 
     // Block height is is now 11, so a reset for the rate limiting should happen.
-    time::advance(Duration::from_secs(1)).await;
+    tokio::time::advance(Duration::from_secs(1)).await;
     // Elapsed time 100 secs;
 
     send_n_request_to_succeed(&net1, &net2, TestRequest4::MAX_REQUESTS).await;
@@ -699,7 +745,7 @@ async fn it_can_limit_requests_rate() {
     send_n_request_to_fail(&net1, &net2, 5).await;
 
     // Advance time to reset the counters once more.
-    time::advance(TestRequest4::TIME_WINDOW).await;
+    tokio::time::advance(TestRequest4::TIME_WINDOW).await;
     // Elapsed time 200 secs;
 
     // Counters should be reset, new requests are allowed.
@@ -735,7 +781,7 @@ async fn it_can_limit_requests_rate_after_reconnection() {
     // Spawn the request listener future.
     tokio::spawn(request_listener_future);
 
-    time::sleep(Duration::from_secs(1)).await;
+    tokio::time::sleep(Duration::from_secs(1)).await;
 
     // The first head requests are sent. These should be the only requests that get an Ok response.
     send_n_request_to_succeed(&net1, &net2, TestRequest4::MAX_REQUESTS).await;
@@ -795,16 +841,16 @@ async fn it_can_reset_requests_rate_with_reconnections() {
     // Spawn the request listener future.
     tokio::spawn(request_listener_future);
 
-    time::sleep(Duration::from_secs(1)).await;
+    tokio::time::sleep(Duration::from_secs(1)).await;
 
-    time::pause();
+    tokio::time::pause();
 
     // The first head requests are sent. These should be the only requests that get an Ok response.
     send_n_request_to_succeed(&net1, &net2, TestRequest4::MAX_REQUESTS).await;
     // Disconnects peer 2.
     disconnect_successfully(&net1, &net2).await;
 
-    time::advance(TestRequest4::TIME_WINDOW / 2).await;
+    tokio::time::advance(TestRequest4::TIME_WINDOW / 2).await;
     // time passed 50 secs;
 
     // Make the first and second request from peer 3.
@@ -814,7 +860,7 @@ async fn it_can_reset_requests_rate_with_reconnections() {
     disconnect_successfully(&net1, &net3).await;
 
     // Puts the total elapsed time to 149 secs, the counters for peer 2 are to be reset (expiration is 100).
-    time::advance(TestRequest4::TIME_WINDOW - Duration::from_secs(1)).await;
+    tokio::time::advance(TestRequest4::TIME_WINDOW - Duration::from_secs(1)).await;
     // time passed 149 secs;
 
     // Reconnect peer 3 and ensure the requests fail, no reset should have happened yet.
@@ -826,7 +872,7 @@ async fn it_can_reset_requests_rate_with_reconnections() {
     send_n_request_to_succeed(&net1, &net2, TestRequest4::MAX_REQUESTS).await;
 
     // Puts the total elapsed time to 150 secs, only resets counters for peer 3.
-    time::advance(Duration::from_secs(1)).await;
+    tokio::time::advance(Duration::from_secs(1)).await;
     // time passed 150 secs;
 
     send_n_request_to_succeed(&net1, &net3, TestRequest4::MAX_REQUESTS).await;
