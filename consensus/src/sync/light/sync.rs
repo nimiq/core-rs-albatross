@@ -12,6 +12,7 @@ use nimiq_network_interface::{
     peer::CloseReason,
     request::RequestError,
 };
+use nimiq_primitives::task_executor::TaskExecutor;
 use nimiq_zkp_component::{
     types::{Error, ZKPRequestEvent},
     zkp_component::ZKPComponentProxy,
@@ -128,6 +129,8 @@ pub struct LightMacroSync<TNetwork: Network> {
     pub(crate) block_headers: FuturesUnordered<
         BoxFuture<'static, (Result<Option<Block>, RequestError>, TNetwork::PeerId)>,
     >,
+    /// Task executor to be compatible with wasm and not wasm environments,
+    pub(crate) executor: Box<dyn TaskExecutor + Send + 'static>,
     /// Waker used for the poll next function
     pub(crate) waker: Option<Waker>,
 }
@@ -138,6 +141,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         network: Arc<TNetwork>,
         network_event_rx: SubscribeEvents<TNetwork::PeerId>,
         zkp_component_proxy: ZKPComponentProxy<TNetwork>,
+        executor: impl TaskExecutor + Send + 'static,
     ) -> Self {
         Self {
             blockchain,
@@ -148,6 +152,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
             zkp_component_proxy,
             zkp_requests: FuturesUnordered::new(),
             waker: None,
+            executor: Box::new(executor),
             block_headers: Default::default(),
         }
     }
@@ -163,15 +168,13 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
     pub fn disconnect_peer(&mut self, peer_id: TNetwork::PeerId) {
         // Remove all pending peer requests (if any)
         self.remove_peer_requests(peer_id);
-
+        let network = Arc::clone(&self.network);
         // We disconnect from this peer
-        tokio::spawn({
-            let network = Arc::clone(&self.network);
-
+        self.executor.exec(Box::pin({
             async move {
                 network.disconnect_peer(peer_id, CloseReason::Other).await;
             }
-        });
+        }));
     }
 }
 

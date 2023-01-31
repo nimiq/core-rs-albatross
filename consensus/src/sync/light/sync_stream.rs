@@ -429,6 +429,9 @@ mod tests {
                 Arc::clone(&net1),
                 net1.subscribe_events(),
                 zkp_component_proxy,
+                Box::new(|fut| {
+                    tokio::spawn(fut);
+                }),
             );
 
             spawn_request_handlers(&net2, &chain2.clone());
@@ -480,6 +483,9 @@ mod tests {
                 Arc::clone(&net1),
                 net1.subscribe_events(),
                 zkp_component_proxy,
+                Box::new(|fut| {
+                    tokio::spawn(fut);
+                }),
             );
 
             let zkp_component2 = nimiq_zkp_component::ZKPComponent::new(
@@ -558,6 +564,9 @@ mod tests {
                 Arc::clone(&net1),
                 net1.subscribe_events(),
                 zkp_component_proxy,
+                Box::new(|fut| {
+                    tokio::spawn(fut);
+                }),
             );
 
             let zkp_component2 = nimiq_zkp_component::ZKPComponent::new(
@@ -636,6 +645,9 @@ mod tests {
                 Arc::clone(&net1),
                 net1.subscribe_events(),
                 zkp_component_proxy,
+                Box::new(|fut| {
+                    tokio::spawn(fut);
+                }),
             );
 
             let zkp_component2 = nimiq_zkp_component::ZKPComponent::new(
@@ -709,6 +721,9 @@ mod tests {
                 Arc::clone(&net1),
                 net1.subscribe_events(),
                 zkp_component_proxy,
+                Box::new(|fut| {
+                    tokio::spawn(fut);
+                }),
             );
 
             let zkp_component2 = nimiq_zkp_component::ZKPComponent::new(
@@ -819,6 +834,9 @@ mod tests {
                 Arc::clone(&net1),
                 net1.subscribe_events(),
                 zkp_component_proxy,
+                Box::new(|fut| {
+                    tokio::spawn(fut);
+                }),
             );
 
             let zkp_component2 = nimiq_zkp_component::ZKPComponent::new(

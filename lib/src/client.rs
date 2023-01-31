@@ -333,6 +333,7 @@ impl ClientInner {
                     bls_cache,
                     zkp_component.proxy(),
                     network_events,
+                    executor.clone(),
                 )
                 .await;
                 (blockchain_proxy, syncer, zkp_component)

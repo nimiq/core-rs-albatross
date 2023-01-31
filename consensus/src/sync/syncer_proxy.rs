@@ -3,14 +3,15 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use futures::{Stream, StreamExt};
-use nimiq_zkp_component::zkp_component::ZKPComponentProxy;
 use parking_lot::Mutex;
+use pin_project::pin_project;
 
 use nimiq_block::Block;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_network_interface::network::{Network, SubscribeEvents};
-use pin_project::pin_project;
+use nimiq_primitives::task_executor::TaskExecutor;
+use nimiq_zkp_component::zkp_component::ZKPComponentProxy;
 
 #[cfg(feature = "full")]
 use crate::sync::{
@@ -122,11 +123,16 @@ impl<N: Network> SyncerProxy<N> {
             bls_cache,
         );
 
+        // The task executor that is supplied for the light macro sync variant is tokio
+        // because the full sync is not supported in wasm
         let macro_sync = LightMacroSync::new(
             blockchain_proxy,
             network,
             network_event_rx,
             zkp_component_proxy,
+            Box::new(|fut| {
+                tokio::spawn(fut);
+            }),
         );
 
         Self::Full(Syncer::new(live_sync, macro_sync))
@@ -139,6 +145,7 @@ impl<N: Network> SyncerProxy<N> {
         bls_cache: Arc<Mutex<PublicKeyCache>>,
         zkp_component_proxy: ZKPComponentProxy<N>,
         network_event_rx: SubscribeEvents<N::PeerId>,
+        executor: impl TaskExecutor + Send + 'static,
     ) -> Self {
         let block_queue_config = QueueConfig {
             include_micro_bodies: false,
@@ -164,6 +171,7 @@ impl<N: Network> SyncerProxy<N> {
             network,
             network_event_rx,
             zkp_component_proxy,
+            executor,
         );
 
         Self::Light(Syncer::new(live_sync, macro_sync))

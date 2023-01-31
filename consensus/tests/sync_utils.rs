@@ -76,6 +76,9 @@ async fn syncer(
                 ))),
                 zkp_prover.proxy(),
                 network.subscribe_events(),
+                Box::new(|fut| {
+                    tokio::spawn(fut);
+                }),
             )
             .await
         }
