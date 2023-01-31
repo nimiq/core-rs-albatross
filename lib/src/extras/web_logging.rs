@@ -54,7 +54,7 @@ pub fn initialize_web_logging(settings_opt: Option<&LogSettings>) -> Result<(), 
         .with(
             tracing_subscriber::fmt::layer()
                 .with_writer(MakeConsoleWriter)
-                .with_ansi(settings.file.is_none())
+                .with_ansi(false)
                 .event_format(Formatting(MaybeSystemTime(settings.timestamps)))
                 .with_filter(filter),
         )
