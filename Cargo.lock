@@ -1288,9 +1288,9 @@ dependencies = [
 
 [[package]]
 name = "curve25519-dalek"
-version = "4.0.0-pre.5"
+version = "4.0.0-rc.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67bc65846be335cb20f4e52d49a437b773a2c1fdb42b19fc84e79e6f6771536f"
+checksum = "8da00a7a9a4eb92a0a0f8e75660926d48f0d0f3c537e455c457bcdaa1e16b1ac"
 dependencies = [
  "cfg-if",
  "fiat-crypto",
@@ -3792,7 +3792,7 @@ name = "nimiq-keys"
 version = "0.1.0"
 dependencies = [
  "beserial",
- "curve25519-dalek 3.2.0",
+ "curve25519-dalek 4.0.0-rc.0",
  "data-encoding",
  "ed25519-zebra",
  "hex",
@@ -4530,7 +4530,7 @@ version = "0.1.0"
 dependencies = [
  "beserial",
  "byteorder",
- "curve25519-dalek 3.2.0",
+ "curve25519-dalek 4.0.0-rc.0",
  "hex",
  "nimiq-hash",
  "nimiq-keys",
@@ -6036,7 +6036,7 @@ dependencies = [
  "aes-gcm 0.9.4",
  "blake2 0.10.4",
  "chacha20poly1305",
- "curve25519-dalek 4.0.0-pre.5",
+ "curve25519-dalek 4.0.0-rc.0",
  "rand_core 0.6.4",
  "ring",
  "rustc_version 0.4.0",

@@ -17,7 +17,7 @@ is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
-curve25519-dalek = "3"
+curve25519-dalek = "4"
 ed25519-zebra = { git = "https://github.com/nimiq/ed25519-zebra.git", branch = "main" }
 data-encoding = "2.3"
 thiserror = "1.0"
