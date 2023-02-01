@@ -1263,6 +1263,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "cuckoofilter"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b810a8449931679f64cd7eef1bbd0fa315801b6d5d9cdc1ace2804d6529eee18"
+dependencies = [
+ "byteorder",
+ "fnv",
+ "rand 0.7.3",
+]
+
+[[package]]
 name = "curve25519-dalek"
 version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1899,7 +1910,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e64b03909df88034c26dc1547e8970b91f98bdb65165d6a4e9110d94263dbb2c"
 dependencies = [
  "gloo-timers",
- "send_wrapper",
+ "send_wrapper 0.4.0",
 ]
 
 [[package]]
@@ -2525,11 +2536,13 @@ dependencies = [
  "instant",
  "libp2p-core",
  "libp2p-dns",
+ "libp2p-floodsub",
  "libp2p-gossipsub",
  "libp2p-identify",
  "libp2p-kad",
  "libp2p-mdns",
  "libp2p-metrics",
+ "libp2p-mplex",
  "libp2p-noise",
  "libp2p-ping",
  "libp2p-quic",
@@ -2589,6 +2602,24 @@ dependencies = [
  "parking_lot 0.12.1",
  "smallvec",
  "trust-dns-resolver",
+]
+
+[[package]]
+name = "libp2p-floodsub"
+version = "0.41.0"
+source = "git+https://github.com/jsdanielh/rust-libp2p.git#94d669b3e4dd99d7735c2fd1cbc0412b8fad7353"
+dependencies = [
+ "cuckoofilter",
+ "fnv",
+ "futures",
+ "libp2p-core",
+ "libp2p-swarm",
+ "log",
+ "prost 0.11.0",
+ "prost-build",
+ "rand 0.8.5",
+ "smallvec",
+ "thiserror",
 ]
 
 [[package]]
@@ -2700,6 +2731,23 @@ dependencies = [
  "libp2p-ping",
  "libp2p-swarm",
  "prometheus-client",
+]
+
+[[package]]
+name = "libp2p-mplex"
+version = "0.38.0"
+source = "git+https://github.com/jsdanielh/rust-libp2p.git#94d669b3e4dd99d7735c2fd1cbc0412b8fad7353"
+dependencies = [
+ "asynchronous-codec",
+ "bytes",
+ "futures",
+ "libp2p-core",
+ "log",
+ "nohash-hasher",
+ "parking_lot 0.12.1",
+ "rand 0.8.5",
+ "smallvec",
+ "unsigned-varint",
 ]
 
 [[package]]
@@ -2887,6 +2935,21 @@ dependencies = [
  "soketto",
  "url",
  "webpki-roots",
+]
+
+[[package]]
+name = "libp2p-websys-transport"
+version = "0.1.3"
+source = "git+https://github.com/jsdanielh/libp2p-websys-transport.git#355d8927bed2d064309f79415496708b0d41a4a0"
+dependencies = [
+ "futures",
+ "js-sys",
+ "libp2p",
+ "parking_lot 0.12.1",
+ "send_wrapper 0.6.0",
+ "thiserror",
+ "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]
@@ -4007,6 +4070,7 @@ dependencies = [
  "instant",
  "ip_network",
  "libp2p",
+ "libp2p-websys-transport",
  "nimiq-bls",
  "nimiq-hash",
  "nimiq-macros",
@@ -5765,6 +5829,12 @@ name = "send_wrapper"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f638d531eccd6e23b980caf34876660d38e265409d8e99b397ab71eb3612fad0"
+
+[[package]]
+name = "send_wrapper"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd0b0ec5f1c1ca621c432a25813d8d60c88abe6d3e08a3eb9cf37d97a0fe3d73"
 
 [[package]]
 name = "serde"

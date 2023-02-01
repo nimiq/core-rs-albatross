@@ -30,8 +30,10 @@ use libp2p::{
     swarm::{dial_opts::DialOpts, ConnectionLimits, NetworkInfo, SwarmBuilder, SwarmEvent},
     yamux, Multiaddr, PeerId, Swarm, Transport,
 };
-#[cfg(feature = "websocket")]
+#[cfg(feature = "tokio-websocket")]
 use libp2p::{dns, tcp, websocket};
+#[cfg(all(feature = "wasm-websocket", not(feature = "tokio-websocket")))]
+use libp2p_websys_transport::WebsocketTransport;
 use log::Instrument;
 use parking_lot::{Mutex, RwLock};
 use tokio::sync::{broadcast, mpsc, oneshot};
@@ -291,12 +293,12 @@ impl Network {
             // Memory transport primary for testing
             // TODO: Use websocket over the memory transport
 
-            #[cfg(feature = "websocket")]
+            #[cfg(feature = "tokio-websocket")]
             let transport = websocket::WsConfig::new(dns::TokioDnsConfig::system(
                 tcp::tokio::Transport::new(tcp::Config::default().nodelay(true)),
             )?)
             .or_transport(MemoryTransport::default());
-            #[cfg(not(feature = "websocket"))]
+            #[cfg(not(feature = "tokio-websocket"))]
             let transport = MemoryTransport::default();
             // Fixme: Handle wasm compatible transport
 
@@ -314,13 +316,14 @@ impl Network {
                 .timeout(std::time::Duration::from_secs(20))
                 .boxed())
         } else {
-            #[cfg(feature = "websocket")]
+            #[cfg(feature = "tokio-websocket")]
             let transport = websocket::WsConfig::new(dns::TokioDnsConfig::system(
                 tcp::tokio::Transport::new(tcp::Config::default().nodelay(true)),
             )?);
-            #[cfg(not(feature = "websocket"))]
+            #[cfg(all(feature = "wasm-websocket", not(feature = "tokio-websocket")))]
+            let transport = WebsocketTransport::default();
+            #[cfg(all(not(feature = "tokio-websocket"), not(feature = "wasm-websocket")))]
             let transport = MemoryTransport::default();
-            // Fixme: Handle wasm compatible transport
 
             let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
                 .into_authentic(keypair)

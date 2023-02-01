@@ -39,4 +39,4 @@ nimiq-transaction-builder = { path = "../transaction-builder" }
 package = "nimiq-lib"
 path = "../lib"
 version = "0.1"
-features = [ "database-storage", "deadlock", "logging", "metrics-server", "panic", "rpc-server", "signal-handling", "validator", "wallet"]
+features = [ "database-storage", "deadlock", "full-consensus", "logging", "metrics-server", "panic", "rpc-server", "signal-handling", "tokio-websocket", "validator", "wallet"]
