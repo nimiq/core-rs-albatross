@@ -715,9 +715,9 @@ dependencies = [
 
 [[package]]
 name = "bindgen"
-version = "0.60.1"
+version = "0.63.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "062dddbc1ba4aca46de6338e2bf87771414c335f7b2f2036e8f3e9befebf88e6"
+checksum = "36d860121800b2a9a94f9b5604b332d5cffb234ce17609ea479d723dbc9d3885"
 dependencies = [
  "bitflags",
  "cexpr",
@@ -730,6 +730,7 @@ dependencies = [
  "regex",
  "rustc-hash",
  "shlex",
+ "syn",
 ]
 
 [[package]]
@@ -2510,9 +2511,9 @@ checksum = "7fc7aa29613bd6a620df431842069224d8bc9011086b1db4c0e0cd47fa03ec9a"
 
 [[package]]
 name = "libmdbx"
-version = "0.1.7"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc7645d94f8ad38f2a67d8a6d4e5adb86a04aa88c0221361ceeb62690eec890e"
+checksum = "45d93f17ca55682728bb9cb0a25a13623dce2018a7af950935d02f3707f2c49e"
 dependencies = [
  "bitflags",
  "byteorder",
@@ -3082,9 +3083,9 @@ dependencies = [
 
 [[package]]
 name = "mdbx-sys"
-version = "0.11.9-0"
+version = "0.12.3-16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "652ada7dd2b8012698f20fca85665f84ab3a5d07eaec333535c82760e068f291"
+checksum = "26ad064d14b288df583a241cfc26052bf25ffb4fedd9713a29c001d365c10f1d"
 dependencies = [
  "bindgen",
  "cc",
