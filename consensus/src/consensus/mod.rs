@@ -6,11 +6,9 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 
 use futures::{FutureExt, StreamExt};
-#[cfg(target_arch = "wasm32")]
-use gloo_timers::future::{sleep, TimeoutFuture};
 use instant::Instant;
 use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(target_family = "wasm"))]
 use tokio::time::{sleep, Sleep};
 use tokio_stream::wrappers::BroadcastStream;
 
@@ -47,9 +45,7 @@ pub struct Consensus<N: Network> {
 
     /// A Delay which exists purely for the waker on its poll to reactivate the task running Consensus::poll
     /// FIXME Remove this
-    #[cfg(target_arch = "wasm32")]
-    next_execution_timer: Option<Pin<Box<TimeoutFuture>>>,
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(not(target_family = "wasm"))]
     next_execution_timer: Option<Pin<Box<Sleep>>>,
     events: BroadcastSender<ConsensusEvent>,
     established_flag: Arc<AtomicBool>,
@@ -76,6 +72,7 @@ impl<N: Network> Consensus<N> {
     ///
     /// TODO: Set appropriate duration
     /// FIXME Remove this
+    #[cfg(not(target_family = "wasm"))]
     const CONSENSUS_POLL_TIMER: Duration = Duration::from_secs(1);
 
     pub fn from_network(
@@ -110,6 +107,7 @@ impl<N: Network> Consensus<N> {
 
         let established_flag = Arc::new(AtomicBool::new(false));
 
+        #[cfg(not(target_family = "wasm"))]
         let timer = Box::pin(sleep(Self::CONSENSUS_POLL_TIMER));
 
         Consensus {
@@ -117,6 +115,7 @@ impl<N: Network> Consensus<N> {
             network,
             sync: syncer,
             events: tx,
+            #[cfg(not(target_family = "wasm"))]
             next_execution_timer: Some(timer),
             established_flag,
             head_requests: None,
@@ -357,10 +356,13 @@ impl<N: Network> Future for Consensus<N> {
         // was potentially awoken by the delays waker, but even then all there is to do is set up a new timer such
         // that it will wake this task again after another time frame has elapsed. No interval was used as that
         // would periodically wake the task even though it might have just executed
-        let mut timer = Box::pin(sleep(Self::CONSENSUS_POLL_TIMER));
-        // If the sleep wasn't pending anymore, it didn't register us with the waker, but we need that.
-        assert!(timer.poll_unpin(cx) == Poll::Pending);
-        self.next_execution_timer = Some(timer);
+        #[cfg(not(target_family = "wasm"))]
+        {
+            let mut timer = Box::pin(sleep(Self::CONSENSUS_POLL_TIMER));
+            // If the sleep wasn't pending anymore, it didn't register us with the waker, but we need that.
+            assert!(timer.poll_unpin(cx) == Poll::Pending);
+            self.next_execution_timer = Some(timer);
+        }
 
         // 4. Advance consensus and catch-up through head requests.
         self.request_heads();
