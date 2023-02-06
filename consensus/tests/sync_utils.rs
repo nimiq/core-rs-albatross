@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use futures::{future, StreamExt};
@@ -8,10 +7,8 @@ use nimiq_bls::cache::PublicKeyCache;
 use nimiq_consensus::sync::syncer::MacroSyncReturn;
 use nimiq_consensus::sync::syncer_proxy::SyncerProxy;
 use nimiq_light_blockchain::LightBlockchain;
-use nimiq_nano_primitives::KEYS_PATH;
 use nimiq_primitives::policy::Policy;
 use nimiq_test_utils::node::TESTING_BLS_CACHE_MAX_CAPACITY;
-use nimiq_test_utils::zkp_test_data::zkp_test_exe;
 use nimiq_zkp_component::ZKPComponent;
 use parking_lot::{Mutex, RwLock};
 
@@ -134,9 +131,6 @@ pub async fn sync_two_peers(
         Box::new(|fut| {
             tokio::spawn(fut);
         }),
-        false,
-        Some(zkp_test_exe()),
-        PathBuf::from(KEYS_PATH),
         None,
     )
     .await;
@@ -184,9 +178,6 @@ pub async fn sync_two_peers(
         Box::new(|fut| {
             tokio::spawn(fut);
         }),
-        false,
-        Some(zkp_test_exe()),
-        PathBuf::from(KEYS_PATH),
         None,
     )
     .await;

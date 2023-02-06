@@ -29,9 +29,9 @@ members = [
   "mempool",
   "metrics-server",
   "mnemonic",
-  "nano-primitives",
-  "nano-primitives/pedersen-generators",
-  "nano-zkp",
+  "zkp-primitives",
+  "zkp-primitives/pedersen-generators",
+  "zkp",
   "network-interface",
   "network-libp2p",
   "network-mock",
@@ -59,9 +59,10 @@ members = [
   "wallet",
   "web-client",
   "zkp-component",
+  "zkp-circuits",
 ]
 
-# Force nimiq-bls and nimiq-nano-zkp to be built with optimization level 2 in
+# Force nimiq-bls and nimiq-zkp to be built with optimization level 2 in
 # the test profiles. This is necessary in order to have decent tests
 # performance. We do the same with nimiq-bls dev profile because it is compiled
 # for a lot of other crates's tests.
@@ -73,16 +74,16 @@ opt-level = 2
 [profile.test.package.nimiq-bls]
 opt-level = 2
 
-[profile.dev.package.nimiq-nano-primitives]
+[profile.dev.package.nimiq-zkp-primitives]
 opt-level = 2
 
-[profile.test.package.nimiq-nano-primitives]
+[profile.test.package.nimiq-zkp-primitives]
 opt-level = 2
 
-[profile.dev.package.nimiq-nano-zkp]
+[profile.dev.package.nimiq-zkp]
 opt-level = 2
 
-[profile.test.package.nimiq-nano-zkp]
+[profile.test.package.nimiq-zkp]
 opt-level = 2
 
 [profile.dev.package.beserial]

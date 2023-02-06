@@ -37,7 +37,6 @@ nimiq-genesis-builder = { path = "../genesis-builder" }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-mempool = { path = "../mempool" }
-nimiq-nano-primitives = { path = "../nano-primitives" }
 nimiq-transaction-builder = { path = "../transaction-builder" }
 nimiq-network-interface = { path = "../network-interface" }
 nimiq-network-libp2p = { path = "../network-libp2p" }
@@ -48,4 +47,5 @@ nimiq-validator = { path = "../validator" }
 nimiq-validator-network = { path = "../validator-network" }
 nimiq-utils = { path = "../utils" }
 nimiq-vrf = { path = "../vrf" }
-nimiq-zkp-component = { path = "../zkp-component", features = ["database-storage", "zkp-prover"] }
+nimiq-zkp-primitives = { path = "../zkp-primitives", features = ["parallel", "zkp-prover", "parallel"] }
+nimiq-zkp-component = { path = "../zkp-component", features = ["database-storage", "zkp-prover", "parallel"] }

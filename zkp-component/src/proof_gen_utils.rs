@@ -12,8 +12,8 @@ use tokio::{
 
 use beserial::{Deserialize, Serialize};
 use nimiq_block::MacroBlock;
-use nimiq_nano_primitives::MacroBlock as ZKPMacroBlock;
-use nimiq_nano_zkp::NanoZKP;
+use nimiq_zkp::prove::prove;
+use nimiq_zkp_primitives::MacroBlock as ZKPMacroBlock;
 
 use super::types::ZKPState;
 use crate::types::*;
@@ -25,7 +25,7 @@ pub fn generate_new_proof(
     latest_header_hash: [u8; 32],
     previous_proof: Option<Proof<MNT6_753>>,
     genesis_state: Vec<u8>,
-    keys_path: &Path,
+    proving_keys_path: &Path,
 ) -> Result<ZKPState, ZKProofGenerationError> {
     let validators = block.get_validators();
 
@@ -38,7 +38,7 @@ pub fn generate_new_proof(
 
         let block = ZKPMacroBlock::try_from(&block).expect("Invalid election block");
 
-        let proof = NanoZKP::prove(
+        let proof = prove(
             latest_pks.clone(),
             latest_header_hash,
             final_pks,
@@ -46,7 +46,7 @@ pub fn generate_new_proof(
             previous_proof.map(|proof| (proof, genesis_state.clone())),
             true,
             true,
-            keys_path,
+            proving_keys_path,
         );
 
         return match proof {

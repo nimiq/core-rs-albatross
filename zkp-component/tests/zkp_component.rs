@@ -11,7 +11,6 @@ use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_database::volatile::VolatileEnvironment;
-use nimiq_nano_primitives::{setup::setup, KEYS_PATH};
 use nimiq_network_interface::network::Network;
 use nimiq_network_mock::{MockHub, MockNetwork};
 use nimiq_primitives::{networks::NetworkId, policy::Policy};
@@ -19,9 +18,10 @@ use nimiq_test_log::test;
 use nimiq_test_utils::{
     blockchain::{signing_key, voting_key},
     blockchain_with_rng::produce_macro_blocks_with_rng,
-    zkp_test_data::{get_base_seed, zkp_test_exe, ZKPROOF_SERIALIZED_IN_HEX},
+    zkp_test_data::{get_base_seed, zkp_test_exe, ZKPROOF_SERIALIZED_IN_HEX, ZKP_TEST_KEYS_PATH},
 };
 use nimiq_utils::time::OffsetTime;
+use nimiq_zkp_circuits::setup::setup;
 
 use nimiq_zkp_component::proof_store::{DBProofStore, ProofStore};
 use nimiq_zkp_component::proof_utils::validate_proof;
@@ -46,7 +46,7 @@ fn blockchain() -> Arc<RwLock<Blockchain>> {
 
 #[test(tokio::test)]
 async fn builds_valid_genesis_proof() {
-    setup(get_base_seed(), Path::new(KEYS_PATH), false).unwrap();
+    setup(get_base_seed(), Path::new(ZKP_TEST_KEYS_PATH), false).unwrap();
     let blockchain = blockchain();
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
@@ -57,9 +57,6 @@ async fn builds_valid_genesis_proof() {
         Box::new(|fut| {
             tokio::spawn(fut);
         }),
-        false,
-        Some(zkp_test_exe()),
-        PathBuf::from(KEYS_PATH),
         None,
     )
     .await
@@ -78,7 +75,7 @@ async fn builds_valid_genesis_proof() {
 #[test(tokio::test)]
 #[ignore]
 async fn loads_valid_zkp_state_from_db() {
-    setup(get_base_seed(), Path::new(KEYS_PATH), false).unwrap();
+    setup(get_base_seed(), Path::new(ZKP_TEST_KEYS_PATH), false).unwrap();
     let blockchain = blockchain();
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
@@ -104,9 +101,6 @@ async fn loads_valid_zkp_state_from_db() {
         Box::new(|fut| {
             tokio::spawn(fut);
         }),
-        false,
-        Some(zkp_test_exe()),
-        PathBuf::from(KEYS_PATH),
         proof_store,
     )
     .await;
@@ -121,7 +115,7 @@ async fn loads_valid_zkp_state_from_db() {
 
 #[test(tokio::test)]
 async fn does_not_load_invalid_zkp_state_from_db() {
-    setup(get_base_seed(), Path::new(KEYS_PATH), false).unwrap();
+    setup(get_base_seed(), Path::new(ZKP_TEST_KEYS_PATH), false).unwrap();
     let blockchain = blockchain();
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
@@ -143,9 +137,6 @@ async fn does_not_load_invalid_zkp_state_from_db() {
         Box::new(|fut| {
             tokio::spawn(fut);
         }),
-        false,
-        Some(zkp_test_exe()),
-        PathBuf::from(KEYS_PATH),
         proof_store,
     )
     .await;
@@ -161,7 +152,7 @@ async fn does_not_load_invalid_zkp_state_from_db() {
 #[test(tokio::test)]
 #[ignore]
 async fn can_produce_two_consecutive_valid_zk_proofs() {
-    setup(get_base_seed(), Path::new(KEYS_PATH), true).unwrap();
+    setup(get_base_seed(), Path::new(ZKP_TEST_KEYS_PATH), true).unwrap();
     let blockchain = blockchain();
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
@@ -169,7 +160,7 @@ async fn can_produce_two_consecutive_valid_zk_proofs() {
     network2.dial_address(network.address()).await.unwrap();
     network.dial_address(network2.address()).await.unwrap();
 
-    let zkp_prover = ZKPComponent::new(
+    let zkp_prover = ZKPComponent::with_prover(
         BlockchainProxy::from(&blockchain),
         Arc::clone(&network),
         Box::new(|fut| {
@@ -177,7 +168,7 @@ async fn can_produce_two_consecutive_valid_zk_proofs() {
         }),
         true,
         Some(zkp_test_exe()),
-        PathBuf::from(KEYS_PATH),
+        Some(PathBuf::from(ZKP_TEST_KEYS_PATH)),
         None,
     )
     .await;

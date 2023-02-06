@@ -19,7 +19,7 @@ maintenance = { status = "experimental" }
 [dependencies]
 async-trait = "0.1"
 futures = { package = "futures-util", version = "0.3" }
-gloo-timers = { version = "0.2.6" , features = [ "futures" ]}
+gloo-timers = { version = "0.2.6", features = [ "futures" ]}
 instant = { version = "0.1", features = [ "wasm-bindgen" ] }
 lazy_static = "1.4.0"
 log = { package = "tracing", version = "0.1", features = ["log"] }
@@ -40,7 +40,6 @@ nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-light-blockchain = { path = "../light-blockchain" }
 nimiq-macros = { path = "../macros" }
-nimiq-nano-primitives = { path = "../nano-primitives" }
 nimiq-network-interface = { path = "../network-interface" }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }
 nimiq-transaction = { path = "../primitives/transaction" }
@@ -67,7 +66,7 @@ nimiq-test-log = { path = "../test-log" }
 # This adds a circular dev-dependency which is fine but breaks VS code rust-analyzer.
 # See https://github.com/rust-analyzer/rust-analyzer/issues/2414
 nimiq-test-utils = { path = "../test-utils" }
-nimiq-zkp-component = { path = "../zkp-component", features = ["zkp-prover"] }
+nimiq-zkp-component = { path = "../zkp-component", features = ["zkp-prover", "parallel"] }
 
 [features]
 full = ["nimiq-blockchain", "nimiq-blockchain-proxy/full"]

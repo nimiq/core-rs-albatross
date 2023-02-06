@@ -2998,6 +2998,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "lock_api"
+version = "0.4.6"
+source = "git+https://github.com/styppo/parking_lot.git#3830254eb8738fb87d85d6fd802f9186891777d5"
+dependencies = [
+ "backtrace",
+ "log",
+ "scopeguard",
+]
+
+[[package]]
 name = "log"
 version = "0.4.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3374,7 +3384,6 @@ dependencies = [
  "nimiq-hash_derive",
  "nimiq-keys",
  "nimiq-macros",
- "nimiq-nano-primitives",
  "nimiq-network-interface",
  "nimiq-primitives",
  "nimiq-test-log",
@@ -3382,6 +3391,7 @@ dependencies = [
  "nimiq-transaction",
  "nimiq-utils",
  "nimiq-vrf",
+ "nimiq-zkp-primitives",
  "num-traits",
  "serde",
  "thiserror",
@@ -3438,8 +3448,6 @@ dependencies = [
  "nimiq-hash",
  "nimiq-keys",
  "nimiq-mmr",
- "nimiq-nano-primitives",
- "nimiq-nano-zkp",
  "nimiq-primitives",
  "nimiq-test-log",
  "nimiq-test-utils",
@@ -3447,6 +3455,8 @@ dependencies = [
  "nimiq-transaction-builder",
  "nimiq-utils",
  "nimiq-vrf",
+ "nimiq-zkp",
+ "nimiq-zkp-primitives",
  "parking_lot 0.12.1",
  "prometheus-client",
  "rand 0.8.5",
@@ -3539,19 +3549,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "nimiq-compile-zkp-setup"
-version = "0.1.0"
-dependencies = [
- "ark-ec",
- "ark-groth16",
- "ark-mnt6-753",
- "ark-serialize",
- "nimiq-nano-primitives",
- "rand 0.8.5",
- "rand_chacha 0.3.1",
-]
-
-[[package]]
 name = "nimiq-consensus"
 version = "0.1.0"
 dependencies = [
@@ -3575,7 +3572,6 @@ dependencies = [
  "nimiq-keys",
  "nimiq-light-blockchain",
  "nimiq-macros",
- "nimiq-nano-primitives",
  "nimiq-network-interface",
  "nimiq-network-libp2p",
  "nimiq-network-mock",
@@ -3838,8 +3834,6 @@ dependencies = [
  "nimiq-log",
  "nimiq-mempool",
  "nimiq-metrics-server",
- "nimiq-nano-primitives",
- "nimiq-nano-zkp",
  "nimiq-network-interface",
  "nimiq-network-libp2p",
  "nimiq-primitives",
@@ -3849,7 +3843,10 @@ dependencies = [
  "nimiq-validator",
  "nimiq-validator-network",
  "nimiq-wallet",
+ "nimiq-zkp",
+ "nimiq-zkp-circuits",
  "nimiq-zkp-component",
+ "nimiq-zkp-primitives",
  "parking_lot 0.12.1",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
@@ -3881,12 +3878,12 @@ dependencies = [
  "nimiq-collections",
  "nimiq-genesis",
  "nimiq-hash",
- "nimiq-nano-zkp",
  "nimiq-primitives",
  "nimiq-test-log",
  "nimiq-test-utils",
  "nimiq-utils",
  "nimiq-vrf",
+ "nimiq-zkp",
  "parking_lot 0.12.1",
  "rand 0.8.5",
  "thiserror",
@@ -3990,66 +3987,6 @@ dependencies = [
  "nimiq-test-log",
  "nimiq-utils",
  "unicode-normalization",
-]
-
-[[package]]
-name = "nimiq-nano-primitives"
-version = "0.1.0"
-dependencies = [
- "ark-crypto-primitives",
- "ark-ec",
- "ark-ff",
- "ark-groth16",
- "ark-mnt4-753",
- "ark-mnt6-753",
- "ark-r1cs-std",
- "ark-relations",
- "ark-serialize",
- "ark-std",
- "beserial",
- "lazy_static",
- "nimiq-block",
- "nimiq-bls",
- "nimiq-collections",
- "nimiq-hash",
- "nimiq-keys",
- "nimiq-pedersen-generators",
- "nimiq-primitives",
- "nimiq-test-log",
- "nimiq-utils",
- "num-traits",
- "rand 0.8.5",
- "rayon",
- "thiserror",
- "tracing",
-]
-
-[[package]]
-name = "nimiq-nano-zkp"
-version = "0.1.0"
-dependencies = [
- "ark-crypto-primitives",
- "ark-ec",
- "ark-ff",
- "ark-groth16",
- "ark-mnt4-753",
- "ark-mnt6-753",
- "ark-r1cs-std",
- "ark-relations",
- "ark-serialize",
- "ark-sponge",
- "ark-std",
- "beserial",
- "lazy_static",
- "nimiq-bls",
- "nimiq-compile-zkp-setup",
- "nimiq-nano-primitives",
- "nimiq-primitives",
- "nimiq-test-log",
- "parking_lot 0.12.0",
- "rand 0.8.5",
- "thiserror",
- "tracing",
 ]
 
 [[package]]
@@ -4358,7 +4295,6 @@ dependencies = [
  "nimiq-hash",
  "nimiq-keys",
  "nimiq-mempool",
- "nimiq-nano-primitives",
  "nimiq-network-interface",
  "nimiq-network-libp2p",
  "nimiq-network-mock",
@@ -4370,6 +4306,7 @@ dependencies = [
  "nimiq-validator-network",
  "nimiq-vrf",
  "nimiq-zkp-component",
+ "nimiq-zkp-primitives",
  "parking_lot 0.12.1",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
@@ -4587,6 +4524,58 @@ dependencies = [
 ]
 
 [[package]]
+name = "nimiq-zkp"
+version = "0.1.0"
+dependencies = [
+ "ark-crypto-primitives",
+ "ark-ec",
+ "ark-ff",
+ "ark-groth16",
+ "ark-mnt4-753",
+ "ark-mnt6-753",
+ "ark-r1cs-std",
+ "ark-relations",
+ "ark-serialize",
+ "ark-sponge",
+ "ark-std",
+ "beserial",
+ "lazy_static",
+ "nimiq-bls",
+ "nimiq-primitives",
+ "nimiq-test-log",
+ "nimiq-zkp-circuits",
+ "nimiq-zkp-primitives",
+ "parking_lot 0.12.0",
+ "rand 0.8.5",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
+name = "nimiq-zkp-circuits"
+version = "0.1.0"
+dependencies = [
+ "ark-crypto-primitives",
+ "ark-ec",
+ "ark-ff",
+ "ark-groth16",
+ "ark-mnt4-753",
+ "ark-mnt6-753",
+ "ark-r1cs-std",
+ "ark-relations",
+ "ark-serialize",
+ "ark-std",
+ "clap",
+ "nimiq-bls",
+ "nimiq-primitives",
+ "nimiq-test-log",
+ "nimiq-zkp-primitives",
+ "rand 0.8.5",
+ "rand_chacha 0.3.1",
+ "tracing",
+]
+
+[[package]]
 name = "nimiq-zkp-component"
 version = "0.1.0"
 dependencies = [
@@ -4613,8 +4602,6 @@ dependencies = [
  "nimiq-keys",
  "nimiq-log",
  "nimiq-macros",
- "nimiq-nano-primitives",
- "nimiq-nano-zkp",
  "nimiq-network-interface",
  "nimiq-network-libp2p",
  "nimiq-network-mock",
@@ -4624,6 +4611,9 @@ dependencies = [
  "nimiq-transaction",
  "nimiq-utils",
  "nimiq-validator-network",
+ "nimiq-zkp",
+ "nimiq-zkp-circuits",
+ "nimiq-zkp-primitives",
  "parking_lot 0.12.1",
  "rand 0.8.5",
  "tempfile",
@@ -4632,6 +4622,37 @@ dependencies = [
  "tokio-stream",
  "tracing",
  "tracing-subscriber 0.3.16",
+]
+
+[[package]]
+name = "nimiq-zkp-primitives"
+version = "0.1.0"
+dependencies = [
+ "ark-ec",
+ "ark-ff",
+ "ark-groth16",
+ "ark-mnt4-753",
+ "ark-mnt6-753",
+ "ark-r1cs-std",
+ "ark-relations",
+ "ark-serialize",
+ "ark-std",
+ "beserial",
+ "lazy_static",
+ "nimiq-block",
+ "nimiq-bls",
+ "nimiq-collections",
+ "nimiq-hash",
+ "nimiq-keys",
+ "nimiq-pedersen-generators",
+ "nimiq-primitives",
+ "nimiq-test-log",
+ "nimiq-utils",
+ "num-traits",
+ "rand 0.8.5",
+ "rayon",
+ "thiserror",
+ "tracing",
 ]
 
 [[package]]
@@ -4847,8 +4868,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d17b78036a60663b797adeaee46f5c9dfebb86948d1255007a1d6be0271ff99"
 dependencies = [
  "instant",
- "lock_api",
+ "lock_api 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot_core 0.8.5",
+]
+
+[[package]]
+name = "parking_lot"
+version = "0.12.0"
+source = "git+https://github.com/styppo/parking_lot.git#3830254eb8738fb87d85d6fd802f9186891777d5"
+dependencies = [
+ "backtrace",
+ "lock_api 0.4.6 (git+https://github.com/styppo/parking_lot.git)",
+ "log",
+ "parking_lot_core 0.9.1 (git+https://github.com/styppo/parking_lot.git)",
 ]
 
 [[package]]
@@ -4857,8 +4889,8 @@ version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3742b2c103b9f06bc9fff0a37ff4912935851bee6d36f3c02bcc755bcfec228f"
 dependencies = [
- "lock_api",
- "parking_lot_core 0.9.1",
+ "lock_api 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot_core 0.9.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -4888,6 +4920,18 @@ dependencies = [
  "redox_syscall",
  "smallvec",
  "thread-id",
+ "windows-sys 0.32.0",
+]
+
+[[package]]
+name = "parking_lot_core"
+version = "0.9.1"
+source = "git+https://github.com/styppo/parking_lot.git#3830254eb8738fb87d85d6fd802f9186891777d5"
+dependencies = [
+ "cfg-if",
+ "libc",
+ "redox_syscall",
+ "smallvec",
  "windows-sys 0.32.0",
 ]
 

@@ -1,4 +1,3 @@
-use nimiq_nano_primitives::SEED;
 use parking_lot::{Mutex, RwLock};
 #[cfg(feature = "zkp-prover")]
 use rand::SeedableRng;
@@ -22,10 +21,6 @@ use nimiq_genesis::{NetworkId, NetworkInfo};
 use nimiq_light_blockchain::LightBlockchain;
 #[cfg(feature = "validator")]
 use nimiq_mempool::mempool::Mempool;
-use nimiq_nano_primitives::setup::KEYS_PATH;
-#[cfg(feature = "zkp-prover")]
-use nimiq_nano_primitives::setup::{all_files_created, load_verifying_key_from_file, setup};
-use nimiq_nano_zkp::{set_verifying_key, ZKP_VERIFYING_KEY};
 use nimiq_network_interface::network::Network as NetworkInterface;
 use nimiq_network_libp2p::{
     discovery::peer_contacts::{PeerContact, Services},
@@ -41,6 +36,12 @@ use nimiq_validator::validator::ValidatorProxy as AbstractValidatorProxy;
 use nimiq_validator_network::network_impl::ValidatorNetworkImpl;
 #[cfg(feature = "wallet")]
 use nimiq_wallet::WalletStore;
+#[cfg(feature = "zkp-prover")]
+use nimiq_zkp::ZKP_VERIFYING_KEY;
+#[cfg(feature = "zkp-prover")]
+use nimiq_zkp_circuits::setup::{
+    all_files_created, load_verifying_key_from_file, setup, DEFAULT_KEYS_PATH, DEVELOPMENT_SEED,
+};
 #[cfg(feature = "database-storage")]
 use nimiq_zkp_component::proof_store::{DBProofStore, ProofStore};
 use nimiq_zkp_component::zkp_component::{
@@ -137,45 +138,32 @@ impl ClientInner {
         }
         let network_info = NetworkInfo::from_network_id(config.network_id);
 
-        // If we are missing the verifying keys in memory there might be an error or we may need to generate them not in run time.
-        // If the Prover is active we need to ensure that the proving keys are present.
-        if ZKP_VERIFYING_KEY.read().is_none() || config.zkp.prover_active {
-            if !config.zkp.prover_active
-                || config.network_id == NetworkId::UnitAlbatross
-                || config.network_id == NetworkId::TestAlbatross
-            {
-                log::error!(
-                    "Missing ZKP verification keys! Make sure to place the keys in '{:?}' and rebuild the client again."
-                ,KEYS_PATH);
-                return Err(Error::config_error("Missing ZKP verification keys"));
-            }
-            if config.network_id == NetworkId::DevAlbatross || config.zkp.prover_active {
-                // For the albatross dev net, we need to generate/download the test keys
-                // for the zero-knowledge proofs.
-                #[cfg(feature = "zkp-prover")]
-                {
-                    let zkp_keys_path = PathBuf::from(KEYS_PATH);
-                    if !all_files_created(&zkp_keys_path, config.zkp.prover_active) {
-                        log::info!("Setting up zero-knowledge prover keys for devnet.");
-                        log::info!(
-                            "This task only needs to be run once and might take about an hour."
-                        );
-                        log::info!(
-                            "Alternatively, you can place the keys in this folder: {:?}.",
-                            KEYS_PATH
-                        );
-                        setup(
-                            ChaCha20Rng::from_seed(SEED),
-                            &zkp_keys_path,
-                            config.zkp.prover_active,
-                        )?;
-                    }
-                    log::info!("Setting the verification key.");
-                    let vk = load_verifying_key_from_file(&zkp_keys_path)?;
-                    set_verifying_key(vk);
-                    log::debug!("Finished Nano ZKP setup.");
-                }
-            }
+        #[cfg(not(feature = "zkp-prover"))]
+        if config.zkp.prover_active {
+            panic!("Can't build a prover node without the zkp-prover feature enabled")
+        }
+
+        #[cfg(feature = "zkp-prover")]
+        // If the Prover is active for devnet we need to ensure that the proving keys are present.
+        if config.network_id == NetworkId::DevAlbatross
+            && config.zkp.prover_active
+            && !all_files_created(&config.zkp.proving_keys_path, config.zkp.prover_active)
+        {
+            log::info!("Setting up zero-knowledge prover keys for devnet.");
+            log::info!("This task only needs to be run once and might take about an hour.");
+            log::info!(
+                "Alternatively, you can place the proving keys in this folder: {:?}.",
+                config.zkp.proving_keys_path
+            );
+            setup(
+                ChaCha20Rng::from_seed(DEVELOPMENT_SEED),
+                &PathBuf::from(DEFAULT_KEYS_PATH),
+                config.zkp.prover_active,
+            )?;
+            log::info!("Setting the verification key.");
+            let vk = load_verifying_key_from_file(&config.zkp.proving_keys_path)?;
+            assert_eq!(vk, *ZKP_VERIFYING_KEY, "Verifying keys don't match. The build in verifying keys don't match the newly generated ones.");
+            log::debug!("Finished ZKP setup.");
         }
 
         // Initialize clock
@@ -273,19 +261,27 @@ impl ClientInner {
                     .unwrap(),
                 ));
                 let blockchain_proxy = BlockchainProxy::from(&blockchain);
-                let zkp_component = ZKPComponent::new(
-                    blockchain_proxy.clone(),
-                    Arc::clone(&network),
-                    executor.clone(),
+                let zkp_component = if config.zkp.prover_active {
                     #[cfg(feature = "zkp-prover")]
-                    config.zkp.prover_active,
-                    #[cfg(feature = "zkp-prover")]
-                    None,
-                    #[cfg(feature = "zkp-prover")]
-                    PathBuf::from(KEYS_PATH),
-                    zkp_storage,
-                )
-                .await;
+                    ZKPComponent::with_prover(
+                        blockchain_proxy.clone(),
+                        Arc::clone(&network),
+                        executor.clone(),
+                        config.zkp.prover_active,
+                        None,
+                        Some(config.zkp.proving_keys_path),
+                        zkp_storage,
+                    )
+                    .await
+                } else {
+                    ZKPComponent::new(
+                        blockchain_proxy.clone(),
+                        Arc::clone(&network),
+                        executor.clone(),
+                        zkp_storage,
+                    )
+                    .await
+                };
                 let syncer = SyncerProxy::new_history(
                     blockchain_proxy.clone(),
                     Arc::clone(&network),
@@ -309,19 +305,28 @@ impl ClientInner {
                     .unwrap(),
                 ));
                 let blockchain_proxy = BlockchainProxy::from(&blockchain);
-                let zkp_component = ZKPComponent::new(
-                    blockchain_proxy.clone(),
-                    Arc::clone(&network),
-                    executor.clone(),
+                let zkp_component = if config.zkp.prover_active {
                     #[cfg(feature = "zkp-prover")]
-                    config.zkp.prover_active,
-                    #[cfg(feature = "zkp-prover")]
-                    None,
-                    #[cfg(feature = "zkp-prover")]
-                    PathBuf::from(KEYS_PATH),
-                    zkp_storage,
-                )
-                .await;
+                    ZKPComponent::with_prover(
+                        blockchain_proxy.clone(),
+                        Arc::clone(&network),
+                        executor.clone(),
+                        config.zkp.prover_active,
+                        None,
+                        Some(config.zkp.proving_keys_path),
+                        zkp_storage,
+                    )
+                    .await
+                } else {
+                    ZKPComponent::new(
+                        blockchain_proxy.clone(),
+                        Arc::clone(&network),
+                        executor.clone(),
+                        zkp_storage,
+                    )
+                    .await
+                };
+
                 let syncer = SyncerProxy::new_full(
                     blockchain_proxy.clone(),
                     Arc::clone(&network),
@@ -339,12 +344,6 @@ impl ClientInner {
                     blockchain_proxy.clone(),
                     Arc::clone(&network),
                     executor.clone(),
-                    #[cfg(feature = "zkp-prover")]
-                    config.zkp.prover_active,
-                    #[cfg(feature = "zkp-prover")]
-                    None,
-                    #[cfg(feature = "zkp-prover")]
-                    PathBuf::from(KEYS_PATH),
                     zkp_storage,
                 )
                 .await;

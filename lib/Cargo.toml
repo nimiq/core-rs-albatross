@@ -61,8 +61,8 @@ nimiq-light-blockchain = { path = "../light-blockchain" }
 nimiq-log = { path = "../log", optional = true }
 nimiq-mempool = { path = "../mempool", optional = true }
 nimiq-metrics-server = { path = "../metrics-server", optional = true }
-nimiq-nano-zkp = { path = "../nano-zkp", features = ["zkp-prover"] }
-nimiq-nano-primitives = { path = "../nano-primitives", features = ["zkp-prover"] }
+nimiq-zkp = { path = "../zkp", features = ["zkp-prover"] }
+nimiq-zkp-primitives = { path = "../zkp-primitives" }
 nimiq-network-libp2p = { path = "../network-libp2p" }
 nimiq-network-interface = { path = "../network-interface" }
 nimiq-primitives = { path = "../primitives", features = ["networks"] }
@@ -72,6 +72,7 @@ nimiq-validator = { path = "../validator", optional = true, features = ["trusted
 nimiq-validator-network = { path = "../validator-network", optional = true }
 nimiq-wallet = { path = "../wallet", optional = true }
 nimiq-zkp-component = { path = "../zkp-component" }
+nimiq-zkp-circuits = { path = "../zkp-circuits" }
 
 [dev-dependencies]
 nimiq-test-log = { path = "../test-log" }
@@ -94,4 +95,5 @@ validator = ["database-storage", "nimiq-mempool", "nimiq-validator", "nimiq-vali
 wallet = ["database-storage", "nimiq-wallet"]
 wasm-websocket = ["nimiq-network-libp2p/wasm-websocket"]
 web-logging = ["nimiq-log", "time/wasm-bindgen", "tracing-subscriber", "tracing-web"]
-zkp-prover = ["nimiq-zkp-component/zkp-prover"]
+zkp-prover = ["nimiq-zkp-component/zkp-prover", "nimiq-zkp-primitives/zkp-prover"]
+parallel = ["nimiq-zkp-primitives/parallel", "nimiq-zkp-component/parallel", "nimiq-zkp/parallel", "nimiq-zkp-circuits/parallel"]

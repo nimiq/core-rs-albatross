@@ -29,7 +29,7 @@ rand = "0.8"
 beserial = { path = "../beserial", features = ["derive"] }
 nimiq-account = { path = "../primitives/account" }
 nimiq-block = { path = "../primitives/block" }
-nimiq-blockchain-interface = {path = "../blockchain-interface"}
+nimiq-blockchain-interface = { path = "../blockchain-interface" }
 nimiq-bls = { path = "../bls", features = ["beserial"] }
 nimiq-collections = { path = "../collections" }
 nimiq-database = { path = "../database" }
@@ -38,7 +38,7 @@ nimiq-genesis = { path = "../genesis" }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-mmr = { path = "../primitives/mmr" }
-nimiq-nano-zkp = { path = "../nano-zkp" }
+nimiq-zkp = { path = "../zkp" }
 nimiq-primitives = { path = "../primitives" }
 nimiq-transaction = { path = "../primitives/transaction" }
 nimiq-utils = { path = "../utils", features = ["math", "time"] }
@@ -46,12 +46,12 @@ nimiq-vrf = { path = "../vrf" }
 
 [dev-dependencies]
 nimiq-block-production = { path = "../block-production", features = ["test-utils"] }
-nimiq-nano-primitives = { path= "../nano-primitives" }
+nimiq-zkp-primitives = { path = "../zkp-primitives" }
 nimiq-test-log = { path = "../test-log" }
 nimiq-transaction-builder = { path = "../transaction-builder" }
 # This adds a circular dev-dependency which is fine but breaks VS code rust-analyzer.
 # See https://github.com/rust-analyzer/rust-analyzer/issues/2414
-nimiq-test-utils = { path= "../test-utils" }
+nimiq-test-utils = { path = "../test-utils" }
 
 [features]
 metrics = ["prometheus-client"]

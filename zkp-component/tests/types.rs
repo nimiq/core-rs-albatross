@@ -6,8 +6,8 @@ use beserial::{Deserialize, Serialize};
 use nimiq_block::MacroBlock;
 use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue};
 use nimiq_hash::Blake2bHash;
-use nimiq_nano_primitives::KEYS_PATH;
 use nimiq_primitives::policy::Policy;
+use nimiq_test_utils::zkp_test_data::ZKP_TEST_KEYS_PATH;
 use nimiq_zkp_component::types::{ProofInput, ZKPState, ZKProof};
 
 #[test]
@@ -79,7 +79,7 @@ fn it_serializes_and_deserializes_proof_input() {
         block: MacroBlock::default(),
         previous_proof: Some(Proof::default()),
         genesis_state: vec![1, 2, 4, 6, 7, 8, 9, 0],
-        keys_path: PathBuf::from(KEYS_PATH),
+        proving_keys_path: PathBuf::from(ZKP_TEST_KEYS_PATH),
     };
     let serialized = Serialize::serialize_to_vec(&proof_input);
     let deserialized: ProofInput = Deserialize::deserialize_from_vec(&serialized).unwrap();
@@ -91,7 +91,7 @@ fn it_serializes_and_deserializes_proof_input() {
         block: MacroBlock::default(),
         previous_proof: None,
         genesis_state: vec![],
-        keys_path: PathBuf::from(KEYS_PATH),
+        proving_keys_path: PathBuf::from(ZKP_TEST_KEYS_PATH),
     };
     let serialized = Serialize::serialize_to_vec(&proof_input);
     let deserialized: ProofInput = Deserialize::deserialize_from_vec(&serialized).unwrap();

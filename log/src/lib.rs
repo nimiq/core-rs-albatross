@@ -37,8 +37,8 @@ pub static NIMIQ_MODULES: &[&str] = &[
     "nimiq_metrics_server",
     "nimiq_mmr",
     "nimiq_mnemonic",
-    "nimiq_nano_primitives",
-    "nimiq_nano_zkp",
+    "nimiq_zkp_primitives",
+    "nimiq_zkp",
     "nimiq_network_interface",
     "nimiq_network_libp2p",
     "nimiq_network_mock",
@@ -62,6 +62,7 @@ pub static NIMIQ_MODULES: &[&str] = &[
     "nimiq_wallet",
     "nimiq_web_client",
     "nimiq_zkp_component",
+    "nimiq_zkp_circuits",
 ];
 
 pub const ENV: &str = "RUST_LOG";

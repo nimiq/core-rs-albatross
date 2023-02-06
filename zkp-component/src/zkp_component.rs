@@ -125,9 +125,6 @@ impl<N: Network> ZKPComponent<N> {
         blockchain: BlockchainProxy,
         network: Arc<N>,
         executor: impl TaskExecutor + Send + 'static,
-        #[cfg(feature = "zkp-prover")] is_prover_active: bool,
-        #[cfg(feature = "zkp-prover")] prover_path: Option<PathBuf>,
-        #[cfg(feature = "zkp-prover")] keys_path: PathBuf,
         proof_storage: Option<Box<dyn ProofStore>>,
     ) -> Self {
         // Defaults zkp state to genesis.
@@ -158,30 +155,42 @@ impl<N: Network> ZKPComponent<N> {
         // Loads the proof from the db if any.
         zkp_component.load_proof_from_db();
 
-        // Activates the prover based on the configuration provided.
-        #[cfg(feature = "zkp-prover")]
-        {
-            zkp_component.zk_prover = match (is_prover_active, &zkp_component.blockchain) {
-                (true, BlockchainProxy::Full(ref blockchain)) => Some(
-                    ZKProver::new(
-                        Arc::clone(blockchain),
-                        Arc::clone(&zkp_component.network),
-                        Arc::clone(&zkp_component.zkp_state),
-                        prover_path,
-                        keys_path,
-                    )
-                    .await,
-                ),
-                (true, _) => {
-                    log::error!("ZKP Prover cannot be activated for a light node.");
-                    None
-                }
-                _ => None,
-            };
-        }
-
         // The handler for zkp request is launched.
         zkp_component.launch_request_handler(executor);
+        zkp_component
+    }
+
+    #[cfg(feature = "zkp-prover")]
+    pub async fn with_prover(
+        blockchain: BlockchainProxy,
+        network: Arc<N>,
+        executor: impl TaskExecutor + Send + 'static,
+        is_prover_active: bool,
+        prover_path: Option<PathBuf>,
+        proving_keys_path: Option<PathBuf>,
+        proof_storage: Option<Box<dyn ProofStore>>,
+    ) -> Self {
+        let mut zkp_component = Self::new(blockchain, network, executor, proof_storage).await;
+
+        // Activates the prover based on the configuration provided.
+        zkp_component.zk_prover = match (is_prover_active, &zkp_component.blockchain) {
+            (true, BlockchainProxy::Full(ref blockchain)) => Some(
+                ZKProver::new(
+                    Arc::clone(blockchain),
+                    Arc::clone(&zkp_component.network),
+                    Arc::clone(&zkp_component.zkp_state),
+                    prover_path,
+                    proving_keys_path,
+                )
+                .await,
+            ),
+            (true, _) => {
+                log::error!("ZKP Prover cannot be activated for a light node.");
+                None
+            }
+            _ => None,
+        };
+
         zkp_component
     }
 

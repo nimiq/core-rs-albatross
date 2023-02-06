@@ -2,7 +2,6 @@ use std::path::Path;
 use std::sync::Arc;
 
 use ark_groth16::Proof;
-use nimiq_nano_primitives::{setup::setup, KEYS_PATH};
 use parking_lot::RwLock;
 
 use beserial::Deserialize;
@@ -15,9 +14,10 @@ use nimiq_test_log::test;
 use nimiq_test_utils::{
     blockchain::{signing_key, voting_key},
     blockchain_with_rng::produce_macro_blocks_with_rng,
-    zkp_test_data::{get_base_seed, ZKPROOF_SERIALIZED_IN_HEX},
+    zkp_test_data::{get_base_seed, ZKPROOF_SERIALIZED_IN_HEX, ZKP_TEST_KEYS_PATH},
 };
 use nimiq_utils::time::OffsetTime;
+use nimiq_zkp_circuits::setup::setup;
 
 use nimiq_zkp_component::proof_store::{DBProofStore, ProofStore};
 use nimiq_zkp_component::proof_utils::validate_proof;
@@ -39,7 +39,7 @@ fn blockchain() -> Arc<RwLock<Blockchain>> {
 
 #[test(tokio::test)]
 async fn can_detect_valid_and_invalid_genesis_proof() {
-    setup(get_base_seed(), Path::new(KEYS_PATH), false).unwrap();
+    setup(get_base_seed(), Path::new(ZKP_TEST_KEYS_PATH), false).unwrap();
     let blockchain = BlockchainProxy::from(blockchain());
 
     let proof = ZKProof {
@@ -63,7 +63,7 @@ async fn can_detect_valid_and_invalid_genesis_proof() {
 
 #[test(tokio::test)]
 async fn can_detect_invalid_proof_none_genesis_blocks() {
-    setup(get_base_seed(), Path::new(KEYS_PATH), false).unwrap();
+    setup(get_base_seed(), Path::new(ZKP_TEST_KEYS_PATH), false).unwrap();
     let blockchain = blockchain();
 
     let producer = BlockProducer::new(signing_key(), voting_key());
@@ -113,7 +113,7 @@ async fn can_detect_invalid_proof_none_genesis_blocks() {
 #[test(tokio::test)]
 #[ignore]
 async fn can_detect_valid_proof_none_genesis_blocks() {
-    setup(get_base_seed(), Path::new(KEYS_PATH), false).unwrap();
+    setup(get_base_seed(), Path::new(ZKP_TEST_KEYS_PATH), false).unwrap();
     let blockchain = blockchain();
 
     let producer = BlockProducer::new(signing_key(), voting_key());

@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
 use futures::StreamExt;
@@ -8,7 +8,6 @@ use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_database::volatile::VolatileEnvironment;
-use nimiq_nano_primitives::{setup::setup, KEYS_PATH};
 use nimiq_network_interface::network::Network;
 use nimiq_network_mock::MockHub;
 use nimiq_primitives::{networks::NetworkId, policy::Policy};
@@ -16,9 +15,9 @@ use nimiq_test_log::test;
 use nimiq_test_utils::{
     blockchain::{signing_key, voting_key},
     blockchain_with_rng::produce_macro_blocks_with_rng,
-    zkp_test_data::ZKPROOF_SERIALIZED_IN_HEX,
-    zkp_test_data::{get_base_seed, zkp_test_exe},
+    zkp_test_data::{get_base_seed, ZKPROOF_SERIALIZED_IN_HEX, ZKP_TEST_KEYS_PATH},
 };
+use nimiq_zkp_circuits::setup::setup;
 
 use nimiq_zkp_component::proof_store::{DBProofStore, ProofStore};
 use nimiq_zkp_component::proof_utils::validate_proof;
@@ -45,7 +44,7 @@ fn blockchain() -> Arc<RwLock<Blockchain>> {
 
 #[test(tokio::test)]
 async fn peers_dont_reply_with_outdated_proof() {
-    setup(get_base_seed(), Path::new(KEYS_PATH), false).unwrap();
+    setup(get_base_seed(), Path::new(ZKP_TEST_KEYS_PATH), false).unwrap();
     let blockchain = blockchain();
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
@@ -60,9 +59,6 @@ async fn peers_dont_reply_with_outdated_proof() {
         Box::new(|fut| {
             tokio::spawn(fut);
         }),
-        false,
-        Some(zkp_test_exe()),
-        PathBuf::from(KEYS_PATH),
         None,
     )
     .await;
@@ -73,9 +69,6 @@ async fn peers_dont_reply_with_outdated_proof() {
         Box::new(|fut| {
             tokio::spawn(fut);
         }),
-        false,
-        Some(zkp_test_exe()),
-        PathBuf::from(KEYS_PATH),
         None,
     )
     .await;
@@ -96,7 +89,7 @@ async fn peers_dont_reply_with_outdated_proof() {
 #[test(tokio::test)]
 #[ignore]
 async fn peers_reply_with_valid_proof() {
-    setup(get_base_seed(), Path::new(KEYS_PATH), false).unwrap();
+    setup(get_base_seed(), Path::new(ZKP_TEST_KEYS_PATH), false).unwrap();
     let blockchain2 = blockchain();
     let blockchain3 = blockchain();
     let mut hub = MockHub::new();
@@ -139,9 +132,6 @@ async fn peers_reply_with_valid_proof() {
         Box::new(|fut| {
             tokio::spawn(fut);
         }),
-        false,
-        Some(zkp_test_exe()),
-        PathBuf::from(KEYS_PATH),
         proof_store_2,
     )
     .await;
@@ -152,9 +142,6 @@ async fn peers_reply_with_valid_proof() {
         Box::new(|fut| {
             tokio::spawn(fut);
         }),
-        false,
-        Some(zkp_test_exe()),
-        PathBuf::from(KEYS_PATH),
         proof_store_3,
     )
     .await;
@@ -184,7 +171,7 @@ async fn peers_reply_with_valid_proof() {
 #[test(tokio::test)]
 #[ignore]
 async fn peers_reply_with_valid_proof_and_election_block() {
-    setup(get_base_seed(), Path::new(KEYS_PATH), false).unwrap();
+    setup(get_base_seed(), Path::new(ZKP_TEST_KEYS_PATH), false).unwrap();
     let blockchain2 = blockchain();
     let blockchain3 = blockchain();
     let mut hub = MockHub::new();
@@ -227,9 +214,6 @@ async fn peers_reply_with_valid_proof_and_election_block() {
         Box::new(|fut| {
             tokio::spawn(fut);
         }),
-        false,
-        Some(zkp_test_exe()),
-        PathBuf::from(KEYS_PATH),
         proof_store_2,
     )
     .await;
@@ -240,9 +224,6 @@ async fn peers_reply_with_valid_proof_and_election_block() {
         Box::new(|fut| {
             tokio::spawn(fut);
         }),
-        false,
-        Some(zkp_test_exe()),
-        PathBuf::from(KEYS_PATH),
         proof_store_3,
     )
     .await;

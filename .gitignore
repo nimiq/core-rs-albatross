@@ -11,6 +11,8 @@ target
 /devnet-environments/*/build/
 .nimiq_*
 proving_keys
+verifying_keys
+!verifying_keys/merger_wrapper.bin
 temp-logs
 temp-state
 .vscode

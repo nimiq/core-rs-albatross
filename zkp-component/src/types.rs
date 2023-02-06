@@ -16,18 +16,18 @@ use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue};
 use nimiq_hash::Blake2bHash;
-use nimiq_nano_primitives::MacroBlock as ZKPMacroBlock;
 use nimiq_network_interface::network::Network;
 use nimiq_network_interface::request::{Handle, RequestError};
 use nimiq_network_interface::{
     network::Topic,
     request::{RequestCommon, RequestMarker},
 };
+use nimiq_zkp_primitives::MacroBlock as ZKPMacroBlock;
 use parking_lot::RwLock;
 use std::borrow::Cow;
 use std::path::PathBuf;
 
-use nimiq_nano_primitives::NanoZKPError;
+use nimiq_zkp_primitives::NanoZKPError;
 use thiserror::Error;
 
 use crate::ZKPComponent;
@@ -306,7 +306,7 @@ pub struct ProofInput {
     pub latest_header_hash: Blake2bHash,
     pub previous_proof: Option<Proof<MNT6_753>>,
     pub genesis_state: Vec<u8>,
-    pub keys_path: PathBuf,
+    pub proving_keys_path: PathBuf,
 }
 
 /// The serialization of the ProofInput is unsafe over the network.
@@ -340,7 +340,7 @@ impl Serialize for ProofInput {
 
         size += SerializeWithLength::serialize::<u8, _>(&self.genesis_state, writer)?;
 
-        let path_buf = self.keys_path.to_string_lossy().to_string();
+        let path_buf = self.proving_keys_path.to_string_lossy().to_string();
         size += SerializeWithLength::serialize::<u16, _>(&path_buf, writer)?;
 
         Ok(size)
@@ -362,7 +362,7 @@ impl Serialize for ProofInput {
 
         size += SerializeWithLength::serialized_size::<u8>(&self.genesis_state);
 
-        let path_buf = self.keys_path.to_string_lossy().to_string();
+        let path_buf = self.proving_keys_path.to_string_lossy().to_string();
         size += SerializeWithLength::serialized_size::<u16>(&path_buf);
 
         size
@@ -409,7 +409,7 @@ impl Deserialize for ProofInput {
             latest_header_hash,
             previous_proof,
             genesis_state,
-            keys_path: PathBuf::from(path_buf),
+            proving_keys_path: PathBuf::from(path_buf),
         })
     }
 }

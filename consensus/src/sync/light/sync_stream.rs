@@ -337,7 +337,6 @@ impl<TNetwork: Network> Stream for LightMacroSync<TNetwork> {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
     use std::sync::Arc;
 
     use futures::StreamExt;
@@ -349,7 +348,6 @@ mod tests {
     use nimiq_blockchain_proxy::BlockchainProxy;
     use nimiq_database::volatile::VolatileEnvironment;
     use nimiq_light_blockchain::LightBlockchain;
-    use nimiq_nano_primitives::KEYS_PATH;
     use nimiq_network_interface::{network::Network, request::request_handler};
     use nimiq_network_mock::{MockHub, MockNetwork};
     use nimiq_primitives::{networks::NetworkId, policy::Policy};
@@ -412,9 +410,6 @@ mod tests {
                 Box::new(|fut| {
                     tokio::spawn(fut);
                 }),
-                false,
-                None,
-                PathBuf::from(KEYS_PATH),
                 None,
             )
             .await;
@@ -466,9 +461,6 @@ mod tests {
                 Box::new(|fut| {
                     tokio::spawn(fut);
                 }),
-                false,
-                None,
-                PathBuf::from(KEYS_PATH),
                 None,
             )
             .await;
@@ -493,9 +485,6 @@ mod tests {
                 Box::new(|fut| {
                     tokio::spawn(fut);
                 }),
-                false,
-                None,
-                PathBuf::from(KEYS_PATH),
                 None,
             )
             .await;
@@ -547,9 +536,6 @@ mod tests {
                 Box::new(|fut| {
                     tokio::spawn(fut);
                 }),
-                false,
-                None,
-                PathBuf::from(KEYS_PATH),
                 None,
             )
             .await;
@@ -574,9 +560,6 @@ mod tests {
                 Box::new(|fut| {
                     tokio::spawn(fut);
                 }),
-                false,
-                None,
-                PathBuf::from(KEYS_PATH),
                 None,
             )
             .await;
@@ -628,9 +611,6 @@ mod tests {
                 Box::new(|fut| {
                     tokio::spawn(fut);
                 }),
-                false,
-                None,
-                PathBuf::from(KEYS_PATH),
                 None,
             )
             .await;
@@ -655,9 +635,6 @@ mod tests {
                 Box::new(|fut| {
                     tokio::spawn(fut);
                 }),
-                false,
-                None,
-                PathBuf::from(KEYS_PATH),
                 None,
             )
             .await;
@@ -704,9 +681,6 @@ mod tests {
                 Box::new(|fut| {
                     tokio::spawn(fut);
                 }),
-                false,
-                None,
-                PathBuf::from(KEYS_PATH),
                 None,
             )
             .await;
@@ -731,9 +705,6 @@ mod tests {
                 Box::new(|fut| {
                     tokio::spawn(fut);
                 }),
-                false,
-                None,
-                PathBuf::from(KEYS_PATH),
                 None,
             )
             .await;
@@ -817,9 +788,6 @@ mod tests {
                 Box::new(|fut| {
                     tokio::spawn(fut);
                 }),
-                false,
-                None,
-                PathBuf::from(KEYS_PATH),
                 None,
             )
             .await;
@@ -844,9 +812,6 @@ mod tests {
                 Box::new(|fut| {
                     tokio::spawn(fut);
                 }),
-                false,
-                None,
-                PathBuf::from(KEYS_PATH),
                 None,
             )
             .await;

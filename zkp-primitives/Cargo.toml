@@ -1,0 +1,47 @@
+[package]
+name = "nimiq-zkp-primitives"
+version = "0.1.0"
+authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
+description = "Shared Primitives of Recursive SNARKs for Nimiq's Nano Nodes"
+license = "MIT/Apache-2.0"
+homepage = "https://nimiq.com"
+repository = "https://github.com/nimiq/core-rs-albatross"
+edition = "2021"
+
+[build-dependencies]
+nimiq-pedersen-generators = { path = "pedersen-generators" }
+
+[dependencies]
+num-traits = "0.2"
+rayon = { version = "^1.6", optional = true }
+log = { package = "tracing", version = "0.1", features = ["log"] }
+lazy_static = "1.4"
+beserial = { path = "../beserial", features = ["derive"] }
+rand = { version = "0.8", features = ["small_rng"] }
+thiserror = "1.0"
+
+ark-ec = "0.3"
+ark-ff = "0.3"
+ark-groth16 = { version = "0.3", default-features = false }
+ark-mnt4-753 = "0.3"
+ark-mnt6-753 = "0.3"
+ark-relations = "0.3"
+ark-r1cs-std = "0.3.1"
+ark-serialize = "0.3"
+ark-std = "0.3"
+
+nimiq-bls = { path = "../bls" }
+nimiq-hash = { path = "../hash" }
+nimiq-primitives = { path = "../primitives", features = ["policy"] }
+
+[dev-dependencies]
+nimiq-block = { path = "../primitives/block" }
+nimiq-collections = { path = "../collections" }
+nimiq-keys = { path = "../keys" }
+nimiq-test-log = { path = "../test-log" }
+nimiq-utils = { path = "../utils" }
+nimiq-primitives = { path = "../primitives", features = ["slots"] }
+
+[features]
+zkp-prover = ["ark-mnt4-753/r1cs", "ark-mnt6-753/r1cs", "ark-groth16/r1cs"]
+parallel = ["rayon", "ark-ec/parallel", "ark-ff/parallel", "ark-std/parallel", "ark-groth16/parallel"]

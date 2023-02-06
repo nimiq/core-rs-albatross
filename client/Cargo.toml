@@ -42,4 +42,5 @@ features = [
     "validator",
     "wallet",
     "zkp-prover",
+    "parallel",
 ]

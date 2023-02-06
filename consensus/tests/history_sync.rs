@@ -1,6 +1,5 @@
 mod sync_utils;
 
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -8,10 +7,8 @@ use futures::StreamExt;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_consensus::sync::syncer_proxy::SyncerProxy;
-use nimiq_nano_primitives::KEYS_PATH;
 use nimiq_test_log::test;
 use nimiq_test_utils::node::TESTING_BLS_CACHE_MAX_CAPACITY;
-use nimiq_test_utils::zkp_test_data::zkp_test_exe;
 use nimiq_zkp_component::ZKPComponent;
 use parking_lot::{Mutex, RwLock};
 
@@ -202,9 +199,6 @@ async fn sync_ingredients() {
         Box::new(|fut| {
             tokio::spawn(fut);
         }),
-        false,
-        Some(zkp_test_exe()),
-        PathBuf::from(KEYS_PATH),
         None,
     )
     .await
@@ -248,9 +242,6 @@ async fn sync_ingredients() {
         Box::new(|fut| {
             tokio::spawn(fut);
         }),
-        false,
-        Some(zkp_test_exe()),
-        PathBuf::from(KEYS_PATH),
         None,
     )
     .await

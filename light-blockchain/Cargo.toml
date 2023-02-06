@@ -20,7 +20,7 @@ nimiq-blockchain-interface = { path = "../blockchain-interface" }
 nimiq-collections = { path = "../collections" }
 nimiq-genesis = { path = "../genesis", default-features = false }
 nimiq-hash = { path = "../hash" }
-nimiq-nano-zkp = { path = "../nano-zkp" }
+nimiq-zkp = { path = "../zkp" }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }
 nimiq-utils = { path = "../utils", features = ["time"] }
 nimiq-vrf = { path = "../vrf" }

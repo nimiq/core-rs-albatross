@@ -24,6 +24,7 @@ use nimiq_primitives::{networks::NetworkId, policy::Policy};
 use nimiq_utils::file_store::FileStore;
 #[cfg(feature = "validator")]
 use nimiq_utils::key_rng::SecureGenerate;
+use nimiq_zkp_circuits::setup::DEFAULT_KEYS_PATH;
 
 #[cfg(any(feature = "rpc-server", feature = "metrics-server"))]
 use crate::config::consts;
@@ -47,7 +48,7 @@ use crate::{
 ///
 /// # ToDo
 ///
-/// * We'll propably have this enum somewhere in the primitives. So this is a placeholder.
+/// * We'll probably have this enum somewhere in the primitives. So this is a placeholder.
 ///
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Display)]
 pub enum SyncMode {
@@ -73,7 +74,7 @@ pub struct ConsensusConfig {
     /// Sync mode used based upon its client type
     pub sync_mode: SyncMode,
     #[builder(default = "3")]
-    /// Mininum number of peers necessary to reach consensus
+    /// Minimum number of peers necessary to reach consensus
     pub min_peers: usize,
     #[builder(default = "1")]
     /// Maximum number of epochs that are stored in the client
@@ -741,8 +742,13 @@ impl ClientConfigBuilder {
 
         // Configure the zk prover
         if let Some(zkp_settings) = config_file.zkp.as_ref() {
+            let mut proving_keys_path = PathBuf::from(DEFAULT_KEYS_PATH);
+            if let Some(zkp_path) = zkp_settings.proving_keys_path.as_ref() {
+                proving_keys_path = PathBuf::from(zkp_path);
+            }
             self.zkp = Some(ZKPConfig {
                 prover_active: zkp_settings.prover_active,
+                proving_keys_path,
             });
         }
 
@@ -854,8 +860,20 @@ impl ClientConfigBuilder {
 }
 
 /// Contains the configurations for the ZKP storage, verification and proof generation.
-#[derive(Debug, Clone, Builder, Default)]
+#[derive(Debug, Clone, Builder)]
 pub struct ZKPConfig {
     /// ZK Proof generation activation config.
     pub prover_active: bool,
+
+    /// Proving keys path for the zkp prover.
+    pub proving_keys_path: PathBuf,
+}
+
+impl Default for ZKPConfig {
+    fn default() -> Self {
+        Self {
+            prover_active: false,
+            proving_keys_path: PathBuf::from(DEFAULT_KEYS_PATH),
+        }
+    }
 }

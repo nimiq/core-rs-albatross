@@ -6,8 +6,8 @@ use nimiq_block::{Block, BlockError};
 use nimiq_blockchain_interface::{
     AbstractBlockchain, BlockchainEvent, ChainInfo, PushError, PushResult,
 };
-use nimiq_nano_zkp::{NanoProof, NanoZKP};
 use nimiq_primitives::policy::Policy;
+use nimiq_zkp::{verify::verify, NanoProof, ZKP_VERIFYING_KEY};
 
 use crate::Blockchain;
 
@@ -62,7 +62,7 @@ impl Blockchain {
         let final_public_keys = block.validators().unwrap().voting_keys_g2();
 
         // Verify the zk proof.
-        let verify_result = NanoZKP::verify(
+        let verify_result = verify(
             genesis_block.block_number(),
             initial_header_hash,
             initial_public_keys,
@@ -70,6 +70,7 @@ impl Blockchain {
             final_header_hash,
             final_public_keys,
             proof,
+            &ZKP_VERIFYING_KEY,
         );
 
         if verify_result.is_err() || !verify_result.unwrap() {

@@ -13,7 +13,6 @@ use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_consensus::{sync::syncer_proxy::SyncerProxy, Consensus};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis_builder::GenesisInfo;
-use nimiq_nano_primitives::KEYS_PATH;
 use nimiq_network_interface::network::Network as NetworkInterface;
 use nimiq_network_mock::MockHub;
 use nimiq_primitives::{key_nibbles::KeyNibbles, networks::NetworkId};
@@ -21,7 +20,7 @@ use nimiq_utils::time::OffsetTime;
 use nimiq_zkp_component::{proof_store::DBProofStore, ZKPComponent};
 
 use crate::test_network::TestNetwork;
-use crate::zkp_test_data::zkp_test_exe;
+use crate::zkp_test_data::{zkp_test_exe, ZKP_TEST_KEYS_PATH};
 
 pub const TESTING_BLS_CACHE_MAX_CAPACITY: usize = 100;
 
@@ -74,7 +73,7 @@ impl<N: NetworkInterface + TestNetwork> Node<N> {
         let network = N::build_network(peer_id, block_hash, hub).await;
         let zkp_storage: Option<Box<dyn ProofStore>> =
             Some(Box::new(DBProofStore::new(env.clone())));
-        let zkp_proxy = ZKPComponent::new(
+        let zkp_proxy = ZKPComponent::with_prover(
             BlockchainProxy::from(&blockchain),
             Arc::clone(&network),
             Box::new(|fut| {
@@ -82,7 +81,7 @@ impl<N: NetworkInterface + TestNetwork> Node<N> {
             }),
             is_prover_active,
             Some(zkp_test_exe()),
-            PathBuf::from(KEYS_PATH),
+            Some(PathBuf::from(ZKP_TEST_KEYS_PATH)),
             zkp_storage,
         )
         .await;

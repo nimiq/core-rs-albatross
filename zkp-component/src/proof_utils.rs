@@ -5,8 +5,8 @@ use nimiq_block::{Block, MacroBlock};
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_genesis::NetworkInfo;
-use nimiq_nano_primitives::NanoZKPError;
-use nimiq_nano_zkp::NanoZKP;
+use nimiq_zkp::{verify::verify, ZKP_VERIFYING_KEY};
+use nimiq_zkp_primitives::NanoZKPError;
 
 use super::types::ZKPState;
 use crate::types::*;
@@ -84,7 +84,7 @@ pub(crate) fn validate_proof_get_new_state(
         .map(|pub_key| pub_key.public_key)
         .collect();
 
-    if NanoZKP::verify(
+    if verify(
         genesis_block.block_number(),
         genesis_block.hash().into(),
         genesis_pks,
@@ -92,6 +92,7 @@ pub(crate) fn validate_proof_get_new_state(
         new_block.hash().into(),
         new_pks.clone(),
         proof.clone(),
+        &ZKP_VERIFYING_KEY,
     )? {
         return Ok(ZKPState {
             latest_pks: new_pks,
