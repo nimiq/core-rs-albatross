@@ -5,6 +5,7 @@ use std::{
     collections::{HashSet, VecDeque},
     sync::Arc,
 };
+#[cfg(not(target_family = "wasm"))]
 use tokio::task::spawn_blocking;
 
 use parking_lot::Mutex;
@@ -214,10 +215,14 @@ pub async fn push_block_only<N: Network>(
     block: Block,
     include_body: bool,
 ) -> (Result<PushResult, PushError>, Blake2bHash) {
+    #[cfg(not(target_family = "wasm"))]
     let push_results =
         spawn_blocking(move || blockchain_push::<N>(blockchain, bls_cache, Some(block), vec![]))
             .await
             .expect("blockchain.push() should not panic");
+    #[cfg(target_family = "wasm")]
+    let push_results = blockchain_push::<N>(blockchain, bls_cache, Some(block), vec![]);
+
     validate_message(
         network,
         pubsub_id,
@@ -263,12 +268,15 @@ pub async fn push_multiple_blocks_with_chunks<N: Network>(
         if push_chunk_result.is_err() {
             chunks.clear();
         }
-
+        #[cfg(not(target_family = "wasm"))]
         let push_results = spawn_blocking(move || {
             blockchain_push::<N>(blockchain2, bls_cache2, Some(block), chunks)
         })
         .await
         .expect("blockchain.push() should not panic");
+
+        #[cfg(target_family = "wasm")]
+        let push_results = blockchain_push::<N>(blockchain2, bls_cache2, Some(block), chunks);
 
         push_result = push_results.block_push_result.unwrap();
         let block_hash = push_results.block_hash;
