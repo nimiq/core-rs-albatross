@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use futures::StreamExt;
 use gloo_timers::future::IntervalStream;
 use wasm_bindgen::prelude::*;
@@ -9,10 +11,12 @@ pub use nimiq::{
     client::{Client, Consensus},
     config::command_line::CommandLine,
     config::config::ClientConfig,
-    config::config_file::{ConfigFile, LogSettings, SyncMode},
+    config::config_file::{ConfigFile, LogSettings, Seed, SyncMode},
     error::Error,
     extras::{panic::initialize_panic_reporting, web_logging::initialize_web_logging},
 };
+
+use nimiq_network_libp2p::Multiaddr;
 
 async fn light_client() {
     let log_settings = LogSettings {
@@ -30,11 +34,17 @@ async fn light_client() {
     let mut builder = ClientConfig::builder();
 
     // Finalize config.
-    let config = builder
+    let mut config = builder
         .volatile()
         .light()
         .build()
         .expect("Build configuration failed");
+
+    let seed = Seed {
+        address: Multiaddr::from_str("/dns4/seed1.v2.nimiq-testnet.com/tcp/8443/ws").unwrap(),
+    };
+    config.network.seeds = vec![seed];
+
     log::debug!("Final configuration: {:#?}", config);
 
     // Create client from config.

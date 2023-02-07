@@ -4558,6 +4558,7 @@ dependencies = [
  "futures-util",
  "gloo-timers",
  "nimiq-lib",
+ "nimiq-network-libp2p",
  "tracing",
  "wasm-bindgen",
  "wasm-bindgen-futures",

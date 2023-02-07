@@ -27,6 +27,8 @@ log = { package = "tracing", version = "0.1", features = ["log"] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 
+nimiq-network-libp2p = { path = "../network-libp2p" }
+
 [dependencies.nimiq]
 package = "nimiq-lib"
 path = "../lib"
