@@ -4514,9 +4514,15 @@ dependencies = [
 name = "nimiq-web-client"
 version = "0.1.0"
 dependencies = [
+ "beserial",
  "futures-util",
  "gloo-timers",
+ "nimiq-blockchain-interface",
+ "nimiq-blockchain-proxy",
+ "nimiq-consensus",
+ "nimiq-hash",
  "nimiq-lib",
+ "nimiq-network-interface",
  "nimiq-network-libp2p",
  "tracing",
  "wasm-bindgen",
