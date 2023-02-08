@@ -306,7 +306,7 @@ pub struct ProofInput {
     pub latest_header_hash: Blake2bHash,
     pub previous_proof: Option<Proof<MNT6_753>>,
     pub genesis_state: Vec<u8>,
-    pub proving_keys_path: PathBuf,
+    pub prover_keys_path: PathBuf,
 }
 
 /// The serialization of the ProofInput is unsafe over the network.
@@ -340,7 +340,7 @@ impl Serialize for ProofInput {
 
         size += SerializeWithLength::serialize::<u8, _>(&self.genesis_state, writer)?;
 
-        let path_buf = self.proving_keys_path.to_string_lossy().to_string();
+        let path_buf = self.prover_keys_path.to_string_lossy().to_string();
         size += SerializeWithLength::serialize::<u16, _>(&path_buf, writer)?;
 
         Ok(size)
@@ -362,7 +362,7 @@ impl Serialize for ProofInput {
 
         size += SerializeWithLength::serialized_size::<u8>(&self.genesis_state);
 
-        let path_buf = self.proving_keys_path.to_string_lossy().to_string();
+        let path_buf = self.prover_keys_path.to_string_lossy().to_string();
         size += SerializeWithLength::serialized_size::<u16>(&path_buf);
 
         size
@@ -409,7 +409,7 @@ impl Deserialize for ProofInput {
             latest_header_hash,
             previous_proof,
             genesis_state,
-            proving_keys_path: PathBuf::from(path_buf),
+            prover_keys_path: PathBuf::from(path_buf),
         })
     }
 }

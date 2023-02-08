@@ -1,6 +1,7 @@
 use std::{env, fs::File, path::Path};
 
 use ark_serialize::CanonicalSerialize;
+
 use nimiq_zkp_circuits::setup::{all_files_created, load_verifying_key_from_file};
 use nimiq_zkp_primitives::NanoZKPError;
 

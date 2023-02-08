@@ -39,8 +39,9 @@ use nimiq_wallet::WalletStore;
 #[cfg(feature = "zkp-prover")]
 use nimiq_zkp::ZKP_VERIFYING_KEY;
 #[cfg(feature = "zkp-prover")]
-use nimiq_zkp_circuits::setup::{
-    all_files_created, load_verifying_key_from_file, setup, DEFAULT_KEYS_PATH, DEVELOPMENT_SEED,
+use nimiq_zkp_circuits::{
+    setup::{all_files_created, load_verifying_key_from_file, setup, DEVELOPMENT_SEED},
+    DEFAULT_KEYS_PATH,
 };
 #[cfg(feature = "database-storage")]
 use nimiq_zkp_component::proof_store::{DBProofStore, ProofStore};
@@ -147,13 +148,13 @@ impl ClientInner {
         // If the Prover is active for devnet we need to ensure that the proving keys are present.
         if config.network_id == NetworkId::DevAlbatross
             && config.zkp.prover_active
-            && !all_files_created(&config.zkp.proving_keys_path, config.zkp.prover_active)
+            && !all_files_created(&config.zkp.prover_keys_path, config.zkp.prover_active)
         {
             log::info!("Setting up zero-knowledge prover keys for devnet.");
             log::info!("This task only needs to be run once and might take about an hour.");
             log::info!(
                 "Alternatively, you can place the proving keys in this folder: {:?}.",
-                config.zkp.proving_keys_path
+                config.zkp.prover_keys_path
             );
             setup(
                 ChaCha20Rng::from_seed(DEVELOPMENT_SEED),
@@ -161,7 +162,7 @@ impl ClientInner {
                 config.zkp.prover_active,
             )?;
             log::info!("Setting the verification key.");
-            let vk = load_verifying_key_from_file(&config.zkp.proving_keys_path)?;
+            let vk = load_verifying_key_from_file(&config.zkp.prover_keys_path)?;
             assert_eq!(vk, *ZKP_VERIFYING_KEY, "Verifying keys don't match. The build in verifying keys don't match the newly generated ones.");
             log::debug!("Finished ZKP setup.");
         }
@@ -269,7 +270,7 @@ impl ClientInner {
                         executor.clone(),
                         config.zkp.prover_active,
                         None,
-                        Some(config.zkp.proving_keys_path),
+                        config.zkp.prover_keys_path,
                         zkp_storage,
                     )
                     .await
@@ -321,7 +322,7 @@ impl ClientInner {
                         executor.clone(),
                         config.zkp.prover_active,
                         None,
-                        Some(config.zkp.proving_keys_path),
+                        config.zkp.prover_keys_path,
                         zkp_storage,
                     )
                     .await

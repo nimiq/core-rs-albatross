@@ -168,7 +168,7 @@ async fn can_produce_two_consecutive_valid_zk_proofs() {
         }),
         true,
         Some(zkp_test_exe()),
-        Some(PathBuf::from(ZKP_TEST_KEYS_PATH)),
+        PathBuf::from(ZKP_TEST_KEYS_PATH),
         None,
     )
     .await;

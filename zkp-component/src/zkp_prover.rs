@@ -17,7 +17,6 @@ use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent, Direction}
 use nimiq_genesis::NetworkInfo;
 use nimiq_network_interface::network::Network;
 use nimiq_primitives::policy::Policy;
-use nimiq_zkp_circuits::DEFAULT_KEYS_PATH;
 use nimiq_zkp_primitives::state_commitment;
 
 use crate::proof_gen_utils::*;
@@ -44,7 +43,7 @@ pub struct ZKProver<N: Network> {
     genesis_state: Vec<u8>,
     proof_future:
         Option<BoxFuture<'static, Result<(ZKPState, MacroBlock), ZKProofGenerationError>>>,
-    proving_keys_path: PathBuf,
+    prover_keys_path: PathBuf,
     prover_path: Option<PathBuf>,
 }
 
@@ -54,7 +53,7 @@ impl<N: Network> ZKProver<N> {
         network: Arc<N>,
         zkp_state: Arc<RwLock<ZKPState>>,
         prover_path: Option<PathBuf>,
-        proving_keys_path: Option<PathBuf>,
+        prover_keys_path: PathBuf,
     ) -> Self {
         let network_info = NetworkInfo::from_network_id(blockchain.read().network_id());
         let genesis_block = network_info.genesis_block::<Block>().unwrap_macro();
@@ -109,8 +108,6 @@ impl<N: Network> ZKProver<N> {
             future::ready(result)
         });
 
-        let proving_keys_path = proving_keys_path.unwrap_or(PathBuf::from(DEFAULT_KEYS_PATH));
-
         Self {
             network,
             zkp_state,
@@ -119,7 +116,7 @@ impl<N: Network> ZKProver<N> {
             pending_election_blocks,
             election_stream: Box::pin(blockchain_election_rx),
             proof_future: None,
-            proving_keys_path,
+            prover_keys_path,
             prover_path,
         }
     }
@@ -167,7 +164,7 @@ impl<N: Network> ZKProver<N> {
                         latest_header_hash: zkp_state.latest_header_hash.clone(),
                         previous_proof: zkp_state.latest_proof.clone(),
                         genesis_state: self.genesis_state.clone(),
-                        proving_keys_path: self.proving_keys_path.clone(),
+                        prover_keys_path: self.prover_keys_path.clone(),
                     },
                     self.prover_path.clone(),
                 )

@@ -26,7 +26,6 @@ use nimiq_bls::utils::bytes_to_bits;
 use nimiq_primitives::policy::Policy;
 use nimiq_zkp_primitives::{MacroBlock, NanoZKPError, PK_TREE_BREADTH, PK_TREE_DEPTH};
 
-pub const DEFAULT_KEYS_PATH: &str = ".zkp";
 pub const DEVELOPMENT_SEED: [u8; 32] = [
     1, 0, 52, 0, 0, 0, 0, 0, 1, 0, 10, 0, 22, 32, 0, 0, 2, 0, 55, 49, 0, 11, 0, 0, 3, 0, 0, 0, 0,
     0, 2, 92,

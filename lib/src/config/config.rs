@@ -24,7 +24,7 @@ use nimiq_primitives::{networks::NetworkId, policy::Policy};
 use nimiq_utils::file_store::FileStore;
 #[cfg(feature = "validator")]
 use nimiq_utils::key_rng::SecureGenerate;
-use nimiq_zkp_circuits::setup::DEFAULT_KEYS_PATH;
+use nimiq_zkp_circuits::DEFAULT_KEYS_PATH;
 
 #[cfg(any(feature = "rpc-server", feature = "metrics-server"))]
 use crate::config::consts;
@@ -742,13 +742,14 @@ impl ClientConfigBuilder {
 
         // Configure the zk prover
         if let Some(zkp_settings) = config_file.zkp.as_ref() {
-            let mut proving_keys_path = PathBuf::from(DEFAULT_KEYS_PATH);
-            if let Some(zkp_path) = zkp_settings.proving_keys_path.as_ref() {
-                proving_keys_path = PathBuf::from(zkp_path);
+            let mut prover_keys_path = PathBuf::from(DEFAULT_KEYS_PATH);
+            if let Some(zkp_path) = zkp_settings.prover_keys_path.as_ref() {
+                prover_keys_path = PathBuf::from(zkp_path);
             }
+
             self.zkp = Some(ZKPConfig {
                 prover_active: zkp_settings.prover_active,
-                proving_keys_path,
+                prover_keys_path,
             });
         }
 
@@ -865,15 +866,15 @@ pub struct ZKPConfig {
     /// ZK Proof generation activation config.
     pub prover_active: bool,
 
-    /// Proving keys path for the zkp prover.
-    pub proving_keys_path: PathBuf,
+    /// Prover keys path for the zkp prover.
+    pub prover_keys_path: PathBuf,
 }
 
 impl Default for ZKPConfig {
     fn default() -> Self {
         Self {
             prover_active: false,
-            proving_keys_path: PathBuf::from(DEFAULT_KEYS_PATH),
+            prover_keys_path: PathBuf::from(DEFAULT_KEYS_PATH),
         }
     }
 }

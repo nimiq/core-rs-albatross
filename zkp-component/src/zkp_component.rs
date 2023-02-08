@@ -167,7 +167,7 @@ impl<N: Network> ZKPComponent<N> {
         executor: impl TaskExecutor + Send + 'static,
         is_prover_active: bool,
         prover_path: Option<PathBuf>,
-        proving_keys_path: Option<PathBuf>,
+        prover_keys_path: PathBuf,
         proof_storage: Option<Box<dyn ProofStore>>,
     ) -> Self {
         let mut zkp_component = Self::new(blockchain, network, executor, proof_storage).await;
@@ -180,7 +180,7 @@ impl<N: Network> ZKPComponent<N> {
                     Arc::clone(&zkp_component.network),
                     Arc::clone(&zkp_component.zkp_state),
                     prover_path,
-                    proving_keys_path,
+                    prover_keys_path,
                 )
                 .await,
             ),

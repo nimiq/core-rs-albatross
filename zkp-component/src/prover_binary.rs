@@ -25,7 +25,7 @@ pub async fn prover_main() -> Result<(), SerializingError> {
             proof_input.latest_header_hash.into(),
             proof_input.previous_proof,
             proof_input.genesis_state,
-            &proof_input.proving_keys_path,
+            &proof_input.prover_keys_path,
         ),
         Err(e) => Err(ZKProofGenerationError::from(e)),
     };

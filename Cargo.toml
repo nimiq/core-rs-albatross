@@ -62,6 +62,8 @@ members = [
   "zkp-circuits",
 ]
 
+resolver = "2"
+
 # Force nimiq-bls and nimiq-zkp to be built with optimization level 2 in
 # the test profiles. This is necessary in order to have decent tests
 # performance. We do the same with nimiq-bls dev profile because it is compiled

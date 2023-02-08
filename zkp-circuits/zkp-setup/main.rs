@@ -5,8 +5,8 @@ use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 
 use nimiq_zkp_circuits::{
-    setup::{setup, DEFAULT_KEYS_PATH},
-    DEVELOPMENT_SEED,
+    setup::{setup, DEVELOPMENT_SEED},
+    DEFAULT_KEYS_PATH,
 };
 use nimiq_zkp_primitives::NanoZKPError;
 

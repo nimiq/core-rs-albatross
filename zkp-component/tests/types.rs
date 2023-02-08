@@ -79,7 +79,7 @@ fn it_serializes_and_deserializes_proof_input() {
         block: MacroBlock::default(),
         previous_proof: Some(Proof::default()),
         genesis_state: vec![1, 2, 4, 6, 7, 8, 9, 0],
-        proving_keys_path: PathBuf::from(ZKP_TEST_KEYS_PATH),
+        prover_keys_path: PathBuf::from(ZKP_TEST_KEYS_PATH),
     };
     let serialized = Serialize::serialize_to_vec(&proof_input);
     let deserialized: ProofInput = Deserialize::deserialize_from_vec(&serialized).unwrap();
@@ -91,7 +91,7 @@ fn it_serializes_and_deserializes_proof_input() {
         block: MacroBlock::default(),
         previous_proof: None,
         genesis_state: vec![],
-        proving_keys_path: PathBuf::from(ZKP_TEST_KEYS_PATH),
+        prover_keys_path: PathBuf::from(ZKP_TEST_KEYS_PATH),
     };
     let serialized = Serialize::serialize_to_vec(&proof_input);
     let deserialized: ProofInput = Deserialize::deserialize_from_vec(&serialized).unwrap();

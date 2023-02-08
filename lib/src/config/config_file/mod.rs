@@ -480,5 +480,5 @@ pub struct ZKPSettings {
     #[serde(default)]
     pub prover_active: bool,
     #[serde(default)]
-    pub proving_keys_path: Option<String>,
+    pub prover_keys_path: Option<String>,
 }

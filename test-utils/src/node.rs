@@ -81,7 +81,7 @@ impl<N: NetworkInterface + TestNetwork> Node<N> {
             }),
             is_prover_active,
             Some(zkp_test_exe()),
-            Some(PathBuf::from(ZKP_TEST_KEYS_PATH)),
+            PathBuf::from(ZKP_TEST_KEYS_PATH),
             zkp_storage,
         )
         .await;

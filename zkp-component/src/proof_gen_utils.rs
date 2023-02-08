@@ -25,7 +25,7 @@ pub fn generate_new_proof(
     latest_header_hash: [u8; 32],
     previous_proof: Option<Proof<MNT6_753>>,
     genesis_state: Vec<u8>,
-    proving_keys_path: &Path,
+    prover_keys_path: &Path,
 ) -> Result<ZKPState, ZKProofGenerationError> {
     let validators = block.get_validators();
 
@@ -46,7 +46,7 @@ pub fn generate_new_proof(
             previous_proof.map(|proof| (proof, genesis_state.clone())),
             true,
             true,
-            proving_keys_path,
+            prover_keys_path,
         );
 
         return match proof {

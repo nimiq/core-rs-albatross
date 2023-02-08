@@ -24,7 +24,6 @@ use nimiq_zkp_circuits::{
         MacroBlockWrapperCircuit, MergerWrapperCircuit, PKTreeNodeCircuit as NodeMNT6,
     },
     utils::pack_inputs,
-    DEFAULT_KEYS_PATH,
 };
 use nimiq_zkp_primitives::{
     merkle_tree_prove, pk_tree_construct, serialize_g1_mnt6, serialize_g2_mnt6, state_commitment,
@@ -56,11 +55,11 @@ pub fn prove(
     // This is a flag indicating if we want to run this function in debug mode. It will verify
     // each proof it creates right after the proof is generated.
     debug_mode: bool,
-    // The path to where the `proving_keys` folder is stored in.
-    proving_keys_path: &Path,
+    // The path to where the `prover_keys` folder is stored in.
+    prover_keys_path: &Path,
 ) -> Result<Proof<MNT6_753>, NanoZKPError> {
     let rng = &mut thread_rng();
-    let proofs = proving_keys_path.join("proofs");
+    let proofs = prover_keys_path.join("proofs");
 
     // Serialize the initial public keys into bits and chunk them into the number of leaves.
     let mut bytes = Vec::new();
@@ -123,7 +122,7 @@ pub fn prove(
             &initial_pk_tree_root,
             &block.signer_bitmap,
             debug_mode,
-            proving_keys_path,
+            prover_keys_path,
         )?;
     }
 
@@ -151,7 +150,7 @@ pub fn prove(
             &initial_pk_tree_root,
             &block.signer_bitmap,
             debug_mode,
-            proving_keys_path,
+            prover_keys_path,
         )?;
     }
 
@@ -179,7 +178,7 @@ pub fn prove(
             &initial_pk_tree_root,
             &block.signer_bitmap,
             debug_mode,
-            proving_keys_path,
+            prover_keys_path,
         )?;
     }
 
@@ -207,7 +206,7 @@ pub fn prove(
             &initial_pk_tree_root,
             &block.signer_bitmap,
             debug_mode,
-            proving_keys_path,
+            prover_keys_path,
         )?;
     }
 
@@ -235,7 +234,7 @@ pub fn prove(
             &initial_pk_tree_root,
             &block.signer_bitmap,
             debug_mode,
-            proving_keys_path,
+            prover_keys_path,
         )?;
     }
 
@@ -258,7 +257,7 @@ pub fn prove(
             &initial_pk_tree_root,
             &block.signer_bitmap,
             debug_mode,
-            proving_keys_path,
+            prover_keys_path,
         )?;
     }
 
@@ -280,7 +279,7 @@ pub fn prove(
             &final_pk_tree_root,
             &block,
             debug_mode,
-            proving_keys_path,
+            prover_keys_path,
         )?;
     }
 
@@ -300,7 +299,7 @@ pub fn prove(
             &final_pks,
             &block,
             debug_mode,
-            proving_keys_path,
+            prover_keys_path,
         )?;
     }
 
@@ -321,7 +320,7 @@ pub fn prove(
             &block,
             genesis_data.clone(),
             debug_mode,
-            proving_keys_path,
+            prover_keys_path,
         )?;
     }
 
@@ -341,7 +340,7 @@ pub fn prove(
         &block,
         genesis_data,
         debug_mode,
-        proving_keys_path,
+        prover_keys_path,
     )?;
 
     // Delete cached proofs.
@@ -414,8 +413,8 @@ fn prove_pk_tree_leaf<R: CryptoRng + Rng>(
 
     // Optionally verify the proof.
     if debug_mode {
-        // Load the proving key from file.
-        let mut file = File::open(Path::new(DEFAULT_KEYS_PATH).join(format!("{name}.bin")))?;
+        // Load the verifying key from file.
+        let mut file = File::open(dir_path.join("verifying_keys").join(format!("{name}.bin")))?;
 
         let verifying_key = VerifyingKey::deserialize_unchecked(&mut file)?;
 
@@ -455,7 +454,7 @@ fn prove_pk_tree_node_mnt6<R: CryptoRng + Rng>(
     dir_path: &Path,
 ) -> Result<(), NanoZKPError> {
     let proving_keys = dir_path.join("proving_keys");
-    let verifying_keys = Path::new(DEFAULT_KEYS_PATH).join("verifying_keys");
+    let verifying_keys = dir_path.join("verifying_keys");
     let proofs = dir_path.join("proofs");
     // Load the proving key from file.
     let mut file = File::open(proving_keys.join(format!("{name}.bin")))?;
@@ -549,7 +548,7 @@ fn prove_pk_tree_node_mnt6<R: CryptoRng + Rng>(
 
     // Optionally verify the proof.
     if debug_mode {
-        // Load the proving key from file.
+        // Load the verifying key from file.
         let mut file = File::open(verifying_keys.join(format!("{name}.bin")))?;
 
         let verifying_key = VerifyingKey::deserialize_unchecked(&mut file)?;
@@ -592,7 +591,7 @@ fn prove_pk_tree_node_mnt4<R: CryptoRng + Rng>(
     dir_path: &Path,
 ) -> Result<(), NanoZKPError> {
     let proving_keys = dir_path.join("proving_keys");
-    let verifying_keys = Path::new(DEFAULT_KEYS_PATH).join("verifying_keys");
+    let verifying_keys = dir_path.join("verifying_keys");
     let proofs = dir_path.join("proofs");
 
     // Load the proving key from file.
@@ -681,7 +680,7 @@ fn prove_pk_tree_node_mnt4<R: CryptoRng + Rng>(
 
     // Optionally verify the proof.
     if debug_mode {
-        // Load the proving key from file.
+        // Load the verifying key from file.
         let mut file = File::open(verifying_keys.join(format!("{name}.bin")))?;
 
         let verifying_key = VerifyingKey::deserialize_unchecked(&mut file)?;
@@ -721,7 +720,7 @@ fn prove_macro_block<R: CryptoRng + Rng>(
     path: &Path,
 ) -> Result<(), NanoZKPError> {
     let proving_keys = path.join("proving_keys");
-    let verifying_keys = Path::new(DEFAULT_KEYS_PATH).join("verifying_keys");
+    let verifying_keys = path.join("verifying_keys");
     let proofs = path.join("proofs");
 
     // Load the proving key from file.
@@ -786,7 +785,7 @@ fn prove_macro_block<R: CryptoRng + Rng>(
 
     // Optionally verify the proof.
     if debug_mode {
-        // Load the proving key from file.
+        // Load the verifying key from file.
         let mut file = File::open(verifying_keys.join("macro_block.bin"))?;
 
         let verifying_key = VerifyingKey::deserialize_unchecked(&mut file)?;
@@ -820,7 +819,7 @@ fn prove_macro_block_wrapper<R: CryptoRng + Rng>(
     path: &Path,
 ) -> Result<(), NanoZKPError> {
     let proving_keys = path.join("proving_keys");
-    let verifying_keys = Path::new(DEFAULT_KEYS_PATH).join("verifying_keys");
+    let verifying_keys = path.join("verifying_keys");
     let proofs = path.join("proofs");
 
     // Load the proving key from file.
@@ -864,7 +863,7 @@ fn prove_macro_block_wrapper<R: CryptoRng + Rng>(
 
     // Optionally verify the proof.
     if debug_mode {
-        // Load the proving key from file.
+        // Load the verifying key from file.
         let mut file = File::open(verifying_keys.join("macro_block_wrapper.bin"))?;
 
         let verifying_key = VerifyingKey::deserialize_unchecked(&mut file)?;
@@ -899,7 +898,7 @@ fn prove_merger<R: CryptoRng + Rng>(
     path: &Path,
 ) -> Result<(), NanoZKPError> {
     let proving_keys = path.join("proving_keys");
-    let verifying_keys = Path::new(DEFAULT_KEYS_PATH).join("verifying_keys");
+    let verifying_keys = path.join("verifying_keys");
     let proofs = path.join("proofs");
     // Load the proving key from file.
     let mut file = File::open(proving_keys.join("merger.bin"))?;
@@ -972,7 +971,7 @@ fn prove_merger<R: CryptoRng + Rng>(
 
     // Optionally verify the proof.
     if debug_mode {
-        // Load the proving key from file.
+        // Load the verifying key from file.
         let mut file = File::open(verifying_keys.join("merger.bin"))?;
 
         let verifying_key = VerifyingKey::deserialize_unchecked(&mut file)?;
@@ -1009,7 +1008,7 @@ fn prove_merger_wrapper<R: CryptoRng + Rng>(
     path: &Path,
 ) -> Result<Proof<MNT6_753>, NanoZKPError> {
     let proving_keys = path.join("proving_keys");
-    let verifying_keys = Path::new(DEFAULT_KEYS_PATH).join("verifying_keys");
+    let verifying_keys = path.join("verifying_keys");
     let proofs = path.join("proofs");
     // Load the proving key from file.
     let mut file = File::open(proving_keys.join("merger_wrapper.bin"))?;
@@ -1065,7 +1064,7 @@ fn prove_merger_wrapper<R: CryptoRng + Rng>(
 
     // Optionally verify the proof.
     if debug_mode {
-        // Load the proving key from file.
+        // Load the verifying key from file.
         let mut file = File::open(verifying_keys.join("merger_wrapper.bin"))?;
 
         let verifying_key = VerifyingKey::deserialize_unchecked(&mut file)?;
