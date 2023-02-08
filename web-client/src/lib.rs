@@ -24,6 +24,17 @@ use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::network::{Network, NetworkEvent};
 use nimiq_network_libp2p::Multiaddr;
 
+/// Nimiq Albatross client that runs in browsers via WASM and is exposed to Javascript.
+///
+/// Usage:
+/// ```js
+/// import init, { WebClient } from "./pkg/nimiq_web_client.js";
+///
+/// init().then(async () => {
+///     const client = await WebClient.create();
+///     // ...
+/// });
+/// ```
 #[wasm_bindgen]
 pub struct WebClient {
     #[wasm_bindgen(skip)]
@@ -32,6 +43,7 @@ pub struct WebClient {
 
 #[wasm_bindgen]
 impl WebClient {
+    /// Create a new WebClient that automatically starts connecting to the network.
     pub async fn create() -> WebClient {
         let log_settings = LogSettings {
             level: Some(LevelFilter::DEBUG),
@@ -84,6 +96,9 @@ impl WebClient {
         WebClient { inner: client }
     }
 
+    /// Start the consensus event stream.
+    ///
+    /// Updates are emitted via `__wasm_imports.consensus_listener`.
     pub async fn subscribe_consensus(&self) {
         let mut consensus_events = self.inner.consensus_proxy().subscribe_events();
 
@@ -103,6 +118,9 @@ impl WebClient {
         }
     }
 
+    /// Start the blockchain head event stream.
+    ///
+    /// Updates are emitted via `__wasm_imports.block_listener`.
     pub async fn subscribe_blocks(&self) {
         let blockchain = self.inner.consensus_proxy().blockchain;
         let mut blockchain_events = blockchain.read().notifier_as_stream();
@@ -147,6 +165,9 @@ impl WebClient {
         }
     }
 
+    /// Start the peer event stream.
+    ///
+    /// Updates are emitted via `__wasm_imports.peer_listener`.
     pub async fn subscribe_peers(&self) {
         let network = self.inner.network();
         let mut network_events = network.subscribe_events();
@@ -167,6 +188,9 @@ impl WebClient {
         }
     }
 
+    /// Start an interval to report statistics.
+    ///
+    /// Updates are emitted via `__wasm_imports.statistics_listener`.
     pub async fn subscribe_statistics(&self) {
         let statistics_interval = LogSettings::default_statistics_interval();
 
@@ -212,15 +236,19 @@ impl WebClient {
 
 #[wasm_bindgen]
 extern "C" {
+    /// Imported Javascript function to receive consensus status
     #[wasm_bindgen(js_namespace = __wasm_imports)]
     fn consensus_listener(established: bool);
 
+    /// Imported Javascript function to receive blockchain head updates
     #[wasm_bindgen(js_namespace = __wasm_imports)]
     fn block_listener(ty: &str, serialized_block: Vec<u8>, rebranch_length: Option<usize>);
 
+    /// Imported Javascript function to receive peer updates
     #[wasm_bindgen(js_namespace = __wasm_imports)]
     fn peer_listener(ty: &str, peer_id: String, num_peers: usize);
 
+    /// Imported Javascript function to receive statistics
     #[wasm_bindgen(js_namespace = __wasm_imports)]
     fn statistics_listener(established: bool, block_number: u32, num_peers: usize);
 }
