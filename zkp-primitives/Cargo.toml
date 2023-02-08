@@ -12,14 +12,6 @@ edition = "2021"
 nimiq-pedersen-generators = { path = "pedersen-generators" }
 
 [dependencies]
-num-traits = "0.2"
-rayon = { version = "^1.6", optional = true }
-log = { package = "tracing", version = "0.1", features = ["log"] }
-lazy_static = "1.4"
-beserial = { path = "../beserial", features = ["derive"] }
-rand = { version = "0.8", features = ["small_rng"] }
-thiserror = "1.0"
-
 ark-ec = "0.3"
 ark-ff = "0.3"
 ark-groth16 = { version = "0.3", default-features = false }
@@ -29,7 +21,14 @@ ark-relations = "0.3"
 ark-r1cs-std = "0.3.1"
 ark-serialize = "0.3"
 ark-std = "0.3"
+lazy_static = "1.4"
+log = { package = "tracing", version = "0.1", features = ["log"] }
+num-traits = "0.2"
+rand = { version = "0.8", features = ["small_rng"] }
+rayon = { version = "^1.6", optional = true }
+thiserror = "1.0"
 
+beserial = { path = "../beserial", features = ["derive"] }
 nimiq-bls = { path = "../bls" }
 nimiq-hash = { path = "../hash" }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }
@@ -38,10 +37,10 @@ nimiq-primitives = { path = "../primitives", features = ["policy"] }
 nimiq-block = { path = "../primitives/block" }
 nimiq-collections = { path = "../collections" }
 nimiq-keys = { path = "../keys" }
+nimiq-primitives = { path = "../primitives", features = ["slots"] }
 nimiq-test-log = { path = "../test-log" }
 nimiq-utils = { path = "../utils" }
-nimiq-primitives = { path = "../primitives", features = ["slots"] }
 
 [features]
-zkp-prover = ["ark-mnt4-753/r1cs", "ark-mnt6-753/r1cs", "ark-groth16/r1cs"]
 parallel = ["rayon", "ark-ec/parallel", "ark-ff/parallel", "ark-std/parallel", "ark-groth16/parallel"]
+zkp-prover = ["ark-mnt4-753/r1cs", "ark-mnt6-753/r1cs", "ark-groth16/r1cs"]

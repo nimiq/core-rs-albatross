@@ -12,7 +12,7 @@ keywords = ["nimiq", "cryptocurrency", "blockchain"]
 
 [[bin]]
 name = "nimiq-test-prove"
-required-features = ["test-prover"]
+required-features = ["test-prover", "tokio/rt-multi-thread"]
 
 [badges]
 travis-ci = { repository = "nimiq/core-rs", branch = "master" }
@@ -27,6 +27,7 @@ ark-mnt6-753 = "0.3"
 ark-serialize = "0.3"
 async-trait = "0.1"
 futures = { package = "futures-util", version = "0.3" }
+hex = "0.4"
 lazy_static = "1.4.0"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = "0.12"
@@ -48,9 +49,6 @@ nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-log = { path = "../log", optional = true }
 nimiq-macros = { path = "../macros" }
-nimiq-zkp = { path = "../zkp"}
-nimiq-zkp-circuits = { path = "../zkp-circuits" }
-nimiq-zkp-primitives = { path = "../zkp-primitives" }
 nimiq-network-interface = { path = "../network-interface" }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }
 nimiq-transaction = { path = "../primitives/transaction" }
@@ -60,9 +58,13 @@ nimiq-utils = { path = "../utils", features = [
     "time",
 ] }
 nimiq-validator-network = { path = "../validator-network" }
-hex = "0.4"
+nimiq-zkp = { path = "../zkp"}
+nimiq-zkp-circuits = { path = "../zkp-circuits" }
+nimiq-zkp-primitives = { path = "../zkp-primitives" }
 
 [dev-dependencies]
+tempfile = "3.3"
+
 nimiq-block-production = { path = "../block-production" }
 nimiq-bls = { path = "../bls" }
 nimiq-genesis-builder = { path = "../genesis-builder" }
@@ -73,10 +75,9 @@ nimiq-test-log = { path = "../test-log" }
 # This adds a circular dev-dependency which is fine but breaks VS code rust-analyzer.
 # See https://github.com/rust-analyzer/rust-analyzer/issues/2414
 nimiq-test-utils = { path = "../test-utils" }
-tempfile = "3.3"
 
 [features]
 database-storage = ["nimiq-database"]
+parallel = ["nimiq-zkp-primitives/parallel", "nimiq-zkp/parallel", "nimiq-zkp-circuits/parallel", "ark-groth16/parallel"]
 test-prover = ["nimiq-log", "zkp-prover", "tracing-subscriber"]
 zkp-prover = ["nimiq-blockchain", "nimiq-zkp/zkp-prover", "tokio/io-util", "tokio/process"]
-parallel = ["nimiq-zkp-primitives/parallel", "nimiq-zkp/parallel", "nimiq-zkp-circuits/parallel", "ark-groth16/parallel"]

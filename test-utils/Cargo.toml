@@ -16,10 +16,10 @@ futures = { package = "futures-util", version = "0.3" }
 hex = "0.4"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 rand = "0.8"
+rand_chacha = "0.3.1"
 parking_lot = "0.12"
 tokio = { version = "1.25", features = ["rt", "time", "tracing"] }
 tokio-stream = "0.1"
-rand_chacha = "0.3.1"
 
 beserial = { path = "../beserial" }
 nimiq-account = { path = "../primitives/account" }
@@ -37,15 +37,15 @@ nimiq-genesis-builder = { path = "../genesis-builder" }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-mempool = { path = "../mempool" }
-nimiq-transaction-builder = { path = "../transaction-builder" }
 nimiq-network-interface = { path = "../network-interface" }
 nimiq-network-libp2p = { path = "../network-libp2p" }
 nimiq-network-mock = { path = "../network-mock" }
 nimiq-primitives = { path = "../primitives" }
 nimiq-transaction = { path = "../primitives/transaction" }
+nimiq-transaction-builder = { path = "../transaction-builder" }
 nimiq-validator = { path = "../validator" }
 nimiq-validator-network = { path = "../validator-network" }
 nimiq-utils = { path = "../utils" }
 nimiq-vrf = { path = "../vrf" }
-nimiq-zkp-primitives = { path = "../zkp-primitives", features = ["parallel", "zkp-prover", "parallel"] }
 nimiq-zkp-component = { path = "../zkp-component", features = ["database-storage", "zkp-prover", "parallel"] }
+nimiq-zkp-primitives = { path = "../zkp-primitives", features = ["parallel", "zkp-prover", "parallel"] }

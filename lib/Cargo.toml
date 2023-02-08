@@ -61,8 +61,6 @@ nimiq-light-blockchain = { path = "../light-blockchain" }
 nimiq-log = { path = "../log", optional = true }
 nimiq-mempool = { path = "../mempool", optional = true }
 nimiq-metrics-server = { path = "../metrics-server", optional = true }
-nimiq-zkp = { path = "../zkp", features = ["zkp-prover"] }
-nimiq-zkp-primitives = { path = "../zkp-primitives" }
 nimiq-network-libp2p = { path = "../network-libp2p" }
 nimiq-network-interface = { path = "../network-interface" }
 nimiq-primitives = { path = "../primitives", features = ["networks"] }
@@ -71,8 +69,10 @@ nimiq-utils = { path = "../utils", features = ["time", "key-store"] }
 nimiq-validator = { path = "../validator", optional = true, features = ["trusted_push"] }
 nimiq-validator-network = { path = "../validator-network", optional = true }
 nimiq-wallet = { path = "../wallet", optional = true }
-nimiq-zkp-component = { path = "../zkp-component" }
+nimiq-zkp = { path = "../zkp", features = ["zkp-prover"] }
 nimiq-zkp-circuits = { path = "../zkp-circuits" }
+nimiq-zkp-component = { path = "../zkp-component" }
+nimiq-zkp-primitives = { path = "../zkp-primitives" }
 
 [dev-dependencies]
 nimiq-test-log = { path = "../test-log" }
@@ -87,6 +87,7 @@ logging = ["file-rotate", "nimiq-log", "serde_json", "tokio", "tracing-subscribe
 loki = ["logging", "tracing-loki"]
 metrics-server = ["nimiq-metrics-server", "nimiq-network-libp2p/metrics", "nimiq-validator/metrics"]
 panic = ["log-panics"]
+parallel = ["nimiq-zkp-primitives/parallel", "nimiq-zkp-component/parallel", "nimiq-zkp/parallel", "nimiq-zkp-circuits/parallel"]
 rpc-server = ["nimiq-jsonrpc-core", "nimiq-jsonrpc-server", "nimiq-rpc-server", "nimiq-wallet", "validator"]
 signal-handling = ["signal-hook", "tokio"]
 tokio-console = ["console-subscriber", "logging", "tokio/tracing"]
@@ -96,4 +97,3 @@ wallet = ["database-storage", "nimiq-wallet"]
 wasm-websocket = ["nimiq-network-libp2p/wasm-websocket"]
 web-logging = ["nimiq-log", "time/wasm-bindgen", "tracing-subscriber", "tracing-web"]
 zkp-prover = ["nimiq-zkp-component/zkp-prover", "nimiq-zkp-primitives/zkp-prover"]
-parallel = ["nimiq-zkp-primitives/parallel", "nimiq-zkp-component/parallel", "nimiq-zkp/parallel", "nimiq-zkp-circuits/parallel"]

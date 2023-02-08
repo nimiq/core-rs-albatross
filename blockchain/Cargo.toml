@@ -16,15 +16,14 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 futures = { package = "futures-util", version = "0.3" }
-thiserror = "1.0"
-tokio = { version = "1.25", features = ["sync"] }
-tokio-stream = { version = "0.1", features = ["sync"] }
 hex = "0.4"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = "0.12"
-prometheus-client = { version = "0.18.1", optional = true}
+prometheus-client = { version = "0.18.1", optional = true }
 rand = "0.8"
-
+thiserror = "1.0"
+tokio = { version = "1.25", features = ["sync"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
 
 beserial = { path = "../beserial", features = ["derive"] }
 nimiq-account = { path = "../primitives/account" }
@@ -38,20 +37,20 @@ nimiq-genesis = { path = "../genesis" }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-mmr = { path = "../primitives/mmr" }
-nimiq-zkp = { path = "../zkp" }
 nimiq-primitives = { path = "../primitives" }
 nimiq-transaction = { path = "../primitives/transaction" }
 nimiq-utils = { path = "../utils", features = ["math", "time"] }
 nimiq-vrf = { path = "../vrf" }
+nimiq-zkp = { path = "../zkp" }
 
 [dev-dependencies]
 nimiq-block-production = { path = "../block-production", features = ["test-utils"] }
-nimiq-zkp-primitives = { path = "../zkp-primitives" }
 nimiq-test-log = { path = "../test-log" }
 nimiq-transaction-builder = { path = "../transaction-builder" }
 # This adds a circular dev-dependency which is fine but breaks VS code rust-analyzer.
 # See https://github.com/rust-analyzer/rust-analyzer/issues/2414
 nimiq-test-utils = { path = "../test-utils" }
+nimiq-zkp-primitives = { path = "../zkp-primitives" }
 
 [features]
 metrics = ["prometheus-client"]

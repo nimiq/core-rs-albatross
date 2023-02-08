@@ -10,21 +10,21 @@ edition = "2021"
 
 [dependencies]
 futures = { package = "futures-util", version = "0.3" }
-thiserror = "1.0"
-parking_lot = "0.12"
-tokio-stream = { version = "0.1", features = ["sync"] }
 log = { package = "tracing", version = "0.1", features = ["log"] }
+parking_lot = "0.12"
+thiserror = "1.0"
+tokio = { version = "1.25", features = ["sync"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
 
 nimiq-block = { path = "../primitives/block" }
 nimiq-blockchain-interface = { path = "../blockchain-interface" }
 nimiq-collections = { path = "../collections" }
 nimiq-genesis = { path = "../genesis", default-features = false }
 nimiq-hash = { path = "../hash" }
-nimiq-zkp = { path = "../zkp" }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }
 nimiq-utils = { path = "../utils", features = ["time"] }
 nimiq-vrf = { path = "../vrf" }
-tokio = { version = "1.25", features = ["sync"] }
+nimiq-zkp = { path = "../zkp" }
 
 [dev-dependencies]
 nimiq-block-production = { path = "../block-production", features = ["test-utils"] }

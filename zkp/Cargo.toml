@@ -16,12 +16,6 @@ nimiq-zkp-primitives = { path = "../zkp-primitives", features = ["zkp-prover"] }
 nimiq-zkp-circuits = { path = "../zkp-circuits", features = ["zkp-prover"] }
 
 [dependencies]
-beserial = { path = "../beserial", features = ["derive"]}
-lazy_static = {version = "1.4"}
-log = { package = "tracing", version = "0.1", features = ["log"] }
-rand = { version = "0.8", features = ["small_rng"] }
-thiserror = "1.0"
-
 ark-crypto-primitives = "0.3"
 ark-ec = "0.3"
 ark-ff = "0.3"
@@ -31,21 +25,26 @@ ark-mnt6-753 = "0.3"
 ark-relations = "0.3"
 ark-r1cs-std = "0.3.1"
 ark-serialize = "0.3"
-ark-std = "0.3"
 ark-sponge = { git = "https://github.com/arkworks-rs/sponge" }
-
-nimiq-bls = { path = "../bls" }
-nimiq-zkp-primitives = { path = "../zkp-primitives", default-features = false }
-nimiq-primitives = { path = "../primitives", features = ["policy"] }
+ark-std = "0.3"
+lazy_static = {version = "1.4"}
+log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
+rand = { version = "0.8", features = ["small_rng"] }
+thiserror = "1.0"
+
+beserial = { path = "../beserial", features = ["derive"]}
+nimiq-bls = { path = "../bls" }
+nimiq-primitives = { path = "../primitives", features = ["policy"] }
 nimiq-zkp-circuits = { path = "../zkp-circuits" }
+nimiq-zkp-primitives = { path = "../zkp-primitives", default-features = false }
 
 [dev-dependencies]
 nimiq-test-log = { path = "../test-log" }
 
 [features]
-zkp-prover = ["ark-crypto-primitives/r1cs", "ark-mnt4-753/r1cs", "ark-mnt6-753/r1cs", "ark-groth16/r1cs"]
 parallel = ["ark-crypto-primitives/parallel", "nimiq-zkp-circuits/parallel", "ark-ec/parallel", "ark-ff/parallel", "ark-std/parallel", "ark-groth16/parallel", "nimiq-zkp-primitives/parallel"]
+zkp-prover = ["ark-crypto-primitives/r1cs", "ark-mnt4-753/r1cs", "ark-mnt6-753/r1cs", "ark-groth16/r1cs"]
 
 [[example]]
 name = "setup"

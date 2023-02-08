@@ -261,8 +261,8 @@ impl ClientInner {
                     .unwrap(),
                 ));
                 let blockchain_proxy = BlockchainProxy::from(&blockchain);
+                #[cfg(feature = "zkp-prover")]
                 let zkp_component = if config.zkp.prover_active {
-                    #[cfg(feature = "zkp-prover")]
                     ZKPComponent::with_prover(
                         blockchain_proxy.clone(),
                         Arc::clone(&network),
@@ -282,6 +282,14 @@ impl ClientInner {
                     )
                     .await
                 };
+                #[cfg(not(feature = "zkp-prover"))]
+                let zkp_component = ZKPComponent::new(
+                    blockchain_proxy.clone(),
+                    Arc::clone(&network),
+                    executor.clone(),
+                    zkp_storage,
+                )
+                .await;
                 let syncer = SyncerProxy::new_history(
                     blockchain_proxy.clone(),
                     Arc::clone(&network),
@@ -305,8 +313,8 @@ impl ClientInner {
                     .unwrap(),
                 ));
                 let blockchain_proxy = BlockchainProxy::from(&blockchain);
+                #[cfg(feature = "zkp-prover")]
                 let zkp_component = if config.zkp.prover_active {
-                    #[cfg(feature = "zkp-prover")]
                     ZKPComponent::with_prover(
                         blockchain_proxy.clone(),
                         Arc::clone(&network),
@@ -326,6 +334,14 @@ impl ClientInner {
                     )
                     .await
                 };
+                #[cfg(not(feature = "zkp-prover"))]
+                let zkp_component = ZKPComponent::new(
+                    blockchain_proxy.clone(),
+                    Arc::clone(&network),
+                    executor.clone(),
+                    zkp_storage,
+                )
+                .await;
 
                 let syncer = SyncerProxy::new_full(
                     blockchain_proxy.clone(),
