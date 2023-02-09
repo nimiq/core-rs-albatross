@@ -117,7 +117,7 @@ impl Serialize for ZKPState {
         size += Serialize::serialize(&count, writer)?;
         for pk in self.latest_pks.iter() {
             // Unchecked serialization happening here.
-            CanonicalSerialize::serialize_unchecked(pk, writer.by_ref())
+            CanonicalSerialize::serialize_uncompressed(pk, writer.by_ref())
                 .map_err(ark_to_bserial_error)?;
             size += CanonicalSerialize::uncompressed_size(pk);
         }
@@ -125,8 +125,9 @@ impl Serialize for ZKPState {
         size += Serialize::serialize(&self.latest_block_number, writer)?;
         size += Serialize::serialize(&self.latest_proof.is_some(), writer)?;
         if let Some(ref latest_proof) = self.latest_proof {
-            CanonicalSerialize::serialize(latest_proof, writer).map_err(ark_to_bserial_error)?;
-            size += CanonicalSerialize::serialized_size(latest_proof);
+            CanonicalSerialize::serialize_uncompressed(latest_proof, writer)
+                .map_err(ark_to_bserial_error)?;
+            size += CanonicalSerialize::serialized_size(latest_proof, ark_serialize::Compress::No);
         }
         Ok(size)
     }
@@ -139,7 +140,7 @@ impl Serialize for ZKPState {
         size += Serialize::serialized_size(&self.latest_block_number);
         size += Serialize::serialized_size(&self.latest_proof.is_some());
         if let Some(ref latest_proof) = self.latest_proof {
-            size += CanonicalSerialize::serialized_size(latest_proof);
+            size += CanonicalSerialize::serialized_size(latest_proof, ark_serialize::Compress::No);
         }
         size
     }
@@ -157,7 +158,7 @@ impl Deserialize for ZKPState {
         for _ in 0..count {
             // Unchecked deserialization happening here.
             latest_pks.push(
-                CanonicalDeserialize::deserialize_unchecked(reader.by_ref())
+                CanonicalDeserialize::deserialize_uncompressed_unchecked(reader.by_ref())
                     .map_err(ark_to_bserial_error)?,
             );
         }
@@ -166,8 +167,10 @@ impl Deserialize for ZKPState {
         let is_some: bool = Deserialize::deserialize(reader)?;
         let mut latest_proof = None;
         if is_some {
-            latest_proof =
-                Some(CanonicalDeserialize::deserialize(reader).map_err(ark_to_bserial_error)?);
+            latest_proof = Some(
+                CanonicalDeserialize::deserialize_uncompressed_unchecked(reader)
+                    .map_err(ark_to_bserial_error)?,
+            );
         }
         Ok(ZKPState {
             latest_pks,
@@ -236,8 +239,9 @@ impl Serialize for ZKProof {
         let mut size = Serialize::serialize(&self.block_number, writer)?;
         size += Serialize::serialize(&self.proof.is_some(), writer)?;
         if let Some(ref latest_proof) = self.proof {
-            CanonicalSerialize::serialize(latest_proof, writer).map_err(ark_to_bserial_error)?;
-            size += CanonicalSerialize::serialized_size(latest_proof);
+            CanonicalSerialize::serialize_compressed(latest_proof, writer)
+                .map_err(ark_to_bserial_error)?;
+            size += CanonicalSerialize::serialized_size(latest_proof, ark_serialize::Compress::Yes);
         }
         Ok(size)
     }
@@ -246,7 +250,7 @@ impl Serialize for ZKProof {
         let mut size = Serialize::serialized_size(&self.block_number);
         size += Serialize::serialized_size(&self.proof.is_some());
         if let Some(ref latest_proof) = self.proof {
-            size += CanonicalSerialize::serialized_size(latest_proof);
+            size += CanonicalSerialize::serialized_size(latest_proof, ark_serialize::Compress::Yes);
         }
         size
     }
@@ -261,8 +265,10 @@ impl Deserialize for ZKProof {
         let mut latest_proof = None;
 
         if is_some {
-            latest_proof =
-                Some(CanonicalDeserialize::deserialize(reader).map_err(ark_to_bserial_error)?);
+            latest_proof = Some(
+                CanonicalDeserialize::deserialize_compressed(reader)
+                    .map_err(ark_to_bserial_error)?,
+            );
         }
 
         Ok(ZKProof {
@@ -324,7 +330,7 @@ impl Serialize for ProofInput {
         size += Serialize::serialize(&count, writer)?;
         for pk in self.latest_pks.iter() {
             // Unchecked serialization happening here.
-            CanonicalSerialize::serialize_unchecked(pk, writer.by_ref())
+            CanonicalSerialize::serialize_uncompressed(pk, writer.by_ref())
                 .map_err(ark_to_bserial_error)?;
             size += CanonicalSerialize::uncompressed_size(pk);
         }
@@ -333,9 +339,9 @@ impl Serialize for ProofInput {
 
         size += Serialize::serialize(&self.previous_proof.is_some(), writer)?;
         if let Some(ref latest_proof) = self.previous_proof {
-            CanonicalSerialize::serialize(latest_proof, writer.by_ref())
+            CanonicalSerialize::serialize_uncompressed(latest_proof, writer.by_ref())
                 .map_err(ark_to_bserial_error)?;
-            size += CanonicalSerialize::serialized_size(latest_proof);
+            size += CanonicalSerialize::serialized_size(latest_proof, ark_serialize::Compress::No);
         }
 
         size += SerializeWithLength::serialize::<u8, _>(&self.genesis_state, writer)?;
@@ -357,7 +363,8 @@ impl Serialize for ProofInput {
 
         size += Serialize::serialized_size(&self.previous_proof.is_some());
         if let Some(ref previous_proof) = self.previous_proof {
-            size += CanonicalSerialize::serialized_size(previous_proof);
+            size +=
+                CanonicalSerialize::serialized_size(previous_proof, ark_serialize::Compress::No);
         }
 
         size += SerializeWithLength::serialized_size::<u8>(&self.genesis_state);
@@ -383,7 +390,7 @@ impl Deserialize for ProofInput {
         for _ in 0..count {
             // Unchecked deserialization happening here.
             latest_pks.push(
-                CanonicalDeserialize::deserialize_unchecked(reader.by_ref())
+                CanonicalDeserialize::deserialize_uncompressed_unchecked(reader.by_ref())
                     .map_err(ark_to_bserial_error)?,
             );
         }
@@ -395,7 +402,8 @@ impl Deserialize for ProofInput {
 
         if is_some {
             previous_proof = Some(
-                CanonicalDeserialize::deserialize(reader.by_ref()).map_err(ark_to_bserial_error)?,
+                CanonicalDeserialize::deserialize_uncompressed_unchecked(reader.by_ref())
+                    .map_err(ark_to_bserial_error)?,
             );
         }
 

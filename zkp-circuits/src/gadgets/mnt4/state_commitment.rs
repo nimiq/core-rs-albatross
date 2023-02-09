@@ -1,9 +1,11 @@
 use ark_mnt4_753::Fr as MNT4Fr;
 use ark_mnt6_753::constraints::G1Var;
-use ark_r1cs_std::bits::boolean::Boolean;
 use ark_r1cs_std::prelude::UInt32;
+use ark_r1cs_std::uint8::UInt8;
+use ark_r1cs_std::ToBitsGadget;
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 
+use crate::endianness::ToBeBytesGadget;
 use crate::gadgets::mnt4::{PedersenHashGadget, SerializeGadget};
 
 /// This gadget is meant to calculate the "state commitment" in-circuit, which is simply a commitment,
@@ -18,34 +20,36 @@ impl StateCommitmentGadget {
     pub fn evaluate(
         cs: ConstraintSystemRef<MNT4Fr>,
         block_number: &UInt32<MNT4Fr>,
-        header_hash: &[Boolean<MNT4Fr>],
-        pk_tree_root: &[Boolean<MNT4Fr>],
+        header_hash: &[UInt8<MNT4Fr>],
+        pk_tree_root: &[UInt8<MNT4Fr>],
         pedersen_generators: &[G1Var],
-    ) -> Result<Vec<Boolean<MNT4Fr>>, SynthesisError> {
+    ) -> Result<Vec<UInt8<MNT4Fr>>, SynthesisError> {
         // Initialize Boolean vector.
-        let mut bits = vec![];
+        let mut bytes = vec![];
 
-        // The block number comes in little endian all the way.
-        // So, a reverse will put it into big endian.
-        let mut block_number_be = block_number.to_bits_le();
+        // The block number.
+        let block_number_be = block_number.to_bytes_be()?;
 
-        block_number_be.reverse();
-
-        bits.extend(block_number_be);
+        bytes.extend(block_number_be);
 
         // Append the header hash.
-        bits.extend_from_slice(header_hash);
+        bytes.extend_from_slice(header_hash);
 
         // Append the public key tree root.
-        bits.extend_from_slice(pk_tree_root);
+        bytes.extend_from_slice(pk_tree_root);
+
+        let bits: Vec<_> = bytes
+            .into_iter()
+            .flat_map(|byte| byte.to_bits_le().unwrap())
+            .collect();
 
         // Calculate the Pedersen hash.
         let hash = PedersenHashGadget::evaluate(&bits, pedersen_generators)?;
 
         // Serialize the Pedersen hash.
-        let serialized_bits = SerializeGadget::serialize_g1(cs, &hash)?;
+        let serialized_bytes = SerializeGadget::serialize_g1(cs, &hash)?;
 
-        Ok(serialized_bits)
+        Ok(serialized_bytes)
     }
 }
 
@@ -54,14 +58,13 @@ mod tests {
     use ark_mnt4_753::Fr as MNT4Fr;
     use ark_mnt6_753::constraints::G1Var;
     use ark_mnt6_753::G2Projective;
-    use ark_r1cs_std::prelude::{AllocVar, Boolean, UInt32};
+    use ark_r1cs_std::prelude::{AllocVar, UInt32};
     use ark_r1cs_std::R1CSVar;
     use ark_relations::r1cs::ConstraintSystem;
     use ark_std::{test_rng, UniformRand};
     use rand::RngCore;
 
     use nimiq_bls::pedersen::pedersen_generators;
-    use nimiq_bls::utils::bytes_to_bits;
     use nimiq_primitives::policy::Policy;
     use nimiq_test_log::test;
     use nimiq_zkp_primitives::{pk_tree_construct, state_commitment};
@@ -88,29 +91,21 @@ mod tests {
         rng.fill_bytes(&mut header_hash);
 
         // Evaluate state commitment using the primitive version.
-        let primitive_comm = bytes_to_bits(&state_commitment(
-            block_number,
-            header_hash,
-            public_keys.clone(),
-        ));
-
-        // Convert the header hash to bits.
-        let header_hash_bits = bytes_to_bits(&header_hash);
+        let primitive_comm = &state_commitment(block_number, header_hash, public_keys.clone());
 
         // Construct the Merkle tree over the public keys.
         let pk_tree_root = pk_tree_construct(public_keys);
-        let pk_tree_root_bits = bytes_to_bits(&pk_tree_root);
 
         // Allocate the block number in the circuit.
         let block_number_var = UInt32::new_witness(cs.clone(), || Ok(block_number)).unwrap();
 
         // Allocate the header hash in the circuit.
         let header_hash_var =
-            Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(header_hash_bits)).unwrap();
+            Vec::<UInt8<MNT4Fr>>::new_witness(cs.clone(), || Ok(&header_hash[..])).unwrap();
 
         // Allocate the public key tree root in the circuit.
         let pk_tree_root_var =
-            Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(pk_tree_root_bits)).unwrap();
+            Vec::<UInt8<MNT4Fr>>::new_witness(cs.clone(), || Ok(&pk_tree_root[..])).unwrap();
 
         // Allocate the generators.
         let generators_var =

@@ -24,7 +24,7 @@ pub fn verifying_keys_setup(source_path: &Path, dest_path: &Path) -> Result<(), 
 
     // Creates the destination files to be included in the binary and writes the key to them.
     let mut dest_file = File::create(dest_path)?;
-    vk.serialize_unchecked(&mut dest_file)?;
+    vk.serialize_uncompressed(&mut dest_file)?;
     dest_file.sync_all()?;
 
     Ok(())

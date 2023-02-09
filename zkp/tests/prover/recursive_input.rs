@@ -1,5 +1,5 @@
 use ark_crypto_primitives::snark::BooleanInputVar;
-use ark_crypto_primitives::{CircuitSpecificSetupSNARK, SNARKGadget, SNARK};
+use ark_crypto_primitives::snark::{CircuitSpecificSetupSNARK, SNARKGadget, SNARK};
 use ark_groth16::constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar};
 use ark_groth16::{Groth16, Proof, VerifyingKey};
 use ark_mnt4_753::constraints::{FqVar as FqVarMNT4, PairingVar};
@@ -8,10 +8,13 @@ use ark_mnt6_753::constraints::FqVar as FqVarMNT6;
 use ark_mnt6_753::{Fq as FqMNT6, Fr as MNT6Fr, MNT6_753};
 use ark_r1cs_std::prelude::{AllocVar, Boolean, EqGadget};
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
-use ark_std::test_rng;
-use rand::RngCore;
+use ark_std::{
+    rand::{rngs::StdRng, RngCore},
+    test_rng,
+};
+use rand::SeedableRng;
 
-use nimiq_bls::utils::bytes_to_bits;
+use nimiq_bls::utils::bytes_to_bits_le;
 use nimiq_test_log::test;
 use nimiq_zkp_circuits::utils::{pack_inputs, prepare_inputs, unpack_inputs};
 
@@ -105,20 +108,20 @@ impl ConstraintSynthesizer<MNT6Fr> for OuterCircuit {
 #[ignore]
 fn recursive_input_works() {
     // Create random number generator.
-    let rng = &mut test_rng();
+    let rng = &mut StdRng::seed_from_u64(test_rng().next_u64());
 
     // Create random bits and inputs for red.
     let mut bytes = [0u8; NUMBER_OF_BITS / 8];
     rng.fill_bytes(&mut bytes);
 
-    let red_priv = bytes_to_bits(&bytes);
+    let red_priv = bytes_to_bits_le(&bytes);
     let red_pub = pack_inputs(red_priv.clone());
 
     // Create random bits and inputs for red.
     let mut bytes = [0u8; NUMBER_OF_BITS / 8];
     rng.fill_bytes(&mut bytes);
 
-    let blue_priv = bytes_to_bits(&bytes);
+    let blue_priv = bytes_to_bits_le(&bytes);
     let blue_pub = pack_inputs(blue_priv.clone());
 
     // Create the inner circuit.

@@ -1,14 +1,18 @@
 #[cfg(feature = "beserial")]
 use std::str::FromStr;
-use std::{cmp::Ordering, fmt, io::Error};
+use std::{
+    cmp::Ordering,
+    fmt,
+    io::{Error, ErrorKind},
+};
 
-use ark_ec::AffineCurve;
+use ark_ec::AffineRepr;
 use ark_mnt6_753::G2Affine;
+use ark_serialize::CanonicalDeserialize;
 
 #[cfg(feature = "beserial")]
 use beserial::Deserialize;
 
-use crate::compression::BeDeserialize;
 #[cfg(feature = "beserial")]
 use crate::ParseError;
 use crate::PublicKey;
@@ -27,9 +31,11 @@ impl CompressedPublicKey {
 
     /// Transforms the compressed form back into the projective form.
     pub fn uncompress(&self) -> Result<PublicKey, Error> {
-        let affine_point: G2Affine = BeDeserialize::deserialize(&mut &self.public_key[..])?;
+        let affine_point: G2Affine =
+            CanonicalDeserialize::deserialize_compressed(&mut &self.public_key[..])
+                .map_err(|e| Error::new(ErrorKind::Other, e))?;
         Ok(PublicKey {
-            public_key: affine_point.into_projective(),
+            public_key: affine_point.into_group(),
         })
     }
 

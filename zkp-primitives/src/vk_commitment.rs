@@ -1,9 +1,9 @@
-use ark_ec::AffineCurve;
+use ark_ec::AffineRepr;
 use ark_groth16::VerifyingKey;
 use ark_mnt6_753::MNT6_753;
 
 use nimiq_bls::pedersen::pedersen_hash;
-use nimiq_bls::utils::bytes_to_bits;
+use nimiq_bls::utils::bytes_to_bits_le;
 
 use crate::pedersen_generator_powers::PEDERSEN_GENERATORS;
 use crate::{serialize_g1_mnt6, serialize_g2_mnt6};
@@ -18,19 +18,19 @@ pub fn vk_commitment(vk: VerifyingKey<MNT6_753>) -> Vec<u8> {
     // Serialize the verifying key into bits.
     let mut bytes: Vec<u8> = vec![];
 
-    bytes.extend_from_slice(serialize_g1_mnt6(&vk.alpha_g1.into_projective()).as_ref());
+    bytes.extend_from_slice(serialize_g1_mnt6(&vk.alpha_g1.into_group()).as_ref());
 
-    bytes.extend_from_slice(serialize_g2_mnt6(&vk.beta_g2.into_projective()).as_ref());
+    bytes.extend_from_slice(serialize_g2_mnt6(&vk.beta_g2.into_group()).as_ref());
 
-    bytes.extend_from_slice(serialize_g2_mnt6(&vk.gamma_g2.into_projective()).as_ref());
+    bytes.extend_from_slice(serialize_g2_mnt6(&vk.gamma_g2.into_group()).as_ref());
 
-    bytes.extend_from_slice(serialize_g2_mnt6(&vk.delta_g2.into_projective()).as_ref());
+    bytes.extend_from_slice(serialize_g2_mnt6(&vk.delta_g2.into_group()).as_ref());
 
     for i in 0..vk.gamma_abc_g1.len() {
-        bytes.extend_from_slice(serialize_g1_mnt6(&vk.gamma_abc_g1[i].into_projective()).as_ref());
+        bytes.extend_from_slice(serialize_g1_mnt6(&vk.gamma_abc_g1[i].into_group()).as_ref());
     }
 
-    let bits = bytes_to_bits(&bytes);
+    let bits = bytes_to_bits_le(&bytes);
 
     // Calculate the Pedersen hash.
     let hash = pedersen_hash(bits, &PEDERSEN_GENERATORS);

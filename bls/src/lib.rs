@@ -5,9 +5,6 @@ pub use types::*;
 #[cfg(feature = "beserial")]
 pub mod serialization;
 
-// Implements big-endian serialization of algebra types.
-pub mod compression;
-
 // Implements the LazyPublicKey type. Which is a faster, cached version of PublicKey.
 #[cfg(feature = "lazy")]
 pub mod lazy;

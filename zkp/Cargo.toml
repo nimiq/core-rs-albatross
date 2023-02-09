@@ -11,24 +11,24 @@ categories = ["cryptography::cryptocurrencies"]
 keywords = ["nimiq", "cryptocurrency", "blockchain"]
 
 [build-dependencies]
-ark-serialize = "0.3"
+ark-serialize = "0.4"
 
 nimiq-zkp-primitives = { path = "../zkp-primitives", features = ["zkp-prover", "parallel"] }
 nimiq-zkp-circuits = { path = "../zkp-circuits", features = ["zkp-prover", "parallel"] }
 
 [dependencies]
-ark-crypto-primitives = "0.3"
-ark-ec = "0.3"
-ark-ff = "0.3"
-ark-groth16 = { version = "0.3", default-features = false }
-ark-mnt4-753 = "0.3"
-ark-mnt6-753 = "0.3"
-ark-relations = "0.3"
-ark-r1cs-std = "0.3.1"
-ark-serialize = "0.3"
-ark-sponge = { git = "https://github.com/arkworks-rs/sponge" }
-ark-std = "0.3"
-lazy_static = {version = "1.4"}
+ark-crypto-primitives = { version = "^0.4", features = ["prf"] }
+ark-ec = "0.4"
+ark-ff = "0.4"
+ark-groth16 = { git = "https://github.com/arkworks-rs/groth16", default-features = false }
+ark-mnt4-753 = "0.4"
+ark-mnt6-753 = "0.4"
+ark-relations = "0.4"
+ark-r1cs-std = "0.4"
+ark-serialize = "0.4"
+ark-sponge = { git = "https://github.com/arkworks-rs/sponge",  branch = "release-0.4" }
+ark-std = "0.4"
+lazy_static = { version = "1.4" }
 log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
 rand = { version = "0.8", features = ["small_rng"] }
@@ -42,6 +42,7 @@ nimiq-zkp-primitives = { path = "../zkp-primitives" }
 
 [dev-dependencies]
 nimiq-test-log = { path = "../test-log" }
+rand_chacha = "0.3.1"
 
 [features]
 parallel = ["nimiq-zkp-circuits/parallel", "nimiq-zkp-primitives/parallel", "ark-crypto-primitives/parallel", "ark-ec/parallel", "ark-ff/parallel", "ark-std/parallel", "ark-groth16/parallel"]

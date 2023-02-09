@@ -17,6 +17,7 @@ use nimiq_mmr::hash::Merge;
 use std::borrow::Cow;
 
 pub mod argon2kdf;
+pub mod blake2s;
 pub mod hmac;
 pub mod pbkdf2;
 #[cfg(feature = "serde")]

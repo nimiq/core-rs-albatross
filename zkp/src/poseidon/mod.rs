@@ -1,25 +1,21 @@
-use ark_ff::{FpParameters, PrimeField};
-use ark_sponge::poseidon::{
-    find_poseidon_ark_and_mds, PoseidonDefaultParametersEntry, PoseidonParameters,
-};
+use ark_ff::PrimeField;
+use ark_sponge::poseidon::{find_poseidon_ark_and_mds, PoseidonConfig, PoseidonDefaultConfigEntry};
 
 pub trait DefaultPoseidonParameters {
-    const PARAMS_T3: PoseidonDefaultParametersEntry;
-    const PARAMS_T9: PoseidonDefaultParametersEntry;
+    const PARAMS_T3: PoseidonDefaultConfigEntry;
+    const PARAMS_T9: PoseidonDefaultConfigEntry;
 }
 
-pub fn create_parameters<F: PrimeField>(
-    param: PoseidonDefaultParametersEntry,
-) -> PoseidonParameters<F> {
+pub fn create_parameters<F: PrimeField>(param: PoseidonDefaultConfigEntry) -> PoseidonConfig<F> {
     let (ark, mds) = find_poseidon_ark_and_mds::<F>(
-        <F::Params as FpParameters>::MODULUS_BITS as u64,
+        F::MODULUS_BIT_SIZE as u64,
         param.rate,
         param.full_rounds as u64,
         param.partial_rounds as u64,
         param.skip_matrices as u64,
     );
 
-    PoseidonParameters {
+    PoseidonConfig {
         full_rounds: param.full_rounds,
         partial_rounds: param.partial_rounds,
         alpha: param.alpha as u64,

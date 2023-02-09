@@ -1,14 +1,14 @@
 use std::{cmp::Ordering, fmt, ops::MulAssign};
 
-use ark_ec::{PairingEngine, ProjectiveCurve};
+use ark_ec::{pairing::Pairing, AffineRepr, CurveGroup, Group};
 use ark_ff::Zero;
 pub use ark_mnt6_753::G2Projective;
 use ark_mnt6_753::{G1Projective, MNT6_753};
+use ark_serialize::CanonicalSerialize;
 use log::error;
 
 use nimiq_hash::Hash;
 
-use crate::compression::BeSerialize;
 use crate::{CompressedPublicKey, SecretKey, SigHash, Signature};
 
 #[derive(Clone, Copy)]
@@ -29,7 +29,7 @@ impl PublicKey {
 
     /// Derives a public key from a secret key. This function will produce an error if it is given zero as an input.
     pub fn from_secret(x: &SecretKey) -> Self {
-        let mut pk = G2Projective::prime_subgroup_generator();
+        let mut pk = G2Projective::generator();
         pk.mul_assign(x.secret_key);
         Self::new(pk)
     }
@@ -49,10 +49,7 @@ impl PublicKey {
         if self.public_key.is_zero() {
             return false;
         }
-        let lhs = MNT6_753::pairing(
-            signature.signature,
-            G2Projective::prime_subgroup_generator(),
-        );
+        let lhs = MNT6_753::pairing(signature.signature, G2Projective::generator());
         let rhs = MNT6_753::pairing(hash_curve, self.public_key);
         lhs == rhs
     }
@@ -63,7 +60,11 @@ impl PublicKey {
     /// and one bit indicating if it is the "point-at-infinity".
     pub fn compress(&self) -> CompressedPublicKey {
         let mut buffer = [0u8; CompressedPublicKey::SIZE];
-        BeSerialize::serialize(&self.public_key.into_affine(), &mut &mut buffer[..]).unwrap();
+        CanonicalSerialize::serialize_compressed(
+            &self.public_key.into_affine(),
+            &mut &mut buffer[..],
+        )
+        .unwrap();
         CompressedPublicKey { public_key: buffer }
     }
 }

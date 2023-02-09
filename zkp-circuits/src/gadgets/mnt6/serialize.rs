@@ -1,10 +1,18 @@
-use ark_mnt4_753::constraints::{G1Var, G2Var};
+use ark_ec::CurveConfig;
+use ark_ff::{Field, PrimeField};
+use ark_mnt4_753::{
+    constraints::{G1Var, G2Var},
+    g2::Config as G2Config,
+};
 use ark_mnt6_753::Fr as MNT6Fr;
-use ark_r1cs_std::prelude::{Boolean, ToBitsGadget};
+use ark_r1cs_std::{
+    prelude::{ToBitsGadget, ToBytesGadget},
+    uint8::UInt8,
+};
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
+use ark_serialize::buffer_byte_size;
 
 use crate::gadgets::mnt6::YToBitGadget;
-use crate::utils::pad_point_bits;
 
 /// A gadget that takes as input a G1 or G2 point and serializes it into a vector of Booleans.
 pub struct SerializeGadget;
@@ -13,45 +21,59 @@ impl SerializeGadget {
     pub fn serialize_g1(
         cs: ConstraintSystemRef<MNT6Fr>,
         point: &G1Var,
-    ) -> Result<Vec<Boolean<MNT6Fr>>, SynthesisError> {
+    ) -> Result<Vec<UInt8<MNT6Fr>>, SynthesisError> {
         // Convert the point to affine coordinates.
         let aff_point = point.to_affine()?;
 
         // Get bits from the x coordinate.
-        let x_bits = aff_point.x.to_bits_le()?;
+        let mut bytes = aff_point.x.to_bytes()?;
+
+        // Truncate unnecessary bytes.
+        let output_byte_size = buffer_byte_size(MNT6Fr::MODULUS_BIT_SIZE as usize + 2);
+        bytes.truncate(output_byte_size);
 
         // Get the y coordinate parity flag.
         let y_bit = YToBitGadget::y_to_bit_g1(cs, &aff_point)?;
 
-        // Get the infinity flag.
-        let infinity_bit = aff_point.infinity;
+        // Add y-bit and infinity flag.
+        let mut last_byte = bytes.pop().unwrap().to_bits_le()?;
+        last_byte[6] = aff_point.infinity;
+        last_byte[7] = y_bit;
+        bytes.push(UInt8::from_bits_le(&last_byte));
 
-        // Pad points and get *Big-Endian* representation.
-        let bits = pad_point_bits::<MNT6Fr>(x_bits, y_bit, infinity_bit);
-
-        Ok(bits)
+        Ok(bytes)
     }
 
     pub fn serialize_g2(
         cs: ConstraintSystemRef<MNT6Fr>,
         point: &G2Var,
-    ) -> Result<Vec<Boolean<MNT6Fr>>, SynthesisError> {
+    ) -> Result<Vec<UInt8<MNT6Fr>>, SynthesisError> {
         // Convert the point to affine coordinates.
         let aff_point = point.to_affine()?;
 
         // Get bits from the x coordinate.
-        let x_bits = aff_point.x.to_bits_le()?;
+        let x_bytes = aff_point.x.to_bytes()?;
 
-        // Get one bit from the y coordinate.
+        // Truncate unnecessary bytes for each extension degree of x.
+        let extension_degree = <G2Config as CurveConfig>::BaseField::extension_degree() as usize;
+        assert_eq!(x_bytes.len() % extension_degree, 0);
+
+        let output_byte_size = buffer_byte_size(MNT6Fr::MODULUS_BIT_SIZE as usize + 2);
+        let mut bytes = Vec::with_capacity(extension_degree * output_byte_size);
+        for coordinate in x_bytes.chunks(x_bytes.len() / extension_degree) {
+            bytes.extend_from_slice(&coordinate[..output_byte_size]);
+        }
+
+        // Get the y coordinate parity flag.
         let y_bit = YToBitGadget::y_to_bit_g2(cs, &aff_point)?;
 
-        // Get the infinity flag.
-        let infinity_bit = aff_point.infinity;
+        // Add y-bit and infinity flag.
+        let mut last_byte = bytes.pop().unwrap().to_bits_le()?;
+        last_byte[6] = aff_point.infinity;
+        last_byte[7] = y_bit;
+        bytes.push(UInt8::from_bits_le(&last_byte));
 
-        // Pad points and get *Big-Endian* representation.
-        let bits = pad_point_bits::<MNT6Fr>(x_bits, y_bit, infinity_bit);
-
-        Ok(bits)
+        Ok(bytes)
     }
 }
 
@@ -65,7 +87,6 @@ mod tests {
     use ark_relations::r1cs::ConstraintSystem;
     use ark_std::{test_rng, UniformRand};
 
-    use nimiq_bls::utils::bytes_to_bits;
     use nimiq_test_log::test;
     use nimiq_zkp_primitives::{serialize_g1_mnt4, serialize_g2_mnt4};
 
@@ -87,15 +108,14 @@ mod tests {
 
         // Serialize using the primitive version.
         let primitive_bytes = serialize_g1_mnt4(&g1_point);
-        let primitive_bits = bytes_to_bits(&primitive_bytes);
 
         // Serialize using the gadget version.
-        let gadget_bits = SerializeGadget::serialize_g1(cs, &g1_point_var).unwrap();
+        let gadget_bytes = SerializeGadget::serialize_g1(cs, &g1_point_var).unwrap();
 
         // Compare the two versions bit by bit.
-        assert_eq!(primitive_bits.len(), gadget_bits.len());
-        for i in 0..primitive_bits.len() {
-            assert_eq!(primitive_bits[i], gadget_bits[i].value().unwrap());
+        assert_eq!(primitive_bytes.len(), gadget_bytes.len());
+        for i in 0..primitive_bytes.len() {
+            assert_eq!(primitive_bytes[i], gadget_bytes[i].value().unwrap());
         }
     }
 
@@ -115,15 +135,19 @@ mod tests {
 
         // Serialize using the primitive version.
         let primitive_bytes = serialize_g2_mnt4(&g2_point);
-        let primitive_bits = bytes_to_bits(&primitive_bytes);
 
         // Serialize using the gadget version.
-        let gadget_bits = SerializeGadget::serialize_g2(cs, &g2_point_var).unwrap();
+        let gadget_bytes = SerializeGadget::serialize_g2(cs, &g2_point_var).unwrap();
 
         // Compare the two versions bit by bit.
-        assert_eq!(primitive_bits.len(), gadget_bits.len());
-        for i in 0..primitive_bits.len() {
-            assert_eq!(primitive_bits[i], gadget_bits[i].value().unwrap());
+        assert_eq!(primitive_bytes.len(), gadget_bytes.len());
+        for i in 0..primitive_bytes.len() {
+            assert_eq!(
+                primitive_bytes[i],
+                gadget_bytes[i].value().unwrap(),
+                "Mismatch in byte {}",
+                i
+            );
         }
     }
 }

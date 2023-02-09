@@ -2,7 +2,6 @@ use ark_mnt6_753::G2Projective;
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
-use nimiq_bls::utils::bytes_to_bits;
 use nimiq_primitives::policy::Policy;
 
 use crate::merkle_tree::merkle_tree_construct;
@@ -33,8 +32,8 @@ pub fn pk_tree_construct(public_keys: Vec<G2Projective>) -> Vec<u8> {
     let iter = public_keys.iter();
     #[cfg(feature = "parallel")]
     let iter = public_keys.par_iter();
-    let bits: Vec<bool> = iter
-        .map(|pk| bytes_to_bits(&serialize_g2_mnt6(pk)))
+    let bytes: Vec<u8> = iter
+        .map(|pk| serialize_g2_mnt6(pk).to_vec())
         .flatten()
         .collect();
 
@@ -43,7 +42,8 @@ pub fn pk_tree_construct(public_keys: Vec<G2Projective>) -> Vec<u8> {
 
     for i in 0..PK_TREE_BREADTH {
         inputs.push(
-            bits[i * bits.len() / PK_TREE_BREADTH..(i + 1) * bits.len() / PK_TREE_BREADTH].to_vec(),
+            bytes[i * bytes.len() / PK_TREE_BREADTH..(i + 1) * bytes.len() / PK_TREE_BREADTH]
+                .to_vec(),
         );
     }
 

@@ -1,6 +1,5 @@
 use std::io;
 
-use ark_ff::{FromBytes, ToBytes};
 use ark_mnt6_753::{Fr, G1Projective};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 
@@ -138,7 +137,9 @@ impl Deserialize for Signature {
 
 impl Serialize for SecretKey {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        self.secret_key.write(writer)?;
+        self.secret_key
+            .serialize_uncompressed(writer)
+            .map_err(ark_to_bserial_error)?;
         Ok(SecretKey::SIZE)
     }
 
@@ -150,7 +151,7 @@ impl Serialize for SecretKey {
 impl Deserialize for SecretKey {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         Ok(SecretKey {
-            secret_key: Fr::read(reader).map_err(|_| SerializingError::InvalidValue)?,
+            secret_key: Fr::deserialize_uncompressed(reader).map_err(ark_to_bserial_error)?,
         })
     }
 }
@@ -221,7 +222,8 @@ impl Serialize for PedersenGenerator {
         writer: &mut W,
     ) -> Result<usize, beserial::SerializingError> {
         let size = CanonicalSerialize::uncompressed_size(&self.0);
-        CanonicalSerialize::serialize_unchecked(&self.0, writer).map_err(ark_to_bserial_error)?;
+        CanonicalSerialize::serialize_uncompressed(&self.0, writer)
+            .map_err(ark_to_bserial_error)?;
         Ok(size)
     }
 
@@ -234,8 +236,8 @@ impl Deserialize for PedersenGenerator {
     fn deserialize<R: beserial::ReadBytesExt>(
         reader: &mut R,
     ) -> Result<Self, beserial::SerializingError> {
-        let g1: G1Projective =
-            CanonicalDeserialize::deserialize_unchecked(reader).map_err(ark_to_bserial_error)?;
+        let g1: G1Projective = CanonicalDeserialize::deserialize_uncompressed_unchecked(reader)
+            .map_err(ark_to_bserial_error)?;
         Ok(PedersenGenerator(g1))
     }
 }

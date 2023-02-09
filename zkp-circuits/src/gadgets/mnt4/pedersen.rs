@@ -66,7 +66,7 @@ mod tests {
     use rand::RngCore;
 
     use nimiq_bls::pedersen::{pedersen_generator_powers, pedersen_generators, pedersen_hash};
-    use nimiq_bls::utils::bytes_to_bits;
+    use nimiq_bls::utils::bytes_to_bits_le;
     use nimiq_test_log::test;
 
     use super::*;
@@ -82,7 +82,7 @@ mod tests {
         // Create random bytes.
         let mut bytes = [0u8; 450];
         rng.fill_bytes(&mut bytes);
-        let bits = bytes_to_bits(&bytes);
+        let bits = bytes_to_bits_le(&bytes);
 
         // Generate the generators for the Pedersen hash.
         let generators = pedersen_generators(6);

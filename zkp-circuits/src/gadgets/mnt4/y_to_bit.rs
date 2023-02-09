@@ -1,7 +1,7 @@
-use ark_ec::mnt6::MNT6Parameters;
+use ark_ec::mnt6::MNT6Config;
 use ark_mnt4_753::Fr as MNT4Fr;
 use ark_mnt6_753::constraints::{Fq3Var, FqVar};
-use ark_mnt6_753::Parameters;
+use ark_mnt6_753::Config;
 use ark_r1cs_std::groups::curves::short_weierstrass::AffineVar;
 use ark_r1cs_std::prelude::Boolean;
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
@@ -19,7 +19,7 @@ impl YToBitGadget {
     /// where half means the half point of the modulus of the underlying field. So, half = (p-1)/2.
     pub fn y_to_bit_g1(
         cs: ConstraintSystemRef<MNT4Fr>,
-        point: &AffineVar<<Parameters as MNT6Parameters>::G1Parameters, FqVar>,
+        point: &AffineVar<<Config as MNT6Config>::G1Config, FqVar>,
     ) -> Result<Boolean<MNT4Fr>, SynthesisError> {
         let y_bit = Self::is_greater_half(cs, &point.y)?;
 
@@ -31,7 +31,7 @@ impl YToBitGadget {
     /// where half means the half point of the modulus of the underlying field. So, half = (p-1)/2.
     pub fn y_to_bit_g2(
         cs: ConstraintSystemRef<MNT4Fr>,
-        point: &AffineVar<<Parameters as MNT6Parameters>::G2Parameters, Fq3Var>,
+        point: &AffineVar<<Config as MNT6Config>::G2Config, Fq3Var>,
     ) -> Result<Boolean<MNT4Fr>, SynthesisError> {
         // Calculate the required inputs to the formula.
         let y_c2_bit = Self::is_greater_half(cs.clone(), &point.y.c2)?;
@@ -68,7 +68,6 @@ mod tests {
     use ark_relations::r1cs::ConstraintSystem;
     use ark_std::{test_rng, UniformRand};
 
-    use nimiq_bls::utils::bytes_to_bits;
     use nimiq_test_log::test;
     use nimiq_zkp_primitives::{serialize_g1_mnt6, serialize_g2_mnt6};
 
@@ -94,8 +93,7 @@ mod tests {
 
             // Serialize using the primitive version and get the first bit (which is the y flag).
             let bytes = serialize_g1_mnt6(&g1_point);
-            let bits = bytes_to_bits(&bytes);
-            let primitive_y_bit = bits[0];
+            let primitive_y_bit = (bytes[bytes.len() - 1] >> 7) == 1;
 
             // Serialize using the gadget version and get the boolean value.
             let gadget_y_bit = YToBitGadget::y_to_bit_g1(cs.clone(), &g1_point_var)
@@ -127,8 +125,7 @@ mod tests {
 
             // Serialize using the primitive version and get the first bit (which is the y flag).
             let bytes = serialize_g2_mnt6(&g2_point);
-            let bits = bytes_to_bits(&bytes);
-            let primitive_y_bit = bits[0];
+            let primitive_y_bit = (bytes[bytes.len() - 1] >> 7) == 1;
 
             // Serialize using the gadget version and get the boolean value.
             let gadget_y_bit = YToBitGadget::y_to_bit_g2(cs.clone(), &g2_point_var)

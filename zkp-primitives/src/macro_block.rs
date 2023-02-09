@@ -1,7 +1,7 @@
-use ark_ec::ProjectiveCurve;
-use ark_ff::fields::PrimeField;
+use ark_ec::Group;
 use ark_mnt6_753::{Fr, G1Projective};
 use num_traits::identities::Zero;
+use std::ops::Mul;
 
 use nimiq_bls::Signature;
 use nimiq_hash::{Blake2sHash, Hash, HashOutput};
@@ -41,7 +41,7 @@ impl MacroBlock {
         let hash_point = self.hash(pk_tree_root);
 
         // Generates the signature.
-        let signature = hash_point.mul(sk.into_repr());
+        let signature = hash_point.mul(sk);
 
         // Adds the signature to the aggregated signature on the block.
         self.signature += &signature;
@@ -91,7 +91,7 @@ impl Default for MacroBlock {
             block_number: 0,
             round_number: 0,
             header_hash: [0; 32],
-            signature: G1Projective::prime_subgroup_generator(),
+            signature: G1Projective::generator(),
             signer_bitmap: vec![true; Policy::SLOTS as usize],
         }
     }

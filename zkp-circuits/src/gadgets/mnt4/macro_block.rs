@@ -1,25 +1,23 @@
 use core::cmp::Ordering;
 use std::borrow::Borrow;
 
-use ark_crypto_primitives::prf::blake2s::constraints::{
-    evaluate_blake2s_with_parameters, OutputVar,
-};
-use ark_crypto_primitives::prf::Blake2sWithParameterBlock;
+use ark_crypto_primitives::prf::blake2s::constraints::OutputVar;
 use ark_ff::One;
 use ark_mnt4_753::Fr as MNT4Fr;
 use ark_mnt6_753::constraints::{FqVar, G1Var, G2Var};
 use ark_mnt6_753::Fq;
-use ark_r1cs_std::alloc::AllocationMode;
-use ark_r1cs_std::prelude::{
-    AllocVar, Boolean, CondSelectGadget, FieldVar, ToBitsGadget, UInt32, UInt8,
+use ark_r1cs_std::{
+    alloc::AllocationMode,
+    prelude::{AllocVar, Boolean, CondSelectGadget, FieldVar, UInt32, UInt8},
 };
 use ark_relations::r1cs::{ConstraintSystemRef, Namespace, SynthesisError};
 
 use nimiq_primitives::policy::Policy;
 use nimiq_zkp_primitives::MacroBlock;
 
+use crate::blake2s::evaluate_blake2s;
+use crate::endianness::ToBeBytesGadget;
 use crate::gadgets::mnt4::{CheckSigGadget, HashToCurve};
-use crate::utils::reverse_inner_byte_order;
 
 /// A gadget that contains utilities to verify the validity of a macro block. Mainly it checks that:
 ///  1. The macro block was signed by the aggregate public key.
@@ -29,7 +27,7 @@ use crate::utils::reverse_inner_byte_order;
 pub struct MacroBlockGadget {
     pub block_number: UInt32<MNT4Fr>,
     pub round_number: UInt32<MNT4Fr>,
-    pub header_hash: Vec<Boolean<MNT4Fr>>,
+    pub header_hash: Vec<UInt8<MNT4Fr>>,
     pub signature: G1Var,
     pub signer_bitmap: Vec<Boolean<MNT4Fr>>,
 }
@@ -41,7 +39,7 @@ impl MacroBlockGadget {
         &self,
         cs: ConstraintSystemRef<MNT4Fr>,
         // This is the commitment for the set of public keys that are owned by the next set of validators.
-        pk_tree_root: &[Boolean<MNT4Fr>],
+        pk_tree_root: &[UInt8<MNT4Fr>],
         // This is the aggregated public key.
         agg_pk: &G2Var,
     ) -> Result<Boolean<MNT4Fr>, SynthesisError> {
@@ -73,106 +71,47 @@ impl MacroBlockGadget {
     pub fn get_hash(
         &self,
         cs: ConstraintSystemRef<MNT4Fr>,
-        pk_tree_root: &[Boolean<MNT4Fr>],
+        pk_tree_root: &[UInt8<MNT4Fr>],
     ) -> Result<G1Var, SynthesisError> {
-        // Initialize Blake2s parameters.
-        let blake2s_parameters = Blake2sWithParameterBlock {
-            digest_length: 32,
-            key_length: 0,
-            fan_out: 1,
-            depth: 1,
-            leaf_length: 0,
-            node_offset: 0,
-            xof_digest_length: 0,
-            node_depth: 0,
-            inner_length: 0,
-            salt: [0; 8],
-            personalization: [0; 8],
-        };
-
         // Initialize Boolean vector.
-        let mut first_bits = vec![];
+        let mut first_bytes = vec![];
 
         // Append the header hash.
-        first_bits.extend_from_slice(&self.header_hash);
+        first_bytes.extend_from_slice(&self.header_hash);
 
         // Append the public key tree root.
-        first_bits.extend_from_slice(pk_tree_root);
-
-        // Prepare order of booleans for blake2s (it doesn't expect Big-Endian)!
-        let prepared_first_bits = reverse_inner_byte_order(&first_bits);
+        first_bytes.extend_from_slice(&pk_tree_root);
 
         // Calculate hash using Blake2s.
-        let first_hash = evaluate_blake2s_with_parameters(
-            &prepared_first_bits,
-            &blake2s_parameters.parameters(),
-        )?;
-
-        // Convert to bits.
-        let mut first_hash_bits = Vec::new();
-
-        for int in &first_hash {
-            first_hash_bits.extend(int.to_bits_le());
-        }
-
-        // Reverse inner-byte order again.
-        let mut first_hash_bits = reverse_inner_byte_order(&first_hash_bits);
+        let mut first_hash = evaluate_blake2s(&first_bytes)?;
 
         // Initialize Boolean vector.
-        let mut second_bits = vec![];
+        let mut second_bytes = vec![];
 
         // Add the first byte.
-        let byte = UInt8::constant(0x04);
+        second_bytes.push(UInt8::constant(0x04));
 
-        let mut bits = byte.to_bits_be()?;
+        // The round number.
+        let mut round_number_bytes = self.round_number.to_bytes_be()?;
 
-        second_bits.append(&mut bits);
+        second_bytes.append(&mut round_number_bytes);
 
-        // The round number comes in little endian all the way. A reverse will put it into big endian.
-        let mut round_number_bits = self.round_number.clone().to_bits_le();
+        // The block number.
+        let mut block_number_bits = self.block_number.to_bytes_be()?;
 
-        round_number_bits.reverse();
-
-        second_bits.append(&mut round_number_bits);
-
-        // The block number comes in little endian all the way. A reverse will put it into big endian.
-        let mut block_number_bits = self.block_number.clone().to_bits_le();
-
-        block_number_bits.reverse();
-
-        second_bits.append(&mut block_number_bits);
+        second_bytes.append(&mut block_number_bits);
 
         // Add another byte.
-        let byte = UInt8::constant(0x01);
-
-        let mut bits = byte.to_bits_be()?;
-
-        second_bits.append(&mut bits);
+        second_bytes.push(UInt8::constant(0x01));
 
         // Append the first hash.
-        second_bits.append(&mut first_hash_bits);
-
-        // Prepare order of booleans for blake2s (it doesn't expect Big-Endian)!
-        let prepared_second_bits = reverse_inner_byte_order(&second_bits);
+        second_bytes.append(&mut first_hash);
 
         // Calculate hash using Blake2s.
-        let second_hash = evaluate_blake2s_with_parameters(
-            &prepared_second_bits,
-            &blake2s_parameters.parameters(),
-        )?;
-
-        // Convert to bits.
-        let mut second_hash_bits = Vec::new();
-
-        for int in &second_hash {
-            second_hash_bits.extend(int.to_bits_le());
-        }
-
-        // At this point the hash does not match the off-circuit one. It has the inner byte order
-        // reversed. However we need it like this for the next step.
+        let second_hash = evaluate_blake2s(&second_bytes)?;
 
         // Hash-to-curve.
-        let g1_point = HashToCurve::hash_to_g1(cs, &second_hash_bits)?;
+        let g1_point = HashToCurve::hash_to_g1(cs, &second_hash)?;
 
         Ok(g1_point)
     }
@@ -238,15 +177,7 @@ impl AllocVar<MacroBlock, MNT4Fr> for MacroBlockGadget {
         let round_number = UInt32::<MNT4Fr>::new_input(cs.clone(), || Ok(value.round_number))?;
 
         let header_hash = OutputVar::new_input(cs.clone(), || Ok(&value.header_hash))?;
-
-        // While the bytes of the Blake2sOutputGadget start with the most significant first,
-        // the bits internally start with the least significant.
-        // Thus, we need to reverse the bit order there.
-        let header_hash = header_hash
-            .0
-            .into_iter()
-            .flat_map(|n| reverse_inner_byte_order(&n.to_bits_le().unwrap()))
-            .collect::<Vec<Boolean<MNT4Fr>>>();
+        let header_hash = header_hash.0;
 
         let signer_bitmap =
             Vec::<Boolean<MNT4Fr>>::new_input(cs.clone(), || Ok(&value.signer_bitmap[..]))?;
@@ -283,15 +214,7 @@ impl AllocVar<MacroBlock, MNT4Fr> for MacroBlockGadget {
         let round_number = UInt32::<MNT4Fr>::new_witness(cs.clone(), || Ok(value.round_number))?;
 
         let header_hash = OutputVar::new_witness(cs.clone(), || Ok(&value.header_hash))?;
-
-        // While the bytes of the Blake2sOutputGadget start with the most significant first,
-        // the bits internally start with the least significant.
-        // Thus, we need to reverse the bit order there.
-        let header_hash = header_hash
-            .0
-            .into_iter()
-            .flat_map(|n| reverse_inner_byte_order(&n.to_bits_le().unwrap()))
-            .collect::<Vec<Boolean<MNT4Fr>>>();
+        let header_hash = header_hash.0;
 
         let signer_bitmap =
             Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(&value.signer_bitmap[..]))?;
@@ -310,19 +233,19 @@ impl AllocVar<MacroBlock, MNT4Fr> for MacroBlockGadget {
 
 #[cfg(test)]
 mod tests {
-    use ark_ec::ProjectiveCurve;
+    use ark_ec::Group;
     use ark_ff::Zero;
     use ark_mnt4_753::Fr as MNT4Fr;
     use ark_mnt6_753::constraints::G2Var;
     use ark_mnt6_753::{Fr, G1Projective, G2Projective};
-    use ark_r1cs_std::prelude::{AllocVar, Boolean};
+    use ark_r1cs_std::prelude::AllocVar;
     use ark_r1cs_std::R1CSVar;
     use ark_relations::r1cs::ConstraintSystem;
     use ark_std::ops::MulAssign;
     use ark_std::{test_rng, UniformRand};
     use rand::RngCore;
 
-    use nimiq_bls::utils::bytes_to_bits;
+    use nimiq_bls::utils::bytes_to_bits_le;
     use nimiq_primitives::policy::Policy;
     use nimiq_test_log::test;
 
@@ -346,7 +269,7 @@ mod tests {
 
         let mut bytes = [3u8; Policy::SLOTS as usize / 8];
         rng.fill_bytes(&mut bytes);
-        let signer_bitmap = bytes_to_bits(&bytes);
+        let signer_bitmap = bytes_to_bits_le(&bytes);
 
         let block = MacroBlock {
             block_number: u32::rand(rng),
@@ -363,8 +286,7 @@ mod tests {
         let block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(block)).unwrap();
 
         let pk_tree_root_var =
-            Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(bytes_to_bits(&pk_tree_root)))
-                .unwrap();
+            Vec::<UInt8<MNT4Fr>>::new_witness(cs.clone(), || Ok(&pk_tree_root[..])).unwrap();
 
         // Calculate hash using the gadget version.
         let gadget_hash = block_var.get_hash(cs, &pk_tree_root_var).unwrap();
@@ -382,7 +304,7 @@ mod tests {
 
         // Create random keys.
         let sk = Fr::rand(rng);
-        let mut pk = G2Projective::prime_subgroup_generator();
+        let mut pk = G2Projective::generator();
         pk.mul_assign(sk);
 
         // Create more block parameters.
@@ -411,8 +333,7 @@ mod tests {
         let block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(block)).unwrap();
 
         let pk_tree_root_var =
-            Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(bytes_to_bits(&pk_tree_root)))
-                .unwrap();
+            Vec::<UInt8<MNT4Fr>>::new_witness(cs.clone(), || Ok(&pk_tree_root[..])).unwrap();
 
         let agg_pk_var = G2Var::new_witness(cs.clone(), || Ok(agg_pk)).unwrap();
 
@@ -434,7 +355,7 @@ mod tests {
 
         // Create random keys.
         let sk = Fr::rand(rng);
-        let mut pk = G2Projective::prime_subgroup_generator();
+        let mut pk = G2Projective::generator();
         pk.mul_assign(sk);
 
         // Create more block parameters.
@@ -466,8 +387,7 @@ mod tests {
         let block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(block)).unwrap();
 
         let pk_tree_root_var =
-            Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(bytes_to_bits(&pk_tree_root)))
-                .unwrap();
+            Vec::<UInt8<MNT4Fr>>::new_witness(cs.clone(), || Ok(&pk_tree_root[..])).unwrap();
 
         let agg_pk_var = G2Var::new_witness(cs.clone(), || Ok(agg_pk)).unwrap();
 
@@ -489,7 +409,7 @@ mod tests {
 
         // Create random keys.
         let sk = Fr::rand(rng);
-        let mut pk = G2Projective::prime_subgroup_generator();
+        let mut pk = G2Projective::generator();
         pk.mul_assign(sk);
 
         // Create more block parameters.
@@ -521,8 +441,7 @@ mod tests {
         let block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(block)).unwrap();
 
         let pk_tree_root_var =
-            Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(bytes_to_bits(&pk_tree_root)))
-                .unwrap();
+            Vec::<UInt8<MNT4Fr>>::new_witness(cs.clone(), || Ok(&pk_tree_root[..])).unwrap();
 
         let agg_pk_var = G2Var::new_witness(cs.clone(), || Ok(agg_pk)).unwrap();
 
@@ -544,7 +463,7 @@ mod tests {
 
         // Create random keys.
         let sk = Fr::rand(rng);
-        let mut pk = G2Projective::prime_subgroup_generator();
+        let mut pk = G2Projective::generator();
         pk.mul_assign(sk);
 
         // Create more block parameters.
@@ -578,8 +497,7 @@ mod tests {
         let block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(block)).unwrap();
 
         let pk_tree_root_var =
-            Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(bytes_to_bits(&pk_tree_root)))
-                .unwrap();
+            Vec::<UInt8<MNT4Fr>>::new_witness(cs.clone(), || Ok(&pk_tree_root[..])).unwrap();
 
         let agg_pk_var = G2Var::new_witness(cs.clone(), || Ok(agg_pk)).unwrap();
 
@@ -601,7 +519,7 @@ mod tests {
 
         // Create random keys.
         let sk = Fr::rand(rng);
-        let mut pk = G2Projective::prime_subgroup_generator();
+        let mut pk = G2Projective::generator();
         pk.mul_assign(sk);
 
         // Create more block parameters.
@@ -633,8 +551,7 @@ mod tests {
         let block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(block)).unwrap();
 
         let pk_tree_root_var =
-            Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(bytes_to_bits(&pk_tree_root)))
-                .unwrap();
+            Vec::<UInt8<MNT4Fr>>::new_witness(cs.clone(), || Ok(&pk_tree_root[..])).unwrap();
 
         let agg_pk_var = G2Var::new_witness(cs.clone(), || Ok(agg_pk)).unwrap();
 
@@ -656,7 +573,7 @@ mod tests {
 
         // Create random keys.
         let sk = Fr::rand(rng);
-        let mut pk = G2Projective::prime_subgroup_generator();
+        let mut pk = G2Projective::generator();
         pk.mul_assign(sk);
 
         // Create more block parameters.
@@ -690,8 +607,7 @@ mod tests {
         let block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(block)).unwrap();
 
         let pk_tree_root_var =
-            Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(bytes_to_bits(&pk_tree_root)))
-                .unwrap();
+            Vec::<UInt8<MNT4Fr>>::new_witness(cs.clone(), || Ok(&pk_tree_root[..])).unwrap();
 
         let agg_pk_var = G2Var::new_witness(cs.clone(), || Ok(agg_pk)).unwrap();
 
@@ -713,7 +629,7 @@ mod tests {
 
         // Create random keys.
         let sk = Fr::rand(rng);
-        let mut pk = G2Projective::prime_subgroup_generator();
+        let mut pk = G2Projective::generator();
         pk.mul_assign(sk);
 
         // Create more block parameters.
@@ -745,8 +661,7 @@ mod tests {
         let block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(block)).unwrap();
 
         let pk_tree_root_var =
-            Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(bytes_to_bits(&pk_tree_root)))
-                .unwrap();
+            Vec::<UInt8<MNT4Fr>>::new_witness(cs.clone(), || Ok(&pk_tree_root[..])).unwrap();
 
         let agg_pk_var = G2Var::new_witness(cs.clone(), || Ok(agg_pk)).unwrap();
 
@@ -768,7 +683,7 @@ mod tests {
 
         // Create random keys.
         let sk = Fr::rand(rng);
-        let mut pk = G2Projective::prime_subgroup_generator();
+        let mut pk = G2Projective::generator();
         pk.mul_assign(sk);
 
         // Create more block parameters.
@@ -797,8 +712,7 @@ mod tests {
         let block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(block)).unwrap();
 
         let pk_tree_root_var =
-            Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(bytes_to_bits(&pk_tree_root)))
-                .unwrap();
+            Vec::<UInt8<MNT4Fr>>::new_witness(cs.clone(), || Ok(&pk_tree_root[..])).unwrap();
 
         let agg_pk_var = G2Var::new_witness(cs.clone(), || Ok(agg_pk)).unwrap();
 

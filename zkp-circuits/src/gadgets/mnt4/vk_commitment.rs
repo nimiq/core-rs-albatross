@@ -2,7 +2,8 @@ use ark_groth16::constraints::VerifyingKeyVar;
 use ark_mnt4_753::Fr as MNT4Fr;
 use ark_mnt6_753::constraints::{G1Var, PairingVar};
 use ark_mnt6_753::MNT6_753;
-use ark_r1cs_std::prelude::Boolean;
+use ark_r1cs_std::uint8::UInt8;
+use ark_r1cs_std::ToBitsGadget;
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 
 use crate::gadgets::mnt4::{PedersenHashGadget, SerializeGadget};
@@ -21,44 +22,44 @@ impl VKCommitmentGadget {
         cs: ConstraintSystemRef<MNT4Fr>,
         vk: &VerifyingKeyVar<MNT6_753, PairingVar>,
         pedersen_generators: &[G1Var],
-    ) -> Result<Vec<Boolean<MNT4Fr>>, SynthesisError> {
+    ) -> Result<Vec<UInt8<MNT4Fr>>, SynthesisError> {
         // Initialize Boolean vector.
-        let mut bits = vec![];
+        let mut bytes = vec![];
 
         // Serialize the verifying key into bits.
         // Alpha G1
-        bits.extend(SerializeGadget::serialize_g1(cs.clone(), &vk.alpha_g1)?);
+        bytes.extend(SerializeGadget::serialize_g1(cs.clone(), &vk.alpha_g1)?);
 
         // Beta G2
-        bits.extend(SerializeGadget::serialize_g2(cs.clone(), &vk.beta_g2)?);
+        bytes.extend(SerializeGadget::serialize_g2(cs.clone(), &vk.beta_g2)?);
 
         // Gamma G2
-        bits.extend(SerializeGadget::serialize_g2(cs.clone(), &vk.gamma_g2)?);
+        bytes.extend(SerializeGadget::serialize_g2(cs.clone(), &vk.gamma_g2)?);
 
         // Delta G2
-        bits.extend(SerializeGadget::serialize_g2(cs.clone(), &vk.delta_g2)?);
+        bytes.extend(SerializeGadget::serialize_g2(cs.clone(), &vk.delta_g2)?);
 
         // Gamma ABC G1
         for i in 0..vk.gamma_abc_g1.len() {
-            bits.extend(SerializeGadget::serialize_g1(
+            bytes.extend(SerializeGadget::serialize_g1(
                 cs.clone(),
                 &vk.gamma_abc_g1[i],
             )?);
         }
 
         // Calculate the Pedersen hash.
-        let hash = PedersenHashGadget::evaluate(&bits, pedersen_generators)?;
+        let hash = PedersenHashGadget::evaluate(&bytes.to_bits_le()?, pedersen_generators)?;
 
         // Serialize the Pedersen hash.
-        let serialized_bits = SerializeGadget::serialize_g1(cs, &hash)?;
+        let serialized_bytes = SerializeGadget::serialize_g1(cs, &hash)?;
 
-        Ok(serialized_bits)
+        Ok(serialized_bytes)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use ark_ec::ProjectiveCurve;
+    use ark_ec::CurveGroup;
     use ark_groth16::constraints::VerifyingKeyVar;
     use ark_groth16::VerifyingKey;
     use ark_mnt4_753::Fr as MNT4Fr;
@@ -71,7 +72,6 @@ mod tests {
     use ark_std::{test_rng, UniformRand};
 
     use nimiq_bls::pedersen::pedersen_generators;
-    use nimiq_bls::utils::bytes_to_bits;
     use nimiq_test_log::test;
     use nimiq_zkp_primitives::vk_commitment;
 
@@ -97,7 +97,7 @@ mod tests {
         ];
 
         // Evaluate vk commitment using the primitive version.
-        let primitive_comm = bytes_to_bits(&vk_commitment(vk.clone()));
+        let primitive_comm = vk_commitment(vk.clone());
 
         // Allocate the verifying key in the circuit.
         let vk_var =

@@ -1,9 +1,9 @@
-use ark_crypto_primitives::SNARK;
+use ark_crypto_primitives::snark::SNARK;
 use ark_ec::mnt6::MNT6;
 use ark_groth16::{Groth16, Proof, VerifyingKey};
-use ark_mnt6_753::{G2Projective as G2MNT6, Parameters, MNT6_753};
+use ark_mnt6_753::{Config, G2Projective as G2MNT6, MNT6_753};
 
-use nimiq_bls::utils::bytes_to_bits;
+use nimiq_bls::utils::bytes_to_bits_le;
 use nimiq_zkp_circuits::utils::pack_inputs;
 use nimiq_zkp_primitives::{state_commitment, vk_commitment, NanoZKPError};
 
@@ -30,24 +30,24 @@ pub fn verify(
     final_pks: Vec<G2MNT6>,
     // The SNARK proof for this circuit.
     proof: Proof<MNT6_753>,
-    verifying_key: &VerifyingKey<MNT6<Parameters>>,
+    verifying_key: &VerifyingKey<MNT6<Config>>,
 ) -> Result<bool, NanoZKPError> {
     // Prepare the inputs.
     let mut inputs = vec![];
 
-    inputs.append(&mut pack_inputs(bytes_to_bits(&state_commitment(
+    inputs.append(&mut pack_inputs(bytes_to_bits_le(&state_commitment(
         initial_block_number,
         initial_header_hash,
         initial_pks,
     ))));
 
-    inputs.append(&mut pack_inputs(bytes_to_bits(&state_commitment(
+    inputs.append(&mut pack_inputs(bytes_to_bits_le(&state_commitment(
         final_block_number,
         final_header_hash,
         final_pks,
     ))));
 
-    inputs.append(&mut pack_inputs(bytes_to_bits(&vk_commitment(
+    inputs.append(&mut pack_inputs(bytes_to_bits_le(&vk_commitment(
         verifying_key.clone(),
     ))));
 

@@ -1,15 +1,18 @@
-use std::io::Error;
 #[cfg(feature = "beserial")]
 use std::str::FromStr;
-use std::{cmp::Ordering, fmt};
+use std::{
+    cmp::Ordering,
+    fmt,
+    io::{Error, ErrorKind},
+};
 
-use ark_ec::{AffineCurve, ProjectiveCurve};
+use ark_ec::{AffineRepr, CurveGroup};
 use ark_mnt6_753::{G1Affine, G1Projective};
 
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 #[cfg(feature = "beserial")]
 use beserial::Deserialize;
 
-use crate::compression::{BeDeserialize, BeSerialize};
 #[cfg(feature = "beserial")]
 use crate::ParseError;
 use crate::Signature;
@@ -28,8 +31,10 @@ impl CompressedSignature {
 
     /// Transforms the compressed form back into the projective form.
     pub fn uncompress(&self) -> Result<Signature, Error> {
-        let affine_point: G1Affine = BeDeserialize::deserialize(&mut &self.signature[..])?;
-        let signature = affine_point.into_projective();
+        let affine_point: G1Affine =
+            CanonicalDeserialize::deserialize_compressed(&mut &self.signature[..])
+                .map_err(|e| Error::new(ErrorKind::Other, e))?;
+        let signature = affine_point.into_group();
         Ok(Signature {
             signature,
             compressed: *self,
@@ -98,7 +103,8 @@ impl FromStr for CompressedSignature {
 impl From<G1Projective> for CompressedSignature {
     fn from(signature: G1Projective) -> Self {
         let mut buffer = [0u8; CompressedSignature::SIZE];
-        BeSerialize::serialize(&signature.into_affine(), &mut &mut buffer[..]).unwrap();
+        CanonicalSerialize::serialize_compressed(&signature.into_affine(), &mut &mut buffer[..])
+            .unwrap();
         CompressedSignature { signature: buffer }
     }
 }

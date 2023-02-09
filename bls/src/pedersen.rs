@@ -1,13 +1,13 @@
-use ark_crypto_primitives::prf::Blake2sWithParameterBlock;
-use ark_ec::group::Group;
-use ark_ff::{FpParameters, One, PrimeField};
-use ark_mnt6_753::{Fq, FqParameters, G1Affine, G1Projective};
-use blake2_rfc::blake2s::Blake2s;
+use ark_ec::{AffineRepr, Group};
+use ark_ff::{One, PrimeField};
+use ark_mnt6_753::{Fq, G1Affine, G1Projective};
+
+use nimiq_hash::blake2s::Blake2sWithParameterBlock;
 
 use crate::rand_gen::generate_random_seed;
 use crate::utils::big_int_from_bytes_be;
 
-pub const POINT_CAPACITY: usize = FqParameters::CAPACITY as usize; // 752
+pub const POINT_CAPACITY: usize = Fq::MODULUS_BIT_SIZE as usize - 1; // 752
 
 /// This is the function for creating generators in the G1 group for the MNT6-753 curve. These
 /// generators are meant to be used for the Pedersen hash function.
@@ -25,28 +25,13 @@ pub fn pedersen_generators(number: usize) -> Vec<G1Projective> {
     let number_rounds = number * 3;
 
     for i in 0..number_rounds {
-        let blake2x = Blake2sWithParameterBlock {
-            digest_length: 32,
-            key_length: 0,
-            fan_out: 0,
-            depth: 0,
-            leaf_length: 32,
-            node_offset: i as u32,
-            xof_digest_length: 65535,
-            node_depth: 0,
-            inner_length: 32,
-            salt: [1; 8],
-            // This needs to be set to an unique value, since we want a different random stream for
-            // each generator series that we create. So we take a random u64 and convert it to bytes.
-            // The random u64 came from random.org.
-            personalization: 2813876015388210123_u64.to_be_bytes(),
-        };
+        let mut blake2x = Blake2sWithParameterBlock::new_blake2x(i, 0xffff);
+        // This needs to be set to an unique value, since we want a different random stream for
+        // each generator series that we create. So we take a random u64 and convert it to bytes.
+        // The random u64 came from random.org.
+        blake2x.personalization = 2813876015388210123_u64.to_be_bytes();
 
-        let mut state = Blake2s::with_parameter_block(&blake2x.parameters());
-
-        state.update(&seed);
-
-        let mut result = state.finalize().as_bytes().to_vec();
+        let mut result = blake2x.evaluate(&seed);
 
         bytes.append(&mut result);
     }
@@ -79,16 +64,15 @@ pub fn pedersen_generators(number: usize) -> Vec<G1Projective> {
 
         bytes[96 * i + 1] = 0;
 
-        let mut x_coordinate =
-            Fq::from_repr(big_int_from_bytes_be(&mut &bytes[96 * i..96 * (i + 1)])).unwrap();
+        let mut x_coordinate = big_int_from_bytes_be(&mut &bytes[96 * i..96 * (i + 1)]).into();
 
         // This implements the try-and-increment method of converting an integer to an elliptic curve point.
         // See https://eprint.iacr.org/2009/226.pdf for more details.
         loop {
-            let point = G1Affine::get_point_from_x(x_coordinate, y_coordinate);
+            let point = G1Affine::get_point_from_x_unchecked(x_coordinate, y_coordinate);
 
             if let Some(g1) = point {
-                let scaled_g1 = g1.scale_by_cofactor();
+                let scaled_g1 = g1.mul_by_cofactor_to_group();
 
                 generators.push(scaled_g1);
 

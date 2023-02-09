@@ -23,7 +23,7 @@ impl<F: PrimeField> YToBitGadget<F> {
         y: &FpVar<F>,
     ) -> Result<Boolean<F>, SynthesisError> {
         // Calculates half.
-        let half_value = F::from_repr(F::modulus_minus_one_div_two()).unwrap();
+        let half_value = F::from_bigint(F::MODULUS_MINUS_ONE_DIV_TWO).unwrap();
 
         // Allocates -half as a constant.
         let half_neg = FpVar::new_constant(cs.clone(), half_value.neg())?;
@@ -53,7 +53,7 @@ impl<F: PrimeField> YToBitGadget<F> {
         // y_adjusted <= half
         let y_adjusted_bits = &y_adjusted.to_bits_le()?;
 
-        Boolean::enforce_smaller_or_equal_than_le(y_adjusted_bits, F::modulus_minus_one_div_two())?;
+        Boolean::enforce_smaller_or_equal_than_le(y_adjusted_bits, F::MODULUS_MINUS_ONE_DIV_TWO)?;
 
         // Enforces the following relation:
         // y + y_bit * (-half) = y_adjusted

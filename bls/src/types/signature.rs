@@ -1,14 +1,11 @@
 use std::fmt;
 
-use ark_crypto_primitives::prf::Blake2sWithParameterBlock;
-use ark_ec::{AffineCurve, ProjectiveCurve};
-use ark_ff::{One, PrimeField};
+use ark_ec::{AffineRepr, Group};
+use ark_ff::{One, PrimeField, ToConstraintField};
 use ark_mnt6_753::{Fq, G1Affine, G1Projective};
-use blake2_rfc::blake2s::Blake2s;
-
+use nimiq_hash::blake2s::Blake2sWithParameterBlock;
 use nimiq_hash::HashOutput;
 
-use crate::utils::big_int_from_bytes_be;
 use crate::{CompressedSignature, SigHash};
 
 #[derive(Clone, Copy)]
@@ -36,25 +33,9 @@ impl Signature {
         let mut bytes = vec![];
 
         for i in 0..3 {
-            let blake2x = Blake2sWithParameterBlock {
-                digest_length: 32,
-                key_length: 0,
-                fan_out: 0,
-                depth: 0,
-                leaf_length: 32,
-                node_offset: i as u32,
-                xof_digest_length: 65535,
-                node_depth: 0,
-                inner_length: 32,
-                salt: [0; 8],
-                personalization: [0; 8],
-            };
+            let blake2x = Blake2sWithParameterBlock::new_blake2x(i, 0xffff); // PITODO: 96
 
-            let mut state = Blake2s::with_parameter_block(&blake2x.parameters());
-
-            state.update(hash.as_bytes());
-
-            let mut result = state.finalize().as_bytes().to_vec();
+            let mut result = blake2x.evaluate(hash.as_bytes());
 
             bytes.append(&mut result);
         }
@@ -71,27 +52,29 @@ impl Signature {
         //    produce a valid element on the first try, but will reduce the entropy of the EC
         //    point generation by one bit.
         // We chose the second one because we believe the entropy reduction is not significant enough.
-        // Since we have 768 bits per generator but only need 752 bits, we set the first 16 bits (768-752=16)
+        // Since we have 768 bits per generator but only need 752 bits, we set the most significant 16 bits (768-752=16)
         // to zero.
-        // The y-coordinate is at the first bit. We convert it to a boolean.
-        let y_coordinate = (bytes[0] >> 7) & 1 == 1;
 
-        // In order to easily read the BigInt from the bytes, we use the first 16 bits as padding.
-        // However, because of the previous explanation, we need to nullify the whole first two bytes.
-        bytes[0] = 0;
+        // The y-coordinate is at the most significant bit (interpreted as little endian). We convert it to a boolean.
+        let bytes_len = bytes.len();
+        let y_bit = (bytes[bytes_len - 1] >> 7) & 1 == 1;
 
-        bytes[1] = 0;
+        // Because of the previous explanation, we need to remove the whole last two bytes.
+        let max_size = ((Fq::MODULUS_BIT_SIZE - 1) / 8) as usize;
+        bytes.truncate(max_size);
 
-        let mut x_coordinate = Fq::from_repr(big_int_from_bytes_be(&mut &bytes[..])).unwrap();
+        let x_coordinates = ToConstraintField::to_field_elements(&bytes).unwrap();
+        assert_eq!(x_coordinates.len(), 1);
+        let mut x_coordinate = x_coordinates[0];
 
         // This implements the try-and-increment method of converting an integer to an elliptic curve point.
         // See https://eprint.iacr.org/2009/226.pdf for more details.
         loop {
-            let point = G1Affine::get_point_from_x(x_coordinate, y_coordinate);
+            let point = G1Affine::get_point_from_x_unchecked(x_coordinate, y_bit);
 
             if let Some(point) = point {
                 // We don't need to scale by the cofactor since MNT6-753 has a cofactor of one.
-                let g1 = point.into_projective();
+                let g1 = point.into_group();
                 return g1;
             }
 
@@ -111,7 +94,7 @@ impl Signature {
     /// validator's signature by its number of slots.
     #[must_use]
     pub fn multiply(&self, x: u16) -> Self {
-        let signature = self.signature.mul([x as u64]);
+        let signature = self.signature.mul_bigint([x as u64]);
         Signature {
             signature,
             compressed: CompressedSignature::from(signature),

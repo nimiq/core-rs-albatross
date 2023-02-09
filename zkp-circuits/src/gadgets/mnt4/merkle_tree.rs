@@ -1,6 +1,10 @@
 use ark_mnt4_753::Fr as MNT4Fr;
 use ark_mnt6_753::constraints::G1Var;
-use ark_r1cs_std::prelude::{Boolean, CondSelectGadget, EqGadget};
+use ark_r1cs_std::{
+    prelude::{Boolean, CondSelectGadget, EqGadget},
+    uint8::UInt8,
+    ToBitsGadget,
+};
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 
 use crate::gadgets::mnt4::{PedersenHashGadget, SerializeGadget};
@@ -23,9 +27,9 @@ impl MerkleTreeGadget {
     #[allow(dead_code)]
     pub fn construct(
         cs: ConstraintSystemRef<MNT4Fr>,
-        inputs: &[Vec<Boolean<MNT4Fr>>],
+        inputs: &[Vec<UInt8<MNT4Fr>>],
         pedersen_generators: &[G1Var],
-    ) -> Result<Vec<Boolean<MNT4Fr>>, SynthesisError> {
+    ) -> Result<Vec<UInt8<MNT4Fr>>, SynthesisError> {
         // Checking that the inputs vector is not empty.
         assert!(!inputs.is_empty());
 
@@ -36,7 +40,8 @@ impl MerkleTreeGadget {
         let mut nodes = Vec::new();
 
         for input in inputs {
-            let pedersen_hash = PedersenHashGadget::evaluate(input, pedersen_generators)?;
+            let pedersen_hash =
+                PedersenHashGadget::evaluate(&input.to_bits_le()?, pedersen_generators)?;
             nodes.push(pedersen_hash);
         }
 
@@ -46,19 +51,20 @@ impl MerkleTreeGadget {
         while nodes.len() > 1 {
             // Process each level of nodes.
             for j in 0..nodes.len() / 2 {
-                let mut bits = Vec::new();
+                let mut bytes = Vec::new();
 
                 // Serialize the left node.
-                bits.extend(SerializeGadget::serialize_g1(cs.clone(), &nodes[2 * j])?);
+                bytes.extend(SerializeGadget::serialize_g1(cs.clone(), &nodes[2 * j])?);
 
                 // Serialize the right node.
-                bits.extend(SerializeGadget::serialize_g1(
+                bytes.extend(SerializeGadget::serialize_g1(
                     cs.clone(),
                     &nodes[2 * j + 1],
                 )?);
 
                 // Calculate the parent node.
-                let parent_node = PedersenHashGadget::evaluate(&bits, pedersen_generators)?;
+                let parent_node =
+                    PedersenHashGadget::evaluate(&bytes.to_bits_le()?, pedersen_generators)?;
 
                 next_nodes.push(parent_node);
             }
@@ -68,9 +74,9 @@ impl MerkleTreeGadget {
         }
 
         // Serialize the root node.
-        let bits = SerializeGadget::serialize_g1(cs, &nodes[0])?;
+        let bytes = SerializeGadget::serialize_g1(cs, &nodes[0])?;
 
-        Ok(bits)
+        Ok(bytes)
     }
 
     /// Verifies a Merkle proof. More specifically, given an input and all of the tree nodes up to
@@ -86,10 +92,10 @@ impl MerkleTreeGadget {
     /// one.
     pub fn verify(
         cs: ConstraintSystemRef<MNT4Fr>,
-        input: &[Boolean<MNT4Fr>],
+        input: &[UInt8<MNT4Fr>],
         nodes: &[G1Var],
         path: &[Boolean<MNT4Fr>],
-        root: &[Boolean<MNT4Fr>],
+        root: &[UInt8<MNT4Fr>],
         pedersen_generators: &[G1Var],
     ) -> Result<Boolean<MNT4Fr>, SynthesisError> {
         // Checking that the inputs vector is not empty.
@@ -102,7 +108,7 @@ impl MerkleTreeGadget {
         assert_eq!(nodes.len(), path.len());
 
         // Calculate the Pedersen hash for the input.
-        let mut result = PedersenHashGadget::evaluate(input, pedersen_generators)?;
+        let mut result = PedersenHashGadget::evaluate(&input.to_bits_le()?, pedersen_generators)?;
 
         // Calculate the root of the tree using the branch values.
         for i in 0..nodes.len() {
@@ -112,21 +118,21 @@ impl MerkleTreeGadget {
             let right_node = CondSelectGadget::conditionally_select(&path[i], &result, &nodes[i])?;
 
             // Serialize the left and right nodes.
-            let mut bits = Vec::new();
+            let mut bytes = Vec::new();
 
-            bits.extend(SerializeGadget::serialize_g1(cs.clone(), &left_node)?);
+            bytes.extend(SerializeGadget::serialize_g1(cs.clone(), &left_node)?);
 
-            bits.extend(SerializeGadget::serialize_g1(cs.clone(), &right_node)?);
+            bytes.extend(SerializeGadget::serialize_g1(cs.clone(), &right_node)?);
 
             // Calculate the parent node and update result.
-            result = PedersenHashGadget::evaluate(&bits, pedersen_generators)?;
+            result = PedersenHashGadget::evaluate(&bytes.to_bits_le()?, pedersen_generators)?;
         }
 
         // Serialize the root node.
-        let bits = SerializeGadget::serialize_g1(cs, &result)?;
+        let bytes = SerializeGadget::serialize_g1(cs, &result)?;
 
         // Check that the calculated root is equal to the given root.
-        root.is_eq(&bits)
+        root.is_eq(&bytes)
     }
 }
 
@@ -141,7 +147,7 @@ mod tests {
     use rand::RngCore;
 
     use nimiq_bls::pedersen::{pedersen_generator_powers, pedersen_generators, pedersen_hash};
-    use nimiq_bls::utils::{byte_from_le_bits, bytes_to_bits};
+    use nimiq_bls::utils::{byte_from_le_bits, bytes_to_bits_le};
     use nimiq_test_log::test;
 
     use nimiq_zkp_primitives::{
@@ -163,16 +169,16 @@ mod tests {
         let mut leaves = Vec::new();
         for _ in 0..16 {
             rng.fill_bytes(&mut bytes);
-            leaves.push(bytes_to_bits(&bytes));
+            leaves.push(bytes.to_vec());
         }
 
         // Construct Merkle tree using the primitive version.
-        let primitive_tree = bytes_to_bits(&merkle_tree_construct(leaves.clone()));
+        let primitive_tree = &merkle_tree_construct(leaves.clone());
 
         // Allocate the random bits in the circuit.
         let mut leaves_var = vec![];
         for leaf in leaves {
-            leaves_var.push(Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(leaf)).unwrap());
+            leaves_var.push(Vec::<UInt8<MNT4Fr>>::new_witness(cs.clone(), || Ok(leaf)).unwrap());
         }
 
         // Generate and allocate the Pedersen generators in the circuit.
@@ -204,13 +210,13 @@ mod tests {
         let mut leaves = Vec::new();
         for _ in 0..16 {
             rng.fill_bytes(&mut bytes);
-            leaves.push(bytes_to_bits(&bytes));
+            leaves.push(bytes.to_vec());
         }
 
         // Create random position.
         let mut byte = [0u8; 1];
         rng.fill_bytes(&mut byte);
-        let mut path = bytes_to_bits(&byte);
+        let mut path = bytes_to_bits_le(&byte);
         path.truncate(4);
         let position = byte_from_le_bits(&path) as usize;
 
@@ -221,7 +227,7 @@ mod tests {
         let proof = merkle_tree_prove(leaves.clone(), path.clone());
 
         // Verify proof.
-        let input = leaves.get(position).unwrap().to_vec();
+        let input = leaves.get(position).unwrap();
 
         assert!(merkle_tree_verify(input, proof, path, root))
     }
@@ -235,56 +241,50 @@ mod tests {
         let rng = &mut test_rng();
 
         // Create random bits.
-        let mut bytes = [0u8; 128];
-        rng.fill_bytes(&mut bytes);
-        let leaf = bytes_to_bits(&bytes);
+        let mut leaf = [0u8; 128];
+        rng.fill_bytes(&mut leaf);
 
         // Create the Pedersen generators.
         let generators = pedersen_generator_powers(4);
 
         // Create fake Merkle tree branch.
         let path = vec![false, true, false, true];
-        let mut bytes = [0u8; 95];
+        let mut hash_bytes = [0u8; 95];
         let mut nodes = vec![];
-        let mut bits = vec![];
+        let mut bytes = vec![];
 
-        let mut node = pedersen_hash(leaf.clone(), &generators);
+        let mut node = pedersen_hash(bytes_to_bits_le(&leaf), &generators);
 
         for i in 0..4 {
-            rng.fill_bytes(&mut bytes);
-            let other_node = pedersen_hash(bytes_to_bits(&bytes), &generators);
+            rng.fill_bytes(&mut hash_bytes);
+            let other_node = pedersen_hash(bytes_to_bits_le(&hash_bytes), &generators);
 
             if path[i] {
-                bits.extend_from_slice(
-                    bytes_to_bits(serialize_g1_mnt6(&other_node).as_ref()).as_ref(),
-                );
-                bits.extend_from_slice(bytes_to_bits(serialize_g1_mnt6(&node).as_ref()).as_ref());
+                bytes.extend_from_slice(serialize_g1_mnt6(&other_node).as_ref());
+                bytes.extend_from_slice(serialize_g1_mnt6(&node).as_ref());
             } else {
-                bits.extend_from_slice(bytes_to_bits(serialize_g1_mnt6(&node).as_ref()).as_ref());
-                bits.extend_from_slice(
-                    bytes_to_bits(serialize_g1_mnt6(&other_node).as_ref()).as_ref(),
-                );
+                bytes.extend_from_slice(serialize_g1_mnt6(&node).as_ref());
+                bytes.extend_from_slice(serialize_g1_mnt6(&other_node).as_ref());
             }
 
             nodes.push(other_node);
-            node = pedersen_hash(bits.clone(), &generators);
-            bits.clear();
+            node = pedersen_hash(bytes_to_bits_le(&bytes), &generators);
+            bytes.clear();
         }
 
         // Create root.
         let root = serialize_g1_mnt6(&node).to_vec();
-        let root_bits = bytes_to_bits(&root);
 
         // Verify Merkle proof using the primitive version.
         assert!(merkle_tree_verify(
-            leaf.clone(),
+            &leaf,
             nodes.clone(),
             path.clone(),
-            root,
+            root.clone(),
         ));
 
         // Allocate the leaf in the circuit.
-        let leaf_var = Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(leaf)).unwrap();
+        let leaf_var = Vec::<UInt8<MNT4Fr>>::new_witness(cs.clone(), || Ok(leaf)).unwrap();
 
         // Allocate the nodes in the circuit.
         let nodes_var = Vec::<G1Var>::new_witness(cs.clone(), || Ok(nodes)).unwrap();
@@ -293,7 +293,7 @@ mod tests {
         let path_var = Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(path)).unwrap();
 
         // Allocate the root in the circuit.
-        let root_var = Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(root_bits)).unwrap();
+        let root_var = Vec::<UInt8<MNT4Fr>>::new_witness(cs.clone(), || Ok(root)).unwrap();
 
         // Allocate the Pedersen generators in the circuit.
         let generators_var =
@@ -322,9 +322,8 @@ mod tests {
         let rng = &mut test_rng();
 
         // Create random bits.
-        let mut bytes = [0u8; 128];
-        rng.fill_bytes(&mut bytes);
-        let leaf = bytes_to_bits(&bytes);
+        let mut leaf = [0u8; 128];
+        rng.fill_bytes(&mut leaf);
 
         // Create the Pedersen generators.
         let generators = pedersen_generator_powers(4);
@@ -335,21 +334,25 @@ mod tests {
         let mut nodes = vec![];
         let mut bits = vec![];
 
-        let mut node = pedersen_hash(leaf.clone(), &generators);
+        let mut node = pedersen_hash(bytes_to_bits_le(&leaf), &generators);
 
         for i in 0..4 {
             rng.fill_bytes(&mut bytes);
-            let other_node = pedersen_hash(bytes_to_bits(&bytes), &generators);
+            let other_node = pedersen_hash(bytes_to_bits_le(&bytes), &generators);
 
             if path[i] {
                 bits.extend_from_slice(
-                    bytes_to_bits(serialize_g1_mnt6(&other_node).as_ref()).as_ref(),
+                    bytes_to_bits_le(serialize_g1_mnt6(&other_node).as_ref()).as_ref(),
                 );
-                bits.extend_from_slice(bytes_to_bits(serialize_g1_mnt6(&node).as_ref()).as_ref());
-            } else {
-                bits.extend_from_slice(bytes_to_bits(serialize_g1_mnt6(&node).as_ref()).as_ref());
                 bits.extend_from_slice(
-                    bytes_to_bits(serialize_g1_mnt6(&other_node).as_ref()).as_ref(),
+                    bytes_to_bits_le(serialize_g1_mnt6(&node).as_ref()).as_ref(),
+                );
+            } else {
+                bits.extend_from_slice(
+                    bytes_to_bits_le(serialize_g1_mnt6(&node).as_ref()).as_ref(),
+                );
+                bits.extend_from_slice(
+                    bytes_to_bits_le(serialize_g1_mnt6(&other_node).as_ref()).as_ref(),
                 );
             }
 
@@ -362,18 +365,17 @@ mod tests {
         let mut bytes = [0u8; 95];
         rng.fill_bytes(&mut bytes);
         let root = bytes.to_vec();
-        let root_bits = bytes_to_bits(&root);
 
         // Verify Merkle proof using the primitive version.
         assert!(!merkle_tree_verify(
-            leaf.clone(),
+            &leaf,
             nodes.clone(),
             path.clone(),
-            root,
+            root.clone(),
         ));
 
         // Allocate the leaf in the circuit.
-        let leaf_var = Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(leaf)).unwrap();
+        let leaf_var = Vec::<UInt8<MNT4Fr>>::new_witness(cs.clone(), || Ok(leaf)).unwrap();
 
         // Allocate the nodes in the circuit.
         let nodes_var = Vec::<G1Var>::new_witness(cs.clone(), || Ok(nodes)).unwrap();
@@ -382,7 +384,7 @@ mod tests {
         let path_var = Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(path)).unwrap();
 
         // Allocate the root in the circuit.
-        let root_var = Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(root_bits)).unwrap();
+        let root_var = Vec::<UInt8<MNT4Fr>>::new_witness(cs.clone(), || Ok(root)).unwrap();
 
         // Allocate the Pedersen generators in the circuit.
         let generators_var =

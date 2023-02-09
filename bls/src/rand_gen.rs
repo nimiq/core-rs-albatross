@@ -50,7 +50,7 @@
 //!
 //! 624314 -> 000000000000000000132006558a816203cb442aeb9162ba1d8f6dac5f0a00ec
 
-use ark_crypto_primitives::prf::Blake2sWithParameterBlock;
+use nimiq_hash::blake2s::Blake2sWithParameterBlock;
 
 /// This function will return 32 verifiably random bytes.
 pub fn generate_random_seed() -> Vec<u8> {
@@ -78,19 +78,7 @@ pub fn generate_random_seed() -> Vec<u8> {
     let random_bytes = hex::decode(concatenated).unwrap();
 
     // Initialize Blake2s parameters.
-    let blake2s = Blake2sWithParameterBlock {
-        digest_length: 32,
-        key_length: 0,
-        fan_out: 1,
-        depth: 1,
-        leaf_length: 0,
-        node_offset: 0,
-        xof_digest_length: 0,
-        node_depth: 0,
-        inner_length: 0,
-        salt: [0; 8],
-        personalization: [0; 8],
-    };
+    let blake2s = Blake2sWithParameterBlock::new();
 
     // Calculate the Blake2s hash.
     blake2s.evaluate(random_bytes.as_ref())

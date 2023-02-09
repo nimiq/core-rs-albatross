@@ -67,7 +67,7 @@ fn main() {
 
         let mut file = File::create(format!("proofs/proof_epoch_{}.bin", i + 1)).unwrap();
 
-        proof.serialize_unchecked(&mut file).unwrap();
+        proof.serialize_uncompressed(&mut file).unwrap();
 
         file.sync_all().unwrap();
     }

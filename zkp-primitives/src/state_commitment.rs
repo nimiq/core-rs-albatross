@@ -1,7 +1,7 @@
 use ark_mnt6_753::G2Projective;
 
 use nimiq_bls::pedersen::pedersen_hash;
-use nimiq_bls::utils::bytes_to_bits;
+use nimiq_bls::utils::bytes_to_bits_le;
 
 use crate::pedersen_generator_powers::PEDERSEN_GENERATORS;
 use crate::{pk_tree_construct, serialize_g1_mnt6};
@@ -30,7 +30,7 @@ pub fn state_commitment(
 
     bytes.extend(&root);
 
-    let bits = bytes_to_bits(&bytes);
+    let bits = bytes_to_bits_le(&bytes);
 
     // Calculate the Pedersen hash.
     let hash = pedersen_hash(bits, &PEDERSEN_GENERATORS);

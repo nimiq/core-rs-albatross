@@ -1,5 +1,5 @@
 use ark_crypto_primitives::snark::BooleanInputVar;
-use ark_crypto_primitives::SNARKGadget;
+use ark_crypto_primitives::snark::SNARKGadget;
 use ark_groth16::constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar};
 use ark_groth16::{Proof, VerifyingKey};
 use ark_mnt4_753::Fr as MNT4Fr;
@@ -123,27 +123,28 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeNodeCircuit {
         // Verifying aggregate public key commitment. It just checks that the calculated aggregate
         // public key is correct by comparing it with the aggregate public key commitment given as
         // an input.
-        let agg_pk_bits = SerializeGadget::serialize_g2(cs.clone(), &agg_pk)?;
+        let agg_pk_bytes = SerializeGadget::serialize_g2(cs.clone(), &agg_pk)?;
 
-        let pedersen_hash = PedersenHashGadget::evaluate(&agg_pk_bits, &pedersen_generators_var)?;
+        let pedersen_hash =
+            PedersenHashGadget::evaluate(&agg_pk_bytes.to_bits_le()?, &pedersen_generators_var)?;
 
-        let pedersen_bits = SerializeGadget::serialize_g1(cs.clone(), &pedersen_hash)?;
+        let pedersen_bytes = SerializeGadget::serialize_g1(cs.clone(), &pedersen_hash)?;
 
-        agg_pk_commitment_bits.enforce_equal(&pedersen_bits)?;
+        agg_pk_commitment_bits.enforce_equal(&pedersen_bytes.to_bits_le()?)?;
 
         // Calculating the commitments to each of the aggregate public keys chunks. These
         // will be given as input to the SNARK circuits lower on the tree.
         let mut agg_pk_chunks_commitments = Vec::new();
 
         for chunk in &agg_pk_chunks_var {
-            let chunk_bits = SerializeGadget::serialize_g2(cs.clone(), chunk)?;
+            let chunk_bytes = SerializeGadget::serialize_g2(cs.clone(), chunk)?;
 
             let pedersen_hash =
-                PedersenHashGadget::evaluate(&chunk_bits, &pedersen_generators_var)?;
+                PedersenHashGadget::evaluate(&chunk_bytes.to_bits_le()?, &pedersen_generators_var)?;
 
-            let pedersen_bits = SerializeGadget::serialize_g1(cs.clone(), &pedersen_hash)?;
+            let pedersen_bytes = SerializeGadget::serialize_g1(cs.clone(), &pedersen_hash)?;
 
-            agg_pk_chunks_commitments.push(pedersen_bits);
+            agg_pk_chunks_commitments.push(pedersen_bytes);
         }
 
         // Calculate the path for the left and right child nodes. Given the current position P,

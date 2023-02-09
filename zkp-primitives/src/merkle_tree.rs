@@ -21,7 +21,7 @@ use crate::{pedersen_generator_powers::PEDERSEN_GENERATORS, serialize::serialize
 ///                   o     o
 ///                  / \   / \
 ///                 0  1  2  3
-pub fn merkle_tree_construct(inputs: Vec<Vec<bool>>) -> Vec<u8> {
+pub fn merkle_tree_construct(inputs: Vec<Vec<u8>>) -> Vec<u8> {
     // Checking that the inputs vector is not empty.
     assert!(!inputs.is_empty());
 
@@ -53,7 +53,7 @@ pub fn merkle_tree_construct(inputs: Vec<Vec<bool>>) -> Vec<u8> {
     let iter = inputs.into_par_iter();
 
     let mut nodes: Vec<G1Projective> = iter
-        .map(|bits| pedersen_hash(bits, &PEDERSEN_GENERATORS))
+        .map(|bits| pedersen_hash(bytes_to_bits_le(&bits), &PEDERSEN_GENERATORS))
         .collect();
 
     // Process each level of nodes.
@@ -65,7 +65,7 @@ pub fn merkle_tree_construct(inputs: Vec<Vec<bool>>) -> Vec<u8> {
 
         // Serialize all the child nodes.
         let bits: Vec<bool> = iter
-            .map(|node| bytes_to_bits(&serialize_g1_mnt6(node)))
+            .map(|node| bytes_to_bits_le(&serialize_g1_mnt6(node)))
             .flatten()
             .collect();
 
@@ -113,7 +113,7 @@ pub fn merkle_tree_construct(inputs: Vec<Vec<bool>>) -> Vec<u8> {
 /// the tree, each time you are the left node it's a zero and if you are the right node it's an
 /// one.
 pub fn merkle_tree_verify(
-    input: Vec<bool>,
+    input: &[u8],
     nodes: Vec<G1Projective>,
     path: Vec<bool>,
     root: Vec<u8>,
@@ -128,7 +128,7 @@ pub fn merkle_tree_verify(
     assert_eq!(nodes.len(), path.len());
 
     // Calculate the Pedersen hashes for the input.
-    let mut result = pedersen_hash(input, &PEDERSEN_GENERATORS);
+    let mut result = pedersen_hash(bytes_to_bits_le(input), &PEDERSEN_GENERATORS);
 
     // Calculate the root of the tree using the branch values.
     let mut left_node;
@@ -152,7 +152,7 @@ pub fn merkle_tree_verify(
 
         bytes.extend_from_slice(serialize_g1_mnt6(&right_node).as_ref());
 
-        let bits = bytes_to_bits(&bytes);
+        let bits = bytes_to_bits_le(&bytes);
 
         // Calculate the parent node and update result.
         result = pedersen_hash(bits, &PEDERSEN_GENERATORS);
@@ -181,7 +181,7 @@ pub fn merkle_tree_verify(
 /// The path for the leaf 2 is simply 01. Another way of thinking about it is that if you go up
 /// the tree, each time you are the left node it's a zero and if you are the right node it's an
 /// one.
-pub fn merkle_tree_prove(inputs: Vec<Vec<bool>>, path: Vec<bool>) -> Vec<G1Projective> {
+pub fn merkle_tree_prove(inputs: Vec<Vec<u8>>, path: Vec<bool>) -> Vec<G1Projective> {
     // Checking that the inputs vector is not empty.
     assert!(!inputs.is_empty());
 
@@ -208,7 +208,7 @@ pub fn merkle_tree_prove(inputs: Vec<Vec<bool>>, path: Vec<bool>) -> Vec<G1Proje
     let mut nodes = Vec::new();
 
     for input in inputs {
-        let hash = pedersen_hash(input, &PEDERSEN_GENERATORS);
+        let hash = pedersen_hash(bytes_to_bits_le(&input), &PEDERSEN_GENERATORS);
         nodes.push(hash);
     }
 
@@ -243,7 +243,7 @@ pub fn merkle_tree_prove(inputs: Vec<Vec<bool>>, path: Vec<bool>) -> Vec<G1Proje
             bytes.extend_from_slice(serialize_g1_mnt6(&nodes[2 * j + 1]).as_ref());
 
             // Calculate the parent node.
-            let bits = bytes_to_bits(&bytes);
+            let bits = bytes_to_bits_le(&bytes);
             let parent_node = pedersen_hash(bits, &PEDERSEN_GENERATORS);
 
             next_nodes.push(parent_node);

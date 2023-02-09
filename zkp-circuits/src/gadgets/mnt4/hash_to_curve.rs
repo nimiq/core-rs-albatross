@@ -1,19 +1,20 @@
-use ark_crypto_primitives::prf::blake2s::constraints::evaluate_blake2s_with_parameters;
-use ark_crypto_primitives::prf::Blake2sWithParameterBlock;
-use ark_ff::{One, PrimeField};
+use ark_ff::{One, PrimeField, ToConstraintField};
 use ark_mnt4_753::Fr as MNT4Fr;
 use ark_mnt6_753::constraints::G1Var;
 use ark_mnt6_753::G1Affine;
 use ark_r1cs_std::fields::fp::FpVar;
 use ark_r1cs_std::fields::FieldVar;
-use ark_r1cs_std::prelude::{AllocVar, Boolean, EqGadget};
+use ark_r1cs_std::prelude::{AllocVar, EqGadget};
+use ark_r1cs_std::uint8::UInt8;
+use ark_r1cs_std::ToBitsGadget;
 use ark_r1cs_std::{R1CSVar, ToConstraintFieldGadget};
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
+use ark_std::Zero;
 
-use nimiq_bls::utils::{big_int_from_bytes_be, byte_from_be_bits, byte_to_le_bits};
+use nimiq_hash::blake2s::Blake2sWithParameterBlock;
 
+use crate::blake2s::evaluate_blake2s_with_parameters;
 use crate::gadgets::mnt4::YToBitGadget;
-use crate::utils::reverse_inner_byte_order;
 
 /// This gadget implements the functionality to hash a message into an elliptic curve point.
 pub struct HashToCurve;
@@ -21,26 +22,14 @@ pub struct HashToCurve;
 impl HashToCurve {
     pub fn hash_to_g1(
         cs: ConstraintSystemRef<MNT4Fr>,
-        hash: &[Boolean<MNT4Fr>],
+        hash: &[UInt8<MNT4Fr>],
     ) -> Result<G1Var, SynthesisError> {
         // Extend the hash to 96 bytes using Blake2X.
         let mut hash_out = Vec::new();
 
         for i in 0..3 {
             // Initialize Blake2s parameters.
-            let blake2s_parameters = Blake2sWithParameterBlock {
-                digest_length: 32,
-                key_length: 0,
-                fan_out: 0,
-                depth: 0,
-                leaf_length: 32,
-                node_offset: i as u32,
-                xof_digest_length: 65535,
-                node_depth: 0,
-                inner_length: 32,
-                salt: [0; 8],
-                personalization: [0; 8],
-            };
+            let blake2s_parameters = Blake2sWithParameterBlock::new_blake2x(i, 0xffff); // PITODO: 96
 
             // Calculate hash.
             hash_out.extend(evaluate_blake2s_with_parameters(
@@ -48,17 +37,6 @@ impl HashToCurve {
                 &blake2s_parameters.parameters(),
             )?);
         }
-
-        // Convert to bits.
-        let mut hash_bits = Vec::new();
-
-        for int in &hash_out {
-            hash_bits.extend(int.to_bits_le());
-        }
-
-        // Reverse inner byte order again to get in the correct order. At this point the hash should
-        // match the off-circuit one.
-        let hash_bits = reverse_inner_byte_order(&hash_bits);
 
         // This converts the hash output into a x-coordinate and a y-coordinate for an elliptic curve
         // point. At this time, it is not guaranteed to be a valid point. A quirk of this code is that
@@ -76,45 +54,47 @@ impl HashToCurve {
         // to zero.
 
         // Separate the hash bits into coordinates.
-        let y_bit = &hash_bits[0];
+        // The y-coordinate is at the most significant bit (interpreted as little endian). We convert it to a boolean.
+        let bytes_len = hash_out.len();
+        let y_bit = hash_out[bytes_len - 1].to_bits_le()?.pop().unwrap();
 
-        let mut x_bits = vec![Boolean::constant(false); 16];
-        x_bits.extend_from_slice(&hash_bits[16..768]);
+        // Because of the previous explanation, we need to remove the whole last two bytes.
+        let max_size = ((MNT4Fr::MODULUS_BIT_SIZE - 1) / 8) as usize;
+        hash_out.truncate(max_size);
+
+        let mut x_coordinates = ToConstraintFieldGadget::to_constraint_field(&hash_out)?;
+        assert_eq!(x_coordinates.len(), 1);
+        let x_coordinate = x_coordinates.pop().unwrap();
 
         let mut g1_option = None;
 
         // Allocate the nonce bits and convert to a field element.
-        let nonce_bits_var = Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || {
-            let x_bits = x_bits
+        let nonce = FpVar::<MNT4Fr>::new_witness(cs.clone(), || {
+            let x_bytes = hash_out
                 .iter()
                 .map(|i| i.value())
                 .collect::<Result<_, SynthesisError>>();
             let y = y_bit.value();
 
             // We need to always return a vector of the correct size for the setup to succeed (otherwise Vec::new_witness fails with an AssignmentMissing error).
-            let (x_bits, y) = match (x_bits, y) {
-                (Ok(x_bits), Ok(y)) => (x_bits, y),
-                (..) => return Ok(vec![false; 8]),
+            let (x_bytes, y) = match (x_bytes, y) {
+                (Ok(x_bytes), Ok(y)) => (x_bytes, y),
+                (..) => return Ok(MNT4Fr::zero()),
             };
 
             // Calculate the increment nonce and the resulting G1 hash point.
-            let (nonce_bits, g1) = Self::try_and_increment(x_bits, y);
+            let (nonce_byte, g1) = Self::try_and_increment(x_bytes, y);
             g1_option = Some(g1);
-            Ok(nonce_bits)
+            Ok(MNT4Fr::from(nonce_byte))
         })?;
-        let nonce = Boolean::le_bits_to_fp_var(&nonce_bits_var)?;
 
         // Allocate the G1 hash point.
         let g1_var = G1Var::new_witness(cs.clone(), || {
             g1_option.ok_or(SynthesisError::AssignmentMissing)
         })?;
 
-        // Convert the x-coordinate bits into a field element.
-        x_bits.reverse();
-        let x = Boolean::le_bits_to_fp_var(&x_bits)?;
-
         // Add the nonce to the x-coordinate.
-        let x = x + nonce;
+        let x = x_coordinate + nonce;
 
         // Compare the coordinates of our G1 hash point to the calculated coordinates.
         let g1_var_affine = g1_var.to_affine()?;
@@ -123,7 +103,7 @@ impl HashToCurve {
         let coordinates = g1_var_affine.to_constraint_field()?;
 
         coordinates[0].enforce_equal(&x)?;
-        y_coordinate.enforce_equal(y_bit)?;
+        y_coordinate.enforce_equal(&y_bit)?;
         coordinates[2].enforce_equal(&FpVar::zero())?;
 
         // We don't need to scale by the cofactor since MNT6-753 has a cofactor of one.
@@ -132,31 +112,25 @@ impl HashToCurve {
         Ok(g1_var)
     }
 
-    /// Returns the nonce i (as a vector of big endian bits), such that (x + i) is a valid x coordinate for G1.
-    /// The nonce i is always a u8, i.e., consists of 8 bits.
-    fn try_and_increment(x_bits: Vec<bool>, y: bool) -> (Vec<bool>, G1Affine) {
-        // Prepare the bits to transform into field element.
-        let mut bytes = vec![];
-
-        for i in 0..96 {
-            bytes.push(byte_from_be_bits(&x_bits[i * 8..(i + 1) * 8]))
-        }
-
+    /// Returns the nonce i, such that (x + i) is a valid x coordinate for G1.
+    /// The nonce i is always a u8.
+    fn try_and_increment(x_bytes: Vec<u8>, y: bool) -> (u8, G1Affine) {
         // Transform the x-coordinate into a field element.
-        let mut x = MNT4Fr::from_repr(big_int_from_bytes_be(&mut &bytes[..])).unwrap();
+        let x_coordinates = ToConstraintField::to_field_elements(&x_bytes).unwrap();
+        assert_eq!(x_coordinates.len(), 1);
+        let mut x_coordinate = x_coordinates[0];
 
         // This implements the try-and-increment method of converting an integer to an elliptic curve point.
         // See https://eprint.iacr.org/2009/226.pdf for more details.
         for i in 0..=255 {
-            let point = G1Affine::get_point_from_x(x, y);
+            let point = G1Affine::get_point_from_x_unchecked(x_coordinate, y);
 
             if let Some(g1) = point {
-                let i_bits = byte_to_le_bits(i);
                 // Note that we don't scale by the cofactor here. We do it later.
-                return (i_bits, g1);
+                return (i, g1);
             }
 
-            x += &MNT4Fr::one();
+            x_coordinate += &MNT4Fr::one();
         }
 
         unreachable!()

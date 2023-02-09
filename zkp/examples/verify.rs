@@ -37,7 +37,7 @@ fn main() {
     // Load the proof from file.
     let mut file = File::open(format!("proofs/proof_epoch_{number_epochs}.bin")).unwrap();
 
-    let proof = Proof::deserialize_unchecked(&mut file).unwrap();
+    let proof = Proof::deserialize_uncompressed_unchecked(&mut file).unwrap();
 
     println!("====== Proof verification for Nano Sync initiated ======");
 

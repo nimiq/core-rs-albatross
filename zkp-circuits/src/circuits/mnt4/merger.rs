@@ -1,11 +1,12 @@
 use ark_crypto_primitives::snark::BooleanInputVar;
-use ark_crypto_primitives::SNARKGadget;
+use ark_crypto_primitives::snark::SNARKGadget;
 use ark_groth16::constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar};
 use ark_groth16::{Proof, VerifyingKey};
 use ark_mnt4_753::Fr as MNT4Fr;
 use ark_mnt6_753::constraints::{FqVar, G1Var, PairingVar};
 use ark_mnt6_753::{Fq, MNT6_753};
 use ark_r1cs_std::prelude::{AllocVar, Boolean, EqGadget};
+use ark_r1cs_std::ToBitsGadget;
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 
 use nimiq_bls::pedersen::pedersen_generators;
@@ -142,7 +143,7 @@ impl ConstraintSynthesizer<MNT4Fr> for MergerCircuit {
         let reference_commitment =
             VKCommitmentGadget::evaluate(cs, &vk_merger_wrapper_var, &pedersen_generators_var)?;
 
-        vk_commitment_bits.enforce_equal(&reference_commitment)?;
+        vk_commitment_bits.enforce_equal(&reference_commitment.to_bits_le()?)?; // PITODO
 
         // Verify equality of initial and intermediate state commitments. If the genesis flag is set to
         // true, it enforces the equality. If it is set to false, it doesn't. This is necessary for

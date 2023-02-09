@@ -1,7 +1,10 @@
 use ark_mnt4_753::Fr as MNT4Fr;
 use ark_mnt6_753::constraints::{FqVar, G1Var, G2Var};
 use ark_mnt6_753::{Fq, G1Projective, G2Projective};
-use ark_r1cs_std::prelude::{AllocVar, Boolean, CondSelectGadget, CurveVar, EqGadget};
+use ark_r1cs_std::prelude::{
+    AllocVar, Boolean, CondSelectGadget, CurveVar, EqGadget, ToBitsGadget,
+};
+use ark_r1cs_std::uint8::UInt8;
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 
 use nimiq_bls::pedersen::pedersen_generators;
@@ -94,6 +97,10 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeLeafCircuit {
 
         // Unpack the inputs by converting them from field elements to bits and truncating appropriately.
         let pk_tree_root_bits = unpack_inputs(pk_tree_root_var)?[..760].to_vec();
+        let pk_tree_root_bytes: Vec<_> = pk_tree_root_bits
+            .chunks(8)
+            .map(UInt8::from_bits_le)
+            .collect();
 
         let agg_pk_commitment_bits = unpack_inputs(agg_pk_commitment_var)?[..760].to_vec();
 
@@ -108,18 +115,18 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeLeafCircuit {
         // public keys serialized and concatenated together. Each leaf contains exactly
         // VALIDATOR_SLOTS/2^n public keys, so that the entire Merkle tree contains all of the
         // public keys.
-        let mut bits = vec![];
+        let mut bytes = vec![];
 
         for item in pks_var.iter().take(self.pks.len()) {
-            bits.extend(SerializeGadget::serialize_g2(cs.clone(), item)?);
+            bytes.extend(SerializeGadget::serialize_g2(cs.clone(), item)?);
         }
 
         MerkleTreeGadget::verify(
             cs.clone(),
-            &bits,
+            &bytes,
             &pk_tree_nodes_var,
             &path_bits,
-            &pk_tree_root_bits,
+            &pk_tree_root_bytes,
             &pedersen_generators_var,
         )?
         .enforce_equal(&Boolean::constant(true))?;
@@ -141,13 +148,14 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeLeafCircuit {
 
         // Verifying aggregate public key. It checks that the calculated aggregate public key
         // is correct by comparing it with the aggregate public key commitment given as an input.
-        let agg_pk_bits = SerializeGadget::serialize_g2(cs.clone(), &calculated_agg_pk)?;
+        let agg_pk_bytes = SerializeGadget::serialize_g2(cs.clone(), &calculated_agg_pk)?;
 
-        let pedersen_hash = PedersenHashGadget::evaluate(&agg_pk_bits, &pedersen_generators_var)?;
+        let pedersen_hash =
+            PedersenHashGadget::evaluate(&agg_pk_bytes.to_bits_le()?, &pedersen_generators_var)?;
 
-        let pedersen_bits = SerializeGadget::serialize_g1(cs, &pedersen_hash)?;
+        let pedersen_bytes = SerializeGadget::serialize_g1(cs, &pedersen_hash)?;
 
-        agg_pk_commitment_bits.enforce_equal(&pedersen_bits)?;
+        agg_pk_commitment_bits.enforce_equal(&pedersen_bytes.to_bits_le()?)?;
 
         Ok(())
     }

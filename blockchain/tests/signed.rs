@@ -20,12 +20,8 @@ use nimiq_test_log::test;
 use nimiq_utils::time::OffsetTime;
 use nimiq_vrf::VrfEntropy;
 
-// /// Still in for future reference, in case this key is needed again
-// const SECRET_KEY: &str = "8e44b45f308dae1e2d4390a0f96cea993960d4178550c62aeaba88e9e168d165\
-// a8dadd6e1c553412d5c0f191e83ffc5a4b71bf45df6b5a125ec2c4a9a40643597cb6b5c3b588d55a363f1b56ac839eee4a6\
-// ff848180500f2fc29d1c0595f0000";
 ///  works with NetworkId::UnitAlbatross
-const SECRET_KEY: &str = "196ffdb1a8acc7cbd76a251aeac0600a1d68b3aba1eba823b5e4dc5dbdcdc730afa752c05ab4f6ef8518384ad514f403c5a088a22b17bf1bc14f8ff8decc2a512c0a200f68d7bdf5a319b30356fe8d1d75ef510aed7a8660968c216c328a0000";
+const SECRET_KEY: &str = "99237809f3b37bd0878854d2b5b66e4cc00ba1a1d64377c374f2b6d1bf3dec7835bfae3e7ab89b6d331b3ef7d1e9a06a7f6967bf00edf9e0bcfe34b58bd1260e96406e09156e4c190ff8f69a9ce1183b4289383e6d798fd5104a3800fabd00";
 
 #[test]
 fn test_skip_block_single_signature() {

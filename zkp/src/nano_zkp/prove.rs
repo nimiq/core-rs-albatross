@@ -2,8 +2,8 @@ use std::fs;
 use std::fs::{DirBuilder, File};
 use std::path::Path;
 
-use ark_crypto_primitives::SNARK;
-use ark_ec::{PairingEngine, ProjectiveCurve};
+use ark_crypto_primitives::snark::SNARK;
+use ark_ec::{pairing::Pairing, CurveGroup};
 use ark_ff::Zero;
 use ark_groth16::{Groth16, Proof, ProvingKey, VerifyingKey};
 use ark_mnt4_753::{Fr as MNT4Fr, MNT4_753};
@@ -13,7 +13,7 @@ use ark_std::UniformRand;
 use rand::{thread_rng, CryptoRng, Rng};
 
 use nimiq_bls::pedersen::{pedersen_generator_powers, pedersen_hash};
-use nimiq_bls::utils::{byte_to_le_bits, bytes_to_bits};
+use nimiq_bls::utils::{byte_to_le_bits, bytes_to_bits_le};
 use nimiq_primitives::policy::Policy;
 use nimiq_zkp_circuits::{
     circuits::mnt4::{
@@ -68,13 +68,12 @@ pub fn prove(
         bytes.extend_from_slice(&serialize_g2_mnt6(initial_pk));
     }
 
-    let bits = bytes_to_bits(&bytes);
-
-    let mut pks_bits = Vec::new();
+    let mut pks_bytes = Vec::new();
 
     for i in 0..PK_TREE_BREADTH {
-        pks_bits.push(
-            bits[i * bits.len() / PK_TREE_BREADTH..(i + 1) * bits.len() / PK_TREE_BREADTH].to_vec(),
+        pks_bytes.push(
+            bytes[i * bytes.len() / PK_TREE_BREADTH..(i + 1) * bytes.len() / PK_TREE_BREADTH]
+                .to_vec(),
         );
     }
 
@@ -86,7 +85,7 @@ pub fn prove(
 
         path.truncate(PK_TREE_DEPTH);
 
-        pk_tree_proofs.push(merkle_tree_prove(pks_bits.clone(), path));
+        pk_tree_proofs.push(merkle_tree_prove(pks_bytes.clone(), path));
     }
 
     // Calculate initial public key tree root.
@@ -364,7 +363,7 @@ fn prove_pk_tree_leaf<R: CryptoRng + Rng>(
     // Load the proving key from file.
     let mut file = File::open(dir_path.join("proving_keys").join(format!("{name}.bin")))?;
 
-    let proving_key = ProvingKey::deserialize_unchecked(&mut file)?;
+    let proving_key = ProvingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
     // Calculate the aggregate public key commitment.
     let mut agg_pk = G2MNT6::zero();
@@ -377,18 +376,18 @@ fn prove_pk_tree_leaf<R: CryptoRng + Rng>(
         }
     }
 
-    let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(&agg_pk));
+    let agg_pk_bits = bytes_to_bits_le(&serialize_g2_mnt6(&agg_pk));
 
     let hash = pedersen_hash(agg_pk_bits, &pedersen_generator_powers(5));
 
-    let agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(&hash));
+    let agg_pk_comm = bytes_to_bits_le(&serialize_g1_mnt6(&hash));
 
     // Get the relevant chunk of the signer's bitmap.
     let signer_bitmap_chunk = &signer_bitmap[position * Policy::SLOTS as usize / PK_TREE_BREADTH
         ..(position + 1) * Policy::SLOTS as usize / PK_TREE_BREADTH];
 
     // Calculate inputs.
-    let mut pk_tree_root = pack_inputs(bytes_to_bits(pk_tree_root));
+    let mut pk_tree_root = pack_inputs(bytes_to_bits_le(pk_tree_root));
 
     let mut agg_pk_commitment = pack_inputs(agg_pk_comm);
 
@@ -416,7 +415,7 @@ fn prove_pk_tree_leaf<R: CryptoRng + Rng>(
         // Load the verifying key from file.
         let mut file = File::open(dir_path.join("verifying_keys").join(format!("{name}.bin")))?;
 
-        let verifying_key = VerifyingKey::deserialize_unchecked(&mut file)?;
+        let verifying_key = VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
         // Prepare the inputs.
         let mut inputs = vec![];
@@ -459,26 +458,26 @@ fn prove_pk_tree_node_mnt6<R: CryptoRng + Rng>(
     // Load the proving key from file.
     let mut file = File::open(proving_keys.join(format!("{name}.bin")))?;
 
-    let proving_key = ProvingKey::deserialize_unchecked(&mut file)?;
+    let proving_key = ProvingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
     // Load the verifying key from file.
     let mut file = File::open(verifying_keys.join(format!("{vk_file}.bin")))?;
 
-    let vk_child = VerifyingKey::deserialize_unchecked(&mut file)?;
+    let vk_child = VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
     // Load the left proof from file.
     let left_position = 2 * position;
 
     let mut file = File::open(proofs.join(format!("{vk_file}_{left_position}.bin")))?;
 
-    let left_proof = Proof::deserialize_unchecked(&mut file)?;
+    let left_proof = Proof::deserialize_uncompressed_unchecked(&mut file)?;
 
     // Load the right proof from file.
     let right_position = 2 * position + 1;
 
     let mut file = File::open(proofs.join(format!("{vk_file}_{right_position}.bin")))?;
 
-    let right_proof = Proof::deserialize_unchecked(&mut file)?;
+    let right_proof = Proof::deserialize_uncompressed_unchecked(&mut file)?;
 
     // Calculate the left aggregate public key commitment.
     let mut agg_pk = G2MNT6::zero();
@@ -491,11 +490,11 @@ fn prove_pk_tree_node_mnt6<R: CryptoRng + Rng>(
         }
     }
 
-    let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(&agg_pk));
+    let agg_pk_bits = bytes_to_bits_le(&serialize_g2_mnt6(&agg_pk));
 
     let hash = pedersen_hash(agg_pk_bits, &pedersen_generator_powers(5));
 
-    let left_agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(&hash));
+    let left_agg_pk_comm = bytes_to_bits_le(&serialize_g1_mnt6(&hash));
 
     // Calculate the right aggregate public key commitment.
     let mut agg_pk = G2MNT6::zero();
@@ -508,11 +507,11 @@ fn prove_pk_tree_node_mnt6<R: CryptoRng + Rng>(
         }
     }
 
-    let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(&agg_pk));
+    let agg_pk_bits = bytes_to_bits_le(&serialize_g2_mnt6(&agg_pk));
 
     let hash = pedersen_hash(agg_pk_bits, &pedersen_generator_powers(5));
 
-    let right_agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(&hash));
+    let right_agg_pk_comm = bytes_to_bits_le(&serialize_g1_mnt6(&hash));
 
     // Get the relevant chunk of the signer's bitmap.
     let signer_bitmap_chunk = &signer_bitmap[position * Policy::SLOTS as usize
@@ -520,7 +519,7 @@ fn prove_pk_tree_node_mnt6<R: CryptoRng + Rng>(
         ..(position + 1) * Policy::SLOTS as usize / 2_usize.pow(tree_level as u32)];
 
     // Calculate inputs.
-    let mut pk_tree_root = pack_inputs(bytes_to_bits(pk_tree_root));
+    let mut pk_tree_root = pack_inputs(bytes_to_bits_le(pk_tree_root));
 
     let mut left_agg_pk_commitment = pack_inputs(left_agg_pk_comm);
 
@@ -551,7 +550,7 @@ fn prove_pk_tree_node_mnt6<R: CryptoRng + Rng>(
         // Load the verifying key from file.
         let mut file = File::open(verifying_keys.join(format!("{name}.bin")))?;
 
-        let verifying_key = VerifyingKey::deserialize_unchecked(&mut file)?;
+        let verifying_key = VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
         // Prepare the inputs.
         let mut inputs = vec![];
@@ -597,26 +596,26 @@ fn prove_pk_tree_node_mnt4<R: CryptoRng + Rng>(
     // Load the proving key from file.
     let mut file = File::open(proving_keys.join(format!("{name}.bin")))?;
 
-    let proving_key = ProvingKey::deserialize_unchecked(&mut file)?;
+    let proving_key = ProvingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
     // Load the verifying key from file.
     let mut file = File::open(verifying_keys.join(format!("{vk_file}.bin")))?;
 
-    let vk_child = VerifyingKey::deserialize_unchecked(&mut file)?;
+    let vk_child = VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
     // Load the left proof from file.
     let left_position = 2 * position;
 
     let mut file = File::open(proofs.join(format!("{vk_file}_{left_position}.bin")))?;
 
-    let left_proof = Proof::deserialize_unchecked(&mut file)?;
+    let left_proof = Proof::deserialize_uncompressed_unchecked(&mut file)?;
 
     // Load the right proof from file.
     let right_position = 2 * position + 1;
 
     let mut file = File::open(proofs.join(format!("{vk_file}_{right_position}.bin")))?;
 
-    let right_proof = Proof::deserialize_unchecked(&mut file)?;
+    let right_proof = Proof::deserialize_uncompressed_unchecked(&mut file)?;
 
     // Calculate the aggregate public key chunks.
     let mut agg_pk_chunks = vec![];
@@ -642,11 +641,11 @@ fn prove_pk_tree_node_mnt4<R: CryptoRng + Rng>(
         agg_pk += chunk;
     }
 
-    let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(&agg_pk));
+    let agg_pk_bits = bytes_to_bits_le(&serialize_g2_mnt6(&agg_pk));
 
     let hash = pedersen_hash(agg_pk_bits, &pedersen_generator_powers(5));
 
-    let agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(&hash));
+    let agg_pk_comm = bytes_to_bits_le(&serialize_g1_mnt6(&hash));
 
     // Get the relevant chunk of the signer's bitmap.
     let signer_bitmap_chunk = &signer_bitmap[position * Policy::SLOTS as usize
@@ -654,7 +653,7 @@ fn prove_pk_tree_node_mnt4<R: CryptoRng + Rng>(
         ..(position + 1) * Policy::SLOTS as usize / 2_usize.pow(tree_level as u32)];
 
     // Calculate inputs.
-    let mut pk_tree_root = pack_inputs(bytes_to_bits(pk_tree_root));
+    let mut pk_tree_root = pack_inputs(bytes_to_bits_le(pk_tree_root));
 
     let mut agg_pk_commitment = pack_inputs(agg_pk_comm);
 
@@ -683,7 +682,7 @@ fn prove_pk_tree_node_mnt4<R: CryptoRng + Rng>(
         // Load the verifying key from file.
         let mut file = File::open(verifying_keys.join(format!("{name}.bin")))?;
 
-        let verifying_key = VerifyingKey::deserialize_unchecked(&mut file)?;
+        let verifying_key = VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
         // Prepare the inputs.
         let mut inputs = vec![];
@@ -726,17 +725,17 @@ fn prove_macro_block<R: CryptoRng + Rng>(
     // Load the proving key from file.
     let mut file = File::open(proving_keys.join("macro_block.bin"))?;
 
-    let proving_key = ProvingKey::deserialize_unchecked(&mut file)?;
+    let proving_key = ProvingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
     // Load the verifying key from file.
     let mut file = File::open(verifying_keys.join("pk_tree_0.bin"))?;
 
-    let vk_pk_tree = VerifyingKey::deserialize_unchecked(&mut file)?;
+    let vk_pk_tree = VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
     // Load the proof from file.
     let mut file = File::open(proofs.join("pk_tree_0_0.bin"))?;
 
-    let proof = Proof::deserialize_unchecked(&mut file)?;
+    let proof = Proof::deserialize_uncompressed_unchecked(&mut file)?;
 
     // Calculate the aggregate public key chunks.
     let mut agg_pk_chunks = vec![];
@@ -755,13 +754,13 @@ fn prove_macro_block<R: CryptoRng + Rng>(
     }
 
     // Calculate the inputs.
-    let mut initial_state_commitment = pack_inputs(bytes_to_bits(&state_commitment(
+    let mut initial_state_commitment = pack_inputs(bytes_to_bits_le(&state_commitment(
         block.block_number - Policy::blocks_per_epoch(),
         initial_header_hash,
         initial_pks.to_vec(),
     )));
 
-    let mut final_state_commitment = pack_inputs(bytes_to_bits(&state_commitment(
+    let mut final_state_commitment = pack_inputs(bytes_to_bits_le(&state_commitment(
         block.block_number,
         block.header_hash,
         final_pks.to_vec(),
@@ -772,9 +771,9 @@ fn prove_macro_block<R: CryptoRng + Rng>(
         vk_pk_tree,
         agg_pk_chunks,
         proof,
-        bytes_to_bits(initial_pk_tree_root),
-        bytes_to_bits(&initial_header_hash),
-        bytes_to_bits(final_pk_tree_root),
+        initial_pk_tree_root.to_vec(),
+        initial_header_hash,
+        final_pk_tree_root.to_vec(),
         block.clone(),
         initial_state_commitment.clone(),
         final_state_commitment.clone(),
@@ -788,7 +787,7 @@ fn prove_macro_block<R: CryptoRng + Rng>(
         // Load the verifying key from file.
         let mut file = File::open(verifying_keys.join("macro_block.bin"))?;
 
-        let verifying_key = VerifyingKey::deserialize_unchecked(&mut file)?;
+        let verifying_key = VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
         // Prepare the inputs.
         let mut inputs = vec![];
@@ -825,26 +824,26 @@ fn prove_macro_block_wrapper<R: CryptoRng + Rng>(
     // Load the proving key from file.
     let mut file = File::open(proving_keys.join("macro_block_wrapper.bin"))?;
 
-    let proving_key = ProvingKey::deserialize_unchecked(&mut file)?;
+    let proving_key = ProvingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
     // Load the verifying key from file.
     let mut file = File::open(verifying_keys.join("macro_block.bin"))?;
 
-    let vk_macro_block = VerifyingKey::deserialize_unchecked(&mut file)?;
+    let vk_macro_block = VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
     // Load the proof from file.
     let mut file = File::open(proofs.join("macro_block.bin"))?;
 
-    let proof = Proof::deserialize_unchecked(&mut file)?;
+    let proof = Proof::deserialize_uncompressed_unchecked(&mut file)?;
 
     // Calculate the inputs.
-    let mut initial_state_commitment = pack_inputs(bytes_to_bits(&state_commitment(
+    let mut initial_state_commitment = pack_inputs(bytes_to_bits_le(&state_commitment(
         block.block_number - Policy::blocks_per_epoch(),
         initial_header_hash,
         initial_pks.to_vec(),
     )));
 
-    let mut final_state_commitment = pack_inputs(bytes_to_bits(&state_commitment(
+    let mut final_state_commitment = pack_inputs(bytes_to_bits_le(&state_commitment(
         block.block_number,
         block.header_hash,
         final_pks.to_vec(),
@@ -866,7 +865,7 @@ fn prove_macro_block_wrapper<R: CryptoRng + Rng>(
         // Load the verifying key from file.
         let mut file = File::open(verifying_keys.join("macro_block_wrapper.bin"))?;
 
-        let verifying_key = VerifyingKey::deserialize_unchecked(&mut file)?;
+        let verifying_key = VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
         // Prepare the inputs.
         let mut inputs = vec![];
@@ -903,22 +902,22 @@ fn prove_merger<R: CryptoRng + Rng>(
     // Load the proving key from file.
     let mut file = File::open(proving_keys.join("merger.bin"))?;
 
-    let proving_key = ProvingKey::deserialize_unchecked(&mut file)?;
+    let proving_key = ProvingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
     // Load the verifying key for Macro Block Wrapper from file.
     let mut file = File::open(verifying_keys.join("macro_block_wrapper.bin"))?;
 
-    let vk_macro_block_wrapper = VerifyingKey::deserialize_unchecked(&mut file)?;
+    let vk_macro_block_wrapper = VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
     // Load the proof for Macro Block Wrapper from file.
     let mut file = File::open(proofs.join("macro_block_wrapper.bin"))?;
 
-    let proof_macro_block_wrapper = Proof::deserialize_unchecked(&mut file)?;
+    let proof_macro_block_wrapper = Proof::deserialize_uncompressed_unchecked(&mut file)?;
 
     // Load the verifying key for Merger Wrapper from file.
     let mut file = File::open(verifying_keys.join("merger_wrapper.bin"))?;
 
-    let vk_merger_wrapper = VerifyingKey::deserialize_unchecked(&mut file)?;
+    let vk_merger_wrapper = VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
     // Get the intermediate state commitment.
     let intermediate_state_commitment = state_commitment(
@@ -943,15 +942,16 @@ fn prove_merger<R: CryptoRng + Rng>(
     };
 
     // Calculate the inputs.
-    let mut initial_state_commitment = pack_inputs(bytes_to_bits(&initial_state_comm_bytes));
+    let mut initial_state_commitment = pack_inputs(bytes_to_bits_le(&initial_state_comm_bytes));
 
-    let mut final_state_commitment = pack_inputs(bytes_to_bits(&state_commitment(
+    let mut final_state_commitment = pack_inputs(bytes_to_bits_le(&state_commitment(
         block.block_number,
         block.header_hash,
         final_pks.to_vec(),
     )));
 
-    let mut vk_commitment = pack_inputs(bytes_to_bits(&vk_commitment(vk_merger_wrapper.clone())));
+    let mut vk_commitment =
+        pack_inputs(bytes_to_bits_le(&vk_commitment(vk_merger_wrapper.clone())));
 
     // Create the circuit.
     let circuit = MergerCircuit::new(
@@ -959,7 +959,7 @@ fn prove_merger<R: CryptoRng + Rng>(
         proof_merger_wrapper,
         proof_macro_block_wrapper,
         vk_merger_wrapper,
-        bytes_to_bits(&intermediate_state_commitment),
+        bytes_to_bits_le(&intermediate_state_commitment),
         genesis_flag,
         initial_state_commitment.clone(),
         final_state_commitment.clone(),
@@ -974,7 +974,7 @@ fn prove_merger<R: CryptoRng + Rng>(
         // Load the verifying key from file.
         let mut file = File::open(verifying_keys.join("merger.bin"))?;
 
-        let verifying_key = VerifyingKey::deserialize_unchecked(&mut file)?;
+        let verifying_key = VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
         // Prepare the inputs.
         let mut inputs = vec![];
@@ -1013,22 +1013,22 @@ fn prove_merger_wrapper<R: CryptoRng + Rng>(
     // Load the proving key from file.
     let mut file = File::open(proving_keys.join("merger_wrapper.bin"))?;
 
-    let proving_key = ProvingKey::deserialize_unchecked(&mut file)?;
+    let proving_key = ProvingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
     // Load the verifying key from file.
     let mut file = File::open(verifying_keys.join("merger.bin"))?;
 
-    let vk_merger = VerifyingKey::deserialize_unchecked(&mut file)?;
+    let vk_merger = VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
     // Load the proof from file.
     let mut file = File::open(proofs.join("merger.bin"))?;
 
-    let proof = Proof::deserialize_unchecked(&mut file)?;
+    let proof = Proof::deserialize_uncompressed_unchecked(&mut file)?;
 
     // Load the verifying key for Merger Wrapper from file.
     let mut file = File::open(verifying_keys.join("merger_wrapper.bin"))?;
 
-    let vk_merger_wrapper = VerifyingKey::deserialize_unchecked(&mut file)?;
+    let vk_merger_wrapper = VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
     // Calculate the inputs.
     let initial_state_comm_bytes = match genesis_data {
@@ -1040,15 +1040,15 @@ fn prove_merger_wrapper<R: CryptoRng + Rng>(
         Some((_, x)) => x,
     };
 
-    let mut initial_state_commitment = pack_inputs(bytes_to_bits(&initial_state_comm_bytes));
+    let mut initial_state_commitment = pack_inputs(bytes_to_bits_le(&initial_state_comm_bytes));
 
-    let mut final_state_commitment = pack_inputs(bytes_to_bits(&state_commitment(
+    let mut final_state_commitment = pack_inputs(bytes_to_bits_le(&state_commitment(
         block.block_number,
         block.header_hash,
         final_pks.to_vec(),
     )));
 
-    let mut vk_commitment = pack_inputs(bytes_to_bits(&vk_commitment(vk_merger_wrapper)));
+    let mut vk_commitment = pack_inputs(bytes_to_bits_le(&vk_commitment(vk_merger_wrapper)));
 
     // Create the circuit.
     let circuit = MergerWrapperCircuit::new(
@@ -1067,7 +1067,7 @@ fn prove_merger_wrapper<R: CryptoRng + Rng>(
         // Load the verifying key from file.
         let mut file = File::open(verifying_keys.join("merger_wrapper.bin"))?;
 
-        let verifying_key = VerifyingKey::deserialize_unchecked(&mut file)?;
+        let verifying_key = VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
         // Prepare the inputs.
         let mut inputs = vec![];
@@ -1093,7 +1093,7 @@ fn prove_merger_wrapper<R: CryptoRng + Rng>(
 }
 
 // Cache proof to file.
-fn proof_to_file<T: PairingEngine>(
+fn proof_to_file<T: Pairing>(
     pk: Proof<T>,
     name: &str,
     number: Option<usize>,
@@ -1111,7 +1111,7 @@ fn proof_to_file<T: PairingEngine>(
 
     let mut file = File::create(proofs.join(format!("{name}{suffix}.bin")))?;
 
-    pk.serialize_unchecked(&mut file)?;
+    pk.serialize_uncompressed(&mut file)?;
 
     file.sync_all()?;
 

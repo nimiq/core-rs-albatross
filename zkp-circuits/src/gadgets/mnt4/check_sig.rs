@@ -1,4 +1,4 @@
-use ark_ec::ProjectiveCurve;
+use ark_ec::Group;
 use ark_mnt4_753::Fr as MNT4Fr;
 use ark_mnt6_753::constraints::{G1Var, G2Var, PairingVar};
 use ark_mnt6_753::G2Projective;
@@ -29,7 +29,7 @@ impl CheckSigGadget {
         let sig_p_var = PairingVar::prepare_g1(signature)?;
 
         // Prepare the generator elliptic curve point.
-        let generator = G2Var::new_constant(cs, G2Projective::prime_subgroup_generator())?;
+        let generator = G2Var::new_constant(cs, G2Projective::generator())?;
 
         let generator_p_var = PairingVar::prepare_g2(&generator)?;
 

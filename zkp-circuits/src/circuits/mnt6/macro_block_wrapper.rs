@@ -1,5 +1,5 @@
 use ark_crypto_primitives::snark::BooleanInputVar;
-use ark_crypto_primitives::SNARKGadget;
+use ark_crypto_primitives::snark::SNARKGadget;
 use ark_groth16::constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar};
 use ark_groth16::{Proof, VerifyingKey};
 use ark_mnt4_753::constraints::{FqVar, PairingVar};

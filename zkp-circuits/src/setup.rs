@@ -1,13 +1,13 @@
 use std::fs::{DirBuilder, File};
 use std::path::Path;
 
-use ark_crypto_primitives::CircuitSpecificSetupSNARK;
+use ark_crypto_primitives::snark::CircuitSpecificSetupSNARK;
 use ark_ec::mnt6::MNT6;
-use ark_ec::{PairingEngine, ProjectiveCurve};
+use ark_ec::{pairing::Pairing, CurveGroup};
 use ark_groth16::{Groth16, Proof, ProvingKey, VerifyingKey};
 use ark_mnt4_753::{Fr as MNT4Fr, G1Projective as G1MNT4, G2Projective as G2MNT4, MNT4_753};
 use ark_mnt6_753::{
-    Fr as MNT6Fr, G1Projective as G1MNT6, G2Projective as G2MNT6, Parameters, MNT6_753,
+    Config, Fr as MNT6Fr, G1Projective as G1MNT6, G2Projective as G2MNT6, MNT6_753,
 };
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::UniformRand;
@@ -22,7 +22,7 @@ use crate::{
         MacroBlockWrapperCircuit, MergerWrapperCircuit, PKTreeNodeCircuit as NodeMNT6,
     },
 };
-use nimiq_bls::utils::bytes_to_bits;
+use nimiq_bls::utils::bytes_to_bits_le;
 use nimiq_primitives::policy::Policy;
 use nimiq_zkp_primitives::{MacroBlock, NanoZKPError, PK_TREE_BREADTH, PK_TREE_DEPTH};
 
@@ -69,11 +69,12 @@ pub fn setup<R: Rng + CryptoRng>(
 
 pub fn load_verifying_key_from_file(
     path: &Path,
-) -> Result<VerifyingKey<MNT6<Parameters>>, NanoZKPError> {
+) -> Result<VerifyingKey<MNT6<Config>>, NanoZKPError> {
     // Loads the verifying key from the preexisting file.
     // Note: We only use the merger_wrapper for key verification purposes.
     let mut file = File::open(path.join("verifying_keys").join("merger_wrapper.bin"))?;
-    let vk: VerifyingKey<MNT6<Parameters>> = VerifyingKey::deserialize_unchecked(&mut file)?;
+    let vk: VerifyingKey<MNT6<Config>> =
+        VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
     Ok(vk)
 }
@@ -151,7 +152,7 @@ fn setup_pk_tree_node_mnt6<R: Rng + CryptoRng>(
             .join(format!("{vk_file}.bin")),
     )?;
 
-    let vk_child = VerifyingKey::deserialize_unchecked(&mut file)?;
+    let vk_child = VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
     // Create dummy inputs.
     let left_proof = Proof {
@@ -209,7 +210,7 @@ fn setup_pk_tree_node_mnt4<R: Rng + CryptoRng>(
             .join(format!("{vk_file}.bin")),
     )?;
 
-    let vk_child = VerifyingKey::deserialize_unchecked(&mut file)?;
+    let vk_child = VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
     // Create dummy inputs.
     let left_proof = Proof {
@@ -257,7 +258,7 @@ fn setup_macro_block<R: Rng + CryptoRng>(rng: &mut R, path: &Path) -> Result<(),
     // Load the verifying key from file.
     let mut file = File::open(path.join("verifying_keys").join("pk_tree_0.bin"))?;
 
-    let vk_pk_tree = VerifyingKey::deserialize_unchecked(&mut file)?;
+    let vk_pk_tree = VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
     // Create dummy inputs.
     let agg_pk_chunks = vec![G2MNT6::rand(rng); 2];
@@ -268,21 +269,18 @@ fn setup_macro_block<R: Rng + CryptoRng>(rng: &mut R, path: &Path) -> Result<(),
         c: G1MNT6::rand(rng).into_affine(),
     };
 
-    let mut bytes = [0u8; 95];
-    rng.fill_bytes(&mut bytes);
-    let initial_pk_tree_root = bytes_to_bits(&bytes);
+    let mut initial_pk_tree_root = [0u8; 95];
+    rng.fill_bytes(&mut initial_pk_tree_root);
 
-    let mut bytes = [0u8; 32];
-    rng.fill_bytes(&mut bytes);
-    let initial_header_hash = bytes_to_bits(&bytes);
+    let mut initial_header_hash = [0u8; 32];
+    rng.fill_bytes(&mut initial_header_hash);
 
     let block_number = u32::rand(rng);
 
     let round_number = u32::rand(rng);
 
-    let mut bytes = [0u8; 95];
-    rng.fill_bytes(&mut bytes);
-    let final_pk_tree_root = bytes_to_bits(&bytes);
+    let mut final_pk_tree_root = [0u8; 95];
+    rng.fill_bytes(&mut final_pk_tree_root);
 
     let initial_state_commitment = vec![MNT4Fr::rand(rng); 2];
 
@@ -295,7 +293,7 @@ fn setup_macro_block<R: Rng + CryptoRng>(rng: &mut R, path: &Path) -> Result<(),
 
     let mut bytes = [0u8; Policy::SLOTS as usize / 8];
     rng.fill_bytes(&mut bytes);
-    let signer_bitmap = bytes_to_bits(&bytes);
+    let signer_bitmap = bytes_to_bits_le(&bytes);
 
     let block = MacroBlock {
         block_number,
@@ -310,9 +308,9 @@ fn setup_macro_block<R: Rng + CryptoRng>(rng: &mut R, path: &Path) -> Result<(),
         vk_pk_tree,
         agg_pk_chunks,
         proof,
-        initial_pk_tree_root,
+        initial_pk_tree_root.to_vec(),
         initial_header_hash,
-        final_pk_tree_root,
+        final_pk_tree_root.to_vec(),
         block,
         initial_state_commitment,
         final_state_commitment,
@@ -331,7 +329,7 @@ fn setup_macro_block_wrapper<R: Rng + CryptoRng>(
     // Load the verifying key from file.
     let mut file = File::open(path.join("verifying_keys").join("macro_block.bin"))?;
 
-    let vk_macro_block = VerifyingKey::deserialize_unchecked(&mut file)?;
+    let vk_macro_block = VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
     // Create dummy inputs.
     let proof = Proof {
@@ -362,7 +360,7 @@ fn setup_merger<R: Rng + CryptoRng>(rng: &mut R, path: &Path) -> Result<(), Nano
     // Load the verifying key from file.
     let mut file = File::open(path.join("verifying_keys").join("macro_block_wrapper.bin"))?;
 
-    let vk_macro_block_wrapper = VerifyingKey::deserialize_unchecked(&mut file)?;
+    let vk_macro_block_wrapper = VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
     // Create dummy inputs.
     let proof_merger_wrapper = Proof {
@@ -387,7 +385,7 @@ fn setup_merger<R: Rng + CryptoRng>(rng: &mut R, path: &Path) -> Result<(), Nano
 
     let mut bytes = [0u8; 95];
     rng.fill_bytes(&mut bytes);
-    let intermediate_state_commitment = bytes_to_bits(&bytes);
+    let intermediate_state_commitment = bytes_to_bits_le(&bytes);
 
     let genesis_flag = bool::rand(rng);
 
@@ -420,7 +418,7 @@ fn setup_merger_wrapper<R: Rng + CryptoRng>(rng: &mut R, path: &Path) -> Result<
     // Load the verifying key from file.
     let mut file = File::open(path.join("verifying_keys").join("merger.bin"))?;
 
-    let vk_merger = VerifyingKey::deserialize_unchecked(&mut file)?;
+    let vk_merger = VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
     // Create dummy inputs.
     let proof = Proof {
@@ -450,7 +448,7 @@ fn setup_merger_wrapper<R: Rng + CryptoRng>(rng: &mut R, path: &Path) -> Result<
     keys_to_file(&pk, &vk, "merger_wrapper", path)
 }
 
-fn keys_to_file<T: PairingEngine>(
+fn keys_to_file<T: Pairing>(
     pk: &ProvingKey<T>,
     vk: &VerifyingKey<T>,
     name: &str,
@@ -466,7 +464,7 @@ fn keys_to_file<T: PairingEngine>(
 
     let mut file = File::create(proving_keys.join(format!("{name}.bin")))?;
 
-    pk.serialize_unchecked(&mut file)?;
+    pk.serialize_uncompressed(&mut file)?;
 
     file.sync_all()?;
 
@@ -477,7 +475,7 @@ fn keys_to_file<T: PairingEngine>(
 
     let mut file = File::create(verifying_keys.join(format!("{name}.bin")))?;
 
-    vk.serialize_unchecked(&mut file)?;
+    vk.serialize_uncompressed(&mut file)?;
 
     file.sync_all()?;
 
