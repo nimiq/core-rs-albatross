@@ -97,7 +97,7 @@ sync_mode = "full"
 
 # Defines the path for the proving keys folders
 # Default: ".zkp"
-# proving_keys_path = "some_folder" #defaults to .zkp folder
+# prover_keys_path = "some_folder" #defaults to .zkp folder
 
 ##############################################################################
 #
