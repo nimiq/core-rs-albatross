@@ -182,7 +182,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         peer_id: &PeerId,
         connection_id: &ConnectionId,
         endpoint: &ConnectedPoint,
-        _failed_addresses: Option<&Vec<Multiaddr>>,
+        failed_addresses: Option<&Vec<Multiaddr>>,
         other_established: usize,
     ) {
         if other_established == 0 {
@@ -191,6 +191,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
             // This is the first connection to this peer
             self.connected_peers.insert(*peer_id);
 
+            // Report the observed addresses of the endpoint if a peer successfully connected to us
             if endpoint.is_listener() {
                 self.events
                     .push_back(NetworkBehaviourAction::NotifyHandler {
@@ -200,6 +201,16 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                             endpoint.get_remote_address().clone(),
                         ),
                     });
+                // Peer failed to connect with some of our own addresses, remove them from our own addresses
+                if let Some(failed_addresses) = failed_addresses {
+                    debug!(
+                        ?failed_addresses,
+                        "Removing failed address from own addresses"
+                    );
+                    self.peer_contact_book
+                        .write()
+                        .remove_own_addresses(failed_addresses.clone(), &self.keypair)
+                }
             }
         } else {
             trace!(%peer_id, "DiscoveryBehaviour::inject_connection_established: Already have a connection established to peer");

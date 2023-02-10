@@ -375,7 +375,10 @@ impl ConnectionHandler for DiscoveryHandler {
                                     let mut peer_contact_book = self.peer_contact_book.write();
 
                                     // Update our own peer contact given the observed addresses we received
-                                    peer_contact_book.add_own_addresses(observed_addresses.clone());
+                                    peer_contact_book.add_own_addresses(
+                                        observed_addresses.clone(),
+                                        &self.keypair,
+                                    );
 
                                     // Send the HandshakeAck
                                     let response_signature =
@@ -481,6 +484,8 @@ impl ConnectionHandler for DiscoveryHandler {
                                         peer_contacts,
                                         self.config.required_services,
                                     );
+
+                                    drop(peer_contact_book);
 
                                     // Store peer contact in handler
                                     self._peer_contact = Some(peer_contact.clone());

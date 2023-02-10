@@ -540,7 +540,7 @@ impl Network {
                             %peer_id,
                             address = %addr,
                             %error,
-                            "Failed to reach address",
+                            "Removing addresses that caused dial failures",
                         );
                         swarm.behaviour_mut().remove_peer_address(peer_id, addr);
                     }

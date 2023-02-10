@@ -1,4 +1,8 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+    time::Duration,
+};
 
 use bitflags::bitflags;
 use instant::SystemTime;
@@ -149,6 +153,18 @@ impl PeerContact {
                 .as_secs(),
         );
     }
+
+    /// Adds a set of addresses
+    pub fn add_addresses(&mut self, addresses: Vec<Multiaddr>) {
+        self.addresses.extend(addresses)
+    }
+
+    /// Removes addresses
+    pub fn remove_addresses(&mut self, addresses: Vec<Multiaddr>) {
+        let to_remove_addresses: HashSet<Multiaddr> = HashSet::from_iter(addresses);
+        self.addresses
+            .retain(|addr| !to_remove_addresses.contains(addr));
+    }
 }
 
 impl TaggedSignable for PeerContact {
@@ -268,19 +284,25 @@ impl PeerContactInfo {
         self.services().contains(services)
     }
 
+    /// Gets the peer score
     pub fn get_score(&self) -> f64 {
         self.meta.read().score
     }
 
+    /// Sets the peer score
     pub fn set_score(&self, score: f64) {
         self.meta.write().score = score;
     }
 }
 
+/// Main structure that holds the peer information that has been obtained or
+/// discovered by the discovery protocol.
 #[derive(Debug)]
 pub struct PeerContactBook {
+    /// Contact information for our own.
     own_peer_contact: PeerContactInfo,
-
+    /// Contact information for other peers in the network indexed by their
+    /// peer ID.
     peer_contacts: HashMap<PeerId, Arc<PeerContactInfo>>,
 }
 
@@ -288,6 +310,7 @@ impl PeerContactBook {
     /// If a peer's age exceeds this value in seconds, it is removed (30 minutes)
     pub const MAX_PEER_AGE: u64 = 30 * 60;
 
+    /// Creates a new `PeerContactBook` given our own peer contact information.
     pub fn new(own_peer_contact: SignedPeerContact) -> Self {
         Self {
             own_peer_contact: own_peer_contact.into(),
@@ -302,20 +325,24 @@ impl PeerContactBook {
     ///  - Check if the peer is already known and update its information.
     ///
     pub fn insert(&mut self, contact: SignedPeerContact) {
+        log::debug!(peer_id = %contact.inner.peer_id(), addresses = ?contact.inner.addresses, "Adding peer contact");
+
         let info = PeerContactInfo::from(contact);
         let peer_id = info.peer_id;
-
-        debug!(%peer_id, "Adding peer contact");
 
         self.peer_contacts.insert(peer_id, Arc::new(info));
     }
 
+    /// Inserts a peer contact or update an existing using the service filtering.
+    /// If the filter matches the services provided by the contact, it is added.
+    /// Otherwise it is ignored.
     pub fn insert_filtered(&mut self, contact: SignedPeerContact, services_filter: Services) {
         let info = PeerContactInfo::from(contact);
         if info.matches(services_filter) {
             log::trace!(
                 added_peer = %info.peer_id,
                 services = ?info.services(),
+                addresses = ?info.contact.inner.addresses,
                 "Inserting into my peer contacts, because is interesting to me",
             );
 
@@ -324,12 +351,16 @@ impl PeerContactBook {
         }
     }
 
+    /// Inserts a set of contacts or updates existing ones
     pub fn insert_all<I: IntoIterator<Item = SignedPeerContact>>(&mut self, contacts: I) {
         for contact in contacts {
             self.insert(contact);
         }
     }
 
+    /// Inserts a set of peer contact or update an existing ones using the service
+    /// filtering. If the filter matches the services provided by the contact,
+    /// it is added. Otherwise it is ignored.
     pub fn insert_all_filtered<I: IntoIterator<Item = SignedPeerContact>>(
         &mut self,
         contacts: I,
@@ -340,10 +371,14 @@ impl PeerContactBook {
         }
     }
 
+    /// Gets a peer contact if it exists given its peer_id.
+    /// If the peer_id is not found, `None` is returned.
     pub fn get(&self, peer_id: &PeerId) -> Option<Arc<PeerContactInfo>> {
         self.peer_contacts.get(peer_id).map(Arc::clone)
     }
 
+    /// Gets a set of peer contacts given a services filter.
+    /// Every peer contact that matches such services will be returned.
     pub fn query(&self, services: Services) -> impl Iterator<Item = Arc<PeerContactInfo>> + '_ {
         // TODO: This is a naive implementation
         // TODO: Sort by score?
@@ -356,6 +391,8 @@ impl PeerContactBook {
         })
     }
 
+    /// Updates the score of every peer in the contact book with the gossipsub
+    /// peer score.
     pub fn update_scores(&self, gossipsub: &Gossipsub) {
         let contacts = self.peer_contacts.iter();
 
@@ -368,14 +405,32 @@ impl PeerContactBook {
         }
     }
 
-    pub fn add_own_addresses<I: IntoIterator<Item = Multiaddr>>(&mut self, addresses: I) {
-        debug!(
-            addresses = ?addresses.into_iter().collect::<Vec<Multiaddr>>(),
-            "Addresses observed for us",
-        );
-        // TODO: We could add these observed addresses to our advertised addresses (with restrictions).
+    /// Adds a set of addresses to the list of addresses known for our own.
+    pub fn add_own_addresses<I: IntoIterator<Item = Multiaddr>>(
+        &mut self,
+        addresses: I,
+        keypair: &Keypair,
+    ) {
+        let mut contact = self.own_peer_contact.contact.inner.clone();
+        let addresses = addresses.into_iter().collect::<Vec<Multiaddr>>();
+        debug!(?addresses, "Adding addresses observed for our own");
+        contact.add_addresses(addresses);
+        self.insert(contact.sign(keypair));
     }
 
+    /// Removes a set of addresses from the list of addresses known for our own.
+    pub fn remove_own_addresses<I: IntoIterator<Item = Multiaddr>>(
+        &mut self,
+        addresses: I,
+        keypair: &Keypair,
+    ) {
+        let mut contact = self.own_peer_contact.contact.inner.clone();
+        let addresses = addresses.into_iter().collect::<Vec<Multiaddr>>();
+        contact.remove_addresses(addresses);
+        self.insert(contact.sign(keypair));
+    }
+
+    /// Updates the timestamp our own contact
     pub fn update_own_contact(&mut self, keypair: &Keypair) {
         // Not really optimal to clone here, but *shrugs*
         let mut contact = self.own_peer_contact.contact.inner.clone();
@@ -386,10 +441,13 @@ impl PeerContactBook {
         self.insert(contact.sign(keypair));
     }
 
+    /// Gets our own contact information
     pub fn get_own_contact(&self) -> &PeerContactInfo {
         &self.own_peer_contact
     }
 
+    /// Removes peer contacts that have already exceeded the maximum age as
+    /// defined in `MAX_PEER_AGE`.
     pub fn house_keeping(&mut self) {
         if let Ok(unix_time) = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
             let delete_peers = self

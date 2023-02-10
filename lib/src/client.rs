@@ -24,7 +24,7 @@ use nimiq_mempool::mempool::Mempool;
 use nimiq_network_interface::network::Network as NetworkInterface;
 use nimiq_network_libp2p::{
     discovery::peer_contacts::{PeerContact, Services},
-    Config as NetworkConfig, Multiaddr, Network,
+    Config as NetworkConfig, Multiaddr, Network, Protocol,
 };
 use nimiq_primitives::{policy::Policy, task_executor::TaskExecutor};
 use nimiq_utils::time::OffsetTime;
@@ -182,8 +182,19 @@ impl ClientInner {
             generate_service_flags(config.consensus.sync_mode);
 
         // Generate my peer contact from identity keypair and my provided services
+        // Filter out unspecified IP addresses since those are not addresses suitable
+        // for the contact book (for others to contact ourself).
+        let mut peer_contact_addresses = config.network.listen_addresses.clone();
+        peer_contact_addresses.retain(|address| {
+            let mut protocols = address.iter();
+            match protocols.next() {
+                Some(Protocol::Ip4(ip)) => !ip.is_unspecified(),
+                Some(Protocol::Ip6(ip)) => !ip.is_unspecified(),
+                _ => true,
+            }
+        });
         let mut peer_contact = PeerContact::new(
-            config.network.listen_addresses.clone(),
+            peer_contact_addresses,
             identity_keypair.public(),
             provided_services,
             None,
