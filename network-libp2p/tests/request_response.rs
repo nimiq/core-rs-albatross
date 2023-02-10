@@ -8,7 +8,9 @@ use libp2p::{
     swarm::KeepAlive,
 };
 use rand::{thread_rng, Rng};
-use tokio::time::{Duration, Instant};
+use tokio::time::Duration;
+#[cfg(feature = "tokio-time")]
+use tokio::time::Instant;
 
 use beserial::{Deserialize, Serialize};
 #[cfg(feature = "tokio-time")]

@@ -275,7 +275,10 @@ impl ConnectionPoolBehaviour {
             .query(self.required_services)
             .filter_map(|contact| {
                 let peer_id = contact.peer_id();
-                if peer_id != own_peer_id && self.peer_ids.can_dial(peer_id) {
+                if peer_id != own_peer_id
+                    && self.peer_ids.can_dial(peer_id)
+                    && contact.addresses().count() > 0
+                {
                     Some(*peer_id)
                 } else {
                     None
