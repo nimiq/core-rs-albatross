@@ -220,10 +220,19 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
 
         let mut peer_requests = PeerMacroRequests::new();
 
+        log::trace!(%epoch_ids.sender,
+            "Creating a new set of requests",
+        );
+
         // Request the election blocks
         for block_hash in epoch_ids.ids {
             let network = Arc::clone(&self.network);
             let peer_id = epoch_ids.sender;
+
+            log::trace!(
+                %block_hash,
+                "Pushing a new block request",
+            );
 
             peer_requests.push_request(block_hash.clone());
 

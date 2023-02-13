@@ -87,10 +87,13 @@ impl PeerMacroRequests {
             }
             // We update our block request.
             // Note: If we receive a response more than once, we use the latest
-            self.queued_requests[position] = (block.hash(), Some(block));
+            let block_hash = block.hash();
+            log::trace!(%block_hash, "Updating block request");
+            self.queued_requests[position] = (block_hash, Some(block));
 
             true
         } else {
+            log::trace!("Received a response for a block that we didnt expect");
             false
         }
     }
