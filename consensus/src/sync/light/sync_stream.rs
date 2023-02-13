@@ -188,15 +188,25 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         while let Poll::Ready(Some(result)) = self.block_headers.poll_next_unpin(cx) {
             match result {
                 (Ok(Some(block)), peer_id) => {
+                    if self.peer_requests.get(&peer_id).is_none() {
+                        log::trace!(%peer_id, "Obtained a None peer request, this is not expected");
+                        panic!("We expected a request for this peer");
+                    }
+
                     let peer_requests = self.peer_requests.get_mut(&peer_id).unwrap();
 
                     if !peer_requests.update_request(block) {
                         // We received a block we were not expecting from this peer
+                        log::trace!(%peer_id,
+                            "Disconnecting peer due to a non expected response",
+                        );
                         self.disconnect_peer(peer_id);
                         return Poll::Ready(None);
                     }
 
                     if peer_requests.is_ready() {
+                        log::trace!(%peer_id, "All pending requests are ready");
+
                         while let Some((_, block)) = peer_requests.pop_request() {
                             let block = block.expect("At this point the queue should be ready");
 
