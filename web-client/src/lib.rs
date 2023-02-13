@@ -57,6 +57,37 @@ impl PeerInfo {
     }
 }
 
+/// Struct that is used to provide initialization-time configuration to the WebClient
+/// This a simplified version of the configuration that is used for regular nodes,
+/// since not all configuration knobs are available when running inside a browser.
+/// For instance, only the light sync mechanism is supported in the browser
+///
+#[wasm_bindgen]
+pub struct WebClientConfiguration {
+    /// The list of seeds nodes that are used to connect to the 2.0 network.
+    /// This string should be a proper Multiaddr format string.
+    seed_nodes: Vec<String>,
+    /// The log level that is used when logging to the web console.
+    /// The same log levels (trace, debug, info, etc) that are supported by the regular client.
+    log_level: String,
+}
+
+#[wasm_bindgen]
+impl WebClientConfiguration {
+    #[wasm_bindgen(constructor)]
+    #[allow(clippy::boxed_local)]
+    pub fn new(seed_nodes: Box<[JsValue]>, log_level: String) -> WebClientConfiguration {
+        let seed_nodes = seed_nodes
+            .iter()
+            .map(|seed| serde_wasm_bindgen::from_value(seed.clone()).unwrap())
+            .collect::<Vec<String>>();
+
+        WebClientConfiguration {
+            seed_nodes,
+            log_level,
+        }
+    }
+}
 /// Nimiq Albatross client that runs in browsers via WASM and is exposed to Javascript.
 ///
 /// Usage:
@@ -77,9 +108,9 @@ pub struct WebClient {
 #[wasm_bindgen]
 impl WebClient {
     /// Create a new WebClient that automatically starts connecting to the network.
-    pub async fn create() -> WebClient {
+    pub async fn create(web_config: WebClientConfiguration) -> WebClient {
         let log_settings = LogSettings {
-            level: Some(LevelFilter::DEBUG),
+            level: Some(LevelFilter::from_str(web_config.log_level.as_str()).unwrap()),
             ..Default::default()
         };
 
@@ -99,10 +130,16 @@ impl WebClient {
             .build()
             .expect("Build configuration failed");
 
-        let seed = Seed {
-            address: Multiaddr::from_str("/dns4/seed1.v2.nimiq-testnet.com/tcp/8443/ws").unwrap(),
-        };
-        config.network.seeds = vec![seed];
+        // Set the seed nodes
+        let seed_nodes = web_config
+            .seed_nodes
+            .iter()
+            .map(|seed| Seed {
+                address: Multiaddr::from_str(seed).unwrap(),
+            })
+            .collect::<Vec<Seed>>();
+
+        config.network.seeds = seed_nodes;
 
         log::debug!(?config, "Final configuration");
 

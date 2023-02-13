@@ -24,6 +24,7 @@ crate-type = ["cdylib"]
 futures = { package = "futures-util", version = "0.3" }
 gloo-timers = "0.2"
 log = { package = "tracing", version = "0.1", features = ["log"] }
+serde-wasm-bindgen = "0.4"
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 

@@ -1,7 +1,8 @@
-import init, { WebClient } from "./pkg/nimiq_web_client.js";
+import init, { WebClient, WebClientConfiguration } from "./pkg/nimiq_web_client.js";
 
 init().then(async () => {
-    const client = await WebClient.create();
+    const config = new WebClientConfiguration(["/dns4/seed1.v2.nimiq-testnet.com/tcp/8443/ws"], "debug");
+    const client = await WebClient.create(config);
     client.subscribe_consensus();
     client.subscribe_blocks();
     client.subscribe_peers();
