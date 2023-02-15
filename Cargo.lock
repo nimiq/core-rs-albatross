@@ -4536,6 +4536,7 @@ dependencies = [
  "nimiq-consensus",
  "nimiq-genesis",
  "nimiq-hash",
+ "nimiq-keys",
  "nimiq-lib",
  "nimiq-light-blockchain",
  "nimiq-network-interface",

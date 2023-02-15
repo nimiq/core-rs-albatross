@@ -27,6 +27,8 @@ use nimiq_network_interface::{
     Multiaddr,
 };
 
+pub mod PrivateKey;
+
 /// Peer information that is exposed to Javascript
 /// This information is a translated form of what is sent by the Network upon
 /// `PeerJoined` events.
@@ -88,6 +90,7 @@ impl WebClientConfiguration {
         }
     }
 }
+
 /// Nimiq Albatross client that runs in browsers via WASM and is exposed to Javascript.
 ///
 /// Usage:
