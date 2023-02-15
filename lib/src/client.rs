@@ -178,8 +178,14 @@ impl ClientInner {
             identity_keypair.public().to_peer_id().to_base58()
         );
 
-        let (provided_services, required_services) =
+        let (mut provided_services, required_services) =
             generate_service_flags(config.consensus.sync_mode);
+
+        // We update the services flags depending on our validator configuration
+        #[cfg(feature = "validator")]
+        if config.validator.is_some() {
+            provided_services |= Services::VALIDATOR;
+        }
 
         // Generate my peer contact from identity keypair and my provided services
         // Filter out unspecified IP addresses since those are not addresses suitable

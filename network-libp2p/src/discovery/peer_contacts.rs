@@ -60,7 +60,7 @@ bitflags! {
         ///
         const TRANSACTION_INDEX = 1 << 6;
 
-        /// This node accepts validator related messages.
+        /// This node is configured as a validator, so it is interested for other validator nodes.
         ///
         const VALIDATOR = 1 << 7;
     }
@@ -336,9 +336,25 @@ impl PeerContactBook {
     /// Inserts a peer contact or update an existing using the service filtering.
     /// If the filter matches the services provided by the contact, it is added.
     /// Otherwise it is ignored.
+    /// The services_filter argument to this function contains the services that are required.
     pub fn insert_filtered(&mut self, contact: SignedPeerContact, services_filter: Services) {
         let info = PeerContactInfo::from(contact);
-        if info.matches(services_filter) {
+
+        if services_filter.contains(Services::VALIDATOR)
+            && info.services().contains(Services::VALIDATOR)
+        {
+            // If I'm configured as a validator, and the peer is also a validator, then that peer is interesting to me,
+            // regardless of the services that are provided by that peer.
+
+            log::trace!(
+                added_peer = %info.peer_id,
+                services = ?info.services(),
+                addresses = ?info.contact.inner.addresses,
+                "Inserting into my peer contacts, because the peer is also a validator",
+            );
+            let peer_id = info.peer_id;
+            self.peer_contacts.insert(peer_id, Arc::new(info));
+        } else if info.matches(services_filter) {
             log::trace!(
                 added_peer = %info.peer_id,
                 services = ?info.services(),
