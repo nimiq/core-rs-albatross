@@ -8,7 +8,7 @@ use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteByte
 
 use crate::errors::{KeysError, ParseError};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct Signature(pub(super) ed25519_zebra::Signature);
 
 impl Signature {

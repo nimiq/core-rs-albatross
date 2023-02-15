@@ -27,7 +27,10 @@ use nimiq_network_interface::{
     Multiaddr,
 };
 
-pub mod PrivateKey;
+pub mod key_pair;
+pub mod private_key;
+pub mod public_key;
+pub mod signature;
 
 /// Peer information that is exposed to Javascript
 /// This information is a translated form of what is sent by the Network upon
