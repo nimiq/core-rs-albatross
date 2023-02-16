@@ -35,6 +35,8 @@ nimiq-consensus = { path = "../consensus", default-features = false }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-network-interface = { path = "../network-interface" }
+nimiq-primitives = {path = "../primitives", features = ["coin", "networks"]}
+nimiq-transaction = { path = "../primitives/transaction" }
 
 [dependencies.nimiq]
 package = "nimiq-lib"
@@ -59,5 +61,4 @@ nimiq-genesis = {path = "../genesis", default-features = false}
 nimiq-light-blockchain = {path = "../light-blockchain"}
 nimiq-network-interface = {path = "../network-interface"}
 nimiq-network-mock = {path = "../network-mock"}
-nimiq-primitives = {path = "../primitives", features = ["networks"]}
 nimiq-zkp-component = {path = "../zkp-component", default-features = false}

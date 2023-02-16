@@ -2,6 +2,7 @@ use wasm_bindgen::prelude::*;
 
 use nimiq_keys::SecureGenerate;
 
+use crate::address::Address;
 use crate::private_key::PrivateKey;
 use crate::public_key::PublicKey;
 use crate::signature::Signature;
@@ -35,6 +36,11 @@ impl KeyPair {
     #[wasm_bindgen(getter, js_name = publicKey)]
     pub fn public_key(&self) -> PublicKey {
         PublicKey::from_native(self.inner.public)
+    }
+
+    #[wasm_bindgen(js_name = toAddress)]
+    pub fn to_address(&self) -> Address {
+        Address::from_native(nimiq_keys::Address::from(&self.inner))
     }
 }
 

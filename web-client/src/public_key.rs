@@ -2,6 +2,7 @@ use std::str::FromStr;
 
 use wasm_bindgen::prelude::*;
 
+use crate::address::Address;
 use crate::private_key::PrivateKey;
 use crate::signature::Signature;
 
@@ -44,6 +45,11 @@ impl PublicKey {
     #[wasm_bindgen(js_name = toHex)]
     pub fn to_hex(&self) -> String {
         self.inner.to_hex()
+    }
+
+    #[wasm_bindgen(js_name = toAddress)]
+    pub fn to_address(&self) -> Address {
+        Address::from_native(nimiq_keys::Address::from(&self.inner))
     }
 }
 

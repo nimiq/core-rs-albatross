@@ -1,25 +1,53 @@
-import init, { WebClient, WebClientConfiguration, KeyPair } from "./pkg/nimiq_web_client.js";
+import init, {
+    WebClient,
+    WebClientConfiguration,
+    Address,
+    KeyPair,
+    PrivateKey,
+    SignatureProof,
+    Transaction,
+} from "./pkg/nimiq_web_client.js";
 
 init().then(async () => {
-    // const config = new WebClientConfiguration(["/dns4/seed1.v2.nimiq-testnet.com/tcp/8443/ws"], "debug");
-    // const client = await WebClient.create(config);
-    // client.subscribe_consensus();
-    // client.subscribe_blocks();
-    // client.subscribe_peers();
+    const config = new WebClientConfiguration(["/dns4/seed1.v2.nimiq-testnet.com/tcp/8443/ws"], "debug");
+    const client = await WebClient.create(config);
+    client.subscribe_consensus();
+    client.subscribe_blocks();
+    client.subscribe_peers();
     // client.subscribe_statistics();
 
-    const keyPair = KeyPair.generate();
-    const data = new TextEncoder().encode('Hello world!');
+    /**
+     * @param {string} privateKey
+     * @param {string} recipient
+     * @param {number} amount
+     * @param {number} [fee]
+     * @returns {Promise<string>}
+     */
+    window.sendTransaction = async (privateKey, recipient, amount, fee = 0) => {
+        if (!client.isEstablished()) {
+            throw new Error('Consensus not yet established');
+        }
 
-    // Freeing this object from the stack has no effect on the KeyPair,
-    // because the privateKey getter implicitly creates a copy
-    keyPair.privateKey.free();
+        const keyPair = KeyPair.derive(PrivateKey.fromHex(privateKey));
 
-    const signature = keyPair.sign(data);
-    console.log('Signature:', signature.toHex());
+        const transaction = Transaction.new_basic(
+            keyPair.toAddress(),
+            Address.fromString(recipient),
+            BigInt(amount),
+            BigInt(fee),
+            client.blockNumber(),
+            client.networkId,
+        );
 
-    const isValid = keyPair.publicKey.verify(signature, data);
-    console.log('Is valid:', isValid);
+        const signature = keyPair.sign(transaction.serializeContent());
+        transaction.proof = SignatureProof.singleSig(keyPair.publicKey, signature).serialize();
+
+        await client.sendTransaction(transaction);
+
+        const hash = transaction.hash();
+        console.log('Transaction sent:', hash);
+        return hash;
+    }
 });
 
 window.__wasm_imports = {

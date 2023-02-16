@@ -16,7 +16,7 @@ pub use nimiq::{
     extras::{panic::initialize_panic_reporting, web_logging::initialize_web_logging},
 };
 
-use beserial::Serialize;
+use beserial::{Deserialize, Serialize};
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_consensus::ConsensusEvent;
@@ -27,10 +27,17 @@ use nimiq_network_interface::{
     Multiaddr,
 };
 
+use crate::transaction::Transaction;
+use crate::utils::from_network_id;
+
+pub mod address;
 pub mod key_pair;
 pub mod private_key;
 pub mod public_key;
 pub mod signature;
+pub mod signature_proof;
+pub mod transaction;
+mod utils;
 
 /// Peer information that is exposed to Javascript
 /// This information is a translated form of what is sent by the Network upon
@@ -109,6 +116,9 @@ impl WebClientConfiguration {
 pub struct WebClient {
     #[wasm_bindgen(skip)]
     pub inner: Client,
+
+    #[wasm_bindgen(js_name = networkId)]
+    pub network_id: u8,
 }
 
 #[wasm_bindgen]
@@ -147,6 +157,8 @@ impl WebClient {
 
         config.network.seeds = seed_nodes;
 
+        let network_id = from_network_id(config.network_id);
+
         log::debug!(?config, "Final configuration");
 
         // Create client from config.
@@ -169,7 +181,10 @@ impl WebClient {
         let zkp_component = client.take_zkp_component().unwrap();
         spawn_local(zkp_component);
 
-        WebClient { inner: client }
+        WebClient {
+            inner: client,
+            network_id,
+        }
     }
 
     /// Start the consensus event stream.
@@ -327,6 +342,32 @@ impl WebClient {
                 };
             })
             .await;
+    }
+
+    #[wasm_bindgen(js_name = isEstablished)]
+    pub fn is_established(&self) -> bool {
+        self.inner.consensus_proxy().is_established()
+    }
+
+    #[wasm_bindgen(js_name = blockNumber)]
+    pub fn block_number(&self) -> u32 {
+        self.inner.blockchain_head().block_number()
+    }
+
+    #[wasm_bindgen(js_name = sendTransaction)]
+    pub async fn send_transaction(&self, transaction: &Transaction) -> Result<(), JsError> {
+        self.inner
+            .consensus_proxy()
+            .send_transaction(transaction.native_ref().clone())
+            .await?;
+        Ok(())
+    }
+
+    #[wasm_bindgen(js_name = sendRawTransaction)]
+    pub async fn send_raw_transaction(&self, raw_tx: &[u8]) -> Result<(), JsError> {
+        let tx = nimiq_transaction::Transaction::deserialize_from_vec(raw_tx)?;
+        self.inner.consensus_proxy().send_transaction(tx).await?;
+        Ok(())
     }
 }
 
