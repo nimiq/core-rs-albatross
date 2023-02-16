@@ -16,7 +16,7 @@ impl SignatureProof {
     #[wasm_bindgen(js_name = singleSig)]
     pub fn single_sig(public_key: &PublicKey, signature: &Signature) -> SignatureProof {
         SignatureProof::from_native(nimiq_transaction::SignatureProof::from(
-            public_key.native_ref().clone(),
+            *public_key.native_ref(),
             signature.native_ref().clone(),
         ))
     }

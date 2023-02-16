@@ -14,7 +14,7 @@ pub struct Transaction {
 
 #[wasm_bindgen]
 impl Transaction {
-    pub fn new_basic(
+    pub fn basic(
         sender: &Address,
         recipient: &Address,
         value: u64,
@@ -40,16 +40,13 @@ impl Transaction {
         hash.to_hex()
     }
 
-    pub fn verify(&self, network_id: Option<u8>) -> Result<bool, JsError> {
+    pub fn verify(&self, network_id: Option<u8>) -> Result<(), JsError> {
         let network_id = match network_id {
             Some(id) => to_network_id(id)?,
             None => self.inner.network_id,
         };
 
-        match self.inner.verify(network_id) {
-            Ok(()) => Ok(true),
-            Err(err) => Err(JsError::from(err)),
-        }
+        self.inner.verify(network_id).map_err(JsError::from)
     }
 
     #[wasm_bindgen(js_name = isValidAt)]
@@ -122,7 +119,7 @@ impl Transaction {
     }
 
     #[wasm_bindgen(setter)]
-    pub fn set_proof(&mut self, proof: Vec<u8>) -> () {
+    pub fn set_proof(&mut self, proof: Vec<u8>) {
         self.inner.proof = proof;
     }
 

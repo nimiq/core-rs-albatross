@@ -6,6 +6,8 @@ use crate::address::Address;
 use crate::private_key::PrivateKey;
 use crate::public_key::PublicKey;
 use crate::signature::Signature;
+use crate::signature_proof::SignatureProof;
+use crate::transaction::Transaction;
 
 #[wasm_bindgen]
 pub struct KeyPair {
@@ -26,6 +28,13 @@ impl KeyPair {
 
     pub fn sign(&self, data: &[u8]) -> Signature {
         Signature::from_native(self.inner.sign(data))
+    }
+
+    #[wasm_bindgen(js_name = signTransaction)]
+    pub fn sign_transaction(&self, transaction: &mut Transaction) {
+        let signature = self.sign(transaction.serialize_content().as_ref());
+        let proof = SignatureProof::single_sig(&self.public_key(), &signature);
+        transaction.set_proof(proof.serialize());
     }
 
     #[wasm_bindgen(getter, js_name = privateKey)]

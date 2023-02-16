@@ -30,7 +30,7 @@ init().then(async () => {
 
         const keyPair = KeyPair.derive(PrivateKey.fromHex(privateKey));
 
-        const transaction = Transaction.new_basic(
+        const transaction = Transaction.basic(
             keyPair.toAddress(),
             Address.fromString(recipient),
             BigInt(amount),
@@ -39,8 +39,7 @@ init().then(async () => {
             client.networkId,
         );
 
-        const signature = keyPair.sign(transaction.serializeContent());
-        transaction.proof = SignatureProof.singleSig(keyPair.publicKey, signature).serialize();
+        keyPair.signTransaction(transaction);
 
         await client.sendTransaction(transaction);
 

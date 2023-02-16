@@ -28,7 +28,7 @@ use nimiq_network_interface::{
 };
 
 use crate::transaction::Transaction;
-use crate::utils::from_network_id;
+use crate::utils::{from_network_id, to_network_id};
 
 pub mod address;
 pub mod key_pair;
@@ -356,17 +356,24 @@ impl WebClient {
 
     #[wasm_bindgen(js_name = sendTransaction)]
     pub async fn send_transaction(&self, transaction: &Transaction) -> Result<(), JsError> {
+        transaction.verify(Some(self.network_id))?;
+
         self.inner
             .consensus_proxy()
             .send_transaction(transaction.native_ref().clone())
             .await?;
+
         Ok(())
     }
 
     #[wasm_bindgen(js_name = sendRawTransaction)]
     pub async fn send_raw_transaction(&self, raw_tx: &[u8]) -> Result<(), JsError> {
         let tx = nimiq_transaction::Transaction::deserialize_from_vec(raw_tx)?;
+
+        tx.verify(to_network_id(self.network_id).ok().unwrap())?;
+
         self.inner.consensus_proxy().send_transaction(tx).await?;
+
         Ok(())
     }
 }
