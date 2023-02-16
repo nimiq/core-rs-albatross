@@ -35,8 +35,11 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                     self.remove_peer_requests(peer_id);
                 }
                 Ok(NetworkEvent::PeerJoined(peer_id)) => {
-                    // Request zkps and start the macro sync process
-                    self.add_peer(peer_id);
+                    // Query if that peer provides the necessary services for syncing
+                    if self.network.peer_provides_required_services(peer_id) {
+                        // Request zkps and start the macro sync process
+                        self.add_peer(peer_id);
+                    }
                 }
                 Err(_) => return Poll::Ready(None),
             }
