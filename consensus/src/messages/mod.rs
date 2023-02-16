@@ -3,8 +3,9 @@ use std::fmt::{Debug, Formatter};
 use beserial::{Deserialize, Serialize};
 use nimiq_block::{Block, MacroBlock};
 #[cfg(feature = "full")]
-use nimiq_blockchain::HistoryTreeChunk;
+use nimiq_blockchain::{ExtendedTransaction, HistoryTreeChunk, HistoryTreeProof};
 use nimiq_hash::Blake2bHash;
+use nimiq_keys::Address;
 use nimiq_network_interface::request::{RequestCommon, RequestMarker};
 
 mod handlers;
@@ -29,6 +30,10 @@ pub const MAX_REQUEST_RESPONSE_BLOCK: u32 = 1000;
 pub const MAX_REQUEST_RESPONSE_MISSING_BLOCKS: u32 = 1000;
 /// The max number of RequestHead requests per peer.
 pub const MAX_REQUEST_RESPONSE_HEAD: u32 = 1000;
+/// The max number of Transactions proof requests per peer.
+pub const MAX_REQUEST_TRANSACTIONS_PROOF: u32 = 1000;
+/// The max number of Transactions proof requests per peer.
+pub const MAX_REQUEST_TRANSACTIONS_BY_ADDRESS: u32 = 1000;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Checkpoint {
@@ -201,4 +206,49 @@ impl RequestCommon for RequestHead {
     const TYPE_ID: u16 = 210;
     type Response = Blake2bHash;
     const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_HEAD;
+}
+
+#[cfg(feature = "full")]
+#[derive(Serialize, Deserialize)]
+pub struct ResponseTransactionsProof {
+    proof: Option<HistoryTreeProof>,
+    block: Option<Block>,
+}
+
+#[cfg(feature = "full")]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RequestTransactionsProof {
+    #[beserial(len_type(u16, limit = 128))]
+    hashes: Vec<Blake2bHash>,
+    epoch_number: u32,
+}
+
+#[cfg(feature = "full")]
+impl RequestCommon for RequestTransactionsProof {
+    type Kind = RequestMarker;
+    const TYPE_ID: u16 = 212;
+    type Response = ResponseTransactionsProof;
+    const MAX_REQUESTS: u32 = MAX_REQUEST_TRANSACTIONS_PROOF;
+}
+
+#[cfg(feature = "full")]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RequestTransactionsByAddress {
+    address: Address,
+    max: Option<u16>,
+}
+
+#[cfg(feature = "full")]
+impl RequestCommon for RequestTransactionsByAddress {
+    type Kind = RequestMarker;
+    const TYPE_ID: u16 = 213;
+    type Response = ResponseTransactionsByAddress;
+    const MAX_REQUESTS: u32 = MAX_REQUEST_TRANSACTIONS_BY_ADDRESS;
+}
+
+#[cfg(feature = "full")]
+#[derive(Serialize, Deserialize)]
+pub struct ResponseTransactionsByAddress {
+    #[beserial(len_type(u16, limit = 128))]
+    transactions: Vec<ExtendedTransaction>,
 }

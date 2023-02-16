@@ -20,7 +20,7 @@ use nimiq_zkp_component::zkp_component::ZKPComponentProxy;
 
 use crate::consensus::head_requests::{HeadRequests, HeadRequestsResult};
 #[cfg(feature = "full")]
-use crate::messages::{RequestBatchSet, RequestHistoryChunk};
+use crate::messages::{RequestBatchSet, RequestHistoryChunk, RequestTransactionsProof};
 use crate::messages::{RequestBlock, RequestHead, RequestMacroChain, RequestMissingBlocks};
 #[cfg(feature = "full")]
 use crate::sync::live::state_queue::RequestChunk;
@@ -151,6 +151,9 @@ impl<N: Network> Consensus<N> {
                 executor.exec(Box::pin(request_handler(network, stream, blockchain)));
 
                 let stream = network.receive_requests::<RequestChunk>();
+                executor.exec(Box::pin(request_handler(network, stream, blockchain)));
+
+                let stream = network.receive_requests::<RequestTransactionsProof>();
                 executor.exec(Box::pin(request_handler(network, stream, blockchain)));
             }
             BlockchainProxy::Light(_) => {}

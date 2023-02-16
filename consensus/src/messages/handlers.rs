@@ -300,3 +300,64 @@ impl Handle<ResponseChunk, Arc<RwLock<Blockchain>>> for RequestChunk {
         })
     }
 }
+
+#[cfg(feature = "full")]
+impl Handle<ResponseTransactionsProof, Arc<RwLock<Blockchain>>> for RequestTransactionsProof {
+    fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> ResponseTransactionsProof {
+        let blockchain = blockchain.read();
+        let hashes = self.hashes.iter().collect();
+
+        let proof = blockchain
+            .history_store
+            .prove(self.epoch_number, hashes, None);
+
+        let block_height = self.epoch_number * Policy::blocks_per_epoch();
+
+        let block = match blockchain
+            .chain_store
+            .get_block_at(block_height, false, None)
+        {
+            Ok(block) => {
+                if block.is_macro() {
+                    // We expect a macro block
+                    Some(block)
+                } else {
+                    None
+                }
+            }
+            Err(err) => {
+                trace!(error = %err, "Did not find the block that was requested");
+                None
+            }
+        };
+
+        ResponseTransactionsProof { proof, block }
+    }
+}
+
+#[cfg(feature = "full")]
+impl Handle<ResponseTransactionsByAddress, Arc<RwLock<Blockchain>>>
+    for RequestTransactionsByAddress
+{
+    fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> ResponseTransactionsByAddress {
+        let blockchain = blockchain.read();
+
+        // Get the transaction hashes for this address.
+        let tx_hashes = blockchain.history_store.get_tx_hashes_by_address(
+            &self.address,
+            self.max.unwrap_or(500),
+            None,
+        );
+
+        let mut transactions = vec![];
+
+        for hash in tx_hashes {
+            // Get all the extended transactions that correspond to this hash.
+            let mut extended_tx_vec = blockchain.history_store.get_ext_tx_by_hash(&hash, None);
+
+            transactions.append(&mut extended_tx_vec);
+        }
+
+        ResponseTransactionsByAddress { transactions }
+    }
+}
