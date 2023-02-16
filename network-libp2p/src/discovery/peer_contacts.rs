@@ -340,7 +340,10 @@ impl PeerContactBook {
     pub fn insert_filtered(&mut self, contact: SignedPeerContact, services_filter: Services) {
         let info = PeerContactInfo::from(contact);
 
-        if services_filter.contains(Services::VALIDATOR)
+        if self
+            .own_peer_contact
+            .services()
+            .contains(Services::VALIDATOR)
             && info.services().contains(Services::VALIDATOR)
         {
             // If I'm configured as a validator, and the peer is also a validator, then that peer is interesting to me,
