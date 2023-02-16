@@ -34,10 +34,10 @@ use nimiq_utils::time::OffsetTime;
 
 /// The max number of TestRequests per peer (used for regular tests only).
 const MAX_REQUEST_RESPONSE_TEST_REQUEST: u32 = 1000;
-/// The max number of TestRequests per peer. This is used exclusivly for rate limiting testing.
+/// The max number of TestRequests per peer. This is used exclusively for rate limiting testing.
 const MAX_REQUEST_RESPONSE_STRESS_TEST_REQUEST: u32 = 2;
 /// The range to restrict the responses to the requests on the testing of the network layer.
-/// This is used exclusivly for rate limiting testing.
+/// This is used exclusively for rate limiting testing.
 const TEST_MAX_REQUEST_RESPONSE_STRESS_TEST_WINDOW: Duration = Duration::from_secs(100);
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -869,7 +869,7 @@ async fn it_can_reset_requests_rate_with_reconnections() {
     reconnect_successfully(&net1, addr1.clone(), &net3).await;
     send_n_request_to_fail(&net1, &net3, 1).await;
 
-    // Reconnect peer 2 and ensure the requests succed, the reset should happen.
+    // Reconnect peer 2 and ensure the requests succeed, the reset should happen.
     reconnect_successfully(&net1, addr1, &net2).await;
     send_n_request_to_succeed(&net1, &net2, TestRequest4::MAX_REQUESTS).await;
 

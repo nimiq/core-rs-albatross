@@ -1,4 +1,4 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -63,6 +63,7 @@ use crate::discovery::behaviour::DiscoveryEvent;
 use crate::discovery::peer_contacts::{PeerContact, PeerContactBook, Services};
 #[cfg(feature = "metrics")]
 use crate::network_metrics::NetworkMetrics;
+use crate::rate_limiting::PendingDeletion;
 use crate::rate_limiting::RateLimit;
 use crate::{
     behaviour::{NimiqBehaviour, NimiqEvent, NimiqNetworkBehaviourError, RequestResponseEvent},
@@ -200,7 +201,8 @@ pub struct Network {
     action_tx: mpsc::Sender<NetworkAction>,
     /// Stream used to send validation messages
     validate_tx: mpsc::UnboundedSender<ValidateMessage<PeerId>>,
-    /// Rate limiting capabilities
+    /// Maintains the rate limits being enforced for our peers. The limits are enforced by
+    /// peer_id and request type.
     peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<u16, RateLimit>>>>,
     /// Metrics used for data analysis
     #[cfg(feature = "metrics")]
@@ -248,7 +250,7 @@ impl Network {
         let (action_tx, action_rx) = mpsc::channel(64);
         let (validate_tx, validate_rx) = mpsc::unbounded_channel();
         let peer_request_limits = Arc::new(Mutex::new(HashMap::new()));
-        let rate_limits_pending_deletion = Arc::new(Mutex::new(VecDeque::new()));
+        let rate_limits_pending_deletion = Arc::new(Mutex::new(PendingDeletion::default()));
 
         #[cfg(not(feature = "tokio-time"))]
         let update_scores = wasm_timer::Interval::new(params.decay_interval);
@@ -386,7 +388,7 @@ impl Network {
         mut validate_rx: mpsc::UnboundedReceiver<ValidateMessage<PeerId>>,
         connected_peers: Arc<RwLock<HashMap<PeerId, PeerContact>>>,
         peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<u16, RateLimit>>>>,
-        rate_limits_pending_deletion: Arc<Mutex<VecDeque<((PeerId, u16), Instant)>>>,
+        rate_limits_pending_deletion: Arc<Mutex<PendingDeletion>>,
         mut update_scores: Interval,
         contacts: Arc<RwLock<PeerContactBook>>,
         #[cfg(feature = "metrics")] metrics: Arc<NetworkMetrics>,
@@ -443,8 +445,8 @@ impl Network {
     }
 
     // This is a duplicate of the previous function.
-    // This is because these two functions use different implemenation for the handling of intervals,
-    // And the tokio version (needed for some test) could  not be reconcilied  with the non tokio version
+    // This is because these two functions use different implementation for the handling of intervals,
+    // And the tokio version (needed for some test) could  not be reconciled  with the non tokio version
     // Essentially the tokio select macro is not compatible with the condition compilation flag
     #[cfg(not(feature = "tokio-time"))]
     async fn swarm_task(
@@ -454,7 +456,7 @@ impl Network {
         mut validate_rx: mpsc::UnboundedReceiver<ValidateMessage<PeerId>>,
         connected_peers: Arc<RwLock<HashMap<PeerId, PeerContact>>>,
         peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<u16, RateLimit>>>>,
-        rate_limits_pending_deletion: Arc<Mutex<VecDeque<((PeerId, u16), Instant)>>>,
+        rate_limits_pending_deletion: Arc<Mutex<PendingDeletion>>,
         mut update_scores: Interval,
         contacts: Arc<RwLock<PeerContactBook>>,
         #[cfg(feature = "metrics")] metrics: Arc<NetworkMetrics>,
@@ -517,7 +519,7 @@ impl Network {
         state: &mut TaskState,
         connected_peers: &RwLock<HashMap<PeerId, PeerContact>>,
         peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<u16, RateLimit>>>>,
-        rate_limits_pending_deletion: Arc<Mutex<VecDeque<((PeerId, u16), Instant)>>>,
+        rate_limits_pending_deletion: Arc<Mutex<PendingDeletion>>,
         #[cfg(feature = "metrics")] metrics: &Arc<NetworkMetrics>,
     ) {
         match event {
@@ -590,7 +592,7 @@ impl Network {
                     swarm.behaviour_mut().remove_peer(peer_id);
 
                     // Removes or marks to remove the respective rate limits.
-                    // Also cleans up the experied rate limits pending to delete.
+                    // Also cleans up the expired rate limits pending to delete.
                     Self::remove_rate_limits(
                         peer_request_limits,
                         rate_limits_pending_deletion,
@@ -1448,7 +1450,7 @@ impl Network {
                     .await
                     {
                         trace!(
-                            "Error while seding a Exceeds Rate limit error to the sender {:?}",
+                            "Error while sending a Exceeds Rate limit error to the sender {:?}",
                             e
                         );
                     }
@@ -1539,7 +1541,7 @@ impl Network {
 
     fn remove_rate_limits(
         peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<u16, RateLimit>>>>,
-        rate_limits_pending_deletion: Arc<Mutex<VecDeque<((PeerId, u16), Instant)>>>,
+        rate_limits_pending_deletion: Arc<Mutex<PendingDeletion>>,
         peer_id: PeerId,
     ) {
         // Every time a peer disconnects, we delete all expired pending limits.
@@ -1557,8 +1559,7 @@ impl Network {
             request_limits.retain(|req_type, rate_limit| {
                 // Gets the requests limit and deletes it if no counter info would be lost, otherwise places it as pending deletion.
                 if !rate_limit.can_delete(Instant::now()) {
-                    rate_limits_pending_deletion_l
-                        .push_back(((peer_id, *req_type), rate_limit.next_reset_time()));
+                    rate_limits_pending_deletion_l.insert(peer_id, *req_type, rate_limit);
                     true
                 } else {
                     false
@@ -1571,52 +1572,49 @@ impl Network {
         }
     }
 
-    /// Deletes the rate limits that were previously marked as pending if their expiration time has passed.
+    /// Deletes the rate limits that were previously marked as pending if its expiration time has passed.
     fn clean_up(
         peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<u16, RateLimit>>>>,
-        rate_limits_pending_deletion: Arc<Mutex<VecDeque<((PeerId, u16), Instant)>>>,
+        rate_limits_pending_deletion: Arc<Mutex<PendingDeletion>>,
     ) {
         let mut rate_limits_pending_deletion_l = rate_limits_pending_deletion.lock();
 
-        // Iterates from the oldest to the most recent object of the queue, deletes the entries that have expired.
-        // The queue is ordered from the oldest to the most recent object added, meaning that its loosely ordered by expiration date.
-        // Thus, the iteration stops upon the first object that is hasn't yet expired. In the case where the queue is out of order,
-        // the clean up will reach it after a few more instants (max time_window).
-        while let Some(((peer_id, req_type), expiration_time)) =
-            rate_limits_pending_deletion_l.front()
-        {
+        // Iterates from the oldest to the most recent expiration date and deletes the entries that have expired.
+        // The pending to deletion is ordered from the oldest to the most recent expiration date, thus we break early
+        // from the loop once we find a non expired rate limit.
+        while let Some(peer_expiration) = rate_limits_pending_deletion_l.first() {
             let current_timestamp = Instant::now();
-            if expiration_time <= &current_timestamp {
+            if peer_expiration.expiration_time <= current_timestamp {
                 let mut peer_request_limits_l = peer_request_limits.lock();
 
-                if let Some(peer_req_limits) =
-                    peer_request_limits_l
-                        .get_mut(peer_id)
-                        .and_then(|peer_req_limits| {
-                            if let Some(rate_limit) = peer_req_limits.get(req_type) {
-                                // If the peer has reconnected the rate limit may be enforcing a new limit. In this case we only remove the pending deletion.
-                                if rate_limit.can_delete(current_timestamp) {
-                                    peer_req_limits.remove(req_type);
-                                }
-                                return Some(peer_req_limits);
+                if let Some(peer_req_limits) = peer_request_limits_l
+                    .get_mut(&peer_expiration.peer_id)
+                    .and_then(|peer_req_limits| {
+                        if let Some(rate_limit) = peer_req_limits.get(&peer_expiration.req_type) {
+                            // If the peer has reconnected the rate limit may be enforcing a new limit. In this case we only remove
+                            // the pending deletion.
+                            if rate_limit.can_delete(current_timestamp) {
+                                peer_req_limits.remove(&peer_expiration.req_type);
                             }
-                            // Only returns None if no request type was found.
-                            None
-                        })
+                            return Some(peer_req_limits);
+                        }
+                        // Only returns None if no request type was found.
+                        None
+                    })
                 {
-                    // If the peer no longer has any pending rate limits, then it gets removed.
+                    // If the peer no longer has any pending rate limits, then it gets removed from both rate limits and pending deletion.
                     if peer_req_limits.is_empty() {
-                        peer_request_limits_l.remove(peer_id);
+                        peer_request_limits_l.remove(&peer_expiration.peer_id);
                     }
                 } else {
                     // If the information is in pending deletion, that should mean it was not deleted from peer_request_limits yet, so that
-                    // reconnections don't bypass the limits we are trying to reenforce.
+                    // reconnection doesn't bypass the limits we are enforcing.
                     unreachable!(
                         "Tried to remove a non existing rate limit from peer_request_limits."
                     );
                 }
-                // Remove the entry from the qeue.
-                rate_limits_pending_deletion_l.pop_front();
+                // Removes the entry from the pending for deletion.
+                rate_limits_pending_deletion_l.remove_first();
             } else {
                 break;
             }
@@ -1668,7 +1666,7 @@ impl NetworkInterface for Network {
         if let Some(contact) = self.connected_peers.read().get(&peer_id) {
             contact.services.contains(self.required_services)
         } else {
-            // If we dont know the peer we return false
+            // If we don't know the peer we return false
             false
         }
     }
