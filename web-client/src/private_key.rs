@@ -5,7 +5,6 @@ use wasm_bindgen::prelude::*;
 use nimiq_keys::SecureGenerate;
 
 #[wasm_bindgen]
-#[derive(Clone, Copy)]
 pub struct PrivateKey {
     inner: nimiq_keys::PrivateKey,
 }
@@ -48,7 +47,7 @@ impl PrivateKey {
         PrivateKey { inner: private_key }
     }
 
-    pub fn to_native(&self) -> nimiq_keys::PrivateKey {
-        self.inner
+    pub fn native_ref(&self) -> &nimiq_keys::PrivateKey {
+        &self.inner
     }
 }

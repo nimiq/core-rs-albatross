@@ -12,7 +12,6 @@ use nimiq_utils::key_rng::SecureGenerate;
 
 use crate::errors::{KeysError, ParseError};
 
-#[derive(Copy)]
 pub struct PrivateKey(pub ed25519_zebra::SigningKey);
 
 impl PrivateKey {

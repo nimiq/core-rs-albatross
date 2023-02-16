@@ -2,22 +2,22 @@ use std::str::FromStr;
 
 use wasm_bindgen::prelude::*;
 
+use crate::private_key::PrivateKey;
 use crate::signature::Signature;
 
 #[wasm_bindgen]
-#[derive(Clone, Copy)]
 pub struct PublicKey {
     inner: nimiq_keys::PublicKey,
 }
 
 #[wasm_bindgen]
 impl PublicKey {
-    pub fn derive(private_key: &PublicKey) -> PublicKey {
-        PublicKey::from_native(nimiq_keys::PublicKey::from(private_key.to_native()))
+    pub fn derive(private_key: &PrivateKey) -> PublicKey {
+        PublicKey::from_native(nimiq_keys::PublicKey::from(private_key.native_ref()))
     }
 
     pub fn verify(&self, signature: &Signature, data: &[u8]) -> bool {
-        self.inner.verify(&signature.to_native(), data)
+        self.inner.verify(signature.native_ref(), data)
     }
 
     #[wasm_bindgen(js_name = fromBytes)]
@@ -52,7 +52,7 @@ impl PublicKey {
         PublicKey { inner: public_key }
     }
 
-    pub fn to_native(&self) -> nimiq_keys::PublicKey {
-        self.inner
+    pub fn native_ref(&self) -> &nimiq_keys::PublicKey {
+        &self.inner
     }
 }

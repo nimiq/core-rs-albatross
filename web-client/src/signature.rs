@@ -41,7 +41,7 @@ impl Signature {
         Signature { inner: signature }
     }
 
-    pub fn to_native(&self) -> nimiq_keys::Signature {
-        self.inner
+    pub fn native_ref(&self) -> &nimiq_keys::Signature {
+        &self.inner
     }
 }
