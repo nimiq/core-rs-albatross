@@ -3,18 +3,19 @@ use std::hash::Hash;
 
 use async_trait::async_trait;
 use futures::stream::BoxStream;
+use thiserror::Error;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 
-use beserial::{Deserialize, Serialize};
+use beserial::{Deserialize, Serialize, SerializingError};
 
 use crate::{
-    peer::*,
+    peer_info::*,
     request::{Message, Request, RequestError},
 };
 
 #[derive(Clone, Debug)]
 pub enum NetworkEvent<P> {
-    PeerJoined(P),
+    PeerJoined(P, PeerInfo),
     PeerLeft(P),
 }
 
@@ -42,6 +43,26 @@ pub trait PubsubId<PeerId>: Clone + Send + Sync + Debug {
     fn propagation_source(&self) -> PeerId;
 }
 
+#[derive(Copy, Clone, Debug)]
+pub enum CloseReason {
+    Other,
+    RemoteClosed,
+    Error,
+}
+
+#[derive(Debug, Error)]
+pub enum SendError {
+    #[error("{0}")]
+    Serialization(#[from] SerializingError),
+    #[error("Peer connection already closed")]
+    AlreadyClosed,
+}
+
+pub trait RequestResponse {
+    type Request: Serialize + Deserialize + Sync;
+    type Response: Serialize + Deserialize + Sync;
+}
+
 #[async_trait]
 pub trait Network: Send + Sync + Unpin + 'static {
     type PeerId: Copy + Debug + Display + Eq + Hash + Send + Sync + Unpin + 'static;
@@ -55,6 +76,10 @@ pub trait Network: Send + Sync + Unpin + 'static {
 
     /// Returns wether the current peer has a connection to another peer
     fn has_peer(&self, peer_id: Self::PeerId) -> bool;
+
+    /// Gets a peer information.
+    /// If the peer isn't found, `None` is returned.
+    fn get_peer_info(&self, peer_id: Self::PeerId) -> Option<PeerInfo>;
 
     /// Returns true when the given peer provides the services flags that are required by us
     fn peer_provides_required_services(&self, peer_id: Self::PeerId) -> bool;

@@ -13,8 +13,10 @@ use tokio_stream::wrappers::{errors::BroadcastStreamRecvError, BroadcastStream, 
 
 use beserial::{Deserialize, Serialize};
 use nimiq_network_interface::{
-    network::{MsgAcceptance, Network, NetworkEvent, PubsubId, SubscribeEvents, Topic},
-    peer::CloseReason,
+    network::{
+        CloseReason, MsgAcceptance, Network, NetworkEvent, PubsubId, SubscribeEvents, Topic,
+    },
+    peer_info::{PeerInfo, Services},
     request::{
         InboundRequestError, Message, OutboundRequestError, Request, RequestCommon, RequestError,
         RequestKind, RequestType,
@@ -67,7 +69,7 @@ impl PubsubId<MockPeerId> for MockId<MockPeerId> {
 #[derive(Debug)]
 pub struct MockNetwork {
     address: MockAddress,
-    peers: Arc<RwLock<ObservableHashMap<MockPeerId, ()>>>,
+    peers: Arc<RwLock<ObservableHashMap<MockPeerId, PeerInfo>>>,
     hub: Arc<Mutex<MockHubInner>>,
     is_connected: Arc<AtomicBool>,
 }
@@ -125,7 +127,8 @@ impl MockNetwork {
                 .write();
             is_new = !other_peers.contains_key(&self.peer_id());
             if is_new {
-                other_peers.insert(self.peer_id(), ());
+                let peer_info = PeerInfo::new(address.into(), Services::all());
+                other_peers.insert(self.peer_id(), peer_info);
             }
         }
 
@@ -136,7 +139,12 @@ impl MockNetwork {
             // Are we connecting to someone that is not ourselves?
             if self.address != address {
                 // Insert peer into our peer list
-                assert!(self.peers.write().insert(address.into(), ()).is_none());
+                let peer_info = PeerInfo::new(address.into(), Services::all());
+                assert!(self
+                    .peers
+                    .write()
+                    .insert(address.into(), peer_info)
+                    .is_none());
 
                 // Set is_connected flag for other network
                 hub.is_connected
@@ -339,7 +347,9 @@ impl Network for MockNetwork {
         Box::pin(
             BroadcastStream::new(self.peers.read().subscribe()).map(|maybe_ev| {
                 maybe_ev.map(|ev| match ev {
-                    observable_hash_map::Event::Add(peer_id) => NetworkEvent::PeerJoined(peer_id),
+                    observable_hash_map::Event::Add(peer_id, peer_info) => {
+                        NetworkEvent::PeerJoined(peer_id, peer_info)
+                    }
                     observable_hash_map::Event::Remove(peer_id) => NetworkEvent::PeerLeft(peer_id),
                 })
             }),
@@ -566,5 +576,9 @@ impl Network for MockNetwork {
 
     fn peer_provides_required_services(&self, _peer_id: Self::PeerId) -> bool {
         true
+    }
+
+    fn get_peer_info(&self, peer_id: Self::PeerId) -> Option<PeerInfo> {
+        self.peers.read().get(&peer_id).cloned()
     }
 }

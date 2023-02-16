@@ -2,10 +2,11 @@ use async_trait::async_trait;
 use std::sync::Arc;
 
 use nimiq_hash::Blake2bHash;
-use nimiq_network_interface::network::Network as NetworkInterface;
-use nimiq_network_libp2p::discovery::peer_contacts::{PeerContact, Services};
-use nimiq_network_libp2p::libp2p::core::multiaddr::multiaddr;
-use nimiq_network_libp2p::{Config, Keypair, Network};
+use nimiq_network_interface::{network::Network as NetworkInterface, peer_info::Services};
+use nimiq_network_libp2p::{
+    discovery::peer_contacts::PeerContact, libp2p::core::multiaddr::multiaddr, Config, Keypair,
+    Network,
+};
 use nimiq_network_mock::{MockHub, MockNetwork};
 use nimiq_utils::time::OffsetTime;
 

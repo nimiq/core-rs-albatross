@@ -21,8 +21,41 @@ use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_consensus::ConsensusEvent;
 use nimiq_hash::Blake2bHash;
-use nimiq_network_interface::network::{Network, NetworkEvent};
-use nimiq_network_libp2p::Multiaddr;
+use nimiq_network_interface::{
+    network::{Network, NetworkEvent},
+    peer_info::{NodeType, Services},
+    Multiaddr,
+};
+
+/// Peer information that is exposed to Javascript
+/// This information is a translated form of what is sent by the Network upon
+/// `PeerJoined` events.
+#[wasm_bindgen]
+pub struct PeerInfo {
+    /// Address of the Peer in `Multiaddr` format
+    address: String,
+    /// Type of node (full, history or light)
+    node_type: String,
+}
+
+#[wasm_bindgen]
+impl PeerInfo {
+    pub fn new(address: String, node_type: String) -> Self {
+        Self { address, node_type }
+    }
+
+    /// Gets the address
+    #[wasm_bindgen(js_name = getAddress)]
+    pub fn get_address(&self) -> String {
+        self.address.clone()
+    }
+
+    /// Gets the node type
+    #[wasm_bindgen(js_name = getNodeType)]
+    pub fn get_node_type(&self) -> String {
+        self.node_type.clone()
+    }
+}
 
 /// Nimiq Albatross client that runs in browsers via WASM and is exposed to Javascript.
 ///
@@ -174,11 +207,31 @@ impl WebClient {
 
         loop {
             match network_events.next().await {
-                Some(Ok(NetworkEvent::PeerJoined(peer_id))) => {
-                    peer_listener("joined", peer_id.to_string(), network.peer_count());
+                Some(Ok(NetworkEvent::PeerJoined(peer_id, peer_info))) => {
+                    let node_type = if peer_info
+                        .get_services()
+                        .contains(Services::provided(NodeType::History))
+                    {
+                        "History"
+                    } else if peer_info
+                        .get_services()
+                        .contains(Services::provided(NodeType::Full))
+                    {
+                        "Full"
+                    } else {
+                        "Light"
+                    };
+                    let peer_info =
+                        PeerInfo::new(peer_info.get_address().to_string(), node_type.to_string());
+                    peer_listener(
+                        "joined",
+                        peer_id.to_string(),
+                        network.peer_count(),
+                        Some(peer_info),
+                    );
                 }
                 Some(Ok(NetworkEvent::PeerLeft(peer_id))) => {
-                    peer_listener("left", peer_id.to_string(), network.peer_count());
+                    peer_listener("left", peer_id.to_string(), network.peer_count(), None);
                 }
                 Some(Err(_error)) => {} // Ignore stream errors
                 None => {
@@ -246,7 +299,7 @@ extern "C" {
 
     /// Imported Javascript function to receive peer updates
     #[wasm_bindgen(js_namespace = __wasm_imports)]
-    fn peer_listener(ty: &str, peer_id: String, num_peers: usize);
+    fn peer_listener(ty: &str, peer_id: String, num_peers: usize, peer_info: Option<PeerInfo>);
 
     /// Imported Javascript function to receive statistics
     #[wasm_bindgen(js_namespace = __wasm_imports)]

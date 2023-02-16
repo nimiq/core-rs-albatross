@@ -47,9 +47,10 @@ use beserial::{Deserialize, Serialize};
 use nimiq_bls::CompressedPublicKey;
 use nimiq_network_interface::{
     network::{
-        MsgAcceptance, Network as NetworkInterface, NetworkEvent, PubsubId, SubscribeEvents, Topic,
+        CloseReason, MsgAcceptance, Network as NetworkInterface, NetworkEvent, PubsubId,
+        SubscribeEvents, Topic,
     },
-    peer::CloseReason,
+    peer_info::{PeerInfo, Services},
     request::{
         peek_type, InboundRequestError, Message, OutboundRequestError, Request, RequestCommon,
         RequestError, RequestType,
@@ -60,7 +61,7 @@ use nimiq_utils::time::OffsetTime;
 use nimiq_validator_network::validator_record::SignedValidatorRecord;
 
 use crate::discovery::behaviour::DiscoveryEvent;
-use crate::discovery::peer_contacts::{PeerContact, PeerContactBook, Services};
+use crate::discovery::peer_contacts::PeerContactBook;
 #[cfg(feature = "metrics")]
 use crate::network_metrics::NetworkMetrics;
 use crate::rate_limiting::PendingDeletion;
@@ -191,10 +192,10 @@ impl PubsubId<PeerId> for GossipsubId<PeerId> {
 pub struct Network {
     /// The local ID that is used to identify our peer
     local_peer_id: PeerId,
-    /// This hash map maintains an association between PeerIds and PeerContact:
+    /// This hash map maintains an association between PeerIds and PeerInfo:
     /// If the peer is interesting, i.e.: it provides services that are interested to us,
     /// we store an entry with the peer contact itself.
-    connected_peers: Arc<RwLock<HashMap<PeerId, PeerContact>>>,
+    connected_peers: Arc<RwLock<HashMap<PeerId, PeerInfo>>>,
     /// Stream used to send event messages
     events_tx: broadcast::Sender<NetworkEvent<PeerId>>,
     /// Stream used to send action messages
@@ -386,7 +387,7 @@ impl Network {
         events_tx: broadcast::Sender<NetworkEvent<PeerId>>,
         mut action_rx: mpsc::Receiver<NetworkAction>,
         mut validate_rx: mpsc::UnboundedReceiver<ValidateMessage<PeerId>>,
-        connected_peers: Arc<RwLock<HashMap<PeerId, PeerContact>>>,
+        connected_peers: Arc<RwLock<HashMap<PeerId, PeerInfo>>>,
         peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<u16, RateLimit>>>>,
         rate_limits_pending_deletion: Arc<Mutex<PendingDeletion>>,
         mut update_scores: Interval,
@@ -454,7 +455,7 @@ impl Network {
         events_tx: broadcast::Sender<NetworkEvent<PeerId>>,
         mut action_rx: mpsc::Receiver<NetworkAction>,
         mut validate_rx: mpsc::UnboundedReceiver<ValidateMessage<PeerId>>,
-        connected_peers: Arc<RwLock<HashMap<PeerId, PeerContact>>>,
+        connected_peers: Arc<RwLock<HashMap<PeerId, PeerInfo>>>,
         peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<u16, RateLimit>>>>,
         rate_limits_pending_deletion: Arc<Mutex<PendingDeletion>>,
         mut update_scores: Interval,
@@ -517,7 +518,7 @@ impl Network {
         events_tx: &broadcast::Sender<NetworkEvent<PeerId>>,
         swarm: &mut NimiqSwarm,
         state: &mut TaskState,
-        connected_peers: &RwLock<HashMap<PeerId, PeerContact>>,
+        connected_peers: &RwLock<HashMap<PeerId, PeerInfo>>,
         peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<u16, RateLimit>>>>,
         rate_limits_pending_deletion: Arc<Mutex<PendingDeletion>>,
         #[cfg(feature = "metrics")] metrics: &Arc<NetworkMetrics>,
@@ -731,16 +732,18 @@ impl Network {
                         match event {
                             DiscoveryEvent::Established {
                                 peer_id,
+                                peer_address,
                                 peer_contact,
                             } => {
+                                let peer_info = PeerInfo::new(peer_address, peer_contact.services);
                                 if connected_peers
                                     .write()
-                                    .insert(peer_id, peer_contact)
+                                    .insert(peer_id, peer_info.clone())
                                     .is_none()
                                 {
                                     info!(%peer_id, "Peer joined");
                                     if let Err(error) =
-                                        events_tx.send(NetworkEvent::PeerJoined(peer_id))
+                                        events_tx.send(NetworkEvent::PeerJoined(peer_id, peer_info))
                                     {
                                         error!(%peer_id, %error, "could not send peer joined event to channel");
                                     }
@@ -1662,9 +1665,13 @@ impl NetworkInterface for Network {
         self.connected_peers.read().contains_key(&peer_id)
     }
 
+    fn get_peer_info(&self, peer_id: Self::PeerId) -> Option<PeerInfo> {
+        self.connected_peers.read().get(&peer_id).cloned()
+    }
+
     fn peer_provides_required_services(&self, peer_id: PeerId) -> bool {
-        if let Some(contact) = self.connected_peers.read().get(&peer_id) {
-            contact.services.contains(self.required_services)
+        if let Some(peer_info) = self.connected_peers.read().get(&peer_id) {
+            peer_info.get_services().contains(self.required_services)
         } else {
             // If we don't know the peer we return false
             false

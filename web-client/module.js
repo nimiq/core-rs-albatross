@@ -65,8 +65,14 @@ window.__wasm_imports = {
      * @param {string} peerId
      * @param {number} numPeers
      */
-    peer_listener(type, peerId, numPeers) {
-        console.log(`Peer ${type}: ${peerId} - now ${numPeers} peers connected`);
+    peer_listener(type, peerId, numPeers, peer_info) {
+        if (peer_info == null) {
+            console.log(`Peer ${type}: ${peerId} - now ${numPeers} peers connected`);
+        } else {
+            const address = peer_info.getAddress();
+            const nodeType = peer_info.getNodeType();
+            console.log(`${nodeType} peer ${type}: ${peerId}@${address} - now ${numPeers} peers connected`);
+        }
     },
 
     /**

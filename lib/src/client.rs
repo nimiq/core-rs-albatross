@@ -21,10 +21,13 @@ use nimiq_genesis::{NetworkId, NetworkInfo};
 use nimiq_light_blockchain::LightBlockchain;
 #[cfg(feature = "validator")]
 use nimiq_mempool::mempool::Mempool;
-use nimiq_network_interface::network::Network as NetworkInterface;
+use nimiq_network_interface::{
+    network::Network as NetworkInterface,
+    peer_info::{NodeType, Services},
+    Multiaddr, Protocol,
+};
 use nimiq_network_libp2p::{
-    discovery::peer_contacts::{PeerContact, Services},
-    Config as NetworkConfig, Multiaddr, Network, Protocol,
+    discovery::peer_contacts::PeerContact, Config as NetworkConfig, Network,
 };
 use nimiq_primitives::{policy::Policy, task_executor::TaskExecutor};
 use nimiq_utils::time::OffsetTime;
@@ -96,31 +99,27 @@ pub fn generate_service_flags(sync_mode: SyncMode) -> (Services, Services) {
         // Services provided by history nodes
         crate::config::config::SyncMode::History => {
             log::info!("Client configured as a history node");
-            Services::HISTORY
-                | Services::FULL_BLOCKS
-                | Services::ACCOUNTS_PROOF
-                | Services::ACCOUNTS_CHUNKS
-                | Services::TRANSACTION_INDEX
+            Services::provided(NodeType::History)
         }
         // Services provided by full nodes
         crate::config::config::SyncMode::Full => {
             log::info!("Client configured as a full node");
-            Services::ACCOUNTS_PROOF | Services::FULL_BLOCKS | Services::ACCOUNTS_CHUNKS
+            Services::provided(NodeType::Full)
         }
         // Services provided by light nodes
         crate::config::config::SyncMode::Light => {
             log::info!("Client configured as a light node");
-            Services::empty()
+            Services::provided(NodeType::Light)
         }
     };
 
     let required_services = match sync_mode {
         // Services required by history nodes
-        crate::config::config::SyncMode::History => Services::HISTORY | Services::FULL_BLOCKS,
+        crate::config::config::SyncMode::History => Services::required(NodeType::History),
         // Services required by full nodes
-        crate::config::config::SyncMode::Full => Services::FULL_BLOCKS | Services::ACCOUNTS_CHUNKS,
+        crate::config::config::SyncMode::Full => Services::required(NodeType::Full),
         // Services required by light nodes
-        crate::config::config::SyncMode::Light => Services::ACCOUNTS_PROOF,
+        crate::config::config::SyncMode::Light => Services::required(NodeType::Light),
     };
     (provided_services, required_services)
 }

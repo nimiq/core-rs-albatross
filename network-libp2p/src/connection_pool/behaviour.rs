@@ -23,8 +23,9 @@ use rand::thread_rng;
 use wasm_timer::Interval;
 
 use nimiq_macros::store_waker;
+use nimiq_network_interface::peer_info::Services;
 
-use crate::discovery::peer_contacts::{PeerContactBook, Services};
+use crate::discovery::peer_contacts::PeerContactBook;
 
 use super::handler::ConnectionPoolHandler;
 

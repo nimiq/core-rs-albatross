@@ -4,44 +4,46 @@ use std::hash::Hash;
 use tokio::sync::broadcast;
 
 #[derive(Clone)]
-pub enum Event<K> {
-    Add(K),
+pub enum Event<K, V> {
+    Add(K, V),
     Remove(K),
 }
 
-pub struct ObservableHashMap<K: Clone + Eq + Hash, V> {
+pub struct ObservableHashMap<K: Clone + Eq + Hash, V: Clone> {
     inner: HashMap<K, V>,
-    tx: broadcast::Sender<Event<K>>,
+    tx: broadcast::Sender<Event<K, V>>,
 }
 
-impl<K: Clone + Eq + Hash + fmt::Debug, V: fmt::Debug> fmt::Debug for ObservableHashMap<K, V> {
+impl<K: Clone + Eq + Hash + fmt::Debug, V: Clone + fmt::Debug> fmt::Debug
+    for ObservableHashMap<K, V>
+{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.inner.fmt(f)
     }
 }
 
-impl<K: Clone + Eq + Hash, V> Default for ObservableHashMap<K, V> {
+impl<K: Clone + Eq + Hash, V: Clone> Default for ObservableHashMap<K, V> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<K: Clone + Eq + Hash, V> From<HashMap<K, V>> for ObservableHashMap<K, V> {
+impl<K: Clone + Eq + Hash, V: Clone> From<HashMap<K, V>> for ObservableHashMap<K, V> {
     fn from(inner: HashMap<K, V>) -> ObservableHashMap<K, V> {
         let (tx, _) = broadcast::channel(64);
         ObservableHashMap { inner, tx }
     }
 }
 
-impl<K: Clone + Eq + Hash, V> ObservableHashMap<K, V> {
+impl<K: Clone + Eq + Hash, V: Clone> ObservableHashMap<K, V> {
     pub fn new() -> Self {
         Self::from(HashMap::new())
     }
     pub fn insert(&mut self, k: K, v: V) -> Option<V> {
-        let result = self.inner.insert(k.clone(), v);
+        let result = self.inner.insert(k.clone(), v.clone());
         if result.is_none() {
             // We don't care if there's no receiver active.
-            let _ = self.tx.send(Event::Add(k));
+            let _ = self.tx.send(Event::Add(k, v));
         }
         result
     }
@@ -62,7 +64,7 @@ impl<K: Clone + Eq + Hash, V> ObservableHashMap<K, V> {
     pub fn keys(&self) -> hash_map::Keys<K, V> {
         self.inner.keys()
     }
-    pub fn subscribe(&self) -> broadcast::Receiver<Event<K>> {
+    pub fn subscribe(&self) -> broadcast::Receiver<Event<K, V>> {
         self.tx.subscribe()
     }
 }

@@ -19,7 +19,8 @@ use nimiq_database::{mdbx::MdbxEnvironment, volatile::VolatileEnvironment, Envir
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 #[cfg(feature = "nimiq-mempool")]
 use nimiq_mempool::{config::MempoolConfig, filter::MempoolRules};
-use nimiq_network_libp2p::{Keypair as IdentityKeypair, Multiaddr};
+use nimiq_network_interface::Multiaddr;
+use nimiq_network_libp2p::Keypair as IdentityKeypair;
 use nimiq_primitives::{networks::NetworkId, policy::Policy};
 use nimiq_utils::file_store::FileStore;
 #[cfg(feature = "validator")]

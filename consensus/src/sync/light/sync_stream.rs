@@ -34,7 +34,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                     // Remove the peer from internal data structures.
                     self.remove_peer_requests(peer_id);
                 }
-                Ok(NetworkEvent::PeerJoined(peer_id)) => {
+                Ok(NetworkEvent::PeerJoined(peer_id, _)) => {
                     // Query if that peer provides the necessary services for syncing
                     if self.network.peer_provides_required_services(peer_id) {
                         // Request zkps and start the macro sync process

@@ -12,13 +12,12 @@ use rand::{thread_rng, Rng};
 use tokio::time::timeout;
 
 use beserial::{Deserialize, Serialize};
-use nimiq_network_interface::network::{MsgAcceptance, NetworkEvent, Topic};
-use nimiq_network_interface::{network::Network as NetworkInterface, peer::CloseReason};
+use nimiq_network_interface::{
+    network::{CloseReason, MsgAcceptance, Network as NetworkInterface, NetworkEvent, Topic},
+    peer_info::Services,
+};
 use nimiq_network_libp2p::{
-    discovery::{
-        behaviour::DiscoveryConfig,
-        peer_contacts::{PeerContact, Services},
-    },
+    discovery::{behaviour::DiscoveryConfig, peer_contacts::PeerContact},
     Config, Network,
 };
 use nimiq_test_log::test;
@@ -62,7 +61,7 @@ fn network_config(address: Multiaddr) -> Config {
 }
 
 fn assert_peer_joined(event: &NetworkEvent<PeerId>, wanted_peer_id: &PeerId) {
-    if let NetworkEvent::PeerJoined(peer_id) = event {
+    if let NetworkEvent::PeerJoined(peer_id, _) = event {
         assert_eq!(peer_id, wanted_peer_id);
     } else {
         panic!("Event is not a NetworkEvent::PeerJoined: {:?}", event);
@@ -264,7 +263,7 @@ async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
         .take(n_peers * (n_peers - 1))
         .for_each(|event| async move {
             match event {
-                Ok(NetworkEvent::PeerJoined(peer_id)) => {
+                Ok(NetworkEvent::PeerJoined(peer_id, _)) => {
                     log::info!(%peer_id, "Received peer joined event");
                 }
                 _ => log::error!(?event, "Unexpected NetworkEvent"),

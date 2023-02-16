@@ -6,7 +6,10 @@ use parking_lot::RwLock;
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_hash::Blake2bHash;
-use nimiq_network_interface::{network::Network, peer::CloseReason, request::RequestError};
+use nimiq_network_interface::{
+    network::{CloseReason, Network},
+    request::RequestError,
+};
 use nimiq_primitives::policy::Policy;
 
 use crate::messages::{MacroChain, RequestMacroChain};

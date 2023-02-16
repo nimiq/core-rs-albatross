@@ -14,19 +14,17 @@ use tokio::time::Instant;
 
 use beserial::{Deserialize, Serialize};
 #[cfg(feature = "tokio-time")]
-use nimiq_network_interface::peer::CloseReason;
+use nimiq_network_interface::network::CloseReason;
 use nimiq_network_interface::{
     network::{Network as NetworkInterface, NetworkEvent},
+    peer_info::Services,
     request::{
         InboundRequestError, OutboundRequestError, Request, RequestCommon, RequestError,
         RequestMarker,
     },
 };
 use nimiq_network_libp2p::{
-    discovery::{
-        behaviour::DiscoveryConfig,
-        peer_contacts::{PeerContact, Services},
-    },
+    discovery::{behaviour::DiscoveryConfig, peer_contacts::PeerContact},
     Config, Network, PeerId,
 };
 use nimiq_test_log::test;
@@ -328,7 +326,7 @@ fn network_config(address: Multiaddr) -> Config {
 }
 
 fn assert_peer_joined(event: &NetworkEvent<PeerId>, wanted_peer_id: &PeerId) {
-    if let NetworkEvent::PeerJoined(peer_id) = event {
+    if let NetworkEvent::PeerJoined(peer_id, _) = event {
         assert_eq!(peer_id, wanted_peer_id);
     } else {
         panic!("Event is not a NetworkEvent::PeerJoined: {:?}", event);

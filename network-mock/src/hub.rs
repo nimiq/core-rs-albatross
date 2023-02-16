@@ -7,7 +7,7 @@ use std::{
 use parking_lot::{Mutex, RwLock};
 use tokio::sync::{broadcast, mpsc, oneshot};
 
-use nimiq_network_interface::request::RequestType;
+use nimiq_network_interface::{peer_info::PeerInfo, request::RequestType};
 
 use crate::network::{MockNetwork, MockRequestId};
 use crate::{MockAddress, MockPeerId, ObservableHashMap};
@@ -43,7 +43,7 @@ pub(crate) struct MockTopic {
 #[derive(Debug, Default)]
 pub(crate) struct MockHubInner {
     /// Peer maps of all networks.
-    pub peer_maps: HashMap<MockAddress, Arc<RwLock<ObservableHashMap<MockPeerId, ()>>>>,
+    pub peer_maps: HashMap<MockAddress, Arc<RwLock<ObservableHashMap<MockPeerId, PeerInfo>>>>,
 
     /// Senders for direct message sending
     pub network_senders: HashMap<SenderKey, mpsc::Sender<Vec<u8>>>,

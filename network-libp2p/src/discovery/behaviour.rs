@@ -19,11 +19,12 @@ use parking_lot::RwLock;
 use wasm_timer::Interval;
 
 use nimiq_hash::Blake2bHash;
+use nimiq_network_interface::peer_info::Services;
 use nimiq_utils::time::OffsetTime;
 
 use super::{
     handler::{DiscoveryHandler, HandlerInEvent, HandlerOutEvent},
-    peer_contacts::{PeerContact, PeerContactBook, Services},
+    peer_contacts::{PeerContact, PeerContactBook},
 };
 
 #[derive(Clone, Debug)]
@@ -73,6 +74,7 @@ impl DiscoveryConfig {
 pub enum DiscoveryEvent {
     Established {
         peer_id: PeerId,
+        peer_address: Multiaddr,
         peer_contact: PeerContact,
     },
     Update,
@@ -185,6 +187,16 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         failed_addresses: Option<&Vec<Multiaddr>>,
         other_established: usize,
     ) {
+        let peer_address = endpoint.get_remote_address().clone();
+
+        // Signal to the handler the address that got us a connection
+        self.events
+            .push_back(NetworkBehaviourAction::NotifyHandler {
+                peer_id: *peer_id,
+                handler: NotifyHandler::One(*connection_id),
+                event: HandlerInEvent::ConnectionAddress(peer_address.clone()),
+            });
+
         if other_established == 0 {
             trace!(%peer_id, ?connection_id, ?endpoint, "DiscoveryBehaviour::inject_connection_established:");
 
@@ -197,9 +209,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                     .push_back(NetworkBehaviourAction::NotifyHandler {
                         peer_id: *peer_id,
                         handler: NotifyHandler::One(*connection_id),
-                        event: HandlerInEvent::ObservedAddress(
-                            endpoint.get_remote_address().clone(),
-                        ),
+                        event: HandlerInEvent::ObservedAddress(peer_address),
                     });
                 // Peer failed to connect with some of our own addresses, remove them from our own addresses
                 if let Some(failed_addresses) = failed_addresses {
@@ -222,12 +232,14 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
         match event {
             HandlerOutEvent::PeerExchangeEstablished {
+                peer_address,
                 peer_contact: signed_peer_contact,
             } => {
                 if let Some(peer_contact) = self.peer_contact_book.read().get(&peer_id) {
                     self.events.push_back(NetworkBehaviourAction::GenerateEvent(
                         DiscoveryEvent::Established {
                             peer_id: signed_peer_contact.public_key().clone().to_peer_id(),
+                            peer_address,
                             peer_contact: peer_contact.contact().clone(),
                         },
                     ));

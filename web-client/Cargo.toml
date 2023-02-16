@@ -33,7 +33,6 @@ nimiq-blockchain-proxy = { path = "../blockchain-proxy", default-features = fals
 nimiq-consensus = { path = "../consensus", default-features = false }
 nimiq-hash = { path = "../hash" }
 nimiq-network-interface = { path = "../network-interface" }
-nimiq-network-libp2p = { path = "../network-libp2p" }
 
 [dependencies.nimiq]
 package = "nimiq-lib"

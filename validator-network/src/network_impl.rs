@@ -61,7 +61,7 @@ where
         let future = async move {
             loop {
                 match event_stream.next().await {
-                    Some(Ok(NetworkEvent::PeerJoined(joined_id))) if joined_id == peer_id => {
+                    Some(Ok(NetworkEvent::PeerJoined(joined_id, _))) if joined_id == peer_id => {
                         break Ok(())
                     }
                     Some(Err(_)) | None => break Err(NetworkError::Offline), // TODO Error type?

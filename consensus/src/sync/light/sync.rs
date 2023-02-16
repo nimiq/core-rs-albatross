@@ -8,8 +8,7 @@ use nimiq_block::Block;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{
-    network::{Network, SubscribeEvents},
-    peer::CloseReason,
+    network::{CloseReason, Network, SubscribeEvents},
     request::RequestError,
 };
 use nimiq_primitives::task_executor::TaskExecutor;

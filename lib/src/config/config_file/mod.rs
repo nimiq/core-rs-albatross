@@ -14,7 +14,7 @@ use nimiq_mempool::{
     filter::{MempoolFilter, MempoolRules},
     mempool::Mempool,
 };
-use nimiq_network_libp2p::Multiaddr;
+use nimiq_network_interface::Multiaddr;
 use nimiq_primitives::{coin::Coin, networks::NetworkId};
 
 use crate::{

@@ -17,10 +17,11 @@ use parking_lot::RwLock;
 use rand::{thread_rng, Rng};
 
 use nimiq_hash::Blake2bHash;
-use nimiq_network_libp2p::discovery::peer_contacts::{PeerContactBook, SignedPeerContact};
+use nimiq_network_interface::peer_info::Services;
 use nimiq_network_libp2p::discovery::{
     behaviour::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryEvent},
-    peer_contacts::{PeerContact, Services},
+    peer_contacts::PeerContact,
+    peer_contacts::{PeerContactBook, SignedPeerContact},
 };
 use nimiq_test_log::test;
 use nimiq_utils::time::OffsetTime;
@@ -217,6 +218,7 @@ pub async fn test_dialing_peer_from_contacts() {
 
     if let Some(SwarmEvent::Behaviour(DiscoveryEvent::Established {
         peer_id,
+        peer_address: _,
         peer_contact: _,
     })) = node1.swarm.next().await
     {

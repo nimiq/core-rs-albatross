@@ -11,11 +11,9 @@ use std::{
 };
 
 use nimiq_hash::Blake2bHash;
+use nimiq_network_interface::peer_info::Services;
 
-use crate::discovery::{
-    behaviour::DiscoveryConfig,
-    peer_contacts::{PeerContact, Services},
-};
+use crate::discovery::{behaviour::DiscoveryConfig, peer_contacts::PeerContact};
 
 pub struct Config {
     pub keypair: Keypair,

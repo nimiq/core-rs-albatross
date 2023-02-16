@@ -86,7 +86,7 @@ nimiq-test-log = { path = "../test-log" }
 [features]
 default = ["peer-contact-book-persistence"]
 metrics = ["prometheus-client"]
-peer-contact-book-persistence = ["serde"]
+peer-contact-book-persistence = ["nimiq-network-interface/peer-contact-book-persistence", "serde"]
 tokio-time = ["tokio/time"]
 tokio-websocket = ["libp2p/dns", "libp2p/tcp", "libp2p/tokio", "libp2p/websocket"]
 wasm-websocket = ["libp2p-websys-transport"]

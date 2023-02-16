@@ -2,8 +2,10 @@ mod hub;
 mod network;
 mod observable_hash_map;
 
-use beserial::{Deserialize, Serialize};
 use derive_more::{Display, From, Into};
+
+use beserial::{Deserialize, Serialize};
+use nimiq_network_interface::{multiaddr, Multiaddr};
 
 pub use hub::MockHub;
 pub use network::{MockId, MockNetwork};
@@ -36,6 +38,12 @@ pub struct MockPeerId(u64);
 impl From<MockAddress> for MockPeerId {
     fn from(address: MockAddress) -> Self {
         Self(address.0)
+    }
+}
+
+impl From<MockAddress> for Multiaddr {
+    fn from(address: MockAddress) -> Self {
+        multiaddr!(Memory(address.0))
     }
 }
 
@@ -77,7 +85,7 @@ pub mod tests {
         events: &mut SubscribeEvents<MockPeerId>,
         expected_peer_id: MockPeerId,
     ) {
-        if let Some(Ok(NetworkEvent::PeerJoined(peer_id))) = events.next().await {
+        if let Some(Ok(NetworkEvent::PeerJoined(peer_id, _peer_info))) = events.next().await {
             assert_eq!(peer_id, expected_peer_id);
         } else {
             panic!("Expected PeerJoined event with id={expected_peer_id}");

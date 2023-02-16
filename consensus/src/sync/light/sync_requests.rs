@@ -7,8 +7,7 @@ use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{
-    network::Network,
-    peer::CloseReason,
+    network::{CloseReason, Network},
     request::{
         InboundRequestError::SenderFutureDropped, RequestError, RequestError::InboundRequest,
     },

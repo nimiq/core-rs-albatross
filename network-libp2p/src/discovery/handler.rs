@@ -22,24 +22,35 @@ use wasm_timer::Interval;
 
 use beserial::SerializingError;
 use nimiq_hash::Blake2bHash;
+use nimiq_network_interface::peer_info::Services;
 use nimiq_utils::tagged_signing::TaggedKeypair;
 
 use super::{
     behaviour::DiscoveryConfig,
     message_codec::{MessageReader, MessageWriter},
-    peer_contacts::{PeerContactBook, Services, SignedPeerContact},
+    peer_contacts::{PeerContactBook, SignedPeerContact},
     protocol::{ChallengeNonce, DiscoveryMessage, DiscoveryProtocol},
 };
 
 #[derive(Clone, Debug)]
 pub enum HandlerInEvent {
+    /// Peer address that got us a connection
+    ConnectionAddress(Multiaddr),
+    /// Address seen from peer
     ObservedAddress(Multiaddr),
 }
 
 #[derive(Clone, Debug)]
 pub enum HandlerOutEvent {
-    ObservedAddresses { observed_addresses: Vec<Multiaddr> },
-    PeerExchangeEstablished { peer_contact: SignedPeerContact },
+    /// List of observed addresses for the peer
+    ObservedAddresses {
+        observed_addresses: Vec<Multiaddr>,
+    },
+    /// A peer discovery exchange protocol with a peer has finalized
+    PeerExchangeEstablished {
+        peer_address: Multiaddr,
+        peer_contact: SignedPeerContact,
+    },
     Update,
 }
 
@@ -117,8 +128,8 @@ pub struct DiscoveryHandler {
     /// The peer contact book
     peer_contact_book: Arc<RwLock<PeerContactBook>>,
 
-    /// The peer contact of the peer we're connected to.
-    _peer_contact: Option<SignedPeerContact>,
+    /// The peer address we're connected to (address that got us connected).
+    peer_address: Option<Multiaddr>,
 
     /// The addresses which we observed for the other peer.
     observed_addresses: Vec<Multiaddr>,
@@ -161,7 +172,7 @@ impl DiscoveryHandler {
             config,
             keypair,
             peer_contact_book,
-            _peer_contact: None,
+            peer_address: None,
             observed_addresses: vec![],
             challenge_nonce: ChallengeNonce::generate(),
             state: HandlerState::Init,
@@ -267,6 +278,9 @@ impl ConnectionHandler for DiscoveryHandler {
 
     fn inject_event(&mut self, event: HandlerInEvent) {
         match event {
+            HandlerInEvent::ConnectionAddress(address) => {
+                self.peer_address = Some(address);
+            }
             HandlerInEvent::ObservedAddress(address) => {
                 // We only use this during handshake and are not waiting on it, so we don't need to wake anything.
                 self.observed_addresses.push(address);
@@ -487,9 +501,6 @@ impl ConnectionHandler for DiscoveryHandler {
 
                                     drop(peer_contact_book);
 
-                                    // Store peer contact in handler
-                                    self._peer_contact = Some(peer_contact.clone());
-
                                     // Timer for periodic updates
                                     if let Some(mut update_interval) = update_interval {
                                         let min_secs =
@@ -505,9 +516,15 @@ impl ConnectionHandler for DiscoveryHandler {
                                     // Switch to established state
                                     self.state = HandlerState::Established;
 
-                                    // TODO: Return an event that we established PEX with a new peer.
+                                    // Return an event that we established PEX with a new peer.
                                     return Poll::Ready(ConnectionHandlerEvent::Custom(
-                                        HandlerOutEvent::PeerExchangeEstablished { peer_contact },
+                                        HandlerOutEvent::PeerExchangeEstablished {
+                                            peer_contact,
+                                            peer_address: self
+                                                .peer_address
+                                                .clone()
+                                                .expect("Address should have been resolved"),
+                                        },
                                     ));
                                 }
 
