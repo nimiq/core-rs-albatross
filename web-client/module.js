@@ -1,16 +1,11 @@
-import init, {
-    WebClient,
-    WebClientConfiguration,
-    Address,
-    KeyPair,
-    PrivateKey,
-    SignatureProof,
-    Transaction,
-} from "./pkg/nimiq_web_client.js";
+import init, * as Nimiq from "./pkg/nimiq_web_client.js";
+
+window.Nimiq = Nimiq;
 
 init().then(async () => {
-    const config = new WebClientConfiguration(["/dns4/seed1.v2.nimiq-testnet.com/tcp/8443/ws"], "debug");
-    const client = await WebClient.create(config);
+    const config = new Nimiq.WebClientConfiguration(["/dns4/seed1.v2.nimiq-testnet.com/tcp/8443/ws"], "debug");
+    const client = await Nimiq.WebClient.create(config);
+    window.client = client; // Prevent garbage collection and for playing around
     client.subscribe_consensus();
     client.subscribe_blocks();
     client.subscribe_peers();
@@ -28,11 +23,11 @@ init().then(async () => {
             throw new Error('Consensus not yet established');
         }
 
-        const keyPair = KeyPair.derive(PrivateKey.fromHex(privateKey));
+        const keyPair = Nimiq.KeyPair.derive(Nimiq.PrivateKey.fromHex(privateKey));
 
-        const transaction = Transaction.basic(
+        const transaction = Nimiq.Transaction.basic(
             keyPair.toAddress(),
-            Address.fromString(recipient),
+            Nimiq.Address.fromString(recipient),
             BigInt(amount),
             BigInt(fee),
             client.blockNumber(),
@@ -42,10 +37,7 @@ init().then(async () => {
         keyPair.signTransaction(transaction);
 
         await client.sendTransaction(transaction);
-
-        const hash = transaction.hash();
-        console.log('Transaction sent:', hash);
-        return hash;
+        return transaction.hash();
     }
 });
 

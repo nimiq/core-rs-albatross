@@ -15,11 +15,11 @@ cargo install wasm-pack
 Once installed, the client can be built using:
 
 ```
-wasm-pack build --target web
+WASM_BINDGEN_WEAKREF=1 wasm-pack build --target web
 ```
 
 The above command will compile the Rust code to WebAssembly and generate the corresponding JS
 bindings required to run the client in a web browser.
 
 After the client has been built, the root directory of this crate can be served with a web server
-(e.g. `python3 -m http.server`) and then the `index.html` file can be loaded from the server.
+(e.g. `python3 -m http.server`) and then the `index.html` file can be loaded from e.g. http://localhost:8000.
