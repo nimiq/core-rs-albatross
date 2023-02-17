@@ -6,6 +6,7 @@ use crate::address::Address;
 use crate::private_key::PrivateKey;
 use crate::signature::Signature;
 
+/// The non-secret (public) part of an asymmetric key pair that is typically used to digitally verify or encrypt data.
 #[wasm_bindgen]
 pub struct PublicKey {
     inner: nimiq_keys::PublicKey,
@@ -13,27 +14,36 @@ pub struct PublicKey {
 
 #[wasm_bindgen]
 impl PublicKey {
+    /// Derives a public key from an existing private key.
     pub fn derive(private_key: &PrivateKey) -> PublicKey {
         PublicKey::from_native(nimiq_keys::PublicKey::from(private_key.native_ref()))
     }
 
+    /// Verifies that a signature is valid for this public key and the provided data.
     pub fn verify(&self, signature: &Signature, data: &[u8]) -> bool {
         self.inner.verify(signature.native_ref(), data)
     }
 
+    /// Deserializes a public key from a byte array.
+    ///
+    /// Throws when the byte array contains less than 32 bytes.
     #[wasm_bindgen(js_name = fromBytes)]
-    pub fn from_bytes(bytes: &[u8]) -> Result<PublicKey, JsError> {
+    pub fn deserialize(bytes: &[u8]) -> Result<PublicKey, JsError> {
         match nimiq_keys::PublicKey::from_bytes(bytes) {
             Ok(key) => Ok(PublicKey::from_native(key)),
             Err(err) => Err(JsError::from(err)),
         }
     }
 
+    /// Serializes the public key to a byte array.
     #[wasm_bindgen(js_name = toBytes)]
-    pub fn to_bytes(&self) -> Vec<u8> {
+    pub fn serialize(&self) -> Vec<u8> {
         self.inner.as_bytes().to_vec()
     }
 
+    /// Parses a public key from its hex representation.
+    ///
+    /// Throws when the string is not valid hex format or when it represents less than 32 bytes.
     #[wasm_bindgen(js_name = fromHex)]
     pub fn from_hex(hex: &str) -> Result<PublicKey, JsError> {
         match nimiq_keys::PublicKey::from_str(hex) {
@@ -42,11 +52,13 @@ impl PublicKey {
         }
     }
 
+    /// Formats the public key into a hex string.
     #[wasm_bindgen(js_name = toHex)]
     pub fn to_hex(&self) -> String {
         self.inner.to_hex()
     }
 
+    /// Gets the public key's address.
     #[wasm_bindgen(js_name = toAddress)]
     pub fn to_address(&self) -> Address {
         Address::from_native(nimiq_keys::Address::from(&self.inner))

@@ -2,6 +2,7 @@ use wasm_bindgen::JsError;
 
 use nimiq_primitives::networks::NetworkId;
 
+/// Convert u8 to a NetworkId
 pub fn from_network_id(network_id: NetworkId) -> u8 {
     match network_id {
         NetworkId::Test => 1,
@@ -16,6 +17,7 @@ pub fn from_network_id(network_id: NetworkId) -> u8 {
     }
 }
 
+/// Convert a NetworkId to u8
 pub fn to_network_id(network_id: u8) -> Result<NetworkId, JsError> {
     match network_id {
         1 => Ok(NetworkId::Test),

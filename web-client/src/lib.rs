@@ -117,13 +117,14 @@ pub struct WebClient {
     #[wasm_bindgen(skip)]
     pub inner: Client,
 
+    /// The network ID that the client is connecting to.
     #[wasm_bindgen(js_name = networkId)]
     pub network_id: u8,
 }
 
 #[wasm_bindgen]
 impl WebClient {
-    /// Create a new WebClient that automatically starts connecting to the network.
+    /// Creates a new WebClient that automatically starts connecting to the network.
     pub async fn create(web_config: WebClientConfiguration) -> WebClient {
         let log_settings = LogSettings {
             level: Some(LevelFilter::from_str(web_config.log_level.as_str()).unwrap()),
@@ -187,7 +188,7 @@ impl WebClient {
         }
     }
 
-    /// Start the consensus event stream.
+    /// Starts the consensus event stream.
     ///
     /// Updates are emitted via `__wasm_imports.consensus_listener`.
     pub async fn subscribe_consensus(&self) {
@@ -209,7 +210,7 @@ impl WebClient {
         }
     }
 
-    /// Start the blockchain head event stream.
+    /// Starts the blockchain head event stream.
     ///
     /// Updates are emitted via `__wasm_imports.block_listener`.
     pub async fn subscribe_blocks(&self) {
@@ -256,7 +257,7 @@ impl WebClient {
         }
     }
 
-    /// Start the peer event stream.
+    /// Starts the peer event stream.
     ///
     /// Updates are emitted via `__wasm_imports.peer_listener`.
     pub async fn subscribe_peers(&self) {
@@ -299,7 +300,7 @@ impl WebClient {
         }
     }
 
-    /// Start an interval to report statistics.
+    /// Starts an interval to report statistics.
     ///
     /// Updates are emitted via `__wasm_imports.statistics_listener`.
     pub async fn subscribe_statistics(&self) {
@@ -344,16 +345,22 @@ impl WebClient {
             .await;
     }
 
+    /// Returns if the client currently has consensus with the network.
     #[wasm_bindgen(js_name = isEstablished)]
     pub fn is_established(&self) -> bool {
         self.inner.consensus_proxy().is_established()
     }
 
+    /// Returns the block number of the current blockchain head.
     #[wasm_bindgen(js_name = blockNumber)]
     pub fn block_number(&self) -> u32 {
         self.inner.blockchain_head().block_number()
     }
 
+    /// Sends a transaction to the network. This method does not check if the
+    /// transaction gets included into a block.
+    ///
+    /// Throws in case of a networking error.
     #[wasm_bindgen(js_name = sendTransaction)]
     pub async fn send_transaction(&self, transaction: &Transaction) -> Result<(), JsError> {
         transaction.verify(Some(self.network_id))?;
@@ -366,6 +373,10 @@ impl WebClient {
         Ok(())
     }
 
+    /// Sends a hex-encoded transaction to the network. This method does not check if the
+    /// transaction gets included into a block.
+    ///
+    /// Throws when the transaction cannot be parsed from the hex string or in case of a networking error.
     #[wasm_bindgen(js_name = sendRawTransaction)]
     pub async fn send_raw_transaction(&self, raw_tx: &[u8]) -> Result<(), JsError> {
         let tx = nimiq_transaction::Transaction::deserialize_from_vec(raw_tx)?;

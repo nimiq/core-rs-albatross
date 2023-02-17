@@ -6,6 +6,7 @@ init().then(async () => {
     const config = new Nimiq.WebClientConfiguration(["/dns4/seed1.v2.nimiq-testnet.com/tcp/8443/ws"], "debug");
     const client = await Nimiq.WebClient.create(config);
     window.client = client; // Prevent garbage collection and for playing around
+
     client.subscribe_consensus();
     client.subscribe_blocks();
     client.subscribe_peers();
