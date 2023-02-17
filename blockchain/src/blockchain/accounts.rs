@@ -1,8 +1,8 @@
 use crate::blockchain_state::BlockchainState;
 use crate::Blockchain;
-use nimiq_account::Accounts;
-use nimiq_account::BlockLog;
-use nimiq_block::{Block, BlockError::TransactionExecutionMismatch, SkipBlockInfo};
+use nimiq_account::{Accounts, BlockState};
+use nimiq_account::{BlockLog, TransactionOperationReceipt};
+use nimiq_block::{Block, BlockError, SkipBlockInfo};
 use nimiq_blockchain_interface::PushError;
 use nimiq_database::WriteTransaction;
 use nimiq_primitives::policy::Policy;
@@ -19,6 +19,7 @@ impl Blockchain {
     ) -> Result<BlockLog, PushError> {
         // Get the accounts from the state.
         let accounts = &state.accounts;
+        let block_state = BlockState::new(block.block_number(), block.timestamp());
 
         // Check the type of the block.
         match block {
@@ -27,16 +28,14 @@ impl Blockchain {
                 let inherents = self.create_macro_block_inherents(macro_block);
 
                 // Commit block to AccountsTree and create the receipts.
-                let batch_info = accounts.commit(
-                    txn,
-                    &[],
-                    &inherents,
-                    macro_block.header.block_number,
-                    macro_block.header.timestamp,
-                );
+                let receipts = if accounts.is_complete(Some(txn)) {
+                    accounts.commit(txn, &[], &inherents, &block_state)
+                } else {
+                    accounts.commit_incomplete(txn, &[], &inherents, &block_state)
+                };
 
                 // Check if the receipts contain an error.
-                if let Err(e) = batch_info {
+                if let Err(e) = receipts {
                     return Err(PushError::AccountsError(e));
                 }
 
@@ -92,30 +91,33 @@ impl Blockchain {
                     self.create_slash_inherents(&body.fork_proofs, skip_block_info, Some(txn));
 
                 // Commit block to AccountsTree and create the receipts.
-                let batch_info = accounts.commit(
-                    txn,
-                    &body.get_raw_transactions(),
-                    &inherents,
-                    micro_block.header.block_number,
-                    micro_block.header.timestamp,
-                );
-                let (batch_info, executed_txns) = match batch_info {
-                    Ok(batch_info) => batch_info,
-                    Err(e) => {
-                        // Check if the receipts contain an error.
-                        return Err(PushError::AccountsError(e));
-                    }
+                let receipts = if accounts.is_complete(Some(txn)) {
+                    accounts.commit(txn, &body.get_raw_transactions(), &inherents, &block_state)
+                } else {
+                    accounts.commit_incomplete(txn, &body.transactions, &inherents, &block_state)
                 };
 
-                // Check the executed transactions result obtained from the accounts commit against the ones in the block
-                for (index, executed_txn) in executed_txns.iter().enumerate() {
-                    if *executed_txn != body.transactions[index] {
-                        return Err(PushError::InvalidBlock(TransactionExecutionMismatch));
+                // Check if the receipts contain an error.
+                if let Err(e) = receipts {
+                    return Err(PushError::AccountsError(e));
+                }
+
+                // Check that the transaction results match the ones in the block.
+                let receipts = receipts.unwrap();
+                assert_eq!(receipts.transactions.len(), body.transactions.len());
+                for (index, receipt) in receipts.transactions.iter().enumerate() {
+                    let matches = match receipt {
+                        TransactionOperationReceipt::Ok(_) => body.transactions[index].succeeded(),
+                        TransactionOperationReceipt::Err(_) => body.transactions[index].failed(),
+                    };
+                    if !matches {
+                        return Err(PushError::InvalidBlock(
+                            BlockError::TransactionExecutionMismatch,
+                        ));
                     }
                 }
 
                 // Store receipts.
-                let receipts = batch_info.receipts.into();
                 self.chain_store
                     .put_receipts(txn, micro_block.header.block_number, &receipts);
 
@@ -197,20 +199,17 @@ impl Blockchain {
                     .expect("Failed to revert - missing receipts");
 
                 // Revert the block from AccountsTree.
-                let batch_info = accounts.revert(
+                let block_state = BlockState::new(block.block_number(), block.timestamp());
+                let result = accounts.revert(
                     txn,
-                    &body.transactions,
+                    &body.get_raw_transactions(),
                     &inherents,
-                    micro_block.header.block_number,
-                    micro_block.header.timestamp,
-                    &receipts,
+                    &block_state,
+                    receipts,
                 );
-                let batch_info = match batch_info {
-                    Ok(batch_info) => batch_info,
-                    Err(e) => {
-                        panic!("Failed to revert - {e:?}");
-                    }
-                };
+                if let Err(e) = result {
+                    panic!("Failed to revert - {e:?}");
+                }
 
                 // Remove the transactions from the History tree. For this you only need to calculate the
                 // number of transactions that you want to remove.

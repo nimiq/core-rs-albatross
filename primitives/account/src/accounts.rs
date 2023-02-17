@@ -15,8 +15,8 @@ use nimiq_trie::trie::{IncompleteTrie, MerkleRadixTrie};
 use crate::data_store::DataStore;
 use crate::interaction_traits::AccountPruningInteraction;
 use crate::{
-    Account, AccountInherentInteraction, AccountReceipt, AccountTransactionInteraction, Inherent,
-    InherentOperationReceipt, OperationReceipt, Receipts, TransactionOperationReceipt,
+    Account, AccountInherentInteraction, AccountReceipt, AccountTransactionInteraction, BlockState,
+    Inherent, InherentOperationReceipt, OperationReceipt, Receipts, TransactionOperationReceipt,
     TransactionReceipt,
 };
 
@@ -67,12 +67,26 @@ impl Accounts {
         &self,
         address: &Address,
         txn_option: Option<&DBTransaction>,
-    ) -> Result<Option<Account>, IncompleteTrie> {
+    ) -> Result<Account, IncompleteTrie> {
         let key = KeyNibbles::from(address);
         match txn_option {
-            Some(txn) => self.tree.get(txn, &key),
-            None => self.tree.get(&ReadTransaction::new(&self.env), &key),
+            Some(txn) => self.tree.get(txn, &key)?.unwrap_or_default(),
+            None => self
+                .tree
+                .get(&ReadTransaction::new(&self.env), &key)?
+                .unwrap_or_default(),
         }
+    }
+
+    pub fn get_complete(&self, address: &Address, txn_option: Option<&DBTransaction>) -> Account {
+        self.get(address, txn_option)
+            .expect("Tree must be complete")
+    }
+
+    fn is_missing(&self, txn: &DBTransaction, address: &Address) -> bool {
+        self.tree
+            .get_missing_range(txn)
+            .map_or(false, |range| range.contains(&KeyNibbles::from(address)))
     }
 
     fn get_with_type(
@@ -81,7 +95,7 @@ impl Accounts {
         address: &Address,
         ty: AccountType,
     ) -> Result<Account, AccountError> {
-        let account = self.get(address, Some(txn))?;
+        let account = self.get_complete(address, Some(txn));
         if account.account_type() != ty {
             return Err(AccountError::TypeMismatch {
                 expected: ty,
@@ -98,7 +112,7 @@ impl Accounts {
         ty: AccountType,
         pruned_account: Option<&AccountReceipt>,
     ) -> Result<Account, AccountError> {
-        if let Some(account) = self.tree.get(txn, &KeyNibbles::from(address)) {
+        if let Some(account) = self.tree.get(txn, &KeyNibbles::from(address))? {
             // TODO This check is unnecessary since we are only using this function during revert.
             //  Replace with assert!()?
             if account.account_type() != ty {
@@ -115,7 +129,9 @@ impl Accounts {
     }
 
     fn put(&self, txn: &mut WriteTransaction, address: &Address, account: Account) {
-        self.tree.put(txn, &KeyNibbles::from(address), account)
+        self.tree
+            .put(txn, &KeyNibbles::from(address), account)
+            .expect("Failed to put account into tree")
     }
 
     fn put_or_prune(
@@ -190,10 +206,22 @@ impl Accounts {
         txn: &mut WriteTransaction,
         transactions: &[Transaction],
         inherents: &[Inherent],
-        block_time: u64,
+        block_state: &BlockState,
     ) -> Result<Receipts, AccountError> {
-        let receipts = self.commit_batch(txn, transactions, inherents, block_time)?;
-        self.tree.update_root(txn);
+        let receipts = self.commit_batch(txn, transactions, inherents, block_state)?;
+        self.tree.update_root(txn).expect("Tree must be complete");
+        Ok(receipts)
+    }
+
+    pub fn commit_incomplete(
+        &self,
+        txn: &mut WriteTransaction,
+        transactions: &[ExecutedTransaction],
+        inherents: &[Inherent],
+        block_state: &BlockState,
+    ) -> Result<Receipts, AccountError> {
+        let receipts = self.commit_batch_incomplete(txn, transactions, inherents, block_state)?;
+        self.tree.update_root(txn).ok();
         Ok(receipts)
     }
 
@@ -202,17 +230,40 @@ impl Accounts {
         txn: &mut WriteTransaction,
         transactions: &[Transaction],
         inherents: &[Inherent],
-        block_time: u64,
+        block_state: &BlockState,
     ) -> Result<Receipts, AccountError> {
+        assert!(self.is_complete(Some(txn)), "Tree must be complete");
         let mut receipts = Receipts::default();
 
         for transaction in transactions {
-            let receipt = self.commit_transaction(txn, transaction, block_time)?;
+            let receipt = self.commit_transaction(txn, transaction, block_state)?;
             receipts.transactions.push(receipt);
         }
 
         for inherent in inherents {
-            let receipt = self.commit_inherent(txn, inherent, block_time)?;
+            let receipt = self.commit_inherent(txn, inherent, block_state)?;
+            receipts.inherents.push(receipt);
+        }
+
+        Ok(receipts)
+    }
+
+    pub fn commit_batch_incomplete(
+        &self,
+        txn: &mut WriteTransaction,
+        transactions: &[ExecutedTransaction],
+        inherents: &[Inherent],
+        block_state: &BlockState,
+    ) -> Result<Receipts, AccountError> {
+        let mut receipts = Receipts::default();
+
+        for transaction in transactions {
+            let receipt = self.commit_transaction_incomplete(txn, transaction, block_state)?;
+            receipts.transactions.push(receipt);
+        }
+
+        for inherent in inherents {
+            let receipt = self.commit_inherent(txn, inherent, block_state)?;
             receipts.inherents.push(receipt);
         }
 
@@ -223,13 +274,31 @@ impl Accounts {
         &self,
         txn: &mut WriteTransaction,
         transaction: &Transaction,
-        block_time: u64,
+        block_state: &BlockState,
     ) -> Result<TransactionOperationReceipt, AccountError> {
-        if let Ok(receipt) = self.try_commit_transaction(txn, transaction, block_time) {
+        if let Ok(receipt) = self.try_commit_transaction(txn, transaction, block_state) {
             Ok(TransactionOperationReceipt::Ok(receipt))
         } else {
-            let receipt = self.commit_failed_transaction(txn, transaction, block_time)?;
+            let receipt = self.commit_failed_transaction(txn, transaction, block_state)?;
             Ok(TransactionOperationReceipt::Err(receipt))
+        }
+    }
+
+    fn commit_transaction_incomplete(
+        &self,
+        txn: &mut WriteTransaction,
+        transaction: &ExecutedTransaction,
+        block_state: &BlockState,
+    ) -> Result<TransactionOperationReceipt, AccountError> {
+        match transaction {
+            ExecutedTransaction::Ok(transaction) => {
+                let receipt = self.commit_successful_transaction(txn, transaction, block_state)?;
+                Ok(TransactionOperationReceipt::Ok(receipt))
+            }
+            ExecutedTransaction::Err(transaction) => {
+                let receipt = self.commit_failed_transaction(txn, transaction, block_state)?;
+                Ok(TransactionOperationReceipt::Err(receipt))
+            }
         }
     }
 
@@ -239,7 +308,7 @@ impl Accounts {
         &self,
         txn: &mut WriteTransaction,
         transaction: &Transaction,
-        block_time: u64,
+        block_state: &BlockState,
     ) -> Result<TransactionReceipt, AccountError> {
         // Commit sender.
         let sender_address = &transaction.sender;
@@ -247,47 +316,19 @@ impl Accounts {
         let mut sender_account =
             self.get_with_type(txn, sender_address, transaction.sender_type)?;
 
-        let mut sender_receipt = sender_account.commit_outgoing_transaction(
+        let sender_receipt = sender_account.commit_outgoing_transaction(
             transaction,
-            block_time,
+            block_state,
             sender_store.write(txn),
         )?;
 
         // Commit recipient.
         let recipient_address = &transaction.recipient;
-        let mut recipient_store = DataStore::new(&self.tree, recipient_address);
         let mut recipient_account = Account::default();
 
         // Handle contract creation.
-        let recipient_result = if transaction
-            .flags
-            .contains(TransactionFlags::CONTRACT_CREATION)
-        {
-            recipient_account = self
-                .get_with_type(txn, recipient_address, AccountType::Basic)
-                .expect("contract creation target must be a basic account");
-
-            Account::create_new_contract(
-                transaction,
-                recipient_account.balance(),
-                block_time,
-                recipient_store.write(txn),
-            )
-            .map(|account| {
-                recipient_account = account;
-                None
-            })
-        } else {
-            self.get_with_type(txn, recipient_address, transaction.recipient_type)
-                .and_then(|mut account| {
-                    recipient_account = account;
-                    recipient_account.commit_incoming_transaction(
-                        transaction,
-                        block_time,
-                        recipient_store.write(txn),
-                    )
-                })
-        };
+        let recipient_result =
+            self.commit_recipient(txn, transaction, block_state, &mut recipient_account);
 
         // If recipient failed, revert sender.
         if let Err(e) = recipient_result {
@@ -296,7 +337,7 @@ impl Accounts {
             sender_account
                 .revert_outgoing_transaction(
                     transaction,
-                    block_time,
+                    block_state,
                     sender_receipt,
                     sender_store.write(txn),
                 )
@@ -319,20 +360,116 @@ impl Accounts {
         })
     }
 
+    /// FIXME This function might leave the WriteTransaction in an inconsistent state if it returns an error!
+    fn commit_successful_transaction(
+        &self,
+        txn: &mut WriteTransaction,
+        transaction: &Transaction,
+        block_state: &BlockState,
+    ) -> Result<TransactionReceipt, AccountError> {
+        // Commit sender.
+        let sender_address = &transaction.sender;
+        let mut sender_receipt = None;
+        let mut pruned_account = None;
+
+        if !self.is_missing(txn, sender_address) {
+            let mut sender_store = DataStore::new(&self.tree, sender_address);
+            let mut sender_account =
+                self.get_with_type(txn, sender_address, transaction.sender_type)?;
+
+            sender_receipt = sender_account.commit_outgoing_transaction(
+                transaction,
+                block_state,
+                sender_store.write(txn),
+            )?;
+
+            pruned_account = self.put_or_prune(txn, sender_address, sender_account);
+        }
+
+        // Commit recipient.
+        let recipient_address = &transaction.recipient;
+        let mut recipient_receipt = None;
+
+        if !self.is_missing(txn, recipient_address) {
+            let mut recipient_account = Account::default();
+
+            recipient_receipt =
+                self.commit_recipient(txn, transaction, block_state, &mut recipient_account)?;
+
+            self.put(txn, recipient_address, recipient_account);
+        }
+
+        Ok(TransactionReceipt {
+            sender_receipt,
+            recipient_receipt,
+            pruned_account,
+        })
+    }
+
+    fn commit_recipient(
+        &self,
+        txn: &mut WriteTransaction,
+        transaction: &Transaction,
+        block_state: &BlockState,
+        recipient_account: &mut Account,
+    ) -> Result<Option<AccountReceipt>, AccountError> {
+        let recipient_address = &transaction.recipient;
+        if self.is_missing(txn, recipient_address) {
+            return Ok(None);
+        }
+
+        let mut recipient_store = DataStore::new(&self.tree, recipient_address);
+
+        // Handle contract creation.
+        if transaction
+            .flags
+            .contains(TransactionFlags::CONTRACT_CREATION)
+        {
+            *recipient_account = self
+                .get_with_type(txn, recipient_address, AccountType::Basic)
+                .expect("contract creation target must be a basic account");
+
+            Account::create_new_contract(
+                transaction,
+                recipient_account.balance(),
+                block_state,
+                recipient_store.write(txn),
+            )
+            .map(|account| {
+                *recipient_account = account;
+                None
+            })
+        } else {
+            self.get_with_type(txn, recipient_address, transaction.recipient_type)
+                .and_then(|mut account| {
+                    *recipient_account = account;
+                    recipient_account.commit_incoming_transaction(
+                        transaction,
+                        block_state,
+                        recipient_store.write(txn),
+                    )
+                })
+        }
+    }
+
     fn commit_failed_transaction(
         &self,
         txn: &mut WriteTransaction,
         transaction: &Transaction,
-        block_time: u64,
+        block_state: &BlockState,
     ) -> Result<TransactionReceipt, AccountError> {
         let sender_address = &transaction.sender;
+        if self.is_missing(txn, sender_address) {
+            return Ok(TransactionReceipt::default());
+        }
+
         let mut sender_store = DataStore::new(&self.tree, sender_address);
         let mut sender_account =
             self.get_with_type(txn, sender_address, transaction.sender_type)?;
 
         let sender_receipt = sender_account.commit_failed_transaction(
             transaction,
-            block_time,
+            block_state,
             sender_store.write(txn),
         )?;
 
@@ -349,13 +486,17 @@ impl Accounts {
         &self,
         txn: &mut WriteTransaction,
         inherent: &Inherent,
-        block_time: u64,
+        block_state: &BlockState,
     ) -> Result<InherentOperationReceipt, AccountError> {
         let address = inherent.target();
+        if self.is_missing(txn, address) {
+            return Ok(InherentOperationReceipt::Ok(None));
+        }
+
         let store = DataStore::new(&self.tree, address);
         let mut account = self.get(address, Some(txn))?;
 
-        if let Ok(receipt) = account.commit_inherent(inherent, block_time, store.write(txn)) {
+        if let Ok(receipt) = account.commit_inherent(inherent, block_state, store.write(txn)) {
             self.put(txn, address, account);
             Ok(InherentOperationReceipt::Ok(receipt))
         } else {
@@ -369,12 +510,11 @@ impl Accounts {
         txn: &mut WriteTransaction,
         transactions: &[Transaction],
         inherents: &[Inherent],
-        block_time: u64,
+        block_state: &BlockState,
         receipts: Receipts,
     ) -> Result<(), AccountError> {
-        self.revert_batch(txn, transactions, inherents, block_time, receipts)?;
-        // It is fine to have an incomplete trie here.
-        let _ = self.tree.update_root(txn);
+        self.revert_batch(txn, transactions, inherents, block_state, receipts)?;
+        self.tree.update_root(txn).ok();
         Ok(())
     }
 
@@ -383,7 +523,7 @@ impl Accounts {
         txn: &mut WriteTransaction,
         transactions: &[Transaction],
         inherents: &[Inherent],
-        block_time: u64,
+        block_state: &BlockState,
         receipts: Receipts,
     ) -> Result<(), AccountError> {
         // Revert inherents in reverse order.
@@ -393,7 +533,7 @@ impl Accounts {
             .zip(receipts.inherents.into_iter())
             .rev();
         for (inherent, receipt) in iter {
-            self.revert_inherent(txn, inherent, block_time, receipt)?;
+            self.revert_inherent(txn, inherent, block_state, receipt)?;
         }
 
         // Revert transactions in reverse order.
@@ -403,7 +543,7 @@ impl Accounts {
             .zip(receipts.transactions.into_iter())
             .rev();
         for (transaction, receipt) in iter {
-            self.revert_transaction(txn, transaction, block_time, receipt)?;
+            self.revert_transaction(txn, transaction, block_state, receipt)?;
         }
 
         Ok(())
@@ -413,15 +553,15 @@ impl Accounts {
         &self,
         txn: &mut WriteTransaction,
         transaction: &Transaction,
-        block_time: u64,
+        block_state: &BlockState,
         receipt: TransactionOperationReceipt,
     ) -> Result<(), AccountError> {
         match receipt {
             OperationReceipt::Ok(receipt) => {
-                self.revert_successful_transaction(txn, transaction, block_time, receipt)
+                self.revert_successful_transaction(txn, transaction, block_state, receipt)
             }
             OperationReceipt::Err(receipt) => {
-                self.revert_failed_transaction(txn, transaction, block_time, receipt)
+                self.revert_failed_transaction(txn, transaction, block_state, receipt)
             }
         }
     }
@@ -431,59 +571,63 @@ impl Accounts {
         &self,
         txn: &mut WriteTransaction,
         transaction: &Transaction,
-        block_time: u64,
+        block_state: &BlockState,
         receipt: TransactionReceipt,
     ) -> Result<(), AccountError> {
         // Revert recipient first.
         let recipient_address = &transaction.recipient;
-        let recipient_store = DataStore::new(&self.tree, recipient_address);
-        let mut recipient_account =
-            self.get_with_type(txn, recipient_address, transaction.recipient_type)?;
+        if !self.is_missing(txn, recipient_address) {
+            let recipient_store = DataStore::new(&self.tree, recipient_address);
+            let mut recipient_account =
+                self.get_with_type(txn, recipient_address, transaction.recipient_type)?;
 
-        // Revert contract creation.
-        if transaction
-            .flags
-            .contains(TransactionFlags::CONTRACT_CREATION)
-        {
-            recipient_account.revert_new_contract(
-                transaction,
-                block_time,
-                recipient_store.write(txn),
-            )?;
+            // Revert contract creation.
+            if transaction
+                .flags
+                .contains(TransactionFlags::CONTRACT_CREATION)
+            {
+                recipient_account.revert_new_contract(
+                    transaction,
+                    block_state,
+                    recipient_store.write(txn),
+                )?;
 
-            recipient_account = Account::default_with_balance(recipient_account.balance());
-        } else {
-            recipient_account.revert_incoming_transaction(
-                transaction,
-                block_time,
-                receipt.recipient_receipt,
-                recipient_store.write(txn),
-            )?;
+                recipient_account = Account::default_with_balance(recipient_account.balance());
+            } else {
+                recipient_account.revert_incoming_transaction(
+                    transaction,
+                    block_state,
+                    receipt.recipient_receipt,
+                    recipient_store.write(txn),
+                )?;
+            }
+
+            // Update or prune recipient.
+            // The recipient account might have been created by the incoming transaction.
+            self.put_or_prune(txn, recipient_address, recipient_account);
         }
 
         // Revert sender. It might need to be restored first if it was pruned.
         let sender_address = &transaction.sender;
-        let sender_store = DataStore::new(&self.tree, sender_address);
-        let mut sender_account = self.get_or_restore(
-            txn,
-            sender_address,
-            transaction.sender_type,
-            receipt.pruned_account.as_ref(),
-        )?;
+        if !self.is_missing(txn, sender_address) {
+            let sender_store = DataStore::new(&self.tree, sender_address);
+            let mut sender_account = self.get_or_restore(
+                txn,
+                sender_address,
+                transaction.sender_type,
+                receipt.pruned_account.as_ref(),
+            )?;
 
-        sender_account.revert_outgoing_transaction(
-            transaction,
-            block_time,
-            receipt.sender_receipt,
-            sender_store.write(txn),
-        )?;
+            sender_account.revert_outgoing_transaction(
+                transaction,
+                block_state,
+                receipt.sender_receipt,
+                sender_store.write(txn),
+            )?;
 
-        // Store sender.
-        self.put(txn, sender_address, sender_account);
-
-        // Update or prune recipient.
-        // The recipient account might have been created by the incoming transaction.
-        self.put_or_prune(txn, recipient_address, recipient_account);
+            // Store sender.
+            self.put(txn, sender_address, sender_account);
+        }
 
         Ok(())
     }
@@ -492,10 +636,14 @@ impl Accounts {
         &self,
         txn: &mut WriteTransaction,
         transaction: &Transaction,
-        block_time: u64,
+        block_state: &BlockState,
         receipt: TransactionReceipt,
     ) -> Result<(), AccountError> {
         let sender_address = &transaction.sender;
+        if self.is_missing(txn, sender_address) {
+            return Ok(());
+        }
+
         let mut sender_store = DataStore::new(&self.tree, sender_address);
         let mut sender_account = self.get_or_restore(
             txn,
@@ -506,7 +654,7 @@ impl Accounts {
 
         sender_account.revert_failed_transaction(
             transaction,
-            block_time,
+            block_state,
             receipt.sender_receipt,
             sender_store.write(txn),
         )?;
@@ -520,7 +668,7 @@ impl Accounts {
         &self,
         txn: &mut WriteTransaction,
         inherent: &Inherent,
-        block_time: u64,
+        block_state: &BlockState,
         receipt: InherentOperationReceipt,
     ) -> Result<(), AccountError> {
         // If the inherent operation failed, there is nothing to revert.
@@ -530,10 +678,14 @@ impl Accounts {
         };
 
         let address = inherent.target();
+        if self.is_missing(txn, address) {
+            return Ok(());
+        }
+
         let store = DataStore::new(&self.tree, address);
         let mut account = self.get(address, Some(txn))?;
 
-        account.revert_inherent(inherent, block_time, receipt, store.write(txn))?;
+        account.revert_inherent(inherent, block_state, receipt, store.write(txn))?;
 
         // The account might have been created by the inherent (i.e. reward inherent).
         self.put_or_prune(txn, address, account);
@@ -543,7 +695,7 @@ impl Accounts {
 
     pub fn finalize_batch(&self, txn: &mut WriteTransaction) {
         // It is fine to have an incomplete trie here.
-        let _ = self.tree.update_root(txn);
+        self.tree.update_root(txn).ok();
     }
 
     pub fn commit_chunk(
