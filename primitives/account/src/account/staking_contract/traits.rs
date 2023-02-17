@@ -1,9 +1,8 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
+use std::mem;
 
-use beserial::{Deserialize, Serialize};
-use nimiq_collections::BitSet;
-use nimiq_database::WriteTransaction;
-use nimiq_primitives::{account::AccountError, coin::Coin, policy::Policy, slots::SlashedSlot};
+use nimiq_primitives::account::AccountType;
+use nimiq_primitives::{account::AccountError, coin::Coin, policy::Policy};
 use nimiq_transaction::account::staking_contract::{
     IncomingStakingTransactionData, OutgoingStakingTransactionProof,
 };
@@ -17,11 +16,9 @@ use crate::account::staking_contract::store::{
 };
 use crate::{
     account::staking_contract::{receipts::SlashReceipt, StakingContract},
-    complete,
     data_store::{DataStoreRead, DataStoreWrite},
     interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction},
-    logs::{AccountInfo, Log},
-    Account, AccountReceipt, AccountsTrie, Inherent, InherentType,
+    Account, AccountPruningInteraction, AccountReceipt, BlockState, Inherent,
 };
 
 /// We need to distinguish between two types of transactions:
@@ -50,7 +47,7 @@ impl AccountTransactionInteraction for StakingContract {
     fn create_new_contract(
         _transaction: &Transaction,
         _initial_balance: Coin,
-        _block_time: u64,
+        _block_state: &BlockState,
         _data_store: DataStoreWrite,
     ) -> Result<Account, AccountError> {
         Err(AccountError::InvalidForRecipient)
@@ -59,7 +56,7 @@ impl AccountTransactionInteraction for StakingContract {
     fn revert_new_contract(
         &mut self,
         _transaction: &Transaction,
-        _block_time: u64,
+        _block_state: &BlockState,
         _data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
         Err(AccountError::InvalidForRecipient)
@@ -68,7 +65,7 @@ impl AccountTransactionInteraction for StakingContract {
     fn commit_incoming_transaction(
         &mut self,
         transaction: &Transaction,
-        block_time: u64,
+        block_state: &BlockState,
         mut data_store: DataStoreWrite,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         let store = StakingContractStoreWrite::new(&mut data_store);
@@ -136,7 +133,7 @@ impl AccountTransactionInteraction for StakingContract {
                 // Get the signer's address from the proof.
                 let signer = proof.compute_signer();
 
-                self.inactivate_validator(&store, &validator_address, &signer, block_number)
+                self.inactivate_validator(&store, &validator_address, &signer, block_state.number)
                     .into()
             }
             IncomingStakingTransactionData::ReactivateValidator {
@@ -185,7 +182,7 @@ impl AccountTransactionInteraction for StakingContract {
     fn revert_incoming_transaction(
         &mut self,
         transaction: &Transaction,
-        block_time: u64,
+        block_state: &BlockState,
         receipt: Option<AccountReceipt>,
         mut data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
@@ -258,7 +255,7 @@ impl AccountTransactionInteraction for StakingContract {
     fn commit_outgoing_transaction(
         &mut self,
         transaction: &Transaction,
-        block_time: u64,
+        block_state: &BlockState,
         mut data_store: DataStoreWrite,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         let store = StakingContractStoreWrite::new(&mut data_store);
@@ -274,7 +271,7 @@ impl AccountTransactionInteraction for StakingContract {
                 self.delete_validator(
                     &store,
                     &validator_address,
-                    block_number,
+                    block_state.number,
                     transaction.total_value(),
                 )
                 .into()
@@ -309,7 +306,7 @@ impl AccountTransactionInteraction for StakingContract {
     fn revert_outgoing_transaction(
         &mut self,
         transaction: &Transaction,
-        block_time: u64,
+        block_state: &BlockState,
         receipt: Option<AccountReceipt>,
         mut data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
@@ -351,7 +348,7 @@ impl AccountTransactionInteraction for StakingContract {
     fn commit_failed_transaction(
         &mut self,
         transaction: &Transaction,
-        block_time: u64,
+        block_state: &BlockState,
         mut data_store: DataStoreWrite,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         let store = StakingContractStoreWrite::new(&mut data_store);
@@ -376,7 +373,7 @@ impl AccountTransactionInteraction for StakingContract {
                     let receipt = self.delete_validator(
                         &store,
                         &validator_address,
-                        block_number,
+                        block_state.number,
                         validator.deposit,
                     )?;
 
@@ -419,7 +416,7 @@ impl AccountTransactionInteraction for StakingContract {
     fn revert_failed_transaction(
         &mut self,
         transaction: &Transaction,
-        block_time: u64,
+        block_state: &BlockState,
         receipt: Option<AccountReceipt>,
         mut data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
@@ -484,7 +481,7 @@ impl AccountTransactionInteraction for StakingContract {
         &self,
         transaction: &Transaction,
         reserved_balance: Coin,
-        block_time: u64,
+        block_state: &BlockState,
         data_store: DataStoreRead,
     ) -> Result<bool, AccountError> {
         todo!()
@@ -494,7 +491,7 @@ impl AccountTransactionInteraction for StakingContract {
     //     &self,
     //     _transaction: &Transaction,
     //     _current_balance: Coin,
-    //     _block_time: u64,
+    //     _block_state: &BlockState,
     // ) -> bool {
     //     // Note: Currently this check is performed via the StakingContract::can_pay_tx interface, which is used by the mempool
     //     // Once a better accounts interface is created, both checks can be reconciliated.

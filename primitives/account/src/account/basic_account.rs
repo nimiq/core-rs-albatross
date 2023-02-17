@@ -6,7 +6,7 @@ use nimiq_transaction::Transaction;
 use crate::data_store::{DataStoreRead, DataStoreWrite};
 use crate::inherent::Inherent;
 use crate::interaction_traits::{AccountPruningInteraction, AccountTransactionInteraction};
-use crate::{Account, AccountError, AccountInherentInteraction, AccountReceipt};
+use crate::{Account, AccountInherentInteraction, AccountReceipt, BlockState};
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
@@ -18,7 +18,7 @@ impl AccountTransactionInteraction for BasicAccount {
     fn create_new_contract(
         _transaction: &Transaction,
         _initial_balance: Coin,
-        _block_time: u64,
+        _block_state: &BlockState,
         _data_store: DataStoreWrite,
     ) -> Result<Account, AccountError> {
         Err(AccountError::InvalidForRecipient)
@@ -27,7 +27,7 @@ impl AccountTransactionInteraction for BasicAccount {
     fn revert_new_contract(
         self,
         _transaction: &Transaction,
-        _block_time: u64,
+        _block_state: &BlockState,
         _data_store: DataStoreWrite,
     ) -> Result<Account, AccountError> {
         Err(AccountError::InvalidForRecipient)
@@ -36,7 +36,7 @@ impl AccountTransactionInteraction for BasicAccount {
     fn commit_incoming_transaction(
         &mut self,
         transaction: &Transaction,
-        _block_time: u64,
+        _block_state: &BlockState,
         _data_store: DataStoreWrite,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         self.balance += transaction.value;
@@ -46,7 +46,7 @@ impl AccountTransactionInteraction for BasicAccount {
     fn revert_incoming_transaction(
         &mut self,
         transaction: &Transaction,
-        _block_time: u64,
+        _block_state: &BlockState,
         _receipt: Option<AccountReceipt>,
         _data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
@@ -57,7 +57,7 @@ impl AccountTransactionInteraction for BasicAccount {
     fn commit_outgoing_transaction(
         &mut self,
         transaction: &Transaction,
-        _block_time: u64,
+        _block_state: &BlockState,
         _data_store: DataStoreWrite,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         self.balance.safe_sub_assign(transaction.total_value())?;
@@ -67,7 +67,7 @@ impl AccountTransactionInteraction for BasicAccount {
     fn revert_outgoing_transaction(
         &mut self,
         transaction: &Transaction,
-        _block_time: u64,
+        _block_state: &BlockState,
         _receipt: Option<AccountReceipt>,
         _data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
@@ -78,7 +78,7 @@ impl AccountTransactionInteraction for BasicAccount {
     fn commit_failed_transaction(
         &mut self,
         transaction: &Transaction,
-        _block_time: u64,
+        _block_state: &BlockState,
         _data_store: DataStoreWrite,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         self.balance.safe_sub_assign(transaction.fee)?;
@@ -88,7 +88,7 @@ impl AccountTransactionInteraction for BasicAccount {
     fn revert_failed_transaction(
         &mut self,
         transaction: &Transaction,
-        _block_time: u64,
+        _block_state: &BlockState,
         _receipt: Option<AccountReceipt>,
         _data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
@@ -100,7 +100,7 @@ impl AccountTransactionInteraction for BasicAccount {
         &self,
         transaction: &Transaction,
         reserved_balance: Coin,
-        _block_time: u64,
+        _block_state: &BlockState,
         _data_store: DataStoreRead,
     ) -> Result<bool, AccountError> {
         let needed = reserved_balance
@@ -114,7 +114,7 @@ impl AccountInherentInteraction for BasicAccount {
     fn commit_inherent(
         &mut self,
         inherent: &Inherent,
-        _block_time: u64,
+        _block_state: &BlockState,
         _data_store: DataStoreWrite,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         match inherent {
@@ -129,7 +129,7 @@ impl AccountInherentInteraction for BasicAccount {
     fn revert_inherent(
         &mut self,
         inherent: &Inherent,
-        _block_time: u64,
+        _block_state: &BlockState,
         _receipt: Option<AccountReceipt>,
         _data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {

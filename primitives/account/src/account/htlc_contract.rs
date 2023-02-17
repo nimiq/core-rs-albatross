@@ -1,6 +1,6 @@
 use beserial::{Deserialize, Serialize};
 use nimiq_keys::Address;
-use nimiq_primitives::account::AccountType;
+use nimiq_primitives::account::{AccountError, AccountType};
 use nimiq_primitives::coin::Coin;
 use nimiq_transaction::account::htlc_contract::{
     AnyHash, CreationTransactionData, HashAlgorithm, ProofType,
@@ -12,7 +12,7 @@ use crate::inherent::Inherent;
 use crate::interaction_traits::{
     AccountInherentInteraction, AccountPruningInteraction, AccountTransactionInteraction,
 };
-use crate::{Account, AccountError, AccountReceipt};
+use crate::{Account, AccountReceipt, BlockState};
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
@@ -33,7 +33,7 @@ impl HashedTimeLockedContract {
         &self,
         transaction: &Transaction,
         new_balance: Coin,
-        block_time: u64,
+        block_state: &BlockState,
     ) -> Result<(), AccountError> {
         let proof_buf = &mut &transaction.proof[..];
         let proof_type: ProofType = Deserialize::deserialize(proof_buf)?;
@@ -41,8 +41,8 @@ impl HashedTimeLockedContract {
         match proof_type {
             ProofType::RegularTransfer => {
                 // Check that the contract has not expired yet.
-                if self.timeout < block_time {
-                    warn!("HTLC has expired: {} < {}", self.timeout, block_time);
+                if self.timeout < block_state.time {
+                    warn!("HTLC has expired: {} < {}", self.timeout, block_state.time);
                     return Err(AccountError::InvalidForSender);
                 }
 
@@ -99,10 +99,10 @@ impl HashedTimeLockedContract {
             }
             ProofType::TimeoutResolve => {
                 // Check that the contract has expired.
-                if self.timeout >= block_time {
+                if self.timeout >= block_state.time {
                     warn!(
                         "HTLC has not yet expired: {} >= {}",
-                        self.timeout, block_time
+                        self.timeout, block_state.time
                     );
                     return Err(AccountError::InvalidForSender);
                 }
@@ -124,7 +124,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
     fn create_new_contract(
         transaction: &Transaction,
         initial_balance: Coin,
-        _block_time: u64,
+        _block_state: &BlockState,
         _data_store: DataStoreWrite,
     ) -> Result<Account, AccountError> {
         let data = CreationTransactionData::parse(transaction)?;
@@ -143,7 +143,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
     fn revert_new_contract(
         &mut self,
         transaction: &Transaction,
-        _block_time: u64,
+        _block_state: &BlockState,
         _data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
         self.balance -= transaction.value;
@@ -153,7 +153,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
     fn commit_incoming_transaction(
         &mut self,
         _transaction: &Transaction,
-        _block_time: u64,
+        _block_state: &BlockState,
         _data_store: DataStoreWrite,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         Err(AccountError::InvalidForRecipient)
@@ -162,7 +162,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
     fn revert_incoming_transaction(
         &mut self,
         _transaction: &Transaction,
-        _block_time: u64,
+        _block_state: &BlockState,
         _receipt: Option<AccountReceipt>,
         _data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
@@ -172,11 +172,11 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
     fn commit_outgoing_transaction(
         &mut self,
         transaction: &Transaction,
-        block_time: u64,
+        block_state: &BlockState,
         _data_store: DataStoreWrite,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         let new_balance = self.balance.safe_sub(transaction.total_value())?;
-        self.can_change_balance(transaction, new_balance, block_time)?;
+        self.can_change_balance(transaction, new_balance, block_state)?;
         self.balance = new_balance;
         Ok(None)
     }
@@ -184,7 +184,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
     fn revert_outgoing_transaction(
         &mut self,
         transaction: &Transaction,
-        _block_time: u64,
+        _block_state: &BlockState,
         _receipt: Option<AccountReceipt>,
         _data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
@@ -195,12 +195,12 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
     fn commit_failed_transaction(
         &mut self,
         transaction: &Transaction,
-        block_time: u64,
+        block_state: &BlockState,
         _data_store: DataStoreWrite,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         let new_balance = self.balance.safe_sub(transaction.fee)?;
         // XXX This check should not be necessary since are also checking this in has_sufficient_balance()
-        self.can_change_balance(transaction, new_balance, block_time)?;
+        self.can_change_balance(transaction, new_balance, block_state)?;
         self.balance = new_balance;
         Ok(None)
     }
@@ -208,7 +208,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
     fn revert_failed_transaction(
         &mut self,
         transaction: &Transaction,
-        _block_time: u64,
+        _block_state: &BlockState,
         _receipt: Option<AccountReceipt>,
         _data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
@@ -220,7 +220,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         &self,
         transaction: &Transaction,
         reserved_balance: Coin,
-        block_time: u64,
+        block_state: &BlockState,
         _data_store: DataStoreRead,
     ) -> Result<bool, AccountError> {
         let needed = reserved_balance
@@ -231,7 +231,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         }
 
         let new_balance = self.balance - needed;
-        self.can_change_balance(transaction, new_balance, block_time)?;
+        self.can_change_balance(transaction, new_balance, block_state)?;
 
         Ok(true)
     }
@@ -241,7 +241,7 @@ impl AccountInherentInteraction for HashedTimeLockedContract {
     fn commit_inherent(
         &mut self,
         _inherent: &Inherent,
-        _block_time: u64,
+        _block_state: &BlockState,
         _data_store: DataStoreWrite,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         Err(AccountError::InvalidForTarget)
@@ -250,7 +250,7 @@ impl AccountInherentInteraction for HashedTimeLockedContract {
     fn revert_inherent(
         &mut self,
         _inherent: &Inherent,
-        _block_time: u64,
+        _block_state: &BlockState,
         _receipt: Option<AccountReceipt>,
         _data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {

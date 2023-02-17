@@ -15,7 +15,7 @@ use crate::{
     interaction_traits::{
         AccountInherentInteraction, AccountPruningInteraction, AccountTransactionInteraction,
     },
-    Account, AccountReceipt,
+    Account, AccountReceipt, BlockState,
 };
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
@@ -35,10 +35,10 @@ impl VestingContract {
         &self,
         transaction: &Transaction,
         new_balance: Coin,
-        block_time: u64,
+        block_state: &BlockState,
     ) -> Result<(), AccountError> {
         // Check vesting min cap.
-        let min_cap = self.min_cap(block_time);
+        let min_cap = self.min_cap(block_state.time);
 
         if new_balance < min_cap {
             return Err(AccountError::InsufficientFunds {
@@ -75,7 +75,7 @@ impl AccountTransactionInteraction for VestingContract {
     fn create_new_contract(
         transaction: &Transaction,
         initial_balance: Coin,
-        _block_time: u64,
+        _block_state: &BlockState,
         _data_store: DataStoreWrite,
     ) -> Result<Account, AccountError> {
         let data = CreationTransactionData::parse(transaction)?;
@@ -92,7 +92,7 @@ impl AccountTransactionInteraction for VestingContract {
     fn revert_new_contract(
         &mut self,
         transaction: &Transaction,
-        _block_time: u64,
+        _block_state: &BlockState,
         _data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
         self.balance -= transaction.value;
@@ -102,7 +102,7 @@ impl AccountTransactionInteraction for VestingContract {
     fn commit_incoming_transaction(
         &mut self,
         _transaction: &Transaction,
-        _block_time: u64,
+        _block_state: &BlockState,
         _data_store: DataStoreWrite,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         Err(AccountError::InvalidForRecipient)
@@ -111,7 +111,7 @@ impl AccountTransactionInteraction for VestingContract {
     fn revert_incoming_transaction(
         &mut self,
         _transaction: &Transaction,
-        _block_time: u64,
+        _block_state: &BlockState,
         _receipt: Option<AccountReceipt>,
         _data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
@@ -121,11 +121,11 @@ impl AccountTransactionInteraction for VestingContract {
     fn commit_outgoing_transaction(
         &mut self,
         transaction: &Transaction,
-        block_time: u64,
+        block_state: &BlockState,
         _data_store: DataStoreWrite,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         let new_balance = self.balance.safe_sub(transaction.total_value())?;
-        self.can_change_balance(transaction, new_balance, block_time)?;
+        self.can_change_balance(transaction, new_balance, block_state)?;
         self.balance = new_balance;
         Ok(None)
     }
@@ -133,7 +133,7 @@ impl AccountTransactionInteraction for VestingContract {
     fn revert_outgoing_transaction(
         &mut self,
         transaction: &Transaction,
-        _block_time: u64,
+        _block_state: &BlockState,
         _receipt: Option<AccountReceipt>,
         _data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
@@ -144,12 +144,12 @@ impl AccountTransactionInteraction for VestingContract {
     fn commit_failed_transaction(
         &mut self,
         transaction: &Transaction,
-        block_time: u64,
+        block_state: &BlockState,
         _data_store: DataStoreWrite,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         let new_balance = self.balance.safe_sub(transaction.fee)?;
         // XXX This check should not be necessary since are also checking this in has_sufficient_balance()
-        self.can_change_balance(transaction, new_balance, block_time)?;
+        self.can_change_balance(transaction, new_balance, block_state)?;
         self.balance = new_balance;
         Ok(None)
     }
@@ -157,7 +157,7 @@ impl AccountTransactionInteraction for VestingContract {
     fn revert_failed_transaction(
         &mut self,
         transaction: &Transaction,
-        _block_time: u64,
+        _block_state: &BlockState,
         _receipt: Option<AccountReceipt>,
         _data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
@@ -169,7 +169,7 @@ impl AccountTransactionInteraction for VestingContract {
         &self,
         transaction: &Transaction,
         reserved_balance: Coin,
-        block_time: u64,
+        block_state: &BlockState,
         _data_store: DataStoreRead,
     ) -> Result<bool, AccountError> {
         let needed = reserved_balance
@@ -180,7 +180,7 @@ impl AccountTransactionInteraction for VestingContract {
         }
 
         let new_balance = self.balance - needed;
-        self.can_change_balance(transaction, new_balance, block_time)?;
+        self.can_change_balance(transaction, new_balance, block_state)?;
 
         Ok(true)
     }
@@ -190,7 +190,7 @@ impl AccountInherentInteraction for VestingContract {
     fn commit_inherent(
         &mut self,
         _inherent: &Inherent,
-        _block_time: u64,
+        _block_state: &BlockState,
         _data_store: DataStoreWrite,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         Err(AccountError::InvalidForTarget)
@@ -199,7 +199,7 @@ impl AccountInherentInteraction for VestingContract {
     fn revert_inherent(
         &mut self,
         _inherent: &Inherent,
-        _block_time: u64,
+        _block_state: &BlockState,
         _receipt: Option<AccountReceipt>,
         _data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
