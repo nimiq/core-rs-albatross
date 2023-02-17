@@ -1,21 +1,44 @@
 use beserial::{Deserialize, Serialize};
-use nimiq_primitives::account::AccountType;
+use nimiq_primitives::account::{AccountError, AccountType};
 use nimiq_primitives::coin::Coin;
 use nimiq_transaction::{Transaction, TransactionFlags};
 
+use crate::account::basic_account::BasicAccount;
+use crate::account::htlc_contract::HashedTimeLockedContract;
+use crate::account::staking_contract::StakingContract;
+use crate::account::vesting_contract::VestingContract;
 use crate::data_store::{DataStoreRead, DataStoreWrite};
 use crate::interaction_traits::{
     AccountInherentInteraction, AccountPruningInteraction, AccountTransactionInteraction,
 };
-use crate::{
-    AccountError, AccountReceipt, BasicAccount, HashedTimeLockedContract, Inherent,
-    StakingContract, VestingContract,
-};
+use crate::{AccountReceipt, BlockState, Inherent};
 
 pub mod basic_account;
 pub mod htlc_contract;
 pub mod staking_contract;
 pub mod vesting_contract;
+
+macro_rules! gen_account_match {
+    ($self: ident, $f: ident $(, $arg:expr )*) => {
+        match $self {
+            Account::Basic(account) => account.$f($( $arg ),*),
+            Account::VestingContract(account) => account.$f($( $arg ),*),
+            Account::HTLC(account) => account.$f($( $arg ),*),
+            Account::Staking(account) => account.$f($( $arg ),*),
+        }
+    };
+}
+
+macro_rules! gen_account_type_match {
+    ($self: expr, $f: ident $(, $arg:expr )*) => {
+        match $self {
+            AccountType::Basic => BasicAccount::$f($( $arg ),*),
+            AccountType::VestingContract => VestingContract::$f($( $arg ),*),
+            AccountType::HTLC => HashedTimeLockedContract::$f($( $arg ),*),
+            AccountType::Staking => StakingContract::$f($( $arg ),*),
+        }
+    };
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
@@ -61,497 +84,185 @@ impl AccountTransactionInteraction for Account {
     fn create_new_contract(
         transaction: &Transaction,
         initial_balance: Coin,
-        block_time: u64,
+        block_state: &BlockState,
         data_store: DataStoreWrite,
     ) -> Result<Account, AccountError> {
         assert!(transaction
             .flags
             .contains(TransactionFlags::CONTRACT_CREATION));
-        todo!()
+        gen_account_type_match!(
+            transaction.recipient_type,
+            create_new_contract,
+            transaction,
+            initial_balance,
+            block_state,
+            data_store,
+        )
     }
 
     fn revert_new_contract(
         self,
         transaction: &Transaction,
-        block_time: u64,
+        block_state: &BlockState,
         data_store: DataStoreWrite,
     ) -> Result<Account, AccountError> {
-        todo!()
+        gen_account_match!(
+            self,
+            revert_new_contract,
+            transaction,
+            block_state,
+            data_store,
+        )
     }
 
     fn commit_incoming_transaction(
         &mut self,
         transaction: &Transaction,
-        block_time: u64,
+        block_state: &BlockState,
         data_store: DataStoreWrite,
     ) -> Result<Option<AccountReceipt>, AccountError> {
-        todo!()
+        gen_account_match!(
+            self,
+            commit_incoming_transaction,
+            transaction,
+            block_state,
+            data_store,
+        )
     }
 
     fn revert_incoming_transaction(
         &mut self,
         transaction: &Transaction,
-        block_time: u64,
+        block_state: &BlockState,
         receipt: Option<AccountReceipt>,
         data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
-        todo!()
+        gen_account_match!(
+            self,
+            revert_incoming_transaction,
+            transaction,
+            block_state,
+            receipt,
+            data_store,
+        )
     }
 
     fn commit_outgoing_transaction(
         &mut self,
         transaction: &Transaction,
-        block_time: u64,
+        block_state: &BlockState,
         data_store: DataStoreWrite,
     ) -> Result<Option<AccountReceipt>, AccountError> {
-        todo!()
+        gen_account_match!(
+            self,
+            commit_outgoing_transaction,
+            transaction,
+            block_state,
+            data_store,
+        )
     }
 
     fn revert_outgoing_transaction(
         &mut self,
         transaction: &Transaction,
-        block_time: u64,
+        block_state: &BlockState,
         receipt: Option<AccountReceipt>,
         data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
-        todo!()
+        gen_account_match!(
+            self,
+            revert_outgoing_transaction,
+            transaction,
+            block_state,
+            receipt,
+            data_store,
+        )
     }
 
     fn commit_failed_transaction(
         &mut self,
         transaction: &Transaction,
-        block_time: u64,
+        block_state: &BlockState,
         data_store: DataStoreWrite,
     ) -> Result<Option<AccountReceipt>, AccountError> {
-        todo!()
+        gen_account_match!(
+            self,
+            commit_failed_transaction,
+            transaction,
+            block_state,
+            data_store,
+        )
     }
 
     fn revert_failed_transaction(
         &mut self,
         transaction: &Transaction,
-        block_time: u64,
+        block_state: &BlockState,
         receipt: Option<AccountReceipt>,
         data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
-        todo!()
+        gen_account_match!(
+            self,
+            revert_failed_transaction,
+            transaction,
+            block_state,
+            receipt,
+            data_store,
+        )
     }
 
     fn has_sufficient_balance(
         &self,
         transaction: &Transaction,
         reserved_balance: Coin,
-        block_time: u64,
+        block_state: &BlockState,
         data_store: DataStoreRead,
     ) -> Result<bool, AccountError> {
-        todo!()
+        gen_account_match!(
+            self,
+            has_sufficient_balance,
+            reserved_balance,
+            block_state,
+            data_store,
+        )
     }
-
-    // fn create(
-    //     accounts_tree: &AccountsTrie,
-    //     db_txn: &mut WriteTransaction,
-    //     transaction: &Transaction,
-    //     block_height: u32,
-    //     block_time: u64,
-    // ) -> Result<AccountInfo, AccountError> {
-    //     match transaction.recipient_type {
-    //         AccountType::Vesting => VestingContract::create(
-    //             accounts_tree,
-    //             db_txn,
-    //             transaction,
-    //             block_height,
-    //             block_time,
-    //         ),
-    //         AccountType::HTLC => HashedTimeLockedContract::create(
-    //             accounts_tree,
-    //             db_txn,
-    //             transaction,
-    //             block_height,
-    //             block_time,
-    //         ),
-    //         _ => Err(AccountError::InvalidForRecipient),
-    //     }
-    // }
-    //
-    // fn commit_incoming_transaction(
-    //     accounts_tree: &AccountsTrie,
-    //     db_txn: &mut WriteTransaction,
-    //     transaction: &Transaction,
-    //     block_height: u32,
-    //     block_time: u64,
-    // ) -> Result<AccountInfo, AccountError> {
-    //     match transaction.recipient_type {
-    //         AccountType::Basic => BasicAccount::commit_incoming_transaction(
-    //             accounts_tree,
-    //             db_txn,
-    //             transaction,
-    //             block_height,
-    //             block_time,
-    //         ),
-    //         AccountType::Vesting => VestingContract::commit_incoming_transaction(
-    //             accounts_tree,
-    //             db_txn,
-    //             transaction,
-    //             block_height,
-    //             block_time,
-    //         ),
-    //         AccountType::HTLC => HashedTimeLockedContract::commit_incoming_transaction(
-    //             accounts_tree,
-    //             db_txn,
-    //             transaction,
-    //             block_height,
-    //             block_time,
-    //         ),
-    //         AccountType::Staking => StakingContract::commit_incoming_transaction(
-    //             accounts_tree,
-    //             db_txn,
-    //             transaction,
-    //             block_height,
-    //             block_time,
-    //         ),
-    //     }
-    // }
-    //
-    // fn revert_incoming_transaction(
-    //     accounts_tree: &AccountsTrie,
-    //     db_txn: &mut WriteTransaction,
-    //     transaction: &Transaction,
-    //     block_height: u32,
-    //     block_time: u64,
-    //     receipt: Option<&Vec<u8>>,
-    // ) -> Result<Vec<Log>, AccountError> {
-    //     match transaction.recipient_type {
-    //         AccountType::Basic => BasicAccount::revert_incoming_transaction(
-    //             accounts_tree,
-    //             db_txn,
-    //             transaction,
-    //             block_height,
-    //             block_time,
-    //             receipt,
-    //         ),
-    //         AccountType::Vesting => VestingContract::revert_incoming_transaction(
-    //             accounts_tree,
-    //             db_txn,
-    //             transaction,
-    //             block_height,
-    //             block_time,
-    //             receipt,
-    //         ),
-    //         AccountType::HTLC => HashedTimeLockedContract::revert_incoming_transaction(
-    //             accounts_tree,
-    //             db_txn,
-    //             transaction,
-    //             block_height,
-    //             block_time,
-    //             receipt,
-    //         ),
-    //         AccountType::Staking => StakingContract::revert_incoming_transaction(
-    //             accounts_tree,
-    //             db_txn,
-    //             transaction,
-    //             block_height,
-    //             block_time,
-    //             receipt,
-    //         ),
-    //     }
-    // }
-    //
-    // fn commit_outgoing_transaction(
-    //     accounts_tree: &AccountsTrie,
-    //     db_txn: &mut WriteTransaction,
-    //     transaction: &Transaction,
-    //     block_height: u32,
-    //     block_time: u64,
-    // ) -> Result<AccountInfo, AccountError> {
-    //     match transaction.sender_type {
-    //         AccountType::Basic => BasicAccount::commit_outgoing_transaction(
-    //             accounts_tree,
-    //             db_txn,
-    //             transaction,
-    //             block_height,
-    //             block_time,
-    //         ),
-    //         AccountType::Vesting => VestingContract::commit_outgoing_transaction(
-    //             accounts_tree,
-    //             db_txn,
-    //             transaction,
-    //             block_height,
-    //             block_time,
-    //         ),
-    //         AccountType::HTLC => HashedTimeLockedContract::commit_outgoing_transaction(
-    //             accounts_tree,
-    //             db_txn,
-    //             transaction,
-    //             block_height,
-    //             block_time,
-    //         ),
-    //         AccountType::Staking => StakingContract::commit_outgoing_transaction(
-    //             accounts_tree,
-    //             db_txn,
-    //             transaction,
-    //             block_height,
-    //             block_time,
-    //         ),
-    //     }
-    // }
-    //
-    // fn revert_outgoing_transaction(
-    //     accounts_tree: &AccountsTrie,
-    //     db_txn: &mut WriteTransaction,
-    //     transaction: &Transaction,
-    //     block_height: u32,
-    //     block_time: u64,
-    //     receipt: Option<&Vec<u8>>,
-    // ) -> Result<Vec<Log>, AccountError> {
-    //     match transaction.sender_type {
-    //         AccountType::Basic => BasicAccount::revert_outgoing_transaction(
-    //             accounts_tree,
-    //             db_txn,
-    //             transaction,
-    //             block_height,
-    //             block_time,
-    //             receipt,
-    //         ),
-    //         AccountType::Vesting => VestingContract::revert_outgoing_transaction(
-    //             accounts_tree,
-    //             db_txn,
-    //             transaction,
-    //             block_height,
-    //             block_time,
-    //             receipt,
-    //         ),
-    //         AccountType::HTLC => HashedTimeLockedContract::revert_outgoing_transaction(
-    //             accounts_tree,
-    //             db_txn,
-    //             transaction,
-    //             block_height,
-    //             block_time,
-    //             receipt,
-    //         ),
-    //         AccountType::Staking => StakingContract::revert_outgoing_transaction(
-    //             accounts_tree,
-    //             db_txn,
-    //             transaction,
-    //             block_height,
-    //             block_time,
-    //             receipt,
-    //         ),
-    //     }
-    // }
-    // fn commit_failed_transaction(
-    //     accounts_tree: &AccountsTrie,
-    //     db_txn: &mut WriteTransaction,
-    //     transaction: &Transaction,
-    //     block_height: u32,
-    // ) -> Result<AccountInfo, AccountError> {
-    //     // Committing a failed transaction is based on the sender type.
-    //     // The fee needs to be paid from the sender account.
-    //     match transaction.sender_type {
-    //         AccountType::Basic => BasicAccount::commit_failed_transaction(
-    //             accounts_tree,
-    //             db_txn,
-    //             transaction,
-    //             block_height,
-    //         ),
-    //         AccountType::Vesting => VestingContract::commit_failed_transaction(
-    //             accounts_tree,
-    //             db_txn,
-    //             transaction,
-    //             block_height,
-    //         ),
-    //         AccountType::HTLC => HashedTimeLockedContract::commit_failed_transaction(
-    //             accounts_tree,
-    //             db_txn,
-    //             transaction,
-    //             block_height,
-    //         ),
-    //         AccountType::Staking => StakingContract::commit_failed_transaction(
-    //             accounts_tree,
-    //             db_txn,
-    //             transaction,
-    //             block_height,
-    //         ),
-    //     }
-    // }
-    // fn revert_failed_transaction(
-    //     accounts_tree: &AccountsTrie,
-    //     db_txn: &mut WriteTransaction,
-    //     transaction: &Transaction,
-    //
-    //     receipt: Option<&Vec<u8>>,
-    // ) -> Result<Vec<Log>, AccountError> {
-    //     match transaction.sender_type {
-    //         AccountType::Basic => {
-    //             BasicAccount::revert_failed_transaction(accounts_tree, db_txn, transaction, receipt)
-    //         }
-    //         AccountType::Vesting => VestingContract::revert_failed_transaction(
-    //             accounts_tree,
-    //             db_txn,
-    //             transaction,
-    //             receipt,
-    //         ),
-    //         AccountType::HTLC => HashedTimeLockedContract::revert_failed_transaction(
-    //             accounts_tree,
-    //             db_txn,
-    //             transaction,
-    //             receipt,
-    //         ),
-    //         AccountType::Staking => StakingContract::revert_failed_transaction(
-    //             accounts_tree,
-    //             db_txn,
-    //             transaction,
-    //             receipt,
-    //         ),
-    //     }
-    // }
-    //
-    // fn can_pay_fee(
-    //     &self,
-    //     transaction: &Transaction,
-    //     current_balance: Coin,
-    //     block_time: u64,
-    // ) -> bool {
-    //     match &self {
-    //         Account::Basic(account) => {
-    //             BasicAccount::can_pay_fee(account, transaction, current_balance, block_time)
-    //         }
-    //         Account::Vesting(account) => {
-    //             VestingContract::can_pay_fee(account, transaction, current_balance, block_time)
-    //         }
-    //         Account::HTLC(account) => HashedTimeLockedContract::can_pay_fee(
-    //             account,
-    //             transaction,
-    //             current_balance,
-    //             block_time,
-    //         ),
-    //         Account::Staking(account) => {
-    //             StakingContract::can_pay_fee(account, transaction, current_balance, block_time)
-    //         }
-    //         _ => false,
-    //     }
-    // }
-    //
-    // fn delete(
-    //     accounts_tree: &AccountsTrie,
-    //     db_txn: &mut WriteTransaction,
-    //     transaction: &Transaction,
-    // ) -> Result<Vec<Log>, AccountError> {
-    //     match transaction.recipient_type {
-    //         AccountType::Vesting => VestingContract::delete(accounts_tree, db_txn, transaction),
-    //         AccountType::HTLC => {
-    //             HashedTimeLockedContract::delete(accounts_tree, db_txn, transaction)
-    //         }
-    //         _ => Err(AccountError::InvalidForRecipient),
-    //     }
-    // }
 }
 
 impl AccountInherentInteraction for Account {
     fn commit_inherent(
         &mut self,
         inherent: &Inherent,
-        block_time: u64,
+        block_state: &BlockState,
         data_store: DataStoreWrite,
     ) -> Result<Option<AccountReceipt>, AccountError> {
-        todo!()
+        gen_account_match!(self, commit_inherent, inherent, block_state, data_store,)
     }
 
     fn revert_inherent(
         &mut self,
         inherent: &Inherent,
-        block_time: u64,
+        block_state: &BlockState,
         receipt: Option<AccountReceipt>,
         data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
-        todo!()
+        gen_account_match!(
+            self,
+            revert_inherent,
+            inherent,
+            block_state,
+            receipt,
+            data_store,
+        )
     }
-
-    // fn commit_inherent(
-    //     accounts_tree: &AccountsTrie,
-    //     db_txn: &mut WriteTransaction,
-    //     inherent: &Inherent,
-    //     block_height: u32,
-    //     block_time: u64,
-    // ) -> Result<AccountInfo, AccountError> {
-    //     // If the inherent target is the staking contract then we forward it to the staking contract
-    //     // right here.
-    //     if STAKING_CONTRACT_ADDRESS == inherent.target {
-    //         return StakingContract::commit_inherent(
-    //             accounts_tree,
-    //             db_txn,
-    //             inherent,
-    //             block_height,
-    //             block_time,
-    //         );
-    //     }
-    //
-    //     // Otherwise, we need to check if the target address belongs to a basic account (or a
-    //     // non-existent account).
-    //     let key = KeyNibbles::from(&inherent.target);
-    //
-    //     let account_type = match accounts_tree.get::<Account>(db_txn, &key) {
-    //         Some(x) => x.account_type(),
-    //         None => AccountType::Basic,
-    //     };
-    //
-    //     if account_type == AccountType::Basic {
-    //         BasicAccount::commit_inherent(accounts_tree, db_txn, inherent, block_height, block_time)
-    //     } else {
-    //         Err(AccountError::InvalidInherent)
-    //     }
-    // }
-    //
-    // fn revert_inherent(
-    //     accounts_tree: &AccountsTrie,
-    //     db_txn: &mut WriteTransaction,
-    //     inherent: &Inherent,
-    //     block_height: u32,
-    //     block_time: u64,
-    //     receipt: Option<&Vec<u8>>,
-    // ) -> Result<Vec<Log>, AccountError> {
-    //     // If the inherent target is the staking contract then we forward it to the staking contract
-    //     // right here.
-    //     if STAKING_CONTRACT_ADDRESS == inherent.target {
-    //         return StakingContract::revert_inherent(
-    //             accounts_tree,
-    //             db_txn,
-    //             inherent,
-    //             block_height,
-    //             block_time,
-    //             receipt,
-    //         );
-    //     }
-    //
-    //     // Otherwise, we need to check if the target address belongs to a basic account (or a
-    //     // non-existent account).
-    //     let key = KeyNibbles::from(&inherent.target);
-    //
-    //     let account_type = match accounts_tree.get::<Account>(db_txn, &key) {
-    //         Some(x) => x.account_type(),
-    //         None => AccountType::Basic,
-    //     };
-    //
-    //     if account_type == AccountType::Basic {
-    //         BasicAccount::revert_inherent(
-    //             accounts_tree,
-    //             db_txn,
-    //             inherent,
-    //             block_height,
-    //             block_time,
-    //             receipt,
-    //         )
-    //     } else {
-    //         Err(AccountError::InvalidInherent)
-    //     }
-    // }
 }
 
 impl AccountPruningInteraction for Account {
     fn can_be_pruned(&self) -> bool {
-        todo!()
+        gen_account_match!(self, can_be_pruned)
     }
 
     fn prune(self, data_store: DataStoreRead) -> Result<Option<AccountReceipt>, AccountError> {
-        todo!()
+        gen_account_match!(self, prune, data_store)
     }
 
     fn restore(
@@ -559,6 +270,6 @@ impl AccountPruningInteraction for Account {
         pruned_account: Option<&AccountReceipt>,
         data_store: DataStoreWrite,
     ) -> Result<Account, AccountError> {
-        todo!()
+        gen_account_type_match!(ty, restore, pruned_account, data_store)
     }
 }
