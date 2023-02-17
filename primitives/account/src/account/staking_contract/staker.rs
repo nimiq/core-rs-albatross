@@ -6,7 +6,6 @@ use crate::account::staking_contract::store::{
     StakingContractStoreReadOps, StakingContractStoreReadOpsExt, StakingContractStoreWrite,
 };
 use crate::account::staking_contract::{StakerReceipt, StakingContract};
-use crate::Account;
 
 /// Struct representing a staker in the staking contract.
 /// Actions concerning a staker are:

@@ -375,6 +375,46 @@ impl StakingContract {
         Ok(())
     }
 
+    /// Removes a validator from the parked set and the disabled slots. This is used by validators
+    /// after they get slashed so that they can produce blocks again.
+    pub fn unpark_validator(
+        &mut self,
+        store: &StakingContractStoreWrite,
+        validator_address: &Address,
+        signer: &Address,
+    ) -> Result<UnparkValidatorReceipt, AccountError> {
+        // Get the validator.
+        let validator = store.expect_validator(validator_address)?;
+
+        // Check that the validator is currently parked.
+        if !self.parked_set.contains(validator_address) {
+            debug!("Validator {} is not parked", validator_address);
+            return Err(AccountError::InvalidForRecipient);
+        }
+
+        // Check that the signer is correct.
+        if *signer != Address::from(&validator.signing_key) {
+            debug!("The transaction signer doesn't match the signing key of the validator.");
+            return Err(AccountError::InvalidSignature);
+        }
+
+        // Remove the validator from the parked_set.
+        self.parked_set.remove(validator_address);
+
+        // Clear the validators current and previous disabled slots.
+        let current_disabled_slots = self.current_disabled_slots.remove(validator_address);
+        let previous_disabled_slots = self.previous_disabled_slots.remove(validator_address);
+
+        // logs.push(Log::UnparkValidator {
+        //     validator_address: validator_address.clone(),
+        // });
+
+        Ok(UnparkValidatorReceipt {
+            current_disabled_slots,
+            previous_disabled_slots,
+        })
+    }
+
     /// Reverts an unpark transaction.
     pub fn revert_unpark_validator(
         &mut self,
@@ -520,44 +560,4 @@ impl StakingContract {
 
         Ok(())
     }
-}
-
-/// Removes a validator from the parked set and the disabled slots. This is used by validators
-/// after they get slashed so that they can produce blocks again.
-pub fn unpark_validator(
-    &mut self,
-    store: &StakingContractStoreWrite,
-    validator_address: &Address,
-    signer: &Address,
-) -> Result<UnparkValidatorReceipt, AccountError> {
-    // Get the validator.
-    let validator = store.expect_validator(validator_address)?;
-
-    // Check that the validator is currently parked.
-    if !self.parked_set.contains(validator_address) {
-        debug!("Validator {} is not parked", validator_address);
-        return Err(AccountError::InvalidForRecipient);
-    }
-
-    // Check that the signer is correct.
-    if *signer != Address::from(&validator.signing_key) {
-        debug!("The transaction signer doesn't match the signing key of the validator.");
-        return Err(AccountError::InvalidSignature);
-    }
-
-    // Remove the validator from the parked_set.
-    self.parked_set.remove(validator_address);
-
-    // Clear the validators current and previous disabled slots.
-    let current_disabled_slots = self.current_disabled_slots.remove(validator_address);
-    let previous_disabled_slots = self.previous_disabled_slots.remove(validator_address);
-
-    // logs.push(Log::UnparkValidator {
-    //     validator_address: validator_address.clone(),
-    // });
-
-    Ok(UnparkValidatorReceipt {
-        current_disabled_slots,
-        previous_disabled_slots,
-    })
 }

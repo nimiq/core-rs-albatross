@@ -2,7 +2,7 @@ use std::fmt::Debug;
 use std::io;
 
 use beserial::{Deserialize, Serialize};
-use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
+use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AccountReceipt(#[beserial(len_type(u16))] Vec<u8>);
@@ -25,7 +25,7 @@ impl<T: Deserialize> Into<T> for AccountReceipt {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TransactionReceipt {
     pub sender_receipt: Option<AccountReceipt>,
     pub recipient_receipt: Option<AccountReceipt>,

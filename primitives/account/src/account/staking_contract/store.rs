@@ -1,9 +1,10 @@
 use nimiq_keys::Address;
-use nimiq_trie::key_nibbles::KeyNibbles;
+use nimiq_primitives::account::AccountError;
+use nimiq_primitives::key_nibbles::KeyNibbles;
 
 use crate::account::staking_contract::validator::Tombstone;
+use crate::account::staking_contract::{Staker, Validator};
 use crate::data_store::{DataStoreRead, DataStoreWrite};
-use crate::{AccountError, Staker, Validator};
 
 struct StakingContractStore {}
 
@@ -130,11 +131,15 @@ pub trait StakingContractStoreReadOpsExt {
 impl<T: StakingContractStoreReadOps> StakingContractStoreReadOpsExt for T {
     fn expect_validator(&self, address: &Address) -> Result<Validator, AccountError> {
         self.get_validator(address)
-            .ok_or_else(|| AccountError::NonExistentAddress(address.clone()))
+            .ok_or_else(|| AccountError::NonExistentAddress {
+                address: address.clone(),
+            })
     }
 
     fn expect_staker(&self, address: &Address) -> Result<Staker, AccountError> {
         self.get_staker(address)
-            .ok_or_else(|| AccountError::NonExistentAddress(address.clone()))
+            .ok_or_else(|| AccountError::NonExistentAddress {
+                address: address.clone(),
+            })
     }
 }
