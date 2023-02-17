@@ -23,51 +23,22 @@ use nimiq_consensus::ConsensusEvent;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{
     network::{Network, NetworkEvent},
-    peer_info::{NodeType, Services},
     Multiaddr,
 };
 
+use crate::peer_info::PeerInfo;
 use crate::transaction::Transaction;
 use crate::utils::{from_network_id, to_network_id};
 
-pub mod address;
-pub mod key_pair;
-pub mod private_key;
-pub mod public_key;
-pub mod signature;
-pub mod signature_proof;
-pub mod transaction;
+mod address;
+mod key_pair;
+mod peer_info;
+mod private_key;
+mod public_key;
+mod signature;
+mod signature_proof;
+mod transaction;
 mod utils;
-
-/// Peer information that is exposed to Javascript
-/// This information is a translated form of what is sent by the Network upon
-/// `PeerJoined` events.
-#[wasm_bindgen]
-pub struct PeerInfo {
-    /// Address of the Peer in `Multiaddr` format
-    address: String,
-    /// Type of node (full, history or light)
-    node_type: String,
-}
-
-#[wasm_bindgen]
-impl PeerInfo {
-    pub fn new(address: String, node_type: String) -> Self {
-        Self { address, node_type }
-    }
-
-    /// Gets the address
-    #[wasm_bindgen(js_name = getAddress)]
-    pub fn get_address(&self) -> String {
-        self.address.clone()
-    }
-
-    /// Gets the node type
-    #[wasm_bindgen(js_name = getNodeType)]
-    pub fn get_node_type(&self) -> String {
-        self.node_type.clone()
-    }
-}
 
 /// Struct that is used to provide initialization-time configuration to the WebClient
 /// This a simplified version of the configuration that is used for regular nodes,
@@ -267,26 +238,11 @@ impl WebClient {
         loop {
             match network_events.next().await {
                 Some(Ok(NetworkEvent::PeerJoined(peer_id, peer_info))) => {
-                    let node_type = if peer_info
-                        .get_services()
-                        .contains(Services::provided(NodeType::History))
-                    {
-                        "History"
-                    } else if peer_info
-                        .get_services()
-                        .contains(Services::provided(NodeType::Full))
-                    {
-                        "Full"
-                    } else {
-                        "Light"
-                    };
-                    let peer_info =
-                        PeerInfo::new(peer_info.get_address().to_string(), node_type.to_string());
                     peer_listener(
                         "joined",
                         peer_id.to_string(),
                         network.peer_count(),
-                        Some(peer_info),
+                        Some(PeerInfo::from_native(peer_info)),
                     );
                 }
                 Some(Ok(NetworkEvent::PeerLeft(peer_id))) => {

@@ -95,17 +95,17 @@ window.__wasm_imports = {
     },
 
     /**
-     * @param {'joined' | 'left'} type
+     * @param {'joined' | 'left'} eventType
      * @param {string} peerId
      * @param {number} numPeers
+     * @param {{ type: string, address: string } | null} peerInfo
      */
-    peer_listener(type, peerId, numPeers, peer_info) {
-        if (peer_info == null) {
-            console.log(`Peer ${type}: ${peerId} - now ${numPeers} peers connected`);
+    peer_listener(eventType, peerId, numPeers, peerInfo) {
+        if (peerInfo) {
+            const host = peerInfo.address.split('/')[2];
+            console.log(`Peer ${eventType}: [${peerInfo.type}] ${peerId}@${host} - now ${numPeers} peers connected`);
         } else {
-            const address = peer_info.getAddress();
-            const nodeType = peer_info.getNodeType();
-            console.log(`${nodeType} peer ${type}: ${peerId}@${address} - now ${numPeers} peers connected`);
+            console.log(`Peer ${eventType}: ${peerId} - now ${numPeers} peers connected`);
         }
     },
 
