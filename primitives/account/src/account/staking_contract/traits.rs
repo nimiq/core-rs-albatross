@@ -263,7 +263,7 @@ impl AccountTransactionInteraction for StakingContract {
         // Parse transaction proof.
         let proof = OutgoingStakingTransactionProof::parse(transaction)?;
 
-        match data {
+        match proof {
             OutgoingStakingTransactionProof::DeleteValidator { proof } => {
                 // Get the validator address from the proof.
                 let validator_address = proof.compute_signer();
@@ -501,58 +501,22 @@ impl AccountTransactionInteraction for StakingContract {
 }
 
 impl AccountInherentInteraction for StakingContract {
-    /// Commits an inherent to the accounts trie.
     fn commit_inherent(
-        accounts_tree: &AccountsTrie,
-        db_txn: &mut WriteTransaction,
+        &mut self,
         inherent: &Inherent,
-        block_height: u32,
-        _block_time: u64,
-    ) -> Result<AccountInfo, AccountError> {
-        trace!("Committing inherent to accounts trie: {:?}", inherent);
-
-        // None of the allowed inherents for the staking contract has a value. Only reward inherents
-        // have a value.
-        if inherent.value != Coin::ZERO {
-            return Err(AccountError::InvalidInherent);
-        }
-
-        // Get the staking contract.
-        let mut staking_contract = complete!(StakingContract::get_staking_contract_or_update(
-            accounts_tree,
-            db_txn
-        ));
-
-        let receipt;
-        let mut logs = Vec::new();
-
-        match &inherent.ty {
-            InherentType::Slash => {
-                // Check data length.
-                if inherent.data.len() != SlashedSlot::SIZE {
-                    return Err(AccountError::InvalidInherent);
-                }
-
-                // Deserialize slot.
-                let slot: SlashedSlot = Deserialize::deserialize(&mut &inherent.data[..])?;
-
+        block_state: &BlockState,
+        mut data_store: DataStoreWrite,
+    ) -> Result<Option<AccountReceipt>, AccountError> {
+        match inherent {
+            Inherent::Slash { slot } => {
                 // Check that the slashed validator does exist.
-                if complete!(StakingContract::get_validator_or_update(
-                    accounts_tree,
-                    db_txn,
-                    &slot.validator_address
-                ))
-                .is_none()
-                {
-                    return Err(AccountError::InvalidInherent);
-                }
+                let store = StakingContractStoreWrite::new(&mut data_store);
+                store.expect_validator(&slot.validator_address)?;
 
                 // Add the validator address to the parked set.
                 // TODO: The inherent might have originated from a fork proof for the previous epoch.
                 //  Right now, we don't care and start the parking period in the epoch the proof has been submitted.
-                let newly_parked = staking_contract
-                    .parked_set
-                    .insert(slot.validator_address.clone());
+                let newly_parked = self.parked_set.insert(slot.validator_address.clone());
 
                 // Fork proof from previous epoch should affect:
                 // - previous_lost_rewards
@@ -566,177 +530,124 @@ impl AccountInherentInteraction for StakingContract {
                 let newly_disabled;
                 let newly_lost_rewards;
 
-                if Policy::epoch_at(slot.event_block) < Policy::epoch_at(block_height) {
-                    newly_lost_rewards = !staking_contract
-                        .previous_lost_rewards
-                        .contains(slot.slot as usize);
+                if Policy::epoch_at(slot.event_block) < Policy::epoch_at(block_state.number) {
+                    newly_lost_rewards = !self.previous_lost_rewards.contains(slot.slot as usize);
 
-                    staking_contract
-                        .previous_lost_rewards
-                        .insert(slot.slot as usize);
+                    self.previous_lost_rewards.insert(slot.slot as usize);
 
                     newly_disabled = false;
-                } else if Policy::batch_at(slot.event_block) < Policy::batch_at(block_height) {
-                    newly_lost_rewards = !staking_contract
-                        .previous_lost_rewards
-                        .contains(slot.slot as usize);
+                } else if Policy::batch_at(slot.event_block) < Policy::batch_at(block_state.number)
+                {
+                    newly_lost_rewards = !self.previous_lost_rewards.contains(slot.slot as usize);
 
-                    staking_contract
-                        .previous_lost_rewards
-                        .insert(slot.slot as usize);
+                    self.previous_lost_rewards.insert(slot.slot as usize);
 
-                    newly_disabled = staking_contract
+                    newly_disabled = self
                         .current_disabled_slots
                         .entry(slot.validator_address.clone())
                         .or_insert_with(BTreeSet::new)
                         .insert(slot.slot);
                 } else {
-                    newly_lost_rewards = !staking_contract
-                        .current_lost_rewards
-                        .contains(slot.slot as usize);
+                    newly_lost_rewards = !self.current_lost_rewards.contains(slot.slot as usize);
 
-                    staking_contract
-                        .current_lost_rewards
-                        .insert(slot.slot as usize);
+                    self.current_lost_rewards.insert(slot.slot as usize);
 
-                    newly_disabled = staking_contract
+                    newly_disabled = self
                         .current_disabled_slots
                         .entry(slot.validator_address.clone())
                         .or_insert_with(BTreeSet::new)
                         .insert(slot.slot);
                 }
 
-                receipt = Some(
+                // if newly_lost_rewards {
+                //     logs.push(Log::Slash {
+                //         validator_address: slot.validator_address.clone(),
+                //         event_block: slot.event_block,
+                //         slot: slot.slot,
+                //         newly_disabled,
+                //     });
+                // }
+                // if newly_parked {
+                //     logs.push(Log::Park {
+                //         validator_address: slot.validator_address,
+                //         event_block: block_height,
+                //     });
+                // }
+
+                Ok(Some(
                     SlashReceipt {
                         newly_parked,
                         newly_disabled,
                         newly_lost_rewards,
                     }
-                    .serialize_to_vec(),
-                );
-
-                if newly_lost_rewards {
-                    logs.push(Log::Slash {
-                        validator_address: slot.validator_address.clone(),
-                        event_block: slot.event_block,
-                        slot: slot.slot,
-                        newly_disabled,
-                    });
-                }
-                if newly_parked {
-                    logs.push(Log::Park {
-                        validator_address: slot.validator_address,
-                        event_block: block_height,
-                    });
-                }
+                    .into(),
+                ))
             }
-            InherentType::FinalizeBatch | InherentType::FinalizeEpoch => {
-                // Invalid data length
-                if !inherent.data.is_empty() {
-                    return Err(AccountError::InvalidInherent);
-                }
-
+            Inherent::FinalizeBatch => {
                 // Clear the lost rewards set.
-                staking_contract.previous_lost_rewards = staking_contract.current_lost_rewards;
-                staking_contract.current_lost_rewards = BitSet::new();
+                self.previous_lost_rewards = mem::take(&mut self.current_lost_rewards);
 
-                // Parking set and disabled slots are only cleared on epoch changes.
-                if inherent.ty == InherentType::FinalizeEpoch {
-                    // But first, retire all validators that have been parked this epoch.
-                    for validator_address in staking_contract.parked_set {
-                        // Get the validator and update it.
-                        let mut validator = complete!(StakingContract::get_validator_or_update(
-                            accounts_tree,
-                            db_txn,
-                            &validator_address,
-                        ))
-                        .ok_or(AccountError::InvalidInherent)?;
+                // Since finalized batches cannot be reverted, we don't need any receipts.
+                Ok(None)
+            }
+            Inherent::FinalizeEpoch => {
+                // Clear the lost rewards set.
+                self.previous_lost_rewards = mem::take(&mut self.current_lost_rewards);
 
-                        validator.inactive_since = Some(block_height);
+                // Parking set and disabled slots are cleared on epoch changes.
+                // But first, retire all validators that have been parked this epoch.
+                let store = StakingContractStoreWrite::new(&mut data_store);
+                for validator_address in self.parked_set {
+                    // Get the validator and update it.
+                    let mut validator = store.expect_validator(&validator_address)?;
+                    validator.inactive_since = Some(block_state.number);
+                    store.put_validator(&validator_address, validator);
 
-                        accounts_tree
-                            .put(
-                                db_txn,
-                                &StakingContract::get_key_validator(&validator_address),
-                                Account::StakingValidator(validator),
-                            )
-                            .expect("temporary until accounts rewrite");
+                    // Update the staking contract.
+                    self.active_validators.remove(&validator_address);
 
-                        // Update the staking contract.
-                        staking_contract
-                            .active_validators
-                            .remove(&validator_address);
-
-                        logs.push(Log::InactivateValidator {
-                            validator_address: validator_address.clone(),
-                        });
-                    }
-
-                    // Now we clear the parking set.
-                    staking_contract.parked_set = BTreeSet::new();
-
-                    // And the disabled slots.
-                    // Optimization: We actually only need the old slots for the first batch of the epoch.
-                    staking_contract.previous_disabled_slots =
-                        staking_contract.current_disabled_slots;
-                    staking_contract.current_disabled_slots = BTreeMap::new();
+                    // logs.push(Log::InactivateValidator {
+                    //     validator_address: validator_address.clone(),
+                    // });
                 }
+
+                // Now we clear the parking set.
+                self.parked_set = BTreeSet::new();
+
+                // And the disabled slots.
+                // Optimization: We actually only need the old slots for the first batch of the epoch.
+                self.previous_disabled_slots = mem::take(&mut self.current_disabled_slots);
 
                 // Since finalized epochs cannot be reverted, we don't need any receipts.
-                receipt = None;
+                Ok(None)
             }
-            InherentType::Reward => {
-                return Err(AccountError::InvalidForTarget);
-            }
+            Inherent::Reward { .. } => Err(AccountError::InvalidForTarget),
         }
-
-        accounts_tree
-            .put(
-                db_txn,
-                &StakingContract::get_key_staking_contract(),
-                Account::Staking(staking_contract),
-            )
-            .expect("temporary until accounts rewrite");
-
-        Ok(AccountInfo::with_receipt(receipt, logs))
     }
 
-    /// Reverts the commit of an inherent to the accounts trie.
     fn revert_inherent(
-        accounts_tree: &AccountsTrie,
-        db_txn: &mut WriteTransaction,
+        &mut self,
         inherent: &Inherent,
-        block_height: u32,
-        _block_time: u64,
-        receipt: Option<&Vec<u8>>,
-    ) -> Result<Vec<Log>, AccountError> {
-        // Get the staking contract main.
-        let mut staking_contract = complete!(StakingContract::get_staking_contract_or_update(
-            accounts_tree,
-            db_txn
-        ));
-        let mut logs = Vec::new();
-
-        match &inherent.ty {
-            InherentType::Slash => {
-                let receipt: SlashReceipt = Deserialize::deserialize_from_vec(
-                    receipt.ok_or(AccountError::InvalidReceipt)?,
-                )?;
-
-                let slot: SlashedSlot = Deserialize::deserialize(&mut &inherent.data[..])?;
+        block_state: &BlockState,
+        receipt: Option<AccountReceipt>,
+        data_store: DataStoreWrite,
+    ) -> Result<(), AccountError> {
+        match inherent {
+            Inherent::Slash { slot } => {
+                let receipt: SlashReceipt = receipt.ok_or(AccountError::InvalidReceipt)?.into();
 
                 // Only remove if it was not already slashed.
                 if receipt.newly_parked {
-                    let has_been_removed =
-                        staking_contract.parked_set.remove(&slot.validator_address);
+                    let has_been_removed = self.parked_set.remove(&slot.validator_address);
 
                     if !has_been_removed {
                         return Err(AccountError::InvalidInherent);
                     }
-                    logs.push(Log::Park {
-                        validator_address: slot.validator_address.clone(),
-                        event_block: block_height,
-                    });
+
+                    // logs.push(Log::Park {
+                    //     validator_address: slot.validator_address.clone(),
+                    //     event_block: block_height,
+                    // });
                 }
 
                 // Fork proof from previous epoch should affect:
@@ -749,11 +660,11 @@ impl AccountInherentInteraction for StakingContract {
                 // - current_lost_rewards
                 // - current_disabled_slots
                 if receipt.newly_disabled {
-                    if Policy::epoch_at(slot.event_block) < Policy::epoch_at(block_height) {
+                    if Policy::epoch_at(slot.event_block) < Policy::epoch_at(block_state.number) {
                         // Nothing to do.
                     } else {
                         let is_empty = {
-                            let entry = staking_contract
+                            let entry = self
                                 .current_disabled_slots
                                 .get_mut(&slot.validator_address)
                                 .unwrap();
@@ -761,54 +672,56 @@ impl AccountInherentInteraction for StakingContract {
                             entry.is_empty()
                         };
                         if is_empty {
-                            staking_contract
-                                .current_disabled_slots
-                                .remove(&slot.validator_address);
+                            self.current_disabled_slots.remove(&slot.validator_address);
                         }
                     }
                 }
                 if receipt.newly_lost_rewards {
-                    if Policy::epoch_at(slot.event_block) < Policy::epoch_at(block_height)
-                        || Policy::batch_at(slot.event_block) < Policy::batch_at(block_height)
+                    if Policy::epoch_at(slot.event_block) < Policy::epoch_at(block_state.number)
+                        || Policy::batch_at(slot.event_block) < Policy::batch_at(block_state.number)
                     {
-                        staking_contract
-                            .previous_lost_rewards
-                            .remove(slot.slot as usize);
+                        self.previous_lost_rewards.remove(slot.slot as usize);
                     } else {
-                        staking_contract
-                            .current_lost_rewards
-                            .remove(slot.slot as usize);
+                        self.current_lost_rewards.remove(slot.slot as usize);
                     }
 
                     // Ordering matters here for testing purposes. The vec will be very small, therefore the performance hit is irrelevant.
-                    logs.insert(
-                        0,
-                        Log::Slash {
-                            validator_address: slot.validator_address,
-                            event_block: slot.event_block,
-                            slot: slot.slot,
-                            newly_disabled: true,
-                        },
-                    );
+                    // logs.insert(
+                    //     0,
+                    //     Log::Slash {
+                    //         validator_address: slot.validator_address,
+                    //         event_block: slot.event_block,
+                    //         slot: slot.slot,
+                    //         newly_disabled: true,
+                    //     },
+                    // );
                 }
+
+                Ok(())
             }
-            InherentType::FinalizeBatch | InherentType::FinalizeEpoch => {
+            Inherent::FinalizeBatch | Inherent::FinalizeEpoch => {
                 // We should not be able to revert finalized epochs or batches!
-                return Err(AccountError::InvalidForTarget);
+                Err(AccountError::InvalidForTarget)
             }
-            InherentType::Reward => {
-                return Err(AccountError::InvalidForTarget);
-            }
+            Inherent::Reward { .. } => Err(AccountError::InvalidForTarget),
         }
+    }
+}
 
-        accounts_tree
-            .put(
-                db_txn,
-                &StakingContract::get_key_staking_contract(),
-                Account::Staking(staking_contract),
-            )
-            .expect("temporary until accounts rewrite");
+impl AccountPruningInteraction for StakingContract {
+    fn can_be_pruned(&self) -> bool {
+        false
+    }
 
-        Ok(logs)
+    fn prune(self, _data_store: DataStoreRead) -> Result<Option<AccountReceipt>, AccountError> {
+        unreachable!()
+    }
+
+    fn restore(
+        _ty: AccountType,
+        _pruned_account: Option<&AccountReceipt>,
+        _data_store: DataStoreWrite,
+    ) -> Result<Account, AccountError> {
+        unreachable!()
     }
 }
