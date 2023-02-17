@@ -158,7 +158,7 @@ class Node:
         """
         if self.process is not None:
             raise Exception(
-                "Process for {} has already been started".format(self.name))
+                f"Process for {self.name} has already been started")
         # Prepare the genesis environment variable
         genesis_file = self.topology_settings.get_conf_dir() + \
             '/' + "dev-albatross.toml"
@@ -190,10 +190,10 @@ class Node:
         if self.process is not None:
             self.process.send_signal(signal.SIGINT)
             if will_be_restarted:
-                log_str = "################################## RESTART ########"
-                "###################"
-                subprocess.run(["echo", log_str, ">>", self.get_log()],
-                               check=True, capture_output=True)
+                log_str = "\n################################## RESTART ######"
+                "#####################\n"
+                with open(self.get_log(), 'a') as log_file:
+                    log_file.write(log_str)
                 self.process = None
 
     def check_panics(self):
@@ -204,7 +204,7 @@ class Node:
         :rtype: bool
         """
         panics = subprocess.run(["grep", "ERROR.*panic[[:blank:]]",
-                                self.get_log()], capture_output=True,
+                                 self.get_log()], capture_output=True,
                                 shell=False, text=True).stdout
         return len(panics) != 0
 
@@ -274,7 +274,7 @@ class Node:
         # We need to use shell to use the '*' wildcard such that the state
         # dir doesn't get removed as well.
         # Also the command needs to be a string
-        subprocess.run("rm -r {}/*".format(self.get_state_dir()),
+        subprocess.run(f"rm -r {self.get_state_dir()}/*",
                        shell=True, check=True, capture_output=True)
         log_str = "\n################################## NODE STATE DELETED ##"
         "#########################\n"

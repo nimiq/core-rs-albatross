@@ -30,12 +30,12 @@ class Topology:
         # All restartable nodes
         self.restartable_nodes = []
         self.latest_block_number = 0
+        nimiq_dir = topology_settings.get_nimiq_dir()
         self.jinja_env = Environment(
-            loader=FileSystemLoader(topology_settings.nimiq_dir +
-                                    "/scripts/devnet/templates/"),
+            loader=FileSystemLoader(f"{nimiq_dir}/scripts/devnet/templates/"),
             trim_blocks=True, lstrip_blocks=True)
-        self.result_file = topology_settings.get_state_dir() + "/" + \
-            "RESULT.TXT"
+        state_dir = topology_settings.get_state_dir()
+        self.result_file = f"{state_dir}/RESULT.TXT"
 
     def __generate_genesis(self, validators: list, spammers: list):
         """
@@ -64,11 +64,11 @@ class Topology:
         template = self.jinja_env.get_template("dev-albatross-genesis.toml.j2")
         content = template.render(
             validators=validators_data, spammers=spammers_data)
-        filename = self.topology_settings.get_conf_dir() + \
-            '/' + "dev-albatross.toml"
+        conf_dir = self.topology_settings.get_conf_dir()
+        filename = f"{conf_dir}/dev-albatross.toml"
         with open(filename, mode="w", encoding="utf-8") as message:
             message.write(content)
-            logging.info("Generated genesis file in {}".format(filename))
+            logging.info(f"Generated genesis file in {filename}")
 
     def __parse_toml_topology(self, topology: dict):
         """
@@ -94,15 +94,15 @@ class Topology:
                     raise Exception("Missing sync_mode for a node")
                 elif node['sync_mode'] not in ["full", "history", "light"]:
                     raise Exception(
-                        "Unexpected sync_mode for a node: {}".format(
-                            node['sync_mode']))
+                        "Unexpected sync_mode for a node: "
+                        f"{node['sync_mode']}")
                 if 'restartable' not in node:
                     raise Exception("Missing restartable for a node")
                 elif not isinstance(node['restartable'], bool):
                     raise Exception(
-                        "Unexpected restartable value for a node: {}".format(
-                            node['restartable']))
-                name = "{}{}".format(key, count+1)
+                        "Unexpected restartable value for a node: "
+                        f"{node['restartable']}")
+                name = f"{key}{count+1}"
                 if 'enable_metrics' in node:
                     metrics = {'port': port_bases[node]['metrics'] + count}
                 else:
@@ -130,8 +130,8 @@ class Topology:
                         raise Exception("Missing tpb for a spammer")
                     elif not isinstance(node['tpb'], int):
                         raise Exception(
-                            "Unexpected tpb value for a spammer: {}".format(
-                                node['tpb']))
+                            "Unexpected tpb value for a spammer: "
+                            f"{node['tpb']}")
                     topology_node = Spammer(
                         name, port, self.topology_settings, node['tpb'],
                         node['sync_mode'], metrics=metrics)
@@ -183,16 +183,16 @@ class Topology:
                     terminated_nodes.append(node)
             if len(panicked_nodes) != 0:
                 warnings = self.__cleanup()
-                subprocess.run(["echo", "PANIC", ">>", self.result_file],
-                               check=True, capture_output=True)
+                with open(self.result_file, 'a+') as result_file:
+                    result_file.write("PANIC\n")
                 raise Exception(
                     "Panic found in nodes: {}".format(
                         list(map(lambda node: node.get_name(),
                                  panicked_nodes))))
             if len(terminated_nodes) != 0:
                 warnings = self.__cleanup()
-                subprocess.run(["echo", "TERMINATED", ">>", self.result_file],
-                               check=True, capture_output=True)
+                with open(self.result_file, 'a+') as result_file:
+                    result_file.write("TERMINATED\n")
                 raise Exception(
                     "Process for nodes '{}' has unexpectedly "
                     "terminated".format(
@@ -208,12 +208,12 @@ class Topology:
                 latest_block_number = node_latest_block_number
         if latest_block_number <= self.latest_block_number:
             warnings = self.__cleanup()
-            subprocess.run(["echo", "CHAIN-STALL", ">>", self.result_file],
-                           check=True, capture_output=True)
+            with open(self.result_file, 'a+') as result_file:
+                result_file.write("CHAIN-STALL\n")
             raise Exception(
-                "No new blocks were produced after {}s".format(mon_time))
+                f"No new blocks were produced after {mon_time}s")
         else:
-            logging.info("Latest block number: {}".format(latest_block_number))
+            logging.info(f"Latest block number: {latest_block_number}")
 
     def __cleanup(self):
         """
@@ -228,18 +228,16 @@ class Topology:
         for node in all_nodes:
             node_warnings = list()
             if node.check_slow_lock_acquisition():
-                subprocess.run(["echo", "SLOW_LOCK_ACQUISITION", ">>",
-                                self.result_file], check=True,
-                               capture_output=True)
+                with open(self.result_file, 'a+') as result_file:
+                    result_file.write("SLOW_LOCK_ACQUISITION\n")
                 node_warnings.append('slow_lock')
             if node.check_long_lock_hold():
-                subprocess.run(["echo", "LONG_LOCK_HOLD_TIME", ">>",
-                                self.result_file], check=True,
-                               capture_output=True)
+                with open(self.result_file, 'a+') as result_file:
+                    result_file.write("LONG_LOCK_HOLD_TIME\n")
                 node_warnings.append('long_lock')
             if node.check_deadlocks():
-                subprocess.run(["echo", "DEADLOCK", ">>", self.result_file],
-                               check=True, capture_output=True)
+                with open(self.result_file, 'a+') as result_file:
+                    result_file.write("DEADLOCK\n")
                 node_warnings.append('deadlock')
             if len(node_warnings) > 0:
                 warnings[node.get_name()] = node_warnings
@@ -266,7 +264,7 @@ class Topology:
 
         # Start all nodes, starting first with seeds
         for seed in self.seed_nodes:
-            logging.info("Starting {}".format(seed.get_name()))
+            logging.info(f"Starting {seed.get_name()}")
             seed.run()
             # Wait some seconds for seed to be up
             time.sleep(3)
@@ -276,7 +274,7 @@ class Topology:
             # Seed nodes are skipped since they are started first
             if node in self.seed_nodes:
                 continue
-            logging.info("Starting {}".format(node.get_name()))
+            logging.info(f"Starting {node.get_name()}")
             node.run()
             # Wait a second for node to be up
             time.sleep(1)
@@ -286,11 +284,12 @@ class Topology:
 
         if control_settings.is_continuous():
             # Continuous mode
+            monitor_interval = control_settings.get_monitor_interval()
             while True:
                 logging.info(
-                    "Producing blocks for {}s with all nodes up".format(
-                        up_time))
-                self.__run_monitor_for(up_time)
+                    f"Producing blocks for {monitor_interval}s with all nodes "
+                    "up")
+                self.__run_monitor_for(monitor_interval)
 
         else:
             restart_settings = control_settings.get_restart_settings()
@@ -305,31 +304,31 @@ class Topology:
                 nodes_to_restart = random.sample(
                     self.restartable_nodes, k=sim_kills)
                 for node in nodes_to_restart:
-                    logging.info("Killing {}".format(node.get_name()))
+                    logging.info(f"Killing {node.get_name()}")
                     node.kill(True)
                     time.sleep(1)
                     if erase_state:
                         logging.info(
-                            "Erasing state for {}".format(node.get_name()))
+                            f"Erasing state for {node.get_name()}")
                         node.erase_state()
                     elif erase_db:
                         logging.info(
-                            "Erasing DB for {}".format(node.get_name()))
+                            f"Erasing DB for {node.get_name()}")
                         node.erase_db()
 
                 logging.info(
-                    "Running with node(s) down for {}s".format(down_time))
+                    f"Running with node(s) down for {down_time}s")
                 self.__run_monitor_for(
                     down_time, exp_down_nodes=nodes_to_restart)
 
                 for node in nodes_to_restart:
-                    logging.info("Restarting {}".format(node.get_name()))
+                    logging.info(
+                        f"Restarting {node.get_name()}")
                     node.run()
                     time.sleep(2)
 
                 logging.info(
-                    "Producing blocks for {}s with all ""nodes up".format(
-                        up_time))
+                    "Producing blocks for {up_time}s with all ""nodes up")
                 self.__run_monitor_for(up_time)
 
             time.sleep(30)

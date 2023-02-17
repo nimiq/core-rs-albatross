@@ -33,6 +33,14 @@ def setup_logging(args):
         datefmt='%Y-%m-%d %H:%M:%S')
 
 
+def check_positive(value):
+    int_value = int(value)
+    if int_value <= 0:
+        raise argparse.ArgumentTypeError(
+            f"{value}: Expected positive (non zero) integer value")
+    return int_value
+
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('-t', '--topology', type=str, required=True,
@@ -49,7 +57,7 @@ def parse_args():
     parser.add_argument('-e', "--erase", action='store_true',
                         help="Erase all of the validator state as part of "
                         "restarting it")
-    parser.add_argument('-r', "--restarts", type=int, default=10,
+    parser.add_argument('-r', "--restarts", type=check_positive, default=10,
                         help="The number of times you want to kill/restart "
                         "validators (by default 10 times)(0 means no restarts)"
                         )
@@ -59,10 +67,10 @@ def parse_args():
     parser.add_argument('-k', "--kills", type=int, default=1,
                         help="How many validators are killed each cycle, by "
                         "default just 1")
-    parser.add_argument('-dt', "--down-time", type=int, default=10,
+    parser.add_argument('-dt', "--down-time", type=check_positive, default=10,
                         help="Time in seconds that validators are taken down, "
                         "by default 10s")
-    parser.add_argument('-ut', "--up-time", type=int, default=40,
+    parser.add_argument('-ut', "--up-time", type=check_positive, default=40,
                         help="Time in seconds during which all validators are "
                         "up, by default 40s")
     parser.add_argument('-d', "--db", action='store_true',
@@ -83,7 +91,7 @@ def main():
     setup_logging(args)
 
     if args.continuous:
-        control_settings = ControlSettings()
+        control_settings = ControlSettings(monitor_interval=args.up_time)
     else:
         restart_settings = RestartSettings(
             args.up_time, args.down_time, args.restarts, args.kills, args.db,
@@ -97,15 +105,15 @@ def main():
         ['git', 'rev-parse', '--show-toplevel'], text=True).rstrip()
 
     # Create the logs dir
-    logs_dir = nimiq_dir + "/" + "temp-logs" + "/" + ts
+    logs_dir = f"{nimiq_dir}/temp-logs/{ts}"
     Path(logs_dir).mkdir(parents=True, exist_ok=False)
 
     # Create the conf dir
-    conf_dir = logs_dir + "/" + "conf"
+    conf_dir = f"{logs_dir}/conf"
     Path(conf_dir).mkdir(parents=False, exist_ok=False)
 
     # Create the state dir
-    state_dir = nimiq_dir + "/" + "temp-state" + "/" + ts
+    state_dir = f"{nimiq_dir}/temp-state/{ts}"
     Path(state_dir).mkdir(parents=True, exist_ok=False)
 
     # Create the loki settings

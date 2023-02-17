@@ -93,12 +93,23 @@ class ControlSettings:
     General topology settings
 
     :param restart_settings: Optional restart settings. Setting this to None is
-        equivalent of running in continuous mode.
+        equivalent of running in continuous mode. If this argument isn't
+        passed continuous mode is assumed and `monitor_interval` is required.
     :type restart_settings: Optional[RestartSettings]
+    :param monitor_interval: Optional integer specifying for how long nodes
+        should freely run before monitoring if they panicked or stopped
+        producing blocks. This only takes effect in continuous mode (not
+        passing `restart_settings`).
+    :type monitor_interval: Optiona[int]
     """
 
-    def __init__(self, restart_settings: Optional[RestartSettings] = None):
+    def __init__(self, restart_settings: Optional[RestartSettings] = None,
+                 monitor_interval: Optional[int] = None):
+        if restart_settings is None and monitor_interval is None:
+            raise Exception("Either restart settings or monitor interval "
+                            "should be passed")
         self.restart_settings = restart_settings
+        self.monitor_interval = monitor_interval
 
     def is_continuous(self):
         """
@@ -117,3 +128,12 @@ class ControlSettings:
         :rtype: Optional[RestartSettings]
         """
         return self.restart_settings
+
+    def get_monitor_interval(self):
+        """
+        Gets the monitor interval setting.
+
+        :return: The monitor interval setting
+        :rtype: Optional[int]
+        """
+        return self.monitor_interval
