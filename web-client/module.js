@@ -3,8 +3,11 @@ import init, * as Nimiq from "./pkg/nimiq_web_client.js";
 window.Nimiq = Nimiq;
 
 init().then(async () => {
-    const config = new Nimiq.WebClientConfiguration(["/dns4/seed1.v2.nimiq-testnet.com/tcp/8443/ws"], "debug");
-    const client = await Nimiq.WebClient.create(config);
+    const config = new Nimiq.ClientConfiguration();
+    config.seedNodes(['/dns4/seed1.v2.nimiq-testnet.com/tcp/8443/ws']);
+    config.logLevel('debug');
+
+    const client = await config.instantiateClient();
     window.client = client; // Prevent garbage collection and for playing around
 
     client.subscribe_consensus();

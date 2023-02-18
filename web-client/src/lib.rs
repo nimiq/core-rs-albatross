@@ -8,7 +8,7 @@ use wasm_bindgen_futures::spawn_local;
 use log::level_filters::LevelFilter;
 
 pub use nimiq::{
-    client::{Client, Consensus},
+    client::Consensus,
     config::command_line::CommandLine,
     config::config::ClientConfig,
     config::config_file::{ConfigFile, LogSettings, Seed, SyncMode},
@@ -40,35 +40,59 @@ mod signature_proof;
 mod transaction;
 mod utils;
 
-/// Struct that is used to provide initialization-time configuration to the WebClient
-/// This a simplified version of the configuration that is used for regular nodes,
+/// Use this to provide initialization-time configuration to the Client.
+/// This is a simplified version of the configuration that is used for regular nodes,
 /// since not all configuration knobs are available when running inside a browser.
-/// For instance, only the light sync mechanism is supported in the browser
-///
 #[wasm_bindgen]
-pub struct WebClientConfiguration {
-    /// The list of seeds nodes that are used to connect to the 2.0 network.
-    /// This string should be a proper Multiaddr format string.
+pub struct ClientConfiguration {
     seed_nodes: Vec<String>,
-    /// The log level that is used when logging to the web console.
-    /// The same log levels (trace, debug, info, etc) that are supported by the regular client.
     log_level: String,
 }
 
+impl Default for ClientConfiguration {
+    fn default() -> Self {
+        Self {
+            seed_nodes: vec![],
+            log_level: "info".to_string(),
+        }
+    }
+}
+
 #[wasm_bindgen]
-impl WebClientConfiguration {
+impl ClientConfiguration {
+    /// Creates a default client configuration that can be used to change the client's configuration.
+    ///
+    /// Use its `instantiateClient()` method to launch the client and connect to the network.
     #[wasm_bindgen(constructor)]
+    pub fn new() -> Self {
+        ClientConfiguration::default()
+    }
+
+    /// Sets the list of seed nodes that are used to connect to the Nimiq Albatross network.
+    ///
+    /// Each array entry must be a proper Multiaddr format string.
+    #[wasm_bindgen(js_name = seedNodes)]
     #[allow(clippy::boxed_local)]
-    pub fn new(seed_nodes: Box<[JsValue]>, log_level: String) -> WebClientConfiguration {
-        let seed_nodes = seed_nodes
+    pub fn seed_nodes(&mut self, seeds: Box<[JsValue]>) {
+        self.seed_nodes = seeds
             .iter()
             .map(|seed| serde_wasm_bindgen::from_value(seed.clone()).unwrap())
             .collect::<Vec<String>>();
+    }
 
-        WebClientConfiguration {
-            seed_nodes,
-            log_level,
-        }
+    /// Sets the log level that is used when logging to the console.
+    ///
+    /// Possible values are `'trace' | 'debug' | 'info' | 'warn' | 'error'`.
+    /// Default is `'info'`.
+    #[wasm_bindgen(js_name = logLevel)]
+    pub fn log_level(&mut self, log_level: String) {
+        self.log_level = log_level.to_lowercase();
+    }
+
+    /// Instantiates a client from this configuration builder.
+    #[wasm_bindgen(js_name = instantiateClient)]
+    pub async fn instantiate_client(&self) -> Client {
+        Client::create(self).await
     }
 }
 
@@ -76,27 +100,28 @@ impl WebClientConfiguration {
 ///
 /// Usage:
 /// ```js
-/// import init, { WebClient } from "./pkg/nimiq_web_client.js";
+/// import init, * as Nimiq from "./pkg/nimiq_web_client.js";
 ///
 /// init().then(async () => {
-///     const client = await WebClient.create();
+///     const configBuilder = Nimiq.ClientConfiguration.builder();
+///     const client = await configBuilder.instantiateClient();
 ///     // ...
 /// });
 /// ```
 #[wasm_bindgen]
-pub struct WebClient {
+pub struct Client {
     #[wasm_bindgen(skip)]
-    pub inner: Client,
+    pub inner: nimiq::client::Client,
 
     /// The network ID that the client is connecting to.
-    #[wasm_bindgen(js_name = networkId)]
+    #[wasm_bindgen(readonly, js_name = networkId)]
     pub network_id: u8,
 }
 
 #[wasm_bindgen]
-impl WebClient {
+impl Client {
     /// Creates a new WebClient that automatically starts connecting to the network.
-    pub async fn create(web_config: WebClientConfiguration) -> WebClient {
+    pub async fn create(web_config: &ClientConfiguration) -> Client {
         let log_settings = LogSettings {
             level: Some(LevelFilter::from_str(web_config.log_level.as_str()).unwrap()),
             ..Default::default()
@@ -135,7 +160,7 @@ impl WebClient {
 
         // Create client from config.
         log::info!("Initializing light client");
-        let mut client: Client = Client::from_config(
+        let mut client = nimiq::client::Client::from_config(
             config,
             Box::new(|fut| {
                 spawn_local(fut);
@@ -153,7 +178,7 @@ impl WebClient {
         let zkp_component = client.take_zkp_component().unwrap();
         spawn_local(zkp_component);
 
-        WebClient {
+        Client {
             inner: client,
             network_id,
         }
