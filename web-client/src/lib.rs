@@ -28,6 +28,7 @@ use nimiq_network_interface::{
 
 use crate::peer_info::PeerInfo;
 use crate::transaction::Transaction;
+use crate::transaction_builder::TransactionBuilder;
 use crate::utils::{from_network_id, to_network_id};
 
 mod address;
@@ -38,6 +39,7 @@ mod public_key;
 mod signature;
 mod signature_proof;
 mod transaction;
+mod transaction_builder;
 mod utils;
 
 /// Use this to provide initialization-time configuration to the Client.
@@ -98,13 +100,14 @@ impl ClientConfiguration {
 
 /// Nimiq Albatross client that runs in browsers via WASM and is exposed to Javascript.
 ///
-/// Usage:
+/// ### Usage:
+///
 /// ```js
 /// import init, * as Nimiq from "./pkg/nimiq_web_client.js";
 ///
 /// init().then(async () => {
-///     const configBuilder = Nimiq.ClientConfiguration.builder();
-///     const client = await configBuilder.instantiateClient();
+///     const config = new Nimiq.ClientConfiguration();
+///     const client = await config.instantiateClient();
 ///     // ...
 /// });
 /// ```
@@ -336,6 +339,12 @@ impl Client {
     #[wasm_bindgen(js_name = blockNumber)]
     pub fn block_number(&self) -> u32 {
         self.inner.blockchain_head().block_number()
+    }
+
+    /// Instantiates a transaction builder class that provides helper methods to create transactions.
+    #[wasm_bindgen(js_name = transactionBuilder)]
+    pub fn transaction_builder(&self) -> TransactionBuilder {
+        TransactionBuilder::new(self.network_id, self.inner.blockchain())
     }
 
     /// Sends a transaction to the network. This method does not check if the

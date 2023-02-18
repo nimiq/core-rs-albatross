@@ -4545,6 +4545,7 @@ dependencies = [
  "nimiq-network-mock",
  "nimiq-primitives",
  "nimiq-transaction",
+ "nimiq-transaction-builder",
  "nimiq-zkp-component",
  "parking_lot 0.12.1",
  "serde-wasm-bindgen",

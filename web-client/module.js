@@ -19,26 +19,115 @@ init().then(async () => {
      * @param {string} privateKey
      * @param {string} recipient
      * @param {number} amount
+     * @param {string} [message]
      * @param {number} [fee]
      * @returns {Promise<string>}
      */
-    window.sendTransaction = async (privateKey, recipient, amount, fee = 0) => {
+    window.sendBasicTransaction = async (privateKey, recipient, amount, message, fee = 0) => {
         if (!client.isEstablished()) {
             throw new Error('Consensus not yet established');
         }
 
         const keyPair = Nimiq.KeyPair.derive(Nimiq.PrivateKey.fromHex(privateKey));
 
-        const transaction = Nimiq.Transaction.newBasicTransaction(
+        const transactionBuilder = client.transactionBuilder();
+
+        let transaction;
+        if (message) {
+            const messageBytes = new TextEncoder().encode(message);
+
+            transaction = transactionBuilder.newBasicWithData(
+                keyPair.toAddress(),
+                Nimiq.Address.fromString(recipient),
+                messageBytes,
+                BigInt(amount),
+                BigInt(fee),
+            ).sign(keyPair);
+        } else {
+            transaction = transactionBuilder.newBasic(
+                keyPair.toAddress(),
+                Nimiq.Address.fromString(recipient),
+                BigInt(amount),
+                BigInt(fee),
+            ).sign(keyPair);
+        }
+
+        await client.sendTransaction(transaction);
+        return transaction.hash();
+    }
+
+    /**
+     * @param {string} privateKey
+     * @param {string} delegation
+     * @param {number} amount
+     * @param {number} [fee]
+     * @returns {Promise<string>}
+     */
+    window.sendCreateStakerTransaction = async (privateKey, delegation, amount, fee = 0) => {
+        if (!client.isEstablished()) {
+            throw new Error('Consensus not yet established');
+        }
+
+        const keyPair = Nimiq.KeyPair.derive(Nimiq.PrivateKey.fromHex(privateKey));
+
+        const transactionBuilder = client.transactionBuilder();
+
+        const transaction = transactionBuilder.newCreateStaker(
             keyPair.toAddress(),
-            Nimiq.Address.fromString(recipient),
+            Nimiq.Address.fromString(delegation),
             BigInt(amount),
             BigInt(fee),
-            client.blockNumber(),
-            client.networkId,
-        );
+        ).sign(keyPair);
 
-        keyPair.signTransaction(transaction);
+        await client.sendTransaction(transaction);
+        return transaction.hash();
+    }
+
+    /**
+     * @param {string} privateKey
+     * @param {string} newDelegation
+     * @param {number} [fee]
+     * @returns {Promise<string>}
+     */
+    window.sendUpdateStakerTransaction = async (privateKey, newDelegation, fee = 0) => {
+        if (!client.isEstablished()) {
+            throw new Error('Consensus not yet established');
+        }
+
+        const keyPair = Nimiq.KeyPair.derive(Nimiq.PrivateKey.fromHex(privateKey));
+
+        const transactionBuilder = client.transactionBuilder();
+
+        const transaction = transactionBuilder.newUpdateStaker(
+            keyPair.toAddress(),
+            Nimiq.Address.fromString(newDelegation),
+            BigInt(fee),
+        ).sign(keyPair);
+
+        await client.sendTransaction(transaction);
+        return transaction.hash();
+    }
+
+    /**
+     * @param {string} privateKey
+     * @param {number} amount
+     * @param {number} [fee]
+     * @returns {Promise<string>}
+     */
+    window.sendUnstakeTransaction = async (privateKey, amount, fee = 0) => {
+        if (!client.isEstablished()) {
+            throw new Error('Consensus not yet established');
+        }
+
+        const keyPair = Nimiq.KeyPair.derive(Nimiq.PrivateKey.fromHex(privateKey));
+
+        const transactionBuilder = client.transactionBuilder();
+
+        const transaction = transactionBuilder.newUnstake(
+            keyPair.toAddress(),
+            BigInt(amount),
+            BigInt(fee),
+        ).sign(keyPair);
 
         await client.sendTransaction(transaction);
         return transaction.hash();
