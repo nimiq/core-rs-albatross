@@ -329,10 +329,10 @@ impl WebClient {
         Ok(())
     }
 
-    /// Sends a hex-encoded transaction to the network. This method does not check if the
+    /// Sends a serialized transaction to the network. This method does not check if the
     /// transaction gets included into a block.
     ///
-    /// Throws when the transaction cannot be parsed from the hex string or in case of a networking error.
+    /// Throws when the transaction cannot be parsed from the byte array or in case of a networking error.
     #[wasm_bindgen(js_name = sendRawTransaction)]
     pub async fn send_raw_transaction(&self, raw_tx: &[u8]) -> Result<(), JsError> {
         let tx = nimiq_transaction::Transaction::deserialize_from_vec(raw_tx)?;

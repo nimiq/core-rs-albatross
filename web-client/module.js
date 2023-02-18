@@ -26,7 +26,7 @@ init().then(async () => {
 
         const keyPair = Nimiq.KeyPair.derive(Nimiq.PrivateKey.fromHex(privateKey));
 
-        const transaction = Nimiq.Transaction.basic(
+        const transaction = Nimiq.Transaction.newBasicTransaction(
             keyPair.toAddress(),
             Nimiq.Address.fromString(recipient),
             BigInt(amount),

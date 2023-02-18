@@ -27,7 +27,8 @@ impl Transaction {
     /// The returned transaction is not yet signed. You can sign it e.g. with `KeyPair.signTransaction`.
     ///
     /// Throws when the numbers given for value and fee do not fit within a u64 or the networkId is unknown.
-    pub fn basic(
+    #[wasm_bindgen(js_name = newBasicTransaction)]
+    pub fn new_basic_transaction(
         sender: &Address,
         recipient: &Address,
         value: u64,
@@ -47,7 +48,7 @@ impl Transaction {
         ))
     }
 
-    /// Computes the transaction's hash, which is is used as its unique identifier on the blockchain.
+    /// Computes the transaction's hash, which is used as its unique identifier on the blockchain.
     pub fn hash(&self) -> String {
         let hash: Blake2bHash = self.inner.hash();
         // TODO: Return an instance of Hash
