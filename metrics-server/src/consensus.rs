@@ -12,9 +12,8 @@ impl ConsensusMetrics {
     ) {
         let sub_registry = registry.sub_registry_with_prefix("consensus");
 
-        let closure = Box::new(NumericClosureMetric::new_gauge(Box::new(move || {
-            consensus.is_established() as u32
-        })));
+        let closure =
+            NumericClosureMetric::new_gauge(Box::new(move || consensus.is_established() as i64));
         sub_registry.register(
             "is_established",
             "Whether consensus is established",

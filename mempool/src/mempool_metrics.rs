@@ -1,20 +1,21 @@
 use crate::mempool_state::EvictionReason;
-use prometheus_client::encoding::text::Encode;
-use prometheus_client::metrics::counter::Counter;
-use prometheus_client::metrics::family::Family;
-use prometheus_client::registry::Registry;
+use prometheus_client::{
+    encoding::{EncodeLabelSet, EncodeLabelValue},
+    metrics::{counter::Counter, family::Family},
+    registry::Registry,
+};
 
 #[derive(Default, Clone)]
 pub struct MempoolMetrics {
     evicted_tx: Family<RemovedReasonLabel, Counter>,
 }
 
-#[derive(Clone, Hash, PartialEq, Eq, Encode)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 struct RemovedReasonLabel {
     reason: TxRemovedReason,
 }
 
-#[derive(Clone, Hash, PartialEq, Eq, Encode)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelValue)]
 enum TxRemovedReason {
     Expired,
     AlreadyIncludedTx,
@@ -27,7 +28,7 @@ impl MempoolMetrics {
         registry.register(
             "removed_tx_count",
             "Number of transactions removed from mempool",
-            Box::new(self.evicted_tx.clone()),
+            self.evicted_tx.clone(),
         );
     }
 

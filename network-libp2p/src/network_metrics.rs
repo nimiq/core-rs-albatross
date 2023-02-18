@@ -1,9 +1,9 @@
 use libp2p::gossipsub::TopicHash;
-use prometheus_client::encoding::text::Encode;
-use prometheus_client::metrics::counter::Counter;
-use prometheus_client::metrics::family::Family;
-use prometheus_client::metrics::histogram::Histogram;
-use prometheus_client::registry::Registry;
+use prometheus_client::{
+    encoding::EncodeLabelSet,
+    metrics::{counter::Counter, family::Family, histogram::Histogram},
+    registry::Registry,
+};
 use std::time::Duration;
 
 pub struct NetworkMetrics {
@@ -12,12 +12,12 @@ pub struct NetworkMetrics {
     response_times: Histogram,
 }
 
-#[derive(Clone, Hash, PartialEq, Eq, Encode)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 struct TopicLabels {
     topic: String,
 }
 
-#[derive(Clone, Hash, PartialEq, Eq, Encode)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 struct RequestIdLabels {
     request_id: String,
 }
@@ -37,19 +37,19 @@ impl NetworkMetrics {
         registry.register(
             "gossipsub_messages_received",
             "Number of received gossipsub messages",
-            Box::new(self.gossipsub_messages_received.clone()),
+            self.gossipsub_messages_received.clone(),
         );
 
         registry.register(
             "gossipsub_messages_published",
             "Number of published gossipsub messages",
-            Box::new(self.gossipsub_messages_published.clone()),
+            self.gossipsub_messages_published.clone(),
         );
 
         registry.register(
             "request_durations",
             "Time between requests and responses",
-            Box::new(self.response_times.clone()),
+            self.response_times.clone(),
         );
     }
 

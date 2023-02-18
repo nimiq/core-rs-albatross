@@ -12,9 +12,8 @@ impl MempoolMetrics {
 
         mempool.metrics().register(sub_registry);
 
-        let closure = Box::new(NumericClosureMetric::new_gauge(Box::new(move || {
-            mempool.num_transactions() as u32
-        })));
+        let closure =
+            NumericClosureMetric::new_gauge(Box::new(move || mempool.num_transactions() as i64));
         sub_registry.register("tx_count", "Txs currently in mempool", closure);
     }
 }

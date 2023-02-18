@@ -1,6 +1,7 @@
+use std::fmt::Debug;
 use std::net::SocketAddr;
 
-use prometheus_client::encoding::text::{Encode, EncodeMetric, Encoder};
+use prometheus_client::encoding::{EncodeGaugeValue, EncodeMetric, MetricEncoder};
 use prometheus_client::registry::Registry;
 
 use parking_lot::RwLock;
@@ -38,12 +39,12 @@ pub struct NimiqTaskMonitor {
     pub monitor: TaskMonitor,
 }
 
-struct NumericClosureMetric<T: Encode + Sized> {
+struct NumericClosureMetric<T: EncodeGaugeValue + Sized + Debug> {
     metric_type: MetricType,
     lambda: Box<dyn Fn() -> T + Sync + Send>,
 }
 
-impl<T: Encode + Sized> NumericClosureMetric<T> {
+impl<T: EncodeGaugeValue + Sized + Debug> NumericClosureMetric<T> {
     fn new(
         metric_type: MetricType,
         lambda: Box<dyn Fn() -> T + Sync + Send>,
@@ -59,19 +60,24 @@ impl<T: Encode + Sized> NumericClosureMetric<T> {
     }
 }
 
-impl<T: Encode + Sized> EncodeMetric for NumericClosureMetric<T> {
-    fn encode(&self, mut encoder: Encoder) -> Result<(), std::io::Error> {
-        encoder
-            .no_suffix()?
-            .no_bucket()?
-            .encode_value((self.lambda)())?
-            .no_exemplar()?;
+impl<T: EncodeGaugeValue + Sized + Debug> EncodeMetric for NumericClosureMetric<T> {
+    fn encode(&self, mut encoder: MetricEncoder) -> Result<(), std::fmt::Error> {
+        encoder.encode_gauge(&(self.lambda)())?;
 
         Ok(())
     }
 
     fn metric_type(&self) -> prometheus_client::metrics::MetricType {
         self.metric_type
+    }
+}
+
+impl<T: EncodeGaugeValue + Sized + Debug> Debug for NumericClosureMetric<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("NumericClosureMetric")
+            .field("metric_type", &self.metric_type)
+            .field("value", &(self.lambda)())
+            .finish()
     }
 }
 

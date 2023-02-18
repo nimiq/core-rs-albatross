@@ -25,14 +25,14 @@ impl BlockMetrics {
         let sub_registry = registry.sub_registry_with_prefix("staking");
 
         let bc = blockchain.clone();
-        let closure = Box::new(NumericClosureMetric::new_gauge(Box::new(move || {
-            bc.read().get_staking_contract().active_validators.len() as u32
-        })));
+        let closure = NumericClosureMetric::new_gauge(Box::new(move || {
+            bc.read().get_staking_contract().active_validators.len() as i64
+        }));
         sub_registry.register("active_validators", "Number of active validators", closure);
 
-        let closure = Box::new(NumericClosureMetric::new_gauge(Box::new(move || {
-            blockchain.read().get_staking_contract().parked_set.len() as u32
-        })));
+        let closure = NumericClosureMetric::new_gauge(Box::new(move || {
+            blockchain.read().get_staking_contract().parked_set.len() as i64
+        }));
         sub_registry.register("parked_validators", "Number of parked validators", closure);
     }
 
@@ -40,23 +40,23 @@ impl BlockMetrics {
         let sub_registry = registry.sub_registry_with_prefix("accounts_trie");
 
         let bc = blockchain.clone();
-        let closure = Box::new(NumericClosureMetric::new_gauge(Box::new(move || {
-            bc.read().state.accounts.size()
-        })));
+        let closure = NumericClosureMetric::new_gauge(Box::new(move || {
+            bc.read().state.accounts.size() as i64
+        }));
         sub_registry.register("accounts", "Number of accounts", closure);
 
-        let closure = Box::new(NumericClosureMetric::new_gauge(Box::new(move || {
-            blockchain.read().state.accounts.num_branches()
-        })));
+        let closure = NumericClosureMetric::new_gauge(Box::new(move || {
+            blockchain.read().state.accounts.num_branches() as i64
+        }));
         sub_registry.register("num_branches", "Number of branch nodes", closure);
     }
 
     fn register_chain(registry: &mut Registry, blockchain: BlockchainProxy) {
         let sub_registry = registry.sub_registry_with_prefix("blockchain");
 
-        let closure = Box::new(NumericClosureMetric::new_gauge(Box::new(move || {
-            blockchain.read().block_number()
-        })));
+        let closure = NumericClosureMetric::new_gauge(Box::new(move || {
+            blockchain.read().block_number() as i64
+        }));
         sub_registry.register("block_number", "Number of latest block", closure);
     }
 }

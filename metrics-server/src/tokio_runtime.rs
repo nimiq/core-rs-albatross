@@ -86,7 +86,7 @@ impl TokioRuntimeMetrics {
             sub_registry.register(
                 TOKIO_RT_METRICS_NAME[i],
                 TOKIO_RT_METRICS_DESC[i],
-                Box::new(gauge.clone()),
+                gauge.clone(),
             );
             self.metric_gauges
                 .insert(TOKIO_RT_METRICS_NAME[i].to_string(), gauge);
@@ -111,7 +111,7 @@ impl TokioRuntimeMetrics {
 
     pub fn update_metric_value(&mut self, name: &str, value: u64) {
         if let Some(gauge) = self.metric_gauges.get(&name.to_string()) {
-            gauge.set(value);
+            gauge.set(value as i64);
         } else {
             panic!("Unexpected metric name: {}", name);
         }

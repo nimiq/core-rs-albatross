@@ -12,9 +12,8 @@ impl NetworkMetrics {
 
         network.metrics().register(sub_registry);
 
-        let closure = Box::new(NumericClosureMetric::new_gauge(Box::new(move || {
-            network.peer_count() as u32
-        })));
+        let closure =
+            NumericClosureMetric::new_gauge(Box::new(move || network.peer_count() as i64));
         sub_registry.register("peer_count", "Number of peers", closure);
     }
 }

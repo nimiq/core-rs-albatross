@@ -2650,7 +2650,7 @@ dependencies = [
  "libp2p-swarm",
  "log",
  "pin-project",
- "prometheus-client",
+ "prometheus-client 0.18.1",
  "prost 0.11.0",
  "prost-build",
  "prost-codec",
@@ -2740,7 +2740,7 @@ dependencies = [
  "libp2p-kad",
  "libp2p-ping",
  "libp2p-swarm",
- "prometheus-client",
+ "prometheus-client 0.18.1",
 ]
 
 [[package]]
@@ -3468,7 +3468,7 @@ dependencies = [
  "nimiq-zkp",
  "nimiq-zkp-primitives",
  "parking_lot 0.12.1",
- "prometheus-client",
+ "prometheus-client 0.19.0",
  "rand 0.8.5",
  "thiserror",
  "tokio",
@@ -3949,7 +3949,7 @@ dependencies = [
  "nimiq-utils",
  "nimiq-vrf",
  "parking_lot 0.12.1",
- "prometheus-client",
+ "prometheus-client 0.19.0",
  "rand 0.8.5",
  "tokio",
  "tokio-metrics",
@@ -3971,7 +3971,7 @@ dependencies = [
  "nimiq-network-interface",
  "nimiq-network-libp2p",
  "parking_lot 0.12.1",
- "prometheus-client",
+ "prometheus-client 0.19.0",
  "tokio",
  "tokio-metrics",
  "tracing",
@@ -4044,7 +4044,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "pin-project",
  "pin-project-lite 0.2.9",
- "prometheus-client",
+ "prometheus-client 0.19.0",
  "rand 0.8.5",
  "serde",
  "thiserror",
@@ -5209,6 +5209,29 @@ dependencies = [
  "itoa",
  "parking_lot 0.12.1",
  "prometheus-client-derive-text-encode",
+]
+
+[[package]]
+name = "prometheus-client"
+version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d6fa99d535dd930d1249e6c79cb3c2915f9172a540fe2b02a4c8f9ca954721e"
+dependencies = [
+ "dtoa",
+ "itoa",
+ "parking_lot 0.12.1",
+ "prometheus-client-derive-encode",
+]
+
+[[package]]
+name = "prometheus-client-derive-encode"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72b6a5217beb0ad503ee7fa752d451c905113d70721b937126158f3106a48cc1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

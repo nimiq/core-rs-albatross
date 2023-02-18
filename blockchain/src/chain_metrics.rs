@@ -2,10 +2,11 @@ use nimiq_block::Block;
 use nimiq_block::BlockBody::Micro;
 use nimiq_blockchain_interface::{ChunksPushError, ChunksPushResult, PushError, PushResult};
 use nimiq_hash::Blake2bHash;
-use prometheus_client::encoding::text::Encode;
-use prometheus_client::metrics::counter::Counter;
-use prometheus_client::metrics::family::Family;
-use prometheus_client::registry::Registry;
+use prometheus_client::{
+    encoding::{EncodeLabelSet, EncodeLabelValue},
+    metrics::{counter::Counter, family::Family},
+    registry::Registry,
+};
 
 #[derive(Default)]
 pub struct BlockchainMetrics {
@@ -13,12 +14,12 @@ pub struct BlockchainMetrics {
     transactions_counts: Family<TransactionProcessedLabels, Counter>,
 }
 
-#[derive(Clone, Hash, PartialEq, Eq, Encode)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 struct PushResultLabels {
     push_result: BlockPushResult,
 }
 
-#[derive(Clone, Hash, PartialEq, Eq, Encode)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelValue)]
 enum BlockPushResult {
     Known,
     Extended,
@@ -29,12 +30,12 @@ enum BlockPushResult {
     Invalid,
 }
 
-#[derive(Clone, Hash, PartialEq, Eq, Encode)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 struct TransactionProcessedLabels {
     ty: TransactionProcessed,
 }
 
-#[derive(Clone, Hash, PartialEq, Eq, Encode)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelValue)]
 enum TransactionProcessed {
     Applied,
     Reverted,
@@ -45,13 +46,13 @@ impl BlockchainMetrics {
         registry.register(
             "block_push_counts",
             "Count of block push results",
-            Box::new(self.block_push_counts.clone()),
+            self.block_push_counts.clone(),
         );
 
         registry.register(
             "transaction_counts",
             "Count of transactions applied/reverted",
-            Box::new(self.transactions_counts.clone()),
+            self.transactions_counts.clone(),
         );
     }
 

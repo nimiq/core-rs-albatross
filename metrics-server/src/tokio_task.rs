@@ -59,7 +59,7 @@ impl TokioTaskMetrics {
                 sub_registry.register(
                     format!("{}_{}", task_name, TOKIO_TASK_METRICS_NAME[i]),
                     format!("{} {}", task_name, TOKIO_TASK_METRICS_DESC[i]),
-                    Box::new(gauge.clone()),
+                    gauge.clone(),
                 );
                 self.metric_gauges.insert(
                     format!("{}_{}", task_name, TOKIO_TASK_METRICS_NAME[i]),
@@ -90,7 +90,7 @@ impl TokioTaskMetrics {
 
     pub fn update_metric_value(&mut self, name: String, value: u64) {
         if let Some(gauge) = self.metric_gauges.get(&name) {
-            gauge.set(value);
+            gauge.set(value as i64);
         } else {
             panic!("Unexpected metric name: {name}");
         }

@@ -34,7 +34,7 @@ impl MetricService {
         Arc::clone(&self.reg)
     }
     fn respond_with_metrics(&mut self) -> Response<Body> {
-        let mut encoded: Vec<u8> = Vec::new();
+        let mut encoded = String::new();
         let reg = self.get_reg();
         encode(&mut encoded, &reg.read()).unwrap();
         let metrics_content_type = "application/openmetrics-text;charset=utf-8;version=1.0.0";
