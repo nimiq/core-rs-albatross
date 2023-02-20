@@ -1,32 +1,32 @@
-use std::fmt::Formatter;
-use std::marker::PhantomData;
-use std::pin::Pin;
-use std::sync::Arc;
-use std::task::{Context, Poll};
-use std::time::Duration;
+use std::{fmt::Formatter, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
-use futures::stream;
-use futures::{future::BoxFuture, stream::StreamExt, Sink, SinkExt};
-use nimiq_handel::update::LevelUpdate;
-use nimiq_network_interface::request::{MessageMarker, RequestCommon};
+use futures::{
+    future::{BoxFuture, FutureExt},
+    stream::StreamExt,
+};
 use parking_lot::RwLock;
 
 use beserial::{Deserialize, Serialize};
-use identity::Identity;
 use nimiq_bls::PublicKey;
 use nimiq_collections::bitset::BitSet;
 use nimiq_handel::{
     aggregation::Aggregation,
     config::Config,
     contribution::{AggregatableContribution, ContributionError},
-    evaluator, identity,
+    evaluator::WeightedVote,
+    identity::{Identity, IdentityRegistry, WeightRegistry},
+    network::Network,
     partitioner::BinomialPartitioner,
     protocol,
     store::ReplaceStore,
-    verifier,
+    update::LevelUpdate,
+    verifier::{VerificationResult, Verifier},
 };
-use nimiq_network_interface::{network::Network, request::Message};
+use nimiq_network_interface::{
+    network::Network as NetworkInterface,
+    request::{MessageMarker, RequestCommon},
+};
 use nimiq_network_mock::{MockHub, MockNetwork};
 use nimiq_test_log::test;
 
@@ -60,13 +60,13 @@ impl AggregatableContribution for Contribution {
 // A dumb Registry
 pub struct Registry {}
 
-impl identity::WeightRegistry for Registry {
+impl WeightRegistry for Registry {
     fn weight(&self, _id: usize) -> Option<usize> {
         Some(1)
     }
 }
 
-impl identity::IdentityRegistry for Registry {
+impl IdentityRegistry for Registry {
     fn public_key(&self, _id: usize) -> Option<PublicKey> {
         None
     }
@@ -86,16 +86,16 @@ impl identity::IdentityRegistry for Registry {
 pub struct DumbVerifier {}
 
 #[async_trait]
-impl verifier::Verifier for DumbVerifier {
+impl Verifier for DumbVerifier {
     type Contribution = Contribution;
-    async fn verify(&self, _contribution: &Self::Contribution) -> verifier::VerificationResult {
-        verifier::VerificationResult::Ok
+    async fn verify(&self, _contribution: &Self::Contribution) -> VerificationResult {
+        VerificationResult::Ok
     }
 }
 
 pub type Store = ReplaceStore<BinomialPartitioner, Contribution>;
 
-pub type Evaluator = evaluator::WeightedVote<Store, Registry, BinomialPartitioner>;
+pub type Evaluator = WeightedVote<Store, Registry, BinomialPartitioner>;
 
 // The test protocol combining the other types.
 pub struct Protocol {
@@ -115,7 +115,7 @@ impl Protocol {
             ReplaceStore::<BinomialPartitioner, Contribution>::new(partitioner.clone()),
         ));
 
-        let evaluator = Arc::new(evaluator::WeightedVote::new(
+        let evaluator = Arc::new(WeightedVote::new(
             store.clone(),
             Arc::clone(&registry),
             partitioner.clone(),
@@ -144,10 +144,6 @@ struct Update<C: AggregatableContribution>(pub LevelUpdate<C>);
 
 impl<C: AggregatableContribution + 'static> RequestCommon for Update<C> {
     type Kind = MessageMarker;
-    //     // The type to use will come from the AggregatableContribution implementation
-    //     // since having a fixed value here would imply that there could be different
-    //     // types using the same type, which would confuse the network at decoding
-    //     // messages upon receiving them.
     const TYPE_ID: u16 = 0;
     const MAX_REQUESTS: u32 = 100;
     const TIME_WINDOW: Duration = Duration::from_millis(500);
@@ -160,7 +156,7 @@ impl protocol::Protocol for Protocol {
     type Registry = Registry;
     type Partitioner = BinomialPartitioner;
     type Store = Store;
-    type Evaluator = evaluator::WeightedVote<Self::Store, Self::Registry, Self::Partitioner>;
+    type Evaluator = WeightedVote<Self::Store, Self::Registry, Self::Partitioner>;
 
     fn verifier(&self) -> Arc<Self::Verifier> {
         self.verifier.clone()
@@ -182,98 +178,26 @@ impl protocol::Protocol for Protocol {
     }
 }
 
-struct SendingFuture<N: Network> {
-    network: Arc<N>,
-}
+struct NetworkWrapper<N: NetworkInterface>(Arc<N>);
 
-impl<N: Network> SendingFuture<N> {
-    pub async fn send<M: Message + Clone + Unpin + std::fmt::Debug>(self, msg: M) {
-        let peers = self.network.get_peers();
-        for peer_id in peers {
-            // We don't care about the response: spawn the request and intentionally
-            // dismiss the request
-            tokio::spawn({
-                let network = Arc::clone(&self.network);
-                let msg = msg.clone();
-                async move {
-                    if let Err(error) = network.message::<M>(msg, peer_id).await {
-                        log::error!(%peer_id, %error, "error sending request");
-                    }
+impl<N: NetworkInterface> Network for NetworkWrapper<N> {
+    type Contribution = Contribution;
+
+    fn send_to(
+        &self,
+        (msg, recipient): (LevelUpdate<Self::Contribution>, usize),
+    ) -> BoxFuture<'static, ()> {
+        let update = Update(msg);
+        let nw = Arc::clone(&self.0);
+        async move {
+            for peer_id in nw.get_peers() {
+                println!("sending a msg to {:?}", &peer_id);
+                if let Err(err) = nw.message(update.clone(), peer_id).await {
+                    log::error!("Error sending request to {}: {:?}", recipient, err);
                 }
-            });
-        }
-    }
-}
-
-/// Implementation of a simple Sink Wrapper for the NetworkInterface's Network trait
-pub struct NetworkSink<M: Message + Unpin, N: Network> {
-    /// The network this sink is sending its messages over
-    network: Arc<N>,
-    /// The currently executed future of sending an item.
-    current_future: Option<BoxFuture<'static, ()>>,
-
-    phantom: PhantomData<M>,
-}
-
-impl<M: Message + Unpin, N: Network> NetworkSink<M, N> {
-    pub fn new(network: Arc<N>) -> Self {
-        Self {
-            network,
-            current_future: None,
-            phantom: PhantomData,
-        }
-    }
-}
-
-impl<M: Message + Clone + Unpin + std::fmt::Debug, N: Network> Sink<(M, usize)>
-    for NetworkSink<M, N>
-{
-    type Error = ();
-
-    fn poll_ready(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        // As this Sink only bufferes a single message poll_ready is the same as poll_flush
-        self.poll_flush(cx)
-    }
-
-    fn start_send(mut self: Pin<&mut Self>, item: (M, usize)) -> Result<(), Self::Error> {
-        // If there is future poll_ready did not return Ready(Ok(())) or poll_ready was not called resulting in an error
-        if self.current_future.is_some() {
-            Err(())
-        } else {
-            // Otherwise, create the future and store it.
-            // Note: This future does not get polled. Only once poll_* is called it will actually be polled.
-            let fut = Box::pin(
-                SendingFuture {
-                    network: self.network.clone(),
-                }
-                .send(item.0),
-            );
-            self.current_future = Some(fut);
-            Ok(())
-        }
-    }
-
-    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        // If there is a future being processed
-        if let Some(mut fut) = self.current_future.take() {
-            // Poll it to check its state
-            if fut.as_mut().poll(cx).is_pending() {
-                // If it is still being processed reset self.current_future and return Pending as no new item can be accepted (and the buffer is occupied).
-                self.current_future = Some(fut);
-                Poll::Pending
-            } else {
-                // If it has completed a new item can be accepted (and the buffer is also empty).
-                Poll::Ready(Ok(()))
             }
-        } else {
-            // when there is no future the buffer is empty and a new item can be accepted.
-            Poll::Ready(Ok(()))
         }
-    }
-
-    fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        // As this Sink only bufferes a single message poll_close is the same as poll_flush
-        self.poll_flush(cx)
+        .boxed()
     }
 }
 
@@ -325,18 +249,7 @@ async fn it_can_aggregate() {
                 net.receive_messages::<Update<Contribution>>()
                     .map(move |msg| msg.0 .0),
             ),
-            Box::pin(
-                NetworkSink {
-                    network: net.clone(),
-                    current_future: None,
-                    phantom: PhantomData,
-                }
-                .with(
-                    |(item, recipient): (LevelUpdate<Contribution>, usize)| async {
-                        Ok((Update(item), recipient))
-                    },
-                ),
-            ),
+            NetworkWrapper(net),
         );
 
         let r = stopped.clone();
@@ -372,11 +285,7 @@ async fn it_can_aggregate() {
             net.receive_messages::<Update<Contribution>>()
                 .map(move |msg| msg.0 .0),
         ),
-        Box::new(NetworkSink {
-            network: net.clone(),
-            current_future: None,
-            phantom: PhantomData,
-        }),
+        NetworkWrapper(Arc::clone(&net)),
     );
 
     // aggregating should not take more than 300 ms
@@ -428,11 +337,7 @@ async fn it_can_aggregate() {
             net.receive_messages::<Update<Contribution>>()
                 .map(move |msg| msg.0 .0),
         ),
-        Box::new(NetworkSink {
-            network: net.clone(),
-            current_future: None,
-            phantom: PhantomData,
-        }),
+        NetworkWrapper(net),
     );
 
     // first poll will add the nodes individual contribution and send its LevelUpdate

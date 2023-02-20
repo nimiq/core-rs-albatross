@@ -15,6 +15,7 @@ pub mod contribution;
 pub mod evaluator;
 pub mod identity;
 pub mod level;
+pub mod network;
 pub mod partitioner;
 pub mod protocol;
 pub mod store;

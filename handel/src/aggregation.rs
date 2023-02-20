@@ -1,42 +1,39 @@
-use std::fmt::Debug;
-use std::pin::Pin;
-use std::task::{Context, Poll};
+use std::{
+    fmt::Debug,
+    pin::Pin,
+    task::{Context, Poll},
+};
 
 use futures::{
-    future::{BoxFuture, Future},
+    future::{BoxFuture, Future, FutureExt},
     ready, select,
-    stream::BoxStream,
-    FutureExt, Sink, Stream, StreamExt,
+    stream::{BoxStream, Stream, StreamExt},
 };
-use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
-use tokio::task::JoinHandle;
 use tokio::time::{interval_at, Instant};
-use tokio_stream::wrappers::{IntervalStream, UnboundedReceiverStream};
+use tokio_stream::wrappers::IntervalStream;
 
-use crate::config::Config;
-use crate::contribution::AggregatableContribution;
-use crate::identity::IdentityRegistry;
-use crate::level::Level;
-use crate::partitioner::Partitioner;
-use crate::protocol::Protocol;
-use crate::store::ContributionStore;
-use crate::todo::TodoList;
-use crate::update::LevelUpdate;
+use crate::{
+    config::Config,
+    contribution::AggregatableContribution,
+    identity::IdentityRegistry,
+    level::Level,
+    network::{LevelUpdateSender, Network},
+    partitioner::Partitioner,
+    protocol::Protocol,
+    store::ContributionStore,
+    todo::TodoList,
+    update::LevelUpdate,
+};
 
 // TODOS:
 // * protocol.store RwLock.
 // * level.state RwLock
-// * SinkError.
 // * Evaluator::new -> threshold (now covered outside of this crate)
 
 type LevelUpdateStream<P> = BoxStream<'static, LevelUpdate<<P as Protocol>::Contribution>>;
-type LevelUpdateSender<P> = UnboundedSender<(LevelUpdate<<P as Protocol>::Contribution>, usize)>;
-
-#[derive(std::fmt::Debug)]
-pub struct SinkError {} // TODO
 
 /// Future implementation for the next aggregation event
-struct NextAggregation<P: Protocol> {
+struct NextAggregation<P: Protocol, N: Network<Contribution = P::Contribution>> {
     /// Handel configuration
     config: Config,
 
@@ -53,7 +50,7 @@ struct NextAggregation<P: Protocol> {
     contribution: P::Contribution,
 
     /// Sink used to relay messages
-    sender: LevelUpdateSender<P>,
+    sender: LevelUpdateSender<N>,
 
     /// Interval for starting the next level regardless of previous levels completion
     start_level_interval: IntervalStream,
@@ -65,13 +62,13 @@ struct NextAggregation<P: Protocol> {
     next_level_timeout: usize,
 }
 
-impl<P: Protocol> NextAggregation<P> {
+impl<P: Protocol, N: Network<Contribution = P::Contribution>> NextAggregation<P, N> {
     pub fn new(
         protocol: P,
         config: Config,
         own_contribution: P::Contribution,
         input_stream: LevelUpdateStream<P>,
-        sender: LevelUpdateSender<P>,
+        sender: LevelUpdateSender<N>,
     ) -> Self {
         // Invoke the partitioner to create the level structure of peers.
         let levels: Vec<Level> = Level::create_levels(protocol.partitioner());
@@ -109,7 +106,7 @@ impl<P: Protocol> NextAggregation<P> {
     }
 
     /// Starts level `level`
-    fn start_level(&self, level: usize) {
+    fn start_level(&mut self, level: usize) {
         let level = self
             .levels
             .get(level)
@@ -130,7 +127,12 @@ impl<P: Protocol> NextAggregation<P> {
                 };
 
                 if let Some(best) = best {
-                    self.send_update(best, level, self.config.peer_count);
+                    self.send_update(
+                        best,
+                        level.id,
+                        level.receive_complete(),
+                        level.select_next_peers(self.config.peer_count),
+                    );
                 }
             }
         }
@@ -149,20 +151,21 @@ impl<P: Protocol> NextAggregation<P> {
 
     /// Check if a level was completed
     /// TODO: remove contribution parameter as it is not used at all.
-    fn check_completed_level(&self, _contribution: P::Contribution, level: usize) {
-        let level = self
-            .levels
-            .get(level)
-            .unwrap_or_else(|| panic!("Attempted to check completeness of invalid level: {level}"));
+    fn check_completed_level(&mut self, level_id: usize) {
+        let num_peers = {
+            let level = self
+                .levels
+                .get(level_id)
+                .expect("Attempted to check completeness of invalid level");
 
-        // check if level already is completed
-        {
-            let level_state = level.state.read();
-            if level_state.receive_completed {
+            // check if level already is completed
+            if level.state.read().receive_completed {
                 // The level was completed before so nothing more to do.
                 return;
             }
-        }
+
+            level.num_peers()
+        };
 
         // first get the current contributor count for this level. Release the lock as soon as possible
         // to continue working on todos.
@@ -170,29 +173,33 @@ impl<P: Protocol> NextAggregation<P> {
             let store = self.protocol.store();
             let store = store.read();
             let best = store
-                .best(level.id)
-                .unwrap_or_else(|| panic!("Expected a best signature for level {}", level.id));
+                .best(level_id)
+                .unwrap_or_else(|| panic!("Expected a best signature for level {}", level_id));
             self.num_contributors(best)
         };
 
         // If the number of contributors on this level is equal to the number of peers on this level it is completed.
-        if num_contributors == level.num_peers() {
-            trace!("Level {} complete", level.id);
+        if num_contributors == num_peers {
+            trace!("Level {} complete", level_id);
             {
                 // Acquire write lock and set the level state for this level to completed.
-                let mut level_state = level.state.write();
-                level_state.receive_completed = true;
+                self.levels
+                    .get(level_id)
+                    .unwrap() // would have panicked earlier.
+                    .state
+                    .write()
+                    .receive_completed = true;
             }
             // if there is a level with a higher id than the completed one it needs to be activated.
-            if level.id + 1 < self.levels.len() {
+            if level_id + 1 < self.levels.len() {
                 // activate next level
-                self.start_level(level.id + 1);
+                self.start_level(level_id + 1);
             }
         }
 
         // In order to send updated messages iterate all levels higher than the given level.
         let level_count = self.levels.len();
-        for i in level.id + 1..level_count {
+        for i in level_id + 1..level_count {
             let combined = {
                 // Acquire read lock to retrieve the current combined contribution for the next lower level
                 let store = self.protocol.store();
@@ -204,8 +211,12 @@ impl<P: Protocol> NextAggregation<P> {
             if let Some(multisig) = combined {
                 let level = self.levels.get(i).unwrap_or_else(|| panic!("No level {i}"));
                 if level.update_signature_to_send(&multisig.clone()) {
-                    // XXX Do this without cloning
-                    self.send_update(multisig, level, self.config.peer_count);
+                    self.send_update(
+                        multisig,
+                        level.id,
+                        level.receive_complete(),
+                        level.select_next_peers(self.config.peer_count),
+                    );
                 }
             }
         }
@@ -214,34 +225,37 @@ impl<P: Protocol> NextAggregation<P> {
     /// Send updated `contribution` for `level` to `count` peers
     ///
     /// for incomplete levels the contribution containing solely this nodes contribution is sent alongside the aggregate
-    fn send_update(&self, contribution: P::Contribution, level: &Level, count: usize) {
-        let peer_ids = level.select_next_peers(count);
-
-        // if there are peers to send the update to send them
+    fn send_update(
+        &mut self,
+        contribution: P::Contribution,
+        level_id: usize,
+        send_individual: bool,
+        peer_ids: Vec<usize>,
+    ) {
+        // If there are peers to send the update to send them
         if !peer_ids.is_empty() {
-            // incomplete levels will always also continue to send their own contribution, alongside the aggregate.
-            let individual = if level.receive_complete() {
+            // If the send_individual flag is set the individual contribution is send alongside the aggregate.
+            let individual = if send_individual {
                 None
             } else {
                 Some(self.contribution.clone())
             };
 
-            // create the LevelUpdate with the aggregate contribution, the level, our node id and, if the level is incomplete, our own contribution
+            // Create the LevelUpdate
             let update = LevelUpdate::<P::Contribution>::new(
                 contribution,
                 individual,
-                level.id,
+                level_id,
                 self.protocol.node_id(),
             );
 
-            // Tag the LevelUpdate with the tag this aggregation runs over creating a LevelUpdateMessage.
+            // Send the level update to every peer_id in peer_ids
             for peer_id in peer_ids {
+                // This should always be the case
                 if peer_id < self.protocol.partitioner().size() {
                     self.sender
                         // `send` is not a future and thus will not block execution.
-                        .send((update.clone(), peer_id))
-                        // If an error occurred that means the receiver no longer exists or was closed which should never happen.
-                        .expect("Message could not be send to unbounded_channel sender");
+                        .send((update.clone(), peer_id));
                 }
             }
         }
@@ -249,19 +263,30 @@ impl<P: Protocol> NextAggregation<P> {
 
     /// Send updates for every level to every peer accordingly.
     fn automatic_update(&mut self) {
-        for level in self.levels.iter().skip(1) {
-            if level.active() {
-                // Get the current best aggregate from store (no clone() needed as that already happens within the store)
-                // freeing the lock as soon as possible for the todo aggregating to continue.
-                let aggregate = {
-                    let store = self.protocol.store();
-                    let store = store.read();
-                    store.combined(level.id - 1)
-                };
-                // For an existing aggregate for this level send it around to the respective peers.
-                if let Some(aggregate) = aggregate {
-                    self.send_update(aggregate, level, self.config.update_count);
+        for level_id in 1..self.levels.len() {
+            let (receive_complete, next_peers) = {
+                let level = self.levels.get(level_id).unwrap();
+                if level.active() {
+                    (
+                        level.receive_complete(),
+                        level.select_next_peers(self.config.peer_count),
+                    )
+                } else {
+                    return;
                 }
+            };
+
+            // Get the current best aggregate from store (no clone() needed as that already happens within the store)
+            // freeing the lock as soon as possible for the todo aggregating to continue.
+            let aggregate = {
+                let store = self.protocol.store();
+                let store = store.read();
+                store.combined(level_id - 1)
+            };
+
+            // For an existing aggregate for this level send it around to the respective peers.
+            if let Some(aggregate) = aggregate {
+                self.send_update(aggregate, level_id, receive_complete, next_peers);
             }
         }
     }
@@ -291,6 +316,7 @@ impl<P: Protocol> NextAggregation<P> {
             select! {
                 _ = self.periodic_update_interval.next().fuse() => self.automatic_update(),
                 _ = self.start_level_interval.next().fuse() => self.activate_next_level(),
+                _ = self.sender.next().fuse() => {},
                 item = self.todos.next().fuse() => {
                     match item {
                         Some(todo) => {
@@ -298,6 +324,7 @@ impl<P: Protocol> NextAggregation<P> {
                             let result = self.protocol.verify(&todo.contribution).await;
 
                             if result.is_ok() {
+                                // special case of full contributions
                                 if todo.level == self.protocol.partitioner().levels() {
                                     return (todo.contribution, Some(self));
                                 }
@@ -312,7 +339,7 @@ impl<P: Protocol> NextAggregation<P> {
                                 // in case the level of this todo has not started, start it now as we have already contributions on it.
                                 self.start_level(todo.level);
                                 // check if a level was completed by the addition of the contribution
-                                self.check_completed_level(todo.contribution.clone(), todo.level);
+                                self.check_completed_level(todo.level);
 
                                 // get the best aggregate
                                 let last_level = self.levels.last().expect("No levels");
@@ -340,19 +367,19 @@ impl<P: Protocol> NextAggregation<P> {
         }
     }
 
-    fn into_inner(self) -> (LevelUpdateStream<P>, LevelUpdateSender<P>) {
+    fn into_inner(self) -> (LevelUpdateStream<P>, LevelUpdateSender<N>) {
         (self.todos.into_stream(), self.sender)
     }
 }
 
-struct FinishedAggregation<P: Protocol> {
+struct FinishedAggregation<P: Protocol, N: Network> {
     level_update: LevelUpdate<P::Contribution>,
     input_stream: LevelUpdateStream<P>,
-    sender: LevelUpdateSender<P>,
+    sender: LevelUpdateSender<N>,
 }
 
-impl<P: Protocol> FinishedAggregation<P> {
-    fn from(aggregation: NextAggregation<P>, aggregate: P::Contribution) -> Self {
+impl<P: Protocol, N: Network<Contribution = P::Contribution>> FinishedAggregation<P, N> {
+    fn from(aggregation: NextAggregation<P, N>, aggregate: P::Contribution) -> Self {
         let level_update = LevelUpdate::<P::Contribution>::new(
             aggregate,
             None,
@@ -370,10 +397,13 @@ impl<P: Protocol> FinishedAggregation<P> {
     }
 }
 
-impl<P: Protocol> Future for FinishedAggregation<P> {
-    type Output = (P::Contribution, Option<NextAggregation<P>>);
+impl<P: Protocol, N: Network<Contribution = P::Contribution>> Future for FinishedAggregation<P, N> {
+    type Output = (P::Contribution, Option<NextAggregation<P, N>>);
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        // always returns Poll::Pending.
+        let _ = self.sender.poll_next_unpin(cx);
+
         while let Some(msg) = ready!(self.input_stream.poll_next_unpin(cx)) {
             // Don't respond to final level updates.
             if msg.level == self.level_update.level {
@@ -381,51 +411,31 @@ impl<P: Protocol> Future for FinishedAggregation<P> {
             }
 
             let response = (self.level_update.clone(), msg.origin());
-            if let Err(e) = self.sender.send(response) {
-                log::warn!(
-                    "Failed to send final LevelUpdate to {}: {:?}",
-                    msg.origin(),
-                    e
-                );
-            }
+            self.sender.send(response);
         }
 
         Poll::Ready((self.level_update.aggregate.clone(), None))
     }
 }
-
 /// Stream implementation for consecutive aggregation events
-pub struct Aggregation<P: Protocol> {
-    next_aggregation: Option<BoxFuture<'static, (P::Contribution, Option<NextAggregation<P>>)>>,
-    network_handle: Option<JoinHandle<()>>,
+pub struct Aggregation<P: Protocol, N: Network<Contribution = P::Contribution>> {
+    next_aggregation: Option<BoxFuture<'static, (P::Contribution, Option<NextAggregation<P, N>>)>>,
 }
 
-impl<P: Protocol> Aggregation<P> {
-    pub fn new<E: Debug + 'static>(
-        protocol: P,
+impl<
+        TProtocol: Protocol,
+        TNetwork: Network<Contribution = TProtocol::Contribution> + Send + 'static,
+    > Aggregation<TProtocol, TNetwork>
+{
+    pub fn new(
+        protocol: TProtocol,
         config: Config,
-        own_contribution: P::Contribution,
-        input_stream: LevelUpdateStream<P>,
-        output_sink: Pin<
-            Box<(dyn Sink<(LevelUpdate<P::Contribution>, usize), Error = E> + Unpin + Send)>,
-        >,
+        own_contribution: TProtocol::Contribution,
+        input_stream: LevelUpdateStream<TProtocol>,
+        network: TNetwork,
     ) -> Self {
-        // Create an unbounded mpsc channel to buffer network messages for the actual aggregation not having to wait for them to get send.
-        // A future optimization could be to have this task not simply forward all messages but filter out those which have become obsolete
-        // by subsequent messages.
-        let (sender, receiver) = unbounded_channel::<(LevelUpdate<P::Contribution>, usize)>();
-
-        // Spawn a task emptying put the receiver of the created mpsc. Note that this task will terminate once all senders are dropped leading
-        // to the stream no longer producing any new items. In turn the forward future will resolve terminating the task.
-        let network_handle = tokio::spawn(async move {
-            if let Err(err) = UnboundedReceiverStream::new(receiver)
-                .map(Ok)
-                .forward(output_sink)
-                .await
-            {
-                warn!("Error sending messages: {:?}", err);
-            }
-        });
+        // Create the Sender, buffering a single message per recipient.
+        let sender = LevelUpdateSender::new(protocol.partitioner().size(), network);
 
         let next_aggregation =
             NextAggregation::new(protocol, config, own_contribution, input_stream, sender)
@@ -434,23 +444,11 @@ impl<P: Protocol> Aggregation<P> {
 
         Self {
             next_aggregation: Some(next_aggregation),
-            network_handle: Some(network_handle),
-        }
-    }
-
-    pub async fn shutdown(&mut self) {
-        // Drop the next aggregation on shutdown.
-        // That also drops the sender of the unbounded channel leaving the receiver to consume remaining items and then
-        // receiving None as there is no sender left, thus terminating the stream.
-        self.next_aggregation = None;
-        if let Some(handle) = self.network_handle.take() {
-            // Wait for the forward spawn to conclude operation.
-            handle.await.expect("network_task returned JoinError")
         }
     }
 }
 
-impl<P: Protocol + Debug> Stream for Aggregation<P> {
+impl<P: Protocol + Debug, N: Network<Contribution = P::Contribution>> Stream for Aggregation<P, N> {
     type Item = P::Contribution;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
