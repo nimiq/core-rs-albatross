@@ -1,43 +1,104 @@
 use std::sync::Arc;
-use std::time::Duration;
 
-use async_trait::async_trait;
-use beserial::Serialize;
-use futures::{future::BoxFuture, stream::BoxStream, FutureExt, StreamExt};
+use futures::{
+    future::{self, FutureExt},
+    stream::{BoxStream, StreamExt},
+};
 use parking_lot::RwLock;
 
+use beserial::{Serialize, WriteBytesExt};
 use nimiq_block::{
-    Block, MacroBlock, MacroBody, MacroHeader, MultiSignature, ProposalTopic,
-    SignedTendermintProposal, TendermintProof, TendermintProposal,
+    Block, MacroBlock, TendermintIdentifier, TendermintProof, TendermintStep, TendermintVote,
 };
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::AbstractBlockchain;
-use nimiq_bls::PublicKey;
-use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
-use nimiq_network_interface::network::MsgAcceptance;
+use nimiq_collections::BitSet;
+use nimiq_handel::{
+    aggregation::Aggregation,
+    identity::{Identity, IdentityRegistry},
+};
+use nimiq_hash::{Blake2bHash, Blake2sHash, Blake2sHasher, Hash, Hasher, SerializeContent};
+use nimiq_keys::Signature as SchnorrSignature;
 use nimiq_primitives::{policy::Policy, slots::Validators};
 use nimiq_tendermint::{
-    AggregationResult, ProposalResult, Step, TendermintError, TendermintOutsideDeps,
-    TendermintState,
+    Proposal, ProposalError, ProposalMessage, Protocol, SignedProposalMessage, Step,
+    TaggedAggregationMessage,
 };
-use nimiq_utils::time::OffsetTime;
-use nimiq_validator_network::ValidatorNetwork;
-use nimiq_vrf::VrfSeed;
+use nimiq_validator_network::{
+    single_response_requester::SingleResponseRequester, ValidatorNetwork,
+};
 
-use crate::aggregation::tendermint::HandelTendermintAdapter;
+use crate::{
+    aggregation::{
+        registry::ValidatorRegistry,
+        tendermint::{
+            contribution::{AggregateMessage, TendermintContribution},
+            proposal::{Body, Header, RequestProposal},
+            protocol::TendermintAggregationProtocol,
+            update_message::TendermintUpdate,
+        },
+    },
+    r#macro::ProposalTopic,
+};
 
-/// The struct that interfaces with the Tendermint crate. It only has to implement the
-/// TendermintOutsideDeps trait in order to do this.
-pub struct TendermintInterface<TValidatorNetwork: ValidatorNetwork> {
+// A note for the signing of the proposal:
+// There are two distinct signatures for any given proposal.
+// The first one is a Schnorr signature from the proposer of any given round over the header hash.
+//     This hash does NOT include the pk_tree_root and this signature is not the one being aggregated.
+// The other one is a BLS signature over the nano_zkp_hash, which is defined as Blake2S(Blake2b(header_hash).append(pk_tree_root))
+//     This one is being aggregated, and contains the pk_tree_root, so the body is necessary for the verification of the signature.
+
+struct NetworkWrapper<TValidatorNetwork: ValidatorNetwork> {
+    network: Arc<TValidatorNetwork>,
+    tag: (u32, Step),
+    height: u32,
+}
+
+impl<TValidatorNetwork: ValidatorNetwork> NetworkWrapper<TValidatorNetwork> {
+    fn new(height: u32, tag: (u32, Step), network: Arc<TValidatorNetwork>) -> Self {
+        Self {
+            height,
+            network,
+            tag,
+        }
+    }
+}
+impl<TValidatorNetwork: ValidatorNetwork + 'static> nimiq_handel::network::Network
+    for NetworkWrapper<TValidatorNetwork>
+{
+    type Contribution = TendermintContribution;
+
+    fn send_to(
+        &self,
+        (msg, recipient): (nimiq_handel::update::LevelUpdate<Self::Contribution>, usize),
+    ) -> futures::future::BoxFuture<'static, ()> {
+        // wrap the level update in the AggregateMessage
+        let aggregation = AggregateMessage(msg);
+        // tag it
+        let tagged_aggregation_message = TaggedAggregationMessage {
+            tag: self.tag,
+            aggregation,
+        };
+        // and create the update.
+        let update_message = TendermintUpdate(tagged_aggregation_message, self.height);
+
+        // clone network so it can be moved into the future
+        let nw = Arc::clone(&self.network);
+
+        // create the send future and return it.
+        async move {
+            nw.send_to(&[recipient], update_message).await;
+        }
+        .boxed()
+    }
+}
+
+pub struct TendermintProtocol<TValidatorNetwork: ValidatorNetwork> {
     // The network that is going to be used to communicate with the other validators.
     pub network: Arc<TValidatorNetwork>,
-    // This is used to maintain a network-wide time.
-    pub offset_time: OffsetTime,
     // The slot band for our validator.
     pub validator_slot_band: u16,
-    // The VRF seed of the parent block.
-    pub prev_seed: VrfSeed,
     // The block number of the macro block to produce.
     pub block_height: u32,
     // Information relative to our validator that is necessary to produce blocks.
@@ -46,528 +107,422 @@ pub struct TendermintInterface<TValidatorNetwork: ValidatorNetwork> {
     pub current_validators: Validators,
     // The main blockchain struct. Contains all of this validator information about the current chain.
     pub blockchain: Arc<RwLock<Blockchain>>,
-    // The aggregation adapter allows Tendermint to use Handel functions and networking.
-    pub aggregation_adapter: HandelTendermintAdapter<TValidatorNetwork>,
-
-    proposal_stream: BoxStream<
-        'static,
-        (
-            SignedTendermintProposal,
-            <TValidatorNetwork as ValidatorNetwork>::PubsubId,
-        ),
-    >,
-
-    initial_round: u32,
+    // Validator registry on the heap for easy cloning into handel protocol.
+    validator_registry: Arc<ValidatorRegistry>,
 }
 
-#[async_trait]
-impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
-    for TendermintInterface<TValidatorNetwork>
+impl<TValidatorNetwork: ValidatorNetwork> Clone for TendermintProtocol<TValidatorNetwork> {
+    fn clone(&self) -> Self {
+        Self {
+            network: Arc::clone(&self.network),
+            validator_slot_band: self.validator_slot_band,
+            block_height: self.block_height,
+            block_producer: self.block_producer.clone(),
+            current_validators: self.current_validators.clone(),
+            blockchain: Arc::clone(&self.blockchain),
+            validator_registry: Arc::clone(&self.validator_registry),
+        }
+    }
+}
+
+impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintProtocol<TValidatorNetwork>
+where
+    <TValidatorNetwork as ValidatorNetwork>::PubsubId: std::fmt::Debug + Unpin,
 {
-    type ProposalTy = MacroHeader;
-    type ProposalCacheTy = MacroBody;
-    type ProposalHashTy = Blake2sHash;
-    type ProofTy = MultiSignature;
-    type ResultTy = MacroBlock;
+    const PROPOSAL_PREFIX: u8 = TendermintStep::Propose as u8;
 
-    fn block_height(&self) -> u32 {
-        self.block_height
+    pub fn new(
+        blockchain: Arc<RwLock<Blockchain>>,
+        network: Arc<TValidatorNetwork>,
+        block_producer: BlockProducer,
+        current_validators: Validators,
+        validator_slot_band: u16,
+        block_height: u32,
+    ) -> Self {
+        Self {
+            block_producer,
+            blockchain,
+            block_height,
+            validator_slot_band,
+            validator_registry: Arc::new(ValidatorRegistry::new(current_validators.clone())),
+            current_validators,
+            network,
+        }
     }
 
-    fn initial_round(&self) -> u32 {
-        // Macro blocks follow the same rules as micro blocks when it comes to round.
-        // Thus the round is offset by the predecessors view.
-        self.initial_round
-    }
+    /// Hashes the proposal, while taking care to not include the PubsubId
+    ///
+    /// This hash is NOT suited to be signed for BLS Aggregated signatures for the macro blocks, as those need to include the pk_tree_root.
+    /// See MacroBlock::nano_zkp_hash for more details.
+    fn hash_proposal(proposal_msg: &ProposalMessage<<Self as Protocol>::Proposal>) -> &[u8] {
+        let mut h = Blake2sHasher::new();
 
-    /// This function is meant to verify the validity of a TendermintState. However, this function
-    /// is only used when Tendermint is starting from a saved state. There is no reasonable
-    /// situation where anyone would need to edit the saved TendermintState, so there's no situation
-    /// where the TendermintState fed into this function would be invalid (unless it gets corrupted
-    /// in memory, but then we have bigger problems).
-    /// So, we leave this function simply returning true and not doing any checks. Mostly likely we
-    /// will get rid of it in the future.
-    fn verify_state(
-        &self,
-        state: &TendermintState<
-            Self::ProposalTy,
-            Self::ProposalCacheTy,
-            Self::ProposalHashTy,
-            Self::ProofTy,
-        >,
-    ) -> bool {
-        state.height == self.block_height
-    }
+        h.write_u8(Self::PROPOSAL_PREFIX)
+            .expect("Must be able to write Prefix to hasher");
+        proposal_msg
+            .proposal
+            .0
+            .serialize_content(&mut h)
+            .expect("Must be able to serialize content of the proposal to hasher");
+        proposal_msg
+            .round
+            .serialize(&mut h)
+            .expect("Must be able to serialize content of the round to hasher ");
+        proposal_msg
+            .valid_round
+            .serialize(&mut h)
+            .expect("Must be able to serialize content of the valid_round to hasher ");
 
-    /// States if it is our turn to be the Tendermint proposer or not.
-    fn is_our_turn(&self, round: u32) -> bool {
+        let mut v = vec![];
+        h.finish()
+            .serialize(&mut v)
+            .expect("Must be able to serialize the hash.");
+
+        v.as_slice();
+        &[]
+    }
+}
+
+impl<TValidatorNetwork: ValidatorNetwork + 'static> Protocol
+    for TendermintProtocol<TValidatorNetwork>
+where
+    <TValidatorNetwork as ValidatorNetwork>::PubsubId: std::fmt::Debug + Unpin,
+{
+    type Decision = MacroBlock;
+    type Proposal = Header<<TValidatorNetwork as ValidatorNetwork>::PubsubId>;
+    type ProposalHash = Blake2sHash;
+    type Inherent = Body;
+    type InherentHash = Blake2bHash;
+    type Aggregation = TendermintContribution;
+    type AggregationMessage = AggregateMessage;
+    type ProposalSignature = SchnorrSignature;
+
+    const F_PLUS_ONE: usize = Policy::F_PLUS_ONE as usize;
+    const TWO_F_PLUS_ONE: usize = Policy::TWO_F_PLUS_ONE as usize;
+    const TIMEOUT_DELTA: u64 = 1000;
+    const TIMEOUT_INIT: u64 = 1000;
+
+    fn is_proposer(&self, round: u32) -> bool {
         let blockchain = self.blockchain.read();
+
+        // Get best block for preceding micro block.
+        // The best block might change, thus the vrf is not stored in separation
+        let vrf_seed = match blockchain.get_block_at(self.block_height - 1, false, None) {
+            Ok(Block::Micro(block)) => block.header.seed,
+            _ => panic!("Preceding block must be a micro block and it must be known."),
+        };
 
         // Get the validator for this round.
         let proposer_slot = blockchain
-            .get_proposer_at(self.block_height, round, self.prev_seed.entropy(), None)
+            .get_proposer_at(self.block_height, round, vrf_seed.entropy(), None)
             .expect("Couldn't find slot owner!");
 
         // Check if the slot bands match.
         // TODO Instead of identifying the validator by its slot_band, we should identify it by its
-        //  address instead.
+        // address instead.
         proposer_slot.band == self.validator_slot_band
     }
 
-    /// Produces a proposal. Evidently, used when we are the proposer.
-    fn get_value(
-        &mut self,
-        round: u32,
-    ) -> Result<(Self::ProposalTy, Self::ProposalCacheTy), TendermintError> {
+    fn create_proposal(&self, round: u32) -> (ProposalMessage<Self::Proposal>, Self::Inherent) {
         let blockchain = self.blockchain.read();
+        let time = blockchain.time.now();
 
-        // Call the block producer to produce the next macro block (minus the justification, of course).
-        let block = self.block_producer.next_macro_block_proposal(
-            &blockchain,
-            self.offset_time.now(),
-            round,
-            vec![],
-        );
+        let block = self
+            .block_producer
+            .next_macro_block_proposal(&blockchain, time, round, vec![]);
 
         // Always `Some(…)` because the above function always sets it to `Some(…)`.
         let body = block.body.expect("produced blocks always have a body");
 
         // Return the block header and body as the proposal.
-        Ok((block.header, body))
+        (
+            ProposalMessage {
+                proposal: Header(block.header, None), // Created proposals do not have a PubSubId
+                round,
+                valid_round: None,
+            },
+            Body(body),
+        )
     }
 
-    /// Assembles a block from a proposal and a proof.
-    fn assemble_block(
+    fn broadcast_proposal(
         &self,
-        round: u32,
-        proposal: Self::ProposalTy,
-        proposal_cache: Option<Self::ProposalCacheTy>,
-        proof: Self::ProofTy,
-    ) -> Result<Self::ResultTy, TendermintError> {
-        // Get the body from the cache. If there is no body cached it is recreated as a fallback.
-        // However that operation is rather expensive and should be avoided.
-        let body = proposal_cache.or_else(|| {
-            // Even though this fallback exist, it is unperformant to not cache the body.
-            // Print a warning instead of failing.
-            log::warn!("MacroBody was not cached. Recreating the body.");
+        proposal: SignedProposalMessage<Self::Proposal, Self::ProposalSignature>,
+    ) {
+        let nw = Arc::clone(&self.network);
+        tokio::spawn(async move {
+            nw.publish::<ProposalTopic<TValidatorNetwork>>(proposal.into())
+                .await
+        });
+    }
 
-            // Acquire a blockchain read lock
-            let blockchain = self.blockchain.read();
+    fn request_proposal(
+        &self,
+        proposal_hash: Self::ProposalHash,
+        round_number: u32,
+        candidates: BitSet,
+    ) -> futures::future::BoxFuture<
+        'static,
+        Option<SignedProposalMessage<Self::Proposal, Self::ProposalSignature>>,
+    > {
+        // First out of the signatory slots calculate the signatory validators
+        let signers = match self.validator_registry.signers_identity(&candidates) {
+            Identity::None => return future::ready(None).boxed(),
+            Identity::Single(idx) => vec![idx],
+            Identity::Multiple(indexes) => indexes,
+        };
 
-            // The staking contract is holding the relevant information
-            // Get the staking contract PRIOR to any state changes.
-            let staking_contract = blockchain.get_staking_contract();
+        let request = RequestProposal {
+            block_number: self.block_height,
+            round_number,
+            proposal_hash,
+        };
 
-            // Compute the data for the MacroBody
-            let lost_reward_set = staking_contract.previous_lost_rewards();
-            let disabled_set = staking_contract.previous_disabled_slots();
-            let validators = if Policy::is_election_block_at(proposal.block_number) {
-                Some(blockchain.next_validators(&proposal.seed))
-            } else {
+        SingleResponseRequester::new(
+            Arc::clone(&self.network),
+            signers,
+            request,
+            (Arc::clone(&self.blockchain), self.block_height),
+            3,
+            |response, (blockchain, block_height)| {
+                if let Some(signed_proposal) = response {
+                    let blockchain = blockchain.read();
+
+                    let vrf_seed = match blockchain.get_block(
+                        &signed_proposal.proposal.parent_hash,
+                        false,
+                        None,
+                    ) {
+                        // Block is known, proceed to verify the producer.
+                        Ok(Block::Micro(block)) => block.header.seed,
+                        // Block is not known, Cannot verify the proposal
+                        _ => return None,
+                    };
+
+                    let proposer = blockchain
+                        .get_proposer_at(
+                            block_height,
+                            signed_proposal.round,
+                            vrf_seed.entropy(),
+                            None,
+                        )
+                        .expect("Couldn't find slot owner!")
+                        .validator
+                        .signing_key;
+
+                    let msg = signed_proposal.into_tendermint_signed_message(None);
+
+                    let data = Self::hash_proposal(&msg.message);
+
+                    if proposer.verify(&msg.signature, data) {
+                        return Some(msg);
+                    }
+                }
                 None
-            };
-            let reward_transactions = blockchain.create_reward_transactions(
-                blockchain.state(),
-                &proposal,
-                &staking_contract,
-            );
-            let pk_tree_root = validators
-                .as_ref()
-                .and_then(|validators| MacroBlock::pk_tree_root(validators).ok());
+            },
+        )
+        .boxed()
+    }
 
-            // Assemble the MacroBody
-            Some(MacroBody {
-                validators,
-                pk_tree_root,
-                lost_reward_set,
-                disabled_set,
-                transactions: reward_transactions,
-            })
+    fn verify_proposal(
+        &self,
+        proposal: &SignedProposalMessage<Self::Proposal, Self::ProposalSignature>,
+        precalculated_inherent: Option<Self::Inherent>,
+        signature_only: bool,
+    ) -> Result<Self::Inherent, nimiq_tendermint::ProposalError> {
+        // No inherent was given, but signature verification is the only required step, independent from
+        // the result this can never work, as the inherent would have to be returned.
+        if precalculated_inherent.is_none() && signature_only {
+            return Err(ProposalError::Other);
+        }
+        // get the hash of the proposal
+        let data = Self::hash_proposal(&proposal.message);
+
+        let blockchain = self.blockchain.read();
+        // Get best block for preceding micro block.
+        // The best block might change, thus the vrf is not stored in separation
+        let vrf_seed =
+            match blockchain.get_block(&proposal.message.proposal.0.parent_hash, false, None) {
+                // Block is known, proceed to verify the producer.
+                Ok(Block::Micro(block)) => block.header.seed,
+                // Block is not known, Cannot verify the proposal
+                _ => return Err(ProposalError::Other),
+            };
+
+        // Get the validator for this round.
+        let mut proposer = blockchain
+            .get_proposer_at(
+                self.block_height,
+                proposal.message.round,
+                vrf_seed.entropy(),
+                None,
+            )
+            .expect("Couldn't find slot owner!")
+            .validator
+            .signing_key;
+
+        // Verify the signature. The proposal is signed by the proposer of the round the proposal is used in
+        if !proposer.verify(&proposal.signature, data) {
+            return Err(ProposalError::InvalidSignature);
+        }
+
+        // If only the signature verification is relevant, return immediately.
+        if signature_only {
+            // safe because signature_only && precalculated_inherent.is_none() was checked in the beginning of this function
+            return Ok(precalculated_inherent.unwrap());
+        }
+
+        let block = Block::Macro(MacroBlock {
+            header: proposal.message.proposal.0.clone(),
+            body: precalculated_inherent.clone().map(|body| body.0),
+            justification: None,
         });
 
-        // Check that we have the correct body for our header.
-        match &body {
-            Some(body) => {
-                if body.hash::<Blake2bHash>() != proposal.body_root {
-                    debug!("Tendermint - assemble_block: Header and cached body don't match");
-                    return Err(TendermintError::CannotAssembleBlock);
-                }
-            }
-            None => {
-                debug!("Tendermint - assemble_block: Cached body is None");
-                return Err(TendermintError::CannotAssembleBlock);
-            }
+        // If a valid round is set, the VRF seed will be signed by the proposer of that round.
+        // So get that proposer.
+        if let Some(vr) = proposal.message.valid_round {
+            proposer = blockchain
+                .get_proposer_at(self.block_height, vr, vrf_seed.entropy(), None)
+                .expect("Couldn't find slot owner!")
+                .validator
+                .signing_key;
         }
 
-        // Assemble the block and return it.
-        Ok(MacroBlock {
-            header: proposal,
-            body,
-            justification: Some(TendermintProof { round, sig: proof }),
-        })
-    }
+        // Fetch predecessor block. Fail if it doesn't exist.
+        let predecessor = blockchain
+            .get_chain_info(block.parent_hash(), false, None)
+            .map(|info| info.head)
+            .map_err(|_| ProposalError::Other)?;
 
-    /// Broadcasts our proposal to the other validators.
-    // Note: There might be situations when we broadcast the proposal before any other validator is
-    // listening (for example, if we were also the producer of the last micro block before this
-    // macro block). In that case, we will lose a Tendermint round unnecessarily. If this happens
-    // frequently, it might make sense for us to have the validator broadcast his proposal twice.
-    // One at the beginning and another at half of the timeout duration.
-    async fn broadcast_proposal(
-        self,
-        round: u32,
-        proposal: Self::ProposalTy,
-        valid_round: Option<u32>,
-    ) -> Result<Self, TendermintError> {
-        // Create the Tendermint proposal message.
-        let proposal_message = TendermintProposal {
-            value: proposal,
-            valid_round,
-            round,
-        };
-
-        // Sign the message with our validator key.
-        let signed_proposal = SignedTendermintProposal::from_message(
-            proposal_message,
-            &self.block_producer.voting_key.secret_key,
-            self.validator_slot_band,
-        );
-
-        debug!(
-            round = round,
-            valid_round = valid_round,
-            "Broadcasting tendermint proposal"
-        );
-
-        // Broadcast the signed proposal to the network.
-        if let Err(err) = self.network.publish::<ProposalTopic>(signed_proposal).await {
-            error!("Publishing proposal failed: {:?}", err);
-        }
-
-        Ok(self)
-    }
-
-    /// Receives a proposal from this round's proposer. It also checks if the proposal is valid. If
-    /// it doesn't a valid proposal from this round's proposer within a set time, then it returns
-    /// Timeout.
-    /// Note that it only accepts the first proposal sent by the proposer, valid or invalid. If it is
-    /// invalid, then it will immediately return Timeout, even if the timeout duration hasn't elapsed
-    /// yet.
-    async fn await_proposal(
-        mut self,
-        round: u32,
-    ) -> Result<
-        (
-            Self,
-            ProposalResult<Self::ProposalTy, Self::ProposalCacheTy>,
-        ),
-        TendermintError,
-    > {
-        let (timeout, proposer_slot_band, proposer_voting_key, proposer_signing_key) = {
-            let blockchain = self.blockchain.read();
-
-            // Get the proposer's slot and slot number for this round.
-            let proposer_slot = blockchain
-                .get_proposer_at(self.block_height, round, self.prev_seed.entropy(), None)
-                .expect("Couldn't find slot owner!");
-            let proposer_slot_band = proposer_slot.band;
-
-            // Get the validator keys.
-            let proposer_voting_key = *proposer_slot.validator.voting_key.uncompress_unchecked();
-            let proposer_signing_key = proposer_slot.validator.signing_key;
-
-            // Calculate the timeout duration.
-            let timeout = Duration::from_millis(
-                Policy::tendermint_timeout_init()
-                    + round as u64 * Policy::tendermint_timeout_delta(),
-            );
-
-            debug!(
-                block_number = blockchain.block_number() + 1,
-                round = &round,
-                slot_band = &proposer_slot_band,
-                "Awaiting proposal timeout={:?}",
-                &timeout
-            );
-
-            (
-                timeout,
-                proposer_slot_band,
-                proposer_voting_key,
-                proposer_signing_key,
-            )
-        };
-
-        // This waits for a proposal from the proposer until it timeouts.
-        let await_res = tokio::time::timeout(
-            timeout,
-            self.await_proposal_loop(
-                proposer_slot_band,
-                &proposer_voting_key,
-                self.block_height,
-                round,
-            ),
-        )
-        .await;
-
-        // Unwrap our await result. If we timed out, we return a proposal timeout right here.
-        let (proposal, id) = match await_res {
-            Ok(v) => v,
-            Err(err) => {
-                debug!("Tendermint - await_proposal: Timed out: {:?}", err);
-                return Ok((self, ProposalResult::Timeout));
-            }
-        };
-
-        let (acceptance, valid_round, header, body) = {
-            let blockchain = self.blockchain.read();
-
-            // Get the header and valid round from the proposal.
-            let header = proposal.value;
-            let valid_round = proposal.valid_round;
-
-            // In case the proposal has a valid round, the original proposer signed the VRF Seed,
-            // so the original slot owners key must be retrieved for header verification.
-            let proposer_key = if valid_round.is_some() {
-                let proposer_slot = blockchain
-                    .get_proposer_at(
-                        self.block_height,
-                        header.round,
-                        self.prev_seed.entropy(),
-                        None,
-                    )
-                    .expect("Couldn't find slot owner!");
-
-                proposer_slot.validator.signing_key
-            } else {
-                proposer_signing_key
-            };
-
-            // Create a block with just our header.
-            let block = Block::Macro(MacroBlock {
-                header: header.clone(),
-                body: None,
-                justification: None,
-            });
-
-            // Check the validity of the block header. If it is invalid, we return a proposal timeout
-            // right here. This doesn't check anything that depends on the blockchain state.
-            let head = blockchain.head();
-            if let Err(error) = block.header().verify(false) {
-                debug!(%error, "Tendermint - await_proposal: Invalid block header");
-                (MsgAcceptance::Reject, valid_round, None, None)
-            } else if let Err(error) = block.verify_immediate_successor(&head) {
-                debug!(%error, "Tendermint - await_proposal: Invalid block header for blockchain head");
-                (MsgAcceptance::Reject, valid_round, None, None)
-            } else if let Err(error) = block.verify_macro_successor(&blockchain.macro_head()) {
-                debug!(%error, "Tendermint - await_proposal: Invalid block header for blockchain macro head");
-                (MsgAcceptance::Reject, valid_round, None, None)
-            } else if let Err(error) = block.verify_proposer(&proposer_key, head.seed()) {
-                debug!(%error, "Tendermint - await_proposal: Invalid block header, VRF seed verification failed");
-                (MsgAcceptance::Reject, valid_round, None, None)
-            } else {
-                // Get a write transaction to the database.
-                let mut txn = blockchain.write_transaction();
-
-                // Get the blockchain state.
-                let state = blockchain.state();
-
-                // Update our blockchain state using the received proposal. If we can't update the state, we
-                // return a proposal timeout.
-                if blockchain.commit_accounts(state, &block, &mut txn).is_err() {
-                    debug!("Tendermint - await_proposal: Can't update state");
-                    (MsgAcceptance::Reject, valid_round, None, None)
-                } else {
-                    // Check the validity of the block against our state. If it is invalid, we return a proposal
-                    // timeout. This also returns the block body that matches the block header
-                    // (assuming that the block is valid).
-                    let block_state = blockchain.verify_block_state(state, &block, Some(&txn));
-
-                    match block_state {
-                        Ok(body) => (
-                            MsgAcceptance::Accept,
-                            valid_round,
-                            Some(header),
-                            Some(body.expect(
-                                "verify_block_state returns a body for blocks without one",
-                            )),
-                        ),
-                        Err(err) => {
-                            debug!(
-                                "Tendermint - await_proposal: Invalid block state: {:?}",
-                                err
-                            );
-                            (MsgAcceptance::Reject, valid_round, None, None)
-                        }
-                    }
-                }
-            }
-        };
-
-        // Indicate the messages acceptance to the network
-        self.network
-            .validate_message::<ProposalTopic>(id, acceptance);
-
-        // Regardless of broadcast result, process proposal if it exists. Timeout otherwise.
-        if let Some(header) = header {
-            // Return the proposal.
-            Ok((
-                self,
-                ProposalResult::Proposal((header, body.expect("Body must exist")), valid_round),
-            ))
+        if let Err(error) = block.header().verify(false) {
+            debug!(%error, "Tendermint - await_proposal: Invalid block header");
+            Err(ProposalError::InvalidProposal)
+        } else if let Err(error) = block.verify_immediate_successor(&predecessor) {
+            debug!(%error, "Tendermint - await_proposal: Invalid block header for blockchain head");
+            Err(ProposalError::InvalidProposal)
+        } else if let Err(error) = block.verify_macro_successor(&blockchain.macro_head()) {
+            debug!(%error, "Tendermint - await_proposal: Invalid block header for blockchain macro head");
+            Err(ProposalError::InvalidProposal)
+        } else if let Err(error) = block.verify_proposer(&proposer, predecessor.seed()) {
+            debug!(%error, "Tendermint - await_proposal: Invalid block header, VRF seed verification failed");
+            Err(ProposalError::InvalidProposal)
         } else {
-            Ok((self, ProposalResult::Timeout))
-        }
-    }
+            // Get a write transaction to the database.
+            let mut txn = blockchain.write_transaction();
 
-    /// This broadcasts our vote for a given proposal and aggregates the votes from the other
-    /// validators. It simply calls the aggregation adapter, which does all the work.
-    async fn broadcast_and_aggregate(
-        mut self,
-        round: u32,
-        step: Step,
-        proposal_hash: Option<Self::ProposalHashTy>,
-    ) -> Result<(Self, AggregationResult<Self::ProposalHashTy, Self::ProofTy>), TendermintError>
-    {
-        self.aggregation_adapter
-            .broadcast_and_aggregate(round, step, proposal_hash)
-            .await
-            .map(|result| (self, result))
-    }
+            // Get the blockchain state.
+            let state = blockchain.state();
 
-    fn rebroadcast_and_aggregate(
-        &self,
-        round: u32,
-        step: Step,
-        proposal_hash: Option<Self::ProposalHashTy>,
-    ) {
-        self.aggregation_adapter
-            .rebroadcast_and_aggregate(round, step, proposal_hash)
-    }
+            // Update our blockchain state using the received proposal. If we can't update the state, we
+            // return a proposal timeout.
+            if blockchain.commit_accounts(state, &block, &mut txn).is_err() {
+                debug!("Tendermint - await_proposal: Can't update state");
+                return Err(ProposalError::InvalidProposal);
+            }
 
-    /// Returns the vote aggregation for a given round and step. It simply calls the aggregation
-    /// adapter, which does all the work.
-    async fn get_aggregation(
-        self,
-        round: u32,
-        step: Step,
-    ) -> Result<(Self, AggregationResult<Self::ProposalHashTy, Self::ProofTy>), TendermintError>
-    {
-        self.aggregation_adapter
-            .get_aggregate(round, step)
-            .map(|result| (self, result))
-    }
-
-    /// Calculates the nano_zkp_hash used as the proposal hash, but for performance reasons we fetch
-    /// the pk_tree_root from the already cached block body.
-    fn hash_proposal(
-        &self,
-        proposal: Self::ProposalTy,
-        proposal_cache: Self::ProposalCacheTy,
-    ) -> Self::ProposalHashTy {
-        // Calculate the header hash.
-        let mut message = proposal.hash::<Blake2bHash>().serialize_to_vec();
-
-        // Fetch the pk_tree_root.
-        let pk_tree_root = proposal_cache.pk_tree_root;
-
-        // If it is Some, add its contents to the message.
-        if let Some(mut bytes) = pk_tree_root {
-            message.append(&mut bytes);
-        }
-
-        // Return the final hash.
-        message.hash::<Blake2sHash>()
-    }
-
-    fn get_background_task(&mut self) -> BoxFuture<'static, ()> {
-        self.aggregation_adapter.create_background_task().boxed()
-    }
-}
-
-impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintInterface<TValidatorNetwork> {
-    /// This function waits in a loop until it gets a proposal message from a given validator with a
-    /// valid signature. It is just a helper function for the await_proposal function in this file.
-    async fn await_proposal_loop(
-        &mut self,
-        validator_slot_band: u16,
-        validator_key: &PublicKey,
-        expected_height: u32,
-        expected_round: u32,
-    ) -> (TendermintProposal, TValidatorNetwork::PubsubId) {
-        while let Some((msg, id)) = self.proposal_stream.as_mut().next().await {
-            // most basic check first: only process current height proposals, discard old ones
-            if msg.message.value.block_number == expected_height
-                && msg.message.round == expected_round
-            {
-                // Check if the proposal comes from the correct validator and the signature of the
-                // proposal is valid. If not, keep awaiting.
-                debug!(
-                    block_number = &msg.message.value.block_number,
-                    round = &msg.message.round,
-                    validator_idx = &msg.signer_idx,
-                    "Received Tendermint Proposal"
-                );
-
-                if validator_slot_band == msg.signer_idx {
-                    if msg.verify(validator_key) {
-                        return (msg.message, id);
-                    } else {
-                        debug!("Tendermint - await_proposal: Invalid signature");
-                    }
-                } else {
-                    debug!(
-                        "Tendermint - await_proposal: Invalid validator id. Expected {}, found {}",
-                        validator_slot_band, msg.signer_idx
-                    );
+            // Check the validity of the block against our state. If it is invalid, we return a proposal
+            // timeout. This also returns the block body that matches the block header
+            // (assuming that the block is valid).
+            match blockchain.verify_block_state(state, &block, Some(&txn)) {
+                Ok(Some(inherent)) => Ok(Body(inherent)),
+                Ok(None) => Ok(precalculated_inherent.unwrap()),
+                Err(error) => {
+                    log::debug!(?error, "Invalid block state");
+                    Err(ProposalError::InvalidProposal)
                 }
             }
         }
-
-        // Evidently, the only way to escape the loop is to receive a valid message. But we need to
-        // tell the Rust compiler this.
-        unreachable!()
     }
 
-    pub fn new(
-        validator_slot_band: u16,
-        active_validators: Validators,
-        prev_seed: VrfSeed,
-        block_height: u32,
-        network: Arc<TValidatorNetwork>,
-        blockchain: Arc<RwLock<Blockchain>>,
-        block_producer: BlockProducer,
-        proposal_stream: BoxStream<
-            'static,
-            (
-                SignedTendermintProposal,
-                <TValidatorNetwork as ValidatorNetwork>::PubsubId,
-            ),
-        >,
-        initial_round: u32,
-    ) -> Self {
-        // Create the aggregation object.
-        let aggregation_adapter = HandelTendermintAdapter::new(
-            validator_slot_band,
-            active_validators.clone(),
-            block_height,
-            network.clone(),
-            block_producer.voting_key.secret_key,
+    fn sign_proposal(
+        &self,
+        proposal_message: &ProposalMessage<Self::Proposal>,
+    ) -> Self::ProposalSignature {
+        let data = Self::hash_proposal(proposal_message);
+        self.block_producer.signing_key.sign(data)
+    }
+
+    fn create_aggregation(
+        &self,
+        round: u32,
+        step: nimiq_tendermint::Step,
+        proposal_hash: Option<Self::ProposalHash>,
+        update_stream: BoxStream<'static, Self::AggregationMessage>,
+    ) -> futures::stream::BoxStream<'static, Self::Aggregation> {
+        // Wrap the network
+        let network =
+            NetworkWrapper::new(self.block_height, (round, step), Arc::clone(&self.network));
+
+        let step = match step {
+            Step::Precommit => TendermintStep::PreCommit,
+            Step::Prevote => TendermintStep::PreVote,
+            _ => panic!("Step must be either prevote or precommit."),
+        };
+
+        let id = TendermintIdentifier {
+            block_number: self.block_height,
+            round_number: round,
+            step,
+        };
+
+        let tendermint_vote = TendermintVote {
+            proposal_hash,
+            id: id.clone(),
+        };
+
+        let own_contribution = TendermintContribution::from_vote(
+            tendermint_vote,
+            &self.block_producer.voting_key.secret_key,
+            self.validator_registry.get_slots(self.validator_slot_band),
         );
 
-        // Create the instance and return it.
-        Self {
+        let protocol = TendermintAggregationProtocol::new(
+            Arc::clone(&self.validator_registry),
+            self.validator_slot_band as usize,
+            1, // to be removed
+            id,
+        );
+
+        Aggregation::new(
+            protocol,
+            nimiq_handel::config::Config::default(),
+            own_contribution,
+            update_stream.map(|item| item.0).boxed(),
             network,
-            offset_time: OffsetTime::default(),
-            validator_slot_band,
-            prev_seed,
-            block_height,
-            block_producer,
-            current_validators: active_validators,
-            blockchain,
-            aggregation_adapter,
-            proposal_stream,
-            initial_round,
+        )
+        .boxed()
+    }
+
+    fn create_decision(
+        &self,
+        proposal: Self::Proposal,
+        inherent: Self::Inherent,
+        aggregation: Self::Aggregation,
+        round: u32,
+    ) -> Self::Decision {
+        // make sure the proof is sufficient for the proposal
+        let proof = aggregation
+            .contributions
+            .get(&Some(proposal.hash(&inherent)))
+            .expect("must have header hash present in aggregate");
+
+        if proof.signers.len() < Policy::TWO_F_PLUS_ONE as usize {
+            panic!("Not enough votes to produce a proof")
+        } else {
+            // make sure the body fits the proposal
+            if inherent.0.hash::<Blake2bHash>() == proposal.0.body_root {
+                // Assemble the block and return it.
+                MacroBlock {
+                    header: proposal.0,
+                    body: Some(inherent.0),
+                    justification: Some(TendermintProof {
+                        round,
+                        sig: proof.clone(),
+                    }),
+                }
+            } else {
+                panic!("Body hash mismatch!");
+            }
         }
     }
 }

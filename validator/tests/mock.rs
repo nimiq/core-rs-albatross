@@ -1,15 +1,21 @@
+use std::{sync::Arc, time::Duration};
+
 use futures::{future, StreamExt};
 use tokio::time;
 
+use beserial::{Deserialize, Serialize};
 use nimiq_block::{MultiSignature, SignedSkipBlockInfo, SkipBlockInfo};
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent};
 use nimiq_bls::{AggregateSignature, KeyPair as BlsKeyPair};
 use nimiq_collections::BitSet;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis_builder::GenesisBuilder;
-use nimiq_handel::update::{LevelUpdate, LevelUpdateMessage};
+use nimiq_handel::update::LevelUpdate;
 use nimiq_keys::{Address, KeyPair, SecureGenerate};
-use nimiq_network_interface::network::{CloseReason, Network as NetworkInterface};
+use nimiq_network_interface::{
+    network::{CloseReason, Network as NetworkInterface},
+    request::{MessageMarker, RequestCommon},
+};
 use nimiq_network_libp2p::Network;
 use nimiq_network_mock::MockHub;
 use nimiq_test_log::test;
@@ -20,9 +26,17 @@ use nimiq_test_utils::{
     },
 };
 use nimiq_validator::aggregation::skip_block::SignedSkipBlockMessage;
-use nimiq_vrf::VrfSeed;
-use std::sync::Arc;
-use std::time::Duration;
+
+#[derive(Debug, Deserialize, Serialize)]
+struct SkipBlockMessage(LevelUpdate<SignedSkipBlockMessage>);
+
+impl RequestCommon for SkipBlockMessage {
+    type Kind = MessageMarker;
+    const TYPE_ID: u16 = 2;
+    const MAX_REQUESTS: u32 = 500;
+    const TIME_WINDOW: std::time::Duration = Duration::from_millis(500);
+    type Response = ();
+}
 
 #[test(tokio::test)]
 async fn one_validator_can_create_micro_blocks() {
@@ -139,18 +153,11 @@ async fn four_validators_can_do_skip_block() {
 }
 
 fn create_skip_block_update(
-    block_number: u32,
-    prev_seed: VrfSeed,
+    skip_block_info: SkipBlockInfo,
     key_pair: BlsKeyPair,
     validator_id: u16,
     slots: &Vec<u16>,
-) -> LevelUpdateMessage<SignedSkipBlockMessage, SkipBlockInfo> {
-    // create skip block data according to parameters
-    let skip_block_info = SkipBlockInfo {
-        block_number,
-        vrf_entropy: prev_seed.entropy(),
-    };
-
+) -> LevelUpdate<SignedSkipBlockMessage> {
     // get a single signature for this skip block data
     let signed_skip_block_info = SignedSkipBlockInfo::from_message(
         skip_block_info.clone(),
@@ -180,7 +187,6 @@ fn create_skip_block_update(
         1,
         validator_id as usize,
     )
-    .with_tag(skip_block_info)
 }
 
 #[ignore]
@@ -255,10 +261,14 @@ async fn validator_can_catch_up() {
 
     let slots = (start..end).collect();
 
+    let skip_block_info = SkipBlockInfo {
+        block_number: 1,
+        vrf_entropy: blockchain.read().head().seed().entropy(),
+    };
+
     // Manually construct a skip block for the validator
     let vc = create_skip_block_update(
-        1,
-        blockchain.read().head().seed().clone(),
+        skip_block_info,
         validator.voting_key(),
         validator.validator_slot_band(),
         &slots,
@@ -274,10 +284,7 @@ async fn validator_can_catch_up() {
     for network in &networks {
         for peer_id in network.get_peers() {
             network
-                .message::<LevelUpdateMessage<SignedSkipBlockMessage, SkipBlockInfo>>(
-                    vc.clone(),
-                    peer_id,
-                )
+                .message::<SkipBlockMessage>(SkipBlockMessage(vc.clone()), peer_id)
                 .await
                 .unwrap();
         }

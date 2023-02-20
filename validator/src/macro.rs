@@ -1,117 +1,129 @@
-use std::io;
-use std::pin::Pin;
-use std::sync::Arc;
-use std::task::{Context, Poll};
+use std::{
+    marker::PhantomData,
+    pin::Pin,
+    sync::Arc,
+    task::{Context, Poll},
+};
 
-use futures::{stream::BoxStream, Stream, StreamExt};
+use futures::{
+    future,
+    stream::{BoxStream, Stream, StreamExt},
+};
 use parking_lot::RwLock;
 
-use beserial::{Deserialize, Serialize};
-use nimiq_block::SignedTendermintProposal;
+use nimiq_block::MacroBlock;
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::Blockchain;
-use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
+use nimiq_keys::Signature as SchnorrSignature;
+use nimiq_network_interface::network::Topic;
 use nimiq_primitives::slots::Validators;
-use nimiq_tendermint::{TendermintOutsideDeps, TendermintReturn, TendermintState};
+use nimiq_tendermint::{Return as TendermintReturn, SignedProposalMessage, Tendermint};
 use nimiq_validator_network::ValidatorNetwork;
-use nimiq_vrf::VrfSeed;
 
-use crate::tendermint::TendermintInterface;
+use crate::{
+    aggregation::tendermint::{
+        proposal::{Header, SignedProposal},
+        state::MacroState,
+        update_message::TendermintUpdate,
+    },
+    tendermint::TendermintProtocol,
+};
 
-pub(crate) struct PersistedMacroState<TValidatorNetwork: ValidatorNetwork + 'static>(
-    pub  TendermintState<
-        <TendermintInterface<TValidatorNetwork> as TendermintOutsideDeps>::ProposalTy,
-        <TendermintInterface<TValidatorNetwork> as TendermintOutsideDeps>::ProposalCacheTy,
-        <TendermintInterface<TValidatorNetwork> as TendermintOutsideDeps>::ProposalHashTy,
-        <TendermintInterface<TValidatorNetwork> as TendermintOutsideDeps>::ProofTy,
-    >,
-);
-
-// Don't know why this is necessary. #[derive(Clone)] does not work.
-impl<TValidatorNetwork: ValidatorNetwork + 'static> Clone
-    for PersistedMacroState<TValidatorNetwork>
+pub(crate) enum MappedReturn<TValidatorNetwork: ValidatorNetwork + 'static>
+where
+    <TValidatorNetwork as ValidatorNetwork>::PubsubId: std::fmt::Debug + Unpin,
 {
-    fn clone(&self) -> Self {
-        Self(self.0.clone())
-    }
+    Update(MacroState),
+    Decision(MacroBlock),
+    ProposalAccepted(SignedProposalMessage<Header<TValidatorNetwork::PubsubId>, SchnorrSignature>),
+    ProposalIgnored(SignedProposalMessage<Header<TValidatorNetwork::PubsubId>, SchnorrSignature>),
+    ProposalRejected(SignedProposalMessage<Header<TValidatorNetwork::PubsubId>, SchnorrSignature>),
 }
 
-impl<TValidatorNetwork: ValidatorNetwork> IntoDatabaseValue
-    for PersistedMacroState<TValidatorNetwork>
+pub struct ProposalTopic<TValidatorNetwork> {
+    _phantom: PhantomData<TValidatorNetwork>,
+}
+
+impl<TValidatorNetwork: ValidatorNetwork + 'static> Topic for ProposalTopic<TValidatorNetwork>
+where
+    <TValidatorNetwork as ValidatorNetwork>::PubsubId: std::fmt::Debug + Unpin,
 {
-    fn database_byte_size(&self) -> usize {
-        self.0.serialized_size()
-    }
+    type Item = SignedProposal;
 
-    fn copy_into_database(&self, mut bytes: &mut [u8]) {
-        Serialize::serialize(&self.0, &mut bytes).unwrap();
-    }
+    const BUFFER_SIZE: usize = 8;
+    const NAME: &'static str = "tendermint-proposal";
+    const VALIDATE: bool = true;
 }
 
-impl<TValidatorNetwork: ValidatorNetwork> FromDatabaseValue
-    for PersistedMacroState<TValidatorNetwork>
+/// Pretty much just a wrapper for tendermint, doing some type conversions.
+pub(crate) struct ProduceMacroBlock<TValidatorNetwork: ValidatorNetwork + 'static>
+where
+    <TValidatorNetwork as ValidatorNetwork>::PubsubId: std::fmt::Debug + Unpin,
 {
-    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
-    where
-        Self: Sized,
-    {
-        let mut cursor = io::Cursor::new(bytes);
-        Ok(Self(Deserialize::deserialize(&mut cursor)?))
-    }
+    tendermint: BoxStream<'static, MappedReturn<TValidatorNetwork>>,
 }
 
-pub(crate) struct ProduceMacroBlock<TValidatorNetwork: ValidatorNetwork + 'static> {
-    tendermint: BoxStream<'static, TendermintReturn<TendermintInterface<TValidatorNetwork>>>,
-}
-
-impl<TValidatorNetwork: ValidatorNetwork + 'static> ProduceMacroBlock<TValidatorNetwork> {
+impl<TValidatorNetwork: ValidatorNetwork + 'static> ProduceMacroBlock<TValidatorNetwork>
+where
+    <TValidatorNetwork as ValidatorNetwork>::PubsubId: std::fmt::Debug + Unpin,
+{
     pub fn new(
         blockchain: Arc<RwLock<Blockchain>>,
         network: Arc<TValidatorNetwork>,
         block_producer: BlockProducer,
         validator_slot_band: u16,
-        active_validators: Validators,
-        prev_seed: VrfSeed,
+        current_validators: Validators,
         block_height: u32,
-        initial_round: u32,
-        state: Option<PersistedMacroState<TValidatorNetwork>>,
+        state_opt: Option<MacroState>,
         proposal_stream: BoxStream<
             'static,
-            (
-                SignedTendermintProposal,
-                <TValidatorNetwork as ValidatorNetwork>::PubsubId,
-            ),
+            SignedProposalMessage<
+                Header<<TValidatorNetwork as ValidatorNetwork>::PubsubId>,
+                SchnorrSignature,
+            >,
         >,
     ) -> Self {
-        // create the TendermintOutsideDeps instance
-        let deps = TendermintInterface::new(
-            validator_slot_band,
-            active_validators,
-            prev_seed,
-            block_height,
-            network,
+        let input = network
+            .receive::<TendermintUpdate>()
+            .filter_map(move |item| {
+                future::ready(if item.0 .1 == block_height {
+                    Some(item.0 .0)
+                } else {
+                    None
+                })
+            })
+            .boxed();
+
+        let dependencies = TendermintProtocol::new(
             blockchain,
+            network,
             block_producer,
-            proposal_stream,
-            initial_round,
+            current_validators,
+            validator_slot_band,
+            block_height,
         );
 
-        let state_opt = state.map(|s| s.0).filter(|s| s.height == block_height);
-
         // create the Tendermint instance, which implements Stream
-
-        let tendermint = match nimiq_tendermint::Tendermint::new(deps, state_opt) {
-            Ok(tendermint) => tendermint,
-            Err(returned_deps) => {
-                log::debug!("TendermintState was invalid. Restarting Tendermint without state");
-                // new only returns None if the state failed to verify, which without a state is impossible.
-                // Thus unwrapping is safe.
-                match nimiq_tendermint::Tendermint::new(returned_deps, None) {
-                    Ok(tendermint) => tendermint,
-                    Err(_) => unreachable!(),
-                }
+        let tendermint = Tendermint::new(
+            dependencies,
+            state_opt.and_then(|s| s.into_tendermint_state(block_height)),
+            proposal_stream,
+            input,
+        )
+        // and map the return value such that a state update can be persisted.
+        .map(move |item| match item {
+            TendermintReturn::Decision(decision) => MappedReturn::Decision(decision),
+            TendermintReturn::Update(state) => {
+                MappedReturn::Update(MacroState::from_tendermint_state(block_height, state))
             }
-        };
+            TendermintReturn::ProposalAccepted(proposal) => {
+                MappedReturn::ProposalAccepted(proposal)
+            }
+            TendermintReturn::ProposalIgnored(proposal) => MappedReturn::ProposalIgnored(proposal),
+            TendermintReturn::ProposalRejected(proposal) => {
+                MappedReturn::ProposalRejected(proposal)
+            }
+        });
 
         // Create the instance and return it.
         Self {
@@ -120,10 +132,11 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> ProduceMacroBlock<TValidator
     }
 }
 
-impl<TValidatorNetwork: ValidatorNetwork + 'static> Stream
-    for ProduceMacroBlock<TValidatorNetwork>
+impl<TValidatorNetwork: ValidatorNetwork + 'static> Stream for ProduceMacroBlock<TValidatorNetwork>
+where
+    <TValidatorNetwork as ValidatorNetwork>::PubsubId: std::fmt::Debug + Unpin,
 {
-    type Item = TendermintReturn<TendermintInterface<TValidatorNetwork>>;
+    type Item = MappedReturn<TValidatorNetwork>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         self.tendermint.poll_next_unpin(cx)

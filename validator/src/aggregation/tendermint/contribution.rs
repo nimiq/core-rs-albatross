@@ -4,8 +4,12 @@ use beserial::{Deserialize, Serialize};
 use nimiq_block::{MultiSignature, TendermintVote};
 use nimiq_bls::{AggregateSignature, SecretKey};
 use nimiq_collections::bitset::BitSet;
-use nimiq_handel::contribution::{AggregatableContribution, ContributionError};
+use nimiq_handel::{
+    contribution::{AggregatableContribution, ContributionError},
+    update::LevelUpdate,
+};
 use nimiq_hash::Blake2sHash;
+use nimiq_tendermint::Aggregation;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct TendermintContribution {
@@ -49,10 +53,8 @@ impl TendermintContribution {
 }
 
 impl AggregatableContribution for TendermintContribution {
-    const TYPE_ID: u16 = 124;
-
-    /// Combines two TendermintContributions Every different proposal is represented as its own multisignature.
-    /// When combining non existing keys must be inserted while the mutlisignatures of existing keys are combined.
+    /// Combines two TendermintContributions. Every different proposal is represented with its own multisignature.
+    /// When combining non existing keys, they must be inserted while the multisignatures of existing keys are combined.
     fn combine(&mut self, other_contribution: &Self) -> Result<(), ContributionError> {
         // TODO: If we don't need the overlapping IDs for the error, we can use `intersection_size`
         let overlap = &self.contributors() & &other_contribution.contributors();
@@ -86,5 +88,43 @@ impl AggregatableContribution for TendermintContribution {
                 aggregated_set |= multi_sig.1.contributors();
                 aggregated_set
             })
+    }
+}
+
+impl Aggregation<Blake2sHash> for TendermintContribution {
+    fn all_contributors(&self) -> BitSet {
+        self.contributors()
+    }
+    fn contributors_for(&self, vote: Option<&Blake2sHash>) -> BitSet {
+        if let Some(multisig) = self.contributions.get(&vote.cloned()) {
+            multisig.contributors()
+        } else {
+            BitSet::default()
+        }
+    }
+    fn proposals(&self) -> Vec<(Blake2sHash, usize)> {
+        self.contributions
+            .iter()
+            .filter_map(|(hash_opt, sig)| {
+                hash_opt
+                    .as_ref()
+                    .map(|hash| (hash.clone(), sig.contributors().len()))
+            })
+            .collect()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct AggregateMessage(pub(crate) LevelUpdate<TendermintContribution>);
+
+impl Aggregation<Blake2sHash> for AggregateMessage {
+    fn all_contributors(&self) -> BitSet {
+        self.0.aggregate.all_contributors()
+    }
+    fn contributors_for(&self, vote: Option<&Blake2sHash>) -> BitSet {
+        self.0.aggregate.contributors_for(vote)
+    }
+    fn proposals(&self) -> Vec<(Blake2sHash, usize)> {
+        self.0.aggregate.proposals()
     }
 }

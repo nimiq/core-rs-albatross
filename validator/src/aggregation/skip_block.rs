@@ -2,8 +2,13 @@ use std::fmt;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
+use std::time::Duration;
 
-use futures::{ready, stream::select, stream::BoxStream, Stream, StreamExt};
+use futures::{
+    future::FutureExt,
+    ready,
+    stream::{select, BoxStream, Stream, StreamExt},
+};
 use parking_lot::RwLock;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -20,13 +25,13 @@ use nimiq_handel::identity::WeightRegistry;
 use nimiq_handel::partitioner::BinomialPartitioner;
 use nimiq_handel::protocol::Protocol;
 use nimiq_handel::store::ReplaceStore;
-use nimiq_handel::update::{LevelUpdate, LevelUpdateMessage};
+use nimiq_handel::update::LevelUpdate;
 use nimiq_hash::Blake2sHash;
+use nimiq_network_interface::request::{MessageMarker, RequestCommon};
 use nimiq_primitives::policy;
 use nimiq_primitives::slots::Validators;
 use nimiq_validator_network::ValidatorNetwork;
 
-use super::network_sink::NetworkSink;
 use super::registry::ValidatorRegistry;
 use super::verifier::MultithreadedVerifier;
 
@@ -38,13 +43,13 @@ enum SkipBlockResult {
 /// Keeps track of SkipBlockInfo for future Aggregations in order to be able to sync the state of this node with others
 /// in case it recognizes it is behind.
 struct InputStreamSwitch {
-    input: BoxStream<'static, LevelUpdateMessage<SignedSkipBlockMessage, SkipBlockInfo>>,
+    input: BoxStream<'static, SkipBlockUpdate>,
     current_skip_block: SkipBlockInfo,
 }
 
 impl InputStreamSwitch {
     fn new(
-        input: BoxStream<'static, LevelUpdateMessage<SignedSkipBlockMessage, SkipBlockInfo>>,
+        input: BoxStream<'static, SkipBlockUpdate>,
         current_skip_block: SkipBlockInfo,
     ) -> (Self, UnboundedReceiver<SkipBlockResult>) {
         let (_, receiver) = unbounded_channel();
@@ -62,20 +67,53 @@ impl Stream for InputStreamSwitch {
     type Item = LevelUpdate<SignedSkipBlockMessage>;
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         while let Some(message) = ready!(self.input.poll_next_unpin(cx)) {
-            if message.tag.block_number != self.current_skip_block.block_number
-                || message.tag.vrf_entropy != self.current_skip_block.vrf_entropy
+            if message.1.block_number != self.current_skip_block.block_number
+                || message.1.vrf_entropy != self.current_skip_block.vrf_entropy
             {
                 // The LevelUpdate is not for this skip block and thus irrelevant.
                 // TODO If it is for a future skip block we might want to shortcut a HeadRequest here.
                 continue;
             }
 
-            return Poll::Ready(Some(message.update));
+            return Poll::Ready(Some(message.0));
         }
 
         // We have exited the loop, so poll_next() must have returned Poll::Ready(None).
         // Thus, we terminate the stream.
         Poll::Ready(None)
+    }
+}
+
+struct NetworkWrapper<TValidatorNetwork: ValidatorNetwork> {
+    network: Arc<TValidatorNetwork>,
+    tag: SkipBlockInfo,
+}
+
+impl<TValidatorNetwork: ValidatorNetwork> NetworkWrapper<TValidatorNetwork> {
+    fn new(tag: SkipBlockInfo, network: Arc<TValidatorNetwork>) -> Self {
+        Self { network, tag }
+    }
+}
+impl<TValidatorNetwork: ValidatorNetwork + 'static> nimiq_handel::network::Network
+    for NetworkWrapper<TValidatorNetwork>
+{
+    type Contribution = SignedSkipBlockMessage;
+
+    fn send_to(
+        &self,
+        (msg, recipient): (nimiq_handel::update::LevelUpdate<Self::Contribution>, usize),
+    ) -> futures::future::BoxFuture<'static, ()> {
+        // Create the update.
+        let update_message = SkipBlockUpdate(msg, self.tag.clone());
+
+        // clone network so it can be moved into the future
+        let nw = Arc::clone(&self.network);
+
+        // create the send future and return it.
+        async move {
+            nw.send_to(&[recipient], update_message).await;
+        }
+        .boxed()
     }
 }
 
@@ -89,8 +127,6 @@ pub struct SignedSkipBlockMessage {
 }
 
 impl AggregatableContribution for SignedSkipBlockMessage {
-    const TYPE_ID: u16 = 123;
-
     fn contributors(&self) -> BitSet {
         self.proof.contributors()
     }
@@ -98,6 +134,17 @@ impl AggregatableContribution for SignedSkipBlockMessage {
     fn combine(&mut self, other_contribution: &Self) -> Result<(), ContributionError> {
         self.proof.combine(&other_contribution.proof)
     }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct SkipBlockUpdate(pub LevelUpdate<SignedSkipBlockMessage>, pub SkipBlockInfo);
+
+impl RequestCommon for SkipBlockUpdate {
+    type Kind = MessageMarker;
+    const TYPE_ID: u16 = 123;
+    const MAX_REQUESTS: u32 = 500;
+    const TIME_WINDOW: std::time::Duration = Duration::from_millis(500);
+    type Response = ();
 }
 
 struct SkipBlockAggregationProtocol {
@@ -240,24 +287,16 @@ impl SkipBlockAggregation {
             );
 
             let (input_switch, receiver) = InputStreamSwitch::new(
-                Box::pin(
-                    network
-                        .receive::<LevelUpdateMessage<SignedSkipBlockMessage, SkipBlockInfo>>()
-                        .map(move |msg| msg.0),
-                ),
+                Box::pin(network.receive::<SkipBlockUpdate>().map(|item| item.0)),
                 skip_block_info.clone(),
             );
 
             let aggregation = Aggregation::new(
                 protocol,
-                skip_block_info.clone(),
                 Config::default(),
                 own_contribution,
                 Box::pin(input_switch),
-                Box::new(NetworkSink::<
-                    LevelUpdateMessage<SignedSkipBlockMessage, SkipBlockInfo>,
-                    N,
-                >::new(network.clone())),
+                NetworkWrapper::new(skip_block_info.clone(), Arc::clone(&network)),
             );
 
             let mut stream = select(

@@ -1,40 +1,51 @@
-use futures::stream::BoxStream;
 use std::error::Error;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 use std::task::{Context, Poll, Waker};
 use std::time::Duration;
 
-use futures::{Stream, StreamExt};
+use futures::stream::{BoxStream, Stream, StreamExt};
 use linked_hash_map::LinkedHashMap;
-use nimiq_bls::lazy::LazyPublicKey;
 use parking_lot::RwLock;
 #[cfg(feature = "metrics")]
 use tokio_metrics::TaskMonitor;
 use tokio_stream::wrappers::BroadcastStream;
 
-use crate::micro::{ProduceMicroBlock, ProduceMicroBlockEvent};
-use crate::r#macro::{PersistedMacroState, ProduceMacroBlock};
-use crate::slash::ForkProofPool;
 use nimiq_account::StakingContract;
-use nimiq_block::{Block, BlockHeaderTopic, BlockTopic, BlockType, ProposalTopic};
+use nimiq_block::{Block, BlockHeaderTopic, BlockTopic, BlockType};
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent, ForkEvent, PushResult};
-use nimiq_bls::KeyPair as BlsKeyPair;
+use nimiq_bls::{lazy::LazyPublicKey, KeyPair as BlsKeyPair};
 use nimiq_consensus::{Consensus, ConsensusEvent, ConsensusProxy};
 use nimiq_database::{Database, Environment, ReadTransaction, WriteTransaction};
 use nimiq_hash::{Blake2bHash, Hash};
-use nimiq_keys::{Address, KeyPair as SchnorrKeyPair};
+use nimiq_keys::{Address, KeyPair as SchnorrKeyPair, Signature as SchnorrSignature};
 use nimiq_macros::store_waker;
 use nimiq_mempool::{config::MempoolConfig, mempool::Mempool, mempool_transactions::TxPriority};
-use nimiq_network_interface::network::{Network, PubsubId, Topic};
-use nimiq_primitives::{coin::Coin, policy::Policy};
-use nimiq_tendermint::TendermintReturn;
+use nimiq_network_interface::{
+    network::{MsgAcceptance, Network, PubsubId, Topic},
+    request::request_handler,
+};
+use nimiq_primitives::coin::Coin;
+use nimiq_primitives::policy::Policy;
+use nimiq_tendermint::SignedProposalMessage;
 use nimiq_transaction_builder::TransactionBuilder;
 use nimiq_validator_network::ValidatorNetwork;
+
+use crate::{
+    aggregation::tendermint::{
+        proposal::{Header, RequestProposal},
+        state::MacroState,
+    },
+    micro::{ProduceMicroBlock, ProduceMicroBlockEvent},
+    r#macro::{MappedReturn, ProduceMacroBlock, ProposalTopic},
+    slash::ForkProofPool,
+};
 
 #[derive(PartialEq)]
 enum ValidatorStakingState {
@@ -91,7 +102,10 @@ impl Clone for ValidatorProxy {
     }
 }
 
-pub struct Validator<TNetwork: Network, TValidatorNetwork: ValidatorNetwork + 'static> {
+pub struct Validator<TNetwork: Network, TValidatorNetwork: ValidatorNetwork + 'static>
+where
+    <TValidatorNetwork as ValidatorNetwork>::PubsubId: std::fmt::Debug + Unpin,
+{
     pub consensus: ConsensusProxy<TNetwork>,
     pub blockchain: Arc<RwLock<Blockchain>>,
     network: Arc<TValidatorNetwork>,
@@ -116,7 +130,7 @@ pub struct Validator<TNetwork: Network, TValidatorNetwork: ValidatorNetwork + 's
     automatic_reactivate: Arc<AtomicBool>,
 
     macro_producer: Option<ProduceMacroBlock<TValidatorNetwork>>,
-    macro_state: Option<PersistedMacroState<TValidatorNetwork>>,
+    macro_state: Arc<RwLock<Option<MacroState>>>,
 
     micro_producer: Option<ProduceMicroBlock<TValidatorNetwork>>,
 
@@ -128,8 +142,9 @@ pub struct Validator<TNetwork: Network, TValidatorNetwork: ValidatorNetwork + 's
     control_mempool_monitor: TaskMonitor,
 }
 
-impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
-    Validator<TNetwork, TValidatorNetwork>
+impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Validator<TNetwork, TValidatorNetwork>
+where
+    <TValidatorNetwork as ValidatorNetwork>::PubsubId: std::fmt::Debug + Unpin,
 {
     const MACRO_STATE_DB_NAME: &'static str = "ValidatorState";
     const MACRO_STATE_KEY: &'static str = "validatorState";
@@ -162,10 +177,11 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
 
         let database = env.open_database(Self::MACRO_STATE_DB_NAME.to_string());
 
-        let macro_state: Option<PersistedMacroState<TValidatorNetwork>> = {
+        let macro_state: Option<MacroState> = {
             let read_transaction = ReadTransaction::new(&env);
             read_transaction.get(&database, Self::MACRO_STATE_KEY)
         };
+        let macro_state = Arc::new(RwLock::new(macro_state));
 
         let network1 = Arc::clone(&network);
         let (proposal_sender, proposal_receiver) = ProposalBuffer::new();
@@ -200,7 +216,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             automatic_reactivate,
 
             macro_producer: None,
-            macro_state,
+            macro_state: Arc::clone(&macro_state),
 
             micro_producer: None,
 
@@ -211,16 +227,19 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             #[cfg(feature = "metrics")]
             control_mempool_monitor: TaskMonitor::new(),
         };
+
         this.init();
 
         tokio::spawn(async move {
             network1
-                .subscribe::<ProposalTopic>()
+                .subscribe::<ProposalTopic<TValidatorNetwork>>()
                 .await
                 .expect("Failed to subscribe to proposal topic")
                 .for_each(|proposal| async { proposal_sender.send(proposal) })
                 .await
         });
+
+        Self::init_network_request_receivers(&this.consensus.network, &macro_state);
 
         this
     }
@@ -233,6 +252,14 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
     #[cfg(feature = "metrics")]
     pub fn get_control_mempool_monitor(&self) -> TaskMonitor {
         self.control_mempool_monitor.clone()
+    }
+
+    fn init_network_request_receivers(
+        network: &Arc<TNetwork>,
+        macro_state: &Arc<RwLock<Option<MacroState>>>,
+    ) {
+        let stream = network.receive_requests::<RequestProposal>();
+        tokio::spawn(Box::pin(request_handler(network, stream, macro_state)));
     }
 
     fn init(&mut self) {
@@ -360,12 +387,8 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                     block_producer,
                     self.validator_slot_band(),
                     active_validators,
-                    head.seed().clone(),
                     next_block_number,
-                    0, // TODO: check this
-                    // This cannot be .take() as there is a chance init_epoch is called multiple times without
-                    // poll_macro being called creating a new macro_state that is Some(...).
-                    self.macro_state.clone(),
+                    self.macro_state.read().clone(),
                     proposal_stream,
                 ));
             }
@@ -453,10 +476,34 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         let macro_producer = self.macro_producer.as_mut().unwrap();
         while let Poll::Ready(Some(event)) = macro_producer.poll_next_unpin(cx) {
             match event {
-                TendermintReturn::Error(err) => {
-                    log::error!("Tendermint returned an error: {:?}", err);
+                MappedReturn::ProposalAccepted(proposal) => {
+                    if let Some(id) = proposal.message.proposal.1 {
+                        self.network
+                            .validate_message::<ProposalTopic<TValidatorNetwork>>(
+                                id,
+                                MsgAcceptance::Accept,
+                            );
+                    }
                 }
-                TendermintReturn::Result(block) => {
+                MappedReturn::ProposalIgnored(proposal) => {
+                    if let Some(id) = proposal.message.proposal.1 {
+                        self.network
+                            .validate_message::<ProposalTopic<TValidatorNetwork>>(
+                                id,
+                                MsgAcceptance::Ignore,
+                            );
+                    }
+                }
+                MappedReturn::ProposalRejected(proposal) => {
+                    if let Some(id) = proposal.message.proposal.1 {
+                        self.network
+                            .validate_message::<ProposalTopic<TValidatorNetwork>>(
+                                id,
+                                MsgAcceptance::Reject,
+                            );
+                    }
+                }
+                MappedReturn::Decision(block) => {
                     trace!("Tendermint returned block {}", block);
                     // If the event is a result meaning the next macro block was produced we push it onto our local chain
                     let block_copy = block.clone();
@@ -502,30 +549,28 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
 
                 // In case of a new state update we need to store the new version of it disregarding
                 // any old state which potentially still lingers.
-                TendermintReturn::StateUpdate(update) => {
-                    trace!("Tendermint state update {:?}", update);
+                MappedReturn::Update(update) => {
+                    // trace!("Tendermint state update {:?}", update);
                     let mut write_transaction = WriteTransaction::new(&self.env);
                     let expected_height = self.blockchain.read().block_number() + 1;
-                    if expected_height != update.height {
+                    if expected_height != update.block_number {
                         warn!(
                             unexpected = true,
                             expected_height,
-                            height = update.height,
+                            height = update.block_number,
                             "Got severely outdated Tendermint state, Tendermint instance should be
                              gone already because new blocks were pushed since it was created."
                         );
+                    } else {
+                        write_transaction.put::<str, Vec<u8>>(
+                            &self.database,
+                            Self::MACRO_STATE_KEY,
+                            &beserial::Serialize::serialize_to_vec(&update),
+                        );
+
+                        write_transaction.commit();
+                        *self.macro_state.write() = Some(update);
                     }
-
-                    write_transaction.put::<str, Vec<u8>>(
-                        &self.database,
-                        Self::MACRO_STATE_KEY,
-                        &beserial::Serialize::serialize_to_vec(&update),
-                    );
-
-                    write_transaction.commit();
-
-                    let persistable_state = PersistedMacroState(update);
-                    self.macro_state = Some(persistable_state);
                 }
             }
         }
@@ -634,7 +679,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             }
         });
 
-        // We also add the unpark transaction to our own mempool with high piority
+        // We also add the unpark transaction to our own mempool with high priority
         tokio::spawn(async move {
             debug!("Adding unpark transaction to mempool");
             if mempool
@@ -720,6 +765,8 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
 
 impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Future
     for Validator<TNetwork, TValidatorNetwork>
+where
+    <TValidatorNetwork as ValidatorNetwork>::PubsubId: std::fmt::Debug + Unpin,
 {
     type Output = ();
 
@@ -773,7 +820,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Future
         let mut received_event: Option<Blake2bHash> = None;
         while let Poll::Ready(Some(event)) = self.blockchain_event_rx.poll_next_unpin(cx) {
             let consensus_established = self.consensus.is_established();
-            trace!(consensus_established, "blockchain event {:?}", event);
+            trace!(?event, consensus_established, "blockchain event");
             if consensus_established {
                 let latest_hash = event.get_newest_hash();
                 self.on_blockchain_event(event);
@@ -788,7 +835,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Future
         // Process fork events.
         while let Poll::Ready(Some(Ok(event))) = self.fork_event_rx.poll_next_unpin(cx) {
             let consensus_established = self.consensus.is_established();
-            trace!(consensus_established, "fork event {:?}", event);
+            trace!(?event, consensus_established, "fork event");
             if consensus_established {
                 self.on_fork_event(event);
             }
@@ -820,7 +867,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Future
                     drop(blockchain);
                     if self.validator_state.is_some() {
                         self.validator_state = None;
-                        info!("Automatically reactivativated.");
+                        info!("Automatically reactivated.");
                     }
                 }
                 ValidatorStakingState::Inactive => match self.validator_state {
@@ -842,18 +889,25 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Future
 }
 
 type ProposalAndPubsubId<TValidatorNetwork> = (
-    <ProposalTopic as Topic>::Item,
+    <ProposalTopic<TValidatorNetwork> as Topic>::Item,
     <TValidatorNetwork as ValidatorNetwork>::PubsubId,
 );
 
-struct ProposalBuffer<TValidatorNetwork: ValidatorNetwork + 'static> {
+struct ProposalBuffer<TValidatorNetwork: ValidatorNetwork + 'static>
+where
+    <TValidatorNetwork as ValidatorNetwork>::PubsubId: std::fmt::Debug + Unpin,
+{
     buffer: LinkedHashMap<
         <TValidatorNetwork::NetworkType as Network>::PeerId,
         ProposalAndPubsubId<TValidatorNetwork>,
     >,
     waker: Option<Waker>,
 }
-impl<TValidatorNetwork: ValidatorNetwork + 'static> ProposalBuffer<TValidatorNetwork> {
+
+impl<TValidatorNetwork: ValidatorNetwork + 'static> ProposalBuffer<TValidatorNetwork>
+where
+    <TValidatorNetwork as ValidatorNetwork>::PubsubId: std::fmt::Debug + Unpin,
+{
     // Ignoring clippy warning: this return type is on purpose
     #[allow(clippy::new_ret_no_self)]
     pub fn new() -> (
@@ -873,10 +927,17 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> ProposalBuffer<TValidatorNet
     }
 }
 
-struct ProposalSender<TValidatorNetwork: ValidatorNetwork + 'static> {
+struct ProposalSender<TValidatorNetwork: ValidatorNetwork + 'static>
+where
+    <TValidatorNetwork as ValidatorNetwork>::PubsubId: std::fmt::Debug + Unpin,
+{
     shared: Arc<RwLock<ProposalBuffer<TValidatorNetwork>>>,
 }
-impl<TValidatorNetwork: ValidatorNetwork + 'static> ProposalSender<TValidatorNetwork> {
+
+impl<TValidatorNetwork: ValidatorNetwork + 'static> ProposalSender<TValidatorNetwork>
+where
+    <TValidatorNetwork as ValidatorNetwork>::PubsubId: std::fmt::Debug + Unpin,
+{
     pub fn send(&self, proposal: ProposalAndPubsubId<TValidatorNetwork>) {
         let source = proposal.1.propagation_source();
         let mut shared = self.shared.write();
@@ -887,11 +948,21 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> ProposalSender<TValidatorNet
     }
 }
 
-struct ProposalReceiver<TValidatorNetwork: ValidatorNetwork + 'static> {
+struct ProposalReceiver<TValidatorNetwork: ValidatorNetwork + 'static>
+where
+    <TValidatorNetwork as ValidatorNetwork>::PubsubId: std::fmt::Debug + Unpin,
+{
     shared: Arc<RwLock<ProposalBuffer<TValidatorNetwork>>>,
 }
-impl<TValidatorNetwork: ValidatorNetwork + 'static> Stream for ProposalReceiver<TValidatorNetwork> {
-    type Item = ProposalAndPubsubId<TValidatorNetwork>;
+
+impl<TValidatorNetwork: ValidatorNetwork + 'static> Stream for ProposalReceiver<TValidatorNetwork>
+where
+    <TValidatorNetwork as ValidatorNetwork>::PubsubId: std::fmt::Debug + Unpin,
+{
+    type Item = SignedProposalMessage<
+        Header<<TValidatorNetwork as ValidatorNetwork>::PubsubId>,
+        SchnorrSignature,
+    >;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let mut shared = self.shared.write();
@@ -899,12 +970,19 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> Stream for ProposalReceiver<
             store_waker!(shared, waker, cx);
             Poll::Pending
         } else {
-            let value = shared.buffer.pop_front().map(|entry| entry.1);
+            let value = shared.buffer.pop_front().map(|entry| {
+                let (msg, id) = entry.1;
+                msg.into_tendermint_signed_message(Some(id))
+            });
             Poll::Ready(value)
         }
     }
 }
-impl<TValidatorNetwork: ValidatorNetwork + 'static> Clone for ProposalReceiver<TValidatorNetwork> {
+
+impl<TValidatorNetwork: ValidatorNetwork + 'static> Clone for ProposalReceiver<TValidatorNetwork>
+where
+    <TValidatorNetwork as ValidatorNetwork>::PubsubId: std::fmt::Debug + Unpin,
+{
     fn clone(&self) -> Self {
         Self {
             shared: Arc::clone(&self.shared),

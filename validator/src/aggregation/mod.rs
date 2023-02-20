@@ -1,5 +1,4 @@
-pub mod network_sink;
-mod registry;
+pub mod registry;
 pub mod skip_block;
 pub mod tendermint;
 /// Implementation of signature aggregation protocols (view change and pBFT prepare/commit) using

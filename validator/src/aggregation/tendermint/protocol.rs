@@ -24,7 +24,7 @@ pub(crate) struct TendermintAggregationProtocol {
 }
 
 impl TendermintAggregationProtocol {
-    pub(super) fn new(
+    pub(crate) fn new(
         validators: Arc<ValidatorRegistry>,
         node_id: usize,
         threshold: usize,
