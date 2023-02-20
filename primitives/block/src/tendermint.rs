@@ -4,44 +4,13 @@ use std::io;
 use beserial::{Deserialize, Serialize};
 use nimiq_bls::AggregatePublicKey;
 use nimiq_hash::{Blake2sHash, Hash, SerializeContent};
-use nimiq_hash_derive::SerializeContent;
-use nimiq_network_interface::network::Topic;
 use nimiq_primitives::policy::Policy;
 use nimiq_primitives::slots::Validators;
 
 use crate::signed::{
-    Message, SignedMessage, PREFIX_TENDERMINT_COMMIT, PREFIX_TENDERMINT_PREPARE,
-    PREFIX_TENDERMINT_PROPOSAL,
+    PREFIX_TENDERMINT_COMMIT, PREFIX_TENDERMINT_PREPARE, PREFIX_TENDERMINT_PROPOSAL,
 };
-use crate::{MacroBlock, MacroHeader, MultiSignature};
-
-/// This topic is used to obtain tendermint proposals through the network
-pub struct ProposalTopic;
-
-impl Topic for ProposalTopic {
-    type Item = SignedTendermintProposal;
-
-    const BUFFER_SIZE: usize = 8;
-    const NAME: &'static str = "tendermint-proposal";
-    const VALIDATE: bool = true;
-}
-
-/// The proposal message sent by the Tendermint leader.
-#[derive(Clone, Debug, Serialize, Deserialize, SerializeContent, PartialEq, Eq)]
-pub struct TendermintProposal {
-    /// The header of the macro block, which is effectively the proposal.
-    pub value: MacroHeader,
-    /// The valid round of the proposer. See the Tendermint crate for more details.
-    pub valid_round: Option<u32>,
-    /// the round this proposal was created for
-    pub round: u32,
-}
-
-impl Message for TendermintProposal {
-    const PREFIX: u8 = PREFIX_TENDERMINT_PROPOSAL;
-}
-
-pub type SignedTendermintProposal = SignedMessage<TendermintProposal>;
+use crate::{MacroBlock, MultiSignature};
 
 /// The proof for a block produced by Tendermint.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -113,7 +82,7 @@ impl TendermintProof {
 pub enum TendermintStep {
     PreVote = PREFIX_TENDERMINT_PREPARE,
     PreCommit = PREFIX_TENDERMINT_COMMIT,
-    Propose = 0x77,
+    Propose = PREFIX_TENDERMINT_PROPOSAL,
 }
 
 /// Unique identifier for a single instance of TendermintAggregation

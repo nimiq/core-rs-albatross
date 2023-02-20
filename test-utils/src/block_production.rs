@@ -4,9 +4,8 @@ use parking_lot::RwLock;
 
 use beserial::Deserialize;
 use nimiq_block::{
-    Block, MacroBlock, MacroBody, MultiSignature, SignedSkipBlockInfo, SkipBlockInfo,
-    SkipBlockProof, TendermintIdentifier, TendermintProof, TendermintProposal, TendermintStep,
-    TendermintVote,
+    Block, MacroBlock, MacroBody, MacroHeader, MultiSignature, SignedSkipBlockInfo, SkipBlockInfo,
+    SkipBlockProof, TendermintIdentifier, TendermintProof, TendermintStep, TendermintVote,
 };
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
@@ -22,6 +21,7 @@ use nimiq_keys::{KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey};
 use nimiq_primitives::{
     key_nibbles::KeyNibbles, policy::Policy, trie::trie_chunk::TrieChunkWithStart,
 };
+use nimiq_tendermint::ProposalMessage;
 use nimiq_transaction::Transaction;
 use nimiq_utils::time::OffsetTime;
 
@@ -152,9 +152,9 @@ impl TemporaryBlockProducer {
             assert!(validators.is_ok());
 
             Block::Macro(TemporaryBlockProducer::finalize_macro_block(
-                TendermintProposal {
+                ProposalMessage {
                     valid_round: None,
-                    value: macro_block_proposal.header,
+                    proposal: macro_block_proposal.header,
                     round: 0u32,
                 },
                 macro_block_proposal
@@ -190,7 +190,7 @@ impl TemporaryBlockProducer {
     }
 
     pub fn finalize_macro_block(
-        proposal: TendermintProposal,
+        proposal: ProposalMessage<MacroHeader>,
         body: MacroBody,
         block_hash: Blake2sHash,
     ) -> MacroBlock {
@@ -204,7 +204,7 @@ impl TemporaryBlockProducer {
         let vote = TendermintVote {
             proposal_hash: Some(block_hash),
             id: TendermintIdentifier {
-                block_number: proposal.value.block_number,
+                block_number: proposal.proposal.block_number,
                 step: TendermintStep::PreCommit,
                 round_number: 0,
             },
@@ -229,7 +229,7 @@ impl TemporaryBlockProducer {
         });
 
         MacroBlock {
-            header: proposal.value,
+            header: proposal.proposal,
             justification,
             body: Some(body),
         }

@@ -2,7 +2,7 @@ use crate::{BlsKeyPair, SchnorrKeyPair};
 use nimiq_block::{
     Block, ForkProof, MacroBlock, MacroBody, MacroHeader, MicroBlock, MicroBody, MicroHeader,
     MicroJustification, MultiSignature, SignedSkipBlockInfo, SkipBlockInfo, SkipBlockProof,
-    TendermintIdentifier, TendermintProof, TendermintProposal, TendermintStep, TendermintVote,
+    TendermintIdentifier, TendermintProof, TendermintStep, TendermintVote,
 };
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::AbstractBlockchain;
@@ -10,6 +10,7 @@ use nimiq_bls::AggregateSignature;
 use nimiq_collections::BitSet;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_primitives::policy::Policy;
+use nimiq_tendermint::ProposalMessage;
 use nimiq_transaction::{
     extended_transaction::ExtendedTransaction, inherent::Inherent, Transaction,
 };
@@ -318,7 +319,7 @@ fn next_macro_block_proposal(
 
 pub fn finalize_macro_block(
     voting_key: &BlsKeyPair,
-    proposal: TendermintProposal,
+    proposal: ProposalMessage<MacroHeader>,
     body: MacroBody,
     block_hash: Blake2sHash,
     config: &BlockConfig,
@@ -326,7 +327,7 @@ pub fn finalize_macro_block(
     let vote = TendermintVote {
         proposal_hash: Some(block_hash),
         id: TendermintIdentifier {
-            block_number: proposal.value.block_number,
+            block_number: proposal.proposal.block_number,
             step: TendermintStep::PreCommit,
             round_number: proposal.round,
         },
@@ -348,7 +349,7 @@ pub fn finalize_macro_block(
     });
 
     MacroBlock {
-        header: proposal.value,
+        header: proposal.proposal,
         justification,
         body: if config.missing_body {
             None
@@ -378,9 +379,9 @@ pub fn next_macro_block(
 
     Block::Macro(finalize_macro_block(
         voting_key,
-        TendermintProposal {
+        ProposalMessage {
             valid_round: None,
-            value: macro_block_proposal.header,
+            proposal: macro_block_proposal.header,
             round: config.tendermint_round.unwrap_or(0),
         },
         macro_block_proposal
