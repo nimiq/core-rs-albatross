@@ -1,8 +1,8 @@
 use std::str::FromStr;
 
 use beserial::{Deserialize, Serialize};
-use nimiq_block::{IndividualSignature, MacroBlock, MacroBody, MacroHeader, MultiSignature};
-use nimiq_bls::{CompressedPublicKey, KeyPair};
+use nimiq_block::{MacroBlock, MacroBody, MacroHeader, MultiSignature};
+use nimiq_bls::{AggregateSignature, CompressedPublicKey, KeyPair};
 use nimiq_collections::bitset::BitSet;
 use nimiq_handel::update::LevelUpdate;
 use nimiq_hash::{Blake2bHasher, Hasher};
@@ -121,7 +121,10 @@ fn create_multisig() -> MultiSignature {
     .unwrap();
     let key_pair = KeyPair::deserialize_from_vec(&raw_key).unwrap();
     let signature = key_pair.sign(&"foobar");
-    IndividualSignature::new(signature, 1).as_multisig()
+    let signature = AggregateSignature::from_signatures(&[signature]);
+    let mut signers = BitSet::default();
+    signers.insert(1);
+    MultiSignature { signature, signers }
 }
 
 #[test]
@@ -139,6 +142,6 @@ fn test_serialize_deserialize_level_update() {
 
 #[test]
 fn test_serialize_deserialize_with_message() {
-    let update = LevelUpdate::new(create_multisig(), None, 2, 3).with_tag(42u64);
-    assert_eq!(update.serialized_size(), 108 + 8);
+    let update = LevelUpdate::new(create_multisig(), None, 2, 3);
+    assert_eq!(update.serialized_size(), 108);
 }
