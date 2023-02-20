@@ -7,11 +7,11 @@ use nimiq_primitives::{account::*, coin::Coin, key_nibbles::KeyNibbles};
 use nimiq_transaction::account::htlc_contract::{
     AnyHash, CreationTransactionData, HashAlgorithm, ProofType,
 };
+use nimiq_transaction::inherent::Inherent;
 use nimiq_transaction::{SignatureProof, Transaction};
 
 use crate::{
     complete, get_or_update_account,
-    inherent::Inherent,
     interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction},
     logs::{AccountInfo, Log},
     Account, AccountsTrie, BasicAccount,

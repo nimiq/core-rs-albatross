@@ -533,7 +533,7 @@ pub struct Inherent {
 
 impl Inherent {
     pub fn from_transaction(
-        inherent: nimiq_account::Inherent,
+        inherent: nimiq_transaction::inherent::Inherent,
         block_number: u32,
         timestamp: u64,
     ) -> Self {

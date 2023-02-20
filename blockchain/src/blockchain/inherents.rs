@@ -1,12 +1,15 @@
 use beserial::Serialize;
-use nimiq_account::{Inherent, InherentType, StakingContract};
+use nimiq_account::StakingContract;
 use nimiq_block::{ForkProof, MacroBlock, MacroHeader, SkipBlockInfo};
 use nimiq_database as db;
 use nimiq_keys::Address;
 use nimiq_primitives::{
     account::AccountType, coin::Coin, key_nibbles::KeyNibbles, policy::Policy, slots::SlashedSlot,
 };
-use nimiq_transaction::reward::RewardTransaction;
+use nimiq_transaction::{
+    inherent::{Inherent, InherentType},
+    reward::RewardTransaction,
+};
 use nimiq_vrf::{AliasMethod, VrfUseCase};
 
 use crate::{blockchain_state::BlockchainState, reward::block_reward_for_batch, Blockchain};

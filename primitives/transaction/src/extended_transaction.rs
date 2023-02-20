@@ -3,15 +3,16 @@ use std::fmt;
 use std::io;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
-use nimiq_account::{Inherent, InherentType};
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_mmr::hash::Hash as MMRHash;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_primitives::policy::Policy;
-use nimiq_transaction::ExecutedTransaction;
-use nimiq_transaction::Transaction as BlockchainTransaction;
+
+use crate::inherent::{Inherent, InherentType};
+use crate::ExecutedTransaction;
+use crate::Transaction as BlockchainTransaction;
 
 /// A single struct that stores information that represents any possible transaction (basic
 /// transaction or inherent) on the blockchain.

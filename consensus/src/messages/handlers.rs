@@ -313,23 +313,18 @@ impl Handle<ResponseTransactionsProof, Arc<RwLock<Blockchain>>> for RequestTrans
 
         let block_height = self.epoch_number * Policy::blocks_per_epoch();
 
-        let block = match blockchain
+        let block = blockchain
             .chain_store
             .get_block_at(block_height, false, None)
-        {
-            Ok(block) => {
+            .ok()
+            .and_then(|block| {
                 if block.is_macro() {
                     // We expect a macro block
                     Some(block)
                 } else {
                     None
                 }
-            }
-            Err(err) => {
-                trace!(error = %err, "Did not find the block that was requested");
-                None
-            }
-        };
+            });
 
         ResponseTransactionsProof { proof, block }
     }
@@ -353,9 +348,7 @@ impl Handle<ResponseTransactionsByAddress, Arc<RwLock<Blockchain>>>
 
         for hash in tx_hashes {
             // Get all the extended transactions that correspond to this hash.
-            let mut extended_tx_vec = blockchain.history_store.get_ext_tx_by_hash(&hash, None);
-
-            transactions.append(&mut extended_tx_vec);
+            transactions.extend(blockchain.history_store.get_ext_tx_by_hash(&hash, None));
         }
 
         ResponseTransactionsByAddress { transactions }

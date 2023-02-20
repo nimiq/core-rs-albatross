@@ -4,10 +4,13 @@ use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteByte
 use nimiq_hash::{Hash, SerializeContent};
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
-use nimiq_transaction::reward::RewardTransaction;
+
+use crate::reward::RewardTransaction;
 
 #[derive(Clone, Debug, Eq, PartialEq, Copy, Serialize, Deserialize)]
 #[repr(u8)]
+/// Enum that represents the different types of inherents.
+/// The moment when those inherents are applied depends upon the specific type of inherent.
 pub enum InherentType {
     Reward,
     Slash,
@@ -28,10 +31,17 @@ impl InherentType {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// An inherent is a special kind of transaction
+/// It does not have a sender account, but it does have a target address and a value that is transfered
+/// For instance, a reward (for producing blocks) is an inherent
 pub struct Inherent {
+    /// The type of the inherent
     pub ty: InherentType,
+    /// The address where the value is deposit
     pub target: Address,
+    /// The value
     pub value: Coin,
+    /// Additional data (if needed)
     pub data: Vec<u8>,
 }
 

@@ -7,13 +7,13 @@ use nimiq_primitives::{
     key_nibbles::KeyNibbles,
     trie::trie_chunk::{TrieChunk, TrieChunkPushResult},
 };
-use nimiq_transaction::{ExecutedTransaction, Transaction, TransactionFlags};
+use nimiq_transaction::{inherent::Inherent, ExecutedTransaction, Transaction, TransactionFlags};
 use nimiq_trie::trie::{IncompleteTrie, MerkleRadixTrie};
 
 use crate::{
     logs::{BatchInfo, TransactionLog},
-    Account, AccountInherentInteraction, AccountTransactionInteraction, Inherent, Log, Receipt,
-    Receipts, RevertTransactionLogs, TransactionInfo,
+    Account, AccountInherentInteraction, AccountTransactionInteraction, Log, Receipt, Receipts,
+    RevertTransactionLogs, TransactionInfo,
 };
 
 /// An alias for the accounts tree.

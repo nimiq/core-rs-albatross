@@ -1,15 +1,16 @@
-use nimiq_account::Inherent;
 use nimiq_block::{
     ForkProof, MacroBlock, MacroBody, MacroHeader, MicroBlock, MicroBody, MicroHeader,
     MicroJustification, SkipBlockInfo, SkipBlockProof,
 };
-use nimiq_blockchain::{Blockchain, ExtendedTransaction};
+use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::KeyPair as SchnorrKeyPair;
 use nimiq_primitives::policy::Policy;
-use nimiq_transaction::Transaction;
+use nimiq_transaction::{
+    extended_transaction::ExtendedTransaction, inherent::Inherent, Transaction,
+};
 use rand::{CryptoRng, Rng, RngCore};
 
 /// Struct that contains all necessary information to actually produce blocks.

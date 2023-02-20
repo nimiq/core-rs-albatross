@@ -1,13 +1,12 @@
 use std::convert::TryFrom;
 use std::time::Instant;
+use tempfile::tempdir;
 
 use rand::{rngs::StdRng, SeedableRng};
-use tempfile::tempdir;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_account::{
-    Account, Accounts, BasicAccount, BatchInfo, Inherent, InherentType, Log, TransactionLog,
-    VestingContract,
+    Account, Accounts, BasicAccount, BatchInfo, Log, TransactionLog, VestingContract,
 };
 use nimiq_account::{Receipt, Receipts};
 use nimiq_bls::KeyPair as BLSKeyPair;
@@ -22,6 +21,7 @@ use nimiq_test_log::test;
 use nimiq_test_utils::test_transaction::{
     generate_accounts, generate_transactions, TestTransaction,
 };
+use nimiq_transaction::inherent::{Inherent, InherentType};
 use nimiq_transaction::{ExecutedTransaction, SignatureProof, Transaction};
 
 const VOLATILE_ENV: bool = true;

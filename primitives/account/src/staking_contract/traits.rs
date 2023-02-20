@@ -8,7 +8,10 @@ use nimiq_primitives::{account::AccountError, coin::Coin, policy::Policy, slots:
 use nimiq_transaction::account::staking_contract::{
     IncomingStakingTransactionData, OutgoingStakingTransactionProof,
 };
-use nimiq_transaction::Transaction;
+use nimiq_transaction::{
+    inherent::{Inherent, InherentType},
+    Transaction,
+};
 
 use crate::{
     complete,
@@ -16,7 +19,7 @@ use crate::{
     logs::{AccountInfo, Log},
     staking_contract::receipts::DeleteValidatorReceipt,
     staking_contract::SlashReceipt,
-    Account, AccountsTrie, Inherent, InherentType, OperationInfo, StakingContract,
+    Account, AccountsTrie, OperationInfo, StakingContract,
 };
 
 /// We need to distinguish between two types of transactions:

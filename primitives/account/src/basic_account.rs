@@ -7,11 +7,13 @@ use nimiq_primitives::{
     coin::Coin,
     key_nibbles::KeyNibbles,
 };
-use nimiq_transaction::Transaction;
+use nimiq_transaction::{
+    inherent::{Inherent, InherentType},
+    Transaction,
+};
 
 use crate::{
     complete, get_or_update_account,
-    inherent::{Inherent, InherentType},
     interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction},
     logs::{AccountInfo, Log},
     Account, AccountsTrie,

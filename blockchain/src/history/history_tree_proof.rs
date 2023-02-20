@@ -4,8 +4,7 @@ use beserial::{
 };
 use nimiq_hash::Blake2bHash;
 use nimiq_mmr::mmr::proof::Proof;
-
-use crate::history::ExtendedTransaction;
+use nimiq_transaction::extended_transaction::ExtendedTransaction;
 
 /// Struct containing a vector of extended transactions together with a Merkle proof for them. It
 /// allows one to prove/verify that specific transactions are part of the History Tree.

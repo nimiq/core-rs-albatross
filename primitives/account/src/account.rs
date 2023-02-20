@@ -7,15 +7,14 @@ use nimiq_primitives::{
     key_nibbles::KeyNibbles,
     policy::Policy,
 };
-use nimiq_transaction::Transaction;
+use nimiq_transaction::{inherent::Inherent, Transaction};
 
 use crate::{
     complete, get_or_update_account,
     interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction},
     logs::AccountInfo,
     staking_contract::{Staker, Validator},
-    AccountsTrie, BasicAccount, HashedTimeLockedContract, Inherent, Log, StakingContract,
-    VestingContract,
+    AccountsTrie, BasicAccount, HashedTimeLockedContract, Log, StakingContract, VestingContract,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]

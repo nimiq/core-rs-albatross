@@ -1,5 +1,4 @@
 use crate::blockchain_state::BlockchainState;
-use crate::history::ExtendedTransaction;
 use crate::Blockchain;
 use nimiq_account::Accounts;
 use nimiq_account::BlockLog;
@@ -7,6 +6,7 @@ use nimiq_block::{Block, BlockError::TransactionExecutionMismatch, SkipBlockInfo
 use nimiq_blockchain_interface::PushError;
 use nimiq_database::WriteTransaction;
 use nimiq_primitives::policy::Policy;
+use nimiq_transaction::extended_transaction::ExtendedTransaction;
 
 /// Implements methods to handle the accounts.
 impl Blockchain {

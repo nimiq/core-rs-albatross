@@ -11,7 +11,6 @@ pub use crate::accounts::{Accounts, AccountsTrie};
 pub use crate::accounts_list::AccountsList;
 pub use crate::basic_account::BasicAccount;
 pub use crate::htlc_contract::*;
-pub use crate::inherent::{Inherent, InherentType};
 pub use crate::interaction_traits::*;
 pub use crate::logs::*;
 pub use crate::receipts::*;
@@ -23,7 +22,7 @@ mod accounts;
 mod accounts_list;
 mod basic_account;
 mod htlc_contract;
-mod inherent;
+
 mod interaction_traits;
 mod logs;
 mod receipts;

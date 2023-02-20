@@ -1,17 +1,18 @@
 use crate::{BlsKeyPair, SchnorrKeyPair};
-use nimiq_account::Inherent;
 use nimiq_block::{
     Block, ForkProof, MacroBlock, MacroBody, MacroHeader, MicroBlock, MicroBody, MicroHeader,
     MicroJustification, MultiSignature, SignedSkipBlockInfo, SkipBlockInfo, SkipBlockProof,
     TendermintIdentifier, TendermintProof, TendermintProposal, TendermintStep, TendermintVote,
 };
-use nimiq_blockchain::{Blockchain, ExtendedTransaction};
+use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_bls::AggregateSignature;
 use nimiq_collections::BitSet;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_primitives::policy::Policy;
-use nimiq_transaction::Transaction;
+use nimiq_transaction::{
+    extended_transaction::ExtendedTransaction, inherent::Inherent, Transaction,
+};
 use nimiq_vrf::VrfSeed;
 
 #[derive(Clone, Default)]

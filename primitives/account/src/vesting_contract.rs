@@ -7,12 +7,12 @@ use nimiq_primitives::{
     key_nibbles::KeyNibbles,
 };
 use nimiq_transaction::{
-    account::vesting_contract::CreationTransactionData, SignatureProof, Transaction,
+    account::vesting_contract::CreationTransactionData, inherent::Inherent, SignatureProof,
+    Transaction,
 };
 
 use crate::{
     complete, get_or_update_account,
-    inherent::Inherent,
     interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction},
     logs::{AccountInfo, Log},
     Account, AccountsTrie, BasicAccount,

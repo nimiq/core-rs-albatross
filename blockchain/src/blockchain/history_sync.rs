@@ -2,7 +2,6 @@ use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
 use std::error::Error;
 
 use beserial::Serialize;
-use nimiq_account::{Inherent, InherentType};
 use nimiq_block::{Block, BlockError};
 use nimiq_blockchain_interface::{
     AbstractBlockchain, BlockchainEvent, ChainInfo, PushError, PushResult,
@@ -10,9 +9,10 @@ use nimiq_blockchain_interface::{
 use nimiq_database::WriteTransaction;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy::Policy;
+use nimiq_transaction::extended_transaction::{ExtTxData, ExtendedTransaction};
+use nimiq_transaction::inherent::{Inherent, InherentType};
 use nimiq_transaction::Transaction;
 
-use crate::history::{ExtTxData, ExtendedTransaction};
 use crate::Blockchain;
 
 /// Implements methods to push macro blocks into the chain when an history node is syncing. This

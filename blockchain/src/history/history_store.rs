@@ -2,7 +2,6 @@ use std::cmp;
 use std::collections::{HashSet, VecDeque};
 
 use beserial::Serialize;
-use nimiq_account::InherentType;
 use nimiq_database::cursor::{ReadCursor, WriteCursor};
 use nimiq_database::{
     Database, DatabaseFlags, Environment, ReadTransaction, Transaction, WriteTransaction,
@@ -17,11 +16,14 @@ use nimiq_mmr::mmr::proof::RangeProof;
 use nimiq_mmr::mmr::MerkleMountainRange;
 use nimiq_mmr::store::memory::MemoryStore;
 use nimiq_primitives::policy::Policy;
+use nimiq_transaction::{
+    extended_transaction::{ExtTxData, ExtendedTransaction},
+    inherent::InherentType,
+};
 
-use crate::history::mmr_store::MMRStore;
-use crate::history::ordered_hash::OrderedHash;
-use crate::history::{ExtendedTransaction, HistoryTreeChunk, HistoryTreeProof};
-use crate::ExtTxData;
+use crate::history::{
+    mmr_store::MMRStore, ordered_hash::OrderedHash, HistoryTreeChunk, HistoryTreeProof,
+};
 
 /// A struct that contains databases to store history trees (which are Merkle Mountain Ranges
 /// constructed from the list of extended transactions in an epoch) and extended transactions (which
@@ -1040,14 +1042,13 @@ impl HistoryStore {
 
 #[cfg(test)]
 mod tests {
-    use nimiq_account::{Inherent, InherentType};
     use nimiq_database::volatile::VolatileEnvironment;
     use nimiq_primitives::coin::Coin;
     use nimiq_primitives::networks::NetworkId;
     use nimiq_test_log::test;
-    use nimiq_transaction::{ExecutedTransaction, Transaction as BlockchainTransaction};
-
-    use crate::ExtTxData;
+    use nimiq_transaction::{
+        inherent::Inherent, ExecutedTransaction, Transaction as BlockchainTransaction,
+    };
 
     use super::*;
 

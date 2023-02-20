@@ -1,5 +1,4 @@
 use beserial::Serialize;
-use nimiq_account::{Inherent, InherentType};
 use nimiq_block::{MacroBlock, MacroBody, MacroHeader};
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_database::volatile::VolatileEnvironment;
@@ -10,6 +9,7 @@ use nimiq_primitives::networks::NetworkId;
 use nimiq_primitives::policy::Policy;
 use nimiq_primitives::slots::SlashedSlot;
 use nimiq_test_log::test;
+use nimiq_transaction::inherent::{Inherent, InherentType};
 use nimiq_utils::time::OffsetTime;
 use nimiq_vrf::VrfSeed;
 use std::sync::Arc;
