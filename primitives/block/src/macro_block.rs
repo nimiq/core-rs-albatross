@@ -52,27 +52,11 @@ impl MacroBlock {
     /// epoch, so for checkpoint blocks the `pk_tree_root` doesn't exist. Then, for checkpoint blocks
     /// this function simply returns:
     ///     nano_zkp_hash = Blake2s( Blake2b(header) )
+    ///
+    /// If the header is an election macro block header the body must not be None. If it is this function will panic.
     pub fn nano_zkp_hash(&self, recalculate_pk_tree: bool) -> Blake2sHash {
-        let mut message = self.hash().serialize_to_vec();
-
-        if let Some(validators) = self.get_validators() {
-            // Create the tree.
-            let mut pk_tree_root = self.get_pk_tree_root();
-            if recalculate_pk_tree || pk_tree_root.is_none() {
-                pk_tree_root = MacroBlock::pk_tree_root(&validators).ok();
-            }
-            if let Some(mut pk_tree_root) = pk_tree_root {
-                // Add it to the message.
-                message.append(&mut pk_tree_root);
-            }
-        }
-
-        // Return the final hash.
-        message.hash()
-    }
-
-    fn get_pk_tree_root(&self) -> Option<Vec<u8>> {
-        self.body.as_ref()?.pk_tree_root.clone()
+        self.header
+            .nano_zkp_hash_with_body(&self.body, recalculate_pk_tree)
     }
 
     /// Calculates the PKTree root from the given validators.
@@ -200,6 +184,64 @@ pub struct MacroHeader {
     pub body_root: Blake2bHash,
     /// A merkle root over all of the transactions that happened in the current epoch.
     pub history_root: Blake2bHash,
+}
+
+impl MacroHeader {
+    /// Calculates the following function:
+    ///     nano_zkp_hash = Blake2s( Blake2b(header) || pk_tree_root )
+    /// Where `pk_tree_root` is the root of a special Merkle tree containing the BLS public keys of
+    /// the validators for the next epoch.
+    /// The `pk_tree_root` is necessary for the Nano ZK proofs and needs to be inserted into the
+    /// signature for the macro blocks. The easiest way is to calculate this modified hash and then
+    /// use it as the signature message.
+    /// Also, the final hash is done with Blake2s because the ZKP circuits can only handle Blake2s.
+    /// Only election blocks have the `validators` field, which contain the validators for the next
+    /// epoch, so for checkpoint blocks the `pk_tree_root` doesn't exist. Then, for checkpoint blocks
+    /// this function simply returns:
+    ///     nano_zkp_hash = Blake2s( Blake2b(header) )
+    ///
+    /// If the header is an election macro block header the body argument must not be `None`. If it is this function will panic.
+    pub fn nano_zkp_hash_with_body(
+        &self,
+        body: &Option<MacroBody>,
+        force_recalculate_pk_tree: bool,
+    ) -> Blake2sHash {
+        if Policy::is_election_block_at(self.block_number) {
+            // Make sure the body exists if the header is an election macro block header.
+            let body = body
+                .as_ref()
+                .expect("Body must be present to calculate nano_zkp_hash for election blocks");
+            // Get the root from the body
+            let mut root = body.pk_tree_root.clone();
+            // Calculate the root in case it is none or the force_recalculation flag is set.
+            if root.is_none() || force_recalculate_pk_tree {
+                // For recalculation retrieve the validators
+                let validators = body
+                    .validators
+                    .as_ref()
+                    .expect("Validators must be present in election blocks");
+                // Start the calculation
+                root = Some(
+                    MacroBlock::pk_tree_root(validators)
+                        .expect("pk tree root calculation for macro blocks must not fail."),
+                );
+            }
+            // Calculate the Blake2sHash with the root for election blocks.
+            self.nano_zkp_hash_with_root(root)
+        } else {
+            // Calculate the Blake2sHash with no root for checkpoint blocks, as they don't have one.
+            self.nano_zkp_hash_with_root(None)
+        }
+    }
+
+    /// Appends the pk_tree_root if existent to this headers Blake2b hash. Afterwards hashes to Blake2s.
+    pub fn nano_zkp_hash_with_root(&self, pk_tree_root: Option<Vec<u8>>) -> Blake2sHash {
+        let mut msg = self.hash::<Blake2bHash>().serialize_to_vec();
+        if let Some(mut root) = pk_tree_root {
+            msg.append(&mut root);
+        }
+        msg.hash()
+    }
 }
 
 impl Message for MacroHeader {
