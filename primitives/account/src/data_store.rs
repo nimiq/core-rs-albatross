@@ -1,7 +1,7 @@
 use beserial::{Deserialize, Serialize};
 use nimiq_database::{Transaction, WriteTransaction};
 use nimiq_keys::Address;
-use nimiq_trie::key_nibbles::KeyNibbles;
+use nimiq_primitives::key_nibbles::KeyNibbles;
 
 use crate::AccountsTrie;
 

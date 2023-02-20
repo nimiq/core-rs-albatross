@@ -16,8 +16,8 @@ use crate::data_store::DataStore;
 use crate::interaction_traits::AccountPruningInteraction;
 use crate::{
     Account, AccountInherentInteraction, AccountReceipt, AccountTransactionInteraction, BlockState,
-    Inherent, InherentOperationReceipt, OperationReceipt, Receipts, TransactionOperationReceipt,
-    TransactionReceipt,
+    Inherent, InherentOperationReceipt, OperationReceipt, Receipts, ReservedBalance,
+    TransactionOperationReceipt, TransactionReceipt,
 };
 
 /// An alias for the accounts tree.
@@ -81,6 +81,33 @@ impl Accounts {
     pub fn get_complete(&self, address: &Address, txn_option: Option<&DBTransaction>) -> Account {
         self.get(address, txn_option)
             .expect("Tree must be complete")
+    }
+
+    pub fn reserve_balance(
+        &self,
+        account: &Account,
+        transaction: &Transaction,
+        reserved_balance: &mut ReservedBalance,
+        block_state: &BlockState,
+        txn_option: Option<&DBTransaction>,
+    ) -> Result<(), AccountError> {
+        // This assumes that the given account corresponds to the sender of the given transaction.
+        let store = DataStore::new(&self.tree, &transaction.sender);
+
+        match txn_option {
+            Some(txn) => account.reserve_balance(
+                transaction,
+                reserved_balance,
+                &block_state,
+                store.read(txn),
+            ),
+            None => account.reserve_balance(
+                transaction,
+                reserved_balance,
+                &block_state,
+                store.read(&ReadTransaction::new(&self.env)),
+            ),
+        }
     }
 
     fn is_missing(&self, txn: &DBTransaction, address: &Address) -> bool {

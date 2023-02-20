@@ -4,7 +4,10 @@ use std::{
     sync::Arc,
 };
 
-use nimiq_account::{Account, AccountTransactionInteraction, BasicAccount, StakingContract};
+use nimiq_account::{
+    Account, AccountTransactionInteraction, BasicAccount, BlockState, ReservedBalance,
+    StakingContract,
+};
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_hash::Hash;
@@ -190,78 +193,6 @@ pub(crate) async fn verify_tx<'a>(
         Some(x) => x,
     };
 
-    // If it is an outgoing staking transaction then we have additional checks.
-    if transaction.sender_type == AccountType::Staking {
-        let accounts_tree = &blockchain.state().accounts.tree;
-        let db_txn = blockchain.read_transaction();
-
-        // Parse transaction data.
-        let data = OutgoingStakingTransactionProof::parse(transaction)
-            .expect("The proof should have already been parsed before, so this cannot panic!");
-
-        // If the sender is already in the mempool then we don't accept another transaction.
-        let duplicate = match data.clone() {
-            OutgoingStakingTransactionProof::DeleteValidator { proof } => mempool_state
-                .outgoing_validators
-                .contains_key(&proof.compute_signer()),
-            OutgoingStakingTransactionProof::RemoveStake { proof } => mempool_state
-                .outgoing_stakers
-                .contains_key(&proof.compute_signer()),
-        };
-
-        if duplicate {
-            log::debug!("Outgoing staking transaction sender is already in mempool.");
-            return Err(VerifyErr::Filtered);
-        }
-
-        // If the sender is not already in the mempool, then we need to check if it can pay the
-        // transaction.
-        //TODO: use the pending balance in the mempool?
-        if !StakingContract::can_pay_tx(
-            accounts_tree,
-            &db_txn,
-            data,
-            transaction.total_value(),
-            block_height,
-        ) {
-            log::debug!("Outgoing staking transaction cannot pay fee.");
-            return Err(VerifyErr::NotEnoughFunds);
-        }
-    }
-
-    // If it is an incoming staking transaction then we have additional checks.
-    if transaction.recipient_type == AccountType::Staking {
-        let accounts_tree = &blockchain.state().accounts.tree;
-        let db_txn = blockchain.read_transaction();
-
-        // Parse transaction data.
-        let data = IncomingStakingTransactionData::parse(transaction)
-            .expect("The data should have already been parsed before, so this cannot panic!");
-
-        // If the recipient is already in the mempool then we don't accept another transaction.
-        let duplicate = match data.clone() {
-            IncomingStakingTransactionData::CreateValidator { proof, .. } => mempool_state
-                .creating_validators
-                .contains_key(&proof.compute_signer()),
-            IncomingStakingTransactionData::CreateStaker { proof, .. } => mempool_state
-                .creating_stakers
-                .contains_key(&proof.compute_signer()),
-            _ => false,
-        };
-
-        if duplicate {
-            log::debug!("Creation staking transaction recipient is already in mempool.");
-            return Err(VerifyErr::Filtered);
-        }
-
-        // If the recipient is not already in the mempool, then we need to check if the transaction
-        // can succeed.
-        if !StakingContract::can_create(accounts_tree, &db_txn, data) {
-            log::debug!("Outgoing staking transaction cannot succeed");
-            return Err(VerifyErr::CannotSucceed);
-        }
-    }
-
     let blockchain_sender_balance = sender_account.balance();
     let blockchain_recipient_balance = recipient_account.balance();
 
@@ -269,25 +200,24 @@ pub(crate) async fn verify_tx<'a>(
     let mut sender_current_balance = Coin::ZERO;
     let mut recipient_current_balance = blockchain_recipient_balance;
 
+    let mut reserved_balance = ReservedBalance::new(transaction.sender.clone());
+
     if let Some(sender_state) = mempool_state.state_by_sender.get(&transaction.sender) {
-        sender_current_balance = sender_state.total;
+        sender_current_balance = sender_state.reserved_balance.balance();
+        reserved_balance = sender_state.reserved_balance.clone();
     }
 
     if let Some(recipient_state) = mempool_state.state_by_sender.get(&transaction.recipient) {
         // We found the recipient in the mempool. Subtract the mempool balance from the recipient balance
-        recipient_current_balance -= recipient_state.total;
+        recipient_current_balance -= recipient_state.reserved_balance.balance();
     }
 
-    // The sender must be able to at least pay the fee (in case the tx fails), assumming all pending txns in the mempool for this sender are included in a block
-    if !AccountTransactionInteraction::has_sufficient_balance(
-        &sender_account,
-        transaction,
-        sender_current_balance + transaction.fee,
-        blockchain.timestamp(),
-    ) {
-        // If the fee cannot be paid for this transaction, we reject it.
-        return Err(VerifyErr::CantPayFee);
-    }
+    // The sender must be able to at least pay the fee (in case the tx fails) assuming all pending txns in the mempool for this sender are included in a block
+    blockchain
+        .reserve_balance(&sender_account, transaction, &mut reserved_balance)
+        .map_err(|_| VerifyErr::CantPayFee)?;
+
+    // FIXME Store the reserved_balance in state_by_sender!!!
 
     // 9. Drop the blockchain lock since it is no longer needed
     drop(blockchain);

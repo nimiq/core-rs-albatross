@@ -133,7 +133,7 @@ impl StakingContract {
         self.balance += deposit;
 
         self.active_validators
-            .insert(validator_address.clone(), deposit);
+            .insert(validator_address.clone(), validator.total_stake);
 
         // Create the validator entry.
         store.put_validator(validator_address, validator);

@@ -3,6 +3,7 @@ use nimiq_primitives::{account::AccountError, coin::Coin};
 use nimiq_transaction::{inherent::Inherent, Transaction};
 
 use crate::data_store::{DataStoreRead, DataStoreWrite};
+use crate::reserved_balance::ReservedBalance;
 use crate::{Account, AccountReceipt, Inherent};
 
 pub struct BlockState {
@@ -79,13 +80,13 @@ pub trait AccountTransactionInteraction: Sized {
         data_store: DataStoreWrite,
     ) -> Result<(), AccountError>;
 
-    fn has_sufficient_balance(
+    fn reserve_balance(
         &self,
         transaction: &Transaction,
-        reserved_balance: Coin,
+        reserved_balance: &mut ReservedBalance,
         block_state: &BlockState,
         data_store: DataStoreRead,
-    ) -> Result<bool, AccountError>;
+    ) -> Result<(), AccountError>;
 }
 
 pub trait AccountInherentInteraction: Sized {

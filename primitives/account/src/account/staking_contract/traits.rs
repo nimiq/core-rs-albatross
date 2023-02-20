@@ -12,8 +12,10 @@ use nimiq_transaction::{
 };
 
 use crate::account::staking_contract::store::{
-    StakingContractStoreReadOps, StakingContractStoreReadOpsExt, StakingContractStoreWrite,
+    StakingContractStoreRead, StakingContractStoreReadOps, StakingContractStoreReadOpsExt,
+    StakingContractStoreWrite,
 };
+use crate::reserved_balance::ReservedBalance;
 use crate::{
     account::staking_contract::{receipts::SlashReceipt, StakingContract},
     data_store::{DataStoreRead, DataStoreWrite},
@@ -364,7 +366,12 @@ impl AccountTransactionInteraction for StakingContract {
                 let validator_address = proof.compute_signer();
 
                 let mut validator = store.expect_validator(&validator_address)?;
-                assert!(!validator.is_active());
+
+                self.can_delete_validator(
+                    &validator,
+                    block_state.number,
+                    transaction.total_value(),
+                )?;
 
                 let new_deposit = validator.deposit.safe_sub(transaction.fee)?;
 
@@ -477,27 +484,54 @@ impl AccountTransactionInteraction for StakingContract {
         // );
     }
 
-    fn has_sufficient_balance(
+    fn reserve_balance(
         &self,
         transaction: &Transaction,
-        reserved_balance: Coin,
+        reserved_balance: &mut ReservedBalance,
         block_state: &BlockState,
         data_store: DataStoreRead,
-    ) -> Result<bool, AccountError> {
-        todo!()
-    }
+    ) -> Result<(), AccountError> {
+        let store = StakingContractStoreRead::new(&data_store);
 
-    // fn can_pay_fee(
-    //     &self,
-    //     _transaction: &Transaction,
-    //     _current_balance: Coin,
-    //     _block_state: &BlockState,
-    // ) -> bool {
-    //     // Note: Currently this check is performed via the StakingContract::can_pay_tx interface, which is used by the mempool
-    //     // Once a better accounts interface is created, both checks can be reconciliated.
-    //
-    //     true
-    // }
+        // Parse transaction proof.
+        let proof = OutgoingStakingTransactionProof::parse(transaction)?;
+
+        match proof {
+            OutgoingStakingTransactionProof::DeleteValidator { proof } => {
+                // Get the validator address from the proof.
+                let validator_address = proof.compute_signer();
+
+                // Fetch the validator.
+                let validator = store.expect_validator(&validator_address)?;
+
+                // Verify that the validator can actually be deleted.
+                // This is ensures that
+                self.can_delete_validator(
+                    &validator,
+                    block_state.number,
+                    transaction.total_value(),
+                )?;
+
+                reserved_balance.reserve_for(
+                    &validator_address,
+                    validator.deposit,
+                    transaction.total_value(),
+                )
+            }
+            OutgoingStakingTransactionProof::RemoveStake { proof } => {
+                // Get the staker address from the proof.
+                let staker_address = proof.compute_signer();
+
+                let staker = store.expect_staker(&staker_address)?;
+
+                reserved_balance.reserve_for(
+                    &staker_address,
+                    staker.balance,
+                    transaction.total_value(),
+                )
+            }
+        }
+    }
 }
 
 impl AccountInherentInteraction for StakingContract {

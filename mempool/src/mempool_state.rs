@@ -1,3 +1,4 @@
+use nimiq_account::ReservedBalance;
 use std::collections::{HashMap, HashSet};
 #[cfg(feature = "metrics")]
 use std::sync::Arc;
@@ -23,18 +24,6 @@ pub(crate) struct MempoolState {
     // The pending balance per sender.
     pub(crate) state_by_sender: HashMap<Address, SenderPendingState>,
 
-    // The sets of all senders of staking transactions. For simplicity, each validator/staker can
-    // only have one outgoing staking transaction in the mempool. This makes sure that the outgoing
-    // staking transaction can actually pay its fee.
-    pub(crate) outgoing_validators: HashMap<Address, Transaction>,
-    pub(crate) outgoing_stakers: HashMap<Address, Transaction>,
-
-    // The sets of all recipients of creation staking transactions. For simplicity, each
-    // validator/staker can only have one creation staking transaction in the mempool. This makes
-    // sure that the creation staking transactions do not interfere with one another.
-    pub(crate) creating_validators: HashMap<Address, Transaction>,
-    pub(crate) creating_stakers: HashMap<Address, Transaction>,
-
     #[cfg(feature = "metrics")]
     pub(crate) metrics: Arc<MempoolMetrics>,
 }
@@ -45,10 +34,6 @@ impl MempoolState {
             regular_transactions: MempoolTransactions::new(regular_txns_limit),
             control_transactions: MempoolTransactions::new(control_txns_limit),
             state_by_sender: HashMap::new(),
-            outgoing_validators: HashMap::new(),
-            outgoing_stakers: HashMap::new(),
-            creating_validators: HashMap::new(),
-            creating_stakers: HashMap::new(),
             #[cfg(feature = "metrics")]
             metrics: Default::default(),
         }
@@ -77,6 +62,40 @@ impl MempoolState {
             return false;
         }
 
+        // Update the per sender state
+        match self.state_by_sender.get_mut(&tx.sender) {
+            None => {
+                let mut txns = HashSet::new();
+                txns.insert(tx_hash);
+
+                let mut reserved_balance = ReservedBalance::new(tx.sender.clone());
+                let reserve_failed = reserved_balance
+                    .reserve_unchecked(tx.total_value())
+                    .is_err();
+                if reserve_failed {
+                    return false;
+                }
+
+                self.state_by_sender.insert(
+                    tx.sender.clone(),
+                    SenderPendingState {
+                        reserved_balance,
+                        txns,
+                    },
+                );
+            }
+            Some(sender_state) => {
+                let reserve_failed = sender_state
+                    .reserved_balance
+                    .reserve_unchecked(tx.total_value())
+                    .is_err();
+                if reserve_failed {
+                    return false;
+                }
+                sender_state.txns.insert(tx_hash);
+            }
+        }
+
         // If we are adding a stacking transaction we insert it into the control txns container
         // Staking txns are control txns
         if tx.sender_type == AccountType::Staking || tx.recipient_type == AccountType::Staking {
@@ -85,76 +104,6 @@ impl MempoolState {
             self.regular_transactions.insert(tx, priority);
         }
 
-        // Update the per sender state
-        match self.state_by_sender.get_mut(&tx.sender) {
-            None => {
-                let mut txns = HashSet::new();
-                txns.insert(tx_hash);
-
-                self.state_by_sender.insert(
-                    tx.sender.clone(),
-                    SenderPendingState {
-                        total: tx.total_value(),
-                        txns,
-                    },
-                );
-            }
-            Some(sender_state) => {
-                sender_state.total += tx.total_value();
-                sender_state.txns.insert(tx_hash);
-            }
-        }
-
-        // If it is an outgoing staking transaction then we have additional work.
-        if tx.sender_type == AccountType::Staking {
-            // Parse transaction data.
-            let data = OutgoingStakingTransactionProof::parse(tx)
-                .expect("The proof should have already been parsed before, so this cannot panic!");
-
-            // Insert the sender address in the correct set.
-            match data {
-                OutgoingStakingTransactionProof::DeleteValidator { proof } => {
-                    assert_eq!(
-                        self.outgoing_validators
-                            .insert(proof.compute_signer(), tx.clone()),
-                        None
-                    );
-                }
-                OutgoingStakingTransactionProof::RemoveStake { proof } => {
-                    assert_eq!(
-                        self.outgoing_stakers
-                            .insert(proof.compute_signer(), tx.clone()),
-                        None
-                    );
-                }
-            }
-        }
-
-        // If it is an incoming staking transaction then we have additional work.
-        if tx.recipient_type == AccountType::Staking {
-            // Parse transaction data.
-            let data = IncomingStakingTransactionData::parse(tx)
-                .expect("The data should have already been parsed before, so this cannot panic!");
-
-            // Insert the recipient address in the correct set, if it is a creation transaction.
-            match data {
-                IncomingStakingTransactionData::CreateValidator { proof, .. } => {
-                    assert_eq!(
-                        self.creating_validators
-                            .insert(proof.compute_signer(), tx.clone()),
-                        None
-                    );
-                }
-                IncomingStakingTransactionData::CreateStaker { proof, .. } => {
-                    assert_eq!(
-                        self.creating_stakers
-                            .insert(proof.compute_signer(), tx.clone()),
-                        None
-                    );
-                }
-                _ => {}
-            }
-        }
         // After inserting the new txn, check if we need to remove txns
         while self.regular_transactions.total_size > self.regular_transactions.total_size_limit {
             let (tx_hash, _) = self.regular_transactions.worst_transactions.pop().unwrap();
@@ -188,8 +137,6 @@ impl MempoolState {
                 self.state_by_sender.remove(&tx.sender);
             }
 
-            self.remove_from_staking_state(&tx);
-
             #[cfg(feature = "metrics")]
             self.metrics.note_evicted(reason);
 
@@ -203,57 +150,9 @@ impl MempoolState {
     pub(crate) fn remove_sender_txns(&mut self, sender_address: &Address) {
         if let Some(sender_state) = &self.state_by_sender.remove(sender_address) {
             for tx_hash in &sender_state.txns {
-                if let Some(tx) = self
-                    .regular_transactions
+                self.regular_transactions
                     .delete(tx_hash)
                     .or_else(|| self.control_transactions.delete(tx_hash))
-                {
-                    self.remove_from_staking_state(&tx);
-                }
-            }
-        }
-    }
-
-    // Internal helper function that takes care of removing staking transactions from the mempool state
-    fn remove_from_staking_state(&mut self, tx: &Transaction) {
-        // If it is an outgoing staking transaction then we have additional work.
-        if tx.sender_type == AccountType::Staking {
-            // Parse transaction data.
-            let data = OutgoingStakingTransactionProof::parse(tx)
-                .expect("The proof should have already been parsed before, so this cannot panic!");
-
-            // Remove the sender address from the correct set.
-            match data {
-                OutgoingStakingTransactionProof::DeleteValidator { proof } => {
-                    assert_ne!(
-                        self.outgoing_validators.remove(&proof.compute_signer()),
-                        None
-                    );
-                }
-                OutgoingStakingTransactionProof::RemoveStake { proof } => {
-                    assert_ne!(self.outgoing_stakers.remove(&proof.compute_signer()), None);
-                }
-            }
-        }
-
-        // If it is an incoming staking transaction then we have additional work.
-        if tx.recipient_type == AccountType::Staking {
-            // Parse transaction data.
-            let data = IncomingStakingTransactionData::parse(tx)
-                .expect("The data should have already been parsed before, so this cannot panic!");
-
-            // Remove the recipient address from the correct set, if it is a creation transaction.
-            match data {
-                IncomingStakingTransactionData::CreateValidator { proof, .. } => {
-                    assert_ne!(
-                        self.creating_validators.remove(&proof.compute_signer()),
-                        None
-                    );
-                }
-                IncomingStakingTransactionData::CreateStaker { proof, .. } => {
-                    assert_ne!(self.creating_stakers.remove(&proof.compute_signer()), None);
-                }
-                _ => {}
             }
         }
     }
@@ -277,8 +176,8 @@ pub(crate) enum EvictionReason {
 }
 
 pub(crate) struct SenderPendingState {
-    // The sum of the txns that are currently stored in the mempool for this sender
-    pub(crate) total: Coin,
+    // The balance reserved by transactions that are currently stored in the mempool for this sender.
+    pub(crate) reserved_balance: ReservedBalance,
 
     // Transaction hashes for this sender.
     pub(crate) txns: HashSet<Blake2bHash>,

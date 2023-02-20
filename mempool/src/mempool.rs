@@ -399,7 +399,7 @@ impl Mempool {
                                     // The sender must be able to at least pay the fee (in case the tx fails)
                                     // (Assuming that all pending txns in the mempool for this sender are included in a block)
 
-                                    if !AccountTransactionInteraction::has_sufficient_balance(
+                                    if !AccountTransactionInteraction::reserve_balance(
                                         &sender_account,
                                         old_tx,
                                         new_total + old_tx.fee,
@@ -427,71 +427,6 @@ impl Mempool {
                                 mempool_state.remove(hash, EvictionReason::Invalid);
                             }
                         }
-                    }
-
-                    // Perform checks for staking transactions
-                    let mut txs_to_remove: Vec<Blake2bHash> = vec![];
-                    // If it is an outgoing staking transaction then we have additional checks.
-                    if tx.sender_type == AccountType::Staking {
-                        // Parse transaction data.
-                        let data = OutgoingStakingTransactionProof::parse(tx)
-                            .expect("The proof should have already been parsed");
-
-                        // If the sender was already in the mempool then we need to remove the transaction.
-                        let transaction = match data.clone() {
-                            OutgoingStakingTransactionProof::DeleteValidator { proof } => {
-                                mempool_state
-                                    .outgoing_validators
-                                    .get(&proof.compute_signer())
-                            }
-                            OutgoingStakingTransactionProof::RemoveStake { proof } => {
-                                mempool_state.outgoing_stakers.get(&proof.compute_signer())
-                            }
-                        };
-
-                        if let Some(transaction) = transaction {
-                            trace!(
-                                reason = "Staking sender already in mempool",
-                                staking_type = "outgoing",
-                                "Mempool-update removing tx {} from mempool",
-                                transaction.hash::<Blake2bHash>()
-                            );
-                            txs_to_remove.push(transaction.hash());
-                        }
-                    }
-
-                    // If it is an incoming staking transaction then we have additional checks.
-                    if tx.recipient_type == AccountType::Staking {
-                        // Parse transaction data.
-                        let data = IncomingStakingTransactionData::parse(tx)
-                            .expect("The data should have already been parsed before");
-
-                        // If the recipient was already in the mempool we need to remove all txs for this recipient
-                        let transaction = match data.clone() {
-                            IncomingStakingTransactionData::CreateValidator { proof, .. } => {
-                                mempool_state
-                                    .creating_validators
-                                    .get(&proof.compute_signer())
-                            }
-                            IncomingStakingTransactionData::CreateStaker { proof, .. } => {
-                                mempool_state.creating_stakers.get(&proof.compute_signer())
-                            }
-                            _ => None,
-                        };
-
-                        if let Some(transaction) = transaction {
-                            trace!(
-                                reason = "Staking recipient already in mempool",
-                                staking_type = "incoming",
-                                "Mempool-update removing tx {} from mempool",
-                                transaction.hash::<Blake2bHash>()
-                            );
-                            txs_to_remove.push(transaction.hash());
-                        }
-                    }
-
-                    for tx in txs_to_remove {
-                        mempool_state.remove(&tx, EvictionReason::Invalid);
                     }
                 }
             }

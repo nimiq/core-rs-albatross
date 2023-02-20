@@ -11,6 +11,7 @@ use crate::data_store::{DataStoreRead, DataStoreWrite};
 use crate::interaction_traits::{
     AccountInherentInteraction, AccountPruningInteraction, AccountTransactionInteraction,
 };
+use crate::reserved_balance::ReservedBalance;
 use crate::{AccountReceipt, BlockState, Inherent};
 
 pub mod basic_account;
@@ -211,16 +212,17 @@ impl AccountTransactionInteraction for Account {
         )
     }
 
-    fn has_sufficient_balance(
+    fn reserve_balance(
         &self,
         transaction: &Transaction,
-        reserved_balance: Coin,
+        reserved_balance: &mut ReservedBalance,
         block_state: &BlockState,
         data_store: DataStoreRead,
-    ) -> Result<bool, AccountError> {
+    ) -> Result<(), AccountError> {
         gen_account_match!(
             self,
-            has_sufficient_balance,
+            reserve_balance,
+            transaction,
             reserved_balance,
             block_state,
             data_store,

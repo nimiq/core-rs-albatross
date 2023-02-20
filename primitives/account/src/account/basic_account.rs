@@ -6,6 +6,7 @@ use nimiq_transaction::Transaction;
 use crate::data_store::{DataStoreRead, DataStoreWrite};
 use crate::inherent::Inherent;
 use crate::interaction_traits::{AccountPruningInteraction, AccountTransactionInteraction};
+use crate::reserved_balance::ReservedBalance;
 use crate::{Account, AccountInherentInteraction, AccountReceipt, BlockState};
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Default, Serialize, Deserialize)]
@@ -96,17 +97,14 @@ impl AccountTransactionInteraction for BasicAccount {
         Ok(())
     }
 
-    fn has_sufficient_balance(
+    fn reserve_balance(
         &self,
         transaction: &Transaction,
-        reserved_balance: Coin,
+        reserved_balance: &mut ReservedBalance,
         _block_state: &BlockState,
         _data_store: DataStoreRead,
-    ) -> Result<bool, AccountError> {
-        let needed = reserved_balance
-            .checked_add(transaction.total_value())
-            .ok_or(AccountError::InvalidCoinValue)?;
-        Ok(self.balance >= needed)
+    ) -> Result<(), AccountError> {
+        reserved_balance.reserve(self.balance, transaction.total_value())
     }
 }
 

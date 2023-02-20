@@ -12,6 +12,7 @@ use crate::inherent::Inherent;
 use crate::interaction_traits::{
     AccountInherentInteraction, AccountPruningInteraction, AccountTransactionInteraction,
 };
+use crate::reserved_balance::ReservedBalance;
 use crate::{Account, AccountReceipt, BlockState};
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
@@ -216,24 +217,21 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         Ok(())
     }
 
-    fn has_sufficient_balance(
+    fn reserve_balance(
         &self,
         transaction: &Transaction,
-        reserved_balance: Coin,
+        reserved_balance: &mut ReservedBalance,
         block_state: &BlockState,
         _data_store: DataStoreRead,
-    ) -> Result<bool, AccountError> {
+    ) -> Result<(), AccountError> {
         let needed = reserved_balance
+            .balance()
             .checked_add(transaction.total_value())
             .ok_or(AccountError::InvalidCoinValue)?;
-        if self.balance < needed {
-            return Ok(false);
-        }
-
-        let new_balance = self.balance - needed;
+        let new_balance = self.balance.safe_sub(needed)?;
         self.can_change_balance(transaction, new_balance, block_state)?;
 
-        Ok(true)
+        reserved_balance.reserve(self.balance, transaction.total_value())
     }
 }
 

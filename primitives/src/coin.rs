@@ -23,6 +23,7 @@ pub struct Coin(u64);
 
 impl Coin {
     pub const ZERO: Coin = Coin(0u64);
+    pub const MAX: Coin = Coin(Self::MAX_SAFE_VALUE);
 
     // How many Lunas fit in one Coin
     pub const LUNAS_PER_COIN: u64 = 100_000u64;

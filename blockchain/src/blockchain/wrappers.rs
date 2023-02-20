@@ -1,13 +1,18 @@
 #[cfg(feature = "metrics")]
 use std::sync::Arc;
 
-use nimiq_account::{Account, StakingContract};
+use nimiq_account::{
+    Account, AccountTransactionInteraction, BlockState, DataStore, ReservedBalance, StakingContract,
+};
 use nimiq_block::Block;
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainError, ChainInfo, Direction};
-use nimiq_database::{ReadTransaction, Transaction};
+use nimiq_database::{ReadDBTransaction, Transaction as DBTransaction};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
-use nimiq_primitives::{key_nibbles::KeyNibbles, policy::Policy, slots::Validator};
+use nimiq_primitives::{
+    account::AccountError, key_nibbles::KeyNibbles, policy::Policy, slots::Validator,
+};
+use nimiq_transaction::Transaction;
 use std::ops::RangeFrom;
 
 #[cfg(feature = "metrics")]
@@ -25,7 +30,7 @@ impl Blockchain {
         &self,
         height: u32,
         include_body: bool,
-        txn_option: Option<&Transaction>,
+        txn_option: Option<&DBTransaction>,
     ) -> Result<Block, BlockchainError> {
         self.chain_store
             .get_block_at(height, include_body, txn_option)
@@ -35,7 +40,7 @@ impl Blockchain {
         &self,
         hash: &Blake2bHash,
         include_body: bool,
-        txn_option: Option<&Transaction>,
+        txn_option: Option<&DBTransaction>,
     ) -> Result<Block, BlockchainError> {
         self.chain_store.get_block(hash, include_body, txn_option)
     }
@@ -46,7 +51,7 @@ impl Blockchain {
         count: u32,
         include_body: bool,
         direction: Direction,
-        txn_option: Option<&Transaction>,
+        txn_option: Option<&DBTransaction>,
     ) -> Result<Vec<Block>, BlockchainError> {
         self.chain_store
             .get_blocks(start_block_hash, count, include_body, direction, txn_option)
@@ -56,7 +61,7 @@ impl Blockchain {
         &self,
         hash: &Blake2bHash,
         include_body: bool,
-        txn_option: Option<&Transaction>,
+        txn_option: Option<&DBTransaction>,
     ) -> Result<ChainInfo, BlockchainError> {
         self.chain_store
             .get_chain_info(hash, include_body, txn_option)
@@ -66,7 +71,7 @@ impl Blockchain {
         &self,
         block_number: u32,
         offset: u32,
-        txn_option: Option<&Transaction>,
+        txn_option: Option<&DBTransaction>,
     ) -> Result<(Validator, u16), BlockchainError> {
         let vrf_entropy = self
             .get_block_at(block_number - 1, false, txn_option)?
@@ -83,7 +88,7 @@ impl Blockchain {
         include_body: bool,
         direction: Direction,
         election_blocks_only: bool,
-        txn_option: Option<&Transaction>,
+        txn_option: Option<&DBTransaction>,
     ) -> Result<Vec<Block>, BlockchainError> {
         self.chain_store.get_macro_blocks(
             start_block_hash,
@@ -120,18 +125,24 @@ impl Blockchain {
         self.state.accounts.size()
     }
 
-    pub fn get_account(&self, address: &Address) -> Option<Account> {
-        // TODO: Find a better place for this differentiation, it should be in a more general location.
-        let key = if *address == Policy::STAKING_CONTRACT_ADDRESS {
-            StakingContract::get_key_staking_contract()
-        } else {
-            KeyNibbles::from(address)
-        };
+    pub fn get_account(&self, address: &Address) -> Account {
+        self.state.accounts.get_complete(address, None)
+    }
 
-        self.state
-            .accounts
-            .get(&key, None)
-            .expect("Incomplete trie.")
+    pub fn reserve_balance(
+        &self,
+        account: &Account,
+        transaction: &Transaction,
+        reserved_balance: &mut ReservedBalance,
+    ) -> Result<(), AccountError> {
+        let block_state = BlockState::new(self.block_number(), self.timestamp());
+        self.state.accounts.reserve_balance(
+            account,
+            transaction,
+            reserved_balance,
+            &block_state,
+            None,
+        )
     }
 
     /// Checks if we have seen some transaction with this hash inside the a validity window.
@@ -139,7 +150,7 @@ impl Blockchain {
         &self,
         tx_hash: &Blake2bHash,
         validity_window_start: u32,
-        txn_opt: Option<&Transaction>,
+        txn_opt: Option<&DBTransaction>,
     ) -> bool {
         // Get a vector with all transactions corresponding to the given hash.
         let ext_hash_vec = self.history_store.get_ext_tx_by_hash(tx_hash, txn_opt);
@@ -165,7 +176,7 @@ impl Blockchain {
     pub fn contains_tx_in_validity_window(
         &self,
         tx_hash: &Blake2bHash,
-        txn_opt: Option<&Transaction>,
+        txn_opt: Option<&DBTransaction>,
     ) -> bool {
         let max_block_number = self
             .block_number()
@@ -186,7 +197,7 @@ impl Blockchain {
     /// This function returns `None` when the trie is complete.
     pub fn get_missing_accounts_range(
         &self,
-        txn_opt: Option<&Transaction>,
+        txn_opt: Option<&DBTransaction>,
     ) -> Option<RangeFrom<KeyNibbles>> {
         let read_txn: ReadTransaction;
         let txn = match txn_opt {
