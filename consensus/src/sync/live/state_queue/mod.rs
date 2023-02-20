@@ -180,6 +180,15 @@ impl<N: Network> StateQueue<N> {
         );
         let current_macro_height = Policy::last_macro_block(blockchain.read().block_number());
         let blockchain_rx = blockchain.read().notifier_as_stream();
+
+        // When initializing the state sync, we assume it to be complete if we have the full state.
+        // In this case, we only start the state sync, once the accounts tree is reinitialized or we reverted a chunk.
+        let start_key = if blockchain.read().state.accounts.is_complete(None) {
+            ChunkRequestState::Complete
+        } else {
+            ChunkRequestState::Reset
+        };
+
         Self {
             config,
             blockchain,
@@ -189,7 +198,7 @@ impl<N: Network> StateQueue<N> {
             buffer: Default::default(),
             buffer_size: 0,
             current_macro_height,
-            start_key: ChunkRequestState::Reset,
+            start_key,
             blockchain_rx,
         }
     }
@@ -473,26 +482,31 @@ impl<N: Network> Stream for StateQueue<N> {
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
         // Poll the blockchain stream and set key start to complete if the accounts trie is
         // complete and we have passed a macro block.
-        // If we have not passed the macro block yet, reset on a rebranch (since we potentially revert from an incomplete state).
+        // Reset on a rebranch (since we potentially revert to an incomplete state).
         while let Poll::Ready(Some(event)) = self.blockchain_rx.poll_next_unpin(cx) {
-            if !self.start_key.is_complete() {
-                match event {
-                    BlockchainEvent::Finalized(_) | BlockchainEvent::EpochFinalized(_) => {
-                        if self.blockchain.read().state.accounts.is_complete(None) {
-                            info!("Finished state sync, trie complete.");
-                            self.start_key = ChunkRequestState::Complete;
-                            self.buffer.clear();
-                            self.buffer_size = 0;
-                        }
+            match event {
+                BlockchainEvent::Finalized(_) | BlockchainEvent::EpochFinalized(_) => {
+                    let blockchain_state_complete =
+                        self.blockchain.read().state.accounts.is_complete(None);
+                    if !self.start_key.is_complete() && blockchain_state_complete {
+                        // Mark state sync as complete after passing a macro block.
+                        info!("Finished state sync, trie complete.");
+                        self.start_key = ChunkRequestState::Complete;
+                        self.buffer.clear();
+                        self.buffer_size = 0;
+                    } else if self.start_key.is_complete() && !blockchain_state_complete {
+                        // Start state sync if the blockchain state was reinitialized after pushing a macro block.
+                        info!("Trie incomplete, starting state sync.");
+                        self.start_key = ChunkRequestState::Reset;
                     }
-                    BlockchainEvent::Rebranched(_, _) => {
-                        if !self.blockchain.read().state.accounts.is_complete(None) {
-                            info!("Reset due to rebranch.");
-                            self.start_key = ChunkRequestState::Reset;
-                        }
-                    }
-                    _ => {}
                 }
+                BlockchainEvent::Rebranched(_, _) => {
+                    if !self.blockchain.read().state.accounts.is_complete(None) {
+                        info!("Reset due to rebranch.");
+                        self.start_key = ChunkRequestState::Reset;
+                    }
+                }
+                _ => {}
             }
         }
 
