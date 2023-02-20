@@ -1,7 +1,6 @@
 use std::fmt::Debug;
 
 use beserial::{Deserialize, Serialize};
-use nimiq_network_interface::request::{MessageMarker, RequestCommon};
 
 use crate::contribution::AggregatableContribution;
 /// The max number of LevelUpdateMessages requests per peer.
@@ -39,15 +38,6 @@ impl<C: AggregatableContribution> LevelUpdate<C> {
         }
     }
 
-    /// Add a tag to the Update, resulting in a LevelUpdateMessage which can be send over wire.
-    /// * `tag` The message this aggregation runs over
-    pub fn with_tag<T: Clone + Debug + Serialize + Deserialize + Send + Unpin>(
-        self,
-        tag: T,
-    ) -> LevelUpdateMessage<C, T> {
-        LevelUpdateMessage { update: self, tag }
-    }
-
     /// The source (i.e id) of the sender of this update
     pub fn origin(&self) -> usize {
         self.origin as usize
@@ -57,33 +47,4 @@ impl<C: AggregatableContribution> LevelUpdate<C> {
     pub fn level(&self) -> usize {
         self.level as usize
     }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct LevelUpdateMessage<
-    C: AggregatableContribution,
-    T: Clone + Debug + Serialize + Deserialize + Send + Unpin,
-> {
-    /// The update for that level
-    pub update: LevelUpdate<C>,
-
-    /// The message this aggregation is running over. This is needed to differentiate to which
-    /// aggregation this belongs to.
-    pub tag: T,
-}
-
-impl<
-        C: AggregatableContribution + 'static,
-        T: Clone + Debug + Serialize + Deserialize + Send + Sync + Unpin + 'static,
-    > RequestCommon for LevelUpdateMessage<C, T>
-{
-    type Kind = MessageMarker;
-    // The type to use will come from the AggregatableContribution implementation
-    // since having a fixed value here would imply that there could be different
-    // types using the same type, which would confuse the network at decoding
-    // messages upon receiving them.
-    const TYPE_ID: u16 = C::TYPE_ID;
-    type Response = ();
-
-    const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_LEVEL_UPDATE_MESSAGE;
 }

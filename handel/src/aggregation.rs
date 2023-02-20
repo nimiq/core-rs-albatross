@@ -1,17 +1,17 @@
 use std::fmt::Debug;
-use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use futures::{
-    future::BoxFuture, ready, select, stream::BoxStream, FutureExt, Sink, Stream, StreamExt,
+    future::{BoxFuture, Future},
+    ready, select,
+    stream::BoxStream,
+    FutureExt, Sink, Stream, StreamExt,
 };
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tokio::task::JoinHandle;
 use tokio::time::{interval_at, Instant};
 use tokio_stream::wrappers::{IntervalStream, UnboundedReceiverStream};
-
-use beserial::{Deserialize, Serialize};
 
 use crate::config::Config;
 use crate::contribution::AggregatableContribution;
@@ -21,7 +21,7 @@ use crate::partitioner::Partitioner;
 use crate::protocol::Protocol;
 use crate::store::ContributionStore;
 use crate::todo::TodoList;
-use crate::update::{LevelUpdate, LevelUpdateMessage};
+use crate::update::LevelUpdate;
 
 // TODOS:
 // * protocol.store RwLock.
@@ -30,17 +30,13 @@ use crate::update::{LevelUpdate, LevelUpdateMessage};
 // * Evaluator::new -> threshold (now covered outside of this crate)
 
 type LevelUpdateStream<P> = BoxStream<'static, LevelUpdate<<P as Protocol>::Contribution>>;
-type LevelUpdateSender<P, T> =
-    UnboundedSender<(LevelUpdateMessage<<P as Protocol>::Contribution, T>, usize)>;
+type LevelUpdateSender<P> = UnboundedSender<(LevelUpdate<<P as Protocol>::Contribution>, usize)>;
 
 #[derive(std::fmt::Debug)]
 pub struct SinkError {} // TODO
 
 /// Future implementation for the next aggregation event
-struct NextAggregation<
-    P: Protocol,
-    T: Clone + Debug + Eq + Serialize + Deserialize + Sized + Send + Sync + Unpin,
-> {
+struct NextAggregation<P: Protocol> {
     /// Handel configuration
     config: Config,
 
@@ -56,11 +52,8 @@ struct NextAggregation<
     /// Our contribution
     contribution: P::Contribution,
 
-    /// The tag for this aggregation
-    tag: T,
-
     /// Sink used to relay messages
-    sender: LevelUpdateSender<P, T>,
+    sender: LevelUpdateSender<P>,
 
     /// Interval for starting the next level regardless of previous levels completion
     start_level_interval: IntervalStream,
@@ -72,18 +65,13 @@ struct NextAggregation<
     next_level_timeout: usize,
 }
 
-impl<
-        P: Protocol,
-        T: Clone + Debug + Eq + Serialize + Deserialize + Sized + Send + Sync + Unpin,
-    > NextAggregation<P, T>
-{
+impl<P: Protocol> NextAggregation<P> {
     pub fn new(
         protocol: P,
-        tag: T,
         config: Config,
         own_contribution: P::Contribution,
         input_stream: LevelUpdateStream<P>,
-        sender: LevelUpdateSender<P, T>,
+        sender: LevelUpdateSender<P>,
     ) -> Self {
         // Invoke the partitioner to create the level structure of peers.
         let levels: Vec<Level> = Level::create_levels(protocol.partitioner());
@@ -109,7 +97,6 @@ impl<
         // Create the NextAggregation struct
         Self {
             protocol,
-            tag,
             config,
             todos,
             levels,
@@ -160,7 +147,8 @@ impl<
         self.num_contributors(aggregate) == self.protocol.partitioner().size()
     }
 
-    /// Check if a level was completed TODO: remove contribution parameter as it is not used at all.
+    /// Check if a level was completed
+    /// TODO: remove contribution parameter as it is not used at all.
     fn check_completed_level(&self, _contribution: P::Contribution, level: usize) {
         let level = self
             .levels
@@ -247,12 +235,11 @@ impl<
             );
 
             // Tag the LevelUpdate with the tag this aggregation runs over creating a LevelUpdateMessage.
-            let update_msg = update.with_tag(self.tag.clone());
             for peer_id in peer_ids {
                 if peer_id < self.protocol.partitioner().size() {
                     self.sender
                         // `send` is not a future and thus will not block execution.
-                        .send((update_msg.clone(), peer_id))
+                        .send((update.clone(), peer_id))
                         // If an error occurred that means the receiver no longer exists or was closed which should never happen.
                         .expect("Message could not be send to unbounded_channel sender");
                 }
@@ -353,33 +340,25 @@ impl<
         }
     }
 
-    fn into_inner(self) -> (LevelUpdateStream<P>, LevelUpdateSender<P, T>) {
+    fn into_inner(self) -> (LevelUpdateStream<P>, LevelUpdateSender<P>) {
         (self.todos.into_stream(), self.sender)
     }
 }
 
-struct FinishedAggregation<
-    P: Protocol,
-    T: Clone + Debug + Serialize + Deserialize + Send + Sync + Unpin,
-> {
-    level_update: LevelUpdateMessage<P::Contribution, T>,
+struct FinishedAggregation<P: Protocol> {
+    level_update: LevelUpdate<P::Contribution>,
     input_stream: LevelUpdateStream<P>,
-    sender: LevelUpdateSender<P, T>,
+    sender: LevelUpdateSender<P>,
 }
 
-impl<
-        P: Protocol,
-        T: Clone + Debug + Eq + Serialize + Deserialize + Sized + Send + Sync + Unpin,
-    > FinishedAggregation<P, T>
-{
-    fn from(aggregation: NextAggregation<P, T>, aggregate: P::Contribution) -> Self {
+impl<P: Protocol> FinishedAggregation<P> {
+    fn from(aggregation: NextAggregation<P>, aggregate: P::Contribution) -> Self {
         let level_update = LevelUpdate::<P::Contribution>::new(
             aggregate,
             None,
             aggregation.protocol.partitioner().levels(),
             aggregation.protocol.node_id(),
-        )
-        .with_tag(aggregation.tag.clone());
+        );
 
         let (input_stream, sender) = aggregation.into_inner();
 
@@ -391,17 +370,13 @@ impl<
     }
 }
 
-impl<
-        P: Protocol,
-        T: Clone + Debug + Eq + Serialize + Deserialize + Send + Sync + Unpin + 'static,
-    > Future for FinishedAggregation<P, T>
-{
-    type Output = (P::Contribution, Option<NextAggregation<P, T>>);
+impl<P: Protocol> Future for FinishedAggregation<P> {
+    type Output = (P::Contribution, Option<NextAggregation<P>>);
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         while let Some(msg) = ready!(self.input_stream.poll_next_unpin(cx)) {
             // Don't respond to final level updates.
-            if msg.level == self.level_update.update.level {
+            if msg.level == self.level_update.level {
                 continue;
             }
 
@@ -415,39 +390,30 @@ impl<
             }
         }
 
-        Poll::Ready((self.level_update.update.aggregate.clone(), None))
+        Poll::Ready((self.level_update.aggregate.clone(), None))
     }
 }
 
 /// Stream implementation for consecutive aggregation events
-pub struct Aggregation<
-    P: Protocol,
-    T: Clone + Debug + Eq + Serialize + Deserialize + Sized + Send + Sync + Unpin,
-> {
-    next_aggregation: Option<BoxFuture<'static, (P::Contribution, Option<NextAggregation<P, T>>)>>,
+pub struct Aggregation<P: Protocol> {
+    next_aggregation: Option<BoxFuture<'static, (P::Contribution, Option<NextAggregation<P>>)>>,
     network_handle: Option<JoinHandle<()>>,
 }
 
-impl<
-        P: Protocol,
-        T: Clone + Debug + Eq + Serialize + Deserialize + Sized + Send + Sync + Unpin + 'static,
-    > Aggregation<P, T>
-{
+impl<P: Protocol> Aggregation<P> {
     pub fn new<E: Debug + 'static>(
         protocol: P,
-        tag: T,
         config: Config,
         own_contribution: P::Contribution,
         input_stream: LevelUpdateStream<P>,
-        output_sink: Box<
-            (dyn Sink<(LevelUpdateMessage<P::Contribution, T>, usize), Error = E> + Unpin + Send),
+        output_sink: Pin<
+            Box<(dyn Sink<(LevelUpdate<P::Contribution>, usize), Error = E> + Unpin + Send)>,
         >,
     ) -> Self {
         // Create an unbounded mpsc channel to buffer network messages for the actual aggregation not having to wait for them to get send.
         // A future optimization could be to have this task not simply forward all messages but filter out those which have become obsolete
         // by subsequent messages.
-        let (sender, receiver) =
-            unbounded_channel::<(LevelUpdateMessage<P::Contribution, T>, usize)>();
+        let (sender, receiver) = unbounded_channel::<(LevelUpdate<P::Contribution>, usize)>();
 
         // Spawn a task emptying put the receiver of the created mpsc. Note that this task will terminate once all senders are dropped leading
         // to the stream no longer producing any new items. In turn the forward future will resolve terminating the task.
@@ -461,16 +427,10 @@ impl<
             }
         });
 
-        let next_aggregation = NextAggregation::new(
-            protocol,
-            tag,
-            config,
-            own_contribution,
-            input_stream,
-            sender,
-        )
-        .next()
-        .boxed();
+        let next_aggregation =
+            NextAggregation::new(protocol, config, own_contribution, input_stream, sender)
+                .next()
+                .boxed();
 
         Self {
             next_aggregation: Some(next_aggregation),
@@ -490,11 +450,7 @@ impl<
     }
 }
 
-impl<
-        P: Protocol + Debug,
-        T: Clone + Debug + Eq + Serialize + Deserialize + Send + Sync + Unpin + 'static,
-    > Stream for Aggregation<P, T>
-{
+impl<P: Protocol + Debug> Stream for Aggregation<P> {
     type Item = P::Contribution;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {

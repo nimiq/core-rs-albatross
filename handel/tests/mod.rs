@@ -6,7 +6,10 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 
 use async_trait::async_trait;
-use futures::{future::BoxFuture, stream::StreamExt, Sink};
+use futures::stream;
+use futures::{future::BoxFuture, stream::StreamExt, Sink, SinkExt};
+use nimiq_handel::update::LevelUpdate;
+use nimiq_network_interface::request::{MessageMarker, RequestCommon};
 use parking_lot::RwLock;
 
 use beserial::{Deserialize, Serialize};
@@ -21,7 +24,6 @@ use nimiq_handel::{
     partitioner::BinomialPartitioner,
     protocol,
     store::ReplaceStore,
-    update::LevelUpdateMessage,
     verifier,
 };
 use nimiq_network_interface::{network::Network, request::Message};
@@ -36,8 +38,6 @@ pub struct Contribution {
 }
 
 impl AggregatableContribution for Contribution {
-    const TYPE_ID: u16 = 44;
-
     fn contributors(&self) -> BitSet {
         self.contributors.clone()
     }
@@ -137,6 +137,21 @@ impl std::fmt::Debug for Protocol {
     fn fmt(&self, _f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         Ok(())
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Update<C: AggregatableContribution>(pub LevelUpdate<C>);
+
+impl<C: AggregatableContribution + 'static> RequestCommon for Update<C> {
+    type Kind = MessageMarker;
+    //     // The type to use will come from the AggregatableContribution implementation
+    //     // since having a fixed value here would imply that there could be different
+    //     // types using the same type, which would confuse the network at decoding
+    //     // messages upon receiving them.
+    const TYPE_ID: u16 = 0;
+    const MAX_REQUESTS: u32 = 100;
+    const TIME_WINDOW: Duration = Duration::from_millis(500);
+    type Response = ();
 }
 
 impl protocol::Protocol for Protocol {
@@ -304,18 +319,24 @@ async fn it_can_aggregate() {
         // spawn a task for this Handel Aggregation and Network instance.
         let mut aggregation = Aggregation::new(
             protocol,
-            1_u8, // serves as the tag or identifier for this aggregation
             config.clone(),
             contribution,
             Box::pin(
-                net.receive_messages::<LevelUpdateMessage<Contribution, u8>>()
-                    .map(move |msg| msg.0.update),
+                net.receive_messages::<Update<Contribution>>()
+                    .map(move |msg| msg.0 .0),
             ),
-            Box::new(NetworkSink {
-                network: net.clone(),
-                current_future: None,
-                phantom: PhantomData,
-            }),
+            Box::pin(
+                NetworkSink {
+                    network: net.clone(),
+                    current_future: None,
+                    phantom: PhantomData,
+                }
+                .with(
+                    |(item, recipient): (LevelUpdate<Contribution>, usize)| async {
+                        Ok((Update(item), recipient))
+                    },
+                ),
+            ),
         );
 
         let r = stopped.clone();
@@ -345,12 +366,11 @@ async fn it_can_aggregate() {
     // instead of spawning the aggregation task await its result here.
     let mut aggregation = Aggregation::new(
         protocol,
-        1_u8, // serves as the tag or identifier for this aggregation
         config.clone(),
         contribution,
         Box::pin(
-            net.receive_messages::<LevelUpdateMessage<Contribution, u8>>()
-                .map(move |msg| msg.0.update),
+            net.receive_messages::<Update<Contribution>>()
+                .map(move |msg| msg.0 .0),
         ),
         Box::new(NetworkSink {
             network: net.clone(),
@@ -402,12 +422,11 @@ async fn it_can_aggregate() {
     // instead of spawning the aggregation task await its result here.
     let mut aggregation = Aggregation::new(
         protocol,
-        1_u8, // serves as the tag or identifier for this aggregation
         config.clone(),
         contribution,
         Box::pin(
-            net.receive_messages::<LevelUpdateMessage<Contribution, u8>>()
-                .map(move |msg| msg.0.update),
+            net.receive_messages::<Update<Contribution>>()
+                .map(move |msg| msg.0 .0),
         ),
         Box::new(NetworkSink {
             network: net.clone(),
