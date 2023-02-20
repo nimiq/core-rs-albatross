@@ -26,6 +26,7 @@ use libp2p::{
         Quorum, Record,
     },
     noise,
+    ping::Success as PingSuccess,
     request_response::{OutboundFailure, RequestId, RequestResponseMessage, ResponseChannel},
     swarm::{dial_opts::DialOpts, ConnectionLimits, NetworkInfo, SwarmBuilder, SwarmEvent},
     yamux, Multiaddr, PeerId, Swarm, Transport,
@@ -840,6 +841,23 @@ impl Network {
                                 );
                             }
                         }
+                    }
+                    NimiqEvent::Ping(event) => {
+                        match event.result {
+                            Err(error) => {
+                                log::debug!(%error, ?event.peer, "Ping failed with peer");
+                            }
+                            Ok(PingSuccess::Pong) => {
+                                log::trace!(?event.peer, "Responded Ping from peer");
+                            }
+                            Ok(PingSuccess::Ping { rtt }) => {
+                                log::trace!(
+                                    ?event.peer,
+                                    ?rtt,
+                                    "Sent Ping and received response to/from peer",
+                                );
+                            }
+                        };
                     }
                     NimiqEvent::Pool(event) => {
                         match event {
