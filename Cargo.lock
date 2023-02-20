@@ -4281,15 +4281,17 @@ dependencies = [
 name = "nimiq-tendermint"
 version = "0.1.0"
 dependencies = [
- "async-trait",
  "beserial",
  "futures-util",
  "nimiq-block",
+ "nimiq-collections",
  "nimiq-hash",
  "nimiq-primitives",
  "nimiq-test-log",
  "thiserror",
  "tokio",
+ "tokio-stream",
+ "tokio-util",
  "tracing",
 ]
 

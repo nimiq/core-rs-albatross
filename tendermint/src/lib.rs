@@ -1,51 +1,12 @@
-#[macro_use]
 extern crate log;
 
-pub(crate) mod outside_deps;
+pub(crate) mod protocol;
 pub(crate) mod state;
-pub(crate) mod stream;
+mod states;
 pub(crate) mod tendermint;
 pub(crate) mod utils;
 
-pub use outside_deps::TendermintOutsideDeps;
-pub use state::TendermintState;
-pub use stream::TendermintStreamWrapper as Tendermint;
-pub use utils::*;
-
-use std::fmt::Debug;
-
-use beserial::{Deserialize, Serialize};
-
-// Poor man's trait aliases:
-pub trait ProposalTrait:
-    Clone + Debug + PartialEq + Deserialize + Serialize + Unpin + Send + Sync + 'static
-{
-}
-impl<T: Clone + Debug + PartialEq + Deserialize + Serialize + Unpin + Send + Sync + 'static>
-    ProposalTrait for T
-{
-}
-
-pub trait ProposalCacheTrait:
-    Clone + Debug + Deserialize + Serialize + Unpin + Send + Sync + 'static
-{
-}
-impl<T: Clone + Debug + Deserialize + Serialize + Unpin + Send + Sync + 'static> ProposalCacheTrait
-    for T
-{
-}
-
-pub trait ProposalHashTrait:
-    Clone + Debug + PartialEq + Ord + Deserialize + Serialize + Unpin + Send + 'static
-{
-}
-impl<T: Clone + Debug + PartialEq + Ord + Deserialize + Serialize + Unpin + Send + 'static>
-    ProposalHashTrait for T
-{
-}
-
-pub trait ProofTrait: Clone + Debug + Deserialize + Serialize + Unpin + Send + 'static {}
-impl<T: Clone + Debug + Deserialize + Serialize + Unpin + Send + 'static> ProofTrait for T {}
-
-pub trait ResultTrait: Clone + Debug + Unpin + Send + 'static {}
-impl<T: Clone + Debug + Unpin + Send + 'static> ResultTrait for T {}
+pub use protocol::*;
+pub use state::*;
+pub use tendermint::*;
+pub use utils::{Return, Step};
