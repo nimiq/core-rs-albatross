@@ -9,6 +9,10 @@ use libp2p::{
     },
     identify::{Behaviour as IdentifyBehaviour, Config as IdentifyConfig, Event as IdentifyEvent},
     kad::{store::MemoryStore, Kademlia, KademliaEvent},
+    ping::{
+        Behaviour as PingBehaviour, Config as PingConfig, Event as PingEvent,
+        Failure as PingFailure,
+    },
     request_response::{
         ProtocolSupport, RequestResponse, RequestResponseConfig,
         RequestResponseEvent as ReqResEvent,
@@ -37,8 +41,11 @@ use crate::{
 pub type NimiqNetworkBehaviourError = EitherError<
     EitherError<
         EitherError<
-            EitherError<EitherError<std::io::Error, DiscoveryError>, GossipsubHandlerError>,
-            std::io::Error,
+            EitherError<
+                EitherError<EitherError<std::io::Error, DiscoveryError>, GossipsubHandlerError>,
+                std::io::Error,
+            >,
+            PingFailure,
         >,
         ConnectionPoolError,
     >,
@@ -53,6 +60,7 @@ pub enum NimiqEvent {
     Discovery(DiscoveryEvent),
     Gossip(GossipsubEvent),
     Identify(IdentifyEvent),
+    Ping(PingEvent),
     Pool(ConnectionPoolEvent),
     RequestResponse(RequestResponseEvent),
 }
@@ -87,6 +95,12 @@ impl From<ConnectionPoolEvent> for NimiqEvent {
     }
 }
 
+impl From<PingEvent> for NimiqEvent {
+    fn from(event: PingEvent) -> Self {
+        Self::Ping(event)
+    }
+}
+
 impl From<RequestResponseEvent> for NimiqEvent {
     fn from(event: RequestResponseEvent) -> Self {
         Self::RequestResponse(event)
@@ -100,6 +114,7 @@ pub struct NimiqBehaviour {
     pub discovery: DiscoveryBehaviour,
     pub gossipsub: Gossipsub,
     pub identify: IdentifyBehaviour,
+    pub ping: PingBehaviour,
     pub pool: ConnectionPoolBehaviour,
     pub request_response: RequestResponse<MessageCodec>,
 }
@@ -138,6 +153,11 @@ impl NimiqBehaviour {
         let identify_config = IdentifyConfig::new("/albatross/2.0".to_string(), public_key);
         let identify = IdentifyBehaviour::new(identify_config);
 
+        // Ping behaviour:
+        // - Send a ping every 15 seconds and timeout at 20 seconds.
+        // - The ping behaviour will close the connection if a ping timeouts.
+        let ping = PingBehaviour::new(PingConfig::new());
+
         // Connection pool behaviour
         let pool = ConnectionPoolBehaviour::new(
             Arc::clone(&contacts),
@@ -157,6 +177,7 @@ impl NimiqBehaviour {
             discovery,
             gossipsub,
             identify,
+            ping,
             pool,
             request_response,
         }
