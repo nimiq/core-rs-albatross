@@ -86,10 +86,14 @@ impl<T: Ord> ConnectionState<T> {
         }
     }
 
+    /// Marks a connection ID as being dialed
     fn mark_dialing(&mut self, id: T) {
         self.dialing.insert(id);
     }
 
+    /// Marks a connection ID as connected. This also implies that if the
+    /// connection ID was previously marked as failed/down or being dialed it
+    /// will be removed from such state.
     fn mark_connected(&mut self, id: T) {
         self.dialing.remove(&id);
         self.failed.remove(&id);
@@ -97,10 +101,18 @@ impl<T: Ord> ConnectionState<T> {
         self.connected.insert(id);
     }
 
+    /// Marks a connection ID as closed (will be removed from the connected)
+    /// set of connections.
     fn mark_closed(&mut self, id: T) {
         self.connected.remove(&id);
     }
 
+    /// Marks a connection ID as failed
+    ///
+    /// If the peers was marked as being dialed, it will be removed from such
+    /// set.
+    /// Also if the connection ID has been marked more that `self.max_failures`
+    /// as failed then the connection ID will be marked as down.
     fn mark_failed(&mut self, id: T) {
         self.dialing.remove(&id);
 
@@ -116,28 +128,42 @@ impl<T: Ord> ConnectionState<T> {
         }
     }
 
+    /// Marks a connection ID as down
+    ///
+    /// If the connection was into the failed set, it will be removed from such
+    /// set.
     fn mark_down(&mut self, id: T) {
         self.failed.remove(&id);
         self.down.insert(id, Instant::now());
     }
 
+    /// Returns wether a specific connection ID can dial another connection ID
     fn can_dial(&self, id: &T) -> bool {
         !self.dialing.contains(id) && !self.connected.contains(id) && !self.down.contains_key(id)
     }
 
+    /// Returns the number of connections being dialed
     fn num_dialing(&self) -> usize {
         self.dialing.len()
     }
 
+    /// Returns the number of connected instances
     fn num_connected(&self) -> usize {
         self.connected.len()
     }
 
+    /// Remove all down peers that haven't been dialed in a while from the `down`
+    /// map to dial them again.
     fn housekeeping(&mut self) {
-        // Remove all down peers that we haven't dialed in a while from the `down` map to dial them again.
         let retry_down_after = self.retry_down_after;
         self.down
             .retain(|_, down_since| down_since.elapsed() < retry_down_after);
+    }
+
+    /// Remove all connection IDs marked as down.
+    /// This will make a peer potentially able to be called again.
+    fn reset_down(&mut self) {
+        self.down.clear()
     }
 }
 
@@ -154,31 +180,57 @@ impl<T> std::fmt::Display for ConnectionState<T> {
     }
 }
 
+/// Connection pool behaviour events
 #[derive(Debug)]
 pub enum ConnectionPoolEvent {
+    /// A peer has joined
     PeerJoined { peer_id: PeerId },
 }
 
 type PoolNetworkBehaviourAction =
     NetworkBehaviourAction<ConnectionPoolEvent, ConnectionPoolHandler>;
 
+/// Connection pool behaviour
+///
+/// This behaviour maintains state on wether the current peer can connect to
+/// another peer. For this it maintains state about other peers such as if
+/// the peer is connected, is being dialed, is down or has failed.
+/// Also watches if we have received more connections than the allowed
+/// configured maximum per peer, IP or subnet.
 pub struct ConnectionPoolBehaviour {
     pub contacts: Arc<RwLock<PeerContactBook>>,
+
+    /// Set of seeds useful when starting to discover other peers.
     seeds: Vec<Multiaddr>,
 
+    /// The set of services that this peer requires.
     required_services: Services,
 
+    /// Connection state per Peer ID
     peer_ids: ConnectionState<PeerId>,
+
+    /// Connection state per address
     addresses: ConnectionState<Multiaddr>,
 
+    /// Queue of actions this behaviour will emit for handler execution.
     actions: VecDeque<PoolNetworkBehaviourAction>,
 
+    /// Tells wether the connection pool behaviour is active or not
     active: bool,
 
+    /// Counters per connection limits
     limits: ConnectionPoolLimits,
+
+    /// Configuration for the connection pool behaviour
     config: ConnectionPoolConfig,
+
+    /// Set of IPs banned
     banned: HashMap<IpNetwork, SystemTime>,
+
+    /// Waker to signal when this behaviour needs to be polled again
     waker: Option<Waker>,
+
+    /// Interval for which the connection pool housekeeping should be run
     housekeeping_timer: Interval,
 }
 
@@ -218,6 +270,12 @@ impl ConnectionPoolBehaviour {
         }
     }
 
+    /// Tries to maintain at least `peer_count_desired` connections.
+    ///
+    /// For this it will try to select peers or seeds to dial in order to
+    /// achieve that many connection.
+    /// Note that this only takes effect if `start_connecting` function has
+    /// been previously called.
     pub fn maintain_peers(&mut self) {
         debug!(
             peer_ids = %self.peer_ids,
@@ -258,6 +316,7 @@ impl ConnectionPoolBehaviour {
         self.wake();
     }
 
+    /// Tells the behaviour to start connecting to other peers.
     pub fn start_connecting(&mut self) {
         self.active = true;
         self.maintain_peers();
