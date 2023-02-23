@@ -623,6 +623,7 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
         // If the connection was closed for any reason, don't dial the peer again.
         // FIXME We want to be more selective here and only mark peers as down for specific CloseReasons.
         self.peer_ids.mark_down(*peer_id);
+        self.addresses.mark_down(address.clone());
 
         self.maintain_peers();
     }
