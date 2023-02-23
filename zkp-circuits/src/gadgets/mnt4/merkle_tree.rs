@@ -7,7 +7,8 @@ use ark_r1cs_std::{
 };
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 
-use crate::gadgets::mnt4::{PedersenHashGadget, SerializeGadget};
+use crate::gadgets::mnt4::PedersenHashGadget;
+use crate::gadgets::serialize::SerializeGadget;
 
 /// This gadgets contains utilities to create Merkle trees and verify proofs for them. It uses Pedersen
 /// hashes to construct the tree instead of cryptographic hash functions in order to be more efficient.
@@ -54,13 +55,10 @@ impl MerkleTreeGadget {
                 let mut bytes = Vec::new();
 
                 // Serialize the left node.
-                bytes.extend(SerializeGadget::serialize_g1(cs.clone(), &nodes[2 * j])?);
+                bytes.extend(nodes[2 * j].serialize_compressed(cs.clone())?);
 
                 // Serialize the right node.
-                bytes.extend(SerializeGadget::serialize_g1(
-                    cs.clone(),
-                    &nodes[2 * j + 1],
-                )?);
+                bytes.extend(nodes[2 * j + 1].serialize_compressed(cs.clone())?);
 
                 // Calculate the parent node.
                 let parent_node =
@@ -74,7 +72,7 @@ impl MerkleTreeGadget {
         }
 
         // Serialize the root node.
-        let bytes = SerializeGadget::serialize_g1(cs, &nodes[0])?;
+        let bytes = nodes[0].serialize_compressed(cs)?;
 
         Ok(bytes)
     }
@@ -120,16 +118,16 @@ impl MerkleTreeGadget {
             // Serialize the left and right nodes.
             let mut bytes = Vec::new();
 
-            bytes.extend(SerializeGadget::serialize_g1(cs.clone(), &left_node)?);
+            bytes.extend(left_node.serialize_compressed(cs.clone())?);
 
-            bytes.extend(SerializeGadget::serialize_g1(cs.clone(), &right_node)?);
+            bytes.extend(right_node.serialize_compressed(cs.clone())?);
 
             // Calculate the parent node and update result.
             result = PedersenHashGadget::evaluate(&bytes.to_bits_le()?, pedersen_generators)?;
         }
 
         // Serialize the root node.
-        let bytes = SerializeGadget::serialize_g1(cs, &result)?;
+        let bytes = result.serialize_compressed(cs)?;
 
         // Check that the calculated root is equal to the given root.
         root.is_eq(&bytes)

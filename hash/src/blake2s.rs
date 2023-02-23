@@ -15,6 +15,12 @@ pub struct Blake2sWithParameterBlock {
     pub personalization: [u8; 8],
 }
 
+impl Default for Blake2sWithParameterBlock {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Blake2sWithParameterBlock {
     pub fn new() -> Self {
         Self {

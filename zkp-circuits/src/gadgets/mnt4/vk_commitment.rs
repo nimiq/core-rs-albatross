@@ -6,7 +6,8 @@ use ark_r1cs_std::uint8::UInt8;
 use ark_r1cs_std::ToBitsGadget;
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 
-use crate::gadgets::mnt4::{PedersenHashGadget, SerializeGadget};
+use crate::gadgets::mnt4::PedersenHashGadget;
+use crate::gadgets::serialize::SerializeGadget;
 
 /// This gadget is meant to calculate a commitment in-circuit for a verifying key of a SNARK in the
 /// MNT6-753 curve. This means we can open this commitment inside of a circuit in the MNT4-753 curve
@@ -28,30 +29,27 @@ impl VKCommitmentGadget {
 
         // Serialize the verifying key into bits.
         // Alpha G1
-        bytes.extend(SerializeGadget::serialize_g1(cs.clone(), &vk.alpha_g1)?);
+        bytes.extend(vk.alpha_g1.serialize_compressed(cs.clone())?);
 
         // Beta G2
-        bytes.extend(SerializeGadget::serialize_g2(cs.clone(), &vk.beta_g2)?);
+        bytes.extend(vk.beta_g2.serialize_compressed(cs.clone())?);
 
         // Gamma G2
-        bytes.extend(SerializeGadget::serialize_g2(cs.clone(), &vk.gamma_g2)?);
+        bytes.extend(vk.gamma_g2.serialize_compressed(cs.clone())?);
 
         // Delta G2
-        bytes.extend(SerializeGadget::serialize_g2(cs.clone(), &vk.delta_g2)?);
+        bytes.extend(vk.delta_g2.serialize_compressed(cs.clone())?);
 
         // Gamma ABC G1
         for i in 0..vk.gamma_abc_g1.len() {
-            bytes.extend(SerializeGadget::serialize_g1(
-                cs.clone(),
-                &vk.gamma_abc_g1[i],
-            )?);
+            bytes.extend(vk.gamma_abc_g1[i].serialize_compressed(cs.clone())?);
         }
 
         // Calculate the Pedersen hash.
         let hash = PedersenHashGadget::evaluate(&bytes.to_bits_le()?, pedersen_generators)?;
 
         // Serialize the Pedersen hash.
-        let serialized_bytes = SerializeGadget::serialize_g1(cs, &hash)?;
+        let serialized_bytes = hash.serialize_compressed(cs)?;
 
         Ok(serialized_bytes)
     }

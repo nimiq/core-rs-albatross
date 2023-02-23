@@ -80,7 +80,7 @@ impl MacroBlockGadget {
         first_bytes.extend_from_slice(&self.header_hash);
 
         // Append the public key tree root.
-        first_bytes.extend_from_slice(&pk_tree_root);
+        first_bytes.extend_from_slice(pk_tree_root);
 
         // Calculate hash using Blake2s.
         let mut first_hash = evaluate_blake2s(&first_bytes)?;

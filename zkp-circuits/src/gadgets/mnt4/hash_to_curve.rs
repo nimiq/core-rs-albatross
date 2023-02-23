@@ -14,7 +14,7 @@ use ark_std::Zero;
 use nimiq_hash::blake2s::Blake2sWithParameterBlock;
 
 use crate::blake2s::evaluate_blake2s_with_parameters;
-use crate::gadgets::mnt4::YToBitGadget;
+use crate::gadgets::y_to_bit::YToBitGadget;
 
 /// This gadget implements the functionality to hash a message into an elliptic curve point.
 pub struct HashToCurve;
@@ -99,7 +99,7 @@ impl HashToCurve {
         // Compare the coordinates of our G1 hash point to the calculated coordinates.
         let g1_var_affine = g1_var.to_affine()?;
 
-        let y_coordinate = YToBitGadget::y_to_bit_g1(cs, &g1_var_affine)?;
+        let y_coordinate = g1_var_affine.y_to_bit(cs)?;
         let coordinates = g1_var_affine.to_constraint_field()?;
 
         coordinates[0].enforce_equal(&x)?;

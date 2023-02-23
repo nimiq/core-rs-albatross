@@ -6,7 +6,8 @@ use ark_r1cs_std::ToBitsGadget;
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 
 use crate::endianness::ToBeBytesGadget;
-use crate::gadgets::mnt4::{PedersenHashGadget, SerializeGadget};
+use crate::gadgets::mnt4::PedersenHashGadget;
+use crate::gadgets::serialize::SerializeGadget;
 
 /// This gadget is meant to calculate the "state commitment" in-circuit, which is simply a commitment,
 /// for a given block, of the block number concatenated with the root of a Merkle tree over the public
@@ -47,7 +48,7 @@ impl StateCommitmentGadget {
         let hash = PedersenHashGadget::evaluate(&bits, pedersen_generators)?;
 
         // Serialize the Pedersen hash.
-        let serialized_bytes = SerializeGadget::serialize_g1(cs, &hash)?;
+        let serialized_bytes = hash.serialize_compressed(cs)?;
 
         Ok(serialized_bytes)
     }

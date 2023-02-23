@@ -16,9 +16,8 @@ use nimiq_bls::pedersen::pedersen_generators;
 use nimiq_primitives::policy::Policy;
 use nimiq_zkp_primitives::MacroBlock;
 
-use crate::gadgets::mnt4::{
-    MacroBlockGadget, PedersenHashGadget, SerializeGadget, StateCommitmentGadget,
-};
+use crate::gadgets::mnt4::{MacroBlockGadget, PedersenHashGadget, StateCommitmentGadget};
+use crate::gadgets::serialize::SerializeGadget;
 
 /// This is the macro block circuit. It takes as inputs an initial state commitment and final state commitment
 /// and it produces a proof that there exists a valid macro block that transforms the initial state
@@ -161,12 +160,12 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         let mut agg_pk_chunks_commitments = Vec::new();
 
         for chunk in &agg_pk_chunks_var {
-            let chunk_bits = SerializeGadget::serialize_g2(cs.clone(), chunk)?;
+            let chunk_bits = chunk.serialize_compressed(cs.clone())?;
 
             let pedersen_hash =
                 PedersenHashGadget::evaluate(&chunk_bits.to_bits_le()?, &pedersen_generators_var)?;
 
-            let pedersen_bits = SerializeGadget::serialize_g1(cs.clone(), &pedersen_hash)?;
+            let pedersen_bits = pedersen_hash.serialize_compressed(cs.clone())?;
 
             agg_pk_chunks_commitments.push(pedersen_bits);
         }

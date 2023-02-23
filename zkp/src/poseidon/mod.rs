@@ -1,5 +1,7 @@
+use ark_crypto_primitives::sponge::poseidon::{
+    find_poseidon_ark_and_mds, PoseidonConfig, PoseidonDefaultConfigEntry,
+};
 use ark_ff::PrimeField;
-use ark_sponge::poseidon::{find_poseidon_ark_and_mds, PoseidonConfig, PoseidonDefaultConfigEntry};
 
 pub trait DefaultPoseidonParameters {
     const PARAMS_T3: PoseidonDefaultConfigEntry;

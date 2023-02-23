@@ -13,7 +13,8 @@ use nimiq_bls::pedersen::pedersen_generators;
 use nimiq_primitives::policy::Policy;
 use nimiq_zkp_primitives::PK_TREE_DEPTH;
 
-use crate::gadgets::mnt4::{PedersenHashGadget, SerializeGadget};
+use crate::gadgets::mnt4::PedersenHashGadget;
+use crate::gadgets::serialize::SerializeGadget;
 use crate::utils::{prepare_inputs, unpack_inputs};
 
 /// This is the node subcircuit of the PKTreeCircuit. See PKTreeLeafCircuit for more details.
@@ -123,12 +124,12 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeNodeCircuit {
         // Verifying aggregate public key commitment. It just checks that the calculated aggregate
         // public key is correct by comparing it with the aggregate public key commitment given as
         // an input.
-        let agg_pk_bytes = SerializeGadget::serialize_g2(cs.clone(), &agg_pk)?;
+        let agg_pk_bytes = agg_pk.serialize_compressed(cs.clone())?;
 
         let pedersen_hash =
             PedersenHashGadget::evaluate(&agg_pk_bytes.to_bits_le()?, &pedersen_generators_var)?;
 
-        let pedersen_bytes = SerializeGadget::serialize_g1(cs.clone(), &pedersen_hash)?;
+        let pedersen_bytes = pedersen_hash.serialize_compressed(cs.clone())?;
 
         agg_pk_commitment_bits.enforce_equal(&pedersen_bytes.to_bits_le()?)?;
 
@@ -137,12 +138,12 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeNodeCircuit {
         let mut agg_pk_chunks_commitments = Vec::new();
 
         for chunk in &agg_pk_chunks_var {
-            let chunk_bytes = SerializeGadget::serialize_g2(cs.clone(), chunk)?;
+            let chunk_bytes = chunk.serialize_compressed(cs.clone())?;
 
             let pedersen_hash =
                 PedersenHashGadget::evaluate(&chunk_bytes.to_bits_le()?, &pedersen_generators_var)?;
 
-            let pedersen_bytes = SerializeGadget::serialize_g1(cs.clone(), &pedersen_hash)?;
+            let pedersen_bytes = pedersen_hash.serialize_compressed(cs.clone())?;
 
             agg_pk_chunks_commitments.push(pedersen_bytes);
         }

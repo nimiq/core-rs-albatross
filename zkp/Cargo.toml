@@ -17,7 +17,7 @@ nimiq-zkp-primitives = { path = "../zkp-primitives", features = ["zkp-prover", "
 nimiq-zkp-circuits = { path = "../zkp-circuits", features = ["zkp-prover", "parallel"] }
 
 [dependencies]
-ark-crypto-primitives = { version = "^0.4", features = ["prf"] }
+ark-crypto-primitives = { version = "^0.4", features = ["prf", "sponge"] }
 ark-ec = "0.4"
 ark-ff = "0.4"
 ark-groth16 = { git = "https://github.com/arkworks-rs/groth16", default-features = false }
@@ -26,7 +26,6 @@ ark-mnt6-753 = "0.4"
 ark-relations = "0.4"
 ark-r1cs-std = "0.4"
 ark-serialize = "0.4"
-ark-sponge = { git = "https://github.com/arkworks-rs/sponge",  branch = "release-0.4" }
 ark-std = "0.4"
 lazy_static = { version = "1.4" }
 log = { package = "tracing", version = "0.1", features = ["log"] }
