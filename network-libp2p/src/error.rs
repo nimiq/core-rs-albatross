@@ -14,6 +14,9 @@ pub enum NetworkError {
     #[error("Network action was cancelled")]
     Cancelled,
 
+    #[error("We could not find any peer that satisfies the desired services")]
+    PeersNotFound,
+
     #[error("Serialization error: {0}")]
     Serialization(#[from] beserial::SerializingError),
 

@@ -10,6 +10,20 @@ use crate::address::Address;
 use crate::key_pair::KeyPair;
 use crate::utils::{from_network_id, to_network_id};
 
+#[wasm_bindgen]
+#[derive(serde::Serialize, serde::Deserialize)]
+/// This struct reperesents a list of transactions.
+/// It is simply a wrapper around Transaction to represent more than one transaction
+pub struct Transactions {
+    txns: Vec<Transaction>,
+}
+
+impl Transactions {
+    pub fn new(txns: Vec<Transaction>) -> Self {
+        Transactions { txns }
+    }
+}
+
 /// Transactions describe a transfer of value, usually from the sender to the recipient.
 /// However, transactions can also have no value, when they are used to _signal_ a change in the staking contract.
 ///
@@ -18,6 +32,7 @@ use crate::utils::{from_network_id, to_network_id};
 /// Transactions require a valid signature proof over their serialized content.
 /// Furthermore, transactions are only valid for 2 hours after their validity-start block height.
 #[wasm_bindgen(inspectable)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct Transaction {
     inner: nimiq_transaction::Transaction,
 }

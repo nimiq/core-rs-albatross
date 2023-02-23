@@ -137,6 +137,11 @@ pub(crate) enum NetworkAction {
     ListenOn {
         listen_addresses: Vec<Multiaddr>,
     },
+    ConnectPeersByServices {
+        services: Services,
+        num_peers: usize,
+        output: oneshot::Sender<Vec<PeerId>>,
+    },
     StartConnecting,
     RestartConnecting,
     StopConnecting,
@@ -1296,6 +1301,27 @@ impl Network {
             NetworkAction::StopConnecting => {
                 swarm.behaviour_mut().pool.stop_connecting();
             }
+            NetworkAction::ConnectPeersByServices {
+                services,
+                num_peers,
+                output,
+            } => {
+                let peers_candidates = swarm
+                    .behaviour_mut()
+                    .pool
+                    .choose_peers_to_dial_by_services(services, num_peers);
+                let mut successful_peers = vec![];
+
+                for peer_id in peers_candidates {
+                    if Swarm::dial(swarm, DialOpts::peer_id(peer_id).build()).is_ok() {
+                        successful_peers.push(peer_id);
+                    }
+                }
+
+                if output.send(successful_peers).is_err() {
+                    error!("Could not send sucessful peers vector");
+                }
+            }
             NetworkAction::DisconnectPeer { peer_id } => {
                 if swarm.disconnect_peer_id(peer_id).is_err() {
                     warn!(%peer_id, "Peer already closed");
@@ -1735,6 +1761,49 @@ impl NetworkInterface for Network {
             // If we don't know the peer we return false
             false
         }
+    }
+
+    async fn get_peers_by_services(
+        &self,
+        services: Services,
+        min_peers: usize,
+    ) -> Result<Vec<Self::PeerId>, NetworkError> {
+        let (output_tx, output_rx) = oneshot::channel();
+        let connected_peers = self.get_peers();
+        let mut filtered_peers = vec![];
+
+        // First we try to get the connected peers that support the desired services
+        for peer_id in connected_peers.iter() {
+            if let Some(peer_info) = self.get_peer_info(*peer_id) {
+                if peer_info.get_services().contains(services) {
+                    filtered_peers.push(*peer_id);
+                }
+            }
+        }
+
+        // If we don't have enough connected peer that support the desired services,
+        // we tell the network to connect to new peers that supports such services.
+        if filtered_peers.len() < min_peers {
+            let num_peers = min_peers - filtered_peers.len();
+
+            self.action_tx
+                .send(NetworkAction::ConnectPeersByServices {
+                    services,
+                    num_peers,
+                    output: output_tx,
+                })
+                .await?;
+
+            filtered_peers.extend(output_rx.await?.iter());
+        }
+
+        // If filtered_peers is still less than the minimum required,
+        // we return an error.
+        if filtered_peers.len() < min_peers {
+            return Err(NetworkError::PeersNotFound);
+        }
+
+        Ok(filtered_peers)
     }
 
     async fn disconnect_peer(&self, peer_id: PeerId, _close_reason: CloseReason) {

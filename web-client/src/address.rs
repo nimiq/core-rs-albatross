@@ -41,4 +41,8 @@ impl Address {
     pub fn native_ref(&self) -> &nimiq_keys::Address {
         &self.inner
     }
+
+    pub fn native(&self) -> nimiq_keys::Address {
+        self.inner.clone()
+    }
 }

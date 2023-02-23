@@ -24,6 +24,7 @@ crate-type = ["cdylib"]
 futures = { package = "futures-util", version = "0.3" }
 js-sys = "0.3"
 log = { package = "tracing", version = "0.1", features = ["log"] }
+serde = {version = "1.0.152", features = ["derive"] }
 serde-wasm-bindgen = "0.4"
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
@@ -37,7 +38,7 @@ nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-network-interface = { path = "../network-interface" }
 nimiq-primitives = {path = "../primitives", features = ["coin", "networks"]}
-nimiq-transaction = { path = "../primitives/transaction" }
+nimiq-transaction = { path = "../primitives/transaction", features=["serde-derive"] }
 nimiq-transaction-builder = { path = "../transaction-builder" }
 
 [dependencies.nimiq]

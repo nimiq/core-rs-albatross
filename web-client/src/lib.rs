@@ -23,9 +23,11 @@ use nimiq_network_interface::{
     network::{CloseReason, Network, NetworkEvent},
     Multiaddr,
 };
+use nimiq_transaction::ExecutedTransaction;
 
+use crate::address::Address;
 use crate::peer_info::PeerInfo;
-use crate::transaction::Transaction;
+use crate::transaction::{Transaction, Transactions};
 use crate::transaction_builder::TransactionBuilder;
 use crate::utils::{from_network_id, to_network_id};
 
@@ -555,6 +557,42 @@ impl Client {
     fn next_listener_id(&mut self) -> usize {
         self.listener_id += 1;
         self.listener_id
+    }
+
+    /// This function is used to query the network for transactions from some specific address, that
+    /// have been included in the chain.
+    /// The obtained transactions correspond to extended transactions.
+    /// They are verified before being returned.
+    /// Up to a max number of transactions are returned from newest to oldest.
+    /// A minimum number of peers needs to be specified.
+    /// If the network does not have at least min_peers to query, then an error is returned
+    #[wasm_bindgen(js_name = getTransactionsByAddress)]
+    pub async fn get_transations_from_address(
+        &self,
+        address: Address,
+        max: u16,
+        min_peers: usize,
+    ) -> Result<JsValue, JsError> {
+        let transactions = self
+            .inner
+            .consensus_proxy()
+            .request_transactions_by_address(address.native(), min_peers, Some(max))
+            .await?;
+
+        let executed_txs: Vec<ExecutedTransaction> = transactions
+            .into_iter()
+            .map(|ext_transaction| ext_transaction.into_transaction().unwrap())
+            .collect();
+
+        // TODO: We are converting executed transactions into regular transactions, which loses the execution result of the txn
+        // This could be provided as an aditional field.
+        let js_transactions: Vec<Transaction> = executed_txs
+            .into_iter()
+            .map(|executed_tx| Transaction::from_native(executed_tx.get_raw_transaction().clone()))
+            .collect();
+
+        // We serialize to JSON using `serde-wasm-bindgen`, in order to be able to use the transactions from JS side (we return a JsValue)
+        Ok(serde_wasm_bindgen::to_value(&Transactions::new(js_transactions)).unwrap())
     }
 }
 

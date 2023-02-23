@@ -307,24 +307,31 @@ impl Handle<ResponseTransactionsProof, Arc<RwLock<Blockchain>>> for RequestTrans
         let blockchain = blockchain.read();
         let hashes = self.hashes.iter().collect();
 
-        let proof = blockchain
-            .history_store
-            .prove(self.epoch_number, hashes, None);
+        let mut block = None;
 
-        let block_height = self.epoch_number * Policy::blocks_per_epoch();
+        let proof =
+            blockchain
+                .history_store
+                .prove(Policy::epoch_at(self.block_number), hashes, None);
 
-        let block = blockchain
-            .chain_store
-            .get_block_at(block_height, false, None)
-            .ok()
-            .and_then(|block| {
-                if block.is_macro() {
-                    // We expect a macro block
-                    Some(block)
-                } else {
-                    None
-                }
-            });
+        //If we obtained a proof, we need to supply the corresponding block
+        if proof.is_some() {
+            block = blockchain
+                .chain_store
+                .get_block_at(self.block_number, false, None)
+                .ok()
+                .and_then(|block| {
+                    if block.is_macro() {
+                        // We expect a macro block
+                        Some(block)
+                    } else {
+                        None
+                    }
+                });
+            if block.is_none() {
+                log::error!("We are supplying a transaction proof but not a block, which can be interpreted as malicious behaviour");
+            }
+        }
 
         ResponseTransactionsProof { proof, block }
     }

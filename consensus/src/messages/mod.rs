@@ -3,13 +3,13 @@ use std::fmt::{Debug, Formatter};
 use beserial::{Deserialize, Serialize};
 use nimiq_block::{Block, MacroBlock};
 #[cfg(feature = "full")]
-use nimiq_blockchain::{HistoryTreeChunk, HistoryTreeProof};
+use nimiq_blockchain::HistoryTreeChunk;
 use nimiq_hash::Blake2bHash;
-#[cfg(feature = "full")]
 use nimiq_keys::Address;
 use nimiq_network_interface::request::{RequestCommon, RequestMarker};
-#[cfg(feature = "full")]
-use nimiq_transaction::extended_transaction::ExtendedTransaction;
+use nimiq_transaction::{
+    extended_transaction::ExtendedTransaction, history_proof::HistoryTreeProof,
+};
 
 mod handlers;
 
@@ -211,22 +211,19 @@ impl RequestCommon for RequestHead {
     const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_HEAD;
 }
 
-#[cfg(feature = "full")]
 #[derive(Serialize, Deserialize)]
 pub struct ResponseTransactionsProof {
-    proof: Option<HistoryTreeProof>,
-    block: Option<Block>,
+    pub proof: Option<HistoryTreeProof>,
+    pub block: Option<Block>,
 }
 
-#[cfg(feature = "full")]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestTransactionsProof {
     #[beserial(len_type(u16, limit = 128))]
-    hashes: Vec<Blake2bHash>,
-    epoch_number: u32,
+    pub hashes: Vec<Blake2bHash>,
+    pub block_number: u32,
 }
 
-#[cfg(feature = "full")]
 impl RequestCommon for RequestTransactionsProof {
     type Kind = RequestMarker;
     const TYPE_ID: u16 = 213;
@@ -234,14 +231,12 @@ impl RequestCommon for RequestTransactionsProof {
     const MAX_REQUESTS: u32 = MAX_REQUEST_TRANSACTIONS_PROOF;
 }
 
-#[cfg(feature = "full")]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestTransactionsByAddress {
-    address: Address,
-    max: Option<u16>,
+    pub address: Address,
+    pub max: Option<u16>,
 }
 
-#[cfg(feature = "full")]
 impl RequestCommon for RequestTransactionsByAddress {
     type Kind = RequestMarker;
     const TYPE_ID: u16 = 214;
@@ -249,9 +244,8 @@ impl RequestCommon for RequestTransactionsByAddress {
     const MAX_REQUESTS: u32 = MAX_REQUEST_TRANSACTIONS_BY_ADDRESS;
 }
 
-#[cfg(feature = "full")]
 #[derive(Serialize, Deserialize)]
 pub struct ResponseTransactionsByAddress {
     #[beserial(len_type(u16, limit = 128))]
-    transactions: Vec<ExtendedTransaction>,
+    pub transactions: Vec<ExtendedTransaction>,
 }

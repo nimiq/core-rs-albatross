@@ -28,6 +28,7 @@ use crate::account::AccountTransactionVerification;
 
 pub mod account;
 pub mod extended_transaction;
+pub mod history_proof;
 pub mod inherent;
 pub mod reward;
 
@@ -205,6 +206,7 @@ impl PartialEq for ExecutedTransaction {
 }
 
 #[derive(Clone, Eq, Debug)]
+#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 #[repr(C)]
 pub struct Transaction {
     pub data: Vec<u8>,

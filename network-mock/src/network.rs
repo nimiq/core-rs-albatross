@@ -581,4 +581,12 @@ impl Network for MockNetwork {
     fn get_peer_info(&self, peer_id: Self::PeerId) -> Option<PeerInfo> {
         self.peers.read().get(&peer_id).cloned()
     }
+
+    async fn get_peers_by_services(
+        &self,
+        _services: Services,
+        _peers: usize,
+    ) -> Result<Vec<Self::PeerId>, MockNetworkError> {
+        Ok(self.get_peers())
+    }
 }

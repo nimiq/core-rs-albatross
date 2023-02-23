@@ -18,12 +18,11 @@ use nimiq_mmr::store::memory::MemoryStore;
 use nimiq_primitives::policy::Policy;
 use nimiq_transaction::{
     extended_transaction::{ExtTxData, ExtendedTransaction},
+    history_proof::HistoryTreeProof,
     inherent::InherentType,
 };
 
-use crate::history::{
-    mmr_store::MMRStore, ordered_hash::OrderedHash, HistoryTreeChunk, HistoryTreeProof,
-};
+use crate::history::{mmr_store::MMRStore, ordered_hash::OrderedHash, HistoryTreeChunk};
 
 /// A struct that contains databases to store history trees (which are Merkle Mountain Ranges
 /// constructed from the list of extended transactions in an epoch) and extended transactions (which

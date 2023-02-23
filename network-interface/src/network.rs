@@ -81,6 +81,16 @@ pub trait Network: Send + Sync + Unpin + 'static {
     /// If the peer isn't found, `None` is returned.
     fn get_peer_info(&self, peer_id: Self::PeerId) -> Option<PeerInfo>;
 
+    /// Gets the set of connected peers that provide the supplied services.
+    /// If we currently don't have min number of connected peer that provides those services,
+    /// we dial peers.
+    /// If there aren't enough peers in the network that provides the required services, we return an error
+    async fn get_peers_by_services(
+        &self,
+        services: Services,
+        min_peers: usize,
+    ) -> Result<Vec<Self::PeerId>, Self::Error>;
+
     /// Returns true when the given peer provides the services flags that are required by us
     fn peer_provides_required_services(&self, peer_id: Self::PeerId) -> bool;
 

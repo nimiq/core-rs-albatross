@@ -364,6 +364,34 @@ impl ConnectionPoolBehaviour {
             .choose_multiple(&mut thread_rng(), num_peers)
     }
 
+    /// This function is used to select a list of peers, based on services flag, in order to dial them.
+    /// num_peers is used to specify how many peers are selected
+    /// The number of peers returned equals num_peers unless there are less available peers
+    pub fn choose_peers_to_dial_by_services(
+        &self,
+        services: Services,
+        num_peers: usize,
+    ) -> Vec<PeerId> {
+        let contacts = self.contacts.read();
+        let own_contact = contacts.get_own_contact();
+        let own_peer_id = own_contact.peer_id();
+
+        contacts
+            .query(services)
+            .filter_map(|contact| {
+                let peer_id = contact.peer_id();
+                if peer_id != own_peer_id
+                    && self.peer_ids.can_dial(peer_id)
+                    && contact.addresses().count() > 0
+                {
+                    Some(*peer_id)
+                } else {
+                    None
+                }
+            })
+            .choose_multiple(&mut thread_rng(), num_peers)
+    }
+
     fn choose_seeds_to_dial(&self) -> Vec<Multiaddr> {
         // We prefer to connect to non-seed peers. Thus, we only choose any seeds here if we're
         // not already dialing any peers and at most one seed at a time.

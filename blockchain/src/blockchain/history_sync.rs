@@ -9,9 +9,11 @@ use nimiq_blockchain_interface::{
 use nimiq_database::WriteTransaction;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy::Policy;
-use nimiq_transaction::extended_transaction::{ExtTxData, ExtendedTransaction};
-use nimiq_transaction::inherent::{Inherent, InherentType};
-use nimiq_transaction::Transaction;
+use nimiq_transaction::{
+    extended_transaction::{ExtTxData, ExtendedTransaction},
+    inherent::{Inherent, InherentType},
+    Transaction,
+};
 
 use crate::Blockchain;
 
