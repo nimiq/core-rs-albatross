@@ -2,10 +2,9 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc, str::FromStr};
 
 use futures::StreamExt;
 use js_sys::{Array, Uint8Array};
+use log::level_filters::LevelFilter;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
-
-use log::level_filters::LevelFilter;
 
 pub use nimiq::{
     client::Consensus,
@@ -21,7 +20,7 @@ use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent};
 use nimiq_consensus::ConsensusEvent;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{
-    network::{Network, NetworkEvent},
+    network::{CloseReason, Network, NetworkEvent},
     Multiaddr,
 };
 
@@ -193,6 +192,7 @@ impl Client {
             peer_changed_listeners: Rc::new(RefCell::new(HashMap::with_capacity(1))),
         };
 
+        client.setup_offline_online_event_handlers();
         client.setup_consensus_events();
         client.setup_blockchain_events();
         client.setup_network_events();
@@ -360,6 +360,50 @@ impl Client {
         self.inner.consensus_proxy().send_transaction(tx).await?;
 
         Ok(())
+    }
+
+    fn setup_offline_online_event_handlers(&self) {
+        let window =
+            web_sys::window().expect("Unable to get a reference to the JS `Window` object");
+        let network = self.inner.network();
+        let network1 = self.inner.network();
+
+        // Register online closure
+        let online_closure = Closure::<dyn Fn()>::new(move || {
+            let network = network.clone();
+            spawn_local(async move {
+                let network = network.clone();
+                network.restart_connecting().await;
+            });
+        });
+        window
+            .add_event_listener_with_callback("online", online_closure.as_ref().unchecked_ref())
+            .expect("Unable to set callback for 'online' event");
+
+        // Register offline closure
+        let offline_closure = Closure::<dyn Fn()>::new(move || {
+            let network = network1.clone();
+            spawn_local(async move {
+                let network = network.clone();
+                network.stop_connecting().await;
+            });
+            let peers = network1.get_peers();
+            for peer in peers {
+                let network = network1.clone();
+                spawn_local(async move {
+                    let network = network.clone();
+                    network.disconnect_peer(peer, CloseReason::Other).await;
+                });
+            }
+        });
+        window
+            .add_event_listener_with_callback("offline", offline_closure.as_ref().unchecked_ref())
+            .expect("Unable to set callback for 'offline' event");
+
+        // Closures can't be dropped since they will be needed outside the context
+        // of this function
+        offline_closure.forget();
+        online_closure.forget();
     }
 
     fn setup_consensus_events(&self) {

@@ -322,6 +322,23 @@ impl ConnectionPoolBehaviour {
         self.maintain_peers();
     }
 
+    /// Tells the behaviour to restart connecting to other peers.
+    /// For this, it clears the set of peers and addresses marked as down
+    /// and tells the network to start connecting again.
+    pub fn restart_connecting(&mut self) {
+        // Clean up the nodes marked as down
+        self.addresses.reset_down();
+        self.peer_ids.reset_down();
+        self.start_connecting();
+    }
+
+    /// Tells the behaviour to stop connecting to other peers.
+    /// This is useful when we are sure we have no possibility of getting a
+    /// connection such as in a network outage.
+    pub fn stop_connecting(&mut self) {
+        self.active = false;
+    }
+
     fn choose_peers_to_dial(&self) -> Vec<PeerId> {
         let num_peers = usize::min(
             self.config.peer_count_desired - self.peer_ids.num_connected(),

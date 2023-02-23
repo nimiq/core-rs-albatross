@@ -138,6 +138,8 @@ pub(crate) enum NetworkAction {
         listen_addresses: Vec<Multiaddr>,
     },
     StartConnecting,
+    RestartConnecting,
+    StopConnecting,
     DisconnectPeer {
         peer_id: PeerId,
     },
@@ -1288,6 +1290,12 @@ impl Network {
             NetworkAction::StartConnecting => {
                 swarm.behaviour_mut().pool.start_connecting();
             }
+            NetworkAction::RestartConnecting => {
+                swarm.behaviour_mut().pool.restart_connecting();
+            }
+            NetworkAction::StopConnecting => {
+                swarm.behaviour_mut().pool.stop_connecting();
+            }
             NetworkAction::DisconnectPeer { peer_id } => {
                 if swarm.disconnect_peer_id(peer_id).is_err() {
                     warn!(%peer_id, "Peer already closed");
@@ -1296,6 +1304,7 @@ impl Network {
         }
     }
 
+    /// Gets the network information
     pub async fn network_info(&self) -> Result<NetworkInfo, NetworkError> {
         let (output_tx, output_rx) = oneshot::channel();
 
@@ -1306,6 +1315,8 @@ impl Network {
         Ok(output_rx.await?)
     }
 
+    /// Tells the network to listen on a specific address received in a
+    /// `Multiaddr` format.
     pub async fn listen_on(&self, listen_addresses: Vec<Multiaddr>) {
         if let Err(error) = self
             .action_tx
@@ -1317,11 +1328,41 @@ impl Network {
         }
     }
 
+    /// Tells the network to start connecting to any available peer or seed.
     pub async fn start_connecting(&self) {
         if let Err(error) = self
             .action_tx
             .clone()
             .send(NetworkAction::StartConnecting)
+            .await
+        {
+            error!(%error, "Failed to send NetworkAction::StartConnecting");
+        }
+    }
+
+    /// Tells the network to restart connecting to any available peer or seed.
+    /// For this, it clears the internal set of peers or addresses marked as down.
+    /// This is useful to instruct the network to reconnect after issuing a
+    /// `stop_connecting` call.
+    pub async fn restart_connecting(&self) {
+        if let Err(error) = self
+            .action_tx
+            .clone()
+            .send(NetworkAction::RestartConnecting)
+            .await
+        {
+            error!(%error, "Failed to send NetworkAction::StartConnecting");
+        }
+    }
+
+    /// Tells the network to stop connecting to any available peer or seed.
+    /// This is useful in known connection outages to stop the network trying
+    /// to dial any of the known peers or addresses.
+    pub async fn stop_connecting(&self) {
+        if let Err(error) = self
+            .action_tx
+            .clone()
+            .send(NetworkAction::StopConnecting)
             .await
         {
             error!(%error, "Failed to send NetworkAction::StartConnecting");
