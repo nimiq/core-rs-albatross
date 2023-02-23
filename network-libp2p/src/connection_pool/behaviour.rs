@@ -592,25 +592,31 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
 
         let ip = match address.iter().next() {
             Some(Protocol::Ip4(ip)) => {
-                IpNetwork::new_truncate(ip, self.config.ipv4_subnet_mask).unwrap()
+                Some(IpNetwork::new_truncate(ip, self.config.ipv4_subnet_mask).unwrap())
             }
             Some(Protocol::Ip6(ip)) => {
-                IpNetwork::new_truncate(ip, self.config.ipv6_subnet_mask).unwrap()
+                Some(IpNetwork::new_truncate(ip, self.config.ipv6_subnet_mask).unwrap())
             }
-            _ => return, // TODO: Review if we need to handle additional protocols
+            _ => None,
         };
 
-        // Decrement IP counters
-        let value = self.limits.ip_count.entry(ip).or_insert(1);
-        *value = value.saturating_sub(1);
-        if *self.limits.ip_count.get(&ip).unwrap() == 0 {
-            self.limits.ip_count.remove(&ip);
+        // Decrement IP counters if needed
+        if let Some(ip) = ip {
+            let value = self.limits.ip_count.entry(ip).or_insert(1);
+            *value = value.saturating_sub(1);
+            if *self.limits.ip_count.get(&ip).unwrap() == 0 {
+                self.limits.ip_count.remove(&ip);
+            }
+
+            match ip {
+                IpNetwork::V4(..) => {
+                    self.limits.ipv4_count = self.limits.ipv4_count.saturating_sub(1)
+                }
+                IpNetwork::V6(..) => {
+                    self.limits.ipv6_count = self.limits.ipv6_count.saturating_sub(1)
+                }
+            };
         }
-
-        match ip {
-            IpNetwork::V4(..) => self.limits.ipv4_count = self.limits.ipv4_count.saturating_sub(1),
-            IpNetwork::V6(..) => self.limits.ipv6_count = self.limits.ipv6_count.saturating_sub(1),
-        };
 
         self.addresses.mark_closed(address.clone());
         self.peer_ids.mark_closed(*peer_id);
