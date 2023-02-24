@@ -3,9 +3,10 @@ use std::borrow::Borrow;
 
 use ark_crypto_primitives::prf::blake2s::constraints::OutputVar;
 use ark_ff::One;
-use ark_mnt4_753::Fr as MNT4Fr;
-use ark_mnt6_753::constraints::{FqVar, G1Var, G2Var};
-use ark_mnt6_753::Fq;
+use ark_mnt6_753::{
+    constraints::{FqVar, G1Var, G2Var},
+    Fq as MNT6Fq,
+};
 use ark_r1cs_std::{
     alloc::AllocationMode,
     prelude::{AllocVar, Boolean, CondSelectGadget, FieldVar, UInt32, UInt8},
@@ -16,8 +17,10 @@ use nimiq_primitives::policy::Policy;
 use nimiq_zkp_primitives::MacroBlock;
 
 use crate::blake2s::evaluate_blake2s;
-use crate::endianness::ToBeBytesGadget;
-use crate::gadgets::mnt4::{CheckSigGadget, HashToCurve};
+use crate::gadgets::{
+    be_bytes::ToBeBytesGadget,
+    mnt6::{CheckSigGadget, HashToCurve},
+};
 
 /// A gadget that contains utilities to verify the validity of a macro block. Mainly it checks that:
 ///  1. The macro block was signed by the aggregate public key.
@@ -25,11 +28,11 @@ use crate::gadgets::mnt4::{CheckSigGadget, HashToCurve};
 ///     validator list).
 ///  3. There are enough signers.
 pub struct MacroBlockGadget {
-    pub block_number: UInt32<MNT4Fr>,
-    pub round_number: UInt32<MNT4Fr>,
-    pub header_hash: Vec<UInt8<MNT4Fr>>,
+    pub block_number: UInt32<MNT6Fq>,
+    pub round_number: UInt32<MNT6Fq>,
+    pub header_hash: Vec<UInt8<MNT6Fq>>,
     pub signature: G1Var,
-    pub signer_bitmap: Vec<Boolean<MNT4Fr>>,
+    pub signer_bitmap: Vec<Boolean<MNT6Fq>>,
 }
 
 impl MacroBlockGadget {
@@ -37,12 +40,12 @@ impl MacroBlockGadget {
     /// the macro block gadget.
     pub fn verify(
         &self,
-        cs: ConstraintSystemRef<MNT4Fr>,
+        cs: ConstraintSystemRef<MNT6Fq>,
         // This is the commitment for the set of public keys that are owned by the next set of validators.
-        pk_tree_root: &[UInt8<MNT4Fr>],
+        pk_tree_root: &[UInt8<MNT6Fq>],
         // This is the aggregated public key.
         agg_pk: &G2Var,
-    ) -> Result<Boolean<MNT4Fr>, SynthesisError> {
+    ) -> Result<Boolean<MNT6Fq>, SynthesisError> {
         // Verify that there are enough signers.
         let enough_signers = self.check_signers(cs.clone())?;
 
@@ -70,8 +73,8 @@ impl MacroBlockGadget {
     /// The function || means concatenation.
     pub fn get_hash(
         &self,
-        cs: ConstraintSystemRef<MNT4Fr>,
-        pk_tree_root: &[UInt8<MNT4Fr>],
+        cs: ConstraintSystemRef<MNT6Fq>,
+        pk_tree_root: &[UInt8<MNT6Fq>],
     ) -> Result<G1Var, SynthesisError> {
         // Initialize Boolean vector.
         let mut first_bytes = vec![];
@@ -119,10 +122,10 @@ impl MacroBlockGadget {
     /// A function that checks if there are enough signers.
     pub fn check_signers(
         &self,
-        cs: ConstraintSystemRef<MNT4Fr>,
-    ) -> Result<Boolean<MNT4Fr>, SynthesisError> {
+        cs: ConstraintSystemRef<MNT6Fq>,
+    ) -> Result<Boolean<MNT6Fq>, SynthesisError> {
         // Get the minimum number of signers.
-        let min_signers = FqVar::new_constant(cs, Fq::from(Policy::TWO_F_PLUS_ONE as u64))?;
+        let min_signers = FqVar::new_constant(cs, MNT6Fq::from(Policy::TWO_F_PLUS_ONE as u64))?;
 
         // Initialize the running sum.
         let mut num_signers = FqVar::zero();
@@ -131,7 +134,7 @@ impl MacroBlockGadget {
         for bit in &self.signer_bitmap {
             num_signers = CondSelectGadget::conditionally_select(
                 bit,
-                &(&num_signers + Fq::one()),
+                &(&num_signers + MNT6Fq::one()),
                 &num_signers,
             )?;
         }
@@ -143,9 +146,9 @@ impl MacroBlockGadget {
 }
 
 /// The allocation function for the macro block gadget.
-impl AllocVar<MacroBlock, MNT4Fr> for MacroBlockGadget {
+impl AllocVar<MacroBlock, MNT6Fq> for MacroBlockGadget {
     fn new_variable<T: Borrow<MacroBlock>>(
-        cs: impl Into<Namespace<MNT4Fr>>,
+        cs: impl Into<Namespace<MNT6Fq>>,
         f: impl FnOnce() -> Result<T, SynthesisError>,
         mode: AllocationMode,
     ) -> Result<Self, SynthesisError> {
@@ -157,7 +160,7 @@ impl AllocVar<MacroBlock, MNT4Fr> for MacroBlockGadget {
     }
 
     fn new_input<T: Borrow<MacroBlock>>(
-        cs: impl Into<Namespace<MNT4Fr>>,
+        cs: impl Into<Namespace<MNT6Fq>>,
         f: impl FnOnce() -> Result<T, SynthesisError>,
     ) -> Result<Self, SynthesisError> {
         let ns = cs.into();
@@ -172,15 +175,15 @@ impl AllocVar<MacroBlock, MNT4Fr> for MacroBlockGadget {
 
         assert_eq!(value.signer_bitmap.len(), Policy::SLOTS as usize);
 
-        let block_number = UInt32::<MNT4Fr>::new_input(cs.clone(), || Ok(value.block_number))?;
+        let block_number = UInt32::<MNT6Fq>::new_input(cs.clone(), || Ok(value.block_number))?;
 
-        let round_number = UInt32::<MNT4Fr>::new_input(cs.clone(), || Ok(value.round_number))?;
+        let round_number = UInt32::<MNT6Fq>::new_input(cs.clone(), || Ok(value.round_number))?;
 
         let header_hash = OutputVar::new_input(cs.clone(), || Ok(&value.header_hash))?;
         let header_hash = header_hash.0;
 
         let signer_bitmap =
-            Vec::<Boolean<MNT4Fr>>::new_input(cs.clone(), || Ok(&value.signer_bitmap[..]))?;
+            Vec::<Boolean<MNT6Fq>>::new_input(cs.clone(), || Ok(&value.signer_bitmap[..]))?;
 
         let signature = G1Var::new_input(cs, || Ok(value.signature))?;
 
@@ -194,7 +197,7 @@ impl AllocVar<MacroBlock, MNT4Fr> for MacroBlockGadget {
     }
 
     fn new_witness<T: Borrow<MacroBlock>>(
-        cs: impl Into<Namespace<MNT4Fr>>,
+        cs: impl Into<Namespace<MNT6Fq>>,
         f: impl FnOnce() -> Result<T, SynthesisError>,
     ) -> Result<Self, SynthesisError> {
         let ns = cs.into();
@@ -209,15 +212,15 @@ impl AllocVar<MacroBlock, MNT4Fr> for MacroBlockGadget {
 
         assert_eq!(value.signer_bitmap.len(), Policy::SLOTS as usize);
 
-        let block_number = UInt32::<MNT4Fr>::new_witness(cs.clone(), || Ok(value.block_number))?;
+        let block_number = UInt32::<MNT6Fq>::new_witness(cs.clone(), || Ok(value.block_number))?;
 
-        let round_number = UInt32::<MNT4Fr>::new_witness(cs.clone(), || Ok(value.round_number))?;
+        let round_number = UInt32::<MNT6Fq>::new_witness(cs.clone(), || Ok(value.round_number))?;
 
         let header_hash = OutputVar::new_witness(cs.clone(), || Ok(&value.header_hash))?;
         let header_hash = header_hash.0;
 
         let signer_bitmap =
-            Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(&value.signer_bitmap[..]))?;
+            Vec::<Boolean<MNT6Fq>>::new_witness(cs.clone(), || Ok(&value.signer_bitmap[..]))?;
 
         let signature = G1Var::new_witness(cs, || Ok(value.signature))?;
 
@@ -235,14 +238,10 @@ impl AllocVar<MacroBlock, MNT4Fr> for MacroBlockGadget {
 mod tests {
     use ark_ec::Group;
     use ark_ff::Zero;
-    use ark_mnt4_753::Fr as MNT4Fr;
-    use ark_mnt6_753::constraints::G2Var;
-    use ark_mnt6_753::{Fr, G1Projective, G2Projective};
-    use ark_r1cs_std::prelude::AllocVar;
-    use ark_r1cs_std::R1CSVar;
+    use ark_mnt6_753::{constraints::G2Var, Fq as MNT6Fq, Fr, G1Projective, G2Projective};
+    use ark_r1cs_std::{prelude::AllocVar, R1CSVar};
     use ark_relations::r1cs::ConstraintSystem;
-    use ark_std::ops::MulAssign;
-    use ark_std::{test_rng, UniformRand};
+    use ark_std::{ops::MulAssign, test_rng, UniformRand};
     use rand::RngCore;
 
     use nimiq_bls::utils::bytes_to_bits_le;
@@ -254,7 +253,7 @@ mod tests {
     #[test]
     fn block_hash_works() {
         // Initialize the constraint system.
-        let cs = ConstraintSystem::<MNT4Fr>::new_ref();
+        let cs = ConstraintSystem::<MNT6Fq>::new_ref();
 
         // Create random number generator.
         let rng = &mut test_rng();
@@ -286,7 +285,7 @@ mod tests {
         let block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(block)).unwrap();
 
         let pk_tree_root_var =
-            Vec::<UInt8<MNT4Fr>>::new_witness(cs.clone(), || Ok(&pk_tree_root[..])).unwrap();
+            Vec::<UInt8<MNT6Fq>>::new_witness(cs.clone(), || Ok(&pk_tree_root[..])).unwrap();
 
         // Calculate hash using the gadget version.
         let gadget_hash = block_var.get_hash(cs, &pk_tree_root_var).unwrap();
@@ -297,7 +296,7 @@ mod tests {
     #[test]
     fn block_verify() {
         // Initialize the constraint system.
-        let cs = ConstraintSystem::<MNT4Fr>::new_ref();
+        let cs = ConstraintSystem::<MNT6Fq>::new_ref();
 
         // Create random number generator.
         let rng = &mut test_rng();
@@ -333,7 +332,7 @@ mod tests {
         let block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(block)).unwrap();
 
         let pk_tree_root_var =
-            Vec::<UInt8<MNT4Fr>>::new_witness(cs.clone(), || Ok(&pk_tree_root[..])).unwrap();
+            Vec::<UInt8<MNT6Fq>>::new_witness(cs.clone(), || Ok(&pk_tree_root[..])).unwrap();
 
         let agg_pk_var = G2Var::new_witness(cs.clone(), || Ok(agg_pk)).unwrap();
 
@@ -348,7 +347,7 @@ mod tests {
     #[test]
     fn block_verify_wrong_block_number() {
         // Initialize the constraint system.
-        let cs = ConstraintSystem::<MNT4Fr>::new_ref();
+        let cs = ConstraintSystem::<MNT6Fq>::new_ref();
 
         // Create random number generator.
         let rng = &mut test_rng();
@@ -387,7 +386,7 @@ mod tests {
         let block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(block)).unwrap();
 
         let pk_tree_root_var =
-            Vec::<UInt8<MNT4Fr>>::new_witness(cs.clone(), || Ok(&pk_tree_root[..])).unwrap();
+            Vec::<UInt8<MNT6Fq>>::new_witness(cs.clone(), || Ok(&pk_tree_root[..])).unwrap();
 
         let agg_pk_var = G2Var::new_witness(cs.clone(), || Ok(agg_pk)).unwrap();
 
@@ -402,7 +401,7 @@ mod tests {
     #[test]
     fn block_verify_wrong_round_number() {
         // Initialize the constraint system.
-        let cs = ConstraintSystem::<MNT4Fr>::new_ref();
+        let cs = ConstraintSystem::<MNT6Fq>::new_ref();
 
         // Create random number generator.
         let rng = &mut test_rng();
@@ -441,7 +440,7 @@ mod tests {
         let block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(block)).unwrap();
 
         let pk_tree_root_var =
-            Vec::<UInt8<MNT4Fr>>::new_witness(cs.clone(), || Ok(&pk_tree_root[..])).unwrap();
+            Vec::<UInt8<MNT6Fq>>::new_witness(cs.clone(), || Ok(&pk_tree_root[..])).unwrap();
 
         let agg_pk_var = G2Var::new_witness(cs.clone(), || Ok(agg_pk)).unwrap();
 
@@ -456,7 +455,7 @@ mod tests {
     #[test]
     fn block_verify_wrong_pk_tree_root() {
         // Initialize the constraint system.
-        let cs = ConstraintSystem::<MNT4Fr>::new_ref();
+        let cs = ConstraintSystem::<MNT6Fq>::new_ref();
 
         // Create random number generator.
         let rng = &mut test_rng();
@@ -497,7 +496,7 @@ mod tests {
         let block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(block)).unwrap();
 
         let pk_tree_root_var =
-            Vec::<UInt8<MNT4Fr>>::new_witness(cs.clone(), || Ok(&pk_tree_root[..])).unwrap();
+            Vec::<UInt8<MNT6Fq>>::new_witness(cs.clone(), || Ok(&pk_tree_root[..])).unwrap();
 
         let agg_pk_var = G2Var::new_witness(cs.clone(), || Ok(agg_pk)).unwrap();
 
@@ -512,7 +511,7 @@ mod tests {
     #[test]
     fn block_verify_wrong_agg_pk() {
         // Initialize the constraint system.
-        let cs = ConstraintSystem::<MNT4Fr>::new_ref();
+        let cs = ConstraintSystem::<MNT6Fq>::new_ref();
 
         // Create random number generator.
         let rng = &mut test_rng();
@@ -551,7 +550,7 @@ mod tests {
         let block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(block)).unwrap();
 
         let pk_tree_root_var =
-            Vec::<UInt8<MNT4Fr>>::new_witness(cs.clone(), || Ok(&pk_tree_root[..])).unwrap();
+            Vec::<UInt8<MNT6Fq>>::new_witness(cs.clone(), || Ok(&pk_tree_root[..])).unwrap();
 
         let agg_pk_var = G2Var::new_witness(cs.clone(), || Ok(agg_pk)).unwrap();
 
@@ -566,7 +565,7 @@ mod tests {
     #[test]
     fn block_verify_wrong_header_hash() {
         // Initialize the constraint system.
-        let cs = ConstraintSystem::<MNT4Fr>::new_ref();
+        let cs = ConstraintSystem::<MNT6Fq>::new_ref();
 
         // Create random number generator.
         let rng = &mut test_rng();
@@ -607,7 +606,7 @@ mod tests {
         let block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(block)).unwrap();
 
         let pk_tree_root_var =
-            Vec::<UInt8<MNT4Fr>>::new_witness(cs.clone(), || Ok(&pk_tree_root[..])).unwrap();
+            Vec::<UInt8<MNT6Fq>>::new_witness(cs.clone(), || Ok(&pk_tree_root[..])).unwrap();
 
         let agg_pk_var = G2Var::new_witness(cs.clone(), || Ok(agg_pk)).unwrap();
 
@@ -622,7 +621,7 @@ mod tests {
     #[test]
     fn block_verify_wrong_signature() {
         // Initialize the constraint system.
-        let cs = ConstraintSystem::<MNT4Fr>::new_ref();
+        let cs = ConstraintSystem::<MNT6Fq>::new_ref();
 
         // Create random number generator.
         let rng = &mut test_rng();
@@ -661,7 +660,7 @@ mod tests {
         let block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(block)).unwrap();
 
         let pk_tree_root_var =
-            Vec::<UInt8<MNT4Fr>>::new_witness(cs.clone(), || Ok(&pk_tree_root[..])).unwrap();
+            Vec::<UInt8<MNT6Fq>>::new_witness(cs.clone(), || Ok(&pk_tree_root[..])).unwrap();
 
         let agg_pk_var = G2Var::new_witness(cs.clone(), || Ok(agg_pk)).unwrap();
 
@@ -676,7 +675,7 @@ mod tests {
     #[test]
     fn block_verify_too_few_signers() {
         // Initialize the constraint system.
-        let cs = ConstraintSystem::<MNT4Fr>::new_ref();
+        let cs = ConstraintSystem::<MNT6Fq>::new_ref();
 
         // Create random number generator.
         let rng = &mut test_rng();
@@ -712,7 +711,7 @@ mod tests {
         let block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(block)).unwrap();
 
         let pk_tree_root_var =
-            Vec::<UInt8<MNT4Fr>>::new_witness(cs.clone(), || Ok(&pk_tree_root[..])).unwrap();
+            Vec::<UInt8<MNT6Fq>>::new_witness(cs.clone(), || Ok(&pk_tree_root[..])).unwrap();
 
         let agg_pk_var = G2Var::new_witness(cs.clone(), || Ok(agg_pk)).unwrap();
 

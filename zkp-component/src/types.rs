@@ -3,10 +3,10 @@ use std::sync::Arc;
 
 use ark_groth16::Proof;
 use ark_mnt6_753::{G2Projective as G2MNT6, MNT6_753};
-
 use ark_serialize::{
     CanonicalDeserialize, CanonicalSerialize, SerializationError as ArkSerializingError,
 };
+
 use beserial::{
     Deserialize, DeserializeWithLength, Serialize, SerializeWithLength, SerializingError,
     SerializingError as BeserialSerializingError,

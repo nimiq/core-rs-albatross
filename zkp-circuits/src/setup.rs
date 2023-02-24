@@ -2,29 +2,29 @@ use std::fs::{DirBuilder, File};
 use std::path::Path;
 
 use ark_crypto_primitives::snark::CircuitSpecificSetupSNARK;
-use ark_ec::mnt6::MNT6;
-use ark_ec::{pairing::Pairing, CurveGroup};
+use ark_ec::{mnt6::MNT6, pairing::Pairing, CurveGroup};
 use ark_groth16::{Groth16, Proof, ProvingKey, VerifyingKey};
-use ark_mnt4_753::{Fr as MNT4Fr, G1Projective as G1MNT4, G2Projective as G2MNT4, MNT4_753};
+use ark_mnt4_753::{Fq as MNT4Fq, G1Projective as G1MNT4, G2Projective as G2MNT4, MNT4_753};
 use ark_mnt6_753::{
-    Config, Fr as MNT6Fr, G1Projective as G1MNT6, G2Projective as G2MNT6, MNT6_753,
+    Config, Fq as MNT6Fq, G1Projective as G1MNT6, G2Projective as G2MNT6, MNT6_753,
 };
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::UniformRand;
 use rand::{CryptoRng, Rng};
 
-use crate::{
-    circuits::mnt4::{
-        MacroBlockCircuit, MergerCircuit, PKTreeLeafCircuit as LeafMNT4,
-        PKTreeNodeCircuit as NodeMNT4,
-    },
-    circuits::mnt6::{
-        MacroBlockWrapperCircuit, MergerWrapperCircuit, PKTreeNodeCircuit as NodeMNT6,
-    },
-};
 use nimiq_bls::utils::bytes_to_bits_le;
 use nimiq_primitives::policy::Policy;
 use nimiq_zkp_primitives::{MacroBlock, NanoZKPError, PK_TREE_BREADTH, PK_TREE_DEPTH};
+
+use crate::{
+    circuits::mnt4::{
+        MacroBlockWrapperCircuit, MergerWrapperCircuit, PKTreeNodeCircuit as NodeMNT4,
+    },
+    circuits::mnt6::{
+        MacroBlockCircuit, MergerCircuit, PKTreeLeafCircuit as LeafMNT6,
+        PKTreeNodeCircuit as NodeMNT6,
+    },
+};
 
 pub const DEVELOPMENT_SEED: [u8; 32] = [
     1, 0, 52, 0, 0, 0, 0, 0, 1, 0, 10, 0, 22, 32, 0, 0, 2, 0, 55, 49, 0, 11, 0, 0, 3, 0, 0, 0, 0,
@@ -114,16 +114,16 @@ fn setup_pk_tree_leaf<R: Rng + CryptoRng>(
 
     let pk_tree_nodes = vec![G1MNT6::rand(rng); PK_TREE_DEPTH];
 
-    let pk_tree_root = vec![MNT4Fr::rand(rng); 2];
+    let pk_tree_root = vec![MNT6Fq::rand(rng); 2];
 
-    let agg_pk_commitment = vec![MNT4Fr::rand(rng); 2];
+    let agg_pk_commitment = vec![MNT6Fq::rand(rng); 2];
 
-    let signer_bitmap = MNT4Fr::rand(rng);
+    let signer_bitmap = MNT6Fq::rand(rng);
 
-    let path = MNT4Fr::rand(rng);
+    let path = MNT6Fq::rand(rng);
 
     // Create parameters for our circuit
-    let circuit = LeafMNT4::new(
+    let circuit = LeafMNT6::new(
         pks,
         pk_tree_nodes,
         pk_tree_root,
@@ -167,18 +167,18 @@ fn setup_pk_tree_node_mnt6<R: Rng + CryptoRng>(
         c: G1MNT4::rand(rng).into_affine(),
     };
 
-    let pk_tree_root = vec![MNT6Fr::rand(rng); 2];
+    let pk_tree_root = vec![MNT4Fq::rand(rng); 2];
 
-    let left_agg_pk_commitment = vec![MNT6Fr::rand(rng); 2];
+    let left_agg_pk_commitment = vec![MNT4Fq::rand(rng); 2];
 
-    let right_agg_pk_commitment = vec![MNT6Fr::rand(rng); 2];
+    let right_agg_pk_commitment = vec![MNT4Fq::rand(rng); 2];
 
-    let signer_bitmap = MNT6Fr::rand(rng);
+    let signer_bitmap = MNT4Fq::rand(rng);
 
-    let path = MNT6Fr::rand(rng);
+    let path = MNT4Fq::rand(rng);
 
     // Create parameters for our circuit
-    let circuit = NodeMNT6::new(
+    let circuit = NodeMNT4::new(
         tree_level,
         vk_child,
         left_proof,
@@ -227,16 +227,16 @@ fn setup_pk_tree_node_mnt4<R: Rng + CryptoRng>(
 
     let agg_pk_chunks = vec![G2MNT6::rand(rng); 4];
 
-    let pk_tree_root = vec![MNT4Fr::rand(rng); 2];
+    let pk_tree_root = vec![MNT6Fq::rand(rng); 2];
 
-    let agg_pk_commitment = vec![MNT4Fr::rand(rng); 2];
+    let agg_pk_commitment = vec![MNT6Fq::rand(rng); 2];
 
-    let signer_bitmap = MNT4Fr::rand(rng);
+    let signer_bitmap = MNT6Fq::rand(rng);
 
-    let path = MNT4Fr::rand(rng);
+    let path = MNT6Fq::rand(rng);
 
     // Create parameters for our circuit
-    let circuit = NodeMNT4::new(
+    let circuit = NodeMNT6::new(
         tree_level,
         vk_child,
         left_proof,
@@ -282,9 +282,9 @@ fn setup_macro_block<R: Rng + CryptoRng>(rng: &mut R, path: &Path) -> Result<(),
     let mut final_pk_tree_root = [0u8; 95];
     rng.fill_bytes(&mut final_pk_tree_root);
 
-    let initial_state_commitment = vec![MNT4Fr::rand(rng); 2];
+    let initial_state_commitment = vec![MNT6Fq::rand(rng); 2];
 
-    let final_state_commitment = vec![MNT4Fr::rand(rng); 2];
+    let final_state_commitment = vec![MNT6Fq::rand(rng); 2];
 
     let mut header_hash = [0u8; 32];
     rng.fill_bytes(&mut header_hash);
@@ -338,9 +338,9 @@ fn setup_macro_block_wrapper<R: Rng + CryptoRng>(
         c: G1MNT4::rand(rng).into_affine(),
     };
 
-    let initial_state_commitment = vec![MNT6Fr::rand(rng); 2];
+    let initial_state_commitment = vec![MNT4Fq::rand(rng); 2];
 
-    let final_state_commitment = vec![MNT6Fr::rand(rng); 2];
+    let final_state_commitment = vec![MNT4Fq::rand(rng); 2];
 
     // Create parameters for our circuit
     let circuit = MacroBlockWrapperCircuit::new(
@@ -389,11 +389,11 @@ fn setup_merger<R: Rng + CryptoRng>(rng: &mut R, path: &Path) -> Result<(), Nano
 
     let genesis_flag = bool::rand(rng);
 
-    let initial_state_commitment = vec![MNT4Fr::rand(rng); 2];
+    let initial_state_commitment = vec![MNT6Fq::rand(rng); 2];
 
-    let final_state_commitment = vec![MNT4Fr::rand(rng); 2];
+    let final_state_commitment = vec![MNT6Fq::rand(rng); 2];
 
-    let vk_commitment = vec![MNT4Fr::rand(rng); 2];
+    let vk_commitment = vec![MNT6Fq::rand(rng); 2];
 
     // Create parameters for our circuit
     let circuit = MergerCircuit::new(
@@ -427,11 +427,11 @@ fn setup_merger_wrapper<R: Rng + CryptoRng>(rng: &mut R, path: &Path) -> Result<
         c: G1MNT4::rand(rng).into_affine(),
     };
 
-    let initial_state_commitment = vec![MNT6Fr::rand(rng); 2];
+    let initial_state_commitment = vec![MNT4Fq::rand(rng); 2];
 
-    let final_state_commitment = vec![MNT6Fr::rand(rng); 2];
+    let final_state_commitment = vec![MNT4Fq::rand(rng); 2];
 
-    let vk_commitment = vec![MNT6Fr::rand(rng); 2];
+    let vk_commitment = vec![MNT4Fq::rand(rng); 2];
 
     // Create parameters for our circuit
     let circuit = MergerWrapperCircuit::new(

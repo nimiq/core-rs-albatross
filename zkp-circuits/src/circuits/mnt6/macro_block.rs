@@ -1,14 +1,15 @@
-use ark_crypto_primitives::snark::BooleanInputVar;
-use ark_crypto_primitives::snark::SNARKGadget;
-use ark_groth16::constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar};
-use ark_groth16::{Proof, VerifyingKey};
-use ark_mnt4_753::Fr as MNT4Fr;
-use ark_mnt6_753::constraints::{FqVar, G1Var, G2Var, PairingVar};
-use ark_mnt6_753::{Fq, G2Projective, MNT6_753};
-use ark_r1cs_std::prelude::{
-    AllocVar, Boolean, CurveVar, EqGadget, FieldVar, ToBitsGadget, UInt32,
+use ark_crypto_primitives::snark::{BooleanInputVar, SNARKGadget};
+use ark_groth16::{
+    constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar},
+    Proof, VerifyingKey,
 };
-use ark_r1cs_std::uint8::UInt8;
+use ark_mnt6_753::{
+    constraints::{FqVar, G1Var, G2Var, PairingVar},
+    Fq as MNT6Fq, G2Projective, MNT6_753,
+};
+use ark_r1cs_std::prelude::{
+    AllocVar, Boolean, CurveVar, EqGadget, FieldVar, ToBitsGadget, UInt32, UInt8,
+};
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 
 use crate::utils::{prepare_inputs, unpack_inputs};
@@ -16,8 +17,10 @@ use nimiq_bls::pedersen::pedersen_generators;
 use nimiq_primitives::policy::Policy;
 use nimiq_zkp_primitives::MacroBlock;
 
-use crate::gadgets::mnt4::{MacroBlockGadget, PedersenHashGadget, StateCommitmentGadget};
-use crate::gadgets::serialize::SerializeGadget;
+use crate::gadgets::{
+    mnt6::{MacroBlockGadget, PedersenHashGadget, StateCommitmentGadget},
+    serialize::SerializeGadget,
+};
 
 /// This is the macro block circuit. It takes as inputs an initial state commitment and final state commitment
 /// and it produces a proof that there exists a valid macro block that transforms the initial state
@@ -44,8 +47,8 @@ pub struct MacroBlockCircuit {
     // field elements. Both of the curves that we use have a modulus of 753 bits and a capacity
     // of 752 bits. So, the first 752 bits (in little-endian) of each field element is data, and the
     // last bit is always set to zero.
-    initial_state_commitment: Vec<Fq>,
-    final_state_commitment: Vec<Fq>,
+    initial_state_commitment: Vec<MNT6Fq>,
+    final_state_commitment: Vec<MNT6Fq>,
 }
 
 impl MacroBlockCircuit {
@@ -57,8 +60,8 @@ impl MacroBlockCircuit {
         initial_header_hash: [u8; 32],
         final_pk_tree_root: Vec<u8>,
         block: MacroBlock,
-        initial_state_commitment: Vec<Fq>,
-        final_state_commitment: Vec<Fq>,
+        initial_state_commitment: Vec<MNT6Fq>,
+        final_state_commitment: Vec<MNT6Fq>,
     ) -> Self {
         Self {
             vk_pk_tree,
@@ -74,12 +77,12 @@ impl MacroBlockCircuit {
     }
 }
 
-impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
+impl ConstraintSynthesizer<MNT6Fq> for MacroBlockCircuit {
     /// This function generates the constraints for the circuit.
-    fn generate_constraints(self, cs: ConstraintSystemRef<MNT4Fr>) -> Result<(), SynthesisError> {
+    fn generate_constraints(self, cs: ConstraintSystemRef<MNT6Fq>) -> Result<(), SynthesisError> {
         // Allocate all the constants.
         let epoch_length_var =
-            UInt32::<MNT4Fr>::new_constant(cs.clone(), Policy::blocks_per_epoch())?;
+            UInt32::<MNT6Fq>::new_constant(cs.clone(), Policy::blocks_per_epoch())?;
 
         let pedersen_generators_var =
             Vec::<G1Var>::new_constant(cs.clone(), pedersen_generators(5))?;
@@ -95,13 +98,13 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
             ProofVar::<MNT6_753, PairingVar>::new_witness(cs.clone(), || Ok(&self.proof))?;
 
         let initial_pk_tree_root_var =
-            Vec::<UInt8<MNT4Fr>>::new_witness(cs.clone(), || Ok(&self.initial_pk_tree_root[..]))?;
+            Vec::<UInt8<MNT6Fq>>::new_witness(cs.clone(), || Ok(&self.initial_pk_tree_root[..]))?;
 
         let initial_header_hash_var =
-            Vec::<UInt8<MNT4Fr>>::new_witness(cs.clone(), || Ok(&self.initial_header_hash[..]))?;
+            Vec::<UInt8<MNT6Fq>>::new_witness(cs.clone(), || Ok(&self.initial_header_hash[..]))?;
 
         let final_pk_tree_root_var =
-            Vec::<UInt8<MNT4Fr>>::new_witness(cs.clone(), || Ok(&self.final_pk_tree_root[..]))?;
+            Vec::<UInt8<MNT6Fq>>::new_witness(cs.clone(), || Ok(&self.final_pk_tree_root[..]))?;
 
         let block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(&self.block))?;
 

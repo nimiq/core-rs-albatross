@@ -1,10 +1,12 @@
-use ark_crypto_primitives::snark::BooleanInputVar;
-use ark_crypto_primitives::snark::SNARKGadget;
-use ark_groth16::constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar};
-use ark_groth16::{Proof, VerifyingKey};
-use ark_mnt4_753::constraints::{FqVar, PairingVar};
-use ark_mnt4_753::{Fq, MNT4_753};
-use ark_mnt6_753::Fr as MNT6Fr;
+use ark_crypto_primitives::{snark::BooleanInputVar, snark::SNARKGadget};
+use ark_groth16::{
+    constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar},
+    Proof, VerifyingKey,
+};
+use ark_mnt4_753::{
+    constraints::{FqVar, PairingVar},
+    Fq as MNT4Fq, MNT4_753,
+};
 use ark_r1cs_std::prelude::{AllocVar, Boolean, EqGadget};
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 
@@ -31,16 +33,16 @@ pub struct MacroBlockWrapperCircuit {
     // field elements. Both of the curves that we use have a modulus of 753 bits and a capacity
     // of 752 bits. So, the first 752 bits (in little-endian) of each field element is data, and the
     // last bit is always set to zero.
-    initial_state_commitment: Vec<Fq>,
-    final_state_commitment: Vec<Fq>,
+    initial_state_commitment: Vec<MNT4Fq>,
+    final_state_commitment: Vec<MNT4Fq>,
 }
 
 impl MacroBlockWrapperCircuit {
     pub fn new(
         vk_macro_block: VerifyingKey<MNT4_753>,
         proof: Proof<MNT4_753>,
-        initial_state_commitment: Vec<Fq>,
-        final_state_commitment: Vec<Fq>,
+        initial_state_commitment: Vec<MNT4Fq>,
+        final_state_commitment: Vec<MNT4Fq>,
     ) -> Self {
         Self {
             vk_macro_block,
@@ -51,9 +53,9 @@ impl MacroBlockWrapperCircuit {
     }
 }
 
-impl ConstraintSynthesizer<MNT6Fr> for MacroBlockWrapperCircuit {
+impl ConstraintSynthesizer<MNT4Fq> for MacroBlockWrapperCircuit {
     /// This function generates the constraints for the circuit.
-    fn generate_constraints(self, cs: ConstraintSystemRef<MNT6Fr>) -> Result<(), SynthesisError> {
+    fn generate_constraints(self, cs: ConstraintSystemRef<MNT4Fq>) -> Result<(), SynthesisError> {
         // Allocate all the constants.
         let vk_macro_block_var = VerifyingKeyVar::<MNT4_753, PairingVar>::new_constant(
             cs.clone(),

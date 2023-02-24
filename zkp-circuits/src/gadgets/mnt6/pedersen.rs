@@ -1,5 +1,4 @@
-use ark_mnt4_753::Fr as MNT4Fr;
-use ark_mnt6_753::constraints::G1Var;
+use ark_mnt6_753::{constraints::G1Var, Fq as MNT6Fq};
 use ark_r1cs_std::prelude::{Boolean, CondSelectGadget, CurveVar};
 use ark_relations::r1cs::SynthesisError;
 
@@ -19,7 +18,7 @@ impl PedersenHashGadget {
     /// where G_0 is a sum generator that is used to guarantee that the exponent of the resulting
     /// EC point is not known (necessary for BLS signatures).
     pub fn evaluate(
-        input: &[Boolean<MNT4Fr>],
+        input: &[Boolean<MNT6Fq>],
         generators: &[G1Var],
     ) -> Result<G1Var, SynthesisError> {
         let capacity = 752;
@@ -57,16 +56,19 @@ impl PedersenHashGadget {
 
 #[cfg(test)]
 mod tests {
-    use ark_mnt4_753::Fr as MNT4Fr;
-    use ark_mnt6_753::constraints::G1Var;
-    use ark_r1cs_std::prelude::{AllocVar, Boolean};
-    use ark_r1cs_std::R1CSVar;
+    use ark_mnt6_753::{constraints::G1Var, Fq as MNT6Fq};
+    use ark_r1cs_std::{
+        prelude::{AllocVar, Boolean},
+        R1CSVar,
+    };
     use ark_relations::r1cs::ConstraintSystem;
     use ark_std::test_rng;
     use rand::RngCore;
 
-    use nimiq_bls::pedersen::{pedersen_generator_powers, pedersen_generators, pedersen_hash};
-    use nimiq_bls::utils::bytes_to_bits_le;
+    use nimiq_bls::{
+        pedersen::{pedersen_generator_powers, pedersen_generators, pedersen_hash},
+        utils::bytes_to_bits_le,
+    };
     use nimiq_test_log::test;
 
     use super::*;
@@ -74,7 +76,7 @@ mod tests {
     #[test]
     fn pedersen_hash_works() {
         // Initialize the constraint system.
-        let cs = ConstraintSystem::<MNT4Fr>::new_ref();
+        let cs = ConstraintSystem::<MNT6Fq>::new_ref();
 
         // Create random number generator.
         let rng = &mut test_rng();
@@ -92,7 +94,7 @@ mod tests {
         let primitive_hash = pedersen_hash(bits.clone(), &generator_powers);
 
         // Allocate the random bits in the circuit.
-        let bits_var = Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(bits)).unwrap();
+        let bits_var = Vec::<Boolean<MNT6Fq>>::new_witness(cs.clone(), || Ok(bits)).unwrap();
 
         // Allocate the Pedersen generators in the circuit.
         let generators_var = Vec::<G1Var>::new_witness(cs, || Ok(generators)).unwrap();

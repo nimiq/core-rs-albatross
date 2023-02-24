@@ -1,17 +1,21 @@
-use ark_crypto_primitives::snark::BooleanInputVar;
-use ark_crypto_primitives::snark::SNARKGadget;
-use ark_groth16::constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar};
-use ark_groth16::{Proof, VerifyingKey};
-use ark_mnt4_753::Fr as MNT4Fr;
-use ark_mnt6_753::constraints::{FqVar, G1Var, PairingVar};
-use ark_mnt6_753::{Fq, MNT6_753};
-use ark_r1cs_std::prelude::{AllocVar, Boolean, EqGadget};
-use ark_r1cs_std::ToBitsGadget;
+use ark_crypto_primitives::snark::{BooleanInputVar, SNARKGadget};
+use ark_groth16::{
+    constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar},
+    Proof, VerifyingKey,
+};
+use ark_mnt6_753::{
+    constraints::{FqVar, G1Var, PairingVar},
+    Fq as MNT6Fq, MNT6_753,
+};
+use ark_r1cs_std::{
+    prelude::{AllocVar, Boolean, EqGadget},
+    ToBitsGadget,
+};
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 
 use nimiq_bls::pedersen::pedersen_generators;
 
-use crate::gadgets::mnt4::VKCommitmentGadget;
+use crate::gadgets::mnt6::VKCommitmentGadget;
 use crate::utils::{prepare_inputs, unpack_inputs};
 
 /// This is the merger circuit. It takes as inputs an initial state commitment, a final state commitment
@@ -53,9 +57,9 @@ pub struct MergerCircuit {
     // field elements. Both of the curves that we use have a modulus of 753 bits and a capacity
     // of 752 bits. So, the first 752 bits (in little-endian) of each field element is data, and the
     // last bit is always set to zero.
-    initial_state_commitment: Vec<Fq>,
-    final_state_commitment: Vec<Fq>,
-    vk_commitment: Vec<Fq>,
+    initial_state_commitment: Vec<MNT6Fq>,
+    final_state_commitment: Vec<MNT6Fq>,
+    vk_commitment: Vec<MNT6Fq>,
 }
 
 impl MergerCircuit {
@@ -66,9 +70,9 @@ impl MergerCircuit {
         vk_merger_wrapper: VerifyingKey<MNT6_753>,
         intermediate_state_commitment: Vec<bool>,
         genesis_flag: bool,
-        initial_state_commitment: Vec<Fq>,
-        final_state_commitment: Vec<Fq>,
-        vk_commitment: Vec<Fq>,
+        initial_state_commitment: Vec<MNT6Fq>,
+        final_state_commitment: Vec<MNT6Fq>,
+        vk_commitment: Vec<MNT6Fq>,
     ) -> Self {
         Self {
             vk_macro_block_wrapper,
@@ -84,9 +88,9 @@ impl MergerCircuit {
     }
 }
 
-impl ConstraintSynthesizer<MNT4Fr> for MergerCircuit {
+impl ConstraintSynthesizer<MNT6Fq> for MergerCircuit {
     /// This function generates the constraints for the circuit.
-    fn generate_constraints(self, cs: ConstraintSystemRef<MNT4Fr>) -> Result<(), SynthesisError> {
+    fn generate_constraints(self, cs: ConstraintSystemRef<MNT6Fq>) -> Result<(), SynthesisError> {
         // Allocate all the constants.
         let pedersen_generators_var =
             Vec::<G1Var>::new_constant(cs.clone(), pedersen_generators(19))?;
@@ -113,7 +117,7 @@ impl ConstraintSynthesizer<MNT4Fr> for MergerCircuit {
             })?;
 
         let intermediate_state_commitment_bits =
-            Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || {
+            Vec::<Boolean<MNT6Fq>>::new_witness(cs.clone(), || {
                 Ok(&self.intermediate_state_commitment[..])
             })?;
 

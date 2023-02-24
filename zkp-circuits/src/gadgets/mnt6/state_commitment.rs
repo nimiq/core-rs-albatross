@@ -1,13 +1,10 @@
-use ark_mnt4_753::Fr as MNT4Fr;
-use ark_mnt6_753::constraints::G1Var;
-use ark_r1cs_std::prelude::UInt32;
-use ark_r1cs_std::uint8::UInt8;
-use ark_r1cs_std::ToBitsGadget;
+use ark_mnt6_753::{constraints::G1Var, Fq as MNT6Fq};
+use ark_r1cs_std::{prelude::UInt32, uint8::UInt8, ToBitsGadget};
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 
-use crate::endianness::ToBeBytesGadget;
-use crate::gadgets::mnt4::PedersenHashGadget;
-use crate::gadgets::serialize::SerializeGadget;
+use crate::gadgets::{
+    be_bytes::ToBeBytesGadget, mnt6::PedersenHashGadget, serialize::SerializeGadget,
+};
 
 /// This gadget is meant to calculate the "state commitment" in-circuit, which is simply a commitment,
 /// for a given block, of the block number concatenated with the root of a Merkle tree over the public
@@ -19,12 +16,12 @@ pub struct StateCommitmentGadget;
 impl StateCommitmentGadget {
     /// Calculates the state commitment.
     pub fn evaluate(
-        cs: ConstraintSystemRef<MNT4Fr>,
-        block_number: &UInt32<MNT4Fr>,
-        header_hash: &[UInt8<MNT4Fr>],
-        pk_tree_root: &[UInt8<MNT4Fr>],
+        cs: ConstraintSystemRef<MNT6Fq>,
+        block_number: &UInt32<MNT6Fq>,
+        header_hash: &[UInt8<MNT6Fq>],
+        pk_tree_root: &[UInt8<MNT6Fq>],
         pedersen_generators: &[G1Var],
-    ) -> Result<Vec<UInt8<MNT4Fr>>, SynthesisError> {
+    ) -> Result<Vec<UInt8<MNT6Fq>>, SynthesisError> {
         // Initialize Boolean vector.
         let mut bytes = vec![];
 
@@ -56,11 +53,11 @@ impl StateCommitmentGadget {
 
 #[cfg(test)]
 mod tests {
-    use ark_mnt4_753::Fr as MNT4Fr;
-    use ark_mnt6_753::constraints::G1Var;
-    use ark_mnt6_753::G2Projective;
-    use ark_r1cs_std::prelude::{AllocVar, UInt32};
-    use ark_r1cs_std::R1CSVar;
+    use ark_mnt6_753::{constraints::G1Var, Fq as MNT6Fq, G2Projective};
+    use ark_r1cs_std::{
+        prelude::{AllocVar, UInt32},
+        R1CSVar,
+    };
     use ark_relations::r1cs::ConstraintSystem;
     use ark_std::{test_rng, UniformRand};
     use rand::RngCore;
@@ -75,7 +72,7 @@ mod tests {
     #[test]
     fn state_commitment_works() {
         // Initialize the constraint system.
-        let cs = ConstraintSystem::<MNT4Fr>::new_ref();
+        let cs = ConstraintSystem::<MNT6Fq>::new_ref();
 
         // Create random number generator.
         let rng = &mut test_rng();
@@ -102,11 +99,11 @@ mod tests {
 
         // Allocate the header hash in the circuit.
         let header_hash_var =
-            Vec::<UInt8<MNT4Fr>>::new_witness(cs.clone(), || Ok(&header_hash[..])).unwrap();
+            Vec::<UInt8<MNT6Fq>>::new_witness(cs.clone(), || Ok(&header_hash[..])).unwrap();
 
         // Allocate the public key tree root in the circuit.
         let pk_tree_root_var =
-            Vec::<UInt8<MNT4Fr>>::new_witness(cs.clone(), || Ok(&pk_tree_root[..])).unwrap();
+            Vec::<UInt8<MNT6Fq>>::new_witness(cs.clone(), || Ok(&pk_tree_root[..])).unwrap();
 
         // Allocate the generators.
         let generators_var =

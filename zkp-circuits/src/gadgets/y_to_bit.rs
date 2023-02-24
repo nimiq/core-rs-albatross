@@ -1,8 +1,10 @@
 use ark_ff::PrimeField;
-use ark_r1cs_std::boolean::Boolean;
-use ark_r1cs_std::fields::fp::FpVar;
-use ark_r1cs_std::prelude::{AllocVar, EqGadget, FieldVar};
-use ark_r1cs_std::{R1CSVar, ToBitsGadget};
+use ark_r1cs_std::{
+    boolean::Boolean,
+    fields::fp::FpVar,
+    prelude::{AllocVar, EqGadget, FieldVar},
+    {R1CSVar, ToBitsGadget},
+};
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 
 /// A gadget that takes an elliptic curve point as input and outputs a single bit representing the

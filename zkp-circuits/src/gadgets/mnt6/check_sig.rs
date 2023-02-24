@@ -1,7 +1,9 @@
 use ark_ec::Group;
-use ark_mnt4_753::Fr as MNT4Fr;
-use ark_mnt6_753::constraints::{G1Var, G2Var, PairingVar};
-use ark_mnt6_753::G2Projective;
+use ark_mnt6_753::Fq as MNT6Fq;
+use ark_mnt6_753::{
+    constraints::{G1Var, G2Var, PairingVar},
+    G2Projective,
+};
 use ark_r1cs_std::prelude::{AllocVar, Boolean, EqGadget, PairingVar as PV};
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 
@@ -14,11 +16,11 @@ impl CheckSigGadget {
     /// It implements the following verification formula:
     /// e(sig, gen) = e(hash, pk)
     pub fn check_signature(
-        cs: ConstraintSystemRef<MNT4Fr>,
+        cs: ConstraintSystemRef<MNT6Fq>,
         public_key: &G2Var,
         hash_point: &G1Var,
         signature: &G1Var,
-    ) -> Result<Boolean<MNT4Fr>, SynthesisError> {
+    ) -> Result<Boolean<MNT6Fq>, SynthesisError> {
         // Prepare the public key elliptic curve point.
         let pub_key_p_var = PairingVar::prepare_g2(public_key)?;
 

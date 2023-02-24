@@ -1,13 +1,12 @@
 use ark_groth16::constraints::VerifyingKeyVar;
-use ark_mnt4_753::Fr as MNT4Fr;
-use ark_mnt6_753::constraints::{G1Var, PairingVar};
-use ark_mnt6_753::MNT6_753;
-use ark_r1cs_std::uint8::UInt8;
-use ark_r1cs_std::ToBitsGadget;
+use ark_mnt6_753::{
+    constraints::{G1Var, PairingVar},
+    Fq as MNT6Fq, MNT6_753,
+};
+use ark_r1cs_std::{uint8::UInt8, ToBitsGadget};
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 
-use crate::gadgets::mnt4::PedersenHashGadget;
-use crate::gadgets::serialize::SerializeGadget;
+use crate::gadgets::{mnt6::PedersenHashGadget, serialize::SerializeGadget};
 
 /// This gadget is meant to calculate a commitment in-circuit for a verifying key of a SNARK in the
 /// MNT6-753 curve. This means we can open this commitment inside of a circuit in the MNT4-753 curve
@@ -20,10 +19,10 @@ pub struct VKCommitmentGadget;
 impl VKCommitmentGadget {
     /// Calculates the verifying key commitment.
     pub fn evaluate(
-        cs: ConstraintSystemRef<MNT4Fr>,
+        cs: ConstraintSystemRef<MNT6Fq>,
         vk: &VerifyingKeyVar<MNT6_753, PairingVar>,
         pedersen_generators: &[G1Var],
-    ) -> Result<Vec<UInt8<MNT4Fr>>, SynthesisError> {
+    ) -> Result<Vec<UInt8<MNT6Fq>>, SynthesisError> {
         // Initialize Boolean vector.
         let mut bytes = vec![];
 
@@ -58,14 +57,12 @@ impl VKCommitmentGadget {
 #[cfg(test)]
 mod tests {
     use ark_ec::CurveGroup;
-    use ark_groth16::constraints::VerifyingKeyVar;
-    use ark_groth16::VerifyingKey;
-    use ark_mnt4_753::Fr as MNT4Fr;
-    use ark_mnt6_753::constraints::{G1Var, PairingVar};
-    use ark_mnt6_753::MNT6_753;
-    use ark_mnt6_753::{G1Projective, G2Projective};
-    use ark_r1cs_std::prelude::AllocVar;
-    use ark_r1cs_std::R1CSVar;
+    use ark_groth16::{constraints::VerifyingKeyVar, VerifyingKey};
+    use ark_mnt6_753::{
+        constraints::{G1Var, PairingVar},
+        Fq as MNT6Fq, MNT6_753, {G1Projective, G2Projective},
+    };
+    use ark_r1cs_std::{prelude::AllocVar, R1CSVar};
     use ark_relations::r1cs::ConstraintSystem;
     use ark_std::{test_rng, UniformRand};
 
@@ -78,7 +75,7 @@ mod tests {
     #[test]
     fn vk_commitment_test() {
         // Initialize the constraint system.
-        let cs = ConstraintSystem::<MNT4Fr>::new_ref();
+        let cs = ConstraintSystem::<MNT6Fq>::new_ref();
 
         // Create random number generator.
         let rng = &mut test_rng();

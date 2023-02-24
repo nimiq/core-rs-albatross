@@ -1,13 +1,11 @@
 use ark_ff::{One, PrimeField, ToConstraintField};
-use ark_mnt4_753::Fr as MNT4Fr;
-use ark_mnt6_753::constraints::G1Var;
-use ark_mnt6_753::G1Affine;
-use ark_r1cs_std::fields::fp::FpVar;
-use ark_r1cs_std::fields::FieldVar;
-use ark_r1cs_std::prelude::{AllocVar, EqGadget};
-use ark_r1cs_std::uint8::UInt8;
-use ark_r1cs_std::ToBitsGadget;
-use ark_r1cs_std::{R1CSVar, ToConstraintFieldGadget};
+use ark_mnt6_753::{constraints::G1Var, Fq as MNT6Fq, G1Affine};
+use ark_r1cs_std::{
+    fields::{fp::FpVar, FieldVar},
+    prelude::{AllocVar, EqGadget},
+    uint8::UInt8,
+    ToBitsGadget, {R1CSVar, ToConstraintFieldGadget},
+};
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 use ark_std::Zero;
 
@@ -21,8 +19,8 @@ pub struct HashToCurve;
 
 impl HashToCurve {
     pub fn hash_to_g1(
-        cs: ConstraintSystemRef<MNT4Fr>,
-        hash: &[UInt8<MNT4Fr>],
+        cs: ConstraintSystemRef<MNT6Fq>,
+        hash: &[UInt8<MNT6Fq>],
     ) -> Result<G1Var, SynthesisError> {
         // Extend the hash to 96 bytes using Blake2X.
         let mut hash_out = Vec::new();
@@ -59,7 +57,7 @@ impl HashToCurve {
         let y_bit = hash_out[bytes_len - 1].to_bits_le()?.pop().unwrap();
 
         // Because of the previous explanation, we need to remove the whole last two bytes.
-        let max_size = ((MNT4Fr::MODULUS_BIT_SIZE - 1) / 8) as usize;
+        let max_size = ((MNT6Fq::MODULUS_BIT_SIZE - 1) / 8) as usize;
         hash_out.truncate(max_size);
 
         let mut x_coordinates = ToConstraintFieldGadget::to_constraint_field(&hash_out)?;
@@ -69,7 +67,7 @@ impl HashToCurve {
         let mut g1_option = None;
 
         // Allocate the nonce bits and convert to a field element.
-        let nonce = FpVar::<MNT4Fr>::new_witness(cs.clone(), || {
+        let nonce = FpVar::<MNT6Fq>::new_witness(cs.clone(), || {
             let x_bytes = hash_out
                 .iter()
                 .map(|i| i.value())
@@ -79,13 +77,13 @@ impl HashToCurve {
             // We need to always return a vector of the correct size for the setup to succeed (otherwise Vec::new_witness fails with an AssignmentMissing error).
             let (x_bytes, y) = match (x_bytes, y) {
                 (Ok(x_bytes), Ok(y)) => (x_bytes, y),
-                (..) => return Ok(MNT4Fr::zero()),
+                (..) => return Ok(MNT6Fq::zero()),
             };
 
             // Calculate the increment nonce and the resulting G1 hash point.
             let (nonce_byte, g1) = Self::try_and_increment(x_bytes, y);
             g1_option = Some(g1);
-            Ok(MNT4Fr::from(nonce_byte))
+            Ok(MNT6Fq::from(nonce_byte))
         })?;
 
         // Allocate the G1 hash point.
@@ -130,7 +128,7 @@ impl HashToCurve {
                 return (i, g1);
             }
 
-            x_coordinate += &MNT4Fr::one();
+            x_coordinate += &MNT6Fq::one();
         }
 
         unreachable!()

@@ -1,10 +1,15 @@
+use futures::{Future, StreamExt};
 #[cfg(feature = "zkp-prover")]
 use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
+use tokio::sync::{
+    broadcast::{channel as broadcast, Sender as BroadcastSender},
+    oneshot::error::RecvError,
+};
+use tokio_stream::wrappers::BroadcastStream;
 
-use futures::{Future, StreamExt};
 use nimiq_block::Block;
 use nimiq_genesis::NetworkInfo;
 use nimiq_network_interface::network::{MsgAcceptance, PubsubId};
@@ -15,10 +20,6 @@ use nimiq_block::MacroBlock;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_network_interface::{network::Network, request::request_handler};
-
-use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
-use tokio::sync::oneshot::error::RecvError;
-use tokio_stream::wrappers::BroadcastStream;
 
 use crate::proof_store::ProofStore;
 use crate::proof_utils::*;

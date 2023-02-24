@@ -3,9 +3,9 @@ use ark_crypto_primitives::snark::{CircuitSpecificSetupSNARK, SNARKGadget, SNARK
 use ark_groth16::constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar};
 use ark_groth16::{Groth16, Proof, VerifyingKey};
 use ark_mnt4_753::constraints::{FqVar as FqVarMNT4, PairingVar};
-use ark_mnt4_753::{Fq as FqMNT4, Fr as MNT4Fr, MNT4_753};
+use ark_mnt4_753::{Fq as FqMNT4, MNT4_753};
 use ark_mnt6_753::constraints::FqVar as FqVarMNT6;
-use ark_mnt6_753::{Fq as FqMNT6, Fr as MNT6Fr, MNT6_753};
+use ark_mnt6_753::{Fq as FqMNT6, MNT6_753};
 use ark_r1cs_std::prelude::{AllocVar, Boolean, EqGadget};
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 use ark_std::{
@@ -30,15 +30,15 @@ pub struct InnerCircuit {
     blue_pub: Vec<FqMNT6>,
 }
 
-impl ConstraintSynthesizer<MNT4Fr> for InnerCircuit {
+impl ConstraintSynthesizer<FqMNT6> for InnerCircuit {
     /// This function generates the constraints for the circuit.
-    fn generate_constraints(self, cs: ConstraintSystemRef<MNT4Fr>) -> Result<(), SynthesisError> {
+    fn generate_constraints(self, cs: ConstraintSystemRef<FqMNT6>) -> Result<(), SynthesisError> {
         // Allocate all the witnesses.
         let red_priv_var =
-            Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(&self.red_priv[..]))?;
+            Vec::<Boolean<FqMNT6>>::new_witness(cs.clone(), || Ok(&self.red_priv[..]))?;
 
         let blue_priv_var =
-            Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(&self.blue_priv[..]))?;
+            Vec::<Boolean<FqMNT6>>::new_witness(cs.clone(), || Ok(&self.blue_priv[..]))?;
 
         // Allocate all the inputs.
         let red_pub_var = Vec::<FqVarMNT6>::new_input(cs.clone(), || Ok(&self.red_pub[..]))?;
@@ -69,9 +69,9 @@ pub struct OuterCircuit {
     blue_pub: Vec<FqMNT4>,
 }
 
-impl ConstraintSynthesizer<MNT6Fr> for OuterCircuit {
+impl ConstraintSynthesizer<FqMNT4> for OuterCircuit {
     /// This function generates the constraints for the circuit.
-    fn generate_constraints(self, cs: ConstraintSystemRef<MNT6Fr>) -> Result<(), SynthesisError> {
+    fn generate_constraints(self, cs: ConstraintSystemRef<FqMNT4>) -> Result<(), SynthesisError> {
         // Allocate the verifying key.
         let vk_var = VerifyingKeyVar::new_constant(cs.clone(), &self.vk).unwrap();
 

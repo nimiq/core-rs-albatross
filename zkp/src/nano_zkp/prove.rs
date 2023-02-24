@@ -6,8 +6,8 @@ use ark_crypto_primitives::snark::SNARK;
 use ark_ec::{pairing::Pairing, CurveGroup};
 use ark_ff::Zero;
 use ark_groth16::{Groth16, Proof, ProvingKey, VerifyingKey};
-use ark_mnt4_753::{Fr as MNT4Fr, MNT4_753};
-use ark_mnt6_753::{Fr as MNT6Fr, G1Projective as G1MNT6, G2Projective as G2MNT6, MNT6_753};
+use ark_mnt4_753::{Fq as MNT4Fq, MNT4_753};
+use ark_mnt6_753::{Fq as MNT6Fq, G1Projective as G1MNT6, G2Projective as G2MNT6, MNT6_753};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::UniformRand;
 use rand::{thread_rng, CryptoRng, Rng};
@@ -17,11 +17,11 @@ use nimiq_bls::utils::{byte_to_le_bits, bytes_to_bits_le};
 use nimiq_primitives::policy::Policy;
 use nimiq_zkp_circuits::{
     circuits::mnt4::{
-        MacroBlockCircuit, MergerCircuit, PKTreeLeafCircuit as LeafMNT4,
-        PKTreeNodeCircuit as NodeMNT4,
+        MacroBlockWrapperCircuit, MergerWrapperCircuit, PKTreeNodeCircuit as NodeMNT4,
     },
     circuits::mnt6::{
-        MacroBlockWrapperCircuit, MergerWrapperCircuit, PKTreeNodeCircuit as NodeMNT6,
+        MacroBlockCircuit, MergerCircuit, PKTreeLeafCircuit as LeafMNT6,
+        PKTreeNodeCircuit as NodeMNT6,
     },
     utils::pack_inputs,
 };
@@ -391,12 +391,12 @@ fn prove_pk_tree_leaf<R: CryptoRng + Rng>(
 
     let mut agg_pk_commitment = pack_inputs(agg_pk_comm);
 
-    let signer_bitmap_chunk: MNT4Fr = pack_inputs(signer_bitmap_chunk.to_vec()).pop().unwrap();
+    let signer_bitmap_chunk: MNT6Fq = pack_inputs(signer_bitmap_chunk.to_vec()).pop().unwrap();
 
-    let path: MNT4Fr = pack_inputs(byte_to_le_bits(position as u8)).pop().unwrap();
+    let path: MNT6Fq = pack_inputs(byte_to_le_bits(position as u8)).pop().unwrap();
 
     // Create the circuit.
-    let circuit = LeafMNT4::new(
+    let circuit = LeafMNT6::new(
         pks[position * Policy::SLOTS as usize / PK_TREE_BREADTH
             ..(position + 1) * Policy::SLOTS as usize / PK_TREE_BREADTH]
             .to_vec(),
@@ -525,12 +525,12 @@ fn prove_pk_tree_node_mnt6<R: CryptoRng + Rng>(
 
     let mut right_agg_pk_commitment = pack_inputs(right_agg_pk_comm);
 
-    let signer_bitmap_chunk: MNT6Fr = pack_inputs(signer_bitmap_chunk.to_vec()).pop().unwrap();
+    let signer_bitmap_chunk: MNT4Fq = pack_inputs(signer_bitmap_chunk.to_vec()).pop().unwrap();
 
-    let path: MNT6Fr = pack_inputs(byte_to_le_bits(position as u8)).pop().unwrap();
+    let path: MNT4Fq = pack_inputs(byte_to_le_bits(position as u8)).pop().unwrap();
 
     // Create the circuit.
-    let circuit = NodeMNT6::new(
+    let circuit = NodeMNT4::new(
         tree_level,
         vk_child,
         left_proof,
@@ -657,12 +657,12 @@ fn prove_pk_tree_node_mnt4<R: CryptoRng + Rng>(
 
     let mut agg_pk_commitment = pack_inputs(agg_pk_comm);
 
-    let signer_bitmap_chunk: MNT4Fr = pack_inputs(signer_bitmap_chunk.to_vec()).pop().unwrap();
+    let signer_bitmap_chunk: MNT6Fq = pack_inputs(signer_bitmap_chunk.to_vec()).pop().unwrap();
 
-    let path: MNT4Fr = pack_inputs(byte_to_le_bits(position as u8)).pop().unwrap();
+    let path: MNT6Fq = pack_inputs(byte_to_le_bits(position as u8)).pop().unwrap();
 
     // Create the circuit.
-    let circuit = NodeMNT4::new(
+    let circuit = NodeMNT6::new(
         tree_level,
         vk_child,
         left_proof,

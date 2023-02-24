@@ -1,18 +1,21 @@
-use ark_mnt4_753::Fr as MNT4Fr;
-use ark_mnt6_753::constraints::{FqVar, G1Var, G2Var};
-use ark_mnt6_753::{Fq, G1Projective, G2Projective};
-use ark_r1cs_std::prelude::{
-    AllocVar, Boolean, CondSelectGadget, CurveVar, EqGadget, ToBitsGadget,
+use ark_mnt6_753::{
+    constraints::{FqVar, G1Var, G2Var},
+    Fq as MNT6Fq, G1Projective, G2Projective,
 };
-use ark_r1cs_std::uint8::UInt8;
+use ark_r1cs_std::{
+    prelude::{AllocVar, Boolean, CondSelectGadget, CurveVar, EqGadget, ToBitsGadget},
+    uint8::UInt8,
+};
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 
 use nimiq_bls::pedersen::pedersen_generators;
 use nimiq_primitives::policy::Policy;
 use nimiq_zkp_primitives::{PK_TREE_BREADTH, PK_TREE_DEPTH};
 
-use crate::gadgets::mnt4::{MerkleTreeGadget, PedersenHashGadget};
-use crate::gadgets::serialize::SerializeGadget;
+use crate::gadgets::{
+    mnt6::{MerkleTreeGadget, PedersenHashGadget},
+    serialize::SerializeGadget,
+};
 use crate::utils::unpack_inputs;
 
 /// This is the leaf subcircuit of the PKTreeCircuit. This circuit main function is to process the
@@ -46,20 +49,20 @@ pub struct PKTreeLeafCircuit {
     // field elements. Both of the curves that we use have a modulus of 753 bits and a capacity
     // of 752 bits. So, the first 752 bits (in little-endian) of each field element is data, and the
     // last bit is always set to zero.
-    pk_tree_root: Vec<Fq>,
-    agg_pk_commitment: Vec<Fq>,
-    signer_bitmap_chunk: Fq,
-    path: Fq,
+    pk_tree_root: Vec<MNT6Fq>,
+    agg_pk_commitment: Vec<MNT6Fq>,
+    signer_bitmap_chunk: MNT6Fq,
+    path: MNT6Fq,
 }
 
 impl PKTreeLeafCircuit {
     pub fn new(
         pks: Vec<G2Projective>,
         pk_tree_nodes: Vec<G1Projective>,
-        pk_tree_root: Vec<Fq>,
-        agg_pk_commitment: Vec<Fq>,
-        signer_bitmap: Fq,
-        path: Fq,
+        pk_tree_root: Vec<MNT6Fq>,
+        agg_pk_commitment: Vec<MNT6Fq>,
+        signer_bitmap: MNT6Fq,
+        path: MNT6Fq,
     ) -> Self {
         Self {
             pks,
@@ -72,9 +75,9 @@ impl PKTreeLeafCircuit {
     }
 }
 
-impl ConstraintSynthesizer<MNT4Fr> for PKTreeLeafCircuit {
+impl ConstraintSynthesizer<MNT6Fq> for PKTreeLeafCircuit {
     /// This function generates the constraints for the circuit.
-    fn generate_constraints(self, cs: ConstraintSystemRef<MNT4Fr>) -> Result<(), SynthesisError> {
+    fn generate_constraints(self, cs: ConstraintSystemRef<MNT6Fq>) -> Result<(), SynthesisError> {
         // Allocate all the constants.
         let pedersen_generators_var =
             Vec::<G1Var>::new_constant(cs.clone(), pedersen_generators(195))?;

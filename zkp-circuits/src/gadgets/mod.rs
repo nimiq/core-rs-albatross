@@ -4,5 +4,6 @@
 pub mod mnt4;
 pub mod mnt6;
 
+pub mod be_bytes;
 pub mod serialize;
 pub mod y_to_bit;

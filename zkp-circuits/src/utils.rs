@@ -3,11 +3,12 @@ use std::cmp::min;
 use ark_ec::Group;
 use ark_ff::PrimeField;
 use ark_mnt6_753::{Fr as MNT6Fr, G2Projective as G2MNT6};
-use ark_r1cs_std::fields::fp::FpVar;
-use ark_r1cs_std::prelude::{Boolean, ToBitsGadget};
+use ark_r1cs_std::{
+    fields::fp::FpVar,
+    prelude::{Boolean, ToBitsGadget},
+};
 use ark_relations::r1cs::SynthesisError;
-use ark_std::ops::MulAssign;
-use ark_std::UniformRand;
+use ark_std::{ops::MulAssign, UniformRand};
 use rand::{rngs::SmallRng, seq::SliceRandom, RngCore, SeedableRng};
 
 use nimiq_primitives::policy::Policy;

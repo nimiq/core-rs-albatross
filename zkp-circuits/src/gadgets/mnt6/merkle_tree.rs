@@ -1,5 +1,4 @@
-use ark_mnt4_753::Fr as MNT4Fr;
-use ark_mnt6_753::constraints::G1Var;
+use ark_mnt6_753::{constraints::G1Var, Fq as MNT6Fq};
 use ark_r1cs_std::{
     prelude::{Boolean, CondSelectGadget, EqGadget},
     uint8::UInt8,
@@ -7,8 +6,7 @@ use ark_r1cs_std::{
 };
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 
-use crate::gadgets::mnt4::PedersenHashGadget;
-use crate::gadgets::serialize::SerializeGadget;
+use crate::gadgets::{mnt6::PedersenHashGadget, serialize::SerializeGadget};
 
 /// This gadgets contains utilities to create Merkle trees and verify proofs for them. It uses Pedersen
 /// hashes to construct the tree instead of cryptographic hash functions in order to be more efficient.
@@ -27,10 +25,10 @@ impl MerkleTreeGadget {
     ///                 0  1  2  3
     #[allow(dead_code)]
     pub fn construct(
-        cs: ConstraintSystemRef<MNT4Fr>,
-        inputs: &[Vec<UInt8<MNT4Fr>>],
+        cs: ConstraintSystemRef<MNT6Fq>,
+        inputs: &[Vec<UInt8<MNT6Fq>>],
         pedersen_generators: &[G1Var],
-    ) -> Result<Vec<UInt8<MNT4Fr>>, SynthesisError> {
+    ) -> Result<Vec<UInt8<MNT6Fq>>, SynthesisError> {
         // Checking that the inputs vector is not empty.
         assert!(!inputs.is_empty());
 
@@ -89,13 +87,13 @@ impl MerkleTreeGadget {
     /// the tree, each time you are the left node it's a zero and if you are the right node it's an
     /// one.
     pub fn verify(
-        cs: ConstraintSystemRef<MNT4Fr>,
-        input: &[UInt8<MNT4Fr>],
+        cs: ConstraintSystemRef<MNT6Fq>,
+        input: &[UInt8<MNT6Fq>],
         nodes: &[G1Var],
-        path: &[Boolean<MNT4Fr>],
-        root: &[UInt8<MNT4Fr>],
+        path: &[Boolean<MNT6Fq>],
+        root: &[UInt8<MNT6Fq>],
         pedersen_generators: &[G1Var],
-    ) -> Result<Boolean<MNT4Fr>, SynthesisError> {
+    ) -> Result<Boolean<MNT6Fq>, SynthesisError> {
         // Checking that the inputs vector is not empty.
         assert!(!input.is_empty());
 
@@ -136,16 +134,19 @@ impl MerkleTreeGadget {
 
 #[cfg(test)]
 mod tests {
-    use ark_mnt4_753::Fr as MNT4Fr;
-    use ark_mnt6_753::constraints::G1Var;
-    use ark_r1cs_std::prelude::{AllocVar, Boolean};
-    use ark_r1cs_std::R1CSVar;
+    use ark_mnt6_753::{constraints::G1Var, Fq as MNT6Fq};
+    use ark_r1cs_std::{
+        prelude::{AllocVar, Boolean},
+        R1CSVar,
+    };
     use ark_relations::r1cs::ConstraintSystem;
     use ark_std::test_rng;
     use rand::RngCore;
 
-    use nimiq_bls::pedersen::{pedersen_generator_powers, pedersen_generators, pedersen_hash};
-    use nimiq_bls::utils::{byte_from_le_bits, bytes_to_bits_le};
+    use nimiq_bls::{
+        pedersen::{pedersen_generator_powers, pedersen_generators, pedersen_hash},
+        utils::{byte_from_le_bits, bytes_to_bits_le},
+    };
     use nimiq_test_log::test;
 
     use nimiq_zkp_primitives::{
@@ -157,7 +158,7 @@ mod tests {
     #[test]
     fn merkle_tree_construct_works() {
         // Initialize the constraint system.
-        let cs = ConstraintSystem::<MNT4Fr>::new_ref();
+        let cs = ConstraintSystem::<MNT6Fq>::new_ref();
 
         // Create random number generator.
         let rng = &mut test_rng();
@@ -176,7 +177,7 @@ mod tests {
         // Allocate the random bits in the circuit.
         let mut leaves_var = vec![];
         for leaf in leaves {
-            leaves_var.push(Vec::<UInt8<MNT4Fr>>::new_witness(cs.clone(), || Ok(leaf)).unwrap());
+            leaves_var.push(Vec::<UInt8<MNT6Fq>>::new_witness(cs.clone(), || Ok(leaf)).unwrap());
         }
 
         // Generate and allocate the Pedersen generators in the circuit.
@@ -233,7 +234,7 @@ mod tests {
     #[test]
     fn merkle_tree_verify_works() {
         // Initialize the constraint system.
-        let cs = ConstraintSystem::<MNT4Fr>::new_ref();
+        let cs = ConstraintSystem::<MNT6Fq>::new_ref();
 
         // Create random number generator.
         let rng = &mut test_rng();
@@ -282,16 +283,16 @@ mod tests {
         ));
 
         // Allocate the leaf in the circuit.
-        let leaf_var = Vec::<UInt8<MNT4Fr>>::new_witness(cs.clone(), || Ok(leaf)).unwrap();
+        let leaf_var = Vec::<UInt8<MNT6Fq>>::new_witness(cs.clone(), || Ok(leaf)).unwrap();
 
         // Allocate the nodes in the circuit.
         let nodes_var = Vec::<G1Var>::new_witness(cs.clone(), || Ok(nodes)).unwrap();
 
         // Allocate the path in the circuit.
-        let path_var = Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(path)).unwrap();
+        let path_var = Vec::<Boolean<MNT6Fq>>::new_witness(cs.clone(), || Ok(path)).unwrap();
 
         // Allocate the root in the circuit.
-        let root_var = Vec::<UInt8<MNT4Fr>>::new_witness(cs.clone(), || Ok(root)).unwrap();
+        let root_var = Vec::<UInt8<MNT6Fq>>::new_witness(cs.clone(), || Ok(root)).unwrap();
 
         // Allocate the Pedersen generators in the circuit.
         let generators_var =
@@ -314,7 +315,7 @@ mod tests {
     #[test]
     fn merkle_tree_verify_wrong_root() {
         // Initialize the constraint system.
-        let cs = ConstraintSystem::<MNT4Fr>::new_ref();
+        let cs = ConstraintSystem::<MNT6Fq>::new_ref();
 
         // Create random number generator.
         let rng = &mut test_rng();
@@ -373,16 +374,16 @@ mod tests {
         ));
 
         // Allocate the leaf in the circuit.
-        let leaf_var = Vec::<UInt8<MNT4Fr>>::new_witness(cs.clone(), || Ok(leaf)).unwrap();
+        let leaf_var = Vec::<UInt8<MNT6Fq>>::new_witness(cs.clone(), || Ok(leaf)).unwrap();
 
         // Allocate the nodes in the circuit.
         let nodes_var = Vec::<G1Var>::new_witness(cs.clone(), || Ok(nodes)).unwrap();
 
         // Allocate the path in the circuit.
-        let path_var = Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(path)).unwrap();
+        let path_var = Vec::<Boolean<MNT6Fq>>::new_witness(cs.clone(), || Ok(path)).unwrap();
 
         // Allocate the root in the circuit.
-        let root_var = Vec::<UInt8<MNT4Fr>>::new_witness(cs.clone(), || Ok(root)).unwrap();
+        let root_var = Vec::<UInt8<MNT6Fq>>::new_witness(cs.clone(), || Ok(root)).unwrap();
 
         // Allocate the Pedersen generators in the circuit.
         let generators_var =

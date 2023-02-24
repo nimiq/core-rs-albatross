@@ -74,9 +74,10 @@ where
 
 #[cfg(test)]
 mod tests_mnt4 {
-    use ark_mnt4_753::constraints::{G1Var, G2Var};
-    use ark_mnt4_753::{G1Projective, G2Projective};
-    use ark_mnt6_753::Fr as MNT6Fr;
+    use ark_mnt4_753::{
+        constraints::{G1Var, G2Var},
+        Fq as MNT4Fq, G1Projective, G2Projective,
+    };
     use ark_r1cs_std::{prelude::AllocVar, R1CSVar};
     use ark_relations::r1cs::ConstraintSystem;
     use ark_std::{test_rng, UniformRand};
@@ -89,7 +90,7 @@ mod tests_mnt4 {
     #[test]
     fn serialization_g1_mnt4_works() {
         // Initialize the constraint system.
-        let cs = ConstraintSystem::<MNT6Fr>::new_ref();
+        let cs = ConstraintSystem::<MNT4Fq>::new_ref();
 
         // Create random number generator.
         let rng = &mut test_rng();
@@ -116,7 +117,7 @@ mod tests_mnt4 {
     #[test]
     fn serialization_g2_mnt4_works() {
         // Initialize the constraint system.
-        let cs = ConstraintSystem::<MNT6Fr>::new_ref();
+        let cs = ConstraintSystem::<MNT4Fq>::new_ref();
 
         // Create random number generator.
         let rng = &mut test_rng();
@@ -148,8 +149,8 @@ mod tests_mnt4 {
 
 #[cfg(test)]
 mod tests_mnt6 {
-    use ark_mnt4_753::Fr as MNT4Fr;
     use ark_mnt6_753::constraints::{G1Var, G2Var};
+    use ark_mnt6_753::Fq as MNT4Fq;
     use ark_mnt6_753::{G1Projective, G2Projective};
     use ark_r1cs_std::{prelude::AllocVar, R1CSVar};
     use ark_relations::r1cs::ConstraintSystem;
@@ -163,7 +164,7 @@ mod tests_mnt6 {
     #[test]
     fn serialization_g1_mnt6_works() {
         // Initialize the constraint system.
-        let cs = ConstraintSystem::<MNT4Fr>::new_ref();
+        let cs = ConstraintSystem::<MNT4Fq>::new_ref();
 
         // Create random number generator.
         let rng = &mut test_rng();
@@ -190,7 +191,7 @@ mod tests_mnt6 {
     #[test]
     fn serialization_g2_mnt6_works() {
         // Initialize the constraint system.
-        let cs = ConstraintSystem::<MNT4Fr>::new_ref();
+        let cs = ConstraintSystem::<MNT4Fq>::new_ref();
 
         // Create random number generator.
         let rng = &mut test_rng();
