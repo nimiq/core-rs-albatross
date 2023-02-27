@@ -10,10 +10,38 @@ init().then(async () => {
     const client = await config.instantiateClient();
     window.client = client; // Prevent garbage collection and for playing around
 
-    client.subscribe_consensus();
-    client.subscribe_blocks();
-    client.subscribe_peers();
-    // client.subscribe_statistics();
+    client.addConsensusChangedListener(
+        (state) => {
+            console.log(`Consensus ${state.toUpperCase()}`);
+        },
+    );
+
+    client.addHeadChangedListener(
+        async (hash, reason, revertedBlocks, adoptedBlocks) => {
+            const serializedBlock = await client.getBlock(hash);
+
+            const { blockNumber, timestamp } = __unserializeBlock(serializedBlock);
+            const rebranchLength = revertedBlocks.length;
+
+            console.log([
+                'Blockchain:',
+                reason,
+                ...(rebranchLength ? [rebranchLength] : []),
+                'at',
+                blockNumber,
+                `(${new Date(timestamp).toISOString().substring(0, 19).replace('T', ' ')} UTC)`
+            ].join(' '));
+        },
+    );
+
+    client.addPeerChangedListener((peerId, reason, numPeers, peerInfo) => {
+        if (peerInfo) {
+            const host = peerInfo.address.split('/')[2];
+            console.log(`Peer ${reason}: [${peerInfo.type}] ${peerId}@${host} - now ${numPeers} peers connected`);
+        } else {
+            console.log(`Peer ${reason}: ${peerId} - now ${numPeers} peers connected`);
+        }
+    });
 
     /**
      * @param {string} privateKey
@@ -134,79 +162,39 @@ init().then(async () => {
     }
 });
 
-window.__wasm_imports = {
-    /**
-     * @param {boolean} established
-     */
-    consensus_listener(established) {
-        console.log(`Consensus: ${established ? 'established =)' : 'lost =('}`);
-    },
+/**
+ * @param {Uint8Array} serializedBlock
+ */
+function __unserializeBlock(serializedBlock) {
+    // Rudimentary block parsing - TODO: Properly deserialize the whole light block
 
-    /**
-     * @param {string} type
-     * @param {Uint8Array} serializedBlock
-     * @param {number?} rebranchLength
-     */
-    block_listener(type, serializedBlock, rebranchLength) {
-        // Rudimentary block parsing - TODO: Properly deserialize the whole light block
+    /** @type {Uint8Array} */
+    let blockNumberBytes;
 
-        /** @type {Uint8Array} */
-        let blockNumberBytes;
+    /** @type {Uint8Array} */
+    let timestampBytes;
 
-        /** @type {Uint8Array} */
-        let timestampBytes;
+    const blockType = serializedBlock[0];
+    if (blockType === 1) { // Macro block
+        const _version = serializedBlock.subarray(1, 1 + 2); // u16
+        blockNumberBytes = serializedBlock.subarray(3, 3 + 4); // u32
+        const _round = serializedBlock.subarray(7, 7 + 4); // u32
+        timestampBytes = serializedBlock.subarray(11, 11 + 8); // u64
+    } else if (blockType === 2) { // Micro block
+        const _version = serializedBlock.subarray(1, 1 + 2); // u16
+        blockNumberBytes = serializedBlock.subarray(3, 3 + 4); // u32
+        timestampBytes = serializedBlock.subarray(7, 7 + 8); // u64
+    } else {
+        throw new Error(`Invalid block type: ${blockType}`);
+    }
 
-        const blockType = serializedBlock[0];
-        if (blockType === 1) {
-            // Macro block
-            const _version = serializedBlock.subarray(1, 1 + 2); // u16
-            blockNumberBytes = serializedBlock.subarray(3, 3 + 4); // u32
-            const _round = serializedBlock.subarray(7, 7 + 4); // u32
-            timestampBytes = serializedBlock.subarray(11, 11 + 8); // u64
-        } else if (blockType === 2) {
-            // Micro block
-            const _version = serializedBlock.subarray(1, 1 + 2); // u16
-            blockNumberBytes = serializedBlock.subarray(3, 3 + 4); // u32
-            timestampBytes = serializedBlock.subarray(7, 7 + 8); // u64
-        } else {
-            throw new Error(`Invalid block type: ${blockType}`);
-        }
+    const blockNumber = new Uint32Array(new Uint8Array(blockNumberBytes).reverse().buffer)[0];
 
-        const blockNumber = new Uint32Array(new Uint8Array(blockNumberBytes).reverse().buffer)[0];
-        const timestampBig = new BigUint64Array(new Uint8Array(timestampBytes).reverse().buffer)[0];
-        const timestamp = parseInt(timestampBig.toString(10));
+    const timestampBig = new BigUint64Array(new Uint8Array(timestampBytes).reverse().buffer)[0];
+    const timestamp = parseInt(timestampBig.toString(10));
 
-        console.log([
-            'Blockchain:',
-            type,
-            ...(rebranchLength ? [rebranchLength] : []),
-            'at',
-            blockNumber,
-            `(${new Date(timestamp).toISOString().substring(0, 19).replace('T', ' ')} UTC)`
-        ].join(' '));
-    },
-
-    /**
-     * @param {'joined' | 'left'} eventType
-     * @param {string} peerId
-     * @param {number} numPeers
-     * @param {{ type: string, address: string } | null} peerInfo
-     */
-    peer_listener(eventType, peerId, numPeers, peerInfo) {
-        if (peerInfo) {
-            const host = peerInfo.address.split('/')[2];
-            console.log(`Peer ${eventType}: [${peerInfo.type}] ${peerId}@${host} - now ${numPeers} peers connected`);
-        } else {
-            console.log(`Peer ${eventType}: ${peerId} - now ${numPeers} peers connected`);
-        }
-    },
-
-    /**
-     * @param {boolean} established
-     * @param {number} blockNumber
-     * @param {number} numPeers
-     */
-    statistics_listener(established, blockNumber, numPeers) {
-        console.log({ established, blockNumber, numPeers });
-    },
+    return {
+        blockNumber,
+        timestamp,
+    };
 }

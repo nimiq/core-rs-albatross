@@ -1,7 +1,7 @@
-use std::str::FromStr;
+use std::{cell::RefCell, collections::HashMap, rc::Rc, str::FromStr};
 
 use futures::StreamExt;
-use gloo_timers::future::IntervalStream;
+use js_sys::{Array, Uint8Array};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 
@@ -18,7 +18,6 @@ pub use nimiq::{
 
 use beserial::{Deserialize, Serialize};
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent};
-use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_consensus::ConsensusEvent;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{
@@ -113,18 +112,22 @@ impl ClientConfiguration {
 /// ```
 #[wasm_bindgen]
 pub struct Client {
-    #[wasm_bindgen(skip)]
-    pub inner: nimiq::client::Client,
+    inner: nimiq::client::Client,
 
     /// The network ID that the client is connecting to.
     #[wasm_bindgen(readonly, js_name = networkId)]
     pub network_id: u8,
+
+    listener_id: usize,
+    consensus_changed_listeners: Rc<RefCell<HashMap<usize, js_sys::Function>>>,
+    head_changed_listeners: Rc<RefCell<HashMap<usize, js_sys::Function>>>,
+    peer_changed_listeners: Rc<RefCell<HashMap<usize, js_sys::Function>>>,
 }
 
 #[wasm_bindgen]
 impl Client {
-    /// Creates a new WebClient that automatically starts connecting to the network.
-    pub async fn create(web_config: &ClientConfiguration) -> Client {
+    /// Creates a new Client that automatically starts connecting to the network.
+    pub async fn create(web_config: &ClientConfiguration) -> Self {
         let log_settings = LogSettings {
             level: Some(LevelFilter::from_str(web_config.log_level.as_str()).unwrap()),
             ..Default::default()
@@ -181,152 +184,81 @@ impl Client {
         let zkp_component = client.take_zkp_component().unwrap();
         spawn_local(zkp_component);
 
-        Client {
+        let client = Client {
             inner: client,
             network_id,
-        }
+            listener_id: 0,
+            consensus_changed_listeners: Rc::new(RefCell::new(HashMap::with_capacity(1))),
+            head_changed_listeners: Rc::new(RefCell::new(HashMap::with_capacity(1))),
+            peer_changed_listeners: Rc::new(RefCell::new(HashMap::with_capacity(1))),
+        };
+
+        client.setup_consensus_events();
+        client.setup_blockchain_events();
+        client.setup_network_events();
+
+        client
     }
 
-    /// Starts the consensus event stream.
-    ///
-    /// Updates are emitted via `__wasm_imports.consensus_listener`.
-    pub async fn subscribe_consensus(&self) {
-        let mut consensus_events = self.inner.consensus_proxy().subscribe_events();
+    /// Adds an event listener for consensus-change events, such as when consensus is established or lost.
+    #[wasm_bindgen(js_name = addConsensusChangedListener)]
+    pub fn add_consensus_changed_listener(
+        &mut self,
+        listener: ConsensusChangedListener,
+    ) -> Result<usize, JsError> {
+        let listener = listener
+            .dyn_into::<js_sys::Function>()
+            .map_err(|_| JsError::new("listener is not a function"))?;
 
-        loop {
-            match consensus_events.next().await {
-                Some(Ok(ConsensusEvent::Established)) => {
-                    consensus_listener(true);
-                }
-                Some(Ok(ConsensusEvent::Lost)) => {
-                    consensus_listener(false);
-                }
-                Some(Err(_error)) => {} // Ignore stream errors
-                None => {
-                    break;
-                }
-            }
-        }
+        let listener_id = self.next_listener_id();
+        self.consensus_changed_listeners
+            .borrow_mut()
+            .insert(listener_id, listener);
+        Ok(listener_id)
     }
 
-    /// Starts the blockchain head event stream.
-    ///
-    /// Updates are emitted via `__wasm_imports.block_listener`.
-    pub async fn subscribe_blocks(&self) {
-        let blockchain = self.inner.consensus_proxy().blockchain;
-        let mut blockchain_events = blockchain.read().notifier_as_stream();
+    /// Adds an event listener for new blocks added to the blockchain.
+    #[wasm_bindgen(js_name = addHeadChangedListener)]
+    pub fn add_head_changed_listener(
+        &mut self,
+        listener: HeadChangedListner,
+    ) -> Result<usize, JsError> {
+        let listener = listener
+            .dyn_into::<js_sys::Function>()
+            .map_err(|_| JsError::new("listener is not a function"))?;
 
-        fn emit_block(
-            blockchain: &BlockchainProxy,
-            ty: &str,
-            hash: Blake2bHash,
-            rebranch_length: Option<usize>,
-        ) {
-            if let Ok(block) = blockchain.read().get_block(&hash, false) {
-                block_listener(ty, block.header().serialize_to_vec(), rebranch_length);
-            }
-        }
-
-        loop {
-            match blockchain_events.next().await {
-                Some(BlockchainEvent::Extended(hash)) => {
-                    emit_block(&blockchain, "extended", hash, None);
-                }
-                Some(BlockchainEvent::HistoryAdopted(hash)) => {
-                    emit_block(&blockchain, "history-adopted", hash, None);
-                }
-                Some(BlockchainEvent::EpochFinalized(hash)) => {
-                    emit_block(&blockchain, "epoch-finalized", hash, None);
-                }
-                Some(BlockchainEvent::Finalized(hash)) => {
-                    emit_block(&blockchain, "finalized", hash, None);
-                }
-                Some(BlockchainEvent::Rebranched(_, new_chain)) => {
-                    emit_block(
-                        &blockchain,
-                        "rebranched",
-                        new_chain.last().unwrap().to_owned().0,
-                        Some(new_chain.len()),
-                    );
-                }
-                None => {
-                    break;
-                }
-            }
-        }
+        let listener_id = self.next_listener_id();
+        self.head_changed_listeners
+            .borrow_mut()
+            .insert(listener_id, listener);
+        Ok(listener_id)
     }
 
-    /// Starts the peer event stream.
-    ///
-    /// Updates are emitted via `__wasm_imports.peer_listener`.
-    pub async fn subscribe_peers(&self) {
-        let network = self.inner.network();
-        let mut network_events = network.subscribe_events();
+    /// Adds an event listener for peer-change events, such as when a new peer joins, or a peer leaves.
+    #[wasm_bindgen(js_name = addPeerChangedListener)]
+    pub fn add_peer_changed_listener(
+        &mut self,
+        listener: PeerChangedListner,
+    ) -> Result<usize, JsError> {
+        let listener = listener
+            .dyn_into::<js_sys::Function>()
+            .map_err(|_| JsError::new("listener is not a function"))?;
 
-        loop {
-            match network_events.next().await {
-                Some(Ok(NetworkEvent::PeerJoined(peer_id, peer_info))) => {
-                    peer_listener(
-                        "joined",
-                        peer_id.to_string(),
-                        network.peer_count(),
-                        Some(PeerInfo::from_native(peer_info)),
-                    );
-                }
-                Some(Ok(NetworkEvent::PeerLeft(peer_id))) => {
-                    peer_listener("left", peer_id.to_string(), network.peer_count(), None);
-                }
-                Some(Err(_error)) => {} // Ignore stream errors
-                None => {
-                    break;
-                }
-            }
-        }
+        let listener_id = self.next_listener_id();
+        self.peer_changed_listeners
+            .borrow_mut()
+            .insert(listener_id, listener);
+        Ok(listener_id)
     }
 
-    /// Starts an interval to report statistics.
-    ///
-    /// Updates are emitted via `__wasm_imports.statistics_listener`.
-    pub async fn subscribe_statistics(&self) {
-        let statistics_interval = LogSettings::default_statistics_interval();
-
-        if statistics_interval == 0 {
-            return;
-        }
-
-        // Run periodically
-        let interval = IntervalStream::new(statistics_interval as u32 * 1000);
-
-        let consensus = self.inner.consensus_proxy();
-
-        interval
-            .for_each(|_| async {
-                match self.inner.network().network_info().await {
-                    Ok(network_info) => {
-                        let head = self.inner.blockchain_head();
-
-                        log::debug!(
-                            block_number = head.block_number(),
-                            num_peers = network_info.num_peers(),
-                            status = consensus.is_established(),
-                            "Consensus status: {:?} - Head: #{}- {}",
-                            consensus.is_established(),
-                            head.block_number(),
-                            head.hash(),
-                        );
-
-                        statistics_listener(
-                            consensus.is_established(),
-                            head.block_number(),
-                            network_info.num_peers(),
-                        );
-                    }
-                    Err(err) => {
-                        log::error!("Error retrieving NetworkInfo: {:?}", err);
-                    }
-                };
-            })
-            .await;
+    /// Removes an event listener by its handle.
+    #[wasm_bindgen(js_name = removeListener)]
+    pub fn remove_listener(&self, handle: usize) {
+        self.consensus_changed_listeners
+            .borrow_mut()
+            .remove(&handle);
+        self.head_changed_listeners.borrow_mut().remove(&handle);
+        self.peer_changed_listeners.borrow_mut().remove(&handle);
     }
 
     /// Returns if the client currently has consensus with the network.
@@ -429,23 +361,171 @@ impl Client {
 
         Ok(())
     }
+
+    fn setup_consensus_events(&self) {
+        let mut consensus_events = self.inner.consensus_proxy().subscribe_events();
+
+        let listeners_rc = Rc::clone(&self.consensus_changed_listeners);
+        let this = JsValue::null();
+
+        spawn_local(async move {
+            loop {
+                let state = match consensus_events.next().await {
+                    Some(Ok(ConsensusEvent::Established)) => Some("established"),
+                    Some(Ok(ConsensusEvent::Lost)) => Some("connecting"),
+                    Some(Err(_)) => {
+                        None // Ignore stream errors
+                    }
+                    None => {
+                        break;
+                    }
+                };
+
+                if state.is_none() {
+                    continue;
+                }
+
+                let state = JsValue::from(state.unwrap());
+                for listener in listeners_rc.borrow().values() {
+                    let _ = listener.call1(&this, &state);
+                }
+            }
+        });
+    }
+
+    fn setup_blockchain_events(&self) {
+        let blockchain = self.inner.consensus_proxy().blockchain;
+        let mut blockchain_events = blockchain.read().notifier_as_stream();
+
+        let listeners_rc = Rc::clone(&self.head_changed_listeners);
+
+        let this = JsValue::null();
+
+        spawn_local(async move {
+            loop {
+                let (hash, reason, reverted_blocks, adopted_blocks) =
+                    match blockchain_events.next().await {
+                        Some(BlockchainEvent::Extended(hash)) => {
+                            let adopted_blocks = Array::new();
+                            adopted_blocks.push(&hash.to_hex().into());
+
+                            (hash, "extended", Array::new(), adopted_blocks)
+                        }
+                        Some(BlockchainEvent::HistoryAdopted(hash)) => {
+                            let adopted_blocks = Array::new();
+                            adopted_blocks.push(&hash.to_hex().into());
+
+                            (hash, "history-adopted", Array::new(), adopted_blocks)
+                        }
+                        Some(BlockchainEvent::EpochFinalized(hash)) => {
+                            let adopted_blocks = Array::new();
+                            adopted_blocks.push(&hash.to_hex().into());
+
+                            (hash, "epoch-finalized", Array::new(), adopted_blocks)
+                        }
+                        Some(BlockchainEvent::Finalized(hash)) => {
+                            let adopted_blocks = Array::new();
+                            adopted_blocks.push(&hash.to_hex().into());
+
+                            (hash, "finalized", Array::new(), adopted_blocks)
+                        }
+                        Some(BlockchainEvent::Rebranched(old_chain, new_chain)) => {
+                            let hash = &new_chain.last().unwrap().0.clone();
+
+                            let reverted_blocks = Array::new();
+                            for (h, _) in old_chain {
+                                reverted_blocks.push(&h.to_hex().into());
+                            }
+
+                            let adopted_blocks = Array::new();
+                            for (h, _) in new_chain {
+                                adopted_blocks.push(&h.to_hex().into());
+                            }
+
+                            (
+                                hash.to_owned(),
+                                "rebranched",
+                                reverted_blocks,
+                                adopted_blocks,
+                            )
+                        }
+                        None => {
+                            break;
+                        }
+                    };
+
+                let args = Array::new();
+                args.push(&hash.to_hex().into());
+                args.push(&reason.into());
+                args.push(&reverted_blocks);
+                args.push(&adopted_blocks);
+
+                for listener in listeners_rc.borrow().values() {
+                    let _ = listener.apply(&this, &args);
+                }
+            }
+        });
+    }
+
+    fn setup_network_events(&self) {
+        let network = self.inner.network();
+        let mut network_events = network.subscribe_events();
+
+        let listeners_rc = Rc::clone(&self.peer_changed_listeners);
+        let this = JsValue::null();
+
+        spawn_local(async move {
+            loop {
+                let details = match network_events.next().await {
+                    Some(Ok(NetworkEvent::PeerJoined(peer_id, peer_info))) => Some((
+                        peer_id.to_string(),
+                        "joined",
+                        Some(PeerInfo::from_native(peer_info)),
+                    )),
+                    Some(Ok(NetworkEvent::PeerLeft(peer_id))) => {
+                        Some((peer_id.to_string(), "left", None))
+                    }
+                    Some(Err(_error)) => {
+                        None // Ignore stream errors
+                    }
+                    None => {
+                        break;
+                    }
+                };
+
+                if let Some((peer_id, reason, peer_info)) = details {
+                    let args = Array::new();
+                    args.push(&peer_id.into());
+                    args.push(&reason.into());
+                    args.push(&network.peer_count().into());
+                    args.push(&peer_info.into());
+
+                    for listener in listeners_rc.borrow().values() {
+                        let _ = listener.apply(&this, &args);
+                    }
+                }
+            }
+        });
+    }
+
+    fn next_listener_id(&mut self) -> usize {
+        self.listener_id += 1;
+        self.listener_id
+    }
 }
 
 #[wasm_bindgen]
 extern "C" {
-    /// Imported Javascript function to receive consensus status
-    #[wasm_bindgen(js_namespace = __wasm_imports)]
-    fn consensus_listener(established: bool);
+    #[wasm_bindgen(typescript_type = "(state: string) => any")]
+    pub type ConsensusChangedListener;
 
-    /// Imported Javascript function to receive blockchain head updates
-    #[wasm_bindgen(js_namespace = __wasm_imports)]
-    fn block_listener(ty: &str, serialized_block: Vec<u8>, rebranch_length: Option<usize>);
+    #[wasm_bindgen(
+        typescript_type = "(hash: string, reason: string, reverted_blocks: string[], adopted_blocks: string[]) => any"
+    )]
+    pub type HeadChangedListner;
 
-    /// Imported Javascript function to receive peer updates
-    #[wasm_bindgen(js_namespace = __wasm_imports)]
-    fn peer_listener(ty: &str, peer_id: String, num_peers: usize, peer_info: Option<PeerInfo>);
-
-    /// Imported Javascript function to receive statistics
-    #[wasm_bindgen(js_namespace = __wasm_imports)]
-    fn statistics_listener(established: bool, block_number: u32, num_peers: usize);
+    #[wasm_bindgen(
+        typescript_type = "(peer_id: string, reason: 'joined' | 'left', peer_count: number, peer_info?: PeerInfo) => any"
+    )]
+    pub type PeerChangedListner;
 }
