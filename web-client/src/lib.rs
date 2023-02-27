@@ -330,15 +330,67 @@ impl Client {
     }
 
     /// Returns if the client currently has consensus with the network.
-    #[wasm_bindgen(js_name = isEstablished)]
-    pub fn is_established(&self) -> bool {
+    #[wasm_bindgen(js_name = isConsensusEstablished)]
+    pub fn is_consensus_established(&self) -> bool {
         self.inner.consensus_proxy().is_established()
     }
 
+    /// Returns the block hash of the current blockchain head.
+    #[wasm_bindgen(js_name = getHeadHash)]
+    pub fn get_head_hash(&self) -> String {
+        self.inner.blockchain_head().hash().to_hex()
+    }
+
     /// Returns the block number of the current blockchain head.
-    #[wasm_bindgen(js_name = blockNumber)]
-    pub fn block_number(&self) -> u32 {
+    #[wasm_bindgen(js_name = getHeadHeight)]
+    pub fn get_head_height(&self) -> u32 {
         self.inner.blockchain_head().block_number()
+    }
+
+    // TODO: Return a Block struct
+    /// Returns the current blockchain head block.
+    /// Note that the web client is a light client and does not have block bodies, i.e. no transactions.
+    #[wasm_bindgen(js_name = getHeadBlock)]
+    pub fn get_head_block(&self) -> Vec<u8> {
+        let block = self.inner.blockchain_head();
+        block.header().serialize_to_vec()
+    }
+
+    // TODO: Return a Block struct
+    /// Fetches a block by its hash.
+    ///
+    /// Throws if the client does not have the block.
+    ///
+    /// Fetching blocks from the network is not yet available.
+    #[wasm_bindgen(js_name = getBlock)]
+    pub async fn get_block(&self, hash: &str) -> Result<Uint8Array, JsError> {
+        let hash = Blake2bHash::from_str(hash)?;
+        let block = self
+            .inner
+            .consensus_proxy()
+            .blockchain
+            .read()
+            .get_block(&hash, false)?;
+        let serialized = block.header().serialize_to_vec();
+        Ok(Uint8Array::from(serialized.as_slice()))
+    }
+
+    // TODO: Return a Block struct
+    /// Fetches a block by its height (block number).
+    ///
+    /// Throws if the client does not have the block.
+    ///
+    /// Fetching blocks from the network is not yet available.
+    #[wasm_bindgen(js_name = getBlockAt)]
+    pub async fn get_block_at(&self, height: u32) -> Result<Uint8Array, JsError> {
+        let block = self
+            .inner
+            .consensus_proxy()
+            .blockchain
+            .read()
+            .get_block_at(height, false)?;
+        let serialized = block.header().serialize_to_vec();
+        Ok(Uint8Array::from(serialized.as_slice()))
     }
 
     /// Instantiates a transaction builder class that provides helper methods to create transactions.
