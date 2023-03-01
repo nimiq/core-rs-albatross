@@ -20,14 +20,9 @@ jobs:
         key: cargo-${{ hashFiles('**/Cargo.toml') }}
     - uses: dtolnay/rust-toolchain@stable
       with:
-        profile: minimal
         toolchain: stable
-        override: true
         components: rustfmt
-    - uses: actions-rs/cargo@v1
-      with:
-        command: fmt
-        args: --all -- --check
+    - run: cargo fmt --all -- --check
 
   test:
     runs-on: ubuntu-22.04
@@ -45,35 +40,21 @@ jobs:
         key: cargo-${{ hashFiles('**/Cargo.toml') }}
     - uses: dtolnay/rust-toolchain@stable
       with:
-        profile: minimal
         toolchain: stable
-        override: true
         components: llvm-tools-preview
     - name: Install Protoc
       run: sudo apt-get install protobuf-compiler
     - name: Install cargo-llvm-cov
-      uses: actions-rs/cargo@v1
-      with:
-        command: install
-        args: cargo-llvm-cov
+      run: cargo install cargo-llvm-cov
     - name: Remove possible stale artifacts
-      uses: actions-rs/cargo@v1
-      with:
-        command: llvm-cov
-        args: clean --workspace
+      run: cargo llvm-cov clean --workspace
     - name: Run test with coverage instrumentation
-      uses: actions-rs/cargo@v1
-      with:
-        command: llvm-cov
-        # Fixme: --doctest is not supported in stable. See:
-        # https://github.com/taiki-e/cargo-llvm-cov/tree/7448e48b438797efb446a98ebd8ff22d3fae5ebe#known-limitations
-        #args: --all-features --doctests
-        args: --all-features
+      run: cargo llvm-cov --all-features
+      # Fixme: --doctest is not supported in stable. See:
+      # https://github.com/taiki-e/cargo-llvm-cov/tree/7448e48b438797efb446a98ebd8ff22d3fae5ebe#known-limitations
+      # run: cargo llvm-cov --all-features --doctests
     - name: Generate coverage report
-      uses: actions-rs/cargo@v1
-      with:
-        command: llvm-cov
-        args: report --lcov --output-path coverage.lcov
+      run: cargo llvm-cov report --lcov --output-path coverage.lcov
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
       with:
@@ -98,9 +79,7 @@ jobs:
         key: cargo-${{ hashFiles('**/Cargo.toml') }}
     - uses: dtolnay/rust-toolchain@stable
       with:
-        profile: minimal
         toolchain: stable
-        override: true
         components: clippy
     - name: Install Protoc
       run: sudo apt-get install protobuf-compiler
@@ -126,16 +105,11 @@ jobs:
         key: cargo-${{ hashFiles('**/Cargo.toml') }}
     - uses: dtolnay/rust-toolchain@stable
       with:
-        profile: minimal
         toolchain: stable
-        override: true
     - name: Install Protoc
       run: sudo apt-get install protobuf-compiler
     - name: Install wasm-pack
-      uses: actions-rs/cargo@v1
-      with:
-        command: install
-        args: wasm-pack
+      run: cargo install wasm-pack
     - name: Compile to wasm and generate bindings
       working-directory: ./web-client
       run: wasm-pack build --target web
@@ -163,14 +137,11 @@ jobs:
     - name: Set up Rust toolchain
       uses: dtolnay/rust-toolchain@stable
       with:
-        profile: minimal
         toolchain: stable
-        override: true
     - name: Install Protoc
       run: sudo apt-get install protobuf-compiler
-    - uses: actions-rs/cargo@v1
-      with:
-        command: build
+    - name: Build the code
+      run: cargo build
     - name: Executes the 4 validators reconnecting scenario
       run: |
           python3 scripts/devnet/devnet.py -t .github/devnet_topologies/four_validators.toml -r 1

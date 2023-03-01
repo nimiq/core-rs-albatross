@@ -21,9 +21,7 @@ jobs:
     - name: Set up Rust toolchain
       uses: dtolnay/rust-toolchain@stable
       with:
-        profile: minimal
         toolchain: stable
-        override: true
     - name: Install Protoc
       run: sudo apt-get install protobuf-compiler
     - name: Set up python
