@@ -1,3 +1,4 @@
+use serde::ser::SerializeStruct;
 use wasm_bindgen::prelude::*;
 
 use beserial::Serialize;
@@ -448,10 +449,7 @@ enum TransactionState {
     _Expired,
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct PlainTransactionDetails {
-    #[serde(flatten)]
     transaction: PlainTransaction,
 
     pub state: String,
@@ -459,6 +457,45 @@ pub struct PlainTransactionDetails {
     pub block_height: Option<u32>,
     pub confirmations: Option<u32>,
     pub timestamp: Option<u64>,
+}
+
+// Manually implement serde::Serialize trait to ensure struct is serialized into a JS Object and not a Map.
+//
+// Unfortunately, serde cannot serialize a struct that includes a #[serde(flatten)] annotation into an Object,
+// and the Github issue for it is closed as "wontfix": https://github.com/serde-rs/serde/issues/1346
+impl serde::Serialize for PlainTransactionDetails {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut plain = serializer.serialize_struct("PlainTransactionDetails", 21)?;
+        plain.serialize_field("transactionHash", &self.transaction.transaction_hash)?;
+        plain.serialize_field("format", &self.transaction.format)?;
+        plain.serialize_field("sender", &self.transaction.sender)?;
+        plain.serialize_field("senderType", &self.transaction.sender_type)?;
+        plain.serialize_field("recipient", &self.transaction.recipient)?;
+        plain.serialize_field("recipientType", &self.transaction.recipient_type)?;
+        plain.serialize_field("value", &self.transaction.value)?;
+        plain.serialize_field("fee", &self.transaction.fee)?;
+        plain.serialize_field("feePerByte", &self.transaction.fee_per_byte)?;
+        plain.serialize_field(
+            "validityStartHeight",
+            &self.transaction.validity_start_height,
+        )?;
+        plain.serialize_field("network", &self.transaction.network)?;
+        plain.serialize_field("flags", &self.transaction.flags)?;
+        plain.serialize_field("data", &self.transaction.data)?;
+        plain.serialize_field("proof", &self.transaction.proof)?;
+        plain.serialize_field("size", &self.transaction.size)?;
+        plain.serialize_field("valid", &self.transaction.valid)?;
+
+        plain.serialize_field("state", &self.state)?;
+        plain.serialize_field("executionResult", &self.execution_result)?;
+        plain.serialize_field("blockHeight", &self.block_height)?;
+        plain.serialize_field("confirmations", &self.confirmations)?;
+        plain.serialize_field("timestamp", &self.timestamp)?;
+        plain.end()
+    }
 }
 
 #[wasm_bindgen(typescript_custom_section)]
