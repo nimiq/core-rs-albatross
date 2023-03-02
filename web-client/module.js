@@ -52,7 +52,7 @@ init().then(async () => {
      * @returns {Promise<string>}
      */
     window.sendBasicTransaction = async (privateKey, recipient, amount, message, fee = 0) => {
-        if (!client.isEstablished()) {
+        if (!client.isConsensusEstablished()) {
             throw new Error('Consensus not yet established');
         }
 
@@ -60,6 +60,7 @@ init().then(async () => {
 
         const transactionBuilder = client.transactionBuilder();
 
+        /** @type {Nimiq.Transaction} */
         let transaction;
         if (message) {
             const messageBytes = new TextEncoder().encode(message);
@@ -92,7 +93,7 @@ init().then(async () => {
      * @returns {Promise<string>}
      */
     window.sendCreateStakerTransaction = async (privateKey, delegation, amount, fee = 0) => {
-        if (!client.isEstablished()) {
+        if (!client.isConsensusEstablished()) {
             throw new Error('Consensus not yet established');
         }
 
@@ -118,7 +119,7 @@ init().then(async () => {
      * @returns {Promise<string>}
      */
     window.sendUpdateStakerTransaction = async (privateKey, newDelegation, fee = 0) => {
-        if (!client.isEstablished()) {
+        if (!client.isConsensusEstablished()) {
             throw new Error('Consensus not yet established');
         }
 
@@ -143,7 +144,7 @@ init().then(async () => {
      * @returns {Promise<string>}
      */
     window.sendUnstakeTransaction = async (privateKey, amount, fee = 0) => {
-        if (!client.isEstablished()) {
+        if (!client.isConsensusEstablished()) {
             throw new Error('Consensus not yet established');
         }
 
