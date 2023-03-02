@@ -192,8 +192,20 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
             match result {
                 (Ok(Some(block)), peer_id) => {
                     if self.peer_requests.get(&peer_id).is_none() {
-                        log::trace!(%peer_id, "Obtained a None peer request, this is not expected");
-                        panic!("We expected a request for this peer");
+                        // If we don't have any pending requests from this peer, we proceed requesting epoch ids
+                        let future = Self::request_epoch_ids(
+                            self.blockchain.clone(),
+                            Arc::clone(&self.network),
+                            peer_id,
+                        )
+                        .boxed();
+                        self.epoch_ids_stream.push(future);
+
+                        // Pushing the future to FuturesUnordered above does not wake the task that
+                        // polls `epoch_ids_stream`. Therefore, we need to wake the task manually.
+                        if let Some(waker) = &self.waker {
+                            waker.wake_by_ref();
+                        }
                     }
 
                     let peer_requests = self.peer_requests.get_mut(&peer_id).unwrap();
