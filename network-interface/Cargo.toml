@@ -25,7 +25,7 @@ libp2p = { git = "https://github.com/jsdanielh/rust-libp2p.git", default-feature
 log = { package = "tracing", version = "0.1", features = ["log"] }
 serde = { version = "1.0", features = ["derive"], optional = true }
 thiserror = "1.0"
-tokio = { version = "1.25", features = ["rt"] }
+tokio = { version = "1.26", features = ["rt"] }
 tokio-stream = { version = "0.1", features = ["default", "sync"] }
 
 beserial = { path = "../beserial", features = ["derive", "libp2p"] }
