@@ -314,20 +314,34 @@ impl Handle<ResponseTransactionsProof, Arc<RwLock<Blockchain>>> for RequestTrans
                 .history_store
                 .prove(Policy::epoch_at(self.block_number), hashes, None);
 
-        //If we obtained a proof, we need to supply the corresponding block
+        // If we obtained a proof, we need to supply the corresponding block
         if proof.is_some() {
-            block = blockchain
-                .chain_store
-                .get_block_at(self.block_number, false, None)
-                .ok()
-                .and_then(|block| {
-                    if block.is_macro() {
-                        // We expect a macro block
-                        Some(block)
-                    } else {
-                        None
-                    }
-                });
+            // If the block_number to proof is in a finalized epoch, use the epoch's finalization block
+            let election_block_number = if Policy::is_election_block_at(self.block_number) {
+                self.block_number
+            } else {
+                Policy::election_block_after(self.block_number)
+            };
+
+            if election_block_number <= blockchain.block_number() {
+                block = blockchain
+                    .chain_store
+                    .get_block_at(election_block_number, false, None)
+                    .ok();
+            } else {
+                // Otherwise, the transaction proof was made at the current history store state, so return the current
+                // head block to prove it.
+                let mut head = blockchain.head();
+
+                // Convert to light block by removing the block body
+                match head {
+                    Block::Macro(ref mut block) => block.body = None,
+                    Block::Micro(ref mut block) => block.body = None,
+                }
+
+                block = Some(head);
+            }
+
             if block.is_none() {
                 log::error!("We are supplying a transaction proof but not a block, which can be interpreted as malicious behaviour");
             }

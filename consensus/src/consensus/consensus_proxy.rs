@@ -123,8 +123,9 @@ impl<N: Network> ConsensusProxy<N> {
                                             .map_or(false, |result| result);
 
                                         if verification_result {
-                                            verified_transactions
-                                                .insert(transaction.tx_hash(), transaction);
+                                            for tx in proof.history {
+                                                verified_transactions.insert(tx.tx_hash(), tx);
+                                            }
                                         } else {
                                             // The proof didn't verify so we disconnect from this peer
                                             log::debug!(peer=%peer_id,"Disconnecting from peer because the transaction proof didn't verify");
