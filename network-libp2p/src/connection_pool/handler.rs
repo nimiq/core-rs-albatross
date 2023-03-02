@@ -12,14 +12,14 @@ use thiserror::Error;
 pub struct ConnectionPoolHandler {}
 
 #[derive(Debug, Error)]
-pub enum HandlerError {}
+pub enum ConnectionPoolHandlerError {}
 
 // Implement ConnectionHandler without an actual protocol, which
 // implies a DeniedUpgrade protocol
 impl ConnectionHandler for ConnectionPoolHandler {
     type InEvent = ();
     type OutEvent = ();
-    type Error = HandlerError;
+    type Error = ConnectionPoolHandlerError;
     type InboundProtocol = DeniedUpgrade;
     type OutboundProtocol = DeniedUpgrade;
     type InboundOpenInfo = ();
@@ -63,7 +63,7 @@ impl ConnectionHandler for ConnectionPoolHandler {
     fn poll(
         &mut self,
         _cx: &mut Context,
-    ) -> Poll<ConnectionHandlerEvent<DeniedUpgrade, (), (), HandlerError>> {
+    ) -> Poll<ConnectionHandlerEvent<DeniedUpgrade, (), (), ConnectionPoolHandlerError>> {
         Poll::Pending
     }
 }

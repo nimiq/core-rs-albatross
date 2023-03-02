@@ -27,11 +27,11 @@ use nimiq_utils::time::OffsetTime;
 use crate::{
     connection_pool::{
         behaviour::{ConnectionPoolBehaviour, ConnectionPoolEvent},
-        handler::HandlerError as ConnectionPoolError,
+        handler::ConnectionPoolHandlerError,
     },
     discovery::{
         behaviour::{DiscoveryBehaviour, DiscoveryEvent},
-        handler::HandlerError as DiscoveryError,
+        handler::DiscoveryHandlerError,
         peer_contacts::PeerContactBook,
     },
     dispatch::codecs::typed::{IncomingRequest, MessageCodec, OutgoingResponse, ReqResProtocol},
@@ -42,12 +42,15 @@ pub type NimiqNetworkBehaviourError = EitherError<
     EitherError<
         EitherError<
             EitherError<
-                EitherError<EitherError<std::io::Error, DiscoveryError>, GossipsubHandlerError>,
+                EitherError<
+                    EitherError<std::io::Error, DiscoveryHandlerError>,
+                    GossipsubHandlerError,
+                >,
                 std::io::Error,
             >,
             PingFailure,
         >,
-        ConnectionPoolError,
+        ConnectionPoolHandlerError,
     >,
     ConnectionHandlerUpgrErr<std::io::Error>,
 >;

@@ -55,7 +55,7 @@ pub enum HandlerOutEvent {
 }
 
 #[derive(Debug, Error)]
-pub enum HandlerError {
+pub enum DiscoveryHandlerError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 
@@ -90,7 +90,7 @@ pub enum HandlerError {
     UpdateLimitExceeded { num_peer_contacts: usize },
 }
 
-impl HandlerError {
+impl DiscoveryHandlerError {
     /// Short-hand to create an IO error variant with an ConnectionReset error.
     pub fn connection_reset() -> Self {
         Self::Io(std::io::ErrorKind::ConnectionReset.into())
@@ -234,7 +234,7 @@ impl DiscoveryHandler {
 impl ConnectionHandler for DiscoveryHandler {
     type InEvent = HandlerInEvent;
     type OutEvent = HandlerOutEvent;
-    type Error = HandlerError;
+    type Error = DiscoveryHandlerError;
     type InboundProtocol = DiscoveryProtocol;
     type OutboundProtocol = DiscoveryProtocol;
     type InboundOpenInfo = ();
@@ -303,8 +303,9 @@ impl ConnectionHandler for DiscoveryHandler {
     fn poll(
         &mut self,
         cx: &mut Context,
-    ) -> Poll<ConnectionHandlerEvent<Self::OutboundProtocol, (), HandlerOutEvent, HandlerError>>
-    {
+    ) -> Poll<
+        ConnectionHandlerEvent<Self::OutboundProtocol, (), HandlerOutEvent, DiscoveryHandlerError>,
+    > {
         loop {
             // Send message
             // This should be done first, so we can flush the outbound sink's buffer.
@@ -379,7 +380,7 @@ impl ConnectionHandler for DiscoveryHandler {
                                     // Check if the received genesis hash matches.
                                     if genesis_hash != self.config.genesis_hash {
                                         return Poll::Ready(ConnectionHandlerEvent::Close(
-                                            HandlerError::GenesisHashMismatch {
+                                            DiscoveryHandlerError::GenesisHashMismatch {
                                                 expected: self.config.genesis_hash.clone(),
                                                 received: genesis_hash,
                                             },
@@ -431,7 +432,7 @@ impl ConnectionHandler for DiscoveryHandler {
 
                                 _ => {
                                     return Poll::Ready(ConnectionHandlerEvent::Close(
-                                        HandlerError::UnexpectedMessage {
+                                        DiscoveryHandlerError::UnexpectedMessage {
                                             message,
                                             state: self.state,
                                         },
@@ -441,7 +442,7 @@ impl ConnectionHandler for DiscoveryHandler {
                         }
                         Poll::Ready(None) => {
                             return Poll::Ready(ConnectionHandlerEvent::Close(
-                                HandlerError::connection_reset(),
+                                DiscoveryHandlerError::connection_reset(),
                             ))
                         }
                         Poll::Ready(Some(Err(e))) => {
@@ -465,7 +466,7 @@ impl ConnectionHandler for DiscoveryHandler {
                                     // Check the peer contact for a valid signature.
                                     if !peer_contact.verify() {
                                         return Poll::Ready(ConnectionHandlerEvent::Close(
-                                            HandlerError::InvalidPeerContactSignature {
+                                            DiscoveryHandlerError::InvalidPeerContactSignature {
                                                 peer_contact,
                                             },
                                         ));
@@ -481,7 +482,7 @@ impl ConnectionHandler for DiscoveryHandler {
                                         peer_contact.public_key(),
                                     ) {
                                         return Poll::Ready(ConnectionHandlerEvent::Close(
-                                            HandlerError::ChallengeResponseFailed,
+                                            DiscoveryHandlerError::ChallengeResponseFailed,
                                         ));
                                     }
 
@@ -530,7 +531,7 @@ impl ConnectionHandler for DiscoveryHandler {
 
                                 _ => {
                                     return Poll::Ready(ConnectionHandlerEvent::Close(
-                                        HandlerError::UnexpectedMessage {
+                                        DiscoveryHandlerError::UnexpectedMessage {
                                             message,
                                             state: self.state,
                                         },
@@ -540,7 +541,7 @@ impl ConnectionHandler for DiscoveryHandler {
                         }
                         Poll::Ready(None) => {
                             return Poll::Ready(ConnectionHandlerEvent::Close(
-                                HandlerError::connection_reset(),
+                                DiscoveryHandlerError::connection_reset(),
                             ))
                         }
                         Poll::Ready(Some(Err(e))) => {
@@ -563,7 +564,9 @@ impl ConnectionHandler for DiscoveryHandler {
                                         if interval < self.config.min_recv_update_interval {
                                             // TODO: Should we just close, or ban?
                                             return Poll::Ready(ConnectionHandlerEvent::Close(
-                                                HandlerError::TooFrequentUpdates { interval },
+                                                DiscoveryHandlerError::TooFrequentUpdates {
+                                                    interval,
+                                                },
                                             ));
                                         }
                                     }
@@ -572,7 +575,7 @@ impl ConnectionHandler for DiscoveryHandler {
                                     // Check if the update is not too large.
                                     if peer_contacts.len() > self.config.update_limit as usize {
                                         return Poll::Ready(ConnectionHandlerEvent::Close(
-                                            HandlerError::UpdateLimitExceeded {
+                                            DiscoveryHandlerError::UpdateLimitExceeded {
                                                 num_peer_contacts: peer_contacts.len(),
                                             },
                                         ));
@@ -591,7 +594,7 @@ impl ConnectionHandler for DiscoveryHandler {
 
                                 _ => {
                                     return Poll::Ready(ConnectionHandlerEvent::Close(
-                                        HandlerError::UnexpectedMessage {
+                                        DiscoveryHandlerError::UnexpectedMessage {
                                             message,
                                             state: self.state,
                                         },
@@ -601,7 +604,7 @@ impl ConnectionHandler for DiscoveryHandler {
                         }
                         Poll::Ready(None) => {
                             return Poll::Ready(ConnectionHandlerEvent::Close(
-                                HandlerError::connection_reset(),
+                                DiscoveryHandlerError::connection_reset(),
                             ))
                         }
                         Poll::Ready(Some(Err(e))) => {
