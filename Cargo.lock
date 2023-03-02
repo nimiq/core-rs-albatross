@@ -4483,6 +4483,7 @@ version = "0.1.0"
 dependencies = [
  "beserial",
  "futures-util",
+ "hex",
  "js-sys",
  "nimiq-blockchain-interface",
  "nimiq-blockchain-proxy",

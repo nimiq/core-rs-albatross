@@ -3,7 +3,9 @@ use wasm_bindgen::prelude::*;
 use beserial::Serialize;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::{account::AccountType, coin::Coin};
-use nimiq_transaction::TransactionFlags;
+use nimiq_transaction::{
+    extended_transaction::ExtendedTransaction, TransactionFlags, TransactionFormat,
+};
 use nimiq_transaction_builder::TransactionProofBuilder;
 
 use crate::address::Address;
@@ -238,6 +240,15 @@ impl Transaction {
         self.inner.serialize_to_vec()
     }
 
+    /// The transaction's format: `0` = Basic, `1` = Extended.
+    #[wasm_bindgen(getter)]
+    pub fn format(&self) -> u8 {
+        match self.inner.format() {
+            TransactionFormat::Basic => 0,
+            TransactionFormat::Extended => 1,
+        }
+    }
+
     /// The transaction's sender address.
     #[wasm_bindgen(getter)]
     pub fn sender(&self) -> Address {
@@ -274,6 +285,12 @@ impl Transaction {
         self.inner.fee.into()
     }
 
+    /// The transaction's fee per byte in luna (NIM's smallest unit).
+    #[wasm_bindgen(getter, js_name = feePerByte)]
+    pub fn fee_per_byte(&self) -> f64 {
+        self.inner.fee_per_byte()
+    }
+
     /// The transaction's validity-start height. The transaction is valid for 2 hours after this block height.
     #[wasm_bindgen(getter, js_name = validityStartHeight)]
     pub fn validity_start_height(&self) -> u32 {
@@ -290,6 +307,12 @@ impl Transaction {
     #[wasm_bindgen(getter)]
     pub fn flags(&self) -> u8 {
         self.inner.flags.into()
+    }
+
+    /// The transaction's data as a byte array.
+    #[wasm_bindgen(getter)]
+    pub fn data(&self) -> Vec<u8> {
+        self.inner.data.to_vec()
     }
 
     /// The transaction's signature proof as a byte array.
@@ -309,6 +332,12 @@ impl Transaction {
     pub fn serialized_size(&self) -> usize {
         self.inner.serialized_size()
     }
+
+    #[wasm_bindgen(js_name = toPlain)]
+    pub fn to_plain(&self) -> Result<PlainTransactionType, JsError> {
+        let plain = PlainTransaction::from_transaction(&self.inner);
+        Ok(serde_wasm_bindgen::to_value(&plain)?.into())
+    }
 }
 
 impl Transaction {
@@ -319,4 +348,200 @@ impl Transaction {
     pub fn native_ref(&self) -> &nimiq_transaction::Transaction {
         &self.inner
     }
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct Raw {
+    raw: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlainTransaction {
+    pub transaction_hash: String,
+    pub format: String,
+    pub sender: String,
+    pub sender_type: String,
+    pub recipient: String,
+    pub recipient_type: String,
+    pub value: u64,
+    pub fee: u64,
+    pub fee_per_byte: f64,
+    pub validity_start_height: u32,
+    pub network: String,
+    pub flags: u8,
+    pub data: Raw,
+    pub proof: Raw,
+    pub size: usize,
+    pub valid: bool,
+}
+
+#[wasm_bindgen(typescript_custom_section)]
+const PLAIN_TRANSACTION_TYPE: &'static str = r#"
+export enum TransactionFormat {
+  BASIC = "basic",
+  EXTENDED = "extended",
+};
+
+export enum AccountType {
+  BASIC = "basic",
+  VESTING = "vesting",
+  HTLC = "htlc",
+  STAKING = "staking",
+  VALIDATOR = "validator",
+  STAKER = "staker",
+};
+
+export type PlainTransaction = {
+  transactionHash: string,
+  format: TransactionFormat,
+  sender: string,
+  senderType: AccountType,
+  recipient: string,
+  recipientType: AccountType,
+  value: number,
+  fee: number,
+  feePerByte: number,
+  validityStartHeight: number,
+  network: string,
+  flags: number,
+  data: { raw: string },
+  proof: { raw: string },
+  size: number,
+  valid: boolean,
+};
+"#;
+
+impl PlainTransaction {
+    pub fn from_transaction(tx: &nimiq_transaction::Transaction) -> Self {
+        Self {
+            transaction_hash: tx.hash::<Blake2bHash>().to_hex(),
+            format: match tx.format() {
+                TransactionFormat::Basic => "basic".to_string(),
+                TransactionFormat::Extended => "extended".to_string(),
+            },
+            sender: tx.sender.to_user_friendly_address(),
+            sender_type: PlainTransaction::account_type_to_string(tx.sender_type),
+            recipient: tx.recipient.to_user_friendly_address(),
+            recipient_type: PlainTransaction::account_type_to_string(tx.recipient_type),
+            value: tx.value.into(),
+            fee: tx.fee.into(),
+            fee_per_byte: tx.fee_per_byte(),
+            validity_start_height: tx.validity_start_height,
+            network: tx.network_id.to_string().to_lowercase(),
+            flags: tx.flags.into(),
+            data: Raw {
+                raw: hex::encode(tx.data.clone()),
+            },
+            proof: Raw {
+                raw: hex::encode(tx.proof.clone()),
+            },
+            size: tx.serialized_size(),
+            valid: tx.verify(tx.network_id).is_ok(),
+        }
+    }
+
+    fn account_type_to_string(ty: AccountType) -> String {
+        match ty {
+            AccountType::Basic => "basic".to_string(),
+            AccountType::Vesting => "vesting".to_string(),
+            AccountType::HTLC => "htlc".to_string(),
+            AccountType::Staking => "staking".to_string(),
+            AccountType::StakingValidator => "validator".to_string(),
+            AccountType::StakingValidatorsStaker => "staker".to_string(),
+            AccountType::StakingStaker => "staker".to_string(),
+        }
+    }
+}
+
+enum TransactionState {
+    _New,
+    _Pending,
+    Included,
+    Confirmed,
+    _Invalidated,
+    _Expired,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlainTransactionDetails {
+    #[serde(flatten)]
+    transaction: PlainTransaction,
+
+    pub state: String,
+    pub execution_result: Option<bool>,
+    pub block_height: Option<u32>,
+    pub confirmations: Option<u32>,
+    pub timestamp: Option<u64>,
+}
+
+#[wasm_bindgen(typescript_custom_section)]
+const PLAIN_TRANSACTION_DETAILS_TYPE: &'static str = r#"
+export enum TransactionState {
+  NEW = "new",
+  PENDING = "pending",
+  INCLUDED = "included",
+  CONFIRMED = "confirmed",
+  INVALIDATED = "invalidated",
+  EXPIRED = "expired",
+}
+
+export type PlainTransactionDetails = PlainTransaction & {
+  state: TransactionState,
+  executionResult?: boolean,
+  blockHeight?: number,
+  confirmations?: number,
+  timestamp?: number,
+};
+"#;
+
+impl PlainTransactionDetails {
+    pub fn from_extended_transaction(
+        ext_tx: &ExtendedTransaction,
+        current_block: u32,
+        last_macro_block: u32,
+    ) -> Self {
+        let block_number = ext_tx.block_number;
+        let block_time = ext_tx.block_time;
+
+        let state = if last_macro_block >= block_number {
+            TransactionState::Confirmed
+        } else {
+            TransactionState::Included
+        };
+
+        let executed_transaction = ext_tx.clone().into_transaction().unwrap();
+
+        Self {
+            transaction: PlainTransaction::from_transaction(
+                executed_transaction.get_raw_transaction(),
+            ),
+            state: PlainTransactionDetails::transaction_state_to_string(state),
+            execution_result: Some(executed_transaction.succeeded()),
+            block_height: Some(block_number),
+            timestamp: Some(block_time),
+            confirmations: Some(block_number - current_block + 1),
+        }
+    }
+
+    fn transaction_state_to_string(state: TransactionState) -> String {
+        match state {
+            TransactionState::_New => "new".to_string(),
+            TransactionState::_Pending => "pending".to_string(),
+            TransactionState::Included => "included".to_string(),
+            TransactionState::Confirmed => "confirmed".to_string(),
+            TransactionState::_Invalidated => "invalidated".to_string(),
+            TransactionState::_Expired => "expired".to_string(),
+        }
+    }
+}
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(typescript_type = "PlainTransaction")]
+    pub type PlainTransactionType;
+
+    #[wasm_bindgen(typescript_type = "PlainTransactionDetails")]
+    pub type PlainTransactionDetailsType;
 }

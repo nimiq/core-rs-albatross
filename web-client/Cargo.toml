@@ -22,6 +22,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 futures = { package = "futures-util", version = "0.3" }
+hex = "0.4"
 js-sys = "0.3"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 serde = {version = "1.0.152", features = ["derive"] }
