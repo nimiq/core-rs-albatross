@@ -168,9 +168,9 @@ dependencies = [
  "ark-nonnative-field",
  "ark-r1cs-std",
  "ark-relations",
- "ark-serialize",
+ "ark-serialize 0.3.0",
  "ark-snark",
- "ark-std",
+ "ark-std 0.3.0",
  "blake2 0.9.2",
  "derivative",
  "digest 0.9.0",
@@ -185,8 +185,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dea978406c4b1ca13c2db2373b05cc55429c3575b8b21f1b9ee859aa5b03dd42"
 dependencies = [
  "ark-ff",
- "ark-serialize",
- "ark-std",
+ "ark-serialize 0.3.0",
+ "ark-std 0.3.0",
  "derivative",
  "num-traits",
  "rayon",
@@ -201,8 +201,8 @@ checksum = "6b3235cc41ee7a12aaaf2c575a2ad7b46713a8a50bda2fc3b003a04845c05dd6"
 dependencies = [
  "ark-ff-asm",
  "ark-ff-macros",
- "ark-serialize",
- "ark-std",
+ "ark-serialize 0.3.0",
+ "ark-std 0.3.0",
  "derivative",
  "num-bigint",
  "num-traits",
@@ -246,8 +246,8 @@ dependencies = [
  "ark-poly",
  "ark-r1cs-std",
  "ark-relations",
- "ark-serialize",
- "ark-std",
+ "ark-serialize 0.3.0",
+ "ark-std 0.3.0",
  "derivative",
  "rayon",
  "tracing",
@@ -262,7 +262,7 @@ dependencies = [
  "ark-ec",
  "ark-ff",
  "ark-r1cs-std",
- "ark-std",
+ "ark-std 0.3.0",
 ]
 
 [[package]]
@@ -275,7 +275,7 @@ dependencies = [
  "ark-ff",
  "ark-mnt4-753",
  "ark-r1cs-std",
- "ark-std",
+ "ark-std 0.3.0",
 ]
 
 [[package]]
@@ -288,7 +288,7 @@ dependencies = [
  "ark-ff",
  "ark-r1cs-std",
  "ark-relations",
- "ark-std",
+ "ark-std 0.3.0",
  "derivative",
  "num-bigint",
  "num-integer",
@@ -303,8 +303,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7b0f78f47537c2f15706db7e98fe64cc1711dbf9def81218194e17239e53e5aa"
 dependencies = [
  "ark-ff",
- "ark-serialize",
- "ark-std",
+ "ark-serialize 0.3.0",
+ "ark-std 0.3.0",
  "derivative",
  "hashbrown 0.11.2",
  "rayon",
@@ -319,7 +319,7 @@ dependencies = [
  "ark-ec",
  "ark-ff",
  "ark-relations",
- "ark-std",
+ "ark-std 0.3.0",
  "derivative",
  "num-bigint",
  "num-traits",
@@ -333,7 +333,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4cba4c1c99792a6834bd97f7fd76578ec2cd58d2afc5139a17e1d1bec65b38f6"
 dependencies = [
  "ark-ff",
- "ark-std",
+ "ark-std 0.3.0",
  "tracing",
  "tracing-subscriber 0.2.25",
 ]
@@ -345,8 +345,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d6c2b318ee6e10f8c2853e73a83adc0ccb88995aa978d8a3408d492ab2ee671"
 dependencies = [
  "ark-serialize-derive",
- "ark-std",
+ "ark-std 0.3.0",
  "digest 0.9.0",
+]
+
+[[package]]
+name = "ark-serialize"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e7e735959bc173ea4baf13327b19c22d452b8e9e8e8f7b7fc34e6bf0e316c33e"
+dependencies = [
+ "ark-std 0.4.0",
+ "digest 0.10.3",
+ "num-bigint",
 ]
 
 [[package]]
@@ -368,7 +379,7 @@ checksum = "0dc3dff1a5f67a9c0b34df32b079752d8dd17f1e9d06253da0453db6c1b7cc8a"
 dependencies = [
  "ark-ff",
  "ark-relations",
- "ark-std",
+ "ark-std 0.3.0",
 ]
 
 [[package]]
@@ -381,8 +392,8 @@ dependencies = [
  "ark-nonnative-field",
  "ark-r1cs-std",
  "ark-relations",
- "ark-serialize",
- "ark-std",
+ "ark-serialize 0.3.0",
+ "ark-std 0.3.0",
  "derivative",
  "digest 0.9.0",
  "rand_chacha 0.3.1",
@@ -398,6 +409,16 @@ dependencies = [
  "num-traits",
  "rand 0.8.5",
  "rayon",
+]
+
+[[package]]
+name = "ark-std"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "94893f1e0c6eeab764ade8dc4c0db24caf4fe7cbbaafc0eba0a9030f447b5185"
+dependencies = [
+ "num-traits",
+ "rand 0.8.5",
 ]
 
 [[package]]
@@ -3469,8 +3490,8 @@ dependencies = [
  "ark-ff",
  "ark-mnt4-753",
  "ark-mnt6-753",
- "ark-serialize",
- "ark-std",
+ "ark-serialize 0.4.1",
+ "ark-std 0.3.0",
  "beserial",
  "blake2-rfc",
  "byteorder",
@@ -4520,9 +4541,9 @@ dependencies = [
  "ark-mnt6-753",
  "ark-r1cs-std",
  "ark-relations",
- "ark-serialize",
+ "ark-serialize 0.4.1",
  "ark-sponge",
- "ark-std",
+ "ark-std 0.3.0",
  "beserial",
  "lazy_static",
  "nimiq-bls",
@@ -4548,8 +4569,8 @@ dependencies = [
  "ark-mnt6-753",
  "ark-r1cs-std",
  "ark-relations",
- "ark-serialize",
- "ark-std",
+ "ark-serialize 0.4.1",
+ "ark-std 0.3.0",
  "clap",
  "nimiq-bls",
  "nimiq-primitives",
@@ -4567,7 +4588,7 @@ dependencies = [
  "ark-groth16",
  "ark-mnt4-753",
  "ark-mnt6-753",
- "ark-serialize",
+ "ark-serialize 0.4.1",
  "async-trait",
  "beserial",
  "futures-util",
@@ -4620,8 +4641,8 @@ dependencies = [
  "ark-mnt6-753",
  "ark-r1cs-std",
  "ark-relations",
- "ark-serialize",
- "ark-std",
+ "ark-serialize 0.4.1",
+ "ark-std 0.3.0",
  "beserial",
  "lazy_static",
  "nimiq-block",
