@@ -39,7 +39,7 @@ nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-network-interface = { path = "../network-interface" }
 nimiq-primitives = {path = "../primitives", features = ["coin", "networks"]}
-nimiq-transaction = { path = "../primitives/transaction", features=["serde-derive"] }
+nimiq-transaction = { path = "../primitives/transaction" }
 nimiq-transaction-builder = { path = "../transaction-builder" }
 
 [dependencies.nimiq]
