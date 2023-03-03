@@ -186,20 +186,25 @@ impl NimiqBehaviour {
         }
     }
 
+    /// Adds a peer address into the DHT
     pub fn add_peer_address(&mut self, peer_id: PeerId, address: Multiaddr) {
         // Add address to the DHT
         self.dht.add_address(&peer_id, address);
     }
 
+    /// Removes a peer from the DHT
     pub fn remove_peer(&mut self, peer_id: PeerId) {
         self.dht.remove_peer(&peer_id);
     }
 
+    /// Removes a peer address from the DHT
     pub fn remove_peer_address(&mut self, peer_id: PeerId, address: Multiaddr) {
         // Remove address from the DHT
         self.dht.remove_address(&peer_id, &address);
     }
 
+    /// Updates the scores of all peers in the peer contact book.
+    /// Updates are performed with the score values of Gossipsub
     pub fn update_scores(&self, contacts: Arc<RwLock<PeerContactBook>>) {
         contacts.read().update_scores(&self.gossipsub);
     }

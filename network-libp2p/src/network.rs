@@ -147,6 +147,7 @@ pub(crate) enum NetworkAction {
     StopConnecting,
     DisconnectPeer {
         peer_id: PeerId,
+        reason: CloseReason,
     },
 }
 
@@ -613,7 +614,6 @@ impl Network {
                     }
                 }
             }
-
             SwarmEvent::IncomingConnection {
                 local_addr,
                 send_back_addr,
@@ -1322,10 +1322,8 @@ impl Network {
                     error!("Could not send sucessful peers vector");
                 }
             }
-            NetworkAction::DisconnectPeer { peer_id } => {
-                if swarm.disconnect_peer_id(peer_id).is_err() {
-                    warn!(%peer_id, "Peer already closed");
-                }
+            NetworkAction::DisconnectPeer { peer_id, reason } => {
+                swarm.behaviour_mut().pool.close_connection(peer_id, reason)
             }
         }
     }
@@ -1806,10 +1804,13 @@ impl NetworkInterface for Network {
         Ok(filtered_peers)
     }
 
-    async fn disconnect_peer(&self, peer_id: PeerId, _close_reason: CloseReason) {
+    async fn disconnect_peer(&self, peer_id: PeerId, close_reason: CloseReason) {
         if let Err(error) = self
             .action_tx
-            .send(NetworkAction::DisconnectPeer { peer_id })
+            .send(NetworkAction::DisconnectPeer {
+                peer_id,
+                reason: close_reason,
+            })
             .await
         {
             error!(%peer_id, %error, "could not send disconnect action to channel");

@@ -101,7 +101,7 @@ impl ConnectionHandler for ConnectionPoolHandler {
         _cx: &mut Context,
     ) -> Poll<ConnectionHandlerEvent<DeniedUpgrade, (), (), ConnectionPoolHandlerError>> {
         if let Some(reason) = self.close_reason.take() {
-            return Poll::Ready(ConnectionHandlerEvent::Close(reason.into()));
+            return Poll::Ready(ConnectionHandlerEvent::Close(reason));
         }
         Poll::Pending
     }

@@ -23,7 +23,7 @@ use rand::thread_rng;
 use wasm_timer::Interval;
 
 use nimiq_macros::store_waker;
-use nimiq_network_interface::peer_info::Services;
+use nimiq_network_interface::{network::CloseReason, peer_info::Services};
 
 use crate::discovery::peer_contacts::PeerContactBook;
 
@@ -337,6 +337,17 @@ impl ConnectionPoolBehaviour {
     /// connection such as in a network outage.
     pub fn stop_connecting(&mut self) {
         self.active = false;
+    }
+
+    /// Closes a peer connection with a reason
+    pub fn close_connection(&mut self, peer_id: PeerId, reason: CloseReason) {
+        self.actions
+            .push_back(NetworkBehaviourAction::NotifyHandler {
+                peer_id,
+                handler: NotifyHandler::Any,
+                event: ConnectionPoolHandlerError::Other(reason),
+            });
+        self.wake();
     }
 
     fn choose_peers_to_dial(&self) -> Vec<PeerId> {
