@@ -1781,8 +1781,8 @@ impl NetworkInterface for Network {
             }
         }
 
-        // If we don't have enough connected peer that support the desired services,
-        // we tell the network to connect to new peers that supports such services.
+        // If we don't have enough connected peers that support the desired services,
+        // we tell the network to connect to new peers that support such services.
         if filtered_peers.len() < min_peers {
             let num_peers = min_peers - filtered_peers.len();
 

@@ -365,7 +365,7 @@ impl ConnectionPoolBehaviour {
     }
 
     /// This function is used to select a list of peers, based on services flag, in order to dial them.
-    /// num_peers is used to specify how many peers are selected
+    /// `num_peers` is used to specify how many peers are selected
     /// The number of peers returned equals num_peers unless there are less available peers
     pub fn choose_peers_to_dial_by_services(
         &self,
