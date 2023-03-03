@@ -6,13 +6,14 @@ use tokio::sync::broadcast::Sender as BroadcastSender;
 use tokio_stream::wrappers::BroadcastStream;
 
 use nimiq_blockchain_proxy::BlockchainProxy;
+use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_network_interface::{
     network::{CloseReason, Network},
     peer_info::Services,
     request::{OutboundRequestError, RequestError},
 };
-use nimiq_primitives::account::AccountType;
+use nimiq_primitives::{account::AccountType, policy::Policy};
 use nimiq_transaction::{
     extended_transaction::ExtendedTransaction, ControlTransactionTopic, Transaction,
     TransactionTopic,
@@ -94,19 +95,26 @@ impl<N: Network> ConsensusProxy<N> {
 
             match response {
                 Ok(response) => {
-                    // Now we request proofs for each transaction we requested.
+                    // Group transaction hashes by epoch to reduce number of requested proofs
+                    let mut hashes_by_epoch: HashMap<u32, Vec<Blake2bHash>> = HashMap::new();
                     for (hash, block_number) in response.receipts {
                         // If the transaction was already verified, then we don't need to verify it again
                         if verified_transactions.contains_key(&hash) {
                             continue;
                         }
 
+                        let epoch = Policy::epoch_at(block_number);
+                        hashes_by_epoch.entry(epoch).or_insert(vec![]).push(hash);
+                    }
+
+                    // Now we request proofs for each epoch and its hashes
+                    for (epoch, hashes) in hashes_by_epoch {
                         let response = self
                             .network
                             .request::<RequestTransactionsProof>(
                                 RequestTransactionsProof {
-                                    hashes: vec![hash],
-                                    block_number: block_number,
+                                    hashes,
+                                    block_number: Policy::election_block_of(epoch),
                                 },
                                 peer_id,
                             )
