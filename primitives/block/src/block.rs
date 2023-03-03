@@ -232,8 +232,7 @@ impl Block {
         }
     }
 
-    /// Return the number of transactions in the block. If the block is a Macro
-    /// block it just returns zero, since Macro blocks don't contain any transactions.
+    /// Return the number of transactions in the block.
     pub fn num_transactions(&self) -> usize {
         self.transactions().map_or(0, |txs| txs.len())
     }

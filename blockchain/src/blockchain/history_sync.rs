@@ -101,11 +101,12 @@ impl Blockchain {
         // Get the block hash.
         let block_hash = block.hash();
 
-        // Calculate the cumulative transaction fees for the given batch. This is necessary to
+        // Calculate the cumulative transaction fees, size, and count for the given batch. This is necessary to
         // create the chain info for the block.
         let mut cum_tx_fees = Coin::ZERO;
-        let current_batch = Policy::batch_at(block.block_number());
         let mut cum_ext_tx_size = 0u64;
+        let mut batch_ext_tx_count = 0u64;
+        let current_batch = Policy::batch_at(block.block_number());
         for i in (0..history.len()).rev() {
             if Policy::batch_at(history[i].block_number) != current_batch {
                 break;
@@ -114,7 +115,15 @@ impl Blockchain {
                 cum_tx_fees += tx.get_raw_transaction().fee;
             }
             cum_ext_tx_size += history[i].data.serialized_size() as u64;
+            batch_ext_tx_count += 1;
         }
+
+        let cum_ext_tx_count = if Policy::is_election_block_at(prev_macro_info.head.block_number())
+        {
+            batch_ext_tx_count
+        } else {
+            prev_macro_info.cum_ext_tx_count + batch_ext_tx_count
+        };
 
         // Create the chain info for the given block and store it.
         let chain_info = ChainInfo {
@@ -123,6 +132,8 @@ impl Blockchain {
             head: block.clone(),
             cum_tx_fees,
             cum_ext_tx_size,
+            cum_ext_tx_count,
+            cum_ext_tx_count_at_macro: cum_ext_tx_count,
             prunable: false,
             prev_missing_range: None,
         };
