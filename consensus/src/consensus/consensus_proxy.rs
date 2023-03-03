@@ -18,7 +18,7 @@ use nimiq_transaction::{
     TransactionTopic,
 };
 
-use crate::messages::{RequestTransactionsByAddress, RequestTransactionsProof};
+use crate::messages::{RequestTransactionReceiptsByAddress, RequestTransactionsProof};
 use crate::ConsensusEvent;
 
 pub struct ConsensusProxy<N: Network> {
@@ -83,8 +83,8 @@ impl<N: Network> ConsensusProxy<N> {
         for peer_id in peers {
             let response = self
                 .network
-                .request::<RequestTransactionsByAddress>(
-                    RequestTransactionsByAddress {
+                .request::<RequestTransactionReceiptsByAddress>(
+                    RequestTransactionReceiptsByAddress {
                         address: address.clone(),
                         max,
                     },
@@ -95,9 +95,9 @@ impl<N: Network> ConsensusProxy<N> {
             match response {
                 Ok(response) => {
                     // Now we request proofs for each transaction we requested.
-                    for transaction in response.transactions {
+                    for (hash, block_number) in response.receipts {
                         // If the transaction was already verified, then we don't need to verify it again
-                        if verified_transactions.contains_key(&transaction.tx_hash()) {
+                        if verified_transactions.contains_key(&hash) {
                             continue;
                         }
 
@@ -105,8 +105,8 @@ impl<N: Network> ConsensusProxy<N> {
                             .network
                             .request::<RequestTransactionsProof>(
                                 RequestTransactionsProof {
-                                    hashes: vec![transaction.tx_hash()],
-                                    block_number: transaction.block_number,
+                                    hashes: vec![hash],
+                                    block_number: block_number,
                                 },
                                 peer_id,
                             )

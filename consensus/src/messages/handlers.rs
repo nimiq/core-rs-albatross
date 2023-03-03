@@ -352,10 +352,10 @@ impl Handle<ResponseTransactionsProof, Arc<RwLock<Blockchain>>> for RequestTrans
 }
 
 #[cfg(feature = "full")]
-impl Handle<ResponseTransactionsByAddress, Arc<RwLock<Blockchain>>>
-    for RequestTransactionsByAddress
+impl Handle<ResponseTransactionReceiptsByAddress, Arc<RwLock<Blockchain>>>
+    for RequestTransactionReceiptsByAddress
 {
-    fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> ResponseTransactionsByAddress {
+    fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> ResponseTransactionReceiptsByAddress {
         let blockchain = blockchain.read();
 
         // Get the transaction hashes for this address.
@@ -365,13 +365,19 @@ impl Handle<ResponseTransactionsByAddress, Arc<RwLock<Blockchain>>>
             None,
         );
 
-        let mut transactions = vec![];
+        let mut receipts = vec![];
 
         for hash in tx_hashes {
             // Get all the extended transactions that correspond to this hash.
-            transactions.extend(blockchain.history_store.get_ext_tx_by_hash(&hash, None));
+            receipts.extend(
+                blockchain
+                    .history_store
+                    .get_ext_tx_by_hash(&hash, None)
+                    .iter()
+                    .map(|ext_tx| (ext_tx.tx_hash(), ext_tx.block_number)),
+            );
         }
 
-        ResponseTransactionsByAddress { transactions }
+        ResponseTransactionReceiptsByAddress { receipts }
     }
 }

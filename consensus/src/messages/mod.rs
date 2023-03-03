@@ -7,9 +7,7 @@ use nimiq_blockchain::HistoryTreeChunk;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_network_interface::request::{RequestCommon, RequestMarker};
-use nimiq_transaction::{
-    extended_transaction::ExtendedTransaction, history_proof::HistoryTreeProof,
-};
+use nimiq_transaction::history_proof::HistoryTreeProof;
 
 mod handlers;
 
@@ -232,20 +230,21 @@ impl RequestCommon for RequestTransactionsProof {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct RequestTransactionsByAddress {
+pub struct RequestTransactionReceiptsByAddress {
     pub address: Address,
     pub max: Option<u16>,
 }
 
-impl RequestCommon for RequestTransactionsByAddress {
+impl RequestCommon for RequestTransactionReceiptsByAddress {
     type Kind = RequestMarker;
     const TYPE_ID: u16 = 214;
-    type Response = ResponseTransactionsByAddress;
+    type Response = ResponseTransactionReceiptsByAddress;
     const MAX_REQUESTS: u32 = MAX_REQUEST_TRANSACTIONS_BY_ADDRESS;
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct ResponseTransactionsByAddress {
+pub struct ResponseTransactionReceiptsByAddress {
+    /// Tuples of `(transaction_hash, block_number)`
     #[beserial(len_type(u16, limit = 128))]
-    pub transactions: Vec<ExtendedTransaction>,
+    pub receipts: Vec<(Blake2bHash, u32)>,
 }
