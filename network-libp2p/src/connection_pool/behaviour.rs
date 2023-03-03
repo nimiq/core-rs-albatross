@@ -8,12 +8,12 @@ use std::{
 use futures::StreamExt;
 use instant::{Instant, SystemTime};
 use ip_network::IpNetwork;
-use libp2p::swarm::dial_opts::PeerCondition;
+use libp2p::swarm::{dial_opts::PeerCondition, NotifyHandler};
 use libp2p::{
     core::{connection::ConnectionId, multiaddr::Protocol, ConnectedPoint},
     swarm::{
-        dial_opts::DialOpts, CloseConnection, ConnectionHandler, DialError, IntoConnectionHandler,
-        NetworkBehaviour, NetworkBehaviourAction, PollParameters,
+        dial_opts::DialOpts, ConnectionHandler, DialError, IntoConnectionHandler, NetworkBehaviour,
+        NetworkBehaviourAction, PollParameters,
     },
     Multiaddr, PeerId,
 };
@@ -27,7 +27,7 @@ use nimiq_network_interface::peer_info::Services;
 
 use crate::discovery::peer_contacts::PeerContactBook;
 
-use super::handler::ConnectionPoolHandler;
+use super::handler::{ConnectionPoolHandler, ConnectionPoolHandlerError};
 
 #[derive(Clone, Debug)]
 struct ConnectionPoolLimits {
@@ -521,11 +521,11 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
 
         // If we have an IP, check connection limits per IP/subnet.
         if let Some(ip) = ip {
-            let mut close_connection = false;
+            let mut close_reason = None;
 
             if self.banned.get(&ip).is_some() {
                 debug!(%ip, "IP is banned");
-                close_connection = true;
+                close_reason = Some(ConnectionPoolHandlerError::BannedIp);
             }
 
             if self.config.peer_count_per_ip_max
@@ -537,7 +537,7 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
                     .saturating_add(1)
             {
                 debug!(%ip, "Max peer connections per IP limit reached");
-                close_connection = true;
+                close_reason = Some(ConnectionPoolHandlerError::MaxPeerPerIPConnectionsReached);
             }
 
             if ip.is_ipv4()
@@ -545,7 +545,7 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
                     < self.limits.ipv4_count.saturating_add(1))
             {
                 debug!("Max peer connections per IPv4 subnet limit reached");
-                close_connection = true;
+                close_reason = Some(ConnectionPoolHandlerError::MaxIpv4SubnetConnectionsReached);
             }
 
             if ip.is_ipv6()
@@ -553,7 +553,7 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
                     < self.limits.ipv6_count.saturating_add(1))
             {
                 debug!("Max peer connections per IPv6 subnet limit reached");
-                close_connection = true;
+                close_reason = Some(ConnectionPoolHandlerError::MaxIpv6SubnetConnectionsReached);
             }
 
             if self.config.peer_count_max
@@ -564,14 +564,16 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
                     .saturating_add(1)
             {
                 debug!("Max peer connections limit reached");
-                close_connection = true;
+                close_reason = Some(ConnectionPoolHandlerError::MaxPeerConnectionsReached);
             }
 
-            if close_connection {
+            if let Some(close_reason) = close_reason {
+                // Notify the handler that the connection must be closed
                 self.actions
-                    .push_back(NetworkBehaviourAction::CloseConnection {
+                    .push_back(NetworkBehaviourAction::NotifyHandler {
                         peer_id: *peer_id,
-                        connection: CloseConnection::One(*connection_id),
+                        handler: NotifyHandler::One(*connection_id),
+                        event: close_reason,
                     });
                 self.wake();
                 return;
