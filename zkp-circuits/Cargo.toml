@@ -20,7 +20,7 @@ rand = { version = "0.8", features = ["small_rng"] }
 rand_chacha = "0.3.1"
 
 ark-crypto-primitives = "0.3"
-ark-ec = "0.3"
+ark-ec = "0.4"
 ark-ff = "0.3"
 ark-groth16 = { version = "0.3", default-features = false }
 ark-mnt4-753 = "0.3"
