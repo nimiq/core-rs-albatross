@@ -440,19 +440,21 @@ impl PlainTransaction {
     }
 }
 
-enum TransactionState {
-    _New,
-    _Pending,
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TransactionState {
+    New,
+    Pending,
     Included,
     Confirmed,
-    _Invalidated,
-    _Expired,
+    Invalidated,
+    Expired,
 }
 
 pub struct PlainTransactionDetails {
     transaction: PlainTransaction,
 
-    pub state: String,
+    pub state: TransactionState,
     pub execution_result: Option<bool>,
     pub block_height: Option<u32>,
     pub confirmations: Option<u32>,
@@ -539,22 +541,11 @@ impl PlainTransactionDetails {
             transaction: PlainTransaction::from_transaction(
                 executed_transaction.get_raw_transaction(),
             ),
-            state: PlainTransactionDetails::transaction_state_to_string(state),
+            state,
             execution_result: Some(executed_transaction.succeeded()),
             block_height: Some(block_number),
             timestamp: Some(block_time),
             confirmations: Some(block_number - current_block + 1),
-        }
-    }
-
-    fn transaction_state_to_string(state: TransactionState) -> String {
-        match state {
-            TransactionState::_New => "new".to_string(),
-            TransactionState::_Pending => "pending".to_string(),
-            TransactionState::Included => "included".to_string(),
-            TransactionState::Confirmed => "confirmed".to_string(),
-            TransactionState::_Invalidated => "invalidated".to_string(),
-            TransactionState::_Expired => "expired".to_string(),
         }
     }
 }
