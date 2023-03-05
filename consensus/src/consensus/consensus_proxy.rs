@@ -6,7 +6,6 @@ use tokio::sync::broadcast::Sender as BroadcastSender;
 use tokio_stream::wrappers::BroadcastStream;
 
 use nimiq_blockchain_proxy::BlockchainProxy;
-use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_network_interface::{
     network::{CloseReason, Network},
@@ -96,7 +95,7 @@ impl<N: Network> ConsensusProxy<N> {
             match response {
                 Ok(response) => {
                     // Group transaction hashes by epoch to reduce number of requested proofs
-                    let mut hashes_by_epoch: HashMap<u32, Vec<Blake2bHash>> = HashMap::new();
+                    let mut hashes_by_epoch = HashMap::new();
                     for (hash, block_number) in response.receipts {
                         // If the transaction was already verified, then we don't need to verify it again
                         if verified_transactions.contains_key(&hash) {
@@ -169,6 +168,12 @@ impl<N: Network> ConsensusProxy<N> {
             }
         }
 
-        Ok(verified_transactions.into_values().collect())
+        // Sort transactions by block_number
+        let mut transactions: Vec<ExtendedTransaction> =
+            verified_transactions.into_values().collect();
+        transactions.sort_unstable_by_key(|ext_tx| ext_tx.block_number);
+        transactions.reverse(); // Return newest transaction (highest block_number) first
+
+        Ok(transactions)
     }
 }
