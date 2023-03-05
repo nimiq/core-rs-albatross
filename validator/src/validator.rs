@@ -15,7 +15,6 @@ use parking_lot::RwLock;
 use tokio_metrics::TaskMonitor;
 use tokio_stream::wrappers::BroadcastStream;
 
-use nimiq_account::StakingContract;
 use nimiq_block::{Block, BlockHeaderTopic, BlockTopic, BlockType};
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::Blockchain;
@@ -622,13 +621,10 @@ where
     }
 
     fn get_staking_state(&self, blockchain: &Blockchain) -> ValidatorStakingState {
-        let accounts_tree = &blockchain.state().accounts.tree;
-        let db_txn = blockchain.read_transaction();
-
         // First, check if the validator is parked.
         let validator_address = self.validator_address();
-        let staking_contract =
-            StakingContract::get_staking_contract(accounts_tree, &db_txn).unwrap();
+        let staking_contract = blockchain.get_staking_contract();
+
         if staking_contract.parked_set.contains(&validator_address)
             || staking_contract
                 .current_disabled_slots
@@ -640,17 +636,18 @@ where
             return ValidatorStakingState::Parked;
         }
 
-        if let Some(validator) =
-            StakingContract::get_validator(accounts_tree, &db_txn, &validator_address).unwrap()
-        {
-            if validator.inactive_since.is_some() {
-                ValidatorStakingState::Inactive
-            } else {
-                ValidatorStakingState::Active
-            }
-        } else {
-            ValidatorStakingState::NoStake
-        }
+        // Then fetch the validator to see if it is active.
+        let data_store = blockchain.get_staking_contract_store();
+        let txn = blockchain.read_transaction();
+        staking_contract
+            .get_validator(&data_store.read(&txn), &validator_address)
+            .map_or(
+                ValidatorStakingState::NoStake,
+                |validator| match validator.inactive_since {
+                    Some(_) => ValidatorStakingState::Inactive,
+                    None => ValidatorStakingState::Active,
+                },
+            )
     }
 
     fn unpark(&self, blockchain: &Blockchain) -> ValidatorState {

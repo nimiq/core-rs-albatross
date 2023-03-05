@@ -2,6 +2,7 @@ use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
 use std::error::Error;
 
 use beserial::Serialize;
+use nimiq_account::BlockState;
 use nimiq_block::{Block, BlockError};
 use nimiq_blockchain_interface::{
     AbstractBlockchain, BlockchainEvent, ChainInfo, PushError, PushResult,
@@ -11,7 +12,7 @@ use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy::Policy;
 use nimiq_transaction::{
     extended_transaction::{ExtTxData, ExtendedTransaction},
-    inherent::{Inherent, InherentType},
+    inherent::Inherent,
     Transaction,
 };
 
@@ -179,24 +180,16 @@ impl Blockchain {
         // so we need to add them again in order to correctly sync.
         for (i, block_number) in block_numbers.iter().enumerate() {
             if Policy::is_macro_block_at(*block_number) {
-                let finalize_batch = Inherent {
-                    ty: InherentType::FinalizeBatch,
-                    target: this.staking_contract_address(),
-                    value: Coin::ZERO,
-                    data: vec![],
-                };
-
-                block_inherents.get_mut(i).unwrap().push(finalize_batch);
+                block_inherents
+                    .get_mut(i)
+                    .unwrap()
+                    .push(Inherent::FinalizeBatch);
 
                 if Policy::is_election_block_at(*block_number) {
-                    let finalize_epoch = Inherent {
-                        ty: InherentType::FinalizeEpoch,
-                        target: this.staking_contract_address(),
-                        value: Coin::ZERO,
-                        data: vec![],
-                    };
-
-                    block_inherents.get_mut(i).unwrap().push(finalize_epoch);
+                    block_inherents
+                        .get_mut(i)
+                        .unwrap()
+                        .push(Inherent::FinalizeEpoch);
                 }
             }
         }
@@ -210,12 +203,12 @@ impl Blockchain {
                 .collect();
 
             // Commit block to AccountsTree and create the receipts.
+            let block_state = BlockState::new(block_numbers[i], block_timestamps[i]);
             let receipts = this.state.accounts.commit_batch(
                 &mut txn,
                 &txns,
                 &block_inherents[i],
-                block_numbers[i],
-                block_timestamps[i],
+                &block_state,
             );
 
             // Check if the receipts contain an error.
@@ -328,16 +321,18 @@ impl Blockchain {
         );
 
         // If there are no listeners we do not log errors
-        _ = this
-            .notifier
-            .send(BlockchainEvent::HistoryAdopted(block_hash.clone()));
+        this.notifier
+            .send(BlockchainEvent::HistoryAdopted(block_hash.clone()))
+            .ok();
 
         if is_election_block {
-            _ = this
-                .notifier
-                .send(BlockchainEvent::EpochFinalized(block_hash));
+            this.notifier
+                .send(BlockchainEvent::EpochFinalized(block_hash))
+                .ok();
         } else {
-            _ = this.notifier.send(BlockchainEvent::Finalized(block_hash));
+            this.notifier
+                .send(BlockchainEvent::Finalized(block_hash))
+                .ok();
         }
 
         // Return result.

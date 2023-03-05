@@ -130,7 +130,7 @@ impl<N: Network> ZKPComponent<N> {
     ) -> Self {
         // Defaults zkp state to genesis.
         let network_info = NetworkInfo::from_network_id(blockchain.read().network_id());
-        let genesis_block = network_info.genesis_block::<Block>().unwrap_macro();
+        let genesis_block = network_info.genesis_block().unwrap_macro();
         let zkp_state = Arc::new(RwLock::new(
             ZKPState::with_genesis(&genesis_block).expect("Invalid genesis block"),
         ));

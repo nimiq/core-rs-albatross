@@ -1,7 +1,10 @@
 use std::collections::btree_set::BTreeSet;
 use std::collections::BTreeMap;
 
-use beserial::{Deserialize, Serialize};
+use beserial::{
+    Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
+    SerializingError, WriteBytesExt,
+};
 use nimiq_collections::BitSet;
 use nimiq_keys::Address;
 use nimiq_primitives::{
@@ -9,22 +12,17 @@ use nimiq_primitives::{
     policy::Policy,
     slots::{Validators, ValidatorsBuilder},
 };
-use nimiq_transaction::account::staking_contract::{
-    IncomingStakingTransactionData, OutgoingStakingTransactionProof,
-};
-use nimiq_trie::trie::IncompleteTrie;
 use nimiq_vrf::{AliasMethod, VrfSeed, VrfUseCase};
-
-use crate::{Account, AccountsTrie};
-
-pub use receipts::*;
-pub use staker::Staker;
-pub use validator::Validator;
 
 use crate::account::staking_contract::store::{
     StakingContractStoreRead, StakingContractStoreReadOps,
 };
 use crate::data_store::DataStoreRead;
+
+pub use receipts::*;
+pub use staker::Staker;
+pub use store::StakingContractStoreWrite;
+pub use validator::Validator;
 
 mod receipts;
 mod staker;
@@ -62,16 +60,15 @@ mod validator;
 ///       the information relative to the Validator and a list of stakers that are validating for
 ///       this validator (we store only the staker address).
 ///     - A list of Stakers, with each Staker struct containing all information about a staker.
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 pub struct StakingContract {
     // The total amount of coins staked (also includes validators deposits).
     pub balance: Coin,
     // The list of active validators addresses (i.e. are eligible to receive slots) and their
     // corresponding balances.
-    #[beserial(len_type(u32))]
     pub active_validators: BTreeMap<Address, Coin>,
     // The validators that were parked during the current epoch.
-    #[beserial(len_type(u32))]
     pub parked_set: BTreeSet<Address>,
     // The validator slots that lost rewards (i.e. are not eligible to receive rewards) during
     // the current batch.
@@ -81,11 +78,9 @@ pub struct StakingContract {
     pub previous_lost_rewards: BitSet,
     // The validator slots, searchable by the validator address, that are disabled (i.e. are no
     // longer eligible to produce blocks) currently.
-    #[beserial(len_type(u32))]
     pub current_disabled_slots: BTreeMap<Address, BTreeSet<u16>>,
     // The validator slots, searchable by the validator address, that were disabled (i.e. are no
     // longer eligible to produce blocks) during the previous batch.
-    #[beserial(len_type(u32))]
     pub previous_disabled_slots: BTreeMap<Address, BTreeSet<u16>>,
 }
 
@@ -183,126 +178,96 @@ impl StakingContract {
     pub fn parked_set(&self) -> Vec<Address> {
         self.parked_set.iter().cloned().collect()
     }
+}
 
-    //     /// Checks if a given sender can pay the transaction.
-    //     pub fn can_pay_tx(
-    //         accounts_tree: &AccountsTrie,
-    //         db_txn: &DBTransaction,
-    //         tx_proof: OutgoingStakingTransactionProof,
-    //         tx_value: Coin,
-    //         block_height: u32,
-    //     ) -> bool {
-    //         match tx_proof {
-    //             OutgoingStakingTransactionProof::DeleteValidator { proof } => {
-    //                 // Get the validator address from the proof.
-    //                 let validator_address = proof.compute_signer();
-    //
-    //                 // Get the validator.
-    //                 let validator =
-    //                     match StakingContract::get_validator(accounts_tree, db_txn, &validator_address)
-    //                     {
-    //                         Some(v) => v,
-    //                         None => {
-    //                             warn!(
-    //                                 "Cannot pay fees for transaction because validator doesn't exist."
-    //                             );
-    //                             return false;
-    //                         }
-    //                     };
-    //
-    //                 // If the fee is larger than the validator deposit then this won't work.
-    //                 if tx_value > validator.deposit {
-    //                     warn!(
-    //     "Cannot pay fees for transaction because fee is larger than validator deposit."
-    // );
-    //                     return false;
-    //                 }
-    //
-    //                 // Check that the validator has been inactive for long enough.
-    //                 match validator.inactivity_flag {
-    //                     None => {
-    //                         warn!("Cannot pay fees for transaction because validator is still active.");
-    //                         return false;
-    //                     }
-    //                     Some(time) => {
-    //                         if block_height
-    //                             <= policy::election_block_after(time) + policy::BLOCKS_PER_BATCH
-    //                         {
-    //                             warn!(
-    //                     "Cannot pay fees for transaction because validator hasn't been inactive for long enough."
-    //                 );
-    //                             return false;
-    //                         }
-    //                     }
-    //                 }
-    //             }
-    //             OutgoingStakingTransactionProof::Unstake { proof } => {
-    //                 // Get the staker address from the proof.
-    //                 let staker_address = proof.compute_signer();
-    //
-    //                 // Get the staker.
-    //                 let staker =
-    //                     match StakingContract::get_staker(accounts_tree, db_txn, &staker_address) {
-    //                         Some(v) => v,
-    //                         None => {
-    //                             warn!("Cannot pay fees for transaction because staker doesn't exist.");
-    //                             return false;
-    //                         }
-    //                     };
-    //
-    //                 // Check that the balance is enough to pay the fee.
-    //                 if tx_value > staker.balance {
-    //                     warn!(
-    //                     "Cannot pay fees for transaction because fee is larger than staker balance."
-    //                 );
-    //                     return false;
-    //                 }
-    //             }
-    //         }
-    //
-    //         true
-    //     }
-    //
-    //     /// Checks if a given creation transaction will succeed.
-    //     pub fn can_create(
-    //         accounts_tree: &AccountsTrie,
-    //         db_txn: &DBTransaction,
-    //         tx_data: IncomingStakingTransactionData,
-    //     ) -> bool {
-    //         match tx_data {
-    //             IncomingStakingTransactionData::CreateValidator { proof, .. } => {
-    //                 // Get the validator address from the proof.
-    //                 let validator_address = proof.compute_signer();
-    //
-    //                 // If the validator already exists then the transaction would fail.
-    //                 if StakingContract::get_validator(accounts_tree, db_txn, &validator_address)
-    //                     .is_some()
-    //                 {
-    //                     warn!("Cannot create validator because validator already exists.");
-    //                     return false;
-    //                 };
-    //             }
-    //             IncomingStakingTransactionData::CreateStaker { proof, delegation } => {
-    //                 // Get the staker address from the proof.
-    //                 let staker_address = proof.compute_signer();
-    //
-    //                 // If the staker already exists then the transaction would fail.
-    //                 if StakingContract::get_staker(accounts_tree, db_txn, &staker_address).is_some() {
-    //                     warn!("Cannot create staker because staker already exists.");
-    //                     return false;
-    //                 };
-    //
-    //                 // Verify we have a valid delegation address (if present)
-    //                 if let Some(delegation) = delegation {
-    //                     let key = StakingContract::get_key_validator(&delegation);
-    //                     if accounts_tree.get::<Account>(db_txn, &key).is_none() {
-    //                         return false;
-    //                     }
-    //                 }
-    //             }
-    //             _ => {}
-    //         }
-    //
-    //         true
-    //     }
+impl Serialize for StakingContract {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+        let mut size = 0;
+
+        size += Serialize::serialize(&self.balance, writer)?;
+
+        size += SerializeWithLength::serialize::<u32, _>(&self.active_validators, writer)?;
+
+        size += SerializeWithLength::serialize::<u32, _>(&self.parked_set, writer)?;
+
+        size += Serialize::serialize(&self.current_lost_rewards, writer)?;
+        size += Serialize::serialize(&self.previous_lost_rewards, writer)?;
+
+        size += Serialize::serialize(&(self.current_disabled_slots.len() as u16), writer)?;
+        for (key, slots) in self.current_disabled_slots.iter() {
+            size += Serialize::serialize(key, writer)?;
+            size += SerializeWithLength::serialize::<u16, _>(slots, writer)?;
+        }
+        size += Serialize::serialize(&(self.previous_disabled_slots.len() as u16), writer)?;
+        for (key, slots) in self.previous_disabled_slots.iter() {
+            size += Serialize::serialize(key, writer)?;
+            size += SerializeWithLength::serialize::<u16, _>(slots, writer)?;
+        }
+
+        Ok(size)
+    }
+
+    fn serialized_size(&self) -> usize {
+        let mut size = 0;
+        size += Serialize::serialized_size(&self.balance);
+
+        size += SerializeWithLength::serialized_size::<u32>(&self.active_validators);
+
+        size += SerializeWithLength::serialized_size::<u32>(&self.parked_set);
+
+        size += Serialize::serialized_size(&self.current_lost_rewards);
+        size += Serialize::serialized_size(&self.previous_lost_rewards);
+
+        size += Serialize::serialized_size(&(self.current_disabled_slots.len() as u16));
+        for (key, slots) in self.current_disabled_slots.iter() {
+            size += Serialize::serialized_size(key);
+            size += SerializeWithLength::serialized_size::<u16>(slots);
+        }
+        size += Serialize::serialized_size(&(self.previous_disabled_slots.len() as u16));
+        for (key, slots) in self.previous_disabled_slots.iter() {
+            size += Serialize::serialized_size(key);
+            size += SerializeWithLength::serialized_size::<u16>(slots);
+        }
+
+        size
+    }
+}
+
+impl Deserialize for StakingContract {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+        let balance = Deserialize::deserialize(reader)?;
+
+        let active_validators = DeserializeWithLength::deserialize::<u32, _>(reader)?;
+
+        let parked_set = DeserializeWithLength::deserialize::<u32, _>(reader)?;
+
+        let current_lost_rewards = Deserialize::deserialize(reader)?;
+        let previous_lost_rewards = Deserialize::deserialize(reader)?;
+
+        let num_current_disabled_slots: u16 = Deserialize::deserialize(reader)?;
+        let mut current_disabled_slots = BTreeMap::new();
+        for _ in 0..num_current_disabled_slots {
+            let key: Address = Deserialize::deserialize(reader)?;
+            let value = DeserializeWithLength::deserialize::<u16, _>(reader)?;
+            current_disabled_slots.insert(key, value);
+        }
+
+        let num_previous_disabled_slots: u16 = Deserialize::deserialize(reader)?;
+        let mut previous_disabled_slots = BTreeMap::new();
+        for _ in 0..num_previous_disabled_slots {
+            let key: Address = Deserialize::deserialize(reader)?;
+            let value = DeserializeWithLength::deserialize::<u16, _>(reader)?;
+            previous_disabled_slots.insert(key, value);
+        }
+
+        Ok(StakingContract {
+            balance,
+            active_validators,
+            parked_set,
+            current_lost_rewards,
+            previous_lost_rewards,
+            current_disabled_slots,
+            previous_disabled_slots,
+        })
+    }
 }

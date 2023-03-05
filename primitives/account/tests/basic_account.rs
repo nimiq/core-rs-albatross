@@ -1,7 +1,10 @@
 use std::convert::TryInto;
 
 use beserial::{Deserialize, Serialize};
-use nimiq_account::{Account, AccountTransactionInteraction, AccountsTrie, BasicAccount, Log};
+use nimiq_account::{
+    Account, AccountPruningInteraction, AccountTransactionInteraction, Accounts, AccountsTrie,
+    BasicAccount, BlockState, DataStore, Log, Receipts,
+};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_database::WriteTransaction;
 use nimiq_keys::{Address, KeyPair, PrivateKey};
@@ -44,67 +47,67 @@ fn it_does_not_allow_creation() {
 #[test]
 fn basic_transfer_works() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTree");
+    let accounts = Accounts::new(env.clone());
+
     let mut db_txn = WriteTransaction::new(&env);
 
-    init_tree(&accounts_tree, &mut db_txn);
+    init_tree(&accounts.tree, &mut db_txn);
 
-    let address_recipient = Address::from_any_str(ADDRESS_2).unwrap();
+    let sender_address = Address::from_any_str(ADDRESS_1).unwrap();
+    let recipient_address = Address::from_any_str(ADDRESS_2).unwrap();
 
-    let key_sender = KeyNibbles::from(&Address::from_any_str(ADDRESS_1).unwrap());
-    let key_recipient = KeyNibbles::from(&address_recipient);
+    let mut sender_account = accounts.get_complete(&sender_address, Some(&db_txn));
+    let mut recipient_account = accounts.get_complete(&recipient_address, Some(&db_txn));
 
     // Works in the normal case.
-    let tx = make_signed_transaction(100, address_recipient.clone());
+    let tx = make_signed_transaction(100, recipient_address.clone());
 
-    let account_info =
-        BasicAccount::commit_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 1, 2).unwrap();
-    assert_eq!(account_info.receipt, None);
+    let block_state = BlockState::new(1, 2);
+    let sender_store = DataStore::new(&accounts.tree, &sender_address);
 
-    assert_eq!(
-        account_info.logs,
-        vec![
-            Log::PayFee {
-                from: tx.sender.clone(),
-                fee: tx.fee,
-            },
-            Log::Transfer {
-                from: tx.sender.clone(),
-                to: tx.recipient.clone(),
-                amount: tx.value,
-                data: None,
-            },
-        ],
-    );
+    let receipt = sender_account
+        .commit_outgoing_transaction(&tx, &block_state, sender_store.write(&mut db_txn))
+        .unwrap();
 
-    let account_info =
-        BasicAccount::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 1, 2).unwrap();
-    assert_eq!(account_info.receipt, None);
-    assert!(account_info.logs.is_empty());
+    assert_eq!(receipt, None);
 
-    assert_eq!(
-        accounts_tree
-            .get::<Account>(&db_txn, &key_sender)
-            .expect("complete trie")
-            .unwrap()
-            .balance(),
-        Coin::from_u64_unchecked(899)
-    );
+    // assert_eq!(
+    //     account_info.logs,
+    //     vec![
+    //         Log::PayFee {
+    //             from: tx.sender.clone(),
+    //             fee: tx.fee,
+    //         },
+    //         Log::Transfer {
+    //             from: tx.sender.clone(),
+    //             to: tx.recipient.clone(),
+    //             amount: tx.value,
+    //             data: None,
+    //         },
+    //     ],
+    // );
 
-    assert_eq!(
-        accounts_tree
-            .get::<Account>(&db_txn, &key_recipient)
-            .expect("complete trie")
-            .unwrap()
-            .balance(),
-        Coin::from_u64_unchecked(1100)
-    );
+    let recipient_store = DataStore::new(&accounts.tree, &recipient_address);
+
+    let receipt = recipient_account
+        .commit_incoming_transaction(&tx, &block_state, recipient_store.write(&mut db_txn))
+        .unwrap();
+
+    assert_eq!(receipt, None);
+    // assert!(account_info.logs.is_empty());
+
+    assert_eq!(sender_account.balance(), Coin::from_u64_unchecked(899));
+    assert_eq!(recipient_account.balance(), Coin::from_u64_unchecked(1100));
 
     // Doesn't work when the transaction value exceeds the account balance.
-    let tx = make_signed_transaction(1000, address_recipient.clone());
+    let tx = make_signed_transaction(1000, recipient_address.clone());
 
     assert_eq!(
-        BasicAccount::commit_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 1, 2),
+        sender_account.commit_outgoing_transaction(
+            &tx,
+            &block_state,
+            sender_store.write(&mut db_txn)
+        ),
         Err(AccountError::InsufficientFunds {
             needed: Coin::from_u64_unchecked(1001),
             balance: Coin::from_u64_unchecked(899)
@@ -112,10 +115,14 @@ fn basic_transfer_works() {
     );
 
     // Doesn't work when the transaction total value exceeds the account balance.
-    let tx = make_signed_transaction(899, address_recipient.clone());
+    let tx = make_signed_transaction(899, recipient_address.clone());
 
     assert_eq!(
-        BasicAccount::commit_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 1, 2),
+        sender_account.commit_outgoing_transaction(
+            &tx,
+            &block_state,
+            sender_store.write(&mut db_txn)
+        ),
         Err(AccountError::InsufficientFunds {
             needed: Coin::from_u64_unchecked(900),
             balance: Coin::from_u64_unchecked(899)
@@ -123,169 +130,128 @@ fn basic_transfer_works() {
     );
 
     // Can revert transaction.
-    let tx = make_signed_transaction(100, address_recipient);
+    let tx = make_signed_transaction(100, recipient_address);
 
     assert_eq!(
-        BasicAccount::revert_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 1, 2, None),
-        Ok(vec![
-            Log::PayFee {
-                from: tx.sender.clone(),
-                fee: tx.fee,
-            },
-            Log::Transfer {
-                from: tx.sender.clone(),
-                to: tx.recipient.clone(),
-                amount: tx.value,
-                data: None,
-            },
-        ])
-    );
-    assert_eq!(
-        BasicAccount::revert_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 1, 2, None)
-            .map(|logs| logs.is_empty()),
-        Ok(true)
-    );
-
-    assert_eq!(
-        accounts_tree
-            .get::<Account>(&db_txn, &key_sender)
-            .expect("complete trie")
-            .unwrap()
-            .balance(),
-        Coin::from_u64_unchecked(1000)
+        sender_account.revert_outgoing_transaction(
+            &tx,
+            &block_state,
+            None,
+            sender_store.write(&mut db_txn)
+        ),
+        Ok(()) // Ok(vec![
+               //     Log::PayFee {
+               //         from: tx.sender.clone(),
+               //         fee: tx.fee,
+               //     },
+               //     Log::Transfer {
+               //         from: tx.sender.clone(),
+               //         to: tx.recipient.clone(),
+               //         amount: tx.value,
+               //         data: None,
+               //     },
+               // ])
     );
 
     assert_eq!(
-        accounts_tree
-            .get::<Account>(&db_txn, &key_recipient)
-            .expect("complete trie")
-            .unwrap()
-            .balance(),
-        Coin::from_u64_unchecked(1000)
+        recipient_account.revert_incoming_transaction(
+            &tx,
+            &block_state,
+            None,
+            recipient_store.write(&mut db_txn)
+        ),
+        Ok(())
     );
+
+    assert_eq!(sender_account.balance(), Coin::from_u64_unchecked(1000));
+    assert_eq!(recipient_account.balance(), Coin::from_u64_unchecked(1000));
 }
 
 #[test]
 fn create_and_prune_works() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTree");
+    let accounts = Accounts::new(env.clone());
     let mut db_txn = WriteTransaction::new(&env);
 
-    init_tree(&accounts_tree, &mut db_txn);
+    init_tree(&accounts.tree, &mut db_txn);
 
-    let address_recipient = Address::from([0; 20]);
-
-    let key_sender = KeyNibbles::from(&Address::from_any_str(ADDRESS_1).unwrap());
-    let key_recipient = KeyNibbles::from(&address_recipient);
+    let sender_address = Address::from_any_str(ADDRESS_1).unwrap();
+    let recipient_address = Address::from([0; 20]);
 
     // Can create a new account and prune an empty account.
-    let tx = make_signed_transaction(999, address_recipient);
+    let tx = make_signed_transaction(999, recipient_address);
 
-    let account_info =
-        BasicAccount::commit_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 1, 2).unwrap();
-    assert_eq!(account_info.receipt, None);
-    assert_eq!(
-        account_info.logs,
-        vec![
-            Log::PayFee {
-                from: tx.sender.clone(),
-                fee: tx.fee,
-            },
-            Log::Transfer {
-                from: tx.sender.clone(),
-                to: tx.recipient.clone(),
-                amount: tx.value,
-                data: None,
-            },
-        ]
-    );
-
-    let account_info =
-        BasicAccount::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 1, 2).unwrap();
-    assert_eq!(account_info.receipt, None);
-    assert!(account_info.logs.is_empty());
+    let receipts = accounts
+        .commit(&mut db_txn, &[tx.clone()], &[], &block_state)
+        .unwrap();
+    assert_eq!(receipts, Receipts::default());
 
     assert_eq!(
-        accounts_tree
-            .get::<Account>(&db_txn, &key_sender)
-            .expect("complete trie"),
-        None
+        accounts.get_complete(&sender_address, Some(&db_txn)),
+        Account::default()
     );
 
     assert_eq!(
-        accounts_tree
-            .get::<Account>(&db_txn, &key_recipient)
-            .expect("complete trie")
-            .unwrap()
+        accounts
+            .get_complete(&recipient_address, Some(&db_txn))
             .balance(),
         Coin::from_u64_unchecked(999)
     );
 
     // Can revert transaction.
-    let logs =
-        BasicAccount::revert_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 1, 2, None)
-            .unwrap();
-    assert_eq!(
-        logs,
-        vec![
-            Log::PayFee {
-                from: tx.sender.clone(),
-                fee: tx.fee,
-            },
-            Log::Transfer {
-                from: tx.sender.clone(),
-                to: tx.recipient.clone(),
-                amount: tx.value,
-                data: None,
-            },
-        ]
-    );
-
-    let logs =
-        BasicAccount::revert_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 1, 2, None)
-            .unwrap();
-    assert!(logs.is_empty());
+    accounts
+        .revert(&mut db_txn, &[tx], &[], &block_state, receipts)
+        .unwrap();
+    // assert_eq!(
+    //     logs,
+    //     vec![
+    //         Log::PayFee {
+    //             from: tx.sender.clone(),
+    //             fee: tx.fee,
+    //         },
+    //         Log::Transfer {
+    //             from: tx.sender.clone(),
+    //             to: tx.recipient.clone(),
+    //             amount: tx.value,
+    //             data: None,
+    //         },
+    //     ]
+    // );
 
     assert_eq!(
-        accounts_tree
-            .get::<Account>(&db_txn, &key_sender)
-            .expect("complete trie")
-            .unwrap()
+        accounts
+            .get_complete(&sender_address, Some(&db_txn))
             .balance(),
         Coin::from_u64_unchecked(1000)
     );
 
     assert_eq!(
-        accounts_tree
-            .get::<Account>(&db_txn, &key_recipient)
-            .expect("complete trie"),
-        None
+        accounts.get_complete(&recipient_address, Some(&db_txn)),
+        Account::default()
     );
 }
 
-fn init_tree(accounts_tree: &AccountsTrie, db_txn: &mut WriteTransaction) {
+fn init_tree(tree: &AccountsTrie, db_txn: &mut WriteTransaction) {
     let key_1 = KeyNibbles::from(&Address::from_any_str(ADDRESS_1).unwrap());
     let key_2 = KeyNibbles::from(&Address::from_any_str(ADDRESS_2).unwrap());
 
-    accounts_tree
-        .put(
-            db_txn,
-            &key_1,
-            Account::Basic(BasicAccount {
-                balance: Coin::from_u64_unchecked(1000),
-            }),
-        )
-        .expect("complete trie");
+    tree.put(
+        db_txn,
+        &key_1,
+        Account::Basic(BasicAccount {
+            balance: Coin::from_u64_unchecked(1000),
+        }),
+    )
+    .expect("complete trie");
 
-    accounts_tree
-        .put(
-            db_txn,
-            &key_2,
-            Account::Basic(BasicAccount {
-                balance: Coin::from_u64_unchecked(1000),
-            }),
-        )
-        .expect("complete trie");
+    tree.put(
+        db_txn,
+        &key_2,
+        Account::Basic(BasicAccount {
+            balance: Coin::from_u64_unchecked(1000),
+        }),
+    )
+    .expect("complete trie");
 }
 
 fn make_signed_transaction(value: u64, recipient: Address) -> Transaction {

@@ -1,9 +1,10 @@
 use nimiq_database::{
     Environment, ReadTransaction, Transaction as DBTransaction, WriteTransaction,
 };
-use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::account::AccountType;
+use nimiq_primitives::trie::TrieItem;
 use nimiq_primitives::{
     account::AccountError,
     key_nibbles::KeyNibbles,
@@ -16,7 +17,7 @@ use crate::data_store::DataStore;
 use crate::interaction_traits::AccountPruningInteraction;
 use crate::{
     Account, AccountInherentInteraction, AccountReceipt, AccountTransactionInteraction, BlockState,
-    Inherent, InherentOperationReceipt, OperationReceipt, Receipts, ReservedBalance,
+    InherentOperationReceipt, OperationReceipt, Receipts, ReservedBalance,
     TransactionOperationReceipt, TransactionReceipt,
 };
 
@@ -41,15 +42,8 @@ impl Accounts {
     }
 
     /// Initializes the Accounts struct with a given list of accounts.
-    pub fn init(&self, txn: &mut WriteTransaction, genesis_accounts: Vec<(KeyNibbles, Account)>) {
-        for (key, account) in genesis_accounts {
-            self.tree
-                .put(txn, &key, account)
-                .expect("temporary until accounts rewrite");
-        }
-        self.tree
-            .update_root(txn)
-            .expect("should be a complete trie");
+    pub fn init(&self, txn: &mut WriteTransaction, genesis_accounts: Vec<TrieItem>) {
+        self.tree.init(txn, genesis_accounts)
     }
 
     /// Returns the number of accounts (incl. hybrid nodes) in the Accounts Trie.
@@ -70,11 +64,11 @@ impl Accounts {
     ) -> Result<Account, IncompleteTrie> {
         let key = KeyNibbles::from(address);
         match txn_option {
-            Some(txn) => self.tree.get(txn, &key)?.unwrap_or_default(),
-            None => self
+            Some(txn) => Ok(self.tree.get(txn, &key)?.unwrap_or_default()),
+            None => Ok(self
                 .tree
                 .get(&ReadTransaction::new(&self.env), &key)?
-                .unwrap_or_default(),
+                .unwrap_or_default()),
         }
     }
 
@@ -110,6 +104,10 @@ impl Accounts {
         }
     }
 
+    pub fn data_store(&self, address: &Address) -> DataStore {
+        DataStore::new(&self.tree, address)
+    }
+
     fn is_missing(&self, txn: &DBTransaction, address: &Address) -> bool {
         self.tree
             .get_missing_range(txn)
@@ -139,7 +137,11 @@ impl Accounts {
         ty: AccountType,
         pruned_account: Option<&AccountReceipt>,
     ) -> Result<Account, AccountError> {
-        if let Some(account) = self.tree.get(txn, &KeyNibbles::from(address))? {
+        let account = self
+            .tree
+            .get::<Account>(txn, &KeyNibbles::from(address))
+            .expect("Tree must be complete");
+        if let Some(account) = account {
             // TODO This check is unnecessary since we are only using this function during revert.
             //  Replace with assert!()?
             if account.account_type() != ty {
@@ -169,7 +171,7 @@ impl Accounts {
     ) -> Option<AccountReceipt> {
         if account.can_be_pruned() {
             let store = DataStore::new(&self.tree, address);
-            let pruned_account = account.prune(store.read(txn))?;
+            let pruned_account = account.prune(store.read(txn));
             self.prune(txn, address);
             pruned_account
         } else {
@@ -339,7 +341,7 @@ impl Accounts {
     ) -> Result<TransactionReceipt, AccountError> {
         // Commit sender.
         let sender_address = &transaction.sender;
-        let mut sender_store = DataStore::new(&self.tree, sender_address);
+        let sender_store = DataStore::new(&self.tree, sender_address);
         let mut sender_account =
             self.get_with_type(txn, sender_address, transaction.sender_type)?;
 
@@ -400,7 +402,7 @@ impl Accounts {
         let mut pruned_account = None;
 
         if !self.is_missing(txn, sender_address) {
-            let mut sender_store = DataStore::new(&self.tree, sender_address);
+            let sender_store = DataStore::new(&self.tree, sender_address);
             let mut sender_account =
                 self.get_with_type(txn, sender_address, transaction.sender_type)?;
 
@@ -445,7 +447,7 @@ impl Accounts {
             return Ok(None);
         }
 
-        let mut recipient_store = DataStore::new(&self.tree, recipient_address);
+        let recipient_store = DataStore::new(&self.tree, recipient_address);
 
         // Handle contract creation.
         if transaction
@@ -468,7 +470,7 @@ impl Accounts {
             })
         } else {
             self.get_with_type(txn, recipient_address, transaction.recipient_type)
-                .and_then(|mut account| {
+                .and_then(|account| {
                     *recipient_account = account;
                     recipient_account.commit_incoming_transaction(
                         transaction,
@@ -490,7 +492,7 @@ impl Accounts {
             return Ok(TransactionReceipt::default());
         }
 
-        let mut sender_store = DataStore::new(&self.tree, sender_address);
+        let sender_store = DataStore::new(&self.tree, sender_address);
         let mut sender_account =
             self.get_with_type(txn, sender_address, transaction.sender_type)?;
 
@@ -521,7 +523,7 @@ impl Accounts {
         }
 
         let store = DataStore::new(&self.tree, address);
-        let mut account = self.get(address, Some(txn))?;
+        let mut account = self.get_complete(address, Some(txn));
 
         if let Ok(receipt) = account.commit_inherent(inherent, block_state, store.write(txn)) {
             self.put(txn, address, account);
@@ -671,7 +673,7 @@ impl Accounts {
             return Ok(());
         }
 
-        let mut sender_store = DataStore::new(&self.tree, sender_address);
+        let sender_store = DataStore::new(&self.tree, sender_address);
         let mut sender_account = self.get_or_restore(
             txn,
             sender_address,
@@ -710,7 +712,7 @@ impl Accounts {
         }
 
         let store = DataStore::new(&self.tree, address);
-        let mut account = self.get(address, Some(txn))?;
+        let mut account = self.get_complete(address, Some(txn));
 
         account.revert_inherent(inherent, block_state, receipt, store.write(txn))?;
 

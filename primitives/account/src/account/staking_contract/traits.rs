@@ -6,10 +6,7 @@ use nimiq_primitives::{account::AccountError, coin::Coin, policy::Policy};
 use nimiq_transaction::account::staking_contract::{
     IncomingStakingTransactionData, OutgoingStakingTransactionProof,
 };
-use nimiq_transaction::{
-    inherent::{Inherent, InherentType},
-    Transaction,
-};
+use nimiq_transaction::{inherent::Inherent, Transaction};
 
 use crate::account::staking_contract::store::{
     StakingContractStoreRead, StakingContractStoreReadOps, StakingContractStoreReadOpsExt,
@@ -20,7 +17,7 @@ use crate::{
     account::staking_contract::{receipts::SlashReceipt, StakingContract},
     data_store::{DataStoreRead, DataStoreWrite},
     interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction},
-    Account, AccountPruningInteraction, AccountReceipt, BlockState, Inherent,
+    Account, AccountPruningInteraction, AccountReceipt, BlockState,
 };
 
 /// We need to distinguish between two types of transactions:
@@ -70,7 +67,7 @@ impl AccountTransactionInteraction for StakingContract {
         block_state: &BlockState,
         mut data_store: DataStoreWrite,
     ) -> Result<Option<AccountReceipt>, AccountError> {
-        let store = StakingContractStoreWrite::new(&mut data_store);
+        let mut store = StakingContractStoreWrite::new(&mut data_store);
 
         // Parse transaction data.
         let data = IncomingStakingTransactionData::parse(transaction)?;
@@ -97,7 +94,7 @@ impl AccountTransactionInteraction for StakingContract {
                 // }
 
                 self.create_validator(
-                    &store,
+                    &mut store,
                     &validator_address,
                     signing_key,
                     voting_key,
@@ -105,7 +102,7 @@ impl AccountTransactionInteraction for StakingContract {
                     signal_data,
                     transaction.value,
                 )
-                .into()
+                .map(|_| None)
             }
             IncomingStakingTransactionData::UpdateValidator {
                 new_signing_key,
@@ -119,14 +116,14 @@ impl AccountTransactionInteraction for StakingContract {
                 let validator_address = proof.compute_signer();
 
                 self.update_validator(
-                    &store,
+                    &mut store,
                     &validator_address,
                     new_signing_key,
                     new_voting_key,
                     new_reward_address,
                     new_signal_data,
                 )
-                .into()
+                .map(|receipt| Some(receipt.into()))
             }
             IncomingStakingTransactionData::InactivateValidator {
                 validator_address,
@@ -135,8 +132,13 @@ impl AccountTransactionInteraction for StakingContract {
                 // Get the signer's address from the proof.
                 let signer = proof.compute_signer();
 
-                self.inactivate_validator(&store, &validator_address, &signer, block_state.number)
-                    .into()
+                self.inactivate_validator(
+                    &mut store,
+                    &validator_address,
+                    &signer,
+                    block_state.number,
+                )
+                .map(|receipt| Some(receipt.into()))
             }
             IncomingStakingTransactionData::ReactivateValidator {
                 validator_address,
@@ -145,8 +147,8 @@ impl AccountTransactionInteraction for StakingContract {
                 // Get the signer's address from the proof.
                 let signer = proof.compute_signer();
 
-                self.reactivate_validator(&store, &validator_address, &signer)
-                    .into()
+                self.reactivate_validator(&mut store, &validator_address, &signer)
+                    .map(|receipt| Some(receipt.into()))
             }
             IncomingStakingTransactionData::UnparkValidator {
                 validator_address,
@@ -155,19 +157,19 @@ impl AccountTransactionInteraction for StakingContract {
                 // Get the signer's address from the proof.
                 let signer = proof.compute_signer();
 
-                self.unpark_validator(&store, &validator_address, &signer)
-                    .into()
+                self.unpark_validator(&mut store, &validator_address, &signer)
+                    .map(|receipt| Some(receipt.into()))
             }
             IncomingStakingTransactionData::CreateStaker { delegation, proof } => {
                 // Get the staker address from the proof.
                 let staker_address = proof.compute_signer();
 
-                self.create_staker(&store, &staker_address, transaction.value, delegation)
-                    .into()
+                self.create_staker(&mut store, &staker_address, transaction.value, delegation)
+                    .map(|_| None)
             }
             IncomingStakingTransactionData::AddStake { staker_address } => self
-                .add_stake(&store, &staker_address, transaction.value)
-                .into(),
+                .add_stake(&mut store, &staker_address, transaction.value)
+                .map(|_| None),
             IncomingStakingTransactionData::UpdateStaker {
                 new_delegation,
                 proof,
@@ -175,8 +177,8 @@ impl AccountTransactionInteraction for StakingContract {
                 // Get the staker address from the proof.
                 let staker_address = proof.compute_signer();
 
-                self.update_staker(&store, &staker_address, new_delegation)
-                    .into()
+                self.update_staker(&mut store, &staker_address, new_delegation)
+                    .map(|receipt| Some(receipt.into()))
             }
         }
     }
@@ -184,72 +186,67 @@ impl AccountTransactionInteraction for StakingContract {
     fn revert_incoming_transaction(
         &mut self,
         transaction: &Transaction,
-        block_state: &BlockState,
+        _block_state: &BlockState,
         receipt: Option<AccountReceipt>,
         mut data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
-        let store = StakingContractStoreWrite::new(&mut data_store);
+        let mut store = StakingContractStoreWrite::new(&mut data_store);
 
         // Parse transaction data.
         let data = IncomingStakingTransactionData::parse(transaction)?;
 
         match data {
-            IncomingStakingTransactionData::CreateValidator {
-                reward_address,
-                proof,
-                ..
-            } => {
+            IncomingStakingTransactionData::CreateValidator { proof, .. } => {
                 // Get the validator address from the proof.
                 let validator_address = proof.compute_signer();
 
-                self.revert_create_validator(&store, &validator_address, transaction.value)
-                    .into()
+                self.revert_create_validator(&mut store, &validator_address, transaction.value)
             }
             IncomingStakingTransactionData::UpdateValidator { proof, .. } => {
                 // Get the validator address from the proof.
                 let validator_address = proof.compute_signer();
 
-                let receipt = receipt.ok_or(AccountError::InvalidReceipt)?.into();
+                let receipt = receipt.ok_or(AccountError::InvalidReceipt)?.try_into()?;
 
-                self.revert_update_validator(&store, &validator_address, receipt)
+                self.revert_update_validator(&mut store, &validator_address, receipt)
             }
             IncomingStakingTransactionData::InactivateValidator {
                 validator_address, ..
             } => {
-                let receipt = receipt.ok_or(AccountError::InvalidReceipt)?.into();
+                let receipt = receipt.ok_or(AccountError::InvalidReceipt)?.try_into()?;
 
-                self.revert_inactivate_validator(&store, &validator_address, receipt)
+                self.revert_inactivate_validator(&mut store, &validator_address, receipt)
             }
             IncomingStakingTransactionData::ReactivateValidator {
                 validator_address, ..
             } => {
-                let receipt = receipt.ok_or(AccountError::InvalidReceipt)?.into();
+                let receipt = receipt.ok_or(AccountError::InvalidReceipt)?.try_into()?;
 
-                self.revert_reactivate_validator(&store, &validator_address, receipt)
+                self.revert_reactivate_validator(&mut store, &validator_address, receipt)
             }
             IncomingStakingTransactionData::UnparkValidator {
                 validator_address, ..
             } => {
-                let receipt = receipt.ok_or(AccountError::InvalidReceipt)?.into();
+                let receipt = receipt.ok_or(AccountError::InvalidReceipt)?.try_into()?;
 
-                self.revert_unpark_validator(&store, &validator_address, receipt)
+                self.revert_unpark_validator(&mut store, &validator_address, receipt)
             }
             IncomingStakingTransactionData::CreateStaker { proof, .. } => {
                 // Get the staker address from the proof.
                 let staker_address = proof.compute_signer();
 
-                self.revert_create_staker(&store, &staker_address, transaction.value)
+                self.revert_create_staker(&mut store, &staker_address, transaction.value)
             }
-            IncomingStakingTransactionData::Stake { staker_address } => {
-                self.revert_add_stake(&store, &staker_address, transaction.value)
+            IncomingStakingTransactionData::AddStake { staker_address } => {
+                self.revert_add_stake(&mut store, &staker_address, transaction.value)
             }
             IncomingStakingTransactionData::UpdateStaker { proof, .. } => {
                 // Get the staker address from the proof.
                 let staker_address = proof.compute_signer();
 
-                let receipt = receipt.ok_or(AccountError::InvalidReceipt)?.into();
+                let receipt = receipt.ok_or(AccountError::InvalidReceipt)?.try_into()?;
 
-                self.revert_update_staker(&store, &staker_address, receipt)
+                self.revert_update_staker(&mut store, &staker_address, receipt)
             }
         }
     }
@@ -260,7 +257,7 @@ impl AccountTransactionInteraction for StakingContract {
         block_state: &BlockState,
         mut data_store: DataStoreWrite,
     ) -> Result<Option<AccountReceipt>, AccountError> {
-        let store = StakingContractStoreWrite::new(&mut data_store);
+        let mut store = StakingContractStoreWrite::new(&mut data_store);
 
         // Parse transaction proof.
         let proof = OutgoingStakingTransactionProof::parse(transaction)?;
@@ -271,19 +268,19 @@ impl AccountTransactionInteraction for StakingContract {
                 let validator_address = proof.compute_signer();
 
                 self.delete_validator(
-                    &store,
+                    &mut store,
                     &validator_address,
                     block_state.number,
                     transaction.total_value(),
                 )
-                .into()
+                .map(|receipt| Some(receipt.into()))
             }
             OutgoingStakingTransactionProof::RemoveStake { proof } => {
                 // Get the staker address from the proof.
                 let staker_address = proof.compute_signer();
 
-                self.remove_stake(&store, &staker_address, transaction.total_value())
-                    .into()
+                self.remove_stake(&mut store, &staker_address, transaction.total_value())
+                    .map(|receipt| receipt.map(|receipt| receipt.into()))
             }
         }
 
@@ -308,11 +305,11 @@ impl AccountTransactionInteraction for StakingContract {
     fn revert_outgoing_transaction(
         &mut self,
         transaction: &Transaction,
-        block_state: &BlockState,
+        _block_state: &BlockState,
         receipt: Option<AccountReceipt>,
         mut data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
-        let store = StakingContractStoreWrite::new(&mut data_store);
+        let mut store = StakingContractStoreWrite::new(&mut data_store);
 
         // Parse transaction data.
         let data = OutgoingStakingTransactionProof::parse(transaction)?;
@@ -322,10 +319,10 @@ impl AccountTransactionInteraction for StakingContract {
                 // Get the validator address from the proof.
                 let validator_address = proof.compute_signer();
 
-                let receipt = receipt.ok_or(AccountError::InvalidReceipt)?.into();
+                let receipt = receipt.ok_or(AccountError::InvalidReceipt)?.try_into()?;
 
                 self.revert_delete_validator(
-                    &store,
+                    &mut store,
                     &validator_address,
                     transaction.total_value(),
                     receipt,
@@ -335,10 +332,13 @@ impl AccountTransactionInteraction for StakingContract {
                 // Get the staker address from the proof.
                 let staker_address = proof.compute_signer();
 
-                let receipt = receipt.into();
+                let receipt = match receipt {
+                    Some(receipt) => Some(receipt.try_into()?),
+                    None => None,
+                };
 
                 self.revert_remove_stake(
-                    &store,
+                    &mut store,
                     &staker_address,
                     transaction.total_value(),
                     receipt,
@@ -353,7 +353,7 @@ impl AccountTransactionInteraction for StakingContract {
         block_state: &BlockState,
         mut data_store: DataStoreWrite,
     ) -> Result<Option<AccountReceipt>, AccountError> {
-        let store = StakingContractStoreWrite::new(&mut data_store);
+        let mut store = StakingContractStoreWrite::new(&mut data_store);
 
         // Parse transaction proof.
         let data = OutgoingStakingTransactionProof::parse(transaction)?;
@@ -378,7 +378,7 @@ impl AccountTransactionInteraction for StakingContract {
                 // Delete the validator if the deposit reaches zero.
                 let receipt = if new_deposit.is_zero() {
                     let receipt = self.delete_validator(
-                        &store,
+                        &mut store,
                         &validator_address,
                         block_state.number,
                         validator.deposit,
@@ -406,8 +406,8 @@ impl AccountTransactionInteraction for StakingContract {
                 let staker_address = proof.compute_signer();
 
                 // This is similar to an remove_stake operation except that what we deduct only the fee from the stake.
-                self.remove_stake(&store, &staker_address, transaction.fee)
-                    .into()
+                self.remove_stake(&mut store, &staker_address, transaction.fee)
+                    .map(|receipt| receipt.map(|receipt| receipt.into()))
             }
         }
 
@@ -423,11 +423,11 @@ impl AccountTransactionInteraction for StakingContract {
     fn revert_failed_transaction(
         &mut self,
         transaction: &Transaction,
-        block_state: &BlockState,
+        _block_state: &BlockState,
         receipt: Option<AccountReceipt>,
         mut data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
-        let store = StakingContractStoreWrite::new(&mut data_store);
+        let mut store = StakingContractStoreWrite::new(&mut data_store);
 
         // Parse transaction data.
         let data = OutgoingStakingTransactionProof::parse(transaction)?;
@@ -437,23 +437,24 @@ impl AccountTransactionInteraction for StakingContract {
                 let validator_address = proof.compute_signer();
 
                 // Get or restore validator.
-                let mut validator = store
-                    .get_validator(&validator_address)
-                    .or_else(|| {
-                        receipt.map(|receipt| {
-                            self.revert_delete_validator(
-                                &store,
-                                &validator_address,
-                                Coin::ZERO,
-                                receipt.into(),
-                            )?;
+                let mut validator = {
+                    if let Some(validator) = store.get_validator(&validator_address) {
+                        validator
+                    } else if let Some(receipt) = receipt {
+                        self.revert_delete_validator(
+                            &mut store,
+                            &validator_address,
+                            Coin::ZERO,
+                            receipt.try_into()?,
+                        )?;
 
-                            store
-                                .get_validator(&validator_address)
-                                .expect("validator should be restored")
-                        })
-                    })
-                    .ok_or(AccountError::InvalidReceipt)?;
+                        store
+                            .get_validator(&validator_address)
+                            .expect("validator should be restored")
+                    } else {
+                        return Err(AccountError::InvalidReceipt);
+                    }
+                };
 
                 // Update the validator's deposit and total_stake.
                 validator.deposit += transaction.fee;
@@ -471,7 +472,12 @@ impl AccountTransactionInteraction for StakingContract {
                 // Get the staker address from the proof.
                 let staker_address = proof.compute_signer();
 
-                self.revert_remove_stake(&store, &staker_address, transaction.fee, receipt.into())
+                let receipt = match receipt {
+                    Some(receipt) => Some(receipt.try_into()?),
+                    None => None,
+                };
+
+                self.revert_remove_stake(&mut store, &staker_address, transaction.fee, receipt)
             }
         }
 
@@ -630,12 +636,12 @@ impl AccountInherentInteraction for StakingContract {
 
                 // Parking set and disabled slots are cleared on epoch changes.
                 // But first, retire all validators that have been parked this epoch.
-                let store = StakingContractStoreWrite::new(&mut data_store);
-                for validator_address in self.parked_set {
+                let mut store = StakingContractStoreWrite::new(&mut data_store);
+                for validator_address in &self.parked_set {
                     // Get the validator and update it.
-                    let mut validator = store.expect_validator(&validator_address)?;
+                    let mut validator = store.expect_validator(validator_address)?;
                     validator.inactive_since = Some(block_state.number);
-                    store.put_validator(&validator_address, validator);
+                    store.put_validator(validator_address, validator);
 
                     // Update the staking contract.
                     self.active_validators.remove(&validator_address);
@@ -664,11 +670,12 @@ impl AccountInherentInteraction for StakingContract {
         inherent: &Inherent,
         block_state: &BlockState,
         receipt: Option<AccountReceipt>,
-        data_store: DataStoreWrite,
+        _data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
         match inherent {
             Inherent::Slash { slot } => {
-                let receipt: SlashReceipt = receipt.ok_or(AccountError::InvalidReceipt)?.into();
+                let receipt: SlashReceipt =
+                    receipt.ok_or(AccountError::InvalidReceipt)?.try_into()?;
 
                 // Only remove if it was not already slashed.
                 if receipt.newly_parked {
@@ -747,7 +754,7 @@ impl AccountPruningInteraction for StakingContract {
         false
     }
 
-    fn prune(self, _data_store: DataStoreRead) -> Result<Option<AccountReceipt>, AccountError> {
+    fn prune(self, _data_store: DataStoreRead) -> Option<AccountReceipt> {
         unreachable!()
     }
 

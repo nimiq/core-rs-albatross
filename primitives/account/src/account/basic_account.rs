@@ -1,10 +1,9 @@
 use beserial::{Deserialize, Serialize};
 use nimiq_primitives::account::AccountType;
 use nimiq_primitives::{account::AccountError, coin::Coin};
-use nimiq_transaction::Transaction;
+use nimiq_transaction::{inherent::Inherent, Transaction};
 
 use crate::data_store::{DataStoreRead, DataStoreWrite};
-use crate::inherent::Inherent;
 use crate::interaction_traits::{AccountPruningInteraction, AccountTransactionInteraction};
 use crate::reserved_balance::ReservedBalance;
 use crate::{Account, AccountInherentInteraction, AccountReceipt, BlockState};
@@ -26,11 +25,11 @@ impl AccountTransactionInteraction for BasicAccount {
     }
 
     fn revert_new_contract(
-        self,
+        &mut self,
         _transaction: &Transaction,
         _block_state: &BlockState,
         _data_store: DataStoreWrite,
-    ) -> Result<Account, AccountError> {
+    ) -> Result<(), AccountError> {
         Err(AccountError::InvalidForRecipient)
     }
 
@@ -72,7 +71,7 @@ impl AccountTransactionInteraction for BasicAccount {
         _receipt: Option<AccountReceipt>,
         _data_store: DataStoreWrite,
     ) -> Result<(), AccountError> {
-        self.balance += transaction.total_value()?;
+        self.balance += transaction.total_value();
         Ok(())
     }
 
@@ -146,8 +145,8 @@ impl AccountPruningInteraction for BasicAccount {
         self.balance.is_zero()
     }
 
-    fn prune(self, _data_store: DataStoreRead) -> Result<Option<AccountReceipt>, AccountError> {
-        Ok(None)
+    fn prune(self, _data_store: DataStoreRead) -> Option<AccountReceipt> {
+        None
     }
 
     fn restore(

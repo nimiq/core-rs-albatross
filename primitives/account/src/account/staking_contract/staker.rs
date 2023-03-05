@@ -32,7 +32,7 @@ impl StakingContract {
     /// Creates a new staker. This function is public to fill the genesis staking contract.
     pub fn create_staker(
         &mut self,
-        store: &StakingContractStoreWrite,
+        store: &mut StakingContractStoreWrite,
         staker_address: &Address,
         value: Coin,
         delegation: Option<Address>,
@@ -75,7 +75,7 @@ impl StakingContract {
     /// Reverts a create staker transaction.
     pub fn revert_create_staker(
         &mut self,
-        store: &StakingContractStoreWrite,
+        store: &mut StakingContractStoreWrite,
         staker_address: &Address,
         value: Coin,
     ) -> Result<(), AccountError> {
@@ -102,7 +102,7 @@ impl StakingContract {
     /// Anyone can add stake for a staker. The staker must already exist.
     pub fn add_stake(
         &mut self,
-        store: &StakingContractStoreWrite,
+        store: &mut StakingContractStoreWrite,
         staker_address: &Address,
         value: Coin,
     ) -> Result<(), AccountError> {
@@ -137,7 +137,7 @@ impl StakingContract {
     /// Reverts a stake transaction.
     pub fn revert_add_stake(
         &mut self,
-        store: &StakingContractStoreWrite,
+        store: &mut StakingContractStoreWrite,
         staker_address: &Address,
         value: Coin,
     ) -> Result<(), AccountError> {
@@ -165,7 +165,7 @@ impl StakingContract {
     /// Updates the staker details. Right now you can only update the delegation.
     pub fn update_staker(
         &mut self,
-        store: &StakingContractStoreWrite,
+        store: &mut StakingContractStoreWrite,
         staker_address: &Address,
         delegation: Option<Address>,
     ) -> Result<StakerReceipt, AccountError> {
@@ -215,7 +215,7 @@ impl StakingContract {
     /// Reverts updating staker details.
     pub fn revert_update_staker(
         &mut self,
-        store: &StakingContractStoreWrite,
+        store: &mut StakingContractStoreWrite,
         staker_address: &Address,
         receipt: StakerReceipt,
     ) -> Result<(), AccountError> {
@@ -247,7 +247,7 @@ impl StakingContract {
     /// staker is deleted.
     pub fn remove_stake(
         &mut self,
-        store: &StakingContractStoreWrite,
+        store: &mut StakingContractStoreWrite,
         staker_address: &Address,
         value: Coin,
     ) -> Result<Option<StakerReceipt>, AccountError> {
@@ -290,7 +290,7 @@ impl StakingContract {
     /// Reverts a remove_stake transaction.
     pub fn revert_remove_stake(
         &mut self,
-        store: &StakingContractStoreWrite,
+        store: &mut StakingContractStoreWrite,
         staker_address: &Address,
         value: Coin,
         receipt: Option<StakerReceipt>,
@@ -338,11 +338,14 @@ impl StakingContract {
     /// Panics if staker.delegation is None.
     fn add_staker_to_validator(
         &mut self,
-        store: &StakingContractStoreWrite,
+        store: &mut StakingContractStoreWrite,
         staker: &Staker,
     ) -> Result<(), AccountError> {
         // Get the validator.
-        let validator_address = &staker.delegation.expect("Staker has no delegation");
+        let validator_address = staker
+            .delegation
+            .as_ref()
+            .expect("Staker has no delegation");
         let mut validator = store.expect_validator(validator_address)?;
 
         // Update it.
@@ -365,10 +368,13 @@ impl StakingContract {
     /// Panics if staker.delegation is None.
     fn remove_staker_from_validator(
         &mut self,
-        store: &StakingContractStoreWrite,
+        store: &mut StakingContractStoreWrite,
         staker: &Staker,
     ) -> Result<(), AccountError> {
-        let validator_address = &staker.delegation.expect("Staker has no delegation");
+        let validator_address = staker
+            .delegation
+            .as_ref()
+            .expect("Staker has no delegation");
 
         // Try to get the validator. It might have been deleted.
         if let Some(mut validator) = store.get_validator(validator_address) {
@@ -391,7 +397,7 @@ impl StakingContract {
         // Validator doesn't exist, check for tombstone.
         if let Some(mut tombstone) = store.get_tombstone(validator_address) {
             // Tombstone exists, update it.
-            tombstone.total_stake -= staker.balance;
+            tombstone.remaining_stake -= staker.balance;
 
             tombstone.num_remaining_stakers -= 1;
 
@@ -412,7 +418,7 @@ impl StakingContract {
     /// Adds `value` coins to a given validator's total stake.
     fn add_stake_to_validator(
         &mut self,
-        store: &StakingContractStoreWrite,
+        store: &mut StakingContractStoreWrite,
         validator_address: &Address,
         value: Coin,
     ) -> Result<(), AccountError> {
@@ -436,7 +442,7 @@ impl StakingContract {
     /// Removes `value` coins from a given validator's total stake.
     fn remove_stake_from_validator(
         &mut self,
-        store: &StakingContractStoreWrite,
+        store: &mut StakingContractStoreWrite,
         validator_address: &Address,
         value: Coin,
     ) -> Result<(), AccountError> {
@@ -459,7 +465,7 @@ impl StakingContract {
         // Validator doesn't exist, check for tombstone.
         if let Some(mut tombstone) = store.get_tombstone(validator_address) {
             // Tombstone exists, update it.
-            tombstone.total_stake -= value;
+            tombstone.remaining_stake -= value;
 
             // Update the tombstone entry.
             store.put_tombstone(validator_address, tombstone);

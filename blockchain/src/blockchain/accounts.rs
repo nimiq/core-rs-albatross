@@ -1,7 +1,7 @@
 use crate::blockchain_state::BlockchainState;
 use crate::Blockchain;
+use nimiq_account::TransactionOperationReceipt;
 use nimiq_account::{Accounts, BlockState};
-use nimiq_account::{BlockLog, TransactionOperationReceipt};
 use nimiq_block::{Block, BlockError, SkipBlockInfo};
 use nimiq_blockchain_interface::PushError;
 use nimiq_database::WriteTransaction;
@@ -16,7 +16,7 @@ impl Blockchain {
         state: &BlockchainState,
         block: &Block,
         txn: &mut WriteTransaction,
-    ) -> Result<BlockLog, PushError> {
+    ) -> Result<(), PushError> {
         // Get the accounts from the state.
         let accounts = &state.accounts;
         let block_state = BlockState::new(block.block_number(), block.timestamp());
@@ -63,28 +63,22 @@ impl Blockchain {
                     0
                 };
 
-                let (batch_info, _) = batch_info.unwrap();
-                Ok(BlockLog::AppliedBlock {
-                    inherent_logs: batch_info.inherent_logs,
-                    block_hash: macro_block.hash(),
-                    block_number: macro_block.header.block_number,
-                    timestamp: macro_block.header.timestamp,
-                    tx_logs: batch_info.tx_logs,
-                    total_tx_size,
-                })
+                // let (batch_info, _) = batch_info.unwrap();
+                // Ok(BlockLog::AppliedBlock {
+                //     inherent_logs: batch_info.inherent_logs,
+                //     block_hash: macro_block.hash(),
+                //     block_number: macro_block.header.block_number,
+                //     timestamp: macro_block.header.timestamp,
+                //     tx_logs: batch_info.tx_logs,
+                //     total_tx_size,
+                // })
+                Ok(())
             }
             Block::Micro(ref micro_block) => {
                 // Get the body of the block.
                 let body = micro_block.body.as_ref().unwrap();
 
-                let skip_block_info = if micro_block.is_skip_block() {
-                    Some(SkipBlockInfo {
-                        block_number: micro_block.header.block_number,
-                        vrf_entropy: micro_block.header.seed.entropy(),
-                    })
-                } else {
-                    None
-                };
+                let skip_block_info = SkipBlockInfo::from_micro_block(micro_block);
 
                 // Create the inherents from any forks or skip block info.
                 let inherents =
@@ -141,14 +135,15 @@ impl Blockchain {
                     0
                 };
 
-                Ok(BlockLog::AppliedBlock {
-                    inherent_logs: batch_info.inherent_logs,
-                    block_hash: micro_block.hash(),
-                    block_number: micro_block.header.block_number,
-                    timestamp: micro_block.header.timestamp,
-                    tx_logs: batch_info.tx_logs,
-                    total_tx_size,
-                })
+                // Ok(BlockLog::AppliedBlock {
+                //     inherent_logs: batch_info.inherent_logs,
+                //     block_hash: micro_block.hash(),
+                //     block_number: micro_block.header.block_number,
+                //     timestamp: micro_block.header.timestamp,
+                //     tx_logs: batch_info.tx_logs,
+                //     total_tx_size,
+                // })
+                Ok(())
             }
         }
     }
@@ -160,7 +155,7 @@ impl Blockchain {
         accounts: &Accounts,
         txn: &mut WriteTransaction,
         block: &Block,
-    ) -> Result<BlockLog, PushError> {
+    ) -> Result<(), PushError> {
         match block {
             Block::Micro(ref micro_block) => {
                 // Verify accounts hash if the tree is complete or changes only happened in the complete part.
@@ -179,14 +174,7 @@ impl Blockchain {
                 // Get the body of the block.
                 let body = micro_block.body.as_ref().unwrap();
 
-                let skip_block_info = if micro_block.is_skip_block() {
-                    Some(SkipBlockInfo {
-                        block_number: micro_block.header.block_number,
-                        vrf_entropy: micro_block.header.seed.entropy(),
-                    })
-                } else {
-                    None
-                };
+                let skip_block_info = SkipBlockInfo::from_micro_block(micro_block);
 
                 // Create the inherents from any forks or skip block info.
                 let inherents =
@@ -223,13 +211,14 @@ impl Blockchain {
 
                 let (_, total_tx_size) = hs_result.unwrap();
 
-                Ok(BlockLog::RevertedBlock {
-                    inherent_logs: batch_info.inherent_logs,
-                    block_hash: micro_block.hash(),
-                    block_number: micro_block.header.block_number,
-                    tx_logs: batch_info.tx_logs,
-                    total_tx_size,
-                })
+                // Ok(BlockLog::RevertedBlock {
+                //     inherent_logs: batch_info.inherent_logs,
+                //     block_hash: micro_block.hash(),
+                //     block_number: micro_block.header.block_number,
+                //     tx_logs: batch_info.tx_logs,
+                //     total_tx_size,
+                // })
+                Ok(())
             }
             Block::Macro(_) => unreachable!("Macro blocks are final and can't be reverted"),
         }

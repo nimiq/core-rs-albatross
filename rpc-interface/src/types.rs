@@ -540,12 +540,12 @@ impl Inherent {
         let hash = inherent.hash();
 
         Inherent {
-            ty: inherent.ty as u8,
+            ty: 0, // FIXME inherent.ty as u8,
             block_number,
             timestamp,
-            target: inherent.target,
-            value: inherent.value,
-            data: inherent.data,
+            target: Default::default(), // FIXME inherent.target,
+            value: Default::default(),  // FIXME inherent.value,
+            data: Default::default(),   // FIXME inherent.data,
             hash,
         }
     }
@@ -657,7 +657,6 @@ impl Account {
                 },
                 metadata: blockchain_state,
             }),
-            _ => Err(Error::UnsupportedAccountType),
         }
     }
 

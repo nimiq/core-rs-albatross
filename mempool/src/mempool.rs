@@ -7,17 +7,12 @@ use std::sync::Arc;
 use tokio_metrics::TaskMonitor;
 
 use beserial::Serialize;
-use nimiq_account::{Account, AccountTransactionInteraction, BasicAccount};
 use nimiq_block::Block;
 use nimiq_blockchain::{Blockchain, TransactionVerificationCache};
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_network_interface::network::{Network, Topic};
-use nimiq_primitives::account::AccountType;
 use nimiq_primitives::coin::Coin;
-use nimiq_transaction::account::staking_contract::{
-    IncomingStakingTransactionData, OutgoingStakingTransactionProof,
-};
 use nimiq_transaction::{ControlTransactionTopic, Transaction, TransactionTopic};
 
 use crate::config::MempoolConfig;
@@ -355,34 +350,21 @@ impl Mempool {
                         // senders balance and some transactions could become invalid
 
                         // Obtain the sender account. Signaling txns from adopted blocks should be allowed
-                        let sender_account =
-                            match blockchain.get_account(&tx.sender).or_else(|| {
-                                if tx.total_value() != Coin::ZERO {
-                                    None
-                                } else {
-                                    Some(Account::Basic(BasicAccount {
-                                        balance: Coin::ZERO,
-                                    }))
-                                }
-                            }) {
-                                None => {
-                                    trace!(
-                                    reason = "The sender was pruned/removed",
-                                    "Mempool-update removing all tx from sender {} from mempool",
-                                    tx.sender
-                                );
-                                    // The account from this sender was pruned/removed, so we need to delete all txns sent from this address
-                                    mempool_state.remove_sender_txns(&tx.sender);
-                                    continue;
-                                }
-                                Some(account) => account,
-                            };
-
+                        let sender_account = blockchain.get_account(&tx.sender);
                         let sender_balance = sender_account.balance();
+
+                        // trace!(
+                        //     reason = "The sender was pruned/removed",
+                        //     "Mempool-update removing all tx from sender {} from mempool",
+                        //     tx.sender
+                        // );
+                        // // The account from this sender was pruned/removed, so we need to delete all txns sent from this address
+                        // mempool_state.remove_sender_txns(&tx.sender);
+                        // continue;
 
                         // Check if the sender still has enough funds to pay for all pending
                         // transactions.
-                        if sender_state.total > sender_balance {
+                        if sender_state.reserved_balance.balance() > sender_balance {
                             // If not, we remove transactions until he is able to pay.
                             let mut new_total = Coin::ZERO;
 
@@ -399,15 +381,16 @@ impl Mempool {
                                     // The sender must be able to at least pay the fee (in case the tx fails)
                                     // (Assuming that all pending txns in the mempool for this sender are included in a block)
 
-                                    if !AccountTransactionInteraction::reserve_balance(
-                                        &sender_account,
-                                        old_tx,
-                                        new_total + old_tx.fee,
-                                        blockchain.timestamp(),
-                                    ) {
-                                        // If the fee cannot be paid for this transaction, we filter it
-                                        return true;
-                                    }
+                                    // FIXME FIXME FIXME
+                                    // if !AccountTransactionInteraction::reserve_balance(
+                                    //     &sender_account,
+                                    //     old_tx,
+                                    //     new_total + old_tx.fee,
+                                    //     blockchain.timestamp(),
+                                    // ) {
+                                    //     // If the fee cannot be paid for this transaction, we filter it
+                                    //     return true;
+                                    // }
 
                                     if old_tx.total_value() + new_total <= sender_balance {
                                         new_total += old_tx.total_value();
@@ -459,18 +442,12 @@ impl Mempool {
                     }
 
                     // Get the sender's account balance.
-                    let sender_balance = match blockchain.get_account(&tx.sender) {
-                        None => {
-                            // No sender in the blockchain for this tx, no need to process.
-                            continue;
-                        }
-                        Some(sender_account) => sender_account.balance(),
-                    };
+                    let sender_balance = blockchain.get_account(&tx.sender).balance();
 
                     // Get the sender's transaction total.
                     let sender_total = match mempool_state.state_by_sender.get(&tx.sender) {
                         None => Coin::ZERO,
-                        Some(sender_state) => sender_state.total,
+                        Some(sender_state) => sender_state.reserved_balance.balance(),
                     };
 
                     // Calculate the new balance assuming we add this transaction to the mempool

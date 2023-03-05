@@ -18,11 +18,11 @@ impl ReservedBalance {
     }
 
     pub fn reserve(&mut self, available: Coin, amount: Coin) -> Result<(), AccountError> {
-        self.reserve_for(&self.address, available, amount)
+        self.reserve_for(&self.address.clone(), available, amount)
     }
 
     pub fn reserve_unchecked(&mut self, amount: Coin) -> Result<(), AccountError> {
-        self.reserve_for(&self.address, Coin::MAX, amount)
+        self.reserve_for(&self.address.clone(), Coin::MAX, amount)
     }
 
     pub fn reserve_for(
@@ -44,6 +44,18 @@ impl ReservedBalance {
 
         self.balances.insert(address.clone(), needed);
         Ok(())
+    }
+
+    pub fn release(&mut self, amount: Coin) {
+        self.release_for(&self.address.clone(), amount)
+    }
+
+    pub fn release_for(&mut self, address: &Address, amount: Coin) {
+        let reserved = self.balances.get(address).unwrap_or(&Coin::ZERO);
+        let reserved = reserved.checked_sub(amount).unwrap_or_else(|| {
+            panic!("Tried to release more than was reserved ({amount} > {reserved})")
+        });
+        self.balances.insert(address.clone(), reserved);
     }
 
     pub fn balance(&self) -> Coin {

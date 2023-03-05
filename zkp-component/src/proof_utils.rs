@@ -1,7 +1,7 @@
 use ark_groth16::Proof;
 use ark_mnt6_753::{G2Projective as G2MNT6, MNT6_753};
 
-use nimiq_block::{Block, MacroBlock};
+use nimiq_block::MacroBlock;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_genesis::NetworkInfo;
@@ -58,7 +58,7 @@ pub(crate) fn get_proof_macro_blocks(
 
     // Gets genesis block
     let network_info = NetworkInfo::from_network_id(blockchain.read().network_id());
-    let genesis_block = network_info.genesis_block::<Block>().unwrap_macro();
+    let genesis_block = network_info.genesis_block().unwrap_macro();
 
     Ok((new_block, genesis_block, proof))
 }

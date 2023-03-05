@@ -1,15 +1,14 @@
 use std::sync::Arc;
 use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
 
-use nimiq_account::{Account, Accounts, BlockLog};
+use nimiq_account::{Accounts, BlockLog};
 use nimiq_block::Block;
 use nimiq_blockchain_interface::{BlockchainError, BlockchainEvent, ChainInfo, ForkEvent};
 use nimiq_database::{Environment, ReadTransaction, WriteTransaction};
 use nimiq_genesis::NetworkInfo;
 use nimiq_hash::Blake2bHash;
-use nimiq_primitives::{
-    coin::Coin, key_nibbles::KeyNibbles, networks::NetworkId, policy::Policy, slots::Validators,
-};
+use nimiq_primitives::trie::TrieItem;
+use nimiq_primitives::{coin::Coin, networks::NetworkId, policy::Policy, slots::Validators};
 use nimiq_utils::time::OffsetTime;
 
 #[cfg(feature = "metrics")]
@@ -83,7 +82,7 @@ impl Blockchain {
         time: Arc<OffsetTime>,
     ) -> Result<Self, BlockchainError> {
         let network_info = NetworkInfo::from_network_id(network_id);
-        let genesis_block = network_info.genesis_block::<Block>();
+        let genesis_block = network_info.genesis_block();
         let genesis_accounts = network_info.genesis_accounts();
         Self::with_genesis(
             env,
@@ -102,7 +101,7 @@ impl Blockchain {
         time: Arc<OffsetTime>,
         network_id: NetworkId,
         genesis_block: Block,
-        genesis_accounts: Vec<(KeyNibbles, Account)>,
+        genesis_accounts: Vec<TrieItem>,
     ) -> Result<Self, BlockchainError> {
         let chain_store = ChainStore::new(env.clone());
         let history_store = HistoryStore::new(env.clone());
@@ -280,7 +279,7 @@ impl Blockchain {
         time: Arc<OffsetTime>,
         network_id: NetworkId,
         genesis_block: Block,
-        genesis_accounts: Vec<(KeyNibbles, Account)>,
+        genesis_accounts: Vec<TrieItem>,
     ) -> Result<Self, BlockchainError> {
         // Initialize chain & accounts with genesis block.
         let head_hash = genesis_block.hash();

@@ -4,19 +4,12 @@ use std::{
     sync::Arc,
 };
 
-use nimiq_account::{
-    Account, AccountTransactionInteraction, BasicAccount, BlockState, ReservedBalance,
-    StakingContract,
-};
+use nimiq_account::ReservedBalance;
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_hash::Hash;
-use nimiq_primitives::account::AccountType;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
-use nimiq_transaction::account::staking_contract::{
-    IncomingStakingTransactionData, OutgoingStakingTransactionProof,
-};
 
 use nimiq_transaction::Transaction;
 
@@ -166,32 +159,11 @@ pub(crate) async fn verify_tx<'a>(
 
     // 7. Sequentialize per Sender to Check Balances and acquire the upgradable from the blockchain.
     //    Perform all balances checks.
-    let sender_account = match blockchain.get_account(&transaction.sender).or_else(|| {
-        if transaction.total_value() != Coin::ZERO {
-            None
-        } else {
-            Some(Account::Basic(BasicAccount {
-                balance: Coin::ZERO,
-            }))
-        }
-    }) {
-        None => {
-            log::debug!(
-                "There is no account for this sender in the blockchain {}",
-                transaction.sender.to_user_friendly_address()
-            );
-            return Err(VerifyErr::InvalidSender);
-        }
-        Some(account) => account,
-    };
+    let sender_account = blockchain.get_account(&transaction.sender);
+    // TODO Shortcut for "empty" accounts?
 
     // 8. Get recipient account to later check against filter rules.
-    let recipient_account = match blockchain.get_account(&transaction.recipient) {
-        None => Account::Basic(BasicAccount {
-            balance: Coin::ZERO,
-        }),
-        Some(x) => x,
-    };
+    let recipient_account = blockchain.get_account(&transaction.recipient);
 
     let blockchain_sender_balance = sender_account.balance();
     let blockchain_recipient_balance = recipient_account.balance();

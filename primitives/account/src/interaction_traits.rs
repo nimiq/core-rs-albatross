@@ -4,7 +4,7 @@ use nimiq_transaction::{inherent::Inherent, Transaction};
 
 use crate::data_store::{DataStoreRead, DataStoreWrite};
 use crate::reserved_balance::ReservedBalance;
-use crate::{Account, AccountReceipt, Inherent};
+use crate::{Account, AccountReceipt};
 
 pub struct BlockState {
     pub number: u32,
@@ -109,7 +109,7 @@ pub trait AccountInherentInteraction: Sized {
 pub trait AccountPruningInteraction: Sized {
     fn can_be_pruned(&self) -> bool;
 
-    fn prune(self, data_store: DataStoreRead) -> Result<Option<AccountReceipt>, AccountError>;
+    fn prune(self, data_store: DataStoreRead) -> Option<AccountReceipt>;
 
     fn restore(
         ty: AccountType,

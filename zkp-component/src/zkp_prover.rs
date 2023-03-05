@@ -56,7 +56,7 @@ impl<N: Network> ZKProver<N> {
         prover_keys_path: PathBuf,
     ) -> Self {
         let network_info = NetworkInfo::from_network_id(blockchain.read().network_id());
-        let genesis_block = network_info.genesis_block::<Block>().unwrap_macro();
+        let genesis_block = network_info.genesis_block().unwrap_macro();
 
         let public_keys = zkp_state.read().latest_pks.clone();
         let genesis_state = state_commitment(

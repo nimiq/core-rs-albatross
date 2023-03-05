@@ -1,4 +1,4 @@
-use crate::OperationReceipt;
+use crate::TransactionOperationReceipt;
 use beserial::Serialize as BeSerialize;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
@@ -407,16 +407,16 @@ impl<T: BeSerialize> From<OperationInfo<T>> for AccountInfo {
 // Batch Info is used as a return type of multiple transactions or batches applied to the blockchain.
 // It stores the transaction logs, inherent logs and receipts associated with the multiple transactions of the batch.
 // Along with the result of applying each individual transaction
-#[derive(Default, Eq, PartialEq, Debug)]
+#[derive(Default, Debug)]
 pub struct BatchInfo {
-    pub receipts: Vec<OperationReceipt>,
+    pub receipts: Vec<TransactionOperationReceipt>,
     pub tx_logs: Vec<TransactionLog>,
     pub inherent_logs: Vec<Log>,
 }
 
 impl BatchInfo {
     pub fn new(
-        receipts: Vec<OperationReceipt>,
+        receipts: Vec<TransactionOperationReceipt>,
         tx_logs: Vec<TransactionLog>,
         inherent_logs: Vec<Log>,
     ) -> Self {

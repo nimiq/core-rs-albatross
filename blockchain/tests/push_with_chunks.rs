@@ -10,7 +10,7 @@ use nimiq_primitives::{
     key_nibbles::KeyNibbles,
     trie::{
         error::MerkleRadixTrieError,
-        trie_chunk::{Item, TrieChunkWithStart},
+        trie_chunk::{TrieChunkWithStart, TrieItem},
     },
 };
 use nimiq_test_utils::block_production::TemporaryBlockProducer;
@@ -414,7 +414,7 @@ fn can_partially_apply_blocks() {
 fn can_detect_invalid_chunks() {
     // Chunks whose hash does not match (items are corrupted)
     check_invalid_chunk!(
-        |invalid_chunk| invalid_chunk.chunk.items[1].values.push(1),
+        |invalid_chunk| invalid_chunk.chunk.items[1].value.push(1),
         Err(ChunksPushError::AccountsError(
             1,
             AccountError::ChunkError(MerkleRadixTrieError::ChunkHashMismatch)
@@ -483,7 +483,7 @@ fn can_detect_invalid_chunks() {
         move |invalid_chunk| invalid_chunk
             .chunk
             .items
-            .insert(0, Item::new(known_key, vec![])),
+            .insert(0, TrieItem::new(known_key, vec![])),
         Err(ChunksPushError::AccountsError(
             1,
             AccountError::ChunkError(MerkleRadixTrieError::InvalidChunk(..))

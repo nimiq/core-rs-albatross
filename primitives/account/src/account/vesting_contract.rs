@@ -11,8 +11,8 @@ use nimiq_transaction::{
 
 use crate::reserved_balance::ReservedBalance;
 use crate::{
+    convert_receipt,
     data_store::{DataStoreRead, DataStoreWrite},
-    inherent::Inherent,
     interaction_traits::{
         AccountInherentInteraction, AccountPruningInteraction, AccountTransactionInteraction,
     },
@@ -210,8 +210,8 @@ impl AccountPruningInteraction for VestingContract {
         self.balance.is_zero()
     }
 
-    fn prune(self, _data_store: DataStoreRead) -> Result<Option<AccountReceipt>, AccountError> {
-        Ok(Some(PrunedVestingContract::from(self).into()))
+    fn prune(self, _data_store: DataStoreRead) -> Option<AccountReceipt> {
+        Some(PrunedVestingContract::from(self).into())
     }
 
     fn restore(
@@ -220,7 +220,8 @@ impl AccountPruningInteraction for VestingContract {
         _data_store: DataStoreWrite,
     ) -> Result<Account, AccountError> {
         let receipt = pruned_account.ok_or(AccountError::InvalidReceipt)?;
-        Ok(Account::Vesting(VestingContract::from(receipt.into())))
+        let pruned_account = PrunedVestingContract::try_from(receipt)?;
+        Ok(Account::Vesting(VestingContract::from(pruned_account)))
     }
 }
 
@@ -257,3 +258,5 @@ impl From<PrunedVestingContract> for VestingContract {
         }
     }
 }
+
+convert_receipt!(PrunedVestingContract);

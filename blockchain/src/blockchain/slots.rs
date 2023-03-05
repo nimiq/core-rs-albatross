@@ -1,4 +1,3 @@
-use nimiq_account::StakingContract;
 use nimiq_blockchain_interface::BlockchainError;
 use nimiq_collections::BitSet;
 use nimiq_database::Transaction;
@@ -47,11 +46,10 @@ impl Blockchain {
 
     /// Calculates the next validators from a given seed.
     pub fn next_validators(&self, seed: &VrfSeed) -> Validators {
-        StakingContract::select_validators(
-            &self.state().accounts.tree,
-            &self.read_transaction(),
-            seed,
-        )
+        let staking_contract = self.get_staking_contract();
+        let data_store = self.get_staking_contract_store();
+        let txn = self.read_transaction();
+        staking_contract.select_validators(&data_store.read(&txn), seed)
     }
 
     pub fn get_proposer_at(

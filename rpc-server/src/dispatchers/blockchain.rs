@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use futures::{future, stream::BoxStream, StreamExt};
 
-use nimiq_account::{BlockLog as BBlockLog, StakingContract, TransactionLog};
+use nimiq_account::{BlockLog as BBlockLog, TransactionLog};
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent};
 use nimiq_blockchain_proxy::{BlockchainProxy, BlockchainReadProxy};
 use nimiq_hash::Blake2bHash;
@@ -57,9 +57,10 @@ fn get_validator_by_address(
     include_stakers: Option<bool>,
 ) -> RPCResult<Validator, BlockchainState, Error> {
     if let BlockchainReadProxy::Full(blockchain) = blockchain_proxy {
-        let accounts_tree = &blockchain.state().accounts.tree;
+        let staking_contract = blockchain.get_staking_contract();
+        let data_store = blockchain.get_staking_contract_store();
         let db_txn = blockchain.read_transaction();
-        let validator = StakingContract::get_validator(accounts_tree, &db_txn, address).unwrap();
+        let validator = staking_contract.get_validator(&data_store.read(&db_txn), address);
 
         if validator.is_none() {
             return Err(Error::ValidatorNotFound(address.clone()));
@@ -67,23 +68,24 @@ fn get_validator_by_address(
 
         let mut stakers = None;
 
-        if include_stakers == Some(true) {
-            let staker_addresses =
-                StakingContract::get_validator_stakers(accounts_tree, &db_txn, address);
-
-            let mut stakers_list: Vec<Staker> = vec![];
-
-            for address in staker_addresses {
-                let mut staker = StakingContract::get_staker(accounts_tree, &db_txn, &address)
-                    .unwrap()
-                    .unwrap();
-                // Delegation is unnecessary because the address is in the parent struct.
-                staker.delegation = None;
-                stakers_list.push(Staker::from_staker(&staker));
-            }
-
-            stakers = Some(stakers_list);
-        }
+        // FIXME
+        // if include_stakers == Some(true) {
+        //     let staker_addresses =
+        //         StakingContract::get_validator_stakers(accounts_tree, &db_txn, address);
+        //
+        //     let mut stakers_list: Vec<Staker> = vec![];
+        //
+        //     for address in staker_addresses {
+        //         let mut staker = StakingContract::get_staker(accounts_tree, &db_txn, &address)
+        //             .unwrap()
+        //             .unwrap();
+        //         // Delegation is unnecessary because the address is in the parent struct.
+        //         staker.delegation = None;
+        //         stakers_list.push(Staker::from_staker(&staker));
+        //     }
+        //
+        //     stakers = Some(stakers_list);
+        // }
 
         Ok(RPCData::with_blockchain(
             Validator::from_validator(&validator.unwrap(), stakers),
@@ -484,20 +486,13 @@ impl BlockchainInterface for BlockchainDispatcher {
     ) -> RPCResult<Account, BlockchainState, Self::Error> {
         let blockchain_proxy = self.blockchain.read();
         if let BlockchainReadProxy::Full(ref blockchain) = blockchain_proxy {
-            let result = blockchain.get_account(&address);
-
-            match result {
-                Some(account) => Account::try_from_account(
-                    address,
-                    account,
-                    BlockchainState::new(blockchain.block_number(), blockchain.head_hash()),
-                )
-                .map_err(Error::Core),
-                None => Ok(RPCData::with_blockchain(
-                    Account::empty(address),
-                    &blockchain_proxy,
-                )),
-            }
+            let account = blockchain.get_account(&address);
+            Account::try_from_account(
+                address,
+                account,
+                BlockchainState::new(blockchain.block_number(), blockchain.head_hash()),
+            )
+            .map_err(Error::Core)
         } else {
             Err(Error::NotSupportedForLightBlockchain)
         }
@@ -615,9 +610,10 @@ impl BlockchainInterface for BlockchainDispatcher {
     ) -> RPCResult<Staker, BlockchainState, Self::Error> {
         let blockchain_proxy = self.blockchain.read();
         if let BlockchainReadProxy::Full(ref blockchain) = blockchain_proxy {
-            let accounts_tree = &blockchain.state().accounts.tree;
+            let staking_contract = blockchain.get_staking_contract();
+            let data_store = blockchain.get_staking_contract_store();
             let db_txn = blockchain.read_transaction();
-            let staker = StakingContract::get_staker(accounts_tree, &db_txn, &address).unwrap();
+            let staker = staking_contract.get_staker(&data_store.read(&db_txn), &address);
 
             match staker {
                 Some(s) => Ok(RPCData::with_blockchain(

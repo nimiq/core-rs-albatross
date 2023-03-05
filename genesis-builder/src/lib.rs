@@ -10,13 +10,14 @@ use thiserror::Error;
 use time::OffsetDateTime;
 use toml::de::Error as TomlError;
 
-use beserial::{Serialize, SerializingError};
-use nimiq_account::{Account, Accounts, AccountsList, BasicAccount, StakingContract};
+use beserial::{Serialize, SerializeWithLength, SerializingError};
+use nimiq_account::{Account, Accounts, BasicAccount, StakingContract, StakingContractStoreWrite};
 use nimiq_block::{Block, MacroBlock, MacroBody, MacroHeader};
 use nimiq_bls::PublicKey as BlsPublicKey;
 use nimiq_database::{Environment, WriteTransaction};
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
+use nimiq_primitives::trie::TrieItem;
 use nimiq_primitives::{
     account::AccountError, coin::Coin, key_nibbles::KeyNibbles, policy::Policy,
 };
@@ -44,7 +45,7 @@ pub enum GenesisBuilderError {
 pub struct GenesisInfo {
     pub block: Block,
     pub hash: Blake2bHash,
-    pub accounts: Vec<(KeyNibbles, Account)>,
+    pub accounts: Vec<TrieItem>,
 }
 
 pub struct GenesisBuilder {
@@ -166,7 +167,6 @@ impl GenesisBuilder {
 
         // Initialize the accounts.
         let accounts = Accounts::new(env.clone());
-        let mut genesis_accounts: Vec<(KeyNibbles, Account)> = Vec::new();
 
         // Note: This line needs to be AFTER we call Accounts::new().
         let mut txn = WriteTransaction::new(&env);
@@ -179,57 +179,28 @@ impl GenesisBuilder {
                 balance: genesis_account.balance,
             });
 
-            genesis_accounts.push((key, account));
+            accounts
+                .tree
+                .put(&mut txn, &key, account)
+                .expect("Failed to store account");
         }
 
         debug!("Staking contract");
         // First generate the Staking contract in the Accounts.
-        self.generate_staking_contract(&accounts, &mut txn)?;
+        let staking_contract = self.generate_staking_contract(&accounts, &mut txn)?;
 
-        // Then get all the accounts from the Staking contract and add them to the genesis_accounts.
-        // TODO: Maybe turn this code into a StakingContract method?
-        genesis_accounts.push((
-            StakingContract::get_key_staking_contract(),
-            Account::Staking(StakingContract::get_staking_contract(&accounts.tree, &txn).unwrap()),
-        ));
+        // Update hashes in tree.
+        accounts
+            .tree
+            .update_root(&mut txn)
+            .expect("Tree must be complete");
 
-        for validator in &self.validators {
-            genesis_accounts.push((
-                StakingContract::get_key_validator(&validator.validator_address),
-                Account::StakingValidator(
-                    StakingContract::get_validator(
-                        &accounts.tree,
-                        &txn,
-                        &validator.validator_address,
-                    )
-                    .unwrap()
-                    .unwrap(),
-                ),
-            ));
-        }
+        // Fetch all accounts & contract data items from the tree.
+        let genesis_accounts = accounts
+            .get_chunk(KeyNibbles::ROOT, usize::MAX - 1, Some(&mut txn))
+            .items;
 
-        for staker in &self.stakers {
-            genesis_accounts.push((
-                StakingContract::get_key_staker(&staker.staker_address),
-                Account::StakingStaker(
-                    StakingContract::get_staker(&accounts.tree, &txn, &staker.staker_address)
-                        .unwrap()
-                        .unwrap(),
-                ),
-            ));
-
-            genesis_accounts.push((
-                StakingContract::get_key_validator_staker(
-                    &staker.delegation,
-                    &staker.staker_address,
-                ),
-                Account::StakingValidatorsStaker(staker.staker_address.clone()),
-            ));
-        }
-
-        accounts.init(&mut txn, genesis_accounts.clone());
-
-        // generate seeds
+        // Generate seeds
         // seed of genesis block = VRF(seed_0)
         let seed = self
             .vrf_seed
@@ -237,8 +208,9 @@ impl GenesisBuilder {
             .ok_or(GenesisBuilderError::NoVrfSeed)?;
         debug!("Genesis seed: {}", seed);
 
-        // generate slot allocation from staking contract
-        let slots = StakingContract::select_validators(&accounts.tree, &txn, &seed);
+        // Generate slot allocation from staking contract
+        let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+        let slots = staking_contract.select_validators(&data_store.read(&txn), &seed);
         debug!("Slots: {:#?}", slots);
 
         // Body
@@ -255,7 +227,7 @@ impl GenesisBuilder {
         debug!("State root: {}", &state_root);
         txn.abort();
 
-        // the header
+        // The header
         let header = MacroHeader {
             version: 1,
             block_number: 0,
@@ -271,7 +243,7 @@ impl GenesisBuilder {
             history_root: Blake2bHash::default(),
         };
 
-        // genesis hash
+        // Genesis hash
         let genesis_hash = header.hash::<Blake2bHash>();
 
         Ok(GenesisInfo {
@@ -289,16 +261,27 @@ impl GenesisBuilder {
         &self,
         accounts: &Accounts,
         txn: &mut WriteTransaction,
-    ) -> Result<(), GenesisBuilderError> {
-        StakingContract::create(&accounts.tree, txn);
+    ) -> Result<StakingContract, GenesisBuilderError> {
+        let mut staking_contract = StakingContract {
+            balance: Default::default(),
+            active_validators: Default::default(),
+            parked_set: Default::default(),
+            current_lost_rewards: Default::default(),
+            previous_lost_rewards: Default::default(),
+            current_disabled_slots: Default::default(),
+            previous_disabled_slots: Default::default(),
+        };
 
         // Get the deposit value.
         let deposit = Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT);
 
+        let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+        let mut data_store_write = data_store.write(txn);
+        let mut store = StakingContractStoreWrite::new(&mut data_store_write);
+
         for validator in &self.validators {
-            StakingContract::create_validator(
-                &accounts.tree,
-                txn,
+            staking_contract.create_validator(
+                &mut store,
                 &validator.validator_address,
                 validator.signing_key,
                 validator.voting_key.compress(),
@@ -309,16 +292,24 @@ impl GenesisBuilder {
         }
 
         for staker in &self.stakers {
-            StakingContract::create_staker(
-                &accounts.tree,
-                txn,
+            staking_contract.create_staker(
+                &mut store,
                 &staker.staker_address,
                 staker.balance,
                 Some(staker.delegation.clone()),
             )?;
         }
 
-        Ok(())
+        accounts
+            .tree
+            .put(
+                txn,
+                &KeyNibbles::from(&Policy::STAKING_CONTRACT_ADDRESS),
+                staking_contract.clone(),
+            )
+            .expect("Failed to store staking contract");
+
+        Ok(staking_contract)
     }
 
     pub fn write_to_files<P: AsRef<Path>>(
@@ -351,7 +342,7 @@ impl GenesisBuilder {
             .create(true)
             .write(true)
             .open(&accounts_path)?;
-        AccountsList(accounts).serialize(&mut file)?;
+        accounts.serialize::<u32, _>(&mut file)?;
 
         Ok(hash)
     }

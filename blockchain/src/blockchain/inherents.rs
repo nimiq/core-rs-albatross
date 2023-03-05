@@ -1,15 +1,9 @@
-use beserial::Serialize;
 use nimiq_account::StakingContract;
 use nimiq_block::{ForkProof, MacroBlock, MacroHeader, SkipBlockInfo};
 use nimiq_database as db;
 use nimiq_keys::Address;
-use nimiq_primitives::{
-    account::AccountType, coin::Coin, key_nibbles::KeyNibbles, policy::Policy, slots::SlashedSlot,
-};
-use nimiq_transaction::{
-    inherent::{Inherent, InherentType},
-    reward::RewardTransaction,
-};
+use nimiq_primitives::{account::AccountType, coin::Coin, policy::Policy, slots::SlashedSlot};
+use nimiq_transaction::{inherent::Inherent, reward::RewardTransaction};
 use nimiq_vrf::{AliasMethod, VrfUseCase};
 
 use crate::{blockchain_state::BlockchainState, reward::block_reward_for_batch, Blockchain};
@@ -78,12 +72,7 @@ impl Blockchain {
         };
 
         // Create the corresponding slash inherent.
-        Inherent {
-            ty: InherentType::Slash,
-            target: self.staking_contract_address(),
-            value: Coin::ZERO,
-            data: slot.serialize_to_vec(),
-        }
+        Inherent::Slash { slot }
     }
 
     /// It creates a slash inherent from a skip block. It expects a *verified* skip block!
@@ -115,12 +104,7 @@ impl Blockchain {
         };
 
         // Create the corresponding slash inherent.
-        Inherent {
-            ty: InherentType::Slash,
-            target: self.staking_contract_address(),
-            value: Coin::ZERO,
-            data: slot.serialize_to_vec(),
-        }
+        Inherent::Slash { slot }
     }
 
     /// Creates the inherents to finalize a batch. The inherents are for reward distribution and
@@ -147,12 +131,7 @@ impl Blockchain {
         };
 
         // Push FinalizeBatch inherent to update StakingContract.
-        inherents.push(Inherent {
-            ty: InherentType::FinalizeBatch,
-            target: self.staking_contract_address(),
-            value: Coin::ZERO,
-            data: Vec::new(),
-        });
+        inherents.push(Inherent::FinalizeBatch);
 
         inherents
     }
@@ -262,13 +241,12 @@ impl Blockchain {
                 .expect("Overflow in reward");
 
             // Create inherent for the reward.
-            let validator = StakingContract::get_validator(
-                &self.state().accounts.tree,
-                &self.read_transaction(),
-                &validator_slot.address,
-            )
-            .expect("Accounts trie must be complete.")
-            .expect("Couldn't find validator in the accounts trie when paying rewards!");
+            let staking_contract = self.get_staking_contract();
+            let data_store = self.get_staking_contract_store();
+            let txn = self.read_transaction();
+            let validator = staking_contract
+                .get_validator(&data_store.read(&txn), &validator_slot.address)
+                .expect("Couldn't find validator in the accounts trie when paying rewards!");
 
             let tx = RewardTransaction {
                 recipient: validator.reward_address.clone(),
@@ -277,12 +255,9 @@ impl Blockchain {
 
             // Test whether account will accept inherent. If it can't then the reward will be
             // burned.
-            let account = state
-                .accounts
-                .get(&KeyNibbles::from(&tx.recipient), None)
-                .expect("Incomplete trie.");
-
-            if account.is_none() || account.unwrap().account_type() == AccountType::Basic {
+            // TODO Improve this check: it assumes that only BasicAccounts can receive transactions.
+            let account = state.accounts.get_complete(&tx.recipient, Some(&txn));
+            if account.account_type() == AccountType::Basic {
                 num_eligible_slots_for_accepted_tx.push(num_eligible_slots);
                 transactions.push(tx);
             } else {
@@ -328,11 +303,6 @@ impl Blockchain {
     /// Creates the inherent to finalize an epoch. The inherent is for updating the StakingContract.
     pub fn finalize_previous_epoch(&self) -> Inherent {
         // Create the FinalizeEpoch inherent.
-        Inherent {
-            ty: InherentType::FinalizeEpoch,
-            target: self.staking_contract_address(),
-            value: Coin::ZERO,
-            data: Vec::new(),
-        }
+        Inherent::FinalizeEpoch
     }
 }

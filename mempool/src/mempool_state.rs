@@ -8,11 +8,8 @@ use crate::mempool_metrics::MempoolMetrics;
 use crate::mempool_transactions::{MempoolTransactions, TxPriority};
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
-use nimiq_primitives::{account::AccountType, coin::Coin};
-use nimiq_transaction::{
-    account::staking_contract::{IncomingStakingTransactionData, OutgoingStakingTransactionProof},
-    Transaction,
-};
+use nimiq_primitives::account::AccountType;
+use nimiq_transaction::Transaction;
 
 pub(crate) struct MempoolState {
     // Container where the regular transactions are stored
@@ -130,7 +127,7 @@ impl MempoolState {
         {
             let sender_state = self.state_by_sender.get_mut(&tx.sender).unwrap();
 
-            sender_state.total -= tx.total_value();
+            sender_state.reserved_balance.release(tx.total_value());
             sender_state.txns.remove(tx_hash);
 
             if sender_state.txns.is_empty() {
@@ -152,7 +149,7 @@ impl MempoolState {
             for tx_hash in &sender_state.txns {
                 self.regular_transactions
                     .delete(tx_hash)
-                    .or_else(|| self.control_transactions.delete(tx_hash))
+                    .or_else(|| self.control_transactions.delete(tx_hash));
             }
         }
     }

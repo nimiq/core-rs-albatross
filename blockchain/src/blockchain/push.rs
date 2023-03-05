@@ -3,9 +3,6 @@ use std::cmp;
 use std::error::Error;
 use std::ops::Deref;
 
-use tokio::sync::broadcast::Sender as BroadcastSender;
-
-use nimiq_account::BlockLog;
 use nimiq_block::{Block, ForkProof, MicroBlock};
 use nimiq_blockchain_interface::{
     AbstractBlockchain, BlockchainEvent, ChainInfo, ChainOrdering, ChunksPushError,
@@ -21,13 +18,13 @@ use nimiq_vrf::VrfSeed;
 
 use crate::{blockchain_state::BlockchainState, Blockchain};
 
-fn send_vec(log_notifier: &BroadcastSender<BlockLog>, logs: Vec<BlockLog>) {
-    for log in logs {
-        // The log notifier is for informational purposes only, thus may have no listeners.
-        // Therefore, no error logs should be produced in this case.
-        _ = log_notifier.send(log);
-    }
-}
+// fn send_vec(log_notifier: &BroadcastSender<BlockLog>, logs: Vec<BlockLog>) {
+//     for log in logs {
+//         // The log notifier is for informational purposes only, thus may have no listeners.
+//         // Therefore, no error logs should be produced in this case.
+//         _ = log_notifier.send(log);
+//     }
+// }
 
 /// Implements methods to push blocks into the chain. This is used when the node has already synced
 /// and is just receiving newly produced blocks. It is also used for the final phase of syncing,
@@ -272,7 +269,7 @@ impl Blockchain {
         };
 
         chain_info.on_main_chain = true;
-        chain_info.set_cumulative_ext_tx_size(&prev_info, block_log.total_tx_size());
+        // FIXME chain_info.set_cumulative_ext_tx_size(&prev_info, block_log.total_tx_size());
         chain_info.history_tree_len =
             this.history_store
                 .total_len_at_epoch(Policy::epoch_at(block_number), Some(&txn)) as u64;
@@ -359,7 +356,7 @@ impl Blockchain {
 
         // The log notifier is for informational purposes only, thus may have no listeners.
         // Therefore, no error logs should be produced in this case.
-        this.log_notifier.send(block_log).ok();
+        // FIXME this.log_notifier.send(block_log).ok();
 
         Ok((PushResult::Extended, chunk_result))
     }
@@ -603,7 +600,7 @@ impl Blockchain {
             .send(BlockchainEvent::Rebranched(reverted_blocks, adopted_blocks))
             .ok();
 
-        send_vec(&this.log_notifier, block_logs);
+        // FIXME send_vec(&this.log_notifier, block_logs);
 
         Ok((PushResult::Rebranched, chunk_result))
     }
@@ -613,7 +610,7 @@ impl Blockchain {
         state: &BlockchainState,
         block: &Block,
         txn: &mut WriteTransaction,
-    ) -> Result<BlockLog, PushError> {
+    ) -> Result<(), PushError> {
         // Check transactions against replay attacks. This is only necessary for micro blocks.
         if block.is_micro() {
             let transactions = block.transactions();
@@ -635,8 +632,7 @@ impl Blockchain {
         }
 
         // Commit block to AccountsTree.
-        let block_log = self.commit_accounts(state, block, txn);
-        if let Err(e) = block_log {
+        if let Err(e) = self.commit_accounts(state, block, txn) {
             warn!(%block, reason = "commit failed", error = &e as &dyn Error, "Rejecting block");
             #[cfg(feature = "metrics")]
             self.metrics.note_invalid_block();
@@ -649,7 +645,7 @@ impl Blockchain {
             return Err(e);
         }
 
-        block_log
+        Ok(())
     }
 
     fn detect_forks(&self, txn: &ReadTransaction, block: &MicroBlock, prev_vrf_seed: &VrfSeed) {

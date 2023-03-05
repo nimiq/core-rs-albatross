@@ -90,7 +90,7 @@ impl StakingContract {
     /// This function is public to fill the genesis staking contract.
     pub fn create_validator(
         &mut self,
-        store: &StakingContractStoreWrite,
+        store: &mut StakingContractStoreWrite,
         validator_address: &Address,
         signing_key: SchnorrPublicKey,
         voting_key: BlsPublicKey,
@@ -144,7 +144,7 @@ impl StakingContract {
     /// Reverts creating a new validator entry.
     pub fn revert_create_validator(
         &mut self,
-        store: &StakingContractStoreWrite,
+        store: &mut StakingContractStoreWrite,
         validator_address: &Address,
         deposit: Coin,
     ) -> Result<(), AccountError> {
@@ -168,7 +168,7 @@ impl StakingContract {
     /// Updates some of the validator details (signing key, voting key, reward address and/or signal data).
     pub fn update_validator(
         &mut self,
-        store: &StakingContractStoreWrite,
+        store: &mut StakingContractStoreWrite,
         validator_address: &Address,
         new_signing_key: Option<SchnorrPublicKey>,
         new_voting_key: Option<BlsPublicKey>,
@@ -220,7 +220,7 @@ impl StakingContract {
     /// Reverts updating validator details.
     pub fn revert_update_validator(
         &mut self,
-        store: &StakingContractStoreWrite,
+        store: &mut StakingContractStoreWrite,
         validator_address: &Address,
         receipt: UpdateValidatorReceipt,
     ) -> Result<(), AccountError> {
@@ -243,13 +243,13 @@ impl StakingContract {
     /// removes the validator from the parking set.
     pub fn inactivate_validator(
         &mut self,
-        store: &StakingContractStoreWrite,
+        store: &mut StakingContractStoreWrite,
         validator_address: &Address,
         signer: &Address,
         block_number: u32,
     ) -> Result<InactivateValidatorReceipt, AccountError> {
         // Get the validator.
-        let mut validator = store.get_validator(validator_address)?;
+        let mut validator = store.expect_validator(validator_address)?;
 
         // Check that the validator is active.
         if !validator.is_active() {
@@ -286,7 +286,7 @@ impl StakingContract {
     /// Reverts inactivating a validator.
     pub fn revert_inactivate_validator(
         &mut self,
-        store: &StakingContractStoreWrite,
+        store: &mut StakingContractStoreWrite,
         validator_address: &Address,
         receipt: InactivateValidatorReceipt,
     ) -> Result<(), AccountError> {
@@ -314,7 +314,7 @@ impl StakingContract {
     /// Reactivates a validator.
     pub fn reactivate_validator(
         &mut self,
-        store: &StakingContractStoreWrite,
+        store: &mut StakingContractStoreWrite,
         validator_address: &Address,
         signer: &Address,
     ) -> Result<ReactivateValidatorReceipt, AccountError> {
@@ -354,7 +354,7 @@ impl StakingContract {
     /// Reverts reactivating a validator.
     pub fn revert_reactivate_validator(
         &mut self,
-        store: &StakingContractStoreWrite,
+        store: &mut StakingContractStoreWrite,
         validator_address: &Address,
         receipt: ReactivateValidatorReceipt,
     ) -> Result<(), AccountError> {
@@ -379,7 +379,7 @@ impl StakingContract {
     /// after they get slashed so that they can produce blocks again.
     pub fn unpark_validator(
         &mut self,
-        store: &StakingContractStoreWrite,
+        store: &mut StakingContractStoreWrite,
         validator_address: &Address,
         signer: &Address,
     ) -> Result<UnparkValidatorReceipt, AccountError> {
@@ -418,7 +418,7 @@ impl StakingContract {
     /// Reverts an unpark transaction.
     pub fn revert_unpark_validator(
         &mut self,
-        _store: &StakingContractStoreWrite,
+        _store: &mut StakingContractStoreWrite,
         validator_address: &Address,
         receipt: UnparkValidatorReceipt,
     ) -> Result<(), AccountError> {
@@ -479,7 +479,7 @@ impl StakingContract {
     /// deleted validator is removed (e.g. by update_staker or remove_stake).
     pub fn delete_validator(
         &mut self,
-        store: &StakingContractStoreWrite,
+        store: &mut StakingContractStoreWrite,
         validator_address: &Address,
         block_number: u32,
         transaction_total_value: Coin,
@@ -525,7 +525,7 @@ impl StakingContract {
     /// Reverts deleting a validator.
     pub fn revert_delete_validator(
         &mut self,
-        store: &StakingContractStoreWrite,
+        store: &mut StakingContractStoreWrite,
         validator_address: &Address,
         transaction_total_value: Coin,
         receipt: DeleteValidatorReceipt,

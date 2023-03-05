@@ -49,9 +49,6 @@ impl TransactionProofBuilder {
             AccountType::Staking => {
                 TransactionProofBuilder::OutStaking(StakingProofBuilder::new(transaction))
             }
-            _ => {
-                unreachable!()
-            }
         }
     }
 

@@ -1,9 +1,11 @@
 use std::collections::BTreeSet;
 
+use crate::{convert_receipt, AccountReceipt};
 use beserial::{Deserialize, Serialize};
 use nimiq_bls::CompressedPublicKey as BlsPublicKey;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
+use nimiq_primitives::account::AccountError;
 
 /// A collection of receipts for inherents/transactions. This is necessary to be able to revert
 /// those inherents/transactions.
@@ -13,6 +15,7 @@ pub struct SlashReceipt {
     pub newly_disabled: bool,
     pub newly_lost_rewards: bool,
 }
+convert_receipt!(SlashReceipt);
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct UpdateValidatorReceipt {
@@ -21,16 +24,19 @@ pub struct UpdateValidatorReceipt {
     pub old_reward_address: Address,
     pub old_signal_data: Option<Blake2bHash>,
 }
+convert_receipt!(UpdateValidatorReceipt);
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct InactivateValidatorReceipt {
     pub was_parked: bool,
 }
+convert_receipt!(InactivateValidatorReceipt);
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct ReactivateValidatorReceipt {
     pub was_inactive_since: u32,
 }
+convert_receipt!(ReactivateValidatorReceipt);
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct UnparkValidatorReceipt {
@@ -39,6 +45,7 @@ pub struct UnparkValidatorReceipt {
     #[beserial(len_type(u16))]
     pub previous_disabled_slots: Option<BTreeSet<u16>>,
 }
+convert_receipt!(UnparkValidatorReceipt);
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct DeleteValidatorReceipt {
@@ -48,8 +55,10 @@ pub struct DeleteValidatorReceipt {
     pub signal_data: Option<Blake2bHash>,
     pub inactive_since: u32,
 }
+convert_receipt!(DeleteValidatorReceipt);
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct StakerReceipt {
     pub delegation: Option<Address>,
 }
+convert_receipt!(StakerReceipt);

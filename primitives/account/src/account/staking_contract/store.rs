@@ -26,10 +26,10 @@ impl StakingContractStore {
     }
 
     fn prefixed_address(prefix: u8, address: &Address) -> KeyNibbles {
-        let mut key = Vec::with_capacity(21);
-        key.push(prefix);
-        key.extend(address.as_slice());
-        KeyNibbles::from(key)
+        let mut key = [0u8; 21];
+        key[0] = prefix;
+        key[1..].copy_from_slice(&address.0);
+        KeyNibbles::from(&key[..])
     }
 }
 
@@ -46,7 +46,7 @@ pub(crate) struct StakingContractStoreRead<'read, 'store, 'tree, 'txn, 'env>(
 );
 
 impl<'read, 'store, 'tree, 'txn, 'env> StakingContractStoreRead<'read, 'store, 'tree, 'txn, 'env> {
-    pub fn new(data_store: &'read DataStoreRead) -> Self {
+    pub fn new(data_store: &'read DataStoreRead<'store, 'tree, 'txn, 'env>) -> Self {
         StakingContractStoreRead(data_store)
     }
 }
@@ -67,41 +67,41 @@ impl<'read, 'store, 'tree, 'txn, 'env> StakingContractStoreReadOps
     }
 }
 
-pub(crate) struct StakingContractStoreWrite<'write, 'store, 'tree, 'txn, 'env>(
+pub struct StakingContractStoreWrite<'write, 'store, 'tree, 'txn, 'env>(
     &'write mut DataStoreWrite<'store, 'tree, 'txn, 'env>,
 );
 
 impl<'write, 'store, 'tree, 'txn, 'env>
     StakingContractStoreWrite<'write, 'store, 'tree, 'txn, 'env>
 {
-    pub fn new(data_store: &'write mut DataStoreWrite) -> Self {
+    pub fn new(data_store: &'write mut DataStoreWrite<'store, 'tree, 'txn, 'env>) -> Self {
         StakingContractStoreWrite(data_store)
     }
 
-    pub fn put_validator(&self, address: &Address, validator: Validator) {
+    pub fn put_validator(&mut self, address: &Address, validator: Validator) {
         self.0
             .put(&StakingContractStore::validator_key(address), validator)
     }
 
-    pub fn remove_validator(self, address: &Address) {
+    pub fn remove_validator(&mut self, address: &Address) {
         self.0.remove(&StakingContractStore::validator_key(address))
     }
 
-    pub fn put_staker(&self, address: &Address, staker: Staker) {
+    pub fn put_staker(&mut self, address: &Address, staker: Staker) {
         self.0
             .put(&StakingContractStore::staker_key(address), staker)
     }
 
-    pub fn remove_staker(self, address: &Address) {
+    pub fn remove_staker(&mut self, address: &Address) {
         self.0.remove(&StakingContractStore::staker_key(address))
     }
 
-    pub fn put_tombstone(&self, address: &Address, tombstone: Tombstone) {
+    pub fn put_tombstone(&mut self, address: &Address, tombstone: Tombstone) {
         self.0
             .put(&StakingContractStore::tombstone_key(address), tombstone)
     }
 
-    pub fn remove_tombstone(self, address: &Address) {
+    pub fn remove_tombstone(&mut self, address: &Address) {
         self.0.remove(&StakingContractStore::tombstone_key(address))
     }
 }

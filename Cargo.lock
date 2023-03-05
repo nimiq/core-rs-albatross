@@ -4387,6 +4387,7 @@ dependencies = [
  "nimiq-bls",
  "nimiq-database-value",
  "nimiq-hash",
+ "nimiq-hash_derive",
  "nimiq-keys",
  "nimiq-macros",
  "nimiq-mmr",

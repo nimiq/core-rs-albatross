@@ -50,7 +50,7 @@ impl LightBlockchain {
     /// Creates a new blockchain from a given network ID.
     pub fn new(network_id: NetworkId) -> Self {
         let network_info = NetworkInfo::from_network_id(network_id);
-        let genesis_block = network_info.genesis_block::<Block>();
+        let genesis_block = network_info.genesis_block();
         Self::with_genesis(network_id, genesis_block)
     }
 

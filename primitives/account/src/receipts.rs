@@ -4,8 +4,8 @@ use std::io;
 use beserial::{Deserialize, Serialize};
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct AccountReceipt(#[beserial(len_type(u16))] Vec<u8>);
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AccountReceipt(#[beserial(len_type(u16))] pub Vec<u8>);
 
 impl From<Vec<u8>> for AccountReceipt {
     fn from(val: Vec<u8>) -> Self {
@@ -13,16 +13,32 @@ impl From<Vec<u8>> for AccountReceipt {
     }
 }
 
-impl<T: Serialize> From<T> for AccountReceipt {
-    fn from(val: T) -> Self {
-        AccountReceipt(val.serialize_to_vec())
-    }
-}
+#[macro_export]
+macro_rules! convert_receipt {
+    ($t: ty) => {
+        impl TryFrom<AccountReceipt> for $t {
+            type Error = AccountError;
 
-impl<T: Deserialize> Into<T> for AccountReceipt {
-    fn into(self) -> T {
-        T::deserialize(&mut self.0[..])
-    }
+            fn try_from(value: AccountReceipt) -> Result<Self, Self::Error> {
+                <$t>::try_from(&value)
+            }
+        }
+
+        impl TryFrom<&AccountReceipt> for $t {
+            type Error = AccountError;
+
+            fn try_from(value: &AccountReceipt) -> Result<Self, Self::Error> {
+                Self::deserialize(&mut &value.0[..])
+                    .map_err(|e| AccountError::InvalidSerialization(e))
+            }
+        }
+
+        impl Into<AccountReceipt> for $t {
+            fn into(self) -> AccountReceipt {
+                AccountReceipt::from(self.serialize_to_vec())
+            }
+        }
+    };
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -46,7 +62,9 @@ pub type InherentOperationReceipt = OperationReceipt<InherentReceipt>;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Receipts {
+    #[beserial(len_type(u16))]
     pub transactions: Vec<TransactionOperationReceipt>,
+    #[beserial(len_type(u16))]
     pub inherents: Vec<InherentOperationReceipt>,
 }
 

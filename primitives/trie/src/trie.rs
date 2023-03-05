@@ -16,9 +16,9 @@ use nimiq_primitives::{
     key_nibbles::KeyNibbles,
     trie::{
         error::MerkleRadixTrieError,
-        trie_chunk::Item,
         trie_chunk::TrieChunk,
         trie_chunk::TrieChunkPushResult,
+        trie_chunk::TrieItem,
         trie_node::{RootData, TrieNode, TrieNodeKind},
         trie_proof::TrieProof,
         trie_proof_node::TrieProofNode,
@@ -131,6 +131,18 @@ impl MerkleRadixTrie {
             };
             self.put_node(txn, &root);
         }
+    }
+
+    pub fn init(&self, txn: &mut WriteTransaction, values: Vec<TrieItem>) {
+        assert!(self.is_complete(txn));
+        assert_eq!(self.num_leaves(txn), 0);
+        assert_eq!(self.num_hybrids(txn), 0);
+
+        for item in values {
+            self.put_raw(txn, &item.key, item.value, &None);
+        }
+
+        self.update_root(txn).expect("Tree must be complete");
     }
 
     /// Clears the database and initializes it as incomplete.
@@ -525,7 +537,7 @@ impl MerkleRadixTrie {
         };
         let chunk: Vec<_> = chunk
             .into_iter()
-            .map(|n| Item::new(n.key, n.value.unwrap()))
+            .map(|n| TrieItem::new(n.key, n.value.unwrap()))
             .collect();
         let proof = if let Some(item) = chunk.last() {
             // Get the proof for the last included item if available.
@@ -738,7 +750,6 @@ impl MerkleRadixTrie {
 
     /// When pushing a chunk the correct behavior may result in an applied chunk or in an ignored chunk.
     /// `start_key` is inclusive and is meant to check if the chunk is a consecutive chunk.
-    /// `end_key` is exclusive.
     pub fn put_chunk(
         &self,
         txn: &mut WriteTransaction,
@@ -831,7 +842,7 @@ impl MerkleRadixTrie {
         // Then, put all the new items.
         let missing_range = chunk.end_key.clone().map(|end| end..);
         for item in chunk.items {
-            self.put_raw(txn, &item.key, item.values, &missing_range);
+            self.put_raw(txn, &item.key, item.value, &missing_range);
         }
 
         // Mark the remaining stumps.
@@ -1702,7 +1713,7 @@ mod tests {
             key_3,
             TrieChunk::new(
                 Some(key_1.clone()),
-                vec![Item::new(key_2, vec![99])],
+                vec![TrieItem::new(key_2, vec![99])],
                 TrieProof::new(vec![proof_value_2.clone(), proof_root.clone()]),
             ),
             proof_root.hash_assert(),

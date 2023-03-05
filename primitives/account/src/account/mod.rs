@@ -1,7 +1,7 @@
 use beserial::{Deserialize, Serialize};
 use nimiq_primitives::account::{AccountError, AccountType};
 use nimiq_primitives::coin::Coin;
-use nimiq_transaction::{Transaction, TransactionFlags};
+use nimiq_transaction::{inherent::Inherent, Transaction, TransactionFlags};
 
 use crate::account::basic_account::BasicAccount;
 use crate::account::htlc_contract::HashedTimeLockedContract;
@@ -12,7 +12,7 @@ use crate::interaction_traits::{
     AccountInherentInteraction, AccountPruningInteraction, AccountTransactionInteraction,
 };
 use crate::reserved_balance::ReservedBalance;
-use crate::{AccountReceipt, BlockState, Inherent};
+use crate::{AccountReceipt, BlockState};
 
 pub mod basic_account;
 pub mod htlc_contract;
@@ -23,7 +23,7 @@ macro_rules! gen_account_match {
     ($self: ident, $f: ident $(, $arg:expr )*) => {
         match $self {
             Account::Basic(account) => account.$f($( $arg ),*),
-            Account::VestingContract(account) => account.$f($( $arg ),*),
+            Account::Vesting(account) => account.$f($( $arg ),*),
             Account::HTLC(account) => account.$f($( $arg ),*),
             Account::Staking(account) => account.$f($( $arg ),*),
         }
@@ -34,7 +34,7 @@ macro_rules! gen_account_type_match {
     ($self: expr, $f: ident $(, $arg:expr )*) => {
         match $self {
             AccountType::Basic => BasicAccount::$f($( $arg ),*),
-            AccountType::VestingContract => VestingContract::$f($( $arg ),*),
+            AccountType::Vesting => VestingContract::$f($( $arg ),*),
             AccountType::HTLC => HashedTimeLockedContract::$f($( $arg ),*),
             AccountType::Staking => StakingContract::$f($( $arg ),*),
         }
@@ -97,22 +97,22 @@ impl AccountTransactionInteraction for Account {
             transaction,
             initial_balance,
             block_state,
-            data_store,
+            data_store
         )
     }
 
     fn revert_new_contract(
-        self,
+        &mut self,
         transaction: &Transaction,
         block_state: &BlockState,
         data_store: DataStoreWrite,
-    ) -> Result<Account, AccountError> {
+    ) -> Result<(), AccountError> {
         gen_account_match!(
             self,
             revert_new_contract,
             transaction,
             block_state,
-            data_store,
+            data_store
         )
     }
 
@@ -127,7 +127,7 @@ impl AccountTransactionInteraction for Account {
             commit_incoming_transaction,
             transaction,
             block_state,
-            data_store,
+            data_store
         )
     }
 
@@ -144,7 +144,7 @@ impl AccountTransactionInteraction for Account {
             transaction,
             block_state,
             receipt,
-            data_store,
+            data_store
         )
     }
 
@@ -159,7 +159,7 @@ impl AccountTransactionInteraction for Account {
             commit_outgoing_transaction,
             transaction,
             block_state,
-            data_store,
+            data_store
         )
     }
 
@@ -176,7 +176,7 @@ impl AccountTransactionInteraction for Account {
             transaction,
             block_state,
             receipt,
-            data_store,
+            data_store
         )
     }
 
@@ -191,7 +191,7 @@ impl AccountTransactionInteraction for Account {
             commit_failed_transaction,
             transaction,
             block_state,
-            data_store,
+            data_store
         )
     }
 
@@ -208,7 +208,7 @@ impl AccountTransactionInteraction for Account {
             transaction,
             block_state,
             receipt,
-            data_store,
+            data_store
         )
     }
 
@@ -225,7 +225,7 @@ impl AccountTransactionInteraction for Account {
             transaction,
             reserved_balance,
             block_state,
-            data_store,
+            data_store
         )
     }
 }
@@ -237,7 +237,7 @@ impl AccountInherentInteraction for Account {
         block_state: &BlockState,
         data_store: DataStoreWrite,
     ) -> Result<Option<AccountReceipt>, AccountError> {
-        gen_account_match!(self, commit_inherent, inherent, block_state, data_store,)
+        gen_account_match!(self, commit_inherent, inherent, block_state, data_store)
     }
 
     fn revert_inherent(
@@ -253,7 +253,7 @@ impl AccountInherentInteraction for Account {
             inherent,
             block_state,
             receipt,
-            data_store,
+            data_store
         )
     }
 }
@@ -263,7 +263,7 @@ impl AccountPruningInteraction for Account {
         gen_account_match!(self, can_be_pruned)
     }
 
-    fn prune(self, data_store: DataStoreRead) -> Result<Option<AccountReceipt>, AccountError> {
+    fn prune(self, data_store: DataStoreRead) -> Option<AccountReceipt> {
         gen_account_match!(self, prune, data_store)
     }
 
@@ -272,6 +272,6 @@ impl AccountPruningInteraction for Account {
         pruned_account: Option<&AccountReceipt>,
         data_store: DataStoreWrite,
     ) -> Result<Account, AccountError> {
-        gen_account_type_match!(ty, restore, pruned_account, data_store)
+        gen_account_type_match!(ty, restore, ty, pruned_account, data_store)
     }
 }

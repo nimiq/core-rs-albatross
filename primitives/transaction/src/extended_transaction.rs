@@ -10,7 +10,7 @@ use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_primitives::policy::Policy;
 
-use crate::inherent::{Inherent, InherentType};
+use crate::inherent::Inherent;
 use crate::ExecutedTransaction;
 use crate::Transaction as BlockchainTransaction;
 
@@ -69,13 +69,16 @@ impl ExtendedTransaction {
         }
 
         for inherent in inherents {
-            if inherent.ty == InherentType::Slash || inherent.ty == InherentType::Reward {
-                ext_txs.push(ExtendedTransaction {
-                    network_id,
-                    block_number,
-                    block_time,
-                    data: ExtTxData::Inherent(inherent),
-                })
+            match inherent {
+                Inherent::Slash { .. } | Inherent::Reward { .. } => {
+                    ext_txs.push(ExtendedTransaction {
+                        network_id,
+                        block_number,
+                        block_time,
+                        data: ExtTxData::Inherent(inherent),
+                    })
+                }
+                _ => {}
             }
         }
 
@@ -131,13 +134,10 @@ impl ExtendedTransaction {
     pub fn tx_hash(&self) -> Blake2bHash {
         match &self.data {
             ExtTxData::Basic(tx) => tx.hash(),
-            ExtTxData::Inherent(v) => {
-                if v.ty == InherentType::Reward {
-                    self.clone().into_transaction().unwrap().hash()
-                } else {
-                    v.hash()
-                }
-            }
+            ExtTxData::Inherent(v) => match v {
+                Inherent::Reward { .. } => self.clone().into_transaction().unwrap().hash(),
+                _ => v.hash(),
+            },
         }
     }
 
@@ -146,17 +146,16 @@ impl ExtendedTransaction {
     pub fn into_transaction(self) -> Result<ExecutedTransaction, IntoTransactionError> {
         match self.data {
             ExtTxData::Basic(tx) => Ok(tx),
-            ExtTxData::Inherent(x) => {
-                if x.ty == InherentType::Reward {
+            ExtTxData::Inherent(inherent) => {
+                if let Inherent::Reward { target, value } = inherent {
                     let txn = BlockchainTransaction::new_basic(
                         Policy::COINBASE_ADDRESS,
-                        x.target,
-                        x.value,
+                        target,
+                        value,
                         Coin::ZERO,
                         self.block_number,
                         self.network_id,
                     );
-
                     Ok(ExecutedTransaction::Ok(txn))
                 } else {
                     Err(IntoTransactionError::NoBasicTransactionMapping)

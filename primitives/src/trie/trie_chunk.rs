@@ -21,15 +21,15 @@ pub struct TrieChunkWithStart {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Item {
+pub struct TrieItem {
     pub key: KeyNibbles,
     #[beserial(len_type(u16))]
-    pub values: Vec<u8>,
+    pub value: Vec<u8>,
 }
 
-impl Item {
-    pub fn new(key: KeyNibbles, values: Vec<u8>) -> Self {
-        Self { key, values }
+impl TrieItem {
+    pub fn new(key: KeyNibbles, value: Vec<u8>) -> Self {
+        Self { key, value }
     }
 }
 
@@ -40,7 +40,7 @@ pub struct TrieChunk {
     /// When set to None it means that it is the last trie chunk.
     pub end_key: Option<KeyNibbles>,
     #[beserial(len_type(u32))]
-    pub items: Vec<Item>,
+    pub items: Vec<TrieItem>,
     pub proof: TrieProof,
 }
 
@@ -56,7 +56,7 @@ impl Display for TrieChunk {
 }
 
 impl TrieChunk {
-    pub fn new(end_key: Option<KeyNibbles>, items: Vec<Item>, proof: TrieProof) -> Self {
+    pub fn new(end_key: Option<KeyNibbles>, items: Vec<TrieItem>, proof: TrieProof) -> Self {
         Self {
             end_key,
             items,

@@ -133,7 +133,7 @@ where
 
     // Setup the complete node.
     let network_info = NetworkInfo::from_network_id(NetworkId::UnitAlbatross);
-    let genesis_block = network_info.genesis_block::<Block>();
+    let genesis_block = network_info.genesis_block();
     let genesis_accounts = network_info.genesis_accounts();
     let mut mock_node =
         MockNode::<MockNetwork>::new(2, genesis_block, genesis_accounts, &mut Some(hub)).await;
@@ -265,7 +265,7 @@ async fn can_sync_state() {
 
     // Setup the complete node.
     let network_info = NetworkInfo::from_network_id(NetworkId::UnitAlbatross);
-    let genesis_block = network_info.genesis_block::<Block>();
+    let genesis_block = network_info.genesis_block();
     let genesis_accounts = network_info.genesis_accounts();
     let mut mock_node =
         MockNode::<MockNetwork>::new(2, genesis_block, genesis_accounts, &mut Some(hub)).await;
@@ -405,7 +405,7 @@ async fn revert_chunks_for_state_live_sync() {
 
     // Setup the complete node.
     let network_info = NetworkInfo::from_network_id(NetworkId::UnitAlbatross);
-    let genesis_block = network_info.genesis_block::<Block>();
+    let genesis_block = network_info.genesis_block();
     let genesis_accounts = network_info.genesis_accounts();
     let mut mock_node =
         MockNode::<MockNetwork>::new(2, genesis_block, genesis_accounts, &mut Some(hub)).await;
@@ -686,7 +686,7 @@ async fn can_remove_chunks_related_to_invalid_blocks() {
 
     // Setup the complete node.
     let network_info = NetworkInfo::from_network_id(NetworkId::UnitAlbatross);
-    let genesis_block = network_info.genesis_block::<Block>();
+    let genesis_block = network_info.genesis_block();
     let genesis_accounts = network_info.genesis_accounts();
     let mut mock_node =
         MockNode::<MockNetwork>::new(2, genesis_block, genesis_accounts, &mut Some(hub)).await;
@@ -773,7 +773,7 @@ async fn clears_buffer_after_macro_block() {
 
     // Setup the complete node.
     let network_info = NetworkInfo::from_network_id(NetworkId::UnitAlbatross);
-    let genesis_block = network_info.genesis_block::<Block>();
+    let genesis_block = network_info.genesis_block();
     let genesis_accounts = network_info.genesis_accounts();
     let mut mock_node =
         MockNode::<MockNetwork>::new(2, genesis_block, genesis_accounts, &mut Some(hub)).await;

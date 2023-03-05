@@ -1,12 +1,10 @@
 #[cfg(feature = "metrics")]
 use std::sync::Arc;
 
-use nimiq_account::{
-    Account, AccountTransactionInteraction, BlockState, DataStore, ReservedBalance, StakingContract,
-};
+use nimiq_account::{Account, BlockState, DataStore, ReservedBalance, StakingContract};
 use nimiq_block::Block;
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainError, ChainInfo, Direction};
-use nimiq_database::{ReadDBTransaction, Transaction as DBTransaction};
+use nimiq_database::{ReadTransaction as DBReadTransaction, Transaction as DBTransaction};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::{
@@ -108,15 +106,22 @@ impl Blockchain {
 
     /// Returns the current staking contract.
     pub fn get_staking_contract_if_complete(&self) -> Option<StakingContract> {
-        let staking_contract_address = StakingContract::get_key_staking_contract();
-
-        match self.state.accounts.get(&staking_contract_address, None) {
-            Ok(Some(Account::Staking(x))) => Some(x),
-            Err(_) => None,
-            _ => {
-                unreachable!()
-            }
+        let staking_contract = self
+            .state
+            .accounts
+            .get(&Policy::STAKING_CONTRACT_ADDRESS, None)
+            .ok()?;
+        match staking_contract {
+            Account::Staking(x) => Some(x),
+            _ => unreachable!(),
         }
+    }
+
+    /// Returns the contract data store for the staking contract.
+    pub fn get_staking_contract_store(&self) -> DataStore {
+        self.state
+            .accounts
+            .data_store(&Policy::STAKING_CONTRACT_ADDRESS)
     }
 
     /// Returns the number of accounts in the Accounts Tree. An account id defined as any leaf node
@@ -199,7 +204,7 @@ impl Blockchain {
         &self,
         txn_opt: Option<&DBTransaction>,
     ) -> Option<RangeFrom<KeyNibbles>> {
-        let read_txn: ReadTransaction;
+        let read_txn: DBReadTransaction;
         let txn = match txn_opt {
             Some(txn) => txn,
             None => {

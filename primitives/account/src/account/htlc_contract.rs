@@ -5,15 +5,14 @@ use nimiq_primitives::coin::Coin;
 use nimiq_transaction::account::htlc_contract::{
     AnyHash, CreationTransactionData, HashAlgorithm, ProofType,
 };
-use nimiq_transaction::{SignatureProof, Transaction};
+use nimiq_transaction::{inherent::Inherent, SignatureProof, Transaction};
 
 use crate::data_store::{DataStoreRead, DataStoreWrite};
-use crate::inherent::Inherent;
 use crate::interaction_traits::{
     AccountInherentInteraction, AccountPruningInteraction, AccountTransactionInteraction,
 };
 use crate::reserved_balance::ReservedBalance;
-use crate::{Account, AccountReceipt, BlockState};
+use crate::{convert_receipt, Account, AccountReceipt, BlockState};
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
@@ -261,8 +260,8 @@ impl AccountPruningInteraction for HashedTimeLockedContract {
         self.balance.is_zero()
     }
 
-    fn prune(self, _data_store: DataStoreRead) -> Result<Option<AccountReceipt>, AccountError> {
-        Ok(Some(PrunedHashedTimeLockContract::from(self).into()))
+    fn prune(self, _data_store: DataStoreRead) -> Option<AccountReceipt> {
+        Some(PrunedHashedTimeLockContract::from(self).into())
     }
 
     fn restore(
@@ -271,8 +270,9 @@ impl AccountPruningInteraction for HashedTimeLockedContract {
         _data_store: DataStoreWrite,
     ) -> Result<Account, AccountError> {
         let receipt = pruned_account.ok_or(AccountError::InvalidReceipt)?;
+        let pruned_account = PrunedHashedTimeLockContract::try_from(receipt)?;
         Ok(Account::HTLC(HashedTimeLockedContract::from(
-            receipt.into(),
+            pruned_account,
         )))
     }
 }
@@ -316,3 +316,5 @@ impl From<PrunedHashedTimeLockContract> for HashedTimeLockedContract {
         }
     }
 }
+
+convert_receipt!(PrunedHashedTimeLockContract);

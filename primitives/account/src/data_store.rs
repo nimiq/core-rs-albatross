@@ -19,11 +19,17 @@ impl<'tree> DataStore<'tree> {
     }
 
     pub fn get<T: Deserialize>(&self, txn: &Transaction, key: &KeyNibbles) -> Option<T> {
-        self.tree.get(txn, &(&self.prefix + key))
+        self.tree
+            .get(txn, &(&self.prefix + key))
+            // FIXME Make this work with incomplete tree.
+            .expect("Tree must be complete")
     }
 
     pub fn put<T: Serialize>(&self, txn: &mut WriteTransaction, key: &KeyNibbles, value: T) {
-        self.tree.put(txn, &(&self.prefix + key), value)
+        self.tree
+            .put(txn, &(&self.prefix + key), value)
+            // FIXME Make this work with incomplete tree.
+            .expect("Tree must be complete")
     }
 
     pub fn remove(&self, txn: &mut WriteTransaction, key: &KeyNibbles) {

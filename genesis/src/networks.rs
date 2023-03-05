@@ -5,20 +5,19 @@ use std::path::Path;
 
 use lazy_static::lazy_static;
 
-use beserial::Deserialize;
 #[cfg(feature = "genesis-override")]
 use beserial::Serialize;
+use beserial::{Deserialize, DeserializeWithLength, SerializeWithLength};
 #[cfg(feature = "accounts")]
-use nimiq_account::{Account, AccountsList};
+use nimiq_block::Block;
 #[cfg(feature = "genesis-override")]
 use nimiq_database::volatile::VolatileEnvironment;
 #[cfg(feature = "genesis-override")]
 use nimiq_genesis_builder::{GenesisBuilder, GenesisBuilderError, GenesisInfo};
 use nimiq_hash::Blake2bHash;
 #[cfg(feature = "accounts")]
-use nimiq_primitives::key_nibbles::KeyNibbles;
-
 pub use nimiq_primitives::networks::NetworkId;
+use nimiq_primitives::trie::TrieItem;
 
 #[derive(Clone, Debug)]
 struct GenesisData {
@@ -46,10 +45,9 @@ impl NetworkInfo {
     }
 
     #[inline]
-    pub fn genesis_block<B: Deserialize>(&self) -> B {
-        let block: B = Deserialize::deserialize_from_vec(self.genesis.block)
-            .expect("Failed to deserialize genesis block.");
-        block
+    pub fn genesis_block(&self) -> Block {
+        Deserialize::deserialize_from_vec(self.genesis.block)
+            .expect("Failed to deserialize genesis block.")
     }
 
     #[inline]
@@ -59,10 +57,9 @@ impl NetworkInfo {
 
     #[cfg(feature = "accounts")]
     #[inline]
-    pub fn genesis_accounts(&self) -> Vec<(KeyNibbles, Account)> {
-        let accounts: AccountsList = Deserialize::deserialize_from_vec(self.genesis.accounts)
-            .expect("Failed to deserialize genesis accounts.");
-        accounts.0
+    pub fn genesis_accounts(&self) -> Vec<TrieItem> {
+        DeserializeWithLength::deserialize_from_vec::<u32>(self.genesis.accounts)
+            .expect("Failed to deserialize genesis accounts.")
     }
 
     pub fn from_network_id(network_id: NetworkId) -> &'static Self {
@@ -84,7 +81,7 @@ fn read_genesis_config(config: &Path) -> Result<GenesisData, GenesisBuilderError
 
     let block = block.serialize_to_vec();
     #[cfg(feature = "accounts")]
-    let accounts = AccountsList(accounts).serialize_to_vec();
+    let accounts = accounts.serialize_to_vec::<u32>();
 
     Ok(GenesisData {
         block: Box::leak(block.into_boxed_slice()),

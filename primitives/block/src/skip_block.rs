@@ -8,7 +8,7 @@ use nimiq_primitives::policy::Policy;
 use nimiq_primitives::slots::Validators;
 use nimiq_vrf::VrfEntropy;
 
-use crate::{Message, MultiSignature, SignedMessage, PREFIX_SKIP_BLOCK_INFO};
+use crate::{Message, MicroBlock, MultiSignature, SignedMessage, PREFIX_SKIP_BLOCK_INFO};
 
 pub type SignedSkipBlockInfo = SignedMessage<SkipBlockInfo>;
 
@@ -25,6 +25,19 @@ pub struct SkipBlockInfo {
     /// fork, but not to branching because of skip blocks.
     /// We use the seed entropy since that is what is actually unique, not the VRF seed itself.
     pub vrf_entropy: VrfEntropy,
+}
+
+impl SkipBlockInfo {
+    pub fn from_micro_block(block: &MicroBlock) -> Option<Self> {
+        if block.is_skip_block() {
+            Some(SkipBlockInfo {
+                block_number: block.header.block_number,
+                vrf_entropy: block.header.seed.entropy(),
+            })
+        } else {
+            None
+        }
+    }
 }
 
 impl Message for SkipBlockInfo {

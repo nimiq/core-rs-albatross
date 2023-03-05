@@ -19,7 +19,7 @@ use nimiq_primitives::policy::Policy;
 use nimiq_transaction::{
     extended_transaction::{ExtTxData, ExtendedTransaction},
     history_proof::HistoryTreeProof,
-    inherent::InherentType,
+    inherent::Inherent,
 };
 
 use crate::history::{mmr_store::MMRStore, ordered_hash::OrderedHash, HistoryTreeChunk};
@@ -247,7 +247,9 @@ impl HistoryStore {
                     affected_addresses.insert(tx.recipient.clone());
                 }
                 ExtTxData::Inherent(tx) => {
-                    affected_addresses.insert(tx.target.clone());
+                    if let Inherent::Reward { target, .. } = tx {
+                        affected_addresses.insert(target.clone());
+                    }
                 }
             }
         }
@@ -936,13 +938,13 @@ impl HistoryStore {
             }
             ExtTxData::Inherent(tx) => {
                 // We only add reward inherents to the address database.
-                if tx.ty == InherentType::Reward {
+                if let Inherent::Reward { target, .. } = tx {
                     let index_tx_recipient =
-                        self.get_last_tx_index_for_address(&tx.target, Some(txn)) + 1;
+                        self.get_last_tx_index_for_address(target, Some(txn)) + 1;
 
                     txn.put(
                         &self.address_db,
-                        &tx.target,
+                        target,
                         &OrderedHash {
                             index: index_tx_recipient,
                             hash: tx_hash,
