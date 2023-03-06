@@ -328,7 +328,7 @@ class Topology:
                     time.sleep(2)
 
                 logging.info(
-                    "Producing blocks for {up_time}s with all ""nodes up")
+                    f"Producing blocks for {up_time}s with all nodes up")
                 self.__run_monitor_for(up_time)
 
             time.sleep(30)
