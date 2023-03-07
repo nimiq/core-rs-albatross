@@ -15,17 +15,26 @@ use crate::{
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize, Display)]
 #[repr(u8)]
 #[cfg_attr(
-    feature = "serde-derive",
-    derive(serde::Serialize, serde::Deserialize),
-    serde(try_from = "u8", into = "u8")
+    any(feature = "serde-derive", feature = "ts-types"),
+    derive(serde::Serialize, serde::Deserialize)
+)]
+#[cfg_attr(feature = "serde-derive", serde(try_from = "u8", into = "u8"))]
+#[cfg_attr(
+    feature = "ts-types",
+    derive(tsify::Tsify),
+    serde(rename = "PlainAccountType", rename_all = "lowercase"),
+    wasm_bindgen::prelude::wasm_bindgen
 )]
 pub enum AccountType {
     Basic = 0,
     Vesting = 1,
     HTLC = 2,
     Staking = 3,
+    #[cfg_attr(feature = "ts-types", serde(skip))]
     StakingValidator = 4,
+    #[cfg_attr(feature = "ts-types", serde(skip))]
     StakingValidatorsStaker = 5,
+    #[cfg_attr(feature = "ts-types", serde(skip))]
     StakingStaker = 6,
 }
 

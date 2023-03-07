@@ -71,6 +71,12 @@ pub struct TransactionReceipt {
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 #[repr(u8)]
+#[cfg_attr(
+    feature = "ts-types",
+    derive(serde::Serialize, serde::Deserialize, tsify::Tsify),
+    serde(rename = "PlainTransactionFormat", rename_all = "lowercase"),
+    wasm_bindgen::prelude::wasm_bindgen
+)]
 pub enum TransactionFormat {
     Basic = 0,
     Extended = 1,

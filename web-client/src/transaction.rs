@@ -1,4 +1,5 @@
 use serde::ser::SerializeStruct;
+use tsify::Tsify;
 use wasm_bindgen::prelude::*;
 
 use beserial::Serialize;
@@ -226,13 +227,10 @@ impl Transaction {
         self.inner.serialize_to_vec()
     }
 
-    /// The transaction's format: `0` = Basic, `1` = Extended.
+    /// The transaction's {@link TransactionFormat}.
     #[wasm_bindgen(getter)]
-    pub fn format(&self) -> u8 {
-        match self.inner.format() {
-            TransactionFormat::Basic => 0,
-            TransactionFormat::Extended => 1,
-        }
+    pub fn format(&self) -> TransactionFormat {
+        self.inner.format()
     }
 
     /// The transaction's sender address.
@@ -241,10 +239,10 @@ impl Transaction {
         Address::from_native(self.inner.sender.clone())
     }
 
-    /// The transaction's sender type: `0` = Basic, `1` = Vesting, `2` = HTLC, `3` = Staking contract.
+    /// The transaction's sender {@link AccountType}.
     #[wasm_bindgen(getter, js_name = senderType)]
-    pub fn sender_type(&self) -> u8 {
-        self.inner.sender_type.into()
+    pub fn sender_type(&self) -> AccountType {
+        self.inner.sender_type
     }
 
     /// The transaction's recipient address.
@@ -253,10 +251,10 @@ impl Transaction {
         Address::from_native(self.inner.recipient.clone())
     }
 
-    /// The transaction's recipient type: `0` = Basic, `1` = Vesting, `2` = HTLC, `3` = Staking contract.
+    /// The transaction's recipient {@link AccountType}.
     #[wasm_bindgen(getter, js_name = recipientType)]
-    pub fn recipient_type(&self) -> u8 {
-        self.inner.recipient_type.into()
+    pub fn recipient_type(&self) -> AccountType {
+        self.inner.recipient_type
     }
 
     /// The transaction's value in luna (NIM's smallest unit).
@@ -336,128 +334,144 @@ impl Transaction {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
-pub struct Raw {
-    raw: String,
+/// Placeholder struct to serialize data of transactions as hex strings in the style of the Nimiq 1.0 library.
+#[derive(serde::Serialize, serde::Deserialize, Tsify)]
+pub struct PlainTransactionData {
+    pub raw: String,
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+/// Placeholder struct to serialize proofs of transactions as hex strings in the style of the Nimiq 1.0 library.
+#[derive(serde::Serialize, serde::Deserialize, Tsify)]
+pub struct PlainTransactionProof {
+    pub raw: String,
+}
+
+/// JSON-compatible and human-readable format of transactions. E.g. addresses are presented in their human-readable
+/// format and address types and the network are represented as strings. Data and proof are serialized as an object
+/// describing their contents (not yet implemented, only the `{ raw: string }` fallback is available).
+#[derive(serde::Serialize, serde::Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct PlainTransaction {
+    /// The transaction's unique hash, used as its identifier. Sometimes also called `txId`.
     pub transaction_hash: String,
-    pub format: String,
+    /// The transaction's format. Nimiq transactions can have one of two formats: "basic" and "extended".
+    /// Basic transactions are simple value transfers between two regular address types and cannot contain
+    /// any extra data. Basic transactions can be serialized to less bytes, so take up less place on the
+    /// blockchain. Extended transactions on the other hand are all other transactions: contract creations
+    /// and interactions, staking transactions, transactions with exta data, etc.
+    #[tsify(type = "PlainTransactionFormat")]
+    pub format: TransactionFormat,
+    /// The transaction's sender address in human-readable IBAN format.
     pub sender: String,
-    pub sender_type: String,
+    /// The type of the transaction's sender. "basic" are regular private-key controlled addresses,
+    /// "vesting" and "htlc" are those contract types respectively, and "staking" is the staking contract.
+    #[tsify(type = "PlainAccountType")]
+    pub sender_type: AccountType,
+    /// The transaction's recipient address in human-readable IBAN format.
     pub recipient: String,
-    pub recipient_type: String,
+    /// The type of the transaction's sender. "basic" are regular private-key controlled addresses,
+    /// "vesting" and "htlc" are those contract types respectively, and "staking" is the staking contract.
+    #[tsify(type = "PlainAccountType")]
+    pub recipient_type: AccountType,
+    // The transaction's value in luna (NIM's smallest unit).
     pub value: u64,
+    /// The transaction's fee in luna (NIM's smallest unit).
     pub fee: u64,
+    /// The transaction's fee-per-byte in luna (NIM's smallest unit).
     pub fee_per_byte: f64,
+    /// The block height at which this transaction becomes valid. It is then valid for 7200 blocks (~2 hours).
     pub validity_start_height: u32,
+    /// The network name on which this transaction is valid.
     pub network: String,
+    /// Any flags that this transaction carries. `0b1 = 1` means it's a contract-creation transaction, `0b10 = 2`
+    /// means it's a signalling transaction with 0 value.
     pub flags: u8,
-    pub data: Raw,
-    pub proof: Raw,
+    /// The `data` field of a transaction serves different purposes based on the transaction's recipient type.
+    /// For transactions to "basic" address types, this field can contain up to 64 bytes of unstructured data.
+    /// For transactions that create contracts or interact with the staking contract, the format of this field
+    /// must follow a fixed structure and defines the new contracts' properties or how the staking contract is
+    /// changed.
+    pub data: PlainTransactionData,
+    /// The `proof` field contains the signature of the eligible signer. The proof field's structure depends on
+    /// the transaction's sender type. For transactions from contracts it can also contain additional structured
+    /// data before the signature.
+    pub proof: PlainTransactionProof,
+    /// The transaction's serialized size in bytes. It is used to determine the fee-per-byte that this
+    /// transaction pays.
     pub size: usize,
+    /// Encodes if the transaction is valid, meaning the signature is valid and the `data` and `proof` fields
+    /// follow the correct format for the transaction's recipient and sender type, respectively.
     pub valid: bool,
 }
 
-#[wasm_bindgen(typescript_custom_section)]
-const PLAIN_TRANSACTION_TYPE: &'static str = r#"
-export enum TransactionFormat {
-  BASIC = "basic",
-  EXTENDED = "extended",
-};
-
-export enum AccountType {
-  BASIC = "basic",
-  VESTING = "vesting",
-  HTLC = "htlc",
-  STAKING = "staking",
-  VALIDATOR = "validator",
-  STAKER = "staker",
-};
-
-export type PlainTransaction = {
-  transactionHash: string,
-  format: TransactionFormat,
-  sender: string,
-  senderType: AccountType,
-  recipient: string,
-  recipientType: AccountType,
-  value: number,
-  fee: number,
-  feePerByte: number,
-  validityStartHeight: number,
-  network: string,
-  flags: number,
-  data: { raw: string },
-  proof: { raw: string },
-  size: number,
-  valid: boolean,
-};
-"#;
-
 impl PlainTransaction {
+    /// Creates a PlainTransaction struct that can be serialized to JS from a native [nimiq_transaction::Transaction].
     pub fn from_transaction(tx: &nimiq_transaction::Transaction) -> Self {
         Self {
             transaction_hash: tx.hash::<Blake2bHash>().to_hex(),
-            format: match tx.format() {
-                TransactionFormat::Basic => "basic".to_string(),
-                TransactionFormat::Extended => "extended".to_string(),
-            },
+            format: tx.format(),
             sender: tx.sender.to_user_friendly_address(),
-            sender_type: PlainTransaction::account_type_to_string(tx.sender_type),
+            sender_type: tx.sender_type,
             recipient: tx.recipient.to_user_friendly_address(),
-            recipient_type: PlainTransaction::account_type_to_string(tx.recipient_type),
+            recipient_type: tx.recipient_type,
             value: tx.value.into(),
             fee: tx.fee.into(),
             fee_per_byte: tx.fee_per_byte(),
             validity_start_height: tx.validity_start_height,
             network: tx.network_id.to_string().to_lowercase(),
             flags: tx.flags.into(),
-            data: Raw {
+            data: PlainTransactionData {
                 raw: hex::encode(tx.data.clone()),
             },
-            proof: Raw {
+            proof: PlainTransactionProof {
                 raw: hex::encode(tx.proof.clone()),
             },
             size: tx.serialized_size(),
             valid: tx.verify(tx.network_id).is_ok(),
         }
     }
-
-    fn account_type_to_string(ty: AccountType) -> String {
-        match ty {
-            AccountType::Basic => "basic".to_string(),
-            AccountType::Vesting => "vesting".to_string(),
-            AccountType::HTLC => "htlc".to_string(),
-            AccountType::Staking => "staking".to_string(),
-            AccountType::StakingValidator => "validator".to_string(),
-            AccountType::StakingValidatorsStaker => "staker".to_string(),
-            AccountType::StakingStaker => "staker".to_string(),
-        }
-    }
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+/// Describes the state of a transaction as known by the client.
+#[derive(serde::Serialize, serde::Deserialize, Tsify)]
 #[serde(rename_all = "lowercase")]
 pub enum TransactionState {
+    /// The transaction only exists locally and has not been broadcast or accepted by any peers.
     New,
+    /// The transaction has been broadcast and accepted by peers and is waiting in the mempool for
+    /// inclusion into the blockchain.
     Pending,
+    /// The transaction has been included into the blockchain, but not yet finalized by a following
+    /// macro block.
     Included,
+    /// The transaction is included in the blockchain and has been finalized by a following macro block.
     Confirmed,
+    /// The transaction was invalided by a blockchain state change before it could be included into
+    /// the chain, or was replaced by a higher-fee transaction, or cannot be applied anymore after a
+    /// blockchain rebranch.
     Invalidated,
+    /// The transaction's validity window has expired and the transaction can no longer be included into
+    /// the blockchain.
     Expired,
 }
 
+/// JSON-compatible and human-readable format of transactions, including details about its state in the
+/// blockchain. Contains all fields from {@link PlainTransaction}, plus additional fields such as
+/// `blockHeight` and `timestamp` if the transaction is included in the blockchain.
+#[derive(Tsify)]
+#[serde(rename_all = "camelCase")]
 pub struct PlainTransactionDetails {
+    #[serde(flatten)]
     transaction: PlainTransaction,
 
     pub state: TransactionState,
+    #[tsify(optional)]
     pub execution_result: Option<bool>,
+    #[tsify(optional)]
     pub block_height: Option<u32>,
+    #[tsify(optional)]
     pub confirmations: Option<u32>,
+    #[tsify(optional)]
     pub timestamp: Option<u64>,
 }
 
@@ -500,27 +514,8 @@ impl serde::Serialize for PlainTransactionDetails {
     }
 }
 
-#[wasm_bindgen(typescript_custom_section)]
-const PLAIN_TRANSACTION_DETAILS_TYPE: &'static str = r#"
-export enum TransactionState {
-  NEW = "new",
-  PENDING = "pending",
-  INCLUDED = "included",
-  CONFIRMED = "confirmed",
-  INVALIDATED = "invalidated",
-  EXPIRED = "expired",
-}
-
-export type PlainTransactionDetails = PlainTransaction & {
-  state: TransactionState,
-  executionResult?: boolean,
-  blockHeight?: number,
-  confirmations?: number,
-  timestamp?: number,
-};
-"#;
-
 impl PlainTransactionDetails {
+    /// Creates a PlainTransactionDetails struct that can be serialized to JS from a native [ExtendedTransaction].
     pub fn from_extended_transaction(
         ext_tx: &ExtendedTransaction,
         current_block: u32,

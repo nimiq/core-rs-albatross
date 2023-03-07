@@ -29,6 +29,8 @@ regex = { version = "1.7", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 strum_macros = "0.24"
 thiserror = { version = "1.0", optional = true }
+tsify = { version = "0.4", optional = true }
+wasm-bindgen = { version = "0.2", optional = true }
 
 beserial = { path = "../beserial", features = ["derive"] }
 nimiq-bls = { path = "../bls", features = ["beserial"], optional = true }
@@ -52,3 +54,4 @@ serde-derive = ["serde"]
 slots = ["beserial/bitvec", "itertools", "nimiq-bls", "nimiq-keys", "nimiq-utils", "policy"]
 transaction = ["thiserror"]
 trie = ["key-nibbles", "nimiq-hash", "thiserror"]
+ts-types = ["serde", "tsify", "wasm-bindgen"]

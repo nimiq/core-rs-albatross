@@ -27,6 +27,7 @@ js-sys = "0.3"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 serde = {version = "1.0.152", features = ["derive"] }
 serde-wasm-bindgen = "0.5"
+tsify = { version = "0.4", features= ["js"] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 web-sys = { version = "0.3.22", features = ["EventTarget", "Window"]}
@@ -38,8 +39,8 @@ nimiq-consensus = { path = "../consensus", default-features = false }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-network-interface = { path = "../network-interface" }
-nimiq-primitives = {path = "../primitives", features = ["coin", "networks"]}
-nimiq-transaction = { path = "../primitives/transaction" }
+nimiq-primitives = {path = "../primitives", features = ["coin", "networks", "ts-types"]}
+nimiq-transaction = { path = "../primitives/transaction", features = ["ts-types"] }
 nimiq-transaction-builder = { path = "../transaction-builder" }
 
 [dependencies.nimiq]
