@@ -109,9 +109,15 @@ impl Accounts {
     }
 
     fn is_missing(&self, txn: &DBTransaction, address: &Address) -> bool {
+        // We consider an account to be missing if the account itself or any of its children are missing.
+        // Therefore we need to check if the rightmost child is contained in the missing range.
+        let mut rightmost_key = [255u8; KeyNibbles::MAX_BYTES];
+        rightmost_key[0..Address::SIZE].copy_from_slice(&address.0);
+        let rightmost_key = KeyNibbles::from(&rightmost_key[..]);
+
         self.tree
             .get_missing_range(txn)
-            .map_or(false, |range| range.contains(&KeyNibbles::from(address)))
+            .map_or(false, |range| range.contains(&rightmost_key))
     }
 
     fn get_with_type(

@@ -21,7 +21,7 @@ pub struct KeyNibbles {
 }
 
 impl KeyNibbles {
-    const MAX_BYTES: usize = 63;
+    pub const MAX_BYTES: usize = 63;
 
     /// The root (empty) key.
     pub const ROOT: KeyNibbles = KeyNibbles {
