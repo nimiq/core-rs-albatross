@@ -316,7 +316,7 @@ impl ops::Add<&KeyNibbles> for &KeyNibbles {
                 .copy_from_slice(&other.bytes[..other.bytes_len()]);
         } else {
             // Complex case: the lhs ends in the middle of a byte.
-            let mut next_byte = bytes[(self.bytes_len() - 1)];
+            let mut next_byte = bytes[self.bytes_len() - 1];
             let mut bytes_length = self.bytes_len() - 1;
 
             for (count, byte) in other.bytes[..other.bytes_len()].iter().enumerate() {
