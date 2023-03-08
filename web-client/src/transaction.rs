@@ -45,8 +45,8 @@ impl Transaction {
     /// type as the `recipient_type`: `1` for vesting, `2` for HTLC. The `data` bytes must have
     /// the correct format of contract creation data for the respective contract type.
     ///
-    /// ### Signalling transactions
-    /// To interact with the staking contract, signalling transaction are often used to not
+    /// ### Signaling transactions
+    /// To interact with the staking contract, signaling transaction are often used to not
     /// transfer any value, but to simply _signal_ a state change instead, such as changing one's
     /// delegation from one validator to another. To create such a transaction, set `flags` to `
     /// 0b10` and populate the `data` bytes accordingly.
@@ -55,7 +55,7 @@ impl Transaction {
     ///
     /// Throws when an account type is unknown, the numbers given for value and fee do not fit
     /// within a u64 or the networkId is unknown. Also throws when no data or recipient type is
-    /// given for contract creation transactions, or no data is given for signalling transactions.
+    /// given for contract creation transactions, or no data is given for signaling transactions.
     #[wasm_bindgen(constructor)]
     pub fn new(
         sender: &Address,
@@ -95,8 +95,8 @@ impl Transaction {
                 validity_start_height,
                 to_network_id(network_id)?,
             )
-        } else if flags.contains(TransactionFlags::SIGNALLING) {
-            nimiq_transaction::Transaction::new_signalling(
+        } else if flags.contains(TransactionFlags::SIGNALING) {
+            nimiq_transaction::Transaction::new_signaling(
                 sender.native_ref().clone(),
                 AccountType::try_from(sender_type.unwrap_or(0))?,
                 recipient.native_ref().clone(),
@@ -287,7 +287,7 @@ impl Transaction {
         from_network_id(self.inner.network_id)
     }
 
-    /// The transaction's flags: `0b1` = contract creation, `0b10` = signalling.
+    /// The transaction's flags: `0b1` = contract creation, `0b10` = signaling.
     #[wasm_bindgen(getter)]
     pub fn flags(&self) -> u8 {
         self.inner.flags.into()
