@@ -673,10 +673,13 @@ impl HistoryStore {
 
     /// Returns a proof for transactions with the given hashes. The proof also includes the extended
     /// transactions.
+    /// The verified state is used for those cases where the verifier might have an incomplete MMR,
+    /// for instance this could occur where we want to create transaction inclusion proofs of incomplete epochs.
     pub fn prove(
         &self,
         epoch_number: u32,
         hashes: Vec<&Blake2bHash>,
+        verifier_state: Option<usize>,
         txn_option: Option<&Transaction>,
     ) -> Option<HistoryTreeProof> {
         // Get the leaf indexes.
@@ -692,7 +695,7 @@ impl HistoryStore {
             positions.append(&mut indices)
         }
 
-        self.prove_with_position(epoch_number, positions, txn_option)
+        self.prove_with_position(epoch_number, positions, verifier_state, txn_option)
     }
 
     /// Returns a proof for all the extended transactions at the given positions (leaf indexes). The
@@ -701,6 +704,7 @@ impl HistoryStore {
         &self,
         epoch_number: u32,
         positions: Vec<usize>,
+        verifier_state: Option<usize>,
         txn_option: Option<&Transaction>,
     ) -> Option<HistoryTreeProof> {
         let read_txn: ReadTransaction;
@@ -720,7 +724,7 @@ impl HistoryStore {
         ));
 
         // Create Merkle proof.
-        let proof = tree.prove(&positions, None).ok()?;
+        let proof = tree.prove(&positions, verifier_state).ok()?;
 
         // Get each extended transaction from the tree.
         let mut ext_txs = vec![];
@@ -1484,6 +1488,7 @@ mod tests {
             .prove(
                 0,
                 vec![&ext_txs[0].tx_hash(), &ext_txs[2].tx_hash()],
+                None,
                 Some(&txn),
             )
             .unwrap();
@@ -1508,6 +1513,7 @@ mod tests {
                     &ext_txs[4].tx_hash(),
                     &ext_txs[6].tx_hash(),
                 ],
+                None,
                 Some(&txn),
             )
             .unwrap();
@@ -1536,7 +1542,7 @@ mod tests {
         // Verify method works.
         let root = history_store.get_history_tree_root(0, Some(&txn)).unwrap();
 
-        let proof = history_store.prove(0, vec![], Some(&txn)).unwrap();
+        let proof = history_store.prove(0, vec![], None, Some(&txn)).unwrap();
 
         assert_eq!(proof.positions.len(), 0);
         assert_eq!(proof.history.len(), 0);

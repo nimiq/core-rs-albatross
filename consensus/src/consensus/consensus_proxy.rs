@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+use nimiq_blockchain_interface::AbstractBlockchain;
 use tokio::sync::broadcast::Sender as BroadcastSender;
 use tokio_stream::wrappers::BroadcastStream;
 
@@ -94,26 +95,58 @@ impl<N: Network> ConsensusProxy<N> {
 
             match response {
                 Ok(response) => {
-                    // Group transaction hashes by epoch to reduce number of requested proofs
-                    let mut hashes_by_epoch = HashMap::new();
+                    let blockchain = self.blockchain.read();
+
+                    // Group transaction hashes by the block number that proofs those transactions to reduce the number of requests
+                    // There are three categories of block numbers:
+                    //  - Finalized epochs: we use the election block number that finalized the respective epoch
+                    //  - Finalized batch in the current epoch: We use the latest checkpoint block number
+                    //  - Current batch: We use the current head to prove those transactions
+
+                    // This is the structure where we group transactions by their proving block number
+                    let mut hashes_by_block = HashMap::new();
+
+                    let election_head_number = blockchain.election_head().block_number();
+
+                    let checkpoint_head_number = blockchain.macro_head().block_number();
+
+                    let current_head_number = blockchain.head().block_number();
+
                     for (hash, block_number) in response.receipts {
                         // If the transaction was already verified, then we don't need to verify it again
                         if verified_transactions.contains_key(&hash) {
                             continue;
                         }
 
-                        let epoch = Policy::epoch_at(block_number);
-                        hashes_by_epoch.entry(epoch).or_insert(vec![]).push(hash);
+                        if block_number <= election_head_number {
+                            // First Case: Transactions from finalized epochs
+                            hashes_by_block
+                                .entry(Policy::election_block_after(block_number))
+                                .or_insert(vec![])
+                                .push(hash);
+                        } else if block_number <= checkpoint_head_number {
+                            // Second Case: Transactions from a finalized batch in the current epoch
+                            hashes_by_block
+                                .entry(checkpoint_head_number)
+                                .or_insert(vec![])
+                                .push(hash);
+                        } else {
+                            // Third Case: Transanctions from the current batch
+                            hashes_by_block
+                                .entry(current_head_number)
+                                .or_insert(vec![])
+                                .push(hash);
+                        }
                     }
 
-                    // Now we request proofs for each epoch and its hashes
-                    for (epoch, hashes) in hashes_by_epoch {
+                    // Now we request proofs for each block and its hashes, according to its classification
+                    for (block_number, hashes) in hashes_by_block {
                         let response = self
                             .network
                             .request::<RequestTransactionsProof>(
                                 RequestTransactionsProof {
                                     hashes,
-                                    block_number: Policy::election_block_of(epoch),
+                                    block_number,
                                 },
                                 peer_id,
                             )

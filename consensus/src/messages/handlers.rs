@@ -307,44 +307,90 @@ impl Handle<ResponseTransactionsProof, Arc<RwLock<Blockchain>>> for RequestTrans
         let blockchain = blockchain.read();
         let hashes = self.hashes.iter().collect();
 
-        let mut block = None;
+        // There are three possible scenarios for creating a transaction inclusion proof:
+        // A- The block number is located in a finalized epoch:
+        //    We use the epoch's finalization block (election block)
+        // B- The block number is located in an incomplete epoch with an already finalized checkpoint block
+        //    We use the batch's checkpoint block, with the current transaction count to construct the proof
+        // C- The block number is located in the current batch:
+        //    We use the current transaction count to construct the proof
 
-        let proof =
-            blockchain
-                .history_store
-                .prove(Policy::epoch_at(self.block_number), hashes, None);
+        let verifier_state;
+        let election_head = blockchain.election_head().block_number();
+        let macro_head = blockchain.macro_head().block_number();
 
-        // If we obtained a proof, we need to supply the corresponding block
-        if proof.is_some() {
-            // If the block_number to proof is in a finalized epoch, use the epoch's finalization block
-            let election_block_number = if Policy::is_election_block_at(self.block_number) {
-                self.block_number
-            } else {
-                Policy::election_block_after(self.block_number)
+        // We cannot prove transactions from the future
+        if self.block_number > blockchain.head().block_number() {
+            return ResponseTransactionsProof {
+                proof: None,
+                block: None,
             };
+        }
 
-            if election_block_number <= blockchain.block_number() {
-                block = blockchain
-                    .chain_store
-                    .get_block_at(election_block_number, false, None)
-                    .ok();
-            } else {
-                // Otherwise, the transaction proof was made at the current history store state, so return the current
-                // head block to prove it.
-                let mut head = blockchain.head();
+        let block;
 
-                // Convert to light block by removing the block body
-                match head {
-                    Block::Macro(ref mut block) => block.body = None,
-                    Block::Micro(ref mut block) => block.body = None,
-                }
-
-                block = Some(head);
+        if Policy::is_election_block_at(self.block_number) {
+            // If we were provided the block number of an election block it has to be already finalized
+            block = blockchain
+                .chain_store
+                .get_block_at(self.block_number, false, None)
+                .ok();
+            verifier_state = None;
+        } else if Policy::is_macro_block_at(self.block_number) {
+            // If we were provided a block number corresponding to a checkpoint block, it needs to correspond to the current epoch
+            // Otherwise, the requester should use the latest epoch number.
+            if self.block_number < election_head {
+                return ResponseTransactionsProof {
+                    proof: None,
+                    block: None,
+                };
             }
 
-            if block.is_none() {
-                log::error!("We are supplying a transaction proof but not a block, which can be interpreted as malicious behaviour");
+            block = blockchain
+                .chain_store
+                .get_block_at(self.block_number, false, None)
+                .ok();
+            let chain_info = blockchain.get_chain_info(
+                &block
+                    .clone()
+                    .expect("We expect to obtain a block from the chain store")
+                    .hash(),
+                false,
+                None,
+            );
+
+            verifier_state = Some(chain_info.unwrap().cum_ext_tx_count_at_macro as usize);
+        } else {
+            // If we were provided a block number corresponding to a micro block, it needs to correspond to the current batch
+            // Otherwise, the requester should use the latest checkpoing number
+            if self.block_number < macro_head {
+                return ResponseTransactionsProof {
+                    proof: None,
+                    block: None,
+                };
             }
+
+            block = blockchain
+                .chain_store
+                .get_block_at(blockchain.block_number(), false, None)
+                .ok();
+
+            verifier_state = None;
+        };
+
+        let proof = blockchain.history_store.prove(
+            Policy::epoch_at(self.block_number),
+            hashes,
+            verifier_state,
+            None,
+        );
+
+        // If we couldn't obtain a proof, or we coudn't obtain a block, we return None
+        if proof.is_none() || block.is_none() {
+            return ResponseTransactionsProof {
+                proof: None,
+                block: None,
+            };
         }
 
         ResponseTransactionsProof { proof, block }
