@@ -44,10 +44,19 @@ pub trait PubsubId<PeerId>: Clone + Send + Sync + Debug {
 }
 
 #[derive(Copy, Clone, Debug)]
+/// Reasons for closing a connection
 pub enum CloseReason {
+    /// Reason is unknown or doesn't fit the other reasons
     Other,
+    /// The other peer closed the connection
     RemoteClosed,
+    /// We need to close the connection to this peer because we are going offline
+    /// and don't want new connections.
+    GoingOffline,
+    /// There was an error and there is need to close the connection
     Error,
+    /// Peer is malicious. This will cause the peer ID and address to get banned.
+    MaliciousPeer,
 }
 
 #[derive(Debug, Error)]

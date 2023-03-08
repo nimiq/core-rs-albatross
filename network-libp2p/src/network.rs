@@ -144,10 +144,12 @@ pub(crate) enum NetworkAction {
     },
     StartConnecting,
     RestartConnecting,
-    StopConnecting,
     DisconnectPeer {
         peer_id: PeerId,
         reason: CloseReason,
+    },
+    UnbanPeer {
+        peer_id: PeerId,
     },
 }
 
@@ -1298,9 +1300,6 @@ impl Network {
             NetworkAction::RestartConnecting => {
                 swarm.behaviour_mut().pool.restart_connecting();
             }
-            NetworkAction::StopConnecting => {
-                swarm.behaviour_mut().pool.stop_connecting();
-            }
             NetworkAction::ConnectPeersByServices {
                 services,
                 num_peers,
@@ -1324,6 +1323,9 @@ impl Network {
             }
             NetworkAction::DisconnectPeer { peer_id, reason } => {
                 swarm.behaviour_mut().pool.close_connection(peer_id, reason)
+            }
+            NetworkAction::UnbanPeer { peer_id } => {
+                swarm.behaviour_mut().pool.unban_connection(peer_id)
             }
         }
     }
@@ -1379,17 +1381,15 @@ impl Network {
         }
     }
 
-    /// Tells the network to stop connecting to any available peer or seed.
-    /// This is useful in known connection outages to stop the network trying
-    /// to dial any of the known peers or addresses.
-    pub async fn stop_connecting(&self) {
+    /// Tells the network to un-ban a peer ID
+    pub async fn unban_peer(&self, peer_id: PeerId) {
         if let Err(error) = self
             .action_tx
             .clone()
-            .send(NetworkAction::StopConnecting)
+            .send(NetworkAction::UnbanPeer { peer_id })
             .await
         {
-            error!(%error, "Failed to send NetworkAction::StartConnecting");
+            error!(%error, "Failed to send NetworkAction::UnbanPeer");
         }
     }
 

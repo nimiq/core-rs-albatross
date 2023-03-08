@@ -6,7 +6,7 @@ use std::{
 };
 
 use futures::StreamExt;
-use instant::{Instant, SystemTime};
+use instant::Instant;
 use ip_network::IpNetwork;
 use libp2p::swarm::{dial_opts::PeerCondition, NotifyHandler};
 use libp2p::{
@@ -66,11 +66,21 @@ impl Default for ConnectionPoolConfig {
 }
 
 struct ConnectionState<T> {
+    /// Set of connection IDs being dialed.
     dialing: BTreeSet<T>,
+    /// Set of connection IDs marked as connected.
     connected: BTreeSet<T>,
+    /// Set of connection IDs marked as banned.
+    banned: BTreeSet<T>,
+    /// Set of connection IDs mark as failed.
     failed: BTreeMap<T, usize>,
+    /// Set of connection IDs mark as down.
+    /// A connection ID is marked as down if it has been marked as failed for
+    /// `max_failures` or if it is marked as such manually.
     down: BTreeMap<T, Instant>,
+    /// Max amount of failures allowed for a connection ID until it is marked as down.
     max_failures: usize,
+    /// Time after which a connection ID would be removed from IDs marked as down.
     retry_down_after: Duration,
 }
 
@@ -79,6 +89,7 @@ impl<T: Ord> ConnectionState<T> {
         Self {
             dialing: BTreeSet::new(),
             connected: BTreeSet::new(),
+            banned: BTreeSet::new(),
             failed: BTreeMap::new(),
             down: BTreeMap::new(),
             max_failures,
@@ -105,6 +116,24 @@ impl<T: Ord> ConnectionState<T> {
     /// set of connections.
     fn mark_closed(&mut self, id: T) {
         self.connected.remove(&id);
+    }
+
+    /// Marks a connection ID as banned. The connection ID will be also removed
+    /// from the IDs marked as down or failed.
+    fn mark_banned(&mut self, id: T) {
+        self.failed.remove(&id);
+        self.down.remove(&id);
+        self.banned.insert(id);
+    }
+
+    /// Removes a connection ID from the banned set
+    fn unmark_banned(&mut self, id: T) {
+        self.banned.remove(&id);
+    }
+
+    /// Returns whether a connection ID is banned
+    fn is_banned(&self, id: T) -> bool {
+        self.banned.get(&id).is_some()
     }
 
     /// Marks a connection ID as failed
@@ -137,9 +166,12 @@ impl<T: Ord> ConnectionState<T> {
         self.down.insert(id, Instant::now());
     }
 
-    /// Returns wether a specific connection ID can dial another connection ID
+    /// Returns whether a specific connection ID can dial another connection ID
     fn can_dial(&self, id: &T) -> bool {
-        !self.dialing.contains(id) && !self.connected.contains(id) && !self.down.contains_key(id)
+        !self.dialing.contains(id)
+            && !self.connected.contains(id)
+            && !self.down.contains_key(id)
+            && !self.banned.contains(id)
     }
 
     /// Returns the number of connections being dialed
@@ -171,11 +203,12 @@ impl<T> std::fmt::Display for ConnectionState<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "connected={}, dialing={}, failed={}, down={}",
+            "connected={}, dialing={}, failed={}, down={}, banned={}",
             self.connected.len(),
             self.dialing.len(),
             self.failed.len(),
-            self.down.len()
+            self.down.len(),
+            self.banned.len(),
         )
     }
 }
@@ -224,9 +257,6 @@ pub struct ConnectionPoolBehaviour {
     /// Configuration for the connection pool behaviour
     config: ConnectionPoolConfig,
 
-    /// Set of IPs banned
-    banned: HashMap<IpNetwork, SystemTime>,
-
     /// Waker to signal when this behaviour needs to be polled again
     waker: Option<Waker>,
 
@@ -258,7 +288,6 @@ impl ConnectionPoolBehaviour {
             active: false,
             limits,
             config,
-            banned: HashMap::new(),
             waker: None,
             housekeeping_timer,
         }
@@ -335,11 +364,15 @@ impl ConnectionPoolBehaviour {
     /// Tells the behaviour to stop connecting to other peers.
     /// This is useful when we are sure we have no possibility of getting a
     /// connection such as in a network outage.
-    pub fn stop_connecting(&mut self) {
+    fn stop_connecting(&mut self) {
         self.active = false;
     }
 
     /// Closes a peer connection with a reason
+    ///
+    /// This will take actions depending on the close reason. For instance:
+    /// - The close reason `MaliciousPeer` will cause the peer to be banned.
+    /// - Going offline will signal the network to stop connecting to peers.
     pub fn close_connection(&mut self, peer_id: PeerId, reason: CloseReason) {
         self.actions
             .push_back(NetworkBehaviourAction::NotifyHandler {
@@ -348,6 +381,12 @@ impl ConnectionPoolBehaviour {
                 event: ConnectionPoolHandlerError::Other(reason),
             });
         self.wake();
+
+        match reason {
+            CloseReason::MaliciousPeer => self.ban_connection(peer_id),
+            CloseReason::GoingOffline => self.stop_connecting(),
+            _ => {}
+        }
     }
 
     fn choose_peers_to_dial(&self) -> Vec<PeerId> {
@@ -438,32 +477,37 @@ impl ConnectionPoolBehaviour {
         self.peer_ids.housekeeping();
         self.addresses.housekeeping();
 
-        for (ip, time) in self.banned.clone() {
-            if time < SystemTime::now() {
-                self.banned.remove(&ip);
-            }
-        }
-
         self.maintain_peers();
     }
 
-    pub fn _ban_ip(&mut self, ip: IpNetwork) {
-        if self
-            .banned
-            .insert(ip, SystemTime::now() + Duration::from_secs(60 * 10)) // 10 minutes
-            .is_none()
-        {
-            debug!(%ip, "IP added to banned set of peers");
-        } else {
-            debug!(%ip, "IP already part of banned set of peers");
+    fn ban_connection(&mut self, peer_id: PeerId) {
+        // Mark the peer ID as banned
+        self.peer_ids.mark_banned(peer_id);
+        debug!(%peer_id, "Banned peer");
+
+        // Mark its addresses as banned if we have them
+        if let Some(contact) = self.contacts.read().get(&peer_id) {
+            let addresses = contact.addresses();
+            for address in addresses {
+                self.addresses.mark_banned(address.clone());
+                debug!(%address, "Banned address");
+            }
         }
     }
 
-    pub fn _unban_ip(&mut self, ip: IpNetwork) {
-        if self.banned.remove(&ip).is_some() {
-            debug!(%ip, "IP removed from banned set of peers");
-        } else {
-            debug!(%ip, "IP was not part of banned set of peers");
+    /// Un-bans a peer connection and its IP if we have the address for such peer ID
+    pub fn unban_connection(&mut self, peer_id: PeerId) {
+        // Unmark the peer ID as banned
+        self.peer_ids.unmark_banned(peer_id);
+        debug!(%peer_id, "Un-banned peer");
+
+        // Mark its addresses as unbanned if we have them
+        if let Some(contact) = self.contacts.read().get(&peer_id) {
+            let addresses = contact.addresses();
+            for address in addresses {
+                self.addresses.unmark_banned(address.clone());
+                debug!(%address, "Un-banned address");
+            }
         }
     }
 }
@@ -519,6 +563,12 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
             return;
         }
 
+        let mut close_reason = None;
+        if self.addresses.is_banned(address.clone()) {
+            debug!(%address, "Address is banned");
+            close_reason = Some(ConnectionPoolHandlerError::BannedIp);
+        }
+
         // Get IP from multiaddress if it exists.
         let ip = match address.iter().next() {
             Some(Protocol::Ip4(ip)) => {
@@ -532,13 +582,6 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
 
         // If we have an IP, check connection limits per IP/subnet.
         if let Some(ip) = ip {
-            let mut close_reason = None;
-
-            if self.banned.get(&ip).is_some() {
-                debug!(%ip, "IP is banned");
-                close_reason = Some(ConnectionPoolHandlerError::BannedIp);
-            }
-
             if self.config.peer_count_per_ip_max
                 < self
                     .limits
@@ -578,29 +621,31 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
                 close_reason = Some(ConnectionPoolHandlerError::MaxPeerConnectionsReached);
             }
 
-            if let Some(close_reason) = close_reason {
-                // Notify the handler that the connection must be closed
-                self.actions
-                    .push_back(NetworkBehaviourAction::NotifyHandler {
-                        peer_id: *peer_id,
-                        handler: NotifyHandler::One(*connection_id),
-                        event: close_reason,
-                    });
-                self.wake();
-                return;
+            if close_reason.is_none() {
+                // Increment peer counts per IP if we are not going to close the connection
+                let value = self.limits.ip_count.entry(ip).or_insert(0);
+                *value = value.saturating_add(1);
+                match ip {
+                    IpNetwork::V4(..) => {
+                        self.limits.ipv4_count = self.limits.ipv4_count.saturating_add(1)
+                    }
+                    IpNetwork::V6(..) => {
+                        self.limits.ipv6_count = self.limits.ipv6_count.saturating_add(1)
+                    }
+                };
             }
+        }
 
-            // Increment peer counts per IP
-            let value = self.limits.ip_count.entry(ip).or_insert(0);
-            *value = value.saturating_add(1);
-            match ip {
-                IpNetwork::V4(..) => {
-                    self.limits.ipv4_count = self.limits.ipv4_count.saturating_add(1)
-                }
-                IpNetwork::V6(..) => {
-                    self.limits.ipv6_count = self.limits.ipv6_count.saturating_add(1)
-                }
-            };
+        if let Some(close_reason) = close_reason {
+            // Notify the handler that the connection must be closed
+            self.actions
+                .push_back(NetworkBehaviourAction::NotifyHandler {
+                    peer_id: *peer_id,
+                    handler: NotifyHandler::One(*connection_id),
+                    event: close_reason,
+                });
+            self.wake();
+            return;
         }
 
         // Peer is connected, mark it as such.
