@@ -106,7 +106,9 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                             checkpoint_epoch = checkpoint_epoch,
                             "Request macro chain failed: invalid checkpoint"
                         );
-                        network.disconnect_peer(peer_id, CloseReason::Other).await;
+                        network
+                            .disconnect_peer(peer_id, CloseReason::MaliciousPeer)
+                            .await;
                         return None;
                     }
                 }
@@ -129,7 +131,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
             }
             Err(error) => {
                 log::error!(%error, "Request macro chain failed");
-                network.disconnect_peer(peer_id, CloseReason::Other).await;
+                network.disconnect_peer(peer_id, CloseReason::Error).await;
                 None
             }
         }

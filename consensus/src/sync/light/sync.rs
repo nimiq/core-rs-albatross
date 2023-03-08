@@ -167,14 +167,14 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         self.peer_requests.remove(&peer_id);
     }
 
-    pub fn disconnect_peer(&mut self, peer_id: TNetwork::PeerId) {
+    pub fn disconnect_peer(&mut self, peer_id: TNetwork::PeerId, reason: CloseReason) {
         // Remove all pending peer requests (if any)
         self.remove_peer_requests(peer_id);
         let network = Arc::clone(&self.network);
         // We disconnect from this peer
         self.executor.exec(Box::pin({
             async move {
-                network.disconnect_peer(peer_id, CloseReason::Other).await;
+                network.disconnect_peer(peer_id, reason).await;
             }
         }));
     }

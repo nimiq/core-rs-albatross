@@ -590,7 +590,7 @@ async fn disconnect_successfully(net1: &Arc<Network>, net2: &Arc<Network>) {
     let mut events2 = net2.subscribe_events();
 
     log::debug!("Disconnecting peer 1 from peer 2");
-    net2.disconnect_peer(net1.get_local_peer_id(), CloseReason::Other)
+    net2.disconnect_peer(net1.get_local_peer_id(), CloseReason::GoingOffline)
         .await;
 
     log::debug!("Waiting for disconnect events");

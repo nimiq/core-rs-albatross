@@ -80,7 +80,9 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
                             "Request macro chain failed: invalid checkpoint block number {}, checkpoint_epoch={}",
                             checkpoint.block_number, checkpoint_epoch
                         );
-                        network.disconnect_peer(peer_id, CloseReason::Other).await;
+                        network
+                            .disconnect_peer(peer_id, CloseReason::MaliciousPeer)
+                            .await;
                         return None;
                     }
                 }
@@ -103,7 +105,7 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
             }
             Err(e) => {
                 log::error!("Request macro chain failed: {:?}", e);
-                network.disconnect_peer(peer_id, CloseReason::Other).await;
+                network.disconnect_peer(peer_id, CloseReason::Error).await;
                 None
             }
         }

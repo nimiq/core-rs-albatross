@@ -384,16 +384,11 @@ impl Client {
 
         // Register offline closure
         let offline_closure = Closure::<dyn Fn()>::new(move || {
-            let peers = network1.get_peers();
-            for peer in peers {
-                let network = network1.clone();
-                spawn_local(async move {
-                    let network = network.clone();
-                    network
-                        .disconnect_peer(peer, CloseReason::GoingOffline)
-                        .await;
-                });
-            }
+            let network = network1.clone();
+            spawn_local(async move {
+                let network = network.clone();
+                network.disconnect(CloseReason::GoingOffline).await;
+            });
         });
         window
             .add_event_listener_with_callback("offline", offline_closure.as_ref().unchecked_ref())

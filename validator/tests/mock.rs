@@ -9,7 +9,7 @@ use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis_builder::GenesisBuilder;
 use nimiq_handel::update::{LevelUpdate, LevelUpdateMessage};
 use nimiq_keys::{Address, KeyPair, SecureGenerate};
-use nimiq_network_interface::network::Network as NetworkInterface;
+use nimiq_network_interface::network::{CloseReason, Network as NetworkInterface};
 use nimiq_network_libp2p::Network;
 use nimiq_network_mock::MockHub;
 use nimiq_test_log::test;
@@ -114,7 +114,11 @@ async fn four_validators_can_do_skip_block() {
 
     // Disconnect the next block producer.
     let validator = pop_validator_for_slot(&mut validators, 1, 1);
-    validator.consensus.network.disconnect().await;
+    validator
+        .consensus
+        .network
+        .disconnect(CloseReason::GoingOffline)
+        .await;
     drop(validator);
     log::info!("Peer disconnection");
 
@@ -207,10 +211,18 @@ async fn validator_can_catch_up() {
     // Disconnect the block producers for the next 3 skip blocks. remember the one which is supposed to actually create the block (3rd skip block)
     let (validator, _) = {
         let validator = validator_for_slot(&mut validators, 1, 1);
-        validator.consensus.network.disconnect().await;
+        validator
+            .consensus
+            .network
+            .disconnect(CloseReason::GoingOffline)
+            .await;
         let id1 = validator.validator_slot_band();
         let validator = validator_for_slot(&mut validators, 2, 2);
-        validator.consensus.network.disconnect().await;
+        validator
+            .consensus
+            .network
+            .disconnect(CloseReason::GoingOffline)
+            .await;
         let id2 = validator.validator_slot_band();
         assert_ne!(id2, id1);
 
@@ -222,7 +234,11 @@ async fn validator_can_catch_up() {
         // });
 
         let validator = validator_for_slot(&validators, 3, 3);
-        validator.consensus.network.disconnect().await;
+        validator
+            .consensus
+            .network
+            .disconnect(CloseReason::GoingOffline)
+            .await;
         assert_ne!(id1, validator.validator_slot_band());
         assert_ne!(id2, validator.validator_slot_band());
         (validator, validator.consensus.network.clone())

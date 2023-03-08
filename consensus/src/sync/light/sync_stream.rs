@@ -11,7 +11,7 @@ use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_light_blockchain::LightBlockchain;
 use nimiq_macros::store_waker;
-use nimiq_network_interface::network::{Network, NetworkEvent};
+use nimiq_network_interface::network::{CloseReason, Network, NetworkEvent};
 use nimiq_primitives::policy::Policy;
 use nimiq_zkp_component::types::ZKPRequestEvent::{OutdatedProof, Proof};
 
@@ -96,7 +96,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                                 log::debug!(?result, "Failed applying ZKP proof to the blockchain",);
 
                                 // Since it failed applying the ZKP from this peer, we disconnect
-                                self.disconnect_peer(peer_id);
+                                self.disconnect_peer(peer_id, CloseReason::MaliciousPeer);
 
                                 return Poll::Ready(None);
                             }
@@ -122,7 +122,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                         %peer_id,
                         "Error requesting zkp from peer",
                     );
-                    self.disconnect_peer(peer_id);
+                    self.disconnect_peer(peer_id, CloseReason::Error);
                     return Poll::Ready(None);
                 }
             }
@@ -215,7 +215,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                         log::trace!(%peer_id,
                             "Disconnecting peer due to a non expected response",
                         );
-                        self.disconnect_peer(peer_id);
+                        self.disconnect_peer(peer_id, CloseReason::MaliciousPeer);
                         return Poll::Ready(None);
                     }
 
@@ -291,7 +291,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                                         "Failed to push macro block",
                                     );
                                     // We failed applying a block from this peer, so we disconnect it
-                                    self.disconnect_peer(peer_id);
+                                    self.disconnect_peer(peer_id, CloseReason::MaliciousPeer);
                                     return Poll::Ready(None);
                                 }
                             }
@@ -320,12 +320,12 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                 (Ok(None), peer_id) => {
                     trace!("Received a request with None");
                     // If a block request fails, we disconnect from this peer
-                    self.disconnect_peer(peer_id);
+                    self.disconnect_peer(peer_id, CloseReason::Error);
                 }
                 (Err(error), peer_id) => {
                     trace!(?error, "Failed block request");
                     // If a block request fails, we disconnect from this peer
-                    self.disconnect_peer(peer_id);
+                    self.disconnect_peer(peer_id, CloseReason::Error);
                 }
             }
         }

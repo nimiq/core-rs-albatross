@@ -1579,17 +1579,20 @@ impl Network {
         }
     }
 
+    /// Gets the number of connected peers
     pub fn peer_count(&self) -> usize {
         self.connected_peers.read().len()
     }
 
-    pub async fn disconnect(&self) {
+    /// Disconnects from (closes the connection to) all peers with a reason
+    pub async fn disconnect(&self, reason: CloseReason) {
         for peer_id in self.get_peers() {
-            self.disconnect_peer(peer_id, CloseReason::Other).await;
+            self.disconnect_peer(peer_id, reason).await;
         }
     }
 
     #[cfg(feature = "metrics")]
+    /// Gets the network metrics
     pub fn metrics(&self) -> Arc<NetworkMetrics> {
         self.metrics.clone()
     }

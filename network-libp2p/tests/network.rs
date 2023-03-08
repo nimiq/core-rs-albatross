@@ -402,7 +402,7 @@ async fn connections_are_properly_closed_events() {
     let mut events1 = net1.subscribe_events();
     let mut events2 = net2.subscribe_events();
 
-    net2.disconnect_peer(*net1.local_peer_id(), CloseReason::Other)
+    net2.disconnect_peer(*net1.local_peer_id(), CloseReason::GoingOffline)
         .await;
     log::debug!("Closed peer");
 
@@ -426,7 +426,8 @@ async fn connections_are_properly_closed_peers() {
     let net1_peer_id = *net1.local_peer_id();
     drop(net1);
 
-    net2.disconnect_peer(net1_peer_id, CloseReason::Other).await;
+    net2.disconnect_peer(net1_peer_id, CloseReason::GoingOffline)
+        .await;
     log::debug!("Closed peer");
 
     let event2 = events2.next().await.unwrap().unwrap();
