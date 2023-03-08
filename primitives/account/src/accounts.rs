@@ -108,18 +108,6 @@ impl Accounts {
         DataStore::new(&self.tree, address)
     }
 
-    fn is_missing(&self, txn: &DBTransaction, address: &Address) -> bool {
-        // We consider an account to be missing if the account itself or any of its children are missing.
-        // Therefore we need to check if the rightmost child is contained in the missing range.
-        let mut rightmost_key = [255u8; KeyNibbles::MAX_BYTES];
-        rightmost_key[0..Address::SIZE].copy_from_slice(&address.0);
-        let rightmost_key = KeyNibbles::from(&rightmost_key[..]);
-
-        self.tree
-            .get_missing_range(txn)
-            .map_or(false, |range| range.contains(&rightmost_key))
-    }
-
     fn get_with_type(
         &self,
         txn: &DBTransaction,
@@ -214,6 +202,30 @@ impl Accounts {
             Some(txn) => self.tree.is_complete(txn),
             None => self.tree.is_complete(&ReadTransaction::new(&self.env)),
         }
+    }
+
+    fn is_missing(&self, txn: &DBTransaction, address: &Address) -> bool {
+        // We consider an account to be missing if the account itself or any of its children are missing.
+        // Therefore we need to check if the rightmost child is contained in the missing range.
+        let mut rightmost_key = [255u8; KeyNibbles::MAX_BYTES];
+        rightmost_key[0..Address::SIZE].copy_from_slice(&address.0);
+        let rightmost_key = KeyNibbles::from(&rightmost_key[..]);
+
+        self.tree
+            .get_missing_range(txn)
+            .map_or(false, |range| range.contains(&rightmost_key))
+    }
+
+    /// Marks the account at the given address as changed if it is missing.
+    /// Returns true if the account is missing, false otherwise.
+    fn mark_changed_if_missing(&self, txn: &mut WriteTransaction, address: &Address) -> bool {
+        let missing = self.is_missing(txn, address);
+        if missing {
+            self.tree
+                .update_within_missing_part(txn, &KeyNibbles::from(address))
+                .expect("Failed to update within missing part");
+        }
+        missing
     }
 
     pub fn exercise_transactions(
@@ -407,7 +419,7 @@ impl Accounts {
         let mut sender_receipt = None;
         let mut pruned_account = None;
 
-        if !self.is_missing(txn, sender_address) {
+        if !self.mark_changed_if_missing(txn, sender_address) {
             let sender_store = DataStore::new(&self.tree, sender_address);
             let mut sender_account =
                 self.get_with_type(txn, sender_address, transaction.sender_type)?;
@@ -425,7 +437,7 @@ impl Accounts {
         let recipient_address = &transaction.recipient;
         let mut recipient_receipt = None;
 
-        if !self.is_missing(txn, recipient_address) {
+        if !self.mark_changed_if_missing(txn, recipient_address) {
             let mut recipient_account = Account::default();
 
             recipient_receipt =
@@ -449,7 +461,7 @@ impl Accounts {
         recipient_account: &mut Account,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         let recipient_address = &transaction.recipient;
-        if self.is_missing(txn, recipient_address) {
+        if self.mark_changed_if_missing(txn, recipient_address) {
             return Ok(None);
         }
 
@@ -494,7 +506,7 @@ impl Accounts {
         block_state: &BlockState,
     ) -> Result<TransactionReceipt, AccountError> {
         let sender_address = &transaction.sender;
-        if self.is_missing(txn, sender_address) {
+        if self.mark_changed_if_missing(txn, sender_address) {
             return Ok(TransactionReceipt::default());
         }
 
@@ -524,7 +536,7 @@ impl Accounts {
         block_state: &BlockState,
     ) -> Result<InherentOperationReceipt, AccountError> {
         let address = inherent.target();
-        if self.is_missing(txn, address) {
+        if self.mark_changed_if_missing(txn, address) {
             return Ok(InherentOperationReceipt::Ok(None));
         }
 
@@ -611,7 +623,7 @@ impl Accounts {
     ) -> Result<(), AccountError> {
         // Revert recipient first.
         let recipient_address = &transaction.recipient;
-        if !self.is_missing(txn, recipient_address) {
+        if !self.mark_changed_if_missing(txn, recipient_address) {
             let recipient_store = DataStore::new(&self.tree, recipient_address);
             let mut recipient_account =
                 self.get_with_type(txn, recipient_address, transaction.recipient_type)?;
@@ -644,7 +656,7 @@ impl Accounts {
 
         // Revert sender. It might need to be restored first if it was pruned.
         let sender_address = &transaction.sender;
-        if !self.is_missing(txn, sender_address) {
+        if !self.mark_changed_if_missing(txn, sender_address) {
             let sender_store = DataStore::new(&self.tree, sender_address);
             let mut sender_account = self.get_or_restore(
                 txn,
@@ -675,7 +687,7 @@ impl Accounts {
         receipt: TransactionReceipt,
     ) -> Result<(), AccountError> {
         let sender_address = &transaction.sender;
-        if self.is_missing(txn, sender_address) {
+        if self.mark_changed_if_missing(txn, sender_address) {
             return Ok(());
         }
 
@@ -713,7 +725,7 @@ impl Accounts {
         };
 
         let address = inherent.target();
-        if self.is_missing(txn, address) {
+        if self.mark_changed_if_missing(txn, address) {
             return Ok(());
         }
 
