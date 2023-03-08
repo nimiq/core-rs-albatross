@@ -133,7 +133,6 @@ impl Blockchain {
             cum_tx_fees,
             cum_ext_tx_size,
             cum_ext_tx_count,
-            cum_ext_tx_count_at_macro: cum_ext_tx_count,
             prunable: false,
             prev_missing_range: None,
         };

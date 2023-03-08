@@ -359,7 +359,7 @@ impl Handle<ResponseTransactionsProof, Arc<RwLock<Blockchain>>> for RequestTrans
                 None,
             );
 
-            verifier_state = Some(chain_info.unwrap().cum_ext_tx_count_at_macro as usize);
+            verifier_state = Some(chain_info.unwrap().cum_ext_tx_count as usize);
         } else {
             // If we were provided a block number corresponding to a micro block, it needs to correspond to the current batch
             // Otherwise, the requester should use the latest checkpoing number
