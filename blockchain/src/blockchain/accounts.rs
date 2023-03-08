@@ -16,7 +16,7 @@ impl Blockchain {
         state: &BlockchainState,
         block: &Block,
         txn: &mut WriteTransaction,
-    ) -> Result<(), PushError> {
+    ) -> Result<u64, PushError> {
         // Get the accounts from the state.
         let accounts = &state.accounts;
         let block_state = BlockState::new(block.block_number(), block.timestamp());
@@ -44,23 +44,20 @@ impl Blockchain {
                 self.chain_store.clear_receipts(txn);
 
                 // Store the transactions and the inherents into the History tree.
-                let ext_txs = ExtendedTransaction::from(
-                    self.network_id,
-                    macro_block.header.block_number,
-                    macro_block.header.timestamp,
-                    vec![],
-                    inherents,
-                );
-                let total_tx_size = if state.can_verify_history {
-                    let hs_result = self.history_store.add_to_history(
-                        txn,
-                        Policy::epoch_at(macro_block.header.block_number),
-                        &ext_txs,
+                let mut total_tx_size = 0;
+                if state.can_verify_history {
+                    let ext_txs = ExtendedTransaction::from(
+                        self.network_id,
+                        macro_block.header.block_number,
+                        macro_block.header.timestamp,
+                        vec![],
+                        inherents,
                     );
-                    let (_, total_tx_size) = hs_result.unwrap();
-                    total_tx_size
-                } else {
-                    0
+                    total_tx_size = self
+                        .history_store
+                        .add_to_history(txn, macro_block.epoch_number(), &ext_txs)
+                        .expect("Failed to store history")
+                        .1
                 };
 
                 // let (batch_info, _) = batch_info.unwrap();
@@ -72,7 +69,8 @@ impl Blockchain {
                 //     tx_logs: batch_info.tx_logs,
                 //     total_tx_size,
                 // })
-                Ok(())
+
+                Ok(total_tx_size)
             }
             Block::Micro(ref micro_block) => {
                 // Get the body of the block.
@@ -116,23 +114,20 @@ impl Blockchain {
                     .put_receipts(txn, micro_block.header.block_number, &receipts);
 
                 // Store the transactions and the inherents into the History tree.
-                let ext_txs = ExtendedTransaction::from(
-                    self.network_id,
-                    micro_block.header.block_number,
-                    micro_block.header.timestamp,
-                    body.transactions.clone(),
-                    inherents,
-                );
-                let total_tx_size = if state.can_verify_history {
-                    let hs_result = self.history_store.add_to_history(
-                        txn,
-                        Policy::epoch_at(micro_block.header.block_number),
-                        &ext_txs,
+                let mut total_tx_size = 0;
+                if state.can_verify_history {
+                    let ext_txs = ExtendedTransaction::from(
+                        self.network_id,
+                        micro_block.header.block_number,
+                        micro_block.header.timestamp,
+                        body.transactions.clone(),
+                        inherents,
                     );
-                    let (_, total_tx_size) = hs_result.unwrap();
-                    total_tx_size
-                } else {
-                    0
+                    total_tx_size = self
+                        .history_store
+                        .add_to_history(txn, micro_block.epoch_number(), &ext_txs)
+                        .expect("Failed to store history")
+                        .1
                 };
 
                 // Ok(BlockLog::AppliedBlock {
@@ -143,7 +138,8 @@ impl Blockchain {
                 //     tx_logs: batch_info.tx_logs,
                 //     total_tx_size,
                 // })
-                Ok(())
+
+                Ok(total_tx_size)
             }
         }
     }
@@ -202,14 +198,9 @@ impl Blockchain {
                 // Remove the transactions from the History tree. For this you only need to calculate the
                 // number of transactions that you want to remove.
                 let num_txs = body.transactions.len() + inherents.len();
-
-                let hs_result = self.history_store.remove_partial_history(
-                    txn,
-                    Policy::epoch_at(micro_block.header.block_number),
-                    num_txs,
-                );
-
-                let (_, total_tx_size) = hs_result.unwrap();
+                self.history_store
+                    .remove_partial_history(txn, micro_block.epoch_number(), num_txs)
+                    .expect("Failed to remove partial history");
 
                 // Ok(BlockLog::RevertedBlock {
                 //     inherent_logs: batch_info.inherent_logs,

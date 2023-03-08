@@ -259,17 +259,10 @@ impl Blockchain {
         let is_macro_block = Policy::is_macro_block_at(block_number);
         let is_election_block = Policy::is_election_block_at(block_number);
 
-        let block_info = this.check_and_commit(&this.state, &chain_info.head, &mut txn);
-        let block_log = match block_info {
-            Ok(block_info) => block_info,
-            Err(e) => {
-                txn.abort();
-                return Err(e);
-            }
-        };
+        let total_tx_size = this.check_and_commit(&this.state, &chain_info.head, &mut txn)?;
 
         chain_info.on_main_chain = true;
-        // FIXME chain_info.set_cumulative_ext_tx_size(&prev_info, block_log.total_tx_size());
+        chain_info.set_cumulative_ext_tx_size(&prev_info, total_tx_size);
         chain_info.history_tree_len =
             this.history_store
                 .total_len_at_epoch(Policy::epoch_at(block_number), Some(&txn)) as u64;
@@ -418,7 +411,6 @@ impl Blockchain {
         let mut write_txn = this.write_transaction();
 
         current = (this.state.head_hash.clone(), this.state.main_chain.clone());
-        let mut block_logs = Vec::new();
 
         while current.0 != ancestor.0 {
             let block = current.1.head.clone();
@@ -444,7 +436,7 @@ impl Blockchain {
                     return Err(PushError::AccountsError(e));
                 }
             }
-            block_logs.push(this.revert_accounts(&this.state.accounts, &mut write_txn, &block)?);
+            this.revert_accounts(&this.state.accounts, &mut write_txn, &block)?;
 
             // Verify accounts hash if the tree is complete or changes only happened in the complete part.
             if let Some(accounts_hash) = this.state.accounts.get_root_hash(Some(&write_txn)) {
@@ -465,34 +457,29 @@ impl Blockchain {
         let mut fork_iter = fork_chain.iter().rev();
 
         while let Some(fork_block) = fork_iter.next() {
-            let block_log = this.check_and_commit(&this.state, &fork_block.1.head, &mut write_txn);
-            let block_log = match block_log {
-                Ok(block_info) => block_info,
-                Err(e) => {
-                    warn!(
-                        block = %target_block,
-                        reason = "failed to apply for block while rebranching",
-                        fork_block = %fork_block.1.head,
-                        error = &e as &dyn Error,
-                        "Rejecting block",
-                    );
-                    write_txn.abort();
+            if let Err(e) = this.check_and_commit(&this.state, &fork_block.1.head, &mut write_txn) {
+                warn!(
+                    block = %target_block,
+                    reason = "failed to apply for block while rebranching",
+                    fork_block = %fork_block.1.head,
+                    error = &e as &dyn Error,
+                    "Rejecting block",
+                );
+                write_txn.abort();
 
-                    // Delete invalid fork blocks from store.
-                    let mut write_txn = this.write_transaction();
-                    for block in vec![fork_block].into_iter().chain(fork_iter) {
-                        this.chain_store.remove_chain_info(
-                            &mut write_txn,
-                            &block.0,
-                            fork_block.1.head.block_number(),
-                        )
-                    }
-                    write_txn.commit();
-
-                    return Err(PushError::InvalidFork);
+                // Delete invalid fork blocks from store.
+                let mut write_txn = this.write_transaction();
+                for block in vec![fork_block].into_iter().chain(fork_iter) {
+                    this.chain_store.remove_chain_info(
+                        &mut write_txn,
+                        &block.0,
+                        fork_block.1.head.block_number(),
+                    )
                 }
-            };
-            block_logs.push(block_log);
+                write_txn.commit();
+
+                return Err(PushError::InvalidFork);
+            }
         }
 
         // Unset onMainChain flag / mainChainSuccessor on the current main chain up to (excluding) the common ancestor.
@@ -610,7 +597,7 @@ impl Blockchain {
         state: &BlockchainState,
         block: &Block,
         txn: &mut WriteTransaction,
-    ) -> Result<(), PushError> {
+    ) -> Result<u64, PushError> {
         // Check transactions against replay attacks. This is only necessary for micro blocks.
         if block.is_micro() {
             let transactions = block.transactions();
@@ -632,12 +619,12 @@ impl Blockchain {
         }
 
         // Commit block to AccountsTree.
-        if let Err(e) = self.commit_accounts(state, block, txn) {
+        let total_tx_size = self.commit_accounts(state, block, txn).map_err(|e| {
             warn!(%block, reason = "commit failed", error = &e as &dyn Error, "Rejecting block");
             #[cfg(feature = "metrics")]
             self.metrics.note_invalid_block();
-            return Err(e);
-        }
+            e
+        })?;
 
         // Verify the state against the block.
         if let Err(e) = self.verify_block_state(state, block, Some(txn)) {
@@ -645,7 +632,7 @@ impl Blockchain {
             return Err(e);
         }
 
-        Ok(())
+        Ok(total_tx_size)
     }
 
     fn detect_forks(&self, txn: &ReadTransaction, block: &MicroBlock, prev_vrf_seed: &VrfSeed) {

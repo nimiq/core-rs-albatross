@@ -36,6 +36,16 @@ impl MicroBlock {
         self.header.hash()
     }
 
+    /// Returns the block number of this macro block.
+    pub fn block_number(&self) -> u32 {
+        self.header.block_number
+    }
+
+    /// Returns the epoch number of this macro block.
+    pub fn epoch_number(&self) -> u32 {
+        Policy::epoch_at(self.header.block_number)
+    }
+
     /// Returns whether the micro block is a skip block
     pub fn is_skip_block(&self) -> bool {
         if let Some(justification) = &self.justification {
