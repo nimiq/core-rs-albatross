@@ -25,7 +25,7 @@ lazy_static = "1.4"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 num-traits = "0.2"
 rand = { version = "0.8", features = ["small_rng"] }
-rayon = { version = "^1.6", optional = true }
+rayon = { version = "^1.7", optional = true }
 thiserror = "1.0"
 
 beserial = { path = "../beserial", features = ["derive"] }
