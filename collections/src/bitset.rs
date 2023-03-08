@@ -2,8 +2,6 @@ use std::fmt;
 use std::iter::{repeat, FromIterator};
 use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign};
 
-use itertools::{EitherOrBoth, Itertools};
-
 use beserial::{
     uvar, Deserialize, FromPrimitive, ReadBytesExt, Serialize, SerializingError, ToPrimitive,
     WriteBytesExt,
@@ -88,11 +86,13 @@ impl BitSet {
         let mut store: Vec<u64> = Vec::new();
         let mut count: usize = 0;
 
-        for t in self.store.iter().zip_longest(other.store.iter()) {
-            let x = match t {
-                EitherOrBoth::Both(a, b) => op(*a, *b),
-                EitherOrBoth::Left(a) => op(*a, 0),
-                EitherOrBoth::Right(b) => op(0, *b),
+        let (mut left, mut right) = (self.store.iter(), other.store.iter());
+        loop {
+            let x = match (left.next(), right.next()) {
+                (Some(a), Some(b)) => op(*a, *b),
+                (Some(a), None) => op(*a, 0),
+                (None, Some(b)) => op(0, *b),
+                (None, None) => break,
             };
             store.push(x);
             count += x.count_ones() as usize;
@@ -107,23 +107,25 @@ impl BitSet {
         let mut count: usize = 0;
         let mut new = vec![];
 
-        for t in self.store.iter_mut().zip_longest(other.store.iter()) {
-            match t {
-                EitherOrBoth::Both(a, b) => {
+        let (mut left, mut right) = (self.store.iter_mut(), other.store.iter());
+        loop {
+            match (left.next(), right.next()) {
+                (Some(a), Some(b)) => {
                     op(a, *b);
                     count += a.count_ones() as usize;
                 }
-                EitherOrBoth::Left(a) => {
+                (Some(a), None) => {
                     let x = 0u64;
                     op(a, x);
                     count += a.count_ones() as usize;
                 }
-                EitherOrBoth::Right(b) => {
+                (None, Some(b)) => {
                     let mut x = 0u64;
                     op(&mut x, *b);
                     new.push(x);
                     count += x.count_ones() as usize;
                 }
+                (None, None) => break,
             }
         }
 
@@ -165,20 +167,21 @@ impl BitSet {
 
     /// Test if this is a superset of `other`
     pub fn is_superset(&self, other: &Self) -> bool {
-        for t in self.store.iter().zip_longest(other.store.iter()) {
-            let c = match t {
-                EitherOrBoth::Both(&a, &b) => a & b == b,
-                EitherOrBoth::Left(_) => {
+        let (mut left, mut right) = (self.store.iter(), other.store.iter());
+        loop {
+            let c = match (left.next(), right.next()) {
+                (Some(&a), Some(&b)) => a & b == b,
+                (Some(_), None) => {
                     // Since the left side can't change the result anymore, it must be a superset
                     return true;
                 }
-                EitherOrBoth::Right(&b) => b == 0,
+                (None, Some(&b)) => b == 0,
+                (None, None) => return true,
             };
             if !c {
                 return false;
             }
         }
-        true
     }
 
     /// Test if this is a subset of `other`
@@ -269,14 +272,27 @@ impl BitXorAssign for BitSet {
 
 impl PartialEq for BitSet {
     fn eq(&self, other: &Self) -> bool {
-        self.store
-            .iter()
-            .zip_longest(other.store.iter())
-            .all(|x| match x {
-                EitherOrBoth::Both(&a, &b) => a == b,
-                EitherOrBoth::Left(&a) => a == 0,
-                EitherOrBoth::Right(&b) => b == 0,
-            })
+        let (mut left, mut right) = (self.store.iter(), other.store.iter());
+        loop {
+            match (left.next(), right.next()) {
+                (Some(&a), Some(&b)) => {
+                    if a != b {
+                        return false;
+                    }
+                }
+                (Some(&a), None) => {
+                    if a != 0 {
+                        return false;
+                    }
+                }
+                (None, Some(&b)) => {
+                    if 0 != b {
+                        return false;
+                    }
+                }
+                (None, None) => return true,
+            }
+        }
     }
 }
 

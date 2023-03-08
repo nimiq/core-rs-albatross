@@ -19,7 +19,6 @@ maintenance = { status = "experimental" }
 [dependencies]
 bitvec = "1.0"
 hex = { version = "0.4", optional = true }
-itertools = { version = "0.10", optional = true }
 lazy_static = { version = "1.2", optional = true }
 log = { package = "tracing", version = "0.1", features = ["log"] }
 num-traits = { version = "0.2", optional = true }
@@ -51,7 +50,7 @@ key-nibbles = ["hex", "nimiq-keys", "nimiq-database-value"]
 networks = ["thiserror"]
 policy = ["lazy_static", "nimiq-keys", "num-traits", "parking_lot"]
 serde-derive = ["serde"]
-slots = ["beserial/bitvec", "itertools", "nimiq-bls", "nimiq-keys", "nimiq-utils", "policy"]
+slots = ["beserial/bitvec", "nimiq-bls", "nimiq-keys", "nimiq-utils", "policy"]
 transaction = ["thiserror"]
 trie = ["key-nibbles", "nimiq-hash", "thiserror"]
 ts-types = ["serde", "tsify", "wasm-bindgen"]

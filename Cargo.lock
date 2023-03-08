@@ -3515,7 +3515,6 @@ version = "0.1.0"
 dependencies = [
  "beserial",
  "hex",
- "itertools",
  "nimiq-test-log",
  "num-traits",
  "rand 0.8.5",
@@ -4052,7 +4051,6 @@ dependencies = [
  "beserial",
  "bitvec",
  "hex",
- "itertools",
  "lazy_static",
  "nimiq-bls",
  "nimiq-database-value",
