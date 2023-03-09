@@ -6699,9 +6699,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-loki"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14c616d5f020d7e61c504c3458f76188fcc91cfdd67dc6e33533d50779a9d743"
+checksum = "630f9edbf303c204f36d08d99510bb7b5b2cb6c010146be3aa6537a183907a95"
 dependencies = [
  "loki-api",
  "reqwest",

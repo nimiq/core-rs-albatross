@@ -41,7 +41,7 @@ url = { version = "2.3", features = ["serde"] }
 thiserror = "1.0"
 time = { version = "0.3", optional = true }
 tokio = { version = "1.26", features = ["rt"], optional = true }
-tracing-loki = { version = "0.2.1", optional = true }
+tracing-loki = { version = "0.2.2", optional = true }
 tracing-subscriber = { version = "0.3", optional = true }
 tracing-web = { version = "0.1", optional = true}
 
