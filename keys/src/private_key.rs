@@ -39,11 +39,6 @@ impl PrivateKey {
     }
 
     #[inline]
-    pub(crate) fn as_zebra(&self) -> &ed25519_zebra::SigningKey {
-        &self.0
-    }
-
-    #[inline]
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, KeysError> {
         Ok(PrivateKey(ed25519_zebra::SigningKey::try_from(bytes)?))
     }

@@ -25,11 +25,6 @@ impl Signature {
     }
 
     #[inline]
-    pub(crate) fn as_zebra(&self) -> &ed25519_zebra::Signature {
-        &self.0
-    }
-
-    #[inline]
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, KeysError> {
         Ok(Signature(ed25519_zebra::Signature::try_from(bytes)?))
     }

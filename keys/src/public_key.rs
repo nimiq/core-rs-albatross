@@ -20,8 +20,8 @@ impl PublicKey {
     pub const SIZE: usize = 32;
 
     pub fn verify(&self, signature: &Signature, data: &[u8]) -> bool {
-        if let Ok(vk) = ed25519_zebra::VerificationKey::try_from(*self.as_zebra()) {
-            vk.verify(signature.as_zebra(), data).is_ok()
+        if let Ok(vk) = ed25519_zebra::VerificationKey::try_from(self.0) {
+            vk.verify(&signature.0, data).is_ok()
         } else {
             false
         }
@@ -33,11 +33,6 @@ impl PublicKey {
             .as_ref()
             .try_into()
             .expect("Obtained slice with an unexpected size")
-    }
-
-    #[inline]
-    pub(crate) fn as_zebra(&self) -> &ed25519_zebra::VerificationKeyBytes {
-        &self.0
     }
 
     #[inline]
@@ -110,7 +105,7 @@ impl PartialOrd for PublicKey {
 
 impl<'a> From<&'a PrivateKey> for PublicKey {
     fn from(private_key: &'a PrivateKey) -> Self {
-        let public_key = ed25519_zebra::VerificationKeyBytes::from(private_key.as_zebra());
+        let public_key = ed25519_zebra::VerificationKeyBytes::from(&private_key.0);
         PublicKey(public_key)
     }
 }

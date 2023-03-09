@@ -236,7 +236,7 @@ impl KeyPair {
         let s = Scalar::from_hash::<sha2::Sha512>(h);
 
         // Get a scalar representation of the private key
-        let sk = self.private.as_zebra().to_scalar();
+        let sk = self.private.0.to_scalar();
 
         // Compute H(C||P)*sk
         s * sk
