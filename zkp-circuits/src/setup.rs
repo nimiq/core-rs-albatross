@@ -4,15 +4,12 @@ use std::path::Path;
 use ark_crypto_primitives::snark::CircuitSpecificSetupSNARK;
 use ark_ec::{mnt6::MNT6, pairing::Pairing, CurveGroup};
 use ark_groth16::{Groth16, Proof, ProvingKey, VerifyingKey};
-use ark_mnt4_753::{Fq as MNT4Fq, G1Projective as G1MNT4, G2Projective as G2MNT4, MNT4_753};
-use ark_mnt6_753::{
-    Config, Fq as MNT6Fq, G1Projective as G1MNT6, G2Projective as G2MNT6, MNT6_753,
-};
+use ark_mnt4_753::{G1Projective as G1MNT4, G2Projective as G2MNT4, MNT4_753};
+use ark_mnt6_753::{Config, G1Projective as G1MNT6, G2Projective as G2MNT6, MNT6_753};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::UniformRand;
 use rand::{CryptoRng, Rng};
 
-use nimiq_bls::utils::bytes_to_bits_le;
 use nimiq_primitives::policy::Policy;
 use nimiq_zkp_primitives::{MacroBlock, NanoZKPError, PK_TREE_BREADTH, PK_TREE_DEPTH};
 
@@ -114,13 +111,18 @@ fn setup_pk_tree_leaf<R: Rng + CryptoRng>(
 
     let pk_tree_nodes = vec![G1MNT6::rand(rng); PK_TREE_DEPTH];
 
-    let pk_tree_root = vec![MNT6Fq::rand(rng); 2];
+    let mut pk_tree_root = [0u8; 95];
+    rng.fill_bytes(&mut pk_tree_root);
 
-    let agg_pk_commitment = vec![MNT6Fq::rand(rng); 2];
+    let mut agg_pk_commitment = [0u8; 95];
+    rng.fill_bytes(&mut agg_pk_commitment);
 
-    let signer_bitmap = MNT6Fq::rand(rng);
+    let mut signer_bitmap = Vec::with_capacity(Policy::SLOTS as usize);
+    for _ in 0..Policy::SLOTS {
+        signer_bitmap.push(rng.gen());
+    }
 
-    let path = MNT6Fq::rand(rng);
+    let path: u8 = rng.gen();
 
     // Create parameters for our circuit
     let circuit = LeafMNT6::new(
@@ -167,15 +169,21 @@ fn setup_pk_tree_node_mnt6<R: Rng + CryptoRng>(
         c: G1MNT4::rand(rng).into_affine(),
     };
 
-    let pk_tree_root = vec![MNT4Fq::rand(rng); 2];
+    let mut pk_tree_root = [0u8; 95];
+    rng.fill_bytes(&mut pk_tree_root);
 
-    let left_agg_pk_commitment = vec![MNT4Fq::rand(rng); 2];
+    let mut left_agg_pk_commitment = [0u8; 95];
+    rng.fill_bytes(&mut left_agg_pk_commitment);
 
-    let right_agg_pk_commitment = vec![MNT4Fq::rand(rng); 2];
+    let mut right_agg_pk_commitment = [0u8; 95];
+    rng.fill_bytes(&mut right_agg_pk_commitment);
 
-    let signer_bitmap = MNT4Fq::rand(rng);
+    let mut signer_bitmap = Vec::with_capacity(Policy::SLOTS as usize);
+    for _ in 0..Policy::SLOTS {
+        signer_bitmap.push(rng.gen());
+    }
 
-    let path = MNT4Fq::rand(rng);
+    let path: u8 = rng.gen();
 
     // Create parameters for our circuit
     let circuit = NodeMNT4::new(
@@ -227,13 +235,18 @@ fn setup_pk_tree_node_mnt4<R: Rng + CryptoRng>(
 
     let agg_pk_chunks = vec![G2MNT6::rand(rng); 4];
 
-    let pk_tree_root = vec![MNT6Fq::rand(rng); 2];
+    let mut pk_tree_root = [0u8; 95];
+    rng.fill_bytes(&mut pk_tree_root);
 
-    let agg_pk_commitment = vec![MNT6Fq::rand(rng); 2];
+    let mut agg_pk_commitment = [0u8; 95];
+    rng.fill_bytes(&mut agg_pk_commitment);
 
-    let signer_bitmap = MNT6Fq::rand(rng);
+    let mut signer_bitmap = Vec::with_capacity(Policy::SLOTS as usize);
+    for _ in 0..Policy::SLOTS {
+        signer_bitmap.push(rng.gen());
+    }
 
-    let path = MNT6Fq::rand(rng);
+    let path: u8 = rng.gen();
 
     // Create parameters for our circuit
     let circuit = NodeMNT6::new(
@@ -282,18 +295,21 @@ fn setup_macro_block<R: Rng + CryptoRng>(rng: &mut R, path: &Path) -> Result<(),
     let mut final_pk_tree_root = [0u8; 95];
     rng.fill_bytes(&mut final_pk_tree_root);
 
-    let initial_state_commitment = vec![MNT6Fq::rand(rng); 2];
+    let mut initial_state_commitment = [0u8; 95];
+    rng.fill_bytes(&mut initial_state_commitment);
 
-    let final_state_commitment = vec![MNT6Fq::rand(rng); 2];
+    let mut final_state_commitment = [0u8; 95];
+    rng.fill_bytes(&mut final_state_commitment);
 
     let mut header_hash = [0u8; 32];
     rng.fill_bytes(&mut header_hash);
 
     let signature = G1MNT6::rand(rng);
 
-    let mut bytes = [0u8; Policy::SLOTS as usize / 8];
-    rng.fill_bytes(&mut bytes);
-    let signer_bitmap = bytes_to_bits_le(&bytes);
+    let mut signer_bitmap = Vec::with_capacity(Policy::SLOTS as usize);
+    for _ in 0..Policy::SLOTS {
+        signer_bitmap.push(rng.gen());
+    }
 
     let block = MacroBlock {
         block_number,
@@ -308,9 +324,9 @@ fn setup_macro_block<R: Rng + CryptoRng>(rng: &mut R, path: &Path) -> Result<(),
         vk_pk_tree,
         agg_pk_chunks,
         proof,
-        initial_pk_tree_root.to_vec(),
+        initial_pk_tree_root,
         initial_header_hash,
-        final_pk_tree_root.to_vec(),
+        final_pk_tree_root,
         block,
         initial_state_commitment,
         final_state_commitment,
@@ -338,9 +354,11 @@ fn setup_macro_block_wrapper<R: Rng + CryptoRng>(
         c: G1MNT4::rand(rng).into_affine(),
     };
 
-    let initial_state_commitment = vec![MNT4Fq::rand(rng); 2];
+    let mut initial_state_commitment = [0u8; 95];
+    rng.fill_bytes(&mut initial_state_commitment);
 
-    let final_state_commitment = vec![MNT4Fq::rand(rng); 2];
+    let mut final_state_commitment = [0u8; 95];
+    rng.fill_bytes(&mut final_state_commitment);
 
     // Create parameters for our circuit
     let circuit = MacroBlockWrapperCircuit::new(
@@ -383,17 +401,19 @@ fn setup_merger<R: Rng + CryptoRng>(rng: &mut R, path: &Path) -> Result<(), Nano
         gamma_abc_g1: vec![G1MNT6::rand(rng).into_affine(); 7],
     };
 
-    let mut bytes = [0u8; 95];
-    rng.fill_bytes(&mut bytes);
-    let intermediate_state_commitment = bytes_to_bits_le(&bytes);
+    let mut intermediate_state_commitment = [0u8; 95];
+    rng.fill_bytes(&mut intermediate_state_commitment);
 
     let genesis_flag = bool::rand(rng);
 
-    let initial_state_commitment = vec![MNT6Fq::rand(rng); 2];
+    let mut initial_state_commitment = [0u8; 95];
+    rng.fill_bytes(&mut initial_state_commitment);
 
-    let final_state_commitment = vec![MNT6Fq::rand(rng); 2];
+    let mut final_state_commitment = [0u8; 95];
+    rng.fill_bytes(&mut final_state_commitment);
 
-    let vk_commitment = vec![MNT6Fq::rand(rng); 2];
+    let mut vk_commitment = [0u8; 95];
+    rng.fill_bytes(&mut vk_commitment);
 
     // Create parameters for our circuit
     let circuit = MergerCircuit::new(
@@ -427,11 +447,14 @@ fn setup_merger_wrapper<R: Rng + CryptoRng>(rng: &mut R, path: &Path) -> Result<
         c: G1MNT4::rand(rng).into_affine(),
     };
 
-    let initial_state_commitment = vec![MNT4Fq::rand(rng); 2];
+    let mut initial_state_commitment = [0u8; 95];
+    rng.fill_bytes(&mut initial_state_commitment);
 
-    let final_state_commitment = vec![MNT4Fq::rand(rng); 2];
+    let mut final_state_commitment = [0u8; 95];
+    rng.fill_bytes(&mut final_state_commitment);
 
-    let vk_commitment = vec![MNT4Fq::rand(rng); 2];
+    let mut vk_commitment = [0u8; 95];
+    rng.fill_bytes(&mut vk_commitment);
 
     // Create parameters for our circuit
     let circuit = MergerWrapperCircuit::new(

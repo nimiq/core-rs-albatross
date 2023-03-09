@@ -1,12 +1,12 @@
 use ark_groth16::constraints::VerifyingKeyVar;
-use ark_mnt6_753::{
-    constraints::{G1Var, PairingVar},
-    Fq as MNT6Fq, MNT6_753,
-};
-use ark_r1cs_std::{uint8::UInt8, ToBitsGadget};
+use ark_mnt6_753::{constraints::PairingVar, Fq as MNT6Fq, MNT6_753};
+use ark_r1cs_std::uint8::UInt8;
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
+use nimiq_pedersen_generators::GenericWindow;
 
-use crate::gadgets::{mnt6::PedersenHashGadget, serialize::SerializeGadget};
+use crate::gadgets::{pedersen::PedersenHashGadget, serialize::SerializeGadget};
+
+use super::DefaultPedersenParametersVar;
 
 /// This gadget is meant to calculate a commitment in-circuit for a verifying key of a SNARK in the
 /// MNT6-753 curve. This means we can open this commitment inside of a circuit in the MNT4-753 curve
@@ -16,12 +16,14 @@ use crate::gadgets::{mnt6::PedersenHashGadget, serialize::SerializeGadget};
 /// of compressing the state and representing it across different curves.
 pub struct VKCommitmentGadget;
 
+pub type VkCommitmentWindow = GenericWindow<14, MNT6Fq>;
+
 impl VKCommitmentGadget {
     /// Calculates the verifying key commitment.
     pub fn evaluate(
         cs: ConstraintSystemRef<MNT6Fq>,
         vk: &VerifyingKeyVar<MNT6_753, PairingVar>,
-        pedersen_generators: &[G1Var],
+        pedersen_generators: &DefaultPedersenParametersVar,
     ) -> Result<Vec<UInt8<MNT6Fq>>, SynthesisError> {
         // Initialize Boolean vector.
         let mut bytes = vec![];
@@ -45,7 +47,8 @@ impl VKCommitmentGadget {
         }
 
         // Calculate the Pedersen hash.
-        let hash = PedersenHashGadget::evaluate(&bytes.to_bits_le()?, pedersen_generators)?;
+        let hash =
+            PedersenHashGadget::<_, _, VkCommitmentWindow>::evaluate(&bytes, pedersen_generators)?;
 
         // Serialize the Pedersen hash.
         let serialized_bytes = hash.serialize_compressed(cs)?;
@@ -59,16 +62,18 @@ mod tests {
     use ark_ec::CurveGroup;
     use ark_groth16::{constraints::VerifyingKeyVar, VerifyingKey};
     use ark_mnt6_753::{
-        constraints::{G1Var, PairingVar},
+        constraints::PairingVar,
         Fq as MNT6Fq, MNT6_753, {G1Projective, G2Projective},
     };
     use ark_r1cs_std::{prelude::AllocVar, R1CSVar};
     use ark_relations::r1cs::ConstraintSystem;
     use ark_std::{test_rng, UniformRand};
 
-    use nimiq_bls::pedersen::pedersen_generators;
+    use nimiq_pedersen_generators::generators::pedersen_generator_powers;
     use nimiq_test_log::test;
     use nimiq_zkp_primitives::vk_commitment;
+
+    use crate::gadgets::pedersen::PedersenParametersVar;
 
     use super::*;
 
@@ -99,8 +104,9 @@ mod tests {
             VerifyingKeyVar::<_, PairingVar>::new_witness(cs.clone(), || Ok(vk.clone())).unwrap();
 
         // Allocate the generators.
+        let parameters = pedersen_generator_powers::<VkCommitmentWindow>();
         let generators_var =
-            Vec::<G1Var>::new_witness(cs.clone(), || Ok(pedersen_generators(14))).unwrap();
+            PedersenParametersVar::new_witness(cs.clone(), || Ok(&parameters)).unwrap();
 
         // Evaluate vk commitment using the gadget version.
         let gadget_comm = VKCommitmentGadget::evaluate(cs, &vk_var, &generators_var).unwrap();

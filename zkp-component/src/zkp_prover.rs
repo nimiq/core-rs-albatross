@@ -40,7 +40,7 @@ pub struct ZKProver<N: Network> {
     sender: Option<Sender<()>>,
     pending_election_blocks: VecDeque<MacroBlock>,
     election_stream: BoxStream<'static, MacroBlock>,
-    genesis_state: Vec<u8>,
+    genesis_state: [u8; 95],
     proof_future:
         Option<BoxFuture<'static, Result<(ZKPState, MacroBlock), ZKProofGenerationError>>>,
     prover_keys_path: PathBuf,
@@ -163,7 +163,7 @@ impl<N: Network> ZKProver<N> {
                         latest_pks: zkp_state.latest_pks.clone(),
                         latest_header_hash: zkp_state.latest_header_hash.clone(),
                         previous_proof: zkp_state.latest_proof.clone(),
-                        genesis_state: self.genesis_state.clone(),
+                        genesis_state: self.genesis_state,
                         prover_keys_path: self.prover_keys_path.clone(),
                     },
                     self.prover_path.clone(),

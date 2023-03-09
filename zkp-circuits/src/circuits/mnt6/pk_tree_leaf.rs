@@ -8,15 +8,14 @@ use ark_r1cs_std::{
 };
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 
-use nimiq_bls::pedersen::pedersen_generators;
 use nimiq_primitives::policy::Policy;
-use nimiq_zkp_primitives::{PK_TREE_BREADTH, PK_TREE_DEPTH};
+use nimiq_zkp_primitives::{PEDERSEN_PARAMETERS, PK_TREE_BREADTH, PK_TREE_DEPTH};
 
 use crate::gadgets::{
-    mnt6::{MerkleTreeGadget, PedersenHashGadget},
+    bits::BitVec,
+    mnt6::{DefaultPedersenHashGadget, DefaultPedersenParametersVar, MerkleTreeGadget},
     serialize::SerializeGadget,
 };
-use crate::utils::unpack_inputs;
 
 /// This is the leaf subcircuit of the PKTreeCircuit. This circuit main function is to process the
 /// validator's public keys and "return" the aggregate public key for the Macro Block. At a
@@ -44,25 +43,20 @@ pub struct PKTreeLeafCircuit {
     pk_tree_nodes: Vec<G1Projective>,
 
     // Inputs (public)
-    // Our inputs are always vectors of booleans (semantically), so that they are consistent across
-    // the different elliptic curves that we use. However, for compactness, we represent them as
-    // field elements. Both of the curves that we use have a modulus of 753 bits and a capacity
-    // of 752 bits. So, the first 752 bits (in little-endian) of each field element is data, and the
-    // last bit is always set to zero.
-    pk_tree_root: Vec<MNT6Fq>,
-    agg_pk_commitment: Vec<MNT6Fq>,
-    signer_bitmap_chunk: MNT6Fq,
-    path: MNT6Fq,
+    pk_tree_root: [u8; 95],
+    agg_pk_commitment: [u8; 95],
+    signer_bitmap_chunk: Vec<bool>,
+    path: u8,
 }
 
 impl PKTreeLeafCircuit {
     pub fn new(
         pks: Vec<G2Projective>,
         pk_tree_nodes: Vec<G1Projective>,
-        pk_tree_root: Vec<MNT6Fq>,
-        agg_pk_commitment: Vec<MNT6Fq>,
-        signer_bitmap: MNT6Fq,
-        path: MNT6Fq,
+        pk_tree_root: [u8; 95],
+        agg_pk_commitment: [u8; 95],
+        signer_bitmap: Vec<bool>,
+        path: u8,
     ) -> Self {
         Self {
             pks,
@@ -80,7 +74,7 @@ impl ConstraintSynthesizer<MNT6Fq> for PKTreeLeafCircuit {
     fn generate_constraints(self, cs: ConstraintSystemRef<MNT6Fq>) -> Result<(), SynthesisError> {
         // Allocate all the constants.
         let pedersen_generators_var =
-            Vec::<G1Var>::new_constant(cs.clone(), pedersen_generators(195))?;
+            DefaultPedersenParametersVar::new_constant(cs.clone(), &*PEDERSEN_PARAMETERS)?; // only need 195
 
         // Allocate all the witnesses.
         let pks_var = Vec::<G2Var>::new_witness(cs.clone(), || Ok(&self.pks[..]))?;
@@ -89,30 +83,21 @@ impl ConstraintSynthesizer<MNT6Fq> for PKTreeLeafCircuit {
             Vec::<G1Var>::new_witness(cs.clone(), || Ok(&self.pk_tree_nodes[..]))?;
 
         // Allocate all the inputs.
-        let pk_tree_root_var = Vec::<FqVar>::new_input(cs.clone(), || Ok(&self.pk_tree_root[..]))?;
+        let pk_tree_root_bytes =
+            UInt8::<MNT6Fq>::new_input_vec(cs.clone(), &self.pk_tree_root[..])?;
 
-        let agg_pk_commitment_var =
-            Vec::<FqVar>::new_input(cs.clone(), || Ok(&self.agg_pk_commitment[..]))?;
+        let agg_pk_commitment_bytes =
+            UInt8::<MNT6Fq>::new_input_vec(cs.clone(), &self.agg_pk_commitment[..])?;
 
-        let signer_bitmap_chunk_var =
-            FqVar::new_input(cs.clone(), || Ok(&self.signer_bitmap_chunk))?;
+        let signer_bitmap_chunk_bits =
+            BitVec::<MNT6Fq>::new_input_vec(cs.clone(), &self.signer_bitmap_chunk)?;
+        let signer_bitmap_chunk_bits =
+            signer_bitmap_chunk_bits.0[..Policy::SLOTS as usize / PK_TREE_BREADTH].to_vec();
 
-        let path_var = FqVar::new_input(cs.clone(), || Ok(&self.path))?;
+        let path_var = FqVar::new_input(cs.clone(), || Ok(MNT6Fq::from(self.path)))?;
 
         // Unpack the inputs by converting them from field elements to bits and truncating appropriately.
-        let pk_tree_root_bits = unpack_inputs(pk_tree_root_var)?[..760].to_vec();
-        let pk_tree_root_bytes: Vec<_> = pk_tree_root_bits
-            .chunks(8)
-            .map(UInt8::from_bits_le)
-            .collect();
-
-        let agg_pk_commitment_bits = unpack_inputs(agg_pk_commitment_var)?[..760].to_vec();
-
-        let signer_bitmap_chunk_bits = unpack_inputs(vec![signer_bitmap_chunk_var])?
-            [..Policy::SLOTS as usize / PK_TREE_BREADTH]
-            .to_vec();
-
-        let path_bits = unpack_inputs(vec![path_var])?[..PK_TREE_DEPTH].to_vec();
+        let path_bits = path_var.to_bits_le()?[..PK_TREE_DEPTH].to_vec();
 
         // Verify the Merkle proof for the public keys. To reiterate, this Merkle tree has 2^n
         // leaves (where n is the PK_TREE_DEPTH constant) and each of the leaves consists of several
@@ -155,11 +140,11 @@ impl ConstraintSynthesizer<MNT6Fq> for PKTreeLeafCircuit {
         let agg_pk_bytes = calculated_agg_pk.serialize_compressed(cs.clone())?;
 
         let pedersen_hash =
-            PedersenHashGadget::evaluate(&agg_pk_bytes.to_bits_le()?, &pedersen_generators_var)?;
+            DefaultPedersenHashGadget::evaluate(&agg_pk_bytes, &pedersen_generators_var)?;
 
         let pedersen_bytes = pedersen_hash.serialize_compressed(cs)?;
 
-        agg_pk_commitment_bits.enforce_equal(&pedersen_bytes.to_bits_le()?)?;
+        agg_pk_commitment_bytes.enforce_equal(&pedersen_bytes)?;
 
         Ok(())
     }

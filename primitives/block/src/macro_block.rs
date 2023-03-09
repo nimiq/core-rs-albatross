@@ -91,7 +91,7 @@ impl MacroBlock {
         }
 
         // Create the tree
-        Ok(pk_tree_construct(public_keys))
+        Ok(pk_tree_construct(public_keys).to_vec())
     }
 
     /// Returns whether or not this macro block is an election block.

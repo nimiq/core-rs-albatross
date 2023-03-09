@@ -29,7 +29,7 @@ fn main() {
 
     let start = Instant::now();
 
-    let mut genesis_state_commitment = vec![];
+    let mut genesis_state_commitment = [0; 95];
     let mut genesis_data = None;
     let mut proof = Proof::default();
 

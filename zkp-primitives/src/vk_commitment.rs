@@ -2,11 +2,7 @@ use ark_ec::AffineRepr;
 use ark_groth16::VerifyingKey;
 use ark_mnt6_753::MNT6_753;
 
-use nimiq_bls::pedersen::pedersen_hash;
-use nimiq_bls::utils::bytes_to_bits_le;
-
-use crate::pedersen_generator_powers::PEDERSEN_GENERATORS;
-use crate::{serialize_g1_mnt6, serialize_g2_mnt6};
+use crate::{pedersen::default_pedersen_hash, serialize_g1_mnt6, serialize_g2_mnt6};
 
 /// This function is meant to calculate a commitment off-circuit for a verifying key of a SNARK in the
 /// MNT6-753 curve. This means we can open this commitment inside of a circuit in the MNT4-753 curve
@@ -14,7 +10,7 @@ use crate::{serialize_g1_mnt6, serialize_g2_mnt6};
 /// We calculate it by first serializing the verifying key and feeding it to the Pedersen hash
 /// function, then we serialize the output and convert it to bits. This provides an efficient way
 /// of compressing the state and representing it across different curves.
-pub fn vk_commitment(vk: VerifyingKey<MNT6_753>) -> Vec<u8> {
+pub fn vk_commitment(vk: VerifyingKey<MNT6_753>) -> [u8; 95] {
     // Serialize the verifying key into bits.
     let mut bytes: Vec<u8> = vec![];
 
@@ -30,13 +26,9 @@ pub fn vk_commitment(vk: VerifyingKey<MNT6_753>) -> Vec<u8> {
         bytes.extend_from_slice(serialize_g1_mnt6(&vk.gamma_abc_g1[i].into_group()).as_ref());
     }
 
-    let bits = bytes_to_bits_le(&bytes);
-
     // Calculate the Pedersen hash.
-    let hash = pedersen_hash(bits, &PEDERSEN_GENERATORS);
+    let hash = default_pedersen_hash(&bytes);
 
     // Serialize the Pedersen commitment.
-    let bytes = serialize_g1_mnt6(&hash);
-
-    Vec::from(bytes.as_ref())
+    serialize_g1_mnt6(&hash)
 }

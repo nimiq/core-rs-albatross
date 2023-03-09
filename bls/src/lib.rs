@@ -12,15 +12,6 @@ pub mod lazy;
 // Implements all of the types needed to do BLS signatures.
 mod types;
 
-// Utility functions.
-pub mod utils;
-
-// Pedersen hash functions.
-pub mod pedersen;
-
-// Randomness generation.
-pub mod rand_gen;
-
 // Specifies the hash algorithm used for signatures
 pub type SigHash = Blake2sHash;
 

@@ -1,59 +1,55 @@
-use ark_crypto_primitives::snark::BooleanInputVar;
+use ark_crypto_primitives::snark::FromFieldElementsGadget;
 use ark_crypto_primitives::snark::{CircuitSpecificSetupSNARK, SNARKGadget, SNARK};
 use ark_groth16::constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar};
 use ark_groth16::{Groth16, Proof, VerifyingKey};
-use ark_mnt4_753::constraints::{FqVar as FqVarMNT4, PairingVar};
+use ark_mnt4_753::constraints::PairingVar;
 use ark_mnt4_753::{Fq as FqMNT4, MNT4_753};
-use ark_mnt6_753::constraints::FqVar as FqVarMNT6;
 use ark_mnt6_753::{Fq as FqMNT6, MNT6_753};
-use ark_r1cs_std::prelude::{AllocVar, Boolean, EqGadget};
-use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
+use ark_r1cs_std::{
+    prelude::{AllocVar, Boolean, EqGadget},
+    uint8::UInt8,
+    ToConstraintFieldGadget,
+};
+use ark_relations::r1cs::{
+    ConstraintSynthesizer, ConstraintSystemRef, SynthesisError, ToConstraintField,
+};
 use ark_std::{
     rand::{rngs::StdRng, RngCore},
     test_rng,
 };
 use rand::SeedableRng;
 
-use nimiq_bls::utils::bytes_to_bits_le;
 use nimiq_test_log::test;
-use nimiq_zkp_circuits::utils::{pack_inputs, prepare_inputs, unpack_inputs};
 
-const NUMBER_OF_BITS: usize = 1024;
+const NUMBER_OF_BYTES: usize = 128;
 
 #[derive(Clone)]
 pub struct InnerCircuit {
     // Witnesses (private)
-    red_priv: Vec<bool>,
-    blue_priv: Vec<bool>,
+    red_priv: Vec<u8>,
+    blue_priv: Vec<u8>,
     // Inputs (public)
-    red_pub: Vec<FqMNT6>,
-    blue_pub: Vec<FqMNT6>,
+    red_pub: Vec<u8>,
+    blue_pub: Vec<u8>,
 }
 
 impl ConstraintSynthesizer<FqMNT6> for InnerCircuit {
     /// This function generates the constraints for the circuit.
     fn generate_constraints(self, cs: ConstraintSystemRef<FqMNT6>) -> Result<(), SynthesisError> {
         // Allocate all the witnesses.
-        let red_priv_var =
-            Vec::<Boolean<FqMNT6>>::new_witness(cs.clone(), || Ok(&self.red_priv[..]))?;
+        let red_priv_var = UInt8::<FqMNT6>::new_witness_vec(cs.clone(), &self.red_priv[..])?;
 
-        let blue_priv_var =
-            Vec::<Boolean<FqMNT6>>::new_witness(cs.clone(), || Ok(&self.blue_priv[..]))?;
+        let blue_priv_var = UInt8::<FqMNT6>::new_witness_vec(cs.clone(), &self.blue_priv[..])?;
 
         // Allocate all the inputs.
-        let red_pub_var = Vec::<FqVarMNT6>::new_input(cs.clone(), || Ok(&self.red_pub[..]))?;
+        let red_pub_var = UInt8::<FqMNT6>::new_input_vec(cs.clone(), &self.red_pub[..])?;
 
-        let blue_pub_var = Vec::<FqVarMNT6>::new_input(cs, || Ok(&self.blue_pub[..]))?;
+        let blue_pub_var = UInt8::<FqMNT6>::new_input_vec(cs, &self.blue_pub[..])?;
 
-        // Unpack the inputs by converting them from field elements to bits and truncating appropriately.
-        let red_var_bits = unpack_inputs(red_pub_var)?[..NUMBER_OF_BITS].to_vec();
+        // Compare the bytes.
+        red_priv_var.enforce_equal(&red_pub_var)?;
 
-        let blue_var_bits = unpack_inputs(blue_pub_var)?[..NUMBER_OF_BITS].to_vec();
-
-        // Compare the bits.
-        red_priv_var.enforce_equal(&red_var_bits)?;
-
-        blue_priv_var.enforce_equal(&blue_var_bits)?;
+        blue_priv_var.enforce_equal(&blue_pub_var)?;
 
         Ok(())
     }
@@ -65,8 +61,8 @@ pub struct OuterCircuit {
     proof: Proof<MNT4_753>,
     vk: VerifyingKey<MNT4_753>,
     // Inputs (public)
-    red_pub: Vec<FqMNT4>,
-    blue_pub: Vec<FqMNT4>,
+    red_pub: Vec<u8>,
+    blue_pub: Vec<u8>,
 }
 
 impl ConstraintSynthesizer<FqMNT4> for OuterCircuit {
@@ -79,21 +75,16 @@ impl ConstraintSynthesizer<FqMNT4> for OuterCircuit {
         let proof_var = ProofVar::new_witness(cs.clone(), || Ok(&self.proof)).unwrap();
 
         // Allocate all the inputs.
-        let red_pub_var = Vec::<FqVarMNT4>::new_input(cs.clone(), || Ok(&self.red_pub[..]))?;
+        let red_pub_var = UInt8::<FqMNT4>::new_input_vec(cs.clone(), &self.red_pub[..])?;
 
-        let blue_pub_var = Vec::<FqVarMNT4>::new_input(cs, || Ok(&self.blue_pub[..]))?;
-
-        // Unpack the inputs by converting them from field elements to bits and truncating appropriately.
-        let red_var_bits = unpack_inputs(red_pub_var)?[..NUMBER_OF_BITS].to_vec();
-
-        let blue_var_bits = unpack_inputs(blue_pub_var)?[..NUMBER_OF_BITS].to_vec();
+        let blue_pub_var = UInt8::<FqMNT4>::new_input_vec(cs, &self.blue_pub[..])?;
 
         // Prepare inputs
-        let mut proof_inputs = prepare_inputs(red_var_bits);
+        let mut proof_inputs = red_pub_var.to_constraint_field()?;
 
-        proof_inputs.append(&mut prepare_inputs(blue_var_bits));
+        proof_inputs.append(&mut blue_pub_var.to_constraint_field()?);
 
-        let input_var = BooleanInputVar::new(proof_inputs);
+        let input_var = FromFieldElementsGadget::from_field_elements(&proof_inputs)?;
 
         // Verify the ZK proof.
         Groth16VerifierGadget::<MNT4_753, PairingVar>::verify(&vk_var, &input_var, &proof_var)?
@@ -111,25 +102,23 @@ fn recursive_input_works() {
     let rng = &mut StdRng::seed_from_u64(test_rng().next_u64());
 
     // Create random bits and inputs for red.
-    let mut bytes = [0u8; NUMBER_OF_BITS / 8];
+    let mut bytes = [0u8; NUMBER_OF_BYTES];
     rng.fill_bytes(&mut bytes);
 
-    let red_priv = bytes_to_bits_le(&bytes);
-    let red_pub = pack_inputs(red_priv.clone());
+    let red = bytes.to_vec();
 
     // Create random bits and inputs for red.
-    let mut bytes = [0u8; NUMBER_OF_BITS / 8];
+    let mut bytes = [0u8; NUMBER_OF_BYTES];
     rng.fill_bytes(&mut bytes);
 
-    let blue_priv = bytes_to_bits_le(&bytes);
-    let blue_pub = pack_inputs(blue_priv.clone());
+    let blue = bytes.to_vec();
 
     // Create the inner circuit.
     let circuit = InnerCircuit {
-        red_priv: red_priv.clone(),
-        blue_priv: blue_priv.clone(),
-        red_pub: red_pub.clone(),
-        blue_pub: blue_pub.clone(),
+        red_priv: red.clone(),
+        blue_priv: blue.clone(),
+        red_pub: red.clone(),
+        blue_pub: blue.clone(),
     };
 
     // Create the proving and verifying keys.
@@ -140,21 +129,17 @@ fn recursive_input_works() {
 
     // Verify the proof.
     let mut inputs = vec![];
-    inputs.extend(&red_pub);
-    inputs.extend(&blue_pub);
+    inputs.extend(&red.to_field_elements().unwrap());
+    inputs.extend(&blue.to_field_elements().unwrap());
 
     assert!(Groth16::<MNT4_753>::verify(&vk, &inputs, &proof).unwrap());
-
-    // Create inputs for the outer circuit.
-    let red_pub = pack_inputs(red_priv);
-    let blue_pub = pack_inputs(blue_priv);
 
     // Create the outer circuit.
     let circuit = OuterCircuit {
         proof,
         vk,
-        red_pub: red_pub.clone(),
-        blue_pub: blue_pub.clone(),
+        red_pub: red.clone(),
+        blue_pub: blue.clone(),
     };
 
     // Create the proving and verifying keys.
@@ -165,8 +150,8 @@ fn recursive_input_works() {
 
     // Verify the proof.
     let mut inputs = vec![];
-    inputs.extend(&red_pub);
-    inputs.extend(&blue_pub);
+    inputs.extend(&red.to_field_elements().unwrap());
+    inputs.extend(&blue.to_field_elements().unwrap());
 
     assert!(Groth16::<MNT6_753>::verify(&vk, &inputs, &proof).unwrap());
 }

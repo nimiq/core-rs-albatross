@@ -4,18 +4,19 @@ use std::path::Path;
 
 use ark_crypto_primitives::snark::SNARK;
 use ark_ec::{pairing::Pairing, CurveGroup};
-use ark_ff::Zero;
+use ark_ff::{ToConstraintField, Zero};
 use ark_groth16::{Groth16, Proof, ProvingKey, VerifyingKey};
 use ark_mnt4_753::{Fq as MNT4Fq, MNT4_753};
 use ark_mnt6_753::{Fq as MNT6Fq, G1Projective as G1MNT6, G2Projective as G2MNT6, MNT6_753};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::UniformRand;
+use nimiq_zkp_circuits::utils::byte_to_le_bits;
+use nimiq_zkp_primitives::pedersen::default_pedersen_hash;
 use rand::{thread_rng, CryptoRng, Rng};
 
-use nimiq_bls::pedersen::{pedersen_generator_powers, pedersen_hash};
-use nimiq_bls::utils::{byte_to_le_bits, bytes_to_bits_le};
 use nimiq_primitives::policy::Policy;
 use nimiq_zkp_circuits::{
+    bits::BitVec,
     circuits::mnt4::{
         MacroBlockWrapperCircuit, MergerWrapperCircuit, PKTreeNodeCircuit as NodeMNT4,
     },
@@ -23,7 +24,6 @@ use nimiq_zkp_circuits::{
         MacroBlockCircuit, MergerCircuit, PKTreeLeafCircuit as LeafMNT6,
         PKTreeNodeCircuit as NodeMNT6,
     },
-    utils::pack_inputs,
 };
 use nimiq_zkp_primitives::{
     merkle_tree_prove, pk_tree_construct, serialize_g1_mnt6, serialize_g2_mnt6, state_commitment,
@@ -47,7 +47,7 @@ pub fn prove(
     block: MacroBlock,
     // If this is not the first epoch, you need to provide the SNARK proof for the previous
     // epoch and the genesis state commitment.
-    genesis_data: Option<(Proof<MNT6_753>, Vec<u8>)>,
+    genesis_data: Option<(Proof<MNT6_753>, [u8; 95])>,
     // This is a flag indicating if we want to cache the proofs. If true, it will see which proofs
     // were already created and start from there. Note that for this to work, you must provide
     // the exact same inputs.
@@ -355,7 +355,7 @@ fn prove_pk_tree_leaf<R: CryptoRng + Rng>(
     position: usize,
     pks: &[G2MNT6],
     pk_tree_nodes: &[G1MNT6],
-    pk_tree_root: &[u8],
+    pk_tree_root: &[u8; 95],
     signer_bitmap: &[bool],
     debug_mode: bool,
     dir_path: &Path,
@@ -376,24 +376,15 @@ fn prove_pk_tree_leaf<R: CryptoRng + Rng>(
         }
     }
 
-    let agg_pk_bits = bytes_to_bits_le(&serialize_g2_mnt6(&agg_pk));
+    let agg_pk_bytes = serialize_g2_mnt6(&agg_pk);
 
-    let hash = pedersen_hash(agg_pk_bits, &pedersen_generator_powers(5));
+    let hash = default_pedersen_hash(&agg_pk_bytes);
 
-    let agg_pk_comm = bytes_to_bits_le(&serialize_g1_mnt6(&hash));
+    let agg_pk_commitment = serialize_g1_mnt6(&hash);
 
     // Get the relevant chunk of the signer's bitmap.
     let signer_bitmap_chunk = &signer_bitmap[position * Policy::SLOTS as usize / PK_TREE_BREADTH
         ..(position + 1) * Policy::SLOTS as usize / PK_TREE_BREADTH];
-
-    // Calculate inputs.
-    let mut pk_tree_root = pack_inputs(bytes_to_bits_le(pk_tree_root));
-
-    let mut agg_pk_commitment = pack_inputs(agg_pk_comm);
-
-    let signer_bitmap_chunk: MNT6Fq = pack_inputs(signer_bitmap_chunk.to_vec()).pop().unwrap();
-
-    let path: MNT6Fq = pack_inputs(byte_to_le_bits(position as u8)).pop().unwrap();
 
     // Create the circuit.
     let circuit = LeafMNT6::new(
@@ -401,10 +392,10 @@ fn prove_pk_tree_leaf<R: CryptoRng + Rng>(
             ..(position + 1) * Policy::SLOTS as usize / PK_TREE_BREADTH]
             .to_vec(),
         pk_tree_nodes.to_vec(),
-        pk_tree_root.clone(),
-        agg_pk_commitment.clone(),
-        signer_bitmap_chunk,
-        path,
+        *pk_tree_root,
+        agg_pk_commitment,
+        signer_bitmap_chunk.to_vec(),
+        position as u8,
     );
 
     // Create the proof.
@@ -420,13 +411,17 @@ fn prove_pk_tree_leaf<R: CryptoRng + Rng>(
         // Prepare the inputs.
         let mut inputs = vec![];
 
-        inputs.append(&mut pk_tree_root);
+        inputs.append(&mut pk_tree_root.to_field_elements().unwrap());
 
-        inputs.append(&mut agg_pk_commitment);
+        inputs.append(&mut agg_pk_commitment.to_field_elements().unwrap());
 
-        inputs.push(signer_bitmap_chunk);
+        inputs.append(
+            &mut BitVec::<MNT6Fq>::to_bytes_le(signer_bitmap_chunk)
+                .to_field_elements()
+                .unwrap(),
+        );
 
-        inputs.push(path);
+        inputs.push(MNT6Fq::from(position as u8));
 
         // Verify proof.
         assert!(Groth16::<MNT4_753>::verify(
@@ -447,7 +442,7 @@ fn prove_pk_tree_node_mnt6<R: CryptoRng + Rng>(
     tree_level: usize,
     vk_file: &str,
     pks: &[G2MNT6],
-    pk_tree_root: &[u8],
+    pk_tree_root: &[u8; 95],
     signer_bitmap: &[bool],
     debug_mode: bool,
     dir_path: &Path,
@@ -490,11 +485,11 @@ fn prove_pk_tree_node_mnt6<R: CryptoRng + Rng>(
         }
     }
 
-    let agg_pk_bits = bytes_to_bits_le(&serialize_g2_mnt6(&agg_pk));
+    let agg_pk_bytes = serialize_g2_mnt6(&agg_pk);
 
-    let hash = pedersen_hash(agg_pk_bits, &pedersen_generator_powers(5));
+    let hash = default_pedersen_hash(&agg_pk_bytes);
 
-    let left_agg_pk_comm = bytes_to_bits_le(&serialize_g1_mnt6(&hash));
+    let left_agg_pk_comm = serialize_g1_mnt6(&hash);
 
     // Calculate the right aggregate public key commitment.
     let mut agg_pk = G2MNT6::zero();
@@ -507,27 +502,16 @@ fn prove_pk_tree_node_mnt6<R: CryptoRng + Rng>(
         }
     }
 
-    let agg_pk_bits = bytes_to_bits_le(&serialize_g2_mnt6(&agg_pk));
+    let agg_pk_bytes = serialize_g2_mnt6(&agg_pk);
 
-    let hash = pedersen_hash(agg_pk_bits, &pedersen_generator_powers(5));
+    let hash = default_pedersen_hash(&agg_pk_bytes);
 
-    let right_agg_pk_comm = bytes_to_bits_le(&serialize_g1_mnt6(&hash));
+    let right_agg_pk_comm = serialize_g1_mnt6(&hash);
 
     // Get the relevant chunk of the signer's bitmap.
     let signer_bitmap_chunk = &signer_bitmap[position * Policy::SLOTS as usize
         / 2_usize.pow(tree_level as u32)
         ..(position + 1) * Policy::SLOTS as usize / 2_usize.pow(tree_level as u32)];
-
-    // Calculate inputs.
-    let mut pk_tree_root = pack_inputs(bytes_to_bits_le(pk_tree_root));
-
-    let mut left_agg_pk_commitment = pack_inputs(left_agg_pk_comm);
-
-    let mut right_agg_pk_commitment = pack_inputs(right_agg_pk_comm);
-
-    let signer_bitmap_chunk: MNT4Fq = pack_inputs(signer_bitmap_chunk.to_vec()).pop().unwrap();
-
-    let path: MNT4Fq = pack_inputs(byte_to_le_bits(position as u8)).pop().unwrap();
 
     // Create the circuit.
     let circuit = NodeMNT4::new(
@@ -535,11 +519,11 @@ fn prove_pk_tree_node_mnt6<R: CryptoRng + Rng>(
         vk_child,
         left_proof,
         right_proof,
-        pk_tree_root.clone(),
-        left_agg_pk_commitment.clone(),
-        right_agg_pk_commitment.clone(),
-        signer_bitmap_chunk,
-        path,
+        *pk_tree_root,
+        left_agg_pk_comm,
+        right_agg_pk_comm,
+        signer_bitmap_chunk.to_vec(),
+        position as u8,
     );
 
     // Create the proof.
@@ -555,15 +539,19 @@ fn prove_pk_tree_node_mnt6<R: CryptoRng + Rng>(
         // Prepare the inputs.
         let mut inputs = vec![];
 
-        inputs.append(&mut pk_tree_root);
+        inputs.append(&mut pk_tree_root.to_field_elements().unwrap());
 
-        inputs.append(&mut left_agg_pk_commitment);
+        inputs.append(&mut left_agg_pk_comm.to_field_elements().unwrap());
 
-        inputs.append(&mut right_agg_pk_commitment);
+        inputs.append(&mut right_agg_pk_comm.to_field_elements().unwrap());
 
-        inputs.push(signer_bitmap_chunk);
+        inputs.append(
+            &mut BitVec::<MNT4Fq>::to_bytes_le(signer_bitmap_chunk)
+                .to_field_elements()
+                .unwrap(),
+        );
 
-        inputs.push(path);
+        inputs.push(MNT4Fq::from(position as u8));
 
         // Verify proof.
         assert!(Groth16::<MNT6_753>::verify(
@@ -584,7 +572,7 @@ fn prove_pk_tree_node_mnt4<R: CryptoRng + Rng>(
     tree_level: usize,
     vk_file: &str,
     pks: &[G2MNT6],
-    pk_tree_root: &[u8],
+    pk_tree_root: &[u8; 95],
     signer_bitmap: &[bool],
     debug_mode: bool,
     dir_path: &Path,
@@ -641,25 +629,16 @@ fn prove_pk_tree_node_mnt4<R: CryptoRng + Rng>(
         agg_pk += chunk;
     }
 
-    let agg_pk_bits = bytes_to_bits_le(&serialize_g2_mnt6(&agg_pk));
+    let agg_pk_bytes = serialize_g2_mnt6(&agg_pk);
 
-    let hash = pedersen_hash(agg_pk_bits, &pedersen_generator_powers(5));
+    let hash = default_pedersen_hash(&agg_pk_bytes);
 
-    let agg_pk_comm = bytes_to_bits_le(&serialize_g1_mnt6(&hash));
+    let agg_pk_comm = serialize_g1_mnt6(&hash);
 
     // Get the relevant chunk of the signer's bitmap.
     let signer_bitmap_chunk = &signer_bitmap[position * Policy::SLOTS as usize
         / 2_usize.pow(tree_level as u32)
         ..(position + 1) * Policy::SLOTS as usize / 2_usize.pow(tree_level as u32)];
-
-    // Calculate inputs.
-    let mut pk_tree_root = pack_inputs(bytes_to_bits_le(pk_tree_root));
-
-    let mut agg_pk_commitment = pack_inputs(agg_pk_comm);
-
-    let signer_bitmap_chunk: MNT6Fq = pack_inputs(signer_bitmap_chunk.to_vec()).pop().unwrap();
-
-    let path: MNT6Fq = pack_inputs(byte_to_le_bits(position as u8)).pop().unwrap();
 
     // Create the circuit.
     let circuit = NodeMNT6::new(
@@ -668,10 +647,10 @@ fn prove_pk_tree_node_mnt4<R: CryptoRng + Rng>(
         left_proof,
         right_proof,
         agg_pk_chunks,
-        pk_tree_root.clone(),
-        agg_pk_commitment.clone(),
-        signer_bitmap_chunk,
-        path,
+        *pk_tree_root,
+        agg_pk_comm,
+        signer_bitmap_chunk.to_vec(),
+        position as u8,
     );
 
     // Create the proof.
@@ -687,13 +666,17 @@ fn prove_pk_tree_node_mnt4<R: CryptoRng + Rng>(
         // Prepare the inputs.
         let mut inputs = vec![];
 
-        inputs.append(&mut pk_tree_root);
+        inputs.append(&mut pk_tree_root.to_field_elements().unwrap());
 
-        inputs.append(&mut agg_pk_commitment);
+        inputs.append(&mut agg_pk_comm.to_field_elements().unwrap());
 
-        inputs.push(signer_bitmap_chunk);
+        inputs.append(
+            &mut BitVec::<MNT6Fq>::to_bytes_le(signer_bitmap_chunk)
+                .to_field_elements()
+                .unwrap(),
+        );
 
-        inputs.push(path);
+        inputs.push(MNT6Fq::from(position as u8));
 
         // Verify proof.
         assert!(Groth16::<MNT4_753>::verify(
@@ -710,10 +693,10 @@ fn prove_pk_tree_node_mnt4<R: CryptoRng + Rng>(
 fn prove_macro_block<R: CryptoRng + Rng>(
     rng: &mut R,
     initial_pks: &[G2MNT6],
-    initial_pk_tree_root: &[u8],
+    initial_pk_tree_root: &[u8; 95],
     initial_header_hash: [u8; 32],
     final_pks: &[G2MNT6],
-    final_pk_tree_root: &[u8],
+    final_pk_tree_root: &[u8; 95],
     block: &MacroBlock,
     debug_mode: bool,
     path: &Path,
@@ -754,29 +737,26 @@ fn prove_macro_block<R: CryptoRng + Rng>(
     }
 
     // Calculate the inputs.
-    let mut initial_state_commitment = pack_inputs(bytes_to_bits_le(&state_commitment(
+    let initial_state_commitment = state_commitment(
         block.block_number - Policy::blocks_per_epoch(),
         initial_header_hash,
         initial_pks.to_vec(),
-    )));
+    );
 
-    let mut final_state_commitment = pack_inputs(bytes_to_bits_le(&state_commitment(
-        block.block_number,
-        block.header_hash,
-        final_pks.to_vec(),
-    )));
+    let final_state_commitment =
+        state_commitment(block.block_number, block.header_hash, final_pks.to_vec());
 
     // Create the circuit.
     let circuit = MacroBlockCircuit::new(
         vk_pk_tree,
         agg_pk_chunks,
         proof,
-        initial_pk_tree_root.to_vec(),
+        *initial_pk_tree_root,
         initial_header_hash,
-        final_pk_tree_root.to_vec(),
+        *final_pk_tree_root,
         block.clone(),
-        initial_state_commitment.clone(),
-        final_state_commitment.clone(),
+        initial_state_commitment,
+        final_state_commitment,
     );
 
     // Create the proof.
@@ -792,9 +772,9 @@ fn prove_macro_block<R: CryptoRng + Rng>(
         // Prepare the inputs.
         let mut inputs = vec![];
 
-        inputs.append(&mut initial_state_commitment);
+        inputs.append(&mut initial_state_commitment.to_field_elements().unwrap());
 
-        inputs.append(&mut final_state_commitment);
+        inputs.append(&mut final_state_commitment.to_field_elements().unwrap());
 
         // Verify proof.
         assert!(Groth16::<MNT4_753>::verify(
@@ -837,24 +817,21 @@ fn prove_macro_block_wrapper<R: CryptoRng + Rng>(
     let proof = Proof::deserialize_uncompressed_unchecked(&mut file)?;
 
     // Calculate the inputs.
-    let mut initial_state_commitment = pack_inputs(bytes_to_bits_le(&state_commitment(
+    let initial_state_commitment = state_commitment(
         block.block_number - Policy::blocks_per_epoch(),
         initial_header_hash,
         initial_pks.to_vec(),
-    )));
+    );
 
-    let mut final_state_commitment = pack_inputs(bytes_to_bits_le(&state_commitment(
-        block.block_number,
-        block.header_hash,
-        final_pks.to_vec(),
-    )));
+    let final_state_commitment =
+        state_commitment(block.block_number, block.header_hash, final_pks.to_vec());
 
     // Create the circuit.
     let circuit = MacroBlockWrapperCircuit::new(
         vk_macro_block,
         proof,
-        initial_state_commitment.clone(),
-        final_state_commitment.clone(),
+        initial_state_commitment,
+        final_state_commitment,
     );
 
     // Create the proof.
@@ -870,9 +847,9 @@ fn prove_macro_block_wrapper<R: CryptoRng + Rng>(
         // Prepare the inputs.
         let mut inputs = vec![];
 
-        inputs.append(&mut initial_state_commitment);
+        inputs.append(&mut initial_state_commitment.to_field_elements().unwrap());
 
-        inputs.append(&mut final_state_commitment);
+        inputs.append(&mut final_state_commitment.to_field_elements().unwrap());
 
         // Verify proof.
         assert!(Groth16::<MNT6_753>::verify(
@@ -892,7 +869,7 @@ fn prove_merger<R: CryptoRng + Rng>(
     initial_header_hash: [u8; 32],
     final_pks: &[G2MNT6],
     block: &MacroBlock,
-    genesis_data: Option<(Proof<MNT6_753>, Vec<u8>)>,
+    genesis_data: Option<(Proof<MNT6_753>, [u8; 95])>,
     debug_mode: bool,
     path: &Path,
 ) -> Result<(), NanoZKPError> {
@@ -928,30 +905,24 @@ fn prove_merger<R: CryptoRng + Rng>(
 
     // Create the proof for the previous epoch, the initial state commitment and the genesis flag
     // depending if this is the first epoch or not.
-    let (proof_merger_wrapper, initial_state_comm_bytes, genesis_flag) = match genesis_data {
+    let (proof_merger_wrapper, initial_state_commitment, genesis_flag) = match genesis_data {
         None => (
             Proof {
                 a: G1MNT6::rand(rng).into_affine(),
                 b: G2MNT6::rand(rng).into_affine(),
                 c: G1MNT6::rand(rng).into_affine(),
             },
-            intermediate_state_commitment.clone(),
+            intermediate_state_commitment,
             true,
         ),
         Some((proof, genesis_state)) => (proof, genesis_state, false),
     };
 
     // Calculate the inputs.
-    let mut initial_state_commitment = pack_inputs(bytes_to_bits_le(&initial_state_comm_bytes));
+    let final_state_commitment =
+        state_commitment(block.block_number, block.header_hash, final_pks.to_vec());
 
-    let mut final_state_commitment = pack_inputs(bytes_to_bits_le(&state_commitment(
-        block.block_number,
-        block.header_hash,
-        final_pks.to_vec(),
-    )));
-
-    let mut vk_commitment =
-        pack_inputs(bytes_to_bits_le(&vk_commitment(vk_merger_wrapper.clone())));
+    let vk_commitment = vk_commitment(vk_merger_wrapper.clone());
 
     // Create the circuit.
     let circuit = MergerCircuit::new(
@@ -959,11 +930,11 @@ fn prove_merger<R: CryptoRng + Rng>(
         proof_merger_wrapper,
         proof_macro_block_wrapper,
         vk_merger_wrapper,
-        bytes_to_bits_le(&intermediate_state_commitment),
+        intermediate_state_commitment,
         genesis_flag,
-        initial_state_commitment.clone(),
-        final_state_commitment.clone(),
-        vk_commitment.clone(),
+        initial_state_commitment,
+        final_state_commitment,
+        vk_commitment,
     );
 
     // Create the proof.
@@ -979,11 +950,11 @@ fn prove_merger<R: CryptoRng + Rng>(
         // Prepare the inputs.
         let mut inputs = vec![];
 
-        inputs.append(&mut initial_state_commitment);
+        inputs.append(&mut initial_state_commitment.to_field_elements().unwrap());
 
-        inputs.append(&mut final_state_commitment);
+        inputs.append(&mut final_state_commitment.to_field_elements().unwrap());
 
-        inputs.append(&mut vk_commitment);
+        inputs.append(&mut vk_commitment.to_field_elements().unwrap());
 
         // Verify proof.
         assert!(Groth16::<MNT4_753>::verify(
@@ -1003,7 +974,7 @@ fn prove_merger_wrapper<R: CryptoRng + Rng>(
     initial_header_hash: [u8; 32],
     final_pks: &[G2MNT6],
     block: &MacroBlock,
-    genesis_data: Option<(Proof<MNT6_753>, Vec<u8>)>,
+    genesis_data: Option<(Proof<MNT6_753>, [u8; 95])>,
     debug_mode: bool,
     path: &Path,
 ) -> Result<Proof<MNT6_753>, NanoZKPError> {
@@ -1031,7 +1002,7 @@ fn prove_merger_wrapper<R: CryptoRng + Rng>(
     let vk_merger_wrapper = VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
     // Calculate the inputs.
-    let initial_state_comm_bytes = match genesis_data {
+    let initial_state_commitment = match genesis_data {
         None => state_commitment(
             block.block_number - Policy::blocks_per_epoch(),
             initial_header_hash,
@@ -1040,23 +1011,18 @@ fn prove_merger_wrapper<R: CryptoRng + Rng>(
         Some((_, x)) => x,
     };
 
-    let mut initial_state_commitment = pack_inputs(bytes_to_bits_le(&initial_state_comm_bytes));
+    let final_state_commitment =
+        state_commitment(block.block_number, block.header_hash, final_pks.to_vec());
 
-    let mut final_state_commitment = pack_inputs(bytes_to_bits_le(&state_commitment(
-        block.block_number,
-        block.header_hash,
-        final_pks.to_vec(),
-    )));
-
-    let mut vk_commitment = pack_inputs(bytes_to_bits_le(&vk_commitment(vk_merger_wrapper)));
+    let vk_commitment = vk_commitment(vk_merger_wrapper);
 
     // Create the circuit.
     let circuit = MergerWrapperCircuit::new(
         vk_merger,
         proof,
-        initial_state_commitment.clone(),
-        final_state_commitment.clone(),
-        vk_commitment.clone(),
+        initial_state_commitment,
+        final_state_commitment,
+        vk_commitment,
     );
 
     // Create the proof.
@@ -1072,11 +1038,11 @@ fn prove_merger_wrapper<R: CryptoRng + Rng>(
         // Prepare the inputs.
         let mut inputs = vec![];
 
-        inputs.append(&mut initial_state_commitment);
+        inputs.append(&mut initial_state_commitment.to_field_elements().unwrap());
 
-        inputs.append(&mut final_state_commitment);
+        inputs.append(&mut final_state_commitment.to_field_elements().unwrap());
 
-        inputs.append(&mut vk_commitment);
+        inputs.append(&mut vk_commitment.to_field_elements().unwrap());
 
         // Verify proof.
         assert!(Groth16::<MNT6_753>::verify(

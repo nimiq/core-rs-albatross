@@ -76,6 +76,12 @@ opt-level = 2
 [profile.test.package.nimiq-bls]
 opt-level = 2
 
+[profile.dev.package.nimiq-zkp-circuits]
+opt-level = 2
+
+[profile.test.package.nimiq-zkp-circuits]
+opt-level = 2
+
 [profile.dev.package.nimiq-zkp-primitives]
 opt-level = 2
 
@@ -137,3 +143,7 @@ opt-level = 2
 
 [profile.test.package.ark-crypto-primitives]
 opt-level = 2
+
+[patch.crates-io]
+ark-ec = { git = "https://github.com/paberr/algebra", branch = "pb/0.4" }
+ark-ff = { git = "https://github.com/paberr/algebra", branch = "pb/0.4" }

@@ -19,10 +19,10 @@ log = { package = "tracing", version = "0.1", features = ["log"] }
 rand = { version = "0.8", features = ["small_rng"] }
 rand_chacha = "0.3.1"
 
-ark-crypto-primitives = "0.4"
+ark-crypto-primitives = { version = "0.4", features = ["crh", "prf", "r1cs"] }
 ark-ec = "0.4"
 ark-ff = "0.4"
-ark-groth16 = { git = "https://github.com/arkworks-rs/groth16", default-features = false }
+ark-groth16 = { version = "0.4", default-features = false }
 ark-mnt4-753 = "0.4"
 ark-mnt6-753 = "0.4"
 ark-relations = "0.4"
@@ -32,6 +32,7 @@ ark-std = "0.4"
 
 nimiq-bls = { path = "../bls" }
 nimiq-hash = { path = "../hash" }
+nimiq-pedersen-generators = { path = "../zkp-primitives/pedersen-generators" }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }
 nimiq-zkp-primitives = { path = "../zkp-primitives" }
 

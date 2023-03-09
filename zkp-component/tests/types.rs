@@ -78,7 +78,7 @@ fn it_serializes_and_deserializes_proof_input() {
         latest_header_hash: Blake2bHash::default(),
         block: MacroBlock::default(),
         previous_proof: Some(Proof::default()),
-        genesis_state: vec![1, 2, 4, 6, 7, 8, 9, 0],
+        genesis_state: [2; 95],
         prover_keys_path: PathBuf::from(ZKP_TEST_KEYS_PATH),
     };
     let serialized = Serialize::serialize_to_vec(&proof_input);
@@ -90,7 +90,7 @@ fn it_serializes_and_deserializes_proof_input() {
         latest_header_hash: Blake2bHash::default(),
         block: MacroBlock::default(),
         previous_proof: None,
-        genesis_state: vec![],
+        genesis_state: [0; 95],
         prover_keys_path: PathBuf::from(ZKP_TEST_KEYS_PATH),
     };
     let serialized = Serialize::serialize_to_vec(&proof_input);

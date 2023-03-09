@@ -1,12 +1,18 @@
-use std::cmp;
 use std::fs::File;
+use std::marker::PhantomData;
 use std::path::PathBuf;
 
+use ark_crypto_primitives::crh::pedersen::Window;
+use ark_ff::PrimeField;
 use beserial::Serialize;
-use beserial::SerializeWithLength;
 pub use beserial::SerializingError;
-use nimiq_bls::pedersen::pedersen_generator_powers;
+use generators::pedersen_generator_powers;
+use generators::POINT_CAPACITY;
 use nimiq_primitives::policy::Policy;
+
+pub mod generators;
+mod rand_gen;
+mod serialization;
 
 /// This is the depth of the PKTree circuit.
 const PK_TREE_DEPTH: usize = 5;
@@ -16,32 +22,50 @@ const PK_TREE_BREADTH: usize = 2_usize.pow(PK_TREE_DEPTH as u32);
 
 const G2_MNT6_SIZE: usize = 285;
 
-pub fn generate_pedersen_generators(dest_path: PathBuf) -> Result<(), SerializingError> {
+#[derive(Clone)]
+pub struct DefaultWindow;
+impl Window for DefaultWindow {
+    const NUM_WINDOWS: usize = num_windows() - 1;
+    const WINDOW_SIZE: usize = POINT_CAPACITY;
+}
+
+#[derive(Clone)]
+pub struct GenericWindow<const NUM_WINDOWS: usize, F: PrimeField> {
+    _f: PhantomData<F>,
+}
+impl<const NUM_WINDOWS: usize, F: PrimeField> Window for GenericWindow<NUM_WINDOWS, F> {
+    const NUM_WINDOWS: usize = NUM_WINDOWS;
+    const WINDOW_SIZE: usize = F::MODULUS_BIT_SIZE as usize - 1;
+}
+
+const fn num_windows() -> usize {
     let num_pks = Policy::SLOTS as usize;
     let num_bits = num_pks * G2_MNT6_SIZE * 8;
     let num_bits_per_leaf = num_bits / PK_TREE_BREADTH;
 
     // Calculate the required number of Pedersen generators. The formula used for the ceiling
     // division of x/y is (x+y-1)/y.
-    let capacity = 752;
+    let capacity = POINT_CAPACITY;
 
-    let mut generators_needed = 4; // At least this much is required for the non-leaf nodes.
+    let generators_needed_a = 4; // At least this much is required for the non-leaf nodes.
+    let generators_needed_b = (num_bits_per_leaf + capacity - 1) / capacity + 1;
 
-    generators_needed = cmp::max(
-        generators_needed,
-        (num_bits_per_leaf + capacity - 1) / capacity + 1,
-    );
+    // Choose maximum.
+    if generators_needed_a > generators_needed_b {
+        generators_needed_a
+    } else {
+        generators_needed_b
+    }
+}
 
-    // Compute generator powers.
-    let generator_powers = pedersen_generator_powers(generators_needed);
+pub fn generate_pedersen_generators(dest_path: PathBuf) -> Result<(), SerializingError> {
+    // Compute generator powers and blinding factor.
+    let parameters = pedersen_generator_powers::<DefaultWindow>();
 
     // Write to file.
     let mut file = File::create(dest_path)?;
 
-    Serialize::serialize(&(generator_powers.len() as u16), &mut file)?;
-    for powers in generator_powers {
-        SerializeWithLength::serialize::<u16, _>(&powers, &mut file)?;
-    }
+    Serialize::serialize(&parameters, &mut file)?;
 
     Ok(())
 }

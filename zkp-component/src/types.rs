@@ -305,14 +305,27 @@ fn ark_to_bserial_error(error: ArkSerializingError) -> BeserialSerializingError 
 }
 
 /// The input to the proof generation process.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ProofInput {
     pub block: MacroBlock,
     pub latest_pks: Vec<G2MNT6>,
     pub latest_header_hash: Blake2bHash,
     pub previous_proof: Option<Proof<MNT6_753>>,
-    pub genesis_state: Vec<u8>,
+    pub genesis_state: [u8; 95],
     pub prover_keys_path: PathBuf,
+}
+
+impl Default for ProofInput {
+    fn default() -> Self {
+        Self {
+            block: Default::default(),
+            latest_pks: Default::default(),
+            latest_header_hash: Default::default(),
+            previous_proof: Default::default(),
+            genesis_state: [0; 95],
+            prover_keys_path: Default::default(),
+        }
+    }
 }
 
 /// The serialization of the ProofInput is unsafe over the network.
@@ -344,7 +357,7 @@ impl Serialize for ProofInput {
             size += CanonicalSerialize::serialized_size(latest_proof, ark_serialize::Compress::No);
         }
 
-        size += SerializeWithLength::serialize::<u8, _>(&self.genesis_state, writer)?;
+        size += Serialize::serialize(&self.genesis_state, writer)?;
 
         let path_buf = self.prover_keys_path.to_string_lossy().to_string();
         size += SerializeWithLength::serialize::<u16, _>(&path_buf, writer)?;
@@ -367,7 +380,7 @@ impl Serialize for ProofInput {
                 CanonicalSerialize::serialized_size(previous_proof, ark_serialize::Compress::No);
         }
 
-        size += SerializeWithLength::serialized_size::<u8>(&self.genesis_state);
+        size += Serialize::serialized_size(&self.genesis_state);
 
         let path_buf = self.prover_keys_path.to_string_lossy().to_string();
         size += SerializeWithLength::serialized_size::<u16>(&path_buf);
@@ -407,7 +420,7 @@ impl Deserialize for ProofInput {
             );
         }
 
-        let genesis_state = DeserializeWithLength::deserialize::<u8, _>(reader)?;
+        let genesis_state = Deserialize::deserialize(reader)?;
 
         let path_buf: String = DeserializeWithLength::deserialize::<u16, _>(reader)?;
 

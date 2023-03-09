@@ -16,11 +16,11 @@ use ark_relations::r1cs::{ConstraintSystemRef, Namespace, SynthesisError};
 use nimiq_primitives::policy::Policy;
 use nimiq_zkp_primitives::MacroBlock;
 
-use crate::blake2s::evaluate_blake2s;
 use crate::gadgets::{
     be_bytes::ToBeBytesGadget,
     mnt6::{CheckSigGadget, HashToCurve},
 };
+use crate::{blake2s::evaluate_blake2s, gadgets::bits::BitVec};
 
 /// A gadget that contains utilities to verify the validity of a macro block. Mainly it checks that:
 ///  1. The macro block was signed by the aggregate public key.
@@ -182,8 +182,8 @@ impl AllocVar<MacroBlock, MNT6Fq> for MacroBlockGadget {
         let header_hash = OutputVar::new_input(cs.clone(), || Ok(&value.header_hash))?;
         let header_hash = header_hash.0;
 
-        let signer_bitmap =
-            Vec::<Boolean<MNT6Fq>>::new_input(cs.clone(), || Ok(&value.signer_bitmap[..]))?;
+        let signer_bitmap = BitVec::<MNT6Fq>::new_input_vec(cs.clone(), &value.signer_bitmap[..])?;
+        let signer_bitmap = signer_bitmap.0;
 
         let signature = G1Var::new_input(cs, || Ok(value.signature))?;
 
@@ -220,7 +220,8 @@ impl AllocVar<MacroBlock, MNT6Fq> for MacroBlockGadget {
         let header_hash = header_hash.0;
 
         let signer_bitmap =
-            Vec::<Boolean<MNT6Fq>>::new_witness(cs.clone(), || Ok(&value.signer_bitmap[..]))?;
+            BitVec::<MNT6Fq>::new_witness_vec(cs.clone(), &value.signer_bitmap[..])?;
+        let signer_bitmap = signer_bitmap.0;
 
         let signature = G1Var::new_witness(cs, || Ok(value.signature))?;
 
@@ -242,9 +243,8 @@ mod tests {
     use ark_r1cs_std::{prelude::AllocVar, R1CSVar};
     use ark_relations::r1cs::ConstraintSystem;
     use ark_std::{ops::MulAssign, test_rng, UniformRand};
-    use rand::RngCore;
+    use rand::{Rng, RngCore};
 
-    use nimiq_bls::utils::bytes_to_bits_le;
     use nimiq_primitives::policy::Policy;
     use nimiq_test_log::test;
 
@@ -266,9 +266,10 @@ mod tests {
         let mut header_hash = [2u8; 32];
         rng.fill_bytes(&mut header_hash);
 
-        let mut bytes = [3u8; Policy::SLOTS as usize / 8];
-        rng.fill_bytes(&mut bytes);
-        let signer_bitmap = bytes_to_bits_le(&bytes);
+        let mut signer_bitmap = Vec::with_capacity(Policy::SLOTS as usize);
+        for _ in 0..Policy::SLOTS {
+            signer_bitmap.push(rng.gen());
+        }
 
         let block = MacroBlock {
             block_number: u32::rand(rng),

@@ -1,4 +1,8 @@
-use ark_crypto_primitives::{snark::BooleanInputVar, snark::SNARKGadget};
+use ark_crypto_primitives::{
+    snark::BooleanInputVar,
+    snark::{FromFieldElementsGadget, SNARKGadget},
+};
+use ark_ff::ToConstraintField;
 use ark_groth16::{
     constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar},
     Proof, VerifyingKey,
@@ -9,8 +13,6 @@ use ark_mnt4_753::{
 };
 use ark_r1cs_std::prelude::{AllocVar, Boolean, EqGadget};
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
-
-use crate::utils::{prepare_inputs, unpack_inputs};
 
 /// This is the macro block wrapper circuit. It takes as inputs an initial state commitment and a
 /// final state commitment and it produces a proof that there exists a valid SNARK proof that transforms
@@ -28,21 +30,16 @@ pub struct MacroBlockWrapperCircuit {
     proof: Proof<MNT4_753>,
 
     // Inputs (public)
-    // Our inputs are always vectors of booleans (semantically), so that they are consistent across
-    // the different elliptic curves that we use. However, for compactness, we represent them as
-    // field elements. Both of the curves that we use have a modulus of 753 bits and a capacity
-    // of 752 bits. So, the first 752 bits (in little-endian) of each field element is data, and the
-    // last bit is always set to zero.
-    initial_state_commitment: Vec<MNT4Fq>,
-    final_state_commitment: Vec<MNT4Fq>,
+    initial_state_commitment: [u8; 95],
+    final_state_commitment: [u8; 95],
 }
 
 impl MacroBlockWrapperCircuit {
     pub fn new(
         vk_macro_block: VerifyingKey<MNT4_753>,
         proof: Proof<MNT4_753>,
-        initial_state_commitment: Vec<MNT4Fq>,
-        final_state_commitment: Vec<MNT4Fq>,
+        initial_state_commitment: [u8; 95],
+        final_state_commitment: [u8; 95],
     ) -> Self {
         Self {
             vk_macro_block,
@@ -67,25 +64,25 @@ impl ConstraintSynthesizer<MNT4Fq> for MacroBlockWrapperCircuit {
             ProofVar::<MNT4_753, PairingVar>::new_witness(cs.clone(), || Ok(&self.proof))?;
 
         // Allocate all the inputs.
-        let initial_state_commitment_var =
-            Vec::<FqVar>::new_input(cs.clone(), || Ok(&self.initial_state_commitment[..]))?;
+        // Since we're only passing it through, we directly allocate them as FqVars.
+        let initial_state_commitment_var = Vec::<FqVar>::new_input(cs.clone(), || {
+            self.initial_state_commitment
+                .to_field_elements()
+                .ok_or(SynthesisError::AssignmentMissing)
+        })?;
 
-        let final_state_commitment_var =
-            Vec::<FqVar>::new_input(cs, || Ok(&self.final_state_commitment[..]))?;
-
-        // Unpack the inputs by converting them from field elements to bits and truncating appropriately.
-        let initial_state_commitment_bits =
-            unpack_inputs(initial_state_commitment_var)?[..760].to_vec();
-
-        let final_state_commitment_bits =
-            unpack_inputs(final_state_commitment_var)?[..760].to_vec();
+        let mut final_state_commitment_var = Vec::<FqVar>::new_input(cs, || {
+            self.final_state_commitment
+                .to_field_elements()
+                .ok_or(SynthesisError::AssignmentMissing)
+        })?;
 
         // Verify the ZK proof.
-        let mut proof_inputs = prepare_inputs(initial_state_commitment_bits);
+        let mut proof_inputs = initial_state_commitment_var;
 
-        proof_inputs.append(&mut prepare_inputs(final_state_commitment_bits));
+        proof_inputs.append(&mut final_state_commitment_var);
 
-        let input_var = BooleanInputVar::new(proof_inputs);
+        let input_var = BooleanInputVar::from_field_elements(&proof_inputs)?;
 
         Groth16VerifierGadget::<MNT4_753, PairingVar>::verify(
             &vk_macro_block_var,

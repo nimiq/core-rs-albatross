@@ -1,10 +1,9 @@
 use ark_crypto_primitives::snark::SNARK;
 use ark_ec::mnt6::MNT6;
+use ark_ff::ToConstraintField;
 use ark_groth16::{Groth16, Proof, VerifyingKey};
 use ark_mnt6_753::{Config, G2Projective as G2MNT6, MNT6_753};
 
-use nimiq_bls::utils::bytes_to_bits_le;
-use nimiq_zkp_circuits::utils::pack_inputs;
 use nimiq_zkp_primitives::{state_commitment, vk_commitment, NanoZKPError};
 
 /// This function verifies a proof for the Merger Wrapper circuit, which implicitly is a proof for
@@ -35,21 +34,23 @@ pub fn verify(
     // Prepare the inputs.
     let mut inputs = vec![];
 
-    inputs.append(&mut pack_inputs(bytes_to_bits_le(&state_commitment(
-        initial_block_number,
-        initial_header_hash,
-        initial_pks,
-    ))));
+    inputs.append(
+        &mut state_commitment(initial_block_number, initial_header_hash, initial_pks)
+            .to_field_elements()
+            .unwrap(),
+    );
 
-    inputs.append(&mut pack_inputs(bytes_to_bits_le(&state_commitment(
-        final_block_number,
-        final_header_hash,
-        final_pks,
-    ))));
+    inputs.append(
+        &mut state_commitment(final_block_number, final_header_hash, final_pks)
+            .to_field_elements()
+            .unwrap(),
+    );
 
-    inputs.append(&mut pack_inputs(bytes_to_bits_le(&vk_commitment(
-        verifying_key.clone(),
-    ))));
+    inputs.append(
+        &mut vk_commitment(verifying_key.clone())
+            .to_field_elements()
+            .unwrap(),
+    );
 
     // Verify proof.
     let result = Groth16::<MNT6_753>::verify(verifying_key, &inputs, &proof)?;

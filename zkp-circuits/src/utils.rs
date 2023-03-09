@@ -1,102 +1,27 @@
-use std::cmp::min;
-
 use ark_ec::Group;
 use ark_ff::PrimeField;
 use ark_mnt6_753::{Fr as MNT6Fr, G2Projective as G2MNT6};
-use ark_r1cs_std::{
-    fields::fp::FpVar,
-    prelude::{Boolean, ToBitsGadget},
-};
-use ark_relations::r1cs::SynthesisError;
+use ark_r1cs_std::{prelude::Boolean, uint8::UInt8};
 use ark_std::{ops::MulAssign, UniformRand};
 use rand::{rngs::SmallRng, seq::SliceRandom, RngCore, SeedableRng};
 
 use nimiq_primitives::policy::Policy;
 use nimiq_zkp_primitives::{pk_tree_construct, state_commitment, MacroBlock};
 
-/// Takes a vector of booleans and converts it into a vector of field elements, which is the way we
-/// represent inputs to circuits (natively).
-/// It assumes the bits are in little endian.
-/// This function is meant to be used off-circuit.
-pub fn pack_inputs<F: PrimeField>(mut input: Vec<bool>) -> Vec<F> {
-    let capacity = F::MODULUS_BIT_SIZE as usize - 1;
-
-    let mut result = vec![];
-
-    while !input.is_empty() {
-        let length = min(input.len(), capacity);
-
-        let remaining_input = input.split_off(length);
-
-        let mut point = F::zero();
-
-        let mut base = F::one();
-
-        for bit in input {
-            if bit {
-                point += base;
-            }
-            base.double_in_place();
-        }
-
-        result.push(point);
-
-        input = remaining_input;
-    }
-
-    result
+pub fn bits_to_bytes<F: PrimeField>(bits: &[Boolean<F>]) -> Vec<UInt8<F>> {
+    bits.chunks(8).map(UInt8::from_bits_le).collect()
 }
 
-/// Takes a vector of Booleans and transforms it into a vector of a vector of Booleans, ready to be
-/// transformed into field elements, which is the way we represent inputs to circuits (as a gadget).
-/// This assumes that both the constraint field and the target field have the same size in bits
-/// (which is true for the MNT curves).
-/// Each field element has its last bit set to zero (since the capacity of a field is always one bit
-/// less than its size). We also pad the last field element with zeros so that it has the correct
-/// size.
-/// This function is meant to be used on-circuit.
-pub fn prepare_inputs<F: PrimeField>(mut input: Vec<Boolean<F>>) -> Vec<Vec<Boolean<F>>> {
-    let capacity = F::MODULUS_BIT_SIZE as usize - 1;
+/// Transforms a u8 into a vector of little endian bits.
+pub fn byte_to_le_bits(mut byte: u8) -> Vec<bool> {
+    let mut bits = vec![];
 
-    let mut result = vec![];
-
-    while !input.is_empty() {
-        let length = min(input.len(), capacity);
-
-        let padding = F::MODULUS_BIT_SIZE as usize - length;
-
-        let remaining_input = input.split_off(length);
-
-        for _ in 0..padding {
-            input.push(Boolean::constant(false));
-        }
-
-        result.push(input);
-
-        input = remaining_input;
+    for _ in 0..8 {
+        bits.push(byte % 2 != 0);
+        byte >>= 1;
     }
 
-    result
-}
-
-/// Takes a vector of public inputs to a circuit, represented as field elements, and converts it
-/// to the canonical representation of a vector of Booleans. Internally, it just converts the field
-/// elements to bits and discards the most significant bit (which never contains any data).
-/// This function is meant to be used on-circuit.
-pub fn unpack_inputs<F: PrimeField>(
-    inputs: Vec<FpVar<F>>,
-) -> Result<Vec<Boolean<F>>, SynthesisError> {
-    let mut result = vec![];
-
-    for elem in inputs {
-        let mut bits = elem.to_bits_le()?;
-
-        bits.pop();
-
-        result.append(&mut bits);
-    }
-
-    Ok(result)
+    bits
 }
 
 /// Create a macro block, validator keys and other information needed to produce a zkp SNARK
@@ -109,7 +34,7 @@ pub fn create_test_blocks(
     [u8; 32],
     Vec<G2MNT6>,
     MacroBlock,
-    Option<Vec<u8>>,
+    Option<[u8; 95]>,
 ) {
     // The random seed. It was generated using random.org.
     let seed = 12370426996209291122;

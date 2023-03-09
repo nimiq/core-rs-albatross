@@ -1,25 +1,30 @@
-use ark_crypto_primitives::snark::{BooleanInputVar, SNARKGadget};
+use ark_crypto_primitives::snark::{BooleanInputVar, FromFieldElementsGadget, SNARKGadget};
 use ark_groth16::{
     constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar},
     Proof, VerifyingKey,
 };
 use ark_mnt6_753::{
-    constraints::{FqVar, G1Var, G2Var, PairingVar},
+    constraints::{FqVar, G2Var, PairingVar},
     Fq as MNT6Fq, G2Projective, MNT6_753,
 };
-use ark_r1cs_std::prelude::{
-    AllocVar, Boolean, CurveVar, EqGadget, FieldVar, ToBitsGadget, UInt32, UInt8,
+use ark_r1cs_std::{
+    prelude::{AllocVar, Boolean, CurveVar, EqGadget, FieldVar, UInt32, UInt8},
+    ToConstraintFieldGadget,
 };
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 
-use crate::utils::{prepare_inputs, unpack_inputs};
-use nimiq_bls::pedersen::pedersen_generators;
 use nimiq_primitives::policy::Policy;
-use nimiq_zkp_primitives::MacroBlock;
+use nimiq_zkp_primitives::{MacroBlock, PEDERSEN_PARAMETERS};
 
-use crate::gadgets::{
-    mnt6::{MacroBlockGadget, PedersenHashGadget, StateCommitmentGadget},
-    serialize::SerializeGadget,
+use crate::{
+    gadgets::{
+        mnt6::{
+            DefaultPedersenHashGadget, DefaultPedersenParametersVar, MacroBlockGadget,
+            StateCommitmentGadget,
+        },
+        serialize::SerializeGadget,
+    },
+    utils::bits_to_bytes,
 };
 
 /// This is the macro block circuit. It takes as inputs an initial state commitment and final state commitment
@@ -36,19 +41,14 @@ pub struct MacroBlockCircuit {
     // Witnesses (private)
     agg_pk_chunks: Vec<G2Projective>,
     proof: Proof<MNT6_753>,
-    initial_pk_tree_root: Vec<u8>,
+    initial_pk_tree_root: [u8; 95],
     initial_header_hash: [u8; 32],
-    final_pk_tree_root: Vec<u8>,
+    final_pk_tree_root: [u8; 95],
     block: MacroBlock,
 
     // Inputs (public)
-    // Our inputs are always vectors of booleans (semantically), so that they are consistent across
-    // the different elliptic curves that we use. However, for compactness, we represent them as
-    // field elements. Both of the curves that we use have a modulus of 753 bits and a capacity
-    // of 752 bits. So, the first 752 bits (in little-endian) of each field element is data, and the
-    // last bit is always set to zero.
-    initial_state_commitment: Vec<MNT6Fq>,
-    final_state_commitment: Vec<MNT6Fq>,
+    initial_state_commitment: [u8; 95],
+    final_state_commitment: [u8; 95],
 }
 
 impl MacroBlockCircuit {
@@ -56,12 +56,12 @@ impl MacroBlockCircuit {
         vk_pk_tree: VerifyingKey<MNT6_753>,
         agg_pk_chunks: Vec<G2Projective>,
         proof: Proof<MNT6_753>,
-        initial_pk_tree_root: Vec<u8>,
+        initial_pk_tree_root: [u8; 95],
         initial_header_hash: [u8; 32],
-        final_pk_tree_root: Vec<u8>,
+        final_pk_tree_root: [u8; 95],
         block: MacroBlock,
-        initial_state_commitment: Vec<MNT6Fq>,
-        final_state_commitment: Vec<MNT6Fq>,
+        initial_state_commitment: [u8; 95],
+        final_state_commitment: [u8; 95],
     ) -> Self {
         Self {
             vk_pk_tree,
@@ -85,7 +85,7 @@ impl ConstraintSynthesizer<MNT6Fq> for MacroBlockCircuit {
             UInt32::<MNT6Fq>::new_constant(cs.clone(), Policy::blocks_per_epoch())?;
 
         let pedersen_generators_var =
-            Vec::<G1Var>::new_constant(cs.clone(), pedersen_generators(5))?;
+            DefaultPedersenParametersVar::new_constant(cs.clone(), &*PEDERSEN_PARAMETERS)?; // only need 5
 
         let vk_pk_tree_var =
             VerifyingKeyVar::<MNT6_753, PairingVar>::new_constant(cs.clone(), &self.vk_pk_tree)?;
@@ -97,13 +97,13 @@ impl ConstraintSynthesizer<MNT6Fq> for MacroBlockCircuit {
         let proof_var =
             ProofVar::<MNT6_753, PairingVar>::new_witness(cs.clone(), || Ok(&self.proof))?;
 
-        let initial_pk_tree_root_var =
+        let initial_pk_tree_root_bytes =
             Vec::<UInt8<MNT6Fq>>::new_witness(cs.clone(), || Ok(&self.initial_pk_tree_root[..]))?;
 
-        let initial_header_hash_var =
+        let initial_header_hash_bytes =
             Vec::<UInt8<MNT6Fq>>::new_witness(cs.clone(), || Ok(&self.initial_header_hash[..]))?;
 
-        let final_pk_tree_root_var =
+        let final_pk_tree_root_bytes =
             Vec::<UInt8<MNT6Fq>>::new_witness(cs.clone(), || Ok(&self.final_pk_tree_root[..]))?;
 
         let block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(&self.block))?;
@@ -113,18 +113,11 @@ impl ConstraintSynthesizer<MNT6Fq> for MacroBlockCircuit {
         })?;
 
         // Allocate all the inputs.
-        let initial_state_commitment_var =
-            Vec::<FqVar>::new_input(cs.clone(), || Ok(&self.initial_state_commitment[..]))?;
+        let initial_state_commitment_bytes =
+            UInt8::<MNT6Fq>::new_input_vec(cs.clone(), &self.initial_state_commitment[..])?;
 
-        let final_state_commitment_var =
-            Vec::<FqVar>::new_input(cs.clone(), || Ok(&self.final_state_commitment[..]))?;
-
-        // Unpack the inputs by converting them from field elements to bits and truncating appropriately.
-        let initial_state_commitment_bits =
-            unpack_inputs(initial_state_commitment_var)?[..760].to_vec();
-
-        let final_state_commitment_bits =
-            unpack_inputs(final_state_commitment_var)?[..760].to_vec();
+        let final_state_commitment_bytes =
+            UInt8::<MNT6Fq>::new_input_vec(cs.clone(), &self.final_state_commitment[..])?;
 
         // Check that the initial block and the final block are exactly one epoch length apart.
         let calculated_block_number =
@@ -138,12 +131,12 @@ impl ConstraintSynthesizer<MNT6Fq> for MacroBlockCircuit {
         let reference_commitment = StateCommitmentGadget::evaluate(
             cs.clone(),
             &initial_block_number_var,
-            &initial_header_hash_var,
-            &initial_pk_tree_root_var,
+            &initial_header_hash_bytes,
+            &initial_pk_tree_root_bytes,
             &pedersen_generators_var,
         )?;
 
-        initial_state_commitment_bits.enforce_equal(&reference_commitment.to_bits_le()?)?; // PITODO
+        initial_state_commitment_bytes.enforce_equal(&reference_commitment)?;
 
         // Verifying equality for final state commitment. It just checks that the final block number,
         // header hash and public key tree root given as a witnesses are correct by committing
@@ -152,21 +145,21 @@ impl ConstraintSynthesizer<MNT6Fq> for MacroBlockCircuit {
             cs.clone(),
             &block_var.block_number,
             &block_var.header_hash,
-            &final_pk_tree_root_var,
+            &final_pk_tree_root_bytes,
             &pedersen_generators_var,
         )?;
 
-        final_state_commitment_bits.enforce_equal(&reference_commitment.to_bits_le()?)?; // PITODO
+        final_state_commitment_bytes.enforce_equal(&reference_commitment)?;
 
         // Calculating the commitments to each of the aggregate public keys chunks. These will be
         // given as inputs to the PKTree SNARK circuit.
         let mut agg_pk_chunks_commitments = Vec::new();
 
         for chunk in &agg_pk_chunks_var {
-            let chunk_bits = chunk.serialize_compressed(cs.clone())?;
+            let chunk_bytes = chunk.serialize_compressed(cs.clone())?;
 
             let pedersen_hash =
-                PedersenHashGadget::evaluate(&chunk_bits.to_bits_le()?, &pedersen_generators_var)?;
+                DefaultPedersenHashGadget::evaluate(&chunk_bytes, &pedersen_generators_var)?;
 
             let pedersen_bits = pedersen_hash.serialize_compressed(cs.clone())?;
 
@@ -181,23 +174,18 @@ impl ConstraintSynthesizer<MNT6Fq> for MacroBlockCircuit {
         // Note that in this particular case, we don't pass the aggregated public key to the SNARK.
         // Instead we pass two chunks of the aggregated public key to it. This is just because the
         // PKTreeNode circuit in the MNT6 curve takes two chunks as inputs.
-        // PITODO: Switch to uint8s?
-        let mut proof_inputs = prepare_inputs(initial_pk_tree_root_var.to_bits_le()?);
+        let mut proof_inputs = initial_pk_tree_root_bytes.to_constraint_field()?;
 
-        proof_inputs.append(&mut prepare_inputs(
-            agg_pk_chunks_commitments[0].to_bits_le()?,
-        ));
+        proof_inputs.append(&mut agg_pk_chunks_commitments[0].to_constraint_field()?);
 
-        proof_inputs.append(&mut prepare_inputs(
-            agg_pk_chunks_commitments[1].to_bits_le()?,
-        ));
+        proof_inputs.append(&mut agg_pk_chunks_commitments[1].to_constraint_field()?);
 
-        proof_inputs.append(&mut prepare_inputs(block_var.signer_bitmap.clone()));
+        proof_inputs.append(&mut bits_to_bytes(&block_var.signer_bitmap).to_constraint_field()?);
 
         // Since we are beginning at the root of the PKTree our path is all zeros.
-        proof_inputs.append(&mut prepare_inputs(FqVar::zero().to_bits_le()?));
+        proof_inputs.push(FqVar::zero());
 
-        let input_var = BooleanInputVar::new(proof_inputs);
+        let input_var = BooleanInputVar::from_field_elements(&proof_inputs)?;
 
         Groth16VerifierGadget::<MNT6_753, PairingVar>::verify(
             &vk_pk_tree_var,
@@ -215,7 +203,7 @@ impl ConstraintSynthesizer<MNT6Fq> for MacroBlockCircuit {
 
         // Verifying that the block is valid.
         block_var
-            .verify(cs, &final_pk_tree_root_var, &agg_pk_var)?
+            .verify(cs, &final_pk_tree_root_bytes, &agg_pk_var)?
             .enforce_equal(&Boolean::constant(true))?;
 
         Ok(())

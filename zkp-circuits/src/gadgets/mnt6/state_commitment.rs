@@ -1,10 +1,13 @@
-use ark_mnt6_753::{constraints::G1Var, Fq as MNT6Fq};
-use ark_r1cs_std::{prelude::UInt32, uint8::UInt8, ToBitsGadget};
+use ark_mnt6_753::Fq as MNT6Fq;
+use ark_r1cs_std::{prelude::UInt32, uint8::UInt8};
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
+use nimiq_pedersen_generators::GenericWindow;
 
 use crate::gadgets::{
-    be_bytes::ToBeBytesGadget, mnt6::PedersenHashGadget, serialize::SerializeGadget,
+    be_bytes::ToBeBytesGadget, pedersen::PedersenHashGadget, serialize::SerializeGadget,
 };
+
+use super::DefaultPedersenParametersVar;
 
 /// This gadget is meant to calculate the "state commitment" in-circuit, which is simply a commitment,
 /// for a given block, of the block number concatenated with the root of a Merkle tree over the public
@@ -13,6 +16,8 @@ use crate::gadgets::{
 /// provides an efficient way of compressing the state and representing it across different curves.
 pub struct StateCommitmentGadget;
 
+pub type StateCommitmentWindow = GenericWindow<2, MNT6Fq>;
+
 impl StateCommitmentGadget {
     /// Calculates the state commitment.
     pub fn evaluate(
@@ -20,7 +25,7 @@ impl StateCommitmentGadget {
         block_number: &UInt32<MNT6Fq>,
         header_hash: &[UInt8<MNT6Fq>],
         pk_tree_root: &[UInt8<MNT6Fq>],
-        pedersen_generators: &[G1Var],
+        pedersen_generators: &DefaultPedersenParametersVar,
     ) -> Result<Vec<UInt8<MNT6Fq>>, SynthesisError> {
         // Initialize Boolean vector.
         let mut bytes = vec![];
@@ -36,13 +41,11 @@ impl StateCommitmentGadget {
         // Append the public key tree root.
         bytes.extend_from_slice(pk_tree_root);
 
-        let bits: Vec<_> = bytes
-            .into_iter()
-            .flat_map(|byte| byte.to_bits_le().unwrap())
-            .collect();
-
         // Calculate the Pedersen hash.
-        let hash = PedersenHashGadget::evaluate(&bits, pedersen_generators)?;
+        let hash = PedersenHashGadget::<_, _, StateCommitmentWindow>::evaluate(
+            &bytes,
+            pedersen_generators,
+        )?;
 
         // Serialize the Pedersen hash.
         let serialized_bytes = hash.serialize_compressed(cs)?;
@@ -53,19 +56,21 @@ impl StateCommitmentGadget {
 
 #[cfg(test)]
 mod tests {
-    use ark_mnt6_753::{constraints::G1Var, Fq as MNT6Fq, G2Projective};
+    use ark_mnt6_753::{Fq as MNT6Fq, G2Projective};
     use ark_r1cs_std::{
         prelude::{AllocVar, UInt32},
         R1CSVar,
     };
     use ark_relations::r1cs::ConstraintSystem;
     use ark_std::{test_rng, UniformRand};
+    use nimiq_pedersen_generators::generators::pedersen_generator_powers;
     use rand::RngCore;
 
-    use nimiq_bls::pedersen::pedersen_generators;
     use nimiq_primitives::policy::Policy;
     use nimiq_test_log::test;
     use nimiq_zkp_primitives::{pk_tree_construct, state_commitment};
+
+    use crate::gadgets::pedersen::PedersenParametersVar;
 
     use super::*;
 
@@ -106,8 +111,9 @@ mod tests {
             Vec::<UInt8<MNT6Fq>>::new_witness(cs.clone(), || Ok(&pk_tree_root[..])).unwrap();
 
         // Allocate the generators.
+        let parameters = pedersen_generator_powers::<StateCommitmentWindow>();
         let generators_var =
-            Vec::<G1Var>::new_witness(cs.clone(), || Ok(pedersen_generators(3))).unwrap();
+            PedersenParametersVar::new_witness(cs.clone(), || Ok(&parameters)).unwrap();
 
         // Evaluate state commitment using the gadget version.
         let gadget_comm = StateCommitmentGadget::evaluate(

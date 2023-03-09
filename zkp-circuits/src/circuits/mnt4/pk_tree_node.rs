@@ -1,4 +1,5 @@
-use ark_crypto_primitives::snark::{BooleanInputVar, SNARKGadget};
+use ark_crypto_primitives::snark::{BooleanInputVar, FromFieldElementsGadget, SNARKGadget};
+use ark_ff::ToConstraintField;
 use ark_groth16::{
     constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar},
     Proof, VerifyingKey,
@@ -7,13 +8,16 @@ use ark_mnt4_753::{
     constraints::{FqVar, PairingVar},
     Fq as MNT4Fq, MNT4_753,
 };
-use ark_r1cs_std::prelude::{AllocVar, Boolean, EqGadget};
+use ark_r1cs_std::{
+    prelude::{AllocVar, Boolean, EqGadget},
+    ToBitsGadget, ToConstraintFieldGadget,
+};
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 
 use nimiq_primitives::policy::Policy;
 use nimiq_zkp_primitives::PK_TREE_DEPTH;
 
-use crate::utils::{prepare_inputs, unpack_inputs};
+use crate::{gadgets::bits::BitVec, utils::bits_to_bytes};
 
 /// This is the node subcircuit of the PKTreeCircuit. See PKTreeLeafCircuit for more details.
 /// Its purpose it two-fold:
@@ -33,16 +37,11 @@ pub struct PKTreeNodeCircuit {
     right_proof: Proof<MNT4_753>,
 
     // Inputs (public)
-    // Our inputs are always vectors of booleans (semantically), so that they are consistent across
-    // the different elliptic curves that we use. However, for compactness, we represent them as
-    // field elements. Both of the curves that we use have a modulus of 753 bits and a capacity
-    // of 752 bits. So, the first 752 bits (in little-endian) of each field element is data, and the
-    // last bit is always set to zero.
-    pk_tree_root: Vec<MNT4Fq>,
-    left_agg_pk_commitment: Vec<MNT4Fq>,
-    right_agg_pk_commitment: Vec<MNT4Fq>,
-    signer_bitmap_chunk: MNT4Fq,
-    path: MNT4Fq,
+    pk_tree_root: [u8; 95],
+    left_agg_pk_commitment: [u8; 95],
+    right_agg_pk_commitment: [u8; 95],
+    signer_bitmap_chunk: Vec<bool>,
+    path: u8,
 }
 
 impl PKTreeNodeCircuit {
@@ -51,11 +50,11 @@ impl PKTreeNodeCircuit {
         vk_child: VerifyingKey<MNT4_753>,
         left_proof: Proof<MNT4_753>,
         right_proof: Proof<MNT4_753>,
-        pk_tree_root: Vec<MNT4Fq>,
-        left_agg_pk_commitment: Vec<MNT4Fq>,
-        right_agg_pk_commitment: Vec<MNT4Fq>,
-        signer_bitmap_chunk: MNT4Fq,
-        path: MNT4Fq,
+        pk_tree_root: [u8; 95],
+        left_agg_pk_commitment: [u8; 95],
+        right_agg_pk_commitment: [u8; 95],
+        signer_bitmap_chunk: Vec<bool>,
+        path: u8,
     ) -> Self {
         Self {
             tree_level,
@@ -86,33 +85,34 @@ impl ConstraintSynthesizer<MNT4Fq> for PKTreeNodeCircuit {
             ProofVar::<MNT4_753, PairingVar>::new_witness(cs.clone(), || Ok(&self.right_proof))?;
 
         // Allocate all the inputs.
-        let pk_tree_root_var = Vec::<FqVar>::new_input(cs.clone(), || Ok(&self.pk_tree_root[..]))?;
+        // Since we're only passing it through, we directly allocate them as FqVars.
+        let pk_tree_root_var = Vec::<FqVar>::new_input(cs.clone(), || {
+            self.pk_tree_root
+                .to_field_elements()
+                .ok_or(SynthesisError::AssignmentMissing)
+        })?;
 
-        let left_agg_pk_commitment_var =
-            Vec::<FqVar>::new_input(cs.clone(), || Ok(&self.left_agg_pk_commitment[..]))?;
+        let mut left_agg_pk_commitment_var = Vec::<FqVar>::new_input(cs.clone(), || {
+            self.left_agg_pk_commitment
+                .to_field_elements()
+                .ok_or(SynthesisError::AssignmentMissing)
+        })?;
 
-        let right_agg_pk_commitment_var =
-            Vec::<FqVar>::new_input(cs.clone(), || Ok(&self.right_agg_pk_commitment[..]))?;
+        let mut right_agg_pk_commitment_var = Vec::<FqVar>::new_input(cs.clone(), || {
+            self.right_agg_pk_commitment
+                .to_field_elements()
+                .ok_or(SynthesisError::AssignmentMissing)
+        })?;
 
-        let signer_bitmap_chunk_var =
-            FqVar::new_input(cs.clone(), || Ok(&self.signer_bitmap_chunk))?;
-
-        let path_var = FqVar::new_input(cs, || Ok(&self.path))?;
-
-        // Unpack the inputs by converting them from field elements to bits and truncating appropriately.
-        let pk_tree_root_bits = unpack_inputs(pk_tree_root_var)?[..760].to_vec();
-
-        let left_agg_pk_commitment_bits =
-            unpack_inputs(left_agg_pk_commitment_var)?[..760].to_vec();
-
-        let right_agg_pk_commitment_bits =
-            unpack_inputs(right_agg_pk_commitment_var)?[..760].to_vec();
-
-        let signer_bitmap_bits = unpack_inputs(vec![signer_bitmap_chunk_var])?
+        let signer_bitmap_chunk_bits =
+            BitVec::<MNT4Fq>::new_input_vec(cs.clone(), &self.signer_bitmap_chunk[..])?;
+        let signer_bitmap_bits = signer_bitmap_chunk_bits.0
             [..Policy::SLOTS as usize / 2_usize.pow(self.tree_level as u32)]
             .to_vec();
 
-        let mut path_bits = unpack_inputs(vec![path_var])?[..PK_TREE_DEPTH].to_vec();
+        let path_var = FqVar::new_input(cs, || Ok(MNT4Fq::from(self.path)))?;
+
+        let mut path_bits = path_var.to_bits_le()?[..PK_TREE_DEPTH].to_vec();
 
         // Calculate the path for the left and right child nodes. Given the current position P,
         // the left position L and the right position R are given as:
@@ -134,16 +134,23 @@ impl ConstraintSynthesizer<MNT4Fq> for PKTreeNodeCircuit {
         let (left_signer_bitmap_bits, right_signer_bitmap_bits) = signer_bitmap_bits
             .split_at(Policy::SLOTS as usize / 2_usize.pow((self.tree_level + 1) as u32));
 
+        let mut left_signer_bitmap_var =
+            bits_to_bytes(left_signer_bitmap_bits).to_constraint_field()?;
+        let mut right_signer_bitmap_var =
+            bits_to_bytes(right_signer_bitmap_bits).to_constraint_field()?;
+        let mut left_path_var = bits_to_bytes(&left_path).to_constraint_field()?;
+        let mut right_path_var = bits_to_bytes(&right_path).to_constraint_field()?;
+
         // Verify the ZK proof for the left child node.
-        let mut proof_inputs = prepare_inputs(pk_tree_root_bits.clone());
+        let mut proof_inputs = pk_tree_root_var.clone();
 
-        proof_inputs.append(&mut prepare_inputs(left_agg_pk_commitment_bits));
+        proof_inputs.append(&mut left_agg_pk_commitment_var);
 
-        proof_inputs.append(&mut prepare_inputs(left_signer_bitmap_bits.to_vec()));
+        proof_inputs.append(&mut left_signer_bitmap_var);
 
-        proof_inputs.append(&mut prepare_inputs(left_path));
+        proof_inputs.append(&mut left_path_var);
 
-        let input_var = BooleanInputVar::new(proof_inputs);
+        let input_var = BooleanInputVar::from_field_elements(&proof_inputs)?;
 
         Groth16VerifierGadget::<MNT4_753, PairingVar>::verify(
             &vk_child_var,
@@ -153,15 +160,15 @@ impl ConstraintSynthesizer<MNT4Fq> for PKTreeNodeCircuit {
         .enforce_equal(&Boolean::constant(true))?;
 
         // Verify the ZK proof for the right child node.
-        let mut proof_inputs = prepare_inputs(pk_tree_root_bits);
+        let mut proof_inputs = pk_tree_root_var;
 
-        proof_inputs.append(&mut prepare_inputs(right_agg_pk_commitment_bits));
+        proof_inputs.append(&mut right_agg_pk_commitment_var);
 
-        proof_inputs.append(&mut prepare_inputs(right_signer_bitmap_bits.to_vec()));
+        proof_inputs.append(&mut right_signer_bitmap_var);
 
-        proof_inputs.append(&mut prepare_inputs(right_path));
+        proof_inputs.append(&mut right_path_var);
 
-        let input_var = BooleanInputVar::new(proof_inputs);
+        let input_var = BooleanInputVar::from_field_elements(&proof_inputs)?;
 
         Groth16VerifierGadget::<MNT4_753, PairingVar>::verify(
             &vk_child_var,

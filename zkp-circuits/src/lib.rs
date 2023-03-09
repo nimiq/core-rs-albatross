@@ -8,4 +8,9 @@ pub(crate) mod gadgets;
 pub mod setup;
 pub mod utils;
 
+#[cfg(feature = "zkp-prover")]
+pub mod bits {
+    pub use crate::gadgets::bits::BitVec;
+}
+
 pub const DEFAULT_KEYS_PATH: &str = ".zkp";
