@@ -95,9 +95,11 @@ impl<N: Network> ConsensusProxy<N> {
 
             match response {
                 Ok(response) => {
+                    log::info!("Obtained response, length {} ", response.receipts.len());
+
                     let blockchain = self.blockchain.read();
 
-                    // Group transaction hashes by the block number that proofs those transactions to reduce the number of requests
+                    // Group transaction hashes by the block number that proves those transactions to reduce the number of requests
                     // There are three categories of block numbers:
                     //  - Finalized epochs: we use the election block number that finalized the respective epoch
                     //  - Finalized batch in the current epoch: We use the latest checkpoint block number
@@ -105,11 +107,8 @@ impl<N: Network> ConsensusProxy<N> {
 
                     // This is the structure where we group transactions by their proving block number
                     let mut hashes_by_block = HashMap::new();
-
                     let election_head_number = blockchain.election_head().block_number();
-
                     let checkpoint_head_number = blockchain.macro_head().block_number();
-
                     let current_head_number = blockchain.head().block_number();
 
                     for (hash, block_number) in response.receipts {
