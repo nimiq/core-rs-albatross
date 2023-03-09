@@ -1,7 +1,8 @@
+import os
 import subprocess
 import signal
-import os
 import re
+import time
 from enum import Enum
 from typing import Optional
 from jinja2 import Environment
@@ -189,9 +190,10 @@ class Node:
         """
         if self.process is not None:
             self.process.send_signal(signal.SIGINT)
+            time.sleep(1)
             if will_be_restarted:
-                log_str = "\n################################## RESTART ######"
-                "#####################\n"
+                log_str = "\n\n################################## RESTART ####"
+                "#######################\n\n"
                 with open(self.get_log(), 'a') as log_file:
                     log_file.write(log_str)
                 self.process = None
@@ -260,8 +262,8 @@ class Node:
         log_file = open(self.get_log(), 'a+')
         subprocess.run(["rm", "-r", self.get_db()],
                        check=True, capture_output=True)
-        log_str = "\n################################## NODE DB DELETED #####"
-        "######################\n"
+        log_str = "\n\n################################## NODE DB DELETED ###"
+        "########################\n\n"
         log_file.write(log_str)
         log_file.close()
 
@@ -276,8 +278,8 @@ class Node:
         # Also the command needs to be a string
         subprocess.run(f"rm -r {self.get_state_dir()}/*",
                        shell=True, check=True, capture_output=True)
-        log_str = "\n################################## NODE STATE DELETED ##"
-        "#########################\n"
+        log_str = "\n\n################################ NODE STATE DELETED ##"
+        "###########################\n\n"
         log_file.write(log_str)
         log_file.close()
 

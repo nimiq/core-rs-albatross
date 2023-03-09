@@ -1,10 +1,9 @@
 import logging
 import random
-import time
 import signal
-import tomli
 import sys
-import subprocess
+import time
+import tomli
 from jinja2 import Environment, FileSystemLoader
 from topology_settings import TopologySettings
 from control_settings import ControlSettings
@@ -306,7 +305,6 @@ class Topology:
                 for node in nodes_to_restart:
                     logging.info(f"Killing {node.get_name()}")
                     node.kill(True)
-                    time.sleep(1)
                     if erase_state:
                         logging.info(
                             f"Erasing state for {node.get_name()}")
