@@ -153,7 +153,7 @@ impl VrfSeed {
         rng.fill_bytes(&mut Z[..]);
 
         // Unpack the private and public keys.
-        let a = keypair.private.0.s;
+        let a = keypair.private.to_scalar();
         let A_bytes = keypair.public.as_bytes();
 
         // Concatenate use case prefix and entropy to form message. Note that we use the entropy

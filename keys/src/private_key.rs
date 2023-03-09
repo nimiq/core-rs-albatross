@@ -3,8 +3,10 @@ use std::fmt::{Debug, Error, Formatter};
 use std::io;
 use std::str::FromStr;
 
+use curve25519_dalek::scalar::Scalar;
 use hex::FromHex;
 use rand_core::{CryptoRng, RngCore};
+use sha2::{Digest as _, Sha512};
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use nimiq_hash::{Hash, SerializeContent};
@@ -23,6 +25,17 @@ impl PrivateKey {
             .as_ref()
             .try_into()
             .expect("Obtained slice with an unexpected size")
+    }
+
+    pub fn to_scalar(&self) -> Scalar {
+        // Convert to scalar as in RFC 8032, section 6, `def secret_expand(secret)`:
+        // https://www.rfc-editor.org/rfc/rfc8032.html#section-6
+        let mut scalar_bytes = [0u8; 32];
+        scalar_bytes.copy_from_slice(&Sha512::digest(self.as_bytes()).as_slice()[..32]);
+        scalar_bytes[0] &= 248;
+        scalar_bytes[31] &= 127;
+        scalar_bytes[31] |= 64;
+        Scalar::from_bits(scalar_bytes)
     }
 
     #[inline]
