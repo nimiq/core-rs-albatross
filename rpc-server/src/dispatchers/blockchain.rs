@@ -290,7 +290,7 @@ impl BlockchainInterface for BlockchainDispatcher {
 
             for ext_tx in extended_tx_vec {
                 if ext_tx.is_inherent() {
-                    inherents.push(Inherent::from_transaction(
+                    inherents.push(Inherent::from(
                         ext_tx.unwrap_inherent().clone(),
                         block_number,
                         timestamp,
@@ -391,7 +391,7 @@ impl BlockchainInterface for BlockchainDispatcher {
             Ok(inherent_tx_vec
                 .into_iter()
                 .map(|ext_tx| {
-                    Inherent::from_transaction(
+                    Inherent::from(
                         ext_tx.unwrap_inherent().clone(),
                         ext_tx.block_number,
                         ext_tx.block_time,

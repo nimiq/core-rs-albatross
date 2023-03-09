@@ -25,6 +25,7 @@ use nimiq_primitives::policy::Policy;
 use nimiq_primitives::slots::Validators;
 use nimiq_transaction::account::htlc_contract::AnyHash;
 use nimiq_transaction::account::htlc_contract::HashAlgorithm as HTLCContractHashAlgorithm;
+use nimiq_transaction::inherent::Inherent as BaseInherent;
 use nimiq_vrf::VrfSeed;
 
 use crate::error::Error;
@@ -519,34 +520,57 @@ impl Transaction {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Inherent {
-    #[serde(rename = "type")]
-    pub ty: u8,
-    pub block_number: u32,
-    pub timestamp: u64,
-    pub target: Address,
-    pub value: Coin,
-    #[serde(with = "crate::serde_helpers::hex")]
-    pub data: Vec<u8>,
-    pub hash: Blake2bHash,
+pub enum Inherent {
+    Reward {
+        block_number: u32,
+        block_time: u64,
+        target: Address,
+        value: Coin,
+        hash: Blake2bHash,
+    },
+    Slash {
+        block_number: u32,
+        block_time: u64,
+        slot: u16,
+        validator_address: Address,
+        event_block: u32,
+    },
+    FinalizeBatch {
+        block_number: u32,
+        block_time: u64,
+    },
+    FinalizeEpoch {
+        block_number: u32,
+        block_time: u64,
+    },
 }
 
 impl Inherent {
-    pub fn from_transaction(
-        inherent: nimiq_transaction::inherent::Inherent,
-        block_number: u32,
-        timestamp: u64,
-    ) -> Self {
+    pub fn from(inherent: BaseInherent, block_number: u32, block_time: u64) -> Self {
         let hash = inherent.hash();
-
-        Inherent {
-            ty: 0, // FIXME inherent.ty as u8,
-            block_number,
-            timestamp,
-            target: Default::default(), // FIXME inherent.target,
-            value: Default::default(),  // FIXME inherent.value,
-            data: Default::default(),   // FIXME inherent.data,
-            hash,
+        match inherent {
+            BaseInherent::Reward { target, value } => Inherent::Reward {
+                block_number,
+                block_time,
+                target,
+                value,
+                hash,
+            },
+            BaseInherent::Slash { slot } => Inherent::Slash {
+                block_number,
+                block_time,
+                slot: slot.slot,
+                validator_address: slot.validator_address,
+                event_block: slot.event_block,
+            },
+            BaseInherent::FinalizeBatch => Inherent::FinalizeBatch {
+                block_number,
+                block_time,
+            },
+            BaseInherent::FinalizeEpoch => Inherent::FinalizeEpoch {
+                block_number,
+                block_time,
+            },
         }
     }
 }
