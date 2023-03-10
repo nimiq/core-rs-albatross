@@ -22,7 +22,7 @@ use crate::data_store::DataStoreRead;
 pub use receipts::*;
 pub use staker::Staker;
 pub use store::StakingContractStoreWrite;
-pub use validator::Validator;
+pub use validator::{Tombstone, Validator};
 
 mod receipts;
 mod staker;
@@ -97,6 +97,15 @@ impl StakingContract {
     /// Get a staker given its address, if it exists.
     pub fn get_staker(&self, data_store: &DataStoreRead, address: &Address) -> Option<Staker> {
         StakingContractStoreRead::new(data_store).get_staker(address)
+    }
+
+    /// Get a tombstone given its address, if it exists.
+    pub fn get_tombstone(
+        &self,
+        data_store: &DataStoreRead,
+        address: &Address,
+    ) -> Option<Tombstone> {
+        StakingContractStoreRead::new(data_store).get_tombstone(address)
     }
 
     /// Get a list containing the addresses of all stakers that are delegating for a given validator.

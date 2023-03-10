@@ -2,8 +2,8 @@ use std::convert::TryInto;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_account::{
-    Account, AccountPruningInteraction, AccountTransactionInteraction, Accounts, AccountsTrie,
-    BasicAccount, BlockState, DataStore, Log, Receipts,
+    Account, AccountTransactionInteraction, Accounts, AccountsTrie, BasicAccount, BlockState,
+    DataStore, Receipts,
 };
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_database::WriteTransaction;
@@ -179,7 +179,9 @@ fn create_and_prune_works() {
     let recipient_address = Address::from([0; 20]);
 
     // Can create a new account and prune an empty account.
-    let tx = make_signed_transaction(999, recipient_address);
+    let tx = make_signed_transaction(999, recipient_address.clone());
+
+    let block_state = BlockState::new(2, 2);
 
     let receipts = accounts
         .commit(&mut db_txn, &[tx.clone()], &[], &block_state)
@@ -202,6 +204,7 @@ fn create_and_prune_works() {
     accounts
         .revert(&mut db_txn, &[tx], &[], &block_state, receipts)
         .unwrap();
+
     // assert_eq!(
     //     logs,
     //     vec![

@@ -1158,9 +1158,10 @@ mod tests {
         );
 
         assert_eq!(
-            history_store.get_ext_tx_by_hash(&ext_txs[2].tx_hash(), Some(&txn))[0]
-                .unwrap_inherent()
-                .value,
+            reward_inherent_value(
+                history_store.get_ext_tx_by_hash(&ext_txs[2].tx_hash(), Some(&txn))[0]
+                    .unwrap_inherent()
+            ),
             Coin::from_u64_unchecked(2),
         );
 
@@ -1208,7 +1209,7 @@ mod tests {
         assert!(query_0[2].is_inherent());
         assert_eq!(query_0[2].block_number, 0);
         assert_eq!(
-            query_0[2].unwrap_inherent().value,
+            reward_inherent_value(query_0[2].unwrap_inherent()),
             Coin::from_u64_unchecked(2)
         );
 
@@ -1224,7 +1225,7 @@ mod tests {
         assert!(query_1[1].is_inherent());
         assert_eq!(query_1[1].block_number, 1);
         assert_eq!(
-            query_1[1].unwrap_inherent().value,
+            reward_inherent_value(query_1[1].unwrap_inherent()),
             Coin::from_u64_unchecked(4)
         );
 
@@ -1247,7 +1248,7 @@ mod tests {
         assert!(query_2[2].is_inherent());
         assert_eq!(query_2[2].block_number, 2);
         assert_eq!(
-            query_2[2].unwrap_inherent().value,
+            reward_inherent_value(query_2[2].unwrap_inherent()),
             Coin::from_u64_unchecked(7)
         );
 
@@ -1278,7 +1279,7 @@ mod tests {
         assert!(query_1[1].is_inherent());
         assert_eq!(query_1[1].block_number, 1);
         assert_eq!(
-            query_1[1].unwrap_inherent().value,
+            reward_inherent_value(query_1[1].unwrap_inherent()),
             Coin::from_u64_unchecked(4)
         );
 
@@ -1321,7 +1322,7 @@ mod tests {
         assert!(query[2].is_inherent());
         assert_eq!(query[2].block_number, 0);
         assert_eq!(
-            query[2].unwrap_inherent().value,
+            reward_inherent_value(query[2].unwrap_inherent()),
             Coin::from_u64_unchecked(2)
         );
 
@@ -1337,7 +1338,7 @@ mod tests {
         assert!(query[1].is_inherent());
         assert_eq!(query[1].block_number, 1);
         assert_eq!(
-            query[1].unwrap_inherent().value,
+            reward_inherent_value(query[1].unwrap_inherent()),
             Coin::from_u64_unchecked(4)
         );
 
@@ -1358,7 +1359,7 @@ mod tests {
         assert!(query[4].is_inherent());
         assert_eq!(query[4].block_number, 2);
         assert_eq!(
-            query[4].unwrap_inherent().value,
+            reward_inherent_value(query[4].unwrap_inherent()),
             Coin::from_u64_unchecked(7)
         );
 
@@ -1385,7 +1386,7 @@ mod tests {
         assert!(query[2].is_inherent());
         assert_eq!(query[2].block_number, 0);
         assert_eq!(
-            query[2].unwrap_inherent().value,
+            reward_inherent_value(query[2].unwrap_inherent()),
             Coin::from_u64_unchecked(2)
         );
 
@@ -1401,7 +1402,7 @@ mod tests {
         assert!(query[1].is_inherent());
         assert_eq!(query[1].block_number, 1);
         assert_eq!(
-            query[1].unwrap_inherent().value,
+            reward_inherent_value(query[1].unwrap_inherent()),
             Coin::from_u64_unchecked(4)
         );
     }
@@ -1626,14 +1627,12 @@ mod tests {
             network_id: NetworkId::UnitAlbatross,
             block_number: block,
             block_time: 0,
-            data: ExtTxData::Inherent(Inherent {
-                ty: InherentType::Reward,
+            data: ExtTxData::Inherent(Inherent::Reward {
                 target: Address::from_user_friendly_address(
                     "NQ04 B79B R4FF 4NGU A9H0 2PT9 9ART 5A88 J73T",
                 )
                 .unwrap(),
                 value: Coin::from_u64_unchecked(value),
-                data: vec![],
             }),
         }
     }
@@ -1666,5 +1665,12 @@ mod tests {
         let ext_7 = create_inherent(2, 7);
 
         vec![ext_0, ext_1, ext_2, ext_3, ext_4, ext_5, ext_6, ext_7]
+    }
+
+    fn reward_inherent_value(inherent: &Inherent) -> Coin {
+        match inherent {
+            Inherent::Reward { value, .. } => value.clone(),
+            _ => unreachable!(),
+        }
     }
 }

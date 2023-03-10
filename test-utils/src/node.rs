@@ -1,22 +1,22 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use nimiq_bls::cache::PublicKeyCache;
-use nimiq_database::Environment;
-use nimiq_zkp_component::proof_store::ProofStore;
 use parking_lot::{Mutex, RwLock};
 
-use nimiq_account::Account;
 use nimiq_block::Block;
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_proxy::BlockchainProxy;
+use nimiq_bls::cache::PublicKeyCache;
 use nimiq_consensus::{sync::syncer_proxy::SyncerProxy, Consensus};
 use nimiq_database::volatile::VolatileEnvironment;
+use nimiq_database::Environment;
 use nimiq_genesis_builder::GenesisInfo;
 use nimiq_network_interface::network::Network as NetworkInterface;
 use nimiq_network_mock::MockHub;
-use nimiq_primitives::{key_nibbles::KeyNibbles, networks::NetworkId};
+use nimiq_primitives::networks::NetworkId;
+use nimiq_primitives::trie::TrieItem;
 use nimiq_utils::time::OffsetTime;
+use nimiq_zkp_component::proof_store::ProofStore;
 use nimiq_zkp_component::{proof_store::DBProofStore, ZKPComponent};
 
 use crate::test_network::TestNetwork;
@@ -51,7 +51,7 @@ impl<N: NetworkInterface + TestNetwork> Node<N> {
     pub async fn new_history(
         peer_id: u64,
         block: Block,
-        accounts: Vec<(KeyNibbles, Account)>,
+        accounts: Vec<TrieItem>,
         hub: &mut Option<MockHub>,
         is_prover_active: bool,
     ) -> Self {

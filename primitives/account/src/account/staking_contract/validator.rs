@@ -78,7 +78,7 @@ impl Validator {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Tombstone {
     pub remaining_stake: Coin,
     pub num_remaining_stakers: u64,

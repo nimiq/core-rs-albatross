@@ -5,7 +5,6 @@ use parking_lot::RwLock;
 use tempfile::tempdir;
 
 use beserial::Deserialize;
-use nimiq_account::StakingContract;
 use nimiq_block::{Block, ForkProof, MicroJustification};
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
@@ -16,7 +15,7 @@ use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::{
     Address, KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey, SecureGenerate,
 };
-use nimiq_primitives::{coin::Coin, key_nibbles::KeyNibbles, policy::Policy};
+use nimiq_primitives::{coin::Coin, policy::Policy};
 use nimiq_test_log::test;
 use nimiq_test_utils::blockchain::{
     fill_micro_blocks, fill_micro_blocks_with_txns, sign_macro_block, signing_key, voting_key,
@@ -586,9 +585,7 @@ fn it_can_revert_failed_transactions() {
     // We need to check that the fee was deducted from the sender account for both transactions
     assert_eq!(
         accounts
-            .get(&KeyNibbles::from(&Address::from(&key_pair.public)), None)
-            .unwrap()
-            .unwrap()
+            .get_complete(&Address::from(&key_pair.public), None)
             .balance(),
         Coin::from_u64_unchecked(999899999700)
     );
@@ -666,9 +663,7 @@ fn it_can_revert_failed_vesting_contract_transaction() {
 
     assert_eq!(
         accounts
-            .get(&KeyNibbles::from(&tx.contract_creation_address()), None)
-            .unwrap()
-            .unwrap()
+            .get_complete(&tx.contract_creation_address(), None)
             .balance(),
         Coin::from_u64_unchecked(1000)
     );
@@ -676,9 +671,7 @@ fn it_can_revert_failed_vesting_contract_transaction() {
     // We verify the value + fee was properly deducted from the accounts balance
     assert_eq!(
         accounts
-            .get(&KeyNibbles::from(&Address::from(&key_pair.public)), None)
-            .unwrap()
-            .unwrap()
+            .get_complete(&Address::from(&key_pair.public), None)
             .balance(),
         Coin::from_u64_unchecked(999999998900)
     );
@@ -740,9 +733,7 @@ fn it_can_revert_failed_vesting_contract_transaction() {
     // We need to check that the fee was deducted from the contract balance for the failed transaction
     assert_eq!(
         accounts
-            .get(&KeyNibbles::from(&tx.contract_creation_address()), None)
-            .unwrap()
-            .unwrap()
+            .get_complete(&tx.contract_creation_address(), None)
             .balance(),
         Coin::from_u64_unchecked(900)
     );
@@ -750,9 +741,7 @@ fn it_can_revert_failed_vesting_contract_transaction() {
     // The sender balance should not have changed
     assert_eq!(
         accounts
-            .get(&KeyNibbles::from(&Address::from(&key_pair.public)), None)
-            .unwrap()
-            .unwrap()
+            .get_complete(&Address::from(&key_pair.public), None)
             .balance(),
         Coin::from_u64_unchecked(999999998900)
     );
@@ -765,9 +754,7 @@ fn it_can_revert_failed_vesting_contract_transaction() {
     // We need to check that the contract balance has the initial funds after reverting the block
     assert_eq!(
         accounts
-            .get(&KeyNibbles::from(&tx.contract_creation_address()), None)
-            .unwrap()
-            .unwrap()
+            .get_complete(&tx.contract_creation_address(), None)
             .balance(),
         Coin::from_u64_unchecked(1000)
     );
@@ -995,7 +982,7 @@ fn it_can_consume_all_validator_deposit() {
     ));
     let producer = BlockProducer::new(signing_key(), voting_key());
 
-    // One block with stacking transactions
+    // One block with staking transactions
     let mut transactions = vec![];
     let key_pair = ed25519_key_pair(VALIDATOR_SECRET_KEY);
     let address =
@@ -1031,7 +1018,7 @@ fn it_can_consume_all_validator_deposit() {
 
     let bc = blockchain.upgradable_read();
 
-    // Block with stacking transactions
+    // Block with staking transactions
     let block = producer.next_micro_block(
         &bc,
         bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
@@ -1055,15 +1042,13 @@ fn it_can_consume_all_validator_deposit() {
     // Now we need to verify that the validator deposit was reduced because of the failing txn
     {
         let blockchain = blockchain.read();
-        let accounts_tree = &blockchain.state().accounts.tree;
+        let staking_contract = blockchain.get_staking_contract();
+        let data_store = blockchain.get_staking_contract_store();
         let db_txn = blockchain.read_transaction();
-        let validator = StakingContract::get_validator(
-            accounts_tree,
-            &db_txn,
-            &Address::from(&key_pair.public),
-        )
-        .unwrap()
-        .unwrap();
+
+        let validator = staking_contract
+            .get_validator(&data_store.read(&db_txn), &Address::from(&key_pair.public))
+            .expect("Validator should be present");
 
         assert_eq!(
             validator.deposit,
@@ -1071,7 +1056,7 @@ fn it_can_consume_all_validator_deposit() {
         );
     }
 
-    //Send another transaction that will consume all the remaining validator deposit, and thus, the validator is deleted
+    // Send another transaction that will consume all the remaining validator deposit, and thus, the validator is deleted
     let mut transactions = vec![];
 
     let invalid_tx = TransactionBuilder::new_delete_validator(
@@ -1088,7 +1073,7 @@ fn it_can_consume_all_validator_deposit() {
 
     let bc = blockchain.upgradable_read();
 
-    // Block with stacking transactions
+    // Block with staking transactions
     let block = producer.next_micro_block(
         &bc,
         bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
@@ -1112,36 +1097,31 @@ fn it_can_consume_all_validator_deposit() {
     // Now we need to verify that the validator no longer exists
     {
         let blockchain = blockchain.read();
-        let accounts_tree = &blockchain.state().accounts.tree;
+        let staking_contract = blockchain.get_staking_contract();
+        let data_store = blockchain.get_staking_contract_store();
         let db_txn = blockchain.read_transaction();
 
-        // The validator should be deleted.
-        let validator = StakingContract::get_validator(
-            accounts_tree,
-            &db_txn,
-            &Address::from(&key_pair.public),
-        )
-        .unwrap();
+        let validator = staking_contract
+            .get_validator(&data_store.read(&db_txn), &Address::from(&key_pair.public));
 
         assert_eq!(validator, None);
     }
+
+    // Revert the failed delete transaction
     let blockchain = blockchain.upgradable_read();
     let mut txn = blockchain.write_transaction();
-    // Revert the failed delete transaction
     let result = blockchain.revert_blocks(1, &mut txn);
 
     assert!(result.is_ok());
     txn.commit();
 
-    //Now the validator should be back:
-
-    let accounts_tree = &blockchain.state().accounts.tree;
+    // Now the validator should be back:
+    let staking_contract = blockchain.get_staking_contract();
+    let data_store = blockchain.get_staking_contract_store();
     let db_txn = blockchain.read_transaction();
 
-    // The validator should be deleted.
     let validator =
-        StakingContract::get_validator(accounts_tree, &db_txn, &Address::from(&key_pair.public))
-            .unwrap();
+        staking_contract.get_validator(&data_store.read(&db_txn), &Address::from(&key_pair.public));
 
     assert!(validator.is_some());
 }
@@ -1161,7 +1141,7 @@ fn it_can_revert_failed_delete_validator() {
     ));
     let producer = BlockProducer::new(signing_key(), voting_key());
 
-    // One block with stacking transactions
+    // One block with staking transactions
     let mut transactions = vec![];
     let key_pair = ed25519_key_pair(VALIDATOR_SECRET_KEY);
     let address =
@@ -1183,7 +1163,7 @@ fn it_can_revert_failed_delete_validator() {
 
     let bc = blockchain.upgradable_read();
 
-    // Block with stacking transactions
+    // Block with staking transactions
     let block = producer.next_micro_block(
         &bc,
         bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
@@ -1207,41 +1187,40 @@ fn it_can_revert_failed_delete_validator() {
     // Now we need to verify that the validator deposit was reduced because of the failing txn
     {
         let blockchain = blockchain.read();
-        let accounts_tree = &blockchain.state().accounts.tree;
+        let staking_contract = blockchain.get_staking_contract();
+        let data_store = blockchain.get_staking_contract_store();
         let db_txn = blockchain.read_transaction();
-        let validator = StakingContract::get_validator(
-            accounts_tree,
-            &db_txn,
-            &Address::from(&key_pair.public),
-        )
-        .unwrap()
-        .unwrap();
+
+        let validator = staking_contract
+            .get_validator(&data_store.read(&db_txn), &Address::from(&key_pair.public))
+            .expect("Validator should be present");
 
         assert_eq!(
             validator.deposit,
             Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT - 100)
         );
-        //Now the validator should be inactive because of the failing txn..
+
+        // Now the validator should be inactive because of the failing txn.
         assert_eq!(validator.inactive_since, Some(1));
     }
 
+    // Revert the delete transaction
     let blockchain = blockchain.upgradable_read();
-
     let mut txn = blockchain.write_transaction();
-    // Revert the reactivate transaction
     let result = blockchain.revert_blocks(1, &mut txn);
 
     assert!(result.is_ok());
 
     txn.commit();
 
-    // Now we need to verify that the validator deposit was reduced because of the failing txn
-    let accounts_tree = &blockchain.state().accounts.tree;
+    // Now we need to verify that the validator deposit was restored to the previous value
+    let staking_contract = blockchain.get_staking_contract();
+    let data_store = blockchain.get_staking_contract_store();
     let db_txn = blockchain.read_transaction();
-    let validator =
-        StakingContract::get_validator(accounts_tree, &db_txn, &Address::from(&key_pair.public))
-            .unwrap()
-            .unwrap();
+
+    let validator = staking_contract
+        .get_validator(&data_store.read(&db_txn), &Address::from(&key_pair.public))
+        .expect("Validator should be present");
 
     assert_eq!(
         validator.deposit,

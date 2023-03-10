@@ -6,13 +6,12 @@ use rand::{rngs::StdRng, SeedableRng};
 
 use beserial::{Deserialize, Serialize};
 use nimiq_account::{
-    Account, Accounts, BasicAccount, BlockState, Inherent, InherentOperationReceipt,
-    OperationReceipt, Receipts, TransactionOperationReceipt, TransactionReceipt, VestingContract,
+    Account, Accounts, BasicAccount, BlockState, InherentOperationReceipt,
+    TransactionOperationReceipt, TransactionReceipt, VestingContract,
 };
 use nimiq_bls::KeyPair as BLSKeyPair;
 use nimiq_database::{mdbx::MdbxEnvironment, volatile::VolatileEnvironment, WriteTransaction};
 use nimiq_genesis_builder::GenesisBuilder;
-use nimiq_hash::Hash;
 use nimiq_keys::{Address, KeyPair, PrivateKey, PublicKey, SecureGenerate};
 use nimiq_primitives::{
     account::AccountType, coin::Coin, key_nibbles::KeyNibbles, networks::NetworkId, policy::Policy,
@@ -21,8 +20,8 @@ use nimiq_test_log::test;
 use nimiq_test_utils::test_transaction::{
     generate_accounts, generate_transactions, TestTransaction,
 };
-use nimiq_transaction::inherent::{Inherent, InherentType};
-use nimiq_transaction::{ExecutedTransaction, SignatureProof, Transaction};
+use nimiq_transaction::inherent::Inherent;
+use nimiq_transaction::{SignatureProof, Transaction};
 
 const VOLATILE_ENV: bool = true;
 
@@ -41,7 +40,7 @@ fn it_can_commit_and_revert_a_block_body() {
         value: Coin::from_u64_unchecked(10000),
     };
 
-    let mut inherent_receipts = vec![InherentOperationReceipt::Ok(None)];
+    let inherent_receipts = vec![InherentOperationReceipt::Ok(None)];
 
     // let mut tx_logs = Vec::new();
     //
@@ -434,11 +433,9 @@ fn accounts_performance() {
     let recipient_balances = vec![0; num_txns];
     let mut genesis_builder = GenesisBuilder::default();
     let address_validator = Address::from([1u8; Address::SIZE]);
-    let reward = Inherent {
-        ty: InherentType::Reward,
+    let reward = Inherent::Reward {
         target: address_validator,
         value: Coin::from_u64_unchecked(10000),
-        data: vec![],
     };
     let rewards = vec![reward; num_txns];
 

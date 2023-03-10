@@ -21,14 +21,12 @@ impl<'tree> DataStore<'tree> {
     pub fn get<T: Deserialize>(&self, txn: &Transaction, key: &KeyNibbles) -> Option<T> {
         self.tree
             .get(txn, &(&self.prefix + key))
-            // FIXME Make this work with incomplete tree.
             .expect("Tree must be complete")
     }
 
     pub fn put<T: Serialize>(&self, txn: &mut WriteTransaction, key: &KeyNibbles, value: T) {
         self.tree
             .put(txn, &(&self.prefix + key), value)
-            // FIXME Make this work with incomplete tree.
             .expect("Tree must be complete")
     }
 
@@ -87,13 +85,13 @@ mod tests {
     use crate::AccountsTrie;
     use nimiq_database::volatile::VolatileEnvironment;
     use nimiq_database::{ReadTransaction, WriteTransaction};
-    use nimiq_primitives::policy;
+    use nimiq_primitives::policy::Policy;
 
     #[test]
     fn data_store_works() {
         let env = VolatileEnvironment::new(10).unwrap();
         let tree = AccountsTrie::new(env.clone(), "accounts_trie");
-        let store = DataStore::new(&tree, &policy::STAKING_CONTRACT_ADDRESS);
+        let store = DataStore::new(&tree, &Policy::STAKING_CONTRACT_ADDRESS);
 
         let mut txn = WriteTransaction::new(&env);
         let mut write = store.write(&mut txn);

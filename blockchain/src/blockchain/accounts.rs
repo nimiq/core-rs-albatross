@@ -5,7 +5,6 @@ use nimiq_account::{Accounts, BlockState};
 use nimiq_block::{Block, BlockError, SkipBlockInfo};
 use nimiq_blockchain_interface::PushError;
 use nimiq_database::WriteTransaction;
-use nimiq_primitives::policy::Policy;
 use nimiq_transaction::extended_transaction::ExtendedTransaction;
 
 /// Implements methods to handle the accounts.

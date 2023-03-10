@@ -21,7 +21,7 @@ use nimiq_keys::{
 };
 use nimiq_mempool::{config::MempoolConfig, mempool::Mempool, mempool_transactions::TxPriority};
 use nimiq_network_mock::{MockHub, MockId, MockNetwork, MockPeerId};
-use nimiq_primitives::{coin::Coin, key_nibbles::KeyNibbles, networks::NetworkId, policy::Policy};
+use nimiq_primitives::{coin::Coin, networks::NetworkId, policy::Policy};
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     blockchain::{produce_macro_blocks_with_txns, signing_key, voting_key},
@@ -1973,9 +1973,7 @@ async fn it_can_reject_invalid_vesting_contract_transaction() {
 
     assert_eq!(
         accounts
-            .get(&KeyNibbles::from(&tx.contract_creation_address()), None)
-            .unwrap()
-            .unwrap()
+            .get_complete(&tx.contract_creation_address(), None)
             .balance(),
         Coin::from_u64_unchecked(1000)
     );

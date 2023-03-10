@@ -41,7 +41,7 @@ macro_rules! convert_receipt {
     };
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TransactionReceipt {
     pub sender_receipt: Option<AccountReceipt>,
     pub recipient_receipt: Option<AccountReceipt>,
@@ -50,7 +50,7 @@ pub struct TransactionReceipt {
 
 pub type InherentReceipt = Option<AccountReceipt>;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum OperationReceipt<T: Clone + Debug + Serialize + Deserialize> {
     Ok(T),
@@ -60,7 +60,7 @@ pub enum OperationReceipt<T: Clone + Debug + Serialize + Deserialize> {
 pub type TransactionOperationReceipt = OperationReceipt<TransactionReceipt>;
 pub type InherentOperationReceipt = OperationReceipt<InherentReceipt>;
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Receipts {
     #[beserial(len_type(u16))]
     pub transactions: Vec<TransactionOperationReceipt>,

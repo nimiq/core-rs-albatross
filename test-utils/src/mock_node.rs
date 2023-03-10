@@ -7,7 +7,6 @@ use futures::stream::BoxStream;
 use futures::{ready, FutureExt, Stream, StreamExt};
 use parking_lot::RwLock;
 
-use nimiq_account::Account;
 use nimiq_block::Block;
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_proxy::BlockchainProxy;
@@ -21,7 +20,8 @@ use nimiq_network_interface::{
     request::{Handle, Request},
 };
 use nimiq_network_mock::MockHub;
-use nimiq_primitives::{key_nibbles::KeyNibbles, networks::NetworkId};
+use nimiq_primitives::networks::NetworkId;
+use nimiq_primitives::trie::TrieItem;
 use nimiq_utils::time::OffsetTime;
 
 use crate::test_network::TestNetwork;
@@ -129,7 +129,7 @@ impl<N: NetworkInterface + TestNetwork> MockNode<N> {
     pub async fn new(
         peer_id: u64,
         block: Block,
-        accounts: Vec<(KeyNibbles, Account)>,
+        accounts: Vec<TrieItem>,
         hub: &mut Option<MockHub>,
     ) -> Self {
         let network = N::build_network(peer_id, block.hash(), hub).await;
