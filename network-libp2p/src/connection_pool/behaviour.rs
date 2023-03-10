@@ -560,6 +560,14 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
                 connections = other_established,
                 "Already have connections established to this peer",
             );
+            // Notify the handler that the connection must be closed
+            self.actions
+                .push_back(NetworkBehaviourAction::NotifyHandler {
+                    peer_id: *peer_id,
+                    handler: NotifyHandler::One(*connection_id),
+                    event: ConnectionPoolHandlerError::AlreadyConnected,
+                });
+            self.wake();
             return;
         }
 

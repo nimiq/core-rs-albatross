@@ -24,6 +24,10 @@ pub enum ConnectionPoolHandlerError {
     #[error("IP is banned")]
     BannedIp,
 
+    /// There is already a connection for this Peer
+    #[error("Peer is already connected")]
+    AlreadyConnected,
+
     /// Maximum connections per IPv4 subnet has been reached
     #[error("Maximum connections per IPV4 subnet has been reached")]
     MaxIpv4SubnetConnectionsReached,
