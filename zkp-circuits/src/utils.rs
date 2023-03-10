@@ -9,6 +9,12 @@ use nimiq_primitives::policy::Policy;
 use nimiq_zkp_primitives::{pk_tree_construct, state_commitment, MacroBlock};
 
 pub fn bits_to_bytes<F: PrimeField>(bits: &[Boolean<F>]) -> Vec<UInt8<F>> {
+    if bits.len() % 8 != 0 {
+        let mut bits = bits.to_vec();
+        bits.resize((bits.len() / 8 + 1) * 8, Boolean::FALSE);
+        return bits_to_bytes(&bits);
+    }
+
     bits.chunks(8).map(UInt8::from_bits_le).collect()
 }
 
