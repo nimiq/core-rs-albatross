@@ -3,10 +3,10 @@ extern crate alloc; // Required for wasm-bindgen-derive
 use std::{cell::RefCell, collections::HashMap, rc::Rc, str::FromStr};
 
 use futures::StreamExt;
-use js_sys::{Array, Uint8Array};
+use js_sys::{Array, Date, Promise, Uint8Array};
 use log::level_filters::LevelFilter;
 use wasm_bindgen::prelude::*;
-use wasm_bindgen_futures::spawn_local;
+use wasm_bindgen_futures::{spawn_local, JsFuture};
 
 pub use nimiq::{
     client::Consensus,
@@ -20,18 +20,17 @@ pub use nimiq::{
 use beserial::{Deserialize, Serialize};
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent};
 use nimiq_consensus::ConsensusEvent;
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_network_interface::{
     network::{CloseReason, Network, NetworkEvent},
     Multiaddr,
 };
-use nimiq_primitives::policy::Policy;
 
 use crate::address::Address;
 use crate::peer_info::PeerInfo;
 use crate::transaction::{
-    PlainTransaction, PlainTransactionDetails, PlainTransactionDetailsArrayType, Transaction,
-    TransactionState,
+    PlainTransaction, PlainTransactionDetails, PlainTransactionDetailsArrayType,
+    PlainTransactionDetailsType, Transaction, TransactionState,
 };
 use crate::transaction_builder::TransactionBuilder;
 use crate::utils::{from_network_id, to_network_id};
@@ -48,7 +47,7 @@ mod transaction_builder;
 mod utils;
 
 /// Maximum number of transactions that can be requested by address
-pub const MAX_TRANSACTIONS_BY_ADDRESS: u16 = 128;
+pub const MAX_TRANSACTIONS_BY_ADDRESS: u16 = 500;
 
 /// Use this to provide initialization-time configuration to the Client.
 /// This is a simplified version of the configuration that is used for regular nodes,
@@ -369,15 +368,14 @@ impl Client {
         TransactionBuilder::new(self.network_id, self.inner.blockchain())
     }
 
-    /// Sends a transaction to the network. This method does not check if the
-    /// transaction gets included into a block.
+    /// Sends a transaction to the network and returns {@link PlainTransactionDetails}.
     ///
     /// Throws in case of a networking error.
     #[wasm_bindgen(js_name = sendTransaction)]
     pub async fn send_transaction(
         &self,
         transaction: &SendTransactionAcceptedTypes,
-    ) -> Result<(), JsError> {
+    ) -> Result<PlainTransactionDetailsType, JsError> {
         let js_value = transaction.unchecked_ref();
 
         let tx: nimiq_transaction::Transaction;
@@ -398,9 +396,73 @@ impl Client {
 
         tx.verify(to_network_id(self.network_id)?)?;
 
-        self.inner.consensus_proxy().send_transaction(tx).await?;
+        let current_height = self.get_head_height();
 
-        Ok(())
+        self.inner
+            .consensus_proxy()
+            .send_transaction(tx.clone())
+            .await?;
+
+        // Until we have a proper way of subscribing & listening for inclusion events of transactions,
+        // we poll the sender's transaction receipts until we find the transaction's hash.
+        // TODO: Instead of polling, subscribe to the transaction's inclusion events, or the sender's tx events.
+        let tx_hash = tx.hash::<Blake2bHash>().to_hex();
+        let start = Date::now();
+
+        loop {
+            // Sleep for 0.5s before requesting (again)
+            JsFuture::from(Promise::new(&mut |resolve, _| {
+                web_sys::window()
+                    .expect("Unable to get a reference to the JS `Window` object")
+                    .set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, 500)
+                    .unwrap();
+            }))
+            .await
+            .unwrap();
+
+            let receipts = self
+                .inner
+                .consensus_proxy()
+                .request_transaction_receipts_by_address(tx.sender.clone(), 1, Some(10))
+                .await?;
+
+            for receipt in receipts {
+                // The receipts are ordered newest first, so we can break the loop once receipts are older than
+                // the blockchain height when we started to avoid looping over receipts that cannot be the one
+                // we are looking for.
+                if receipt.1 <= current_height {
+                    break;
+                }
+
+                if receipt.0.to_hex() == tx_hash {
+                    // Get the full transaction
+                    let ext_tx = self
+                        .inner
+                        .consensus_proxy()
+                        .request_transaction_by_hash_and_block_number(receipt.0, receipt.1, 1)
+                        .await?;
+                    let current_block = self.get_head_height();
+                    let details =
+                        PlainTransactionDetails::from_extended_transaction(&ext_tx, current_block);
+                    return Ok(serde_wasm_bindgen::to_value(&details)?.into());
+                }
+            }
+
+            if Date::now() - start >= 10_000.0 {
+                break;
+            }
+        }
+
+        // If the transaction did not get included, return it as TransactionState::New
+        let details = PlainTransactionDetails::new(
+            &Transaction::from_native(tx),
+            TransactionState::New,
+            None,
+            None,
+            None,
+            None,
+        );
+        Ok(serde_wasm_bindgen::to_value(&details)?.into())
     }
 
     fn setup_offline_online_event_handlers(&self) {
@@ -596,7 +658,7 @@ impl Client {
     /// Up to a max number of transactions are returned from newest to oldest.
     /// If the network does not have at least min_peers to query, then an error is returned
     #[wasm_bindgen(js_name = getTransactionsByAddress)]
-    pub async fn get_transations_by_address(
+    pub async fn get_transactions_by_address(
         &self,
         address: Address,
         since_block_height: Option<u32>,
@@ -643,16 +705,11 @@ impl Client {
             .await?;
 
         let current_block = self.get_head_height();
-        let last_macro_block = Policy::last_macro_block(current_block);
 
-        let plain_tx_details: Vec<PlainTransactionDetails> = transactions
+        let plain_tx_details: Vec<_> = transactions
             .into_iter()
             .map(|ext_tx| {
-                PlainTransactionDetails::from_extended_transaction(
-                    &ext_tx,
-                    current_block,
-                    last_macro_block,
-                )
+                PlainTransactionDetails::from_extended_transaction(&ext_tx, current_block)
             })
             .collect();
 

@@ -456,7 +456,7 @@ impl Handle<ResponseTransactionReceiptsByAddress, Arc<RwLock<Blockchain>>>
         // Get the transaction hashes for this address.
         let tx_hashes = blockchain.history_store.get_tx_hashes_by_address(
             &self.address,
-            self.max.unwrap_or(500),
+            self.max.unwrap_or(500).min(500),
             None,
         );
 

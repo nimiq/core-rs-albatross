@@ -7,7 +7,7 @@ use wasm_bindgen_derive::TryFromJsValue;
 
 use beserial::Serialize;
 use nimiq_hash::{Blake2bHash, Hash};
-use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId};
+use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId, policy::Policy};
 use nimiq_transaction::{
     extended_transaction::ExtendedTransaction, TransactionFlags, TransactionFormat,
 };
@@ -324,7 +324,7 @@ impl Transaction {
 
     #[wasm_bindgen(js_name = toPlain)]
     pub fn to_plain(&self) -> Result<PlainTransactionType, JsError> {
-        let plain = PlainTransaction::from_transaction(&self.inner);
+        let plain = self.to_plain_transaction();
         Ok(serde_wasm_bindgen::to_value(&plain)?.into())
     }
 }
@@ -340,6 +340,10 @@ impl Transaction {
 
     pub fn take_native(self) -> nimiq_transaction::Transaction {
         self.inner
+    }
+
+    pub fn to_plain_transaction(&self) -> PlainTransaction {
+        PlainTransaction::from_transaction(&self.inner)
     }
 }
 
@@ -541,14 +545,31 @@ impl serde::Serialize for PlainTransactionDetails {
 }
 
 impl PlainTransactionDetails {
-    /// Creates a PlainTransactionDetails struct that can be serialized to JS from a native [ExtendedTransaction].
-    pub fn from_extended_transaction(
-        ext_tx: &ExtendedTransaction,
-        current_block: u32,
-        last_macro_block: u32,
+    // Construct a TransactionDetails struct with all details manually
+    pub fn new(
+        tx: &Transaction,
+        state: TransactionState,
+        execution_result: Option<bool>,
+        block_height: Option<u32>,
+        timestamp: Option<u64>,
+        confirmations: Option<u32>,
     ) -> Self {
+        Self {
+            transaction: tx.to_plain_transaction(),
+            state,
+            execution_result,
+            block_height,
+            timestamp,
+            confirmations,
+        }
+    }
+
+    /// Creates a PlainTransactionDetails struct that can be serialized to JS from a native [ExtendedTransaction].
+    pub fn from_extended_transaction(ext_tx: &ExtendedTransaction, current_block: u32) -> Self {
         let block_number = ext_tx.block_number;
         let block_time = ext_tx.block_time;
+
+        let last_macro_block = Policy::last_macro_block(current_block);
 
         let state = if last_macro_block >= block_number {
             TransactionState::Confirmed

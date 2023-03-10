@@ -81,8 +81,7 @@ init().then(async () => {
             ).sign(keyPair);
         }
 
-        await client.sendTransaction(transaction);
-        return transaction.hash();
+        return client.sendTransaction(transaction);
     }
 
     /**
@@ -108,8 +107,7 @@ init().then(async () => {
             BigInt(fee),
         ).sign(keyPair);
 
-        await client.sendTransaction(transaction);
-        return transaction.hash();
+        return client.sendTransaction(transaction);
     }
 
     /**
@@ -133,8 +131,7 @@ init().then(async () => {
             BigInt(fee),
         ).sign(keyPair);
 
-        await client.sendTransaction(transaction);
-        return transaction.hash();
+        return client.sendTransaction(transaction);
     }
 
     /**
@@ -158,8 +155,7 @@ init().then(async () => {
             BigInt(fee),
         ).sign(keyPair);
 
-        await client.sendTransaction(transaction);
-        return transaction.hash();
+        return client.sendTransaction(transaction);
     }
 });
 
