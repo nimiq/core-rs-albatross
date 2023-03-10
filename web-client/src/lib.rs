@@ -3,7 +3,7 @@ extern crate alloc; // Required for wasm-bindgen-derive
 use std::{cell::RefCell, collections::HashMap, rc::Rc, str::FromStr};
 
 use futures::StreamExt;
-use js_sys::{Array, Date, Promise, Uint8Array};
+use js_sys::{Array, Date, Promise};
 use log::level_filters::LevelFilter;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{spawn_local, JsFuture};
@@ -17,7 +17,7 @@ pub use nimiq::{
     extras::{panic::initialize_panic_reporting, web_logging::initialize_web_logging},
 };
 
-use beserial::{Deserialize, Serialize};
+use beserial::Deserialize;
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent};
 use nimiq_consensus::ConsensusEvent;
 use nimiq_hash::{Blake2bHash, Hash};
@@ -27,6 +27,7 @@ use nimiq_network_interface::{
 };
 
 use crate::address::Address;
+use crate::block::{PlainBlock, PlainBlockType};
 use crate::peer_info::PeerInfo;
 use crate::transaction::{
     PlainTransaction, PlainTransactionDetails, PlainTransactionDetailsArrayType,
@@ -37,6 +38,7 @@ use crate::transaction_builder::TransactionBuilder;
 use crate::utils::{from_network_id, to_network_id};
 
 mod address;
+mod block;
 mod key_pair;
 mod peer_info;
 mod private_key;
@@ -317,23 +319,21 @@ impl Client {
         self.inner.blockchain_head().block_number()
     }
 
-    // TODO: Return a Block struct
     /// Returns the current blockchain head block.
     /// Note that the web client is a light client and does not have block bodies, i.e. no transactions.
     #[wasm_bindgen(js_name = getHeadBlock)]
-    pub fn get_head_block(&self) -> Vec<u8> {
+    pub fn get_head_block(&self) -> Result<PlainBlockType, JsError> {
         let block = self.inner.blockchain_head();
-        block.header().serialize_to_vec()
+        Ok(serde_wasm_bindgen::to_value(&PlainBlock::from_block(&block))?.into())
     }
 
-    // TODO: Return a Block struct
     /// Fetches a block by its hash.
     ///
     /// Throws if the client does not have the block.
     ///
     /// Fetching blocks from the network is not yet available.
     #[wasm_bindgen(js_name = getBlock)]
-    pub async fn get_block(&self, hash: &str) -> Result<Uint8Array, JsError> {
+    pub async fn get_block(&self, hash: &str) -> Result<PlainBlockType, JsError> {
         let hash = Blake2bHash::from_str(hash)?;
         let block = self
             .inner
@@ -341,26 +341,23 @@ impl Client {
             .blockchain
             .read()
             .get_block(&hash, false)?;
-        let serialized = block.header().serialize_to_vec();
-        Ok(Uint8Array::from(serialized.as_slice()))
+        Ok(serde_wasm_bindgen::to_value(&PlainBlock::from_block(&block))?.into())
     }
 
-    // TODO: Return a Block struct
     /// Fetches a block by its height (block number).
     ///
     /// Throws if the client does not have the block.
     ///
     /// Fetching blocks from the network is not yet available.
     #[wasm_bindgen(js_name = getBlockAt)]
-    pub async fn get_block_at(&self, height: u32) -> Result<Uint8Array, JsError> {
+    pub async fn get_block_at(&self, height: u32) -> Result<PlainBlockType, JsError> {
         let block = self
             .inner
             .consensus_proxy()
             .blockchain
             .read()
             .get_block_at(height, false)?;
-        let serialized = block.header().serialize_to_vec();
-        Ok(Uint8Array::from(serialized.as_slice()))
+        Ok(serde_wasm_bindgen::to_value(&PlainBlock::from_block(&block))?.into())
     }
 
     /// Instantiates a transaction builder class that provides helper methods to create transactions.

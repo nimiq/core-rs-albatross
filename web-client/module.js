@@ -18,9 +18,7 @@ init().then(async () => {
 
     client.addHeadChangedListener(
         async (hash, reason, revertedBlocks, adoptedBlocks) => {
-            const serializedBlock = await client.getBlock(hash);
-
-            const { blockNumber, timestamp } = __unserializeBlock(serializedBlock);
+            const block = await client.getBlock(hash);
             const rebranchLength = revertedBlocks.length;
 
             console.log([
@@ -28,8 +26,8 @@ init().then(async () => {
                 reason,
                 ...(rebranchLength ? [rebranchLength] : []),
                 'at',
-                blockNumber,
-                `(${new Date(timestamp).toISOString().substring(0, 19).replace('T', ' ')} UTC)`
+                block.height,
+                `(${new Date(block.timestamp).toISOString().substring(0, 19).replace('T', ' ')} UTC)`
             ].join(' '));
         },
     );
@@ -158,40 +156,3 @@ init().then(async () => {
         return client.sendTransaction(transaction);
     }
 });
-
-/**
- * @param {Uint8Array} serializedBlock
- */
-function __unserializeBlock(serializedBlock) {
-    // Rudimentary block parsing - TODO: Properly deserialize the whole light block
-
-    /** @type {Uint8Array} */
-    let blockNumberBytes;
-
-    /** @type {Uint8Array} */
-    let timestampBytes;
-
-    const blockType = serializedBlock[0];
-    if (blockType === 1) { // Macro block
-        const _version = serializedBlock.subarray(1, 1 + 2); // u16
-        blockNumberBytes = serializedBlock.subarray(3, 3 + 4); // u32
-        const _round = serializedBlock.subarray(7, 7 + 4); // u32
-        timestampBytes = serializedBlock.subarray(11, 11 + 8); // u64
-    } else if (blockType === 2) { // Micro block
-        const _version = serializedBlock.subarray(1, 1 + 2); // u16
-        blockNumberBytes = serializedBlock.subarray(3, 3 + 4); // u32
-        timestampBytes = serializedBlock.subarray(7, 7 + 8); // u64
-    } else {
-        throw new Error(`Invalid block type: ${blockType}`);
-    }
-
-    const blockNumber = new Uint32Array(new Uint8Array(blockNumberBytes).reverse().buffer)[0];
-
-    const timestampBig = new BigUint64Array(new Uint8Array(timestampBytes).reverse().buffer)[0];
-    const timestamp = parseInt(timestampBig.toString(10));
-
-    return {
-        blockNumber,
-        timestamp,
-    };
-}

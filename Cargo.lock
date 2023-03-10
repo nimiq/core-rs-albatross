@@ -4568,6 +4568,7 @@ dependencies = [
  "futures-util",
  "hex",
  "js-sys",
+ "nimiq-block",
  "nimiq-blockchain-interface",
  "nimiq-blockchain-proxy",
  "nimiq-bls",
