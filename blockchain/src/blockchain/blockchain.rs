@@ -24,7 +24,7 @@ const BROADCAST_MAX_CAPACITY: usize = 256;
 /// structure in this crate.
 pub struct Blockchain {
     /// The environment of the blockchain.
-    env: Environment,
+    pub(crate) env: Environment,
     /// Blockchain configuration options
     pub config: BlockchainConfig,
     /// The network ID. It determines if this is the mainnet or one of the testnets.

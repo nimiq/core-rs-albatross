@@ -2,25 +2,29 @@ use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use nimiq_blockchain_interface::AbstractBlockchain;
-use nimiq_hash::Blake2bHash;
 use tokio::sync::broadcast::Sender as BroadcastSender;
 use tokio_stream::wrappers::BroadcastStream;
 
+use beserial::Deserialize;
+use nimiq_account::Account;
+use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
+use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_network_interface::{
     network::{CloseReason, Network},
     peer_info::Services,
     request::{OutboundRequestError, RequestError},
 };
-use nimiq_primitives::{account::AccountType, policy::Policy};
+use nimiq_primitives::{account::AccountType, key_nibbles::KeyNibbles, policy::Policy};
 use nimiq_transaction::{
     extended_transaction::ExtendedTransaction, ControlTransactionTopic, Transaction,
     TransactionTopic,
 };
 
-use crate::messages::{RequestTransactionReceiptsByAddress, RequestTransactionsProof};
+use crate::messages::{
+    RequestAccountsProof, RequestTransactionReceiptsByAddress, RequestTransactionsProof,
+};
 use crate::ConsensusEvent;
 
 pub struct ConsensusProxy<N: Network> {
@@ -63,7 +67,7 @@ impl<N: Network> ConsensusProxy<N> {
         min_peers: usize,
         max: Option<u16>,
     ) -> Result<Vec<(Blake2bHash, u32)>, RequestError> {
-        let mut optained_receipts = HashSet::new();
+        let mut obtained_receipts = HashSet::new();
 
         // We obtain a list of connected peers that could satisfy our request and perform the request to each one:
         for peer_id in self
@@ -91,7 +95,7 @@ impl<N: Network> ConsensusProxy<N> {
                         "Obtained txn receipts response, length {} ",
                         response.receipts.len()
                     );
-                    optained_receipts.extend(response.receipts);
+                    obtained_receipts.extend(response.receipts);
                 }
                 Err(error) => {
                     // If there was a request error with this peer we log an error
@@ -100,7 +104,7 @@ impl<N: Network> ConsensusProxy<N> {
             }
         }
 
-        let mut receipts: Vec<_> = optained_receipts.into_iter().collect();
+        let mut receipts: Vec<_> = obtained_receipts.into_iter().collect();
         receipts.sort_unstable_by_key(|receipt| receipt.1);
         receipts.reverse(); // Return newest receipts (highest block_number) first
 
@@ -264,7 +268,7 @@ impl<N: Network> ConsensusProxy<N> {
                                     break;
                                 }
                             } else {
-                                // If we receive a proof but we do not recieve a block, we disconnect from the peer
+                                // If we receive a proof but we do not receive a block, we disconnect from the peer
                                 log::debug!(peer=%peer_id,"Disconnecting from peer due to an inconsistency in the transaction proof response");
                                 self.network
                                     .disconnect_peer(peer_id, CloseReason::Other)
@@ -290,5 +294,116 @@ impl<N: Network> ConsensusProxy<N> {
         transactions.reverse(); // Return newest transaction (highest block_number) first
 
         Ok(transactions)
+    }
+
+    pub async fn request_accounts_by_addresses(
+        &self,
+        addresses: Vec<Address>,
+        min_peers: usize,
+    ) -> Result<Vec<(Address, Account)>, RequestError> {
+        // First we tell the network to provide us with a vector that contains all the connected peers that support such services
+        // Note: If the network could not provide enough peers that satisfies our requirement, then an error would be returned
+        let peers = self
+            .network
+            .get_peers_by_services(Services::ACCOUNTS_PROOF, min_peers)
+            .await
+            .map_err(|error| {
+                log::error!(
+                    err = %error,
+                    "Request accounts by addresses couldn't be fulfilled"
+                );
+
+                RequestError::OutboundRequest(OutboundRequestError::SendError)
+            })?;
+
+        let mut verified_accounts = HashMap::new();
+
+        for peer_id in peers {
+            // If we already verified all accounts we are done
+            if addresses.len() == verified_accounts.len() {
+                break;
+            }
+
+            // Before requesting accounts from a peer, we need to check if those accounts were already verified
+            let unverified_addresses = addresses
+                .iter()
+                .cloned()
+                .filter(|address| !verified_accounts.contains_key(address))
+                .collect();
+
+            log::debug!(
+                peer_id = %peer_id,
+                "Performing accounts by address request to peer",
+            );
+            let response = self
+                .network
+                .request::<RequestAccountsProof>(
+                    RequestAccountsProof {
+                        addresses: unverified_addresses,
+                    },
+                    peer_id,
+                )
+                .await;
+
+            match response {
+                Ok(response) => {
+                    if let Some(proof) = response.proof {
+                        if let Some(block_hash) = response.block_hash {
+                            let blockchain = self.blockchain.read();
+                            // First try to obtain, from our chain store, the block that was used to generate the proof
+                            let block = blockchain.get_block(&block_hash, false).ok();
+
+                            if let Some(block) = block {
+                                // Now we need to verify the proof
+                                if !proof.verify(block.state_root()) {
+                                    // If the proof does not verify, we disconnect from the peer
+                                    log::debug!(peer=%peer_id,"Disconnecting from peer because the accounts proof didn't verify");
+                                    self.network
+                                        .disconnect_peer(peer_id, CloseReason::Other)
+                                        .await;
+                                    break;
+                                }
+                                // If the proof is valid, then we add the obtained accounts to our verified accounts vector.
+                                let mut key_nibbles: HashMap<KeyNibbles, Address> =
+                                    HashMap::from_iter(addresses.iter().map(|address| {
+                                        (KeyNibbles::from(address), address.clone())
+                                    }));
+                                for trie_proof_node in proof.nodes {
+                                    if let Some(value) = trie_proof_node.value() {
+                                        if let Some(address) =
+                                            key_nibbles.remove(&trie_proof_node.key)
+                                        {
+                                            if let Ok(account) =
+                                                Account::deserialize_from_vec(value)
+                                            {
+                                                verified_accounts.insert(address, account);
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
+                                // If we couldn't find the block, then we cannot verify the proof
+                                log::debug!(block_hash=%block_hash,"Received an accounts proof, but we could not find the block that was used to generate the proof");
+                            }
+                        } else {
+                            // The peer provided a proof but did not provide the block hash, this is considered malicious
+                            log::debug!(peer=%peer_id,"Disconnecting from peer because of mailicious behaviour during accounts proof");
+                            self.network
+                                .disconnect_peer(peer_id, CloseReason::MaliciousPeer)
+                                .await;
+                        }
+                    } else {
+                        // If there is no proof, then we just continue with the next peer
+                        log::debug!(peer=%peer_id, "We requested an accounts proof but the peer didn't provide any");
+                    }
+                }
+                Err(error) => {
+                    // If there was a request error with this peer we log an error
+                    log::error!(peer=%peer_id, err=%error,"There was an error requesting accounts proof from peer");
+                }
+            }
+        }
+
+        Ok(verified_accounts.into_iter().collect())
     }
 }

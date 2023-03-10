@@ -1,9 +1,4 @@
-use std::borrow::Cow;
-use std::cmp;
-use std::fmt;
-use std::ops;
-use std::str;
-use std::usize;
+use std::{borrow::Cow, cmp, fmt, ops, str, usize};
 
 use log::error;
 
@@ -13,7 +8,7 @@ use nimiq_keys::Address;
 
 /// A compact representation of a node's key. It stores the key in big endian. Each byte
 /// stores up to 2 nibbles. Internally, we assume that a key is represented in hexadecimal form.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
 pub struct KeyNibbles {
     /// Invariant: Unused nibbles are always zeroed.
     bytes: [u8; KeyNibbles::MAX_BYTES],

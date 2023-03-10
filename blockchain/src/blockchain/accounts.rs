@@ -4,7 +4,10 @@ use nimiq_account::{Accounts, BlockState};
 use nimiq_account::{BlockLogger, TransactionOperationReceipt};
 use nimiq_block::{Block, BlockError, SkipBlockInfo};
 use nimiq_blockchain_interface::PushError;
+use nimiq_database::ReadTransaction;
 use nimiq_database::WriteTransaction;
+use nimiq_keys::Address;
+use nimiq_primitives::{key_nibbles::KeyNibbles, trie::trie_proof::TrieProof};
 use nimiq_transaction::extended_transaction::ExtendedTransaction;
 
 /// Implements methods to handle the accounts.
@@ -197,5 +200,13 @@ impl Blockchain {
             }
             Block::Macro(_) => unreachable!("Macro blocks are final and can't be reverted"),
         }
+    }
+
+    pub fn get_accounts_proof(&self, addresses: &[Address]) -> Option<TrieProof> {
+        let txn = ReadTransaction::new(&self.env);
+
+        let keys: Vec<KeyNibbles> = addresses.iter().map(KeyNibbles::from).collect();
+
+        self.state().accounts.tree.get_proof(&txn, keys)
     }
 }

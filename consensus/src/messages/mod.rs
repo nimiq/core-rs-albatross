@@ -7,6 +7,7 @@ use nimiq_blockchain::HistoryTreeChunk;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_network_interface::request::{RequestCommon, RequestMarker};
+use nimiq_primitives::trie::trie_proof::TrieProof;
 use nimiq_transaction::history_proof::HistoryTreeProof;
 
 mod handlers;
@@ -19,6 +20,8 @@ The consensus module uses the following messages:
 203 RequestResponseMessage<Epoch>
 */
 
+// The max number of Accounts proof requests per peer.
+pub const MAX_REQUEST_ACCOUNTS_PROOF: u32 = 1000;
 /// The max number of MacroChain requests per peer.
 pub const MAX_REQUEST_RESPONSE_MACRO_CHAIN: u32 = 1000;
 /// The max number of BatchSet requests per peer.
@@ -247,4 +250,26 @@ pub struct ResponseTransactionReceiptsByAddress {
     /// Tuples of `(transaction_hash, block_number)`
     #[beserial(len_type(u16, limit = 128))]
     pub receipts: Vec<(Blake2bHash, u32)>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RequestAccountsProof {
+    #[beserial(len_type(u16, limit = 128))]
+    /// Addresses for which the accounts trie proof is requested for
+    pub addresses: Vec<Address>,
+}
+
+impl RequestCommon for RequestAccountsProof {
+    type Kind = RequestMarker;
+    const TYPE_ID: u16 = 215;
+    type Response = ResponseAccountsProof;
+    const MAX_REQUESTS: u32 = MAX_REQUEST_ACCOUNTS_PROOF;
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ResponseAccountsProof {
+    // The accounts proof
+    pub proof: Option<TrieProof>,
+    // The hash of the block that was used to create the proof
+    pub block_hash: Option<Blake2bHash>,
 }

@@ -398,7 +398,7 @@ impl Handle<ResponseTransactionsProof, Arc<RwLock<Blockchain>>> for RequestTrans
                 "Requested txn proof from current batch",
             );
             // If we were provided a block number corresponding to a micro block, it needs to correspond to the current batch
-            // Otherwise, the requester should use the latest checkpoing number
+            // Otherwise, the requester should use the latest checkpoint block number
             if self.block_number < macro_head {
                 log::info!(
                     block_number = self.block_number,
@@ -474,5 +474,30 @@ impl Handle<ResponseTransactionReceiptsByAddress, Arc<RwLock<Blockchain>>>
         }
 
         ResponseTransactionReceiptsByAddress { receipts }
+    }
+}
+
+#[cfg(feature = "full")]
+impl Handle<ResponseAccountsProof, Arc<RwLock<Blockchain>>> for RequestAccountsProof {
+    fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> ResponseAccountsProof {
+        let blockchain = blockchain.read();
+
+        // We only prove accounts that exist in our current state
+        let proof = blockchain.get_accounts_proof(&self.addresses);
+
+        if proof.is_none() {
+            // If we could not generate a proof we respond with an empty result
+            return ResponseAccountsProof {
+                proof: None,
+                block_hash: None,
+            };
+        }
+
+        let block_hash = blockchain.head_hash();
+
+        ResponseAccountsProof {
+            proof,
+            block_hash: Some(block_hash),
+        }
     }
 }

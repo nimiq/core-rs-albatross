@@ -3589,6 +3589,7 @@ dependencies = [
  "hex",
  "instant",
  "lazy_static",
+ "nimiq-account",
  "nimiq-block",
  "nimiq-block-production",
  "nimiq-blockchain",

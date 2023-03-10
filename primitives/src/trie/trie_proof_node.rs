@@ -90,6 +90,13 @@ impl TrieProofNode {
     pub fn iter_children(&self) -> Iter {
         Iter::from_children(&self.children)
     }
+
+    pub fn value(&self) -> Option<&Vec<u8>> {
+        if let ProofValue::Value(value) = &self.value {
+            return Some(value);
+        }
+        None
+    }
 }
 
 impl SerializeContent for TrieProofNode {
