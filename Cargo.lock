@@ -3670,7 +3670,7 @@ dependencies = [
  "nimiq-test-log",
  "rust-argon2",
  "serde",
- "sha2 0.9.9",
+ "sha2 0.10.2",
 ]
 
 [[package]]
@@ -3778,7 +3778,7 @@ dependencies = [
  "rand 0.8.5",
  "rand_core 0.6.4",
  "serde",
- "sha2 0.9.9",
+ "sha2 0.10.2",
  "thiserror",
 ]
 
@@ -4472,7 +4472,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde-big-array",
- "sha2 0.9.9",
+ "sha2 0.10.2",
  "tracing",
 ]
 
