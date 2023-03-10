@@ -42,6 +42,9 @@ mod transaction;
 mod transaction_builder;
 mod utils;
 
+/// Maximum number of transactions that can be requested by address
+pub const MAX_TRANSACTIONS_BY_ADDRESS: u16 = 128;
+
 /// Use this to provide initialization-time configuration to the Client.
 /// This is a simplified version of the configuration that is used for regular nodes,
 /// since not all configuration knobs are available when running inside a browser.
@@ -563,6 +566,14 @@ impl Client {
         max: Option<u16>,
         min_peers: Option<usize>,
     ) -> Result<PlainTransactionDetailsArrayType, JsError> {
+        if let Some(max) = max {
+            if max > MAX_TRANSACTIONS_BY_ADDRESS {
+                return Err(JsError::new(
+                    "The maximum number of transactions exceeds the one that is supported",
+                ));
+            }
+        }
+
         let transactions = self
             .inner
             .consensus_proxy()

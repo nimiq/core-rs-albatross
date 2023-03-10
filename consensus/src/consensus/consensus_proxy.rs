@@ -82,6 +82,10 @@ impl<N: Network> ConsensusProxy<N> {
         // At this point we obtained a list of connected peers that could satisfy our request,
         // so we perform the request to each of those peers:
         for peer_id in peers {
+            log::debug!(
+                peer_id = %peer_id,
+                "Performing txns by address request to peer",
+            );
             let response = self
                 .network
                 .request::<RequestTransactionReceiptsByAddress>(
@@ -95,7 +99,10 @@ impl<N: Network> ConsensusProxy<N> {
 
             match response {
                 Ok(response) => {
-                    log::info!("Obtained response, length {} ", response.receipts.len());
+                    log::debug!(
+                        "Obtained txn receipts response, length {} ",
+                        response.receipts.len()
+                    );
 
                     let blockchain = self.blockchain.read();
 
@@ -138,8 +145,15 @@ impl<N: Network> ConsensusProxy<N> {
                         }
                     }
 
+                    // We drop the blockchain lock because is no longer needed while we request proofs
+                    drop(blockchain);
+
                     // Now we request proofs for each block and its hashes, according to its classification
                     for (block_number, hashes) in hashes_by_block {
+                        log::debug!(
+                            block_number=%block_number,
+                            "Performing txn proof requests for block number",
+                        );
                         let response = self
                             .network
                             .request::<RequestTransactionsProof>(
@@ -155,6 +169,8 @@ impl<N: Network> ConsensusProxy<N> {
                                 // We verify the transaction using the proof
                                 if let Some(proof) = proof_response.proof {
                                     if let Some(block) = proof_response.block {
+                                        log::debug!(peer=%peer_id,"New txns proof and block from peer");
+
                                         // TODO: We are currently assuming that the provided block was included in the chain
                                         // but we also need some additional information to prove the block is part of the chain.
                                         let verification_result = proof

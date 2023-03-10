@@ -305,7 +305,7 @@ impl Handle<ResponseChunk, Arc<RwLock<Blockchain>>> for RequestChunk {
 impl Handle<ResponseTransactionsProof, Arc<RwLock<Blockchain>>> for RequestTransactionsProof {
     fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> ResponseTransactionsProof {
         let blockchain = blockchain.read();
-        let hashes = self.hashes.iter().collect();
+        let hashes: Vec<&Blake2bHash> = self.hashes.iter().collect();
 
         // There are three possible scenarios for creating a transaction inclusion proof:
         // A- The block number is located in a finalized epoch:
@@ -318,9 +318,15 @@ impl Handle<ResponseTransactionsProof, Arc<RwLock<Blockchain>>> for RequestTrans
         let verifier_state;
         let election_head = blockchain.election_head().block_number();
         let macro_head = blockchain.macro_head().block_number();
+        let current_head = blockchain.head().block_number();
 
         // We cannot prove transactions from the future
-        if self.block_number > blockchain.head().block_number() {
+        if self.block_number > current_head {
+            log::info!(
+                "Requested txn proof from the future, current_head {}, requested block number {}",
+                current_head,
+                self.block_number
+            );
             return ResponseTransactionsProof {
                 proof: None,
                 block: None,
@@ -330,16 +336,38 @@ impl Handle<ResponseTransactionsProof, Arc<RwLock<Blockchain>>> for RequestTrans
         let block;
 
         if Policy::is_election_block_at(self.block_number) {
+            log::info!(
+                election_block_number = self.block_number,
+                len = hashes.len(),
+                "Requested txn proof from finalized epoch",
+            );
             // If we were provided the block number of an election block it has to be already finalized
             block = blockchain
                 .chain_store
                 .get_block_at(self.block_number, false, None)
                 .ok();
+
+            if block.is_none() {
+                log::info!("Could not find the desired block to create the txn proof");
+                return ResponseTransactionsProof {
+                    proof: None,
+                    block: None,
+                };
+            }
             verifier_state = None;
         } else if Policy::is_macro_block_at(self.block_number) {
+            log::info!(
+                checkpoint_block_number = self.block_number,
+                len = hashes.len(),
+                "Requested txn proof from finalized checkpoint block",
+            );
             // If we were provided a block number corresponding to a checkpoint block, it needs to correspond to the current epoch
             // Otherwise, the requester should use the latest epoch number.
             if self.block_number < election_head {
+                log::info!(
+                    "Requested txn proof that corresponds to a finalized epoch, should use the election block instead {}",
+                    self.block_number
+                );
                 return ResponseTransactionsProof {
                     proof: None,
                     block: None,
@@ -350,20 +378,32 @@ impl Handle<ResponseTransactionsProof, Arc<RwLock<Blockchain>>> for RequestTrans
                 .chain_store
                 .get_block_at(self.block_number, false, None)
                 .ok();
-            let chain_info = blockchain.get_chain_info(
-                &block
-                    .clone()
-                    .expect("We expect to obtain a block from the chain store")
-                    .hash(),
-                false,
-                None,
-            );
 
-            verifier_state = Some(chain_info.unwrap().cum_ext_tx_count as usize);
+            if let Some(block) = block.clone() {
+                let chain_info = blockchain.get_chain_info(&block.hash(), false, None);
+                let current_txn_count = chain_info.unwrap().cum_ext_tx_count;
+                verifier_state = Some(current_txn_count as usize);
+            } else {
+                //If we could not find a block, we cannot fulfil the request
+                log::info!("Could not find the desired block to create the txn proof");
+                return ResponseTransactionsProof {
+                    proof: None,
+                    block: None,
+                };
+            }
         } else {
+            log::info!(
+                block_number = self.block_number,
+                len = hashes.len(),
+                "Requested txn proof from current batch",
+            );
             // If we were provided a block number corresponding to a micro block, it needs to correspond to the current batch
             // Otherwise, the requester should use the latest checkpoing number
             if self.block_number < macro_head {
+                log::info!(
+                    block_number = self.block_number,
+                    "Requested txn proof from finalized batch, should use a checkpoint block instead",
+                );
                 return ResponseTransactionsProof {
                     proof: None,
                     block: None,
@@ -375,6 +415,14 @@ impl Handle<ResponseTransactionsProof, Arc<RwLock<Blockchain>>> for RequestTrans
                 .get_block_at(blockchain.block_number(), false, None)
                 .ok();
 
+            if block.is_none() {
+                log::info!("Could not find the desired block to create the txn proof");
+                return ResponseTransactionsProof {
+                    proof: None,
+                    block: None,
+                };
+            }
+
             verifier_state = None;
         };
 
@@ -385,8 +433,9 @@ impl Handle<ResponseTransactionsProof, Arc<RwLock<Blockchain>>> for RequestTrans
             None,
         );
 
-        // If we couldn't obtain a proof, or we coudn't obtain a block, we return None
-        if proof.is_none() || block.is_none() {
+        // If we couldn't obtain a proof we return None
+        if proof.is_none() {
+            log::info!("Could not generate the txn inclusion proof");
             return ResponseTransactionsProof {
                 proof: None,
                 block: None,
