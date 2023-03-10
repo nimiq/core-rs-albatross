@@ -11,7 +11,7 @@ edition = "2021"
 
 [dependencies]
 byteorder = "1.3"
-curve25519-dalek = "3"
+curve25519-dalek = "4"
 hex = "0.4"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 num-traits = "0.2"
