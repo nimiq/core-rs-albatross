@@ -161,21 +161,18 @@ impl AccountTransactionVerification for HashedTimeLockedContractVerifier {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize, Display)]
+#[derive(
+    Clone, Copy, Debug, Default, Deserialize, Display, Eq, Ord, PartialEq, PartialOrd, Serialize,
+)]
 #[repr(u8)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 pub enum HashAlgorithm {
+    #[default]
     Blake2b = 1,
     Sha256 = 3,
 }
 
-impl Default for HashAlgorithm {
-    fn default() -> Self {
-        HashAlgorithm::Blake2b
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[repr(u8)]
 pub enum ProofType {
     RegularTransfer = 1,
@@ -192,7 +189,7 @@ impl AnyHash {
     }
 }
 
-#[derive(Default, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 pub struct CreationTransactionData {
     pub sender: Address,

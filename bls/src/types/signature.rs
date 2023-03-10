@@ -111,7 +111,7 @@ impl Signature {
     /// validator's signature by its number of slots.
     #[must_use]
     pub fn multiply(&self, x: u16) -> Self {
-        let signature = self.signature.mul(&[x as u64]);
+        let signature = self.signature.mul([x as u64]);
         Signature {
             signature,
             compressed: CompressedSignature::from(signature),

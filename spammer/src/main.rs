@@ -392,7 +392,7 @@ async fn spam(
             SpamType::Vesting,
         ];
 
-        let dist = WeightedIndex::new(&config.weights).unwrap();
+        let dist = WeightedIndex::new(config.weights).unwrap();
         let mut rng = thread_rng();
         let new_count;
 

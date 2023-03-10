@@ -169,21 +169,17 @@ pub struct ConsensusSettings {
     pub min_peers: Option<usize>,
 }
 
-#[derive(Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Clone, Copy, Deserialize, Debug, Default, Eq, PartialEq)]
 #[serde(rename_all = "lowercase")]
 /// Synchronization mode used by the client based upon its client type
 pub enum SyncMode {
+    #[default]
     /// Synchronization mode used by History nodes (full transaction history is maintained)
     History,
     /// Full Nodes. They use LightMacroSync + State Sync to reach consensus
     Full,
     /// Light nodes use LightMacroSync + BlockLiveSync to reach consensus
     Light,
-}
-impl Default for SyncMode {
-    fn default() -> Self {
-        SyncMode::History
-    }
 }
 
 #[derive(Debug, Error)]
@@ -213,7 +209,7 @@ impl From<SyncMode> for config::SyncMode {
     }
 }
 
-#[derive(Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 // TODO: I think we can directly use `NetworkId` here
 pub enum Network {
@@ -221,14 +217,9 @@ pub enum Network {
     Test,
     Dev,
     TestAlbatross,
+    #[default]
     DevAlbatross,
     UnitAlbatross,
-}
-
-impl Default for Network {
-    fn default() -> Self {
-        Network::DevAlbatross
-    }
 }
 
 impl FromStr for Network {

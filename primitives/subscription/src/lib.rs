@@ -5,10 +5,11 @@ use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
 use nimiq_transaction::Transaction;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[repr(u8)]
 pub enum Subscription {
     #[beserial(discriminant = 0)]
+    #[default]
     None,
     #[beserial(discriminant = 1)]
     Any,
@@ -16,12 +17,6 @@ pub enum Subscription {
     Addresses(#[beserial(len_type(u16))] HashSet<Address>),
     #[beserial(discriminant = 3)]
     MinFee(Coin), // Fee per byte
-}
-
-impl Default for Subscription {
-    fn default() -> Self {
-        Subscription::None
-    }
 }
 
 impl Subscription {

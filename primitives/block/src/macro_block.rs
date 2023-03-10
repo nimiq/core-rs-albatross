@@ -206,7 +206,6 @@ impl Message for MacroHeader {
     const PREFIX: u8 = PREFIX_TENDERMINT_PROPOSAL;
 }
 
-#[allow(clippy::derive_hash_xor_eq)] // TODO: Shouldn't be necessary
 impl Hash for MacroHeader {}
 
 impl fmt::Display for MacroHeader {
@@ -278,7 +277,6 @@ impl MacroBody {
     }
 }
 
-#[allow(clippy::derive_hash_xor_eq)] // TODO: Shouldn't be necessary
 impl Hash for MacroBody {}
 
 #[derive(Error, Debug)]
