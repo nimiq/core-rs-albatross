@@ -272,6 +272,34 @@ impl Client {
         self.inner.consensus_proxy().is_established()
     }
 
+    /// Returns a promise that resolves when the client has established consensus with the network.
+    #[wasm_bindgen(js_name = waitForConsensusEstablished)]
+    pub async fn wait_for_consensus_established(&self) -> Result<(), JsError> {
+        if self.is_consensus_established() {
+            return Ok(());
+        }
+
+        let is_established = self
+            .inner
+            .consensus_proxy()
+            .subscribe_events()
+            .any(|event| async move {
+                if let Ok(state) = event {
+                    matches!(state, ConsensusEvent::Established)
+                } else {
+                    self.is_consensus_established()
+                }
+            })
+            .await;
+
+        if !is_established {
+            // The stream terminated before an `Established` event occured
+            return Err(JsError::new("Stream ended"));
+        }
+
+        Ok(())
+    }
+
     /// Returns the block hash of the current blockchain head.
     #[wasm_bindgen(js_name = getHeadHash)]
     pub fn get_head_hash(&self) -> String {
