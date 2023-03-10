@@ -145,7 +145,7 @@ impl<N: Network> ConsensusProxy<N> {
                         }
                     }
 
-                    // We drop the blockchain lock because is no longer needed while we request proofs
+                    // We drop the blockchain lock because it's no longer needed while we request proofs
                     drop(blockchain);
 
                     // Now we request proofs for each block and its hashes, according to its classification

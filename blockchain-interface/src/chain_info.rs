@@ -24,8 +24,8 @@ pub struct ChainInfo {
     pub cum_tx_fees: Coin,
     /// The accumulated extended transaction size. It resets every other macro block.
     pub cum_ext_tx_size: u64,
-    /// The accumulated extended transaction count in the current epoch. Resets at election blocks.
-    pub cum_ext_tx_count: u64,
+    /// The total length of the history tree up to the current block.
+    pub history_tree_len: u64,
     /// A boolean stating if this block can be pruned.
     pub prunable: bool,
     /// Missing range of the accounts before this block.
@@ -44,7 +44,7 @@ impl ChainInfo {
             main_chain_successor: None,
             cum_tx_fees: Coin::ZERO,
             cum_ext_tx_size: 0,
-            cum_ext_tx_count: 0,
+            history_tree_len: 0,
             prunable,
             prev_missing_range: None,
         }
@@ -66,14 +66,6 @@ impl ChainInfo {
             prev_info.cum_tx_fees + block.sum_transaction_fees()
         };
 
-        // Reset the transaction count accumulator if this is the first block of an epoch. Otherwise,
-        // just add the transaction count of this block to the accumulator.
-        let cum_ext_tx_count: u64 = if Policy::is_election_block_at(prev_info.head.block_number()) {
-            block.num_transactions() as u64
-        } else {
-            prev_info.cum_ext_tx_count + block.num_transactions() as u64
-        };
-
         let prunable = !block.is_election();
 
         ChainInfo {
@@ -82,7 +74,7 @@ impl ChainInfo {
             head: block,
             cum_tx_fees,
             cum_ext_tx_size: 0,
-            cum_ext_tx_count,
+            history_tree_len: 0,
             prunable,
             prev_missing_range,
         }
@@ -143,7 +135,7 @@ impl Serialize for ChainInfo {
         size += Serialize::serialize(&self.main_chain_successor, writer)?;
         size += Serialize::serialize(&self.cum_tx_fees, writer)?;
         size += Serialize::serialize(&self.cum_ext_tx_size, writer)?;
-        size += Serialize::serialize(&self.cum_ext_tx_count, writer)?;
+        size += Serialize::serialize(&self.history_tree_len, writer)?;
         size += Serialize::serialize(&self.prunable, writer)?;
         size += Serialize::serialize(&self.prev_missing_range, writer)?;
 
@@ -169,7 +161,7 @@ impl Serialize for ChainInfo {
         size += Serialize::serialized_size(&self.main_chain_successor);
         size += Serialize::serialized_size(&self.cum_tx_fees);
         size += Serialize::serialized_size(&self.cum_ext_tx_size);
-        size += Serialize::serialized_size(&self.cum_ext_tx_count);
+        size += Serialize::serialized_size(&self.history_tree_len);
         size += Serialize::serialized_size(&self.prunable);
         size += Serialize::serialized_size(&self.prev_missing_range);
         size
@@ -217,7 +209,7 @@ impl Deserialize for ChainInfo {
         let main_chain_successor = Deserialize::deserialize(reader)?;
         let cum_tx_fees = Deserialize::deserialize(reader)?;
         let cum_ext_tx_size = Deserialize::deserialize(reader)?;
-        let cum_ext_tx_count = Deserialize::deserialize(reader)?;
+        let history_tree_len = Deserialize::deserialize(reader)?;
         let prunable = Deserialize::deserialize(reader)?;
         let prev_missing_range = Deserialize::deserialize(reader)?;
 
@@ -227,7 +219,7 @@ impl Deserialize for ChainInfo {
             main_chain_successor,
             cum_tx_fees,
             cum_ext_tx_size,
-            cum_ext_tx_count,
+            history_tree_len,
             prunable,
             prev_missing_range,
         })

@@ -101,11 +101,10 @@ impl Blockchain {
         // Get the block hash.
         let block_hash = block.hash();
 
-        // Calculate the cumulative transaction fees, size, and count for the given batch. This is necessary to
+        // Calculate the cumulative transaction fees and size for the given batch. This is necessary to
         // create the chain info for the block.
         let mut cum_tx_fees = Coin::ZERO;
         let mut cum_ext_tx_size = 0u64;
-        let mut batch_ext_tx_count = 0u64;
         let current_batch = Policy::batch_at(block.block_number());
         for i in (0..history.len()).rev() {
             if Policy::batch_at(history[i].block_number) != current_batch {
@@ -115,24 +114,16 @@ impl Blockchain {
                 cum_tx_fees += tx.get_raw_transaction().fee;
             }
             cum_ext_tx_size += history[i].data.serialized_size() as u64;
-            batch_ext_tx_count += 1;
         }
 
-        let cum_ext_tx_count = if Policy::is_election_block_at(prev_macro_info.head.block_number())
-        {
-            batch_ext_tx_count
-        } else {
-            prev_macro_info.cum_ext_tx_count + batch_ext_tx_count
-        };
-
         // Create the chain info for the given block and store it.
-        let chain_info = ChainInfo {
+        let mut chain_info = ChainInfo {
             on_main_chain: true,
             main_chain_successor: None,
             head: block.clone(),
             cum_tx_fees,
             cum_ext_tx_size,
-            cum_ext_tx_count,
+            history_tree_len: 0, // Will be correctly set when building the history tree
             prunable: false,
             prev_missing_range: None,
         };
@@ -276,6 +267,13 @@ impl Blockchain {
             block.epoch_number(),
             &history[first_new_ext_tx..],
         );
+
+        // Use the just built history tree to set the `ChainInfo`'s total history length
+        chain_info.history_tree_len =
+            this.history_store.len(block.epoch_number(), Some(&mut txn)) as u64;
+
+        this.chain_store
+            .put_chain_info(&mut txn, &block_hash, &chain_info, true);
 
         let wanted_history_root = this
             .history_store

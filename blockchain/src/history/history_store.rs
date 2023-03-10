@@ -122,6 +122,34 @@ impl HistoryStore {
         }
     }
 
+    /// Returns the total length of the History Tree at a given epoch number.
+    /// The size of the history length is useful for getting a proof for a previous state
+    /// of the history tree.
+    pub fn len(&self, epoch_number: u32, txn_option: Option<&Transaction>) -> usize {
+        let read_txn: ReadTransaction;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = ReadTransaction::new(&self.env);
+                &read_txn
+            }
+        };
+        // Get history tree for given epoch.
+        let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(
+            &self.hist_tree_db,
+            txn,
+            epoch_number,
+        ));
+
+        // Get the Merkle tree length
+        tree.len()
+    }
+
+    /// Returns whether the history tree is empty
+    pub fn is_empty(&self, epoch_number: u32, txn_option: Option<&Transaction>) -> bool {
+        self.len(epoch_number, txn_option) == 0
+    }
+
     /// Add a list of extended transactions to an existing history tree. It returns the root of the
     /// resulting tree and the total size of the transactions added.
     /// This function assumes that:
@@ -673,7 +701,7 @@ impl HistoryStore {
 
     /// Returns a proof for transactions with the given hashes. The proof also includes the extended
     /// transactions.
-    /// The verified state is used for those cases where the verifier might have an incomplete MMR,
+    /// The verifier state is used for those cases where the verifier might have an incomplete MMR,
     /// for instance this could occur where we want to create transaction inclusion proofs of incomplete epochs.
     pub fn prove(
         &self,

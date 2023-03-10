@@ -323,9 +323,9 @@ impl Handle<ResponseTransactionsProof, Arc<RwLock<Blockchain>>> for RequestTrans
         // We cannot prove transactions from the future
         if self.block_number > current_head {
             log::info!(
-                "Requested txn proof from the future, current_head {}, requested block number {}",
                 current_head,
-                self.block_number
+                requested_block_number = self.block_number,
+                "Requested txn proof from the future",
             );
             return ResponseTransactionsProof {
                 proof: None,
@@ -365,8 +365,8 @@ impl Handle<ResponseTransactionsProof, Arc<RwLock<Blockchain>>> for RequestTrans
             // Otherwise, the requester should use the latest epoch number.
             if self.block_number < election_head {
                 log::info!(
-                    "Requested txn proof that corresponds to a finalized epoch, should use the election block instead {}",
-                    self.block_number
+                    block_number = self.block_number,
+                    "Requested txn proof that corresponds to a finalized epoch, should use the election block instead",
                 );
                 return ResponseTransactionsProof {
                     proof: None,
@@ -381,8 +381,8 @@ impl Handle<ResponseTransactionsProof, Arc<RwLock<Blockchain>>> for RequestTrans
 
             if let Some(block) = block.clone() {
                 let chain_info = blockchain.get_chain_info(&block.hash(), false, None);
-                let current_txn_count = chain_info.unwrap().cum_ext_tx_count;
-                verifier_state = Some(current_txn_count as usize);
+                let history_tree_len = chain_info.unwrap().history_tree_len;
+                verifier_state = Some(history_tree_len as usize);
             } else {
                 //If we could not find a block, we cannot fulfil the request
                 log::info!("Could not find the desired block to create the txn proof");
