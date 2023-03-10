@@ -46,8 +46,8 @@ fn pedersen_generators(number: usize) -> Vec<G1Projective> {
     let mut generators = Vec::new();
 
     // Generating the generators.
-    for _ in 0..number {
-        // This converts the hash output into a x-coordinate and a y-coordinate for an elliptic curve
+    for n in 0..number {
+        // This converts the hash output into an x-coordinate and a y-coordinate for an elliptic curve
         // point. At this time, it is not guaranteed to be a valid point. A quirk of this code is that
         // we need to set the most significant 16 bits to zero. The reason for this is that the field for
         // the MNT6-753 curve is not exactly 753 bits, it is a bit smaller. This means that if we try
@@ -63,14 +63,12 @@ fn pedersen_generators(number: usize) -> Vec<G1Projective> {
         // to zero.
 
         // The y-coordinate is at the most significant bit (interpreted as little endian). We convert it to a boolean.
-        let bytes_len = bytes.len();
-        let y_bit = (bytes[bytes_len - 1] >> 7) & 1 == 1;
+        let bytes = &bytes[n * 96..n * 96 + 96];
+        let y_bit = (bytes[bytes.len() - 1] >> 7) & 1 == 1;
 
         // Because of the previous explanation, we need to remove the whole last two bytes.
         let max_size = ((Fq::MODULUS_BIT_SIZE - 1) / 8) as usize;
-        bytes.truncate(max_size);
-
-        let x_coordinates = ToConstraintField::to_field_elements(&bytes).unwrap();
+        let x_coordinates = ToConstraintField::to_field_elements(&bytes[..max_size]).unwrap();
         assert_eq!(x_coordinates.len(), 1);
         let mut x_coordinate = x_coordinates[0];
 
