@@ -3929,6 +3929,7 @@ name = "nimiq-log"
 version = "0.1.0"
 dependencies = [
  "ansi_term",
+ "time",
  "tracing",
  "tracing-log",
  "tracing-subscriber 0.3.16",

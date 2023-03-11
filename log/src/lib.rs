@@ -1,6 +1,7 @@
 use ansi_term::{Color, Style};
 use log::{level_filters::LevelFilter, Event, Level, Subscriber};
 use std::{env, fmt};
+use time::format_description::well_known::Iso8601;
 use tracing_log::NormalizeEvent;
 use tracing_subscriber::filter::Targets;
 use tracing_subscriber::fmt::format::Writer;
@@ -230,7 +231,7 @@ pub struct MaybeSystemTime(pub bool);
 impl FormatTime for MaybeSystemTime {
     fn format_time(&self, w: &mut Writer) -> fmt::Result {
         if self.0 {
-            UtcTime::rfc_3339().format_time(w)
+            UtcTime::new(Iso8601::DEFAULT).format_time(w)
         } else {
             ().format_time(w)
         }
