@@ -23,7 +23,7 @@ thiserror = "1.0"
 beserial = { path = "../../beserial", features = ["derive"] }
 nimiq-bls = { path = "../../bls" }
 nimiq-collections = { path = "../../collections" }
-nimiq-database = { path = "../../database" }
+nimiq-database = { path = "../../database", optional = true }
 nimiq-database-value = { path = "../../database/database-value" }
 nimiq-hash = { path = "../../hash" }
 nimiq-keys = { path = "../../keys", features = ["serde-derive"] }
@@ -43,4 +43,5 @@ nimiq-test-log = { path = "../../test-log" }
 nimiq-test-utils = { path = "../../test-utils" }
 
 [features]
+interaction-trait = ["nimiq-database"]
 serde-derive = ["serde"]

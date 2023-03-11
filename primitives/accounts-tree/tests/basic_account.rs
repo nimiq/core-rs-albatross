@@ -3,7 +3,7 @@ use std::convert::TryInto;
 use beserial::{Deserialize, Serialize};
 use nimiq_account::{
     Account, AccountTransactionInteraction, AccountsTrie, BasicAccount, BlockState, DataStore,
-    Receipts,
+    TransactionOperationReceipt, TransactionReceipt,
 };
 use nimiq_accounts_tree::Accounts;
 use nimiq_database::volatile::VolatileEnvironment;

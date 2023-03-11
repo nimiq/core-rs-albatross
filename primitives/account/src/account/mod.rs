@@ -1,17 +1,24 @@
 use beserial::{Deserialize, Serialize};
-use nimiq_primitives::account::{AccountError, AccountType};
+#[cfg(feature = "interaction-trait")]
+use nimiq_primitives::account::AccountError;
+use nimiq_primitives::account::AccountType;
 use nimiq_primitives::coin::Coin;
+#[cfg(feature = "interaction-trait")]
 use nimiq_transaction::{inherent::Inherent, Transaction, TransactionFlags};
 
 use crate::account::basic_account::BasicAccount;
 use crate::account::htlc_contract::HashedTimeLockedContract;
 use crate::account::staking_contract::StakingContract;
 use crate::account::vesting_contract::VestingContract;
+#[cfg(feature = "interaction-trait")]
 use crate::data_store::{DataStoreRead, DataStoreWrite};
+#[cfg(feature = "interaction-trait")]
 use crate::interaction_traits::{
     AccountInherentInteraction, AccountPruningInteraction, AccountTransactionInteraction,
 };
+#[cfg(feature = "interaction-trait")]
 use crate::reserved_balance::ReservedBalance;
+#[cfg(feature = "interaction-trait")]
 use crate::{AccountReceipt, BlockState};
 
 pub mod basic_account;
@@ -19,6 +26,7 @@ pub mod htlc_contract;
 pub mod staking_contract;
 pub mod vesting_contract;
 
+#[cfg(feature = "interaction-trait")]
 macro_rules! gen_account_match {
     ($self: ident, $f: ident $(, $arg:expr )*) => {
         match $self {
@@ -30,6 +38,7 @@ macro_rules! gen_account_match {
     };
 }
 
+#[cfg(feature = "interaction-trait")]
 macro_rules! gen_account_type_match {
     ($self: expr, $f: ident $(, $arg:expr )*) => {
         match $self {
@@ -81,6 +90,7 @@ impl Default for Account {
     }
 }
 
+#[cfg(feature = "interaction-trait")]
 impl AccountTransactionInteraction for Account {
     fn create_new_contract(
         transaction: &Transaction,
@@ -245,6 +255,7 @@ impl AccountTransactionInteraction for Account {
     }
 }
 
+#[cfg(feature = "interaction-trait")]
 impl AccountInherentInteraction for Account {
     fn commit_inherent(
         &mut self,
@@ -273,6 +284,7 @@ impl AccountInherentInteraction for Account {
     }
 }
 
+#[cfg(feature = "interaction-trait")]
 impl AccountPruningInteraction for Account {
     fn can_be_pruned(&self) -> bool {
         gen_account_match!(self, can_be_pruned)

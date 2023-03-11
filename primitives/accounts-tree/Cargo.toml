@@ -21,7 +21,7 @@ strum_macros = "0.24"
 thiserror = "1.0"
 
 beserial = { path = "../../beserial", features = ["derive"] }
-nimiq-account = { path = "../account" }
+nimiq-account = { path = "../account", features = ["interaction-trait"] }
 nimiq-bls = { path = "../../bls" }
 nimiq-collections = { path = "../../collections" }
 nimiq-database = { path = "../../database" }
