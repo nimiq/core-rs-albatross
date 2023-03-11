@@ -371,7 +371,7 @@ pub fn next_macro_block(
 
     let macro_block_proposal = next_macro_block_proposal(signing_key, blockchain, config);
 
-    let block_hash = macro_block_proposal.nano_zkp_hash(true);
+    let block_hash = macro_block_proposal.zkp_hash(true);
 
     let validators =
         blockchain.get_validators_for_epoch(Policy::epoch_at(blockchain.block_number() + 1), None);

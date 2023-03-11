@@ -153,19 +153,19 @@ mod tests {
         // Get the header hash.
         let header_hash = block.hash();
 
-        // Create the nano_primitives MacroBlock.
-        let mut nano_block = MacroBlock::without_signatures(0, 0, header_hash.into());
+        // Create the zkp_primitives MacroBlock.
+        let mut zkp_block = MacroBlock::without_signatures(0, 0, header_hash.into());
 
         for (i, sk) in validator_keys.iter().enumerate() {
-            nano_block.sign(sk, i, &pk_tree_root);
+            zkp_block.sign(sk, i, &pk_tree_root);
         }
 
         // Create the TendermintProof using our signature.
-        let agg_sig = AggregateSignature::from_signatures(&[Signature::from(nano_block.signature)]);
+        let agg_sig = AggregateSignature::from_signatures(&[Signature::from(zkp_block.signature)]);
 
         let mut bitset = BitSet::with_capacity(Policy::SLOTS as usize);
 
-        for (i, b) in nano_block.signer_bitmap.iter().enumerate() {
+        for (i, b) in zkp_block.signer_bitmap.iter().enumerate() {
             if *b {
                 bitset.insert(i);
             }

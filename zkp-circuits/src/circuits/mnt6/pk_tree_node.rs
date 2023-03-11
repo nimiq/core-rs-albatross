@@ -1,37 +1,50 @@
-use ark_crypto_primitives::snark::{BooleanInputVar, FromFieldElementsGadget, SNARKGadget};
-use ark_ff::ToConstraintField;
+use ark_crypto_primitives::snark::SNARKGadget;
 use ark_groth16::{
     constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar},
     Proof, VerifyingKey,
 };
 use ark_mnt6_753::{
-    constraints::{FqVar, G2Var, PairingVar},
+    constraints::{G2Var, PairingVar},
     Fq as MNT6Fq, G2Projective, MNT6_753,
 };
 use ark_r1cs_std::{
-    prelude::{AllocVar, Boolean, CurveVar, EqGadget, ToBitsGadget},
+    prelude::{AllocVar, Boolean, EqGadget},
     uint8::UInt8,
-    ToConstraintFieldGadget,
 };
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 
+use nimiq_pedersen_generators::GenericWindow;
 use nimiq_primitives::policy::Policy;
-use nimiq_zkp_primitives::{PEDERSEN_PARAMETERS, PK_TREE_DEPTH};
+use nimiq_zkp_primitives::PEDERSEN_PARAMETERS;
 
-use crate::{
-    gadgets::{
-        bits::BitVec,
-        mnt6::{DefaultPedersenHashGadget, DefaultPedersenParametersVar},
-        serialize::SerializeGadget,
-    },
-    utils::bits_to_bytes,
+use crate::gadgets::{
+    bits::BitVec, mnt6::DefaultPedersenParametersVar, pedersen::PedersenHashGadget,
+    recursive_input::RecursiveInputVar, serialize::SerializeGadget,
 };
+
+pub(super) type PkInnerNodeWindow = GenericWindow<4, MNT6Fq>;
+
+pub(super) fn hash_g2(
+    cs: &ConstraintSystemRef<MNT6Fq>,
+    g2: &G2Var,
+    pedersen_generators_var: &DefaultPedersenParametersVar,
+) -> Result<Vec<UInt8<MNT6Fq>>, SynthesisError> {
+    let bytes = g2.serialize_compressed(cs.clone())?;
+
+    let pedersen_hash =
+        PedersenHashGadget::<_, _, PkInnerNodeWindow>::evaluate(&bytes, pedersen_generators_var)?;
+
+    pedersen_hash.serialize_compressed(cs.clone())
+}
 
 /// This is the node subcircuit of the PKTreeCircuit. See PKTreeLeafCircuit for more details.
 /// Its purpose it three-fold:
 ///     1) Split the signer bitmap chunk it receives as an input into two halves.
-///     2) Recalculate the aggregate public key commitments
-///     3) Verify the proofs from its two child nodes in the PKTree.
+///     2) Verify the proofs from its two child nodes in the PKTree.
+///     3) Verify the aggregate public key commitments.
+///     4) Verify the node hash.
+/// This circuit must also calculate the public input for the lower level because the lower
+/// level is MNT4 but all calculations must be performed on MNT6.
 #[derive(Clone)]
 pub struct PKTreeNodeCircuit {
     // Constants for the circuit. Careful, changing these values result in a different circuit, so
@@ -40,39 +53,58 @@ pub struct PKTreeNodeCircuit {
     vk_child: VerifyingKey<MNT6_753>,
 
     // Witnesses (private)
-    left_proof: Proof<MNT6_753>,
-    right_proof: Proof<MNT6_753>,
-    agg_pk_chunks: Vec<G2Projective>,
+    l_proof: Proof<MNT6_753>,
+    r_proof: Proof<MNT6_753>,
+    ll_agg_pk_commitment: G2Projective,
+    lr_agg_pk_commitment: G2Projective,
+    rl_agg_pk_commitment: G2Projective,
+    rr_agg_pk_commitment: G2Projective,
+
+    ll_pk_node_hash: [u8; 95],
+    lr_pk_node_hash: [u8; 95],
+    rl_pk_node_hash: [u8; 95],
+    rr_pk_node_hash: [u8; 95],
 
     // Inputs (public)
-    pk_tree_root: [u8; 95],
+    pk_node_hash: [u8; 95],
     agg_pk_commitment: [u8; 95],
     signer_bitmap_chunk: Vec<bool>,
-    path: u8,
 }
 
 impl PKTreeNodeCircuit {
     pub fn new(
         tree_level: usize,
         vk_child: VerifyingKey<MNT6_753>,
-        left_proof: Proof<MNT6_753>,
-        right_proof: Proof<MNT6_753>,
-        agg_pk_chunks: Vec<G2Projective>,
-        pk_tree_root: [u8; 95],
+        l_proof: Proof<MNT6_753>,
+        r_proof: Proof<MNT6_753>,
+        ll_agg_pk_commitment: G2Projective,
+        lr_agg_pk_commitment: G2Projective,
+        rl_agg_pk_commitment: G2Projective,
+        rr_agg_pk_commitment: G2Projective,
+        ll_pk_node_hash: [u8; 95],
+        lr_pk_node_hash: [u8; 95],
+        rl_pk_node_hash: [u8; 95],
+        rr_pk_node_hash: [u8; 95],
+        pk_node_hash: [u8; 95],
         agg_pk_commitment: [u8; 95],
         signer_bitmap_chunk: Vec<bool>,
-        path: u8,
     ) -> Self {
         Self {
             tree_level,
             vk_child,
-            left_proof,
-            right_proof,
-            agg_pk_chunks,
-            pk_tree_root,
+            l_proof,
+            r_proof,
+            ll_agg_pk_commitment,
+            lr_agg_pk_commitment,
+            rl_agg_pk_commitment,
+            rr_agg_pk_commitment,
+            ll_pk_node_hash,
+            lr_pk_node_hash,
+            rl_pk_node_hash,
+            rr_pk_node_hash,
+            pk_node_hash,
             agg_pk_commitment,
             signer_bitmap_chunk,
-            path,
         }
     }
 }
@@ -81,32 +113,44 @@ impl ConstraintSynthesizer<MNT6Fq> for PKTreeNodeCircuit {
     /// This function generates the constraints for the circuit.
     fn generate_constraints(self, cs: ConstraintSystemRef<MNT6Fq>) -> Result<(), SynthesisError> {
         // Allocate all the constants.
-        let pedersen_generators_var =
-            DefaultPedersenParametersVar::new_constant(cs.clone(), &*PEDERSEN_PARAMETERS)?; // only need 5
+        let pedersen_generators_var = DefaultPedersenParametersVar::new_constant(
+            cs.clone(),
+            PEDERSEN_PARAMETERS.sub_window::<PkInnerNodeWindow>(),
+        )?;
 
         let vk_child_var =
             VerifyingKeyVar::<MNT6_753, PairingVar>::new_constant(cs.clone(), &self.vk_child)?;
 
         // Allocate all the witnesses.
-        let left_proof_var =
-            ProofVar::<MNT6_753, PairingVar>::new_witness(cs.clone(), || Ok(&self.left_proof))?;
+        let l_proof_var =
+            ProofVar::<MNT6_753, PairingVar>::new_witness(cs.clone(), || Ok(&self.l_proof))?;
 
-        let right_proof_var =
-            ProofVar::<MNT6_753, PairingVar>::new_witness(cs.clone(), || Ok(&self.right_proof))?;
+        let r_proof_var =
+            ProofVar::<MNT6_753, PairingVar>::new_witness(cs.clone(), || Ok(&self.r_proof))?;
 
-        let agg_pk_chunks_var =
-            Vec::<G2Var>::new_witness(cs.clone(), || Ok(&self.agg_pk_chunks[..]))?;
+        let ll_agg_pk_commitment_var =
+            G2Var::new_witness(cs.clone(), || Ok(self.ll_agg_pk_commitment))?;
+        let lr_agg_pk_commitment_var =
+            G2Var::new_witness(cs.clone(), || Ok(self.lr_agg_pk_commitment))?;
+        let rl_agg_pk_commitment_var =
+            G2Var::new_witness(cs.clone(), || Ok(self.rl_agg_pk_commitment))?;
+        let rr_agg_pk_commitment_var =
+            G2Var::new_witness(cs.clone(), || Ok(self.rr_agg_pk_commitment))?;
+
+        let ll_pk_node_hash_bytes =
+            UInt8::<MNT6Fq>::new_witness_vec(cs.clone(), &self.ll_pk_node_hash)?;
+        let lr_pk_node_hash_bytes =
+            UInt8::<MNT6Fq>::new_witness_vec(cs.clone(), &self.lr_pk_node_hash)?;
+        let rl_pk_node_hash_bytes =
+            UInt8::<MNT6Fq>::new_witness_vec(cs.clone(), &self.rl_pk_node_hash)?;
+        let rr_pk_node_hash_bytes =
+            UInt8::<MNT6Fq>::new_witness_vec(cs.clone(), &self.rr_pk_node_hash)?;
 
         // Allocate all the inputs.
-        // Directly allocate as FqVar as it is passed through.
-        let pk_tree_root_var = Vec::<FqVar>::new_input(cs.clone(), || {
-            self.pk_tree_root
-                .to_field_elements()
-                .ok_or(SynthesisError::AssignmentMissing)
-        })?;
+        let pk_node_hash_bytes = UInt8::<MNT6Fq>::new_input_vec(cs.clone(), &self.pk_node_hash)?;
 
         let agg_pk_commitment_bytes =
-            UInt8::<MNT6Fq>::new_input_vec(cs.clone(), &self.agg_pk_commitment[..])?;
+            UInt8::<MNT6Fq>::new_input_vec(cs.clone(), &self.agg_pk_commitment)?;
 
         let signer_bitmap_chunk_bytes =
             BitVec::<MNT6Fq>::new_input_vec(cs.clone(), &self.signer_bitmap_chunk)?;
@@ -114,108 +158,90 @@ impl ConstraintSynthesizer<MNT6Fq> for PKTreeNodeCircuit {
             [..Policy::SLOTS as usize / 2_usize.pow(self.tree_level as u32)]
             .to_vec();
 
-        let path_var = FqVar::new_input(cs.clone(), || Ok(MNT6Fq::from(self.path)))?;
-
-        // Unpack the inputs by converting them from field elements to bits and truncating appropriately.
-        let mut path_bits = path_var.to_bits_le()?[..PK_TREE_DEPTH].to_vec();
-
         // Calculating the aggregate public key.
-        let mut agg_pk = G2Var::zero();
-
-        for pk in &agg_pk_chunks_var {
-            agg_pk += pk;
-        }
+        let l_agg_pk_commitment_var = &ll_agg_pk_commitment_var + &lr_agg_pk_commitment_var;
+        let r_agg_pk_commitment_var = &rl_agg_pk_commitment_var + &rr_agg_pk_commitment_var;
+        let agg_pk_commitment_var = l_agg_pk_commitment_var + r_agg_pk_commitment_var;
 
         // Verifying aggregate public key commitment. It just checks that the calculated aggregate
         // public key is correct by comparing it with the aggregate public key commitment given as
         // an input.
-        let agg_pk_bytes = agg_pk.serialize_compressed(cs.clone())?;
-
-        let pedersen_hash =
-            DefaultPedersenHashGadget::evaluate(&agg_pk_bytes, &pedersen_generators_var)?;
-
-        let pedersen_bytes = pedersen_hash.serialize_compressed(cs.clone())?;
+        let pedersen_bytes = hash_g2(&cs, &agg_pk_commitment_var, &pedersen_generators_var)?;
 
         agg_pk_commitment_bytes.enforce_equal(&pedersen_bytes)?;
 
         // Calculating the commitments to each of the aggregate public keys chunks. These
         // will be given as input to the SNARK circuits lower on the tree.
-        let mut agg_pk_chunks_commitments = Vec::new();
+        let ll_agg_pk_commitment_bytes =
+            hash_g2(&cs, &ll_agg_pk_commitment_var, &pedersen_generators_var)?;
+        let lr_agg_pk_commitment_bytes =
+            hash_g2(&cs, &lr_agg_pk_commitment_var, &pedersen_generators_var)?;
+        let rl_agg_pk_commitment_bytes =
+            hash_g2(&cs, &rl_agg_pk_commitment_var, &pedersen_generators_var)?;
+        let rr_agg_pk_commitment_bytes =
+            hash_g2(&cs, &rr_agg_pk_commitment_var, &pedersen_generators_var)?;
 
-        for chunk in &agg_pk_chunks_var {
-            let chunk_bytes = chunk.serialize_compressed(cs.clone())?;
+        // Calculate the node hashes of our children and our own.
+        let mut l_pk_node_hash_bytes = vec![];
+        l_pk_node_hash_bytes.extend_from_slice(&ll_pk_node_hash_bytes);
+        l_pk_node_hash_bytes.extend_from_slice(&lr_pk_node_hash_bytes);
+        let pedersen_hash = PedersenHashGadget::<_, _, PkInnerNodeWindow>::evaluate(
+            &l_pk_node_hash_bytes,
+            &pedersen_generators_var,
+        )?;
+        let l_pk_node_hash_bytes = pedersen_hash.serialize_compressed(cs.clone())?;
 
-            let pedersen_hash =
-                DefaultPedersenHashGadget::evaluate(&chunk_bytes, &pedersen_generators_var)?;
+        let mut r_pk_node_hash_bytes = vec![];
+        r_pk_node_hash_bytes.extend_from_slice(&rl_pk_node_hash_bytes);
+        r_pk_node_hash_bytes.extend_from_slice(&rr_pk_node_hash_bytes);
+        let pedersen_hash = PedersenHashGadget::<_, _, PkInnerNodeWindow>::evaluate(
+            &r_pk_node_hash_bytes,
+            &pedersen_generators_var,
+        )?;
+        let r_pk_node_hash_bytes = pedersen_hash.serialize_compressed(cs.clone())?;
 
-            let pedersen_bytes = pedersen_hash.serialize_compressed(cs.clone())?;
+        let mut calculated_pk_node_hash_bytes = vec![];
+        calculated_pk_node_hash_bytes.extend_from_slice(&l_pk_node_hash_bytes);
+        calculated_pk_node_hash_bytes.extend_from_slice(&r_pk_node_hash_bytes);
+        let pedersen_hash = PedersenHashGadget::<_, _, PkInnerNodeWindow>::evaluate(
+            &calculated_pk_node_hash_bytes,
+            &pedersen_generators_var,
+        )?;
+        let calculated_pk_node_hash_bytes = pedersen_hash.serialize_compressed(cs)?;
 
-            agg_pk_chunks_commitments.push(pedersen_bytes);
-        }
-
-        // Calculate the path for the left and right child nodes. Given the current position P,
-        // the left position L and the right position R are given as:
-        //    L = 2 * P
-        //    R = 2 * P + 1
-        // For efficiency reasons, we actually calculate the path using bit manipulation.
-        // Calculate P >> 1, which is equivalent to calculating 2 * P (in little-endian).
-        path_bits.pop();
-        path_bits.insert(0, Boolean::Constant(false));
-        let left_path = path_bits.clone();
-
-        // path_bits is currently P >> 1 = L. Calculate L & 1, which is equivalent to L + 1 (in little-endian).
-        let _ = path_bits.remove(0);
-        path_bits.insert(0, Boolean::Constant(true));
-        let right_path = path_bits;
+        calculated_pk_node_hash_bytes.enforce_equal(&pk_node_hash_bytes)?;
 
         // Split the signer's bitmap chunk into two, for the left and right child nodes.
-        let (left_signer_bitmap_bits, right_signer_bitmap_bits) = signer_bitmap_chunk_bits
+        let (l_signer_bitmap_bits, r_signer_bitmap_bits) = signer_bitmap_chunk_bits
             .split_at(Policy::SLOTS as usize / 2_usize.pow((self.tree_level + 1) as u32));
 
-        let mut left_signer_bitmap_var =
-            bits_to_bytes(left_signer_bitmap_bits).to_constraint_field()?;
-        let mut right_signer_bitmap_var =
-            bits_to_bytes(right_signer_bitmap_bits).to_constraint_field()?;
-        let mut left_path_var = bits_to_bytes(&left_path).to_constraint_field()?;
-        let mut right_path_var = bits_to_bytes(&right_path).to_constraint_field()?;
-
         // Verify the ZK proof for the left child node.
-        let mut proof_inputs = pk_tree_root_var.clone();
-
-        proof_inputs.append(&mut agg_pk_chunks_commitments[0].to_constraint_field()?);
-
-        proof_inputs.append(&mut agg_pk_chunks_commitments[1].to_constraint_field()?);
-
-        proof_inputs.append(&mut left_signer_bitmap_var);
-
-        proof_inputs.append(&mut left_path_var);
-
-        let input_var = BooleanInputVar::from_field_elements(&proof_inputs)?;
+        let mut proof_inputs = RecursiveInputVar::new();
+        proof_inputs.push(&ll_pk_node_hash_bytes)?;
+        proof_inputs.push(&lr_pk_node_hash_bytes)?;
+        proof_inputs.push(&ll_agg_pk_commitment_bytes)?;
+        proof_inputs.push(&lr_agg_pk_commitment_bytes)?;
+        proof_inputs.push(l_signer_bitmap_bits)?;
 
         Groth16VerifierGadget::<MNT6_753, PairingVar>::verify(
             &vk_child_var,
-            &input_var,
-            &left_proof_var,
+            &proof_inputs.into(),
+            &l_proof_var,
         )?
         .enforce_equal(&Boolean::constant(true))?;
 
         // Verify the ZK proof for the right child node.
-        let mut proof_inputs = pk_tree_root_var;
-
-        proof_inputs.append(&mut agg_pk_chunks_commitments[2].to_constraint_field()?);
-
-        proof_inputs.append(&mut agg_pk_chunks_commitments[3].to_constraint_field()?);
-
-        proof_inputs.append(&mut right_signer_bitmap_var);
-
-        proof_inputs.append(&mut right_path_var);
-
-        let input_var = BooleanInputVar::from_field_elements(&proof_inputs)?;
+        let mut proof_inputs = RecursiveInputVar::new();
+        proof_inputs.push(&rl_pk_node_hash_bytes)?;
+        proof_inputs.push(&rr_pk_node_hash_bytes)?;
+        proof_inputs.push(&rl_agg_pk_commitment_bytes)?;
+        proof_inputs.push(&rr_agg_pk_commitment_bytes)?;
+        proof_inputs.push(r_signer_bitmap_bits)?;
 
         Groth16VerifierGadget::<MNT6_753, PairingVar>::verify(
             &vk_child_var,
-            &input_var,
-            &right_proof_var,
+            &proof_inputs.into(),
+            &r_proof_var,
         )?
         .enforce_equal(&Boolean::constant(true))?;
 

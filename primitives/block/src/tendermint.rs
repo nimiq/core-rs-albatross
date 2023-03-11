@@ -46,9 +46,9 @@ impl TendermintProof {
             return false;
         }
 
-        // Calculate the `nano_zkp_hash`. This a special hash that is calculated using the `validators`
-        // field of the block body. It is necessary for the ZKP proofs used in the nano sync.
-        let block_hash = block.nano_zkp_hash(false);
+        // Calculate the `zkp_hash`. This a special hash that is calculated using the `validators`
+        // field of the block body. It is necessary for the ZKP proofs used in the light macro sync.
+        let block_hash = block.zkp_hash(false);
 
         // Calculate the message that was actually signed by the validators.
         let message = TendermintVote {
@@ -100,7 +100,7 @@ pub struct TendermintIdentifier {
 // First of all to be able to create a block proof the signatures must be over a hash which includes:
 // * block-height
 // * tendermint round
-// * proposal hash (calculated using the `nano_zkp_hash` function)
+// * proposal hash (calculated using the `zkp_hash` function)
 // * implicit: TendermintStep which also works as the prefix for the specific message which is signed (read purpose byte)
 //
 // In addition to that the correct assignment of specific contributions to their aggregations also needs part of this information.

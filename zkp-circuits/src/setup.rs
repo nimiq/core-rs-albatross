@@ -11,7 +11,7 @@ use ark_std::UniformRand;
 use rand::{CryptoRng, Rng};
 
 use nimiq_primitives::policy::Policy;
-use nimiq_zkp_primitives::{MacroBlock, NanoZKPError, PK_TREE_BREADTH, PK_TREE_DEPTH};
+use nimiq_zkp_primitives::{MacroBlock, NanoZKPError, PK_TREE_BREADTH};
 
 use crate::{
     circuits::mnt4::{
@@ -28,8 +28,8 @@ pub const DEVELOPMENT_SEED: [u8; 32] = [
     0, 2, 92,
 ];
 
-/// This function generates the parameters (proving and verifying keys) for the entire nano sync
-/// program. It does this by generating the parameters for each circuit, "from bottom to top". The
+/// This function generates the parameters (proving and verifying keys) for the entire light macro sync.
+/// It does this by generating the parameters for each circuit, "from bottom to top". The
 /// order is absolutely necessary because each circuit needs a verifying key from the circuit "below"
 /// it. Note that the parameter generation can take longer than one hour, even two on some computers.
 pub fn setup<R: Rng + CryptoRng>(
@@ -43,15 +43,15 @@ pub fn setup<R: Rng + CryptoRng>(
 
     setup_pk_tree_leaf(&mut rng, path, "pk_tree_5")?;
 
-    setup_pk_tree_node_mnt6(&mut rng, path, "pk_tree_5", "pk_tree_4", 4)?;
+    setup_pk_tree_node_mnt4(&mut rng, path, "pk_tree_5", "pk_tree_4", 4)?;
 
-    setup_pk_tree_node_mnt4(&mut rng, path, "pk_tree_4", "pk_tree_3", 3)?;
+    setup_pk_tree_node_mnt6(&mut rng, path, "pk_tree_4", "pk_tree_3", 3)?;
 
-    setup_pk_tree_node_mnt6(&mut rng, path, "pk_tree_3", "pk_tree_2", 2)?;
+    setup_pk_tree_node_mnt4(&mut rng, path, "pk_tree_3", "pk_tree_2", 2)?;
 
-    setup_pk_tree_node_mnt4(&mut rng, path, "pk_tree_2", "pk_tree_1", 1)?;
+    setup_pk_tree_node_mnt6(&mut rng, path, "pk_tree_2", "pk_tree_1", 1)?;
 
-    setup_pk_tree_node_mnt6(&mut rng, path, "pk_tree_1", "pk_tree_0", 0)?;
+    setup_pk_tree_node_mnt4(&mut rng, path, "pk_tree_1", "pk_tree_0", 0)?;
 
     setup_macro_block(&mut rng, path)?;
 
@@ -109,8 +109,6 @@ fn setup_pk_tree_leaf<R: Rng + CryptoRng>(
     // Create dummy inputs.
     let pks = vec![G2MNT6::rand(rng); Policy::SLOTS as usize / PK_TREE_BREADTH];
 
-    let pk_tree_nodes = vec![G1MNT6::rand(rng); PK_TREE_DEPTH];
-
     let mut pk_tree_root = [0u8; 95];
     rng.fill_bytes(&mut pk_tree_root);
 
@@ -122,83 +120,10 @@ fn setup_pk_tree_leaf<R: Rng + CryptoRng>(
         signer_bitmap.push(rng.gen());
     }
 
-    let path: u8 = rng.gen();
-
     // Create parameters for our circuit
-    let circuit = LeafMNT6::new(
-        pks,
-        pk_tree_nodes,
-        pk_tree_root,
-        agg_pk_commitment,
-        signer_bitmap,
-        path,
-    );
+    let circuit = LeafMNT6::new(pks, pk_tree_root, agg_pk_commitment, signer_bitmap);
 
     let (pk, vk) = Groth16::<MNT4_753>::setup(circuit, rng)?;
-
-    // Save keys to file.
-    keys_to_file(&pk, &vk, name, dir_path)
-}
-
-fn setup_pk_tree_node_mnt6<R: Rng + CryptoRng>(
-    rng: &mut R,
-    dir_path: &Path,
-    vk_file: &str,
-    name: &str,
-    tree_level: usize,
-) -> Result<(), NanoZKPError> {
-    // Load the verifying key from file.
-    let mut file = File::open(
-        dir_path
-            .join("verifying_keys")
-            .join(format!("{vk_file}.bin")),
-    )?;
-
-    let vk_child = VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
-
-    // Create dummy inputs.
-    let left_proof = Proof {
-        a: G1MNT4::rand(rng).into_affine(),
-        b: G2MNT4::rand(rng).into_affine(),
-        c: G1MNT4::rand(rng).into_affine(),
-    };
-
-    let right_proof = Proof {
-        a: G1MNT4::rand(rng).into_affine(),
-        b: G2MNT4::rand(rng).into_affine(),
-        c: G1MNT4::rand(rng).into_affine(),
-    };
-
-    let mut pk_tree_root = [0u8; 95];
-    rng.fill_bytes(&mut pk_tree_root);
-
-    let mut left_agg_pk_commitment = [0u8; 95];
-    rng.fill_bytes(&mut left_agg_pk_commitment);
-
-    let mut right_agg_pk_commitment = [0u8; 95];
-    rng.fill_bytes(&mut right_agg_pk_commitment);
-
-    let mut signer_bitmap = Vec::with_capacity(Policy::SLOTS as usize);
-    for _ in 0..Policy::SLOTS {
-        signer_bitmap.push(rng.gen());
-    }
-
-    let path: u8 = rng.gen();
-
-    // Create parameters for our circuit
-    let circuit = NodeMNT4::new(
-        tree_level,
-        vk_child,
-        left_proof,
-        right_proof,
-        pk_tree_root,
-        left_agg_pk_commitment,
-        right_agg_pk_commitment,
-        signer_bitmap,
-        path,
-    );
-
-    let (pk, vk) = Groth16::<MNT6_753>::setup(circuit, rng)?;
 
     // Save keys to file.
     keys_to_file(&pk, &vk, name, dir_path)
@@ -222,6 +147,73 @@ fn setup_pk_tree_node_mnt4<R: Rng + CryptoRng>(
 
     // Create dummy inputs.
     let left_proof = Proof {
+        a: G1MNT4::rand(rng).into_affine(),
+        b: G2MNT4::rand(rng).into_affine(),
+        c: G1MNT4::rand(rng).into_affine(),
+    };
+
+    let right_proof = Proof {
+        a: G1MNT4::rand(rng).into_affine(),
+        b: G2MNT4::rand(rng).into_affine(),
+        c: G1MNT4::rand(rng).into_affine(),
+    };
+
+    let mut pk_node_hash = [0u8; 95];
+    rng.fill_bytes(&mut pk_node_hash);
+
+    let mut l_pk_node_hash = [0u8; 95];
+    rng.fill_bytes(&mut l_pk_node_hash);
+    let mut r_pk_node_hash = [0u8; 95];
+    rng.fill_bytes(&mut r_pk_node_hash);
+
+    let mut left_agg_pk_commitment = [0u8; 95];
+    rng.fill_bytes(&mut left_agg_pk_commitment);
+
+    let mut right_agg_pk_commitment = [0u8; 95];
+    rng.fill_bytes(&mut right_agg_pk_commitment);
+
+    let mut signer_bitmap = Vec::with_capacity(Policy::SLOTS as usize);
+    for _ in 0..Policy::SLOTS {
+        signer_bitmap.push(rng.gen());
+    }
+
+    // Create parameters for our circuit
+    let circuit = NodeMNT4::new(
+        tree_level,
+        vk_child,
+        left_proof,
+        right_proof,
+        l_pk_node_hash,
+        r_pk_node_hash,
+        left_agg_pk_commitment,
+        right_agg_pk_commitment,
+        signer_bitmap,
+    );
+
+    let (pk, vk) = Groth16::<MNT6_753>::setup(circuit, rng)?;
+
+    // Save keys to file.
+    keys_to_file(&pk, &vk, name, dir_path)
+}
+
+fn setup_pk_tree_node_mnt6<R: Rng + CryptoRng>(
+    rng: &mut R,
+    dir_path: &Path,
+    vk_file: &str,
+    name: &str,
+    tree_level: usize,
+) -> Result<(), NanoZKPError> {
+    // Load the verifying key from file.
+    let mut file = File::open(
+        dir_path
+            .join("verifying_keys")
+            .join(format!("{vk_file}.bin")),
+    )?;
+
+    let vk_child = VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
+
+    // Create dummy inputs.
+    let left_proof = Proof {
         a: G1MNT6::rand(rng).into_affine(),
         b: G2MNT6::rand(rng).into_affine(),
         c: G1MNT6::rand(rng).into_affine(),
@@ -233,10 +225,16 @@ fn setup_pk_tree_node_mnt4<R: Rng + CryptoRng>(
         c: G1MNT6::rand(rng).into_affine(),
     };
 
-    let agg_pk_chunks = vec![G2MNT6::rand(rng); 4];
+    let agg_pks = vec![G2MNT6::rand(rng); 4];
 
-    let mut pk_tree_root = [0u8; 95];
-    rng.fill_bytes(&mut pk_tree_root);
+    let mut pk_node_hashes = vec![];
+    for _ in 0..4 {
+        let mut pk_node_hash = [0u8; 95];
+        rng.fill_bytes(&mut pk_node_hash);
+        pk_node_hashes.push(pk_node_hash);
+    }
+    let mut pk_node_hash = [0u8; 95];
+    rng.fill_bytes(&mut pk_node_hash);
 
     let mut agg_pk_commitment = [0u8; 95];
     rng.fill_bytes(&mut agg_pk_commitment);
@@ -246,19 +244,23 @@ fn setup_pk_tree_node_mnt4<R: Rng + CryptoRng>(
         signer_bitmap.push(rng.gen());
     }
 
-    let path: u8 = rng.gen();
-
     // Create parameters for our circuit
     let circuit = NodeMNT6::new(
         tree_level,
         vk_child,
         left_proof,
         right_proof,
-        agg_pk_chunks,
-        pk_tree_root,
+        agg_pks[0],
+        agg_pks[1],
+        agg_pks[2],
+        agg_pks[3],
+        pk_node_hashes[0],
+        pk_node_hashes[1],
+        pk_node_hashes[2],
+        pk_node_hashes[3],
+        pk_node_hash,
         agg_pk_commitment,
         signer_bitmap,
-        path,
     );
 
     let (pk, vk) = Groth16::<MNT4_753>::setup(circuit, rng)?;
@@ -274,8 +276,6 @@ fn setup_macro_block<R: Rng + CryptoRng>(rng: &mut R, path: &Path) -> Result<(),
     let vk_pk_tree = VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
     // Create dummy inputs.
-    let agg_pk_chunks = vec![G2MNT6::rand(rng); 2];
-
     let proof = Proof {
         a: G1MNT6::rand(rng).into_affine(),
         b: G2MNT6::rand(rng).into_affine(),
@@ -319,15 +319,28 @@ fn setup_macro_block<R: Rng + CryptoRng>(rng: &mut R, path: &Path) -> Result<(),
         signer_bitmap,
     };
 
+    let mut l_pk_node_hash = [0u8; 95];
+    rng.fill_bytes(&mut l_pk_node_hash);
+
+    let mut r_pk_node_hash = [0u8; 95];
+    rng.fill_bytes(&mut r_pk_node_hash);
+
+    let l_agg_commitment = G2MNT6::rand(rng);
+
+    let r_agg_commitment = G2MNT6::rand(rng);
+
     // Create parameters for our circuit
     let circuit = MacroBlockCircuit::new(
         vk_pk_tree,
-        agg_pk_chunks,
         proof,
         initial_pk_tree_root,
         initial_header_hash,
         final_pk_tree_root,
         block,
+        l_pk_node_hash,
+        r_pk_node_hash,
+        l_agg_commitment,
+        r_agg_commitment,
         initial_state_commitment,
         final_state_commitment,
     );

@@ -1,31 +1,26 @@
-use ark_crypto_primitives::snark::{BooleanInputVar, FromFieldElementsGadget, SNARKGadget};
+use ark_crypto_primitives::snark::SNARKGadget;
 use ark_groth16::{
     constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar},
     Proof, VerifyingKey,
 };
 use ark_mnt6_753::{
-    constraints::{FqVar, G2Var, PairingVar},
+    constraints::{G2Var, PairingVar},
     Fq as MNT6Fq, G2Projective, MNT6_753,
 };
-use ark_r1cs_std::{
-    prelude::{AllocVar, Boolean, CurveVar, EqGadget, FieldVar, UInt32, UInt8},
-    ToConstraintFieldGadget,
-};
+use ark_r1cs_std::prelude::{AllocVar, Boolean, EqGadget, UInt32, UInt8};
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 
 use nimiq_primitives::policy::Policy;
 use nimiq_zkp_primitives::{MacroBlock, PEDERSEN_PARAMETERS};
 
-use crate::{
-    gadgets::{
-        mnt6::{
-            DefaultPedersenHashGadget, DefaultPedersenParametersVar, MacroBlockGadget,
-            StateCommitmentGadget,
-        },
-        serialize::SerializeGadget,
-    },
-    utils::bits_to_bytes,
+use crate::gadgets::{
+    mnt6::{DefaultPedersenParametersVar, MacroBlockGadget, StateCommitmentGadget},
+    pedersen::PedersenHashGadget,
+    recursive_input::RecursiveInputVar,
+    serialize::SerializeGadget,
 };
+
+use super::pk_tree_node::{hash_g2, PkInnerNodeWindow};
 
 /// This is the macro block circuit. It takes as inputs an initial state commitment and final state commitment
 /// and it produces a proof that there exists a valid macro block that transforms the initial state
@@ -39,12 +34,15 @@ pub struct MacroBlockCircuit {
     vk_pk_tree: VerifyingKey<MNT6_753>,
 
     // Witnesses (private)
-    agg_pk_chunks: Vec<G2Projective>,
     proof: Proof<MNT6_753>,
     initial_pk_tree_root: [u8; 95],
     initial_header_hash: [u8; 32],
     final_pk_tree_root: [u8; 95],
     block: MacroBlock,
+    l_pk_node_hash: [u8; 95],
+    r_pk_node_hash: [u8; 95],
+    l_agg_pk_commitment: G2Projective,
+    r_agg_pk_commitment: G2Projective,
 
     // Inputs (public)
     initial_state_commitment: [u8; 95],
@@ -54,23 +52,29 @@ pub struct MacroBlockCircuit {
 impl MacroBlockCircuit {
     pub fn new(
         vk_pk_tree: VerifyingKey<MNT6_753>,
-        agg_pk_chunks: Vec<G2Projective>,
         proof: Proof<MNT6_753>,
         initial_pk_tree_root: [u8; 95],
         initial_header_hash: [u8; 32],
         final_pk_tree_root: [u8; 95],
         block: MacroBlock,
+        l_pk_node_hash: [u8; 95],
+        r_pk_node_hash: [u8; 95],
+        l_agg_pk_commitment: G2Projective,
+        r_agg_pk_commitment: G2Projective,
         initial_state_commitment: [u8; 95],
         final_state_commitment: [u8; 95],
     ) -> Self {
         Self {
             vk_pk_tree,
-            agg_pk_chunks,
             proof,
             initial_pk_tree_root,
             initial_header_hash,
             final_pk_tree_root,
             block,
+            l_pk_node_hash,
+            r_pk_node_hash,
+            l_agg_pk_commitment,
+            r_agg_pk_commitment,
             initial_state_commitment,
             final_state_commitment,
         }
@@ -84,16 +88,15 @@ impl ConstraintSynthesizer<MNT6Fq> for MacroBlockCircuit {
         let epoch_length_var =
             UInt32::<MNT6Fq>::new_constant(cs.clone(), Policy::blocks_per_epoch())?;
 
-        let pedersen_generators_var =
-            DefaultPedersenParametersVar::new_constant(cs.clone(), &*PEDERSEN_PARAMETERS)?; // only need 5
+        let pedersen_generators_var = DefaultPedersenParametersVar::new_constant(
+            cs.clone(),
+            PEDERSEN_PARAMETERS.sub_window::<PkInnerNodeWindow>(),
+        )?;
 
         let vk_pk_tree_var =
             VerifyingKeyVar::<MNT6_753, PairingVar>::new_constant(cs.clone(), &self.vk_pk_tree)?;
 
         // Allocate all the witnesses.
-        let agg_pk_chunks_var =
-            Vec::<G2Var>::new_witness(cs.clone(), || Ok(&self.agg_pk_chunks[..]))?;
-
         let proof_var =
             ProofVar::<MNT6_753, PairingVar>::new_witness(cs.clone(), || Ok(&self.proof))?;
 
@@ -107,6 +110,18 @@ impl ConstraintSynthesizer<MNT6Fq> for MacroBlockCircuit {
             Vec::<UInt8<MNT6Fq>>::new_witness(cs.clone(), || Ok(&self.final_pk_tree_root[..]))?;
 
         let block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(&self.block))?;
+
+        let l_pk_node_hash_bytes =
+            Vec::<UInt8<MNT6Fq>>::new_witness(cs.clone(), || Ok(&self.l_pk_node_hash[..]))?;
+
+        let r_pk_node_hash_bytes =
+            Vec::<UInt8<MNT6Fq>>::new_witness(cs.clone(), || Ok(&self.r_pk_node_hash[..]))?;
+
+        let l_agg_pk_commitment_var =
+            G2Var::new_witness(cs.clone(), || Ok(self.l_agg_pk_commitment))?;
+
+        let r_agg_pk_commitment_var =
+            G2Var::new_witness(cs.clone(), || Ok(self.r_agg_pk_commitment))?;
 
         let initial_block_number_var = UInt32::new_witness(cs.clone(), || {
             Ok(self.block.block_number - Policy::blocks_per_epoch())
@@ -153,18 +168,22 @@ impl ConstraintSynthesizer<MNT6Fq> for MacroBlockCircuit {
 
         // Calculating the commitments to each of the aggregate public keys chunks. These will be
         // given as inputs to the PKTree SNARK circuit.
-        let mut agg_pk_chunks_commitments = Vec::new();
+        let l_agg_pk_commitment_bytes =
+            hash_g2(&cs, &l_agg_pk_commitment_var, &pedersen_generators_var)?;
+        let r_agg_pk_commitment_bytes =
+            hash_g2(&cs, &r_agg_pk_commitment_var, &pedersen_generators_var)?;
 
-        for chunk in &agg_pk_chunks_var {
-            let chunk_bytes = chunk.serialize_compressed(cs.clone())?;
+        // Calculate and verify the root hash.
+        let mut pk_node_hash_bytes = vec![];
+        pk_node_hash_bytes.extend_from_slice(&l_pk_node_hash_bytes);
+        pk_node_hash_bytes.extend_from_slice(&r_pk_node_hash_bytes);
+        let pedersen_hash = PedersenHashGadget::<_, _, PkInnerNodeWindow>::evaluate(
+            &pk_node_hash_bytes,
+            &pedersen_generators_var,
+        )?;
+        let pk_node_hash_bytes = pedersen_hash.serialize_compressed(cs.clone())?;
 
-            let pedersen_hash =
-                DefaultPedersenHashGadget::evaluate(&chunk_bytes, &pedersen_generators_var)?;
-
-            let pedersen_bits = pedersen_hash.serialize_compressed(cs.clone())?;
-
-            agg_pk_chunks_commitments.push(pedersen_bits);
-        }
+        pk_node_hash_bytes.enforce_equal(&initial_pk_tree_root_bytes)?;
 
         // Verifying the SNARK proof. This is a proof that the aggregate public key is indeed
         // correct. It simply takes the public keys and the signers bitmap and recalculates the
@@ -174,32 +193,22 @@ impl ConstraintSynthesizer<MNT6Fq> for MacroBlockCircuit {
         // Note that in this particular case, we don't pass the aggregated public key to the SNARK.
         // Instead we pass two chunks of the aggregated public key to it. This is just because the
         // PKTreeNode circuit in the MNT6 curve takes two chunks as inputs.
-        let mut proof_inputs = initial_pk_tree_root_bytes.to_constraint_field()?;
-
-        proof_inputs.append(&mut agg_pk_chunks_commitments[0].to_constraint_field()?);
-
-        proof_inputs.append(&mut agg_pk_chunks_commitments[1].to_constraint_field()?);
-
-        proof_inputs.append(&mut bits_to_bytes(&block_var.signer_bitmap).to_constraint_field()?);
-
-        // Since we are beginning at the root of the PKTree our path is all zeros.
-        proof_inputs.push(FqVar::zero());
-
-        let input_var = BooleanInputVar::from_field_elements(&proof_inputs)?;
+        let mut proof_inputs = RecursiveInputVar::new();
+        proof_inputs.push(&l_pk_node_hash_bytes)?;
+        proof_inputs.push(&r_pk_node_hash_bytes)?;
+        proof_inputs.push(&l_agg_pk_commitment_bytes)?;
+        proof_inputs.push(&r_agg_pk_commitment_bytes)?;
+        proof_inputs.push(&block_var.signer_bitmap)?;
 
         Groth16VerifierGadget::<MNT6_753, PairingVar>::verify(
             &vk_pk_tree_var,
-            &input_var,
+            &proof_inputs.into(),
             &proof_var,
         )?
         .enforce_equal(&Boolean::constant(true))?;
 
         // Calculating the aggregate public key.
-        let mut agg_pk_var = G2Var::zero();
-
-        for pk in &agg_pk_chunks_var {
-            agg_pk_var += pk;
-        }
+        let agg_pk_var = l_agg_pk_commitment_var + r_agg_pk_commitment_var;
 
         // Verifying that the block is valid.
         block_var

@@ -46,7 +46,7 @@ use crate::{
 // There are two distinct signatures for any given proposal.
 // The first one is a Schnorr signature from the proposer of any given round over the header hash.
 //     This hash does NOT include the pk_tree_root and this signature is not the one being aggregated.
-// The other one is a BLS signature over the nano_zkp_hash, which is defined as Blake2S(Blake2b(header_hash).append(pk_tree_root))
+// The other one is a BLS signature over the zkp_hash, which is defined as Blake2S(Blake2b(header_hash).append(pk_tree_root))
 //     This one is being aggregated, and contains the pk_tree_root, so the body is necessary for the verification of the signature.
 
 struct NetworkWrapper<TValidatorNetwork: ValidatorNetwork> {
@@ -153,7 +153,7 @@ where
     /// Hashes the proposal, while taking care to not include the PubsubId
     ///
     /// This hash is NOT suited to be signed for BLS Aggregated signatures for the macro blocks, as those need to include the pk_tree_root.
-    /// See MacroBlock::nano_zkp_hash for more details.
+    /// See MacroBlock::zkp_hash for more details.
     fn hash_proposal(proposal_msg: &ProposalMessage<<Self as Protocol>::Proposal>) -> &[u8] {
         let mut h = Blake2sHasher::new();
 

@@ -1,8 +1,10 @@
 use ark_groth16::constraints::VerifyingKeyVar;
 use ark_mnt6_753::{constraints::PairingVar, Fq as MNT6Fq, MNT6_753};
-use ark_r1cs_std::uint8::UInt8;
+use ark_r1cs_std::{alloc::AllocVar, uint8::UInt8};
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
-use nimiq_pedersen_generators::GenericWindow;
+
+use nimiq_pedersen_generators::DefaultWindow;
+use nimiq_zkp_primitives::PEDERSEN_PARAMETERS;
 
 use crate::gadgets::{pedersen::PedersenHashGadget, serialize::SerializeGadget};
 
@@ -16,15 +18,19 @@ use super::DefaultPedersenParametersVar;
 /// of compressing the state and representing it across different curves.
 pub struct VKCommitmentGadget;
 
-pub type VkCommitmentWindow = GenericWindow<14, MNT6Fq>;
+pub type VkCommitmentWindow = DefaultWindow;
 
 impl VKCommitmentGadget {
     /// Calculates the verifying key commitment.
     pub fn evaluate(
         cs: ConstraintSystemRef<MNT6Fq>,
         vk: &VerifyingKeyVar<MNT6_753, PairingVar>,
-        pedersen_generators: &DefaultPedersenParametersVar,
     ) -> Result<Vec<UInt8<MNT6Fq>>, SynthesisError> {
+        let pedersen_generators = DefaultPedersenParametersVar::new_constant(
+            cs.clone(),
+            PEDERSEN_PARAMETERS.sub_window::<VkCommitmentWindow>(),
+        )?;
+
         // Initialize Boolean vector.
         let mut bytes = vec![];
 
@@ -48,7 +54,7 @@ impl VKCommitmentGadget {
 
         // Calculate the Pedersen hash.
         let hash =
-            PedersenHashGadget::<_, _, VkCommitmentWindow>::evaluate(&bytes, pedersen_generators)?;
+            PedersenHashGadget::<_, _, VkCommitmentWindow>::evaluate(&bytes, &pedersen_generators)?;
 
         // Serialize the Pedersen hash.
         let serialized_bytes = hash.serialize_compressed(cs)?;
@@ -69,11 +75,8 @@ mod tests {
     use ark_relations::r1cs::ConstraintSystem;
     use ark_std::{test_rng, UniformRand};
 
-    use nimiq_pedersen_generators::pedersen_generator_powers;
     use nimiq_test_log::test;
     use nimiq_zkp_primitives::vk_commitment;
-
-    use crate::gadgets::pedersen::PedersenParametersVar;
 
     use super::*;
 
@@ -103,13 +106,8 @@ mod tests {
         let vk_var =
             VerifyingKeyVar::<_, PairingVar>::new_witness(cs.clone(), || Ok(vk.clone())).unwrap();
 
-        // Allocate the generators.
-        let parameters = pedersen_generator_powers::<VkCommitmentWindow>();
-        let generators_var =
-            PedersenParametersVar::new_witness(cs.clone(), || Ok(&parameters)).unwrap();
-
         // Evaluate vk commitment using the gadget version.
-        let gadget_comm = VKCommitmentGadget::evaluate(cs, &vk_var, &generators_var).unwrap();
+        let gadget_comm = VKCommitmentGadget::evaluate(cs, &vk_var).unwrap();
 
         // Compare the two versions bit by bit.
         assert_eq!(primitive_comm.len(), gadget_comm.len());

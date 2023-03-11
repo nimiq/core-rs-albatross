@@ -28,7 +28,7 @@ ark-r1cs-std = "0.4"
 ark-serialize = "0.4"
 ark-std = "0.4"
 lazy_static = { version = "1.4" }
-log = { package = "tracing", version = "0.1", features = ["log"] }
+log = { package = "tracing", version = "0.1", features = ["log", "attributes"] }
 parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
 rand = { version = "0.8", features = ["small_rng"] }
 thiserror = "1.0"
@@ -40,8 +40,11 @@ nimiq-zkp-circuits = { path = "../zkp-circuits" }
 nimiq-zkp-primitives = { path = "../zkp-primitives" }
 
 [dev-dependencies]
-nimiq-test-log = { path = "../test-log" }
 rand_chacha = "0.3.1"
+tracing-subscriber = { version = "0.2" }
+
+nimiq-test-log = { path = "../test-log" }
+nimiq-zkp-circuits = { path = "../zkp-circuits", features = ["zkp-prover"] }
 
 [features]
 parallel = ["nimiq-zkp-circuits/parallel", "nimiq-zkp-primitives/parallel", "ark-crypto-primitives/parallel", "ark-ec/parallel", "ark-ff/parallel", "ark-std/parallel", "ark-groth16/parallel"]

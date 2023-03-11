@@ -19,8 +19,6 @@ use crate::fork_proof::ForkProof;
 use crate::skip_block::SkipBlockProof;
 
 /// The struct representing a Micro block.
-/// A Micro block, unlike a Macro block, doesn't contain any inherents (data that can be calculated
-/// by full nodes but for syncing and for nano nodes some needs to be explicitly included).
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MicroBlock {
     /// The header, contains some basic information and commitments to the body and the state.

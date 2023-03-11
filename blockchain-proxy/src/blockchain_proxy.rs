@@ -40,7 +40,7 @@ impl Clone for BlockchainProxy {
         match self {
             #[cfg(feature = "full")]
             Self::Full(blockchain) => Self::Full(Arc::clone(blockchain)),
-            Self::Light(nano_blockchain) => Self::Light(Arc::clone(nano_blockchain)),
+            Self::Light(light_blockchain) => Self::Light(Arc::clone(light_blockchain)),
         }
     }
 }
@@ -53,8 +53,8 @@ impl From<Arc<RwLock<Blockchain>>> for BlockchainProxy {
 }
 
 impl From<Arc<RwLock<LightBlockchain>>> for BlockchainProxy {
-    fn from(nano_blockchain: Arc<RwLock<LightBlockchain>>) -> Self {
-        Self::Light(nano_blockchain)
+    fn from(light_blockchain: Arc<RwLock<LightBlockchain>>) -> Self {
+        Self::Light(light_blockchain)
     }
 }
 
@@ -66,8 +66,8 @@ impl<'a> From<&'a Arc<RwLock<Blockchain>>> for BlockchainProxy {
 }
 
 impl<'a> From<&'a Arc<RwLock<LightBlockchain>>> for BlockchainProxy {
-    fn from(nano_blockchain: &'a Arc<RwLock<LightBlockchain>>) -> Self {
-        Self::Light(Arc::clone(nano_blockchain))
+    fn from(light_blockchain: &'a Arc<RwLock<LightBlockchain>>) -> Self {
+        Self::Light(Arc::clone(light_blockchain))
     }
 }
 
@@ -80,8 +80,8 @@ impl BlockchainProxy {
             BlockchainProxy::Full(blockchain) => {
                 BlockchainReadProxy::Full(Arc::new(blockchain.read()))
             }
-            BlockchainProxy::Light(nano_blockchain) => {
-                BlockchainReadProxy::Light(Arc::new(nano_blockchain.read()))
+            BlockchainProxy::Light(light_blockchain) => {
+                BlockchainReadProxy::Light(Arc::new(light_blockchain.read()))
             }
         }
     }

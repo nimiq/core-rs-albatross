@@ -213,7 +213,7 @@ impl Blockchain {
                         ));
                     }
                 } else {
-                    // We don't need to check the nano_zkp_hash here since it was already checked in the
+                    // We don't need to check the zkp_hash here since it was already checked in the
                     // `verify_block_body` method.
 
                     // Get the lost rewards and disabled sets.

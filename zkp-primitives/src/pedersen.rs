@@ -1,5 +1,8 @@
-use ark_crypto_primitives::crh::pedersen::{bytes_to_bits, Window};
-use ark_ec::CurveGroup;
+use ark_crypto_primitives::crh::{
+    pedersen::{Window, CRH},
+    CRHScheme,
+};
+use ark_ec::{AffineRepr, CurveGroup};
 use ark_mnt6_753::G1Projective;
 use lazy_static::lazy_static;
 use nimiq_pedersen_generators::{default, DefaultWindow, PedersenParameters};
@@ -22,31 +25,9 @@ pub fn pedersen_hash<C: CurveGroup, W: Window>(
     input: &[u8],
     parameters: &PedersenParameters<C>,
 ) -> C {
-    // The Pedersen Hash implementation of arkworks is not working properly for the mnt6 curve.
-    // Thus, we still use our own implementation for now.
-
-    // Check that the input can be stored using the available generators.
-    assert!(parameters.parameters.generators.len() >= W::NUM_WINDOWS);
-    assert!(W::NUM_WINDOWS * W::WINDOW_SIZE >= input.len() / 8);
-
-    let bits = bytes_to_bits(input);
-
-    // Initialize the sum to the first generator.
-    let mut result = parameters.blinding_factor;
-
-    let generator_powers = &parameters.parameters.generators;
-
-    // Start calculating the Pedersen hash.
-    for (i, chunk) in bits.chunks(W::WINDOW_SIZE).enumerate() {
-        // We multiply each generator by the corresponding scalar formed from 752 bits of input. This
-        // is the double-and-add method for EC point multiplication.
-        // (https://en.wikipedia.org/wiki/Elliptic_curve_point_multiplication#Double-and-add)
-        for (j, bit) in chunk.iter().enumerate() {
-            if *bit {
-                result += generator_powers[i][j];
-            }
-        }
-    }
-
-    result
+    let mut hash = CRH::<C, W>::evaluate(&parameters.parameters, input)
+        .unwrap()
+        .into_group();
+    hash += &parameters.blinding_factor;
+    hash
 }

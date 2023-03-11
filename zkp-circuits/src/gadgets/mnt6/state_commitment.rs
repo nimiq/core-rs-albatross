@@ -16,7 +16,7 @@ use super::DefaultPedersenParametersVar;
 /// provides an efficient way of compressing the state and representing it across different curves.
 pub struct StateCommitmentGadget;
 
-pub type StateCommitmentWindow = GenericWindow<2, MNT6Fq>;
+pub type StateCommitmentWindow = GenericWindow<4, MNT6Fq>; // can be reduced to 2
 
 impl StateCommitmentGadget {
     /// Calculates the state commitment.

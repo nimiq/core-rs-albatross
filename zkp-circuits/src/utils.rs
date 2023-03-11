@@ -1,22 +1,10 @@
 use ark_ec::Group;
-use ark_ff::PrimeField;
 use ark_mnt6_753::{Fr as MNT6Fr, G2Projective as G2MNT6};
-use ark_r1cs_std::{prelude::Boolean, uint8::UInt8};
 use ark_std::{ops::MulAssign, UniformRand};
 use rand::{rngs::SmallRng, seq::SliceRandom, RngCore, SeedableRng};
 
 use nimiq_primitives::policy::Policy;
 use nimiq_zkp_primitives::{pk_tree_construct, state_commitment, MacroBlock};
-
-pub fn bits_to_bytes<F: PrimeField>(bits: &[Boolean<F>]) -> Vec<UInt8<F>> {
-    if bits.len() % 8 != 0 {
-        let mut bits = bits.to_vec();
-        bits.resize((bits.len() / 8 + 1) * 8, Boolean::FALSE);
-        return bits_to_bytes(&bits);
-    }
-
-    bits.chunks(8).map(UInt8::from_bits_le).collect()
-}
 
 /// Transforms a u8 into a vector of little endian bits.
 pub fn byte_to_le_bits(mut byte: u8) -> Vec<bool> {

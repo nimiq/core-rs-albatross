@@ -15,6 +15,23 @@ pub struct PedersenParameters<C: CurveGroup> {
     pub blinding_factor: C,
 }
 
+impl<C: CurveGroup> PedersenParameters<C> {
+    pub fn sub_window<W: Window>(&self) -> Self {
+        PedersenParameters {
+            parameters: Parameters {
+                generators: self
+                    .parameters
+                    .generators
+                    .iter()
+                    .take(W::NUM_WINDOWS)
+                    .cloned()
+                    .collect(),
+            },
+            blinding_factor: self.blinding_factor,
+        }
+    }
+}
+
 /// This is the function for creating generators in the G1 group for the MNT6-753 curve. These
 /// generators are meant to be used for the Pedersen hash function.
 fn pedersen_generators(number: usize) -> Vec<G1Projective> {

@@ -41,7 +41,7 @@ impl MacroBlock {
     }
 
     /// Calculates the following function:
-    ///     nano_zkp_hash = Blake2s( Blake2b(header) || pk_tree_root )
+    ///     zkp_hash = Blake2s( Blake2b(header) || pk_tree_root )
     /// Where `pk_tree_root` is the root of a special Merkle tree containing the BLS public keys of
     /// the validators for the next epoch.
     /// The `pk_tree_root` is necessary for the Nano ZK proofs and needs to be inserted into the
@@ -54,9 +54,9 @@ impl MacroBlock {
     ///     nano_zkp_hash = Blake2s( Blake2b(header) )
     ///
     /// If the header is an election macro block header the body must not be None. If it is this function will panic.
-    pub fn nano_zkp_hash(&self, recalculate_pk_tree: bool) -> Blake2sHash {
+    pub fn zkp_hash(&self, recalculate_pk_tree: bool) -> Blake2sHash {
         self.header
-            .nano_zkp_hash_with_body(&self.body, recalculate_pk_tree)
+            .zkp_hash_with_body(&self.body, recalculate_pk_tree)
     }
 
     /// Calculates the PKTree root from the given validators.
@@ -201,7 +201,7 @@ impl MacroHeader {
     ///     nano_zkp_hash = Blake2s( Blake2b(header) )
     ///
     /// If the header is an election macro block header the body argument must not be `None`. If it is this function will panic.
-    pub fn nano_zkp_hash_with_body(
+    pub fn zkp_hash_with_body(
         &self,
         body: &Option<MacroBody>,
         force_recalculate_pk_tree: bool,
@@ -269,7 +269,7 @@ pub struct MacroBody {
     /// Is only Some when the macro block is an election block.
     pub validators: Option<Validators>,
     /// The root of a special Merkle tree over the next validator's voting keys. It is necessary to
-    /// verify the zero-knowledge proofs used in the nano-sync.
+    /// verify the zero-knowledge proofs used in the light macro sync.
     /// Is only Some when the macro block is an election block.
     #[beserial(len_type(u8, limit = 96))]
     pub pk_tree_root: Option<Vec<u8>>,

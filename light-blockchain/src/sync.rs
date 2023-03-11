@@ -8,7 +8,7 @@ use nimiq_zkp::{verify::verify, NanoProof, ZKP_VERIFYING_KEY};
 
 use crate::blockchain::LightBlockchain;
 
-/// Implements methods to sync a nano node.
+/// Implements methods to sync a light node.
 impl LightBlockchain {
     /// Syncs using a zero-knowledge proof. It receives an election block and a proof that there is
     /// a valid chain between the genesis block and that block.

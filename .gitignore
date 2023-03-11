@@ -12,6 +12,7 @@ target
 .nimiq_*
 proving_keys
 verifying_keys
+proofs
 !verifying_keys/merger_wrapper.bin
 temp-logs
 temp-state

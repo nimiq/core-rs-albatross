@@ -7,7 +7,7 @@ use ark_mnt6_753::{Config, G2Projective as G2MNT6, MNT6_753};
 use nimiq_zkp_primitives::{state_commitment, vk_commitment, NanoZKPError};
 
 /// This function verifies a proof for the Merger Wrapper circuit, which implicitly is a proof for
-/// the entire nano sync program. It is very fast, shouldn't take more than a second, even on older
+/// the entire light macro sync. It is very fast, shouldn't take more than a second, even on older
 /// computers.
 pub fn verify(
     // The block number of the initial block. Most likely, it will be the genesis block.

@@ -4,7 +4,9 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use ark_groth16::Proof;
+use ark_relations::r1cs::{ConstraintLayer, TracingMode};
 use ark_serialize::CanonicalSerialize;
+use tracing_subscriber::layer::SubscriberExt;
 
 use nimiq_zkp::prove::prove;
 use nimiq_zkp_circuits::utils::create_test_blocks;
@@ -26,6 +28,11 @@ fn main() {
     let number_epochs: u64 = data.trim().parse().expect("Couldn't read user input.");
 
     println!("====== Proof generation for Nano Sync initiated ======");
+
+    let mut layer = ConstraintLayer::default();
+    layer.mode = TracingMode::OnlyConstraints;
+    let subscriber = tracing_subscriber::Registry::default().with(layer);
+    let _guard = log::subscriber::set_default(subscriber);
 
     let start = Instant::now();
 

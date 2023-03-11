@@ -27,7 +27,7 @@ pub struct Header<Id>(pub MacroHeader, pub Option<Id>);
 
 impl<Id> Proposal<Blake2sHash, Body, Blake2bHash> for Header<Id> {
     fn hash(&self, t: &Body) -> Blake2sHash {
-        self.0.nano_zkp_hash_with_body(&Some(t.0.clone()), false)
+        self.0.zkp_hash_with_body(&Some(t.0.clone()), false)
     }
     fn inherent_hash(&self) -> Blake2bHash {
         self.0.body_root.clone()

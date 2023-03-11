@@ -1,15 +1,16 @@
-use ark_crypto_primitives::snark::{BooleanInputVar, FromFieldElementsGadget, SNARKGadget};
-use ark_ff::ToConstraintField;
+use ark_crypto_primitives::snark::SNARKGadget;
 use ark_groth16::{
     constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar},
     Proof, VerifyingKey,
 };
-use ark_mnt4_753::{
-    constraints::{FqVar, PairingVar},
-    Fq as MNT4Fq, MNT4_753,
+use ark_mnt4_753::{constraints::PairingVar, Fq as MNT4Fq, MNT4_753};
+use ark_r1cs_std::{
+    prelude::{AllocVar, Boolean, EqGadget},
+    uint8::UInt8,
 };
-use ark_r1cs_std::prelude::{AllocVar, Boolean, EqGadget};
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
+
+use crate::gadgets::recursive_input::RecursiveInputVar;
 
 /// This is the merger wrapper circuit. It takes as inputs an initial state commitment, a final state
 /// commitment and a verifying key commitment and it produces a proof that there exists a valid SNARK
@@ -62,37 +63,23 @@ impl ConstraintSynthesizer<MNT4Fq> for MergerWrapperCircuit {
             ProofVar::<MNT4_753, PairingVar>::new_witness(cs.clone(), || Ok(&self.proof))?;
 
         // Allocate all the inputs.
-        // Since we're only passing it through, we directly allocate them as FqVars.
-        let initial_state_commitment_var = Vec::<FqVar>::new_input(cs.clone(), || {
-            self.initial_state_commitment
-                .to_field_elements()
-                .ok_or(SynthesisError::AssignmentMissing)
-        })?;
+        let initial_state_commitment_var =
+            UInt8::<MNT4Fq>::new_input_vec(cs.clone(), &self.initial_state_commitment)?;
 
-        let mut final_state_commitment_var = Vec::<FqVar>::new_input(cs.clone(), || {
-            self.final_state_commitment
-                .to_field_elements()
-                .ok_or(SynthesisError::AssignmentMissing)
-        })?;
+        let final_state_commitment_var =
+            UInt8::<MNT4Fq>::new_input_vec(cs.clone(), &self.final_state_commitment)?;
 
-        let mut vk_commitment_var = Vec::<FqVar>::new_input(cs, || {
-            self.vk_commitment
-                .to_field_elements()
-                .ok_or(SynthesisError::AssignmentMissing)
-        })?;
+        let vk_commitment_var = UInt8::<MNT4Fq>::new_input_vec(cs, &self.vk_commitment)?;
 
         // Verify the ZK proof.
-        let mut proof_inputs = initial_state_commitment_var;
-
-        proof_inputs.append(&mut final_state_commitment_var);
-
-        proof_inputs.append(&mut vk_commitment_var);
-
-        let input_var = BooleanInputVar::from_field_elements(&proof_inputs)?;
+        let mut proof_inputs = RecursiveInputVar::new();
+        proof_inputs.push(&initial_state_commitment_var)?;
+        proof_inputs.push(&final_state_commitment_var)?;
+        proof_inputs.push(&vk_commitment_var)?;
 
         Groth16VerifierGadget::<MNT4_753, PairingVar>::verify(
             &vk_merger_var,
-            &input_var,
+            &proof_inputs.into(),
             &proof_var,
         )?
         .enforce_equal(&Boolean::constant(true))?;

@@ -1,12 +1,17 @@
 use std::borrow::Borrow;
 
-use ark_crypto_primitives::crh::pedersen::{constraints::CRHGadget, Parameters, Window};
+use ark_crypto_primitives::crh::{
+    pedersen::{
+        constraints::{CRHGadget, CRHParametersVar},
+        Window,
+    },
+    CRHSchemeGadget,
+};
 use ark_ec::CurveGroup;
 use ark_ff::Field;
 use ark_r1cs_std::{
     prelude::{AllocVar, AllocationMode, CurveVar, GroupOpsBounds},
     uint8::UInt8,
-    ToBitsGadget,
 };
 use ark_relations::r1cs::{Namespace, SynthesisError};
 use nimiq_pedersen_generators::PedersenParameters;
@@ -15,7 +20,7 @@ pub struct PedersenParametersVar<C: CurveGroup, GG: CurveVar<C, ConstraintF<C>>>
 where
     for<'a> &'a GG: GroupOpsBounds<'a, C, GG>,
 {
-    parameters: Parameters<C>, //CRHParametersVar<C, GG>,
+    parameters: CRHParametersVar<C, GG>,
     blinding_factor: GG,
 }
 
@@ -34,12 +39,11 @@ where
         let value = f()?;
         let params = &(*value.borrow()).clone();
         Ok(PedersenParametersVar {
-            // parameters: CRHParametersVar::new_variable(
-            //     cs.clone(),
-            //     || Ok(&params.parameters),
-            //     mode,
-            // )?,
-            parameters: params.parameters.clone(),
+            parameters: CRHParametersVar::new_variable(
+                cs.clone(),
+                || Ok(&params.parameters),
+                mode,
+            )?,
             blinding_factor: <GG as AllocVar<C, _>>::new_variable(
                 cs,
                 || Ok(&params.blinding_factor),
@@ -77,35 +81,9 @@ where
         input: &[UInt8<ConstraintF<C>>],
         params: &PedersenParametersVar<C, GG>,
     ) -> Result<GG, SynthesisError> {
-        // There's a mismatch between the on-circuit and off-circuit hashes when using the arkworks implementation.
-        // Thus we resort to our own and will change back once in the future.
-        // let mut hash = CRHGadget::<C, GG, W>::evaluate(&params.parameters, input)?;
-        // hash += &params.blinding_factor;
-        // Ok(hash)
-
-        // Check that the input can be stored using the available generators.
-        assert!(params.parameters.generators.len() >= W::NUM_WINDOWS);
-        assert!(W::NUM_WINDOWS * W::WINDOW_SIZE >= input.len() / 8);
-
-        let bits = input.to_bits_le()?;
-
-        // Initiate the result with the sum generator.
-        let mut result = params.blinding_factor.clone();
-
-        // Start calculating the Pedersen hash. We use the double-and-add method for EC point
-        // multiplication for each generator.
-        for (i, chunk) in bits.chunks(W::WINDOW_SIZE).enumerate() {
-            for (j, bit) in chunk.iter().enumerate() {
-                // Add the base to the result.
-                let self_plus_base = result.clone() + params.parameters.generators[i][j];
-
-                // Depending on the bit, either select the new result (with the base added) or
-                // continue with the previous result.
-                result = GG::conditionally_select(bit, &self_plus_base, &result)?;
-            }
-        }
-
-        Ok(result)
+        let mut hash = CRHGadget::<C, GG, W>::evaluate(&params.parameters, input)?;
+        hash += &params.blinding_factor;
+        Ok(hash)
     }
 }
 

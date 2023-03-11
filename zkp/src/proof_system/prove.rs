@@ -10,8 +10,6 @@ use ark_mnt4_753::{Fq as MNT4Fq, MNT4_753};
 use ark_mnt6_753::{Fq as MNT6Fq, G1Projective as G1MNT6, G2Projective as G2MNT6, MNT6_753};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::UniformRand;
-use nimiq_zkp_circuits::utils::byte_to_le_bits;
-use nimiq_zkp_primitives::pedersen::default_pedersen_hash;
 use rand::{thread_rng, CryptoRng, Rng};
 
 use nimiq_primitives::policy::Policy;
@@ -25,12 +23,13 @@ use nimiq_zkp_circuits::{
         PKTreeNodeCircuit as NodeMNT6,
     },
 };
+use nimiq_zkp_primitives::pedersen::default_pedersen_hash;
 use nimiq_zkp_primitives::{
-    merkle_tree_prove, pk_tree_construct, serialize_g1_mnt6, serialize_g2_mnt6, state_commitment,
-    vk_commitment, MacroBlock, NanoZKPError, PK_TREE_BREADTH, PK_TREE_DEPTH,
+    pk_tree_construct, serialize_g1_mnt6, serialize_g2_mnt6, state_commitment, vk_commitment,
+    MacroBlock, NanoZKPError, PK_TREE_BREADTH, PK_TREE_DEPTH,
 };
 
-/// This function generates a proof for a new epoch, it uses the entire nano sync program. Note
+/// This function generates a proof for a new epoch, it uses the entire light macro sync. Note
 /// that the proof generation can easily take longer than 12 hours.
 pub fn prove(
     // The public keys of the validators of the initial state. So, the validators that were
@@ -77,17 +76,6 @@ pub fn prove(
         );
     }
 
-    // Calculate the Merkle proofs for each leaf of the initial public key tree.
-    let mut pk_tree_proofs = vec![];
-
-    for i in 0..PK_TREE_BREADTH {
-        let mut path = byte_to_le_bits(i as u8);
-
-        path.truncate(PK_TREE_DEPTH);
-
-        pk_tree_proofs.push(merkle_tree_prove(pks_bytes.clone(), path));
-    }
-
     // Calculate initial public key tree root.
     let initial_pk_tree_root = pk_tree_construct(initial_pks.clone());
 
@@ -96,169 +84,6 @@ pub fn prove(
 
     const NUM_PROOFS: usize = 67;
     let mut current_proof = 0;
-
-    // Start generating proofs for PKTree level 5.
-    #[allow(clippy::needless_range_loop)]
-    for i in 0..32 {
-        current_proof += 1;
-        if proof_caching && proofs.join(format!("pk_tree_5_{i}.bin")).exists() {
-            continue;
-        }
-
-        log::info!(
-            "Generating sub-proof ({}/{}): pk_tree_5_{}",
-            current_proof,
-            NUM_PROOFS,
-            i
-        );
-
-        prove_pk_tree_leaf(
-            rng,
-            "pk_tree_5",
-            i,
-            &initial_pks,
-            &pk_tree_proofs[i],
-            &initial_pk_tree_root,
-            &block.signer_bitmap,
-            debug_mode,
-            prover_keys_path,
-        )?;
-    }
-
-    // Start generating proofs for PKTree level 4.
-    for i in 0..16 {
-        current_proof += 1;
-        if proof_caching && proofs.join(format!("pk_tree_4_{i}.bin")).exists() {
-            continue;
-        }
-
-        log::info!(
-            "Generating sub-proof ({}/{}): pk_tree_4_{}",
-            current_proof,
-            NUM_PROOFS,
-            i
-        );
-
-        prove_pk_tree_node_mnt6(
-            rng,
-            "pk_tree_4",
-            i,
-            4,
-            "pk_tree_5",
-            &initial_pks,
-            &initial_pk_tree_root,
-            &block.signer_bitmap,
-            debug_mode,
-            prover_keys_path,
-        )?;
-    }
-
-    // Start generating proofs for PKTree level 3.
-    for i in 0..8 {
-        current_proof += 1;
-        if proof_caching && proofs.join(format!("pk_tree_3_{i}.bin")).exists() {
-            continue;
-        }
-
-        log::info!(
-            "Generating sub-proof ({}/{}): pk_tree_3_{}",
-            current_proof,
-            NUM_PROOFS,
-            i
-        );
-
-        prove_pk_tree_node_mnt4(
-            rng,
-            "pk_tree_3",
-            i,
-            3,
-            "pk_tree_4",
-            &initial_pks,
-            &initial_pk_tree_root,
-            &block.signer_bitmap,
-            debug_mode,
-            prover_keys_path,
-        )?;
-    }
-
-    // Start generating proofs for PKTree level 2.
-    for i in 0..4 {
-        current_proof += 1;
-        if proof_caching && proofs.join(format!("pk_tree_2_{i}.bin")).exists() {
-            continue;
-        }
-
-        log::info!(
-            "Generating sub-proof ({}/{}): pk_tree_2_{}",
-            current_proof,
-            NUM_PROOFS,
-            i
-        );
-
-        prove_pk_tree_node_mnt6(
-            rng,
-            "pk_tree_2",
-            i,
-            2,
-            "pk_tree_3",
-            &initial_pks,
-            &initial_pk_tree_root,
-            &block.signer_bitmap,
-            debug_mode,
-            prover_keys_path,
-        )?;
-    }
-
-    // Start generating proofs for PKTree level 1.
-    for i in 0..2 {
-        current_proof += 1;
-        if proof_caching && proofs.join(format!("pk_tree_1_{i}.bin")).exists() {
-            continue;
-        }
-
-        log::info!(
-            "Generating sub-proof ({}/{}): pk_tree_1_{}",
-            current_proof,
-            NUM_PROOFS,
-            i
-        );
-
-        prove_pk_tree_node_mnt4(
-            rng,
-            "pk_tree_1",
-            i,
-            1,
-            "pk_tree_2",
-            &initial_pks,
-            &initial_pk_tree_root,
-            &block.signer_bitmap,
-            debug_mode,
-            prover_keys_path,
-        )?;
-    }
-
-    // Start generating proof for PKTree level 0.
-    current_proof += 1;
-    if !(proof_caching && proofs.join("pk_tree_0_0.bin").exists()) {
-        log::info!(
-            "Generating sub-proof ({}/{}): pk_tree_0_0",
-            current_proof,
-            NUM_PROOFS,
-        );
-
-        prove_pk_tree_node_mnt6(
-            rng,
-            "pk_tree_0",
-            0,
-            0,
-            "pk_tree_1",
-            &initial_pks,
-            &initial_pk_tree_root,
-            &block.signer_bitmap,
-            debug_mode,
-            prover_keys_path,
-        )?;
-    }
 
     // Start generating proof for Macro Block.
     current_proof += 1;
@@ -278,6 +103,7 @@ pub fn prove(
             &final_pk_tree_root,
             &block,
             debug_mode,
+            proof_caching,
             prover_keys_path,
         )?;
     }
@@ -351,51 +177,57 @@ pub fn prove(
 
 fn prove_pk_tree_leaf<R: CryptoRng + Rng>(
     rng: &mut R,
-    name: &str,
     position: usize,
     pks: &[G2MNT6],
-    pk_tree_nodes: &[G1MNT6],
-    pk_tree_root: &[u8; 95],
     signer_bitmap: &[bool],
     debug_mode: bool,
+    proof_caching: bool,
     dir_path: &Path,
-) -> Result<(), NanoZKPError> {
+) -> Result<[u8; 95], NanoZKPError> {
+    assert_eq!(pks.len(), signer_bitmap.len());
+
+    let name = "pk_tree_5";
+
+    // Calculate the aggregate public key commitment.
+    let mut agg_pk = G2MNT6::zero();
+    let mut pk_node_hash = vec![];
+
+    for (i, pk) in pks.iter().enumerate() {
+        pk_node_hash.extend(serialize_g2_mnt6(pk));
+        if signer_bitmap[i] {
+            agg_pk += pk;
+        }
+    }
+    let hash = default_pedersen_hash(&pk_node_hash);
+    let pk_node_hash = serialize_g1_mnt6(&hash);
+
+    let agg_pk_bytes = serialize_g2_mnt6(&agg_pk);
+
+    let hash = default_pedersen_hash(&agg_pk_bytes);
+    let agg_pk_commitment = serialize_g1_mnt6(&hash);
+
+    if proof_caching
+        && dir_path
+            .join("proofs")
+            .join(format!("{name}_{position}.bin"))
+            .exists()
+    {
+        return Ok(pk_node_hash);
+    }
+
+    log::info!("Generating sub-proof: {name}_{}", position);
+
     // Load the proving key from file.
     let mut file = File::open(dir_path.join("proving_keys").join(format!("{name}.bin")))?;
 
     let proving_key = ProvingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
-    // Calculate the aggregate public key commitment.
-    let mut agg_pk = G2MNT6::zero();
-
-    for i in position * Policy::SLOTS as usize / PK_TREE_BREADTH
-        ..(position + 1) * Policy::SLOTS as usize / PK_TREE_BREADTH
-    {
-        if signer_bitmap[i] {
-            agg_pk += pks[i];
-        }
-    }
-
-    let agg_pk_bytes = serialize_g2_mnt6(&agg_pk);
-
-    let hash = default_pedersen_hash(&agg_pk_bytes);
-
-    let agg_pk_commitment = serialize_g1_mnt6(&hash);
-
-    // Get the relevant chunk of the signer's bitmap.
-    let signer_bitmap_chunk = &signer_bitmap[position * Policy::SLOTS as usize / PK_TREE_BREADTH
-        ..(position + 1) * Policy::SLOTS as usize / PK_TREE_BREADTH];
-
     // Create the circuit.
     let circuit = LeafMNT6::new(
-        pks[position * Policy::SLOTS as usize / PK_TREE_BREADTH
-            ..(position + 1) * Policy::SLOTS as usize / PK_TREE_BREADTH]
-            .to_vec(),
-        pk_tree_nodes.to_vec(),
-        *pk_tree_root,
+        pks.to_vec(),
+        pk_node_hash,
         agg_pk_commitment,
-        signer_bitmap_chunk.to_vec(),
-        position as u8,
+        signer_bitmap.to_vec(),
     );
 
     // Create the proof.
@@ -411,17 +243,15 @@ fn prove_pk_tree_leaf<R: CryptoRng + Rng>(
         // Prepare the inputs.
         let mut inputs = vec![];
 
-        inputs.append(&mut pk_tree_root.to_field_elements().unwrap());
+        inputs.append(&mut pk_node_hash.to_field_elements().unwrap());
 
         inputs.append(&mut agg_pk_commitment.to_field_elements().unwrap());
 
         inputs.append(
-            &mut BitVec::<MNT6Fq>::to_bytes_le(signer_bitmap_chunk)
+            &mut BitVec::<MNT6Fq>::to_bytes_le(signer_bitmap)
                 .to_field_elements()
                 .unwrap(),
         );
-
-        inputs.push(MNT6Fq::from(position as u8));
 
         // Verify proof.
         assert!(Groth16::<MNT4_753>::verify(
@@ -432,24 +262,90 @@ fn prove_pk_tree_leaf<R: CryptoRng + Rng>(
     }
 
     // Cache proof to file.
-    proof_to_file(proof, name, Some(position), dir_path)
+    proof_to_file(proof, name, Some(position), dir_path)?;
+
+    Ok(pk_node_hash)
 }
 
-fn prove_pk_tree_node_mnt6<R: CryptoRng + Rng>(
+fn prove_pk_tree_node_mnt4<R: CryptoRng + Rng>(
     rng: &mut R,
-    name: &str,
     position: usize,
     tree_level: usize,
-    vk_file: &str,
     pks: &[G2MNT6],
-    pk_tree_root: &[u8; 95],
     signer_bitmap: &[bool],
     debug_mode: bool,
+    proof_caching: bool,
     dir_path: &Path,
-) -> Result<(), NanoZKPError> {
+) -> Result<([u8; 95], [u8; 95]), NanoZKPError> {
+    assert_eq!(pks.len(), signer_bitmap.len());
+
+    let name = format!("pk_tree_{}", tree_level);
+    let vk_file = format!("pk_tree_{}", tree_level + 1);
+
+    let l_pks = &pks[..pks.len() / 2];
+    let r_pks = &pks[pks.len() / 2..];
+    let l_signer_bitmap = &signer_bitmap[..signer_bitmap.len() / 2];
+    let r_signer_bitmap = &signer_bitmap[signer_bitmap.len() / 2..];
+
+    // First create sub-proofs.
+    let l_pk_node_hash;
+    let r_pk_node_hash;
+    if tree_level == PK_TREE_DEPTH - 1 {
+        // Next level is the leaf node.
+        l_pk_node_hash = prove_pk_tree_leaf(
+            rng,
+            2 * position,
+            l_pks,
+            l_signer_bitmap,
+            debug_mode,
+            proof_caching,
+            dir_path,
+        )?;
+
+        r_pk_node_hash = prove_pk_tree_leaf(
+            rng,
+            2 * position + 1,
+            r_pks,
+            r_signer_bitmap,
+            debug_mode,
+            proof_caching,
+            dir_path,
+        )?;
+    } else {
+        // Next level is an inner node.
+        l_pk_node_hash = prove_pk_tree_node_mnt6(
+            rng,
+            2 * position,
+            tree_level + 1,
+            l_pks,
+            l_signer_bitmap,
+            debug_mode,
+            proof_caching,
+            dir_path,
+        )?;
+
+        r_pk_node_hash = prove_pk_tree_node_mnt6(
+            rng,
+            2 * position + 1,
+            tree_level + 1,
+            r_pks,
+            r_signer_bitmap,
+            debug_mode,
+            proof_caching,
+            dir_path,
+        )?;
+    }
+
     let proving_keys = dir_path.join("proving_keys");
     let verifying_keys = dir_path.join("verifying_keys");
     let proofs = dir_path.join("proofs");
+
+    if proof_caching && proofs.join(format!("{name}_{position}.bin")).exists() {
+        return Ok((l_pk_node_hash, r_pk_node_hash));
+    }
+
+    log::info!("Generating sub-proof: {name}_{position}");
+
     // Load the proving key from file.
     let mut file = File::open(proving_keys.join(format!("{name}.bin")))?;
 
@@ -477,41 +373,28 @@ fn prove_pk_tree_node_mnt6<R: CryptoRng + Rng>(
     // Calculate the left aggregate public key commitment.
     let mut agg_pk = G2MNT6::zero();
 
-    for i in left_position * Policy::SLOTS as usize / 2_usize.pow((tree_level + 1) as u32)
-        ..(left_position + 1) * Policy::SLOTS as usize / 2_usize.pow((tree_level + 1) as u32)
-    {
-        if signer_bitmap[i] {
-            agg_pk += pks[i];
+    for (i, pk) in l_pks.iter().enumerate() {
+        if l_signer_bitmap[i] {
+            agg_pk += pk;
         }
     }
 
     let agg_pk_bytes = serialize_g2_mnt6(&agg_pk);
-
     let hash = default_pedersen_hash(&agg_pk_bytes);
-
     let left_agg_pk_comm = serialize_g1_mnt6(&hash);
 
     // Calculate the right aggregate public key commitment.
     let mut agg_pk = G2MNT6::zero();
 
-    for i in right_position * Policy::SLOTS as usize / 2_usize.pow((tree_level + 1) as u32)
-        ..(right_position + 1) * Policy::SLOTS as usize / 2_usize.pow((tree_level + 1) as u32)
-    {
-        if signer_bitmap[i] {
-            agg_pk += pks[i];
+    for (i, pk) in r_pks.iter().enumerate() {
+        if r_signer_bitmap[i] {
+            agg_pk += pk;
         }
     }
 
     let agg_pk_bytes = serialize_g2_mnt6(&agg_pk);
-
     let hash = default_pedersen_hash(&agg_pk_bytes);
-
     let right_agg_pk_comm = serialize_g1_mnt6(&hash);
-
-    // Get the relevant chunk of the signer's bitmap.
-    let signer_bitmap_chunk = &signer_bitmap[position * Policy::SLOTS as usize
-        / 2_usize.pow(tree_level as u32)
-        ..(position + 1) * Policy::SLOTS as usize / 2_usize.pow(tree_level as u32)];
 
     // Create the circuit.
     let circuit = NodeMNT4::new(
@@ -519,11 +402,11 @@ fn prove_pk_tree_node_mnt6<R: CryptoRng + Rng>(
         vk_child,
         left_proof,
         right_proof,
-        *pk_tree_root,
+        l_pk_node_hash,
+        r_pk_node_hash,
         left_agg_pk_comm,
         right_agg_pk_comm,
-        signer_bitmap_chunk.to_vec(),
-        position as u8,
+        signer_bitmap.to_vec(),
     );
 
     // Create the proof.
@@ -539,19 +422,17 @@ fn prove_pk_tree_node_mnt6<R: CryptoRng + Rng>(
         // Prepare the inputs.
         let mut inputs = vec![];
 
-        inputs.append(&mut pk_tree_root.to_field_elements().unwrap());
+        inputs.append(&mut l_pk_node_hash.to_field_elements().unwrap());
+        inputs.append(&mut r_pk_node_hash.to_field_elements().unwrap());
 
         inputs.append(&mut left_agg_pk_comm.to_field_elements().unwrap());
-
         inputs.append(&mut right_agg_pk_comm.to_field_elements().unwrap());
 
         inputs.append(
-            &mut BitVec::<MNT4Fq>::to_bytes_le(signer_bitmap_chunk)
+            &mut BitVec::<MNT4Fq>::to_bytes_le(signer_bitmap)
                 .to_field_elements()
                 .unwrap(),
         );
-
-        inputs.push(MNT4Fq::from(position as u8));
 
         // Verify proof.
         assert!(Groth16::<MNT6_753>::verify(
@@ -562,24 +443,92 @@ fn prove_pk_tree_node_mnt6<R: CryptoRng + Rng>(
     }
 
     // Cache proof to file.
-    proof_to_file(proof, name, Some(position), dir_path)
+    proof_to_file(proof, &name, Some(position), dir_path)?;
+    Ok((l_pk_node_hash, r_pk_node_hash))
 }
 
-fn prove_pk_tree_node_mnt4<R: CryptoRng + Rng>(
+fn prove_pk_tree_node_mnt6<R: CryptoRng + Rng>(
     rng: &mut R,
-    name: &str,
     position: usize,
     tree_level: usize,
-    vk_file: &str,
     pks: &[G2MNT6],
-    pk_tree_root: &[u8; 95],
     signer_bitmap: &[bool],
     debug_mode: bool,
+    proof_caching: bool,
     dir_path: &Path,
-) -> Result<(), NanoZKPError> {
+) -> Result<[u8; 95], NanoZKPError> {
+    assert_eq!(pks.len(), signer_bitmap.len());
+
+    let name = format!("pk_tree_{}", tree_level);
+    let vk_file = format!("pk_tree_{}", tree_level + 1);
+
+    let l_pks = &pks[..pks.len() / 2];
+    let r_pks = &pks[pks.len() / 2..];
+    let ll_pks = &l_pks[..l_pks.len() / 2];
+    let lr_pks = &l_pks[l_pks.len() / 2..];
+    let rl_pks = &r_pks[..r_pks.len() / 2];
+    let rr_pks = &r_pks[r_pks.len() / 2..];
+    let l_signer_bitmap = &signer_bitmap[..signer_bitmap.len() / 2];
+    let r_signer_bitmap = &signer_bitmap[signer_bitmap.len() / 2..];
+    let ll_signer_bitmap = &l_signer_bitmap[..l_signer_bitmap.len() / 2];
+    let lr_signer_bitmap = &l_signer_bitmap[l_signer_bitmap.len() / 2..];
+    let rl_signer_bitmap = &r_signer_bitmap[..r_signer_bitmap.len() / 2];
+    let rr_signer_bitmap = &r_signer_bitmap[r_signer_bitmap.len() / 2..];
+
     let proving_keys = dir_path.join("proving_keys");
     let verifying_keys = dir_path.join("verifying_keys");
     let proofs = dir_path.join("proofs");
+
+    // Next level is always an inner node.
+    let (ll_pk_node_hash, lr_pk_node_hash) = prove_pk_tree_node_mnt4(
+        rng,
+        2 * position,
+        tree_level + 1,
+        l_pks,
+        l_signer_bitmap,
+        debug_mode,
+        proof_caching,
+        dir_path,
+    )?;
+
+    let (rl_pk_node_hash, rr_pk_node_hash) = prove_pk_tree_node_mnt4(
+        rng,
+        2 * position + 1,
+        tree_level + 1,
+        r_pks,
+        r_signer_bitmap,
+        debug_mode,
+        proof_caching,
+        dir_path,
+    )?;
+
+    // Calculate the node hash.
+    let mut l_pk_node_hash = vec![];
+    l_pk_node_hash.extend(ll_pk_node_hash);
+    l_pk_node_hash.extend(lr_pk_node_hash);
+
+    let hash = default_pedersen_hash(&l_pk_node_hash);
+    let l_pk_node_hash = serialize_g1_mnt6(&hash);
+
+    let mut r_pk_node_hash = vec![];
+    r_pk_node_hash.extend(rl_pk_node_hash);
+    r_pk_node_hash.extend(rr_pk_node_hash);
+
+    let hash = default_pedersen_hash(&r_pk_node_hash);
+    let r_pk_node_hash = serialize_g1_mnt6(&hash);
+
+    let mut pk_node_hash = vec![];
+    pk_node_hash.extend(l_pk_node_hash);
+    pk_node_hash.extend(r_pk_node_hash);
+
+    let hash = default_pedersen_hash(&pk_node_hash);
+    let pk_node_hash = serialize_g1_mnt6(&hash);
+
+    if proof_caching && proofs.join(format!("{name}_{position}.bin")).exists() {
+        return Ok(pk_node_hash);
+    }
+
+    log::info!("Generating sub-proof: {name}_{position}");
 
     // Load the proving key from file.
     let mut file = File::open(proving_keys.join(format!("{name}.bin")))?;
@@ -608,19 +557,37 @@ fn prove_pk_tree_node_mnt4<R: CryptoRng + Rng>(
     // Calculate the aggregate public key chunks.
     let mut agg_pk_chunks = vec![];
 
-    for i in position * 4..(position + 1) * 4 {
-        let mut agg_pk = G2MNT6::zero();
-
-        for j in i * Policy::SLOTS as usize / 2_usize.pow((tree_level + 2) as u32)
-            ..(i + 1) * Policy::SLOTS as usize / 2_usize.pow((tree_level + 2) as u32)
-        {
-            if signer_bitmap[j] {
-                agg_pk += pks[j];
-            }
+    let mut agg_pk = G2MNT6::zero();
+    for (i, pk) in ll_pks.iter().enumerate() {
+        if ll_signer_bitmap[i] {
+            agg_pk += pk;
         }
-
-        agg_pk_chunks.push(agg_pk);
     }
+    agg_pk_chunks.push(agg_pk);
+
+    let mut agg_pk = G2MNT6::zero();
+    for (i, pk) in lr_pks.iter().enumerate() {
+        if lr_signer_bitmap[i] {
+            agg_pk += pk;
+        }
+    }
+    agg_pk_chunks.push(agg_pk);
+
+    let mut agg_pk = G2MNT6::zero();
+    for (i, pk) in rl_pks.iter().enumerate() {
+        if rl_signer_bitmap[i] {
+            agg_pk += pk;
+        }
+    }
+    agg_pk_chunks.push(agg_pk);
+
+    let mut agg_pk = G2MNT6::zero();
+    for (i, pk) in rr_pks.iter().enumerate() {
+        if rr_signer_bitmap[i] {
+            agg_pk += pk;
+        }
+    }
+    agg_pk_chunks.push(agg_pk);
 
     // Calculate the aggregate public key commitment.
     let mut agg_pk = G2MNT6::zero();
@@ -630,15 +597,8 @@ fn prove_pk_tree_node_mnt4<R: CryptoRng + Rng>(
     }
 
     let agg_pk_bytes = serialize_g2_mnt6(&agg_pk);
-
     let hash = default_pedersen_hash(&agg_pk_bytes);
-
     let agg_pk_comm = serialize_g1_mnt6(&hash);
-
-    // Get the relevant chunk of the signer's bitmap.
-    let signer_bitmap_chunk = &signer_bitmap[position * Policy::SLOTS as usize
-        / 2_usize.pow(tree_level as u32)
-        ..(position + 1) * Policy::SLOTS as usize / 2_usize.pow(tree_level as u32)];
 
     // Create the circuit.
     let circuit = NodeMNT6::new(
@@ -646,11 +606,17 @@ fn prove_pk_tree_node_mnt4<R: CryptoRng + Rng>(
         vk_child,
         left_proof,
         right_proof,
-        agg_pk_chunks,
-        *pk_tree_root,
+        agg_pk_chunks[0],
+        agg_pk_chunks[1],
+        agg_pk_chunks[2],
+        agg_pk_chunks[3],
+        ll_pk_node_hash,
+        lr_pk_node_hash,
+        rl_pk_node_hash,
+        rr_pk_node_hash,
+        pk_node_hash,
         agg_pk_comm,
-        signer_bitmap_chunk.to_vec(),
-        position as u8,
+        signer_bitmap.to_vec(),
     );
 
     // Create the proof.
@@ -666,17 +632,15 @@ fn prove_pk_tree_node_mnt4<R: CryptoRng + Rng>(
         // Prepare the inputs.
         let mut inputs = vec![];
 
-        inputs.append(&mut pk_tree_root.to_field_elements().unwrap());
+        inputs.append(&mut pk_node_hash.to_field_elements().unwrap());
 
         inputs.append(&mut agg_pk_comm.to_field_elements().unwrap());
 
         inputs.append(
-            &mut BitVec::<MNT6Fq>::to_bytes_le(signer_bitmap_chunk)
+            &mut BitVec::<MNT6Fq>::to_bytes_le(signer_bitmap)
                 .to_field_elements()
                 .unwrap(),
         );
-
-        inputs.push(MNT6Fq::from(position as u8));
 
         // Verify proof.
         assert!(Groth16::<MNT4_753>::verify(
@@ -687,7 +651,9 @@ fn prove_pk_tree_node_mnt4<R: CryptoRng + Rng>(
     }
 
     // Cache proof to file.
-    proof_to_file(proof, name, Some(position), dir_path)
+    proof_to_file(proof, &name, Some(position), dir_path)?;
+
+    Ok(pk_node_hash)
 }
 
 fn prove_macro_block<R: CryptoRng + Rng>(
@@ -699,8 +665,21 @@ fn prove_macro_block<R: CryptoRng + Rng>(
     final_pk_tree_root: &[u8; 95],
     block: &MacroBlock,
     debug_mode: bool,
+    proof_caching: bool,
     path: &Path,
 ) -> Result<(), NanoZKPError> {
+    // Generate the PK Tree proofs.
+    let (l_pk_node_hash, r_pk_node_hash) = prove_pk_tree_node_mnt4(
+        rng,
+        0,
+        0,
+        initial_pks,
+        &block.signer_bitmap,
+        debug_mode,
+        proof_caching,
+        path,
+    )?;
+
     let proving_keys = path.join("proving_keys");
     let verifying_keys = path.join("verifying_keys");
     let proofs = path.join("proofs");
@@ -749,12 +728,15 @@ fn prove_macro_block<R: CryptoRng + Rng>(
     // Create the circuit.
     let circuit = MacroBlockCircuit::new(
         vk_pk_tree,
-        agg_pk_chunks,
         proof,
         *initial_pk_tree_root,
         initial_header_hash,
         *final_pk_tree_root,
         block.clone(),
+        l_pk_node_hash,
+        r_pk_node_hash,
+        agg_pk_chunks[0],
+        agg_pk_chunks[1],
         initial_state_commitment,
         final_state_commitment,
     );

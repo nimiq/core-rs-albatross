@@ -1,6 +1,6 @@
-pub use nano_zkp::*;
+pub use proof_system::*;
 
-pub(crate) mod nano_zkp;
+pub(crate) mod proof_system;
 
 pub mod verifying_key;
 
