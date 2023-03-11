@@ -5,13 +5,13 @@ use std::{
 };
 
 use async_trait::async_trait;
-use futures::{future::join_all, lock::Mutex, stream::BoxStream, StreamExt};
+use futures::{future::join_all, lock::Mutex, stream::BoxStream, StreamExt, TryFutureExt};
 
 use beserial::{Deserialize, Serialize};
 use nimiq_bls::{lazy::LazyPublicKey, CompressedPublicKey, SecretKey};
 use nimiq_network_interface::{
     network::{MsgAcceptance, Network, NetworkEvent, Topic},
-    request::Message,
+    request::{Message, Request, RequestCommon},
 };
 
 use super::{MessageStream, NetworkError, ValidatorNetwork};
@@ -229,6 +229,24 @@ where
             .await
             .into_iter()
             .collect::<Vec<Result<(), Self::Error>>>()
+    }
+
+    async fn request<TRequest: Request>(
+        &self,
+        request: TRequest,
+        validator_id: usize,
+    ) -> Result<
+        <TRequest as RequestCommon>::Response,
+        NetworkError<<Self::NetworkType as Network>::Error>,
+    > {
+        if let Ok(peer_id) = self.get_validator_peer_id(validator_id).await {
+            self.network
+                .request(request, peer_id)
+                .map_err(NetworkError::Request)
+                .await
+        } else {
+            Err(NetworkError::Unreachable)
+        }
     }
 
     fn receive<M>(&self) -> MessageStream<M, N::PeerId>

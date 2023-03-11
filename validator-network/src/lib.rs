@@ -1,5 +1,6 @@
 pub mod error;
 pub mod network_impl;
+pub mod single_response_requester;
 pub mod validator_record;
 
 use std::{pin::Pin, time::Duration};
@@ -10,7 +11,7 @@ use futures::{stream::BoxStream, Stream};
 use nimiq_bls::{lazy::LazyPublicKey, CompressedPublicKey, SecretKey};
 use nimiq_network_interface::{
     network::{MsgAcceptance, Network, PubsubId, Topic},
-    request::Message,
+    request::{Message, Request, RequestCommon},
 };
 
 pub use crate::error::NetworkError;
@@ -37,6 +38,15 @@ pub trait ValidatorNetwork: Send + Sync {
         validator_ids: &[usize],
         msg: M,
     ) -> Vec<Result<(), Self::Error>>;
+
+    async fn request<TRequest: Request>(
+        &self,
+        request: TRequest,
+        validator_id: usize,
+    ) -> Result<
+        <TRequest as RequestCommon>::Response,
+        NetworkError<<Self::NetworkType as Network>::Error>,
+    >;
 
     /// Will receive from all connected peers
     fn receive<M>(&self) -> MessageStream<M, <Self::NetworkType as Network>::PeerId>
