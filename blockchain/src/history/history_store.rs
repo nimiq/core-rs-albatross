@@ -125,7 +125,7 @@ impl HistoryStore {
     /// Returns the total length of the History Tree at a given epoch number.
     /// The size of the history length is useful for getting a proof for a previous state
     /// of the history tree.
-    pub fn len(&self, epoch_number: u32, txn_option: Option<&Transaction>) -> usize {
+    pub fn total_len_at_epoch(&self, epoch_number: u32, txn_option: Option<&Transaction>) -> usize {
         let read_txn: ReadTransaction;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -143,11 +143,6 @@ impl HistoryStore {
 
         // Get the Merkle tree length
         tree.len()
-    }
-
-    /// Returns whether the history tree is empty
-    pub fn is_empty(&self, epoch_number: u32, txn_option: Option<&Transaction>) -> bool {
-        self.len(epoch_number, txn_option) == 0
     }
 
     /// Add a list of extended transactions to an existing history tree. It returns the root of the

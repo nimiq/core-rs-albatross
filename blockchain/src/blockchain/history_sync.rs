@@ -270,7 +270,8 @@ impl Blockchain {
 
         // Use the just built history tree to set the `ChainInfo`'s total history length
         chain_info.history_tree_len =
-            this.history_store.len(block.epoch_number(), Some(&txn)) as u64;
+            this.history_store
+                .total_len_at_epoch(block.epoch_number(), Some(&txn)) as u64;
 
         this.chain_store
             .put_chain_info(&mut txn, &block_hash, &chain_info, true);
