@@ -1,14 +1,15 @@
 use std::convert::TryFrom;
 use std::time::Instant;
-use tempfile::tempdir;
 
 use rand::{rngs::StdRng, SeedableRng};
+use tempfile::tempdir;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_account::{
-    Account, Accounts, BasicAccount, BlockState, InherentOperationReceipt,
-    TransactionOperationReceipt, TransactionReceipt, VestingContract,
+    Account, BasicAccount, BlockState, InherentOperationReceipt, TransactionOperationReceipt,
+    TransactionReceipt, VestingContract,
 };
+use nimiq_accounts_tree::Accounts;
 use nimiq_bls::KeyPair as BLSKeyPair;
 use nimiq_database::{mdbx::MdbxEnvironment, volatile::VolatileEnvironment, WriteTransaction};
 use nimiq_genesis_builder::GenesisBuilder;

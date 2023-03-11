@@ -14,6 +14,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 beserial = { path = "../beserial" }
 nimiq-account = { path = "../primitives/account" }
+nimiq-accounts-tree = { path = "../primitives/accounts-tree" }
 nimiq-block = { path = "../primitives/block" }
 nimiq-bls = { path = "../bls" }
 nimiq-database = { path = "../database" }

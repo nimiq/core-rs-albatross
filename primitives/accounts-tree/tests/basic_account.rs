@@ -2,9 +2,10 @@ use std::convert::TryInto;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_account::{
-    Account, AccountTransactionInteraction, Accounts, AccountsTrie, BasicAccount, BlockState,
-    DataStore, TransactionOperationReceipt, TransactionReceipt,
+    Account, AccountTransactionInteraction, AccountsTrie, BasicAccount, BlockState, DataStore,
+    Receipts,
 };
+use nimiq_accounts_tree::Accounts;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_database::WriteTransaction;
 use nimiq_keys::{Address, KeyPair, PrivateKey};

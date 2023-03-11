@@ -3,9 +3,8 @@ use std::convert::{TryFrom, TryInto};
 use rand::thread_rng;
 
 use beserial::{Deserialize, Serialize, SerializingError};
-use nimiq_account::{
-    Account, AccountTransactionInteraction, Accounts, BlockState, VestingContract,
-};
+use nimiq_account::{Account, AccountTransactionInteraction, BlockState, VestingContract};
+use nimiq_accounts_tree::Accounts;
 use nimiq_database::{volatile::VolatileEnvironment, WriteTransaction};
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::{

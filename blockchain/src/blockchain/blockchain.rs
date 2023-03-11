@@ -1,7 +1,8 @@
 use std::sync::Arc;
 use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
 
-use nimiq_account::{Accounts, BlockLog};
+use nimiq_account::BlockLog;
+use nimiq_accounts_tree::Accounts;
 use nimiq_block::Block;
 use nimiq_blockchain_interface::{BlockchainError, BlockchainEvent, ChainInfo, ForkEvent};
 use nimiq_database::{Environment, ReadTransaction, WriteTransaction};

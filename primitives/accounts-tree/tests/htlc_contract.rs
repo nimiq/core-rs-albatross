@@ -2,9 +2,10 @@ use std::convert::TryInto;
 
 use beserial::{Deserialize, Serialize, SerializingError};
 use nimiq_account::{
-    Account, AccountPruningInteraction, AccountTransactionInteraction, Accounts, BlockState,
+    Account, AccountPruningInteraction, AccountTransactionInteraction, BlockState,
     HashedTimeLockedContract,
 };
+use nimiq_accounts_tree::Accounts;
 use nimiq_database::{volatile::VolatileEnvironment, WriteTransaction};
 use nimiq_hash::{Blake2bHasher, HashOutput, Hasher, Sha256Hasher};
 use nimiq_keys::{Address, KeyPair, PrivateKey};

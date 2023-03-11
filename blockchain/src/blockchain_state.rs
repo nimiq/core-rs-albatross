@@ -1,4 +1,4 @@
-use nimiq_account::Accounts;
+use nimiq_accounts_tree::Accounts;
 use nimiq_block::MacroBlock;
 use nimiq_blockchain_interface::ChainInfo;
 use nimiq_hash::Blake2bHash;

@@ -3,6 +3,7 @@ use std::convert::TryInto;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_account::*;
+use nimiq_accounts_tree::Accounts;
 use nimiq_bls::{
     CompressedPublicKey as BlsPublicKey, KeyPair as BlsKeyPair, SecretKey as BlsSecretKey,
 };

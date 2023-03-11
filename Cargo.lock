@@ -3398,6 +3398,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "nimiq-accounts-tree"
+version = "0.1.0"
+dependencies = [
+ "beserial",
+ "hex",
+ "lazy_static",
+ "nimiq-account",
+ "nimiq-bls",
+ "nimiq-collections",
+ "nimiq-database",
+ "nimiq-database-value",
+ "nimiq-genesis-builder",
+ "nimiq-hash",
+ "nimiq-keys",
+ "nimiq-macros",
+ "nimiq-primitives",
+ "nimiq-test-log",
+ "nimiq-test-utils",
+ "nimiq-transaction",
+ "nimiq-trie",
+ "nimiq-utils",
+ "nimiq-vrf",
+ "parking_lot 0.12.1",
+ "rand 0.8.5",
+ "serde",
+ "strum_macros",
+ "tempfile",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
 name = "nimiq-block"
 version = "0.1.0"
 dependencies = [
@@ -3467,6 +3499,7 @@ dependencies = [
  "futures-util",
  "hex",
  "nimiq-account",
+ "nimiq-accounts-tree",
  "nimiq-block",
  "nimiq-block-production",
  "nimiq-blockchain-interface",
@@ -3672,6 +3705,7 @@ dependencies = [
  "beserial",
  "hex",
  "nimiq-account",
+ "nimiq-accounts-tree",
  "nimiq-block",
  "nimiq-bls",
  "nimiq-database",

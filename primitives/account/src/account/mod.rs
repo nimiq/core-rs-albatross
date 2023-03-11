@@ -70,7 +70,7 @@ impl Account {
         }
     }
 
-    pub(crate) fn default_with_balance(balance: Coin) -> Self {
+    pub fn default_with_balance(balance: Coin) -> Self {
         Account::Basic(BasicAccount { balance })
     }
 }

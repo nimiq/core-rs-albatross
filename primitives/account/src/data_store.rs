@@ -2,8 +2,10 @@ use beserial::{Deserialize, Serialize};
 use nimiq_database::{Transaction, WriteTransaction};
 use nimiq_keys::Address;
 use nimiq_primitives::key_nibbles::KeyNibbles;
+use nimiq_trie::trie::MerkleRadixTrie;
 
-use crate::AccountsTrie;
+/// An alias for the accounts tree.
+pub type AccountsTrie = MerkleRadixTrie;
 
 pub struct DataStore<'a> {
     tree: &'a AccountsTrie,

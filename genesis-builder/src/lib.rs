@@ -11,7 +11,8 @@ use time::OffsetDateTime;
 use toml::de::Error as TomlError;
 
 use beserial::{Serialize, SerializeWithLength, SerializingError};
-use nimiq_account::{Account, Accounts, BasicAccount, StakingContract, StakingContractStoreWrite};
+use nimiq_account::{Account, BasicAccount, StakingContract, StakingContractStoreWrite};
+use nimiq_accounts_tree::Accounts;
 use nimiq_block::{Block, MacroBlock, MacroBody, MacroHeader};
 use nimiq_bls::PublicKey as BlsPublicKey;
 use nimiq_database::{Environment, WriteTransaction};

@@ -1,3 +1,8 @@
+use nimiq_account::{
+    Account, AccountInherentInteraction, AccountPruningInteraction, AccountReceipt,
+    AccountTransactionInteraction, AccountsTrie, BlockState, DataStore, InherentOperationReceipt,
+    OperationReceipt, Receipts, ReservedBalance, TransactionOperationReceipt, TransactionReceipt,
+};
 use nimiq_database::{
     Environment, ReadTransaction, Transaction as DBTransaction, WriteTransaction,
 };
@@ -11,18 +16,7 @@ use nimiq_primitives::{
     trie::trie_chunk::{TrieChunk, TrieChunkPushResult},
 };
 use nimiq_transaction::{inherent::Inherent, ExecutedTransaction, Transaction, TransactionFlags};
-use nimiq_trie::trie::{IncompleteTrie, MerkleRadixTrie};
-
-use crate::data_store::DataStore;
-use crate::interaction_traits::AccountPruningInteraction;
-use crate::{
-    Account, AccountInherentInteraction, AccountReceipt, AccountTransactionInteraction, BlockState,
-    InherentOperationReceipt, OperationReceipt, Receipts, ReservedBalance,
-    TransactionOperationReceipt, TransactionReceipt,
-};
-
-/// An alias for the accounts tree.
-pub type AccountsTrie = MerkleRadixTrie;
+use nimiq_trie::trie::IncompleteTrie;
 
 /// The Accounts struct is simply an wrapper containing a database environment and, more importantly,
 /// a MerkleRadixTrie with accounts as leaf values. This struct basically holds all the accounts in

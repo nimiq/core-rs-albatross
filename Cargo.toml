@@ -34,6 +34,7 @@ members = [
   "network-mock",
   "primitives",
   "primitives/account",
+  "primitives/accounts-tree",
   "primitives/block",
   "primitives/mmr",
   "primitives/subscription",
