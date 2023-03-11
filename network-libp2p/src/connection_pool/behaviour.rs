@@ -231,7 +231,13 @@ type PoolNetworkBehaviourAction =
 /// Also watches if we have received more connections than the allowed
 /// configured maximum per peer, IP or subnet.
 pub struct ConnectionPoolBehaviour {
+    /// Peer contact book. This is the data structure where information of all
+    /// known peers is store. This information includes known addresses and
+    /// services of each of the peers.
     pub contacts: Arc<RwLock<PeerContactBook>>,
+
+    /// Local (own) peer ID
+    own_peer_id: PeerId,
 
     /// Set of seeds useful when starting to discover other peers.
     seeds: Vec<Multiaddr>,
@@ -267,6 +273,7 @@ pub struct ConnectionPoolBehaviour {
 impl ConnectionPoolBehaviour {
     pub fn new(
         contacts: Arc<RwLock<PeerContactBook>>,
+        own_peer_id: PeerId,
         seeds: Vec<Multiaddr>,
         required_services: Services,
     ) -> Self {
@@ -280,6 +287,7 @@ impl ConnectionPoolBehaviour {
 
         Self {
             contacts,
+            own_peer_id,
             seeds,
             required_services,
             peer_ids: ConnectionState::new(2, config.retry_down_after),
@@ -560,14 +568,23 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
                 connections = other_established,
                 "Already have connections established to this peer",
             );
-            // Notify the handler that the connection must be closed
-            self.actions
-                .push_back(NetworkBehaviourAction::NotifyHandler {
-                    peer_id: *peer_id,
-                    handler: NotifyHandler::One(*connection_id),
-                    event: ConnectionPoolHandlerError::AlreadyConnected,
-                });
-            self.wake();
+            // We have more than one connection to the same peer. Deterministically
+            // choose which connection to close: close the connection only if the
+            // other peer ID is less than our own peer ID value.
+            // Note: We don't track all of the connection IDs and if the latest
+            // connection ID we get is from a peer ID with a lower value, we
+            // close it. If not, we optimistically expect that the other peer
+            // does it.
+            if *peer_id <= self.own_peer_id {
+                // Notify the handler that the connection must be closed
+                self.actions
+                    .push_back(NetworkBehaviourAction::NotifyHandler {
+                        peer_id: *peer_id,
+                        handler: NotifyHandler::One(*connection_id),
+                        event: ConnectionPoolHandlerError::AlreadyConnected,
+                    });
+                self.wake();
+            }
             return;
         }
 

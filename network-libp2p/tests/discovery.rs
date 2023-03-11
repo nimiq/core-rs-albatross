@@ -9,7 +9,10 @@ use libp2p::{
     },
     identity::Keypair,
     noise::{self, NoiseConfig},
-    swarm::{dial_opts::DialOpts, KeepAlive, Swarm, SwarmEvent},
+    swarm::{
+        dial_opts::{DialOpts, PeerCondition},
+        KeepAlive, Swarm, SwarmEvent,
+    },
     yamux::YamuxConfig,
     PeerId, Transport,
 };
@@ -100,7 +103,13 @@ impl TestNode {
     }
 
     pub fn dial_peer_id(&mut self, peer_id: &PeerId) {
-        Swarm::dial(&mut self.swarm, DialOpts::peer_id(*peer_id).build()).unwrap();
+        Swarm::dial(
+            &mut self.swarm,
+            DialOpts::peer_id(*peer_id)
+                .condition(PeerCondition::Disconnected)
+                .build(),
+        )
+        .unwrap();
     }
 }
 

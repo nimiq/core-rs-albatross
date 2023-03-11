@@ -12,6 +12,7 @@ use futures::{ready, stream::BoxStream, Stream, StreamExt};
 use instant::Instant;
 use libp2p::core::transport::MemoryTransport;
 use libp2p::gossipsub::PeerScoreParams;
+use libp2p::swarm::dial_opts::PeerCondition;
 use libp2p::{
     core,
     core::{muxing::StreamMuxerBox, transport::Boxed},
@@ -1054,7 +1055,13 @@ impl Network {
             NetworkAction::Dial { peer_id, output } => {
                 if output
                     .send(
-                        Swarm::dial(swarm, DialOpts::peer_id(peer_id).build()).map_err(Into::into),
+                        Swarm::dial(
+                            swarm,
+                            DialOpts::peer_id(peer_id)
+                                .condition(PeerCondition::Disconnected)
+                                .build(),
+                        )
+                        .map_err(Into::into),
                     )
                     .is_err()
                 {

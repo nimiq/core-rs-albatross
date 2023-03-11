@@ -213,13 +213,15 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                     });
                 // Peer failed to connect with some of our own addresses, remove them from our own addresses
                 if let Some(failed_addresses) = failed_addresses {
-                    debug!(
-                        ?failed_addresses,
-                        "Removing failed address from own addresses"
-                    );
-                    self.peer_contact_book
-                        .write()
-                        .remove_own_addresses(failed_addresses.clone(), &self.keypair)
+                    if !failed_addresses.is_empty() {
+                        debug!(
+                            ?failed_addresses,
+                            "Removing failed address from own addresses"
+                        );
+                        self.peer_contact_book
+                            .write()
+                            .remove_own_addresses(failed_addresses.clone(), &self.keypair)
+                    }
                 }
             }
         } else {

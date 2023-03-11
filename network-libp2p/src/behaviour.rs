@@ -164,6 +164,7 @@ impl NimiqBehaviour {
         // Connection pool behaviour
         let pool = ConnectionPoolBehaviour::new(
             Arc::clone(&contacts),
+            peer_id,
             config.seeds,
             config.discovery.required_services,
         );
