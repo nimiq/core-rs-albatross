@@ -21,9 +21,9 @@ use beserial::{Deserialize, Serialize};
 ///
 /// Please document the tags used here to avoid collisions:
 ///
-///  - `0x01`: [`ChallengeNonce`](nimiq_network_libp2p::discovery::protocol::ChallengeNonce)
-///  - `0x02`: [`PeerContact`](nimiq_network_libp2p::discovery::peer_contacts::PeerContact)
-///  - `0x03`: [`ValidatorRecord`]
+///  - `0x01`: [`ChallengeNonce`](../../nimiq_network_libp2p/discovery/protocol/struct.ChallengeNonce.html)
+///  - `0x02`: [`PeerContact`](../../nimiq_network_libp2p/discovery/peer_contacts/struct.PeerContact.html)
+///  - `0x03`: [`ValidatorRecord`](../../nimiq_validator_network/validator_record/struct.ValidatorRecord.html)
 ///
 pub trait TaggedSignable: Serialize {
     const TAG: u8;

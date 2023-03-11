@@ -60,7 +60,9 @@ impl std::fmt::Debug for VrfEntropy {
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 /// A struct containing a VRF Seed. It is simply the serialized output of the VXEdDSA algorithm.
-/// https://www.signal.org/docs/specifications/xeddsa/#vxeddsa
+///
+/// <https://www.signal.org/docs/specifications/xeddsa/#vxeddsa>
+///
 /// Note that this signature is NOT unique for a given message and public key. In fact, if a signer
 /// produces two VRF seeds for the same message they will be different (with overwhelmingly high
 /// probability). This is because the signing algorithm uses a random input, similar to a Schnorr

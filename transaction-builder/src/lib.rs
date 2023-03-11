@@ -104,6 +104,7 @@ pub struct TransactionBuilder {
 // Basic builder functionality.
 impl TransactionBuilder {
     /// Creates an new, empty `TransactionBuilder`.
+    ///
     /// Only if all required fields are set, transactions can be generated via [`generate`].
     ///
     /// # Examples
@@ -164,19 +165,22 @@ impl TransactionBuilder {
     }
 
     /// Sets the `value` to be transferred by the transaction.
+    ///
     /// The value is a *required* field and must always be set.
     ///
     /// Most transactions have to have non-zero transaction values.
     /// The only exceptions are signalling transactions to:
-    /// * [`update validator details`]
-    /// * [`retire validators`]
-    /// * [`re-activate validators`]
-    /// * [`unpark validators`]
-    /// * [`update staker details`]
-    /// * [`retire staker funds`]
-    /// * [`re-activate staker funds`]
+    /// * `update validator details`
+    /// * `retire validators`
+    /// * `re-activate validators`
+    /// * `unpark validators`
+    /// * `update staker details`
+    /// * `retire staker funds`
+    /// * `re-activate staker funds`
+    ///
     /// Signalling transactions have a special status as they also require an additional step
-    /// during the proof generation (see [`SignallingProofBuilder`]).
+    /// during the proof generation (see
+    /// [`StakingProofBuilder`](proof::staking_contract::StakingProofBuilder)).
     ///
     /// # Examples
     ///
@@ -193,6 +197,7 @@ impl TransactionBuilder {
     }
 
     /// Sets the transaction `fee` that needs to be paid.
+    ///
     /// The fee is not mandatory and will default to 0 if not provided.
     ///
     /// # Examples
@@ -226,6 +231,7 @@ impl TransactionBuilder {
     }
 
     /// Sets the `sender` address of a transaction.
+    ///
     /// The sender is a *required* field and must always be set.
     ///
     /// # Examples
@@ -246,13 +252,14 @@ impl TransactionBuilder {
     }
 
     /// Sets the `sender_type`, which describes the account type of the sender.
+    ///
     /// This field is optional and will default to `AccountType::Basic`.
     ///
     /// Since the sender type determines the type of proof required for the transaction,
     /// it is essential to set it to the correct type.
     ///
     /// The proof builder can be determined as follows:
-    /// 1. If the transaction is a [`signalling transaction`], it will be a [`SignallingProofBuilder`].
+    /// 1. If the transaction is a `signalling transaction`, it will be a [`StakingProofBuilder`].
     /// 2. Otherwise, the following mapping holds depending on `sender_type`:
     ///     - `AccountType::Basic`: [`BasicProofBuilder`]
     ///     - `AccountType::Vesting`: [`BasicProofBuilder`]
@@ -289,17 +296,16 @@ impl TransactionBuilder {
     /// let htlc_proof_builder = proof_builder.unwrap_htlc();
     /// ```
     ///
-    /// [`signalling transaction`]: struct.TransactionBuilder.html#method.with_value
-    /// [`SignallingProofBuilder`]: proof/staking_contract/struct.SignallingProofBuilder.html
-    /// [`BasicProofBuilder`]: proof/struct.BasicProofBuilder.html
-    /// [`HtlcProofBuilder`]: proof/htlc_contract/struct.HtlcProofBuilder.html
-    /// [`StakingProofBuilder`]: proof/staking_contract/struct.StakingRecipientBuilder.html
+    /// [`BasicProofBuilder`]: proof::BasicProofBuilder
+    /// [`HtlcProofBuilder`]: proof::htlc_contract::HtlcProofBuilder
+    /// [`StakingProofBuilder`]: proof::staking_contract::StakingProofBuilder
     pub fn with_sender_type(&mut self, sender_type: AccountType) -> &mut Self {
         self.sender_type = Some(sender_type);
         self
     }
 
     /// Sets the transaction's `recipient`.
+    ///
     /// [`Recipient`]'s can be easily created using builder methods that will automatically
     /// populate the transaction's data field depending on the chosen type of recipient.
     /// The recipient is a *required* field.
@@ -340,6 +346,7 @@ impl TransactionBuilder {
     }
 
     /// Sets the `network_id` for the transaction.
+    ///
     /// The network id is a *required* field and must always be set.
     /// It restricts the validity of the transaction to a network and prevents replay attacks.
     ///
@@ -358,6 +365,7 @@ impl TransactionBuilder {
     }
 
     /// Sets the `validity_start_height` for the transaction.
+    ///
     /// The validity start height is a *required* field and must always be set.
     /// It restricts the validity of the transaction to a blockchain height
     /// and prevents replay attacks.
@@ -379,6 +387,7 @@ impl TransactionBuilder {
 
     /// This method tries putting together the preliminary transaction
     /// in order to move to the proof building phase by returning a [`TransactionProofBuilder`].
+    ///
     /// In case of a failure, it returns a [`TransactionBuilderError`].
     ///
     /// # Examples

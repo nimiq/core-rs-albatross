@@ -14,10 +14,12 @@ pub struct Policy {
     /// How many batches constitute an epoch
     pub batches_per_epoch: u16,
     /// Tendermint's initial timeout, in milliseconds.
-    /// See https://arxiv.org/abs/1807.04938v3 for more information.
+    ///
+    /// See <https://arxiv.org/abs/1807.04938v3> for more information.
     pub tendermint_timeout_init: u64,
     /// Tendermint's timeout delta, in milliseconds.
-    /// See https://arxiv.org/abs/1807.04938v3 for more information.
+    ///
+    /// See <https://arxiv.org/abs/1807.04938v3> for more information.
     pub tendermint_timeout_delta: u64,
     /// Maximum size of accounts trie chunks.
     pub state_chunks_max_size: u32,

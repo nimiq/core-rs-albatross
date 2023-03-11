@@ -8,10 +8,11 @@ use nimiq_transaction::{SignatureProof, Transaction};
 use crate::proof::TransactionProofBuilder;
 
 /// The `StakingDataBuilder` can be used to build the data for incoming staking transactions.
+///
 /// Such transactions still require a normal proof builder to be used in addition.
 ///
-/// Thus, the [`generate`] method of this proof builder will return another proof builder
-/// instead of the final transaction.
+/// Thus, the [`generate`](StakingDataBuilder::generate) method of this proof builder will return
+/// another proof builder instead of the final transaction.
 #[derive(Clone, Debug)]
 pub struct StakingDataBuilder {
     pub transaction: Transaction,
