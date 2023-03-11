@@ -69,7 +69,7 @@ mod tests {
     use ark_relations::r1cs::ConstraintSystem;
     use ark_std::{test_rng, UniformRand};
 
-    use nimiq_pedersen_generators::generators::pedersen_generator_powers;
+    use nimiq_pedersen_generators::pedersen_generator_powers;
     use nimiq_test_log::test;
     use nimiq_zkp_primitives::vk_commitment;
 

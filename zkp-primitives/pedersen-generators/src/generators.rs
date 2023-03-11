@@ -101,9 +101,10 @@ pub fn pedersen_generator_powers<W: Window>() -> PedersenParameters<G1Projective
     for generator in generators.into_iter().skip(1) {
         let mut powers = Vec::with_capacity(W::WINDOW_SIZE);
         let mut power = generator;
-        for _ in 0..W::WINDOW_SIZE {
-            powers.push(power);
+        powers.push(power);
+        for _ in 1..W::WINDOW_SIZE {
             power.double_in_place();
+            powers.push(power);
         }
         generator_powers.push(powers);
     }

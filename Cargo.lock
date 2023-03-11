@@ -213,7 +213,7 @@ dependencies = [
 [[package]]
 name = "ark-ec"
 version = "0.4.2"
-source = "git+https://github.com/paberr/algebra?branch=pb/0.4#5f6512770d0fbc12e63a1c8e1efdd1834f4e9758"
+source = "git+https://github.com/paberr/algebra?branch=pb/0.4#1ab82cb767bc4e462cfd1a4b89e9d4996586fbf6"
 dependencies = [
  "ark-ff",
  "ark-poly",
@@ -4092,8 +4092,7 @@ dependencies = [
  "ark-ec",
  "ark-ff",
  "ark-mnt6-753",
- "ark-serialize",
- "beserial",
+ "bencher",
  "hex",
  "nimiq-hash",
  "nimiq-primitives",

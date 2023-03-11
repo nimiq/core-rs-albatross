@@ -8,14 +8,19 @@ homepage = "https://nimiq.com"
 repository = "https://github.com/nimiq/core-rs-albatross"
 edition = "2021"
 
+[[bench]]
+name = "generate"
+harness = false
+
 [dependencies]
 ark-crypto-primitives = { version = "0.4", features = ["crh"] }
 ark-ec = "0.4"
 ark-ff = "0.4"
 ark-mnt6-753 = "0.4"
-ark-serialize = "0.4"
 hex = "0.4"
 
-beserial = { path = "../../beserial", features = ["derive"] }
 nimiq-hash = { path = "../../hash" }
 nimiq-primitives = { path = "../../primitives", features = ["policy"] }
+
+[dev-dependencies]
+bencher = "0.1"

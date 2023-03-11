@@ -1,9 +1,12 @@
 use ark_crypto_primitives::crh::pedersen::{bytes_to_bits, Window};
 use ark_ec::CurveGroup;
 use ark_mnt6_753::G1Projective;
-use nimiq_pedersen_generators::{generators::PedersenParameters, DefaultWindow};
+use lazy_static::lazy_static;
+use nimiq_pedersen_generators::{default, DefaultWindow, PedersenParameters};
 
-use crate::pedersen_generator_powers::PEDERSEN_PARAMETERS;
+lazy_static! {
+    pub static ref PEDERSEN_PARAMETERS: PedersenParameters<G1Projective> = default();
+}
 
 /// Calculates the Pedersen hash. Given a vector of bits b_i we divide the vector into chunks
 /// of 752 bits and convert them into scalars like so:

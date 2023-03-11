@@ -63,7 +63,7 @@ mod tests {
     };
     use ark_relations::r1cs::ConstraintSystem;
     use ark_std::{test_rng, UniformRand};
-    use nimiq_pedersen_generators::generators::pedersen_generator_powers;
+    use nimiq_pedersen_generators::pedersen_generator_powers;
     use rand::RngCore;
 
     use nimiq_primitives::policy::Policy;

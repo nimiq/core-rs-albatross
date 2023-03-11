@@ -5,7 +5,7 @@
 
 pub use macro_block::*;
 pub use merkle_tree::*;
-pub use pedersen_generator_powers::PEDERSEN_PARAMETERS;
+pub use pedersen::PEDERSEN_PARAMETERS;
 pub use pk_tree::*;
 pub use serialize::*;
 pub use state_commitment::*;
@@ -14,7 +14,6 @@ pub use vk_commitment::*;
 mod macro_block;
 mod merkle_tree;
 pub mod pedersen;
-mod pedersen_generator_powers;
 mod pk_tree;
 mod serialize;
 mod state_commitment;

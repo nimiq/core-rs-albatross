@@ -1,18 +1,15 @@
-use std::fs::File;
 use std::marker::PhantomData;
-use std::path::PathBuf;
 
 use ark_crypto_primitives::crh::pedersen::Window;
 use ark_ff::PrimeField;
-use beserial::Serialize;
-pub use beserial::SerializingError;
-use generators::pedersen_generator_powers;
+use ark_mnt6_753::G1Projective;
+pub use generators::pedersen_generator_powers;
+pub use generators::PedersenParameters;
 use generators::POINT_CAPACITY;
 use nimiq_primitives::policy::Policy;
 
-pub mod generators;
+mod generators;
 mod rand_gen;
-mod serialization;
 
 /// This is the depth of the PKTree circuit.
 const PK_TREE_DEPTH: usize = 5;
@@ -58,14 +55,6 @@ const fn num_windows() -> usize {
     }
 }
 
-pub fn generate_pedersen_generators(dest_path: PathBuf) -> Result<(), SerializingError> {
-    // Compute generator powers and blinding factor.
-    let parameters = pedersen_generator_powers::<DefaultWindow>();
-
-    // Write to file.
-    let mut file = File::create(dest_path)?;
-
-    Serialize::serialize(&parameters, &mut file)?;
-
-    Ok(())
+pub fn default() -> PedersenParameters<G1Projective> {
+    pedersen_generator_powers::<DefaultWindow>()
 }

@@ -9,7 +9,7 @@ use ark_r1cs_std::{
     ToBitsGadget,
 };
 use ark_relations::r1cs::{Namespace, SynthesisError};
-use nimiq_pedersen_generators::generators::PedersenParameters;
+use nimiq_pedersen_generators::PedersenParameters;
 
 pub struct PedersenParametersVar<C: CurveGroup, GG: CurveVar<C, ConstraintF<C>>>
 where
@@ -118,7 +118,7 @@ mod tests {
     use nimiq_zkp_primitives::pedersen::pedersen_hash;
     use rand::RngCore;
 
-    use nimiq_pedersen_generators::{generators::pedersen_generator_powers, GenericWindow};
+    use nimiq_pedersen_generators::{pedersen_generator_powers, GenericWindow};
     use nimiq_test_log::test;
 
     use super::*;
