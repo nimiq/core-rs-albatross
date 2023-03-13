@@ -1,4 +1,5 @@
 use crate::{BlsKeyPair, SchnorrKeyPair};
+use nimiq_account::BlockState;
 use nimiq_block::{
     Block, ForkProof, MacroBlock, MacroBody, MacroHeader, MicroBlock, MicroBody, MicroHeader,
     MicroJustification, MultiSignature, SignedSkipBlockInfo, SkipBlockInfo, SkipBlockProof,
@@ -69,10 +70,12 @@ pub fn next_micro_block(
 
     let inherents = blockchain.create_slash_inherents(&config.fork_proofs, None, None);
 
+    let block_state = BlockState::new(block_number, timestamp);
+
     let (state_root, executed_txns) = blockchain
         .state()
         .accounts
-        .exercise_transactions(&transactions, &inherents, block_number, timestamp)
+        .exercise_transactions(&transactions, &inherents, &block_state)
         .expect("Failed to compute accounts hash during block production");
 
     let ext_txs = ExtendedTransaction::from(
@@ -155,11 +158,13 @@ pub fn next_skip_block(
     // Create the inherents from the skip block info.
     let inherents = blockchain.create_slash_inherents(&[], Some(skip_block_info), None);
 
+    let block_state = BlockState::new(block_number, timestamp);
+
     let state_root = config.state_root.clone().unwrap_or_else(|| {
         let (state_root, _) = blockchain
             .state()
             .accounts
-            .exercise_transactions(&[], &inherents, block_number, timestamp)
+            .exercise_transactions(&[], &inherents, &block_state)
             .expect("Failed to compute accounts hash during block production");
         state_root
     });
@@ -289,9 +294,11 @@ fn next_macro_block_proposal(
 
     let inherents: Vec<Inherent> = blockchain.create_macro_block_inherents(&macro_block);
 
+    let block_state = BlockState::new(block_number, timestamp);
+
     let (root, _) = state
         .accounts
-        .exercise_transactions(&[], &inherents, block_number, timestamp)
+        .exercise_transactions(&[], &inherents, &block_state)
         .expect("Failed to compute accounts hash during block production.");
 
     macro_block.header.state_root = root;

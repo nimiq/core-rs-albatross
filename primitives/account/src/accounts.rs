@@ -232,20 +232,28 @@ impl Accounts {
         &self,
         transactions: &[Transaction],
         inherents: &[Inherent],
-        block_height: u32,
-        timestamp: u64,
+        block_state: &BlockState,
     ) -> Result<(Blake2bHash, Vec<ExecutedTransaction>), AccountError> {
-        todo!()
-        // let mut txn = WriteTransaction::new(&self.env);
-        //
-        // let (_, executed_txns) =
-        //     self.commit(&mut txn, transactions, inherents, block_height, timestamp)?;
-        //
-        // let hash = self.root_hash(Some(&txn));
-        //
-        // txn.abort();
-        //
-        // Ok((hash, executed_txns))
+        let mut txn = WriteTransaction::new(&self.env);
+        assert!(self.is_complete(Some(&txn)), "Tree must be complete");
+
+        let receipts = self.commit(&mut txn, transactions, inherents, block_state)?;
+        assert_eq!(transactions.len(), receipts.transactions.len());
+
+        let executed_txns = transactions
+            .iter()
+            .zip(receipts.transactions.iter())
+            .map(|(tx, receipt)| match receipt {
+                OperationReceipt::Ok(_) => ExecutedTransaction::Ok(tx.clone()),
+                OperationReceipt::Err(_) => ExecutedTransaction::Err(tx.clone()),
+            })
+            .collect();
+
+        let hash = self.get_root_hash_assert(Some(&txn));
+
+        txn.abort();
+
+        Ok((hash, executed_txns))
     }
 
     pub fn commit(

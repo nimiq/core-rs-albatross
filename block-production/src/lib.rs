@@ -1,3 +1,4 @@
+use nimiq_account::BlockState;
 use nimiq_block::{
     ForkProof, MacroBlock, MacroBody, MacroHeader, MicroBlock, MicroBody, MicroHeader,
     MicroJustification, SkipBlockInfo, SkipBlockProof,
@@ -115,10 +116,11 @@ impl BlockProducer {
         let inherents = blockchain.create_slash_inherents(&fork_proofs, skip_block_info, None);
 
         // Update the state and calculate the state root.
+        let block_state = BlockState::new(block_number, timestamp);
         let (state_root, executed_txns) = blockchain
             .state()
             .accounts
-            .exercise_transactions(&transactions, &inherents, block_number, timestamp)
+            .exercise_transactions(&transactions, &inherents, &block_state)
             .expect("Failed to compute accounts hash during block production");
 
         // Calculate the extended transactions from the transactions and the inherents.
@@ -318,9 +320,10 @@ impl BlockProducer {
         let inherents: Vec<Inherent> = blockchain.create_macro_block_inherents(&macro_block);
 
         // Update the state and add the state root to the header.
+        let block_state = BlockState::new(block_number, timestamp);
         let (root, _) = state
             .accounts
-            .exercise_transactions(&[], &inherents, block_number, timestamp)
+            .exercise_transactions(&[], &inherents, &block_state)
             .expect("Failed to compute accounts hash during block production.");
 
         macro_block.header.state_root = root;
