@@ -373,7 +373,7 @@ fn it_can_apply_and_revert_valid_transaction() {
     let env = VolatileEnvironment::new(10).unwrap();
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Address::from([1u8; 20]));
-    let block_state = BlockState::new(1, 1);
+    let block_state = BlockState::new(2, 200);
     let mut db_txn = WriteTransaction::new(&env);
 
     let key_pair = key_pair();
@@ -422,7 +422,7 @@ fn it_can_apply_and_revert_valid_transaction() {
 }
 
 #[test]
-fn it_refuses_invalid_transaction() {
+fn it_refuses_invalid_transactions() {
     let env = VolatileEnvironment::new(10).unwrap();
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Address::from([1u8; 20]));
@@ -467,8 +467,8 @@ fn it_refuses_invalid_transaction() {
     assert_eq!(
         result,
         Err(AccountError::InsufficientFunds {
-            needed: 900.try_into().unwrap(),
-            balance: 800.try_into().unwrap()
+            needed: 200.try_into().unwrap(),
+            balance: 100.try_into().unwrap()
         })
     );
 }

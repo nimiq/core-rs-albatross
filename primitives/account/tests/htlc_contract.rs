@@ -533,6 +533,8 @@ fn it_can_apply_and_revert_valid_transaction() {
     Serialize::serialize(&sender_signature_proof, &mut proof);
     tx.proof = proof;
 
+    let block_state = BlockState::new(1, 101);
+
     let receipt = htlc
         .commit_outgoing_transaction(&tx, &block_state, data_store.write(&mut db_txn))
         .expect("Failed to commit transaction");
@@ -547,11 +549,10 @@ fn it_can_apply_and_revert_valid_transaction() {
 
 #[test]
 #[allow(unused_must_use)]
-fn it_refuses_invalid_transaction() {
+fn it_refuses_invalid_transactions() {
     let env = VolatileEnvironment::new(10).unwrap();
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Address::from([0u8; 20]));
-    let block_state = BlockState::new(1, 1);
     let mut db_txn = WriteTransaction::new(&env);
 
     let (start_contract, mut tx, pre_image, sender_signature_proof, recipient_signature_proof) =
@@ -570,6 +571,8 @@ fn it_refuses_invalid_transaction() {
 
     let mut htlc = start_contract.clone();
 
+    let block_state = BlockState::new(1, 101);
+
     let result = htlc.commit_outgoing_transaction(&tx, &block_state, data_store.write(&mut db_txn));
 
     assert_eq!(result, Err(AccountError::InvalidForSender));
@@ -584,6 +587,8 @@ fn it_refuses_invalid_transaction() {
     Serialize::serialize(&pre_image, &mut proof);
     Serialize::serialize(&recipient_signature_proof, &mut proof);
     tx.proof = proof;
+
+    let block_state = BlockState::new(1, 1);
 
     let result = htlc.commit_outgoing_transaction(&tx, &block_state, data_store.write(&mut db_txn));
 
@@ -625,8 +630,8 @@ fn it_refuses_invalid_transaction() {
     assert_eq!(
         result,
         Err(AccountError::InsufficientFunds {
-            needed: 500.try_into().unwrap(),
-            balance: 0.try_into().unwrap()
+            needed: 1000.try_into().unwrap(),
+            balance: 500.try_into().unwrap()
         })
     );
 
@@ -658,6 +663,8 @@ fn it_refuses_invalid_transaction() {
     Serialize::serialize(&ProofType::TimeoutResolve, &mut proof);
     Serialize::serialize(&recipient_signature_proof, &mut proof);
     tx.proof = proof;
+
+    let block_state = BlockState::new(1, 101);
 
     let result = htlc.commit_outgoing_transaction(&tx, &block_state, data_store.write(&mut db_txn));
 

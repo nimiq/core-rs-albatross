@@ -511,7 +511,6 @@ impl AccountTransactionInteraction for StakingContract {
                 let validator = store.expect_validator(&validator_address)?;
 
                 // Verify that the validator can actually be deleted.
-                // This is ensures that
                 self.can_delete_validator(
                     &validator,
                     block_state.number,

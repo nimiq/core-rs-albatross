@@ -319,8 +319,7 @@ fn it_can_revert_unpark_transactions() {
 
     assert_eq!(blockchain.read().block_number(), 2);
 
-    // One block with stacking transactions
-
+    // One block with staking transactions
     let mut transactions = vec![];
     let key_pair = signing_key();
     let address = Address::from_any_str(ADDRESS).unwrap();
@@ -339,7 +338,7 @@ fn it_can_revert_unpark_transactions() {
 
     let bc = blockchain.upgradable_read();
 
-    // Block with stacking transactions
+    // Block with staking transactions
     let block = producer.next_micro_block(
         &bc,
         bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,

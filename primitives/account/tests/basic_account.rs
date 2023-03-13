@@ -3,7 +3,7 @@ use std::convert::TryInto;
 use beserial::{Deserialize, Serialize};
 use nimiq_account::{
     Account, AccountTransactionInteraction, Accounts, AccountsTrie, BasicAccount, BlockState,
-    DataStore, Receipts,
+    DataStore, TransactionOperationReceipt, TransactionReceipt,
 };
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_database::WriteTransaction;
@@ -186,7 +186,13 @@ fn create_and_prune_works() {
     let receipts = accounts
         .commit(&mut db_txn, &[tx.clone()], &[], &block_state)
         .unwrap();
-    assert_eq!(receipts, Receipts::default());
+
+    assert_eq!(
+        receipts.transactions,
+        vec![TransactionOperationReceipt::Ok(
+            TransactionReceipt::default()
+        )]
+    );
 
     assert_eq!(
         accounts.get_complete(&sender_address, Some(&db_txn)),

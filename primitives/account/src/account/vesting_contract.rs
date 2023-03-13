@@ -43,8 +43,8 @@ impl VestingContract {
 
         if new_balance < min_cap {
             return Err(AccountError::InsufficientFunds {
-                balance: new_balance,
-                needed: min_cap,
+                balance: self.balance - min_cap,
+                needed: self.balance - new_balance,
             });
         }
 
@@ -149,7 +149,7 @@ impl AccountTransactionInteraction for VestingContract {
         _data_store: DataStoreWrite,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         let new_balance = self.balance.safe_sub(transaction.fee)?;
-        // XXX This check should not be necessary since are also checking this in has_sufficient_balance()
+        // XXX This check should not be necessary since are also checking this in reserve_balance()
         self.can_change_balance(transaction, new_balance, block_state)?;
         self.balance = new_balance;
         Ok(None)

@@ -4,8 +4,7 @@ use std::convert::TryInto;
 use beserial::{Deserialize, Serialize};
 use nimiq_account::*;
 use nimiq_bls::{
-    CompressedPublicKey as BlsPublicKey, CompressedPublicKey, KeyPair as BlsKeyPair,
-    SecretKey as BlsSecretKey,
+    CompressedPublicKey as BlsPublicKey, KeyPair as BlsKeyPair, SecretKey as BlsSecretKey,
 };
 use nimiq_collections::BitSet;
 use nimiq_database::{volatile::VolatileEnvironment, WriteTransaction};
@@ -382,8 +381,8 @@ fn update_validator_works() {
     assert_eq!(validator.num_stakers, 1);
     assert_eq!(validator.inactive_since, None);
 
-    // Works when the validator doesn't exist.
-    let keypair = ed25519_key_pair(STAKER_PRIVATE_KEY);
+    // Try with a non-existent validator.
+    let fake_keypair = ed25519_key_pair(STAKER_PRIVATE_KEY);
 
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::UpdateValidator {
@@ -399,21 +398,19 @@ fn update_validator_works() {
             proof: SignatureProof::default(),
         },
         0,
-        &keypair,
+        &fake_keypair,
     );
 
-    let receipt = staking_contract
-        .commit_incoming_transaction(&tx, &block_state, data_store.write(&mut db_txn))
-        .expect("Failed to commit transaction");
-
-    let expected_receipt = UpdateValidatorReceipt {
-        old_signing_key: Default::default(),
-        old_voting_key: CompressedPublicKey::default(),
-        old_reward_address: Default::default(),
-        old_signal_data: None,
-    };
-    assert_eq!(receipt, Some(expected_receipt.into()));
-    //assert!(account_info.logs.is_empty());
+    assert_eq!(
+        staking_contract.commit_incoming_transaction(
+            &tx,
+            &block_state,
+            data_store.write(&mut db_txn),
+        ),
+        Err(AccountError::NonExistentAddress {
+            address: staker_address()
+        })
+    );
 }
 
 #[test]
@@ -493,13 +490,14 @@ fn inactivate_validator_works() {
         &signing_keypair,
     );
 
-    let receipt = staking_contract
-        .commit_incoming_transaction(&tx, &block_state, data_store.write(&mut db_txn))
-        .expect("Failed to commit transaction");
-
-    let noop_receipt: AccountReceipt = InactivateValidatorReceipt { was_parked: false }.into();
-    assert_eq!(receipt, Some(noop_receipt.clone()));
-    // assert!(account_info.logs.is_empty());
+    assert_eq!(
+        staking_contract.commit_incoming_transaction(
+            &tx,
+            &block_state,
+            data_store.write(&mut db_txn)
+        ),
+        Err(AccountError::InvalidForRecipient)
+    );
 
     // Try with a wrong signature.
     let tx = make_signed_incoming_transaction(
@@ -511,12 +509,14 @@ fn inactivate_validator_works() {
         &cold_keypair,
     );
 
-    let receipt = staking_contract
-        .commit_incoming_transaction(&tx, &block_state, data_store.write(&mut db_txn))
-        .expect("Failed to commit transaction");
-
-    assert_eq!(receipt, Some(noop_receipt.clone()));
-    // assert!(account_info.logs.is_empty());
+    assert_eq!(
+        staking_contract.commit_incoming_transaction(
+            &tx,
+            &block_state,
+            data_store.write(&mut db_txn)
+        ),
+        Err(AccountError::InvalidForRecipient)
+    );
 
     // Revert the transaction.
     staking_contract
@@ -551,24 +551,28 @@ fn inactivate_validator_works() {
         .contains_key(&validator_address));
     assert!(staking_contract.parked_set.contains(&validator_address));
 
-    // Works when the validator doesn't exist.
+    // Try with a non-existent validator.
     let fake_address = staker_address();
 
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::InactivateValidator {
-            validator_address: fake_address,
+            validator_address: fake_address.clone(),
             proof: SignatureProof::default(),
         },
         0,
         &signing_keypair,
     );
 
-    let receipt = staking_contract
-        .commit_incoming_transaction(&tx, &block_state, data_store.write(&mut db_txn))
-        .expect("Failed to commit transaction");
-
-    assert_eq!(receipt, Some(noop_receipt));
-    // assert!(account_info.logs.is_empty());
+    assert_eq!(
+        staking_contract.commit_incoming_transaction(
+            &tx,
+            &block_state,
+            data_store.write(&mut db_txn)
+        ),
+        Err(AccountError::NonExistentAddress {
+            address: fake_address
+        })
+    );
 }
 
 #[test]
@@ -659,15 +663,14 @@ fn reactivate_validator_works() {
         &signing_keypair,
     );
 
-    let receipt = staking_contract
-        .commit_incoming_transaction(&tx, &block_state, data_store.write(&mut db_txn))
-        .expect("Failed to commit transaction");
-
-    let noop_receipt = ReactivateValidatorReceipt {
-        was_inactive_since: 0,
-    };
-    assert_eq!(receipt, Some(noop_receipt.clone().into()));
-    //assert!(account_info.logs.is_empty());
+    assert_eq!(
+        staking_contract.commit_incoming_transaction(
+            &tx,
+            &block_state,
+            data_store.write(&mut db_txn)
+        ),
+        Err(AccountError::InvalidForRecipient)
+    );
 
     // Try with a wrong signature.
     let tx = make_signed_incoming_transaction(
@@ -679,12 +682,14 @@ fn reactivate_validator_works() {
         &cold_keypair,
     );
 
-    let receipt = staking_contract
-        .commit_incoming_transaction(&tx, &block_state, data_store.write(&mut db_txn))
-        .expect("Failed to commit transaction");
-
-    assert_eq!(receipt, Some(noop_receipt.clone().into()));
-    //assert!(account_info.logs.is_empty());
+    assert_eq!(
+        staking_contract.commit_incoming_transaction(
+            &tx,
+            &block_state,
+            data_store.write(&mut db_txn)
+        ),
+        Err(AccountError::InvalidForRecipient)
+    );
 
     // Revert the transaction.
     staking_contract
@@ -718,24 +723,28 @@ fn reactivate_validator_works() {
         .active_validators
         .contains_key(&validator_address));
 
-    // Works when the validator doesn't exist.
+    // Try with a non-existent validator.
     let fake_address = staker_address();
 
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::ReactivateValidator {
-            validator_address: fake_address,
+            validator_address: fake_address.clone(),
             proof: SignatureProof::default(),
         },
         0,
         &cold_keypair,
     );
 
-    let receipt = staking_contract
-        .commit_incoming_transaction(&tx, &block_state, data_store.write(&mut db_txn))
-        .expect("Failed to commit transaction");
-
-    assert_eq!(receipt, Some(noop_receipt.into()));
-    // assert!(account_info.logs.is_empty());
+    assert_eq!(
+        staking_contract.commit_incoming_transaction(
+            &tx,
+            &block_state,
+            data_store.write(&mut db_txn)
+        ),
+        Err(AccountError::NonExistentAddress {
+            address: fake_address
+        })
+    );
 }
 
 #[test]
@@ -806,16 +815,14 @@ fn unpark_validator_works() {
         &signing_keypair,
     );
 
-    let receipt = staking_contract
-        .commit_incoming_transaction(&tx, &block_state, data_store.write(&mut db_txn))
-        .expect("Failed to commit transaction");
-
-    let noop_receipt = UnparkValidatorReceipt {
-        current_disabled_slots: None,
-        previous_disabled_slots: None,
-    };
-    assert_eq!(receipt, Some(noop_receipt.clone().into()));
-    // assert!(account_info.logs.is_empty());
+    assert_eq!(
+        staking_contract.commit_incoming_transaction(
+            &tx,
+            &block_state,
+            data_store.write(&mut db_txn)
+        ),
+        Err(AccountError::InvalidForRecipient)
+    );
 
     // Try with a wrong signature.
     let tx = make_signed_incoming_transaction(
@@ -827,11 +834,14 @@ fn unpark_validator_works() {
         &cold_keypair,
     );
 
-    let receipt = staking_contract
-        .commit_incoming_transaction(&tx, &block_state, data_store.write(&mut db_txn))
-        .expect("Failed to commit transaction");
-    assert_eq!(receipt, Some(noop_receipt.clone().into()));
-    // assert!(account_info.logs.is_empty());
+    assert_eq!(
+        staking_contract.commit_incoming_transaction(
+            &tx,
+            &block_state,
+            data_store.write(&mut db_txn)
+        ),
+        Err(AccountError::InvalidForRecipient)
+    );
 
     staking_contract
         .revert_incoming_transaction(&tx, &block_state, receipt, data_store.write(&mut db_txn))
@@ -852,23 +862,28 @@ fn unpark_validator_works() {
         .previous_disabled_slots
         .contains_key(&validator_address));
 
-    // Works when the validator doesn't exist.
+    // Try with a non-existent validator.
     let fake_address = staker_address();
 
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::UnparkValidator {
-            validator_address: fake_address,
+            validator_address: fake_address.clone(),
             proof: SignatureProof::default(),
         },
         0,
         &cold_keypair,
     );
 
-    let receipt = staking_contract
-        .commit_incoming_transaction(&tx, &block_state, data_store.write(&mut db_txn))
-        .expect("Failed to commit transaction");
-    assert_eq!(receipt, Some(noop_receipt.into()));
-    // assert!(account_info.logs.is_empty());
+    assert_eq!(
+        staking_contract.commit_incoming_transaction(
+            &tx,
+            &block_state,
+            data_store.write(&mut db_txn)
+        ),
+        Err(AccountError::NonExistentAddress {
+            address: fake_address
+        })
+    );
 }
 
 #[test]
@@ -1430,13 +1445,16 @@ fn update_staker_works() {
         &staker_keypair,
     );
 
-    let receipt = staking_contract
-        .commit_incoming_transaction(&tx, &block_state, data_store.write(&mut db_txn))
-        .expect("Failed to commit transaction");
-
-    let noop_receipt = StakerReceipt { delegation: None };
-    assert_eq!(receipt, Some(noop_receipt.clone().into()));
-    // assert!(account_info.logs.is_empty());
+    assert_eq!(
+        staking_contract.commit_incoming_transaction(
+            &tx,
+            &block_state,
+            data_store.write(&mut db_txn)
+        ),
+        Err(AccountError::NonExistentAddress {
+            address: staker_address.clone()
+        })
+    );
 
     // Works when changing to no validator.
     let tx = make_signed_incoming_transaction(
@@ -1524,8 +1542,8 @@ fn update_staker_works() {
         ))
     );
 
-    // Works when the staker doesn't exist.
-    let keypair = ed25519_key_pair(VALIDATOR_PRIVATE_KEY);
+    // Doesn't work when the staker doesn't exist.
+    let fake_keypair = ed25519_key_pair(VALIDATOR_PRIVATE_KEY);
 
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::UpdateStaker {
@@ -1533,15 +1551,19 @@ fn update_staker_works() {
             proof: SignatureProof::default(),
         },
         0,
-        &keypair,
+        &fake_keypair,
     );
 
-    let receipt = staking_contract
-        .commit_incoming_transaction(&tx, &block_state, data_store.write(&mut db_txn))
-        .expect("Failed to commit transaction");
-
-    assert_eq!(receipt, Some(noop_receipt.into()));
-    // assert!(account_info.logs.is_empty());
+    assert_eq!(
+        staking_contract.commit_incoming_transaction(
+            &tx,
+            &block_state,
+            data_store.write(&mut db_txn)
+        ),
+        Err(AccountError::NonExistentAddress {
+            address: (&fake_keypair.public).into()
+        })
+    );
 }
 
 #[test]
@@ -1931,6 +1953,8 @@ fn slash_inherents_work() {
     );
 
     // Works in previous epoch, previous batch case.
+    let block_state = BlockState::new(Policy::blocks_per_epoch() + 1, 1000);
+
     let receipt = staking_contract
         .commit_inherent(&inherent, &block_state, data_store.write(&mut db_txn))
         .expect("Failed to commit inherent");
@@ -2095,7 +2119,7 @@ fn finalize_epoch_inherents_works() {
         .get_validator(&data_store.read(&db_txn), &validator_address)
         .expect("Validator should exist");
 
-    assert_eq!(validator.inactive_since, Some(1));
+    assert_eq!(validator.inactive_since, Some(Policy::blocks_per_epoch()));
 
     // Cannot revert the inherent.
     assert_eq!(

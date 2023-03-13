@@ -45,7 +45,7 @@ where
     let temp_producer2 = TemporaryBlockProducer::new_incomplete();
 
     let block = temp_producer1.next_block(vec![], false);
-    let valid_chunk1 = temp_producer1.get_chunk(KeyNibbles::ROOT, 2);
+    let valid_chunk1 = temp_producer1.get_chunk(KeyNibbles::ROOT, 1);
     let next_chunk_start = valid_chunk1.chunk.end_key.clone().unwrap();
 
     // Invalid keys end
@@ -247,26 +247,20 @@ fn can_rebranch_and_revert_chunks() {
 
     // Block 1, 1 chunk
     let block1 = temp_producer1.next_block(vec![], false);
-    let chunk1 = temp_producer1.get_chunk(KeyNibbles::ROOT, 2);
+    let chunk1 = temp_producer1.get_chunk(KeyNibbles::ROOT, 1);
     let chunk2_start = chunk1.chunk.end_key.clone().unwrap();
     assert_eq!(
         temp_producer2.push_with_chunks(block1, vec![chunk1]),
         Ok((PushResult::Extended, Ok(ChunksPushResult::Chunks(1, 0))))
     );
 
+    // Block 2b, 1 chunk (to be rebranched)
+    let block2b = temp_producer1.next_block_no_push(vec![], true);
+
     // Block 2a, 1 chunk (to be reverted)
     let block2a = temp_producer1.next_block(vec![], false);
     let chunk2a = temp_producer1.get_chunk(chunk2_start.clone(), 2);
 
-    // Block 2b, 1 chunk (to be rebranched)
-    let block2b = Block::Micro({
-        let blockchain = &temp_producer2.blockchain.read();
-        next_skip_block(
-            &temp_producer2.producer.voting_key,
-            blockchain,
-            &BlockConfig::default(),
-        )
-    });
     assert_eq!(
         temp_producer1.push(block2b.clone()),
         Ok(PushResult::Rebranched)
@@ -317,7 +311,7 @@ fn can_partially_apply_blocks() {
 
     let block = temp_producer1.next_block_with_txs(vec![], false, vec![]);
     // Chunk covers trie until d...
-    let chunk1 = temp_producer1.get_chunk(KeyNibbles::ROOT, 4);
+    let chunk1 = temp_producer1.get_chunk(KeyNibbles::ROOT, 3);
     let chunk2_start = chunk1.chunk.end_key.clone().unwrap();
     assert_eq!(
         temp_producer2.push_with_chunks(block, vec![chunk1]),
@@ -510,7 +504,7 @@ fn can_detect_invalid_chunks() {
         ))
     );
 
-    // Invalid end key (way later than the chink size)
+    // Invalid end key (way later than the chunk size)
     let address_unknown = Address::from_hex("ff00000000000000000000000000000000000000").unwrap();
     let unknown_key = KeyNibbles::from(&address_unknown);
     check_invalid_chunk!(

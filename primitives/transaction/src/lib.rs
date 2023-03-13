@@ -157,7 +157,7 @@ impl Default for SignatureProof {
     }
 }
 /// A wrapper around the Transaction struct that encodes the result of executing such transaction
-#[derive(Clone, Eq, Debug, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum ExecutedTransaction {
     /// A successfully executed transaction
@@ -192,21 +192,6 @@ impl ExecutedTransaction {
         match self {
             ExecutedTransaction::Ok(txn) => txn.hash(),
             ExecutedTransaction::Err(txn) => txn.hash(),
-        }
-    }
-}
-
-impl PartialEq for ExecutedTransaction {
-    fn eq(&self, other: &Self) -> bool {
-        match self {
-            ExecutedTransaction::Ok(txn) => match other {
-                ExecutedTransaction::Ok(other_txn) => txn == other_txn,
-                ExecutedTransaction::Err(_) => false,
-            },
-            ExecutedTransaction::Err(txn) => match other {
-                ExecutedTransaction::Ok(_) => false,
-                ExecutedTransaction::Err(other_txn) => txn == other_txn,
-            },
         }
     }
 }

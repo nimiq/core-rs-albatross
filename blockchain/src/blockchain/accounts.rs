@@ -153,6 +153,11 @@ impl Blockchain {
     ) -> Result<(), PushError> {
         match block {
             Block::Micro(ref micro_block) => {
+                debug!(
+                    block_number = &micro_block.header.block_number,
+                    "Reverting block"
+                );
+
                 // Verify accounts hash if the tree is complete or changes only happened in the complete part.
                 if let Some(accounts_hash) = accounts.get_root_hash(Some(txn)) {
                     assert_eq!(
@@ -160,11 +165,6 @@ impl Blockchain {
                         "Failed to revert - inconsistent state"
                     );
                 }
-
-                debug!(
-                    block_number = &micro_block.header.block_number,
-                    "Reverting block"
-                );
 
                 // Get the body of the block.
                 let body = micro_block.body.as_ref().unwrap();

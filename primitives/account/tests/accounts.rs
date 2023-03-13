@@ -275,7 +275,7 @@ fn it_checks_for_sufficient_funds() {
         address_sender.clone(),
         address_recipient.clone(),
         Coin::try_from(10).unwrap(),
-        Coin::ZERO,
+        Coin::from_u64_unchecked(1),
         1,
         NetworkId::Main,
     );
