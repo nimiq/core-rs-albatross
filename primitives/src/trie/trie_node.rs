@@ -10,7 +10,7 @@ use beserial::{
     SerializingError, WriteBytesExt,
 };
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
-use nimiq_hash::{Blake2bHash, HashOutput, Hasher, SerializeContent};
+use nimiq_hash::{Blake2bHash, Hash, HashOutput, Hasher};
 
 use crate::{key_nibbles::KeyNibbles, trie::error::MerkleRadixTrieError};
 
@@ -260,7 +260,22 @@ impl TrieNode {
     pub fn hash<H: HashOutput>(&self) -> Option<H> {
         self.can_hash().then(|| {
             let mut hasher = H::Builder::default();
-            self.serialize_content(&mut hasher).unwrap();
+            self.key.serialize(&mut hasher).unwrap();
+            match (self.has_children(), &self.value) {
+                (_, None) => {
+                    hasher.write_u8(0).unwrap();
+                }
+                (false, Some(val)) => {
+                    hasher.write_u8(1).unwrap();
+                    val.serialize::<u16, _>(&mut hasher).unwrap();
+                }
+                (true, Some(val)) => {
+                    hasher.write_u8(2).unwrap();
+                    let val_hash: Blake2bHash = val.hash();
+                    val_hash.serialize(&mut hasher).unwrap();
+                }
+            }
+            self.children.serialize(&mut hasher).unwrap();
             hasher.finish()
         })
     }
@@ -357,21 +372,6 @@ impl Serialize for TrieNode {
     }
 }
 
-impl SerializeContent for TrieNode {
-    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
-        let mut size = 0;
-        size += self.key.serialize(writer)?;
-        if let Some(v) = &self.value {
-            writer.write_u8(1)?;
-            size += v.serialize::<u16, _>(writer)?;
-        } else {
-            writer.write_u8(0)?;
-        }
-        size += self.children.serialize(writer)?;
-        Ok(size)
-    }
-}
-
 impl IntoDatabaseValue for TrieNode {
     fn database_byte_size(&self) -> usize {
         self.serialized_size()
@@ -394,6 +394,14 @@ impl FromDatabaseValue for TrieNode {
 
 pub struct Iter<'a> {
     it: slice::Iter<'a, Option<TrieNodeChild>>,
+}
+
+impl<'a> Iter<'a> {
+    pub fn from_children(children: &'a [Option<TrieNodeChild>; 16]) -> Iter<'a> {
+        Iter {
+            it: children.iter(),
+        }
+    }
 }
 
 impl<'a> Iterator for Iter<'a> {
@@ -425,9 +433,7 @@ impl<'a> IntoIterator for &'a TrieNode {
     type Item = &'a TrieNodeChild;
     type IntoIter = Iter<'a>;
     fn into_iter(self) -> Iter<'a> {
-        Iter {
-            it: self.children.iter(),
-        }
+        Iter::from_children(&self.children)
     }
 }
 

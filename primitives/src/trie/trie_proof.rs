@@ -4,7 +4,7 @@ use beserial::{Deserialize, Serialize};
 use nimiq_hash::Blake2bHash;
 
 use crate::key_nibbles::KeyNibbles;
-use crate::trie::{network_trie_node::NetworkTrieNode, trie_node::TrieNode};
+use crate::trie::{trie_node::TrieNode, trie_proof_node::TrieProofNode};
 
 /// A Merkle proof of the inclusion of some leaf nodes in the Merkle Radix Trie. The
 /// proof consists of the path from the leaves that we want to prove inclusion all the way up
@@ -27,29 +27,14 @@ use crate::trie::{network_trie_node::NetworkTrieNode, trie_node::TrieNode};
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TrieProof {
     #[beserial(len_type(u16))]
-    // TODO: for hybrid nodes, this contains data. is this bad?
-    pub nodes: Vec<NetworkTrieNode>,
+    pub nodes: Vec<TrieProofNode>,
 }
 
 impl TrieProof {
     pub fn new(nodes: Vec<TrieNode>) -> TrieProof {
         TrieProof {
-            nodes: nodes.into_iter().map(NetworkTrieNode::from).collect(),
+            nodes: nodes.into_iter().map(TrieProofNode::from).collect(),
         }
-    }
-
-    /// Returns all of the leaf/hybrid nodes in the proof. These are the nodes that we are proving
-    /// inclusion in the trie.
-    pub fn values(&self) -> Vec<&TrieNode> {
-        let mut nodes = Vec::new();
-
-        for node in &self.nodes {
-            if node.value.is_some() {
-                nodes.push(node.as_ref());
-            }
-        }
-
-        nodes
     }
 
     /// Verifies a proof against the given root hash. Note that this doesn't check that whatever keys
@@ -65,7 +50,7 @@ impl TrieProof {
         }
 
         // We'll use this vector to temporarily store child nodes before they are verified.
-        let mut children: Vec<&TrieNode> = Vec::new();
+        let mut children: Vec<&TrieProofNode> = Vec::new();
 
         // Check that the proof is a valid trie.
         for node in &self.nodes {
@@ -78,18 +63,16 @@ impl TrieProof {
                     if node.key.is_prefix_of(&child.key) {
                         // Get the hash and key of the child from the parent node.
                         let (child_hash, child_key) =
-                            match (node.child(&child.key), node.child_key(&child.key, &None)) {
+                            match (node.child(&child.key), node.child_key(&child.key)) {
                                 (Ok(c), Ok(k)) => (&c.hash, k),
                                 _ => return false,
                             };
 
                         // The child node must match the hash and the key, otherwise the proof is
                         // invalid.
-                        if child_hash != &child.hash_assert::<Blake2bHash>()
-                            || child_key != child.key
-                        {
+                        if child_hash != &child.hash() || child_key != child.key {
                             error!("The child node doesn't match the given hash and/or key. Got hash {}, child has hash {}. Got key {}, child has key {}.",
-                                   child_hash, child.hash_assert::<Blake2bHash>(), child_key, child.key);
+                                   child_hash, child.hash(), child_key, child.key);
                             return false;
                         }
                     }
@@ -122,10 +105,10 @@ impl TrieProof {
         }
 
         // And must match the hash given as the root hash.
-        if &root.hash_assert::<Blake2bHash>() != root_hash {
+        if &root.hash() != root_hash {
             error!(
                 "The root node doesn't have the correct hash! It has hash {}, but it should be {}.",
-                root.hash_assert::<Blake2bHash>(),
+                root.hash(),
                 root_hash
             );
             return false;

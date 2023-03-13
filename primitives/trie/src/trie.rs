@@ -16,12 +16,12 @@ use nimiq_primitives::{
     key_nibbles::KeyNibbles,
     trie::{
         error::MerkleRadixTrieError,
-        network_trie_node::NetworkTrieNode,
         trie_chunk::Item,
         trie_chunk::TrieChunk,
         trie_chunk::TrieChunkPushResult,
         trie_node::{RootData, TrieNode, TrieNodeKind},
         trie_proof::TrieProof,
+        trie_proof_node::TrieProofNode,
     },
 };
 
@@ -658,7 +658,7 @@ impl MerkleRadixTrie {
         &self,
         txn: &mut WriteTransaction,
         keys: ops::RangeFrom<KeyNibbles>,
-        last_item_proof: &[NetworkTrieNode],
+        last_item_proof: &[TrieProofNode],
     ) -> Result<(), MerkleRadixTrieError> {
         let mut last_item_proof = last_item_proof.iter().rev();
         let missing_range = Some(keys.clone());
