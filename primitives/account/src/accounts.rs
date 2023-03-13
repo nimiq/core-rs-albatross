@@ -725,7 +725,8 @@ impl Accounts {
             sender_store.write(txn),
         )?;
 
-        self.put(txn, sender_address, sender_account);
+        // Reverting a zero-fee signaling transaction can create a prunable account.
+        self.put_or_prune(txn, sender_address, sender_account);
 
         Ok(())
     }
