@@ -78,6 +78,8 @@ pub trait BlockchainInterface {
     async fn get_transactions_by_address(
         &mut self,
         address: Address,
+        from: Vec<Address>,
+        to: Vec<Address>,
         max: Option<u16>,
     ) -> RPCResult<Vec<ExecutedTransaction>, (), Self::Error>;
 

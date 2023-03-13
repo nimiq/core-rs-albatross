@@ -91,6 +91,14 @@ pub enum BlockchainCommand {
         /// The address to query by.
         address: Address,
 
+        /// Filter transactions by recipient addresses. Empty list means no filter.
+        /// If both `from` and `to` are empty, all transactions are returned.
+        from: Vec<Address>,
+
+        /// Filter transactions by sender addresses. Empty list means no filter.
+        /// If both `from` and `to` are empty, all transactions are returned.
+        to: Vec<Address>,
+
         /// Max number of transactions to fetch. If absent it defaults to 500.
         #[clap(long)]
         max: Option<u16>,
@@ -267,6 +275,8 @@ impl HandleSubcommand for BlockchainCommand {
 
             BlockchainCommand::TransactionsByAddress {
                 address,
+                from,
+                to,
                 max,
                 just_hash,
             } => {
@@ -283,7 +293,7 @@ impl HandleSubcommand for BlockchainCommand {
                         "{:#?}",
                         client
                             .blockchain
-                            .get_transactions_by_address(address, max)
+                            .get_transactions_by_address(address, from, to, max)
                             .await?
                     )
                 }

@@ -429,6 +429,8 @@ impl BlockchainInterface for BlockchainDispatcher {
     async fn get_transactions_by_address(
         &mut self,
         address: Address,
+        from: Vec<Address>,
+        to: Vec<Address>,
         max: Option<u16>,
     ) -> RPCResult<Vec<ExecutedTransaction>, (), Self::Error> {
         if let BlockchainReadProxy::Full(blockchain) = self.blockchain.read() {
@@ -461,13 +463,30 @@ impl BlockchainInterface for BlockchainDispatcher {
                 let block_number = extended_tx.block_number;
                 let timestamp = extended_tx.block_time;
 
-                if let Ok(tx) = extended_tx.into_transaction() {
-                    txs.push(ExecutedTransaction::from_blockchain(
-                        tx,
-                        block_number,
-                        timestamp,
-                        blockchain.block_number(),
-                    ));
+                // TODO We have to see how to get the block number from tx
+                // let (start_block, end_block) = if let Some(range) = block_range {
+                //     (range.start.unwrap_or(0), range.end.unwrap_or(blockchain.block_number()))
+                // } else {
+                //     (0, blockchain.block_number())
+                // };
+
+                if let Ok(extended_tx) = extended_tx.into_transaction() {
+                    match extended_tx {
+                        nimiq_transaction::ExecutedTransaction::Ok(ref tx)
+                        | nimiq_transaction::ExecutedTransaction::Err(ref tx) => {
+                            if (from.is_empty() && to.is_empty())
+                                || from.contains(&tx.sender)
+                                || to.contains(&tx.recipient)
+                            {
+                                txs.push(ExecutedTransaction::from_blockchain(
+                                    extended_tx,
+                                    block_number,
+                                    timestamp,
+                                    blockchain.block_number(),
+                                ));
+                            }
+                        }
+                    }
                 }
             }
 
