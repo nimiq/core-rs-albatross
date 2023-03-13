@@ -219,12 +219,23 @@ impl Accounts {
     /// Marks the account at the given address as changed if it is missing.
     /// Returns true if the account is missing, false otherwise.
     fn mark_changed_if_missing(&self, txn: &mut WriteTransaction, address: &Address) -> bool {
-        let missing = self.is_missing(txn, address);
+        // We consider an account to be missing if the account itself or any of its children are missing.
+        // Therefore we need to check if the rightmost child is contained in the missing range.
+        let mut rightmost_key = [255u8; KeyNibbles::MAX_BYTES];
+        rightmost_key[0..Address::SIZE].copy_from_slice(&address.0);
+        let rightmost_key = KeyNibbles::from(&rightmost_key[..]);
+
+        let missing = self
+            .tree
+            .get_missing_range(txn)
+            .map_or(false, |range| range.contains(&rightmost_key));
+
         if missing {
             self.tree
-                .update_within_missing_part(txn, &KeyNibbles::from(address))
+                .update_within_missing_part(txn, &rightmost_key)
                 .expect("Failed to update within missing part");
         }
+
         missing
     }
 
