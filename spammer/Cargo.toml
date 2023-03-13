@@ -24,7 +24,7 @@ log = { package = "tracing", version = "0.1", features = ["log"] }
 rand = "0.8.5"
 tokio = { version = "1.26", features = ["rt-multi-thread", "time", "tracing"] }
 tokio-metrics = { version = "0.1" }
-toml = "0.5"
+toml = "0.7"
 serde = "1.0.152"
 nimiq-block = { path = "../primitives/block" }
 nimiq-blockchain = { path = "../blockchain" }
