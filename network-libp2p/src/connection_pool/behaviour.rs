@@ -592,6 +592,9 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
         if self.addresses.is_banned(address.clone()) {
             debug!(%address, "Address is banned");
             close_reason = Some(ConnectionPoolHandlerError::BannedIp);
+        } else if self.peer_ids.is_banned(*peer_id) {
+            debug!(%peer_id, "Peer is banned");
+            close_reason = Some(ConnectionPoolHandlerError::BannedPeer);
         }
 
         // Get IP from multiaddress if it exists.

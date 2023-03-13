@@ -458,6 +458,38 @@ async fn dht_put_and_get() {
     assert_eq!(fetched_record, Some(put_record));
 }
 
+#[test(tokio::test)]
+async fn ban_peer() {
+    let (net1, net2) = create_connected_networks().await;
+
+    assert!(net2.has_peer(*net1.local_peer_id()));
+
+    let mut events2 = net2.subscribe_events();
+
+    let net1_peer_id = *net1.local_peer_id();
+    let net2_peer_id = *net2.local_peer_id();
+
+    net2.disconnect_peer(net1_peer_id, CloseReason::MaliciousPeer)
+        .await;
+    log::debug!("Closed peer");
+
+    let event2 = events2.next().await.unwrap().unwrap();
+    assert_peer_left(&event2, &net1_peer_id);
+    log::trace!(event = ?event2, "Event 2");
+
+    assert_eq!(net2.get_peers(), &[]);
+
+    // Now try to reconnect peer 1
+    net1.dial_peer(net2_peer_id).await.unwrap();
+
+    // Check that the connection to peer 1 (from peer 2 perspective) was closed
+    let event2 = events2.next().await.unwrap().unwrap();
+    assert_peer_left(&event2, &net1_peer_id);
+    log::trace!(event = ?event2, "Event 2");
+
+    assert_eq!(net2.get_peers(), &[]);
+}
+
 pub struct TestTopic;
 
 impl Topic for TestTopic {

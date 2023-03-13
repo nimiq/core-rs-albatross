@@ -20,13 +20,17 @@ pub struct ConnectionPoolHandler {
 /// Connection Pool errors
 #[derive(Clone, Debug, Error)]
 pub enum ConnectionPoolHandlerError {
+    /// There is already a connection for this Peer
+    #[error("Peer is already connected")]
+    AlreadyConnected,
+
     /// Ip is banned
     #[error("IP is banned")]
     BannedIp,
 
-    /// There is already a connection for this Peer
-    #[error("Peer is already connected")]
-    AlreadyConnected,
+    /// Peer is banned
+    #[error("Peer is banned")]
+    BannedPeer,
 
     /// Maximum connections per IPv4 subnet has been reached
     #[error("Maximum connections per IPV4 subnet has been reached")]
