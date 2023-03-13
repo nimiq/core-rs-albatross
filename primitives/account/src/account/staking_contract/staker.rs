@@ -6,6 +6,7 @@ use crate::account::staking_contract::store::{
     StakingContractStoreReadOps, StakingContractStoreReadOpsExt, StakingContractStoreWrite,
 };
 use crate::account::staking_contract::{StakerReceipt, StakingContract};
+use crate::Tombstone;
 
 /// Struct representing a staker in the staking contract.
 /// Actions concerning a staker are:
@@ -42,6 +43,11 @@ impl StakingContract {
             return Err(AccountError::AlreadyExistentAddress {
                 address: staker_address.clone(),
             });
+        }
+
+        // Check that the delegated validator exists.
+        if let Some(validator_address) = &delegation {
+            store.expect_validator(validator_address)?;
         }
 
         // Create the staker struct.
@@ -109,9 +115,12 @@ impl StakingContract {
         // Get the staker.
         let mut staker = store.expect_staker(staker_address)?;
 
-        // If we are delegating to a validator, we need to update it too.
-        // The validator might have been deleted, in which case `add_stake_to_validator` will fail.
+        // If we are delegating to a validator, we need to update it.
         if let Some(validator_address) = &staker.delegation {
+            // Check that the delegation is still valid, i.e. the validator hasn't been deleted.
+            store.expect_validator(validator_address)?;
+
+            // Update the validator.
             self.add_stake_to_validator(store, validator_address, value)?;
         }
 
@@ -172,7 +181,7 @@ impl StakingContract {
         // Get the staker.
         let mut staker = store.expect_staker(staker_address)?;
 
-        // Check that the validator from the new delegation exists.
+        // Check that the delegated validator exists.
         if let Some(new_validator_address) = &delegation {
             store.expect_validator(new_validator_address)?;
         }
@@ -254,17 +263,15 @@ impl StakingContract {
         // Get the staker.
         let mut staker = store.expect_staker(staker_address)?;
 
-        // Update the staker's balance.
-        staker.balance.safe_sub_assign(value)?;
+        // Compute the new balance of the staker. We can't update `staker` here yet as
+        // `remove_staker_from_validator` needs the original balance intact.
+        let new_balance = staker.balance.safe_sub(value)?;
 
         // All checks passed, not allowed to fail from here on!
 
-        // Update our balance.
-        self.balance -= value;
-
         // If we are delegating to a validator, we update it.
         if let Some(validator_address) = &staker.delegation {
-            if staker.balance.is_zero() {
+            if new_balance.is_zero() {
                 self.remove_staker_from_validator(store, &staker)
                     .expect("inconsistent contract state");
             } else {
@@ -272,6 +279,12 @@ impl StakingContract {
                     .expect("inconsistent contract state");
             }
         }
+
+        // Update the staker's balance.
+        staker.balance = new_balance;
+
+        // Update our balance.
+        self.balance -= value;
 
         // Update or remove the staker entry, depending on remaining balance.
         if staker.balance.is_zero() {
@@ -299,6 +312,7 @@ impl StakingContract {
             .get_staker(staker_address)
             .or_else(|| {
                 receipt.map(|receipt| {
+                    // Set the staker balance to zero here, it is updated later.
                     let staker = Staker {
                         address: staker_address.clone(),
                         balance: Coin::ZERO,
@@ -341,25 +355,50 @@ impl StakingContract {
         store: &mut StakingContractStoreWrite,
         staker: &Staker,
     ) -> Result<(), AccountError> {
-        // Get the validator.
         let validator_address = staker
             .delegation
             .as_ref()
             .expect("Staker has no delegation");
-        let mut validator = store.expect_validator(validator_address)?;
 
-        // Update it.
-        validator.total_stake += staker.balance;
+        // Try to get the validator. It might have been deleted.
+        if let Some(mut validator) = store.get_validator(validator_address) {
+            // Validator exists, update it.
+            validator.total_stake += staker.balance;
 
-        if validator.is_active() {
-            self.active_validators
-                .insert(validator_address.clone(), validator.total_stake);
+            if validator.is_active() {
+                self.active_validators
+                    .insert(validator_address.clone(), validator.total_stake);
+            }
+
+            validator.num_stakers += 1;
+
+            // Update the validator entry.
+            store.put_validator(validator_address, validator);
+
+            return Ok(());
         }
 
-        validator.num_stakers += 1;
+        // Validator doesn't exist, check for tombstone.
+        if let Some(mut tombstone) = store.get_tombstone(validator_address) {
+            // Tombstone exists, update it.
+            tombstone.remaining_stake += staker.balance;
 
-        // Update the validator entry.
-        store.put_validator(validator_address, validator);
+            tombstone.num_remaining_stakers += 1;
+
+            store.put_tombstone(validator_address, tombstone);
+
+            return Ok(());
+        }
+
+        // Tombstone doesn't exist, so it must have been deleted by a previous
+        // `remove_staker_from_validator` call. Recreate it.
+        // TODO We should consider guarding this functionality behind a flag. It's not obvious from
+        //  the function name that this will create a tombstone if the validator doesn't exist.
+        let tombstone = Tombstone {
+            remaining_stake: staker.balance,
+            num_remaining_stakers: 1,
+        };
+        store.put_tombstone(&validator_address, tombstone);
 
         Ok(())
     }
@@ -422,21 +461,35 @@ impl StakingContract {
         validator_address: &Address,
         value: Coin,
     ) -> Result<(), AccountError> {
-        // Get the validator.
-        let mut validator = store.expect_validator(validator_address)?;
+        // Try to get the validator. It might have been deleted.
+        if let Some(mut validator) = store.get_validator(validator_address) {
+            // Validator exists, update it.
+            validator.total_stake += value;
 
-        // Update it.
-        validator.total_stake += value;
+            if validator.is_active() {
+                self.active_validators
+                    .insert(validator_address.clone(), validator.total_stake);
+            }
 
-        if validator.is_active() {
-            self.active_validators
-                .insert(validator_address.clone(), validator.total_stake);
+            // Update the validator entry.
+            store.put_validator(validator_address, validator);
+
+            return Ok(());
         }
 
-        // Update the validator entry.
-        store.put_validator(validator_address, validator);
+        // Validator doesn't exist, check for tombstone.
+        if let Some(mut tombstone) = store.get_tombstone(validator_address) {
+            // Tombstone exists, update it.
+            tombstone.remaining_stake += value;
 
-        Ok(())
+            // Update the tombstone entry.
+            store.put_tombstone(validator_address, tombstone);
+
+            return Ok(());
+        }
+
+        // Neither validator nor tombstone exist, this is an error.
+        panic!("inconsistent contract state");
     }
 
     /// Removes `value` coins from a given validator's total stake.
