@@ -305,7 +305,7 @@ impl GenesisBuilder {
             .put(
                 txn,
                 &KeyNibbles::from(&Policy::STAKING_CONTRACT_ADDRESS),
-                staking_contract.clone(),
+                Account::Staking(staking_contract.clone()),
             )
             .expect("Failed to store staking contract");
 
