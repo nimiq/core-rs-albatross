@@ -546,8 +546,8 @@ impl<N: Network> From<&ZKPComponent<N>> for ZKPStateEnvironment {
     }
 }
 
-impl Handle<RequestZKPResponse, Arc<ZKPStateEnvironment>> for RequestZKP {
-    fn handle(&self, env: &Arc<ZKPStateEnvironment>) -> RequestZKPResponse {
+impl<N: Network> Handle<N, RequestZKPResponse, Arc<ZKPStateEnvironment>> for RequestZKP {
+    fn handle(&self, _peer_id: N::PeerId, env: &Arc<ZKPStateEnvironment>) -> RequestZKPResponse {
         // First retrieve the ZKP proof and release the lock again.
         let zkp_state = env.zkp_state.read();
         let latest_block_number = zkp_state.latest_block_number;

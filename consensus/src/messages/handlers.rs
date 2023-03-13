@@ -12,7 +12,7 @@ use nimiq_block::BlockInclusionProof;
 use nimiq_blockchain::{Blockchain, CHUNK_SIZE};
 use nimiq_blockchain_interface::{AbstractBlockchain, Direction};
 use nimiq_blockchain_proxy::BlockchainProxy;
-use nimiq_network_interface::request::Handle;
+use nimiq_network_interface::{network::Network, request::Handle};
 #[cfg(feature = "full")]
 use nimiq_primitives::policy::Policy;
 
@@ -20,8 +20,8 @@ use crate::messages::*;
 #[cfg(feature = "full")]
 use crate::sync::live::state_queue::{Chunk, RequestChunk, ResponseChunk};
 
-impl Handle<MacroChain, BlockchainProxy> for RequestMacroChain {
-    fn handle(&self, blockchain: &BlockchainProxy) -> MacroChain {
+impl<N: Network> Handle<N, MacroChain, BlockchainProxy> for RequestMacroChain {
+    fn handle(&self, _peer_id: N::PeerId, blockchain: &BlockchainProxy) -> MacroChain {
         let blockchain = blockchain.read();
 
         // A peer has the macro chain. Check all block locator hashes in the given order and pick
@@ -85,8 +85,8 @@ impl Handle<MacroChain, BlockchainProxy> for RequestMacroChain {
 }
 
 #[cfg(feature = "full")]
-impl Handle<BatchSetInfo, Arc<RwLock<Blockchain>>> for RequestBatchSet {
-    fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> BatchSetInfo {
+impl<N: Network> Handle<N, BatchSetInfo, Arc<RwLock<Blockchain>>> for RequestBatchSet {
+    fn handle(&self, _peer_id: N::PeerId, blockchain: &Arc<RwLock<Blockchain>>) -> BatchSetInfo {
         let blockchain = blockchain.read();
 
         if let Ok(Block::Macro(block)) = blockchain.get_block(&self.hash, true, None) {
@@ -147,8 +147,8 @@ impl Handle<BatchSetInfo, Arc<RwLock<Blockchain>>> for RequestBatchSet {
 }
 
 #[cfg(feature = "full")]
-impl Handle<HistoryChunk, Arc<RwLock<Blockchain>>> for RequestHistoryChunk {
-    fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> HistoryChunk {
+impl<N: Network> Handle<N, HistoryChunk, Arc<RwLock<Blockchain>>> for RequestHistoryChunk {
+    fn handle(&self, _peer_id: N::PeerId, blockchain: &Arc<RwLock<Blockchain>>) -> HistoryChunk {
         let chunk = blockchain.read().history_store.prove_chunk(
             self.epoch_number,
             self.block_number,
@@ -160,8 +160,8 @@ impl Handle<HistoryChunk, Arc<RwLock<Blockchain>>> for RequestHistoryChunk {
     }
 }
 
-impl Handle<Option<Block>, BlockchainProxy> for RequestBlock {
-    fn handle(&self, blockchain: &BlockchainProxy) -> Option<Block> {
+impl<N: Network> Handle<N, Option<Block>, BlockchainProxy> for RequestBlock {
+    fn handle(&self, _peer_id: N::PeerId, blockchain: &BlockchainProxy) -> Option<Block> {
         let blockchain = blockchain.read();
         if let Ok(block) = blockchain.get_block(&self.hash, false) {
             let block = match block {
@@ -189,8 +189,8 @@ impl Handle<Option<Block>, BlockchainProxy> for RequestBlock {
     }
 }
 
-impl Handle<ResponseBlocks, BlockchainProxy> for RequestMissingBlocks {
-    fn handle(&self, blockchain: &BlockchainProxy) -> ResponseBlocks {
+impl<N: Network> Handle<N, ResponseBlocks, BlockchainProxy> for RequestMissingBlocks {
+    fn handle(&self, _peer_id: N::PeerId, blockchain: &BlockchainProxy) -> ResponseBlocks {
         let blockchain = blockchain.read();
 
         // TODO We might want to do a sanity check on the locator hashes and reject the request if
@@ -273,15 +273,15 @@ impl Handle<ResponseBlocks, BlockchainProxy> for RequestMissingBlocks {
     }
 }
 
-impl Handle<Blake2bHash, BlockchainProxy> for RequestHead {
-    fn handle(&self, blockchain: &BlockchainProxy) -> Blake2bHash {
+impl<N: Network> Handle<N, Blake2bHash, BlockchainProxy> for RequestHead {
+    fn handle(&self, _peer_id: N::PeerId, blockchain: &BlockchainProxy) -> Blake2bHash {
         blockchain.read().head_hash()
     }
 }
 
 #[cfg(feature = "full")]
-impl Handle<ResponseChunk, Arc<RwLock<Blockchain>>> for RequestChunk {
-    fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> ResponseChunk {
+impl<N: Network> Handle<N, ResponseChunk, Arc<RwLock<Blockchain>>> for RequestChunk {
+    fn handle(&self, _peer_id: N::PeerId, blockchain: &Arc<RwLock<Blockchain>>) -> ResponseChunk {
         let blockchain_rg = blockchain.read();
 
         // Check if our state is complete.
@@ -304,8 +304,14 @@ impl Handle<ResponseChunk, Arc<RwLock<Blockchain>>> for RequestChunk {
 }
 
 #[cfg(feature = "full")]
-impl Handle<ResponseTransactionsProof, Arc<RwLock<Blockchain>>> for RequestTransactionsProof {
-    fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> ResponseTransactionsProof {
+impl<N: Network> Handle<N, ResponseTransactionsProof, Arc<RwLock<Blockchain>>>
+    for RequestTransactionsProof
+{
+    fn handle(
+        &self,
+        _peer_id: N::PeerId,
+        blockchain: &Arc<RwLock<Blockchain>>,
+    ) -> ResponseTransactionsProof {
         let blockchain = blockchain.read();
         let hashes: Vec<&Blake2bHash> = self.hashes.iter().collect();
 
@@ -449,10 +455,14 @@ impl Handle<ResponseTransactionsProof, Arc<RwLock<Blockchain>>> for RequestTrans
 }
 
 #[cfg(feature = "full")]
-impl Handle<ResponseTransactionReceiptsByAddress, Arc<RwLock<Blockchain>>>
+impl<N: Network> Handle<N, ResponseTransactionReceiptsByAddress, Arc<RwLock<Blockchain>>>
     for RequestTransactionReceiptsByAddress
 {
-    fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> ResponseTransactionReceiptsByAddress {
+    fn handle(
+        &self,
+        _peer_id: N::PeerId,
+        blockchain: &Arc<RwLock<Blockchain>>,
+    ) -> ResponseTransactionReceiptsByAddress {
         let blockchain = blockchain.read();
 
         // Get the transaction hashes for this address.
@@ -480,8 +490,12 @@ impl Handle<ResponseTransactionReceiptsByAddress, Arc<RwLock<Blockchain>>>
 }
 
 #[cfg(feature = "full")]
-impl Handle<ResponseTrieProof, Arc<RwLock<Blockchain>>> for RequestTrieProof {
-    fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> ResponseTrieProof {
+impl<N: Network> Handle<N, ResponseTrieProof, Arc<RwLock<Blockchain>>> for RequestTrieProof {
+    fn handle(
+        &self,
+        _peer_id: N::PeerId,
+        blockchain: &Arc<RwLock<Blockchain>>,
+    ) -> ResponseTrieProof {
         let blockchain = blockchain.read();
 
         // We only prove accounts that exist in our current state
@@ -505,8 +519,12 @@ impl Handle<ResponseTrieProof, Arc<RwLock<Blockchain>>> for RequestTrieProof {
 }
 
 #[cfg(feature = "full")]
-impl Handle<ResponseBlocksProof, Arc<RwLock<Blockchain>>> for RequestBlocksProof {
-    fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> ResponseBlocksProof {
+impl<N: Network> Handle<N, ResponseBlocksProof, Arc<RwLock<Blockchain>>> for RequestBlocksProof {
+    fn handle(
+        &self,
+        _peer_id: N::PeerId,
+        blockchain: &Arc<RwLock<Blockchain>>,
+    ) -> ResponseBlocksProof {
         let blockchain = blockchain.read();
 
         // Check if the request is sane and we can answer it

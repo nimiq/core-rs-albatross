@@ -193,39 +193,40 @@ pub fn peek_type(buffer: &[u8]) -> Result<RequestType, SerializingError> {
 }
 
 /// This trait defines the behaviour when receiving a message and how to generate the response.
-pub trait Handle<Response, T> {
-    fn handle(&self, context: &T) -> Response;
+pub trait Handle<N: Network, Response, T> {
+    fn handle(&self, peer_id: N::PeerId, context: &T) -> Response;
 }
 
 const MAX_CONCURRENT_HANDLERS: usize = 64;
 
 pub fn request_handler<
     T: Send + Sync + Clone + 'static,
-    Req: Handle<Req::Response, T> + Request,
+    Req: Handle<N, Req::Response, T> + Request,
     N: Network,
 >(
     network: &Arc<N>,
     stream: BoxStream<'static, (Req, N::RequestId, N::PeerId)>,
     req_environment: &T,
 ) -> impl Future<Output = ()> {
-    let blockchain = req_environment.clone();
+    let req_environment = req_environment.clone();
     let network = Arc::clone(network);
     async move {
         stream
             .for_each_concurrent(MAX_CONCURRENT_HANDLERS, |(msg, request_id, peer_id)| {
                 let request_id = request_id;
                 let network = Arc::clone(&network);
-                let blockchain = blockchain.clone();
+                let req_environment = req_environment.clone();
                 async move {
-                    let blockchain = blockchain.clone();
+                    let req_environment = req_environment.clone();
                     let network = Arc::clone(&network);
                     let request_id = request_id;
+
                     tokio::spawn(async move {
                         log::trace!("[{:?}] {:?} {:#?}", request_id, peer_id, msg);
 
                         // Try to send the response, logging to debug if it fails
                         if let Err(err) = network
-                            .respond::<Req>(request_id, msg.handle(&blockchain))
+                            .respond::<Req>(request_id, msg.handle(peer_id, &req_environment))
                             .await
                         {
                             log::debug!(

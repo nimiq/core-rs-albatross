@@ -6,7 +6,10 @@ use beserial::{Deserialize, Serialize};
 use nimiq_block::{MacroBody, MacroHeader};
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_keys::Signature as SchnorrSignature;
-use nimiq_network_interface::request::{Handle, RequestCommon, RequestMarker};
+use nimiq_network_interface::{
+    network::Network,
+    request::{Handle, RequestCommon, RequestMarker},
+};
 use nimiq_tendermint::{Inherent, Proposal, ProposalMessage, SignedProposalMessage};
 
 use crate::aggregation::tendermint::state::MacroState;
@@ -94,8 +97,14 @@ impl RequestCommon for RequestProposal {
     const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_PROPOSAL;
 }
 
-impl Handle<Option<SignedProposal>, Arc<RwLock<Option<MacroState>>>> for RequestProposal {
-    fn handle(&self, context: &Arc<RwLock<Option<MacroState>>>) -> Option<SignedProposal> {
+impl<N: Network> Handle<N, Option<SignedProposal>, Arc<RwLock<Option<MacroState>>>>
+    for RequestProposal
+{
+    fn handle(
+        &self,
+        _peer_id: N::PeerId,
+        context: &Arc<RwLock<Option<MacroState>>>,
+    ) -> Option<SignedProposal> {
         context.read().as_ref().and_then(|state| {
             state.get_proposal_for(self.block_number, self.round_number, &self.proposal_hash)
         })

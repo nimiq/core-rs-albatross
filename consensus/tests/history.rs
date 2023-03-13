@@ -535,7 +535,7 @@ async fn request_missing_blocks_across_macro_block() {
 
     // Also we should've received a request to fill the first gap.
     // Instead of gossiping the block, we'll answer the missing blocks request
-    mock_node.set_missing_block_handler(Some(|req, blockchain| {
+    mock_node.set_missing_block_handler(Some(|_mock_peer_id, req, blockchain| {
         assert_eq!(&req.target_hash, blockchain.read().head().parent_hash());
 
         let blocks = blockchain

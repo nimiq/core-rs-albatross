@@ -28,19 +28,19 @@ use crate::test_network::TestNetwork;
 
 pub struct MockHandler<
     N: NetworkInterface + TestNetwork,
-    Req: Request + Handle<Req::Response, T>,
+    Req: Request + Handle<N, Req::Response, T>,
     T: Send + Sync + Unpin,
 > {
     network: Arc<N>,
     subscription: BoxStream<'static, (Req, N::RequestId, N::PeerId)>,
-    request_handler: Option<fn(&Req, &T) -> Req::Response>,
+    request_handler: Option<fn(N::PeerId, &Req, &T) -> Req::Response>,
     response_future: Option<BoxFuture<'static, u16>>,
     environment: T,
 }
 
 impl<
         N: NetworkInterface + TestNetwork,
-        Req: Request + Handle<Req::Response, T>,
+        Req: Request + Handle<N, Req::Response, T>,
         T: Send + Sync + Unpin,
     > MockHandler<N, Req, T>
 {
@@ -57,14 +57,17 @@ impl<
             environment,
         }
     }
-    pub fn set_handler(&mut self, request_handler: Option<fn(&Req, &T) -> Req::Response>) {
+    pub fn set_handler(
+        &mut self,
+        request_handler: Option<fn(N::PeerId, &Req, &T) -> Req::Response>,
+    ) {
         self.request_handler = request_handler;
     }
 }
 
 impl<
         N: NetworkInterface + TestNetwork,
-        Req: Request + Handle<Req::Response, T>,
+        Req: Request + Handle<N, Req::Response, T>,
         T: Send + Sync + Unpin,
     > Stream for MockHandler<N, Req, T>
 {
@@ -78,7 +81,7 @@ impl<
                 return Poll::Ready(Some(req));
             }
 
-            if let Some((request, request_id, _peer_id)) =
+            if let Some((request, request_id, peer_id)) =
                 ready!(self.subscription.poll_next_unpin(cx))
             {
                 log::info!(
@@ -87,10 +90,10 @@ impl<
                     self.request_handler.is_some()
                 );
                 let response = if let Some(ref h) = self.request_handler {
-                    h(&request, &self.environment)
+                    h(peer_id, &request, &self.environment)
                 } else {
                     // call original handler with blockchain
-                    request.handle(&self.environment)
+                    request.handle(peer_id, &self.environment)
                 };
 
                 let network2 = Arc::clone(&self.network);
@@ -179,7 +182,7 @@ impl<N: NetworkInterface + TestNetwork> MockNode<N> {
     pub fn set_missing_block_handler(
         &mut self,
         request_missing_block_handler: Option<
-            fn(&RequestMissingBlocks, &BlockchainProxy) -> ResponseBlocks,
+            fn(N::PeerId, &RequestMissingBlocks, &BlockchainProxy) -> ResponseBlocks,
         >,
     ) {
         self.request_missing_block_handler
@@ -188,7 +191,9 @@ impl<N: NetworkInterface + TestNetwork> MockNode<N> {
 
     pub fn set_chunk_handler(
         &mut self,
-        request_chunk_handler: Option<fn(&RequestChunk, &Arc<RwLock<Blockchain>>) -> ResponseChunk>,
+        request_chunk_handler: Option<
+            fn(N::PeerId, &RequestChunk, &Arc<RwLock<Blockchain>>) -> ResponseChunk,
+        >,
     ) {
         self.request_chunk_handler
             .set_handler(request_chunk_handler);

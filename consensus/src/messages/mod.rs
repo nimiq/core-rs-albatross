@@ -6,9 +6,11 @@ use nimiq_block::{Block, BlockInclusionProof, MacroBlock};
 use nimiq_blockchain::HistoryTreeChunk;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
-use nimiq_network_interface::request::{RequestCommon, RequestMarker};
+use nimiq_network_interface::request::{MessageMarker, RequestCommon, RequestMarker};
 use nimiq_primitives::{key_nibbles::KeyNibbles, trie::trie_proof::TrieProof};
 use nimiq_transaction::history_proof::HistoryTreeProof;
+
+use crate::error::SubscribebyAdressErrors;
 
 mod handlers;
 
@@ -40,6 +42,10 @@ pub const MAX_REQUEST_TRANSACTIONS_BY_ADDRESS: u32 = 1000;
 pub const MAX_REQUEST_TRIE_PROOF: u32 = 1000;
 /// The max number of Block proof requests per peer.
 pub const MAX_REQUEST_BLOCKS_PROOF: u32 = 1000;
+/// The max number of Subscribe to address requests per peer.
+pub const MAX_REQUEST_SUBSCRIBE_BY_ADDRESS: u32 = 10;
+/// The max number of Address notifications per peer.
+pub const MAX_ADDRESS_NOTIFICATION: u32 = 100;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Checkpoint {
@@ -293,4 +299,54 @@ impl RequestCommon for RequestBlocksProof {
     const TYPE_ID: u16 = 216;
     type Response = ResponseBlocksProof;
     const MAX_REQUESTS: u32 = MAX_REQUEST_BLOCKS_PROOF;
+}
+
+/// Operations supported for the txn events by address subscription
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[repr(u8)]
+pub enum TxAddressSubscriptionOperation {
+    /// Start the subscription, with the provided addresses
+    Initiate,
+    /// Update a current subscription, remplacing the existing one with the provided addresses
+    Update,
+    /// Terminate the subscription
+    Terminate,
+}
+
+/// This request is used to initiate/update/terminate a subscription to events of some given addresses
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RequestSubscribeToAddress {
+    /// The type of operation that is needed by the peer
+    pub operation: TxAddressSubscriptionOperation,
+    /// The addresses which are interesting to the peer
+    #[beserial(len_type(u16, limit = 10))]
+    pub hashes: Vec<Address>,
+}
+
+impl RequestCommon for RequestSubscribeToAddress {
+    type Kind = RequestMarker;
+    const TYPE_ID: u16 = 215;
+    type Response = ResponseRequestTransactionsByAddress;
+    const MAX_REQUESTS: u32 = MAX_REQUEST_SUBSCRIBE_BY_ADDRESS;
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ResponseRequestTransactionsByAddress {
+    /// Response used to specify if the request can be fullfiled or not
+    pub result: Result<(), SubscribebyAdressErrors>,
+}
+
+/// This request is used to push an event to a peer
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PushAdressNotification {
+    /// Tuples of `(transaction_hash, block_number)`
+    #[beserial(len_type(u16, limit = 128))]
+    pub receipts: Vec<(Blake2bHash, u32)>,
+}
+
+impl RequestCommon for PushAdressNotification {
+    type Kind = MessageMarker;
+    const TYPE_ID: u16 = 216;
+    type Response = ();
+    const MAX_REQUESTS: u32 = MAX_ADDRESS_NOTIFICATION;
 }

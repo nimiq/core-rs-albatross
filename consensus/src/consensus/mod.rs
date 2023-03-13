@@ -30,9 +30,13 @@ use crate::sync::live::state_queue::RequestChunk;
 use crate::sync::{syncer::LiveSyncPushEvent, syncer_proxy::SyncerProxy};
 
 use self::consensus_proxy::ConsensusProxy;
+#[cfg(feature = "full")]
+use self::remote_event_dispatcher::RemoteEventDispatcher;
 
 pub mod consensus_proxy;
 mod head_requests;
+#[cfg(feature = "full")]
+mod remote_event_dispatcher;
 
 #[derive(Clone)]
 pub enum ConsensusEvent {
@@ -108,6 +112,9 @@ impl<N: Network> Consensus<N> {
 
         Self::init_network_request_receivers(&network, &blockchain, executor);
 
+        #[cfg(feature = "full")]
+        Self::init_remote_event_dispatcher(&network, &blockchain);
+
         let established_flag = Arc::new(AtomicBool::new(false));
 
         #[cfg(not(target_family = "wasm"))]
@@ -125,6 +132,23 @@ impl<N: Network> Consensus<N> {
             head_requests_time: None,
             min_peers,
             zkp_proxy,
+        }
+    }
+
+    fn init_remote_event_dispatcher(network: &Arc<N>, blockchain: &BlockchainProxy) {
+        // We spawn the Remote Event Dispatcher into its own task (this is only available for full nodes and history nodes)
+
+        match blockchain {
+            #[cfg(feature = "full")]
+            BlockchainProxy::Full(blockchain) => {
+                let network = Arc::clone(network);
+                let blockchain = Arc::clone(&blockchain);
+                let remote_event_dispatcher = RemoteEventDispatcher::new(network, blockchain);
+                tokio::spawn(remote_event_dispatcher);
+            }
+            BlockchainProxy::Light(_) => {
+                //The light blockchain does not provide this functionality
+            }
         }
     }
 
