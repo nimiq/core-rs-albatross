@@ -30,7 +30,8 @@ use crate::address::Address;
 use crate::peer_info::PeerInfo;
 use crate::transaction::{
     PlainTransaction, PlainTransactionDetails, PlainTransactionDetailsArrayType,
-    PlainTransactionDetailsType, Transaction, TransactionState,
+    PlainTransactionDetailsType, PlainTransactionReceipt, PlainTransactionReceiptArrayType,
+    Transaction, TransactionState,
 };
 use crate::transaction_builder::TransactionBuilder;
 use crate::utils::{from_network_id, to_network_id};
@@ -652,11 +653,53 @@ impl Client {
         self.listener_id
     }
 
-    /// This function is used to query the network for transactions from a specific address, that
-    /// have been included in the chain.
+    /// This function is used to query the network for transaction receipts from and to a
+    /// specific address, that have been included in the chain.
+    ///
+    /// The obtained receipts are _not_ verified before being returned.
+    ///
+    /// Up to a `limit` number of transaction receipts are returned from newest to oldest.
+    /// If the network does not have at least `min_peers` to query, then an error is returned.
+    #[wasm_bindgen(js_name = getTransactionReceiptsByAddress)]
+    pub async fn get_transaction_receipts_by_address(
+        &self,
+        address: Address,
+        limit: Option<u16>,
+        min_peers: Option<usize>,
+    ) -> Result<PlainTransactionReceiptArrayType, JsError> {
+        if let Some(max) = limit {
+            if max > MAX_TRANSACTIONS_BY_ADDRESS {
+                return Err(JsError::new(
+                    "The maximum number of transaction receipts exceeds the one that is supported",
+                ));
+            }
+        }
+
+        let receipts = self
+            .inner
+            .consensus_proxy()
+            .request_transaction_receipts_by_address(
+                address.native(),
+                min_peers.unwrap_or(1),
+                limit,
+            )
+            .await?;
+
+        let plain_tx_receipts: Vec<_> = receipts
+            .into_iter()
+            .map(|receipt| PlainTransactionReceipt::from_receipt(&receipt))
+            .collect();
+
+        Ok(serde_wasm_bindgen::to_value(&plain_tx_receipts)?.into())
+    }
+
+    /// This function is used to query the network for transactions from and to a specific
+    /// address, that have been included in the chain.
+    ///
     /// The obtained transactions are verified before being returned.
-    /// Up to a max number of transactions are returned from newest to oldest.
-    /// If the network does not have at least min_peers to query, then an error is returned
+    ///
+    /// Up to a `limit` number of transactions are returned from newest to oldest.
+    /// If the network does not have at least `min_peers` to query, then an error is returned.
     #[wasm_bindgen(js_name = getTransactionsByAddress)]
     pub async fn get_transactions_by_address(
         &self,

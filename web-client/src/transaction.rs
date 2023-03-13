@@ -592,6 +592,26 @@ impl PlainTransactionDetails {
     }
 }
 
+/// JSON-compatible and human-readable format of transaction receipts.
+#[derive(serde::Serialize, serde::Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub struct PlainTransactionReceipt {
+    /// The transaction's unique hash, used as its identifier. Sometimes also called `txId`.
+    pub transaction_hash: String,
+    /// The transaction's block height where it is included in the blockchain.
+    pub block_height: u32,
+}
+
+impl PlainTransactionReceipt {
+    /// Creates a PlainTransactionReceipt struct that can be serialized to JS.
+    pub fn from_receipt(receipt: &(Blake2bHash, u32)) -> Self {
+        Self {
+            transaction_hash: receipt.0.to_hex(),
+            block_height: receipt.1,
+        }
+    }
+}
+
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(typescript_type = "PlainTransaction")]
@@ -602,4 +622,10 @@ extern "C" {
 
     #[wasm_bindgen(typescript_type = "PlainTransactionDetails[]")]
     pub type PlainTransactionDetailsArrayType;
+
+    #[wasm_bindgen(typescript_type = "PlainTransactionReceipt")]
+    pub type PlainTransactionReceiptType;
+
+    #[wasm_bindgen(typescript_type = "PlainTransactionReceipt[]")]
+    pub type PlainTransactionReceiptArrayType;
 }
