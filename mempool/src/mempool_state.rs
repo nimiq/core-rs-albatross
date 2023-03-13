@@ -93,7 +93,7 @@ impl MempoolState {
             }
         }
 
-        // If we are adding a stacking transaction we insert it into the control txns container
+        // If we are adding a staking transaction we insert it into the control txns container
         // Staking txns are control txns
         if tx.sender_type == AccountType::Staking || tx.recipient_type == AccountType::Staking {
             self.control_transactions.insert(tx, priority);

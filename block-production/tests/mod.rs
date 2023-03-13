@@ -415,7 +415,7 @@ fn it_can_revert_create_staker_transaction() {
 
     assert_eq!(blockchain.read().block_number(), 2);
 
-    // One block with stacking transactions
+    // One block with staking transactions
 
     let mut transactions = vec![];
     let key_pair = ed25519_key_pair(ACCOUNT_SECRET_KEY);
@@ -436,7 +436,7 @@ fn it_can_revert_create_staker_transaction() {
 
     let bc = blockchain.upgradable_read();
 
-    // Block with stacking transactions
+    // Block with staking transactions
     let block = producer.next_micro_block(
         &bc,
         bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
@@ -522,7 +522,7 @@ fn it_can_revert_failed_transactions() {
 
     assert_eq!(blockchain.read().block_number(), 2);
 
-    // One block with stacking transactions
+    // One block with staking transactions
 
     let mut transactions = vec![];
     let key_pair = ed25519_key_pair(ACCOUNT_SECRET_KEY);
@@ -557,7 +557,7 @@ fn it_can_revert_failed_transactions() {
 
     let bc = blockchain.upgradable_read();
 
-    // Block with stacking transactions
+    // Block with staking transactions
     let block = producer.next_micro_block(
         &bc,
         bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
@@ -783,7 +783,7 @@ fn it_can_revert_reactivate_transaction() {
     ));
     let producer = BlockProducer::new(signing_key(), voting_key());
 
-    // One block with stacking transactions
+    // One block with staking transactions
     let mut transactions = vec![];
     let key_pair = ed25519_key_pair(ACCOUNT_SECRET_KEY);
     let address =
@@ -805,7 +805,7 @@ fn it_can_revert_reactivate_transaction() {
 
     let bc = blockchain.upgradable_read();
 
-    // Block with stacking transactions
+    // Block with staking transactions
     let block = producer.next_micro_block(
         &bc,
         bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
@@ -843,7 +843,7 @@ fn it_can_revert_reactivate_transaction() {
 
     let bc = blockchain.upgradable_read();
 
-    // Block with stacking transactions
+    // Block with staking transactions
     let block = producer.next_micro_block(
         &bc,
         bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
@@ -884,7 +884,7 @@ fn it_can_revert_unpark_transaction() {
     ));
     let producer = BlockProducer::new(signing_key(), voting_key());
 
-    // One block with stacking transactions
+    // One block with staking transactions
     let mut transactions = vec![];
     let key_pair = ed25519_key_pair(ACCOUNT_SECRET_KEY);
     let address =
@@ -906,7 +906,7 @@ fn it_can_revert_unpark_transaction() {
 
     let bc = blockchain.upgradable_read();
 
-    // Block with stacking transactions
+    // Block with staking transactions
     let block = producer.next_micro_block(
         &bc,
         bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
@@ -940,7 +940,7 @@ fn it_can_revert_unpark_transaction() {
 
     let bc = blockchain.upgradable_read();
 
-    // Block with stacking transactions
+    // Block with staking transactions
     let block = producer.next_micro_block(
         &bc,
         bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
@@ -1242,7 +1242,7 @@ fn it_can_revert_basic_and_create_contracts_txns() {
     ));
     let producer = BlockProducer::new(signing_key(), voting_key());
 
-    // One block with stacking transactions
+    // One block with staking transactions
     let mut transactions = vec![];
     let key_pair = ed25519_key_pair(ACCOUNT_SECRET_KEY);
 
