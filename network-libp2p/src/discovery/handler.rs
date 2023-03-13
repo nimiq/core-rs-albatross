@@ -215,10 +215,14 @@ impl DiscoveryHandler {
             .collect()
     }
 
-    /// Checks if both inbound and outbound are available and transitions to sending a handshake. This includes waking
-    /// waker to continue polling.
-    fn check_connected(&mut self) {
-        if self.inbound.is_some() && self.outbound.is_some() {
+    /// Checks if the handler is ready to start the discovery protocol.
+    /// This basically checks that:
+    /// - Both inbound and outbound are available
+    /// - The connection peer address is already resolved.
+    /// If these conditions are met, it transitions to sending a handshake and waking
+    /// the waker.
+    fn check_initialized(&mut self) {
+        if self.inbound.is_some() && self.outbound.is_some() && self.peer_address.is_some() {
             debug!("Inbound and outbound connected. Performing handshake");
 
             self.state = HandlerState::SendHandshake;
@@ -255,7 +259,7 @@ impl ConnectionHandler for DiscoveryHandler {
 
         self.inbound = Some(protocol);
 
-        self.check_connected();
+        self.check_initialized();
     }
 
     fn inject_fully_negotiated_outbound(
@@ -273,13 +277,14 @@ impl ConnectionHandler for DiscoveryHandler {
 
         self.outbound = Some(protocol);
 
-        self.check_connected();
+        self.check_initialized();
     }
 
     fn inject_event(&mut self, event: HandlerInEvent) {
         match event {
             HandlerInEvent::ConnectionAddress(address) => {
                 self.peer_address = Some(address);
+                self.check_initialized();
             }
             HandlerInEvent::ObservedAddress(address) => {
                 // We only use this during handshake and are not waiting on it, so we don't need to wake anything.
