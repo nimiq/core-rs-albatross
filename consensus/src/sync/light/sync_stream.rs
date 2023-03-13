@@ -191,117 +191,119 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         while let Poll::Ready(Some(result)) = self.block_headers.poll_next_unpin(cx) {
             match result {
                 (Ok(Some(block)), peer_id) => {
-                    if self.peer_requests.get(&peer_id).is_none() {
-                        // If we don't have any pending requests from this peer, we proceed requesting epoch ids
-                        let future = Self::request_epoch_ids(
-                            self.blockchain.clone(),
-                            Arc::clone(&self.network),
-                            peer_id,
-                        )
-                        .boxed();
-                        self.epoch_ids_stream.push(future);
-
-                        // Pushing the future to FuturesUnordered above does not wake the task that
-                        // polls `epoch_ids_stream`. Therefore, we need to wake the task manually.
-                        if let Some(waker) = &self.waker {
-                            waker.wake_by_ref();
+                    if let Some(peer_requests) = self.peer_requests.get_mut(&peer_id) {
+                        if !peer_requests.update_request(block) {
+                            // We received a block we were not expecting from this peer
+                            log::trace!(%peer_id,
+                                "Disconnecting peer due to a non expected response",
+                            );
+                            self.disconnect_peer(peer_id, CloseReason::MaliciousPeer);
+                            return Poll::Ready(None);
                         }
-                    }
 
-                    let peer_requests = self.peer_requests.get_mut(&peer_id).unwrap();
+                        if peer_requests.is_ready() {
+                            log::trace!(%peer_id, "All pending requests are ready");
 
-                    if !peer_requests.update_request(block) {
-                        // We received a block we were not expecting from this peer
-                        log::trace!(%peer_id,
-                            "Disconnecting peer due to a non expected response",
-                        );
-                        self.disconnect_peer(peer_id, CloseReason::MaliciousPeer);
-                        return Poll::Ready(None);
-                    }
+                            while let Some((_, block)) = peer_requests.pop_request() {
+                                let block = block.expect("At this point the queue should be ready");
 
-                    if peer_requests.is_ready() {
-                        log::trace!(%peer_id, "All pending requests are ready");
+                                // Check if the block is still valid for us or if it is outdated before trying to apply it
+                                let push_result = match self.blockchain {
+                                    #[cfg(feature = "full")]
+                                    BlockchainProxy::Full(ref full_blockchain) => {
+                                        let blockchain = full_blockchain.upgradable_read();
 
-                        while let Some((_, block)) = peer_requests.pop_request() {
-                            let block = block.expect("At this point the queue should be ready");
+                                        let latest_block_number = blockchain.block_number();
+                                        // Get the block number of the election block before the current election block.
+                                        let current_election_block_number =
+                                            blockchain.election_head().block_number();
+                                        let previous_election_block_number =
+                                            if current_election_block_number > 0 {
+                                                Some(Policy::election_block_before(
+                                                    current_election_block_number,
+                                                ))
+                                            } else {
+                                                None
+                                            };
 
-                            // Check if the block is still valid for us or if it is outdated before trying to apply it
-                            let push_result = match self.blockchain {
-                                #[cfg(feature = "full")]
-                                BlockchainProxy::Full(ref full_blockchain) => {
-                                    let blockchain = full_blockchain.upgradable_read();
-
-                                    let latest_block_number = blockchain.block_number();
-                                    // Get the block number of the election block before the current election block.
-                                    let current_election_block_number =
-                                        blockchain.election_head().block_number();
-                                    let previous_election_block_number =
-                                        if current_election_block_number > 0 {
-                                            Some(Policy::election_block_before(
-                                                current_election_block_number,
-                                            ))
+                                        // If the block matches the previous election block, we use it to update the `previous_slots`.
+                                        // Otherwise, check if it's outdated / push the macro block.
+                                        if previous_election_block_number
+                                            == Some(block.block_number())
+                                        {
+                                            Blockchain::update_previous_slots(
+                                                blockchain,
+                                                block.clone(),
+                                            )
+                                        } else if block.block_number() < latest_block_number {
+                                            // The peer is outdated, so we emit it, and we remove it
+                                            self.peer_requests.remove(&peer_id);
+                                            return Poll::Ready(Some(MacroSyncReturn::Outdated(
+                                                peer_id,
+                                            )));
                                         } else {
-                                            None
-                                        };
-
-                                    // If the block matches the previous election block, we use it to update the `previous_slots`.
-                                    // Otherwise, check if it's outdated / push the macro block.
-                                    if previous_election_block_number == Some(block.block_number())
-                                    {
-                                        Blockchain::update_previous_slots(blockchain, block.clone())
-                                    } else if block.block_number() < latest_block_number {
-                                        // The peer is outdated, so we emit it, and we remove it
-                                        self.peer_requests.remove(&peer_id);
-                                        return Poll::Ready(Some(MacroSyncReturn::Outdated(
-                                            peer_id,
-                                        )));
-                                    } else {
-                                        Blockchain::push_macro(blockchain, block.clone())
+                                            Blockchain::push_macro(blockchain, block.clone())
+                                        }
                                     }
-                                }
-                                BlockchainProxy::Light(ref light_blockchain) => {
-                                    let blockchain = light_blockchain.upgradable_read();
+                                    BlockchainProxy::Light(ref light_blockchain) => {
+                                        let blockchain = light_blockchain.upgradable_read();
 
-                                    let latest_block_number = blockchain.block_number();
+                                        let latest_block_number = blockchain.block_number();
 
-                                    if block.block_number() < latest_block_number {
-                                        // The peer is outdated, so we emit it, and we remove it
-                                        self.peer_requests.remove(&peer_id);
-                                        return Poll::Ready(Some(MacroSyncReturn::Outdated(
-                                            peer_id,
-                                        )));
+                                        if block.block_number() < latest_block_number {
+                                            // The peer is outdated, so we emit it, and we remove it
+                                            self.peer_requests.remove(&peer_id);
+                                            return Poll::Ready(Some(MacroSyncReturn::Outdated(
+                                                peer_id,
+                                            )));
+                                        }
+
+                                        LightBlockchain::push_macro(blockchain, block.clone())
                                     }
+                                };
 
-                                    LightBlockchain::push_macro(blockchain, block.clone())
-                                }
-                            };
-
-                            match push_result {
-                                Ok(push_result) => {
-                                    log::debug!(
-                                        block_number = block.block_number(),
-                                        ?push_result,
-                                        "Pushed a macro block",
-                                    );
-                                }
-                                Err(error) => {
-                                    log::debug!(
-                                        block_number = block.block_number(),
-                                        ?error,
-                                        "Failed to push macro block",
-                                    );
-                                    // We failed applying a block from this peer, so we disconnect it
-                                    self.disconnect_peer(peer_id, CloseReason::MaliciousPeer);
-                                    return Poll::Ready(None);
+                                match push_result {
+                                    Ok(push_result) => {
+                                        log::debug!(
+                                            block_number = block.block_number(),
+                                            ?push_result,
+                                            "Pushed a macro block",
+                                        );
+                                    }
+                                    Err(error) => {
+                                        log::debug!(
+                                            block_number = block.block_number(),
+                                            ?error,
+                                            "Failed to push macro block",
+                                        );
+                                        // We failed applying a block from this peer, so we disconnect it
+                                        self.disconnect_peer(peer_id, CloseReason::MaliciousPeer);
+                                        return Poll::Ready(None);
+                                    }
                                 }
                             }
-                        }
-                        //  At this point we applied all the pending requests from this peer
-                        self.peer_requests.remove(&peer_id);
+                            //  At this point we applied all the pending requests from this peer
+                            self.peer_requests.remove(&peer_id);
 
-                        // Re-request epoch ids after applying these blocks in order to know if we are up to date with this peer
-                        // or if there is more to sync
-                        // Request epoch ids with our updated state from this peer
+                            // Re-request epoch ids after applying these blocks in order to know if we are up to date with this peer
+                            // or if there is more to sync
+                            // Request epoch ids with our updated state from this peer
+                            let future = Self::request_epoch_ids(
+                                self.blockchain.clone(),
+                                Arc::clone(&self.network),
+                                peer_id,
+                            )
+                            .boxed();
+                            self.epoch_ids_stream.push(future);
+
+                            // Pushing the future to FuturesUnordered above does not wake the task that
+                            // polls `epoch_ids_stream`. Therefore, we need to wake the task manually.
+                            if let Some(waker) = &self.waker {
+                                waker.wake_by_ref();
+                            }
+                        }
+                    } else {
+                        // If we don't have any pending requests from this peer, we proceed requesting epoch ids
                         let future = Self::request_epoch_ids(
                             self.blockchain.clone(),
                             Arc::clone(&self.network),
