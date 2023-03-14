@@ -256,7 +256,7 @@ impl TransactionBuilder {
 
     // pub fn new_update_validator()
 
-    // pub fn new_inactivate_validator()
+    // pub fn new_deactivate_validator()
 
     // pub fn new_reactivate_validator()
 

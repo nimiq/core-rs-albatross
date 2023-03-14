@@ -288,12 +288,12 @@ fn update_validator() {
 }
 
 #[test]
-fn retire_validator() {
+fn unpark_validator() {
     let signing_keypair = ed25519_key_pair(VALIDATOR_SIGNING_SECRET_KEY);
 
     // Test serialization and deserialization.
     let mut tx = make_signed_incoming_tx(
-        IncomingStakingTransactionData::InactivateValidator {
+        IncomingStakingTransactionData::UnparkValidator {
             validator_address: VALIDATOR_ADDRESS.parse().unwrap(),
             proof: SignatureProof::default(),
         },
@@ -328,7 +328,7 @@ fn retire_validator() {
     let other_pair = KeyPair::generate_default_csprng();
 
     let tx = make_signed_incoming_tx(
-        IncomingStakingTransactionData::InactivateValidator {
+        IncomingStakingTransactionData::UnparkValidator {
             validator_address: VALIDATOR_ADDRESS.parse().unwrap(),
             proof: SignatureProof::default(),
         },
@@ -344,12 +344,12 @@ fn retire_validator() {
 }
 
 #[test]
-fn reactivate_validator() {
+fn deactivate_validator() {
     let signing_keypair = ed25519_key_pair(VALIDATOR_SIGNING_SECRET_KEY);
 
     // Test serialization and deserialization.
     let mut tx = make_signed_incoming_tx(
-        IncomingStakingTransactionData::ReactivateValidator {
+        IncomingStakingTransactionData::DeactivateValidator {
             validator_address: VALIDATOR_ADDRESS.parse().unwrap(),
             proof: SignatureProof::default(),
         },
@@ -384,7 +384,7 @@ fn reactivate_validator() {
     let other_pair = KeyPair::generate_default_csprng();
 
     let tx = make_signed_incoming_tx(
-        IncomingStakingTransactionData::ReactivateValidator {
+        IncomingStakingTransactionData::DeactivateValidator {
             validator_address: VALIDATOR_ADDRESS.parse().unwrap(),
             proof: SignatureProof::default(),
         },
@@ -400,12 +400,12 @@ fn reactivate_validator() {
 }
 
 #[test]
-fn unpark_validator() {
+fn reactivate_validator() {
     let signing_keypair = ed25519_key_pair(VALIDATOR_SIGNING_SECRET_KEY);
 
     // Test serialization and deserialization.
     let mut tx = make_signed_incoming_tx(
-        IncomingStakingTransactionData::UnparkValidator {
+        IncomingStakingTransactionData::ReactivateValidator {
             validator_address: VALIDATOR_ADDRESS.parse().unwrap(),
             proof: SignatureProof::default(),
         },
@@ -440,8 +440,62 @@ fn unpark_validator() {
     let other_pair = KeyPair::generate_default_csprng();
 
     let tx = make_signed_incoming_tx(
-        IncomingStakingTransactionData::UnparkValidator {
+        IncomingStakingTransactionData::ReactivateValidator {
             validator_address: VALIDATOR_ADDRESS.parse().unwrap(),
+            proof: SignatureProof::default(),
+        },
+        0,
+        &signing_keypair,
+        Some(other_pair.public),
+    );
+
+    assert_eq!(
+        AccountType::verify_incoming_transaction(&tx),
+        Err(TransactionError::InvalidProof)
+    );
+}
+
+#[test]
+fn retire_validator() {
+    let signing_keypair = ed25519_key_pair(VALIDATOR_SIGNING_SECRET_KEY);
+
+    // Test serialization and deserialization.
+    let mut tx = make_signed_incoming_tx(
+        IncomingStakingTransactionData::RetireValidator {
+            proof: SignatureProof::default(),
+        },
+        0,
+        &signing_keypair,
+        None,
+    );
+
+    let tx_hex = "01006205b300481ddd7af6be3cf5c123b7af2c21f87f4ac808c8b0e622eb85826124a8440081ffab9ad94cda56bc1674293eb1cb14f6f79884c9d4d62d620ba493bf3a9361e6fdcb5b411a9a9fe8a84ef6ec7a158cf70096075c017f42371a749e64652e008c551fabc6e6e00c609c3f0313257ad7e835643c00000000000000000000000000000000000000000103000000000000000000000000000000640000000104020061b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd9105009d690094f47ba83e06e08c030f9bad28707fb53d5c27f8e39f0f5bbcc7caad3f81be4d2838be59caccaa8dc2810237f0da7e1fcdddfbacf51063906ebd500a0e";
+    let tx_size = 264;
+
+    let mut ser_tx: Vec<u8> = Vec::with_capacity(tx_size);
+    assert_eq!(tx_size, tx.serialized_size());
+    assert_eq!(tx_size, tx.serialize(&mut ser_tx).unwrap());
+    assert_eq!(tx_hex, hex::encode(ser_tx));
+
+    let deser_tx = Deserialize::deserialize(&mut &hex::decode(tx_hex).unwrap()[..]).unwrap();
+    assert_eq!(tx, deser_tx);
+
+    // Works in the valid case.
+    assert_eq!(AccountType::verify_incoming_transaction(&tx), Ok(()));
+
+    // Signaling transaction with a non-zero value.
+    tx.value = Coin::from_u64_unchecked(1);
+
+    assert_eq!(
+        AccountType::verify_incoming_transaction(&tx),
+        Err(TransactionError::InvalidValue)
+    );
+
+    // Invalid signature.
+    let other_pair = KeyPair::generate_default_csprng();
+
+    let tx = make_signed_incoming_tx(
+        IncomingStakingTransactionData::RetireValidator {
             proof: SignatureProof::default(),
         },
         0,
@@ -470,7 +524,7 @@ fn create_staker() {
         None,
     );
 
-    let tx_hex = "010077050183fa05dbe31f85e719f4c4fd67ebdba2e444d9f8b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd910500e7148694ef5ccb6d774ef46d3a5f94f6075ecb526c50bb9a9b9ab4056cecfbc86d3672608b6736f41dbf155d1d0fe4b3f76c628ec7184400ddf8fe53b6ed2d048c551fabc6e6e00c609c3f0313257ad7e835643c00000000000000000000000000000000000000000103000000000000006400000000000000640000000104000061b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd910500fe297fbfa21f6aa595546a5cd50a5c7af3f95ef3d95e67167c35213baad5264e9548b570fff2cc75573ffe1d8c1acfc1858927ae985b1935b155c19d6f2d7b07";
+    let tx_hex = "010077060183fa05dbe31f85e719f4c4fd67ebdba2e444d9f8b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd910500b83fdec4193034bd2c9dce48352c8ad0ae969f96833407f456a191b5a18a40e9b0b393d61a26cba9459ca47ecd9883f68929a7ff236bb61a5a715c2bec51630e8c551fabc6e6e00c609c3f0313257ad7e835643c00000000000000000000000000000000000000000103000000000000006400000000000000640000000104000061b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd9105003500fd6f820ce7b2186120e94e3ecfd2c8a7a67cd2fd905fbb0b56ea4990ee9cbc8f50c0750d2c9e5ddce129e7619bda9d0f81d718f841fdc4ed5f1ff3a9c000";
     let tx_size = 285;
 
     let mut ser_tx: Vec<u8> = Vec::with_capacity(tx_size);
@@ -525,7 +579,7 @@ fn stake() {
         None,
     );
 
-    let tx_hex = "010015068c551fabc6e6e00c609c3f0313257ad7e835643c8c551fabc6e6e00c609c3f0313257ad7e835643c00000000000000000000000000000000000000000103000000000000006400000000000000640000000104000061b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd910500ec9d59330a36169dc602dbdab7c4ec1a289b9a9b97938219db0585da337195b651def72d25b8a29c7b00936ac44a21f59db467c8e0646cfe9641b88e306f650d";
+    let tx_hex = "010015078c551fabc6e6e00c609c3f0313257ad7e835643c8c551fabc6e6e00c609c3f0313257ad7e835643c00000000000000000000000000000000000000000103000000000000006400000000000000640000000104000061b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd910500a602457c2df0de2c3f65c9d3052ba4de0b8d6dbf56342327684f11af69d5f44feb7b798b5656a83ef23d4171239ae3b24739cf8b8fb78636bde888a6922f8b06";
     let tx_size = 187;
 
     let mut ser_tx: Vec<u8> = Vec::with_capacity(tx_size);
@@ -555,7 +609,7 @@ fn update_staker() {
         None,
     );
 
-    let tx_hex = "010077070183fa05dbe31f85e719f4c4fd67ebdba2e444d9f8b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd910500912d064ba2b1497656f34918ba0f1e4c005269dac08867f7b96c3b259372dd808b8f4b72fbfe582054424dba778f8f2fad73f0751d62afcf6b1922d5d8e825038c551fabc6e6e00c609c3f0313257ad7e835643c00000000000000000000000000000000000000000103000000000000000000000000000000640000000104020061b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd91050002380c4c37062c8c753fd7993c50c8cbb67b58e9c4c78e4d1873aeb0fc1810c4428fe4748658bf22ceb965b14c4734543b8f771928bf5a5802d50e0c3be39509";
+    let tx_hex = "010077080183fa05dbe31f85e719f4c4fd67ebdba2e444d9f8b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd910500f21220c7cd98d02236279fb692999cb260c810b239b8f4f1bb8920e6db9dbbc6c6af475dc7b3be3c51339671cc2fe4c33dad83065fa6b492464f6210986d4a008c551fabc6e6e00c609c3f0313257ad7e835643c00000000000000000000000000000000000000000103000000000000000000000000000000640000000104020061b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd910500100b942ef869581648efd2cad7c870426743ada5873feb6eb1570e918e35b693efa397b0621b3ce5b1799a6c7d522fd95a84337ee6930eaa8cef1e5735cb6d0a";
     let tx_size = 285;
 
     let mut ser_tx: Vec<u8> = Vec::with_capacity(tx_size);

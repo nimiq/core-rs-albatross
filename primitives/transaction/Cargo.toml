@@ -30,7 +30,7 @@ nimiq-keys = { path = "../../keys", features = ["serde-derive"] }
 nimiq-macros = { path = "../../macros" }
 nimiq-mmr = { path = "../mmr" }
 nimiq-network-interface = { path = "../../network-interface" }
-nimiq-primitives = { path = "..", features = ["account", "coin", "networks", "policy", "serde-derive"] }
+nimiq-primitives = { path = "..", features = ["account", "coin", "networks", "policy", "serde-derive", "slots"] }
 nimiq-utils = { path = "../../utils", features = ["merkle"] }
 
 [dev-dependencies]

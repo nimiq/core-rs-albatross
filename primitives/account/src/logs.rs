@@ -83,7 +83,7 @@ pub enum Log {
     },
 
     #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
-    InactivateValidator { validator_address: Address },
+    DeactivateValidator { validator_address: Address },
 
     #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
     ReactivateValidator { validator_address: Address },
@@ -205,7 +205,7 @@ impl Log {
                         .map(|new_reward_address| new_reward_address == address)
                         .unwrap_or(false)
             }
-            Log::InactivateValidator { validator_address } => validator_address == address,
+            Log::DeactivateValidator { validator_address } => validator_address == address,
             Log::ReactivateValidator { validator_address } => validator_address == address,
             Log::UnparkValidator { validator_address } => validator_address == address,
             Log::CreateStaker {

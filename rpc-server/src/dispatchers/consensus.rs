@@ -922,9 +922,9 @@ impl ConsensusInterface for ConsensusDispatcher {
         self.send_raw_transaction(raw_tx).await
     }
 
-    /// Returns a serialized `inactivate_validator` transaction. You need to provide the address of a basic
+    /// Returns a serialized `deactivate_validator` transaction. You need to provide the address of a basic
     /// account (the sender wallet) to pay the transaction fee.
-    async fn create_inactivate_validator_transaction(
+    async fn create_deactivate_validator_transaction(
         &mut self,
         sender_wallet: Address,
         validator_address: Address,
@@ -936,7 +936,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             PrivateKey::deserialize_from_vec(&hex::decode(signing_secret_key).unwrap()).unwrap();
         let signing_key_pair = KeyPair::from(secret_key);
 
-        let transaction = TransactionBuilder::new_inactivate_validator(
+        let transaction = TransactionBuilder::new_deactivate_validator(
             &self.get_wallet_keypair(&sender_wallet)?,
             validator_address,
             &signing_key_pair,
@@ -948,9 +948,9 @@ impl ConsensusInterface for ConsensusDispatcher {
         Ok(transaction_to_hex_string(&transaction).into())
     }
 
-    /// Sends a `inactivate_validator` transaction to the network. You need to provide the address of a basic
+    /// Sends a `deactivate_validator` transaction to the network. You need to provide the address of a basic
     /// account (the sender wallet) to pay the transaction fee.
-    async fn send_inactivate_validator_transaction(
+    async fn send_deactivate_validator_transaction(
         &mut self,
         sender_wallet: Address,
         validator_address: Address,
@@ -959,7 +959,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         validity_start_height: ValidityStartHeight,
     ) -> RPCResult<Blake2bHash, (), Self::Error> {
         let raw_tx = self
-            .create_inactivate_validator_transaction(
+            .create_deactivate_validator_transaction(
                 sender_wallet,
                 validator_address,
                 signing_secret_key,

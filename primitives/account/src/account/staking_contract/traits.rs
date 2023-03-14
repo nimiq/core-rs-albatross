@@ -20,28 +20,6 @@ use crate::{
     Account, AccountPruningInteraction, AccountReceipt, BlockState,
 };
 
-/// We need to distinguish between two types of transactions:
-/// 1. Incoming transactions, which include:
-///     - Validator
-///         * Create
-///         * Update
-///         * Retire
-///         * Reactivate
-///         * Unpark
-///     - Staker
-///         * Create
-///         * Stake
-///         * Update
-///         * Retire
-///         * Reactivate
-///     The type of transaction is given in the data field.
-/// 2. Outgoing transactions, which include:
-///     - Validator
-///         * Drop
-///     - Staker
-///         * Unstake
-///         * Deduct fees
-///     The type of transaction is given in the proof field.
 impl AccountTransactionInteraction for StakingContract {
     fn create_new_contract(
         _transaction: &Transaction,
@@ -125,14 +103,24 @@ impl AccountTransactionInteraction for StakingContract {
                 )
                 .map(|receipt| Some(receipt.into()))
             }
-            IncomingStakingTransactionData::InactivateValidator {
+            IncomingStakingTransactionData::UnparkValidator {
                 validator_address,
                 proof,
             } => {
                 // Get the signer's address from the proof.
                 let signer = proof.compute_signer();
 
-                self.inactivate_validator(
+                self.unpark_validator(&mut store, &validator_address, &signer)
+                    .map(|receipt| Some(receipt.into()))
+            }
+            IncomingStakingTransactionData::DeactivateValidator {
+                validator_address,
+                proof,
+            } => {
+                // Get the signer's address from the proof.
+                let signer = proof.compute_signer();
+
+                self.deactivate_validator(
                     &mut store,
                     &validator_address,
                     &signer,
@@ -150,14 +138,11 @@ impl AccountTransactionInteraction for StakingContract {
                 self.reactivate_validator(&mut store, &validator_address, &signer)
                     .map(|receipt| Some(receipt.into()))
             }
-            IncomingStakingTransactionData::UnparkValidator {
-                validator_address,
-                proof,
-            } => {
-                // Get the signer's address from the proof.
-                let signer = proof.compute_signer();
+            IncomingStakingTransactionData::RetireValidator { proof } => {
+                // Get the validator address from the proof.
+                let validator_address = proof.compute_signer();
 
-                self.unpark_validator(&mut store, &validator_address, &signer)
+                self.retire_validator(&mut store, &validator_address, block_state.number)
                     .map(|receipt| Some(receipt.into()))
             }
             IncomingStakingTransactionData::CreateStaker { delegation, proof } => {
@@ -210,12 +195,19 @@ impl AccountTransactionInteraction for StakingContract {
 
                 self.revert_update_validator(&mut store, &validator_address, receipt)
             }
-            IncomingStakingTransactionData::InactivateValidator {
+            IncomingStakingTransactionData::UnparkValidator {
                 validator_address, ..
             } => {
                 let receipt = receipt.ok_or(AccountError::InvalidReceipt)?.try_into()?;
 
-                self.revert_inactivate_validator(&mut store, &validator_address, receipt)
+                self.revert_unpark_validator(&mut store, &validator_address, receipt)
+            }
+            IncomingStakingTransactionData::DeactivateValidator {
+                validator_address, ..
+            } => {
+                let receipt = receipt.ok_or(AccountError::InvalidReceipt)?.try_into()?;
+
+                self.revert_deactivate_validator(&mut store, &validator_address, receipt)
             }
             IncomingStakingTransactionData::ReactivateValidator {
                 validator_address, ..
@@ -224,12 +216,13 @@ impl AccountTransactionInteraction for StakingContract {
 
                 self.revert_reactivate_validator(&mut store, &validator_address, receipt)
             }
-            IncomingStakingTransactionData::UnparkValidator {
-                validator_address, ..
-            } => {
+            IncomingStakingTransactionData::RetireValidator { proof } => {
+                // Get the validator address from the proof.
+                let validator_address = proof.compute_signer();
+
                 let receipt = receipt.ok_or(AccountError::InvalidReceipt)?.try_into()?;
 
-                self.revert_unpark_validator(&mut store, &validator_address, receipt)
+                self.revert_retire_validator(&mut store, &validator_address, receipt)
             }
             IncomingStakingTransactionData::CreateStaker { proof, .. } => {
                 // Get the staker address from the proof.
@@ -367,11 +360,7 @@ impl AccountTransactionInteraction for StakingContract {
 
                 let mut validator = store.expect_validator(&validator_address)?;
 
-                self.can_delete_validator(
-                    &validator,
-                    block_state.number,
-                    transaction.total_value(),
-                )?;
+                self.can_delete_validator(&validator, block_state.number)?;
 
                 let new_deposit = validator.deposit.safe_sub(transaction.fee)?;
 
@@ -511,11 +500,7 @@ impl AccountTransactionInteraction for StakingContract {
                 let validator = store.expect_validator(&validator_address)?;
 
                 // Verify that the validator can actually be deleted.
-                self.can_delete_validator(
-                    &validator,
-                    block_state.number,
-                    transaction.total_value(),
-                )?;
+                self.can_delete_validator(&validator, block_state.number)?;
 
                 reserved_balance.reserve_for(
                     &validator_address,
@@ -645,7 +630,7 @@ impl AccountInherentInteraction for StakingContract {
                     // Update the staking contract.
                     self.active_validators.remove(&validator_address);
 
-                    // logs.push(Log::InactivateValidator {
+                    // logs.push(Log::DeactivateValidator {
                     //     validator_address: validator_address.clone(),
                     // });
                 }

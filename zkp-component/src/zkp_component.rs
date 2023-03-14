@@ -10,7 +10,6 @@ use tokio::sync::{
 };
 use tokio_stream::wrappers::BroadcastStream;
 
-use nimiq_block::Block;
 use nimiq_genesis::NetworkInfo;
 use nimiq_network_interface::network::{MsgAcceptance, PubsubId};
 use nimiq_primitives::task_executor::TaskExecutor;

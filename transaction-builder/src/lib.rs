@@ -260,10 +260,10 @@ impl TransactionBuilder {
     /// The proof builder can be determined as follows:
     /// 1. If the transaction is a `signaling transaction`, it will be a [`SignalingProofBuilder`].
     /// 2. Otherwise, the following mapping holds depending on `sender_type`:
-    ///     - `AccountType::Basic`: [`BasicProofBuilder`]
-    ///     - `AccountType::Vesting`: [`BasicProofBuilder`]
-    ///     - `AccountType::HTLC`: [`HtlcProofBuilder`]
-    ///     - `AccountType::Staking`: [`StakingProofBuilder`]
+    ///   - `AccountType::Basic`: [`BasicProofBuilder`]
+    ///   - `AccountType::Vesting`: [`BasicProofBuilder`]
+    ///   - `AccountType::HTLC`: [`HtlcProofBuilder`]
+    ///   - `AccountType::Staking`: [`StakingProofBuilder`]
     ///
     /// # Examples
     ///
@@ -1285,7 +1285,7 @@ impl TransactionBuilder {
         }
     }
 
-    /// Creates a transaction that inactivates a validator.
+    /// Creates a transaction that unparks a *parked* validator, i.e. making it *active* again.
     ///
     /// # Arguments
     ///
@@ -1306,7 +1306,7 @@ impl TransactionBuilder {
     ///
     /// This is a *signaling transaction*.
     ///
-    pub fn new_inactivate_validator(
+    pub fn new_unpark_validator(
         key_pair: &KeyPair,
         validator_address: Address,
         signing_key_pair: &KeyPair,
@@ -1315,7 +1315,60 @@ impl TransactionBuilder {
         network_id: NetworkId,
     ) -> Result<Transaction, TransactionBuilderError> {
         let mut recipient = Recipient::new_staking_builder();
-        recipient.inactivate_validator(validator_address);
+        recipient.unpark_validator(validator_address);
+
+        let mut builder = Self::new();
+        builder
+            .with_sender(Address::from(key_pair))
+            .with_recipient(recipient.generate().unwrap())
+            .with_value(Coin::ZERO)
+            .with_fee(fee)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(network_id);
+
+        let proof_builder = builder.generate()?;
+        match proof_builder {
+            TransactionProofBuilder::InStaking(mut builder) => {
+                builder.sign_with_key_pair(signing_key_pair);
+                let mut builder = builder.generate().unwrap().unwrap_basic();
+                builder.sign_with_key_pair(key_pair);
+                Ok(builder.generate().unwrap())
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    /// Creates a transaction that deactivates a validator.
+    ///
+    /// # Arguments
+    ///
+    ///  - `key_pair`:              The key pair used to sign the transaction. The transaction fee
+    ///                             is taken from the account belonging to this key pair.
+    ///  - `validator_address`:     The validator address.
+    ///  - `signing_key_pair`:      The key pair that corresponds to the validator's signing key.
+    ///                             The data is signed using this key pair.
+    ///  - `fee`:                   Transaction fee.
+    ///  - `validity_start_height`: Block height from which this transaction is valid.
+    ///  - `network_id`:            ID of network for which the transaction is valid.
+    ///
+    /// # Returns
+    ///
+    /// The finalized transaction.
+    ///
+    /// # Note
+    ///
+    /// This is a *signaling transaction*.
+    ///
+    pub fn new_deactivate_validator(
+        key_pair: &KeyPair,
+        validator_address: Address,
+        signing_key_pair: &KeyPair,
+        fee: Coin,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> Result<Transaction, TransactionBuilderError> {
+        let mut recipient = Recipient::new_staking_builder();
+        recipient.deactivate_validator(validator_address);
 
         let mut builder = Self::new();
         builder
@@ -1391,18 +1444,17 @@ impl TransactionBuilder {
         }
     }
 
-    /// Creates a transaction that unparks a *parked* validator, i.e. making it *active* again.
+    /// Creates a transaction that retires a validator.
     ///
     /// # Arguments
     ///
-    ///  - `key_pair`:              The key pair used to sign the transaction. The transaction fee
-    ///                             is taken from the account belonging to this key pair.
-    ///  - `validator_address`:     The validator address.
-    ///  - `signing_key_pair`:      The key pair that corresponds to the validator's signing key.
-    ///                             The data is signed using this key pair.
-    ///  - `fee`:                   Transaction fee.
-    ///  - `validity_start_height`: Block height from which this transaction is valid.
-    ///  - `network_id`:            ID of network for which the transaction is valid.
+    ///  - `key_pair`:                 The key pair used to sign the transaction. The transaction
+    ///                                fee is taken from the account belonging to this key pair.
+    ///  - `cold_key_pair`:            The key pair that corresponds to the validator address. The
+    ///                                data is signed using this key pair.
+    ///  - `fee`:                      Transaction fee.
+    ///  - `validity_start_height`:    Block height from which this transaction is valid.
+    ///  - `network_id`:               ID of network for which the transaction is valid.
     ///
     /// # Returns
     ///
@@ -1412,16 +1464,15 @@ impl TransactionBuilder {
     ///
     /// This is a *signaling transaction*.
     ///
-    pub fn new_unpark_validator(
+    pub fn new_retire_validator(
         key_pair: &KeyPair,
-        validator_address: Address,
-        signing_key_pair: &KeyPair,
+        cold_key_pair: &KeyPair,
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Result<Transaction, TransactionBuilderError> {
         let mut recipient = Recipient::new_staking_builder();
-        recipient.unpark_validator(validator_address);
+        recipient.retire_validator();
 
         let mut builder = Self::new();
         builder
@@ -1435,7 +1486,7 @@ impl TransactionBuilder {
         let proof_builder = builder.generate()?;
         match proof_builder {
             TransactionProofBuilder::InStaking(mut builder) => {
-                builder.sign_with_key_pair(signing_key_pair);
+                builder.sign_with_key_pair(cold_key_pair);
                 let mut builder = builder.generate().unwrap().unwrap_basic();
                 builder.sign_with_key_pair(key_pair);
                 Ok(builder.generate().unwrap())

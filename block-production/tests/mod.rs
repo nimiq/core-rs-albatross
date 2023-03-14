@@ -2,6 +2,7 @@ use std::convert::TryInto;
 use std::sync::Arc;
 
 use parking_lot::RwLock;
+use rand::thread_rng;
 use tempfile::tempdir;
 
 use beserial::Deserialize;
@@ -9,16 +10,19 @@ use nimiq_block::{Block, ForkProof, MicroJustification};
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
+use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_database::{mdbx::MdbxEnvironment, volatile::VolatileEnvironment};
 use nimiq_genesis::NetworkId;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::{
-    Address, KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey, SecureGenerate,
+    Address, KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey,
+    PublicKey as SchnorrPublicKey, SecureGenerate,
 };
 use nimiq_primitives::{coin::Coin, policy::Policy};
 use nimiq_test_log::test;
 use nimiq_test_utils::blockchain::{
-    fill_micro_blocks, fill_micro_blocks_with_txns, sign_macro_block, signing_key, voting_key,
+    fill_micro_blocks, fill_micro_blocks_with_txns, produce_macro_blocks, sign_macro_block,
+    signing_key, voting_key,
 };
 use nimiq_transaction::ExecutedTransaction;
 use nimiq_transaction_builder::TransactionBuilder;
@@ -791,7 +795,7 @@ fn it_can_revert_reactivate_transaction() {
             .unwrap();
     let signing_key_pair = ed25519_key_pair(VALIDATOR_SIGNING_KEY);
 
-    let tx = TransactionBuilder::new_inactivate_validator(
+    let tx = TransactionBuilder::new_deactivate_validator(
         &key_pair,
         address.clone(),
         &signing_key_pair,
@@ -981,104 +985,86 @@ fn it_can_consume_all_validator_deposit() {
     ));
     let producer = BlockProducer::new(signing_key(), voting_key());
 
-    // One block with staking transactions
-    let mut transactions = vec![];
-    let key_pair = ed25519_key_pair(VALIDATOR_SECRET_KEY);
-    let address =
-        Address::from_user_friendly_address("NQ20 TSB0 DFSM UH9C 15GQ GAGJ TTE4 D3MA 859E")
-            .unwrap();
-
-    let signing_key_pair = ed25519_key_pair(VALIDATOR_SIGNING_KEY);
-    let account_key_pair = ed25519_key_pair(ACCOUNT_SECRET_KEY);
-    let tx = TransactionBuilder::new_inactivate_validator(
-        &account_key_pair,
-        Address::from(&key_pair.public),
-        &signing_key_pair,
-        Coin::from_u64_unchecked(100),
-        1,
-        NetworkId::UnitAlbatross,
-    )
-    .unwrap();
-
-    transactions.push(tx);
-
-    // This is an invalid tx since it will try to move more than the validator deposit
-    let invalid_tx = TransactionBuilder::new_delete_validator(
-        address.clone(),
+    // Add a new validator.
+    let key_pair = ed25519_key_pair(ACCOUNT_SECRET_KEY);
+    let cold_key_pair = SchnorrKeyPair::generate(&mut thread_rng());
+    let voting_key_pair = BlsKeyPair::generate(&mut thread_rng());
+    let create_tx = TransactionBuilder::new_create_validator(
         &key_pair,
-        Coin::from_u64_unchecked(100),
-        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT),
+        &cold_key_pair,
+        SchnorrPublicKey::default(),
+        &voting_key_pair,
+        Address::from([0u8; 20]),
+        None,
+        Coin::ZERO,
         1,
         NetworkId::UnitAlbatross,
     )
     .unwrap();
 
-    transactions.push(invalid_tx.clone());
+    // Retire the validator.
+    let retire_tx = TransactionBuilder::new_retire_validator(
+        &key_pair,
+        &cold_key_pair,
+        Coin::ZERO,
+        1,
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
+
+    // Create a vesting contract to make the delete transaction fail by causing a type mismatch.
+    let vesting_tx = TransactionBuilder::new_create_vesting(
+        &key_pair,
+        Address::from([0u8; 20]),
+        1,
+        10,
+        10,
+        Coin::from_u64_unchecked(1000),
+        Coin::ZERO,
+        1,
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
 
     let bc = blockchain.upgradable_read();
-
-    // Block with staking transactions
     let block = producer.next_micro_block(
         &bc,
         bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
         vec![],
-        transactions,
-        vec![0x41],
+        vec![create_tx, retire_tx, vesting_tx.clone()],
+        vec![],
         None,
     );
-
-    let block_transactions = &block.body.as_ref().unwrap().transactions;
-
-    assert_eq!(block_transactions[1], ExecutedTransaction::Err(invalid_tx));
-
     assert_eq!(
         Blockchain::push(bc, Block::Micro(block)),
         Ok(PushResult::Extended)
     );
 
-    assert_eq!(blockchain.read().block_number(), 1);
+    produce_macro_blocks(
+        &producer,
+        &blockchain,
+        (Policy::batches_per_epoch() + 1) as usize,
+    );
 
-    // Now we need to verify that the validator deposit was reduced because of the failing txn
-    {
-        let blockchain = blockchain.read();
-        let staking_contract = blockchain.get_staking_contract();
-        let data_store = blockchain.get_staking_contract_store();
-        let db_txn = blockchain.read_transaction();
-
-        let validator = staking_contract
-            .get_validator(&data_store.read(&db_txn), &Address::from(&key_pair.public))
-            .expect("Validator should be present");
-
-        assert_eq!(
-            validator.deposit,
-            Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT - 100)
-        );
-    }
-
-    // Send another transaction that will consume all the remaining validator deposit, and thus, the validator is deleted
-    let mut transactions = vec![];
-
+    // This is an invalid tx since the recipient type doesn't match.
     let invalid_tx = TransactionBuilder::new_delete_validator(
-        address.clone(),
-        &key_pair,
+        vesting_tx.contract_creation_address(),
+        &cold_key_pair,
+        Coin::from_u64_unchecked(100),
         Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT - 100),
-        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT),
         1,
         NetworkId::UnitAlbatross,
     )
     .unwrap();
 
-    transactions.push(invalid_tx.clone());
-
-    let bc = blockchain.upgradable_read();
-
     // Block with staking transactions
+    let bc = blockchain.upgradable_read();
     let block = producer.next_micro_block(
         &bc,
         bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
         vec![],
-        transactions,
-        vec![0x41],
+        vec![invalid_tx.clone()],
+        vec![],
         None,
     );
 
@@ -1091,7 +1077,67 @@ fn it_can_consume_all_validator_deposit() {
         Ok(PushResult::Extended)
     );
 
-    assert_eq!(blockchain.read().block_number(), 2);
+    assert_eq!(
+        blockchain.read().block_number(),
+        (Policy::batches_per_epoch() + 1) as u32 * Policy::blocks_per_batch() + 1
+    );
+
+    // Now we need to verify that the validator deposit was reduced because of the failing txn
+    {
+        let blockchain = blockchain.read();
+        let staking_contract = blockchain.get_staking_contract();
+        let data_store = blockchain.get_staking_contract_store();
+        let db_txn = blockchain.read_transaction();
+
+        let validator = staking_contract
+            .get_validator(
+                &data_store.read(&db_txn),
+                &Address::from(&cold_key_pair.public),
+            )
+            .expect("Validator should be present");
+
+        assert_eq!(
+            validator.deposit,
+            Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT - 100)
+        );
+    }
+
+    // Send another transaction that will consume all the remaining validator deposit.
+    // This will delete the validator.
+    let invalid_tx = TransactionBuilder::new_delete_validator(
+        vesting_tx.contract_creation_address(),
+        &cold_key_pair,
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT - 100),
+        Coin::from_u64_unchecked(1),
+        1,
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
+
+    // Block with staking transactions
+    let bc = blockchain.upgradable_read();
+    let block = producer.next_micro_block(
+        &bc,
+        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        vec![],
+        vec![invalid_tx.clone()],
+        vec![],
+        None,
+    );
+
+    let block_transactions = &block.body.as_ref().unwrap().transactions;
+
+    assert_eq!(block_transactions[0], ExecutedTransaction::Err(invalid_tx));
+
+    assert_eq!(
+        Blockchain::push(bc, Block::Micro(block)),
+        Ok(PushResult::Extended)
+    );
+
+    assert_eq!(
+        blockchain.read().block_number(),
+        (Policy::batches_per_epoch() + 1) as u32 * Policy::blocks_per_batch() + 2
+    );
 
     // Now we need to verify that the validator no longer exists
     {
@@ -1100,8 +1146,10 @@ fn it_can_consume_all_validator_deposit() {
         let data_store = blockchain.get_staking_contract_store();
         let db_txn = blockchain.read_transaction();
 
-        let validator = staking_contract
-            .get_validator(&data_store.read(&db_txn), &Address::from(&key_pair.public));
+        let validator = staking_contract.get_validator(
+            &data_store.read(&db_txn),
+            &Address::from(&cold_key_pair.public),
+        );
 
         assert_eq!(validator, None);
     }
@@ -1119,8 +1167,10 @@ fn it_can_consume_all_validator_deposit() {
     let data_store = blockchain.get_staking_contract_store();
     let db_txn = blockchain.read_transaction();
 
-    let validator =
-        staking_contract.get_validator(&data_store.read(&db_txn), &Address::from(&key_pair.public));
+    let validator = staking_contract.get_validator(
+        &data_store.read(&db_txn),
+        &Address::from(&cold_key_pair.public),
+    );
 
     assert!(validator.is_some());
 }
@@ -1140,40 +1190,90 @@ fn it_can_revert_failed_delete_validator() {
     ));
     let producer = BlockProducer::new(signing_key(), voting_key());
 
-    // One block with staking transactions
-    let mut transactions = vec![];
-    let key_pair = ed25519_key_pair(VALIDATOR_SECRET_KEY);
-    let address =
-        Address::from_user_friendly_address("NQ20 TSB0 DFSM UH9C 15GQ GAGJ TTE4 D3MA 859E")
-            .unwrap();
-
-    // This is an invalid tx since it will try to move more than the validator deposit
-    let invalid_tx = TransactionBuilder::new_delete_validator(
-        address.clone(),
+    // Add a new validator.
+    let key_pair = ed25519_key_pair(ACCOUNT_SECRET_KEY);
+    let cold_key_pair = SchnorrKeyPair::generate(&mut thread_rng());
+    let voting_key_pair = BlsKeyPair::generate(&mut thread_rng());
+    let create_tx = TransactionBuilder::new_create_validator(
         &key_pair,
-        Coin::from_u64_unchecked(100),
-        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT),
+        &cold_key_pair,
+        SchnorrPublicKey::default(),
+        &voting_key_pair,
+        Address::from([0u8; 20]),
+        None,
+        Coin::ZERO,
         1,
         NetworkId::UnitAlbatross,
     )
     .unwrap();
 
-    transactions.push(invalid_tx.clone());
+    // Retire the validator.
+    let retire_tx = TransactionBuilder::new_retire_validator(
+        &key_pair,
+        &cold_key_pair,
+        Coin::ZERO,
+        1,
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
+
+    // Create a vesting contract to make the delete transaction fail by causing a type mismatch.
+    let vesting_tx = TransactionBuilder::new_create_vesting(
+        &key_pair,
+        Address::from([0u8; 20]),
+        1,
+        10,
+        10,
+        Coin::from_u64_unchecked(1000),
+        Coin::ZERO,
+        1,
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
 
     let bc = blockchain.upgradable_read();
-
-    // Block with staking transactions
     let block = producer.next_micro_block(
         &bc,
         bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
         vec![],
-        transactions,
-        vec![0x41],
+        vec![create_tx, retire_tx, vesting_tx.clone()],
+        vec![],
+        None,
+    );
+    assert_eq!(
+        Blockchain::push(bc, Block::Micro(block)),
+        Ok(PushResult::Extended)
+    );
+
+    produce_macro_blocks(
+        &producer,
+        &blockchain,
+        (Policy::batches_per_epoch() + 1) as usize,
+    );
+
+    // This is an invalid tx since the recipient type doesn't match.
+    let invalid_tx = TransactionBuilder::new_delete_validator(
+        vesting_tx.contract_creation_address(),
+        &cold_key_pair,
+        Coin::from_u64_unchecked(100),
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT - 100),
+        1,
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
+
+    // Block with staking transactions
+    let bc = blockchain.upgradable_read();
+    let block = producer.next_micro_block(
+        &bc,
+        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        vec![],
+        vec![invalid_tx.clone()],
+        vec![],
         None,
     );
 
     let block_transactions = &block.body.as_ref().unwrap().transactions;
-
     assert_eq!(block_transactions[0], ExecutedTransaction::Err(invalid_tx));
 
     assert_eq!(
@@ -1181,7 +1281,10 @@ fn it_can_revert_failed_delete_validator() {
         Ok(PushResult::Extended)
     );
 
-    assert_eq!(blockchain.read().block_number(), 1);
+    assert_eq!(
+        blockchain.read().block_number(),
+        (Policy::batches_per_epoch() + 1) as u32 * Policy::blocks_per_batch() + 1
+    );
 
     // Now we need to verify that the validator deposit was reduced because of the failing txn
     {
@@ -1191,7 +1294,10 @@ fn it_can_revert_failed_delete_validator() {
         let db_txn = blockchain.read_transaction();
 
         let validator = staking_contract
-            .get_validator(&data_store.read(&db_txn), &Address::from(&key_pair.public))
+            .get_validator(
+                &data_store.read(&db_txn),
+                &Address::from(&cold_key_pair.public),
+            )
             .expect("Validator should be present");
 
         assert_eq!(
@@ -1218,7 +1324,10 @@ fn it_can_revert_failed_delete_validator() {
     let db_txn = blockchain.read_transaction();
 
     let validator = staking_contract
-        .get_validator(&data_store.read(&db_txn), &Address::from(&key_pair.public))
+        .get_validator(
+            &data_store.read(&db_txn),
+            &Address::from(&cold_key_pair.public),
+        )
         .expect("Validator should be present");
 
     assert_eq!(

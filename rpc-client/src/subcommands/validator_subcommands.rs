@@ -93,11 +93,11 @@ pub enum ValidatorCommand {
         tx_commons: TxCommon,
     },
 
-    /// Sends a transaction to inactivate this validator. In order to avoid having the validator reactivated soon after
+    /// Sends a transaction to deactivate this validator. In order to avoid having the validator reactivated soon after
     /// this transaction takes effect, use the command set-auto-reactivate-validator to make sure the automatic reactivation
     /// configuration is turned off.
     /// The sender wallet must be unlocked prior to this command.
-    InactivateValidator {
+    DeactivateValidator {
         /// The fee will be payed from this address. This wallet must be already unlocked.
         sender_wallet: Address,
 
@@ -248,7 +248,7 @@ impl HandleSubcommand for ValidatorCommand {
                 }
             }
 
-            ValidatorCommand::InactivateValidator {
+            ValidatorCommand::DeactivateValidator {
                 sender_wallet,
                 tx_commons,
             } => {
@@ -257,7 +257,7 @@ impl HandleSubcommand for ValidatorCommand {
                 if tx_commons.dry {
                     let tx = client
                         .consensus
-                        .create_inactivate_validator_transaction(
+                        .create_deactivate_validator_transaction(
                             sender_wallet,
                             validator_address,
                             key_data,
@@ -269,7 +269,7 @@ impl HandleSubcommand for ValidatorCommand {
                 } else {
                     let txid = client
                         .consensus
-                        .send_inactivate_validator_transaction(
+                        .send_deactivate_validator_transaction(
                             sender_wallet,
                             validator_address,
                             key_data,

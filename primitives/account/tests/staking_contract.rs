@@ -414,7 +414,138 @@ fn update_validator_works() {
 }
 
 #[test]
-fn inactivate_validator_works() {
+fn unpark_validator_works() {
+    let env = VolatileEnvironment::new(10).unwrap();
+    let accounts = Accounts::new(env.clone());
+    let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+    let block_state = BlockState::new(2, 2);
+    let mut db_txn = WriteTransaction::new(&env);
+
+    let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
+
+    let validator_address = validator_address();
+    let cold_keypair = ed25519_key_pair(VALIDATOR_PRIVATE_KEY);
+    let signing_keypair = ed25519_key_pair(VALIDATOR_SIGNING_SECRET_KEY);
+
+    // To begin with, park and disable the validator.
+    let mut slots = BTreeSet::new();
+    slots.insert(1);
+    slots.insert(2);
+    slots.insert(3);
+
+    staking_contract
+        .parked_set
+        .insert(validator_address.clone());
+    staking_contract
+        .current_disabled_slots
+        .insert(validator_address.clone(), slots.clone());
+    staking_contract
+        .previous_disabled_slots
+        .insert(validator_address.clone(), slots.clone());
+
+    // Works in the valid case.
+    let tx = make_signed_incoming_transaction(
+        IncomingStakingTransactionData::UnparkValidator {
+            validator_address: validator_address.clone(),
+            proof: SignatureProof::default(),
+        },
+        0,
+        &signing_keypair,
+    );
+
+    let receipt = staking_contract
+        .commit_incoming_transaction(&tx, &block_state, data_store.write(&mut db_txn))
+        .expect("Failed to commit transaction");
+
+    let expected_receipt = UnparkValidatorReceipt {
+        current_disabled_slots: Some(slots.clone()),
+        previous_disabled_slots: Some(slots),
+    };
+    assert_eq!(receipt, Some(expected_receipt.into()));
+
+    assert!(!staking_contract.parked_set.contains(&validator_address));
+    assert!(!staking_contract
+        .current_disabled_slots
+        .contains_key(&validator_address));
+    assert!(!staking_contract
+        .previous_disabled_slots
+        .contains_key(&validator_address));
+
+    // Try with an already unparked validator.
+    assert_eq!(
+        staking_contract.commit_incoming_transaction(
+            &tx,
+            &block_state,
+            data_store.write(&mut db_txn)
+        ),
+        Err(AccountError::InvalidForRecipient)
+    );
+
+    // Revert the transaction.
+    staking_contract
+        .revert_incoming_transaction(&tx, &block_state, receipt, data_store.write(&mut db_txn))
+        .expect("Failed to revert transaction");
+
+    // assert_eq!(
+    //     logs,
+    //     vec![Log::UnparkValidator {
+    //         validator_address: validator_address.clone()
+    //     }]
+    // );
+
+    assert!(staking_contract.parked_set.contains(&validator_address));
+    assert!(staking_contract
+        .current_disabled_slots
+        .contains_key(&validator_address));
+    assert!(staking_contract
+        .previous_disabled_slots
+        .contains_key(&validator_address));
+
+    // Try with a non-existent validator.
+    let fake_address = staker_address();
+
+    let tx = make_signed_incoming_transaction(
+        IncomingStakingTransactionData::UnparkValidator {
+            validator_address: fake_address.clone(),
+            proof: SignatureProof::default(),
+        },
+        0,
+        &signing_keypair,
+    );
+
+    assert_eq!(
+        staking_contract.commit_incoming_transaction(
+            &tx,
+            &block_state,
+            data_store.write(&mut db_txn)
+        ),
+        Err(AccountError::NonExistentAddress {
+            address: fake_address
+        })
+    );
+
+    // Try with a wrong signature.
+    let invalid_tx = make_signed_incoming_transaction(
+        IncomingStakingTransactionData::UnparkValidator {
+            validator_address: validator_address.clone(),
+            proof: SignatureProof::default(),
+        },
+        0,
+        &cold_keypair,
+    );
+
+    assert_eq!(
+        staking_contract.commit_incoming_transaction(
+            &invalid_tx,
+            &block_state,
+            data_store.write(&mut db_txn)
+        ),
+        Err(AccountError::InvalidSignature)
+    );
+}
+
+#[test]
+fn deactivate_validator_works() {
     let env = VolatileEnvironment::new(10).unwrap();
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
@@ -436,7 +567,7 @@ fn inactivate_validator_works() {
 
     // Works in the valid case.
     let tx = make_signed_incoming_transaction(
-        IncomingStakingTransactionData::InactivateValidator {
+        IncomingStakingTransactionData::DeactivateValidator {
             validator_address: validator_address.clone(),
             proof: SignatureProof::default(),
         },
@@ -450,11 +581,11 @@ fn inactivate_validator_works() {
 
     assert_eq!(
         receipt,
-        Some(InactivateValidatorReceipt { was_parked: true }.into())
+        Some(DeactivateValidatorReceipt { was_parked: true }.into())
     );
     // assert_eq!(
     //     account_info.logs,
-    //     vec![Log::InactivateValidator {
+    //     vec![Log::DeactivateValidator {
     //         validator_address: validator_address.clone()
     //     }]
     // );
@@ -481,34 +612,6 @@ fn inactivate_validator_works() {
     assert!(!staking_contract.parked_set.contains(&validator_address));
 
     // Try with an already inactive validator.
-    let tx = make_signed_incoming_transaction(
-        IncomingStakingTransactionData::InactivateValidator {
-            validator_address: validator_address.clone(),
-            proof: SignatureProof::default(),
-        },
-        0,
-        &signing_keypair,
-    );
-
-    assert_eq!(
-        staking_contract.commit_incoming_transaction(
-            &tx,
-            &block_state,
-            data_store.write(&mut db_txn)
-        ),
-        Err(AccountError::InvalidForRecipient)
-    );
-
-    // Try with a wrong signature.
-    let tx = make_signed_incoming_transaction(
-        IncomingStakingTransactionData::InactivateValidator {
-            validator_address: validator_address.clone(),
-            proof: SignatureProof::default(),
-        },
-        0,
-        &cold_keypair,
-    );
-
     assert_eq!(
         staking_contract.commit_incoming_transaction(
             &tx,
@@ -525,7 +628,7 @@ fn inactivate_validator_works() {
 
     // assert_eq!(
     //     logs,
-    //     vec![Log::InactivateValidator {
+    //     vec![Log::DeactivateValidator {
     //         validator_address: validator_address.clone()
     //     }]
     // );
@@ -555,7 +658,7 @@ fn inactivate_validator_works() {
     let fake_address = staker_address();
 
     let tx = make_signed_incoming_transaction(
-        IncomingStakingTransactionData::InactivateValidator {
+        IncomingStakingTransactionData::DeactivateValidator {
             validator_address: fake_address.clone(),
             proof: SignatureProof::default(),
         },
@@ -572,6 +675,25 @@ fn inactivate_validator_works() {
         Err(AccountError::NonExistentAddress {
             address: fake_address
         })
+    );
+
+    // Try with a wrong signature.
+    let invalid_tx = make_signed_incoming_transaction(
+        IncomingStakingTransactionData::DeactivateValidator {
+            validator_address: validator_address.clone(),
+            proof: SignatureProof::default(),
+        },
+        0,
+        &cold_keypair,
+    );
+
+    assert_eq!(
+        staking_contract.commit_incoming_transaction(
+            &invalid_tx,
+            &block_state,
+            data_store.write(&mut db_txn)
+        ),
+        Err(AccountError::InvalidSignature)
     );
 }
 
@@ -591,9 +713,9 @@ fn reactivate_validator_works() {
     let signing_keypair = ed25519_key_pair(VALIDATOR_SIGNING_SECRET_KEY);
     let voting_key = bls_public_key(VALIDATOR_VOTING_KEY);
 
-    // To begin with, retire the validator.
+    // To begin with, deactivate the validator.
     let tx = make_signed_incoming_transaction(
-        IncomingStakingTransactionData::InactivateValidator {
+        IncomingStakingTransactionData::DeactivateValidator {
             validator_address: validator_address.clone(),
             proof: SignatureProof::default(),
         },
@@ -654,34 +776,6 @@ fn reactivate_validator_works() {
     );
 
     // Try with an already active validator.
-    let tx = make_signed_incoming_transaction(
-        IncomingStakingTransactionData::ReactivateValidator {
-            validator_address: validator_address.clone(),
-            proof: SignatureProof::default(),
-        },
-        0,
-        &signing_keypair,
-    );
-
-    assert_eq!(
-        staking_contract.commit_incoming_transaction(
-            &tx,
-            &block_state,
-            data_store.write(&mut db_txn)
-        ),
-        Err(AccountError::InvalidForRecipient)
-    );
-
-    // Try with a wrong signature.
-    let tx = make_signed_incoming_transaction(
-        IncomingStakingTransactionData::ReactivateValidator {
-            validator_address: validator_address.clone(),
-            proof: SignatureProof::default(),
-        },
-        0,
-        &cold_keypair,
-    );
-
     assert_eq!(
         staking_contract.commit_incoming_transaction(
             &tx,
@@ -726,9 +820,30 @@ fn reactivate_validator_works() {
     // Try with a non-existent validator.
     let fake_address = staker_address();
 
-    let tx = make_signed_incoming_transaction(
+    let invalid_tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::ReactivateValidator {
             validator_address: fake_address.clone(),
+            proof: SignatureProof::default(),
+        },
+        0,
+        &signing_keypair,
+    );
+
+    assert_eq!(
+        staking_contract.commit_incoming_transaction(
+            &invalid_tx,
+            &block_state,
+            data_store.write(&mut db_txn)
+        ),
+        Err(AccountError::NonExistentAddress {
+            address: fake_address
+        })
+    );
+
+    // Try with a wrong signature.
+    let invalid_tx = make_signed_incoming_transaction(
+        IncomingStakingTransactionData::ReactivateValidator {
+            validator_address: validator_address.clone(),
             proof: SignatureProof::default(),
         },
         0,
@@ -737,18 +852,38 @@ fn reactivate_validator_works() {
 
     assert_eq!(
         staking_contract.commit_incoming_transaction(
+            &invalid_tx,
+            &block_state,
+            data_store.write(&mut db_txn)
+        ),
+        Err(AccountError::InvalidSignature)
+    );
+
+    // Try with a retired validator.
+    let retire_tx = make_signed_incoming_transaction(
+        IncomingStakingTransactionData::RetireValidator {
+            proof: SignatureProof::default(),
+        },
+        0,
+        &cold_keypair,
+    );
+
+    staking_contract
+        .commit_incoming_transaction(&retire_tx, &block_state, data_store.write(&mut db_txn))
+        .expect("Failed to commit transaction");
+
+    assert_eq!(
+        staking_contract.commit_incoming_transaction(
             &tx,
             &block_state,
             data_store.write(&mut db_txn)
         ),
-        Err(AccountError::NonExistentAddress {
-            address: fake_address
-        })
+        Err(AccountError::InvalidForRecipient)
     );
 }
 
 #[test]
-fn unpark_validator_works() {
+fn retire_validator_works() {
     let env = VolatileEnvironment::new(10).unwrap();
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
@@ -761,39 +896,22 @@ fn unpark_validator_works() {
     let cold_keypair = ed25519_key_pair(VALIDATOR_PRIVATE_KEY);
     let signing_keypair = ed25519_key_pair(VALIDATOR_SIGNING_SECRET_KEY);
 
-    // To begin with, unpark and disable the validator.
-    let mut slots = BTreeSet::new();
-    slots.insert(1);
-    slots.insert(2);
-    slots.insert(3);
-
-    staking_contract
-        .parked_set
-        .insert(validator_address.clone());
-    staking_contract
-        .current_disabled_slots
-        .insert(validator_address.clone(), slots.clone());
-    staking_contract
-        .previous_disabled_slots
-        .insert(validator_address.clone(), slots.clone());
-
     // Works in the valid case.
     let tx = make_signed_incoming_transaction(
-        IncomingStakingTransactionData::UnparkValidator {
-            validator_address: validator_address.clone(),
+        IncomingStakingTransactionData::RetireValidator {
             proof: SignatureProof::default(),
         },
         0,
-        &signing_keypair,
+        &cold_keypair,
     );
 
     let receipt = staking_contract
         .commit_incoming_transaction(&tx, &block_state, data_store.write(&mut db_txn))
         .expect("Failed to commit transaction");
 
-    let expected_receipt = UnparkValidatorReceipt {
-        current_disabled_slots: Some(slots.clone()),
-        previous_disabled_slots: Some(slots),
+    let expected_receipt = RetireValidatorReceipt {
+        was_active: true,
+        was_parked: false,
     };
     assert_eq!(receipt, Some(expected_receipt.into()));
 
@@ -805,35 +923,7 @@ fn unpark_validator_works() {
         .previous_disabled_slots
         .contains_key(&validator_address));
 
-    // Try with an already unparked validator.
-    let tx = make_signed_incoming_transaction(
-        IncomingStakingTransactionData::UnparkValidator {
-            validator_address: validator_address.clone(),
-            proof: SignatureProof::default(),
-        },
-        0,
-        &signing_keypair,
-    );
-
-    assert_eq!(
-        staking_contract.commit_incoming_transaction(
-            &tx,
-            &block_state,
-            data_store.write(&mut db_txn)
-        ),
-        Err(AccountError::InvalidForRecipient)
-    );
-
-    // Try with a wrong signature.
-    let tx = make_signed_incoming_transaction(
-        IncomingStakingTransactionData::UnparkValidator {
-            validator_address: validator_address.clone(),
-            proof: SignatureProof::default(),
-        },
-        0,
-        &cold_keypair,
-    );
-
+    // Try with an already retired validator.
     assert_eq!(
         staking_contract.commit_incoming_transaction(
             &tx,
@@ -854,34 +944,27 @@ fn unpark_validator_works() {
     //     }]
     // );
 
-    assert!(staking_contract.parked_set.contains(&validator_address));
     assert!(staking_contract
-        .current_disabled_slots
-        .contains_key(&validator_address));
-    assert!(staking_contract
-        .previous_disabled_slots
+        .active_validators
         .contains_key(&validator_address));
 
-    // Try with a non-existent validator.
-    let fake_address = staker_address();
-
-    let tx = make_signed_incoming_transaction(
-        IncomingStakingTransactionData::UnparkValidator {
-            validator_address: fake_address.clone(),
+    // Try with a wrong signature.
+    let invalid_tx = make_signed_incoming_transaction(
+        IncomingStakingTransactionData::RetireValidator {
             proof: SignatureProof::default(),
         },
         0,
-        &cold_keypair,
+        &signing_keypair,
     );
 
     assert_eq!(
         staking_contract.commit_incoming_transaction(
-            &tx,
+            &invalid_tx,
             &block_state,
             data_store.write(&mut db_txn)
         ),
         Err(AccountError::NonExistentAddress {
-            address: fake_address
+            address: Address::from(&signing_keypair.public)
         })
     );
 }
@@ -908,9 +991,9 @@ fn delete_validator_works() {
         Err(AccountError::InvalidForSender)
     );
 
-    // Retire the validator.
-    let retire_tx = make_signed_incoming_transaction(
-        IncomingStakingTransactionData::InactivateValidator {
+    // Deactivate validator.
+    let deactivate_tx = make_signed_incoming_transaction(
+        IncomingStakingTransactionData::DeactivateValidator {
             validator_address: validator_address(),
             proof: SignatureProof::default(),
         },
@@ -919,11 +1002,45 @@ fn delete_validator_works() {
     );
 
     staking_contract
+        .commit_incoming_transaction(&deactivate_tx, &block_state, data_store.write(&mut db_txn))
+        .expect("Failed to commit transaction");
+
+    // Doesn't work with a deactivated but not retired validator.
+    let after_cooldown = Policy::election_block_after(2) + Policy::blocks_per_batch() + 1;
+    let block_state = BlockState::new(after_cooldown, 1000);
+
+    assert_eq!(
+        staking_contract.commit_outgoing_transaction(
+            &tx,
+            &block_state,
+            data_store.write(&mut db_txn)
+        ),
+        Err(AccountError::InvalidForSender)
+    );
+
+    // Retire the validator.
+    let retire_tx = make_signed_incoming_transaction(
+        IncomingStakingTransactionData::RetireValidator {
+            proof: SignatureProof::default(),
+        },
+        0,
+        &ed25519_key_pair(VALIDATOR_PRIVATE_KEY),
+    );
+
+    let block_state = BlockState::new(3, 3);
+    staking_contract
         .commit_incoming_transaction(&retire_tx, &block_state, data_store.write(&mut db_txn))
         .expect("Failed to commit transaction");
 
-    // Doesn't work until the next election block.
-    let next_election_block = Policy::election_block_after(2);
+    // Doesn't work if the cooldown hasn't expired.
+    assert_eq!(
+        staking_contract.commit_outgoing_transaction(
+            &tx,
+            &BlockState::new(after_cooldown - 1, 999),
+            data_store.write(&mut db_txn)
+        ),
+        Err(AccountError::InvalidForSender)
+    );
 
     // Works in the valid case.
     let validator_address = validator_address();
@@ -932,7 +1049,7 @@ fn delete_validator_works() {
     let reward_address = validator_address.clone();
     let staker_address = staker_address();
 
-    let block_state = BlockState::new(next_election_block + Policy::blocks_per_batch() + 1, 1000);
+    let block_state = BlockState::new(after_cooldown, 1000);
 
     let receipt = staking_contract
         .commit_outgoing_transaction(&tx, &block_state, data_store.write(&mut db_txn))
@@ -1090,6 +1207,7 @@ fn delete_validator_works() {
     );
     assert_eq!(validator.num_stakers, 1);
     assert_eq!(validator.inactive_since, Some(2));
+    assert_eq!(validator.retired, true);
 
     assert_eq!(
         staking_contract.get_tombstone(&data_store.read(&db_txn), &validator_address),
@@ -2090,7 +2208,7 @@ fn finalize_epoch_inherents_works() {
     assert_eq!(receipt, None);
     // assert_eq!(
     //     account_info.logs,
-    //     vec![Log::InactivateValidator {
+    //     vec![Log::DeactivateValidator {
     //         validator_address: validator_address.clone(),
     //     }]
     // );

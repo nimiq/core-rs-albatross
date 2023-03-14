@@ -216,9 +216,9 @@ fn it_can_create_validator_transactions() {
 
     assert_eq!(tx, tx2);
 
-    // Inactivate
+    // Deactivate
     let tx = make_signed_incoming_transaction(
-        IncomingStakingTransactionData::InactivateValidator {
+        IncomingStakingTransactionData::DeactivateValidator {
             validator_address: address.clone(),
             proof: Default::default(),
         },
@@ -226,7 +226,7 @@ fn it_can_create_validator_transactions() {
         &key_pair,
     );
 
-    let tx2 = TransactionBuilder::new_inactivate_validator(
+    let tx2 = TransactionBuilder::new_deactivate_validator(
         &key_pair,
         address.clone(),
         &key_pair,

@@ -12,7 +12,7 @@ use crate::recipient::Recipient;
 ///     - Validator
 ///         * Create
 ///         * Update (signaling)
-///         * Inactivate (signaling)
+///         * Deactivate (signaling)
 ///         * Reactivate (signaling)
 ///         * Unpark (signaling)
 ///     - Staker
@@ -83,12 +83,25 @@ impl StakingRecipientBuilder {
         self
     }
 
-    /// This method allows to inactivate a validator entry. Inactive validators will not be considered
-    /// for the validator selection. Inactivating a validator is also necessary to delete it and retrieve
-    /// back its initial deposit.
+    /// This method allows to prevent a validator from being automatically retired after slashing.
+    /// After misbehavior or being offline, a validator might be slashed.
+    /// This automatically moves a validator into a *parked* state. This means that
+    /// this validator will be automatically retired on the next election block.
+    /// This signaling transaction will prevent the automatic retirement.
     /// It needs to be signed by the key pair corresponding to the signing key.
-    pub fn inactivate_validator(&mut self, validator_address: Address) -> &mut Self {
-        self.data = Some(IncomingStakingTransactionData::InactivateValidator {
+    pub fn unpark_validator(&mut self, validator_address: Address) -> &mut Self {
+        self.data = Some(IncomingStakingTransactionData::UnparkValidator {
+            validator_address,
+            proof: Default::default(),
+        });
+        self
+    }
+
+    /// This method allows to deactivate a validator entry. Inactive validators will not be considered
+    /// for the validator selection.
+    /// It needs to be signed by the key pair corresponding to the signing key.
+    pub fn deactivate_validator(&mut self, validator_address: Address) -> &mut Self {
+        self.data = Some(IncomingStakingTransactionData::DeactivateValidator {
             validator_address,
             proof: Default::default(),
         });
@@ -107,15 +120,11 @@ impl StakingRecipientBuilder {
         self
     }
 
-    /// This method allows to prevent a validator from being automatically retired after slashing.
-    /// After misbehavior or being offline, a validator might be slashed.
-    /// This automatically moves a validator into a *parked* state. This means that
-    /// this validator will be automatically retired on the next election block.
-    /// This signaling transaction will prevent the automatic retirement.
-    /// It needs to be signed by the key pair corresponding to the signing key.
-    pub fn unpark_validator(&mut self, validator_address: Address) -> &mut Self {
-        self.data = Some(IncomingStakingTransactionData::UnparkValidator {
-            validator_address,
+    /// This method allows to retire a validator entry. Retiring a validator permanently deactivates
+    /// it which is necessary in order to delete the validator and retrieve back its initial deposit.
+    /// It needs to be signed by the key pair corresponding to the cold key.
+    pub fn retire_validator(&mut self) -> &mut Self {
+        self.data = Some(IncomingStakingTransactionData::RetireValidator {
             proof: Default::default(),
         });
         self

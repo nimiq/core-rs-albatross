@@ -5,21 +5,22 @@ use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
 use nimiq_primitives::{account::AccountError, coin::Coin, policy::Policy};
 
 use crate::account::staking_contract::receipts::{
-    DeleteValidatorReceipt, InactivateValidatorReceipt, ReactivateValidatorReceipt,
+    DeactivateValidatorReceipt, DeleteValidatorReceipt, ReactivateValidatorReceipt,
     UnparkValidatorReceipt, UpdateValidatorReceipt,
 };
 use crate::account::staking_contract::store::{
     StakingContractStoreReadOps, StakingContractStoreReadOpsExt, StakingContractStoreWrite,
 };
 use crate::account::staking_contract::StakingContract;
+use crate::RetireValidatorReceipt;
 
 /// Struct representing a validator in the staking contract.
 /// Actions concerning a validator are:
 /// 1. Create: Creates a validator.
 /// 2. Update: Updates the validator.
-/// 3. Inactivate: Inactivates a validator (also starts a cooldown period used for Delete).
+/// 3. Deactivate: Deactivates a validator (also starts a cooldown period used for Delete).
 /// 4. Reactivate: Reactivates a validator.
-/// 5. Unpark: Prevents a validator from being automatically inactivated.
+/// 5. Unpark: Prevents a validator from being automatically deactivated.
 /// 6. Delete: Deletes a validator (validator must have been inactive for the cooldown period).
 ///
 /// The actions can be summarized by the following state diagram:
@@ -70,6 +71,8 @@ pub struct Validator {
     // An option indicating if the validator is inactive. If it is inactive, then it contains the
     // block height at which it became inactive.
     pub inactive_since: Option<u32>,
+    // A flag indicating if the validator is retired.
+    pub retired: bool,
 }
 
 impl Validator {
@@ -115,9 +118,10 @@ impl StakingContract {
             reward_address,
             signal_data,
             total_stake: deposit,
+            deposit,
             num_stakers: 0,
             inactive_since: None,
-            deposit,
+            retired: false,
         };
 
         // If a tombstone exists for this validator, restore total_stake and num_stakers from it.
@@ -239,142 +243,6 @@ impl StakingContract {
         Ok(())
     }
 
-    /// Inactivates a validator. It is necessary to retire a validator before dropping it. This also
-    /// removes the validator from the parking set.
-    pub fn inactivate_validator(
-        &mut self,
-        store: &mut StakingContractStoreWrite,
-        validator_address: &Address,
-        signer: &Address,
-        block_number: u32,
-    ) -> Result<InactivateValidatorReceipt, AccountError> {
-        // Get the validator.
-        let mut validator = store.expect_validator(validator_address)?;
-
-        // Check that the validator is active.
-        if !validator.is_active() {
-            debug!("Validator {} is already inactive", validator_address);
-            return Err(AccountError::InvalidForRecipient);
-        }
-
-        // Check that the signer is correct.
-        if *signer != Address::from(&validator.signing_key) {
-            debug!("The transaction signer doesn't match the signing key of the validator.");
-            return Err(AccountError::InvalidSignature);
-        }
-
-        // All checks passed, not allowed to fail from here on!
-
-        // Mark validator as inactive.
-        validator.inactive_since = Some(block_number);
-
-        // Remove validator from active_validators.
-        // We expect the validator to be present since we checked that it is not inactive above.
-        self.active_validators
-            .remove(validator_address)
-            .expect("inconsistent contract state");
-
-        // Remove validator from parked_set.
-        let was_parked = self.parked_set.remove(validator_address);
-
-        // Update validator entry.
-        store.put_validator(validator_address, validator);
-
-        Ok(InactivateValidatorReceipt { was_parked })
-    }
-
-    /// Reverts inactivating a validator.
-    pub fn revert_inactivate_validator(
-        &mut self,
-        store: &mut StakingContractStoreWrite,
-        validator_address: &Address,
-        receipt: InactivateValidatorReceipt,
-    ) -> Result<(), AccountError> {
-        // Get the validator.
-        let mut validator = store.expect_validator(validator_address)?;
-
-        // Mark validator as active.
-        validator.inactive_since = None;
-
-        // Re-add validator to active_validators.
-        self.active_validators
-            .insert(validator_address.clone(), validator.total_stake);
-
-        // Re-add validator to parked_set if it was parked before.
-        if receipt.was_parked {
-            self.parked_set.insert(validator_address.clone());
-        }
-
-        // Update validator entry.
-        store.put_validator(validator_address, validator);
-
-        Ok(())
-    }
-
-    /// Reactivates a validator.
-    pub fn reactivate_validator(
-        &mut self,
-        store: &mut StakingContractStoreWrite,
-        validator_address: &Address,
-        signer: &Address,
-    ) -> Result<ReactivateValidatorReceipt, AccountError> {
-        // Get the validator.
-        let mut validator = store.expect_validator(validator_address)?;
-
-        // Check that the validator is inactive.
-        if validator.is_active() {
-            debug!("Validator {} is already active", validator_address);
-            return Err(AccountError::InvalidForRecipient);
-        }
-
-        // Check that the signer is correct.
-        if *signer != Address::from(&validator.signing_key) {
-            debug!("The transaction signer doesn't match the signing key of the validator.");
-            return Err(AccountError::InvalidSignature);
-        }
-
-        // All checks passed, not allowed to fail from here on!
-
-        // Mark validator as active.
-        let was_inactive_since = validator
-            .inactive_since
-            .take()
-            .expect("validator is inactive");
-
-        // Add validator to active_validators.
-        self.active_validators
-            .insert(validator_address.clone(), validator.total_stake);
-
-        // Update validator entry.
-        store.put_validator(validator_address, validator);
-
-        Ok(ReactivateValidatorReceipt { was_inactive_since })
-    }
-
-    /// Reverts reactivating a validator.
-    pub fn revert_reactivate_validator(
-        &mut self,
-        store: &mut StakingContractStoreWrite,
-        validator_address: &Address,
-        receipt: ReactivateValidatorReceipt,
-    ) -> Result<(), AccountError> {
-        // Get the validator.
-        let mut validator = store.expect_validator(validator_address)?;
-
-        // Restore validator inactive state.
-        validator.inactive_since = Some(receipt.was_inactive_since);
-
-        // Remove validator from active_validators again.
-        self.active_validators
-            .remove(validator_address)
-            .expect("inconsistent contract state");
-
-        // Update validator entry.
-        store.put_validator(validator_address, validator);
-
-        Ok(())
-    }
-
     /// Removes a validator from the parked set and the disabled slots. This is used by validators
     /// after they get slashed so that they can produce blocks again.
     pub fn unpark_validator(
@@ -438,38 +306,258 @@ impl StakingContract {
         Ok(())
     }
 
+    /// Deactivates a validator. It is necessary to retire a validator before dropping it. This also
+    /// removes the validator from the parking set.
+    pub fn deactivate_validator(
+        &mut self,
+        store: &mut StakingContractStoreWrite,
+        validator_address: &Address,
+        signer: &Address,
+        block_number: u32,
+    ) -> Result<DeactivateValidatorReceipt, AccountError> {
+        // Get the validator.
+        let mut validator = store.expect_validator(validator_address)?;
+
+        // Check that the validator is active.
+        if !validator.is_active() {
+            debug!("Validator {} is already inactive", validator_address);
+            return Err(AccountError::InvalidForRecipient);
+        }
+
+        // Check that the signer is correct.
+        if *signer != Address::from(&validator.signing_key) {
+            debug!("The transaction signer doesn't match the signing key of the validator.");
+            return Err(AccountError::InvalidSignature);
+        }
+
+        // All checks passed, not allowed to fail from here on!
+
+        // Mark validator as inactive.
+        validator.inactive_since = Some(block_number);
+
+        // Remove validator from active_validators.
+        // We expect the validator to be present since we checked that it is not inactive above.
+        self.active_validators
+            .remove(validator_address)
+            .expect("inconsistent contract state");
+
+        // Remove validator from parked_set.
+        let was_parked = self.parked_set.remove(validator_address);
+
+        // Update validator entry.
+        store.put_validator(validator_address, validator);
+
+        Ok(DeactivateValidatorReceipt { was_parked })
+    }
+
+    /// Reverts inactivating a validator.
+    pub fn revert_deactivate_validator(
+        &mut self,
+        store: &mut StakingContractStoreWrite,
+        validator_address: &Address,
+        receipt: DeactivateValidatorReceipt,
+    ) -> Result<(), AccountError> {
+        // Get the validator.
+        let mut validator = store.expect_validator(validator_address)?;
+
+        // Mark validator as active.
+        validator.inactive_since = None;
+
+        // Re-add validator to active_validators.
+        self.active_validators
+            .insert(validator_address.clone(), validator.total_stake);
+
+        // Re-add validator to parked_set if it was parked before.
+        if receipt.was_parked {
+            self.parked_set.insert(validator_address.clone());
+        }
+
+        // Update validator entry.
+        store.put_validator(validator_address, validator);
+
+        Ok(())
+    }
+
+    /// Reactivates a validator.
+    pub fn reactivate_validator(
+        &mut self,
+        store: &mut StakingContractStoreWrite,
+        validator_address: &Address,
+        signer: &Address,
+    ) -> Result<ReactivateValidatorReceipt, AccountError> {
+        // Get the validator.
+        let mut validator = store.expect_validator(validator_address)?;
+
+        // Check that the validator is inactive.
+        if validator.is_active() {
+            debug!("Validator {} is already active", validator_address);
+            return Err(AccountError::InvalidForRecipient);
+        }
+
+        // Check that the validator is not retired.
+        if validator.retired {
+            debug!("Validator {} is retired", validator_address);
+            return Err(AccountError::InvalidForRecipient);
+        }
+
+        // Check that the signer is correct.
+        if *signer != Address::from(&validator.signing_key) {
+            debug!("The transaction signer doesn't match the signing key of the validator.");
+            return Err(AccountError::InvalidSignature);
+        }
+
+        // All checks passed, not allowed to fail from here on!
+
+        // Mark validator as active.
+        let was_inactive_since = validator
+            .inactive_since
+            .take()
+            .expect("validator is inactive");
+
+        // Add validator to active_validators.
+        self.active_validators
+            .insert(validator_address.clone(), validator.total_stake);
+
+        // Update validator entry.
+        store.put_validator(validator_address, validator);
+
+        Ok(ReactivateValidatorReceipt { was_inactive_since })
+    }
+
+    /// Reverts reactivating a validator.
+    pub fn revert_reactivate_validator(
+        &mut self,
+        store: &mut StakingContractStoreWrite,
+        validator_address: &Address,
+        receipt: ReactivateValidatorReceipt,
+    ) -> Result<(), AccountError> {
+        // Get the validator.
+        let mut validator = store.expect_validator(validator_address)?;
+
+        // Restore validator inactive state.
+        validator.inactive_since = Some(receipt.was_inactive_since);
+
+        // Remove validator from active_validators again.
+        self.active_validators
+            .remove(validator_address)
+            .expect("inconsistent contract state");
+
+        // Update validator entry.
+        store.put_validator(validator_address, validator);
+
+        Ok(())
+    }
+
+    /// Retires a validator, permanently deactivating it.
+    pub fn retire_validator(
+        &mut self,
+        store: &mut StakingContractStoreWrite,
+        validator_address: &Address,
+        block_number: u32,
+    ) -> Result<RetireValidatorReceipt, AccountError> {
+        // Get the validator.
+        let mut validator = store.expect_validator(validator_address)?;
+
+        // Check that the validator is not already retired.
+        if validator.retired {
+            debug!("Validator {} is already retired", validator_address);
+            return Err(AccountError::InvalidForRecipient);
+        }
+
+        // All checks passed, not allowed to fail from here on!
+
+        // Retire the validator.
+        validator.retired = true;
+
+        // Deactivate the validator if it is still active.
+        let was_active = validator.is_active();
+        if was_active {
+            validator.inactive_since = Some(block_number);
+
+            // Remove validator from active_validators.
+            // We expect the validator to be present since we checked that it is not inactive above.
+            self.active_validators
+                .remove(validator_address)
+                .expect("inconsistent contract state");
+        }
+
+        // Remove validator from parked_set.
+        let was_parked = self.parked_set.remove(validator_address);
+
+        // Update validator entry.
+        store.put_validator(validator_address, validator);
+
+        Ok(RetireValidatorReceipt {
+            was_active,
+            was_parked,
+        })
+    }
+
+    /// Reverts retiring a validator.
+    pub fn revert_retire_validator(
+        &mut self,
+        store: &mut StakingContractStoreWrite,
+        validator_address: &Address,
+        receipt: RetireValidatorReceipt,
+    ) -> Result<(), AccountError> {
+        // Get the validator.
+        let mut validator = store.expect_validator(validator_address)?;
+
+        // Clear the retired flag.
+        validator.retired = false;
+
+        // Reactivate validator if it was active before.
+        if receipt.was_active {
+            // Mark validator as active.
+            validator.inactive_since = None;
+
+            // Re-add validator to active_validators.
+            self.active_validators
+                .insert(validator_address.clone(), validator.total_stake);
+        }
+
+        // Re-add validator to parked_set if it was parked before.
+        if receipt.was_parked {
+            self.parked_set.insert(validator_address.clone());
+        }
+
+        // Update validator entry.
+        store.put_validator(validator_address, validator);
+
+        Ok(())
+    }
+
     /// Checks if a validator can be deleted.
     pub fn can_delete_validator(
         &self,
         validator: &Validator,
         block_number: u32,
-        transaction_total_value: Coin,
     ) -> Result<(), AccountError> {
-        // Check that the validator has been inactive for long enough.
-        if let Some(inactive_since) = validator.inactive_since {
-            let deadline =
-                Policy::election_block_after(inactive_since) + Policy::blocks_per_batch();
-            if block_number <= deadline {
-                debug!("Tried to delete validator {} too soon", validator.address);
-                return Err(AccountError::InvalidForSender);
-            }
-        } else {
+        // Check that the validator is retired.
+        if !validator.retired {
             debug!("Tried to delete active validator {}", validator.address);
             return Err(AccountError::InvalidForSender);
         }
 
-        // The transaction value + fee must be equal to the validator deposit
-        if transaction_total_value != validator.deposit {
-            return Err(AccountError::InvalidCoinValue);
+        // Check that the validator has been inactive for long enough.
+        // We must wait until the first batch of the next epoch has passed such that we don't delete
+        // the validator before potential rewards have been distributed.
+        let inactive_since = validator
+            .inactive_since
+            .expect("Validator is retired so it must be inactive");
+        let wait_until = Policy::election_block_after(inactive_since) + Policy::blocks_per_batch();
+        if block_number <= wait_until {
+            debug!("Tried to delete validator {} too soon", validator.address);
+            return Err(AccountError::InvalidForSender);
         }
 
         Ok(())
     }
 
-    /// Deletes a validator and returns its deposit. This can only be used on inactive validators!
-    /// After the validator gets inactivated, it needs to wait until the second batch of the next
+    /// Deletes a validator and returns its deposit. This can only be used on retired validators!
+    /// After the validator gets deactivated, it needs to wait until the second batch of the next
     /// epoch in order to be able to be deleted. This is necessary because if the validator was an
-    /// elected validator when it was inactivated then it might receive rewards until the end of the
+    /// elected validator when it was deactivated then it might receive rewards until the end of the
     /// first batch of the next epoch. So it needs to be available.
     ///
     /// When a validator is deleted, the stakers delegating to it will NOT be updated. If there is
@@ -488,7 +576,12 @@ impl StakingContract {
         let validator = store.expect_validator(validator_address)?;
 
         // Check that the validator can be deleted.
-        self.can_delete_validator(&validator, block_number, transaction_total_value)?;
+        self.can_delete_validator(&validator, block_number)?;
+
+        // The transaction value + fee must be equal to the validator deposit
+        if transaction_total_value != validator.deposit {
+            return Err(AccountError::InvalidCoinValue);
+        }
 
         // All checks passed, not allowed to fail from here on!
 
@@ -541,9 +634,10 @@ impl StakingContract {
             reward_address: receipt.reward_address,
             signal_data: receipt.signal_data,
             total_stake: transaction_total_value,
+            deposit: transaction_total_value,
             num_stakers: 0,
             inactive_since: Some(receipt.inactive_since),
-            deposit: transaction_total_value,
+            retired: true,
         };
 
         // If there is a tombstone for this validator, add the remaining staker and stakers.
