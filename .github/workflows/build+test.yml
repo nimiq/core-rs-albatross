@@ -3,6 +3,7 @@ name: Build + Test
 on:
   - push
   - pull_request
+  - merge_group
 
 jobs:
 
