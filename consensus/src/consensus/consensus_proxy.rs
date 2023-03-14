@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use nimiq_blockchain_interface::AbstractBlockchain;
+use nimiq_hash::Blake2bHash;
 use tokio::sync::broadcast::Sender as BroadcastSender;
 use tokio_stream::wrappers::BroadcastStream;
 
@@ -59,6 +60,8 @@ impl<N: Network> ConsensusProxy<N> {
     pub async fn request_transactions_by_address(
         &self,
         address: Address,
+        since_block_height: u32,
+        ignored_hashes: Vec<Blake2bHash>,
         min_peers: usize,
         max: Option<u16>,
     ) -> Result<Vec<ExtendedTransaction>, RequestError> {
@@ -119,6 +122,14 @@ impl<N: Network> ConsensusProxy<N> {
                     let current_head_number = blockchain.head().block_number();
 
                     for (hash, block_number) in response.receipts {
+                        if block_number < since_block_height {
+                            continue;
+                        }
+
+                        if ignored_hashes.contains(&hash) {
+                            continue;
+                        }
+
                         // If the transaction was already verified, then we don't need to verify it again
                         if verified_transactions.contains_key(&hash) {
                             continue;

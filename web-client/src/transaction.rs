@@ -458,11 +458,11 @@ pub enum TransactionState {
 /// JSON-compatible and human-readable format of transactions, including details about its state in the
 /// blockchain. Contains all fields from {@link PlainTransaction}, plus additional fields such as
 /// `blockHeight` and `timestamp` if the transaction is included in the blockchain.
-#[derive(Tsify)]
+#[derive(serde::Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct PlainTransactionDetails {
     #[serde(flatten)]
-    transaction: PlainTransaction,
+    pub transaction: PlainTransaction,
 
     pub state: TransactionState,
     #[tsify(optional)]

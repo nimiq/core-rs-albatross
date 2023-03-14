@@ -27,7 +27,9 @@ use nimiq_primitives::policy::Policy;
 
 use crate::address::Address;
 use crate::peer_info::PeerInfo;
-use crate::transaction::{PlainTransactionDetails, PlainTransactionDetailsArrayType, Transaction};
+use crate::transaction::{
+    PlainTransactionDetails, PlainTransactionDetailsArrayType, Transaction, TransactionState,
+};
 use crate::transaction_builder::TransactionBuilder;
 use crate::utils::{from_network_id, to_network_id};
 
@@ -591,10 +593,12 @@ impl Client {
     pub async fn get_transations_by_address(
         &self,
         address: Address,
-        max: Option<u16>,
+        since_block_height: Option<u32>,
+        known_transaction_details: Option<PlainTransactionDetailsArrayType>,
+        limit: Option<u16>,
         min_peers: Option<usize>,
     ) -> Result<PlainTransactionDetailsArrayType, JsError> {
-        if let Some(max) = max {
+        if let Some(max) = limit {
             if max > MAX_TRANSACTIONS_BY_ADDRESS {
                 return Err(JsError::new(
                     "The maximum number of transactions exceeds the one that is supported",
@@ -602,10 +606,34 @@ impl Client {
             }
         }
 
+        let mut known_hashes = vec![];
+
+        if let Some(array) = known_transaction_details {
+            let plain_tx_details =
+                serde_wasm_bindgen::from_value::<Vec<PlainTransactionDetails>>(array.into())?;
+            for obj in plain_tx_details {
+                match obj.state {
+                    // Do not skip unconfirmed transactions
+                    TransactionState::New
+                    | TransactionState::Pending
+                    | TransactionState::Included => continue,
+                    _ => {
+                        known_hashes.push(Blake2bHash::from_str(&obj.transaction.transaction_hash)?)
+                    }
+                }
+            }
+        }
+
         let transactions = self
             .inner
             .consensus_proxy()
-            .request_transactions_by_address(address.native(), min_peers.unwrap_or(1), max)
+            .request_transactions_by_address(
+                address.native(),
+                since_block_height.unwrap_or(0),
+                known_hashes,
+                min_peers.unwrap_or(1),
+                limit,
+            )
             .await?;
 
         let current_block = self.get_head_height();
