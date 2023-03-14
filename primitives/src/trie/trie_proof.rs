@@ -1,7 +1,7 @@
 use log::error;
 
 use beserial::{Deserialize, Serialize};
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::{Blake2bHash, Hash};
 
 use crate::key_nibbles::KeyNibbles;
 use crate::trie::{trie_node::TrieNode, trie_proof_node::TrieProofNode};
@@ -72,7 +72,7 @@ impl TrieProof {
                         // invalid.
                         if child_hash != &child.hash() || child_key != child.key {
                             error!("The child node doesn't match the given hash and/or key. Got hash {}, child has hash {}. Got key {}, child has key {}.",
-                                   child_hash, child.hash(), child_key, child.key);
+                                   child_hash, child.hash::<Blake2bHash>(), child_key, child.key);
                             return false;
                         }
                     }
@@ -105,10 +105,10 @@ impl TrieProof {
         }
 
         // And must match the hash given as the root hash.
-        if &root.hash() != root_hash {
+        if &root.hash::<Blake2bHash>() != root_hash {
             error!(
                 "The root node doesn't have the correct hash! It has hash {}, but it should be {}.",
-                root.hash(),
+                root.hash::<Blake2bHash>(),
                 root_hash
             );
             return false;

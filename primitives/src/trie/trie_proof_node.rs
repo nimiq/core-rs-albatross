@@ -1,7 +1,9 @@
 use log::error;
 
 use beserial::{Deserialize, Serialize, SerializeWithLength, WriteBytesExt};
-use nimiq_hash::{Blake2bHash, Blake2bHasher, Hash, Hasher};
+use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
+
+use std::io;
 
 use crate::{
     key_nibbles::KeyNibbles,
@@ -88,27 +90,32 @@ impl TrieProofNode {
     pub fn iter_children(&self) -> Iter {
         Iter::from_children(&self.children)
     }
+}
 
-    pub fn hash(&self) -> Blake2bHash {
-        let mut hasher = Blake2bHasher::default();
-        self.key.serialize(&mut hasher).unwrap();
+impl SerializeContent for TrieProofNode {
+    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
+        let mut size = 0;
+        size += self.key.serialize(writer).unwrap();
+        size += 1;
         match &self.value {
             ProofValue::None => {
-                hasher.write_u8(0).unwrap();
+                writer.write_u8(0).unwrap();
             }
             ProofValue::Value(val) => {
-                hasher.write_u8(1).unwrap();
-                val.serialize::<u16, _>(&mut hasher).unwrap();
+                writer.write_u8(1).unwrap();
+                size += val.serialize::<u16, _>(writer).unwrap();
             }
             ProofValue::Hash(val_hash) => {
-                hasher.write_u8(2).unwrap();
-                val_hash.serialize(&mut hasher).unwrap();
+                writer.write_u8(2).unwrap();
+                size += val_hash.serialize(writer).unwrap();
             }
         }
-        self.children.serialize(&mut hasher).unwrap();
-        hasher.finish()
+        size += self.children.serialize(writer).unwrap();
+        Ok(size)
     }
 }
+
+impl Hash for TrieProofNode {}
 
 #[cfg(test)]
 mod test {
