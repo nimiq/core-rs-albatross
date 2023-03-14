@@ -4497,6 +4497,7 @@ dependencies = [
  "nimiq-vrf",
  "parking_lot 0.12.1",
  "rand 0.8.5",
+ "rayon",
  "tokio",
  "tokio-metrics",
  "tokio-stream",

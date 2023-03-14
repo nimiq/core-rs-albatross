@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use tokio::task;
 
 use nimiq_block::{TendermintIdentifier, TendermintVote};
@@ -32,13 +33,11 @@ impl<I: IdentityRegistry + Sync + Send + 'static> Verifier for TendermintVerifie
     type Contribution = TendermintContribution;
 
     async fn verify(&self, contribution: &Self::Contribution) -> VerificationResult {
-        // Store the JoinHandles so they can be awaited later.
-        let mut results: Vec<task::JoinHandle<VerificationResult>> = vec![];
-
         // Every different proposals contributions must be verified.
         // Note: Once spawned the tasks cannot be aborted. Thus all contributions will be verified even though it is not strictly necessary.
         // I.e once f contributions are against the proposal this node signed, it is already known that that proposal is not going to pass.
         // Likewise once a proposal has 2f+1 valid contributions it passed and no other contributions are needed.
+        let mut params = Vec::new();
         for (hash, multi_sig) in &contribution.contributions {
             // Create  the aggregated public key for this specific proposal hash's contributions.
             let mut aggregated_public_key = AggregatePublicKey::new();
@@ -51,33 +50,33 @@ impl<I: IdentityRegistry + Sync + Send + 'static> Verifier for TendermintVerifie
             }
 
             // create a thread that is allowed to block for this specific proposals hash contributions.
-            let contribution = multi_sig.clone();
             let vote = TendermintVote {
                 id: self.id.clone(),
                 proposal_hash: hash.clone(),
             };
 
-            results.push(task::spawn_blocking(move || {
-                if aggregated_public_key.verify_hash(vote.hash(), &contribution.signature) {
-                    VerificationResult::Ok
-                } else {
-                    VerificationResult::Forged
-                }
-            }));
+            params.push((aggregated_public_key, vote, multi_sig.clone()));
         }
+        let result = task::spawn_blocking(move || {
+            params
+                .into_par_iter()
+                .map(|(aggregated_public_key, vote, contribution)| {
+                    if aggregated_public_key.verify_hash(vote.hash(), &contribution.signature) {
+                        Ok(())
+                    } else {
+                        Err(())
+                    }
+                })
+                // If there is a single verification that failed, fail the whole verification as well.
+                .try_reduce(|| (), |(), ()| Ok(()))
+        })
+        .await
+        .expect("spawned verification task has panicked");
 
-        // Take all the join handles and await them.
-        // If there is a single join handle which returned a VerifactionResult != VerificationResult::Ok
-        // this Verificatioon failed as well with the given VerificationResult.
-        // let vec_iter = stream::iter(results);
-        while let Some(handle) = results.pop() {
-            let result = handle.await.expect("Spawned Verification Task has paniced");
-            if !result.is_ok() {
-                return result;
-            }
+        match result {
+            // All results were Ok. Verification is Ok.
+            Ok(()) => VerificationResult::Ok,
+            Err(()) => VerificationResult::Forged,
         }
-
-        // All results were awaited and Ok. Verification is Ok.
-        VerificationResult::Ok
     }
 }
