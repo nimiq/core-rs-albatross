@@ -10,7 +10,7 @@ use nimiq_network_interface::request::{MessageMarker, RequestCommon, RequestMark
 use nimiq_primitives::{key_nibbles::KeyNibbles, trie::trie_proof::TrieProof};
 use nimiq_transaction::history_proof::HistoryTreeProof;
 
-use crate::error::SubscribebyAdressErrors;
+use crate::error::SubscribeToAdressesError;
 
 mod handlers;
 
@@ -45,7 +45,7 @@ pub const MAX_REQUEST_BLOCKS_PROOF: u32 = 1000;
 /// The max number of Subscribe to address requests per peer.
 pub const MAX_REQUEST_SUBSCRIBE_BY_ADDRESS: u32 = 10;
 /// The max number of Address notifications per peer.
-pub const MAX_ADDRESS_NOTIFICATION: u32 = 100;
+pub const MAX_ADDRESS_NOTIFICATIONS: u32 = 100;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Checkpoint {
@@ -304,23 +304,21 @@ impl RequestCommon for RequestBlocksProof {
 /// Operations supported for the txn events by address subscription
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 #[repr(u8)]
-pub enum TxAddressSubscriptionOperation {
-    /// Start the subscription, with the provided addresses
-    Initiate,
-    /// Update a current subscription, remplacing the existing one with the provided addresses
-    Update,
-    /// Terminate the subscription
-    Terminate,
+pub enum AddressSubscriptionOperation {
+    /// Subscribe to some interesting addresses, to start receiving notifications about those addresses.
+    Subscribe,
+    /// Unsubscribe from some specific addresses, to stop receiving notifications from those addresses
+    Unsubscribe,
 }
 
 /// This request is used to initiate/update/terminate a subscription to events of some given addresses
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestSubscribeToAddress {
     /// The type of operation that is needed by the peer
-    pub operation: TxAddressSubscriptionOperation,
+    pub operation: AddressSubscriptionOperation,
     /// The addresses which are interesting to the peer
     #[beserial(len_type(u16, limit = 10))]
-    pub hashes: Vec<Address>,
+    pub addresses: Vec<Address>,
 }
 
 impl RequestCommon for RequestSubscribeToAddress {
@@ -333,7 +331,7 @@ impl RequestCommon for RequestSubscribeToAddress {
 #[derive(Serialize, Deserialize)]
 pub struct ResponseRequestTransactionsByAddress {
     /// Response used to specify if the request can be fullfiled or not
-    pub result: Result<(), SubscribebyAdressErrors>,
+    pub result: Result<(), SubscribeToAdressesError>,
 }
 
 /// This request is used to push an event to a peer
@@ -348,5 +346,5 @@ impl RequestCommon for PushAdressNotification {
     type Kind = MessageMarker;
     const TYPE_ID: u16 = 216;
     type Response = ();
-    const MAX_REQUESTS: u32 = MAX_ADDRESS_NOTIFICATION;
+    const MAX_REQUESTS: u32 = MAX_ADDRESS_NOTIFICATIONS;
 }

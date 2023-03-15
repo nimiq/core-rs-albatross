@@ -16,9 +16,9 @@ use nimiq_keys::Address;
 use nimiq_network_interface::request::Handle;
 use nimiq_network_interface::{network::Network, request::request_handler};
 
+use crate::messages::{AddressSubscriptionOperation, ResponseRequestTransactionsByAddress};
 use crate::messages::{PushAdressNotification, RequestSubscribeToAddress};
-use crate::messages::{ResponseRequestTransactionsByAddress, TxAddressSubscriptionOperation};
-use crate::SubscribebyAdressErrors::*;
+use crate::SubscribeToAdressesError::*;
 
 //The max number of peers that can be subscribed.
 pub const MAX_SUBSCRIBED_PEERS: usize = 5;
@@ -35,47 +35,39 @@ impl<N: Network>
         state: &Arc<RwLock<RemoteEventDispatcherState<N>>>,
     ) -> ResponseRequestTransactionsByAddress {
         match self.operation {
-            TxAddressSubscriptionOperation::Initiate => {
-                if state.read().contains_peer(&peer_id) {
-                    return ResponseRequestTransactionsByAddress {
-                        result: Err(InvalidOperation),
-                    };
-                }
-                if state.read().number_of_peers() > MAX_SUBSCRIBED_PEERS {
+            AddressSubscriptionOperation::Subscribe => {
+                if !state.read().contains_peer(&peer_id)
+                    && state.read().number_of_peers() > MAX_SUBSCRIBED_PEERS
+                {
+                    // If this is a subscription from a new peer and we already have to many peers we cannot accept new subscriptions
                     return ResponseRequestTransactionsByAddress {
                         result: Err(TooManyPeers),
                     };
                 }
 
-                if self.hashes.len() > MAX_SUBSCRIBED_PEERS_ADDRESSES {
+                //TODO: handle properly how many addresses we want to support
+                if self.addresses.len() > MAX_SUBSCRIBED_PEERS_ADDRESSES {
                     return ResponseRequestTransactionsByAddress {
                         result: Err(TooManyAddresses),
                     };
                 }
 
-                state.write().add_peer(&peer_id, self.hashes.clone());
+                state
+                    .write()
+                    .add_addresses(&peer_id, self.addresses.clone());
             }
-            TxAddressSubscriptionOperation::Update => {
-                if !state.read().contains_peer(&peer_id) {
-                    return ResponseRequestTransactionsByAddress {
-                        result: Err(InvalidOperation),
-                    };
-                }
-                if self.hashes.len() > MAX_SUBSCRIBED_PEERS_ADDRESSES {
-                    return ResponseRequestTransactionsByAddress {
-                        result: Err(TooManyAddresses),
-                    };
-                }
-                state.write().update_peer(&peer_id, self.hashes.clone());
-            }
-            TxAddressSubscriptionOperation::Terminate => {
+
+            AddressSubscriptionOperation::Unsubscribe => {
+                //If we don't know this peer we just unsuscribe
                 if !state.read().contains_peer(&peer_id) {
                     return ResponseRequestTransactionsByAddress {
                         result: Err(InvalidOperation),
                     };
                 }
 
-                state.write().remove_peer(&peer_id);
+                state
+                    .write()
+                    .remove_addresses(&peer_id, self.addresses.clone());
             }
         }
         ResponseRequestTransactionsByAddress { result: Ok(()) }
@@ -106,19 +98,17 @@ impl<N: Network> RemoteEventDispatcherState<N> {
         self.subscribed_peers.len()
     }
 
-    pub fn add_peer(&mut self, peer_id: &N::PeerId, addresses: Vec<Address>) {
-        if self.subscribed_peers.len() > MAX_SUBSCRIBED_PEERS {
-            return;
+    pub fn add_addresses(&mut self, peer_id: &N::PeerId, addresses: Vec<Address>) {
+        // If we already knew this peer, then we just update its interesting addresses
+        if let Some(interesting_addresses) = self.subscribed_peers.get_mut(peer_id) {
+            interesting_addresses.extend(addresses.iter().cloned())
+        } else {
+            // Otherwise, we insert a new entry for this peer
+            self.subscribed_peers
+                .insert(*peer_id, HashSet::from_iter(addresses.iter().cloned()));
         }
 
-        // If the peer was already subscribed, we cannot re add it.
-        if self.subscribed_peers.contains_key(peer_id) {
-            return;
-        }
-
-        self.subscribed_peers
-            .insert(*peer_id, HashSet::from_iter(addresses.iter().cloned()));
-
+        // Now we update our address mapping
         for address in addresses {
             if let Some(peers) = self.subscriptions.get_mut(&address) {
                 peers.insert(*peer_id);
@@ -128,32 +118,6 @@ impl<N: Network> RemoteEventDispatcherState<N> {
                 self.subscriptions.insert(address, new_peers);
             }
         }
-    }
-
-    pub fn update_peer(&mut self, peer_id: &N::PeerId, new_addresses: Vec<Address>) {
-        if !self.contains_peer(peer_id) {
-            return;
-        }
-
-        //1. Remove the old addresses
-        for address in self.subscribed_peers.get(peer_id).unwrap() {
-            if let Some(peers) = self.subscriptions.get_mut(address) {
-                peers.remove(peer_id);
-            }
-        }
-        //2. Add the new ones
-        for address in new_addresses.iter() {
-            if let Some(peers) = self.subscriptions.get_mut(&address) {
-                peers.insert(*peer_id);
-            } else {
-                let mut new_peers = HashSet::new();
-                new_peers.insert(*peer_id);
-                self.subscriptions.insert(address.clone(), new_peers);
-            }
-        }
-        //3. Update the list of interesting addresses for this peer
-        self.subscribed_peers
-            .insert(*peer_id, HashSet::from_iter(new_addresses.iter().cloned()));
     }
 
     pub fn remove_peer(&mut self, peer_id: &N::PeerId) {
@@ -167,6 +131,25 @@ impl<N: Network> RemoteEventDispatcherState<N> {
         }
         // Finally remove the peer
         self.subscribed_peers.remove(peer_id);
+    }
+
+    pub fn remove_addresses(&mut self, peer_id: &N::PeerId, addresses: Vec<Address>) {
+        if let Some(peer_addresses) = self.subscribed_peers.get_mut(peer_id) {
+            // Obtain the addresses that are interested to this peer and remove the ones that are no longer interesting
+            for address in &addresses {
+                peer_addresses.remove(address);
+            }
+
+            // If this peer doesn't have any interesting address left, then we just remove it
+            self.subscribed_peers.remove(peer_id);
+        }
+
+        // Remove the peer from the addresses
+        for address in addresses {
+            if let Some(peers) = self.subscriptions.get_mut(&address) {
+                peers.remove(peer_id);
+            }
+        }
     }
 
     pub fn get_peers(&self, address: &Address) -> Option<HashSet<N::PeerId>> {
@@ -201,7 +184,7 @@ impl<N: Network> RemoteEventDispatcher<N> {
     pub fn new(network: Arc<N>, blockchain: Arc<RwLock<Blockchain>>) -> Self {
         let state = Arc::new(RwLock::new(RemoteEventDispatcherState::new()));
 
-        // Spawn the request handler
+        // Spawn the network receiver that will take care of processing address subscription requests
         let stream = network.receive_requests::<RequestSubscribeToAddress>();
 
         tokio::spawn(request_handler(&network, stream, &Arc::clone(&state)));

@@ -24,16 +24,20 @@ use nimiq_transaction::{
 };
 
 use crate::messages::{
-    RequestBlocksProof, RequestTransactionReceiptsByAddress, RequestTransactionsProof,
-    RequestTrieProof, ResponseBlocksProof,
+    AddressSubscriptionOperation, RequestBlocksProof, RequestSubscribeToAddress,
+    RequestTransactionReceiptsByAddress, RequestTransactionsProof, RequestTrieProof,
+    ResponseBlocksProof,
 };
 use crate::ConsensusEvent;
+
+use crate::RemoteEvent;
 
 pub struct ConsensusProxy<N: Network> {
     pub blockchain: BlockchainProxy,
     pub network: Arc<N>,
     pub(crate) established_flag: Arc<AtomicBool>,
     pub(crate) events: BroadcastSender<ConsensusEvent>,
+    pub(crate) remote_events: BroadcastSender<RemoteEvent>,
 }
 
 impl<N: Network> Clone for ConsensusProxy<N> {
@@ -43,6 +47,7 @@ impl<N: Network> Clone for ConsensusProxy<N> {
             network: Arc::clone(&self.network),
             established_flag: Arc::clone(&self.established_flag),
             events: self.events.clone(),
+            remote_events: self.remote_events.clone(),
         }
     }
 }
@@ -61,6 +66,10 @@ impl<N: Network> ConsensusProxy<N> {
 
     pub fn subscribe_events(&self) -> BroadcastStream<ConsensusEvent> {
         BroadcastStream::new(self.events.subscribe())
+    }
+
+    pub fn subscribe_remote_events(&self) -> BroadcastStream<RemoteEvent> {
+        BroadcastStream::new(self.remote_events.subscribe())
     }
 
     pub async fn request_transaction_receipts_by_address(
@@ -438,5 +447,65 @@ impl<N: Network> ConsensusProxy<N> {
         }
 
         Ok(verified_accounts.into_iter().collect())
+    }
+
+    pub async fn subscribe_to_addresses(
+        &self,
+        addresses: Vec<Address>,
+        min_peers: usize,
+        peer_id: Option<N::PeerId>,
+    ) -> Result<(), RequestError> {
+        //If we are provided a peer_id we perform the request only to this specific peer
+        let peers = if let Some(peer_id) = peer_id {
+            //TODO we need to check if this peer_id can satisfy our request
+            vec![peer_id]
+        } else {
+            // We tell the network to provide us with a vector that contains all the connected peers that support such services
+            // Note: If the network could not provide enough peers that satisfies our requirement, then an error would be returned
+            self.network
+                .get_peers_by_services(Services::MEMPOOL, min_peers)
+                .await
+                .map_err(|error| {
+                    log::error!(
+                        err = %error,
+                        "The transactions by address request couldn't be fulfilled"
+                    );
+
+                    RequestError::OutboundRequest(OutboundRequestError::SendError)
+                })?
+        };
+
+        // Subscribe to all peers that could provide the necessary services
+        for peer_id in peers {
+            let response = self
+                .network
+                .request::<RequestSubscribeToAddress>(
+                    RequestSubscribeToAddress {
+                        operation: AddressSubscriptionOperation::Subscribe,
+                        addresses: addresses.clone(),
+                    },
+                    peer_id,
+                )
+                .await;
+
+            match response {
+                Ok(response) => match response.result {
+                    Ok(_) => {
+                        //Done, we are subscribed at least to one peer, continue with the next one
+                        continue;
+                    }
+                    Err(_) => {
+                        // If there was en error subscribing to a peer, we just continue with the next one
+                        // Here we could do something with the specific error conditions of the failed subscription
+                        continue;
+                    }
+                },
+                Err(_) => {
+                    // Try with the next peer
+                    continue;
+                }
+            }
+        }
+        Ok(())
     }
 }

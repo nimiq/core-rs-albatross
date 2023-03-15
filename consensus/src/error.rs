@@ -19,17 +19,17 @@ pub enum SyncError {
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Error, Eq, PartialEq, Serialize, Deserialize)]
-pub enum SubscribebyAdressErrors {
-    /// Already attending to many peers
+pub enum SubscribeToAdressesError {
+    /// Already attending too many peers
     #[error("TooManyPeers")]
     TooManyPeers = 1,
-    /// Already attending to many peers
+    /// Already attending too many peers
     #[error("TooManyAddresses")]
     TooManyAddresses = 2,
     /// Some of the provided parameters/operations was invalid
-    #[error("InvalidOperation")]
+    #[error("Invalid operation")]
     InvalidOperation = 3,
-    /// Another type of error
+    /// Another type of error not covered by the previous error types
     #[error("Other")]
     Other = 4,
 }

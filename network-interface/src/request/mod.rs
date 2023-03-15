@@ -197,6 +197,11 @@ pub trait Handle<N: Network, Response, T> {
     fn handle(&self, peer_id: N::PeerId, context: &T) -> Response;
 }
 
+/// This trait defines the behaviour when receiving a message
+pub trait MessageHandle<N: Network, T> {
+    fn message_handle(&self, peer_id: N::PeerId, context: &T);
+}
+
 const MAX_CONCURRENT_HANDLERS: usize = 64;
 
 pub fn request_handler<
@@ -236,6 +241,37 @@ pub fn request_handler<
                                 err
                             );
                         };
+                    })
+                    .await
+                    .expect("Request handler panicked")
+                }
+            })
+            .await
+    }
+}
+
+pub fn message_handler<
+    T: Send + Sync + Clone + 'static,
+    Msg: MessageHandle<N, T> + Message,
+    N: Network,
+>(
+    _network: &Arc<N>,
+    stream: BoxStream<'static, (Msg, N::PeerId)>,
+    req_environment: &T,
+) -> impl Future<Output = ()> {
+    let req_environment = req_environment.clone();
+    async move {
+        stream
+            .for_each_concurrent(MAX_CONCURRENT_HANDLERS, |(msg, peer_id)| {
+                let req_environment = req_environment.clone();
+                async move {
+                    let req_environment = req_environment.clone();
+
+                    tokio::spawn(async move {
+                        log::trace!("{:?} {:#?}", peer_id, msg);
+
+                        //Messages do not have a response (so the response is ignored)
+                        msg.message_handle(peer_id, &req_environment);
                     })
                     .await
                     .expect("Request handler panicked")
