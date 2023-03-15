@@ -199,7 +199,6 @@ pub fn initialize_logging(
     }
     #[cfg(not(feature = "loki"))]
     tracing_subscriber::registry()
-        .with(rotating_layer)
         .with(tokio_console_layer)
         .with(
             tracing_subscriber::fmt::layer()
