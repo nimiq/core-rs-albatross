@@ -58,11 +58,10 @@ impl<N: Network> ZKProver<N> {
         let network_info = NetworkInfo::from_network_id(blockchain.read().network_id());
         let genesis_block = network_info.genesis_block().unwrap_macro();
 
-        let public_keys = zkp_state.read().latest_pks.clone();
         let genesis_state = state_commitment(
             genesis_block.block_number(),
-            genesis_block.hash().into(),
-            public_keys,
+            &genesis_block.hash().into(),
+            &genesis_block.pk_tree_root().unwrap(),
         );
 
         // Prepends the election blocks from the blockchain for which we don't have a proof yet

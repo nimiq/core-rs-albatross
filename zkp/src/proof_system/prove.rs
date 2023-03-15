@@ -80,7 +80,7 @@ pub fn prove(
     let initial_pk_tree_root = pk_tree_construct(initial_pks.clone());
 
     // Calculate final public key tree root.
-    let final_pk_tree_root = pk_tree_construct(final_pks.clone());
+    let final_pk_tree_root = pk_tree_construct(final_pks);
 
     const NUM_PROOFS: usize = 67;
     let mut current_proof = 0;
@@ -99,7 +99,6 @@ pub fn prove(
             &initial_pks,
             &initial_pk_tree_root,
             initial_header_hash,
-            &final_pks,
             &final_pk_tree_root,
             &block,
             debug_mode,
@@ -119,9 +118,9 @@ pub fn prove(
 
         prove_macro_block_wrapper(
             rng,
-            &initial_pks,
+            &initial_pk_tree_root,
             initial_header_hash,
-            &final_pks,
+            &final_pk_tree_root,
             &block,
             debug_mode,
             prover_keys_path,
@@ -139,9 +138,9 @@ pub fn prove(
 
         prove_merger(
             rng,
-            &initial_pks,
+            &initial_pk_tree_root,
             initial_header_hash,
-            &final_pks,
+            &final_pk_tree_root,
             &block,
             genesis_data.clone(),
             debug_mode,
@@ -159,9 +158,9 @@ pub fn prove(
 
     let proof = prove_merger_wrapper(
         rng,
-        &initial_pks,
+        &initial_pk_tree_root,
         initial_header_hash,
-        &final_pks,
+        &final_pk_tree_root,
         &block,
         genesis_data,
         debug_mode,
@@ -661,7 +660,6 @@ fn prove_macro_block<R: CryptoRng + Rng>(
     initial_pks: &[G2MNT6],
     initial_pk_tree_root: &[u8; 95],
     initial_header_hash: [u8; 32],
-    final_pks: &[G2MNT6],
     final_pk_tree_root: &[u8; 95],
     block: &MacroBlock,
     debug_mode: bool,
@@ -718,12 +716,12 @@ fn prove_macro_block<R: CryptoRng + Rng>(
     // Calculate the inputs.
     let initial_state_commitment = state_commitment(
         block.block_number - Policy::blocks_per_epoch(),
-        initial_header_hash,
-        initial_pks.to_vec(),
+        &initial_header_hash,
+        initial_pk_tree_root,
     );
 
     let final_state_commitment =
-        state_commitment(block.block_number, block.header_hash, final_pks.to_vec());
+        state_commitment(block.block_number, &block.header_hash, final_pk_tree_root);
 
     // Create the circuit.
     let circuit = MacroBlockCircuit::new(
@@ -772,9 +770,9 @@ fn prove_macro_block<R: CryptoRng + Rng>(
 
 fn prove_macro_block_wrapper<R: CryptoRng + Rng>(
     rng: &mut R,
-    initial_pks: &[G2MNT6],
+    initial_pk_tree_root: &[u8; 95],
     initial_header_hash: [u8; 32],
-    final_pks: &[G2MNT6],
+    final_pk_tree_root: &[u8; 95],
     block: &MacroBlock,
     debug_mode: bool,
     path: &Path,
@@ -801,12 +799,12 @@ fn prove_macro_block_wrapper<R: CryptoRng + Rng>(
     // Calculate the inputs.
     let initial_state_commitment = state_commitment(
         block.block_number - Policy::blocks_per_epoch(),
-        initial_header_hash,
-        initial_pks.to_vec(),
+        &initial_header_hash,
+        initial_pk_tree_root,
     );
 
     let final_state_commitment =
-        state_commitment(block.block_number, block.header_hash, final_pks.to_vec());
+        state_commitment(block.block_number, &block.header_hash, final_pk_tree_root);
 
     // Create the circuit.
     let circuit = MacroBlockWrapperCircuit::new(
@@ -847,9 +845,9 @@ fn prove_macro_block_wrapper<R: CryptoRng + Rng>(
 
 fn prove_merger<R: CryptoRng + Rng>(
     rng: &mut R,
-    initial_pks: &[G2MNT6],
+    initial_pk_tree_root: &[u8; 95],
     initial_header_hash: [u8; 32],
-    final_pks: &[G2MNT6],
+    final_pk_tree_root: &[u8; 95],
     block: &MacroBlock,
     genesis_data: Option<(Proof<MNT6_753>, [u8; 95])>,
     debug_mode: bool,
@@ -881,8 +879,8 @@ fn prove_merger<R: CryptoRng + Rng>(
     // Get the intermediate state commitment.
     let intermediate_state_commitment = state_commitment(
         block.block_number - Policy::blocks_per_epoch(),
-        initial_header_hash,
-        initial_pks.to_vec(),
+        &initial_header_hash,
+        initial_pk_tree_root,
     );
 
     // Create the proof for the previous epoch, the initial state commitment and the genesis flag
@@ -902,7 +900,7 @@ fn prove_merger<R: CryptoRng + Rng>(
 
     // Calculate the inputs.
     let final_state_commitment =
-        state_commitment(block.block_number, block.header_hash, final_pks.to_vec());
+        state_commitment(block.block_number, &block.header_hash, final_pk_tree_root);
 
     let vk_commitment = vk_commitment(vk_merger_wrapper.clone());
 
@@ -952,9 +950,9 @@ fn prove_merger<R: CryptoRng + Rng>(
 
 fn prove_merger_wrapper<R: CryptoRng + Rng>(
     rng: &mut R,
-    initial_pks: &[G2MNT6],
+    initial_pk_tree_root: &[u8; 95],
     initial_header_hash: [u8; 32],
-    final_pks: &[G2MNT6],
+    final_pk_tree_root: &[u8; 95],
     block: &MacroBlock,
     genesis_data: Option<(Proof<MNT6_753>, [u8; 95])>,
     debug_mode: bool,
@@ -987,14 +985,14 @@ fn prove_merger_wrapper<R: CryptoRng + Rng>(
     let initial_state_commitment = match genesis_data {
         None => state_commitment(
             block.block_number - Policy::blocks_per_epoch(),
-            initial_header_hash,
-            initial_pks.to_vec(),
+            &initial_header_hash,
+            initial_pk_tree_root,
         ),
         Some((_, x)) => x,
     };
 
     let final_state_commitment =
-        state_commitment(block.block_number, block.header_hash, final_pks.to_vec());
+        state_commitment(block.block_number, &block.header_hash, final_pk_tree_root);
 
     let vk_commitment = vk_commitment(vk_merger_wrapper);
 

@@ -2,7 +2,7 @@ use ark_crypto_primitives::snark::SNARK;
 use ark_ec::mnt6::MNT6;
 use ark_ff::ToConstraintField;
 use ark_groth16::{Groth16, Proof, VerifyingKey};
-use ark_mnt6_753::{Config, G2Projective as G2MNT6, MNT6_753};
+use ark_mnt6_753::{Config, MNT6_753};
 
 use nimiq_zkp_primitives::{state_commitment, vk_commitment, NanoZKPError};
 
@@ -14,11 +14,11 @@ pub fn verify(
     initial_block_number: u32,
     // The header hash of the initial block. Most likely, it will be the genesis block.
     initial_header_hash: [u8; 32],
-    // The public keys of the validators of the initial block. Most likely, it will be the genesis
+    // The public key tree root of the validators of the initial block. Most likely, it will be the genesis
     // block.
     // Note that we are referring to the validators that are selected in the initial block, not
     // the validators that signed the initial block.
-    initial_pks: Vec<G2MNT6>,
+    initial_pk_tree_root: &[u8; 95],
     // The block number of the final block.
     final_block_number: u32,
     // The header hash of the final block.
@@ -26,7 +26,7 @@ pub fn verify(
     // The public keys of the validators of the final block.
     // Note that we are referring to the validators that are selected in the final block, not
     // the validators that signed the final block.
-    final_pks: Vec<G2MNT6>,
+    final_pk_tree_root: &[u8; 95],
     // The SNARK proof for this circuit.
     proof: Proof<MNT6_753>,
     verifying_key: &VerifyingKey<MNT6<Config>>,
@@ -35,13 +35,17 @@ pub fn verify(
     let mut inputs = vec![];
 
     inputs.append(
-        &mut state_commitment(initial_block_number, initial_header_hash, initial_pks)
-            .to_field_elements()
-            .unwrap(),
+        &mut state_commitment(
+            initial_block_number,
+            &initial_header_hash,
+            initial_pk_tree_root,
+        )
+        .to_field_elements()
+        .unwrap(),
     );
 
     inputs.append(
-        &mut state_commitment(final_block_number, final_header_hash, final_pks)
+        &mut state_commitment(final_block_number, &final_header_hash, final_pk_tree_root)
             .to_field_elements()
             .unwrap(),
     );

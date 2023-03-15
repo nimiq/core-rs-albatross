@@ -60,7 +60,7 @@ impl MacroBlock {
     }
 
     /// Calculates the PKTree root from the given validators.
-    pub fn pk_tree_root(validators: &Validators) -> Result<Vec<u8>, BlockError> {
+    pub fn calc_pk_tree_root(validators: &Validators) -> Result<Vec<u8>, BlockError> {
         // Get the public keys.
         let public_keys = validators.voting_keys_g2();
 
@@ -101,6 +101,13 @@ impl MacroBlock {
     /// Returns the epoch number of this macro block.
     pub fn epoch_number(&self) -> u32 {
         Policy::epoch_at(self.header.block_number)
+    }
+
+    /// Returns the pk tree root.
+    pub fn pk_tree_root(&self) -> Option<[u8; 95]> {
+        self.body.as_ref()?.pk_tree_root.as_ref()?[..]
+            .try_into()
+            .ok()
     }
 
     /// Verifies that the block is valid for the given validators.
@@ -222,7 +229,7 @@ impl MacroHeader {
                     .expect("Validators must be present in election blocks");
                 // Start the calculation
                 root = Some(
-                    MacroBlock::pk_tree_root(validators)
+                    MacroBlock::calc_pk_tree_root(validators)
                         .expect("pk tree root calculation for macro blocks must not fail."),
                 );
             }
@@ -271,6 +278,7 @@ pub struct MacroBody {
     /// The root of a special Merkle tree over the next validator's voting keys. It is necessary to
     /// verify the zero-knowledge proofs used in the light macro sync.
     /// Is only Some when the macro block is an election block.
+    /// TODO: Change to fixed size array [u8; 95]
     #[beserial(len_type(u8, limit = 96))]
     pub pk_tree_root: Option<Vec<u8>>,
     /// A bitset representing which validator slots had their reward slashed at the time when this
@@ -302,7 +310,7 @@ impl MacroBody {
         // If this is an election block and check_pk_tree_root is set,
         // check if the pk_tree_root matches the validators.
         if is_election && check_pk_tree_root {
-            match MacroBlock::pk_tree_root(self.validators.as_ref().unwrap()) {
+            match MacroBlock::calc_pk_tree_root(self.validators.as_ref().unwrap()) {
                 Ok(pk_tree_root) => {
                     if pk_tree_root != *self.pk_tree_root.as_ref().unwrap() {
                         return Err(BlockError::InvalidPkTreeRoot);

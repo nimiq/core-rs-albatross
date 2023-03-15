@@ -26,6 +26,7 @@ pub fn create_test_blocks(
 ) -> (
     Vec<G2MNT6>,
     [u8; 32],
+    [u8; 95],
     Vec<G2MNT6>,
     MacroBlock,
     Option<[u8; 95]>,
@@ -99,12 +100,14 @@ pub fn create_test_blocks(
         }
     }
 
+    let initial_pk_tree_root = pk_tree_construct(initial_pks.clone());
+
     // If this is the first index (genesis), also return the genesis state commitment.
     let genesis_state_commitment = if index == 0 {
         Some(state_commitment(
             0,
-            initial_header_hash,
-            initial_pks.clone(),
+            &initial_header_hash,
+            &initial_pk_tree_root,
         ))
     } else {
         None
@@ -114,6 +117,7 @@ pub fn create_test_blocks(
     (
         initial_pks,
         initial_header_hash,
+        initial_pk_tree_root,
         final_pks,
         block,
         genesis_state_commitment,

@@ -44,7 +44,7 @@ fn fully_compressed(bench: &mut Bencher) {
         .collect();
     let validators = Validators::new(compressed_validators);
 
-    bench.iter(|| MacroBlock::pk_tree_root(&validators))
+    bench.iter(|| MacroBlock::calc_pk_tree_root(&validators))
 }
 
 /// We compute the pk tree root in the following scenario:
@@ -53,7 +53,7 @@ fn fully_compressed(bench: &mut Bencher) {
 fn fully_uncompressed(bench: &mut Bencher) {
     let validators = generate_uncompressed_validators();
 
-    bench.iter(|| MacroBlock::pk_tree_root(&validators))
+    bench.iter(|| MacroBlock::calc_pk_tree_root(&validators))
 }
 
 benchmark_group!(benches, fully_compressed, fully_uncompressed);

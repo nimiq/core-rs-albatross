@@ -224,7 +224,7 @@ impl Blockchain {
                     // its hash against the block header.
                     let real_pk_tree_root = real_validators
                         .as_ref()
-                        .and_then(|validators| MacroBlock::pk_tree_root(validators).ok());
+                        .and_then(|validators| MacroBlock::calc_pk_tree_root(validators).ok());
 
                     let real_body = MacroBody {
                         validators: real_validators,

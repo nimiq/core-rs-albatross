@@ -28,6 +28,6 @@ fn main() {
 
     for i in 0..50 {
         println!("{i}");
-        MacroBlock::pk_tree_root(&validators).expect("PK tree root building failed");
+        MacroBlock::calc_pk_tree_root(&validators).expect("PK tree root building failed");
     }
 }

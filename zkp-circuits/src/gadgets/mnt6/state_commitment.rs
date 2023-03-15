@@ -93,11 +93,11 @@ mod tests {
         let mut header_hash = [0u8; 32];
         rng.fill_bytes(&mut header_hash);
 
-        // Evaluate state commitment using the primitive version.
-        let primitive_comm = &state_commitment(block_number, header_hash, public_keys.clone());
-
         // Construct the Merkle tree over the public keys.
         let pk_tree_root = pk_tree_construct(public_keys);
+
+        // Evaluate state commitment using the primitive version.
+        let primitive_comm = &state_commitment(block_number, &header_hash, &pk_tree_root);
 
         // Allocate the block number in the circuit.
         let block_number_var = UInt32::new_witness(cs.clone(), || Ok(block_number)).unwrap();
