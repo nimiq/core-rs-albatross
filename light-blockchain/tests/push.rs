@@ -91,7 +91,7 @@ impl TemporaryLightBlockProducer {
 }
 
 pub fn expect_push_micro_block(config: BlockConfig, expected_res: Result<PushResult, PushError>) {
-    if !config.macro_only {
+    if config.test_micro {
         push_micro_after_macro(&config, &expected_res);
         push_micro_after_micro(&config, &expected_res);
         push_simple_skip_block(&config, &expected_res);
@@ -101,7 +101,7 @@ pub fn expect_push_micro_block(config: BlockConfig, expected_res: Result<PushRes
         push_rebranch_fork(&config, &expected_res);
     }
 
-    if !config.micro_only {
+    if config.test_macro {
         simply_push_macro_block(&config, &expected_res);
     }
 }
@@ -341,7 +341,8 @@ fn it_validates_parent_hash() {
 fn it_validates_block_number() {
     expect_push_micro_block(
         BlockConfig {
-            micro_only: true,
+            test_macro: false,
+            test_election: false,
             block_number_offset: 1,
             ..Default::default()
         },
@@ -375,7 +376,7 @@ fn it_validates_seed() {
 fn it_validates_parent_election_hash() {
     expect_push_micro_block(
         BlockConfig {
-            macro_only: true,
+            test_micro: false,
             parent_election_hash: Some(Blake2bHash::default()),
             ..Default::default()
         },
@@ -389,7 +390,7 @@ fn it_validates_parent_election_hash() {
 fn it_validates_tendermint_round_number() {
     expect_push_micro_block(
         BlockConfig {
-            macro_only: true,
+            test_micro: false,
             tendermint_round: Some(3),
             ..Default::default()
         },

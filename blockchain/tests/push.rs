@@ -10,7 +10,7 @@ use nimiq_test_utils::block_production::TemporaryBlockProducer;
 use nimiq_vrf::VrfSeed;
 
 pub fn expect_push_micro_block(config: BlockConfig, expected_res: Result<PushResult, PushError>) {
-    if !config.macro_only {
+    if config.test_micro {
         push_micro_after_macro(&config, &expected_res);
         push_micro_after_micro(&config, &expected_res);
         push_simple_skip_block(&config, &expected_res);
@@ -20,8 +20,12 @@ pub fn expect_push_micro_block(config: BlockConfig, expected_res: Result<PushRes
         push_rebranch_fork(&config, &expected_res);
     }
 
-    if !config.micro_only {
+    if config.test_macro {
         simply_push_macro_block(&config, &expected_res);
+    }
+
+    if config.test_election {
+        simply_push_election_block(&config, &expected_res);
     }
 }
 
@@ -200,6 +204,27 @@ fn simply_push_macro_block(config: &BlockConfig, expected_res: &Result<PushResul
     assert_eq!(&temp_producer.push(block.clone()), expected_res);
 }
 
+fn simply_push_election_block(config: &BlockConfig, expected_res: &Result<PushResult, PushError>) {
+    let temp_producer = TemporaryBlockProducer::new();
+
+    for _ in 0..Policy::blocks_per_epoch() - 1 {
+        let block = temp_producer.next_block(vec![], false);
+        temp_producer.push(block.clone()).unwrap();
+    }
+
+    let block = {
+        let blockchain = temp_producer.blockchain.read();
+        next_macro_block(
+            &temp_producer.producer.signing_key,
+            &temp_producer.producer.voting_key,
+            &blockchain,
+            config,
+        )
+    };
+
+    assert_eq!(&temp_producer.push(block.clone()), expected_res);
+}
+
 #[test]
 fn it_works_with_valid_blocks() {
     let config = BlockConfig::default();
@@ -260,7 +285,8 @@ fn it_validates_parent_hash() {
 fn it_validates_block_number() {
     expect_push_micro_block(
         BlockConfig {
-            micro_only: true,
+            test_macro: false,
+            test_election: false,
             block_number_offset: 1,
             ..Default::default()
         },
@@ -344,7 +370,7 @@ fn it_validates_history_root() {
 fn it_validates_parent_election_hash() {
     expect_push_micro_block(
         BlockConfig {
-            macro_only: true,
+            test_micro: false,
             parent_election_hash: Some(Blake2bHash::default()),
             ..Default::default()
         },
@@ -358,10 +384,23 @@ fn it_validates_parent_election_hash() {
 fn it_validates_tendermint_round_number() {
     expect_push_micro_block(
         BlockConfig {
-            macro_only: true,
+            test_micro: false,
             tendermint_round: Some(3),
             ..Default::default()
         },
         Err(InvalidBlock(BlockError::InvalidJustification)),
+    );
+}
+
+#[test]
+fn it_validates_interlink() {
+    expect_push_micro_block(
+        BlockConfig {
+            test_micro: false,
+            test_macro: false,
+            interlink: Some(None),
+            ..Default::default()
+        },
+        Err(InvalidBlock(BlockError::InvalidInterlink)),
     );
 }

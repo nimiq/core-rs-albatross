@@ -1,4 +1,4 @@
-use nimiq_block::{Block, BlockError, MacroBlock, MacroBody};
+use nimiq_block::{Block, BlockError, BlockHeader, MacroBlock, MacroBody};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushError};
 use nimiq_database::Transaction as DBTransaction;
 use nimiq_hash::{Blake2bHash, Hash};
@@ -38,6 +38,28 @@ impl Blockchain {
         // election block.
         if block.is_macro() {
             block.verify_macro_successor(&self.election_head())?;
+        }
+
+        // Verify the interlink (or its absence)
+        if let BlockHeader::Macro(macro_header) = block.header() {
+            if block.is_election() {
+                if let Some(interlink) = &macro_header.interlink {
+                    let expected_interlink = self.election_head().get_next_interlink().unwrap();
+
+                    if interlink != &expected_interlink {
+                        warn!(reason = "Bad Interlink", "Rejecting block");
+                        return Err(PushError::InvalidBlock(BlockError::InvalidInterlink));
+                    }
+                } else {
+                    warn!(reason = "Missing Interlink", "Rejecting block");
+                    return Err(PushError::InvalidBlock(BlockError::InvalidInterlink));
+                }
+            }
+
+            if !block.is_election() && macro_header.interlink.is_some() {
+                warn!(reason = "Superfluous Interlink", "Rejecting block");
+                return Err(PushError::InvalidBlock(BlockError::InvalidInterlink));
+            }
         }
 
         // In trusted don't do slot related checks since they are mostly signature verifications

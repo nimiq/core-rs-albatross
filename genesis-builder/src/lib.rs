@@ -240,6 +240,7 @@ impl GenesisBuilder {
                 .map_err(|_| GenesisBuilderError::InvalidTimestamp(timestamp))?,
             parent_hash: [0u8; 32].into(),
             parent_election_hash: [0u8; 32].into(),
+            interlink: Some(vec![]),
             seed,
             extra_data: vec![],
             state_root,

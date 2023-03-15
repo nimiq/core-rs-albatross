@@ -17,7 +17,7 @@ use nimiq_transaction::{
 };
 use nimiq_vrf::VrfSeed;
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct BlockConfig {
     pub version: Option<u16>,
     pub block_number_offset: i32,
@@ -33,15 +33,45 @@ pub struct BlockConfig {
     pub skip_block_proof: Option<SkipBlockProof>,
 
     // Micro only
-    pub micro_only: bool,
+    pub test_micro: bool,
     pub fork_proofs: Vec<ForkProof>,
     pub transactions: Vec<Transaction>,
     pub extra_data: Vec<u8>,
 
     // Macro only
-    pub macro_only: bool,
+    pub test_macro: bool,
     pub parent_election_hash: Option<Blake2bHash>,
     pub tendermint_round: Option<u32>,
+
+    // Election only
+    pub test_election: bool,
+    pub interlink: Option<Option<Vec<Blake2bHash>>>,
+}
+
+impl Default for BlockConfig {
+    fn default() -> Self {
+        BlockConfig {
+            version: None,
+            block_number_offset: 0,
+            timestamp_offset: 0,
+            parent_hash: None,
+            seed: None,
+            missing_body: false,
+            body_hash: None,
+            state_root: None,
+            history_root: None,
+            skip_block_proof: None,
+            test_micro: true,
+            fork_proofs: vec![],
+            transactions: vec![],
+            extra_data: vec![],
+            test_macro: true,
+            parent_election_hash: None,
+            tendermint_round: None,
+            test_election: true,
+            interlink: None,
+        }
+    }
 }
 
 /// `config` can be used to generate blocks that can be invalid in some way. config == Default creates a valid block.
@@ -238,6 +268,14 @@ fn next_macro_block_proposal(
         .clone()
         .unwrap_or_else(|| blockchain.election_head_hash());
 
+    let interlink = config.interlink.clone().unwrap_or_else(|| {
+        if Policy::is_election_block_at(block_number) {
+            Some(blockchain.election_head().get_next_interlink().unwrap())
+        } else {
+            None
+        }
+    });
+
     let seed = config
         .seed
         .clone()
@@ -250,6 +288,7 @@ fn next_macro_block_proposal(
         timestamp,
         parent_hash,
         parent_election_hash,
+        interlink,
         seed,
         extra_data: config.extra_data.clone(),
         state_root: Blake2bHash::default(),

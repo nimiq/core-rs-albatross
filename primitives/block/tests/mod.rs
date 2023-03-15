@@ -11,6 +11,9 @@ use nimiq_primitives::slots::ValidatorsBuilder;
 use nimiq_test_log::test;
 use nimiq_vrf::VrfSeed;
 
+mod block_proof;
+mod macro_block;
+
 #[test]
 fn it_can_convert_macro_block_into_slots() {
     let hash = Blake2bHasher::default().digest(&[]);
@@ -91,6 +94,7 @@ fn it_can_convert_macro_block_into_slots() {
             timestamp: 0,
             parent_hash: hash.clone(),
             parent_election_hash: hash.clone(),
+            interlink: None,
             seed: VrfSeed::default(),
             extra_data: vec![],
             state_root: hash.clone(),

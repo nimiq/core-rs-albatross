@@ -238,6 +238,12 @@ impl BlockProducer {
         // Get the hash of the latest election macro block.
         let parent_election_hash = blockchain.election_head_hash();
 
+        let interlink = if Policy::is_election_block_at(block_number) {
+            Some(blockchain.election_head().get_next_interlink().unwrap())
+        } else {
+            None
+        };
+
         // Calculate the seed for this block by signing the previous block seed with the validator
         // key.
         let seed = blockchain
@@ -255,6 +261,7 @@ impl BlockProducer {
             timestamp,
             parent_hash,
             parent_election_hash,
+            interlink,
             seed,
             extra_data,
             state_root: Blake2bHash::default(),
@@ -287,7 +294,7 @@ impl BlockProducer {
             blockchain.create_reward_transactions(state, &header, &staking_contract);
 
         // If this is an election block, calculate the validator set for the next epoch.
-        let validators = if Policy::is_election_block_at(blockchain.block_number() + 1) {
+        let validators = if Policy::is_election_block_at(block_number) {
             Some(blockchain.next_validators(&header.seed))
         } else {
             None

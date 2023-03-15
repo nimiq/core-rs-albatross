@@ -383,6 +383,7 @@ fn test_verify_election_macro_body() {
         timestamp: 0,
         parent_hash: Blake2bHash::default(),
         parent_election_hash: Blake2bHash::default(),
+        interlink: Some(vec![]),
         seed: VrfSeed::default(),
         extra_data: vec![0; 30],
         state_root: Blake2bHash::default(),

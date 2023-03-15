@@ -7,6 +7,7 @@ use tokio_stream::wrappers::BroadcastStream;
 
 use beserial::Deserialize;
 use nimiq_account::Account;
+use nimiq_block::Block;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::Blake2bHash;
@@ -23,7 +24,8 @@ use nimiq_transaction::{
 };
 
 use crate::messages::{
-    RequestTransactionReceiptsByAddress, RequestTransactionsProof, RequestTrieProof,
+    RequestBlocksProof, RequestTransactionReceiptsByAddress, RequestTransactionsProof,
+    RequestTrieProof, ResponseBlocksProof,
 };
 use crate::ConsensusEvent;
 
@@ -229,9 +231,9 @@ impl<N: Network> ConsensusProxy<N> {
             // Now we request proofs for each block and its hashes, according to its classification
             for (block_number, hashes) in hashes_by_block {
                 log::debug!(
-                    block_number=%block_number,
-                    "Performing txn proof request for block number",
-                );
+                block_number=%block_number,
+                "Performing txn proof request for block number",
+                    );
                 let response = self
                     .network
                     .request::<RequestTransactionsProof>(
@@ -248,12 +250,47 @@ impl<N: Network> ConsensusProxy<N> {
                         if let Some(proof) = proof_response.proof {
                             if let Some(block) = proof_response.block {
                                 log::debug!(peer=%peer_id,"New txns proof and block from peer");
-
-                                // TODO: We are currently assuming that the provided block was included in the chain
-                                // but we also need some additional information to prove the block is part of the chain.
-                                let verification_result = proof
+                                let mut verification_result = proof
                                     .verify(block.history_root().clone())
                                     .map_or(false, |result| result);
+
+                                // Verify block inclusion
+                                if block.block_number() <= election_head_number {
+                                    // Cache election head such that it can't change between request and response
+                                    let election_head = self.blockchain.read().election_head();
+
+                                    // Request block inclusion proofs for txs of previous epochs
+                                    let block_proof = {
+                                        if let Ok(ResponseBlocksProof {
+                                            proof: Some(block_proof),
+                                        }) = self
+                                            .network
+                                            .request::<RequestBlocksProof>(
+                                                RequestBlocksProof {
+                                                    election_head: election_head.block_number(),
+                                                    blocks: vec![block.block_number()],
+                                                },
+                                                peer_id,
+                                            )
+                                            .await
+                                        {
+                                            block_proof
+                                        } else {
+                                            log::debug!(peer=%peer_id, "Error requesting block proof");
+                                            continue;
+                                        }
+                                    };
+
+                                    // Verify that the block is part of the chain using the block inclusion proof
+                                    if let Block::Macro(macro_block) = block {
+                                        verification_result = verification_result
+                                            && block_proof
+                                                .is_block_proven(&election_head, &macro_block);
+                                    } else {
+                                        log::debug!(peer=%peer_id, "Macro block expected in tx proof response");
+                                        continue;
+                                    }
+                                }
 
                                 if verification_result {
                                     for tx in proof.history {

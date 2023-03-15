@@ -78,6 +78,38 @@ impl MacroBlock {
         Ok(pk_tree_construct(public_keys).to_vec())
     }
 
+    /// Computes the next interlink from self.header.interlink
+    pub fn get_next_interlink(&self) -> Result<Vec<Blake2bHash>, BlockError> {
+        if !self.is_election_block() {
+            return Err(BlockError::InvalidBlockType);
+        }
+        let mut interlink = self
+            .header
+            .interlink
+            .clone()
+            .expect("Election blocks have interlinks");
+        let number_hashes_to_update = if self.block_number() == 0 {
+            // 0.trailing_zeros() would be 32, thus we need an exception for it
+            0
+        } else {
+            (self.block_number() / Policy::blocks_per_epoch()).trailing_zeros() as usize
+        };
+        if number_hashes_to_update > interlink.len() {
+            interlink.push(self.hash());
+        }
+        assert!(
+            interlink.len() >= number_hashes_to_update,
+            "{} {}",
+            interlink.len(),
+            number_hashes_to_update,
+        );
+        #[allow(clippy::needless_range_loop)]
+        for i in 0..number_hashes_to_update {
+            interlink[i] = self.hash();
+        }
+        Ok(interlink)
+    }
+
     /// Returns whether or not this macro block is an election block.
     pub fn is_election_block(&self) -> bool {
         Policy::is_election_block_at(self.header.block_number)
@@ -174,6 +206,9 @@ pub struct MacroHeader {
     pub parent_hash: Blake2bHash,
     /// The hash of the header of the preceding election macro block.
     pub parent_election_hash: Blake2bHash,
+    /// Hashes of the last blocks dividable by 2^x
+    #[beserial(len_type(u8))]
+    pub interlink: Option<Vec<Blake2bHash>>,
     /// The seed of the block. This is the BLS signature of the seed of the immediately preceding
     /// block (either micro or macro) using the validator key of the block proposer.
     pub seed: VrfSeed,

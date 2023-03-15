@@ -1,7 +1,7 @@
 use std::fmt::{Debug, Formatter};
 
 use beserial::{Deserialize, Serialize};
-use nimiq_block::{Block, MacroBlock};
+use nimiq_block::{Block, BlockInclusionProof, MacroBlock};
 #[cfg(feature = "full")]
 use nimiq_blockchain::HistoryTreeChunk;
 use nimiq_hash::Blake2bHash;
@@ -38,6 +38,8 @@ pub const MAX_REQUEST_TRANSACTIONS_PROOF: u32 = 1000;
 pub const MAX_REQUEST_TRANSACTIONS_BY_ADDRESS: u32 = 1000;
 // The max number of Trie proof requests per peer.
 pub const MAX_REQUEST_TRIE_PROOF: u32 = 1000;
+/// The max number of Block proof requests per peer.
+pub const MAX_REQUEST_BLOCKS_PROOF: u32 = 1000;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Checkpoint {
@@ -272,4 +274,23 @@ pub struct ResponseTrieProof {
     pub proof: Option<TrieProof>,
     // The hash of the block that was used to create the proof
     pub block_hash: Option<Blake2bHash>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RequestBlocksProof {
+    pub election_head: u32,
+    #[beserial(len_type(u16))]
+    pub blocks: Vec<u32>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ResponseBlocksProof {
+    pub proof: Option<BlockInclusionProof>,
+}
+
+impl RequestCommon for RequestBlocksProof {
+    type Kind = RequestMarker;
+    const TYPE_ID: u16 = 215;
+    type Response = ResponseBlocksProof;
+    const MAX_REQUESTS: u32 = MAX_REQUEST_BLOCKS_PROOF;
 }

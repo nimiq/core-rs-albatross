@@ -7,6 +7,8 @@ use parking_lot::RwLock;
 
 use nimiq_block::Block;
 #[cfg(feature = "full")]
+use nimiq_block::BlockInclusionProof;
+#[cfg(feature = "full")]
 use nimiq_blockchain::{Blockchain, CHUNK_SIZE};
 use nimiq_blockchain_interface::{AbstractBlockchain, Direction};
 use nimiq_blockchain_proxy::BlockchainProxy;
@@ -498,6 +500,46 @@ impl Handle<ResponseTrieProof, Arc<RwLock<Blockchain>>> for RequestTrieProof {
         ResponseTrieProof {
             proof,
             block_hash: Some(block_hash),
+        }
+    }
+}
+
+#[cfg(feature = "full")]
+impl Handle<ResponseBlocksProof, Arc<RwLock<Blockchain>>> for RequestBlocksProof {
+    fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> ResponseBlocksProof {
+        let blockchain = blockchain.read();
+
+        // Check if the request is sane and we can answer it
+        for &block_number in &self.blocks {
+            if !Policy::is_election_block_at(block_number)
+                || block_number > self.election_head
+                || self.election_head > blockchain.election_head().block_number()
+            {
+                return ResponseBlocksProof { proof: None };
+            }
+        }
+
+        // Collect all election blocks needed for the proof
+        let mut election_numbers = Vec::new();
+        let mut block_proof = Vec::new();
+        for block_number in &self.blocks {
+            let hops = BlockInclusionProof::get_interlink_hops(*block_number, self.election_head);
+            let mut hop_blocks = Vec::new();
+            for &hop in &hops {
+                if !election_numbers.contains(&hop) {
+                    if let Ok(Block::Macro(hop_block)) = blockchain.get_block_at(hop, false, None) {
+                        hop_blocks.push(hop_block);
+                    } else {
+                        continue;
+                    }
+                }
+            }
+            election_numbers.extend_from_slice(&hops);
+            block_proof.append(&mut hop_blocks);
+        }
+
+        ResponseBlocksProof {
+            proof: Some(BlockInclusionProof { proof: block_proof }),
         }
     }
 }

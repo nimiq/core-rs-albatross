@@ -6,6 +6,7 @@ use thiserror::Error;
 use nimiq_primitives::transaction::TransactionError;
 
 pub use block::*;
+pub use block_proof::*;
 pub use fork_proof::*;
 pub use macro_block::*;
 pub use micro_block::*;
@@ -15,6 +16,7 @@ pub use skip_block::*;
 pub use tendermint::*;
 
 mod block;
+mod block_proof;
 mod fork_proof;
 mod macro_block;
 mod micro_block;
@@ -38,6 +40,8 @@ pub enum BlockError {
     InvalidParentHash,
     #[error("Invalid parent election hash")]
     InvalidParentElectionHash,
+    #[error("Invalid or missing interlink")]
+    InvalidInterlink,
     #[error("Contains an invalid seed")]
     InvalidSeed,
     #[error("Extra data too large")]
