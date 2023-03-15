@@ -1,14 +1,16 @@
 use ark_crypto_primitives::snark::SNARKGadget;
+use ark_ff::UniformRand;
 use ark_groth16::{
     constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar},
     Proof, VerifyingKey,
 };
-use ark_mnt6_753::{constraints::PairingVar, Fq as MNT6Fq, MNT6_753};
+use ark_mnt6_753::{constraints::PairingVar, Fq as MNT6Fq, G1Affine, G2Affine, MNT6_753};
 use ark_r1cs_std::{
     prelude::{AllocVar, Boolean, EqGadget},
     uint8::UInt8,
 };
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
+use rand::Rng;
 
 use crate::gadgets::{mnt6::VKCommitmentGadget, recursive_input::RecursiveInputVar};
 
@@ -74,6 +76,56 @@ impl MergerCircuit {
             final_state_commitment,
             vk_commitment,
         }
+    }
+
+    pub fn rand<R: Rng + ?Sized>(vk_child: VerifyingKey<MNT6_753>, rng: &mut R) -> Self {
+        // Create dummy inputs.
+        let proof_merger_wrapper = Proof {
+            a: G1Affine::rand(rng),
+            b: G2Affine::rand(rng),
+            c: G1Affine::rand(rng),
+        };
+
+        let proof_macro_block_wrapper = Proof {
+            a: G1Affine::rand(rng),
+            b: G2Affine::rand(rng),
+            c: G1Affine::rand(rng),
+        };
+
+        let vk_merger_wrapper = VerifyingKey {
+            alpha_g1: G1Affine::rand(rng),
+            beta_g2: G2Affine::rand(rng),
+            gamma_g2: G2Affine::rand(rng),
+            delta_g2: G2Affine::rand(rng),
+            gamma_abc_g1: vec![G1Affine::rand(rng); 7],
+        };
+
+        let mut intermediate_state_commitment = [0u8; 95];
+        rng.fill_bytes(&mut intermediate_state_commitment);
+
+        let genesis_flag = bool::rand(rng);
+
+        let mut initial_state_commitment = [0u8; 95];
+        rng.fill_bytes(&mut initial_state_commitment);
+
+        let mut final_state_commitment = [0u8; 95];
+        rng.fill_bytes(&mut final_state_commitment);
+
+        let mut vk_commitment = [0u8; 95];
+        rng.fill_bytes(&mut vk_commitment);
+
+        // Create parameters for our circuit
+        MergerCircuit::new(
+            vk_child,
+            proof_merger_wrapper,
+            proof_macro_block_wrapper,
+            vk_merger_wrapper,
+            intermediate_state_commitment,
+            genesis_flag,
+            initial_state_commitment,
+            final_state_commitment,
+            vk_commitment,
+        )
     }
 }
 

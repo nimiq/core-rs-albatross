@@ -1,9 +1,11 @@
+use ark_ff::UniformRand;
 use ark_mnt6_753::{constraints::G2Var, Fq as MNT6Fq, G2Projective};
 use ark_r1cs_std::{
     prelude::{AllocVar, CondSelectGadget, CurveVar, EqGadget},
     uint8::UInt8,
 };
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
+use rand::{distributions::Standard, prelude::Distribution};
 
 use nimiq_primitives::policy::Policy;
 use nimiq_zkp_primitives::{PEDERSEN_PARAMETERS, PK_TREE_BREADTH};
@@ -115,5 +117,25 @@ impl ConstraintSynthesizer<MNT6Fq> for PKTreeLeafCircuit {
         agg_pk_commitment_bytes.enforce_equal(&pedersen_bytes)?;
 
         Ok(())
+    }
+}
+
+impl Distribution<PKTreeLeafCircuit> for Standard {
+    fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> PKTreeLeafCircuit {
+        let pks = vec![G2Projective::rand(rng); Policy::SLOTS as usize / PK_TREE_BREADTH];
+
+        let mut pk_tree_root = [0u8; 95];
+        rng.fill_bytes(&mut pk_tree_root);
+
+        let mut agg_pk_commitment = [0u8; 95];
+        rng.fill_bytes(&mut agg_pk_commitment);
+
+        let mut signer_bitmap = Vec::with_capacity(Policy::SLOTS as usize);
+        for _ in 0..Policy::SLOTS {
+            signer_bitmap.push(rng.gen());
+        }
+
+        // Create parameters for our circuit
+        PKTreeLeafCircuit::new(pks, pk_tree_root, agg_pk_commitment, signer_bitmap)
     }
 }

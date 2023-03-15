@@ -1,14 +1,16 @@
 use ark_crypto_primitives::snark::SNARKGadget;
+use ark_ff::UniformRand;
 use ark_groth16::{
     constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar},
     Proof, VerifyingKey,
 };
-use ark_mnt4_753::{constraints::PairingVar, Fq as MNT4Fq, MNT4_753};
+use ark_mnt4_753::{constraints::PairingVar, Fq as MNT4Fq, G1Affine, G2Affine, MNT4_753};
 use ark_r1cs_std::{
     prelude::{AllocVar, Boolean, EqGadget},
     uint8::UInt8,
 };
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
+use rand::Rng;
 
 use crate::gadgets::recursive_input::RecursiveInputVar;
 
@@ -45,6 +47,29 @@ impl MacroBlockWrapperCircuit {
             initial_state_commitment,
             final_state_commitment,
         }
+    }
+
+    pub fn rand<R: Rng + ?Sized>(vk_child: VerifyingKey<MNT4_753>, rng: &mut R) -> Self {
+        // Create dummy inputs.
+        let proof = Proof {
+            a: G1Affine::rand(rng),
+            b: G2Affine::rand(rng),
+            c: G1Affine::rand(rng),
+        };
+
+        let mut initial_state_commitment = [0u8; 95];
+        rng.fill_bytes(&mut initial_state_commitment);
+
+        let mut final_state_commitment = [0u8; 95];
+        rng.fill_bytes(&mut final_state_commitment);
+
+        // Create parameters for our circuit
+        MacroBlockWrapperCircuit::new(
+            vk_child,
+            proof,
+            initial_state_commitment,
+            final_state_commitment,
+        )
     }
 }
 

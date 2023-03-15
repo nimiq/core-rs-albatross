@@ -1,14 +1,16 @@
 use ark_crypto_primitives::snark::SNARKGadget;
+use ark_ff::UniformRand;
 use ark_groth16::{
     constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar},
     Proof, VerifyingKey,
 };
-use ark_mnt4_753::{constraints::PairingVar, Fq as MNT4Fq, MNT4_753};
+use ark_mnt4_753::{constraints::PairingVar, Fq as MNT4Fq, G1Affine, G2Affine, MNT4_753};
 use ark_r1cs_std::{
     prelude::{AllocVar, Boolean, EqGadget},
     uint8::UInt8,
 };
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
+use rand::Rng;
 
 use nimiq_primitives::policy::Policy;
 
@@ -52,6 +54,55 @@ impl PKTreeNodeCircuit {
         signer_bitmap_chunk: Vec<bool>,
     ) -> Self {
         Self {
+            tree_level,
+            vk_child,
+            l_proof,
+            r_proof,
+            l_pk_node_hash,
+            r_pk_node_hash,
+            l_agg_pk_commitment,
+            r_agg_pk_commitment,
+            signer_bitmap_chunk,
+        }
+    }
+
+    pub fn rand<R: Rng + ?Sized>(
+        tree_level: usize,
+        vk_child: VerifyingKey<MNT4_753>,
+        rng: &mut R,
+    ) -> Self {
+        let l_proof = Proof {
+            a: G1Affine::rand(rng),
+            b: G2Affine::rand(rng),
+            c: G1Affine::rand(rng),
+        };
+
+        let r_proof = Proof {
+            a: G1Affine::rand(rng),
+            b: G2Affine::rand(rng),
+            c: G1Affine::rand(rng),
+        };
+
+        let mut pk_node_hash = [0u8; 95];
+        rng.fill_bytes(&mut pk_node_hash);
+
+        let mut l_pk_node_hash = [0u8; 95];
+        rng.fill_bytes(&mut l_pk_node_hash);
+        let mut r_pk_node_hash = [0u8; 95];
+        rng.fill_bytes(&mut r_pk_node_hash);
+
+        let mut l_agg_pk_commitment = [0u8; 95];
+        rng.fill_bytes(&mut l_agg_pk_commitment);
+
+        let mut r_agg_pk_commitment = [0u8; 95];
+        rng.fill_bytes(&mut r_agg_pk_commitment);
+
+        let mut signer_bitmap_chunk = Vec::with_capacity(Policy::SLOTS as usize);
+        for _ in 0..Policy::SLOTS {
+            signer_bitmap_chunk.push(rng.gen());
+        }
+
+        PKTreeNodeCircuit {
             tree_level,
             vk_child,
             l_proof,

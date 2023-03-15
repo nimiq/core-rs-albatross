@@ -1,14 +1,16 @@
 use ark_crypto_primitives::snark::SNARKGadget;
+use ark_ff::UniformRand;
 use ark_groth16::{
     constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar},
     Proof, VerifyingKey,
 };
 use ark_mnt6_753::{
     constraints::{G2Var, PairingVar},
-    Fq as MNT6Fq, G2Projective, MNT6_753,
+    Fq as MNT6Fq, G1Affine, G1Projective, G2Affine, G2Projective, MNT6_753,
 };
 use ark_r1cs_std::prelude::{AllocVar, Boolean, EqGadget, UInt32, UInt8};
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
+use rand::Rng;
 
 use nimiq_primitives::policy::Policy;
 use nimiq_zkp_primitives::{MacroBlock, PEDERSEN_PARAMETERS};
@@ -78,6 +80,76 @@ impl MacroBlockCircuit {
             initial_state_commitment,
             final_state_commitment,
         }
+    }
+
+    pub fn rand<R: Rng + ?Sized>(vk_child: VerifyingKey<MNT6_753>, rng: &mut R) -> Self {
+        let proof = Proof {
+            a: G1Affine::rand(rng),
+            b: G2Affine::rand(rng),
+            c: G1Affine::rand(rng),
+        };
+
+        let mut initial_pk_tree_root = [0u8; 95];
+        rng.fill_bytes(&mut initial_pk_tree_root);
+
+        let mut initial_header_hash = [0u8; 32];
+        rng.fill_bytes(&mut initial_header_hash);
+
+        let block_number = u32::rand(rng);
+
+        let round_number = u32::rand(rng);
+
+        let mut final_pk_tree_root = [0u8; 95];
+        rng.fill_bytes(&mut final_pk_tree_root);
+
+        let mut initial_state_commitment = [0u8; 95];
+        rng.fill_bytes(&mut initial_state_commitment);
+
+        let mut final_state_commitment = [0u8; 95];
+        rng.fill_bytes(&mut final_state_commitment);
+
+        let mut header_hash = [0u8; 32];
+        rng.fill_bytes(&mut header_hash);
+
+        let signature = G1Projective::rand(rng);
+
+        let mut signer_bitmap = Vec::with_capacity(Policy::SLOTS as usize);
+        for _ in 0..Policy::SLOTS {
+            signer_bitmap.push(rng.gen());
+        }
+
+        let block = MacroBlock {
+            block_number,
+            round_number,
+            header_hash,
+            signature,
+            signer_bitmap,
+        };
+
+        let mut l_pk_node_hash = [0u8; 95];
+        rng.fill_bytes(&mut l_pk_node_hash);
+
+        let mut r_pk_node_hash = [0u8; 95];
+        rng.fill_bytes(&mut r_pk_node_hash);
+
+        let l_agg_commitment = G2Projective::rand(rng);
+
+        let r_agg_commitment = G2Projective::rand(rng);
+
+        MacroBlockCircuit::new(
+            vk_child,
+            proof,
+            initial_pk_tree_root,
+            initial_header_hash,
+            final_pk_tree_root,
+            block,
+            l_pk_node_hash,
+            r_pk_node_hash,
+            l_agg_commitment,
+            r_agg_commitment,
+            initial_state_commitment,
+            final_state_commitment,
+        )
     }
 }
 

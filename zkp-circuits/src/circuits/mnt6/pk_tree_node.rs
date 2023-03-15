@@ -1,17 +1,19 @@
 use ark_crypto_primitives::snark::SNARKGadget;
+use ark_ff::UniformRand;
 use ark_groth16::{
     constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar},
     Proof, VerifyingKey,
 };
 use ark_mnt6_753::{
     constraints::{G2Var, PairingVar},
-    Fq as MNT6Fq, G2Projective, MNT6_753,
+    Fq as MNT6Fq, G1Affine, G2Affine, G2Projective, MNT6_753,
 };
 use ark_r1cs_std::{
     prelude::{AllocVar, Boolean, EqGadget},
     uint8::UInt8,
 };
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
+use rand::Rng;
 
 use nimiq_pedersen_generators::GenericWindow;
 use nimiq_primitives::policy::Policy;
@@ -106,6 +108,61 @@ impl PKTreeNodeCircuit {
             agg_pk_commitment,
             signer_bitmap_chunk,
         }
+    }
+
+    pub fn rand<R: Rng + ?Sized>(
+        tree_level: usize,
+        vk_child: VerifyingKey<MNT6_753>,
+        rng: &mut R,
+    ) -> Self {
+        let l_proof = Proof {
+            a: G1Affine::rand(rng),
+            b: G2Affine::rand(rng),
+            c: G1Affine::rand(rng),
+        };
+
+        let r_proof = Proof {
+            a: G1Affine::rand(rng),
+            b: G2Affine::rand(rng),
+            c: G1Affine::rand(rng),
+        };
+
+        let agg_pks = vec![G2Projective::rand(rng); 4];
+
+        let mut pk_node_hashes = vec![];
+        for _ in 0..4 {
+            let mut pk_node_hash = [0u8; 95];
+            rng.fill_bytes(&mut pk_node_hash);
+            pk_node_hashes.push(pk_node_hash);
+        }
+        let mut pk_node_hash = [0u8; 95];
+        rng.fill_bytes(&mut pk_node_hash);
+
+        let mut agg_pk_commitment = [0u8; 95];
+        rng.fill_bytes(&mut agg_pk_commitment);
+
+        let mut signer_bitmap = Vec::with_capacity(Policy::SLOTS as usize);
+        for _ in 0..Policy::SLOTS {
+            signer_bitmap.push(rng.gen());
+        }
+
+        PKTreeNodeCircuit::new(
+            tree_level,
+            vk_child,
+            l_proof,
+            r_proof,
+            agg_pks[0],
+            agg_pks[1],
+            agg_pks[2],
+            agg_pks[3],
+            pk_node_hashes[0],
+            pk_node_hashes[1],
+            pk_node_hashes[2],
+            pk_node_hashes[3],
+            pk_node_hash,
+            agg_pk_commitment,
+            signer_bitmap,
+        )
     }
 }
 

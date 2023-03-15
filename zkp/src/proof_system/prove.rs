@@ -82,7 +82,7 @@ pub fn prove(
     // Calculate final public key tree root.
     let final_pk_tree_root = pk_tree_construct(final_pks);
 
-    const NUM_PROOFS: usize = 67;
+    const NUM_PROOFS: usize = 4;
     let mut current_proof = 0;
 
     // Start generating proof for Macro Block.
