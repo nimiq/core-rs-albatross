@@ -954,13 +954,15 @@ impl MerkleRadixTrie {
             if cur_node.key == *key {
                 // Remove the value from the node.
                 // PITODO check if hybrid or leaf node
+                let prev_kind = cur_node.kind();
                 cur_node.value = None;
+                let count_updates;
                 if cur_node.is_root() || cur_node.has_children() {
                     // Node was a hybrid node and is now a branch node.
                     let num_children = cur_node.iter_children().count();
 
                     // If it has only a single child and isn't the root node, merge it with that child.
-                    let count_updates = if num_children == 1 && !cur_node.is_root() {
+                    if num_children == 1 && !cur_node.is_root() {
                         // Remove the node from the database.
                         txn.remove(&self.db, &cur_node.key);
 
@@ -977,25 +979,22 @@ impl MerkleRadixTrie {
                         root_path.push(only_child);
 
                         // We removed a hybrid node.
-                        CountUpdates {
+                        count_updates = CountUpdates {
                             hybrids: -1,
                             ..Default::default()
-                        }
+                        };
                     } else {
                         // The node is root or has multiple children, thus we cannot remove it.
-                        // Instead we must convert it to a branch node by removing its value.
+                        // Instead we converted it to a branch node by removing its value.
+
+                        // We converted a hybrid node into a branch node.
+                        // Or kept a branch node a branch node if there was no value stored before.
+                        count_updates = CountUpdates::from_update(prev_kind, cur_node.kind());
 
                         // Update the node and add it to the root path.
                         self.put_node(txn, &cur_node);
 
                         root_path.push(cur_node);
-
-                        // We converted a hybrid node into a branch node.
-                        CountUpdates {
-                            branches: 1,
-                            hybrids: -1,
-                            ..Default::default()
-                        }
                     };
 
                     // Update the keys and hashes of the rest of the root path.
@@ -1501,6 +1500,12 @@ mod tests {
         assert_eq!(trie.get(&txn, &key_3).expect("complete trie"), Some(1337));
 
         trie.remove(&mut txn, &key_3);
+        assert_eq!(trie.count_nodes(&txn), (0, 0, 0));
+        assert_eq!(trie.get(&txn, &key_1).expect("complete trie"), None::<i32>);
+        assert_eq!(trie.get(&txn, &key_2).expect("complete trie"), None::<i32>);
+        assert_eq!(trie.get(&txn, &key_3).expect("complete trie"), None::<i32>);
+
+        trie.remove(&mut txn, &KeyNibbles::ROOT);
         assert_eq!(trie.count_nodes(&txn), (0, 0, 0));
         assert_eq!(trie.get(&txn, &key_1).expect("complete trie"), None::<i32>);
         assert_eq!(trie.get(&txn, &key_2).expect("complete trie"), None::<i32>);
