@@ -48,7 +48,7 @@ nimiq-block-production = { path = "../block-production", features = ["test-utils
 nimiq-test-log = { path = "../test-log" }
 nimiq-transaction-builder = { path = "../transaction-builder" }
 # This adds a circular dev-dependency which is fine but breaks VS code rust-analyzer.
-# See https://github.com/rust-analyzer/rust-analyzer/issues/2414
+# See https://github.com/rust-analyzer/rust-analyzer/issues/14167
 nimiq-test-utils = { path = "../test-utils" }
 nimiq-zkp-primitives = { path = "../zkp-primitives" }
 

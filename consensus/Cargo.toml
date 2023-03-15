@@ -64,7 +64,7 @@ nimiq-network-mock = { path = "../network-mock" }
 nimiq-network-libp2p = { path = "../network-libp2p" }
 nimiq-test-log = { path = "../test-log" }
 # This adds a circular dev-dependency which is fine but breaks VS code rust-analyzer.
-# See https://github.com/rust-analyzer/rust-analyzer/issues/2414
+# See https://github.com/rust-analyzer/rust-analyzer/issues/14167
 nimiq-test-utils = { path = "../test-utils" }
 nimiq-zkp-component = { path = "../zkp-component", features = ["zkp-prover", "parallel"] }
 
