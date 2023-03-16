@@ -1,7 +1,7 @@
 [package]
 name = "beserial_derive"
 version = "0.1.0"
-authors = ["Marvin W <git@larma.de>"]
+authors = ["Marvin W <git@larma.de>", "The Nimiq Core Development Team <info@nimiq.com>"]
 edition = "2021"
 description = "Derive macros for beserial"
 homepage = "https://nimiq.com"

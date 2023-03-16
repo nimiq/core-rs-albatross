@@ -1,9 +1,9 @@
 [package]
 name = "nimiq-zkp-test-gen"
 version = "0.1.0"
-authors = ["Ines C <ii.cruz@campus.fct.unl.pt>"]
+authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 edition = "2021"
-description = "All functionality related to the zk proof storage, dessimination and request handeling."
+description = "All functionality related to the zk proof storage, dissemination and request handeling."
 homepage = "https://nimiq.com"
 repository = "https://github.com/nimiq/core-rs-albatross"
 license = "Apache-2.0"

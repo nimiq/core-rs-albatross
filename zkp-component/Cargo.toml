@@ -1,7 +1,7 @@
 [package]
 name = "nimiq-zkp-component"
 version = "0.1.0"
-authors = ["Ines C <ii.cruz@campus.fct.unl.pt>"]
+authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 edition = "2021"
 description = "All functionality related to the zk proof storage, dessimination and request handeling."
 homepage = "https://nimiq.com"

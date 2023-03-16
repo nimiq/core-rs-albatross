@@ -84,7 +84,6 @@ async fn peers_do_not_reply_with_outdated_proof() {
 }
 
 #[test(tokio::test)]
-#[ignore]
 async fn peers_reply_with_valid_proof() {
     let blockchain2 = blockchain();
     let blockchain3 = blockchain();
@@ -165,7 +164,6 @@ async fn peers_reply_with_valid_proof() {
 }
 
 #[test(tokio::test)]
-#[ignore]
 async fn peers_reply_with_valid_proof_and_election_block() {
     let blockchain2 = blockchain();
     let blockchain3 = blockchain();

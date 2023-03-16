@@ -1,7 +1,7 @@
 [package]
 name = "nimiq-collections"
 version = "0.1.0"
-authors = ["Pascal B <git@paberr.net>"]
+authors = ["Pascal B <git@paberr.net>", "The Nimiq Core Development Team <info@nimiq.com>"]
 edition = "2021"
 description = "A set of advanced collections for use in the Nimiq Rust implementation"
 homepage = "https://nimiq.com"

@@ -72,7 +72,6 @@ async fn builds_valid_genesis_proof() {
 }
 
 #[test(tokio::test)]
-#[ignore]
 async fn loads_valid_zkp_state_from_db() {
     let blockchain = blockchain();
     let mut hub = MockHub::new();

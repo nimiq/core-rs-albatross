@@ -107,7 +107,6 @@ async fn can_detect_invalid_proof_none_genesis_blocks() {
 }
 
 #[test(tokio::test)]
-#[ignore]
 async fn can_detect_valid_proof_none_genesis_blocks() {
     let blockchain = blockchain();
 
