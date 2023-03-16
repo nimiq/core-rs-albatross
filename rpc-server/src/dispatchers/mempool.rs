@@ -55,7 +55,7 @@ impl MempoolInterface for MempoolDispatcher {
 
         match self
             .mempool
-            .add_transaction(tx, Some(TxPriority::HighPriority))
+            .add_transaction(tx, Some(TxPriority::High))
             .await
         {
             Ok(_) => Ok(txid.into()),

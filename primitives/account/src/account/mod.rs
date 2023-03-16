@@ -228,6 +228,21 @@ impl AccountTransactionInteraction for Account {
             data_store
         )
     }
+
+    fn release_balance(
+        &self,
+        transaction: &Transaction,
+        reserved_balance: &mut ReservedBalance,
+        data_store: DataStoreRead,
+    ) -> Result<(), AccountError> {
+        gen_account_match!(
+            self,
+            release_balance,
+            transaction,
+            reserved_balance,
+            data_store
+        )
+    }
 }
 
 impl AccountInherentInteraction for Account {

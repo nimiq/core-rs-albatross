@@ -14,11 +14,11 @@ use nimiq_transaction::Transaction;
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub enum TxPriority {
     /// Low Priority transactions
-    LowPriority = 1,
-    /// Medium Priority transactions, this is thed default
-    MediumPriority = 2,
+    Low = 1,
+    /// Medium Priority transactions, this is the default
+    Medium = 2,
     /// High Priority transactions,
-    HighPriority = 3,
+    High = 3,
 }
 
 /// Ordering in which transactions removed from the mempool to be included in blocks.
@@ -136,19 +136,17 @@ impl MempoolTransactions {
         self.transactions.contains_key(hash)
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.transactions.is_empty()
+    pub fn len(&self) -> usize {
+        self.transactions.len()
     }
 
-    // This function is used to remove the transactions that are no longer valid at a given block height
-    pub fn get_expired_txns(&mut self, block_height: u32) -> Vec<Blake2bHash> {
+    // This function is used to remove the transactions that are no longer valid at a given block number.
+    pub fn get_expired_txns(&mut self, block_number: u32) -> Vec<Blake2bHash> {
         let mut expired_txns = vec![];
         loop {
             // Get the hash of the oldest transaction.
             let tx_hash = match self.oldest_transactions.peek() {
-                None => {
-                    break;
-                }
+                None => break,
                 Some((tx_hash, _)) => tx_hash.clone(),
             };
 
@@ -156,7 +154,7 @@ impl MempoolTransactions {
             let tx = self.get(&tx_hash).unwrap();
 
             // Check if it is still valid.
-            if tx.is_valid_at(block_height) {
+            if tx.is_valid_at(block_number) {
                 // No need to process more transactions, since we arrived to the oldest one that is valid
                 break;
             } else {

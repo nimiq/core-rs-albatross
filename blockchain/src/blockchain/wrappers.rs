@@ -150,6 +150,17 @@ impl Blockchain {
         )
     }
 
+    pub fn release_balance(
+        &self,
+        account: &Account,
+        transaction: &Transaction,
+        reserved_balance: &mut ReservedBalance,
+    ) -> Result<(), AccountError> {
+        self.state
+            .accounts
+            .release_balance(account, transaction, reserved_balance, None)
+    }
+
     /// Checks if we have seen some transaction with this hash inside the a validity window.
     pub fn tx_in_validity_window(
         &self,

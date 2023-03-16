@@ -3972,6 +3972,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "prometheus-client 0.19.0",
  "rand 0.8.5",
+ "thiserror",
  "tokio",
  "tokio-metrics",
  "tokio-stream",

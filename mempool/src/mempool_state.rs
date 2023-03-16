@@ -1,4 +1,5 @@
 use nimiq_account::ReservedBalance;
+use nimiq_blockchain::Blockchain;
 use std::collections::{HashMap, HashSet};
 #[cfg(feature = "metrics")]
 use std::sync::Arc;
@@ -6,6 +7,7 @@ use std::sync::Arc;
 #[cfg(feature = "metrics")]
 use crate::mempool_metrics::MempoolMetrics;
 use crate::mempool_transactions::{MempoolTransactions, TxPriority};
+use crate::verify::VerifyErr;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
 use nimiq_primitives::account::AccountType;
@@ -50,47 +52,37 @@ impl MempoolState {
         }
     }
 
-    pub(crate) fn put(&mut self, tx: &Transaction, priority: TxPriority) -> bool {
+    pub(crate) fn put(
+        &mut self,
+        blockchain: &Blockchain,
+        tx: &Transaction,
+        priority: TxPriority,
+    ) -> Result<(), VerifyErr> {
+        // Don't add the same transaction twice.
         let tx_hash = tx.hash();
-
-        if self.regular_transactions.contains_key(&tx_hash)
-            || self.control_transactions.contains_key(&tx_hash)
-        {
-            return false;
+        if self.contains(&tx_hash) {
+            return Err(VerifyErr::Known);
         }
 
-        // Update the per sender state
-        match self.state_by_sender.get_mut(&tx.sender) {
-            None => {
-                let mut txns = HashSet::new();
-                txns.insert(tx_hash);
+        // Reserve the balance necessary for this transaction on the sender account.
+        let sender_account = blockchain.get_account(&tx.sender);
+        if let Some(sender_state) = self.state_by_sender.get_mut(&tx.sender) {
+            let reserved_balance = &mut sender_state.reserved_balance;
+            blockchain
+                .reserve_balance(&sender_account, tx, reserved_balance)
+                .map_err(|_| VerifyErr::InsufficientFunds)?;
+            sender_state.txns.insert(tx.hash());
+        } else {
+            let mut reserved_balance = ReservedBalance::new(tx.sender.clone());
+            blockchain
+                .reserve_balance(&sender_account, tx, &mut reserved_balance)
+                .map_err(|_| VerifyErr::InsufficientFunds)?;
 
-                let mut reserved_balance = ReservedBalance::new(tx.sender.clone());
-                let reserve_failed = reserved_balance
-                    .reserve_unchecked(tx.total_value())
-                    .is_err();
-                if reserve_failed {
-                    return false;
-                }
-
-                self.state_by_sender.insert(
-                    tx.sender.clone(),
-                    SenderPendingState {
-                        reserved_balance,
-                        txns,
-                    },
-                );
-            }
-            Some(sender_state) => {
-                let reserve_failed = sender_state
-                    .reserved_balance
-                    .reserve_unchecked(tx.total_value())
-                    .is_err();
-                if reserve_failed {
-                    return false;
-                }
-                sender_state.txns.insert(tx_hash);
-            }
+            let sender_state = SenderPendingState {
+                reserved_balance,
+                txns: HashSet::from([tx.hash()]),
+            };
+            self.state_by_sender.insert(tx.sender.clone(), sender_state);
         }
 
         // If we are adding a staking transaction we insert it into the control txns container
@@ -104,61 +96,55 @@ impl MempoolState {
         // After inserting the new txn, check if we need to remove txns
         while self.regular_transactions.total_size > self.regular_transactions.total_size_limit {
             let (tx_hash, _) = self.regular_transactions.worst_transactions.pop().unwrap();
-            self.remove(&tx_hash, EvictionReason::TooFull);
+            self.remove(blockchain, &tx_hash, EvictionReason::TooFull);
         }
 
         while self.control_transactions.total_size > self.control_transactions.total_size_limit {
             let (tx_hash, _) = self.control_transactions.worst_transactions.pop().unwrap();
-            self.remove(&tx_hash, EvictionReason::TooFull);
+            self.remove(blockchain, &tx_hash, EvictionReason::TooFull);
         }
 
-        true
+        Ok(())
     }
 
     pub(crate) fn remove(
         &mut self,
+        blockchain: &Blockchain,
         tx_hash: &Blake2bHash,
-        reason: EvictionReason,
+        #[allow(unused_variables)] reason: EvictionReason,
     ) -> Option<Transaction> {
-        if let Some(tx) = self
+        let tx = self
             .regular_transactions
             .delete(tx_hash)
-            .or_else(|| self.control_transactions.delete(tx_hash))
-        {
-            let sender_state = self.state_by_sender.get_mut(&tx.sender).unwrap();
+            .or_else(|| self.control_transactions.delete(tx_hash));
 
-            sender_state.reserved_balance.release(tx.total_value());
-            sender_state.txns.remove(tx_hash);
+        if let Some(tx) = tx {
+            if let Some(sender_state) = self.state_by_sender.get_mut(&tx.sender) {
+                let sender_account = blockchain.get_account(&tx.sender);
+                blockchain
+                    .release_balance(&sender_account, &tx, &mut sender_state.reserved_balance)
+                    .expect("Failed to release balance");
 
-            if sender_state.txns.is_empty() {
-                self.state_by_sender.remove(&tx.sender);
+                sender_state.txns.remove(tx_hash);
+
+                if sender_state.txns.is_empty() {
+                    self.state_by_sender.remove(&tx.sender);
+                }
             }
 
             #[cfg(feature = "metrics")]
             self.metrics.note_evicted(reason);
 
-            Some(tx)
-        } else {
-            None
+            return Some(tx);
         }
+
+        None
     }
 
-    // Removes all the transactions sent by some specific address
-    pub(crate) fn remove_sender_txns(&mut self, sender_address: &Address) {
-        if let Some(sender_state) = &self.state_by_sender.remove(sender_address) {
-            for tx_hash in &sender_state.txns {
-                self.regular_transactions
-                    .delete(tx_hash)
-                    .or_else(|| self.control_transactions.delete(tx_hash));
-            }
-        }
-    }
-
-    /// Retrieves all expired transaction hashes from both the `regular_transactions` and `control_transactions` Vectors
-    pub fn get_expired_txns(&mut self, block_height: u32) -> Vec<Blake2bHash> {
-        let mut expired_txns = self.control_transactions.get_expired_txns(block_height);
-        expired_txns.append(&mut self.regular_transactions.get_expired_txns(block_height));
-
+    /// Retrieves all expired transaction hashes from both the `regular_transactions` and `control_transactions` vectors
+    pub fn get_expired_txns(&mut self, block_number: u32) -> Vec<Blake2bHash> {
+        let mut expired_txns = self.control_transactions.get_expired_txns(block_number);
+        expired_txns.append(&mut self.regular_transactions.get_expired_txns(block_number));
         expired_txns
     }
 }

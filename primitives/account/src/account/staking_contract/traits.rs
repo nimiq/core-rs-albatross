@@ -522,6 +522,33 @@ impl AccountTransactionInteraction for StakingContract {
             }
         }
     }
+
+    fn release_balance(
+        &self,
+        transaction: &Transaction,
+        reserved_balance: &mut ReservedBalance,
+        _data_store: DataStoreRead,
+    ) -> Result<(), AccountError> {
+        // Parse transaction proof.
+        let proof = OutgoingStakingTransactionProof::parse(transaction)?;
+
+        match proof {
+            OutgoingStakingTransactionProof::DeleteValidator { proof } => {
+                // Get the validator address from the proof.
+                let validator_address = proof.compute_signer();
+
+                reserved_balance.release_for(&validator_address, transaction.total_value());
+            }
+            OutgoingStakingTransactionProof::RemoveStake { proof } => {
+                // Get the staker address from the proof.
+                let staker_address = proof.compute_signer();
+
+                reserved_balance.release_for(&staker_address, transaction.total_value())
+            }
+        }
+
+        Ok(())
+    }
 }
 
 impl AccountInherentInteraction for StakingContract {

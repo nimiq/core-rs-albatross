@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use futures::{ready, stream::BoxStream, StreamExt};
-use parking_lot::{RwLock, RwLockUpgradableReadGuard};
+use parking_lot::RwLock;
 
 use nimiq_blockchain::Blockchain;
 use nimiq_network_interface::network::{MsgAcceptance, Network, Topic};
@@ -37,7 +37,7 @@ pub(crate) struct MempoolExecutor<N: Network, T: Topic + Unpin + Sync> {
     network: Arc<N>,
 
     // Network ID, used for tx verification
-    network_id: Arc<NetworkId>,
+    network_id: NetworkId,
 
     // Transaction stream that is used to listen to transactions from the network
     txn_stream: BoxStream<'static, (Transaction, <N as Network>::PubsubId)>,
@@ -56,11 +56,11 @@ impl<N: Network, T: Topic + Unpin + Sync> MempoolExecutor<N, T> {
         verification_tasks: Arc<AtomicU32>,
     ) -> Self {
         Self {
-            blockchain: blockchain.clone(),
+            blockchain: Arc::clone(&blockchain),
             state,
             filter,
             network,
-            network_id: Arc::new(blockchain.read().network_id),
+            network_id: blockchain.read().network_id,
             verification_tasks,
             txn_stream,
             _phantom: PhantomData,
@@ -84,8 +84,8 @@ impl<N: Network, T: Topic + Unpin + Sync> Future for MempoolExecutor<N, T> {
             let mempool_state = Arc::clone(&self.state);
             let filter = Arc::clone(&self.filter);
             let tasks_count = Arc::clone(&self.verification_tasks);
-            let network_id = Arc::clone(&self.network_id);
             let network = Arc::clone(&self.network);
+            let network_id = self.network_id;
 
             // Spawn the transaction verification task
             tokio::task::spawn(async move {
@@ -94,19 +94,22 @@ impl<N: Network, T: Topic + Unpin + Sync> Future for MempoolExecutor<N, T> {
                 // Verifying and pushing the TX in a separate scope to drop the lock that is returned by
                 // the verify_tx function immediately
                 let acceptance = {
-                    let verify_tx_ret =
-                        verify_tx(&tx, blockchain, network_id, &mempool_state, filter).await;
+                    let verify_tx_ret = verify_tx(
+                        &tx,
+                        blockchain,
+                        network_id,
+                        &mempool_state,
+                        filter,
+                        TxPriority::Medium,
+                    )
+                    .await;
 
                     match verify_tx_ret {
-                        Ok(mempool_state_lock) => {
-                            RwLockUpgradableReadGuard::upgrade(mempool_state_lock)
-                                .put(&tx, TxPriority::MediumPriority);
-                            MsgAcceptance::Accept
-                        }
+                        Ok(_) => MsgAcceptance::Accept,
                         // Reject the message if signature verification fails or transaction is invalid
                         // for current validation window
-                        Err(VerifyErr::InvalidSignature) => MsgAcceptance::Reject,
-                        Err(VerifyErr::InvalidTxWindow) => MsgAcceptance::Reject,
+                        Err(VerifyErr::InvalidTransaction(_)) => MsgAcceptance::Reject,
+                        Err(VerifyErr::AlreadyIncluded) => MsgAcceptance::Reject,
                         Err(_) => MsgAcceptance::Ignore,
                     }
                 };

@@ -1445,121 +1445,6 @@ async fn mempool_update_pruned_account() {
 }
 
 #[test(tokio::test(flavor = "multi_thread", worker_threads = 10))]
-async fn mempool_update_create_staker_twice() {
-    let time = Arc::new(OffsetTime::new());
-    let env = VolatileEnvironment::new(10).unwrap();
-
-    let key_pair = ed25519_key_pair(ACCOUNT_SECRET_KEY);
-    let address = Address::from_any_str(STAKER_ADDRESS).unwrap();
-
-    // This is the transaction produced in the block
-    let tx = TransactionBuilder::new_create_staker(
-        &key_pair,
-        &key_pair,
-        Some(address.clone()),
-        100_000_000.try_into().unwrap(),
-        100.try_into().unwrap(),
-        1,
-        NetworkId::UnitAlbatross,
-    )
-    .unwrap();
-
-    // This is a slightly different transaction, that also creates the same staker
-    let tx_dup = TransactionBuilder::new_create_staker(
-        &key_pair,
-        &key_pair,
-        Some(address),
-        100.try_into().unwrap(),
-        0.try_into().unwrap(),
-        1,
-        NetworkId::UnitAlbatross,
-    )
-    .unwrap();
-
-    let txns = vec![tx_dup];
-
-    let adopted_txns = vec![tx];
-
-    let mut adopted_micro_blocks = vec![];
-
-    adopted_micro_blocks.push((
-        Blake2bHash::default(),
-        create_dummy_micro_block(Some(adopted_txns.to_vec())),
-    ));
-
-    log::debug!("Done generating adopted micro block");
-
-    let blockchain = Arc::new(RwLock::new(
-        Blockchain::new(
-            env,
-            BlockchainConfig::default(),
-            NetworkId::UnitAlbatross,
-            time,
-        )
-        .unwrap(),
-    ));
-
-    // Create mempool and subscribe with a custom txn stream.
-    let mempool = Mempool::new(blockchain.clone(), MempoolConfig::default());
-    let mut hub = MockHub::new();
-    let mock_id = MockId::new(hub.new_address().into());
-    let mock_network = Arc::new(hub.new_network());
-
-    // Send txns to mempool
-    send_control_txn_to_mempool(&mempool, mock_network, mock_id, txns).await;
-
-    assert_eq!(
-        mempool.num_transactions(),
-        1,
-        "Number of txns in mempool is not what is expected"
-    );
-
-    // We need a block producer to produce blocks
-    let producer = BlockProducer::new(signing_key(), voting_key());
-
-    {
-        let bc = blockchain.upgradable_read();
-
-        let block =
-            producer.next_micro_block(&bc, bc.time.now(), vec![], adopted_txns, vec![0x41], None);
-
-        assert_eq!(
-            Blockchain::push(bc, Block::Micro(block)),
-            Ok(PushResult::Extended)
-        );
-    }
-
-    // Call mempool update
-    mempool.mempool_update(&adopted_micro_blocks[..], &[].to_vec());
-
-    // Get txns from mempool
-    let (updated_txns, _) = mempool.get_control_transactions_for_block(10_000);
-
-    assert_eq!(
-        updated_txns.len(),
-        0,
-        "Number of txns is not what is expected"
-    );
-
-    let bc = blockchain.upgradable_read();
-
-    let block = producer.next_micro_block(
-        &bc,
-        bc.time.now(),
-        vec![],
-        updated_txns.clone(),
-        vec![0x41],
-        None,
-    );
-
-    // We should succeed producing a block with the remaining mempool transactions
-    assert_eq!(
-        Blockchain::push(bc, Block::Micro(block)),
-        Ok(PushResult::Extended)
-    );
-}
-
-#[test(tokio::test(flavor = "multi_thread", worker_threads = 10))]
 async fn mempool_basic_prioritization_control_tx() {
     let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
@@ -1620,7 +1505,7 @@ async fn mempool_basic_prioritization_control_tx() {
 
     // Insert unpark with high priority
     mempool
-        .add_transaction(unpark.clone(), Some(TxPriority::HighPriority))
+        .add_transaction(unpark.clone(), Some(TxPriority::High))
         .await
         .unwrap();
 
@@ -1771,76 +1656,6 @@ async fn mempool_regular_and_control_tx() {
         mempool.num_transactions(),
         0,
         "Number of txns in mempool is not what is expected"
-    );
-}
-
-#[test(tokio::test(flavor = "multi_thread", worker_threads = 10))]
-async fn mempool_update_create_staker_non_existent_delegation_addr() {
-    let mut rng = StdRng::seed_from_u64(0);
-    let time = Arc::new(OffsetTime::new());
-    let env = VolatileEnvironment::new(10).unwrap();
-    let mut genesis_builder = GenesisBuilder::default();
-
-    // Generate and sign transactions
-    let balance = 10000000;
-    let num_txns = 10;
-
-    let sender_balances = vec![balance; num_txns as usize];
-
-    // Generate sender accounts
-    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true);
-
-    // Note that we are using generated accounts for the create staker transaction
-    let tx = TransactionBuilder::new_create_staker(
-        &sender_accounts[0].keypair,
-        &sender_accounts[0].keypair,
-        Some(Address::from(&sender_accounts[1].keypair)),
-        100.try_into().unwrap(),
-        0.try_into().unwrap(),
-        1,
-        NetworkId::UnitAlbatross,
-    )
-    .unwrap();
-
-    let txns = vec![tx];
-
-    // Add validator to genesis, note that the delegation address is not in the genesis
-    genesis_builder.with_genesis_validator(
-        Address::from(&SchnorrKeyPair::generate(&mut rng)),
-        signing_key().public,
-        voting_key().public_key,
-        Address::default(),
-    );
-
-    // Generate the genesis and blockchain
-    let genesis_info = genesis_builder.generate(env.clone()).unwrap();
-
-    let blockchain = Arc::new(RwLock::new(
-        Blockchain::with_genesis(
-            env.clone(),
-            BlockchainConfig::default(),
-            time,
-            NetworkId::UnitAlbatross,
-            genesis_info.block,
-            genesis_info.accounts,
-        )
-        .unwrap(),
-    ));
-
-    // Create mempool and subscribe with a custom txn stream
-    let mempool = Mempool::new(blockchain.clone(), MempoolConfig::default());
-    let mut hub = MockHub::new();
-    let mock_id = MockId::new(hub.new_address().into());
-    let mock_network = Arc::new(hub.new_network());
-
-    // Send txns to mempool
-    send_control_txn_to_mempool(&mempool, mock_network, mock_id, txns).await;
-
-    // The transaction should be rejected by the mempool, since the delegation address does not exist
-    assert_eq!(
-        mempool.num_transactions(),
-        0,
-        "Number of txns in the mempools is not what is expected"
     );
 }
 

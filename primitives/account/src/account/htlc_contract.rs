@@ -232,6 +232,16 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
 
         reserved_balance.reserve(self.balance, transaction.total_value())
     }
+
+    fn release_balance(
+        &self,
+        transaction: &Transaction,
+        reserved_balance: &mut ReservedBalance,
+        _data_store: DataStoreRead,
+    ) -> Result<(), AccountError> {
+        reserved_balance.release(transaction.total_value());
+        Ok(())
+    }
 }
 
 impl AccountInherentInteraction for HashedTimeLockedContract {

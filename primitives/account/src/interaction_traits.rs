@@ -87,6 +87,13 @@ pub trait AccountTransactionInteraction: Sized {
         block_state: &BlockState,
         data_store: DataStoreRead,
     ) -> Result<(), AccountError>;
+
+    fn release_balance(
+        &self,
+        transaction: &Transaction,
+        reserved_balance: &mut ReservedBalance,
+        data_store: DataStoreRead,
+    ) -> Result<(), AccountError>;
 }
 
 pub trait AccountInherentInteraction: Sized {

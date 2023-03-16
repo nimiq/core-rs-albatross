@@ -680,7 +680,7 @@ where
         tokio::spawn(async move {
             debug!("Adding unpark transaction to mempool");
             if mempool
-                .add_transaction(unpark_transaction, Some(TxPriority::HighPriority))
+                .add_transaction(unpark_transaction, Some(TxPriority::High))
                 .await
                 .is_err()
             {

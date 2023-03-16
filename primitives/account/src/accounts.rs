@@ -104,6 +104,26 @@ impl Accounts {
         }
     }
 
+    pub fn release_balance(
+        &self,
+        account: &Account,
+        transaction: &Transaction,
+        reserved_balance: &mut ReservedBalance,
+        txn_option: Option<&DBTransaction>,
+    ) -> Result<(), AccountError> {
+        // This assumes that the given account corresponds to the sender of the given transaction.
+        let store = DataStore::new(&self.tree, &transaction.sender);
+
+        match txn_option {
+            Some(txn) => account.release_balance(transaction, reserved_balance, store.read(txn)),
+            None => account.release_balance(
+                transaction,
+                reserved_balance,
+                store.read(&ReadTransaction::new(&self.env)),
+            ),
+        }
+    }
+
     pub fn data_store(&self, address: &Address) -> DataStore {
         DataStore::new(&self.tree, address)
     }

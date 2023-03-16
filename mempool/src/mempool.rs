@@ -1,18 +1,19 @@
 use futures::future::{AbortHandle, Abortable};
 use futures::lock::{Mutex, MutexGuard};
 use futures::stream::BoxStream;
-use parking_lot::{RwLock, RwLockUpgradableReadGuard};
+use parking_lot::RwLock;
+use std::collections::HashSet;
 use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
 use tokio_metrics::TaskMonitor;
 
 use beserial::Serialize;
+use nimiq_account::ReservedBalance;
 use nimiq_block::Block;
 use nimiq_blockchain::{Blockchain, TransactionVerificationCache};
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_network_interface::network::{Network, Topic};
-use nimiq_primitives::coin::Coin;
 use nimiq_transaction::{ControlTransactionTopic, Transaction, TransactionTopic};
 
 use crate::config::MempoolConfig;
@@ -21,7 +22,7 @@ use crate::filter::{MempoolFilter, MempoolRules};
 #[cfg(feature = "metrics")]
 use crate::mempool_metrics::MempoolMetrics;
 use crate::mempool_state::{EvictionReason, MempoolState};
-use crate::mempool_transactions::TxPriority;
+use crate::mempool_transactions::{MempoolTransactions, TxPriority};
 use crate::verify::{verify_tx, VerifyErr};
 
 /// Struct defining the Mempool
@@ -285,7 +286,7 @@ impl Mempool {
         for transaction in &transactions {
             let tx_hash: Blake2bHash = transaction.hash();
             if blockchain.contains_tx_in_validity_window(&tx_hash, None) {
-                mempool_state.remove(&tx_hash, EvictionReason::AlreadyIncluded);
+                mempool_state.remove(&blockchain, &tx_hash, EvictionReason::AlreadyIncluded);
             }
         }
     }
@@ -309,17 +310,15 @@ impl Mempool {
         adopted_blocks: &[(Blake2bHash, Block)],
         reverted_blocks: &[(Blake2bHash, Block)],
     ) {
-        // Acquire the mempool and blockchain locks
+        // Acquire the mempool and blockchain locks.
         let blockchain = self.blockchain.read();
         let mut mempool_state = self.state.write();
 
-        let block_height = blockchain.block_number() + 1;
-
         // First remove the transactions that are no longer valid due to age.
-        let expired_txns = mempool_state.get_expired_txns(block_height);
-
+        let next_block_number = blockchain.block_number() + 1;
+        let expired_txns = mempool_state.get_expired_txns(next_block_number);
         for tx_hash in expired_txns {
-            mempool_state.remove(&tx_hash, EvictionReason::Expired);
+            mempool_state.remove(&blockchain, &tx_hash, EvictionReason::Expired);
         }
 
         // Now iterate over the transactions in the adopted blocks:
@@ -327,10 +326,10 @@ impl Mempool {
         //    remove it from the mempool
         //  else
         //    if we know the sender
-        //      update the sender state (some transactions could become invalid )
+        //      update the sender state (some transactions could become invalid)
         //    else
         //      we don't care, since it won't affect our senders balance
-        //
+        let mut affected_senders = HashSet::new();
         for (_, block) in adopted_blocks {
             if let Some(transactions) = block.transactions() {
                 for tx in transactions {
@@ -340,79 +339,45 @@ impl Mempool {
                     // Check if we already know this transaction. If yes, a known transaction was
                     // mined so we need to remove it from the mempool.
                     if mempool_state.contains(&tx_hash) {
-                        mempool_state.remove(&tx_hash, EvictionReason::AlreadyIncluded);
+                        mempool_state.remove(
+                            &blockchain,
+                            &tx_hash,
+                            EvictionReason::AlreadyIncluded,
+                        );
                         continue;
                     }
 
                     // Check if we know the sender of this transaction.
-                    if let Some(sender_state) = mempool_state.state_by_sender.get(&tx.sender) {
+                    if mempool_state.state_by_sender.contains_key(&tx.sender) {
                         // This an unknown transaction from a known sender, we need to update our
                         // senders balance and some transactions could become invalid
-
-                        // Obtain the sender account. Signaling txns from adopted blocks should be allowed
-                        let sender_account = blockchain.get_account(&tx.sender);
-                        let sender_balance = sender_account.balance();
-
-                        // trace!(
-                        //     reason = "The sender was pruned/removed",
-                        //     "Mempool-update removing all tx from sender {} from mempool",
-                        //     tx.sender
-                        // );
-                        // // The account from this sender was pruned/removed, so we need to delete all txns sent from this address
-                        // mempool_state.remove_sender_txns(&tx.sender);
-                        // continue;
-
-                        // Check if the sender still has enough funds to pay for all pending
-                        // transactions.
-                        if sender_state.reserved_balance.balance() > sender_balance {
-                            // If not, we remove transactions until he is able to pay.
-                            let mut new_total = Coin::ZERO;
-
-                            // TODO: We could have per sender transactions ordered by fee to try to
-                            //       keep the ones with higher fee
-                            let sender_txs: Vec<Blake2bHash> =
-                                sender_state.txns.iter().cloned().collect();
-
-                            let txs_to_remove: Vec<&Blake2bHash> = sender_txs
-                                .iter()
-                                .filter(|hash| {
-                                    let old_tx = mempool_state.get(hash).unwrap();
-
-                                    // The sender must be able to at least pay the fee (in case the tx fails)
-                                    // (Assuming that all pending txns in the mempool for this sender are included in a block)
-
-                                    // FIXME FIXME FIXME
-                                    // if !AccountTransactionInteraction::reserve_balance(
-                                    //     &sender_account,
-                                    //     old_tx,
-                                    //     new_total + old_tx.fee,
-                                    //     blockchain.timestamp(),
-                                    // ) {
-                                    //     // If the fee cannot be paid for this transaction, we filter it
-                                    //     return true;
-                                    // }
-
-                                    if old_tx.total_value() + new_total <= sender_balance {
-                                        new_total += old_tx.total_value();
-                                        false
-                                    } else {
-                                        true
-                                    }
-                                })
-                                .collect();
-
-                            for hash in txs_to_remove {
-                                trace!(
-                                    reason = "Sender no longer has funds to pay for tx",
-                                    "Mempool-update removing tx {} from mempool",
-                                    hash
-                                );
-                                mempool_state.remove(hash, EvictionReason::Invalid);
-                            }
-                        }
+                        affected_senders.insert(tx.sender.clone());
                     }
                 }
             }
+        }
+
+        // Update all sender balances that were affected by the adopted blocks.
+        // Remove the transactions that have become invalid.
+        for address in affected_senders {
+            let sender_account = blockchain.get_account(&address);
+            let mut sender_state = mempool_state.state_by_sender.remove(&address).unwrap();
+            sender_state.reserved_balance = ReservedBalance::new(address.clone());
+
+            // TODO: We should have per sender transactions ordered by fee to try to
+            //       keep the ones with higher fee
+            sender_state.txns.retain(|tx_hash| {
+                let tx = mempool_state.get(tx_hash).unwrap();
+                let still_valid = blockchain
+                    .reserve_balance(&sender_account, tx, &mut sender_state.reserved_balance)
+                    .is_ok();
+                if !still_valid {
+                    mempool_state.remove(&blockchain, tx_hash, EvictionReason::Invalid);
+                }
+                still_valid
+            });
+
+            mempool_state.state_by_sender.insert(address, sender_state);
         }
 
         // Iterate over the transactions in the reverted blocks,
@@ -420,11 +385,9 @@ impl Mempool {
         // This is similar to an operation where we try to add a transaction,
         // the only difference is that we don't need to re-check signature
         for (_, block) in reverted_blocks {
-            let block_height = blockchain.block_number() + 1;
-
             if let Some(transactions) = block.transactions() {
                 for tx in transactions {
-                    let tx = &tx.get_raw_transaction();
+                    let tx = tx.get_raw_transaction();
                     let tx_hash = tx.hash();
 
                     // Check if we already know this transaction. If yes, skip ahead.
@@ -433,35 +396,17 @@ impl Mempool {
                     }
 
                     // Check if transaction is still valid.
-                    if !tx.is_valid_at(block_height)
-                        || blockchain.contains_tx_in_validity_window(&tx_hash, None)
-                    {
-                        // Tx has expired or is already included in the new chain, so skip it
-                        // (TX is lost...)
+                    if !tx.is_valid_at(next_block_number) {
                         continue;
                     }
 
-                    // Get the sender's account balance.
-                    let sender_balance = blockchain.get_account(&tx.sender).balance();
-
-                    // Get the sender's transaction total.
-                    let sender_total = match mempool_state.state_by_sender.get(&tx.sender) {
-                        None => Coin::ZERO,
-                        Some(sender_state) => sender_state.reserved_balance.balance(),
-                    };
-
-                    // Calculate the new balance assuming we add this transaction to the mempool
-                    let pending_balance = tx.total_value() + sender_total;
-
-                    if pending_balance <= sender_balance {
-                        //TODO: This could be improved by re-adding unpark txns with high priority
-                        mempool_state.put(tx, TxPriority::MediumPriority);
-                    } else {
-                        debug!(
-                            block_number = block.block_number(),
-                            "Tx from reverted block was dropped because of insufficient funds tx_hash={}", tx_hash
-                        );
+                    // Check that the transaction has not already been included.
+                    if blockchain.contains_tx_in_validity_window(&tx_hash, None) {
+                        continue;
                     }
+
+                    // Add the transaction to the mempool. Balance checks are performed within put().
+                    mempool_state.put(&blockchain, tx, TxPriority::Medium).ok();
                 }
             }
         }
@@ -469,132 +414,88 @@ impl Mempool {
 
     /// Returns a vector with accepted transactions from the mempool.
     ///
-    /// Returns the highest fee per byte up to max_bytes transactions and removes them from the mempool
-    /// It also return the sum of the serialied size of the returned transactions
+    /// Returns the highest fee per byte up to max_bytes transactions and removes them from the mempool.
+    /// It also return the sum of the serialized size of the returned transactions.
     pub fn get_transactions_for_block(&self, max_bytes: usize) -> (Vec<Transaction>, usize) {
-        let mut tx_vec = vec![];
+        let blockchain = self.blockchain.read();
+        let mut state = self.state.write();
+        let (txs, size) =
+            Self::get_transactions_for_block_impl(&mut state.regular_transactions, max_bytes);
 
-        let state = self.state.upgradable_read();
-
-        if state.regular_transactions.is_empty() {
-            log::debug!("Requesting regular txns and there are no txns in the mempool ");
-            return (tx_vec, 0_usize);
-        }
-
-        let mut size = 0_usize;
-
-        let mut mempool_state_upgraded = RwLockUpgradableReadGuard::upgrade(state);
-
-        loop {
-            // Get the hash of the highest paying regular transaction.
-            let tx_hash = match mempool_state_upgraded
-                .regular_transactions
-                .best_transactions
-                .peek()
-            {
-                None => {
-                    break;
-                }
-                Some((tx_hash, _)) => tx_hash.clone(),
-            };
-
-            // Get the transaction.
-            let tx = mempool_state_upgraded.get(&tx_hash).unwrap().clone();
-
-            // Calculate size. If we can't fit the transaction in the block, then we stop here.
-            // TODO: We can optimize this. There might be a smaller transaction that still fits.
-            // We need to account for one extra byte per transaction to encode its final execution status
-            let next_size = size + 1 + tx.serialized_size();
-
-            if next_size > max_bytes {
-                break;
-            }
-
-            size = next_size;
-
-            // Remove the transaction from the mempool.
-            mempool_state_upgraded.remove(&tx_hash, EvictionReason::BlockBuilding);
-
-            // Push the transaction to our output vector.
-            tx_vec.push(tx);
+        for tx in &txs {
+            state.remove(&blockchain, &tx.hash(), EvictionReason::BlockBuilding);
         }
 
         debug!(
-            returned_txs = tx_vec.len(),
-            remaining_txs = mempool_state_upgraded
-                .regular_transactions
-                .transactions
-                .len(),
+            returned_txs = txs.len(),
+            remaining_txs = state.regular_transactions.len(),
             "Returned regular transactions from mempool"
         );
 
-        (tx_vec, size)
+        (txs, size)
     }
 
     /// Returns a vector with accepted control transactions from the mempool.
     ///
-    /// Returns the highest fee per byte up to max_bytes transactions and removes them from the mempool
+    /// Returns the highest fee per byte up to max_bytes transactions and removes them from the mempool.
+    /// It also return the sum of the serialized size of the returned transactions.
     pub fn get_control_transactions_for_block(
         &self,
         max_bytes: usize,
     ) -> (Vec<Transaction>, usize) {
-        let mut tx_vec = vec![];
+        let blockchain = self.blockchain.read();
+        let mut state = self.state.write();
+        let (txs, size) =
+            Self::get_transactions_for_block_impl(&mut state.control_transactions, max_bytes);
 
-        let state = self.state.upgradable_read();
-
-        if state.control_transactions.is_empty() {
-            log::debug!("Requesting control txns and there are no txns in the mempool ");
-            return (tx_vec, 0_usize);
+        for tx in &txs {
+            state.remove(&blockchain, &tx.hash(), EvictionReason::BlockBuilding);
         }
 
+        debug!(
+            returned_txs = txs.len(),
+            remaining_txs = state.control_transactions.len(),
+            "Returned control transactions from mempool"
+        );
+
+        (txs, size)
+    }
+
+    fn get_transactions_for_block_impl(
+        transactions: &mut MempoolTransactions,
+        max_bytes: usize,
+    ) -> (Vec<Transaction>, usize) {
+        let mut txs = vec![];
         let mut size = 0_usize;
 
-        let mut mempool_state_upgraded = RwLockUpgradableReadGuard::upgrade(state);
-
         loop {
-            // Get the hash of the highest paying control transactions.
-            let tx_hash = match mempool_state_upgraded
-                .control_transactions
-                .best_transactions
-                .peek()
-            {
-                None => {
-                    break;
-                }
+            // Get the hash of the highest paying transactions.
+            let tx_hash = match transactions.best_transactions.peek() {
+                None => break,
                 Some((tx_hash, _)) => tx_hash.clone(),
             };
 
             // Get the transaction.
-            let tx = mempool_state_upgraded.get(&tx_hash).unwrap().clone();
+            let tx = transactions.get(&tx_hash).unwrap().clone();
 
             // Calculate size. If we can't fit the transaction in the block, then we stop here.
             // TODO: We can optimize this. There might be a smaller transaction that still fits.
             // We need to account for one extra byte per transaction to encode its final execution status
             let next_size = size + 1 + tx.serialized_size();
-
             if next_size > max_bytes {
                 break;
             }
-
             size = next_size;
 
-            // Remove the transaction from the mempool.
-            mempool_state_upgraded.remove(&tx_hash, EvictionReason::BlockBuilding);
+            // Remove the transaction from best_transactions so that we can advance.
+            // The caller needs to clean up the rest of the data structures.
+            transactions.best_transactions.pop();
 
             // Push the transaction to our output vector.
-            tx_vec.push(tx);
+            txs.push(tx);
         }
 
-        debug!(
-            returned_txs = tx_vec.len(),
-            remaining_txs = mempool_state_upgraded
-                .control_transactions
-                .transactions
-                .len(),
-            "Returned control transactions from mempool"
-        );
-
-        (tx_vec, size)
+        (txs, size)
     }
 
     /// Adds a transaction to the Mempool.
@@ -606,21 +507,16 @@ impl Mempool {
         let blockchain = Arc::clone(&self.blockchain);
         let mempool_state = Arc::clone(&self.state);
         let filter = Arc::clone(&self.filter);
-        let network_id = Arc::new(blockchain.read().network_id);
-        let verify_tx_ret =
-            verify_tx(&transaction, blockchain, network_id, &mempool_state, filter).await;
-
-        match verify_tx_ret {
-            Ok(mempool_state_lock) => {
-                RwLockUpgradableReadGuard::upgrade(mempool_state_lock).put(
-                    &transaction,
-                    tx_priority.unwrap_or(TxPriority::MediumPriority),
-                );
-
-                Ok(())
-            }
-            Err(e) => Err(e),
-        }
+        let network_id = blockchain.read().network_id;
+        verify_tx(
+            &transaction,
+            blockchain,
+            network_id,
+            &mempool_state,
+            filter,
+            tx_priority.unwrap_or(TxPriority::Medium),
+        )
+        .await
     }
 
     /// Checks whether a transaction has been filtered
