@@ -635,7 +635,7 @@ impl ConnectionHandler for DiscoveryHandler {
                                     }
                                 }
                             }
-                            Poll::Ready(None) => todo!("Interval terminated"),
+                            Poll::Ready(None) => unreachable!("Interval terminated"),
                             Poll::Pending => break,
                         }
                     }
