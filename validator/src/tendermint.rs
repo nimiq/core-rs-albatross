@@ -407,15 +407,17 @@ where
             debug!(%error, "Tendermint - await_proposal: Invalid block header, VRF seed verification failed");
             Err(ProposalError::InvalidProposal)
         } else {
-            // Get a write transaction to the database.
-            let mut txn = blockchain.write_transaction();
-
             // Get the blockchain state.
             let state = blockchain.state();
+
+            // Get a write transaction to the database, even if we don't intend to actually write
+            // anything out.
+            let mut txn = blockchain.write_transaction();
 
             // Update our blockchain state using the received proposal. If we can't update the state, we
             // return a proposal timeout.
             if blockchain.commit_accounts(state, &block, &mut txn).is_err() {
+                txn.abort();
                 debug!("Tendermint - await_proposal: Can't update state");
                 return Err(ProposalError::InvalidProposal);
             }
@@ -423,7 +425,9 @@ where
             // Check the validity of the block against our state. If it is invalid, we return a proposal
             // timeout. This also returns the block body that matches the block header
             // (assuming that the block is valid).
-            match blockchain.verify_block_state(state, &block, Some(&txn)) {
+            let verification_result = blockchain.verify_block_state(state, &block, Some(&txn));
+            txn.abort();
+            match verification_result {
                 Ok(Some(inherent)) => Ok(Body(inherent)),
                 Ok(None) => Ok(precalculated_inherent.unwrap()),
                 Err(error) => {
