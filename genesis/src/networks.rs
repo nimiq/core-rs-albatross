@@ -8,15 +8,14 @@ use lazy_static::lazy_static;
 #[cfg(feature = "genesis-override")]
 use beserial::Serialize;
 use beserial::{Deserialize, DeserializeWithLength, SerializeWithLength};
-#[cfg(feature = "accounts")]
 use nimiq_block::Block;
 #[cfg(feature = "genesis-override")]
 use nimiq_database::volatile::VolatileEnvironment;
 #[cfg(feature = "genesis-override")]
 use nimiq_genesis_builder::{GenesisBuilder, GenesisBuilderError, GenesisInfo};
 use nimiq_hash::Blake2bHash;
-#[cfg(feature = "accounts")]
 pub use nimiq_primitives::networks::NetworkId;
+#[cfg(feature = "accounts")]
 use nimiq_primitives::trie::TrieItem;
 
 #[derive(Clone, Debug)]
