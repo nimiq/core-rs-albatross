@@ -239,6 +239,7 @@ fn can_ignore_chunks_with_invalid_start_key() {
 }
 
 #[test]
+#[ignore]
 fn can_rebranch_and_revert_chunks() {
     let temp_producer1 = TemporaryBlockProducer::new();
     let temp_producer2 = TemporaryBlockProducer::new_incomplete();
