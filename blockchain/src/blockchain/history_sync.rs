@@ -204,7 +204,7 @@ impl Blockchain {
             // Commit block to AccountsTree and create the receipts.
             let block_state = BlockState::new(block_numbers[i], block_timestamps[i]);
             let receipts = this.state.accounts.commit_batch(
-                &mut txn,
+                &mut (&mut txn).into(),
                 &txns,
                 &block_inherents[i],
                 &block_state,
@@ -229,7 +229,7 @@ impl Blockchain {
                 return Err(PushError::AccountsError(e));
             }
         }
-        this.state.accounts.finalize_batch(&mut txn);
+        this.state.accounts.finalize_batch(&mut (&mut txn).into());
 
         // Unwrap the block.
         let macro_block = block.unwrap_macro_ref();
@@ -441,7 +441,7 @@ impl Blockchain {
             // Revert the accounts tree. This also reverts the history store.
             self.revert_accounts(
                 &self.state.accounts,
-                write_txn,
+                &mut write_txn.into(),
                 &current_info.head,
                 &mut BlockLogger::empty(),
             )?;

@@ -1,8 +1,8 @@
-use nimiq_database::{TransactionProxy, WriteTransactionProxy};
+use nimiq_database::TransactionProxy;
 use nimiq_keys::Address;
 use nimiq_primitives::key_nibbles::KeyNibbles;
 use nimiq_serde::{Deserialize, Serialize};
-use nimiq_trie::trie::TrieNodeIter;
+use nimiq_trie::{trie::TrieNodeIter, WriteTransactionProxy};
 
 use crate::{
     data_store_ops::{DataStoreIterOps, DataStoreReadOps},
@@ -45,10 +45,10 @@ impl<'tree> DataStore<'tree> {
         DataStoreRead { store: self, txn }
     }
 
-    pub fn write<'store, 'txn, 'env>(
+    pub fn write<'store, 'txn, 'txni, 'env>(
         &'store self,
-        txn: &'txn mut WriteTransactionProxy<'env>,
-    ) -> DataStoreWrite<'store, 'tree, 'txn, 'env> {
+        txn: &'txn mut WriteTransactionProxy<'txni, 'env>,
+    ) -> DataStoreWrite<'store, 'tree, 'txn, 'txni, 'env> {
         DataStoreWrite { store: self, txn }
     }
 }
@@ -76,12 +76,12 @@ impl<'store, 'tree, 'txn, 'env> DataStoreIterOps for DataStoreRead<'store, 'tree
     }
 }
 
-pub struct DataStoreWrite<'store, 'tree, 'txn, 'env> {
+pub struct DataStoreWrite<'store, 'tree, 'txn, 'txni, 'env> {
     store: &'store DataStore<'tree>,
-    txn: &'txn mut WriteTransactionProxy<'env>,
+    txn: &'txn mut WriteTransactionProxy<'txni, 'env>,
 }
 
-impl<'store, 'tree, 'txn, 'env> DataStoreWrite<'store, 'tree, 'txn, 'env> {
+impl<'store, 'tree, 'txn, 'txni, 'env> DataStoreWrite<'store, 'tree, 'txn, 'txni, 'env> {
     pub fn get<T: Deserialize>(&self, key: &KeyNibbles) -> Option<T> {
         self.store.get(self.txn, key)
     }
@@ -112,7 +112,8 @@ mod tests {
         let store = DataStore::new(&tree, &Policy::STAKING_CONTRACT_ADDRESS);
 
         let mut txn = env.write_transaction();
-        let mut write = store.write(&mut txn);
+        let mut trie_txn = (&mut txn).into();
+        let mut write = store.write(&mut trie_txn);
 
         let key_1 = "290d7f3".parse().unwrap();
         let key_2 = "290d252".parse().unwrap();

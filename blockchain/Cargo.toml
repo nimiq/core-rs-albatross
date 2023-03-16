@@ -40,6 +40,7 @@ nimiq-mmr = { path = "../primitives/mmr" }
 nimiq-primitives = { path = "../primitives" }
 nimiq-serde = { path = "../serde" }
 nimiq-transaction = { path = "../primitives/transaction" }
+nimiq-trie = { path = "../primitives/trie" }
 nimiq-utils = { path = "../utils", features = ["math", "time"] }
 nimiq-vrf = { path = "../vrf" }
 nimiq-zkp = { path = "../zkp" }

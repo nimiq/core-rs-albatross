@@ -436,9 +436,12 @@ where
 
             // Update our blockchain state using the received proposal. If we can't update the state, we
             // return a proposal timeout.
-            if let Err(error) =
-                blockchain.commit_accounts(state, &block, &mut txn, &mut BlockLogger::empty())
-            {
+            if let Err(error) = blockchain.commit_accounts(
+                state,
+                &block,
+                &mut (&mut txn).into(),
+                &mut BlockLogger::empty(),
+            ) {
                 debug!(%error, %block, "Tendermint - await_proposal: Failed to commit accounts");
                 return Err(ProposalError::InvalidProposal);
             }

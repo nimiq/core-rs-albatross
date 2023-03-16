@@ -85,15 +85,15 @@ impl<'read, T: DataStoreReadOps + DataStoreIterOps> StakingContractStoreRead<'re
 }
 
 #[cfg(feature = "interaction-traits")]
-pub struct StakingContractStoreWrite<'write, 'store, 'tree, 'txn, 'env>(
-    &'write mut DataStoreWrite<'store, 'tree, 'txn, 'env>,
+pub struct StakingContractStoreWrite<'write, 'store, 'tree, 'txn, 'txni, 'env>(
+    &'write mut DataStoreWrite<'store, 'tree, 'txn, 'txni, 'env>,
 );
 
 #[cfg(feature = "interaction-traits")]
-impl<'write, 'store, 'tree, 'txn, 'env>
-    StakingContractStoreWrite<'write, 'store, 'tree, 'txn, 'env>
+impl<'write, 'store, 'tree, 'txn, 'txni, 'env>
+    StakingContractStoreWrite<'write, 'store, 'tree, 'txn, 'txni, 'env>
 {
-    pub fn new(data_store: &'write mut DataStoreWrite<'store, 'tree, 'txn, 'env>) -> Self {
+    pub fn new(data_store: &'write mut DataStoreWrite<'store, 'tree, 'txn, 'txni, 'env>) -> Self {
         StakingContractStoreWrite(data_store)
     }
 
@@ -126,8 +126,8 @@ impl<'write, 'store, 'tree, 'txn, 'env>
 }
 
 #[cfg(feature = "interaction-traits")]
-impl<'write, 'store, 'tree, 'txn, 'env> StakingContractStoreReadOps
-    for StakingContractStoreWrite<'write, 'store, 'tree, 'txn, 'env>
+impl<'write, 'store, 'tree, 'txn, 'txni, 'env> StakingContractStoreReadOps
+    for StakingContractStoreWrite<'write, 'store, 'tree, 'txn, 'txni, 'env>
 {
     fn get_validator(&self, address: &Address) -> Option<Validator> {
         self.0.get(&StakingContractStore::validator_key(address))

@@ -22,6 +22,7 @@ use nimiq_transaction::{
     SignatureProof, Transaction,
 };
 use nimiq_transaction_builder::TransactionProofBuilder;
+use nimiq_trie::WriteTransactionProxy;
 use rand::{CryptoRng, Rng};
 
 pub enum ValidatorState {
@@ -380,7 +381,8 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
     }
 
     pub fn put_account(&self, address: &Address, account: Account) {
-        let mut txn = self.accounts.env.write_transaction();
+        let mut raw_txn = self.accounts.env.write_transaction();
+        let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
         self.accounts
             .tree
             .put(&mut txn, &KeyNibbles::from(address), account)
@@ -389,7 +391,7 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
             .tree
             .update_root(&mut txn)
             .expect("Tree must be complete");
-        txn.commit();
+        raw_txn.commit();
     }
 
     fn ensure_outgoing_account(
@@ -725,7 +727,8 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
         // Get the deposit value.
         let deposit = Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT);
 
-        let mut txn = self.accounts.env.write_transaction();
+        let mut raw_txn = self.accounts.env.write_transaction();
+        let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
         let data_store = self.accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
         let mut data_store_write = data_store.write(&mut txn);
         let mut store = StakingContractStoreWrite::new(&mut data_store_write);
@@ -792,7 +795,7 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
             .tree
             .update_root(&mut txn)
             .expect("Tree must be complete");
-        txn.commit();
+        raw_txn.commit();
 
         (
             validator_key_pair,

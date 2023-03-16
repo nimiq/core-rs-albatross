@@ -297,7 +297,7 @@ impl Blockchain {
         // Initialize accounts.
         let accounts = Accounts::new(env.clone());
         let mut txn = env.write_transaction();
-        accounts.init(&mut txn, genesis_accounts);
+        accounts.init(&mut (&mut txn).into(), genesis_accounts);
 
         // Store genesis block.
         chain_store.put_chain_info(&mut txn, &head_hash, &main_chain, true);

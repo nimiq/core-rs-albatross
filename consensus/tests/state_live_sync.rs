@@ -60,7 +60,7 @@ fn blockchain(complete: bool) -> Blockchain {
         blockchain
             .state
             .accounts
-            .reinitialize_as_incomplete(&mut txn);
+            .reinitialize_as_incomplete(&mut (&mut txn).into());
         txn.commit();
     }
 

@@ -1,6 +1,6 @@
 use nimiq_database::{
     traits::{Database, WriteTransaction},
-    DatabaseProxy, TransactionProxy as DBTransaction, WriteTransactionProxy,
+    DatabaseProxy, TransactionProxy as DBTransaction,
 };
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
@@ -14,7 +14,10 @@ use nimiq_primitives::{
     },
 };
 use nimiq_transaction::{inherent::Inherent, ExecutedTransaction, Transaction, TransactionFlags};
-use nimiq_trie::trie::{IncompleteTrie, MerkleRadixTrie};
+use nimiq_trie::{
+    trie::{IncompleteTrie, MerkleRadixTrie},
+    WriteTransactionProxy,
+};
 
 use crate::{
     Account, AccountInherentInteraction, AccountPruningInteraction, AccountReceipt,
@@ -253,7 +256,8 @@ impl Accounts {
         inherents: &[Inherent],
         block_state: &BlockState,
     ) -> Result<(Blake2bHash, Vec<ExecutedTransaction>), AccountError> {
-        let mut txn = self.env.write_transaction();
+        let mut raw_txn = self.env.write_transaction();
+        let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
         assert!(self.is_complete(Some(&txn)), "Tree must be complete");
 
         let receipts = self.commit(
@@ -276,7 +280,7 @@ impl Accounts {
 
         let hash = self.get_root_hash_assert(Some(&txn));
 
-        txn.abort();
+        raw_txn.abort();
 
         Ok((hash, executed_txns))
     }

@@ -15,7 +15,7 @@ use nimiq_block::{Block, MacroBlock, MacroBody, MacroHeader};
 use nimiq_bls::PublicKey as BlsPublicKey;
 use nimiq_database::{
     traits::{Database, WriteTransaction},
-    DatabaseProxy, WriteTransactionProxy,
+    DatabaseProxy,
 };
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
@@ -23,6 +23,7 @@ use nimiq_primitives::{
     account::AccountError, coin::Coin, key_nibbles::KeyNibbles, policy::Policy, trie::TrieItem,
 };
 use nimiq_serde::{DeserializeError, Serialize};
+use nimiq_trie::WriteTransactionProxy;
 use nimiq_vrf::VrfSeed;
 use thiserror::Error;
 use time::OffsetDateTime;
@@ -222,7 +223,8 @@ impl GenesisBuilder {
         let accounts = Accounts::new(env.clone());
 
         // Note: This line needs to be AFTER we call Accounts::new().
-        let mut txn = env.write_transaction();
+        let mut raw_txn = env.write_transaction();
+        let mut txn = (&mut raw_txn).into();
 
         debug!("Genesis accounts");
         for genesis_account in &self.basic_accounts {
@@ -328,7 +330,7 @@ impl GenesisBuilder {
             )
             .fold(Coin::ZERO, |sum, account| sum + account.balance());
 
-        txn.abort();
+        raw_txn.abort();
 
         // The header
         let header = MacroHeader {

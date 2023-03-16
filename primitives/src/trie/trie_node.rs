@@ -1,4 +1,4 @@
-use std::{io, ops::RangeFrom, slice};
+use std::{io, mem, ops::RangeFrom, slice};
 
 use byteorder::WriteBytesExt;
 use log::error;
@@ -233,12 +233,14 @@ impl TrieNode {
         Ok(())
     }
 
-    pub fn put_value(&mut self, new_value: Vec<u8>) -> Result<(), MerkleRadixTrieError> {
+    pub fn put_value(
+        &mut self,
+        new_value: Vec<u8>,
+    ) -> Result<Option<Vec<u8>>, MerkleRadixTrieError> {
         if self.root_data.is_some() {
             return Err(MerkleRadixTrieError::RootCantHaveValue);
         }
-        self.value = Some(new_value);
-        Ok(())
+        Ok(mem::replace(&mut self.value, Some(new_value)))
     }
 
     pub fn iter_children(&self) -> Iter {

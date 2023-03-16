@@ -97,7 +97,7 @@ fn it_can_create_batch_finalization_inherents() {
         .state()
         .accounts
         .commit(
-            &mut txn,
+            &mut (&mut txn).into(),
             &[],
             &[slash_inherent],
             &BlockState::new(Policy::blocks_per_batch() + 1, 1),

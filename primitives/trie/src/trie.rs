@@ -10,7 +10,7 @@ use std::{
 use log::error;
 use nimiq_database::{
     traits::{Database, ReadCursor, ReadTransaction, WriteTransaction},
-    DatabaseProxy, IntoIterProxy, TableProxy, TransactionProxy, WriteTransactionProxy,
+    DatabaseProxy, IntoIterProxy, TableProxy, TransactionProxy,
 };
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::{
@@ -24,6 +24,11 @@ use nimiq_primitives::{
     },
 };
 use nimiq_serde::{Deserialize, Serialize};
+
+use crate::{
+    transaction::{OldValue, TransactionExt as _},
+    WriteTransactionProxy,
+};
 
 /// A Merkle Radix Trie is a hybrid between a Merkle tree and a Radix trie. Like a Merkle tree each
 /// node contains the hashes of all its children. That creates a tree that is resistant to
@@ -116,7 +121,7 @@ impl MerkleRadixTrie {
         let tree = MerkleRadixTrie { db: table };
 
         let mut txn = db.write_transaction();
-        tree.init_root(&mut txn, incomplete);
+        tree.init_root(&mut (&mut txn).into(), incomplete);
         txn.commit();
 
         tree
@@ -129,7 +134,7 @@ impl MerkleRadixTrie {
             } else {
                 TrieNode::new_root()
             };
-            self.put_node(txn, &root);
+            self.put_node(txn, &root, OldValue::None);
         }
     }
 
@@ -254,13 +259,15 @@ impl MerkleRadixTrie {
     }
 
     fn get_node(&self, txn: &TransactionProxy, key: &KeyNibbles) -> Option<TrieNode> {
-        let mut node: TrieNode = txn.get(&self.db, key)?;
-        node.key = key.clone();
-        Some(node)
+        txn.get_node(&self.db, key)
     }
 
-    fn put_node(&self, txn: &mut WriteTransactionProxy, node: &TrieNode) {
-        txn.put_reserve(&self.db, &node.key, node);
+    fn put_node(&self, txn: &mut WriteTransactionProxy, node: &TrieNode, old_value: OldValue) {
+        txn.put_node(&self.db, node, old_value)
+    }
+
+    fn remove_node(&self, txn: &mut WriteTransactionProxy, key: &KeyNibbles, old_value: OldValue) {
+        txn.remove_node(&self.db, key, old_value)
     }
 
     /// Get the value at the given key. If there's no leaf or hybrid node at the given key then it
@@ -364,7 +371,7 @@ impl MerkleRadixTrie {
                     new_node
                         .put_child(&cur_node.key, Blake2bHash::default())
                         .unwrap();
-                    self.put_node(txn, &new_node);
+                    self.put_node(txn, &new_node, OldValue::None);
 
                     // Push the new node into the root path.
                     root_path.push(new_node);
@@ -375,7 +382,7 @@ impl MerkleRadixTrie {
                 } else {
                     // The new node is a sibling of the current node. Thus it is a leaf node.
                     let new_node = TrieNode::new_leaf(key.clone(), value);
-                    self.put_node(txn, &new_node);
+                    self.put_node(txn, &new_node, OldValue::None);
 
                     // We insert a new branch node as the parent of both the current node and the
                     // new node.
@@ -384,7 +391,7 @@ impl MerkleRadixTrie {
                     new_parent
                         .put_child(&new_node.key, new_node.hash_assert())
                         .unwrap();
-                    self.put_node(txn, &new_parent);
+                    self.put_node(txn, &new_parent, OldValue::None);
 
                     count_updates = CountUpdates {
                         branches: 1,
@@ -403,8 +410,8 @@ impl MerkleRadixTrie {
                 // Update the node and store it.
                 // TODO This unwrap() will fail when attempting to store a value at the root node
                 let prev_kind = cur_node.kind();
-                cur_node.put_value(value).unwrap();
-                self.put_node(txn, &cur_node);
+                let old_value = cur_node.put_value(value).unwrap();
+                self.put_node(txn, &cur_node, old_value.into());
 
                 count_updates = CountUpdates::from_update(prev_kind, cur_node.kind());
                 // Push the node into the root path.
@@ -418,14 +425,14 @@ impl MerkleRadixTrie {
                 Err(_) => {
                     // Create and store the new node.
                     let new_node = TrieNode::new_leaf(key.clone(), value);
-                    self.put_node(txn, &new_node);
+                    self.put_node(txn, &new_node, OldValue::None);
 
                     // Update the parent node and store it.
                     let old_kind = cur_node.kind();
                     cur_node
                         .put_child(&new_node.key, new_node.hash_assert())
                         .unwrap();
-                    self.put_node(txn, &cur_node);
+                    self.put_node(txn, &cur_node, OldValue::Unchanged);
 
                     count_updates = CountUpdates {
                         leaves: 1,
@@ -442,7 +449,7 @@ impl MerkleRadixTrie {
                 Ok(child_key) => {
                     root_path.push(cur_node);
 
-                    cur_node = self.get_node(txn, &child_key).unwrap();
+                    cur_node = txn.get_node(&self.db, &child_key).unwrap();
                 }
             }
         }
@@ -497,7 +504,7 @@ impl MerkleRadixTrie {
                     // We cannot continue further down as the next node is outside our trie.
                     // Update this node prior to `update_keys` (which only updates the other nodes in the root path).
                     node.put_child_no_hash(key).expect("Prefix must be correct");
-                    self.put_node(txn, &node);
+                    self.put_node(txn, &node, OldValue::Unchanged);
 
                     root_path.push(node);
                     break;
@@ -616,7 +623,7 @@ impl MerkleRadixTrie {
                     && cur_node.iter_children().count() == 1
                 {
                     count_updates.apply_update(prev_kind, None);
-                    txn.remove(&self.db, &cur_node.key);
+                    self.remove_node(txn, &cur_node.key, OldValue::Unchanged);
 
                     let only_child_key = cur_node
                         .iter_children()
@@ -630,7 +637,7 @@ impl MerkleRadixTrie {
                 } else {
                     count_updates.apply_update(prev_kind, cur_node.kind());
                 }
-                self.put_node(txn, &cur_node);
+                self.put_node(txn, &cur_node, OldValue::Unchanged);
             }
 
             if cur_node.key.len() == keys.start.len() {
@@ -711,7 +718,7 @@ impl MerkleRadixTrie {
             }
             count_updates.apply_update(prev_kind, cur_node.kind());
 
-            self.put_node(txn, &cur_node);
+            self.put_node(txn, &cur_node, OldValue::Unchanged);
 
             match last_item_proof.next() {
                 Some(n) => cur_proof = n,
@@ -855,7 +862,7 @@ impl MerkleRadixTrie {
 
         let mut root_node = self.get_root(txn).unwrap();
         root_node.root_data.as_mut().unwrap().incomplete = chunk.end_key.clone().map(|end| end..);
-        self.put_node(txn, &root_node);
+        self.put_node(txn, &root_node, OldValue::Unchanged);
 
         Ok(TrieChunkPushResult::Applied)
     }
@@ -908,7 +915,7 @@ impl MerkleRadixTrie {
         let mut root_node = self.get_root(txn).unwrap();
         root_node.root_data.as_mut().unwrap().incomplete =
             Some(ops::RangeFrom { start: start_key });
-        self.put_node(txn, &root_node);
+        self.put_node(txn, &root_node, OldValue::Unchanged);
 
         Ok(())
     }
@@ -945,7 +952,7 @@ impl MerkleRadixTrie {
                 // Remove the value from the node.
                 // PITODO check if hybrid or leaf node
                 let prev_kind = cur_node.kind();
-                cur_node.value = None;
+                let old_value = mem::replace(&mut cur_node.value, None);
                 let count_updates;
                 if cur_node.is_root() || cur_node.has_children() {
                     // Node was a hybrid node and is now a branch node.
@@ -954,7 +961,7 @@ impl MerkleRadixTrie {
                     // If it has only a single child and isn't the root node, merge it with that child.
                     if num_children == 1 && !cur_node.is_root() {
                         // Remove the node from the database.
-                        txn.remove(&self.db, &cur_node.key);
+                        self.remove_node(txn, &cur_node.key, old_value.into());
 
                         // Get the node's only child and add it to the root path.
                         let only_child_key = cur_node
@@ -982,7 +989,7 @@ impl MerkleRadixTrie {
                         count_updates = CountUpdates::from_update(prev_kind, cur_node.kind());
 
                         // Update the node and add it to the root path.
-                        self.put_node(txn, &cur_node);
+                        self.put_node(txn, &cur_node, old_value.into());
 
                         root_path.push(cur_node);
                     };
@@ -993,7 +1000,7 @@ impl MerkleRadixTrie {
                     return;
                 } else {
                     // Node was a leaf node, delete if from the database.
-                    txn.remove(&self.db, key);
+                    self.remove_node(txn, key, old_value.into());
                     break;
                 }
             }
@@ -1034,7 +1041,7 @@ impl MerkleRadixTrie {
             // child.
             if num_children == 1 && !parent_node.is_root() && !parent_node.is_hybrid() {
                 // Remove the node from the database.
-                txn.remove(&self.db, &parent_node.key);
+                self.remove_node(txn, &parent_node.key, OldValue::Unchanged);
                 count_updates.apply_update(parent_node.kind(), None);
 
                 // Get the node's only child and add it to the root path.
@@ -1058,7 +1065,7 @@ impl MerkleRadixTrie {
             // parent node in the database and the root path. Then we update the keys and hashes of
             // of the root path.
             else if !parent_node.is_empty() {
-                self.put_node(txn, &parent_node);
+                self.put_node(txn, &parent_node, OldValue::Unchanged);
 
                 root_path.push(parent_node);
 
@@ -1069,7 +1076,7 @@ impl MerkleRadixTrie {
             // Otherwise, our node must have no children and not be the root/hybrid node. In this case we
             // need to remove it too, so we loop again.
             else {
-                txn.remove(&self.db, &parent_node.key);
+                self.remove_node(txn, &parent_node.key, OldValue::Unchanged);
                 count_updates.apply_update(parent_node.kind(), None);
                 child_key = parent_node.key.clone();
             }
@@ -1260,7 +1267,7 @@ impl MerkleRadixTrie {
                     .expect("Root path must start with a root node");
                 count_updates.update_root_data(root_data);
                 if only_root_needs_update {
-                    self.put_node(txn, root);
+                    self.put_node(txn, root, OldValue::Unchanged);
                     return;
                 }
             }
@@ -1278,7 +1285,7 @@ impl MerkleRadixTrie {
                 .put_child(&child_node.key, Blake2bHash::default())
                 .unwrap();
             assert_eq!(root_path.is_empty(), parent_node.is_root());
-            self.put_node(txn, &parent_node);
+            self.put_node(txn, &parent_node, OldValue::Unchanged);
 
             child_node = parent_node;
         }
@@ -1312,7 +1319,7 @@ impl MerkleRadixTrie {
                 }
             }
         }
-        self.put_node(txn, &node);
+        self.put_node(txn, &node, OldValue::Unchanged);
         node.hash().ok_or(IncompleteTrie)
     }
 
@@ -1503,6 +1510,7 @@ impl<'txn, T: Deserialize> Iterator for TrieNodeIter<'txn, T> {
 
 #[cfg(test)]
 mod tests {
+    use nimiq_primitives::trie::trie_diff::{TrieDiff, ValueChange};
     use nimiq_test_log::test;
 
     use super::*;
@@ -1516,7 +1524,8 @@ mod tests {
 
         let env = nimiq_database::volatile::VolatileDatabase::new(20).unwrap();
         let trie = MerkleRadixTrie::new(env.clone(), "database");
-        let mut txn = env.write_transaction();
+        let mut raw_txn = env.write_transaction();
+        let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
 
         assert_eq!(trie.count_nodes(&txn), (0, 0, 0));
 
@@ -1579,7 +1588,8 @@ mod tests {
 
         let env = nimiq_database::volatile::VolatileDatabase::new(20).unwrap();
         let trie = MerkleRadixTrie::new(env.clone(), "database");
-        let mut txn = env.write_transaction();
+        let mut raw_txn = env.write_transaction();
+        let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
 
         trie.put(&mut txn, &key_1, 9).expect("complete trie");
         trie.put(&mut txn, &key_2, 8).expect("complete trie");
@@ -1638,7 +1648,8 @@ mod tests {
 
         let env = nimiq_database::volatile::VolatileDatabase::new(20).unwrap();
         let trie = MerkleRadixTrie::new(env.clone(), "database");
-        let mut txn = env.write_transaction();
+        let mut raw_txn = env.write_transaction();
+        let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
 
         trie.put(&mut txn, &key_1, 1u8).expect("complete trie");
         trie.put(&mut txn, &key_2, 2u8).expect("complete trie");
@@ -1740,7 +1751,8 @@ mod tests {
 
         let env = nimiq_database::volatile::VolatileDatabase::new(20).unwrap();
         let trie = MerkleRadixTrie::new(env.clone(), "database");
-        let mut txn = env.write_transaction();
+        let mut raw_txn = env.write_transaction();
+        let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
 
         let initial_hash = trie.root_hash_assert(&txn);
         assert_eq!(trie.count_nodes(&txn), (0, 0, 0));
@@ -1798,6 +1810,112 @@ mod tests {
     }
 
     #[test]
+    fn diffs_work() {
+        use self::ValueChange::*;
+
+        let key_1 = "413f22".parse().unwrap();
+        let key_2 = "413".parse().unwrap();
+        let key_3 = "413f227fa".parse().unwrap();
+        let key_4 = "413b391".parse().unwrap();
+        let key_5 = "412324".parse().unwrap();
+
+        let env = nimiq_database::volatile::VolatileDatabase::new(10).unwrap();
+        let trie = MerkleRadixTrie::new(env.clone(), "database");
+
+        let mut raw_txn = env.write_transaction();
+        let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
+
+        #[track_caller]
+        fn assert_diff(got: TrieDiff, mut wanted: Vec<(KeyNibbles, ValueChange)>) {
+            wanted.sort_by_key(|item| item.0.clone());
+            let got: Vec<_> = got
+                .iter()
+                .map(|(key, change)| (key.clone(), change.clone()))
+                .collect();
+            assert_eq!(got, wanted);
+        }
+
+        // Empty
+        txn.start_recording();
+        assert_diff(txn.stop_recording(), vec![]);
+
+        // Puts
+        txn.start_recording();
+        trie.put::<u8>(&mut txn, &key_1, 1).expect("complete trie");
+        trie.put::<u8>(&mut txn, &key_2, 2).expect("complete trie");
+        trie.put::<u8>(&mut txn, &key_3, 3).expect("complete trie");
+        trie.put::<u8>(&mut txn, &key_4, 4).expect("complete trie");
+        assert_diff(
+            txn.stop_recording(),
+            vec![
+                (key_1.clone(), Insert(vec![1])),
+                (key_2.clone(), Insert(vec![2])),
+                (key_3.clone(), Insert(vec![3])),
+                (key_4.clone(), Insert(vec![4])),
+            ],
+        );
+
+        // Non-existing delete
+        txn.start_recording();
+        trie.remove(&mut txn, &key_5);
+        assert_diff(txn.stop_recording(), vec![]);
+
+        // Delete
+        txn.start_recording();
+        trie.remove(&mut txn, &key_1);
+        assert_diff(txn.stop_recording(), vec![(key_1.clone(), Delete(vec![1]))]);
+
+        // Put followed by delete
+        txn.start_recording();
+        trie.put::<u8>(&mut txn, &key_1, 1).expect("complete trie");
+        trie.remove(&mut txn, &key_1);
+        assert_diff(txn.stop_recording(), vec![]);
+
+        // Delete followed by put of the same value
+        txn.start_recording();
+        trie.remove(&mut txn, &key_2);
+        trie.put::<u8>(&mut txn, &key_2, 2).expect("complete trie");
+        assert_diff(txn.stop_recording(), vec![]);
+
+        // Delete followed by put of a different value
+        txn.start_recording();
+        trie.remove(&mut txn, &key_3);
+        trie.put::<u8>(&mut txn, &key_3, 33).expect("complete trie");
+        assert_diff(
+            txn.stop_recording(),
+            vec![(key_3.clone(), Update(vec![3], vec![33]))],
+        );
+
+        // Two puts to the same existing key
+        txn.start_recording();
+        trie.put::<u8>(&mut txn, &key_2, 22).expect("complete trie");
+        trie.put::<u8>(&mut txn, &key_2, 222)
+            .expect("complete trie");
+        assert_diff(
+            txn.stop_recording(),
+            vec![(key_2.clone(), Update(vec![2], vec![222]))],
+        );
+
+        // Two puts to the same non-existing key
+        txn.start_recording();
+        trie.put::<u8>(&mut txn, &key_1, 11).expect("complete trie");
+        trie.put::<u8>(&mut txn, &key_1, 111)
+            .expect("complete trie");
+        assert_diff(
+            txn.stop_recording(),
+            vec![(key_1.clone(), Insert(vec![111]))],
+        );
+
+        // Puts to an existing key
+        txn.start_recording();
+        trie.put::<u8>(&mut txn, &key_4, 44).expect("complete trie");
+        assert_diff(
+            txn.stop_recording(),
+            vec![(key_4.clone(), Update(vec![4], vec![44]))],
+        );
+    }
+
+    #[test]
     fn get_predecessor_works() {
         let key_1 = "413f22".parse().unwrap();
         let key_2 = "413".parse().unwrap();
@@ -1809,7 +1927,8 @@ mod tests {
 
         let env = nimiq_database::volatile::VolatileDatabase::new(20).unwrap();
         let trie = MerkleRadixTrie::new(env.clone(), "database");
-        let mut txn = env.write_transaction();
+        let mut raw_txn = env.write_transaction();
+        let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
 
         assert_eq!(trie.get_predecessor(&txn, &KeyNibbles::ROOT), None);
         assert_eq!(trie.get_predecessor(&txn, &key_1), None);
@@ -1845,7 +1964,8 @@ mod tests {
 
         let env = nimiq_database::volatile::VolatileDatabase::new(20).unwrap();
         let trie = MerkleRadixTrie::new_incomplete(env.clone(), "database");
-        let mut txn = env.write_transaction();
+        let mut raw_txn = env.write_transaction();
+        let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
         assert!(!trie.is_complete(&txn));
 
         trie.put_chunk(
@@ -1921,7 +2041,8 @@ mod tests {
 
         let env = nimiq_database::volatile::VolatileDatabase::new(20).unwrap();
         let original = MerkleRadixTrie::new(env.clone(), "original");
-        let mut txn = env.write_transaction();
+        let mut raw_txn = env.write_transaction();
+        let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
 
         original
             .put(&mut txn, &key_1, 80085)
@@ -1946,7 +2067,8 @@ mod tests {
         let env = nimiq_database::volatile::VolatileDatabase::new(20).unwrap();
         let original = MerkleRadixTrie::new(env.clone(), "original");
         let trie = MerkleRadixTrie::new(env.clone(), "copy");
-        let mut txn = env.write_transaction();
+        let mut raw_txn = env.write_transaction();
+        let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
 
         let hash = original.root_hash_assert(&txn);
 
@@ -1968,7 +2090,8 @@ mod tests {
         let env = nimiq_database::volatile::VolatileDatabase::new(20).unwrap();
         let original = MerkleRadixTrie::new(env.clone(), "original");
         let trie = MerkleRadixTrie::new_incomplete(env.clone(), "copy");
-        let mut txn = env.write_transaction();
+        let mut raw_txn = env.write_transaction();
+        let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
 
         original
             .put(&mut txn, &key_1, 80085)
@@ -2042,7 +2165,8 @@ mod tests {
                 )
             })
             .collect();
-        let mut txn = env.write_transaction();
+        let mut raw_txn = env.write_transaction();
+        let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
 
         original
             .put(&mut txn, &key_1, 80085)
@@ -2098,7 +2222,8 @@ mod tests {
                 )
             })
             .collect();
-        let mut txn = env.write_transaction();
+        let mut raw_txn = env.write_transaction();
+        let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
 
         original
             .put(&mut txn, &key_1, 80085)
@@ -2150,7 +2275,8 @@ mod tests {
         let tries: Vec<_> = (1..5)
             .map(|i| {
                 let trie = MerkleRadixTrie::new(env.clone(), &format!("copy{i}"));
-                let mut txn = env.write_transaction();
+                let mut raw_txn = env.write_transaction();
+                let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
                 trie.put(&mut txn, &key_1, 80085).expect("complete trie");
                 trie.put(&mut txn, &key_2, 999).expect("complete trie");
                 trie.put(&mut txn, &key_3, 1337).expect("complete trie");
@@ -2158,12 +2284,13 @@ mod tests {
                 trie.update_root(&mut txn).expect("complete trie");
                 assert_eq!(trie.count_nodes(&txn), (0, 2, 2));
                 assert!(trie.is_complete(&txn));
-                txn.commit();
+                raw_txn.commit();
 
                 (i, trie)
             })
             .collect();
-        let mut txn = env.write_transaction();
+        let mut raw_txn = env.write_transaction();
+        let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
 
         original
             .put(&mut txn, &key_1, 80085)
@@ -2219,7 +2346,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn trie_cache_consistency() {
         let key_1 = "413f22".parse().unwrap();
         let key_2 = "413".parse().unwrap();
@@ -2229,7 +2355,8 @@ mod tests {
         let env = nimiq_database::volatile::VolatileDatabase::new(20).unwrap();
         let original = MerkleRadixTrie::new(env.clone(), "original");
 
-        let mut txn = env.write_transaction();
+        let mut raw_txn = env.write_transaction();
+        let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
 
         original
             .put(&mut txn, &key_1, 80085)
@@ -2241,9 +2368,10 @@ mod tests {
         assert_eq!(original.count_nodes(&txn), (0, 2, 2));
         assert!(original.is_complete(&txn));
 
-        txn.abort();
+        raw_txn.abort();
 
-        let txn = env.write_transaction();
+        let mut raw_txn = env.write_transaction();
+        let txn: WriteTransactionProxy = (&mut raw_txn).into();
         assert_eq!(original.num_branches(&txn), 0);
         assert_eq!(original.num_hybrids(&txn), 0);
         assert_eq!(original.num_leaves(&txn), 0);
@@ -2271,7 +2399,8 @@ mod tests {
         let env = nimiq_database::volatile::VolatileDatabase::new(20).unwrap();
         let original = MerkleRadixTrie::new(env.clone(), "original");
 
-        let mut txn = env.write_transaction();
+        let mut raw_txn = env.write_transaction();
+        let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
 
         // Add the nodes and make sure put works correctly.
         original
@@ -2305,7 +2434,8 @@ mod tests {
         let env = nimiq_database::volatile::VolatileDatabase::new(20).unwrap();
         let original = MerkleRadixTrie::new(env.clone(), "original");
 
-        let mut txn = env.write_transaction();
+        let mut raw_txn = env.write_transaction();
+        let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
 
         original.remove_chunk(&mut txn, key_1).unwrap();
         assert!(original.is_complete(&txn));
@@ -2322,7 +2452,8 @@ mod tests {
         let env = nimiq_database::volatile::VolatileDatabase::new(20).unwrap();
         let original = MerkleRadixTrie::new(env.clone(), "original");
 
-        let mut txn = env.write_transaction();
+        let mut raw_txn = env.write_transaction();
+        let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
 
         original
             .put(&mut txn, &key_1, 80085)
@@ -2357,7 +2488,8 @@ mod tests {
         let env = nimiq_database::volatile::VolatileDatabase::new(20).unwrap();
         let original = MerkleRadixTrie::new(env.clone(), "original");
 
-        let mut txn = env.write_transaction();
+        let mut raw_txn = env.write_transaction();
+        let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
         assert!(original.is_complete(&txn));
 
         original

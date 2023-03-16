@@ -124,7 +124,7 @@ fn it_can_commit_and_revert_a_block_body() {
 
     accounts
         .revert(
-            &mut txn,
+            &mut (&mut txn).into(),
             &transactions,
             &[reward],
             &block_state,
@@ -332,7 +332,7 @@ fn it_checks_for_sufficient_funds() {
 
         let receipts = accounts
             .commit(
-                &mut txn,
+                &mut (&mut txn).into(),
                 &[tx.clone()],
                 &[],
                 &block_state,
@@ -454,7 +454,7 @@ fn accounts_performance() {
     let accounts = Accounts::new(env.clone());
     let mut txn = env.write_transaction();
     let start = Instant::now();
-    accounts.init(&mut txn, genesis_info.accounts);
+    accounts.init(&mut (&mut txn).into(), genesis_info.accounts);
     let duration = start.elapsed();
     println!(
         "Time elapsed after account init: {} ms, Accounts per second {}",
@@ -476,7 +476,7 @@ fn accounts_performance() {
     let block_state = BlockState::new(1, 1);
     let start = Instant::now();
     let result = accounts.commit(
-        &mut txn,
+        &mut (&mut txn).into(),
         &txns[..],
         &rewards[..],
         &block_state,
@@ -573,7 +573,7 @@ fn accounts_performance_history_sync_batches_single_sender() {
     let accounts = Accounts::new(env.clone());
     let mut txn = env.write_transaction();
     let start = Instant::now();
-    accounts.init(&mut txn, genesis_info.accounts);
+    accounts.init(&mut (&mut txn).into(), genesis_info.accounts);
     let duration = start.elapsed();
     log::debug!(
         "Time elapsed after account init: {} ms, Accounts per second {}",
@@ -601,7 +601,7 @@ fn accounts_performance_history_sync_batches_single_sender() {
         for _blocks in 0..Policy::blocks_per_batch() {
             let block_state = BlockState::new(block_index, 1);
             let result = accounts.commit_batch(
-                &mut txn,
+                &mut (&mut txn).into(),
                 &block_transactions[block_index as usize],
                 &rewards[..],
                 &block_state,
@@ -614,7 +614,7 @@ fn accounts_performance_history_sync_batches_single_sender() {
             block_index += 1;
         }
 
-        accounts.finalize_batch(&mut txn);
+        accounts.finalize_batch(&mut (&mut txn).into());
         txn.commit();
 
         let batch_duration = batch_start.elapsed();
@@ -698,7 +698,7 @@ fn accounts_performance_history_sync_batches_many_to_many() {
     let accounts = Accounts::new(env.clone());
     let mut txn = env.write_transaction();
     let start = Instant::now();
-    accounts.init(&mut txn, genesis_info.accounts);
+    accounts.init(&mut (&mut txn).into(), genesis_info.accounts);
     let duration = start.elapsed();
     log::debug!(
         "Time elapsed after account init: {} ms, Accounts per second {}",
@@ -724,7 +724,7 @@ fn accounts_performance_history_sync_batches_many_to_many() {
         for _blocks in 0..Policy::blocks_per_batch() {
             let block_state = BlockState::new(block_index, 1);
             let result = accounts.commit_batch(
-                &mut txn,
+                &mut (&mut txn).into(),
                 &block_transactions[block_index as usize],
                 &rewards[..],
                 &block_state,
@@ -737,7 +737,7 @@ fn accounts_performance_history_sync_batches_many_to_many() {
             block_index += 1;
         }
 
-        accounts.finalize_batch(&mut txn);
+        accounts.finalize_batch(&mut (&mut txn).into());
         txn.commit();
 
         let batch_duration = batch_start.elapsed();

@@ -51,6 +51,7 @@ nimiq-serde = { path = "../serde" }
 nimiq-tendermint = { path = "../tendermint" }
 nimiq-transaction = { path = "../primitives/transaction" }
 nimiq-transaction-builder = { path = "../transaction-builder" }
+nimiq-trie = { path = "../primitives/trie" }
 nimiq-validator = { path = "../validator" }
 nimiq-validator-network = { path = "../validator-network" }
 nimiq-utils = { path = "../utils" }

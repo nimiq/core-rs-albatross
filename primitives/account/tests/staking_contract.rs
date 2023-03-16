@@ -96,6 +96,7 @@ fn can_iter_stakers() {
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let mut db_txn = env.write_transaction();
+    let mut db_txn = (&mut db_txn).into();
 
     let staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
 
@@ -147,6 +148,7 @@ fn can_get_it() {
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let mut db_txn = env.write_transaction();
+    let mut db_txn = (&mut db_txn).into();
 
     let staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
 
@@ -178,6 +180,7 @@ fn create_validator_works() {
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let block_state = BlockState::new(1, 1);
     let mut db_txn = env.write_transaction();
+    let mut db_txn = (&mut db_txn).into();
 
     let mut staking_contract = make_empty_contract();
 
@@ -305,6 +308,7 @@ fn update_validator_works() {
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let block_state = BlockState::new(2, 2);
     let mut db_txn = env.write_transaction();
+    let mut db_txn = (&mut db_txn).into();
 
     let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
 
@@ -458,6 +462,7 @@ fn deactivate_validator_works() {
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let block_state = BlockState::new(2, 2);
     let mut db_txn = env.write_transaction();
+    let mut db_txn = (&mut db_txn).into();
 
     let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
 
@@ -617,6 +622,7 @@ fn reactivate_validator_works() {
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let block_state = BlockState::new(2, 2);
     let mut db_txn = env.write_transaction();
+    let mut db_txn = (&mut db_txn).into();
 
     let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
 
@@ -929,6 +935,7 @@ fn retire_validator_works() {
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let block_state = BlockState::new(2, 2);
     let mut db_txn = env.write_transaction();
+    let mut db_txn = (&mut db_txn).into();
 
     let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
 
@@ -1031,6 +1038,7 @@ fn delete_validator_works() {
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let block_state = BlockState::new(2, 2);
     let mut db_txn = env.write_transaction();
+    let mut db_txn = (&mut db_txn).into();
 
     let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
 
@@ -1310,6 +1318,7 @@ fn create_staker_works() {
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let block_state = BlockState::new(2, 2);
     let mut db_txn = env.write_transaction();
+    let mut db_txn = (&mut db_txn).into();
 
     let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), false);
 
@@ -1444,6 +1453,7 @@ fn stake_works() {
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let block_state = BlockState::new(2, 2);
     let mut db_txn = env.write_transaction();
+    let mut db_txn = (&mut db_txn).into();
 
     let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
 
@@ -1567,6 +1577,7 @@ fn update_staker_works() {
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let block_state = BlockState::new(2, 2);
     let mut db_txn = env.write_transaction();
+    let mut db_txn = (&mut db_txn).into();
 
     let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
 
@@ -1823,6 +1834,7 @@ fn unstake_works() {
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let block_state = BlockState::new(2, 2);
     let mut db_txn = env.write_transaction();
+    let mut db_txn = (&mut db_txn).into();
 
     let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
 
@@ -2047,6 +2059,7 @@ fn reward_inherents_not_allowed() {
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let block_state = BlockState::new(2, 2);
     let mut db_txn = env.write_transaction();
+    let mut db_txn = (&mut db_txn).into();
 
     let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
 
@@ -2075,6 +2088,7 @@ fn slash_inherents_work() {
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let block_state = BlockState::new(2, 2);
     let mut db_txn = env.write_transaction();
+    let mut db_txn = (&mut db_txn).into();
 
     let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
 
@@ -2283,6 +2297,7 @@ fn finalize_batch_inherents_works() {
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let block_state = BlockState::new(Policy::blocks_per_batch(), 500);
     let mut db_txn = env.write_transaction();
+    let mut db_txn = (&mut db_txn).into();
 
     let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
 
@@ -2332,6 +2347,7 @@ fn finalize_epoch_inherents_works() {
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let block_state = BlockState::new(Policy::blocks_per_epoch(), 1000);
     let mut db_txn = env.write_transaction();
+    let mut db_txn = (&mut db_txn).into();
 
     let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
 

@@ -52,7 +52,7 @@ impl TemporaryBlockProducer {
             blockchain_rg
                 .state
                 .accounts
-                .reinitialize_as_incomplete(&mut txn);
+                .reinitialize_as_incomplete(&mut (&mut txn).into());
             txn.commit();
         }
 

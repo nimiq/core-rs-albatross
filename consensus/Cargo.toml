@@ -68,6 +68,7 @@ nimiq-test-log = { path = "../test-log" }
 # This adds a circular dev-dependency which is fine but breaks VS code rust-analyzer.
 # See https://github.com/rust-analyzer/rust-analyzer/issues/14167
 nimiq-test-utils = { path = "../test-utils" }
+nimiq-trie = { path = "../primitives/trie" }
 nimiq-zkp-component = { path = "../zkp-component", features = ["zkp-prover", "parallel"] }
 
 [features]

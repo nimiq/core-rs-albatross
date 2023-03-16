@@ -200,7 +200,7 @@ impl Blockchain {
                 chunk_data.start_key
             );
             let result = self.state.accounts.commit_chunk(
-                &mut txn,
+                &mut (&mut txn).into(),
                 chunk_data.chunk,
                 state_root.clone(),
                 chunk_data.start_key,
@@ -438,10 +438,10 @@ impl Blockchain {
                 .expect("Corrupted store: Failed to find main chain predecessor while rebranching");
 
             if let Some(ref prev_missing_range) = current.1.prev_missing_range {
-                let result = this
-                    .state
-                    .accounts
-                    .revert_chunk(&mut write_txn, prev_missing_range.start.clone());
+                let result = this.state.accounts.revert_chunk(
+                    &mut (&mut write_txn).into(),
+                    prev_missing_range.start.clone(),
+                );
 
                 if let Err(e) = result {
                     // Check if the revert chunk failed.
@@ -452,7 +452,7 @@ impl Blockchain {
             let mut block_logger = BlockLogger::new_reverted(block.hash(), block.block_number());
             let total_tx_size = this.revert_accounts(
                 &this.state.accounts,
-                &mut write_txn,
+                &mut (&mut write_txn).into(),
                 &block,
                 &mut block_logger,
             )?;
@@ -671,7 +671,7 @@ impl Blockchain {
         }
 
         // Commit block to AccountsTree.
-        let total_tx_size = self.commit_accounts(state, block, txn, block_logger).map_err(|e| {
+        let total_tx_size = self.commit_accounts(state, block, &mut txn.into(), block_logger).map_err(|e| {
             warn!(%block, reason = "commit failed", error = &e as &dyn Error, "Rejecting block");
             #[cfg(feature = "metrics")]
             self.metrics.note_invalid_block();

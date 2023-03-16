@@ -1,11 +1,12 @@
 use nimiq_account::{Account, Accounts, BlockLogger, BlockState, TransactionOperationReceipt};
 use nimiq_block::{Block, BlockError, SkipBlockInfo};
 use nimiq_blockchain_interface::PushError;
-use nimiq_database::{traits::Database, TransactionProxy, WriteTransactionProxy};
+use nimiq_database::{traits::Database, TransactionProxy};
 use nimiq_keys::Address;
 use nimiq_primitives::{key_nibbles::KeyNibbles, trie::trie_proof::TrieProof};
 use nimiq_serde::Deserialize;
 use nimiq_transaction::extended_transaction::ExtendedTransaction;
+use nimiq_trie::WriteTransactionProxy;
 
 use crate::{blockchain_state::BlockchainState, Blockchain};
 
@@ -53,7 +54,7 @@ impl Blockchain {
 
                 // Macro blocks are final and receipts for the previous batch are no longer necessary
                 // as rebranching across this block is not possible.
-                self.chain_store.clear_receipts(txn);
+                self.chain_store.clear_receipts(txn.raw());
 
                 // Store the transactions and the inherents into the History tree.
                 let mut total_tx_size = 0;
@@ -67,7 +68,7 @@ impl Blockchain {
                     );
                     total_tx_size = self
                         .history_store
-                        .add_to_history(txn, macro_block.epoch_number(), &ext_txs)
+                        .add_to_history(txn.raw(), macro_block.epoch_number(), &ext_txs)
                         .expect("Failed to store history")
                         .1
                 };
@@ -122,8 +123,11 @@ impl Blockchain {
                 }
 
                 // Store receipts.
-                self.chain_store
-                    .put_receipts(txn, micro_block.header.block_number, &receipts);
+                self.chain_store.put_receipts(
+                    txn.raw(),
+                    micro_block.header.block_number,
+                    &receipts,
+                );
 
                 // Store the transactions and the inherents into the History tree.
                 let mut total_tx_size = 0;
@@ -137,7 +141,7 @@ impl Blockchain {
                     );
                     total_tx_size = self
                         .history_store
-                        .add_to_history(txn, micro_block.epoch_number(), &ext_txs)
+                        .add_to_history(txn.raw(), micro_block.epoch_number(), &ext_txs)
                         .expect("Failed to store history")
                         .1
                 };
@@ -209,7 +213,7 @@ impl Blockchain {
         let num_txs = body.transactions.len() + inherents.len();
         let (_, total_size) = self
             .history_store
-            .remove_partial_history(txn, block.epoch_number(), num_txs)
+            .remove_partial_history(txn.raw(), block.epoch_number(), num_txs)
             .expect("Failed to remove partial history");
 
         Ok(total_size)

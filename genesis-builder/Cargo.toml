@@ -21,4 +21,5 @@ nimiq-serde = { path = "../serde" }
 nimiq-keys = { path = "../keys", features = ["serde-derive"] }
 nimiq-primitives = { path = "../primitives", features = ["serde-derive"] }
 nimiq-transaction = { path = "../primitives/transaction" }
+nimiq-trie = { path = "../primitives/trie" }
 nimiq-vrf = { path = "../vrf", features = ["serde-derive"] }

@@ -85,7 +85,9 @@ impl Blockchain {
         read_txn.close();
         let mut txn = this.write_transaction();
 
-        this.state.accounts.reinitialize_as_incomplete(&mut txn);
+        this.state
+            .accounts
+            .reinitialize_as_incomplete(&mut (&mut txn).into());
 
         // Since it's a macro block, we have to clear the ChainStore. If we are syncing for the first
         // time, this should be empty. But we clear it just in case it's not our first time.
@@ -265,7 +267,9 @@ impl Blockchain {
         read_txn.close();
         let mut txn = this.write_transaction();
 
-        this.state.accounts.reinitialize_as_incomplete(&mut txn);
+        this.state
+            .accounts
+            .reinitialize_as_incomplete(&mut (&mut txn).into());
 
         let is_election_block = Policy::is_election_block_at(block_number);
 
