@@ -2,10 +2,8 @@ use std::borrow::Borrow;
 use std::cmp;
 use std::error::Error;
 use std::fmt;
-use std::fmt::Display;
 use std::mem;
 use std::ops;
-use std::ops::RangeFrom;
 
 use log::error;
 
@@ -351,7 +349,7 @@ impl MerkleRadixTrie {
         txn: &mut WriteTransaction,
         key: &KeyNibbles,
         value: Vec<u8>,
-        missing_range: &Option<RangeFrom<KeyNibbles>>,
+        missing_range: &Option<ops::RangeFrom<KeyNibbles>>,
     ) {
         // Start by getting the root node.
         let mut cur_node = self
@@ -476,7 +474,7 @@ impl MerkleRadixTrie {
         &self,
         txn: &mut WriteTransaction,
         key: &KeyNibbles,
-        missing_range: &Option<RangeFrom<KeyNibbles>>,
+        missing_range: &Option<ops::RangeFrom<KeyNibbles>>,
     ) -> Result<(), MerkleRadixTrieError> {
         let mut node = self
             .get_root(txn)
@@ -932,7 +930,7 @@ impl MerkleRadixTrie {
         &self,
         txn: &mut WriteTransaction,
         key: &KeyNibbles,
-        missing_range: &Option<RangeFrom<KeyNibbles>>,
+        missing_range: &Option<ops::RangeFrom<KeyNibbles>>,
     ) {
         // PITODO: add result type
         // Start by getting the root node.
@@ -1109,10 +1107,10 @@ impl MerkleRadixTrie {
     /// requires some light refactoring to the way proofs work.
     pub fn get_proof<T>(&self, txn: &Transaction, mut keys: Vec<T>) -> Option<TrieProof>
     where
-        T: Borrow<KeyNibbles> + Ord + Display,
+        T: Borrow<KeyNibbles>,
     {
         // We sort the keys to simplify traversal in post-order.
-        keys.sort();
+        keys.sort_by(|k1, k2| k1.borrow().cmp(k2.borrow()));
 
         // Initialize the vector that will contain the proof.
         let mut proof_nodes = Vec::new();
@@ -1142,7 +1140,8 @@ impl MerkleRadixTrie {
                 if !pointer_node.key.is_prefix_of(cur_key.borrow()) {
                     error!(
                         "Pointer node with key {} is not a prefix to the current node with key {}.",
-                        pointer_node.key, cur_key
+                        pointer_node.key,
+                        cur_key.borrow(),
                     );
                     return None;
                 }
@@ -1168,7 +1167,7 @@ impl MerkleRadixTrie {
                     Err(_) => {
                         error!(
                             "Key {} is not a part of the trie. Can't produce the proof.",
-                            cur_key
+                            cur_key.borrow()
                         );
                         return None;
                     }
@@ -1227,7 +1226,7 @@ impl MerkleRadixTrie {
     fn is_within_complete_part(
         &self,
         key: &KeyNibbles,
-        missing_range: &Option<RangeFrom<KeyNibbles>>,
+        missing_range: &Option<ops::RangeFrom<KeyNibbles>>,
     ) -> bool {
         missing_range
             .as_ref()
@@ -1237,7 +1236,7 @@ impl MerkleRadixTrie {
 
     /// Returns the range of missing keys in the partial tree.
     /// If the tree is complete, it returns `None`.
-    pub fn get_missing_range(&self, txn: &Transaction) -> Option<RangeFrom<KeyNibbles>> {
+    pub fn get_missing_range(&self, txn: &Transaction) -> Option<ops::RangeFrom<KeyNibbles>> {
         self.get_root(txn)
             .expect("trie needs root node")
             .root_data
@@ -1298,7 +1297,7 @@ impl MerkleRadixTrie {
         &self,
         txn: &mut WriteTransaction,
         key: &KeyNibbles,
-        missing_range: &Option<RangeFrom<KeyNibbles>>,
+        missing_range: &Option<ops::RangeFrom<KeyNibbles>>,
     ) -> Result<Blake2bHash, IncompleteTrie> {
         let mut node: TrieNode = self.get_node(txn, key).unwrap();
         if !node.has_children() {
