@@ -1,3 +1,5 @@
+extern crate alloc; // Required for wasm-bindgen-derive
+
 use std::{cell::RefCell, collections::HashMap, rc::Rc, str::FromStr};
 
 use futures::StreamExt;
@@ -28,7 +30,8 @@ use nimiq_primitives::policy::Policy;
 use crate::address::Address;
 use crate::peer_info::PeerInfo;
 use crate::transaction::{
-    PlainTransactionDetails, PlainTransactionDetailsArrayType, Transaction, TransactionState,
+    PlainTransaction, PlainTransactionDetails, PlainTransactionDetailsArrayType, Transaction,
+    TransactionState,
 };
 use crate::transaction_builder::TransactionBuilder;
 use crate::utils::{from_network_id, to_network_id};
@@ -371,26 +374,29 @@ impl Client {
     ///
     /// Throws in case of a networking error.
     #[wasm_bindgen(js_name = sendTransaction)]
-    pub async fn send_transaction(&self, transaction: &Transaction) -> Result<(), JsError> {
-        transaction.verify(Some(self.network_id))?;
+    pub async fn send_transaction(
+        &self,
+        transaction: &SendTransactionAcceptedTypes,
+    ) -> Result<(), JsError> {
+        let js_value = transaction.unchecked_ref();
 
-        self.inner
-            .consensus_proxy()
-            .send_transaction(transaction.native_ref().clone())
-            .await?;
+        let tx: nimiq_transaction::Transaction;
+        if let Ok(transaction) = Transaction::try_from(js_value) {
+            log::debug!("Detected instance of Transaction class");
+            tx = transaction.take_native();
+        } else if let Ok(plain_transaction) =
+            serde_wasm_bindgen::from_value::<PlainTransaction>(js_value.clone())
+        {
+            log::debug!("Detected PlainTransaction object");
+            tx = plain_transaction.to_transaction()?;
+        } else if let Ok(hex) = serde_wasm_bindgen::from_value::<String>(js_value.clone()) {
+            log::debug!("Detected string-serialized transaction");
+            tx = nimiq_transaction::Transaction::deserialize_from_vec(&hex::decode(hex)?)?;
+        } else {
+            return Err(JsError::new("Cannot parse the transaction argument"));
+        }
 
-        Ok(())
-    }
-
-    /// Sends a serialized transaction to the network. This method does not check if the
-    /// transaction gets included into a block.
-    ///
-    /// Throws when the transaction cannot be parsed from the byte array or in case of a networking error.
-    #[wasm_bindgen(js_name = sendRawTransaction)]
-    pub async fn send_raw_transaction(&self, raw_tx: &[u8]) -> Result<(), JsError> {
-        let tx = nimiq_transaction::Transaction::deserialize_from_vec(raw_tx)?;
-
-        tx.verify(to_network_id(self.network_id).ok().unwrap())?;
+        tx.verify(to_network_id(self.network_id)?)?;
 
         self.inner.consensus_proxy().send_transaction(tx).await?;
 
@@ -668,4 +674,7 @@ extern "C" {
         typescript_type = "(peer_id: string, reason: 'joined' | 'left', peer_count: number, peer_info?: PeerInfo) => any"
     )]
     pub type PeerChangedListner;
+
+    #[wasm_bindgen(typescript_type = "Transaction | PlainTransaction | string")]
+    pub type SendTransactionAcceptedTypes;
 }

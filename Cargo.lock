@@ -4589,6 +4589,7 @@ dependencies = [
  "tracing",
  "tsify",
  "wasm-bindgen",
+ "wasm-bindgen-derive",
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
  "web-sys",
@@ -7172,6 +7173,19 @@ dependencies = [
  "quote",
  "syn",
  "wasm-bindgen-shared",
+]
+
+[[package]]
+name = "wasm-bindgen-derive"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7301886930edaa72b7d102655ea395774aa9f0614c1a491393648a5fec34435"
+dependencies = [
+ "js-sys",
+ "proc-macro2",
+ "quote",
+ "syn",
+ "wasm-bindgen",
 ]
 
 [[package]]

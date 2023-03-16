@@ -1,10 +1,13 @@
+use std::str::FromStr;
+
 use serde::ser::SerializeStruct;
 use tsify::Tsify;
 use wasm_bindgen::prelude::*;
+use wasm_bindgen_derive::TryFromJsValue;
 
 use beserial::Serialize;
 use nimiq_hash::{Blake2bHash, Hash};
-use nimiq_primitives::{account::AccountType, coin::Coin};
+use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId};
 use nimiq_transaction::{
     extended_transaction::ExtendedTransaction, TransactionFlags, TransactionFormat,
 };
@@ -21,7 +24,9 @@ use crate::utils::{from_network_id, to_network_id};
 ///
 /// Transactions require a valid signature proof over their serialized content.
 /// Furthermore, transactions are only valid for 2 hours after their validity-start block height.
+#[derive(TryFromJsValue)]
 #[wasm_bindgen(inspectable)]
+#[derive(Clone)]
 pub struct Transaction {
     inner: nimiq_transaction::Transaction,
 }
@@ -332,6 +337,10 @@ impl Transaction {
     pub fn native_ref(&self) -> &nimiq_transaction::Transaction {
         &self.inner
     }
+
+    pub fn take_native(self) -> nimiq_transaction::Transaction {
+        self.inner
+    }
 }
 
 /// Placeholder struct to serialize data of transactions as hex strings in the style of the Nimiq 1.0 library.
@@ -429,6 +438,23 @@ impl PlainTransaction {
             size: tx.serialized_size(),
             valid: tx.verify(tx.network_id).is_ok(),
         }
+    }
+
+    pub fn to_transaction(&self) -> Result<nimiq_transaction::Transaction, JsError> {
+        let mut tx = Transaction::new(
+            &Address::from_string(&self.sender)?,
+            Some(self.sender_type.into()),
+            &Address::from_string(&self.recipient)?,
+            Some(self.recipient_type.into()),
+            self.value,
+            Some(self.fee),
+            Some(hex::decode(&self.data.raw)?),
+            Some(self.flags),
+            self.validity_start_height,
+            from_network_id(NetworkId::from_str(&self.network)?),
+        )?;
+        tx.set_proof(hex::decode(&self.proof.raw)?);
+        Ok(tx.inner)
     }
 }
 
