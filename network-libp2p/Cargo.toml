@@ -19,7 +19,7 @@ maintenance = { status = "experimental" }
 [dependencies]
 async-trait = "0.1"
 base64 = "0.21"
-bitflags = "1.2"
+bitflags = "2.0"
 bytes = "1.4"
 derive_more = "0.99"
 futures = { package = "futures-util", version = "0.3" }
