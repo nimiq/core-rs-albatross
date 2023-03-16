@@ -14,7 +14,7 @@ path = "zkp-setup/main.rs"
 required-features = ["zkp-prover", "parallel"]
 
 [dependencies]
-clap = { version = "4.1", features = ["cargo"] }
+clap = { version = "4.1", features = ["cargo", "string"] }
 hex = "0.4"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 rand = { version = "0.8", features = ["small_rng"] }
@@ -36,7 +36,6 @@ nimiq-hash = { path = "../hash" }
 nimiq-pedersen-generators = { path = "../zkp-primitives/pedersen-generators" }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }
 nimiq-zkp-primitives = { path = "../zkp-primitives" }
-
 
 [dev-dependencies]
 ark-test-curves = { version = "0.4", features = ["bls12_381_curve"] }

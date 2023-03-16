@@ -476,7 +476,7 @@ mod tests {
     }
 
     #[test]
-    fn it_correctly_comutes_first_ofs() {
+    fn it_correctly_commutes_first_ofs() {
         initialize_policy();
         assert_eq!(Policy::first_block_of(1), 1);
         assert_eq!(Policy::first_block_of(2), 129);

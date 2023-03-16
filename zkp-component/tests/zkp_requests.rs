@@ -1,4 +1,3 @@
-use std::path::Path;
 use std::sync::Arc;
 
 use futures::StreamExt;
@@ -15,9 +14,8 @@ use nimiq_test_log::test;
 use nimiq_test_utils::{
     blockchain::{signing_key, voting_key},
     blockchain_with_rng::produce_macro_blocks_with_rng,
-    zkp_test_data::{get_base_seed, ZKPROOF_SERIALIZED_IN_HEX, ZKP_TEST_KEYS_PATH},
+    zkp_test_data::{get_base_seed, ZKPROOF_SERIALIZED_IN_HEX},
 };
-use nimiq_zkp_circuits::setup::setup;
 
 use nimiq_zkp_component::proof_store::{DBProofStore, ProofStore};
 use nimiq_zkp_component::proof_utils::validate_proof;
@@ -43,8 +41,7 @@ fn blockchain() -> Arc<RwLock<Blockchain>> {
 }
 
 #[test(tokio::test)]
-async fn peers_dont_reply_with_outdated_proof() {
-    setup(get_base_seed(), Path::new(ZKP_TEST_KEYS_PATH), false).unwrap();
+async fn peers_do_not_reply_with_outdated_proof() {
     let blockchain = blockchain();
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
@@ -89,7 +86,6 @@ async fn peers_dont_reply_with_outdated_proof() {
 #[test(tokio::test)]
 #[ignore]
 async fn peers_reply_with_valid_proof() {
-    setup(get_base_seed(), Path::new(ZKP_TEST_KEYS_PATH), false).unwrap();
     let blockchain2 = blockchain();
     let blockchain3 = blockchain();
     let mut hub = MockHub::new();
@@ -171,7 +167,6 @@ async fn peers_reply_with_valid_proof() {
 #[test(tokio::test)]
 #[ignore]
 async fn peers_reply_with_valid_proof_and_election_block() {
-    setup(get_base_seed(), Path::new(ZKP_TEST_KEYS_PATH), false).unwrap();
     let blockchain2 = blockchain();
     let blockchain3 = blockchain();
     let mut hub = MockHub::new();

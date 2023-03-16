@@ -31,9 +31,13 @@ pub fn verifying_keys_setup(source_path: &Path, dest_path: &Path) -> Result<(), 
 }
 
 fn main() -> Result<(), NanoZKPError> {
-    let keys_dest_path = Path::new(&env::var_os("OUT_DIR").unwrap()).join("verifying_key.data");
+    let keys_dest_path = Path::new(&env::var_os("OUT_DIR").unwrap()).join("dev_verifying_key.data");
     let keys_source_path = Path::new("../.zkp");
+    verifying_keys_setup(keys_source_path, &keys_dest_path)?;
 
+    let keys_dest_path =
+        Path::new(&env::var_os("OUT_DIR").unwrap()).join("unit_verifying_key.data");
+    let keys_source_path = Path::new("../.zkp_tests");
     verifying_keys_setup(keys_source_path, &keys_dest_path)?;
 
     println!("cargo:rerun-if-changed=build.rs");

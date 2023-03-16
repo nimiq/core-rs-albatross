@@ -49,6 +49,7 @@ impl FromStr for NetworkId {
             "bounty" => Ok(NetworkId::Bounty),
             "dummy" => Ok(NetworkId::Dummy),
             "main" => Ok(NetworkId::Main),
+            "unitalbatross" => Ok(NetworkId::UnitAlbatross),
             "testalbatross" => Ok(NetworkId::TestAlbatross),
             "devalbatross" => Ok(NetworkId::DevAlbatross),
             _ => Err(NetworkIdParseError(String::from(s))),

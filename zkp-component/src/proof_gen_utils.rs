@@ -39,7 +39,7 @@ pub fn generate_new_proof(
         let block = ZKPMacroBlock::try_from(&block).expect("Invalid election block");
 
         let proof = prove(
-            prev_pks.clone(),
+            prev_pks,
             prev_header_hash,
             final_pks.clone(),
             block.clone(),

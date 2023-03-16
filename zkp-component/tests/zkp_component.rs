@@ -46,7 +46,6 @@ fn blockchain() -> Arc<RwLock<Blockchain>> {
 
 #[test(tokio::test)]
 async fn builds_valid_genesis_proof() {
-    setup(get_base_seed(), Path::new(ZKP_TEST_KEYS_PATH), false).unwrap();
     let blockchain = blockchain();
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
@@ -75,7 +74,6 @@ async fn builds_valid_genesis_proof() {
 #[test(tokio::test)]
 #[ignore]
 async fn loads_valid_zkp_state_from_db() {
-    setup(get_base_seed(), Path::new(ZKP_TEST_KEYS_PATH), false).unwrap();
     let blockchain = blockchain();
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
@@ -115,7 +113,6 @@ async fn loads_valid_zkp_state_from_db() {
 
 #[test(tokio::test)]
 async fn does_not_load_invalid_zkp_state_from_db() {
-    setup(get_base_seed(), Path::new(ZKP_TEST_KEYS_PATH), false).unwrap();
     let blockchain = blockchain();
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());

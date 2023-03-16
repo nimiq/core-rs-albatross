@@ -1,30 +1,44 @@
 use std::{path::Path, time::Instant};
 
-use clap::{Arg, Command};
+use clap::Parser;
+use nimiq_zkp_primitives::NanoZKPError;
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 
+use nimiq_primitives::{
+    networks::NetworkId,
+    policy::{Policy, TEST_POLICY},
+};
 use nimiq_zkp_circuits::{
     setup::{setup, DEVELOPMENT_SEED},
     DEFAULT_KEYS_PATH,
 };
-use nimiq_zkp_primitives::NanoZKPError;
+
+// This is a copied constant from nimiq-test-utils.
+const DEFAULT_TEST_KEYS_PATH: &str = ".zkp_tests";
+
+#[derive(Debug, Parser)]
+
+/// Create the zkp keys for Devnet or Unit test.
+struct Setup {
+    /// Network ID to generate ZKP keys for.
+    /// Currently supported are: UnitAlbatross and DevAlbatross
+    #[clap(short = 'n', long, value_enum)]
+    network_id: Option<NetworkId>,
+}
 
 fn main() -> Result<(), NanoZKPError> {
-    let matches = Command::new("nimiq-zkp-setup")
-        .about("Create the zkp keys for Devnet.")
-        .arg(
-            Arg::new("path")
-                .value_name("PATH")
-                .default_value(DEFAULT_KEYS_PATH),
-        )
-        .get_matches();
+    let args = Setup::parse();
 
-    let keys_path = if let Some(p) = matches.get_one::<String>("path") {
-        Path::new(p)
-    } else {
-        Path::new(DEFAULT_KEYS_PATH)
-    };
+    let keys_path = Path::new(match args.network_id.unwrap_or(NetworkId::DevAlbatross) {
+        NetworkId::DevAlbatross => DEFAULT_KEYS_PATH,
+        NetworkId::UnitAlbatross => {
+            // Use test constants for the setup.
+            let _ = Policy::get_or_init(TEST_POLICY);
+            DEFAULT_TEST_KEYS_PATH
+        }
+        _ => panic!("Invalid network ID"),
+    });
 
     // Generates the verifying keys if they don't exist yet.
     println!("====== Devnet Parameter generation for ZKP initiated ======");

@@ -31,6 +31,7 @@ nimiq-test-utils = { path = "../../test-utils" }
 nimiq-utils = { path = "../../utils", features = [
     "time",
 ] }
+nimiq-zkp = { path = "../../zkp", features = ["zkp-prover"] }
 nimiq-zkp-circuits = { path = "../../zkp-circuits", features = ["zkp-prover"] }
 nimiq-zkp-component = { path = "..", features = ["zkp-prover"] }
 nimiq-zkp-primitives = { path = "../../zkp-primitives", features = ["zkp-prover"] }

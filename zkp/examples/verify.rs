@@ -52,7 +52,7 @@ fn main() {
         final_header_hash,
         &final_pk_tree_root,
         proof,
-        &*ZKP_VERIFYING_KEY,
+        &ZKP_VERIFYING_KEY,
     )
     .unwrap();
 

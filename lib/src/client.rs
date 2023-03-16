@@ -138,6 +138,9 @@ impl ClientInner {
         }
         let network_info = NetworkInfo::from_network_id(config.network_id);
 
+        // Load the correct verifying key.
+        ZKP_VERIFYING_KEY.init_with_network_id(config.network_id);
+
         #[cfg(not(feature = "zkp-prover"))]
         if config.zkp.prover_active {
             panic!("Can't build a prover node without the zkp-prover feature enabled")

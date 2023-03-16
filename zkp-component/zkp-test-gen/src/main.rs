@@ -1,5 +1,6 @@
 use beserial::Serialize;
 use log::metadata::LevelFilter;
+use nimiq_zkp::ZKP_VERIFYING_KEY;
 use parking_lot::RwLock;
 use std::{io, path::Path, sync::Arc, time::Instant};
 use tracing_subscriber::{filter::Targets, prelude::*};
@@ -21,7 +22,7 @@ use nimiq_test_utils::{
     zkp_test_data::{get_base_seed, DEFAULT_TEST_KEYS_PATH},
 };
 use nimiq_utils::time::OffsetTime;
-use nimiq_zkp_circuits::setup::setup;
+use nimiq_zkp_circuits::setup::{load_verifying_key_from_file, setup};
 use nimiq_zkp_component::{
     proof_gen_utils::generate_new_proof, proof_utils::validate_proof, types::ZKPState,
 };
@@ -73,6 +74,8 @@ fn blockchain() -> Arc<RwLock<Blockchain>> {
 
 async fn produce_two_consecutive_valid_zk_proofs() {
     setup(get_base_seed(), Path::new(DEFAULT_TEST_KEYS_PATH), true).unwrap();
+    ZKP_VERIFYING_KEY
+        .init_with_key(load_verifying_key_from_file(Path::new(DEFAULT_TEST_KEYS_PATH)).unwrap());
 
     let blockchain = blockchain();
 
