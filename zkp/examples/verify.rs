@@ -29,7 +29,7 @@ fn main() {
     println!("====== Generating random inputs ======");
 
     // Get initial random parameters.
-    let (_, initial_header_hash, initial_pk_tree_root, _, _, _) = create_test_blocks(0);
+    let (_, genesis_header_hash, genesis_pk_tree_root, _, _, _) = create_test_blocks(0);
 
     // Get final random parameters.
     let (_, final_header_hash, final_pk_tree_root, _, _, _) = create_test_blocks(number_epochs);
@@ -46,8 +46,8 @@ fn main() {
     // Verify proof.
     let result = verify(
         0,
-        initial_header_hash,
-        &initial_pk_tree_root,
+        genesis_header_hash,
+        &genesis_pk_tree_root,
         Policy::blocks_per_epoch() * number_epochs as u32,
         final_header_hash,
         &final_pk_tree_root,

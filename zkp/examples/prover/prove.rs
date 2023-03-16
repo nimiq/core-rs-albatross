@@ -42,7 +42,7 @@ fn main() {
 
     for i in 0..number_epochs {
         // Get random parameters.
-        let (initial_pks, initial_header_hash, _, final_pks, block, genesis_state_commitment_opt) =
+        let (prev_pks, prev_header_hash, _, final_pks, block, genesis_state_commitment_opt) =
             create_test_blocks(i);
 
         // Create genesis data.
@@ -56,8 +56,8 @@ fn main() {
 
         // Generate proof.
         proof = prove(
-            initial_pks,
-            initial_header_hash,
+            prev_pks,
+            prev_header_hash,
             final_pks.clone(),
             block,
             genesis_data.clone(),

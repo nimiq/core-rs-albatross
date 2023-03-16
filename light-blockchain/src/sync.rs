@@ -42,9 +42,9 @@ impl LightBlockchain {
         block.verify(false)?;
 
         // Prepare the inputs to verify the proof.
-        let initial_block_number = this.genesis_block.block_number();
-        let initial_header_hash = <[u8; 32]>::from(this.genesis_block.hash());
-        let initial_pk_tree_root = this
+        let genesis_block_number = this.genesis_block.block_number();
+        let genesis_header_hash = <[u8; 32]>::from(this.genesis_block.hash());
+        let genesis_pk_tree_root = this
             .genesis_block
             .unwrap_macro_ref()
             .pk_tree_root()
@@ -58,9 +58,9 @@ impl LightBlockchain {
 
         // Verify the zk proof.
         let verify_result = verify(
-            initial_block_number,
-            initial_header_hash,
-            &initial_pk_tree_root,
+            genesis_block_number,
+            genesis_header_hash,
+            &genesis_pk_tree_root,
             final_block_number,
             final_header_hash,
             &final_pk_tree_root,

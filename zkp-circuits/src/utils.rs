@@ -37,21 +37,21 @@ pub fn create_test_blocks(
     // Create RNG.
     let mut rng = SmallRng::seed_from_u64(seed + index);
 
-    // Create key pairs for the initial validators.
-    let mut initial_sks = vec![];
-    let mut initial_pks = vec![];
+    // Create key pairs for the previous validators.
+    let mut prev_sks = vec![];
+    let mut prev_pks = vec![];
 
     for _ in 0..Policy::SLOTS {
         let sk = MNT6Fr::rand(&mut rng);
         let mut pk = G2MNT6::generator();
         pk.mul_assign(sk);
-        initial_sks.push(sk);
-        initial_pks.push(pk);
+        prev_sks.push(sk);
+        prev_pks.push(pk);
     }
 
-    // Create the initial header hash.
-    let mut initial_header_hash = [0u8; 32];
-    rng.fill_bytes(&mut initial_header_hash);
+    // Create the previous header hash.
+    let mut prev_header_hash = [0u8; 32];
+    rng.fill_bytes(&mut prev_header_hash);
 
     // Create a random signer bitmap.
     let mut signer_bitmap = vec![true; Policy::TWO_F_PLUS_ONE as usize];
@@ -96,28 +96,24 @@ pub fn create_test_blocks(
 
     for i in 0..Policy::SLOTS as usize {
         if signer_bitmap[i] {
-            block.sign(&initial_sks[i], i, &final_pk_tree_root);
+            block.sign(&prev_sks[i], i, &final_pk_tree_root);
         }
     }
 
-    let initial_pk_tree_root = pk_tree_construct(initial_pks.clone());
+    let prev_pk_tree_root = pk_tree_construct(prev_pks.clone());
 
     // If this is the first index (genesis), also return the genesis state commitment.
     let genesis_state_commitment = if index == 0 {
-        Some(state_commitment(
-            0,
-            &initial_header_hash,
-            &initial_pk_tree_root,
-        ))
+        Some(state_commitment(0, &prev_header_hash, &prev_pk_tree_root))
     } else {
         None
     };
 
     // Return the data.
     (
-        initial_pks,
-        initial_header_hash,
-        initial_pk_tree_root,
+        prev_pks,
+        prev_header_hash,
+        prev_pk_tree_root,
         final_pks,
         block,
         genesis_state_commitment,

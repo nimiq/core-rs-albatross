@@ -10,15 +10,14 @@ use nimiq_zkp_primitives::{state_commitment, vk_commitment, NanoZKPError};
 /// the entire light macro sync. It is very fast, shouldn't take more than a second, even on older
 /// computers.
 pub fn verify(
-    // The block number of the initial block. Most likely, it will be the genesis block.
-    initial_block_number: u32,
-    // The header hash of the initial block. Most likely, it will be the genesis block.
-    initial_header_hash: [u8; 32],
-    // The public key tree root of the validators of the initial block. Most likely, it will be the genesis
-    // block.
+    // The block number of the initial block.
+    genesis_block_number: u32,
+    // The header hash of the initial block.
+    genesis_header_hash: [u8; 32],
+    // The public key tree root of the validators of the initial block.
     // Note that we are referring to the validators that are selected in the initial block, not
     // the validators that signed the initial block.
-    initial_pk_tree_root: &[u8; 95],
+    genesis_pk_tree_root: &[u8; 95],
     // The block number of the final block.
     final_block_number: u32,
     // The header hash of the final block.
@@ -36,9 +35,9 @@ pub fn verify(
 
     inputs.append(
         &mut state_commitment(
-            initial_block_number,
-            &initial_header_hash,
-            initial_pk_tree_root,
+            genesis_block_number,
+            &genesis_header_hash,
+            genesis_pk_tree_root,
         )
         .to_field_elements()
         .unwrap(),

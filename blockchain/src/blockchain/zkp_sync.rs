@@ -55,8 +55,8 @@ impl Blockchain {
             .unwrap();
         let genesis_hash = genesis_block.hash();
 
-        let initial_header_hash = <[u8; 32]>::from(genesis_hash.clone());
-        let initial_pk_tree_root = genesis_block
+        let genesis_header_hash = <[u8; 32]>::from(genesis_hash.clone());
+        let genesis_pk_tree_root = genesis_block
             .unwrap_macro_ref()
             .pk_tree_root()
             .ok_or(PushError::InvalidBlock(BlockError::InvalidPkTreeRoot))?;
@@ -70,8 +70,8 @@ impl Blockchain {
         // Verify the zk proof.
         let verify_result = verify(
             genesis_block.block_number(),
-            initial_header_hash,
-            &initial_pk_tree_root,
+            genesis_header_hash,
+            &genesis_pk_tree_root,
             final_block_number,
             final_header_hash,
             &final_pk_tree_root,

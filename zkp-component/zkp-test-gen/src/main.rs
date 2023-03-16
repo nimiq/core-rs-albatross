@@ -18,10 +18,10 @@ use nimiq_primitives::{
 use nimiq_test_utils::{
     blockchain::{signing_key, voting_key},
     blockchain_with_rng::produce_macro_blocks_with_rng,
-    zkp_test_data::get_base_seed,
+    zkp_test_data::{get_base_seed, DEFAULT_TEST_KEYS_PATH},
 };
 use nimiq_utils::time::OffsetTime;
-use nimiq_zkp_circuits::{setup::setup, DEFAULT_KEYS_PATH};
+use nimiq_zkp_circuits::setup::setup;
 use nimiq_zkp_component::{
     proof_gen_utils::generate_new_proof, proof_utils::validate_proof, types::ZKPState,
 };
@@ -47,12 +47,12 @@ fn initialize() {
 async fn main() -> Result<(), NanoZKPError> {
     initialize();
     // Generates the verifying keys if they don't exist yet.
-    println!("====== Test ZK proof generation initiated ======");
+    log::info!("====== Test ZK proof generation initiated ======");
     let start = Instant::now();
     produce_two_consecutive_valid_zk_proofs().await;
 
-    println!("====== Test ZK proof generation finished ======");
-    println!("Total time elapsed: {:?} seconds", start.elapsed());
+    log::info!("====== Test ZK proof generation finished ======");
+    log::info!("Total time elapsed: {:?} seconds", start.elapsed());
 
     Ok(())
 }
@@ -72,7 +72,8 @@ fn blockchain() -> Arc<RwLock<Blockchain>> {
 }
 
 async fn produce_two_consecutive_valid_zk_proofs() {
-    setup(get_base_seed(), Path::new(DEFAULT_KEYS_PATH), true).unwrap();
+    setup(get_base_seed(), Path::new(DEFAULT_TEST_KEYS_PATH), true).unwrap();
+
     let blockchain = blockchain();
 
     // Produce the 1st election block after genesis.
@@ -103,7 +104,7 @@ async fn produce_two_consecutive_valid_zk_proofs() {
         zkp_state.latest_header_hash.into(),
         zkp_state.latest_proof,
         genesis_state,
-        Path::new(DEFAULT_KEYS_PATH),
+        Path::new(DEFAULT_TEST_KEYS_PATH),
     )
     .unwrap();
     let proof = zkp_state.clone().into();
@@ -131,7 +132,7 @@ async fn produce_two_consecutive_valid_zk_proofs() {
         zkp_state.latest_header_hash.into(),
         zkp_state.latest_proof,
         genesis_state,
-        Path::new(DEFAULT_KEYS_PATH),
+        Path::new(DEFAULT_TEST_KEYS_PATH),
     )
     .unwrap();
     let proof = zkp_state.into();

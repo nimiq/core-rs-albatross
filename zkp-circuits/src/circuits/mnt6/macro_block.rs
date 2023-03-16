@@ -24,8 +24,8 @@ use crate::gadgets::{
 
 use super::pk_tree_node::{hash_g2, PkInnerNodeWindow};
 
-/// This is the macro block circuit. It takes as inputs an initial state commitment and final state commitment
-/// and it produces a proof that there exists a valid macro block that transforms the initial state
+/// This is the macro block circuit. It takes as inputs the previous state commitment and final state commitment
+/// and it produces a proof that there exists a valid macro block that transforms the previous state
 /// into the final state.
 /// Since the state is composed only of the block number and the public keys of the current validator
 /// list, updating the state is just incrementing the block number and substituting the previous
@@ -37,8 +37,8 @@ pub struct MacroBlockCircuit {
 
     // Witnesses (private)
     proof: Proof<MNT6_753>,
-    initial_pk_tree_root: [u8; 95],
-    initial_header_hash: [u8; 32],
+    prev_pk_tree_root: [u8; 95],
+    prev_header_hash: [u8; 32],
     final_pk_tree_root: [u8; 95],
     block: MacroBlock,
     l_pk_node_hash: [u8; 95],
@@ -47,7 +47,7 @@ pub struct MacroBlockCircuit {
     r_agg_pk_commitment: G2Projective,
 
     // Inputs (public)
-    initial_state_commitment: [u8; 95],
+    prev_state_commitment: [u8; 95],
     final_state_commitment: [u8; 95],
 }
 
@@ -55,29 +55,29 @@ impl MacroBlockCircuit {
     pub fn new(
         vk_pk_tree: VerifyingKey<MNT6_753>,
         proof: Proof<MNT6_753>,
-        initial_pk_tree_root: [u8; 95],
-        initial_header_hash: [u8; 32],
+        prev_pk_tree_root: [u8; 95],
+        prev_header_hash: [u8; 32],
         final_pk_tree_root: [u8; 95],
         block: MacroBlock,
         l_pk_node_hash: [u8; 95],
         r_pk_node_hash: [u8; 95],
         l_agg_pk_commitment: G2Projective,
         r_agg_pk_commitment: G2Projective,
-        initial_state_commitment: [u8; 95],
+        prev_state_commitment: [u8; 95],
         final_state_commitment: [u8; 95],
     ) -> Self {
         Self {
             vk_pk_tree,
             proof,
-            initial_pk_tree_root,
-            initial_header_hash,
+            prev_pk_tree_root,
+            prev_header_hash,
             final_pk_tree_root,
             block,
             l_pk_node_hash,
             r_pk_node_hash,
             l_agg_pk_commitment,
             r_agg_pk_commitment,
-            initial_state_commitment,
+            prev_state_commitment,
             final_state_commitment,
         }
     }
@@ -89,11 +89,11 @@ impl MacroBlockCircuit {
             c: G1Affine::rand(rng),
         };
 
-        let mut initial_pk_tree_root = [0u8; 95];
-        rng.fill_bytes(&mut initial_pk_tree_root);
+        let mut prev_pk_tree_root = [0u8; 95];
+        rng.fill_bytes(&mut prev_pk_tree_root);
 
-        let mut initial_header_hash = [0u8; 32];
-        rng.fill_bytes(&mut initial_header_hash);
+        let mut prev_header_hash = [0u8; 32];
+        rng.fill_bytes(&mut prev_header_hash);
 
         let block_number = u32::rand(rng);
 
@@ -102,8 +102,8 @@ impl MacroBlockCircuit {
         let mut final_pk_tree_root = [0u8; 95];
         rng.fill_bytes(&mut final_pk_tree_root);
 
-        let mut initial_state_commitment = [0u8; 95];
-        rng.fill_bytes(&mut initial_state_commitment);
+        let mut prev_state_commitment = [0u8; 95];
+        rng.fill_bytes(&mut prev_state_commitment);
 
         let mut final_state_commitment = [0u8; 95];
         rng.fill_bytes(&mut final_state_commitment);
@@ -139,15 +139,15 @@ impl MacroBlockCircuit {
         MacroBlockCircuit::new(
             vk_child,
             proof,
-            initial_pk_tree_root,
-            initial_header_hash,
+            prev_pk_tree_root,
+            prev_header_hash,
             final_pk_tree_root,
             block,
             l_pk_node_hash,
             r_pk_node_hash,
             l_agg_commitment,
             r_agg_commitment,
-            initial_state_commitment,
+            prev_state_commitment,
             final_state_commitment,
         )
     }
@@ -172,11 +172,11 @@ impl ConstraintSynthesizer<MNT6Fq> for MacroBlockCircuit {
         let proof_var =
             ProofVar::<MNT6_753, PairingVar>::new_witness(cs.clone(), || Ok(&self.proof))?;
 
-        let initial_pk_tree_root_bytes =
-            Vec::<UInt8<MNT6Fq>>::new_witness(cs.clone(), || Ok(&self.initial_pk_tree_root[..]))?;
+        let prev_pk_tree_root_bytes =
+            Vec::<UInt8<MNT6Fq>>::new_witness(cs.clone(), || Ok(&self.prev_pk_tree_root[..]))?;
 
-        let initial_header_hash_bytes =
-            Vec::<UInt8<MNT6Fq>>::new_witness(cs.clone(), || Ok(&self.initial_header_hash[..]))?;
+        let prev_header_hash_bytes =
+            Vec::<UInt8<MNT6Fq>>::new_witness(cs.clone(), || Ok(&self.prev_header_hash[..]))?;
 
         let final_pk_tree_root_bytes =
             Vec::<UInt8<MNT6Fq>>::new_witness(cs.clone(), || Ok(&self.final_pk_tree_root[..]))?;
@@ -195,35 +195,35 @@ impl ConstraintSynthesizer<MNT6Fq> for MacroBlockCircuit {
         let r_agg_pk_commitment_var =
             G2Var::new_witness(cs.clone(), || Ok(self.r_agg_pk_commitment))?;
 
-        let initial_block_number_var = UInt32::new_witness(cs.clone(), || {
+        let prev_block_number_var = UInt32::new_witness(cs.clone(), || {
             Ok(self.block.block_number - Policy::blocks_per_epoch())
         })?;
 
         // Allocate all the inputs.
-        let initial_state_commitment_bytes =
-            UInt8::<MNT6Fq>::new_input_vec(cs.clone(), &self.initial_state_commitment[..])?;
+        let prev_state_commitment_bytes =
+            UInt8::<MNT6Fq>::new_input_vec(cs.clone(), &self.prev_state_commitment[..])?;
 
         let final_state_commitment_bytes =
             UInt8::<MNT6Fq>::new_input_vec(cs.clone(), &self.final_state_commitment[..])?;
 
-        // Check that the initial block and the final block are exactly one epoch length apart.
+        // Check that the previous block and the final block are exactly one epoch length apart.
         let calculated_block_number =
-            UInt32::addmany(&[initial_block_number_var.clone(), epoch_length_var])?;
+            UInt32::addmany(&[prev_block_number_var.clone(), epoch_length_var])?;
 
         calculated_block_number.enforce_equal(&block_var.block_number)?;
 
-        // Verifying equality for initial state commitment. It just checks that the initial block
+        // Verifying equality for previous state commitment. It just checks that the previous block
         // number, header hash and public key tree root given as witnesses are correct by committing
-        // to them and comparing the result with the initial state commitment given as an input.
+        // to them and comparing the result with the previous state commitment given as an input.
         let reference_commitment = StateCommitmentGadget::evaluate(
             cs.clone(),
-            &initial_block_number_var,
-            &initial_header_hash_bytes,
-            &initial_pk_tree_root_bytes,
+            &prev_block_number_var,
+            &prev_header_hash_bytes,
+            &prev_pk_tree_root_bytes,
             &pedersen_generators_var,
         )?;
 
-        initial_state_commitment_bytes.enforce_equal(&reference_commitment)?;
+        prev_state_commitment_bytes.enforce_equal(&reference_commitment)?;
 
         // Verifying equality for final state commitment. It just checks that the final block number,
         // header hash and public key tree root given as a witnesses are correct by committing
@@ -255,7 +255,7 @@ impl ConstraintSynthesizer<MNT6Fq> for MacroBlockCircuit {
         )?;
         let pk_node_hash_bytes = pedersen_hash.serialize_compressed(cs.clone())?;
 
-        pk_node_hash_bytes.enforce_equal(&initial_pk_tree_root_bytes)?;
+        pk_node_hash_bytes.enforce_equal(&prev_pk_tree_root_bytes)?;
 
         // Verifying the SNARK proof. This is a proof that the aggregate public key is indeed
         // correct. It simply takes the public keys and the signers bitmap and recalculates the

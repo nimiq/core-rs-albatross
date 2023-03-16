@@ -14,9 +14,9 @@ use rand::Rng;
 
 use crate::gadgets::recursive_input::RecursiveInputVar;
 
-/// This is the merger wrapper circuit. It takes as inputs an initial state commitment, a final state
+/// This is the merger wrapper circuit. It takes as inputs the genesis state commitment, a final state
 /// commitment and a verifying key commitment and it produces a proof that there exists a valid SNARK
-/// proof that transforms the initial state into the final state.
+/// proof that transforms the genesis state into the final state.
 /// The circuit is basically only a SNARK verifier. Its use is just to change the elliptic curve
 /// that the proof exists in, which is sometimes needed for recursive composition of SNARK proofs.
 /// This circuit only verifies proofs from the Merger circuit because it has the corresponding
@@ -30,7 +30,7 @@ pub struct MergerWrapperCircuit {
     proof: Proof<MNT4_753>,
 
     // Inputs (public)
-    initial_state_commitment: [u8; 95],
+    genesis_state_commitment: [u8; 95],
     final_state_commitment: [u8; 95],
     vk_commitment: [u8; 95],
 }
@@ -39,14 +39,14 @@ impl MergerWrapperCircuit {
     pub fn new(
         vk_merger: VerifyingKey<MNT4_753>,
         proof: Proof<MNT4_753>,
-        initial_state_commitment: [u8; 95],
+        genesis_state_commitment: [u8; 95],
         final_state_commitment: [u8; 95],
         vk_commitment: [u8; 95],
     ) -> Self {
         Self {
             vk_merger,
             proof,
-            initial_state_commitment,
+            genesis_state_commitment,
             final_state_commitment,
             vk_commitment,
         }
@@ -60,8 +60,8 @@ impl MergerWrapperCircuit {
             c: G1Affine::rand(rng),
         };
 
-        let mut initial_state_commitment = [0u8; 95];
-        rng.fill_bytes(&mut initial_state_commitment);
+        let mut genesis_state_commitment = [0u8; 95];
+        rng.fill_bytes(&mut genesis_state_commitment);
 
         let mut final_state_commitment = [0u8; 95];
         rng.fill_bytes(&mut final_state_commitment);
@@ -73,7 +73,7 @@ impl MergerWrapperCircuit {
         MergerWrapperCircuit::new(
             vk_child,
             proof,
-            initial_state_commitment,
+            genesis_state_commitment,
             final_state_commitment,
             vk_commitment,
         )
@@ -92,8 +92,8 @@ impl ConstraintSynthesizer<MNT4Fq> for MergerWrapperCircuit {
             ProofVar::<MNT4_753, PairingVar>::new_witness(cs.clone(), || Ok(&self.proof))?;
 
         // Allocate all the inputs.
-        let initial_state_commitment_var =
-            UInt8::<MNT4Fq>::new_input_vec(cs.clone(), &self.initial_state_commitment)?;
+        let genesis_state_commitment_var =
+            UInt8::<MNT4Fq>::new_input_vec(cs.clone(), &self.genesis_state_commitment)?;
 
         let final_state_commitment_var =
             UInt8::<MNT4Fq>::new_input_vec(cs.clone(), &self.final_state_commitment)?;
@@ -102,7 +102,7 @@ impl ConstraintSynthesizer<MNT4Fq> for MergerWrapperCircuit {
 
         // Verify the ZK proof.
         let mut proof_inputs = RecursiveInputVar::new();
-        proof_inputs.push(&initial_state_commitment_var)?;
+        proof_inputs.push(&genesis_state_commitment_var)?;
         proof_inputs.push(&final_state_commitment_var)?;
         proof_inputs.push(&vk_commitment_var)?;
 

@@ -69,7 +69,7 @@ pub(crate) fn validate_proof_get_new_state(
     new_block: &MacroBlock,
     genesis_block: MacroBlock,
 ) -> Result<ZKPState, Error> {
-    let initial_pk_tree_root = genesis_block.pk_tree_root().ok_or(Error::InvalidBlock)?;
+    let genesis_pk_tree_root = genesis_block.pk_tree_root().ok_or(Error::InvalidBlock)?;
     let final_pk_tree_root = new_block.pk_tree_root().ok_or(Error::InvalidBlock)?;
     let new_pks: Vec<G2MNT6> = new_block
         .get_validators()
@@ -82,7 +82,7 @@ pub(crate) fn validate_proof_get_new_state(
     if verify(
         genesis_block.block_number(),
         genesis_block.hash().into(),
-        &initial_pk_tree_root,
+        &genesis_pk_tree_root,
         new_block.block_number(),
         new_block.hash().into(),
         &final_pk_tree_root,

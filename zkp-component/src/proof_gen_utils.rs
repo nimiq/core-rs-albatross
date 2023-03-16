@@ -21,8 +21,8 @@ use crate::types::*;
 /// Generates the zk proof and sends it through the channel provided. Upon failure, the error is sent trough the channel provided.
 pub fn generate_new_proof(
     block: MacroBlock,
-    latest_pks: Vec<G2MNT6>,
-    latest_header_hash: [u8; 32],
+    prev_pks: Vec<G2MNT6>,
+    prev_header_hash: [u8; 32],
     previous_proof: Option<Proof<MNT6_753>>,
     genesis_state: [u8; 95],
     prover_keys_path: &Path,
@@ -30,7 +30,7 @@ pub fn generate_new_proof(
     let validators = block.get_validators();
 
     if let Some(validators) = validators {
-        let final_pks = validators
+        let final_pks: Vec<_> = validators
             .voting_keys()
             .into_iter()
             .map(|pub_key| pub_key.public_key)
@@ -39,9 +39,9 @@ pub fn generate_new_proof(
         let block = ZKPMacroBlock::try_from(&block).expect("Invalid election block");
 
         let proof = prove(
-            latest_pks.clone(),
-            latest_header_hash,
-            final_pks,
+            prev_pks.clone(),
+            prev_header_hash,
+            final_pks.clone(),
             block.clone(),
             previous_proof.map(|proof| (proof, genesis_state)),
             true,
@@ -51,7 +51,7 @@ pub fn generate_new_proof(
 
         return match proof {
             Ok(proof) => Ok(ZKPState {
-                latest_pks,
+                latest_pks: final_pks,
                 latest_header_hash: block.header_hash.into(),
                 latest_block_number: block.block_number,
                 latest_proof: Some(proof),

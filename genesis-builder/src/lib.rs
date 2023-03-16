@@ -208,14 +208,16 @@ impl GenesisBuilder {
             .ok_or(GenesisBuilderError::NoVrfSeed)?;
         debug!("Genesis seed: {}", seed);
 
-        // Generate slot allocation from staking contract
+        // Generate slot allocation from staking contract.
         let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
         let slots = staking_contract.select_validators(&data_store.read(&txn), &seed);
+        let pk_tree_root = MacroBlock::calc_pk_tree_root(&slots).unwrap();
         debug!("Slots: {:#?}", slots);
 
         // Body
         let body = MacroBody {
             validators: Some(slots),
+            pk_tree_root: Some(pk_tree_root),
             ..Default::default()
         };
 
