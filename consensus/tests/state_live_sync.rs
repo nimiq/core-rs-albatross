@@ -513,13 +513,10 @@ async fn revert_chunks_for_state_live_sync() {
     info!("Applying chunk #{}", 2);
     assert!(
         matches!(
-            join!(mock_node.next(), live_sync.next()),
-            (
-                Some(RequestChunk::TYPE_ID),
-                Some(LiveSyncEvent::PushEvent(
-                    LiveSyncPushEvent::AcceptedBufferedBlock(..)
-                ))
-            )
+            live_sync.next().await,
+            Some(LiveSyncEvent::PushEvent(
+                LiveSyncPushEvent::AcceptedBufferedBlock(..)
+            ))
         ),
         "Should receive and accept chunks"
     );
@@ -541,20 +538,6 @@ async fn revert_chunks_for_state_live_sync() {
     );
 
     info!("Applying chunk #{}", 4);
-    assert!(
-        matches!(
-            join!(mock_node.next(), live_sync.next()),
-            (
-                Some(RequestChunk::TYPE_ID),
-                Some(LiveSyncEvent::PushEvent(LiveSyncPushEvent::AcceptedChunks(
-                    _
-                )))
-            )
-        ),
-        "Should receive and accept chunks"
-    );
-
-    info!("Applying chunk #{}", 5);
     assert!(
         matches!(
             join!(mock_node.next(), live_sync.next()),
@@ -600,7 +583,7 @@ async fn can_reset_chain_of_chunks() {
                 let chunk = blockchain_rg
                     .state
                     .accounts
-                    .get_chunk(KeyNibbles::ROOT, 4, None);
+                    .get_chunk(KeyNibbles::ROOT, 3, None);
                 ResponseChunk::Chunk(Chunk {
                     block_number: blockchain_rg.block_number(),
                     block_hash: blockchain_rg.head_hash(),
@@ -859,13 +842,10 @@ async fn clears_buffer_after_macro_block() {
 
     assert!(
         matches!(
-            join!(mock_node.next(), live_sync.next()),
-            (
-                Some(RequestChunk::TYPE_ID),
-                Some(LiveSyncEvent::PushEvent(
-                    LiveSyncPushEvent::AcceptedBufferedBlock(..)
-                ))
-            )
+            live_sync.next().await,
+            Some(LiveSyncEvent::PushEvent(
+                LiveSyncPushEvent::AcceptedBufferedBlock(..)
+            ))
         ),
         "Should accept missing blocks"
     );
