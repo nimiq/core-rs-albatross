@@ -655,7 +655,7 @@ impl AccountInherentInteraction for StakingContract {
                     store.put_validator(validator_address, validator);
 
                     // Update the staking contract.
-                    self.active_validators.remove(&validator_address);
+                    self.active_validators.remove(validator_address);
 
                     // logs.push(Log::DeactivateValidator {
                     //     validator_address: validator_address.clone(),

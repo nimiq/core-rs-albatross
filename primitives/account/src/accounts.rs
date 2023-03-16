@@ -89,16 +89,13 @@ impl Accounts {
         let store = DataStore::new(&self.tree, &transaction.sender);
 
         match txn_option {
-            Some(txn) => account.reserve_balance(
-                transaction,
-                reserved_balance,
-                &block_state,
-                store.read(txn),
-            ),
+            Some(txn) => {
+                account.reserve_balance(transaction, reserved_balance, block_state, store.read(txn))
+            }
             None => account.reserve_balance(
                 transaction,
                 reserved_balance,
-                &block_state,
+                block_state,
                 store.read(&ReadTransaction::new(&self.env)),
             ),
         }
@@ -602,10 +599,7 @@ impl Accounts {
     ) -> Result<(), AccountError> {
         // Revert inherents in reverse order.
         assert_eq!(inherents.len(), receipts.inherents.len());
-        let iter = inherents
-            .into_iter()
-            .zip(receipts.inherents.into_iter())
-            .rev();
+        let iter = inherents.iter().zip(receipts.inherents.into_iter()).rev();
         for (inherent, receipt) in iter {
             self.revert_inherent(txn, inherent, block_state, receipt)?;
         }
@@ -613,7 +607,7 @@ impl Accounts {
         // Revert transactions in reverse order.
         assert_eq!(transactions.len(), receipts.transactions.len());
         let iter = transactions
-            .into_iter()
+            .iter()
             .zip(receipts.transactions.into_iter())
             .rev();
         for (transaction, receipt) in iter {

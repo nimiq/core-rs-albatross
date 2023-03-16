@@ -197,7 +197,7 @@ impl GenesisBuilder {
 
         // Fetch all accounts & contract data items from the tree.
         let genesis_accounts = accounts
-            .get_chunk(KeyNibbles::ROOT, usize::MAX - 1, Some(&mut txn))
+            .get_chunk(KeyNibbles::ROOT, usize::MAX - 1, Some(&txn))
             .items;
 
         // Generate seeds

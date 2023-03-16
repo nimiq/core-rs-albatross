@@ -54,7 +54,7 @@ fn get_block_by_hash(
 fn get_validator_by_address(
     blockchain_proxy: &BlockchainReadProxy,
     address: &Address,
-    include_stakers: Option<bool>,
+    _include_stakers: Option<bool>,
 ) -> RPCResult<Validator, BlockchainState, Error> {
     if let BlockchainReadProxy::Full(blockchain) = blockchain_proxy {
         let staking_contract = blockchain.get_staking_contract();
@@ -66,9 +66,9 @@ fn get_validator_by_address(
             return Err(Error::ValidatorNotFound(address.clone()));
         }
 
-        let mut stakers = None;
+        let stakers = None;
 
-        // FIXME
+        // FIXME We can't efficiently fetch the stakers, so we will need to scan.
         // if include_stakers == Some(true) {
         //     let staker_addresses =
         //         StakingContract::get_validator_stakers(accounts_tree, &db_txn, address);

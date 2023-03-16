@@ -398,7 +398,7 @@ impl StakingContract {
             remaining_stake: staker.balance,
             num_remaining_stakers: 1,
         };
-        store.put_tombstone(&validator_address, tombstone);
+        store.put_tombstone(validator_address, tombstone);
 
         Ok(())
     }

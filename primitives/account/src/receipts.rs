@@ -33,9 +33,9 @@ macro_rules! convert_receipt {
             }
         }
 
-        impl Into<AccountReceipt> for $t {
-            fn into(self) -> AccountReceipt {
-                AccountReceipt::from(self.serialize_to_vec())
+        impl From<$t> for AccountReceipt {
+            fn from(value: $t) -> Self {
+                AccountReceipt::from(value.serialize_to_vec())
             }
         }
     };
