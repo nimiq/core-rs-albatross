@@ -29,9 +29,6 @@ members = [
   "mempool",
   "metrics-server",
   "mnemonic",
-  "zkp-primitives",
-  "zkp-primitives/pedersen-generators",
-  "zkp",
   "network-interface",
   "network-libp2p",
   "network-mock",
@@ -58,8 +55,12 @@ members = [
   "vrf",
   "wallet",
   "web-client",
-  "zkp-component",
+  "zkp",
   "zkp-circuits",
+  "zkp-component",
+  "zkp-component/zkp-test-gen",
+  "zkp-primitives",
+  "zkp-primitives/pedersen-generators",
 ]
 
 resolver = "2"

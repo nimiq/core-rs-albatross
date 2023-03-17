@@ -1,0 +1,36 @@
+[package]
+name = "nimiq-zkp-test-gen"
+version = "0.1.0"
+authors = ["Ines C <ii.cruz@campus.fct.unl.pt>"]
+edition = "2021"
+description = "All functionality related to the zk proof storage, dessimination and request handeling."
+homepage = "https://nimiq.com"
+repository = "https://github.com/nimiq/core-rs-albatross"
+license = "Apache-2.0"
+categories = ["cryptography::cryptocurrencies"]
+keywords = ["nimiq", "cryptocurrency", "blockchain"]
+
+[dependencies]
+hex = "0.4"
+log = { package = "tracing", version = "0.1", features = ["log"] }
+parking_lot = "0.12"
+tokio = { version = "1.26", features = ["macros", "rt", "sync"] }
+tracing-subscriber = { version = "0.3" }
+
+beserial = { path = "../../beserial" }
+nimiq-block = { path = "../../primitives/block" }
+nimiq-block-production = { path = "../../block-production" }
+nimiq-blockchain = { path = "../../blockchain" }
+nimiq-blockchain-interface = { path = "../../blockchain-interface" }
+nimiq-blockchain-proxy = { path = "../../blockchain-proxy" }
+nimiq-database = { path = "../../database" }
+nimiq-genesis = { path = "../../genesis" }
+nimiq-log = { path = "../../log" }
+nimiq-primitives = { path = "../../primitives", features = ["policy"] }
+nimiq-test-utils = { path = "../../test-utils" }
+nimiq-utils = { path = "../../utils", features = [
+    "time",
+] }
+nimiq-zkp-circuits = { path = "../../zkp-circuits", features = ["zkp-prover"] }
+nimiq-zkp-component = { path = "..", features = ["zkp-prover"] }
+nimiq-zkp-primitives = { path = "../../zkp-primitives", features = ["zkp-prover"] }

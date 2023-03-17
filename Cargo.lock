@@ -4735,6 +4735,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "nimiq-zkp-test-gen"
+version = "0.1.0"
+dependencies = [
+ "beserial",
+ "hex",
+ "nimiq-block",
+ "nimiq-block-production",
+ "nimiq-blockchain",
+ "nimiq-blockchain-interface",
+ "nimiq-blockchain-proxy",
+ "nimiq-database",
+ "nimiq-genesis",
+ "nimiq-log",
+ "nimiq-primitives",
+ "nimiq-test-utils",
+ "nimiq-utils",
+ "nimiq-zkp-circuits",
+ "nimiq-zkp-component",
+ "nimiq-zkp-primitives",
+ "parking_lot 0.12.1",
+ "tokio",
+ "tracing",
+ "tracing-subscriber 0.3.16",
+]
+
+[[package]]
 name = "nix"
 version = "0.24.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
