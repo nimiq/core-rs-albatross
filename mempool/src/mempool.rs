@@ -420,17 +420,32 @@ impl Mempool {
     }
 
     /// Returns a vector with accepted transactions from the mempool.
+    /// Note that this takes a read lock on blockchain.
     ///
     /// Returns the highest fee per byte up to max_bytes transactions and removes them from the mempool.
     /// It also return the sum of the serialized size of the returned transactions.
     pub fn get_transactions_for_block(&self, max_bytes: usize) -> (Vec<Transaction>, usize) {
         let blockchain = self.blockchain.read();
+        self.get_transactions_for_block_locked(&blockchain, max_bytes)
+    }
+
+    /// Returns a vector with accepted transactions from the mempool.
+    /// If the caller already holds a blockchain lock, it can be passed to this function to prevent
+    /// double-locking the blockchain.
+    ///
+    /// Returns the highest fee per byte up to max_bytes transactions and removes them from the mempool.
+    /// It also return the sum of the serialized size of the returned transactions.
+    pub fn get_transactions_for_block_locked(
+        &self,
+        blockchain: &Blockchain,
+        max_bytes: usize,
+    ) -> (Vec<Transaction>, usize) {
         let mut state = self.state.write();
         let (txs, size) =
             Self::get_transactions_for_block_impl(&mut state.regular_transactions, max_bytes);
 
         for tx in &txs {
-            state.remove(&blockchain, &tx.hash(), EvictionReason::BlockBuilding);
+            state.remove(blockchain, &tx.hash(), EvictionReason::BlockBuilding);
         }
 
         debug!(
@@ -443,6 +458,7 @@ impl Mempool {
     }
 
     /// Returns a vector with accepted control transactions from the mempool.
+    /// Note that this takes a read lock on blockchain.
     ///
     /// Returns the highest fee per byte up to max_bytes transactions and removes them from the mempool.
     /// It also return the sum of the serialized size of the returned transactions.
@@ -451,12 +467,26 @@ impl Mempool {
         max_bytes: usize,
     ) -> (Vec<Transaction>, usize) {
         let blockchain = self.blockchain.read();
+        self.get_control_transactions_for_block_locked(&blockchain, max_bytes)
+    }
+
+    /// Returns a vector with accepted control transactions from the mempool.
+    /// If the caller already holds a blockchain lock, it can be passed to this function to prevent
+    /// double-locking the blockchain.
+    ///
+    /// Returns the highest fee per byte up to max_bytes transactions and removes them from the mempool.
+    /// It also return the sum of the serialized size of the returned transactions.
+    pub fn get_control_transactions_for_block_locked(
+        &self,
+        blockchain: &Blockchain,
+        max_bytes: usize,
+    ) -> (Vec<Transaction>, usize) {
         let mut state = self.state.write();
         let (txs, size) =
             Self::get_transactions_for_block_impl(&mut state.control_transactions, max_bytes);
 
         for tx in &txs {
-            state.remove(&blockchain, &tx.hash(), EvictionReason::BlockBuilding);
+            state.remove(blockchain, &tx.hash(), EvictionReason::BlockBuilding);
         }
 
         debug!(

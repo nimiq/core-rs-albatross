@@ -285,13 +285,13 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
 
         let (mut transactions, txn_size) = self
             .mempool
-            .get_control_transactions_for_block(block_available_bytes);
+            .get_control_transactions_for_block_locked(blockchain, block_available_bytes);
 
         block_available_bytes = block_available_bytes.saturating_sub(txn_size);
 
         let (mut regular_transactions, _) = self
             .mempool
-            .get_transactions_for_block(block_available_bytes);
+            .get_transactions_for_block_locked(blockchain, block_available_bytes);
 
         transactions.append(&mut regular_transactions);
 
