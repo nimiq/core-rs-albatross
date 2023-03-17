@@ -11,7 +11,7 @@ use nimiq_primitives::{
 };
 use nimiq_zkp_circuits::{
     setup::{setup, DEVELOPMENT_SEED},
-    test_setup::setup_merger_wrapper_simulation,
+    test_setup::{setup_merger_wrapper_simulation, UNIT_TOXIC_WASTE_SEED},
     DEFAULT_KEYS_PATH,
 };
 
@@ -49,8 +49,11 @@ fn main() -> Result<(), NanoZKPError> {
 
     setup(ChaCha20Rng::from_seed(DEVELOPMENT_SEED), keys_path, true).unwrap();
     if network_id == NetworkId::UnitAlbatross {
-        setup_merger_wrapper_simulation(&mut ChaCha20Rng::from_seed(DEVELOPMENT_SEED), keys_path)
-            .unwrap();
+        setup_merger_wrapper_simulation(
+            &mut ChaCha20Rng::from_seed(UNIT_TOXIC_WASTE_SEED),
+            keys_path,
+        )
+        .unwrap();
     }
 
     println!("====== Devnet Parameter generation for ZKP finished ======");

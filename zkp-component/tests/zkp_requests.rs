@@ -1,8 +1,7 @@
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use futures::StreamExt;
 
-use beserial::Deserialize;
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_proxy::BlockchainProxy;
@@ -14,12 +13,12 @@ use nimiq_test_log::test;
 use nimiq_test_utils::{
     blockchain::{signing_key, voting_key},
     blockchain_with_rng::produce_macro_blocks_with_rng,
-    zkp_test_data::{get_base_seed, ZKPROOF_SERIALIZED_IN_HEX},
+    zkp_test_data::{get_base_seed, simulate_merger_wrapper, ZKP_TEST_KEYS_PATH},
 };
 
+use nimiq_zkp::ZKP_VERIFYING_KEY;
 use nimiq_zkp_component::proof_store::{DBProofStore, ProofStore};
 use nimiq_zkp_component::proof_utils::validate_proof;
-use nimiq_zkp_component::types::ZKProof;
 use nimiq_zkp_component::zkp_requests::ZKPRequests;
 use nimiq_zkp_component::ZKPComponent;
 use parking_lot::RwLock;
@@ -112,9 +111,13 @@ async fn peers_reply_with_valid_proof() {
         &mut get_base_seed(),
     );
 
-    // Seta valid proof into the 2 components.
-    let new_proof =
-        &ZKProof::deserialize_from_vec(&hex::decode(ZKPROOF_SERIALIZED_IN_HEX).unwrap()).unwrap();
+    // Set a valid proof into the 2 components.
+    let new_proof = simulate_merger_wrapper(
+        &Path::new(ZKP_TEST_KEYS_PATH),
+        &blockchain2,
+        &ZKP_VERIFYING_KEY,
+        &mut get_base_seed(),
+    );
     log::info!("setting proof");
     store2.set_zkp(&new_proof);
     store3.set_zkp(&new_proof);
@@ -193,8 +196,12 @@ async fn peers_reply_with_valid_proof_and_election_block() {
     );
 
     // Seta valid proof into the 2 components.
-    let new_proof =
-        &ZKProof::deserialize_from_vec(&hex::decode(ZKPROOF_SERIALIZED_IN_HEX).unwrap()).unwrap();
+    let new_proof = simulate_merger_wrapper(
+        &Path::new(ZKP_TEST_KEYS_PATH),
+        &blockchain2,
+        &ZKP_VERIFYING_KEY,
+        &mut get_base_seed(),
+    );
     log::info!("setting proof");
     store2.set_zkp(&new_proof);
     store3.set_zkp(&new_proof);

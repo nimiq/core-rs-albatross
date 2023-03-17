@@ -1,19 +1,21 @@
+use std::path::Path;
 use std::sync::Arc;
 
 use ark_groth16::Proof;
+use nimiq_zkp::ZKP_VERIFYING_KEY;
 use parking_lot::RwLock;
 
-use beserial::Deserialize;
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_primitives::{networks::NetworkId, policy::Policy};
 use nimiq_test_log::test;
+use nimiq_test_utils::zkp_test_data::ZKP_TEST_KEYS_PATH;
 use nimiq_test_utils::{
     blockchain::{signing_key, voting_key},
     blockchain_with_rng::produce_macro_blocks_with_rng,
-    zkp_test_data::{get_base_seed, ZKPROOF_SERIALIZED_IN_HEX, ZKPROOF_SERIALIZED_IN_HEX2},
+    zkp_test_data::{get_base_seed, simulate_merger_wrapper},
 };
 use nimiq_utils::time::OffsetTime;
 
@@ -119,8 +121,12 @@ async fn can_detect_valid_proof_none_genesis_blocks() {
     );
 
     // Gets the election block and sets the precomputed zk proof from it.
-    let zkp_proof =
-        &ZKProof::deserialize_from_vec(&hex::decode(ZKPROOF_SERIALIZED_IN_HEX).unwrap()).unwrap();
+    let zkp_proof = simulate_merger_wrapper(
+        &Path::new(ZKP_TEST_KEYS_PATH),
+        &blockchain,
+        &ZKP_VERIFYING_KEY,
+        &mut get_base_seed(),
+    );
     assert!(
         validate_proof(&BlockchainProxy::from(blockchain.clone()), &zkp_proof, None,),
         "The validation of a valid proof failed"
@@ -134,8 +140,12 @@ async fn can_detect_valid_proof_none_genesis_blocks() {
     );
 
     // Gets the election block and sets the precomputed zk proof from it.
-    let zkp_proof =
-        &ZKProof::deserialize_from_vec(&hex::decode(ZKPROOF_SERIALIZED_IN_HEX2).unwrap()).unwrap();
+    let zkp_proof = simulate_merger_wrapper(
+        &Path::new(ZKP_TEST_KEYS_PATH),
+        &blockchain,
+        &ZKP_VERIFYING_KEY,
+        &mut get_base_seed(),
+    );
     assert!(
         validate_proof(&BlockchainProxy::from(blockchain), &zkp_proof, None,),
         "The validation of a valid proof failed"

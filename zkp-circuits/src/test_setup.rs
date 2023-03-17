@@ -12,7 +12,7 @@ use ark_relations::r1cs::{
     ConstraintSynthesizer, ConstraintSystem, OptimizationGoal, Result as R1CSResult,
     SynthesisError, SynthesisMode,
 };
-use ark_serialize::CanonicalDeserialize;
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{cfg_into_iter, cfg_iter, rand::Rng};
 use rand::CryptoRng;
 #[cfg(feature = "parallel")]
@@ -24,6 +24,13 @@ use nimiq_zkp_primitives::NanoZKPError;
 
 use crate::{circuits::mnt4::MergerWrapperCircuit, setup::keys_to_file};
 
+/// Seed to be used to create toxic waste for unit tests.
+pub const UNIT_TOXIC_WASTE_SEED: [u8; 32] = [
+    1, 0, 52, 0, 0, 0, 0, 0, 1, 0, 10, 0, 22, 32, 0, 0, 2, 0, 55, 49, 0, 11, 0, 0, 3, 0, 0, 0, 0,
+    0, 2, 92,
+];
+
+#[derive(CanonicalSerialize, CanonicalDeserialize)]
 pub struct ToxicWaste<E: Pairing> {
     alpha: E::ScalarField,
     beta: E::ScalarField,
@@ -256,6 +263,11 @@ pub fn setup_merger_wrapper_simulation<R: Rng + CryptoRng>(
 
     // Save keys to file.
     keys_to_file(&pk, &vk, "merger_wrapper", path)?;
+
+    // Save toxic waste to file.
+    let mut file = File::create(path.join(format!("toxic_waste.bin")))?;
+    toxic_waste.serialize_uncompressed(&mut file)?;
+    file.sync_all()?;
 
     Ok(toxic_waste)
 }

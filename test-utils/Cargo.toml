@@ -11,6 +11,10 @@ categories = ["cryptography::cryptocurrencies"]
 keywords = ["nimiq", "cryptocurrency", "blockchain"]
 
 [dependencies]
+ark-ff = "0.4"
+ark-groth16 = { version = "0.4", default-features = false }
+ark-mnt6-753 = "0.4"
+ark-serialize = "0.4"
 async-trait = "0.1"
 futures = { package = "futures-util", version = "0.3" }
 hex = "0.4"
@@ -48,5 +52,6 @@ nimiq-validator = { path = "../validator" }
 nimiq-validator-network = { path = "../validator-network" }
 nimiq-utils = { path = "../utils" }
 nimiq-vrf = { path = "../vrf" }
+nimiq-zkp-circuits = { path = "../zkp-circuits", features = ["test-setup", "zkp-prover", "parallel"] }
 nimiq-zkp-component = { path = "../zkp-component", features = ["database-storage", "zkp-prover", "parallel"] }
 nimiq-zkp-primitives = { path = "../zkp-primitives", features = ["parallel", "zkp-prover", "parallel"] }

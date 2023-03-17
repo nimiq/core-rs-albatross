@@ -239,9 +239,7 @@ pub(crate) fn keys_to_file<T: Pairing>(
     }
 
     let mut file = File::create(proving_keys.join(format!("{name}.bin")))?;
-
     pk.serialize_uncompressed(&mut file)?;
-
     file.sync_all()?;
 
     // Save verifying key to file.
@@ -250,9 +248,7 @@ pub(crate) fn keys_to_file<T: Pairing>(
     }
 
     let mut file = File::create(verifying_keys.join(format!("{name}.bin")))?;
-
     vk.serialize_uncompressed(&mut file)?;
-
     file.sync_all()?;
 
     Ok(())

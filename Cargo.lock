@@ -4319,6 +4319,10 @@ dependencies = [
 name = "nimiq-test-utils"
 version = "0.1.0"
 dependencies = [
+ "ark-ff",
+ "ark-groth16",
+ "ark-mnt6-753",
+ "ark-serialize",
  "async-trait",
  "beserial",
  "futures-util",
@@ -4349,6 +4353,7 @@ dependencies = [
  "nimiq-validator",
  "nimiq-validator-network",
  "nimiq-vrf",
+ "nimiq-zkp-circuits",
  "nimiq-zkp-component",
  "nimiq-zkp-primitives",
  "parking_lot 0.12.1",
