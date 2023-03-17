@@ -11,6 +11,7 @@ use nimiq_primitives::{
 };
 use nimiq_zkp_circuits::{
     setup::{setup, DEVELOPMENT_SEED},
+    test_setup::setup_merger_wrapper_simulation,
     DEFAULT_KEYS_PATH,
 };
 
@@ -30,7 +31,8 @@ struct Setup {
 fn main() -> Result<(), NanoZKPError> {
     let args = Setup::parse();
 
-    let keys_path = Path::new(match args.network_id.unwrap_or(NetworkId::DevAlbatross) {
+    let network_id = args.network_id.unwrap_or(NetworkId::DevAlbatross);
+    let keys_path = Path::new(match network_id {
         NetworkId::DevAlbatross => DEFAULT_KEYS_PATH,
         NetworkId::UnitAlbatross => {
             // Use test constants for the setup.
@@ -46,6 +48,10 @@ fn main() -> Result<(), NanoZKPError> {
     let start = Instant::now();
 
     setup(ChaCha20Rng::from_seed(DEVELOPMENT_SEED), keys_path, true).unwrap();
+    if network_id == NetworkId::UnitAlbatross {
+        setup_merger_wrapper_simulation(&mut ChaCha20Rng::from_seed(DEVELOPMENT_SEED), keys_path)
+            .unwrap();
+    }
 
     println!("====== Devnet Parameter generation for ZKP finished ======");
     println!("Total time elapsed: {:?} seconds", start.elapsed());

@@ -4635,6 +4635,7 @@ dependencies = [
  "ark-groth16",
  "ark-mnt4-753",
  "ark-mnt6-753",
+ "ark-poly",
  "ark-r1cs-std",
  "ark-relations",
  "ark-serialize",
@@ -4650,6 +4651,7 @@ dependencies = [
  "nimiq-zkp-primitives",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
+ "rayon",
  "tracing",
 ]
 

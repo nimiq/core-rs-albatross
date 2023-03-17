@@ -8,6 +8,9 @@ pub(crate) mod gadgets;
 pub mod setup;
 pub mod utils;
 
+#[cfg(feature = "test-setup")]
+pub mod test_setup;
+
 #[cfg(feature = "zkp-prover")]
 pub mod bits {
     pub use crate::gadgets::bits::BitVec;

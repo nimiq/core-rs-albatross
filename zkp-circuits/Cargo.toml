@@ -11,7 +11,7 @@ edition = "2021"
 [[bin]]
 name = "nimiq-zkp-setup"
 path = "zkp-setup/main.rs"
-required-features = ["zkp-prover", "parallel"]
+required-features = ["zkp-prover", "parallel", "test-setup"]
 
 [dependencies]
 clap = { version = "4.1", features = ["cargo", "string"] }
@@ -19,6 +19,7 @@ hex = "0.4"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 rand = { version = "0.8", features = ["small_rng"] }
 rand_chacha = "0.3.1"
+rayon = { version = "^1.7", optional = true }
 
 ark-crypto-primitives = { version = "0.4", features = ["crh", "prf", "r1cs"] }
 ark-ec = "0.4"
@@ -26,6 +27,7 @@ ark-ff = "0.4"
 ark-groth16 = { version = "0.4", default-features = false }
 ark-mnt4-753 = "0.4"
 ark-mnt6-753 = "0.4"
+ark-poly = { version = "0.4", optional = true }
 ark-relations = "0.4"
 ark-r1cs-std = "0.4"
 ark-serialize = "0.4"
@@ -45,4 +47,5 @@ nimiq-test-log = { path = "../test-log" }
 
 [features]
 zkp-prover = ["ark-crypto-primitives/r1cs", "ark-mnt4-753/r1cs", "ark-mnt6-753/r1cs", "ark-groth16/r1cs", "nimiq-zkp-primitives/zkp-prover"]
-parallel = ["ark-crypto-primitives/parallel", "ark-ec/parallel", "ark-ff/parallel", "ark-std/parallel", "ark-groth16/parallel", "nimiq-zkp-primitives/parallel"]
+parallel = ["rayon", "ark-crypto-primitives/parallel", "ark-ec/parallel", "ark-ff/parallel", "ark-std/parallel", "ark-groth16/parallel", "nimiq-zkp-primitives/parallel"]
+test-setup = ["ark-poly"]

@@ -224,7 +224,7 @@ fn setup_merger_wrapper<R: Rng + CryptoRng>(rng: &mut R, path: &Path) -> Result<
     keys_to_file(&pk, &vk, "merger_wrapper", path)
 }
 
-fn keys_to_file<T: Pairing>(
+pub(crate) fn keys_to_file<T: Pairing>(
     pk: &ProvingKey<T>,
     vk: &VerifyingKey<T>,
     name: &str,
