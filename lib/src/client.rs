@@ -39,7 +39,6 @@ use nimiq_validator::validator::ValidatorProxy as AbstractValidatorProxy;
 use nimiq_validator_network::network_impl::ValidatorNetworkImpl;
 #[cfg(feature = "wallet")]
 use nimiq_wallet::WalletStore;
-#[cfg(feature = "zkp-prover")]
 use nimiq_zkp::ZKP_VERIFYING_KEY;
 #[cfg(feature = "zkp-prover")]
 use nimiq_zkp_circuits::{

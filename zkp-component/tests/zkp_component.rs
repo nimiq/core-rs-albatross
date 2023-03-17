@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use futures::StreamExt;
+use nimiq_test_utils::zkp_test_data::ZKPROOF_SERIALIZED_IN_HEX2;
 use parking_lot::RwLock;
 
 use beserial::Deserialize;
@@ -192,6 +193,11 @@ async fn can_produce_two_consecutive_valid_zk_proofs() {
         validate_proof(&BlockchainProxy::from(&blockchain), &proof, None,),
         "Generated ZK proof for the first block should be valid"
     );
+    assert_eq!(
+        proof,
+        ZKProof::deserialize_from_vec(&hex::decode(ZKPROOF_SERIALIZED_IN_HEX).unwrap()).unwrap(),
+        "Generated ZK proof for the first block should be valid"
+    );
 
     produce_macro_blocks_with_rng(
         &producer,
@@ -206,5 +212,11 @@ async fn can_produce_two_consecutive_valid_zk_proofs() {
     assert!(
         validate_proof(&BlockchainProxy::from(&blockchain), &proof, None,),
         "Generated ZK proof for the second block should be valid"
+    );
+
+    assert_eq!(
+        proof,
+        ZKProof::deserialize_from_vec(&hex::decode(ZKPROOF_SERIALIZED_IN_HEX2).unwrap()).unwrap(),
+        "Generated ZK proof for the first block should be valid"
     );
 }

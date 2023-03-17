@@ -13,7 +13,7 @@ use nimiq_test_log::test;
 use nimiq_test_utils::{
     blockchain::{signing_key, voting_key},
     blockchain_with_rng::produce_macro_blocks_with_rng,
-    zkp_test_data::{get_base_seed, ZKPROOF_SERIALIZED_IN_HEX},
+    zkp_test_data::{get_base_seed, ZKPROOF_SERIALIZED_IN_HEX, ZKPROOF_SERIALIZED_IN_HEX2},
 };
 use nimiq_utils::time::OffsetTime;
 
@@ -121,6 +121,21 @@ async fn can_detect_valid_proof_none_genesis_blocks() {
     // Gets the election block and sets the precomputed zk proof from it.
     let zkp_proof =
         &ZKProof::deserialize_from_vec(&hex::decode(ZKPROOF_SERIALIZED_IN_HEX).unwrap()).unwrap();
+    assert!(
+        validate_proof(&BlockchainProxy::from(blockchain.clone()), &zkp_proof, None,),
+        "The validation of a valid proof failed"
+    );
+
+    produce_macro_blocks_with_rng(
+        &producer,
+        &blockchain,
+        Policy::batches_per_epoch() as usize,
+        &mut get_base_seed(),
+    );
+
+    // Gets the election block and sets the precomputed zk proof from it.
+    let zkp_proof =
+        &ZKProof::deserialize_from_vec(&hex::decode(ZKPROOF_SERIALIZED_IN_HEX2).unwrap()).unwrap();
     assert!(
         validate_proof(&BlockchainProxy::from(blockchain), &zkp_proof, None,),
         "The validation of a valid proof failed"
