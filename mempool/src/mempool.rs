@@ -360,12 +360,17 @@ impl Mempool {
         // Update all sender balances that were affected by the adopted blocks.
         // Remove the transactions that have become invalid.
         for address in affected_senders {
-            let sender_account = blockchain.get_account(&address);
-            let mut sender_state = mempool_state.state_by_sender.remove(&address).unwrap();
+            // The sender_state does not exist anymore if all transactions from this sender have
+            // been mined.
+            let mut sender_state = match mempool_state.state_by_sender.remove(&address) {
+                Some(state) => state,
+                None => continue,
+            };
             sender_state.reserved_balance = ReservedBalance::new(address.clone());
 
             // TODO: We should have per sender transactions ordered by fee to try to
             //       keep the ones with higher fee
+            let sender_account = blockchain.get_account(&address);
             sender_state.txns.retain(|tx_hash| {
                 let tx = mempool_state.get(tx_hash).unwrap();
                 let still_valid = blockchain
@@ -377,7 +382,9 @@ impl Mempool {
                 still_valid
             });
 
-            mempool_state.state_by_sender.insert(address, sender_state);
+            if !sender_state.txns.is_empty() {
+                mempool_state.state_by_sender.insert(address, sender_state);
+            }
         }
 
         // Iterate over the transactions in the reverted blocks,
