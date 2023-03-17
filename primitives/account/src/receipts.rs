@@ -70,35 +70,6 @@ pub struct Receipts {
 
 // TODO Implement sparse serialization for Receipts
 
-// impl Receipts {
-//     pub fn new() -> Receipts {
-//         Receipts(vec![])
-//     }
-//
-//     pub fn len(&self) -> usize {
-//         self.0.len()
-//     }
-//
-//     pub fn is_empty(&self) -> bool {
-//         self.0.is_empty()
-//     }
-// }
-//
-// impl From<Vec<OperationReceipt>> for Receipts {
-//     fn from(val: Vec<OperationReceipt>) -> Self {
-//         Receipts(val)
-//     }
-// }
-//
-// impl IntoIterator for Receipts {
-//     type Item = OperationReceipt;
-//     type IntoIter = IntoIter<Self::Item>;
-//
-//     fn into_iter(self) -> Self::IntoIter {
-//         self.0.into_iter()
-//     }
-// }
-
 impl IntoDatabaseValue for Receipts {
     fn database_byte_size(&self) -> usize {
         self.serialized_size()
