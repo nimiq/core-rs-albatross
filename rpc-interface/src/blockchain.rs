@@ -23,18 +23,18 @@ pub trait BlockchainInterface {
     async fn get_block_by_hash(
         &mut self,
         hash: Blake2bHash,
-        include_transactions: Option<bool>,
+        include_body: Option<bool>,
     ) -> RPCResult<Block, (), Self::Error>;
 
     async fn get_block_by_number(
         &mut self,
         block_number: u32,
-        include_transactions: Option<bool>,
+        include_body: Option<bool>,
     ) -> RPCResult<Block, (), Self::Error>;
 
     async fn get_latest_block(
         &mut self,
-        include_transactions: Option<bool>,
+        include_body: Option<bool>,
     ) -> RPCResult<Block, (), Self::Error>;
 
     async fn get_slot_at(
@@ -115,7 +115,7 @@ pub trait BlockchainInterface {
     #[stream]
     async fn subscribe_for_head_block(
         &mut self,
-        include_transactions: Option<bool>,
+        include_body: Option<bool>,
     ) -> Result<BoxStream<'static, RPCData<Block, ()>>, Self::Error>;
 
     #[stream]

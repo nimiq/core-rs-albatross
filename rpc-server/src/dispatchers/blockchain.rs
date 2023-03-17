@@ -35,16 +35,13 @@ impl BlockchainDispatcher {
 fn get_block_by_hash(
     blockchain: &BlockchainReadProxy,
     hash: &Blake2bHash,
-    include_transactions: Option<bool>,
+    include_body: Option<bool>,
 ) -> RPCResult<Block, (), Error> {
-    let include_body =
-        include_transactions.unwrap_or(matches!(blockchain, BlockchainReadProxy::Full(_)));
+    let include_body = include_body.unwrap_or(matches!(blockchain, BlockchainReadProxy::Full(_)));
 
     blockchain
         .get_block(hash, include_body)
-        .map(|block| {
-            Block::from_block(blockchain, block, include_transactions.unwrap_or(false)).into()
-        })
+        .map(|block| Block::from_block(blockchain, block, include_body).into())
         .map_err(|_| Error::BlockNotFoundByHash(hash.clone()))
 }
 
@@ -121,9 +118,9 @@ impl BlockchainInterface for BlockchainDispatcher {
     async fn get_block_by_hash(
         &mut self,
         hash: Blake2bHash,
-        include_transactions: Option<bool>,
+        include_body: Option<bool>,
     ) -> RPCResult<Block, (), Self::Error> {
-        get_block_by_hash(&self.blockchain.read(), &hash, include_transactions)
+        get_block_by_hash(&self.blockchain.read(), &hash, include_body)
     }
 
     /// Tries to fetch a block given its number. It has an option to include the transactions in the
@@ -132,30 +129,30 @@ impl BlockchainInterface for BlockchainDispatcher {
     async fn get_block_by_number(
         &mut self,
         block_number: u32,
-        include_transactions: Option<bool>,
+        include_body: Option<bool>,
     ) -> RPCResult<Block, (), Self::Error> {
         let blockchain = self.blockchain.read();
 
         let include_body =
-            include_transactions.unwrap_or(matches!(blockchain, BlockchainReadProxy::Full(_)));
+            include_body.unwrap_or(matches!(blockchain, BlockchainReadProxy::Full(_)));
 
         let block = blockchain
             .get_block_at(block_number, include_body)
             .map_err(|_| Error::BlockNotFound(block_number))?;
 
-        Ok(Block::from_block(&blockchain, block, include_transactions.unwrap_or(false)).into())
+        Ok(Block::from_block(&blockchain, block, include_body).into())
     }
 
     /// Returns the block at the head of the main chain. It has an option to include the
     /// transactions in the block, which defaults to false.
     async fn get_latest_block(
         &mut self,
-        include_transactions: Option<bool>,
+        include_body: Option<bool>,
     ) -> RPCResult<Block, (), Self::Error> {
         let blockchain = self.blockchain.read();
         let block = blockchain.head();
 
-        Ok(Block::from_block(&blockchain, block, include_transactions.unwrap_or(false)).into())
+        Ok(Block::from_block(&blockchain, block, include_body.unwrap_or(false)).into())
     }
 
     /// Returns the information for the slot owner at the given block height and offset. The
@@ -631,7 +628,7 @@ impl BlockchainInterface for BlockchainDispatcher {
     #[stream]
     async fn subscribe_for_head_block(
         &mut self,
-        include_transactions: Option<bool>,
+        include_body: Option<bool>,
     ) -> Result<BoxStream<'static, RPCData<Block, ()>>, Self::Error> {
         let blockchain = self.blockchain.clone();
         let stream = self.subscribe_for_head_block_hash().await?;
@@ -644,7 +641,7 @@ impl BlockchainInterface for BlockchainDispatcher {
                 let result = get_block_by_hash(
                     &blockchain_rg,
                     &rpc_result.data, //The data contains the hash
-                    include_transactions,
+                    include_body,
                 )
                 .map_or_else(|_| None, Some);
                 future::ready(result)

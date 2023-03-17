@@ -172,7 +172,7 @@ impl Block {
     pub fn from_block(
         blockchain: &BlockchainReadProxy,
         block: nimiq_block::Block,
-        include_transactions: bool,
+        include_body: bool,
     ) -> Self {
         let block_number = block.block_number();
         let timestamp = block.timestamp();
@@ -191,7 +191,7 @@ impl Block {
 
                 // Get the reward inherents and convert them to reward transactions.
                 let transactions = if let BlockchainReadProxy::Full(blockchain) = blockchain {
-                    if include_transactions {
+                    if include_body {
                         let ext_txs = blockchain
                             .history_store
                             .get_block_transactions(block_number, None);
@@ -256,7 +256,7 @@ impl Block {
                                 .map(Into::into)
                                 .collect(),
                         ),
-                        if include_transactions {
+                        if include_body {
                             let head_height = blockchain.head().block_number();
                             Some(
                                 body.transactions

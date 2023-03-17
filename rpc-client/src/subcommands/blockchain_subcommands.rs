@@ -39,9 +39,9 @@ pub enum BlockchainCommand {
         #[clap(long)]
         block_number: Option<u32>,
 
-        /// Include transactions
-        #[clap(short = 't', long)]
-        include_transactions: bool,
+        /// Whether to include the block body
+        #[clap(short = 'b', long)]
+        include_body: bool,
     },
 
     /// Query a transaction from the blockchain.
@@ -176,23 +176,20 @@ impl HandleSubcommand for BlockchainCommand {
             BlockchainCommand::Block {
                 block_hash,
                 block_number,
-                include_transactions,
+                include_body,
             } => {
                 let block = if let Some(block_hash) = block_hash {
                     client
                         .blockchain
-                        .get_block_by_hash(block_hash, Some(include_transactions))
+                        .get_block_by_hash(block_hash, Some(include_body))
                         .await
                 } else if let Some(block_number) = block_number {
                     client
                         .blockchain
-                        .get_block_by_number(block_number, Some(include_transactions))
+                        .get_block_by_number(block_number, Some(include_body))
                         .await
                 } else {
-                    client
-                        .blockchain
-                        .get_latest_block(Some(include_transactions))
-                        .await
+                    client.blockchain.get_latest_block(Some(include_body)).await
                 }?;
                 println!("{block:#?}")
             }
