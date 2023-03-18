@@ -7,7 +7,7 @@ use nimiq_blockchain::HistoryTreeChunk;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_network_interface::request::{RequestCommon, RequestMarker};
-use nimiq_primitives::trie::trie_proof::TrieProof;
+use nimiq_primitives::{key_nibbles::KeyNibbles, trie::trie_proof::TrieProof};
 use nimiq_transaction::history_proof::HistoryTreeProof;
 
 mod handlers;
@@ -20,8 +20,6 @@ The consensus module uses the following messages:
 203 RequestResponseMessage<Epoch>
 */
 
-// The max number of Accounts proof requests per peer.
-pub const MAX_REQUEST_ACCOUNTS_PROOF: u32 = 1000;
 /// The max number of MacroChain requests per peer.
 pub const MAX_REQUEST_RESPONSE_MACRO_CHAIN: u32 = 1000;
 /// The max number of BatchSet requests per peer.
@@ -38,6 +36,8 @@ pub const MAX_REQUEST_RESPONSE_HEAD: u32 = 1000;
 pub const MAX_REQUEST_TRANSACTIONS_PROOF: u32 = 1000;
 /// The max number of Transactions proof requests per peer.
 pub const MAX_REQUEST_TRANSACTIONS_BY_ADDRESS: u32 = 1000;
+// The max number of Trie proof requests per peer.
+pub const MAX_REQUEST_TRIE_PROOF: u32 = 1000;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Checkpoint {
@@ -253,21 +253,21 @@ pub struct ResponseTransactionReceiptsByAddress {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct RequestAccountsProof {
+pub struct RequestTrieProof {
     #[beserial(len_type(u16, limit = 128))]
     /// Addresses for which the accounts trie proof is requested for
-    pub addresses: Vec<Address>,
+    pub keys: Vec<KeyNibbles>, //-> Accounts
 }
 
-impl RequestCommon for RequestAccountsProof {
+impl RequestCommon for RequestTrieProof {
     type Kind = RequestMarker;
     const TYPE_ID: u16 = 215;
-    type Response = ResponseAccountsProof;
-    const MAX_REQUESTS: u32 = MAX_REQUEST_ACCOUNTS_PROOF;
+    type Response = ResponseTrieProof;
+    const MAX_REQUESTS: u32 = MAX_REQUEST_TRIE_PROOF;
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct ResponseAccountsProof {
+pub struct ResponseTrieProof {
     // The accounts proof
     pub proof: Option<TrieProof>,
     // The hash of the block that was used to create the proof

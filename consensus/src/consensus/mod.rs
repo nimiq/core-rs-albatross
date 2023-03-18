@@ -24,7 +24,9 @@ use crate::messages::{
     RequestBatchSet, RequestHistoryChunk, RequestTransactionReceiptsByAddress,
     RequestTransactionsProof,
 };
-use crate::messages::{RequestBlock, RequestHead, RequestMacroChain, RequestMissingBlocks};
+use crate::messages::{
+    RequestBlock, RequestHead, RequestMacroChain, RequestMissingBlocks, RequestTrieProof,
+};
 #[cfg(feature = "full")]
 use crate::sync::live::state_queue::RequestChunk;
 use crate::sync::{syncer::LiveSyncPushEvent, syncer_proxy::SyncerProxy};
@@ -160,6 +162,9 @@ impl<N: Network> Consensus<N> {
                 executor.exec(Box::pin(request_handler(network, stream, blockchain)));
 
                 let stream = network.receive_requests::<RequestTransactionReceiptsByAddress>();
+                executor.exec(Box::pin(request_handler(network, stream, blockchain)));
+
+                let stream = network.receive_requests::<RequestTrieProof>();
                 executor.exec(Box::pin(request_handler(network, stream, blockchain)));
             }
             BlockchainProxy::Light(_) => {}

@@ -6,7 +6,6 @@ use nimiq_block::{Block, BlockError, SkipBlockInfo};
 use nimiq_blockchain_interface::PushError;
 use nimiq_database::ReadTransaction;
 use nimiq_database::WriteTransaction;
-use nimiq_keys::Address;
 use nimiq_primitives::{key_nibbles::KeyNibbles, trie::trie_proof::TrieProof};
 use nimiq_transaction::extended_transaction::ExtendedTransaction;
 
@@ -202,11 +201,9 @@ impl Blockchain {
         }
     }
 
-    pub fn get_accounts_proof(&self, addresses: &[Address]) -> Option<TrieProof> {
+    pub fn get_accounts_proof(&self, keys: &[KeyNibbles]) -> Option<TrieProof> {
         let txn = ReadTransaction::new(&self.env);
 
-        let keys: Vec<KeyNibbles> = addresses.iter().map(KeyNibbles::from).collect();
-
-        self.state().accounts.tree.get_proof(&txn, keys)
+        self.state().accounts.tree.get_proof(&txn, keys.to_vec())
     }
 }

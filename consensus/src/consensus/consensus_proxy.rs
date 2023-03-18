@@ -23,7 +23,7 @@ use nimiq_transaction::{
 };
 
 use crate::messages::{
-    RequestAccountsProof, RequestTransactionReceiptsByAddress, RequestTransactionsProof,
+    RequestTransactionReceiptsByAddress, RequestTransactionsProof, RequestTrieProof,
 };
 use crate::ConsensusEvent;
 
@@ -324,12 +324,12 @@ impl<N: Network> ConsensusProxy<N> {
                 break;
             }
 
-            // Before requesting accounts from a peer, we need to check if those accounts were already verified
-            let unverified_addresses = addresses
-                .iter()
-                .cloned()
-                .filter(|address| !verified_accounts.contains_key(address))
-                .collect();
+            let mut unverified_keys: HashMap<KeyNibbles, Address> = HashMap::from_iter(
+                addresses
+                    .iter()
+                    .filter(|&address| !verified_accounts.contains_key(address))
+                    .map(|address| (KeyNibbles::from(address), address.clone())),
+            );
 
             log::debug!(
                 peer_id = %peer_id,
@@ -337,9 +337,9 @@ impl<N: Network> ConsensusProxy<N> {
             );
             let response = self
                 .network
-                .request::<RequestAccountsProof>(
-                    RequestAccountsProof {
-                        addresses: unverified_addresses,
+                .request::<RequestTrieProof>(
+                    RequestTrieProof {
+                        keys: unverified_keys.keys().cloned().collect(),
                     },
                     peer_id,
                 )
@@ -364,14 +364,10 @@ impl<N: Network> ConsensusProxy<N> {
                                     break;
                                 }
                                 // If the proof is valid, then we add the obtained accounts to our verified accounts vector.
-                                let mut key_nibbles: HashMap<KeyNibbles, Address> =
-                                    HashMap::from_iter(addresses.iter().map(|address| {
-                                        (KeyNibbles::from(address), address.clone())
-                                    }));
                                 for trie_proof_node in proof.nodes {
                                     if let Some(value) = trie_proof_node.value() {
                                         if let Some(address) =
-                                            key_nibbles.remove(&trie_proof_node.key)
+                                            unverified_keys.remove(&trie_proof_node.key)
                                         {
                                             if let Ok(account) =
                                                 Account::deserialize_from_vec(value)

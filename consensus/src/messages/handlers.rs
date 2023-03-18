@@ -478,16 +478,16 @@ impl Handle<ResponseTransactionReceiptsByAddress, Arc<RwLock<Blockchain>>>
 }
 
 #[cfg(feature = "full")]
-impl Handle<ResponseAccountsProof, Arc<RwLock<Blockchain>>> for RequestAccountsProof {
-    fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> ResponseAccountsProof {
+impl Handle<ResponseTrieProof, Arc<RwLock<Blockchain>>> for RequestTrieProof {
+    fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> ResponseTrieProof {
         let blockchain = blockchain.read();
 
         // We only prove accounts that exist in our current state
-        let proof = blockchain.get_accounts_proof(&self.addresses);
+        let proof = blockchain.get_accounts_proof(&self.keys);
 
         if proof.is_none() {
             // If we could not generate a proof we respond with an empty result
-            return ResponseAccountsProof {
+            return ResponseTrieProof {
                 proof: None,
                 block_hash: None,
             };
@@ -495,7 +495,7 @@ impl Handle<ResponseAccountsProof, Arc<RwLock<Blockchain>>> for RequestAccountsP
 
         let block_hash = blockchain.head_hash();
 
-        ResponseAccountsProof {
+        ResponseTrieProof {
             proof,
             block_hash: Some(block_hash),
         }
