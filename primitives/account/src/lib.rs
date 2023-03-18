@@ -15,6 +15,7 @@ pub use crate::reserved_balance::ReservedBalance;
 mod account;
 mod accounts;
 mod data_store;
+mod data_store_ops;
 mod interaction_traits;
 mod logs;
 mod receipts;

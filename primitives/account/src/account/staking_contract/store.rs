@@ -4,7 +4,8 @@ use nimiq_primitives::key_nibbles::KeyNibbles;
 
 use crate::account::staking_contract::validator::Tombstone;
 use crate::account::staking_contract::{Staker, Validator};
-use crate::data_store::{DataStoreRead, DataStoreWrite};
+use crate::data_store::DataStoreWrite;
+use crate::data_store_ops::DataStoreReadOps;
 
 struct StakingContractStore {}
 
@@ -41,18 +42,16 @@ pub trait StakingContractStoreReadOps {
     fn get_tombstone(&self, address: &Address) -> Option<Tombstone>;
 }
 
-pub(crate) struct StakingContractStoreRead<'read, 'store, 'tree, 'txn, 'env>(
-    &'read DataStoreRead<'store, 'tree, 'txn, 'env>,
-);
+pub(crate) struct StakingContractStoreRead<'read, T: DataStoreReadOps>(&'read T);
 
-impl<'read, 'store, 'tree, 'txn, 'env> StakingContractStoreRead<'read, 'store, 'tree, 'txn, 'env> {
-    pub fn new(data_store: &'read DataStoreRead<'store, 'tree, 'txn, 'env>) -> Self {
+impl<'read, T: DataStoreReadOps> StakingContractStoreRead<'read, T> {
+    pub fn new(data_store: &'read T) -> Self {
         StakingContractStoreRead(data_store)
     }
 }
 
-impl<'read, 'store, 'tree, 'txn, 'env> StakingContractStoreReadOps
-    for StakingContractStoreRead<'read, 'store, 'tree, 'txn, 'env>
+impl<'read, T: DataStoreReadOps> StakingContractStoreReadOps
+    for StakingContractStoreRead<'read, T>
 {
     fn get_validator(&self, address: &Address) -> Option<Validator> {
         self.0.get(&StakingContractStore::validator_key(address))

@@ -3,7 +3,7 @@ use nimiq_database::{Transaction, WriteTransaction};
 use nimiq_keys::Address;
 use nimiq_primitives::key_nibbles::KeyNibbles;
 
-use crate::AccountsTrie;
+use crate::{data_store_ops::DataStoreReadOps, AccountsTrie};
 
 pub struct DataStore<'a> {
     tree: &'a AccountsTrie,
@@ -54,8 +54,8 @@ pub struct DataStoreRead<'store, 'tree, 'txn, 'env> {
     txn: &'txn Transaction<'env>,
 }
 
-impl<'store, 'tree, 'txn, 'env> DataStoreRead<'store, 'tree, 'txn, 'env> {
-    pub fn get<T: Deserialize>(&self, key: &KeyNibbles) -> Option<T> {
+impl<'store, 'tree, 'txn, 'env> DataStoreReadOps for DataStoreRead<'store, 'tree, 'txn, 'env> {
+    fn get<T: Deserialize>(&self, key: &KeyNibbles) -> Option<T> {
         self.store.get(self.txn, key)
     }
 }
@@ -82,6 +82,7 @@ impl<'store, 'tree, 'txn, 'env> DataStoreWrite<'store, 'tree, 'txn, 'env> {
 #[cfg(test)]
 mod tests {
     use crate::data_store::DataStore;
+    use crate::data_store_ops::DataStoreReadOps;
     use crate::AccountsTrie;
     use nimiq_database::volatile::VolatileEnvironment;
     use nimiq_database::{ReadTransaction, WriteTransaction};

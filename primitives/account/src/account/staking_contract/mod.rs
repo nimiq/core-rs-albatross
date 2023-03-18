@@ -14,10 +14,10 @@ use nimiq_primitives::{
 };
 use nimiq_vrf::{AliasMethod, VrfSeed, VrfUseCase};
 
-use crate::account::staking_contract::store::{
-    StakingContractStoreRead, StakingContractStoreReadOps,
+use crate::{
+    account::staking_contract::store::{StakingContractStoreRead, StakingContractStoreReadOps},
+    data_store_ops::DataStoreReadOps,
 };
-use crate::data_store::DataStoreRead;
 
 pub use receipts::*;
 pub use staker::Staker;
@@ -86,32 +86,36 @@ pub struct StakingContract {
 
 impl StakingContract {
     /// Get a validator given its address, if it exists.
-    pub fn get_validator(
+    pub fn get_validator<T: DataStoreReadOps>(
         &self,
-        data_store: &DataStoreRead,
+        data_store: &T,
         address: &Address,
     ) -> Option<Validator> {
         StakingContractStoreRead::new(data_store).get_validator(address)
     }
 
     /// Get a staker given its address, if it exists.
-    pub fn get_staker(&self, data_store: &DataStoreRead, address: &Address) -> Option<Staker> {
+    pub fn get_staker<T: DataStoreReadOps>(
+        &self,
+        data_store: &T,
+        address: &Address,
+    ) -> Option<Staker> {
         StakingContractStoreRead::new(data_store).get_staker(address)
     }
 
     /// Get a tombstone given its address, if it exists.
-    pub fn get_tombstone(
+    pub fn get_tombstone<T: DataStoreReadOps>(
         &self,
-        data_store: &DataStoreRead,
+        data_store: &T,
         address: &Address,
     ) -> Option<Tombstone> {
         StakingContractStoreRead::new(data_store).get_tombstone(address)
     }
 
     /// Get a list containing the addresses of all stakers that are delegating for a given validator.
-    pub fn get_stakers_for_validator(
+    pub fn get_stakers_for_validator<T: DataStoreReadOps>(
         &self,
-        _data_store: &DataStoreRead,
+        _data_store: &T,
         _address: &Address,
     ) -> Vec<Address> {
         todo!()
@@ -119,7 +123,11 @@ impl StakingContract {
 
     /// Given a seed, it randomly distributes the validator slots across all validators. It is
     /// used to select the validators for the next epoch.
-    pub fn select_validators(&self, data_store: &DataStoreRead, seed: &VrfSeed) -> Validators {
+    pub fn select_validators<T: DataStoreReadOps>(
+        &self,
+        data_store: &T,
+        seed: &VrfSeed,
+    ) -> Validators {
         let mut validator_addresses = Vec::with_capacity(self.active_validators.len());
         let mut validator_stakes = Vec::with_capacity(self.active_validators.len());
 
