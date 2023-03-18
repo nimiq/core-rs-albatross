@@ -56,7 +56,7 @@ pub fn zkp_test_exe() -> std::path::PathBuf {
 }
 
 pub fn load_merger_wrapper_simulator(path: &Path) -> Option<ToxicWaste<MNT6_753>> {
-    let file = File::open(path.join(format!("toxic_waste.bin"))).ok()?;
+    let file = File::open(path.join("toxic_waste.bin")).ok()?;
     ToxicWaste::deserialize_uncompressed(file).ok()
 }
 

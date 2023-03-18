@@ -28,10 +28,7 @@ pub fn pk_tree_construct(public_keys: Vec<G2Projective>) -> [u8; 95] {
     let iter = public_keys.iter();
     #[cfg(feature = "parallel")]
     let iter = public_keys.par_iter();
-    let bytes: Vec<u8> = iter
-        .map(|pk| serialize_g2_mnt6(pk).to_vec())
-        .flatten()
-        .collect();
+    let bytes: Vec<u8> = iter.flat_map(|pk| serialize_g2_mnt6(pk).to_vec()).collect();
 
     // Chunk the bits into the number of leaves.
     let mut inputs = Vec::new();

@@ -33,7 +33,10 @@ ark-r1cs-std = "0.4"
 ark-serialize = { version = "0.4", features = ["derive"] }
 ark-std = "0.4"
 
+beserial = { path = "../beserial", features = ["derive"] }
+nimiq-block = { path = "../primitives/block" }
 nimiq-bls = { path = "../bls" }
+nimiq-genesis = { path = "../genesis", default-features = false }
 nimiq-hash = { path = "../hash" }
 nimiq-pedersen-generators = { path = "../zkp-primitives/pedersen-generators" }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }

@@ -61,8 +61,7 @@ pub fn merkle_tree_construct(inputs: Vec<Vec<u8>>) -> [u8; 95] {
 
         // Serialize all the child nodes.
         let bytes: Vec<u8> = iter
-            .map(|node| serialize_g1_mnt6(node).to_vec())
-            .flatten()
+            .flat_map(|node| serialize_g1_mnt6(node).to_vec())
             .collect();
 
         // Chunk the bits into the number of parent nodes.

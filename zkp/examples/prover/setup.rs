@@ -1,5 +1,6 @@
 use std::{path::PathBuf, time::Instant};
 
+use nimiq_primitives::networks::NetworkId;
 use nimiq_zkp_circuits::setup::setup;
 use rand::thread_rng;
 
@@ -11,7 +12,7 @@ fn main() {
     let start = Instant::now();
 
     // use the current directory
-    setup(thread_rng(), &PathBuf::new(), true).unwrap();
+    setup(thread_rng(), &PathBuf::new(), NetworkId::DevAlbatross, true).unwrap();
 
     println!("====== Parameter generation for ZKP Circuit finished ======");
     println!("Total time elapsed: {:?} seconds", start.elapsed());

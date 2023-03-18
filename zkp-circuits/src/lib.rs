@@ -4,6 +4,7 @@ mod blake2s;
 pub mod circuits;
 #[cfg(feature = "zkp-prover")]
 pub(crate) mod gadgets;
+pub mod metadata;
 #[cfg(feature = "zkp-prover")]
 pub mod setup;
 pub mod utils;

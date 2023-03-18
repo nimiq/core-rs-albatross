@@ -10,12 +10,6 @@ edition = "2021"
 categories = ["cryptography::cryptocurrencies"]
 keywords = ["nimiq", "cryptocurrency", "blockchain"]
 
-[build-dependencies]
-ark-serialize = "0.4"
-
-nimiq-zkp-primitives = { path = "../zkp-primitives", features = ["zkp-prover", "parallel"] }
-nimiq-zkp-circuits = { path = "../zkp-circuits", features = ["zkp-prover", "parallel"] }
-
 [dependencies]
 ark-crypto-primitives = { version = "0.4", features = ["prf", "sponge"] }
 ark-ec = "0.4"

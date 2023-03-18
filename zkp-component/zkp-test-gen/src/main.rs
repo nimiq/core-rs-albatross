@@ -73,7 +73,13 @@ fn blockchain() -> Arc<RwLock<Blockchain>> {
 }
 
 async fn produce_two_consecutive_valid_zk_proofs() {
-    setup(get_base_seed(), Path::new(DEFAULT_TEST_KEYS_PATH), true).unwrap();
+    setup(
+        get_base_seed(),
+        Path::new(DEFAULT_TEST_KEYS_PATH),
+        NetworkId::UnitAlbatross,
+        true,
+    )
+    .unwrap();
     ZKP_VERIFYING_KEY
         .init_with_key(load_verifying_key_from_file(Path::new(DEFAULT_TEST_KEYS_PATH)).unwrap());
 

@@ -9,6 +9,8 @@ use ark_mnt6_753::{Config, MNT6_753};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use rand::{CryptoRng, Rng};
 
+use nimiq_genesis::NetworkInfo;
+use nimiq_primitives::networks::NetworkId;
 use nimiq_zkp_primitives::NanoZKPError;
 
 use crate::{
@@ -20,6 +22,8 @@ use crate::{
         PKTreeNodeCircuit as NodeMNT6,
     },
 };
+
+use crate::metadata::VerifyingKeyMetadata;
 
 pub const DEVELOPMENT_SEED: [u8; 32] = [
     1, 0, 52, 0, 0, 0, 0, 0, 1, 0, 10, 0, 22, 32, 0, 0, 2, 0, 55, 49, 0, 11, 0, 0, 3, 0, 0, 0, 0,
@@ -33,6 +37,7 @@ pub const DEVELOPMENT_SEED: [u8; 32] = [
 pub fn setup<R: Rng + CryptoRng>(
     mut rng: R,
     path: &Path,
+    network_id: NetworkId,
     prover_active: bool,
 ) -> Result<(), NanoZKPError> {
     if all_files_created(path, prover_active) {
@@ -58,6 +63,12 @@ pub fn setup<R: Rng + CryptoRng>(
     setup_merger(&mut rng, path)?;
 
     setup_merger_wrapper(&mut rng, path)?;
+
+    let network_info = NetworkInfo::from_network_id(network_id);
+    let genesis_block = network_info.genesis_block().unwrap_macro();
+    let meta_data = VerifyingKeyMetadata::new(genesis_block.hash());
+
+    meta_data.save_to_file(path)?;
 
     Ok(())
 }

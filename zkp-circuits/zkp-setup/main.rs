@@ -47,7 +47,13 @@ fn main() -> Result<(), NanoZKPError> {
     println!("Starting keys setup at: {keys_path:?}");
     let start = Instant::now();
 
-    setup(ChaCha20Rng::from_seed(DEVELOPMENT_SEED), keys_path, true).unwrap();
+    setup(
+        ChaCha20Rng::from_seed(DEVELOPMENT_SEED),
+        keys_path,
+        network_id,
+        true,
+    )
+    .unwrap();
     if network_id == NetworkId::UnitAlbatross {
         setup_merger_wrapper_simulation(
             &mut ChaCha20Rng::from_seed(UNIT_TOXIC_WASTE_SEED),

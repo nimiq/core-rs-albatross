@@ -7,7 +7,7 @@ use lazy_static::lazy_static;
 
 #[cfg(feature = "genesis-override")]
 use beserial::Serialize;
-use beserial::{Deserialize, DeserializeWithLength, SerializeWithLength};
+use beserial::{Deserialize, SerializeWithLength};
 use nimiq_block::Block;
 #[cfg(feature = "genesis-override")]
 use nimiq_database::volatile::VolatileEnvironment;
@@ -57,6 +57,8 @@ impl NetworkInfo {
     #[cfg(feature = "accounts")]
     #[inline]
     pub fn genesis_accounts(&self) -> Vec<TrieItem> {
+        use beserial::DeserializeWithLength;
+
         DeserializeWithLength::deserialize_from_vec::<u32>(self.genesis.accounts)
             .expect("Failed to deserialize genesis accounts.")
     }

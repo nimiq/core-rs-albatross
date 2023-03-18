@@ -64,7 +64,7 @@ beserial = { path = "../beserial", features = ["derive"] }
 nimiq-bls = {path = "../bls"}
 nimiq-blockchain-proxy = {path = "../blockchain-proxy", default-features = false}
 nimiq-consensus = {path = "../consensus", default-features = false}
-nimiq-genesis = {path = "../genesis", default-features = false}
+nimiq-genesis = { path = "../genesis", default-features = false }
 nimiq-light-blockchain = {path = "../light-blockchain"}
 nimiq-network-interface = {path = "../network-interface"}
 nimiq-network-mock = {path = "../network-mock"}

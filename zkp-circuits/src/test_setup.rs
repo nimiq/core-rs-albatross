@@ -130,19 +130,19 @@ impl<E: Pairing> ToxicWaste<E> {
         let gamma_abc = cfg_iter!(a[..num_instance_variables])
             .zip(&b[..num_instance_variables])
             .zip(&c[..num_instance_variables])
-            .map(|((a, b), c)| (self.beta * a + &(self.alpha * b) + c) * &gamma_inverse)
+            .map(|((a, b), c)| (self.beta * a + self.alpha * b + c) * gamma_inverse)
             .collect::<Vec<_>>();
 
         self.abc = cfg_iter!(a[..num_instance_variables])
             .zip(&b[..num_instance_variables])
             .zip(&c[..num_instance_variables])
-            .map(|((a, b), c)| self.beta * a + &(self.alpha * b) + c)
+            .map(|((a, b), c)| self.beta * a + self.alpha * b + c)
             .collect::<Vec<_>>();
 
         let l = cfg_iter!(a[num_instance_variables..])
             .zip(&b[num_instance_variables..])
             .zip(&c[num_instance_variables..])
-            .map(|((a, b), c)| (self.beta * a + &(self.alpha * b) + c) * &delta_inverse)
+            .map(|((a, b), c)| (self.beta * a + self.alpha * b + c) * delta_inverse)
             .collect::<Vec<_>>();
 
         drop(c);
@@ -265,7 +265,7 @@ pub fn setup_merger_wrapper_simulation<R: Rng + CryptoRng>(
     keys_to_file(&pk, &vk, "merger_wrapper", path)?;
 
     // Save toxic waste to file.
-    let mut file = File::create(path.join(format!("toxic_waste.bin")))?;
+    let mut file = File::create(path.join("toxic_waste.bin"))?;
     toxic_waste.serialize_uncompressed(&mut file)?;
     file.sync_all()?;
 
