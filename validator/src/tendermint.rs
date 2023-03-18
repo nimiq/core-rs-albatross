@@ -7,6 +7,7 @@ use futures::{
 use parking_lot::RwLock;
 
 use beserial::{Serialize, WriteBytesExt};
+use nimiq_account::BlockLogger;
 use nimiq_block::{
     Block, MacroBlock, TendermintIdentifier, TendermintProof, TendermintStep, TendermintVote,
 };
@@ -416,7 +417,10 @@ where
 
             // Update our blockchain state using the received proposal. If we can't update the state, we
             // return a proposal timeout.
-            if blockchain.commit_accounts(state, &block, &mut txn).is_err() {
+            if blockchain
+                .commit_accounts(state, &block, &mut txn, &mut BlockLogger::empty())
+                .is_err()
+            {
                 txn.abort();
                 debug!("Tendermint - await_proposal: Can't update state");
                 return Err(ProposalError::InvalidProposal);

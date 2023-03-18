@@ -11,7 +11,9 @@ use time::OffsetDateTime;
 use toml::de::Error as TomlError;
 
 use beserial::{Serialize, SerializeWithLength, SerializingError};
-use nimiq_account::{Account, Accounts, BasicAccount, StakingContract, StakingContractStoreWrite};
+use nimiq_account::{
+    Account, Accounts, BasicAccount, StakingContract, StakingContractStoreWrite, TransactionLog,
+};
 use nimiq_block::{Block, MacroBlock, MacroBody, MacroHeader};
 use nimiq_bls::PublicKey as BlsPublicKey;
 use nimiq_database::{Environment, WriteTransaction};
@@ -290,6 +292,7 @@ impl GenesisBuilder {
                 validator.reward_address.clone(),
                 None,
                 deposit,
+                &mut TransactionLog::empty(),
             )?;
         }
 
@@ -299,6 +302,7 @@ impl GenesisBuilder {
                 &staker.staker_address,
                 staker.balance,
                 Some(staker.delegation.clone()),
+                &mut TransactionLog::empty(),
             )?;
         }
 

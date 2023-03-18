@@ -2,7 +2,7 @@ use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
 use std::error::Error;
 
 use beserial::Serialize;
-use nimiq_account::BlockState;
+use nimiq_account::{BlockLogger, BlockState};
 use nimiq_block::{Block, BlockError};
 use nimiq_blockchain_interface::{
     AbstractBlockchain, BlockchainEvent, ChainInfo, PushError, PushResult,
@@ -204,11 +204,14 @@ impl Blockchain {
 
             // Commit block to AccountsTree and create the receipts.
             let block_state = BlockState::new(block_numbers[i], block_timestamps[i]);
+            let mut block_log =
+                BlockLogger::new_applied(Default::default(), block_numbers[i], block_timestamps[i]); // PITODO: Potentially integrate but fix hash
             let receipts = this.state.accounts.commit_batch(
                 &mut txn,
                 &txns,
                 &block_inherents[i],
                 &block_state,
+                &mut block_log,
             );
 
             // Check if the receipts contain an error.
@@ -438,7 +441,12 @@ impl Blockchain {
                 .expect("Failed to find main chain predecessor while reverting blocks!");
 
             // Revert the accounts tree. This also reverts the history store.
-            self.revert_accounts(&self.state.accounts, write_txn, &current_info.head)?;
+            self.revert_accounts(
+                &self.state.accounts,
+                write_txn,
+                &current_info.head,
+                &mut BlockLogger::empty(),
+            )?;
 
             current_info = prev_info;
         }

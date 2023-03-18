@@ -1,4 +1,4 @@
-use nimiq_account::BlockState;
+use nimiq_account::{BlockLogger, BlockState};
 use nimiq_block::{MacroBlock, MacroBody, MacroHeader};
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_database::volatile::VolatileEnvironment;
@@ -102,6 +102,7 @@ fn it_can_create_batch_finalization_inherents() {
             &[],
             &[slash_inherent],
             &BlockState::new(Policy::blocks_per_batch() + 1, 1),
+            &mut BlockLogger::empty()
         )
         .is_ok());
     txn.commit();

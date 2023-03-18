@@ -2,7 +2,9 @@ use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
 use std::cmp;
 use std::error::Error;
 use std::ops::Deref;
+use tokio::sync::broadcast::Sender as BroadcastSender;
 
+use nimiq_account::{BlockLog, BlockLogger};
 use nimiq_block::{Block, ForkProof, MicroBlock};
 use nimiq_blockchain_interface::{
     AbstractBlockchain, BlockchainEvent, ChainInfo, ChainOrdering, ChunksPushError,
@@ -18,13 +20,13 @@ use nimiq_vrf::VrfSeed;
 
 use crate::{blockchain_state::BlockchainState, Blockchain};
 
-// fn send_vec(log_notifier: &BroadcastSender<BlockLog>, logs: Vec<BlockLog>) {
-//     for log in logs {
-//         // The log notifier is for informational purposes only, thus may have no listeners.
-//         // Therefore, no error logs should be produced in this case.
-//         _ = log_notifier.send(log);
-//     }
-// }
+fn send_vec(log_notifier: &BroadcastSender<BlockLog>, logs: Vec<BlockLog>) {
+    for log in logs {
+        // The log notifier is for informational purposes only, thus may have no listeners.
+        // Therefore, no error logs should be produced in this case.
+        _ = log_notifier.send(log);
+    }
+}
 
 /// Implements methods to push blocks into the chain. This is used when the node has already synced
 /// and is just receiving newly produced blocks. It is also used for the final phase of syncing,
@@ -259,7 +261,13 @@ impl Blockchain {
         let is_macro_block = Policy::is_macro_block_at(block_number);
         let is_election_block = Policy::is_election_block_at(block_number);
 
-        let total_tx_size = this.check_and_commit(&this.state, &chain_info.head, &mut txn)?;
+        let mut block_logger = BlockLogger::new_applied(
+            block_hash.clone(),
+            block_number,
+            chain_info.head.timestamp(),
+        );
+        let total_tx_size =
+            this.check_and_commit(&this.state, &chain_info.head, &mut txn, &mut block_logger)?;
 
         chain_info.on_main_chain = true;
         chain_info.set_cumulative_ext_tx_size(&prev_info, total_tx_size);
@@ -349,7 +357,9 @@ impl Blockchain {
 
         // The log notifier is for informational purposes only, thus may have no listeners.
         // Therefore, no error logs should be produced in this case.
-        // FIXME this.log_notifier.send(block_log).ok();
+        this.log_notifier
+            .send(block_logger.build(total_tx_size))
+            .ok();
 
         Ok((PushResult::Extended, chunk_result))
     }
@@ -412,6 +422,8 @@ impl Blockchain {
 
         current = (this.state.head_hash.clone(), this.state.main_chain.clone());
 
+        let mut block_logs = vec![];
+
         while current.0 != ancestor.0 {
             let block = current.1.head.clone();
             if block.is_macro() {
@@ -436,7 +448,14 @@ impl Blockchain {
                     return Err(PushError::AccountsError(e));
                 }
             }
-            this.revert_accounts(&this.state.accounts, &mut write_txn, &block)?;
+            let mut block_logger = BlockLogger::new_reverted(block.hash(), block.block_number());
+            let total_tx_size = this.revert_accounts(
+                &this.state.accounts,
+                &mut write_txn,
+                &block,
+                &mut block_logger,
+            )?;
+            block_logs.push(block_logger.build(total_tx_size));
 
             // Verify accounts hash if the tree is complete or changes only happened in the complete part.
             if let Some(accounts_hash) = this.state.accounts.get_root_hash(Some(&write_txn)) {
@@ -457,28 +476,39 @@ impl Blockchain {
         let mut fork_iter = fork_chain.iter().rev();
 
         while let Some(fork_block) = fork_iter.next() {
-            if let Err(e) = this.check_and_commit(&this.state, &fork_block.1.head, &mut write_txn) {
-                warn!(
-                    block = %target_block,
-                    reason = "failed to apply for block while rebranching",
-                    fork_block = %fork_block.1.head,
-                    error = &e as &dyn Error,
-                    "Rejecting block",
-                );
-                write_txn.abort();
+            let mut block_logger =
+                BlockLogger::new_reverted(fork_block.0.clone(), fork_block.1.head.block_number());
 
-                // Delete invalid fork blocks from store.
-                let mut write_txn = this.write_transaction();
-                for block in vec![fork_block].into_iter().chain(fork_iter) {
-                    this.chain_store.remove_chain_info(
-                        &mut write_txn,
-                        &block.0,
-                        fork_block.1.head.block_number(),
-                    )
+            match this.check_and_commit(
+                &this.state,
+                &fork_block.1.head,
+                &mut write_txn,
+                &mut block_logger,
+            ) {
+                Ok(total_tx_size) => block_logs.push(block_logger.build(total_tx_size)),
+                Err(e) => {
+                    warn!(
+                        block = %target_block,
+                        reason = "failed to apply for block while rebranching",
+                        fork_block = %fork_block.1.head,
+                        error = &e as &dyn Error,
+                        "Rejecting block",
+                    );
+                    write_txn.abort();
+
+                    // Delete invalid fork blocks from store.
+                    let mut write_txn = this.write_transaction();
+                    for block in vec![fork_block].into_iter().chain(fork_iter) {
+                        this.chain_store.remove_chain_info(
+                            &mut write_txn,
+                            &block.0,
+                            fork_block.1.head.block_number(),
+                        )
+                    }
+                    write_txn.commit();
+
+                    return Err(PushError::InvalidFork);
                 }
-                write_txn.commit();
-
-                return Err(PushError::InvalidFork);
             }
         }
 
@@ -587,7 +617,7 @@ impl Blockchain {
             .send(BlockchainEvent::Rebranched(reverted_blocks, adopted_blocks))
             .ok();
 
-        // FIXME send_vec(&this.log_notifier, block_logs);
+        send_vec(&this.log_notifier, block_logs);
 
         Ok((PushResult::Rebranched, chunk_result))
     }
@@ -597,6 +627,7 @@ impl Blockchain {
         state: &BlockchainState,
         block: &Block,
         txn: &mut WriteTransaction,
+        block_logger: &mut BlockLogger,
     ) -> Result<u64, PushError> {
         // Check transactions against replay attacks. This is only necessary for micro blocks.
         if block.is_micro() {
@@ -619,7 +650,7 @@ impl Blockchain {
         }
 
         // Commit block to AccountsTree.
-        let total_tx_size = self.commit_accounts(state, block, txn).map_err(|e| {
+        let total_tx_size = self.commit_accounts(state, block, txn, block_logger).map_err(|e| {
             warn!(%block, reason = "commit failed", error = &e as &dyn Error, "Rejecting block");
             #[cfg(feature = "metrics")]
             self.metrics.note_invalid_block();

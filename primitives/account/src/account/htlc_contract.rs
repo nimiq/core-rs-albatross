@@ -12,7 +12,9 @@ use crate::interaction_traits::{
     AccountInherentInteraction, AccountPruningInteraction, AccountTransactionInteraction,
 };
 use crate::reserved_balance::ReservedBalance;
-use crate::{convert_receipt, Account, AccountReceipt, BlockState};
+use crate::{
+    convert_receipt, Account, AccountReceipt, BlockState, InherentLogger, Log, TransactionLog,
+};
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
@@ -34,6 +36,7 @@ impl HashedTimeLockedContract {
         transaction: &Transaction,
         new_balance: Coin,
         block_state: &BlockState,
+        tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         let proof_buf = &mut &transaction.proof[..];
         let proof_type: ProofType = Deserialize::deserialize(proof_buf)?;
@@ -59,7 +62,7 @@ impl HashedTimeLockedContract {
                 }
 
                 // Ignore pre_image.
-                let _pre_image: AnyHash = Deserialize::deserialize(proof_buf)?;
+                let pre_image: AnyHash = Deserialize::deserialize(proof_buf)?;
 
                 // Check that the transaction is signed by the authorized recipient.
                 let signature_proof: SignatureProof = Deserialize::deserialize(proof_buf)?;
@@ -83,6 +86,12 @@ impl HashedTimeLockedContract {
                         needed: self.balance - new_balance,
                     });
                 }
+
+                tx_logger.push_log(Log::HTLCRegularTransfer {
+                    contract_address: transaction.sender.clone(),
+                    pre_image,
+                    hash_depth,
+                });
             }
             ProofType::EarlyResolve => {
                 // Check that the transaction is signed by both parties.
@@ -96,6 +105,10 @@ impl HashedTimeLockedContract {
                 {
                     return Err(AccountError::InvalidSignature);
                 }
+
+                tx_logger.push_log(Log::HTLCEarlyResolve {
+                    contract_address: transaction.sender.clone(),
+                });
             }
             ProofType::TimeoutResolve => {
                 // Check that the contract has expired.
@@ -113,6 +126,10 @@ impl HashedTimeLockedContract {
                 if !signature_proof.is_signed_by(&self.sender) {
                     return Err(AccountError::InvalidSignature);
                 }
+
+                tx_logger.push_log(Log::HTLCTimeoutResolve {
+                    contract_address: transaction.sender.clone(),
+                });
             }
         };
 
@@ -126,8 +143,21 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         initial_balance: Coin,
         _block_state: &BlockState,
         _data_store: DataStoreWrite,
+        tx_logger: &mut TransactionLog,
     ) -> Result<Account, AccountError> {
         let data = CreationTransactionData::parse(transaction)?;
+
+        tx_logger.push_log(Log::HTLCCreate {
+            contract_address: transaction.recipient.clone(),
+            sender: data.sender.clone(),
+            recipient: data.recipient.clone(),
+            hash_algorithm: data.hash_algorithm,
+            hash_root: data.hash_root.clone(),
+            hash_count: data.hash_count,
+            timeout: data.timeout,
+            total_amount: transaction.value,
+        });
+
         Ok(Account::HTLC(HashedTimeLockedContract {
             balance: initial_balance + transaction.value,
             sender: data.sender,
@@ -145,8 +175,21 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         transaction: &Transaction,
         _block_state: &BlockState,
         _data_store: DataStoreWrite,
+        tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         self.balance -= transaction.value;
+
+        tx_logger.push_log(Log::HTLCCreate {
+            contract_address: transaction.recipient.clone(),
+            sender: self.sender.clone(),
+            recipient: self.recipient.clone(),
+            hash_algorithm: self.hash_algorithm,
+            hash_root: self.hash_root.clone(),
+            hash_count: self.hash_count,
+            timeout: self.timeout,
+            total_amount: transaction.value,
+        });
+
         Ok(())
     }
 
@@ -155,6 +198,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         _transaction: &Transaction,
         _block_state: &BlockState,
         _data_store: DataStoreWrite,
+        _tx_logger: &mut TransactionLog,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         Err(AccountError::InvalidForRecipient)
     }
@@ -165,6 +209,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         _block_state: &BlockState,
         _receipt: Option<AccountReceipt>,
         _data_store: DataStoreWrite,
+        _tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         Err(AccountError::InvalidForRecipient)
     }
@@ -174,10 +219,15 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         transaction: &Transaction,
         block_state: &BlockState,
         _data_store: DataStoreWrite,
+        tx_logger: &mut TransactionLog,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         let new_balance = self.balance.safe_sub(transaction.total_value())?;
-        self.can_change_balance(transaction, new_balance, block_state)?;
+        self.can_change_balance(transaction, new_balance, block_state, tx_logger)?;
         self.balance = new_balance;
+
+        tx_logger.prepend_log(Log::transfer_log(transaction));
+        tx_logger.prepend_log(Log::pay_fee_log(transaction));
+
         Ok(None)
     }
 
@@ -187,8 +237,44 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         _block_state: &BlockState,
         _receipt: Option<AccountReceipt>,
         _data_store: DataStoreWrite,
+        tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         self.balance += transaction.total_value();
+
+        tx_logger.push_log(Log::pay_fee_log(transaction));
+        tx_logger.push_log(Log::transfer_log(transaction));
+
+        let proof_buf = &mut &transaction.proof[..];
+        let proof_type: ProofType = Deserialize::deserialize(proof_buf)?;
+
+        match proof_type {
+            ProofType::RegularTransfer => {
+                // Check that the provided hash_root is correct.
+                let _hash_algorithm: HashAlgorithm = Deserialize::deserialize(proof_buf)?;
+                let hash_depth: u8 = Deserialize::deserialize(proof_buf)?;
+                let _hash_root: AnyHash = Deserialize::deserialize(proof_buf)?;
+
+                // Ignore pre_image.
+                let pre_image: AnyHash = Deserialize::deserialize(proof_buf)?;
+
+                tx_logger.push_log(Log::HTLCRegularTransfer {
+                    contract_address: transaction.sender.clone(),
+                    pre_image,
+                    hash_depth,
+                });
+            }
+            ProofType::EarlyResolve => {
+                tx_logger.push_log(Log::HTLCEarlyResolve {
+                    contract_address: transaction.sender.clone(),
+                });
+            }
+            ProofType::TimeoutResolve => {
+                tx_logger.push_log(Log::HTLCTimeoutResolve {
+                    contract_address: transaction.sender.clone(),
+                });
+            }
+        };
+
         Ok(())
     }
 
@@ -197,11 +283,20 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         transaction: &Transaction,
         block_state: &BlockState,
         _data_store: DataStoreWrite,
+        tx_logger: &mut TransactionLog,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         let new_balance = self.balance.safe_sub(transaction.fee)?;
         // XXX This check should not be necessary since are also checking this in reserve_balance()
-        self.can_change_balance(transaction, new_balance, block_state)?;
+        self.can_change_balance(
+            transaction,
+            new_balance,
+            block_state,
+            &mut TransactionLog::empty(),
+        )?;
         self.balance = new_balance;
+
+        tx_logger.push_log(Log::pay_fee_log(transaction));
+
         Ok(None)
     }
 
@@ -211,8 +306,12 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         _block_state: &BlockState,
         _receipt: Option<AccountReceipt>,
         _data_store: DataStoreWrite,
+        tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         self.balance += transaction.fee;
+
+        tx_logger.push_log(Log::pay_fee_log(transaction));
+
         Ok(())
     }
 
@@ -228,7 +327,12 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
             .checked_add(transaction.total_value())
             .ok_or(AccountError::InvalidCoinValue)?;
         let new_balance = self.balance.safe_sub(needed)?;
-        self.can_change_balance(transaction, new_balance, block_state)?;
+        self.can_change_balance(
+            transaction,
+            new_balance,
+            block_state,
+            &mut TransactionLog::empty(),
+        )?;
 
         reserved_balance.reserve(self.balance, transaction.total_value())
     }
@@ -250,6 +354,7 @@ impl AccountInherentInteraction for HashedTimeLockedContract {
         _inherent: &Inherent,
         _block_state: &BlockState,
         _data_store: DataStoreWrite,
+        _inherent_logger: InherentLogger,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         Err(AccountError::InvalidForTarget)
     }
@@ -260,6 +365,7 @@ impl AccountInherentInteraction for HashedTimeLockedContract {
         _block_state: &BlockState,
         _receipt: Option<AccountReceipt>,
         _data_store: DataStoreWrite,
+        _inherent_logger: InherentLogger,
     ) -> Result<(), AccountError> {
         Err(AccountError::InvalidForTarget)
     }

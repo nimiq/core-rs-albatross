@@ -1,7 +1,7 @@
 use nimiq_database::{
     Environment, ReadTransaction, Transaction as DBTransaction, WriteTransaction,
 };
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
 use nimiq_primitives::account::AccountType;
 use nimiq_primitives::trie::TrieItem;
@@ -16,9 +16,9 @@ use nimiq_trie::trie::{IncompleteTrie, MerkleRadixTrie};
 use crate::data_store::DataStore;
 use crate::interaction_traits::AccountPruningInteraction;
 use crate::{
-    Account, AccountInherentInteraction, AccountReceipt, AccountTransactionInteraction, BlockState,
-    InherentOperationReceipt, OperationReceipt, Receipts, ReservedBalance,
-    TransactionOperationReceipt, TransactionReceipt,
+    Account, AccountInherentInteraction, AccountReceipt, AccountTransactionInteraction,
+    BlockLogger, BlockState, InherentLogger, InherentOperationReceipt, OperationReceipt, Receipts,
+    ReservedBalance, TransactionLog, TransactionOperationReceipt, TransactionReceipt,
 };
 
 /// An alias for the accounts tree.
@@ -253,7 +253,13 @@ impl Accounts {
         let mut txn = WriteTransaction::new(&self.env);
         assert!(self.is_complete(Some(&txn)), "Tree must be complete");
 
-        let receipts = self.commit(&mut txn, transactions, inherents, block_state)?;
+        let receipts = self.commit(
+            &mut txn,
+            transactions,
+            inherents,
+            block_state,
+            &mut BlockLogger::empty(),
+        )?;
         assert_eq!(transactions.len(), receipts.transactions.len());
 
         let executed_txns = transactions
@@ -278,8 +284,10 @@ impl Accounts {
         transactions: &[Transaction],
         inherents: &[Inherent],
         block_state: &BlockState,
+        block_logger: &mut BlockLogger,
     ) -> Result<Receipts, AccountError> {
-        let receipts = self.commit_batch(txn, transactions, inherents, block_state)?;
+        let receipts =
+            self.commit_batch(txn, transactions, inherents, block_state, block_logger)?;
         self.tree.update_root(txn).expect("Tree must be complete");
         Ok(receipts)
     }
@@ -302,17 +310,24 @@ impl Accounts {
         transactions: &[Transaction],
         inherents: &[Inherent],
         block_state: &BlockState,
+        block_logger: &mut BlockLogger,
     ) -> Result<Receipts, AccountError> {
         assert!(self.is_complete(Some(txn)), "Tree must be complete");
         let mut receipts = Receipts::default();
 
         for transaction in transactions {
-            let receipt = self.commit_transaction(txn, transaction, block_state)?;
+            let receipt = self.commit_transaction(
+                txn,
+                transaction,
+                block_state,
+                block_logger.new_tx_log(transaction.hash()),
+            )?;
             receipts.transactions.push(receipt);
         }
 
         for inherent in inherents {
-            let receipt = self.commit_inherent(txn, inherent, block_state)?;
+            let receipt =
+                self.commit_inherent(txn, inherent, block_state, block_logger.inherent_logger())?;
             receipts.inherents.push(receipt);
         }
 
@@ -334,7 +349,8 @@ impl Accounts {
         }
 
         for inherent in inherents {
-            let receipt = self.commit_inherent(txn, inherent, block_state)?;
+            let receipt =
+                self.commit_inherent(txn, inherent, block_state, InherentLogger::empty())?;
             receipts.inherents.push(receipt);
         }
 
@@ -346,11 +362,14 @@ impl Accounts {
         txn: &mut WriteTransaction,
         transaction: &Transaction,
         block_state: &BlockState,
+        tx_logger: &mut TransactionLog,
     ) -> Result<TransactionOperationReceipt, AccountError> {
-        if let Ok(receipt) = self.try_commit_transaction(txn, transaction, block_state) {
+        if let Ok(receipt) = self.try_commit_transaction(txn, transaction, block_state, tx_logger) {
             Ok(TransactionOperationReceipt::Ok(receipt))
         } else {
-            let receipt = self.commit_failed_transaction(txn, transaction, block_state)?;
+            tx_logger.clear();
+            let receipt =
+                self.commit_failed_transaction(txn, transaction, block_state, tx_logger)?;
             Ok(TransactionOperationReceipt::Err(receipt))
         }
     }
@@ -363,11 +382,21 @@ impl Accounts {
     ) -> Result<TransactionOperationReceipt, AccountError> {
         match transaction {
             ExecutedTransaction::Ok(transaction) => {
-                let receipt = self.commit_successful_transaction(txn, transaction, block_state)?;
+                let receipt = self.commit_successful_transaction(
+                    txn,
+                    transaction,
+                    block_state,
+                    &mut TransactionLog::empty(),
+                )?;
                 Ok(TransactionOperationReceipt::Ok(receipt))
             }
             ExecutedTransaction::Err(transaction) => {
-                let receipt = self.commit_failed_transaction(txn, transaction, block_state)?;
+                let receipt = self.commit_failed_transaction(
+                    txn,
+                    transaction,
+                    block_state,
+                    &mut TransactionLog::empty(),
+                )?;
                 Ok(TransactionOperationReceipt::Err(receipt))
             }
         }
@@ -380,6 +409,7 @@ impl Accounts {
         txn: &mut WriteTransaction,
         transaction: &Transaction,
         block_state: &BlockState,
+        tx_logger: &mut TransactionLog,
     ) -> Result<TransactionReceipt, AccountError> {
         // Commit sender.
         let sender_address = &transaction.sender;
@@ -391,6 +421,7 @@ impl Accounts {
             transaction,
             block_state,
             sender_store.write(txn),
+            tx_logger,
         )?;
 
         // Commit recipient.
@@ -398,8 +429,13 @@ impl Accounts {
         let mut recipient_account = Account::default();
 
         // Handle contract creation.
-        let recipient_result =
-            self.commit_recipient(txn, transaction, block_state, &mut recipient_account);
+        let recipient_result = self.commit_recipient(
+            txn,
+            transaction,
+            block_state,
+            &mut recipient_account,
+            tx_logger,
+        );
 
         // If recipient failed, revert sender.
         if let Err(e) = recipient_result {
@@ -411,6 +447,7 @@ impl Accounts {
                     block_state,
                     sender_receipt,
                     sender_store.write(txn),
+                    tx_logger,
                 )
                 .expect("failed to revert sender account");
 
@@ -437,6 +474,7 @@ impl Accounts {
         txn: &mut WriteTransaction,
         transaction: &Transaction,
         block_state: &BlockState,
+        tx_logger: &mut TransactionLog,
     ) -> Result<TransactionReceipt, AccountError> {
         // Commit sender.
         let sender_address = &transaction.sender;
@@ -452,6 +490,7 @@ impl Accounts {
                 transaction,
                 block_state,
                 sender_store.write(txn),
+                tx_logger,
             )?;
 
             pruned_account = self.put_or_prune(txn, sender_address, sender_account);
@@ -464,8 +503,13 @@ impl Accounts {
         if !self.mark_changed_if_missing(txn, recipient_address) {
             let mut recipient_account = Account::default();
 
-            recipient_receipt =
-                self.commit_recipient(txn, transaction, block_state, &mut recipient_account)?;
+            recipient_receipt = self.commit_recipient(
+                txn,
+                transaction,
+                block_state,
+                &mut recipient_account,
+                tx_logger,
+            )?;
 
             self.put(txn, recipient_address, recipient_account);
         }
@@ -483,6 +527,7 @@ impl Accounts {
         transaction: &Transaction,
         block_state: &BlockState,
         recipient_account: &mut Account,
+        tx_logger: &mut TransactionLog,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         let recipient_address = &transaction.recipient;
         if self.mark_changed_if_missing(txn, recipient_address) {
@@ -505,6 +550,7 @@ impl Accounts {
                 recipient_account.balance(),
                 block_state,
                 recipient_store.write(txn),
+                tx_logger,
             )
             .map(|account| {
                 *recipient_account = account;
@@ -518,6 +564,7 @@ impl Accounts {
                         transaction,
                         block_state,
                         recipient_store.write(txn),
+                        tx_logger,
                     )
                 })
         }
@@ -528,6 +575,7 @@ impl Accounts {
         txn: &mut WriteTransaction,
         transaction: &Transaction,
         block_state: &BlockState,
+        tx_logger: &mut TransactionLog,
     ) -> Result<TransactionReceipt, AccountError> {
         let sender_address = &transaction.sender;
         if self.mark_changed_if_missing(txn, sender_address) {
@@ -542,6 +590,7 @@ impl Accounts {
             transaction,
             block_state,
             sender_store.write(txn),
+            tx_logger,
         )?;
 
         let pruned_account = self.put_or_prune(txn, sender_address, sender_account);
@@ -558,6 +607,7 @@ impl Accounts {
         txn: &mut WriteTransaction,
         inherent: &Inherent,
         block_state: &BlockState,
+        inherent_logger: InherentLogger,
     ) -> Result<InherentOperationReceipt, AccountError> {
         let address = inherent.target();
         if self.mark_changed_if_missing(txn, address) {
@@ -567,7 +617,9 @@ impl Accounts {
         let store = DataStore::new(&self.tree, address);
         let mut account = self.get_complete(address, Some(txn));
 
-        if let Ok(receipt) = account.commit_inherent(inherent, block_state, store.write(txn)) {
+        if let Ok(receipt) =
+            account.commit_inherent(inherent, block_state, store.write(txn), inherent_logger)
+        {
             self.put(txn, address, account);
             Ok(InherentOperationReceipt::Ok(receipt))
         } else {
@@ -583,8 +635,16 @@ impl Accounts {
         inherents: &[Inherent],
         block_state: &BlockState,
         receipts: Receipts,
+        block_logger: &mut BlockLogger,
     ) -> Result<(), AccountError> {
-        self.revert_batch(txn, transactions, inherents, block_state, receipts)?;
+        self.revert_batch(
+            txn,
+            transactions,
+            inherents,
+            block_state,
+            receipts,
+            block_logger,
+        )?;
         self.tree.update_root(txn).ok();
         Ok(())
     }
@@ -596,12 +656,19 @@ impl Accounts {
         inherents: &[Inherent],
         block_state: &BlockState,
         receipts: Receipts,
+        block_logger: &mut BlockLogger,
     ) -> Result<(), AccountError> {
         // Revert inherents in reverse order.
         assert_eq!(inherents.len(), receipts.inherents.len());
         let iter = inherents.iter().zip(receipts.inherents.into_iter()).rev();
         for (inherent, receipt) in iter {
-            self.revert_inherent(txn, inherent, block_state, receipt)?;
+            self.revert_inherent(
+                txn,
+                inherent,
+                block_state,
+                receipt,
+                block_logger.inherent_logger(),
+            )?;
         }
 
         // Revert transactions in reverse order.
@@ -611,7 +678,13 @@ impl Accounts {
             .zip(receipts.transactions.into_iter())
             .rev();
         for (transaction, receipt) in iter {
-            self.revert_transaction(txn, transaction, block_state, receipt)?;
+            self.revert_transaction(
+                txn,
+                transaction,
+                block_state,
+                receipt,
+                block_logger.new_tx_log(transaction.hash()),
+            )?;
         }
 
         Ok(())
@@ -623,13 +696,18 @@ impl Accounts {
         transaction: &Transaction,
         block_state: &BlockState,
         receipt: TransactionOperationReceipt,
+        tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         match receipt {
-            OperationReceipt::Ok(receipt) => {
-                self.revert_successful_transaction(txn, transaction, block_state, receipt)
-            }
+            OperationReceipt::Ok(receipt) => self.revert_successful_transaction(
+                txn,
+                transaction,
+                block_state,
+                receipt,
+                tx_logger,
+            ),
             OperationReceipt::Err(receipt) => {
-                self.revert_failed_transaction(txn, transaction, block_state, receipt)
+                self.revert_failed_transaction(txn, transaction, block_state, receipt, tx_logger)
             }
         }
     }
@@ -641,6 +719,7 @@ impl Accounts {
         transaction: &Transaction,
         block_state: &BlockState,
         receipt: TransactionReceipt,
+        tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         // Revert recipient first.
         let recipient_address = &transaction.recipient;
@@ -658,6 +737,7 @@ impl Accounts {
                     transaction,
                     block_state,
                     recipient_store.write(txn),
+                    tx_logger,
                 )?;
 
                 recipient_account = Account::default_with_balance(recipient_account.balance());
@@ -667,6 +747,7 @@ impl Accounts {
                     block_state,
                     receipt.recipient_receipt,
                     recipient_store.write(txn),
+                    tx_logger,
                 )?;
             }
 
@@ -691,6 +772,7 @@ impl Accounts {
                 block_state,
                 receipt.sender_receipt,
                 sender_store.write(txn),
+                tx_logger,
             )?;
 
             // Store sender.
@@ -706,6 +788,7 @@ impl Accounts {
         transaction: &Transaction,
         block_state: &BlockState,
         receipt: TransactionReceipt,
+        tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         let sender_address = &transaction.sender;
         if self.mark_changed_if_missing(txn, sender_address) {
@@ -725,6 +808,7 @@ impl Accounts {
             block_state,
             receipt.sender_receipt,
             sender_store.write(txn),
+            tx_logger,
         )?;
 
         // Reverting a zero-fee signaling transaction can create a prunable account.
@@ -739,6 +823,7 @@ impl Accounts {
         inherent: &Inherent,
         block_state: &BlockState,
         receipt: InherentOperationReceipt,
+        inherent_logger: InherentLogger,
     ) -> Result<(), AccountError> {
         // If the inherent operation failed, there is nothing to revert.
         let receipt = match receipt {
@@ -754,7 +839,13 @@ impl Accounts {
         let store = DataStore::new(&self.tree, address);
         let mut account = self.get_complete(address, Some(txn));
 
-        account.revert_inherent(inherent, block_state, receipt, store.write(txn))?;
+        account.revert_inherent(
+            inherent,
+            block_state,
+            receipt,
+            store.write(txn),
+            inherent_logger,
+        )?;
 
         // The account might have been created by the inherent (i.e. reward inherent).
         self.put_or_prune(txn, address, account);

@@ -12,7 +12,7 @@ use crate::account::staking_contract::store::{
     StakingContractStoreReadOps, StakingContractStoreReadOpsExt, StakingContractStoreWrite,
 };
 use crate::account::staking_contract::StakingContract;
-use crate::RetireValidatorReceipt;
+use crate::{Log, RetireValidatorReceipt, TransactionLog};
 
 /// Struct representing a validator in the staking contract.
 /// Actions concerning a validator are:
@@ -100,6 +100,7 @@ impl StakingContract {
         reward_address: Address,
         signal_data: Option<Blake2bHash>,
         deposit: Coin,
+        tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         // Fail if the validator already exists.
         if store.get_validator(validator_address).is_some() {
@@ -139,6 +140,11 @@ impl StakingContract {
         self.active_validators
             .insert(validator_address.clone(), validator.total_stake);
 
+        tx_logger.push_log(Log::CreateValidator {
+            validator_address: validator_address.clone(),
+            reward_address: validator.reward_address.clone(),
+        });
+
         // Create the validator entry.
         store.put_validator(validator_address, validator);
 
@@ -151,6 +157,7 @@ impl StakingContract {
         store: &mut StakingContractStoreWrite,
         validator_address: &Address,
         deposit: Coin,
+        tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         // Get the validator.
         let validator = store.expect_validator(validator_address)?;
@@ -166,6 +173,11 @@ impl StakingContract {
         // Remove the validator entry.
         store.remove_validator(validator_address);
 
+        tx_logger.push_log(Log::CreateValidator {
+            validator_address: validator_address.clone(),
+            reward_address: validator.reward_address,
+        });
+
         Ok(())
     }
 
@@ -178,6 +190,7 @@ impl StakingContract {
         new_voting_key: Option<BlsPublicKey>,
         new_reward_address: Option<Address>,
         new_signal_data: Option<Option<Blake2bHash>>,
+        tx_logger: &mut TransactionLog,
     ) -> Result<UpdateValidatorReceipt, AccountError> {
         // Get the validator.
         let mut validator = store.expect_validator(validator_address)?;
@@ -209,14 +222,14 @@ impl StakingContract {
 
         // All checks passed, not allowed to fail from here on!
 
+        tx_logger.push_log(Log::UpdateValidator {
+            validator_address: validator_address.clone(),
+            old_reward_address: receipt.old_reward_address.clone(),
+            new_reward_address: Some(validator.reward_address.clone()),
+        });
+
         // Update the validator entry.
         store.put_validator(validator_address, validator);
-
-        // let log = Log::UpdateValidator {
-        //     validator_address: validator_address.clone(),
-        //     old_reward_address: receipt.old_reward_address.clone(),
-        //     new_reward_address: Some(validator.reward_address),
-        // };
 
         Ok(receipt)
     }
@@ -227,9 +240,16 @@ impl StakingContract {
         store: &mut StakingContractStoreWrite,
         validator_address: &Address,
         receipt: UpdateValidatorReceipt,
+        tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         // Get the validator.
         let mut validator = store.expect_validator(validator_address)?;
+
+        tx_logger.push_log(Log::UpdateValidator {
+            validator_address: validator_address.clone(),
+            old_reward_address: receipt.old_reward_address.clone(),
+            new_reward_address: Some(validator.reward_address),
+        });
 
         // Revert validator info.
         validator.signing_key = receipt.old_signing_key;
@@ -250,6 +270,7 @@ impl StakingContract {
         store: &mut StakingContractStoreWrite,
         validator_address: &Address,
         signer: &Address,
+        tx_logger: &mut TransactionLog,
     ) -> Result<UnparkValidatorReceipt, AccountError> {
         // Get the validator.
         let validator = store.expect_validator(validator_address)?;
@@ -273,9 +294,9 @@ impl StakingContract {
         let current_disabled_slots = self.current_disabled_slots.remove(validator_address);
         let previous_disabled_slots = self.previous_disabled_slots.remove(validator_address);
 
-        // logs.push(Log::UnparkValidator {
-        //     validator_address: validator_address.clone(),
-        // });
+        tx_logger.push_log(Log::UnparkValidator {
+            validator_address: validator_address.clone(),
+        });
 
         Ok(UnparkValidatorReceipt {
             current_disabled_slots,
@@ -289,6 +310,7 @@ impl StakingContract {
         _store: &mut StakingContractStoreWrite,
         validator_address: &Address,
         receipt: UnparkValidatorReceipt,
+        tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         // Re-add validator to parked_set.
         self.parked_set.insert(validator_address.clone());
@@ -303,6 +325,10 @@ impl StakingContract {
                 .insert(validator_address.clone(), slots);
         }
 
+        tx_logger.push_log(Log::UnparkValidator {
+            validator_address: validator_address.clone(),
+        });
+
         Ok(())
     }
 
@@ -314,6 +340,7 @@ impl StakingContract {
         validator_address: &Address,
         signer: &Address,
         block_number: u32,
+        tx_logger: &mut TransactionLog,
     ) -> Result<DeactivateValidatorReceipt, AccountError> {
         // Get the validator.
         let mut validator = store.expect_validator(validator_address)?;
@@ -347,6 +374,10 @@ impl StakingContract {
         // Update validator entry.
         store.put_validator(validator_address, validator);
 
+        tx_logger.push_log(Log::DeactivateValidator {
+            validator_address: validator_address.clone(),
+        });
+
         Ok(DeactivateValidatorReceipt { was_parked })
     }
 
@@ -356,6 +387,7 @@ impl StakingContract {
         store: &mut StakingContractStoreWrite,
         validator_address: &Address,
         receipt: DeactivateValidatorReceipt,
+        tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         // Get the validator.
         let mut validator = store.expect_validator(validator_address)?;
@@ -375,6 +407,10 @@ impl StakingContract {
         // Update validator entry.
         store.put_validator(validator_address, validator);
 
+        tx_logger.push_log(Log::DeactivateValidator {
+            validator_address: validator_address.clone(),
+        });
+
         Ok(())
     }
 
@@ -384,6 +420,7 @@ impl StakingContract {
         store: &mut StakingContractStoreWrite,
         validator_address: &Address,
         signer: &Address,
+        tx_logger: &mut TransactionLog,
     ) -> Result<ReactivateValidatorReceipt, AccountError> {
         // Get the validator.
         let mut validator = store.expect_validator(validator_address)?;
@@ -421,6 +458,10 @@ impl StakingContract {
         // Update validator entry.
         store.put_validator(validator_address, validator);
 
+        tx_logger.push_log(Log::ReactivateValidator {
+            validator_address: validator_address.clone(),
+        });
+
         Ok(ReactivateValidatorReceipt { was_inactive_since })
     }
 
@@ -430,6 +471,7 @@ impl StakingContract {
         store: &mut StakingContractStoreWrite,
         validator_address: &Address,
         receipt: ReactivateValidatorReceipt,
+        tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         // Get the validator.
         let mut validator = store.expect_validator(validator_address)?;
@@ -445,6 +487,10 @@ impl StakingContract {
         // Update validator entry.
         store.put_validator(validator_address, validator);
 
+        tx_logger.push_log(Log::ReactivateValidator {
+            validator_address: validator_address.clone(),
+        });
+
         Ok(())
     }
 
@@ -454,6 +500,7 @@ impl StakingContract {
         store: &mut StakingContractStoreWrite,
         validator_address: &Address,
         block_number: u32,
+        tx_logger: &mut TransactionLog,
     ) -> Result<RetireValidatorReceipt, AccountError> {
         // Get the validator.
         let mut validator = store.expect_validator(validator_address)?;
@@ -479,6 +526,10 @@ impl StakingContract {
             self.active_validators
                 .remove(validator_address)
                 .expect("inconsistent contract state");
+
+            tx_logger.push_log(Log::DeactivateValidator {
+                validator_address: validator_address.clone(),
+            });
         }
 
         // Remove validator from parked_set.
@@ -499,6 +550,7 @@ impl StakingContract {
         store: &mut StakingContractStoreWrite,
         validator_address: &Address,
         receipt: RetireValidatorReceipt,
+        tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         // Get the validator.
         let mut validator = store.expect_validator(validator_address)?;
@@ -514,6 +566,10 @@ impl StakingContract {
             // Re-add validator to active_validators.
             self.active_validators
                 .insert(validator_address.clone(), validator.total_stake);
+
+            tx_logger.push_log(Log::DeactivateValidator {
+                validator_address: validator_address.clone(),
+            });
         }
 
         // Re-add validator to parked_set if it was parked before.
@@ -571,6 +627,7 @@ impl StakingContract {
         validator_address: &Address,
         block_number: u32,
         transaction_total_value: Coin,
+        tx_logger: &mut TransactionLog,
     ) -> Result<DeleteValidatorReceipt, AccountError> {
         // Get the validator.
         let validator = store.expect_validator(validator_address)?;
@@ -600,10 +657,10 @@ impl StakingContract {
         // Remove the validator entry.
         store.remove_validator(validator_address);
 
-        // let logs = vec![Log::DeleteValidator {
-        //     validator_address: validator_address.clone(),
-        //     reward_address: validator.reward_address,
-        // }];
+        tx_logger.push_log(Log::DeleteValidator {
+            validator_address: validator_address.clone(),
+            reward_address: validator.reward_address.clone(),
+        });
 
         // Return the receipt.
         Ok(DeleteValidatorReceipt {
@@ -622,6 +679,7 @@ impl StakingContract {
         validator_address: &Address,
         transaction_total_value: Coin,
         receipt: DeleteValidatorReceipt,
+        tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         // Update our balance.
         self.balance += transaction_total_value;
@@ -648,6 +706,11 @@ impl StakingContract {
             // Remove the tombstone entry.
             store.remove_tombstone(validator_address);
         }
+
+        tx_logger.push_log(Log::DeleteValidator {
+            validator_address: validator_address.clone(),
+            reward_address: validator.reward_address.clone(),
+        });
 
         // Re-add the validator entry.
         store.put_validator(validator_address, validator);

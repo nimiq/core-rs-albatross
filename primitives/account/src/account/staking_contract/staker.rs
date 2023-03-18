@@ -6,7 +6,7 @@ use crate::account::staking_contract::store::{
     StakingContractStoreReadOps, StakingContractStoreReadOpsExt, StakingContractStoreWrite,
 };
 use crate::account::staking_contract::{StakerReceipt, StakingContract};
-use crate::Tombstone;
+use crate::{Log, Tombstone, TransactionLog};
 
 /// Struct representing a staker in the staking contract.
 /// Actions concerning a staker are:
@@ -37,6 +37,7 @@ impl StakingContract {
         staker_address: &Address,
         value: Coin,
         delegation: Option<Address>,
+        tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         // See if the staker already exists.
         if store.get_staker(staker_address).is_some() {
@@ -65,15 +66,15 @@ impl StakingContract {
         // Update balance.
         self.balance += value;
 
+        // Build the return logs
+        tx_logger.push_log(Log::CreateStaker {
+            staker_address: staker_address.clone(),
+            validator_address: staker.delegation.clone(),
+            value,
+        });
+
         // Add the staker entry.
         store.put_staker(staker_address, staker);
-
-        // // Build the return logs
-        // let logs = vec![Log::CreateStaker {
-        //     staker_address: staker_address.clone(),
-        //     validator_address: delegation.clone(),
-        //     value,
-        // }];
 
         Ok(())
     }
@@ -84,6 +85,7 @@ impl StakingContract {
         store: &mut StakingContractStoreWrite,
         staker_address: &Address,
         value: Coin,
+        tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         // Get the staker.
         let staker = store.expect_staker(staker_address)?;
@@ -101,6 +103,12 @@ impl StakingContract {
         // Remove the staker entry.
         store.remove_staker(staker_address);
 
+        tx_logger.push_log(Log::CreateStaker {
+            staker_address: staker_address.clone(),
+            validator_address: staker.delegation.clone(),
+            value,
+        });
+
         Ok(())
     }
 
@@ -111,6 +119,7 @@ impl StakingContract {
         store: &mut StakingContractStoreWrite,
         staker_address: &Address,
         value: Coin,
+        tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         // Get the staker.
         let mut staker = store.expect_staker(staker_address)?;
@@ -130,15 +139,15 @@ impl StakingContract {
         // Update our balance.
         self.balance += value;
 
+        // Build the return logs
+        tx_logger.push_log(Log::Stake {
+            staker_address: staker_address.clone(),
+            validator_address: staker.delegation.clone(),
+            value,
+        });
+
         // Update the staker entry.
         store.put_staker(staker_address, staker);
-
-        // // Build the return logs
-        // let logs = vec![Log::Stake {
-        //     staker_address: staker_address.clone(),
-        //     validator_address: staker.delegation.clone(),
-        //     value,
-        // }];
 
         Ok(())
     }
@@ -149,6 +158,7 @@ impl StakingContract {
         store: &mut StakingContractStoreWrite,
         staker_address: &Address,
         value: Coin,
+        tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         // Get the staker.
         let mut staker = store.expect_staker(staker_address)?;
@@ -165,6 +175,12 @@ impl StakingContract {
         // Update our balance.
         self.balance -= value;
 
+        tx_logger.push_log(Log::Stake {
+            staker_address: staker_address.clone(),
+            validator_address: staker.delegation.clone(),
+            value,
+        });
+
         // Update the staker entry.
         store.put_staker(staker_address, staker);
 
@@ -177,6 +193,7 @@ impl StakingContract {
         store: &mut StakingContractStoreWrite,
         staker_address: &Address,
         delegation: Option<Address>,
+        tx_logger: &mut TransactionLog,
     ) -> Result<StakerReceipt, AccountError> {
         // Get the staker.
         let mut staker = store.expect_staker(staker_address)?;
@@ -187,6 +204,13 @@ impl StakingContract {
         }
 
         // All checks passed, not allowed to fail from here on!
+
+        // Create logs.
+        tx_logger.push_log(Log::UpdateStaker {
+            staker_address: staker_address.clone(),
+            old_validator_address: staker.delegation.clone(),
+            new_validator_address: delegation.clone(),
+        });
 
         // Create the receipt.
         let receipt = StakerReceipt {
@@ -211,13 +235,6 @@ impl StakingContract {
         // Update the staker entry.
         store.put_staker(staker_address, staker);
 
-        // // Create logs.
-        // let logs = vec![Log::UpdateStaker {
-        //     staker_address: staker_address.clone(),
-        //     old_validator_address: staker.delegation.clone(),
-        //     new_validator_address: delegation.clone(),
-        // }];
-
         Ok(receipt)
     }
 
@@ -227,6 +244,7 @@ impl StakingContract {
         store: &mut StakingContractStoreWrite,
         staker_address: &Address,
         receipt: StakerReceipt,
+        tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         // Get the staker.
         let mut staker = store.expect_staker(staker_address)?;
@@ -236,6 +254,13 @@ impl StakingContract {
             self.remove_staker_from_validator(store, &staker)
                 .expect("inconsistent contract state");
         }
+
+        // Create logs.
+        tx_logger.push_log(Log::UpdateStaker {
+            staker_address: staker_address.clone(),
+            old_validator_address: receipt.delegation.clone(),
+            new_validator_address: staker.delegation.clone(),
+        });
 
         // Restore the previous delegation.
         staker.delegation = receipt.delegation;
@@ -259,6 +284,7 @@ impl StakingContract {
         store: &mut StakingContractStoreWrite,
         staker_address: &Address,
         value: Coin,
+        tx_logger: &mut TransactionLog,
     ) -> Result<Option<StakerReceipt>, AccountError> {
         // Get the staker.
         let mut staker = store.expect_staker(staker_address)?;
@@ -286,6 +312,12 @@ impl StakingContract {
         // Update our balance.
         self.balance -= value;
 
+        tx_logger.push_log(Log::Unstake {
+            staker_address: staker_address.clone(),
+            validator_address: staker.delegation.clone(),
+            value,
+        });
+
         // Update or remove the staker entry, depending on remaining balance.
         if staker.balance.is_zero() {
             store.remove_staker(staker_address);
@@ -307,6 +339,7 @@ impl StakingContract {
         staker_address: &Address,
         value: Coin,
         receipt: Option<StakerReceipt>,
+        tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         let mut staker = store
             .get_staker(staker_address)
@@ -341,6 +374,12 @@ impl StakingContract {
             self.add_stake_to_validator(store, validator_address, value)
                 .expect("inconsistent contract state");
         }
+
+        tx_logger.push_log(Log::Unstake {
+            staker_address: staker_address.clone(),
+            validator_address: staker.delegation.clone(),
+            value,
+        });
 
         // Update the staker entry.
         store.put_staker(staker_address, staker);

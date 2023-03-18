@@ -4,7 +4,7 @@ use rand::thread_rng;
 
 use beserial::{Deserialize, Serialize, SerializingError};
 use nimiq_account::{
-    Account, AccountTransactionInteraction, Accounts, BlockState, VestingContract,
+    Account, AccountTransactionInteraction, Accounts, BlockState, TransactionLog, VestingContract,
 };
 use nimiq_database::{volatile::VolatileEnvironment, WriteTransaction};
 use nimiq_keys::{Address, KeyPair, PrivateKey};
@@ -190,6 +190,7 @@ fn it_can_create_contract_from_transaction() {
         Coin::ZERO,
         &block_state,
         data_store.write(&mut db_txn),
+        &mut TransactionLog::empty(),
     )
     .expect("Failed to create contract");
 
@@ -222,6 +223,7 @@ fn it_can_create_contract_from_transaction() {
         Coin::ZERO,
         &block_state,
         data_store.write(&mut db_txn),
+        &mut TransactionLog::empty(),
     )
     .expect("Failed to create contract");
 
@@ -255,6 +257,7 @@ fn it_can_create_contract_from_transaction() {
         Coin::ZERO,
         &block_state,
         data_store.write(&mut db_txn),
+        &mut TransactionLog::empty(),
     )
     .expect("Failed to create contract");
 
@@ -283,6 +286,7 @@ fn it_can_create_contract_from_transaction() {
         Coin::ZERO,
         &block_state,
         data_store.write(&mut db_txn),
+        &mut TransactionLog::empty(),
     );
 
     assert_eq!(
@@ -313,8 +317,12 @@ fn it_does_not_support_incoming_transactions() {
 
     let mut contract = generate_contract();
 
-    let result =
-        contract.commit_incoming_transaction(&tx, &block_state, data_store.write(&mut db_txn));
+    let result = contract.commit_incoming_transaction(
+        &tx,
+        &block_state,
+        data_store.write(&mut db_txn),
+        &mut TransactionLog::empty(),
+    );
 
     assert_eq!(result, Err(AccountError::InvalidForRecipient));
 
@@ -323,6 +331,7 @@ fn it_does_not_support_incoming_transactions() {
         &block_state,
         None,
         data_store.write(&mut db_txn),
+        &mut TransactionLog::empty(),
     );
 
     assert_eq!(result, Err(AccountError::InvalidForRecipient));
@@ -395,13 +404,24 @@ fn it_can_apply_and_revert_valid_transaction() {
     tx.proof = signature_proof.serialize_to_vec();
 
     let receipt = contract
-        .commit_outgoing_transaction(&tx, &block_state, data_store.write(&mut db_txn))
+        .commit_outgoing_transaction(
+            &tx,
+            &block_state,
+            data_store.write(&mut db_txn),
+            &mut TransactionLog::empty(),
+        )
         .expect("Failed to commit transaction");
 
     assert_eq!(contract.balance, 800.try_into().unwrap());
 
     contract
-        .revert_outgoing_transaction(&tx, &block_state, receipt, data_store.write(&mut db_txn))
+        .revert_outgoing_transaction(
+            &tx,
+            &block_state,
+            receipt,
+            data_store.write(&mut db_txn),
+            &mut TransactionLog::empty(),
+        )
         .expect("Failed to revert transaction");
 
     assert_eq!(contract, start_contract);
@@ -409,13 +429,24 @@ fn it_can_apply_and_revert_valid_transaction() {
     let block_state = BlockState::new(1, 200);
 
     let receipt = contract
-        .commit_outgoing_transaction(&tx, &block_state, data_store.write(&mut db_txn))
+        .commit_outgoing_transaction(
+            &tx,
+            &block_state,
+            data_store.write(&mut db_txn),
+            &mut TransactionLog::empty(),
+        )
         .expect("Failed to commit transaction");
 
     assert_eq!(contract.balance, 800.try_into().unwrap());
 
     contract
-        .revert_outgoing_transaction(&tx, &block_state, receipt, data_store.write(&mut db_txn))
+        .revert_outgoing_transaction(
+            &tx,
+            &block_state,
+            receipt,
+            data_store.write(&mut db_txn),
+            &mut TransactionLog::empty(),
+        )
         .expect("Failed to revert transaction");
 
     assert_eq!(contract, start_contract);
@@ -449,8 +480,12 @@ fn it_refuses_invalid_transactions() {
 
     let block_state = BlockState::new(1, 200);
 
-    let result =
-        contract.commit_outgoing_transaction(&tx, &block_state, data_store.write(&mut db_txn));
+    let result = contract.commit_outgoing_transaction(
+        &tx,
+        &block_state,
+        data_store.write(&mut db_txn),
+        &mut TransactionLog::empty(),
+    );
 
     assert_eq!(result, Err(AccountError::InvalidSignature));
 
@@ -461,8 +496,12 @@ fn it_refuses_invalid_transactions() {
 
     let block_state = BlockState::new(1, 100);
 
-    let result =
-        contract.commit_outgoing_transaction(&tx, &block_state, data_store.write(&mut db_txn));
+    let result = contract.commit_outgoing_transaction(
+        &tx,
+        &block_state,
+        data_store.write(&mut db_txn),
+        &mut TransactionLog::empty(),
+    );
 
     assert_eq!(
         result,

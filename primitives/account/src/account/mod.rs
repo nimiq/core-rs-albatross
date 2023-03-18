@@ -12,7 +12,7 @@ use crate::interaction_traits::{
     AccountInherentInteraction, AccountPruningInteraction, AccountTransactionInteraction,
 };
 use crate::reserved_balance::ReservedBalance;
-use crate::{AccountReceipt, BlockState};
+use crate::{AccountReceipt, BlockState, InherentLogger, TransactionLog};
 
 pub mod basic_account;
 pub mod htlc_contract;
@@ -87,6 +87,7 @@ impl AccountTransactionInteraction for Account {
         initial_balance: Coin,
         block_state: &BlockState,
         data_store: DataStoreWrite,
+        tx_logger: &mut TransactionLog,
     ) -> Result<Account, AccountError> {
         assert!(transaction
             .flags
@@ -97,7 +98,8 @@ impl AccountTransactionInteraction for Account {
             transaction,
             initial_balance,
             block_state,
-            data_store
+            data_store,
+            tx_logger
         )
     }
 
@@ -106,13 +108,15 @@ impl AccountTransactionInteraction for Account {
         transaction: &Transaction,
         block_state: &BlockState,
         data_store: DataStoreWrite,
+        tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         gen_account_match!(
             self,
             revert_new_contract,
             transaction,
             block_state,
-            data_store
+            data_store,
+            tx_logger
         )
     }
 
@@ -121,13 +125,15 @@ impl AccountTransactionInteraction for Account {
         transaction: &Transaction,
         block_state: &BlockState,
         data_store: DataStoreWrite,
+        tx_logger: &mut TransactionLog,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         gen_account_match!(
             self,
             commit_incoming_transaction,
             transaction,
             block_state,
-            data_store
+            data_store,
+            tx_logger
         )
     }
 
@@ -137,6 +143,7 @@ impl AccountTransactionInteraction for Account {
         block_state: &BlockState,
         receipt: Option<AccountReceipt>,
         data_store: DataStoreWrite,
+        tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         gen_account_match!(
             self,
@@ -144,7 +151,8 @@ impl AccountTransactionInteraction for Account {
             transaction,
             block_state,
             receipt,
-            data_store
+            data_store,
+            tx_logger
         )
     }
 
@@ -153,13 +161,15 @@ impl AccountTransactionInteraction for Account {
         transaction: &Transaction,
         block_state: &BlockState,
         data_store: DataStoreWrite,
+        tx_logger: &mut TransactionLog,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         gen_account_match!(
             self,
             commit_outgoing_transaction,
             transaction,
             block_state,
-            data_store
+            data_store,
+            tx_logger
         )
     }
 
@@ -169,6 +179,7 @@ impl AccountTransactionInteraction for Account {
         block_state: &BlockState,
         receipt: Option<AccountReceipt>,
         data_store: DataStoreWrite,
+        tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         gen_account_match!(
             self,
@@ -176,7 +187,8 @@ impl AccountTransactionInteraction for Account {
             transaction,
             block_state,
             receipt,
-            data_store
+            data_store,
+            tx_logger
         )
     }
 
@@ -185,13 +197,15 @@ impl AccountTransactionInteraction for Account {
         transaction: &Transaction,
         block_state: &BlockState,
         data_store: DataStoreWrite,
+        tx_logger: &mut TransactionLog,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         gen_account_match!(
             self,
             commit_failed_transaction,
             transaction,
             block_state,
-            data_store
+            data_store,
+            tx_logger
         )
     }
 
@@ -201,6 +215,7 @@ impl AccountTransactionInteraction for Account {
         block_state: &BlockState,
         receipt: Option<AccountReceipt>,
         data_store: DataStoreWrite,
+        tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         gen_account_match!(
             self,
@@ -208,7 +223,8 @@ impl AccountTransactionInteraction for Account {
             transaction,
             block_state,
             receipt,
-            data_store
+            data_store,
+            tx_logger
         )
     }
 
@@ -251,8 +267,16 @@ impl AccountInherentInteraction for Account {
         inherent: &Inherent,
         block_state: &BlockState,
         data_store: DataStoreWrite,
+        inherent_logger: InherentLogger,
     ) -> Result<Option<AccountReceipt>, AccountError> {
-        gen_account_match!(self, commit_inherent, inherent, block_state, data_store)
+        gen_account_match!(
+            self,
+            commit_inherent,
+            inherent,
+            block_state,
+            data_store,
+            inherent_logger
+        )
     }
 
     fn revert_inherent(
@@ -261,6 +285,7 @@ impl AccountInherentInteraction for Account {
         block_state: &BlockState,
         receipt: Option<AccountReceipt>,
         data_store: DataStoreWrite,
+        inherent_logger: InherentLogger,
     ) -> Result<(), AccountError> {
         gen_account_match!(
             self,
@@ -268,7 +293,8 @@ impl AccountInherentInteraction for Account {
             inherent,
             block_state,
             receipt,
-            data_store
+            data_store,
+            inherent_logger
         )
     }
 }

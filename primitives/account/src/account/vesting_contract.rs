@@ -9,15 +9,15 @@ use nimiq_transaction::{
     Transaction,
 };
 
-use crate::reserved_balance::ReservedBalance;
 use crate::{
     convert_receipt,
     data_store::{DataStoreRead, DataStoreWrite},
     interaction_traits::{
         AccountInherentInteraction, AccountPruningInteraction, AccountTransactionInteraction,
     },
-    Account, AccountReceipt, BlockState,
+    Account, AccountReceipt, BlockState, InherentLogger,
 };
+use crate::{reserved_balance::ReservedBalance, Log, TransactionLog};
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
@@ -78,8 +78,19 @@ impl AccountTransactionInteraction for VestingContract {
         initial_balance: Coin,
         _block_state: &BlockState,
         _data_store: DataStoreWrite,
+        tx_logger: &mut TransactionLog,
     ) -> Result<Account, AccountError> {
         let data = CreationTransactionData::parse(transaction)?;
+
+        tx_logger.push_log(Log::VestingCreate {
+            contract_address: transaction.recipient.clone(),
+            owner: data.owner.clone(),
+            start_time: data.start_time,
+            time_step: data.time_step,
+            step_amount: data.step_amount,
+            total_amount: data.total_amount,
+        });
+
         Ok(Account::Vesting(VestingContract {
             balance: initial_balance + transaction.value,
             owner: data.owner,
@@ -95,8 +106,19 @@ impl AccountTransactionInteraction for VestingContract {
         transaction: &Transaction,
         _block_state: &BlockState,
         _data_store: DataStoreWrite,
+        tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         self.balance -= transaction.value;
+
+        tx_logger.push_log(Log::VestingCreate {
+            contract_address: transaction.recipient.clone(),
+            owner: self.owner.clone(),
+            start_time: self.start_time,
+            time_step: self.time_step,
+            step_amount: self.step_amount,
+            total_amount: self.total_amount,
+        });
+
         Ok(())
     }
 
@@ -105,6 +127,7 @@ impl AccountTransactionInteraction for VestingContract {
         _transaction: &Transaction,
         _block_state: &BlockState,
         _data_store: DataStoreWrite,
+        _tx_logger: &mut TransactionLog,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         Err(AccountError::InvalidForRecipient)
     }
@@ -115,6 +138,7 @@ impl AccountTransactionInteraction for VestingContract {
         _block_state: &BlockState,
         _receipt: Option<AccountReceipt>,
         _data_store: DataStoreWrite,
+        _tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         Err(AccountError::InvalidForRecipient)
     }
@@ -124,10 +148,15 @@ impl AccountTransactionInteraction for VestingContract {
         transaction: &Transaction,
         block_state: &BlockState,
         _data_store: DataStoreWrite,
+        tx_logger: &mut TransactionLog,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         let new_balance = self.balance.safe_sub(transaction.total_value())?;
         self.can_change_balance(transaction, new_balance, block_state)?;
         self.balance = new_balance;
+
+        tx_logger.push_log(Log::pay_fee_log(transaction));
+        tx_logger.push_log(Log::transfer_log(transaction));
+
         Ok(None)
     }
 
@@ -137,8 +166,13 @@ impl AccountTransactionInteraction for VestingContract {
         _block_state: &BlockState,
         _receipt: Option<AccountReceipt>,
         _data_store: DataStoreWrite,
+        tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         self.balance += transaction.total_value();
+
+        tx_logger.push_log(Log::pay_fee_log(transaction));
+        tx_logger.push_log(Log::transfer_log(transaction));
+
         Ok(())
     }
 
@@ -147,11 +181,15 @@ impl AccountTransactionInteraction for VestingContract {
         transaction: &Transaction,
         block_state: &BlockState,
         _data_store: DataStoreWrite,
+        tx_logger: &mut TransactionLog,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         let new_balance = self.balance.safe_sub(transaction.fee)?;
         // XXX This check should not be necessary since are also checking this in reserve_balance()
         self.can_change_balance(transaction, new_balance, block_state)?;
         self.balance = new_balance;
+
+        tx_logger.push_log(Log::pay_fee_log(transaction));
+
         Ok(None)
     }
 
@@ -161,8 +199,12 @@ impl AccountTransactionInteraction for VestingContract {
         _block_state: &BlockState,
         _receipt: Option<AccountReceipt>,
         _data_store: DataStoreWrite,
+        tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         self.balance += transaction.fee;
+
+        tx_logger.push_log(Log::pay_fee_log(transaction));
+
         Ok(())
     }
 
@@ -200,6 +242,7 @@ impl AccountInherentInteraction for VestingContract {
         _inherent: &Inherent,
         _block_state: &BlockState,
         _data_store: DataStoreWrite,
+        _inherent_logger: InherentLogger,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         Err(AccountError::InvalidForTarget)
     }
@@ -210,6 +253,7 @@ impl AccountInherentInteraction for VestingContract {
         _block_state: &BlockState,
         _receipt: Option<AccountReceipt>,
         _data_store: DataStoreWrite,
+        _inherent_logger: InherentLogger,
     ) -> Result<(), AccountError> {
         Err(AccountError::InvalidForTarget)
     }

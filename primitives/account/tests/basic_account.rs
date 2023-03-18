@@ -2,8 +2,8 @@ use std::convert::TryInto;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_account::{
-    Account, AccountTransactionInteraction, Accounts, AccountsTrie, BasicAccount, BlockState,
-    DataStore, TransactionOperationReceipt, TransactionReceipt,
+    Account, AccountTransactionInteraction, Accounts, AccountsTrie, BasicAccount, BlockLogger,
+    BlockState, DataStore, Log, TransactionLog, TransactionOperationReceipt, TransactionReceipt,
 };
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_database::WriteTransaction;
@@ -65,36 +65,48 @@ fn basic_transfer_works() {
     let block_state = BlockState::new(1, 2);
     let sender_store = DataStore::new(&accounts.tree, &sender_address);
 
+    let mut tx_logger = TransactionLog::empty();
     let receipt = sender_account
-        .commit_outgoing_transaction(&tx, &block_state, sender_store.write(&mut db_txn))
+        .commit_outgoing_transaction(
+            &tx,
+            &block_state,
+            sender_store.write(&mut db_txn),
+            &mut tx_logger,
+        )
         .unwrap();
 
     assert_eq!(receipt, None);
 
-    // assert_eq!(
-    //     account_info.logs,
-    //     vec![
-    //         Log::PayFee {
-    //             from: tx.sender.clone(),
-    //             fee: tx.fee,
-    //         },
-    //         Log::Transfer {
-    //             from: tx.sender.clone(),
-    //             to: tx.recipient.clone(),
-    //             amount: tx.value,
-    //             data: None,
-    //         },
-    //     ],
-    // );
+    assert_eq!(
+        tx_logger.logs,
+        vec![
+            Log::PayFee {
+                from: tx.sender.clone(),
+                fee: tx.fee,
+            },
+            Log::Transfer {
+                from: tx.sender.clone(),
+                to: tx.recipient.clone(),
+                amount: tx.value,
+                data: None,
+            },
+        ],
+    );
 
     let recipient_store = DataStore::new(&accounts.tree, &recipient_address);
 
+    let mut tx_logger = TransactionLog::empty();
     let receipt = recipient_account
-        .commit_incoming_transaction(&tx, &block_state, recipient_store.write(&mut db_txn))
+        .commit_incoming_transaction(
+            &tx,
+            &block_state,
+            recipient_store.write(&mut db_txn),
+            &mut tx_logger,
+        )
         .unwrap();
 
     assert_eq!(receipt, None);
-    // assert!(account_info.logs.is_empty());
+    assert!(tx_logger.logs.is_empty());
 
     assert_eq!(sender_account.balance(), Coin::from_u64_unchecked(899));
     assert_eq!(recipient_account.balance(), Coin::from_u64_unchecked(1100));
@@ -106,7 +118,8 @@ fn basic_transfer_works() {
         sender_account.commit_outgoing_transaction(
             &tx,
             &block_state,
-            sender_store.write(&mut db_txn)
+            sender_store.write(&mut db_txn),
+            &mut TransactionLog::empty()
         ),
         Err(AccountError::InsufficientFunds {
             needed: Coin::from_u64_unchecked(1001),
@@ -121,7 +134,8 @@ fn basic_transfer_works() {
         sender_account.commit_outgoing_transaction(
             &tx,
             &block_state,
-            sender_store.write(&mut db_txn)
+            sender_store.write(&mut db_txn),
+            &mut TransactionLog::empty()
         ),
         Err(AccountError::InsufficientFunds {
             needed: Coin::from_u64_unchecked(900),
@@ -132,25 +146,31 @@ fn basic_transfer_works() {
     // Can revert transaction.
     let tx = make_signed_transaction(100, recipient_address);
 
+    let mut tx_logger = TransactionLog::empty();
     assert_eq!(
         sender_account.revert_outgoing_transaction(
             &tx,
             &block_state,
             None,
-            sender_store.write(&mut db_txn)
+            sender_store.write(&mut db_txn),
+            &mut tx_logger
         ),
-        Ok(()) // Ok(vec![
-               //     Log::PayFee {
-               //         from: tx.sender.clone(),
-               //         fee: tx.fee,
-               //     },
-               //     Log::Transfer {
-               //         from: tx.sender.clone(),
-               //         to: tx.recipient.clone(),
-               //         amount: tx.value,
-               //         data: None,
-               //     },
-               // ])
+        Ok(())
+    );
+    assert_eq!(
+        tx_logger.logs,
+        vec![
+            Log::PayFee {
+                from: tx.sender.clone(),
+                fee: tx.fee,
+            },
+            Log::Transfer {
+                from: tx.sender.clone(),
+                to: tx.recipient.clone(),
+                amount: tx.value,
+                data: None,
+            },
+        ]
     );
 
     assert_eq!(
@@ -158,7 +178,8 @@ fn basic_transfer_works() {
             &tx,
             &block_state,
             None,
-            recipient_store.write(&mut db_txn)
+            recipient_store.write(&mut db_txn),
+            &mut TransactionLog::empty()
         ),
         Ok(())
     );
@@ -184,7 +205,13 @@ fn create_and_prune_works() {
     let block_state = BlockState::new(2, 2);
 
     let receipts = accounts
-        .commit(&mut db_txn, &[tx.clone()], &[], &block_state)
+        .commit(
+            &mut db_txn,
+            &[tx.clone()],
+            &[],
+            &block_state,
+            &mut BlockLogger::empty(),
+        )
         .unwrap();
 
     assert_eq!(
@@ -207,25 +234,34 @@ fn create_and_prune_works() {
     );
 
     // Can revert transaction.
+    let mut block_logger = BlockLogger::empty();
     accounts
-        .revert(&mut db_txn, &[tx], &[], &block_state, receipts)
+        .revert(
+            &mut db_txn,
+            &[tx.clone()],
+            &[],
+            &block_state,
+            receipts,
+            &mut block_logger,
+        )
         .unwrap();
+    let block_log = block_logger.build(0);
 
-    // assert_eq!(
-    //     logs,
-    //     vec![
-    //         Log::PayFee {
-    //             from: tx.sender.clone(),
-    //             fee: tx.fee,
-    //         },
-    //         Log::Transfer {
-    //             from: tx.sender.clone(),
-    //             to: tx.recipient.clone(),
-    //             amount: tx.value,
-    //             data: None,
-    //         },
-    //     ]
-    // );
+    assert_eq!(
+        block_log.transaction_logs()[0].logs,
+        vec![
+            Log::PayFee {
+                from: tx.sender.clone(),
+                fee: tx.fee,
+            },
+            Log::Transfer {
+                from: tx.sender.clone(),
+                to: tx.recipient.clone(),
+                amount: tx.value,
+                data: None,
+            },
+        ]
+    );
 
     assert_eq!(
         accounts

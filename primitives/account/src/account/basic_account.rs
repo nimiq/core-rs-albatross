@@ -6,7 +6,10 @@ use nimiq_transaction::{inherent::Inherent, Transaction};
 use crate::data_store::{DataStoreRead, DataStoreWrite};
 use crate::interaction_traits::{AccountPruningInteraction, AccountTransactionInteraction};
 use crate::reserved_balance::ReservedBalance;
-use crate::{Account, AccountInherentInteraction, AccountReceipt, BlockState};
+use crate::{
+    Account, AccountInherentInteraction, AccountReceipt, BlockState, InherentLogger, Log,
+    TransactionLog,
+};
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
@@ -20,6 +23,7 @@ impl AccountTransactionInteraction for BasicAccount {
         _initial_balance: Coin,
         _block_state: &BlockState,
         _data_store: DataStoreWrite,
+        _tx_logger: &mut TransactionLog,
     ) -> Result<Account, AccountError> {
         Err(AccountError::InvalidForRecipient)
     }
@@ -29,6 +33,7 @@ impl AccountTransactionInteraction for BasicAccount {
         _transaction: &Transaction,
         _block_state: &BlockState,
         _data_store: DataStoreWrite,
+        _tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         Err(AccountError::InvalidForRecipient)
     }
@@ -38,6 +43,7 @@ impl AccountTransactionInteraction for BasicAccount {
         transaction: &Transaction,
         _block_state: &BlockState,
         _data_store: DataStoreWrite,
+        _tx_logger: &mut TransactionLog,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         self.balance += transaction.value;
         Ok(None)
@@ -49,6 +55,7 @@ impl AccountTransactionInteraction for BasicAccount {
         _block_state: &BlockState,
         _receipt: Option<AccountReceipt>,
         _data_store: DataStoreWrite,
+        _tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         self.balance -= transaction.value;
         Ok(())
@@ -59,8 +66,13 @@ impl AccountTransactionInteraction for BasicAccount {
         transaction: &Transaction,
         _block_state: &BlockState,
         _data_store: DataStoreWrite,
+        tx_logger: &mut TransactionLog,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         self.balance.safe_sub_assign(transaction.total_value())?;
+
+        tx_logger.push_log(Log::pay_fee_log(transaction));
+        tx_logger.push_log(Log::transfer_log(transaction));
+
         Ok(None)
     }
 
@@ -70,8 +82,13 @@ impl AccountTransactionInteraction for BasicAccount {
         _block_state: &BlockState,
         _receipt: Option<AccountReceipt>,
         _data_store: DataStoreWrite,
+        tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         self.balance += transaction.total_value();
+
+        tx_logger.push_log(Log::pay_fee_log(transaction));
+        tx_logger.push_log(Log::transfer_log(transaction));
+
         Ok(())
     }
 
@@ -80,8 +97,12 @@ impl AccountTransactionInteraction for BasicAccount {
         transaction: &Transaction,
         _block_state: &BlockState,
         _data_store: DataStoreWrite,
+        tx_logger: &mut TransactionLog,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         self.balance.safe_sub_assign(transaction.fee)?;
+
+        tx_logger.push_log(Log::pay_fee_log(transaction));
+
         Ok(None)
     }
 
@@ -91,8 +112,12 @@ impl AccountTransactionInteraction for BasicAccount {
         _block_state: &BlockState,
         _receipt: Option<AccountReceipt>,
         _data_store: DataStoreWrite,
+        tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         self.balance += transaction.fee;
+
+        tx_logger.push_log(Log::pay_fee_log(transaction));
+
         Ok(())
     }
 
@@ -123,10 +148,17 @@ impl AccountInherentInteraction for BasicAccount {
         inherent: &Inherent,
         _block_state: &BlockState,
         _data_store: DataStoreWrite,
+        mut inherent_logger: InherentLogger,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         match inherent {
-            Inherent::Reward { value, .. } => {
+            Inherent::Reward { value, target } => {
                 self.balance += *value;
+
+                inherent_logger.push_log(Log::PayoutReward {
+                    to: target.clone(),
+                    value: *value,
+                });
+
                 Ok(None)
             }
             _ => Err(AccountError::InvalidForTarget),
@@ -139,10 +171,17 @@ impl AccountInherentInteraction for BasicAccount {
         _block_state: &BlockState,
         _receipt: Option<AccountReceipt>,
         _data_store: DataStoreWrite,
+        mut inherent_logger: InherentLogger,
     ) -> Result<(), AccountError> {
         match inherent {
-            Inherent::Reward { value, .. } => {
+            Inherent::Reward { value, target } => {
                 self.balance -= *value;
+
+                inherent_logger.push_log(Log::PayoutReward {
+                    to: target.clone(),
+                    value: *value,
+                });
+
                 Ok(())
             }
             _ => Err(AccountError::InvalidForTarget),

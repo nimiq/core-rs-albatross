@@ -1,7 +1,7 @@
 use crate::blockchain_state::BlockchainState;
 use crate::Blockchain;
-use nimiq_account::TransactionOperationReceipt;
 use nimiq_account::{Accounts, BlockState};
+use nimiq_account::{BlockLogger, TransactionOperationReceipt};
 use nimiq_block::{Block, BlockError, SkipBlockInfo};
 use nimiq_blockchain_interface::PushError;
 use nimiq_database::WriteTransaction;
@@ -15,6 +15,7 @@ impl Blockchain {
         state: &BlockchainState,
         block: &Block,
         txn: &mut WriteTransaction,
+        block_logger: &mut BlockLogger,
     ) -> Result<u64, PushError> {
         // Get the accounts from the state.
         let accounts = &state.accounts;
@@ -23,12 +24,12 @@ impl Blockchain {
         // Check the type of the block.
         match block {
             Block::Macro(ref macro_block) => {
-                // Initialize a vector to store the inherents
+                // Initialize a vector to store the inherents.
                 let inherents = self.create_macro_block_inherents(macro_block);
 
                 // Commit block to AccountsTree and create the receipts.
                 let receipts = if accounts.is_complete(Some(txn)) {
-                    accounts.commit(txn, &[], &inherents, &block_state)
+                    accounts.commit(txn, &[], &inherents, &block_state, block_logger)
                 } else {
                     accounts.commit_incomplete(txn, &[], &inherents, &block_state)
                 };
@@ -59,16 +60,6 @@ impl Blockchain {
                         .1
                 };
 
-                // let (batch_info, _) = batch_info.unwrap();
-                // Ok(BlockLog::AppliedBlock {
-                //     inherent_logs: batch_info.inherent_logs,
-                //     block_hash: macro_block.hash(),
-                //     block_number: macro_block.header.block_number,
-                //     timestamp: macro_block.header.timestamp,
-                //     tx_logs: batch_info.tx_logs,
-                //     total_tx_size,
-                // })
-
                 Ok(total_tx_size)
             }
             Block::Micro(ref micro_block) => {
@@ -83,9 +74,16 @@ impl Blockchain {
 
                 // Commit block to AccountsTree and create the receipts.
                 let receipts = if accounts.is_complete(Some(txn)) {
-                    accounts.commit(txn, &body.get_raw_transactions(), &inherents, &block_state)
+                    accounts.commit(
+                        txn,
+                        &body.get_raw_transactions(),
+                        &inherents,
+                        &block_state,
+                        block_logger,
+                    )
                 } else {
                     accounts.commit_incomplete(txn, &body.transactions, &inherents, &block_state)
+                    // PITODO we cannot emit logs when syncing
                 };
 
                 // Check if the receipts contain an error.
@@ -129,15 +127,6 @@ impl Blockchain {
                         .1
                 };
 
-                // Ok(BlockLog::AppliedBlock {
-                //     inherent_logs: batch_info.inherent_logs,
-                //     block_hash: micro_block.hash(),
-                //     block_number: micro_block.header.block_number,
-                //     timestamp: micro_block.header.timestamp,
-                //     tx_logs: batch_info.tx_logs,
-                //     total_tx_size,
-                // })
-
                 Ok(total_tx_size)
             }
         }
@@ -150,7 +139,8 @@ impl Blockchain {
         accounts: &Accounts,
         txn: &mut WriteTransaction,
         block: &Block,
-    ) -> Result<(), PushError> {
+        block_logger: &mut BlockLogger,
+    ) -> Result<u64, PushError> {
         match block {
             Block::Micro(ref micro_block) => {
                 debug!(
@@ -189,6 +179,7 @@ impl Blockchain {
                     &inherents,
                     &block_state,
                     receipts,
+                    block_logger,
                 );
                 if let Err(e) = result {
                     panic!("Failed to revert - {e:?}");
@@ -197,18 +188,12 @@ impl Blockchain {
                 // Remove the transactions from the History tree. For this you only need to calculate the
                 // number of transactions that you want to remove.
                 let num_txs = body.transactions.len() + inherents.len();
-                self.history_store
+                let (_, total_size) = self
+                    .history_store
                     .remove_partial_history(txn, micro_block.epoch_number(), num_txs)
                     .expect("Failed to remove partial history");
 
-                // Ok(BlockLog::RevertedBlock {
-                //     inherent_logs: batch_info.inherent_logs,
-                //     block_hash: micro_block.hash(),
-                //     block_number: micro_block.header.block_number,
-                //     tx_logs: batch_info.tx_logs,
-                //     total_tx_size,
-                // })
-                Ok(())
+                Ok(total_size)
             }
             Block::Macro(_) => unreachable!("Macro blocks are final and can't be reverted"),
         }

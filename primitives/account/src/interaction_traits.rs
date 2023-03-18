@@ -4,7 +4,7 @@ use nimiq_transaction::{inherent::Inherent, Transaction};
 
 use crate::data_store::{DataStoreRead, DataStoreWrite};
 use crate::reserved_balance::ReservedBalance;
-use crate::{Account, AccountReceipt};
+use crate::{Account, AccountReceipt, InherentLogger, TransactionLog};
 
 pub struct BlockState {
     pub number: u32,
@@ -26,6 +26,7 @@ pub trait AccountTransactionInteraction: Sized {
         initial_balance: Coin,
         block_state: &BlockState,
         data_store: DataStoreWrite,
+        tx_logger: &mut TransactionLog,
     ) -> Result<Account, AccountError>;
 
     fn revert_new_contract(
@@ -33,6 +34,7 @@ pub trait AccountTransactionInteraction: Sized {
         transaction: &Transaction,
         block_state: &BlockState,
         data_store: DataStoreWrite,
+        tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError>;
 
     fn commit_incoming_transaction(
@@ -40,6 +42,7 @@ pub trait AccountTransactionInteraction: Sized {
         transaction: &Transaction,
         block_state: &BlockState,
         data_store: DataStoreWrite,
+        tx_logger: &mut TransactionLog,
     ) -> Result<Option<AccountReceipt>, AccountError>;
 
     fn revert_incoming_transaction(
@@ -48,6 +51,7 @@ pub trait AccountTransactionInteraction: Sized {
         block_state: &BlockState,
         receipt: Option<AccountReceipt>,
         data_store: DataStoreWrite,
+        tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError>;
 
     fn commit_outgoing_transaction(
@@ -55,6 +59,7 @@ pub trait AccountTransactionInteraction: Sized {
         transaction: &Transaction,
         block_state: &BlockState,
         data_store: DataStoreWrite,
+        tx_logger: &mut TransactionLog,
     ) -> Result<Option<AccountReceipt>, AccountError>;
 
     fn revert_outgoing_transaction(
@@ -63,6 +68,7 @@ pub trait AccountTransactionInteraction: Sized {
         block_state: &BlockState,
         receipt: Option<AccountReceipt>,
         data_store: DataStoreWrite,
+        tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError>;
 
     fn commit_failed_transaction(
@@ -70,6 +76,7 @@ pub trait AccountTransactionInteraction: Sized {
         transaction: &Transaction,
         block_state: &BlockState,
         data_store: DataStoreWrite,
+        tx_logger: &mut TransactionLog,
     ) -> Result<Option<AccountReceipt>, AccountError>;
 
     fn revert_failed_transaction(
@@ -78,6 +85,7 @@ pub trait AccountTransactionInteraction: Sized {
         block_state: &BlockState,
         receipt: Option<AccountReceipt>,
         data_store: DataStoreWrite,
+        tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError>;
 
     fn reserve_balance(
@@ -102,6 +110,7 @@ pub trait AccountInherentInteraction: Sized {
         inherent: &Inherent,
         block_state: &BlockState,
         data_store: DataStoreWrite,
+        tx_logger: InherentLogger,
     ) -> Result<Option<AccountReceipt>, AccountError>;
 
     fn revert_inherent(
@@ -110,6 +119,7 @@ pub trait AccountInherentInteraction: Sized {
         block_state: &BlockState,
         receipt: Option<AccountReceipt>,
         data_store: DataStoreWrite,
+        tx_logger: InherentLogger,
     ) -> Result<(), AccountError>;
 }
 

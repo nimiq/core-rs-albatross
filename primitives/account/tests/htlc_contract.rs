@@ -3,7 +3,7 @@ use std::convert::TryInto;
 use beserial::{Deserialize, Serialize, SerializingError};
 use nimiq_account::{
     Account, AccountPruningInteraction, AccountTransactionInteraction, Accounts, BlockState,
-    HashedTimeLockedContract,
+    HashedTimeLockedContract, TransactionLog,
 };
 use nimiq_database::{volatile::VolatileEnvironment, WriteTransaction};
 use nimiq_hash::{Blake2bHasher, HashOutput, Hasher, Sha256Hasher};
@@ -188,6 +188,7 @@ fn it_can_create_contract_from_transaction() {
         Coin::ZERO,
         &block_state,
         data_store.write(&mut db_txn),
+        &mut TransactionLog::empty(),
     )
     .expect("Failed to create HTLC");
 
@@ -225,11 +226,22 @@ fn it_does_not_support_incoming_transactions() {
     tx.recipient_type = AccountType::HTLC;
 
     assert_eq!(
-        htlc.commit_incoming_transaction(&tx, &block_state, data_store.write(&mut db_txn)),
+        htlc.commit_incoming_transaction(
+            &tx,
+            &block_state,
+            data_store.write(&mut db_txn),
+            &mut TransactionLog::empty()
+        ),
         Err(AccountError::InvalidForRecipient)
     );
     assert_eq!(
-        htlc.revert_incoming_transaction(&tx, &block_state, None, data_store.write(&mut db_txn)),
+        htlc.revert_incoming_transaction(
+            &tx,
+            &block_state,
+            None,
+            data_store.write(&mut db_txn),
+            &mut TransactionLog::empty()
+        ),
         Err(AccountError::InvalidForRecipient)
     );
 }
@@ -497,13 +509,24 @@ fn it_can_apply_and_revert_valid_transaction() {
     let mut htlc = start_contract.clone();
 
     let receipt = htlc
-        .commit_outgoing_transaction(&tx, &block_state, data_store.write(&mut db_txn))
+        .commit_outgoing_transaction(
+            &tx,
+            &block_state,
+            data_store.write(&mut db_txn),
+            &mut TransactionLog::empty(),
+        )
         .expect("Failed to commit transaction");
 
     assert!(htlc.can_be_pruned());
 
-    htlc.revert_outgoing_transaction(&tx, &block_state, receipt, data_store.write(&mut db_txn))
-        .expect("Failed to revert transaction");
+    htlc.revert_outgoing_transaction(
+        &tx,
+        &block_state,
+        receipt,
+        data_store.write(&mut db_txn),
+        &mut TransactionLog::empty(),
+    )
+    .expect("Failed to revert transaction");
 
     assert_eq!(htlc, start_contract);
 
@@ -517,13 +540,24 @@ fn it_can_apply_and_revert_valid_transaction() {
     tx.proof = proof;
 
     let receipt = htlc
-        .commit_outgoing_transaction(&tx, &block_state, data_store.write(&mut db_txn))
+        .commit_outgoing_transaction(
+            &tx,
+            &block_state,
+            data_store.write(&mut db_txn),
+            &mut TransactionLog::empty(),
+        )
         .expect("Failed to commit transaction");
 
     assert!(htlc.can_be_pruned());
 
-    htlc.revert_outgoing_transaction(&tx, &block_state, receipt, data_store.write(&mut db_txn))
-        .expect("Failed to revert transaction");
+    htlc.revert_outgoing_transaction(
+        &tx,
+        &block_state,
+        receipt,
+        data_store.write(&mut db_txn),
+        &mut TransactionLog::empty(),
+    )
+    .expect("Failed to revert transaction");
 
     assert_eq!(htlc, start_contract);
 
@@ -536,13 +570,24 @@ fn it_can_apply_and_revert_valid_transaction() {
     let block_state = BlockState::new(1, 101);
 
     let receipt = htlc
-        .commit_outgoing_transaction(&tx, &block_state, data_store.write(&mut db_txn))
+        .commit_outgoing_transaction(
+            &tx,
+            &block_state,
+            data_store.write(&mut db_txn),
+            &mut TransactionLog::empty(),
+        )
         .expect("Failed to commit transaction");
 
     assert!(htlc.can_be_pruned());
 
-    htlc.revert_outgoing_transaction(&tx, &block_state, receipt, data_store.write(&mut db_txn))
-        .expect("Failed to revert transaction");
+    htlc.revert_outgoing_transaction(
+        &tx,
+        &block_state,
+        receipt,
+        data_store.write(&mut db_txn),
+        &mut TransactionLog::empty(),
+    )
+    .expect("Failed to revert transaction");
 
     assert_eq!(htlc, start_contract);
 }
@@ -573,7 +618,12 @@ fn it_refuses_invalid_transactions() {
 
     let block_state = BlockState::new(1, 101);
 
-    let result = htlc.commit_outgoing_transaction(&tx, &block_state, data_store.write(&mut db_txn));
+    let result = htlc.commit_outgoing_transaction(
+        &tx,
+        &block_state,
+        data_store.write(&mut db_txn),
+        &mut TransactionLog::empty(),
+    );
 
     assert_eq!(result, Err(AccountError::InvalidForSender));
 
@@ -590,7 +640,12 @@ fn it_refuses_invalid_transactions() {
 
     let block_state = BlockState::new(1, 1);
 
-    let result = htlc.commit_outgoing_transaction(&tx, &block_state, data_store.write(&mut db_txn));
+    let result = htlc.commit_outgoing_transaction(
+        &tx,
+        &block_state,
+        data_store.write(&mut db_txn),
+        &mut TransactionLog::empty(),
+    );
 
     assert_eq!(result, Err(AccountError::InvalidForSender));
 
@@ -605,7 +660,12 @@ fn it_refuses_invalid_transactions() {
     Serialize::serialize(&sender_signature_proof, &mut proof);
     tx.proof = proof;
 
-    let result = htlc.commit_outgoing_transaction(&tx, &block_state, data_store.write(&mut db_txn));
+    let result = htlc.commit_outgoing_transaction(
+        &tx,
+        &block_state,
+        data_store.write(&mut db_txn),
+        &mut TransactionLog::empty(),
+    );
 
     assert_eq!(result, Err(AccountError::InvalidSignature));
 
@@ -625,7 +685,12 @@ fn it_refuses_invalid_transactions() {
     Serialize::serialize(&recipient_signature_proof, &mut proof);
     tx.proof = proof;
 
-    let result = htlc.commit_outgoing_transaction(&tx, &block_state, data_store.write(&mut db_txn));
+    let result = htlc.commit_outgoing_transaction(
+        &tx,
+        &block_state,
+        data_store.write(&mut db_txn),
+        &mut TransactionLog::empty(),
+    );
 
     assert_eq!(
         result,
@@ -644,7 +709,12 @@ fn it_refuses_invalid_transactions() {
     Serialize::serialize(&recipient_signature_proof, &mut proof);
     tx.proof = proof;
 
-    let result = htlc.commit_outgoing_transaction(&tx, &block_state, data_store.write(&mut db_txn));
+    let result = htlc.commit_outgoing_transaction(
+        &tx,
+        &block_state,
+        data_store.write(&mut db_txn),
+        &mut TransactionLog::empty(),
+    );
 
     assert_eq!(result, Err(AccountError::InvalidSignature));
 
@@ -654,7 +724,12 @@ fn it_refuses_invalid_transactions() {
     Serialize::serialize(&sender_signature_proof, &mut proof);
     tx.proof = proof;
 
-    let result = htlc.commit_outgoing_transaction(&tx, &block_state, data_store.write(&mut db_txn));
+    let result = htlc.commit_outgoing_transaction(
+        &tx,
+        &block_state,
+        data_store.write(&mut db_txn),
+        &mut TransactionLog::empty(),
+    );
 
     assert_eq!(result, Err(AccountError::InvalidForSender));
 
@@ -666,7 +741,12 @@ fn it_refuses_invalid_transactions() {
 
     let block_state = BlockState::new(1, 101);
 
-    let result = htlc.commit_outgoing_transaction(&tx, &block_state, data_store.write(&mut db_txn));
+    let result = htlc.commit_outgoing_transaction(
+        &tx,
+        &block_state,
+        data_store.write(&mut db_txn),
+        &mut TransactionLog::empty(),
+    );
 
     assert_eq!(result, Err(AccountError::InvalidSignature));
 }

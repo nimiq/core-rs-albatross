@@ -154,7 +154,7 @@ pub enum Log {
 }
 
 impl Log {
-    pub fn transfer_log_from_transaction(transaction: &Transaction) -> Self {
+    pub fn transfer_log(transaction: &Transaction) -> Self {
         Log::Transfer {
             from: transaction.sender.clone(),
             to: transaction.recipient.clone(),
@@ -166,6 +166,13 @@ impl Log {
             } else {
                 None
             },
+        }
+    }
+
+    pub fn pay_fee_log(transaction: &Transaction) -> Self {
+        Log::PayFee {
+            from: transaction.sender.clone(),
+            fee: transaction.fee,
         }
     }
 
@@ -286,6 +293,142 @@ impl TransactionLog {
     pub fn new(tx_hash: Blake2bHash, logs: Vec<Log>) -> Self {
         Self { tx_hash, logs }
     }
+
+    pub fn empty() -> Self {
+        Self::new(Blake2bHash::default(), vec![])
+    }
+
+    pub(crate) fn push_log(&mut self, log: Log) {
+        self.logs.push(log)
+    }
+
+    pub(crate) fn prepend_log(&mut self, log: Log) {
+        self.logs.insert(0, log)
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.logs.clear()
+    }
+}
+
+#[derive(Debug)]
+pub struct InherentLogger<'a> {
+    inherents: Option<&'a mut Vec<Log>>,
+}
+
+impl<'a> InherentLogger<'a> {
+    pub fn new(logs: &'a mut Vec<Log>) -> Self {
+        InherentLogger {
+            inherents: Some(logs),
+        }
+    }
+
+    pub fn empty() -> Self {
+        Self { inherents: None }
+    }
+
+    pub(crate) fn push_log(&mut self, log: Log) {
+        if let Some(ref mut inherents) = self.inherents {
+            inherents.push(log);
+        }
+    }
+
+    pub(crate) fn prepend_log(&mut self, log: Log) {
+        if let Some(ref mut inherents) = self.inherents {
+            inherents.insert(0, log);
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct BlockLogger {
+    block_log: BlockLog,
+}
+
+impl BlockLogger {
+    fn new(block_log: BlockLog) -> Self {
+        Self { block_log }
+    }
+
+    pub fn empty() -> Self {
+        Self::new(BlockLog::AppliedBlock {
+            inherent_logs: vec![],
+            block_hash: Default::default(),
+            block_number: 0,
+            timestamp: 0,
+            tx_logs: vec![],
+            total_tx_size: 0,
+        })
+    }
+
+    pub fn new_applied(block_hash: Blake2bHash, block_number: u32, timestamp: u64) -> Self {
+        Self::new(BlockLog::AppliedBlock {
+            inherent_logs: vec![],
+            block_hash,
+            block_number,
+            timestamp,
+            tx_logs: vec![],
+            total_tx_size: 0,
+        })
+    }
+
+    pub fn new_reverted(block_hash: Blake2bHash, block_number: u32) -> Self {
+        Self::new(BlockLog::RevertedBlock {
+            inherent_logs: vec![],
+            block_hash,
+            block_number,
+            tx_logs: vec![],
+            total_tx_size: 0,
+        })
+    }
+
+    pub(crate) fn inherent_logger(&mut self) -> InherentLogger {
+        match self.block_log {
+            BlockLog::RevertedBlock {
+                ref mut inherent_logs,
+                ..
+            }
+            | BlockLog::AppliedBlock {
+                ref mut inherent_logs,
+                ..
+            } => InherentLogger {
+                inherents: Some(inherent_logs),
+            },
+        }
+    }
+
+    pub(crate) fn new_tx_log(&mut self, tx_hash: Blake2bHash) -> &mut TransactionLog {
+        let tx_log = TransactionLog::new(tx_hash, vec![]);
+
+        match self.block_log {
+            BlockLog::RevertedBlock {
+                ref mut tx_logs, ..
+            }
+            | BlockLog::AppliedBlock {
+                ref mut tx_logs, ..
+            } => {
+                tx_logs.push(tx_log);
+                tx_logs.last_mut().unwrap()
+            }
+        }
+    }
+
+    pub fn build(self, size: u64) -> BlockLog {
+        let mut block_log = self.block_log;
+        match block_log {
+            BlockLog::RevertedBlock {
+                ref mut total_tx_size,
+                ..
+            }
+            | BlockLog::AppliedBlock {
+                ref mut total_tx_size,
+                ..
+            } => {
+                *total_tx_size = size;
+            }
+        }
+        block_log
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -322,8 +465,15 @@ impl BlockLog {
             BlockLog::RevertedBlock { total_tx_size, .. } => *total_tx_size,
         }
     }
+
+    pub fn transaction_logs(&self) -> &[TransactionLog] {
+        match self {
+            BlockLog::AppliedBlock { ref tx_logs, .. }
+            | BlockLog::RevertedBlock { ref tx_logs, .. } => tx_logs,
+        }
+    }
 }
-// This structure stores the info/data associated to a sucessful transaction that was committed
+// This structure stores the info/data associated to a successful transaction that was committed
 pub struct TransactionInfo {
     pub sender_info: Option<AccountInfo>,
     pub recipient_info: Option<AccountInfo>,
