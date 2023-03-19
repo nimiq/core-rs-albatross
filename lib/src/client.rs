@@ -17,7 +17,9 @@ use nimiq_consensus::{
     sync::syncer_proxy::SyncerProxy, Consensus as AbstractConsensus,
     ConsensusProxy as AbstractConsensusProxy,
 };
-use nimiq_genesis::{NetworkId, NetworkInfo};
+#[cfg(feature = "zkp-prover")]
+use nimiq_genesis::NetworkId;
+use nimiq_genesis::NetworkInfo;
 use nimiq_light_blockchain::LightBlockchain;
 #[cfg(feature = "validator")]
 use nimiq_mempool::mempool::Mempool;

@@ -27,6 +27,8 @@ use nimiq_utils::file_store::FileStore;
 use nimiq_utils::key_rng::SecureGenerate;
 use nimiq_zkp_circuits::DEFAULT_KEYS_PATH;
 
+#[cfg(feature = "database-storage")]
+use crate::config::config_file::DatabaseSettings;
 #[cfg(any(feature = "rpc-server", feature = "metrics-server"))]
 use crate::config::consts;
 #[cfg(feature = "metrics-server")]
@@ -34,7 +36,7 @@ use crate::config::consts::default_bind;
 use crate::{
     config::{
         command_line::CommandLine,
-        config_file::{self, ConfigFile, Seed},
+        config_file::{ConfigFile, Seed},
         paths,
         user_agent::UserAgent,
     },
@@ -225,8 +227,8 @@ impl Default for DatabaseConfig {
     }
 }
 #[cfg(feature = "database-storage")]
-impl From<Option<config_file::DatabaseSettings>> for DatabaseConfig {
-    fn from(db_settings: Option<config_file::DatabaseSettings>) -> Self {
+impl From<Option<DatabaseSettings>> for DatabaseConfig {
+    fn from(db_settings: Option<DatabaseSettings>) -> Self {
         let default = DatabaseConfig::default();
 
         if let Some(db_settings) = db_settings {
