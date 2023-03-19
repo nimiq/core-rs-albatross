@@ -1,14 +1,19 @@
 use beserial::{Deserialize, Serialize};
-use nimiq_primitives::account::AccountType;
-use nimiq_primitives::{account::AccountError, coin::Coin};
+#[cfg(feature = "interaction-traits")]
+use nimiq_primitives::account::{AccountError, AccountType};
+use nimiq_primitives::coin::Coin;
+#[cfg(feature = "interaction-traits")]
 use nimiq_transaction::{inherent::Inherent, Transaction};
 
-use crate::data_store::{DataStoreRead, DataStoreWrite};
-use crate::interaction_traits::{AccountPruningInteraction, AccountTransactionInteraction};
-use crate::reserved_balance::ReservedBalance;
+#[cfg(feature = "interaction-traits")]
 use crate::{
-    Account, AccountInherentInteraction, AccountReceipt, BlockState, InherentLogger, Log,
-    TransactionLog,
+    data_store::{DataStoreRead, DataStoreWrite},
+    interaction_traits::{
+        AccountInherentInteraction, AccountPruningInteraction, AccountTransactionInteraction,
+        BlockState,
+    },
+    reserved_balance::ReservedBalance,
+    Account, AccountReceipt, InherentLogger, Log, TransactionLog,
 };
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Default, Serialize, Deserialize)]
@@ -17,6 +22,7 @@ pub struct BasicAccount {
     pub balance: Coin,
 }
 
+#[cfg(feature = "interaction-traits")]
 impl AccountTransactionInteraction for BasicAccount {
     fn create_new_contract(
         _transaction: &Transaction,
@@ -142,6 +148,7 @@ impl AccountTransactionInteraction for BasicAccount {
     }
 }
 
+#[cfg(feature = "interaction-traits")]
 impl AccountInherentInteraction for BasicAccount {
     fn commit_inherent(
         &mut self,
@@ -189,6 +196,7 @@ impl AccountInherentInteraction for BasicAccount {
     }
 }
 
+#[cfg(feature = "interaction-traits")]
 impl AccountPruningInteraction for BasicAccount {
     fn can_be_pruned(&self) -> bool {
         self.balance.is_zero()

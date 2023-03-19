@@ -13,12 +13,11 @@ use nimiq_primitives::{
 use nimiq_transaction::{inherent::Inherent, ExecutedTransaction, Transaction, TransactionFlags};
 use nimiq_trie::trie::{IncompleteTrie, MerkleRadixTrie};
 
-use crate::data_store::DataStore;
-use crate::interaction_traits::AccountPruningInteraction;
 use crate::{
-    Account, AccountInherentInteraction, AccountReceipt, AccountTransactionInteraction,
-    BlockLogger, BlockState, InherentLogger, InherentOperationReceipt, OperationReceipt, Receipts,
-    ReservedBalance, TransactionLog, TransactionOperationReceipt, TransactionReceipt,
+    Account, AccountInherentInteraction, AccountPruningInteraction, AccountReceipt,
+    AccountTransactionInteraction, BlockLogger, BlockState, DataStore, InherentLogger,
+    InherentOperationReceipt, OperationReceipt, Receipts, ReservedBalance, TransactionLog,
+    TransactionOperationReceipt, TransactionReceipt,
 };
 
 /// An alias for the accounts tree.

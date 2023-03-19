@@ -1,12 +1,19 @@
 use beserial::{Deserialize, Serialize};
 use nimiq_keys::Address;
-use nimiq_primitives::{account::AccountError, coin::Coin};
+#[cfg(feature = "interaction-traits")]
+use nimiq_primitives::account::AccountError;
+use nimiq_primitives::coin::Coin;
 
-use crate::account::staking_contract::store::{
-    StakingContractStoreReadOps, StakingContractStoreReadOpsExt, StakingContractStoreWrite,
+#[cfg(feature = "interaction-traits")]
+use crate::{
+    account::staking_contract::{
+        store::{
+            StakingContractStoreReadOps, StakingContractStoreReadOpsExt, StakingContractStoreWrite,
+        },
+        StakerReceipt, StakingContract, Tombstone,
+    },
+    Log, TransactionLog,
 };
-use crate::account::staking_contract::{StakerReceipt, StakingContract};
-use crate::{Log, Tombstone, TransactionLog};
 
 /// Struct representing a staker in the staking contract.
 /// Actions concerning a staker are:
@@ -29,6 +36,7 @@ pub struct Staker {
     pub delegation: Option<Address>,
 }
 
+#[cfg(feature = "interaction-traits")]
 impl StakingContract {
     /// Creates a new staker. This function is public to fill the genesis staking contract.
     pub fn create_staker(

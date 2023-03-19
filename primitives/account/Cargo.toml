@@ -23,14 +23,14 @@ thiserror = "1.0"
 beserial = { path = "../../beserial", features = ["derive"] }
 nimiq-bls = { path = "../../bls" }
 nimiq-collections = { path = "../../collections" }
-nimiq-database = { path = "../../database" }
+nimiq-database = { path = "../../database", optional = true }
 nimiq-database-value = { path = "../../database/database-value" }
 nimiq-hash = { path = "../../hash" }
 nimiq-keys = { path = "../../keys", features = ["serde-derive"] }
 nimiq-macros = { path = "../../macros" }
 nimiq-primitives = { path = "..", features = ["coin", "policy", "serde-derive", "slots", "trie"] }
 nimiq-transaction = { path = "../transaction", features = ["serde-derive"] }
-nimiq-trie = { path = "../trie" }
+nimiq-trie = { path = "../trie", optional = true }
 nimiq-utils = { path = "../../utils", features = ["key-rng"] }
 nimiq-vrf = { path = "../../vrf" }
 
@@ -43,4 +43,7 @@ nimiq-test-log = { path = "../../test-log" }
 nimiq-test-utils = { path = "../../test-utils" }
 
 [features]
+accounts = ["interaction-traits", "nimiq-database", "nimiq-trie"]
+default = ["accounts", "interaction-traits"]
+interaction-traits = ["nimiq-database"]
 serde-derive = ["serde"]

@@ -330,10 +330,12 @@ impl TransactionLog {
         self.logs.push(log)
     }
 
+    #[cfg(feature = "interaction-traits")]
     pub(crate) fn prepend_log(&mut self, log: Log) {
         self.logs.insert(0, log)
     }
 
+    #[cfg(feature = "interaction-traits")]
     pub(crate) fn clear(&mut self) {
         self.logs.clear()
     }
@@ -355,12 +357,14 @@ impl<'a> InherentLogger<'a> {
         Self { inherents: None }
     }
 
+    #[cfg(feature = "interaction-traits")]
     pub(crate) fn push_log(&mut self, log: Log) {
         if let Some(ref mut inherents) = self.inherents {
             inherents.push(log);
         }
     }
 
+    #[cfg(feature = "interaction-traits")]
     pub(crate) fn prepend_log(&mut self, log: Log) {
         if let Some(ref mut inherents) = self.inherents {
             inherents.insert(0, log);
@@ -410,6 +414,7 @@ impl BlockLogger {
         })
     }
 
+    #[cfg(feature = "interaction-traits")]
     pub(crate) fn inherent_logger(&mut self) -> InherentLogger {
         match self.block_log {
             BlockLog::RevertedBlock {
@@ -425,6 +430,7 @@ impl BlockLogger {
         }
     }
 
+    #[cfg(feature = "interaction-traits")]
     pub(crate) fn new_tx_log(&mut self, tx_hash: Blake2bHash) -> &mut TransactionLog {
         let tx_log = TransactionLog::new(tx_hash, vec![]);
 

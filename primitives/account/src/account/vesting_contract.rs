@@ -1,23 +1,24 @@
 use beserial::{Deserialize, Serialize};
 use nimiq_keys::Address;
-use nimiq_primitives::{
-    account::{AccountError, AccountType},
-    coin::Coin,
-};
+#[cfg(feature = "interaction-traits")]
+use nimiq_primitives::account::AccountType;
+use nimiq_primitives::{account::AccountError, coin::Coin};
+#[cfg(feature = "interaction-traits")]
 use nimiq_transaction::{
     account::vesting_contract::CreationTransactionData, inherent::Inherent, SignatureProof,
     Transaction,
 };
 
+use crate::{convert_receipt, AccountReceipt};
+#[cfg(feature = "interaction-traits")]
 use crate::{
-    convert_receipt,
     data_store::{DataStoreRead, DataStoreWrite},
     interaction_traits::{
         AccountInherentInteraction, AccountPruningInteraction, AccountTransactionInteraction,
     },
-    Account, AccountReceipt, BlockState, InherentLogger,
+    reserved_balance::ReservedBalance,
+    Account, BlockState, InherentLogger, Log, TransactionLog,
 };
-use crate::{reserved_balance::ReservedBalance, Log, TransactionLog};
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
@@ -31,6 +32,7 @@ pub struct VestingContract {
     pub total_amount: Coin,
 }
 
+#[cfg(feature = "interaction-traits")]
 impl VestingContract {
     fn can_change_balance(
         &self,
@@ -72,6 +74,7 @@ impl VestingContract {
     }
 }
 
+#[cfg(feature = "interaction-traits")]
 impl AccountTransactionInteraction for VestingContract {
     fn create_new_contract(
         transaction: &Transaction,
@@ -236,6 +239,7 @@ impl AccountTransactionInteraction for VestingContract {
     }
 }
 
+#[cfg(feature = "interaction-traits")]
 impl AccountInherentInteraction for VestingContract {
     fn commit_inherent(
         &mut self,
@@ -259,6 +263,7 @@ impl AccountInherentInteraction for VestingContract {
     }
 }
 
+#[cfg(feature = "interaction-traits")]
 impl AccountPruningInteraction for VestingContract {
     fn can_be_pruned(&self) -> bool {
         self.balance.is_zero()

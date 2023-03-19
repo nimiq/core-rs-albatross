@@ -2,17 +2,24 @@ use beserial::{Deserialize, Serialize};
 use nimiq_bls::CompressedPublicKey as BlsPublicKey;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
-use nimiq_primitives::{account::AccountError, coin::Coin, policy::Policy};
+use nimiq_primitives::coin::Coin;
+#[cfg(feature = "interaction-traits")]
+use nimiq_primitives::{account::AccountError, policy::Policy};
 
-use crate::account::staking_contract::receipts::{
-    DeactivateValidatorReceipt, DeleteValidatorReceipt, ReactivateValidatorReceipt,
-    UnparkValidatorReceipt, UpdateValidatorReceipt,
+#[cfg(feature = "interaction-traits")]
+use crate::{
+    account::staking_contract::{
+        receipts::{
+            DeactivateValidatorReceipt, DeleteValidatorReceipt, ReactivateValidatorReceipt,
+            UnparkValidatorReceipt, UpdateValidatorReceipt,
+        },
+        store::{
+            StakingContractStoreReadOps, StakingContractStoreReadOpsExt, StakingContractStoreWrite,
+        },
+        StakingContract,
+    },
+    Log, RetireValidatorReceipt, TransactionLog,
 };
-use crate::account::staking_contract::store::{
-    StakingContractStoreReadOps, StakingContractStoreReadOpsExt, StakingContractStoreWrite,
-};
-use crate::account::staking_contract::StakingContract;
-use crate::{Log, RetireValidatorReceipt, TransactionLog};
 
 /// Struct representing a validator in the staking contract.
 /// Actions concerning a validator are:
@@ -87,6 +94,7 @@ pub struct Tombstone {
     pub num_remaining_stakers: u64,
 }
 
+#[cfg(feature = "interaction-traits")]
 impl StakingContract {
     /// Creates a new validator. The initial stake is always equal to the validator deposit
     /// and can only be retrieved by deleting the validator.

@@ -4,6 +4,7 @@ use nimiq_primitives::key_nibbles::KeyNibbles;
 
 use crate::account::staking_contract::validator::Tombstone;
 use crate::account::staking_contract::{Staker, Validator};
+#[cfg(feature = "interaction-traits")]
 use crate::data_store::DataStoreWrite;
 use crate::data_store_ops::DataStoreReadOps;
 
@@ -66,10 +67,12 @@ impl<'read, T: DataStoreReadOps> StakingContractStoreReadOps
     }
 }
 
+#[cfg(feature = "interaction-traits")]
 pub struct StakingContractStoreWrite<'write, 'store, 'tree, 'txn, 'env>(
     &'write mut DataStoreWrite<'store, 'tree, 'txn, 'env>,
 );
 
+#[cfg(feature = "interaction-traits")]
 impl<'write, 'store, 'tree, 'txn, 'env>
     StakingContractStoreWrite<'write, 'store, 'tree, 'txn, 'env>
 {
@@ -105,6 +108,7 @@ impl<'write, 'store, 'tree, 'txn, 'env>
     }
 }
 
+#[cfg(feature = "interaction-traits")]
 impl<'write, 'store, 'tree, 'txn, 'env> StakingContractStoreReadOps
     for StakingContractStoreWrite<'write, 'store, 'tree, 'txn, 'env>
 {

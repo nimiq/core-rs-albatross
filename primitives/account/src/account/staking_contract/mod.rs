@@ -21,12 +21,14 @@ use crate::{
 
 pub use receipts::*;
 pub use staker::Staker;
+#[cfg(feature = "interaction-traits")]
 pub use store::StakingContractStoreWrite;
 pub use validator::{Tombstone, Validator};
 
 mod receipts;
 mod staker;
 mod store;
+#[cfg(feature = "interaction-traits")]
 mod traits;
 mod validator;
 

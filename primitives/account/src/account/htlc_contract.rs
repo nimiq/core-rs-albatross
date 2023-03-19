@@ -1,19 +1,25 @@
 use beserial::{Deserialize, Serialize};
 use nimiq_keys::Address;
-use nimiq_primitives::account::{AccountError, AccountType};
+use nimiq_primitives::account::AccountError;
+#[cfg(feature = "interaction-traits")]
+use nimiq_primitives::account::AccountType;
 use nimiq_primitives::coin::Coin;
-use nimiq_transaction::account::htlc_contract::{
-    AnyHash, CreationTransactionData, HashAlgorithm, ProofType,
-};
+use nimiq_transaction::account::htlc_contract::{AnyHash, HashAlgorithm};
+#[cfg(feature = "interaction-traits")]
+use nimiq_transaction::account::htlc_contract::{CreationTransactionData, ProofType};
+#[cfg(feature = "interaction-traits")]
 use nimiq_transaction::{inherent::Inherent, SignatureProof, Transaction};
 
-use crate::data_store::{DataStoreRead, DataStoreWrite};
-use crate::interaction_traits::{
-    AccountInherentInteraction, AccountPruningInteraction, AccountTransactionInteraction,
-};
-use crate::reserved_balance::ReservedBalance;
+use crate::{convert_receipt, AccountReceipt};
+#[cfg(feature = "interaction-traits")]
 use crate::{
-    convert_receipt, Account, AccountReceipt, BlockState, InherentLogger, Log, TransactionLog,
+    data_store::{DataStoreRead, DataStoreWrite},
+    interaction_traits::{
+        AccountInherentInteraction, AccountPruningInteraction, AccountTransactionInteraction,
+        BlockState,
+    },
+    reserved_balance::ReservedBalance,
+    Account, InherentLogger, Log, TransactionLog,
 };
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
@@ -30,6 +36,7 @@ pub struct HashedTimeLockedContract {
     pub total_amount: Coin,
 }
 
+#[cfg(feature = "interaction-traits")]
 impl HashedTimeLockedContract {
     fn can_change_balance(
         &self,
@@ -137,6 +144,7 @@ impl HashedTimeLockedContract {
     }
 }
 
+#[cfg(feature = "interaction-traits")]
 impl AccountTransactionInteraction for HashedTimeLockedContract {
     fn create_new_contract(
         transaction: &Transaction,
@@ -348,6 +356,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
     }
 }
 
+#[cfg(feature = "interaction-traits")]
 impl AccountInherentInteraction for HashedTimeLockedContract {
     fn commit_inherent(
         &mut self,
@@ -371,6 +380,7 @@ impl AccountInherentInteraction for HashedTimeLockedContract {
     }
 }
 
+#[cfg(feature = "interaction-traits")]
 impl AccountPruningInteraction for HashedTimeLockedContract {
     fn can_be_pruned(&self) -> bool {
         self.balance.is_zero()
