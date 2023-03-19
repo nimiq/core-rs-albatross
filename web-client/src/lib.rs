@@ -28,7 +28,7 @@ use nimiq_network_interface::{
 };
 use nimiq_primitives::networks::NetworkId;
 
-use crate::address::Address;
+use crate::address::{Address, AddressAnyType};
 use crate::block::{PlainBlock, PlainBlockType};
 use crate::peer_info::PeerInfo;
 use crate::transaction::{
@@ -722,7 +722,7 @@ impl Client {
     #[wasm_bindgen(js_name = getTransactionReceiptsByAddress)]
     pub async fn get_transaction_receipts_by_address(
         &self,
-        address: Address,
+        address: &AddressAnyType,
         limit: Option<u16>,
         min_peers: Option<usize>,
     ) -> Result<PlainTransactionReceiptArrayType, JsError> {
@@ -738,7 +738,7 @@ impl Client {
             .inner
             .consensus_proxy()
             .request_transaction_receipts_by_address(
-                address.native(),
+                Address::from_any(address)?.take_native(),
                 min_peers.unwrap_or(1),
                 limit,
             )
@@ -762,7 +762,7 @@ impl Client {
     #[wasm_bindgen(js_name = getTransactionsByAddress)]
     pub async fn get_transactions_by_address(
         &self,
-        address: Address,
+        address: &AddressAnyType,
         since_block_height: Option<u32>,
         known_transaction_details: Option<PlainTransactionDetailsArrayType>,
         limit: Option<u16>,
@@ -798,7 +798,7 @@ impl Client {
             .inner
             .consensus_proxy()
             .request_transactions_by_address(
-                address.native(),
+                Address::from_any(address)?.take_native(),
                 since_block_height.unwrap_or(0),
                 known_hashes,
                 min_peers.unwrap_or(1),
