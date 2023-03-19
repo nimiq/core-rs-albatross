@@ -301,7 +301,7 @@ impl Transaction {
     /// The transaction's data as a byte array.
     #[wasm_bindgen(getter)]
     pub fn data(&self) -> Vec<u8> {
-        self.inner.data.to_vec()
+        self.inner.data.clone()
     }
 
     /// The transaction's signature proof as a byte array.
@@ -383,7 +383,32 @@ impl Transaction {
     }
 
     pub fn to_plain_transaction(&self) -> PlainTransaction {
-        PlainTransaction::from_transaction(&self.inner)
+        PlainTransaction {
+            transaction_hash: self.hash(),
+            format: self.format(),
+            sender: self.sender().to_plain(),
+            sender_type: self.sender_type(),
+            recipient: self.recipient().to_plain(),
+            recipient_type: self.recipient_type(),
+            value: self.value(),
+            fee: self.fee(),
+            fee_per_byte: self.fee_per_byte(),
+            validity_start_height: self.validity_start_height(),
+            network: to_network_id(self.network_id())
+                .ok()
+                .unwrap()
+                .to_string()
+                .to_lowercase(),
+            flags: self.flags(),
+            data: PlainTransactionData {
+                raw: hex::encode(self.data()),
+            },
+            proof: PlainTransactionProof {
+                raw: hex::encode(self.proof()),
+            },
+            size: self.serialized_size(),
+            valid: self.verify(None).is_ok(),
+        }
     }
 
     pub fn from_plain_transaction(plain: &PlainTransaction) -> Result<Transaction, JsError> {
@@ -473,34 +498,6 @@ pub struct PlainTransaction {
     /// Encodes if the transaction is valid, meaning the signature is valid and the `data` and `proof` fields
     /// follow the correct format for the transaction's recipient and sender type, respectively.
     pub valid: bool,
-}
-
-impl PlainTransaction {
-    /// Creates a PlainTransaction struct that can be serialized to JS from a native [nimiq_transaction::Transaction].
-    pub fn from_transaction(tx: &nimiq_transaction::Transaction) -> Self {
-        Self {
-            transaction_hash: tx.hash::<Blake2bHash>().to_hex(),
-            format: tx.format(),
-            sender: tx.sender.to_user_friendly_address(),
-            sender_type: tx.sender_type,
-            recipient: tx.recipient.to_user_friendly_address(),
-            recipient_type: tx.recipient_type,
-            value: tx.value.into(),
-            fee: tx.fee.into(),
-            fee_per_byte: tx.fee_per_byte(),
-            validity_start_height: tx.validity_start_height,
-            network: tx.network_id.to_string().to_lowercase(),
-            flags: tx.flags.into(),
-            data: PlainTransactionData {
-                raw: hex::encode(tx.data.clone()),
-            },
-            proof: PlainTransactionProof {
-                raw: hex::encode(tx.proof.clone()),
-            },
-            size: tx.serialized_size(),
-            valid: tx.verify(tx.network_id).is_ok(),
-        }
-    }
 }
 
 /// Describes the state of a transaction as known by the client.
@@ -621,9 +618,10 @@ impl PlainTransactionDetails {
         let executed_transaction = ext_tx.clone().into_transaction().unwrap();
 
         Self {
-            transaction: PlainTransaction::from_transaction(
-                executed_transaction.get_raw_transaction(),
-            ),
+            transaction: Transaction::from_native(
+                executed_transaction.get_raw_transaction().clone(),
+            )
+            .to_plain_transaction(),
             state,
             execution_result: Some(executed_transaction.succeeded()),
             block_height: Some(block_number),
