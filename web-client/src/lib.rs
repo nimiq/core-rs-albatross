@@ -25,6 +25,7 @@ use nimiq_network_interface::{
     network::{CloseReason, Network, NetworkEvent},
     Multiaddr,
 };
+use nimiq_primitives::networks::NetworkId;
 
 use crate::address::Address;
 use crate::block::{PlainBlock, PlainBlockType};
@@ -57,6 +58,7 @@ pub const MAX_TRANSACTIONS_BY_ADDRESS: u16 = 500;
 /// since not all configuration knobs are available when running inside a browser.
 #[wasm_bindgen]
 pub struct ClientConfiguration {
+    network_id: NetworkId,
     seed_nodes: Vec<String>,
     log_level: String,
 }
@@ -64,6 +66,7 @@ pub struct ClientConfiguration {
 impl Default for ClientConfiguration {
     fn default() -> Self {
         Self {
+            network_id: NetworkId::DevAlbatross,
             seed_nodes: vec![],
             log_level: "info".to_string(),
         }
@@ -78,6 +81,15 @@ impl ClientConfiguration {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         ClientConfiguration::default()
+    }
+
+    /// Sets the network ID the client should use. Input is case-insensitive.
+    ///
+    /// Possible values are `'TestAlbatross' | 'DevAlbatross'`.
+    /// Default is `'DevAlbatross'`.
+    pub fn network(&mut self, network: String) -> Result<(), JsError> {
+        self.network_id = NetworkId::from_str(&network)?;
+        Ok(())
     }
 
     /// Sets the list of seed nodes that are used to connect to the Nimiq Albatross network.
@@ -170,8 +182,7 @@ impl Client {
             .collect::<Vec<Seed>>();
 
         config.network.seeds = seed_nodes;
-
-        let network_id = from_network_id(config.network_id);
+        config.network_id = web_config.network_id;
 
         log::debug!(?config, "Final configuration");
 
@@ -197,7 +208,7 @@ impl Client {
 
         let client = Client {
             inner: client,
-            network_id,
+            network_id: from_network_id(web_config.network_id),
             listener_id: 0,
             consensus_changed_listeners: Rc::new(RefCell::new(HashMap::with_capacity(1))),
             head_changed_listeners: Rc::new(RefCell::new(HashMap::with_capacity(1))),
