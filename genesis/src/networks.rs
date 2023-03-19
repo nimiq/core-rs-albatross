@@ -5,9 +5,9 @@ use std::path::Path;
 
 use lazy_static::lazy_static;
 
+use beserial::Deserialize;
 #[cfg(feature = "genesis-override")]
-use beserial::Serialize;
-use beserial::{Deserialize, SerializeWithLength};
+use beserial::{Serialize, SerializeWithLength};
 use nimiq_block::Block;
 #[cfg(feature = "genesis-override")]
 use nimiq_database::volatile::VolatileEnvironment;
@@ -15,7 +15,6 @@ use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis_builder::{GenesisBuilder, GenesisBuilderError, GenesisInfo};
 use nimiq_hash::Blake2bHash;
 pub use nimiq_primitives::networks::NetworkId;
-#[cfg(feature = "accounts")]
 use nimiq_primitives::trie::TrieItem;
 
 #[derive(Clone, Debug)]
@@ -54,7 +53,6 @@ impl NetworkInfo {
         &self.genesis.hash
     }
 
-    #[cfg(feature = "accounts")]
     #[inline]
     pub fn genesis_accounts(&self) -> Vec<TrieItem> {
         use beserial::DeserializeWithLength;
@@ -81,7 +79,6 @@ fn read_genesis_config(config: &Path) -> Result<GenesisData, GenesisBuilderError
     } = GenesisBuilder::from_config_file(config)?.generate(env)?;
 
     let block = block.serialize_to_vec();
-    #[cfg(feature = "accounts")]
     let accounts = accounts.serialize_to_vec::<u32>();
 
     Ok(GenesisData {

@@ -24,7 +24,6 @@ lazy_static = "1.2"
 url = "2.3"
 
 beserial = { path = "../beserial", features = ["derive", "net"] }
-nimiq-account = { path = "../primitives/account", optional = true }
 nimiq-block = { path = "../primitives/block" }
 nimiq-bls = { path = "../bls" }
 nimiq-database = { path = "../database", optional = true }
@@ -47,6 +46,5 @@ nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 
 [features]
-accounts = ["nimiq-account"]
-default = ["accounts", "genesis-override"]
-genesis-override = ["accounts", "nimiq-database", "nimiq-genesis-builder"]
+default = ["genesis-override"]
+genesis-override = ["nimiq-database", "nimiq-genesis-builder"]

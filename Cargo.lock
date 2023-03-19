@@ -3648,7 +3648,6 @@ dependencies = [
  "bitflags",
  "hex",
  "lazy_static",
- "nimiq-account",
  "nimiq-block",
  "nimiq-bls",
  "nimiq-database",
