@@ -5,6 +5,7 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc, str::FromStr};
 use futures::StreamExt;
 use js_sys::{Array, Date, Promise};
 use log::level_filters::LevelFilter;
+use tsify::Tsify;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{spawn_local, JsFuture};
 
@@ -52,6 +53,25 @@ mod utils;
 
 /// Maximum number of transactions that can be requested by address
 pub const MAX_TRANSACTIONS_BY_ADDRESS: u16 = 500;
+
+/// Describes the state of consensus of the client.
+#[derive(Tsify)]
+#[serde(rename_all = "lowercase")]
+pub enum ConsensusState {
+    Connecting,
+    Syncing,
+    Established,
+}
+
+impl ConsensusState {
+    pub fn to_string(&self) -> &str {
+        match self {
+            ConsensusState::Connecting => "connecting",
+            ConsensusState::Syncing => "syncing",
+            ConsensusState::Established => "established",
+        }
+    }
+}
 
 /// Use this to provide initialization-time configuration to the Client.
 /// This is a simplified version of the configuration that is used for regular nodes,
@@ -511,16 +531,24 @@ impl Client {
     }
 
     fn setup_consensus_events(&self) {
-        let mut consensus_events = self.inner.consensus_proxy().subscribe_events();
+        let consensus = self.inner.consensus_proxy();
+        let network = self.inner.network();
 
-        let listeners_rc = Rc::clone(&self.consensus_changed_listeners);
-        let this = JsValue::null();
+        let mut consensus_events = consensus.subscribe_events();
+
+        let consensus_listeners = Rc::clone(&self.consensus_changed_listeners);
 
         spawn_local(async move {
             loop {
                 let state = match consensus_events.next().await {
-                    Some(Ok(ConsensusEvent::Established)) => Some("established"),
-                    Some(Ok(ConsensusEvent::Lost)) => Some("connecting"),
+                    Some(Ok(ConsensusEvent::Established)) => Some(ConsensusState::Established),
+                    Some(Ok(ConsensusEvent::Lost)) => {
+                        if network.peer_count() >= 1 {
+                            Some(ConsensusState::Syncing)
+                        } else {
+                            Some(ConsensusState::Connecting)
+                        }
+                    }
                     Some(Err(_)) => {
                         None // Ignore stream errors
                     }
@@ -529,25 +557,31 @@ impl Client {
                     }
                 };
 
-                if state.is_none() {
-                    continue;
-                }
-
-                let state = JsValue::from(state.unwrap());
-                for listener in listeners_rc.borrow().values() {
-                    let _ = listener.call1(&this, &state);
+                if let Some(state) = state {
+                    Client::fire_consensus_event(&consensus_listeners, state);
                 }
             }
         });
     }
 
-    fn setup_blockchain_events(&self) {
-        let blockchain = self.inner.consensus_proxy().blockchain;
-        let mut blockchain_events = blockchain.read().notifier_as_stream();
-
-        let listeners_rc = Rc::clone(&self.head_changed_listeners);
+    fn fire_consensus_event(
+        listeners: &Rc<RefCell<HashMap<usize, js_sys::Function>>>,
+        state: ConsensusState,
+    ) {
+        let state = JsValue::from(state.to_string());
 
         let this = JsValue::null();
+        for listener in listeners.borrow().values() {
+            let _ = listener.call1(&this, &state);
+        }
+    }
+
+    fn setup_blockchain_events(&self) {
+        let blockchain = self.inner.consensus_proxy().blockchain;
+
+        let mut blockchain_events = blockchain.read().notifier_as_stream();
+
+        let block_listeners = Rc::clone(&self.head_changed_listeners);
 
         spawn_local(async move {
             loop {
@@ -608,7 +642,8 @@ impl Client {
                 args.push(&reverted_blocks);
                 args.push(&adopted_blocks);
 
-                for listener in listeners_rc.borrow().values() {
+                let this = JsValue::null();
+                for listener in block_listeners.borrow().values() {
                     let _ = listener.apply(&this, &args);
                 }
             }
@@ -617,10 +652,12 @@ impl Client {
 
     fn setup_network_events(&self) {
         let network = self.inner.network();
+        let consensus = self.inner.consensus_proxy();
+
         let mut network_events = network.subscribe_events();
 
-        let listeners_rc = Rc::clone(&self.peer_changed_listeners);
-        let this = JsValue::null();
+        let peer_listeners = Rc::clone(&self.peer_changed_listeners);
+        let consensus_listeners = Rc::clone(&self.consensus_changed_listeners);
 
         spawn_local(async move {
             loop {
@@ -641,14 +678,28 @@ impl Client {
                     }
                 };
 
+                let peer_count = network.peer_count();
+
+                if !consensus.is_established() {
+                    if peer_count >= 1 {
+                        Client::fire_consensus_event(&consensus_listeners, ConsensusState::Syncing)
+                    } else {
+                        Client::fire_consensus_event(
+                            &consensus_listeners,
+                            ConsensusState::Connecting,
+                        )
+                    }
+                }
+
                 if let Some((peer_id, reason, peer_info)) = details {
                     let args = Array::new();
                     args.push(&peer_id.into());
                     args.push(&reason.into());
-                    args.push(&network.peer_count().into());
+                    args.push(&peer_count.into());
                     args.push(&peer_info.into());
 
-                    for listener in listeners_rc.borrow().values() {
+                    let this = JsValue::null();
+                    for listener in peer_listeners.borrow().values() {
                         let _ = listener.apply(&this, &args);
                     }
                 }
@@ -770,7 +821,7 @@ impl Client {
 
 #[wasm_bindgen]
 extern "C" {
-    #[wasm_bindgen(typescript_type = "(state: string) => any")]
+    #[wasm_bindgen(typescript_type = "(state: ConsensusState) => any")]
     pub type ConsensusChangedListener;
 
     #[wasm_bindgen(
