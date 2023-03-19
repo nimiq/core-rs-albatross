@@ -5,7 +5,7 @@ use tsify::Tsify;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_derive::TryFromJsValue;
 
-use beserial::Serialize;
+use beserial::{Deserialize, Serialize};
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId, policy::Policy};
 use nimiq_transaction::{
@@ -68,7 +68,7 @@ impl Transaction {
         recipient: &Address,
         recipient_type: Option<u8>,
         value: u64,
-        fee: Option<u64>,
+        fee: u64,
         data: Option<Vec<u8>>,
         flags: Option<u8>,
         validity_start_height: u32,
@@ -84,7 +84,7 @@ impl Transaction {
                 recipient.native_ref().clone(),
                 AccountType::try_from(recipient_type.unwrap_or(0))?,
                 Coin::try_from(value)?,
-                Coin::try_from(fee.unwrap_or(0))?,
+                Coin::try_from(fee)?,
                 data.unwrap_or(Vec::new()),
                 validity_start_height,
                 to_network_id(network_id)?,
@@ -96,7 +96,7 @@ impl Transaction {
                 AccountType::try_from(sender_type.unwrap_or(0))?,
                 AccountType::try_from(recipient_type.unwrap_throw())?,
                 Coin::try_from(value)?,
-                Coin::try_from(fee.unwrap_or(0))?,
+                Coin::try_from(fee)?,
                 validity_start_height,
                 to_network_id(network_id)?,
             )
@@ -107,7 +107,7 @@ impl Transaction {
                 recipient.native_ref().clone(),
                 AccountType::try_from(recipient_type.unwrap_or(3))?,
                 Coin::try_from(value)?,
-                Coin::try_from(fee.unwrap_or(0))?,
+                Coin::try_from(fee)?,
                 data.unwrap_throw(),
                 validity_start_height,
                 to_network_id(network_id)?,
@@ -322,10 +322,46 @@ impl Transaction {
         self.inner.serialized_size()
     }
 
+    /// Creates a JSON-compatible plain object representing the transaction.
     #[wasm_bindgen(js_name = toPlain)]
     pub fn to_plain(&self) -> Result<PlainTransactionType, JsError> {
         let plain = self.to_plain_transaction();
         Ok(serde_wasm_bindgen::to_value(&plain)?.into())
+    }
+
+    /// Parses a transaction from a {@link Transaction} instance, a plain object, or a serialized
+    /// string representation.
+    ///
+    /// Throws when a transaction cannot be parsed from the argument.
+    #[wasm_bindgen(js_name = fromAny)]
+    pub fn from_any(tx: &TransactionAnyType) -> Result<Transaction, JsError> {
+        let js_value: &JsValue = tx.unchecked_ref();
+
+        Transaction::try_from(js_value)
+            .or_else(|_| {
+                Transaction::from_plain_transaction(&serde_wasm_bindgen::from_value::<
+                    PlainTransaction,
+                >(js_value.clone())?)
+            })
+            .or_else(|_| {
+                Ok(Transaction::from_native(
+                    nimiq_transaction::Transaction::deserialize_from_vec(&hex::decode(
+                        serde_wasm_bindgen::from_value::<String>(js_value.to_owned())?,
+                    )?)?,
+                ))
+            })
+    }
+
+    /// Parses a transaction from a plain object.
+    ///
+    /// Throws when a transaction cannot be parsed from the argument.
+    #[wasm_bindgen(js_name = fromPlain)]
+    pub fn from_plain(plain: &PlainTransactionType) -> Result<Transaction, JsError> {
+        let js_value: &JsValue = plain.unchecked_ref();
+
+        Transaction::from_plain_transaction(&serde_wasm_bindgen::from_value::<PlainTransaction>(
+            js_value.to_owned(),
+        )?)
     }
 }
 
@@ -338,12 +374,34 @@ impl Transaction {
         &self.inner
     }
 
+    pub fn native(&self) -> nimiq_transaction::Transaction {
+        self.inner.clone()
+    }
+
     pub fn take_native(self) -> nimiq_transaction::Transaction {
         self.inner
     }
 
     pub fn to_plain_transaction(&self) -> PlainTransaction {
         PlainTransaction::from_transaction(&self.inner)
+    }
+
+    pub fn from_plain_transaction(plain: &PlainTransaction) -> Result<Transaction, JsError> {
+        let mut tx = Transaction::new(
+            &Address::from_string(&plain.sender)?,
+            Some(plain.sender_type.into()),
+            &Address::from_string(&plain.recipient)?,
+            Some(plain.recipient_type.into()),
+            plain.value,
+            plain.fee,
+            Some(hex::decode(&plain.data.raw)?),
+            Some(plain.flags),
+            plain.validity_start_height,
+            from_network_id(NetworkId::from_str(&plain.network)?),
+        )?;
+        tx.set_proof(hex::decode(&plain.proof.raw)?);
+
+        Ok(tx)
     }
 }
 
@@ -442,23 +500,6 @@ impl PlainTransaction {
             size: tx.serialized_size(),
             valid: tx.verify(tx.network_id).is_ok(),
         }
-    }
-
-    pub fn to_transaction(&self) -> Result<nimiq_transaction::Transaction, JsError> {
-        let mut tx = Transaction::new(
-            &Address::from_string(&self.sender)?,
-            Some(self.sender_type.into()),
-            &Address::from_string(&self.recipient)?,
-            Some(self.recipient_type.into()),
-            self.value,
-            Some(self.fee),
-            Some(hex::decode(&self.data.raw)?),
-            Some(self.flags),
-            self.validity_start_height,
-            from_network_id(NetworkId::from_str(&self.network)?),
-        )?;
-        tx.set_proof(hex::decode(&self.proof.raw)?);
-        Ok(tx.inner)
     }
 }
 
@@ -628,4 +669,7 @@ extern "C" {
 
     #[wasm_bindgen(typescript_type = "PlainTransactionReceipt[]")]
     pub type PlainTransactionReceiptArrayType;
+
+    #[wasm_bindgen(typescript_type = "Transaction | PlainTransaction | string")]
+    pub type TransactionAnyType;
 }

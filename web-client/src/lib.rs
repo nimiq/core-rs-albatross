@@ -18,10 +18,9 @@ pub use nimiq::{
     extras::{panic::initialize_panic_reporting, web_logging::initialize_web_logging},
 };
 
-use beserial::Deserialize;
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent};
 use nimiq_consensus::ConsensusEvent;
-use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{
     network::{CloseReason, Network, NetworkEvent},
     Multiaddr,
@@ -32,12 +31,12 @@ use crate::address::{Address, AddressAnyType};
 use crate::block::{PlainBlock, PlainBlockType};
 use crate::peer_info::PeerInfo;
 use crate::transaction::{
-    PlainTransaction, PlainTransactionDetails, PlainTransactionDetailsArrayType,
-    PlainTransactionDetailsType, PlainTransactionReceipt, PlainTransactionReceiptArrayType,
-    Transaction, TransactionState,
+    PlainTransactionDetails, PlainTransactionDetailsArrayType, PlainTransactionDetailsType,
+    PlainTransactionReceipt, PlainTransactionReceiptArrayType, Transaction, TransactionAnyType,
+    TransactionState,
 };
 use crate::transaction_builder::TransactionBuilder;
-use crate::utils::{from_network_id, to_network_id};
+use crate::utils::from_network_id;
 
 mod address;
 mod block;
@@ -403,39 +402,23 @@ impl Client {
     #[wasm_bindgen(js_name = sendTransaction)]
     pub async fn send_transaction(
         &self,
-        transaction: &SendTransactionAcceptedTypes,
+        transaction: &TransactionAnyType,
     ) -> Result<PlainTransactionDetailsType, JsError> {
-        let js_value = transaction.unchecked_ref();
+        let tx = Transaction::from_any(transaction)?;
 
-        let tx: nimiq_transaction::Transaction;
-        if let Ok(transaction) = Transaction::try_from(js_value) {
-            log::debug!("Detected instance of Transaction class");
-            tx = transaction.take_native();
-        } else if let Ok(plain_transaction) =
-            serde_wasm_bindgen::from_value::<PlainTransaction>(js_value.clone())
-        {
-            log::debug!("Detected PlainTransaction object");
-            tx = plain_transaction.to_transaction()?;
-        } else if let Ok(hex) = serde_wasm_bindgen::from_value::<String>(js_value.clone()) {
-            log::debug!("Detected string-serialized transaction");
-            tx = nimiq_transaction::Transaction::deserialize_from_vec(&hex::decode(hex)?)?;
-        } else {
-            return Err(JsError::new("Cannot parse the transaction argument"));
-        }
-
-        tx.verify(to_network_id(self.network_id)?)?;
+        tx.verify(Some(self.network_id))?;
 
         let current_height = self.get_head_height();
 
         self.inner
             .consensus_proxy()
-            .send_transaction(tx.clone())
+            .send_transaction(tx.native())
             .await?;
 
         // Until we have a proper way of subscribing & listening for inclusion events of transactions,
         // we poll the sender's transaction receipts until we find the transaction's hash.
         // TODO: Instead of polling, subscribe to the transaction's inclusion events, or the sender's tx events.
-        let tx_hash = tx.hash::<Blake2bHash>().to_hex();
+        let tx_hash = tx.hash();
         let start = Date::now();
 
         loop {
@@ -452,7 +435,7 @@ impl Client {
             let receipts = self
                 .inner
                 .consensus_proxy()
-                .request_transaction_receipts_by_address(tx.sender.clone(), 1, Some(10))
+                .request_transaction_receipts_by_address(tx.sender().take_native(), 1, Some(10))
                 .await?;
 
             for receipt in receipts {
@@ -483,14 +466,8 @@ impl Client {
         }
 
         // If the transaction did not get included, return it as TransactionState::New
-        let details = PlainTransactionDetails::new(
-            &Transaction::from_native(tx),
-            TransactionState::New,
-            None,
-            None,
-            None,
-            None,
-        );
+        let details =
+            PlainTransactionDetails::new(&tx, TransactionState::New, None, None, None, None);
         Ok(serde_wasm_bindgen::to_value(&details)?.into())
     }
 
@@ -833,7 +810,4 @@ extern "C" {
         typescript_type = "(peer_id: string, reason: 'joined' | 'left', peer_count: number, peer_info?: PeerInfo) => any"
     )]
     pub type PeerChangedListner;
-
-    #[wasm_bindgen(typescript_type = "Transaction | PlainTransaction | string")]
-    pub type SendTransactionAcceptedTypes;
 }
