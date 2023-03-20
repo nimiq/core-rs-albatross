@@ -204,14 +204,12 @@ impl Blockchain {
 
             // Commit block to AccountsTree and create the receipts.
             let block_state = BlockState::new(block_numbers[i], block_timestamps[i]);
-            let mut block_log =
-                BlockLogger::new_applied(Default::default(), block_numbers[i], block_timestamps[i]); // PITODO: Potentially integrate but fix hash
             let receipts = this.state.accounts.commit_batch(
                 &mut txn,
                 &txns,
                 &block_inherents[i],
                 &block_state,
-                &mut block_log,
+                &mut BlockLogger::empty(),
             );
 
             // Check if the receipts contain an error.

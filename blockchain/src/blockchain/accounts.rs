@@ -82,8 +82,8 @@ impl Blockchain {
                         block_logger,
                     )
                 } else {
+                    // We should not emit logs when syncing.
                     accounts.commit_incomplete(txn, &body.transactions, &inherents, &block_state)
-                    // PITODO we cannot emit logs when syncing
                 };
 
                 // Check if the receipts contain an error.

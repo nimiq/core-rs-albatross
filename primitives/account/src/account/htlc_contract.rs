@@ -354,7 +354,7 @@ impl AccountInherentInteraction for HashedTimeLockedContract {
         _inherent: &Inherent,
         _block_state: &BlockState,
         _data_store: DataStoreWrite,
-        _inherent_logger: InherentLogger,
+        _inherent_logger: &mut InherentLogger,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         Err(AccountError::InvalidForTarget)
     }
@@ -365,7 +365,7 @@ impl AccountInherentInteraction for HashedTimeLockedContract {
         _block_state: &BlockState,
         _receipt: Option<AccountReceipt>,
         _data_store: DataStoreWrite,
-        _inherent_logger: InherentLogger,
+        _inherent_logger: &mut InherentLogger,
     ) -> Result<(), AccountError> {
         Err(AccountError::InvalidForTarget)
     }

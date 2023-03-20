@@ -267,7 +267,7 @@ impl AccountInherentInteraction for Account {
         inherent: &Inherent,
         block_state: &BlockState,
         data_store: DataStoreWrite,
-        inherent_logger: InherentLogger,
+        inherent_logger: &mut InherentLogger,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         gen_account_match!(
             self,
@@ -285,7 +285,7 @@ impl AccountInherentInteraction for Account {
         block_state: &BlockState,
         receipt: Option<AccountReceipt>,
         data_store: DataStoreWrite,
-        inherent_logger: InherentLogger,
+        inherent_logger: &mut InherentLogger,
     ) -> Result<(), AccountError> {
         gen_account_match!(
             self,

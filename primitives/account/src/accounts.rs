@@ -326,8 +326,12 @@ impl Accounts {
         }
 
         for inherent in inherents {
-            let receipt =
-                self.commit_inherent(txn, inherent, block_state, block_logger.inherent_logger())?;
+            let receipt = self.commit_inherent(
+                txn,
+                inherent,
+                block_state,
+                &mut block_logger.inherent_logger(),
+            )?;
             receipts.inherents.push(receipt);
         }
 
@@ -350,7 +354,7 @@ impl Accounts {
 
         for inherent in inherents {
             let receipt =
-                self.commit_inherent(txn, inherent, block_state, InherentLogger::empty())?;
+                self.commit_inherent(txn, inherent, block_state, &mut InherentLogger::empty())?;
             receipts.inherents.push(receipt);
         }
 
@@ -607,7 +611,7 @@ impl Accounts {
         txn: &mut WriteTransaction,
         inherent: &Inherent,
         block_state: &BlockState,
-        inherent_logger: InherentLogger,
+        inherent_logger: &mut InherentLogger,
     ) -> Result<InherentOperationReceipt, AccountError> {
         let address = inherent.target();
         if self.mark_changed_if_missing(txn, address) {
@@ -667,7 +671,7 @@ impl Accounts {
                 inherent,
                 block_state,
                 receipt,
-                block_logger.inherent_logger(),
+                &mut block_logger.inherent_logger(),
             )?;
         }
 
@@ -823,7 +827,7 @@ impl Accounts {
         inherent: &Inherent,
         block_state: &BlockState,
         receipt: InherentOperationReceipt,
-        inherent_logger: InherentLogger,
+        inherent_logger: &mut InherentLogger,
     ) -> Result<(), AccountError> {
         // If the inherent operation failed, there is nothing to revert.
         let receipt = match receipt {

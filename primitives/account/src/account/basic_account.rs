@@ -148,7 +148,7 @@ impl AccountInherentInteraction for BasicAccount {
         inherent: &Inherent,
         _block_state: &BlockState,
         _data_store: DataStoreWrite,
-        mut inherent_logger: InherentLogger,
+        inherent_logger: &mut InherentLogger,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         match inherent {
             Inherent::Reward { value, target } => {
@@ -171,7 +171,7 @@ impl AccountInherentInteraction for BasicAccount {
         _block_state: &BlockState,
         _receipt: Option<AccountReceipt>,
         _data_store: DataStoreWrite,
-        mut inherent_logger: InherentLogger,
+        inherent_logger: &mut InherentLogger,
     ) -> Result<(), AccountError> {
         match inherent {
             Inherent::Reward { value, target } => {

@@ -378,7 +378,7 @@ impl AccountTransactionInteraction for StakingContract {
         // Parse transaction proof.
         let data = OutgoingStakingTransactionProof::parse(transaction)?;
 
-        let result = match data {
+        let receipt = match data {
             // In the case of a failed Delete Validator we will:
             // 1. Pay the fee from the validator deposit
             // 2. If the deposit reaches 0, we delete the validator
@@ -416,22 +416,41 @@ impl AccountTransactionInteraction for StakingContract {
                 // Update our balance.
                 self.balance -= transaction.fee;
 
-                Ok(receipt)
+                tx_logger.push_log(Log::ValidatorFeeDeduction {
+                    validator_address,
+                    fee: transaction.fee,
+                });
+
+                receipt
             }
             OutgoingStakingTransactionProof::RemoveStake { proof } => {
                 // Get the staker address from the proof.
                 let staker_address = proof.compute_signer();
 
                 // This is similar to an remove_stake operation except that what we deduct only the fee from the stake.
-                self.remove_stake(&mut store, &staker_address, transaction.fee, tx_logger)
-                    .map(|receipt| receipt.map(|receipt| receipt.into()))
+                // We do not want the fee payment to be displayed as a successful unstake in the block logs,
+                // which is why we pass an empty logger.
+                let receipt = self
+                    .remove_stake(
+                        &mut store,
+                        &staker_address,
+                        transaction.fee,
+                        &mut TransactionLog::empty(),
+                    )
+                    .map(|receipt| receipt.map(|receipt| receipt.into()))?;
+
+                tx_logger.push_log(Log::StakerFeeDeduction {
+                    staker_address,
+                    fee: transaction.fee,
+                });
+
+                receipt
             }
         };
 
-        // PITODO: Add new logs for deducting stake/validator deposit
         tx_logger.prepend_log(Log::pay_fee_log(transaction));
 
-        result
+        Ok(receipt)
     }
 
     fn revert_failed_transaction(
@@ -584,7 +603,7 @@ impl AccountInherentInteraction for StakingContract {
         inherent: &Inherent,
         block_state: &BlockState,
         mut data_store: DataStoreWrite,
-        mut inherent_logger: InherentLogger,
+        inherent_logger: &mut InherentLogger,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         match inherent {
             Inherent::Slash { slot } => {
@@ -710,7 +729,7 @@ impl AccountInherentInteraction for StakingContract {
         block_state: &BlockState,
         receipt: Option<AccountReceipt>,
         _data_store: DataStoreWrite,
-        mut inherent_logger: InherentLogger,
+        inherent_logger: &mut InherentLogger,
     ) -> Result<(), AccountError> {
         match inherent {
             Inherent::Slash { slot } => {

@@ -2133,7 +2133,7 @@ fn reward_inherents_not_allowed() {
             &inherent,
             &block_state,
             data_store.write(&mut db_txn),
-            InherentLogger::empty()
+            &mut InherentLogger::empty()
         ),
         Err(AccountError::InvalidForTarget)
     );
@@ -2162,13 +2162,13 @@ fn slash_inherents_work() {
 
     // Works in current epoch, current batch case.
     let mut logs = vec![];
-    let inherent_logger = InherentLogger::new(&mut logs);
+    let mut inherent_logger = InherentLogger::new(&mut logs);
     let receipt = staking_contract
         .commit_inherent(
             &inherent,
             &block_state,
             data_store.write(&mut db_txn),
-            inherent_logger,
+            &mut inherent_logger,
         )
         .expect("Failed to commit inherent");
 
@@ -2226,13 +2226,13 @@ fn slash_inherents_work() {
     let block_state = BlockState::new(Policy::blocks_per_batch() + 1, 500);
 
     let mut logs = vec![];
-    let inherent_logger = InherentLogger::new(&mut logs);
+    let mut inherent_logger = InherentLogger::new(&mut logs);
     let receipt = staking_contract
         .commit_inherent(
             &inherent,
             &block_state,
             data_store.write(&mut db_txn),
-            inherent_logger,
+            &mut inherent_logger,
         )
         .expect("Failed to commit inherent");
 
@@ -2290,13 +2290,13 @@ fn slash_inherents_work() {
     let block_state = BlockState::new(Policy::blocks_per_epoch() + 1, 1000);
 
     let mut logs = vec![];
-    let inherent_logger = InherentLogger::new(&mut logs);
+    let mut inherent_logger = InherentLogger::new(&mut logs);
     let receipt = staking_contract
         .commit_inherent(
             &inherent,
             &block_state,
             data_store.write(&mut db_txn),
-            inherent_logger,
+            &mut inherent_logger,
         )
         .expect("Failed to commit inherent");
 
@@ -2368,13 +2368,13 @@ fn finalize_batch_inherents_works() {
     let inherent = Inherent::FinalizeBatch;
 
     let mut logs = vec![];
-    let inherent_logger = InherentLogger::new(&mut logs);
+    let mut inherent_logger = InherentLogger::new(&mut logs);
     let receipt = staking_contract
         .commit_inherent(
             &inherent,
             &block_state,
             data_store.write(&mut db_txn),
-            inherent_logger,
+            &mut inherent_logger,
         )
         .expect("Failed to commit inherent");
 
@@ -2394,7 +2394,7 @@ fn finalize_batch_inherents_works() {
             &block_state,
             None,
             data_store.write(&mut db_txn),
-            InherentLogger::empty()
+            &mut InherentLogger::empty()
         ),
         Err(AccountError::InvalidForTarget)
     );
@@ -2433,13 +2433,13 @@ fn finalize_epoch_inherents_works() {
     let inherent = Inherent::FinalizeEpoch;
 
     let mut logs = vec![];
-    let inherent_logger = InherentLogger::new(&mut logs);
+    let mut inherent_logger = InherentLogger::new(&mut logs);
     let receipt = staking_contract
         .commit_inherent(
             &inherent,
             &block_state,
             data_store.write(&mut db_txn),
-            inherent_logger,
+            &mut inherent_logger,
         )
         .expect("Failed to commit inherent");
 
@@ -2484,7 +2484,7 @@ fn finalize_epoch_inherents_works() {
             &block_state,
             None,
             data_store.write(&mut db_txn),
-            InherentLogger::empty()
+            &mut InherentLogger::empty()
         ),
         Err(AccountError::InvalidForTarget)
     );
@@ -2660,9 +2660,15 @@ fn revert_slash_inherent(
     slot: u16,
 ) {
     let mut logs = vec![];
-    let inherent_logger = InherentLogger::new(&mut logs);
+    let mut inherent_logger = InherentLogger::new(&mut logs);
     staking_contract
-        .revert_inherent(inherent, block_state, receipt, data_store, inherent_logger)
+        .revert_inherent(
+            inherent,
+            block_state,
+            receipt,
+            data_store,
+            &mut inherent_logger,
+        )
         .expect("Failed to revert inherent");
 
     let mut event_block = block_state.number;

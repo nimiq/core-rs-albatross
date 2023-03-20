@@ -855,12 +855,14 @@ pub enum LogType {
     VestingCreate,
     CreateValidator,
     UpdateValidator,
+    ValidatorFeeDeduction,
     DeactivateValidator,
     ReactivateValidator,
     UnparkValidator,
     CreateStaker,
     Stake,
     UpdateStaker,
+    StakerFeeDeduction,
     DeleteValidator,
     Unstake,
     PayoutReward,
@@ -916,6 +918,8 @@ impl LogType {
             Log::Slash { .. } => Self::Slash,
             Log::RevertContract { .. } => Self::RevertContract,
             Log::FailedTransaction { .. } => Self::FailedTransaction,
+            Log::ValidatorFeeDeduction { .. } => Self::ValidatorFeeDeduction,
+            Log::StakerFeeDeduction { .. } => Self::StakerFeeDeduction,
         }
     }
 }

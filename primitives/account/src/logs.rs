@@ -83,6 +83,12 @@ pub enum Log {
     },
 
     #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
+    ValidatorFeeDeduction {
+        validator_address: Address,
+        fee: Coin,
+    },
+
+    #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
     DeactivateValidator { validator_address: Address },
 
     #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
@@ -104,6 +110,9 @@ pub enum Log {
         validator_address: Option<Address>,
         value: Coin,
     },
+
+    #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
+    StakerFeeDeduction { staker_address: Address, fee: Coin },
 
     #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
     UpdateStaker {
@@ -276,6 +285,10 @@ impl Log {
             } => validator_address == address,
             Log::RevertContract { contract_address } => contract_address == address,
             Log::FailedTransaction { from, to, .. } => from == address || to == address,
+            Log::ValidatorFeeDeduction {
+                validator_address, ..
+            } => validator_address == address,
+            Log::StakerFeeDeduction { staker_address, .. } => staker_address == address,
         }
     }
 }

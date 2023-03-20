@@ -110,7 +110,7 @@ pub trait AccountInherentInteraction: Sized {
         inherent: &Inherent,
         block_state: &BlockState,
         data_store: DataStoreWrite,
-        tx_logger: InherentLogger,
+        inherent_logger: &mut InherentLogger,
     ) -> Result<Option<AccountReceipt>, AccountError>;
 
     fn revert_inherent(
@@ -119,7 +119,7 @@ pub trait AccountInherentInteraction: Sized {
         block_state: &BlockState,
         receipt: Option<AccountReceipt>,
         data_store: DataStoreWrite,
-        tx_logger: InherentLogger,
+        inherent_logger: &mut InherentLogger,
     ) -> Result<(), AccountError>;
 }
 
