@@ -404,9 +404,9 @@ dependencies = [
 
 [[package]]
 name = "ark-test-curves"
-version = "0.4.1"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "04fe14f78bde3f1587dec9f1610fa85824219c1cbc879c4ff46b1a5b90eb582b"
+checksum = "83c22c2469f93dfcace9a98baabb7af1bc0c40de82c07cffbc0deba4acf41a90"
 dependencies = [
  "ark-ec",
  "ark-ff",
