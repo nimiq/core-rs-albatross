@@ -6,7 +6,7 @@ use rand::{rngs::StdRng, SeedableRng};
 
 use beserial::{Deserialize, Serialize};
 use nimiq_account::{
-    Account, Accounts, BasicAccount, BlockLogger, BlockState, InherentOperationReceipt,
+    Account, Accounts, BasicAccount, BlockLogger, BlockState, InherentOperationReceipt, Log,
     TransactionOperationReceipt, TransactionReceipt, VestingContract,
 };
 use nimiq_bls::KeyPair as BLSKeyPair;
@@ -938,21 +938,39 @@ fn it_commits_valid_and_failing_txns() {
     let signature_proof = SignatureProof::from(key_pair.public, signature);
     tx.proof = signature_proof.serialize_to_vec();
 
+    let mut block_logger = BlockLogger::empty();
     let receipts = accounts
         .commit(
             &mut db_txn,
             &vec![tx.clone()],
             &[],
             &block_state,
-            &mut BlockLogger::empty(),
+            &mut block_logger,
         )
         .unwrap();
+    let block_logs = block_logger.build(0);
 
     assert_eq!(
         receipts.transactions,
         vec![TransactionOperationReceipt::Err(
             TransactionReceipt::default()
         )]
+    );
+    assert!(block_logs.transaction_logs()[0].failed);
+    assert_eq!(
+        block_logs.transaction_logs()[0].logs,
+        vec![
+            Log::FailedTransaction {
+                from: tx.sender.clone(),
+                to: tx.recipient.clone(),
+                failure_reason: "Insufficient funds: needed 0.02200, but has balance 0.01000"
+                    .to_string()
+            },
+            Log::PayFee {
+                from: tx.sender.clone(),
+                fee: tx.fee
+            }
+        ]
     );
 
     db_txn.commit();

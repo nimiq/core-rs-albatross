@@ -300,11 +300,26 @@ pub struct TransactionLog {
     #[cfg_attr(feature = "serde-derive", serde(rename = "hash"))]
     pub tx_hash: Blake2bHash,
     pub logs: Vec<Log>,
+    pub failed: bool,
 }
 
 impl TransactionLog {
     pub fn new(tx_hash: Blake2bHash, logs: Vec<Log>) -> Self {
-        Self { tx_hash, logs }
+        Self {
+            tx_hash,
+            logs,
+            failed: false,
+        }
+    }
+
+    pub fn push_failed_log(&mut self, transaction: &Transaction, reason: String) {
+        self.failed = true;
+
+        self.push_log(Log::FailedTransaction {
+            from: transaction.sender.clone(),
+            to: transaction.recipient.clone(),
+            failure_reason: reason,
+        })
     }
 
     pub fn empty() -> Self {

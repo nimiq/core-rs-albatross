@@ -4,7 +4,8 @@ use rand::thread_rng;
 
 use beserial::{Deserialize, Serialize, SerializingError};
 use nimiq_account::{
-    Account, AccountTransactionInteraction, Accounts, BlockState, TransactionLog, VestingContract,
+    Account, AccountTransactionInteraction, Accounts, BlockState, Log, TransactionLog,
+    VestingContract,
 };
 use nimiq_database::{volatile::VolatileEnvironment, WriteTransaction};
 use nimiq_keys::{Address, KeyPair, PrivateKey};
@@ -185,14 +186,27 @@ fn it_can_create_contract_from_transaction() {
 
     let data_store = accounts.data_store(&transaction.contract_creation_address());
 
+    let mut tx_logger = TransactionLog::empty();
     let contract = VestingContract::create_new_contract(
         &transaction,
         Coin::ZERO,
         &block_state,
         data_store.write(&mut db_txn),
-        &mut TransactionLog::empty(),
+        &mut tx_logger,
     )
     .expect("Failed to create contract");
+
+    assert_eq!(
+        tx_logger.logs,
+        vec![Log::VestingCreate {
+            contract_address: transaction.contract_creation_address(),
+            owner: owner.clone(),
+            start_time: 0,
+            time_step: 1000,
+            step_amount: 100.try_into().unwrap(),
+            total_amount: 100.try_into().unwrap()
+        }]
+    );
 
     let contract = match contract {
         Account::Vesting(contract) => contract,
@@ -218,12 +232,13 @@ fn it_can_create_contract_from_transaction() {
 
     let data_store = accounts.data_store(&transaction.contract_creation_address());
 
+    let mut tx_logger = TransactionLog::empty();
     let contract = VestingContract::create_new_contract(
         &transaction,
         Coin::ZERO,
         &block_state,
         data_store.write(&mut db_txn),
-        &mut TransactionLog::empty(),
+        &mut tx_logger,
     )
     .expect("Failed to create contract");
 
@@ -252,12 +267,13 @@ fn it_can_create_contract_from_transaction() {
 
     let data_store = accounts.data_store(&transaction.contract_creation_address());
 
+    let mut tx_logger = TransactionLog::empty();
     let contract = VestingContract::create_new_contract(
         &transaction,
         Coin::ZERO,
         &block_state,
         data_store.write(&mut db_txn),
-        &mut TransactionLog::empty(),
+        &mut tx_logger,
     )
     .expect("Failed to create contract");
 
@@ -281,12 +297,13 @@ fn it_can_create_contract_from_transaction() {
 
     let data_store = accounts.data_store(&transaction.contract_creation_address());
 
+    let mut tx_logger = TransactionLog::empty();
     let result = VestingContract::create_new_contract(
         &transaction,
         Coin::ZERO,
         &block_state,
         data_store.write(&mut db_txn),
-        &mut TransactionLog::empty(),
+        &mut tx_logger,
     );
 
     assert_eq!(
@@ -317,23 +334,27 @@ fn it_does_not_support_incoming_transactions() {
 
     let mut contract = generate_contract();
 
+    let mut tx_logger = TransactionLog::empty();
     let result = contract.commit_incoming_transaction(
         &tx,
         &block_state,
         data_store.write(&mut db_txn),
-        &mut TransactionLog::empty(),
+        &mut tx_logger,
     );
 
+    assert_eq!(tx_logger.logs.len(), 0);
     assert_eq!(result, Err(AccountError::InvalidForRecipient));
 
+    let mut tx_logger = TransactionLog::empty();
     let result = contract.revert_incoming_transaction(
         &tx,
         &block_state,
         None,
         data_store.write(&mut db_txn),
-        &mut TransactionLog::empty(),
+        &mut tx_logger,
     );
 
+    assert_eq!(tx_logger.logs.len(), 0);
     assert_eq!(result, Err(AccountError::InvalidForRecipient));
 }
 
@@ -403,49 +424,83 @@ fn it_can_apply_and_revert_valid_transaction() {
     let signature_proof = SignatureProof::from(key_pair.public, signature);
     tx.proof = signature_proof.serialize_to_vec();
 
+    let mut tx_logger = TransactionLog::empty();
     let receipt = contract
         .commit_outgoing_transaction(
             &tx,
             &block_state,
             data_store.write(&mut db_txn),
-            &mut TransactionLog::empty(),
+            &mut tx_logger,
         )
         .expect("Failed to commit transaction");
 
     assert_eq!(contract.balance, 800.try_into().unwrap());
+    assert_eq!(
+        tx_logger.logs,
+        vec![
+            Log::PayFee {
+                from: tx.sender.clone(),
+                fee: tx.fee
+            },
+            Log::Transfer {
+                from: tx.sender.clone(),
+                to: tx.recipient.clone(),
+                amount: tx.value,
+                data: None
+            }
+        ]
+    );
 
+    let mut tx_logger = TransactionLog::empty();
     contract
         .revert_outgoing_transaction(
             &tx,
             &block_state,
             receipt,
             data_store.write(&mut db_txn),
-            &mut TransactionLog::empty(),
+            &mut tx_logger,
         )
         .expect("Failed to revert transaction");
 
     assert_eq!(contract, start_contract);
+    assert_eq!(
+        tx_logger.logs,
+        vec![
+            Log::PayFee {
+                from: tx.sender.clone(),
+                fee: tx.fee
+            },
+            Log::Transfer {
+                from: tx.sender.clone(),
+                to: tx.recipient.clone(),
+                amount: tx.value,
+                data: None
+            }
+        ]
+    );
 
     let block_state = BlockState::new(1, 200);
 
+    let mut tx_logger = TransactionLog::empty();
     let receipt = contract
         .commit_outgoing_transaction(
             &tx,
             &block_state,
             data_store.write(&mut db_txn),
-            &mut TransactionLog::empty(),
+            &mut tx_logger,
         )
         .expect("Failed to commit transaction");
 
     assert_eq!(contract.balance, 800.try_into().unwrap());
 
+    let mut tx_logger = TransactionLog::empty();
     contract
         .revert_outgoing_transaction(
             &tx,
             &block_state,
             receipt,
             data_store.write(&mut db_txn),
-            &mut TransactionLog::empty(),
+            &mut tx_logger,
         )
         .expect("Failed to revert transaction");
 
@@ -480,14 +535,16 @@ fn it_refuses_invalid_transactions() {
 
     let block_state = BlockState::new(1, 200);
 
+    let mut tx_logger = TransactionLog::empty();
     let result = contract.commit_outgoing_transaction(
         &tx,
         &block_state,
         data_store.write(&mut db_txn),
-        &mut TransactionLog::empty(),
+        &mut tx_logger,
     );
 
     assert_eq!(result, Err(AccountError::InvalidSignature));
+    assert_eq!(tx_logger.logs.len(), 0);
 
     // Funds still vested
     let signature = key_pair.sign(&tx.serialize_content()[..]);
@@ -496,11 +553,12 @@ fn it_refuses_invalid_transactions() {
 
     let block_state = BlockState::new(1, 100);
 
+    let mut tx_logger = TransactionLog::empty();
     let result = contract.commit_outgoing_transaction(
         &tx,
         &block_state,
         data_store.write(&mut db_txn),
-        &mut TransactionLog::empty(),
+        &mut tx_logger,
     );
 
     assert_eq!(
@@ -510,4 +568,5 @@ fn it_refuses_invalid_transactions() {
             balance: 100.try_into().unwrap()
         })
     );
+    assert_eq!(tx_logger.logs.len(), 0);
 }

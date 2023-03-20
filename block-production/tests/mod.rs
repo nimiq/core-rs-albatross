@@ -694,7 +694,7 @@ fn it_can_revert_failed_vesting_contract_transaction() {
 
     let bc = blockchain.upgradable_read();
 
-    //Now we create a redeem funds transaction that will fail
+    // Now we create a redeem funds transaction that will fail
     let redeem_tx = TransactionBuilder::new_redeem_vesting(
         &key_pair,
         tx.contract_creation_address(),

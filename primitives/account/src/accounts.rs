@@ -368,13 +368,16 @@ impl Accounts {
         block_state: &BlockState,
         tx_logger: &mut TransactionLog,
     ) -> Result<TransactionOperationReceipt, AccountError> {
-        if let Ok(receipt) = self.try_commit_transaction(txn, transaction, block_state, tx_logger) {
-            Ok(TransactionOperationReceipt::Ok(receipt))
-        } else {
-            tx_logger.clear();
-            let receipt =
-                self.commit_failed_transaction(txn, transaction, block_state, tx_logger)?;
-            Ok(TransactionOperationReceipt::Err(receipt))
+        match self.try_commit_transaction(txn, transaction, block_state, tx_logger) {
+            Ok(receipt) => Ok(TransactionOperationReceipt::Ok(receipt)),
+            Err(e) => {
+                tx_logger.clear();
+                tx_logger.push_failed_log(transaction, e.to_string());
+
+                let receipt =
+                    self.commit_failed_transaction(txn, transaction, block_state, tx_logger)?;
+                Ok(TransactionOperationReceipt::Err(receipt))
+            }
         }
     }
 

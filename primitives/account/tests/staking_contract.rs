@@ -527,12 +527,12 @@ fn unpark_validator_works() {
         )
         .expect("Failed to revert transaction");
 
-    // assert_eq!(
-    //     logs,
-    //     vec![Log::UnparkValidator {
-    //         validator_address: validator_address.clone()
-    //     }]
-    // );
+    assert_eq!(
+        tx_logger.logs,
+        vec![Log::UnparkValidator {
+            validator_address: validator_address.clone()
+        }]
+    );
 
     assert!(staking_contract.parked_set.contains(&validator_address));
     assert!(staking_contract
@@ -683,12 +683,12 @@ fn deactivate_validator_works() {
         )
         .expect("Failed to revert transaction");
 
-    // assert_eq!(
-    //     logs,
-    //     vec![Log::DeactivateValidator {
-    //         validator_address: validator_address.clone()
-    //     }]
-    // );
+    assert_eq!(
+        tx_logger.logs,
+        vec![Log::DeactivateValidator {
+            validator_address: validator_address.clone()
+        }]
+    );
 
     let validator = staking_contract
         .get_validator(&data_store.read(&db_txn), &validator_address)
@@ -868,12 +868,12 @@ fn reactivate_validator_works() {
         )
         .expect("Failed to revert transaction");
 
-    // assert_eq!(
-    //     logs,
-    //     vec![Log::ReactivateValidator {
-    //         validator_address: validator_address.clone()
-    //     }]
-    // );
+    assert_eq!(
+        tx_logger.logs,
+        vec![Log::ReactivateValidator {
+            validator_address: validator_address.clone()
+        }]
+    );
 
     let validator = staking_contract
         .get_validator(&data_store.read(&db_txn), &validator_address)
@@ -1036,12 +1036,12 @@ fn retire_validator_works() {
         )
         .expect("Failed to revert transaction");
 
-    // assert_eq!(
-    //     logs,
-    //     vec![Log::UnparkValidator {
-    //         validator_address: validator_address.clone()
-    //     }]
-    // );
+    assert_eq!(
+        tx_logger.logs,
+        vec![Log::DeactivateValidator {
+            validator_address: validator_address.clone()
+        }]
+    );
 
     assert!(staking_contract
         .active_validators
@@ -1300,25 +1300,25 @@ fn delete_validator_works() {
         )
         .expect("Failed to revert transaction");
 
-    // assert_eq!(
-    //     logs,
-    //     vec![
-    //         Log::PayFee {
-    //             from: tx.sender.clone(),
-    //             fee: tx.fee,
-    //         },
-    //         Log::Transfer {
-    //             from: tx.sender.clone(),
-    //             to: tx.recipient.clone(),
-    //             amount: tx.value,
-    //             data: None,
-    //         },
-    //         Log::DeleteValidator {
-    //             validator_address: validator_address.clone(),
-    //             reward_address: reward_address.clone(),
-    //         }
-    //     ]
-    // );
+    assert_eq!(
+        tx_logger.logs,
+        vec![
+            Log::PayFee {
+                from: tx.sender.clone(),
+                fee: tx.fee,
+            },
+            Log::Transfer {
+                from: tx.sender.clone(),
+                to: tx.recipient.clone(),
+                amount: tx.value,
+                data: None,
+            },
+            Log::DeleteValidator {
+                validator_address: validator_address.clone(),
+                reward_address: reward_address.clone(),
+            }
+        ]
+    );
 
     let validator = staking_contract
         .get_validator(&data_store.read(&db_txn), &validator_address)
@@ -1447,14 +1447,14 @@ fn create_staker_works() {
         )
         .expect("Failed to revert transaction");
 
-    // assert_eq!(
-    //     logs,
-    //     vec![Log::CreateStaker {
-    //         staker_address: staker_address.clone(),
-    //         validator_address: Some(validator_address.clone()),
-    //         value: tx.value,
-    //     }]
-    // );
+    assert_eq!(
+        tx_logger.logs,
+        vec![Log::CreateStaker {
+            staker_address: staker_address.clone(),
+            validator_address: Some(validator_address.clone()),
+            value: tx.value,
+        }]
+    );
 
     assert_eq!(
         staking_contract.get_staker(&data_store.read(&db_txn), &staker_address),
@@ -1566,14 +1566,14 @@ fn stake_works() {
         )
         .expect("Failed to revert transaction");
 
-    // assert_eq!(
-    //     logs,
-    //     vec![Log::Stake {
-    //         staker_address: staker_address.clone(),
-    //         validator_address: Some(validator_address.clone()),
-    //         value: tx.value,
-    //     }]
-    // );
+    assert_eq!(
+        tx_logger.logs,
+        vec![Log::Stake {
+            staker_address: staker_address.clone(),
+            validator_address: Some(validator_address.clone()),
+            value: tx.value,
+        }]
+    );
 
     let staker = staking_contract
         .get_staker(&data_store.read(&db_txn), &staker_address)
@@ -1808,14 +1808,14 @@ fn update_staker_works() {
         )
         .expect("Failed to revert transaction");
 
-    // assert_eq!(
-    //     logs,
-    //     vec![Log::UpdateStaker {
-    //         staker_address: staker_address.clone(),
-    //         old_validator_address: Some(other_validator_address.clone()),
-    //         new_validator_address: None,
-    //     }]
-    // );
+    assert_eq!(
+        tx_logger.logs,
+        vec![Log::UpdateStaker {
+            staker_address: staker_address.clone(),
+            old_validator_address: Some(other_validator_address.clone()),
+            new_validator_address: None,
+        }]
+    );
 
     let validator = staking_contract
         .get_validator(&data_store.read(&db_txn), &other_validator_address)
@@ -2033,26 +2033,26 @@ fn unstake_works() {
         )
         .expect("Failed to revert transaction");
 
-    // assert_eq!(
-    //     logs,
-    //     vec![
-    //         Log::PayFee {
-    //             from: tx.sender.clone(),
-    //             fee: tx.fee,
-    //         },
-    //         Log::Transfer {
-    //             from: tx.sender.clone(),
-    //             to: tx.recipient.clone(),
-    //             amount: tx.value,
-    //             data: None,
-    //         },
-    //         Log::Unstake {
-    //             staker_address: staker_address.clone(),
-    //             validator_address: Some(validator_address.clone()),
-    //             value: Coin::from_u64_unchecked(50_000_000),
-    //         }
-    //     ]
-    // );
+    assert_eq!(
+        tx_logger.logs,
+        vec![
+            Log::PayFee {
+                from: tx.sender.clone(),
+                fee: tx.fee,
+            },
+            Log::Transfer {
+                from: tx.sender.clone(),
+                to: tx.recipient.clone(),
+                amount: tx.value,
+                data: None,
+            },
+            Log::Unstake {
+                staker_address: staker_address.clone(),
+                validator_address: Some(validator_address.clone()),
+                value: Coin::from_u64_unchecked(50_000_000),
+            }
+        ]
+    );
 
     let staker = staking_contract
         .get_staker(&data_store.read(&db_txn), &staker_address)
@@ -2084,32 +2084,6 @@ fn unstake_works() {
         ))
     );
 }
-
-// Not applicable anymore
-// #[test]
-// fn zero_value_inherents_not_allowed() {
-//     let env = VolatileEnvironment::new(10).unwrap();
-//     let accounts = Accounts::new(env.clone());
-//     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
-//     let block_state = BlockState::new(2, 2);
-//     let mut db_txn = WriteTransaction::new(&env);
-//
-//     let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
-//
-//     let validator_address = validator_address();
-//
-//     let inherent = Inherent::Slash {
-//         ty: InherentType::Slash,
-//         target: validator_address,
-//         value: Coin::ZERO,
-//         data: vec![],
-//     };
-//
-//     assert_eq!(
-//         staking_contract.commit_inherent(&accounts_tree, &mut db_txn, &inherent, 2, 0),
-//         Err(AccountError::InvalidInherent)
-//     );
-// }
 
 #[test]
 fn reward_inherents_not_allowed() {

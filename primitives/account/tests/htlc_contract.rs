@@ -3,7 +3,7 @@ use std::convert::TryInto;
 use beserial::{Deserialize, Serialize, SerializingError};
 use nimiq_account::{
     Account, AccountPruningInteraction, AccountTransactionInteraction, Accounts, BlockState,
-    HashedTimeLockedContract, TransactionLog,
+    HashedTimeLockedContract, Log, TransactionLog,
 };
 use nimiq_database::{volatile::VolatileEnvironment, WriteTransaction};
 use nimiq_hash::{Blake2bHasher, HashOutput, Hasher, Sha256Hasher};
@@ -183,12 +183,13 @@ fn it_can_create_contract_from_transaction() {
     let block_state = BlockState::new(1, 1);
     let mut db_txn = WriteTransaction::new(&env);
 
+    let mut tx_logger = TransactionLog::empty();
     let htlc = HashedTimeLockedContract::create_new_contract(
         &transaction,
         Coin::ZERO,
         &block_state,
         data_store.write(&mut db_txn),
-        &mut TransactionLog::empty(),
+        &mut tx_logger,
     )
     .expect("Failed to create HTLC");
 
@@ -203,6 +204,19 @@ fn it_can_create_contract_from_transaction() {
     assert_eq!(htlc.hash_root, AnyHash::from([0u8; 32]));
     assert_eq!(htlc.hash_count, 2);
     assert_eq!(htlc.timeout, 1000);
+    assert_eq!(
+        tx_logger.logs,
+        vec![Log::HTLCCreate {
+            contract_address: transaction.contract_creation_address(),
+            sender: htlc.sender,
+            recipient: htlc.recipient,
+            hash_algorithm: htlc.hash_algorithm,
+            hash_root: htlc.hash_root,
+            hash_count: htlc.hash_count,
+            timeout: htlc.timeout,
+            total_amount: htlc.total_amount
+        }]
+    );
 }
 
 #[test]
@@ -225,25 +239,30 @@ fn it_does_not_support_incoming_transactions() {
     );
     tx.recipient_type = AccountType::HTLC;
 
+    let mut tx_logger = TransactionLog::empty();
     assert_eq!(
         htlc.commit_incoming_transaction(
             &tx,
             &block_state,
             data_store.write(&mut db_txn),
-            &mut TransactionLog::empty()
+            &mut tx_logger
         ),
         Err(AccountError::InvalidForRecipient)
     );
+    assert_eq!(tx_logger.logs.len(), 0);
+
+    let mut tx_logger = TransactionLog::empty();
     assert_eq!(
         htlc.revert_incoming_transaction(
             &tx,
             &block_state,
             None,
             data_store.write(&mut db_txn),
-            &mut TransactionLog::empty()
+            &mut tx_logger
         ),
         Err(AccountError::InvalidForRecipient)
     );
+    assert_eq!(tx_logger.logs.len(), 0);
 }
 
 fn prepare_outgoing_transaction() -> (
@@ -508,27 +527,69 @@ fn it_can_apply_and_revert_valid_transaction() {
 
     let mut htlc = start_contract.clone();
 
+    let mut tx_logger = TransactionLog::empty();
     let receipt = htlc
         .commit_outgoing_transaction(
             &tx,
             &block_state,
             data_store.write(&mut db_txn),
-            &mut TransactionLog::empty(),
+            &mut tx_logger,
         )
         .expect("Failed to commit transaction");
 
     assert!(htlc.can_be_pruned());
+    assert_eq!(
+        tx_logger.logs,
+        vec![
+            Log::PayFee {
+                from: tx.sender.clone(),
+                fee: tx.fee
+            },
+            Log::Transfer {
+                from: tx.sender.clone(),
+                to: tx.recipient.clone(),
+                amount: tx.value,
+                data: None
+            },
+            Log::HTLCRegularTransfer {
+                contract_address: tx.sender.clone(),
+                pre_image: pre_image.clone(),
+                hash_depth: 2
+            }
+        ]
+    );
 
+    let mut tx_logger = TransactionLog::empty();
     htlc.revert_outgoing_transaction(
         &tx,
         &block_state,
         receipt,
         data_store.write(&mut db_txn),
-        &mut TransactionLog::empty(),
+        &mut tx_logger,
     )
     .expect("Failed to revert transaction");
 
     assert_eq!(htlc, start_contract);
+    assert_eq!(
+        tx_logger.logs,
+        vec![
+            Log::PayFee {
+                from: tx.sender.clone(),
+                fee: tx.fee
+            },
+            Log::Transfer {
+                from: tx.sender.clone(),
+                to: tx.recipient.clone(),
+                amount: tx.value,
+                data: None
+            },
+            Log::HTLCRegularTransfer {
+                contract_address: tx.sender.clone(),
+                pre_image,
+                hash_depth: 2
+            }
+        ]
+    );
 
     // early resolve
     let mut proof = Vec::with_capacity(
@@ -539,27 +600,65 @@ fn it_can_apply_and_revert_valid_transaction() {
     Serialize::serialize(&sender_signature_proof, &mut proof);
     tx.proof = proof;
 
+    let mut tx_logger = TransactionLog::empty();
     let receipt = htlc
         .commit_outgoing_transaction(
             &tx,
             &block_state,
             data_store.write(&mut db_txn),
-            &mut TransactionLog::empty(),
+            &mut tx_logger,
         )
         .expect("Failed to commit transaction");
 
     assert!(htlc.can_be_pruned());
+    assert_eq!(
+        tx_logger.logs,
+        vec![
+            Log::PayFee {
+                from: tx.sender.clone(),
+                fee: tx.fee
+            },
+            Log::Transfer {
+                from: tx.sender.clone(),
+                to: tx.recipient.clone(),
+                amount: tx.value,
+                data: None
+            },
+            Log::HTLCEarlyResolve {
+                contract_address: tx.sender.clone(),
+            }
+        ]
+    );
 
+    let mut tx_logger = TransactionLog::empty();
     htlc.revert_outgoing_transaction(
         &tx,
         &block_state,
         receipt,
         data_store.write(&mut db_txn),
-        &mut TransactionLog::empty(),
+        &mut tx_logger,
     )
     .expect("Failed to revert transaction");
 
     assert_eq!(htlc, start_contract);
+    assert_eq!(
+        tx_logger.logs,
+        vec![
+            Log::PayFee {
+                from: tx.sender.clone(),
+                fee: tx.fee
+            },
+            Log::Transfer {
+                from: tx.sender.clone(),
+                to: tx.recipient.clone(),
+                amount: tx.value,
+                data: None
+            },
+            Log::HTLCEarlyResolve {
+                contract_address: tx.sender.clone(),
+            }
+        ]
+    );
 
     // timeout resolve
     let mut proof = Vec::with_capacity(1 + sender_signature_proof.serialized_size());
@@ -569,27 +668,65 @@ fn it_can_apply_and_revert_valid_transaction() {
 
     let block_state = BlockState::new(1, 101);
 
+    let mut tx_logger = TransactionLog::empty();
     let receipt = htlc
         .commit_outgoing_transaction(
             &tx,
             &block_state,
             data_store.write(&mut db_txn),
-            &mut TransactionLog::empty(),
+            &mut tx_logger,
         )
         .expect("Failed to commit transaction");
 
     assert!(htlc.can_be_pruned());
+    assert_eq!(
+        tx_logger.logs,
+        vec![
+            Log::PayFee {
+                from: tx.sender.clone(),
+                fee: tx.fee
+            },
+            Log::Transfer {
+                from: tx.sender.clone(),
+                to: tx.recipient.clone(),
+                amount: tx.value,
+                data: None
+            },
+            Log::HTLCTimeoutResolve {
+                contract_address: tx.sender.clone(),
+            }
+        ]
+    );
 
+    let mut tx_logger = TransactionLog::empty();
     htlc.revert_outgoing_transaction(
         &tx,
         &block_state,
         receipt,
         data_store.write(&mut db_txn),
-        &mut TransactionLog::empty(),
+        &mut tx_logger,
     )
     .expect("Failed to revert transaction");
 
     assert_eq!(htlc, start_contract);
+    assert_eq!(
+        tx_logger.logs,
+        vec![
+            Log::PayFee {
+                from: tx.sender.clone(),
+                fee: tx.fee
+            },
+            Log::Transfer {
+                from: tx.sender.clone(),
+                to: tx.recipient,
+                amount: tx.value,
+                data: None
+            },
+            Log::HTLCTimeoutResolve {
+                contract_address: tx.sender,
+            }
+        ]
+    );
 }
 
 #[test]
@@ -618,14 +755,16 @@ fn it_refuses_invalid_transactions() {
 
     let block_state = BlockState::new(1, 101);
 
+    let mut tx_logger = TransactionLog::empty();
     let result = htlc.commit_outgoing_transaction(
         &tx,
         &block_state,
         data_store.write(&mut db_txn),
-        &mut TransactionLog::empty(),
+        &mut tx_logger,
     );
 
     assert_eq!(result, Err(AccountError::InvalidForSender));
+    assert_eq!(tx_logger.logs.len(), 0);
 
     // regular transfer: hash mismatch
     let mut proof =
@@ -640,14 +779,16 @@ fn it_refuses_invalid_transactions() {
 
     let block_state = BlockState::new(1, 1);
 
+    let mut tx_logger = TransactionLog::empty();
     let result = htlc.commit_outgoing_transaction(
         &tx,
         &block_state,
         data_store.write(&mut db_txn),
-        &mut TransactionLog::empty(),
+        &mut tx_logger,
     );
 
     assert_eq!(result, Err(AccountError::InvalidForSender));
+    assert_eq!(tx_logger.logs.len(), 0);
 
     // regular transfer: invalid signature
     let mut proof =
@@ -660,14 +801,16 @@ fn it_refuses_invalid_transactions() {
     Serialize::serialize(&sender_signature_proof, &mut proof);
     tx.proof = proof;
 
+    let mut tx_logger = TransactionLog::empty();
     let result = htlc.commit_outgoing_transaction(
         &tx,
         &block_state,
         data_store.write(&mut db_txn),
-        &mut TransactionLog::empty(),
+        &mut tx_logger,
     );
 
     assert_eq!(result, Err(AccountError::InvalidSignature));
+    assert_eq!(tx_logger.logs.len(), 0);
 
     // regular transfer: underflow
     let mut proof =
@@ -685,11 +828,12 @@ fn it_refuses_invalid_transactions() {
     Serialize::serialize(&recipient_signature_proof, &mut proof);
     tx.proof = proof;
 
+    let mut tx_logger = TransactionLog::empty();
     let result = htlc.commit_outgoing_transaction(
         &tx,
         &block_state,
         data_store.write(&mut db_txn),
-        &mut TransactionLog::empty(),
+        &mut tx_logger,
     );
 
     assert_eq!(
@@ -699,6 +843,7 @@ fn it_refuses_invalid_transactions() {
             balance: 500.try_into().unwrap()
         })
     );
+    assert_eq!(tx_logger.logs.len(), 0);
 
     // early resolve: invalid signature
     let mut proof = Vec::with_capacity(
@@ -709,14 +854,16 @@ fn it_refuses_invalid_transactions() {
     Serialize::serialize(&recipient_signature_proof, &mut proof);
     tx.proof = proof;
 
+    let mut tx_logger = TransactionLog::empty();
     let result = htlc.commit_outgoing_transaction(
         &tx,
         &block_state,
         data_store.write(&mut db_txn),
-        &mut TransactionLog::empty(),
+        &mut tx_logger,
     );
 
     assert_eq!(result, Err(AccountError::InvalidSignature));
+    assert_eq!(tx_logger.logs.len(), 0);
 
     // timeout resolve: timeout not expired
     let mut proof = Vec::with_capacity(1 + sender_signature_proof.serialized_size());
@@ -724,14 +871,16 @@ fn it_refuses_invalid_transactions() {
     Serialize::serialize(&sender_signature_proof, &mut proof);
     tx.proof = proof;
 
+    let mut tx_logger = TransactionLog::empty();
     let result = htlc.commit_outgoing_transaction(
         &tx,
         &block_state,
         data_store.write(&mut db_txn),
-        &mut TransactionLog::empty(),
+        &mut tx_logger,
     );
 
     assert_eq!(result, Err(AccountError::InvalidForSender));
+    assert_eq!(tx_logger.logs.len(), 0);
 
     // timeout resolve: invalid signature
     let mut proof = Vec::with_capacity(1 + recipient_signature_proof.serialized_size());
@@ -741,12 +890,14 @@ fn it_refuses_invalid_transactions() {
 
     let block_state = BlockState::new(1, 101);
 
+    let mut tx_logger = TransactionLog::empty();
     let result = htlc.commit_outgoing_transaction(
         &tx,
         &block_state,
         data_store.write(&mut db_txn),
-        &mut TransactionLog::empty(),
+        &mut tx_logger,
     );
 
     assert_eq!(result, Err(AccountError::InvalidSignature));
+    assert_eq!(tx_logger.logs.len(), 0);
 }
