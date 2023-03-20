@@ -20,8 +20,8 @@ macro_rules! gen_blockchain_match {
     ($self: ident, $t: ident, $f: ident $(, $arg:expr )*) => {
         match $self {
             #[cfg(feature = "full")]
-            $t::Full(ref blockchain) => AbstractBlockchain::$f(&***blockchain, $( $arg ),*),
-            $t::Light(ref light_blockchain) => AbstractBlockchain::$f(&***light_blockchain, $( $arg ),*),
+            $t::Full(ref blockchain) => AbstractBlockchain::$f(&**blockchain, $( $arg ),*),
+            $t::Light(ref light_blockchain) => AbstractBlockchain::$f(&**light_blockchain, $( $arg ),*),
         }
     };
 }
@@ -77,11 +77,9 @@ impl BlockchainProxy {
     pub fn read(&self) -> BlockchainReadProxy {
         match self {
             #[cfg(feature = "full")]
-            BlockchainProxy::Full(blockchain) => {
-                BlockchainReadProxy::Full(Arc::new(blockchain.read()))
-            }
+            BlockchainProxy::Full(blockchain) => BlockchainReadProxy::Full(blockchain.read()),
             BlockchainProxy::Light(light_blockchain) => {
-                BlockchainReadProxy::Light(Arc::new(light_blockchain.read()))
+                BlockchainReadProxy::Light(light_blockchain.read())
             }
         }
     }
@@ -92,9 +90,9 @@ impl BlockchainProxy {
 pub enum BlockchainReadProxy<'a> {
     #[cfg(feature = "full")]
     /// Read locked access to a Full Blockchain
-    Full(Arc<RwLockReadGuard<'a, Blockchain>>),
+    Full(RwLockReadGuard<'a, Blockchain>),
     /// Read locked access to a Light Blockchain
-    Light(Arc<RwLockReadGuard<'a, LightBlockchain>>),
+    Light(RwLockReadGuard<'a, LightBlockchain>),
 }
 
 impl<'a> AbstractBlockchain for BlockchainReadProxy<'a> {
