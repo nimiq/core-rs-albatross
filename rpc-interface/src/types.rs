@@ -7,7 +7,7 @@ use std::{
 };
 
 use clap::ValueEnum;
-use nimiq_blockchain_interface::AbstractBlockchain;
+use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainError};
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DeserializeFromStr, DisplayFromStr, SerializeDisplay};
 
@@ -173,7 +173,7 @@ impl Block {
         blockchain: &BlockchainReadProxy,
         block: nimiq_block::Block,
         include_body: bool,
-    ) -> Self {
+    ) -> Result<Self, BlockchainError> {
         let block_number = block.block_number();
         let timestamp = block.timestamp();
         let size = block.serialized_size() as u32;
@@ -219,7 +219,7 @@ impl Block {
                     None
                 };
 
-                Block {
+                Ok(Block {
                     hash: macro_block.hash(),
                     size,
                     batch,
@@ -242,7 +242,7 @@ impl Block {
                         disabled_set,
                         justification: macro_block.justification.map(TendermintProof::from),
                     },
-                }
+                })
             }
 
             nimiq_block::Block::Micro(micro_block) => {
@@ -280,7 +280,7 @@ impl Block {
                     ),
                 };
 
-                Block {
+                Ok(Block {
                     hash: micro_block.hash(),
                     size,
                     batch,
@@ -296,11 +296,11 @@ impl Block {
                     history_hash: micro_block.header.history_root,
                     transactions,
                     additional_fields: BlockAdditionalFields::Micro {
-                        producer: Slot::from(blockchain, block_number, block_number),
+                        producer: Slot::from(blockchain, block_number, block_number)?,
                         fork_proofs,
                         justification: micro_block.justification.map(Into::into),
                     },
-                }
+                })
             }
         }
     }
@@ -347,16 +347,18 @@ pub struct Slot {
 }
 
 impl Slot {
-    pub fn from(blockchain: &BlockchainReadProxy, block_number: u32, offset: u32) -> Self {
-        let (validator, slot_number) = blockchain
-            .get_slot_owner_at(block_number, offset)
-            .expect("Couldn't calculate slot owner!");
+    pub fn from(
+        blockchain: &BlockchainReadProxy,
+        block_number: u32,
+        offset: u32,
+    ) -> Result<Self, BlockchainError> {
+        let (validator, slot_number) = blockchain.get_slot_owner_at(block_number, offset)?;
 
-        Slot {
+        Ok(Slot {
             slot_number,
             validator: validator.address,
             public_key: validator.voting_key.compressed().clone(),
-        }
+        })
     }
 }
 

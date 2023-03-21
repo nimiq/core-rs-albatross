@@ -41,8 +41,9 @@ fn get_block_by_hash(
 
     blockchain
         .get_block(hash, include_body)
-        .map(|block| Block::from_block(blockchain, block, include_body).into())
+        .and_then(|block| Block::from_block(blockchain, block, include_body))
         .map_err(|_| Error::BlockNotFoundByHash(hash.clone()))
+        .map(|block| block.into())
 }
 
 /// Tries to fetch a validator information given its address. It has an option to include a collection
@@ -140,7 +141,9 @@ impl BlockchainInterface for BlockchainDispatcher {
             .get_block_at(block_number, include_body)
             .map_err(|_| Error::BlockNotFound(block_number))?;
 
-        Ok(Block::from_block(&blockchain, block, include_body).into())
+        Ok(Block::from_block(&blockchain, block, include_body)
+            .map_err(|_| Error::BlockNotFound(block_number))?
+            .into())
     }
 
     /// Returns the block at the head of the main chain. It has an option to include the
@@ -152,12 +155,17 @@ impl BlockchainInterface for BlockchainDispatcher {
         let blockchain = self.blockchain.read();
         let block = blockchain.head();
 
-        Ok(Block::from_block(&blockchain, block, include_body.unwrap_or(false)).into())
+        Ok(
+            Block::from_block(&blockchain, block, include_body.unwrap_or(false))
+                .expect("Should always have the head block.")
+                .into(),
+        )
     }
 
     /// Returns the information for the slot owner at the given block height and offset. The
     /// offset is optional, it will default to getting the offset for the existing block
     /// at the given height.
+    /// We only have this information available for the last 2 batches at most.
     async fn get_slot_at(
         &mut self,
         block_number: u32,
@@ -184,7 +192,8 @@ impl BlockchainInterface for BlockchainDispatcher {
         };
 
         Ok(RPCData::with_blockchain(
-            Slot::from(&blockchain, block_number, offset),
+            Slot::from(&blockchain, block_number, offset)
+                .map_err(|_| Error::BlockNotFound(block_number))?,
             &blockchain,
         ))
     }
