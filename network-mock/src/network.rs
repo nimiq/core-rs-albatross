@@ -697,6 +697,10 @@ impl Network for MockNetwork {
         true
     }
 
+    fn peer_provides_services(&self, _peer_id: Self::PeerId, _services: Services) -> bool {
+        true
+    }
+
     fn get_peer_info(&self, peer_id: Self::PeerId) -> Option<PeerInfo> {
         self.peers.read().get(&peer_id).cloned()
     }

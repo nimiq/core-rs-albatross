@@ -12,17 +12,13 @@ use nimiq_block::BlockInclusionProof;
 use nimiq_blockchain::{Blockchain, CHUNK_SIZE};
 use nimiq_blockchain_interface::{AbstractBlockchain, Direction};
 use nimiq_blockchain_proxy::BlockchainProxy;
-use nimiq_network_interface::{
-    network::Network,
-    request::{Handle, MessageHandle},
-};
+use nimiq_network_interface::{network::Network, request::Handle};
 #[cfg(feature = "full")]
 use nimiq_primitives::policy::Policy;
-use tokio::sync::broadcast::Sender;
 
+use crate::messages::*;
 #[cfg(feature = "full")]
 use crate::sync::live::state_queue::{Chunk, RequestChunk, ResponseChunk};
-use crate::{consensus::RemoteEvent, messages::*};
 
 impl<N: Network> Handle<N, MacroChain, BlockchainProxy> for RequestMacroChain {
     fn handle(&self, _peer_id: N::PeerId, blockchain: &BlockchainProxy) -> MacroChain {
@@ -563,13 +559,5 @@ impl<N: Network> Handle<N, ResponseBlocksProof, Arc<RwLock<Blockchain>>> for Req
         ResponseBlocksProof {
             proof: Some(BlockInclusionProof { proof: block_proof }),
         }
-    }
-}
-impl<N: Network> MessageHandle<N, Sender<RemoteEvent>> for PushAdressNotification {
-    fn message_handle(&self, _peer_id: N::PeerId, remote_events: &Sender<RemoteEvent>) {
-        let event = RemoteEvent::InterestingReceipts(self.receipts.clone());
-
-        // We just send the events, we don't care if there is an error.
-        let _ = remote_events.send(event);
     }
 }

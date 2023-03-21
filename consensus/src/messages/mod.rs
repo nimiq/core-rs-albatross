@@ -6,7 +6,10 @@ use nimiq_block::{Block, BlockInclusionProof, MacroBlock};
 use nimiq_blockchain::HistoryTreeChunk;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
-use nimiq_network_interface::request::{MessageMarker, RequestCommon, RequestMarker};
+use nimiq_network_interface::{
+    network::Topic,
+    request::{RequestCommon, RequestMarker},
+};
 use nimiq_primitives::{key_nibbles::KeyNibbles, trie::trie_proof::TrieProof};
 use nimiq_transaction::history_proof::HistoryTreeProof;
 
@@ -324,27 +327,43 @@ pub struct RequestSubscribeToAddress {
 impl RequestCommon for RequestSubscribeToAddress {
     type Kind = RequestMarker;
     const TYPE_ID: u16 = 215;
-    type Response = ResponseRequestTransactionsByAddress;
+    type Response = ResponseSubscribeToAddress;
     const MAX_REQUESTS: u32 = MAX_REQUEST_SUBSCRIBE_BY_ADDRESS;
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct ResponseRequestTransactionsByAddress {
+pub struct ResponseSubscribeToAddress {
     /// Response used to specify if the request can be fullfiled or not
     pub result: Result<(), SubscribeToAdressesError>,
 }
 
-/// This request is used to push an event to a peer
+/// Different kind of events that could generate notifications
+#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+#[repr(u8)]
+pub enum NotificationEvent {
+    BlockchainExtend,
+}
+
+/// Interesting Addresses Notifications:
+/// A collection of transaction receipts that might be interesting for some peer
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct PushAdressNotification {
+pub struct AddressNotification {
+    /// The Event that generated this notification
+    pub event: NotificationEvent,
     /// Tuples of `(transaction_hash, block_number)`
     #[beserial(len_type(u16, limit = 128))]
     pub receipts: Vec<(Blake2bHash, u32)>,
 }
 
-impl RequestCommon for PushAdressNotification {
-    type Kind = MessageMarker;
-    const TYPE_ID: u16 = 216;
-    type Response = ();
-    const MAX_REQUESTS: u32 = MAX_ADDRESS_NOTIFICATIONS;
+/// Topic used to notify peers about transaction adddresses they are subscribed to
+/// The final notification is sent over a subtopic derived from this one, which is specific to each peer
+#[derive(Clone, Debug, Default)]
+pub struct AddressSubscriptionTopic;
+
+impl Topic for AddressSubscriptionTopic {
+    type Item = AddressNotification;
+
+    const BUFFER_SIZE: usize = 1024;
+    const NAME: &'static str = "transactions";
+    const VALIDATE: bool = true;
 }

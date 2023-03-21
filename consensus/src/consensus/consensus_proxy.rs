@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+use futures::stream::BoxStream;
 use tokio::sync::broadcast::Sender as BroadcastSender;
 use tokio_stream::wrappers::BroadcastStream;
 
@@ -24,20 +25,17 @@ use nimiq_transaction::{
 };
 
 use crate::messages::{
-    AddressSubscriptionOperation, RequestBlocksProof, RequestSubscribeToAddress,
-    RequestTransactionReceiptsByAddress, RequestTransactionsProof, RequestTrieProof,
-    ResponseBlocksProof,
+    AddressNotification, AddressSubscriptionOperation, AddressSubscriptionTopic,
+    RequestBlocksProof, RequestSubscribeToAddress, RequestTransactionReceiptsByAddress,
+    RequestTransactionsProof, RequestTrieProof, ResponseBlocksProof,
 };
 use crate::ConsensusEvent;
-
-use crate::RemoteEvent;
 
 pub struct ConsensusProxy<N: Network> {
     pub blockchain: BlockchainProxy,
     pub network: Arc<N>,
     pub(crate) established_flag: Arc<AtomicBool>,
     pub(crate) events: BroadcastSender<ConsensusEvent>,
-    pub(crate) remote_events: BroadcastSender<RemoteEvent>,
 }
 
 impl<N: Network> Clone for ConsensusProxy<N> {
@@ -47,7 +45,6 @@ impl<N: Network> Clone for ConsensusProxy<N> {
             network: Arc::clone(&self.network),
             established_flag: Arc::clone(&self.established_flag),
             events: self.events.clone(),
-            remote_events: self.remote_events.clone(),
         }
     }
 }
@@ -68,8 +65,18 @@ impl<N: Network> ConsensusProxy<N> {
         BroadcastStream::new(self.events.subscribe())
     }
 
-    pub fn subscribe_remote_events(&self) -> BroadcastStream<RemoteEvent> {
-        BroadcastStream::new(self.remote_events.subscribe())
+    /// Subscribe to remote address notification events
+    pub async fn subscribe_address_notifications(
+        &self,
+    ) -> BoxStream<(AddressNotification, N::PubsubId)> {
+        let txn_stream = self
+            .network
+            .subscribe_subtopic::<AddressSubscriptionTopic>(
+                self.network.get_local_peer_id().to_string(),
+            )
+            .await;
+
+        txn_stream.unwrap()
     }
 
     pub async fn request_transaction_receipts_by_address(
@@ -167,7 +174,7 @@ impl<N: Network> ConsensusProxy<N> {
         min_peers: usize,
     ) -> Result<Vec<<N as Network>::PeerId>, RequestError> {
         // First we tell the network to provide us with a vector that contains all the connected peers that support such services
-        // Note: If the network could not provide enough peers that satisfies our requirement, then an error would be returned
+        // Note: If the network could not provide enough peers that satisfy our requirement, then an error would be returned
         self.network
             .get_peers_by_services(services, min_peers)
             .await
@@ -457,23 +464,23 @@ impl<N: Network> ConsensusProxy<N> {
     ) -> Result<(), RequestError> {
         //If we are provided a peer_id we perform the request only to this specific peer
         let peers = if let Some(peer_id) = peer_id {
-            //TODO we need to check if this peer_id can satisfy our request
-            vec![peer_id]
+            if self
+                .network
+                .peer_provides_services(peer_id, Services::FULL_BLOCKS)
+            {
+                // Providing the specific peer can be used in cases where the light client receives notifications that a new peer joined the network
+                // and then it wants to subscribe to this new peer.
+                vec![peer_id]
+            } else {
+                vec![]
+            }
         } else {
-            // We tell the network to provide us with a vector that contains all the connected peers that support such services
-            // Note: If the network could not provide enough peers that satisfies our requirement, then an error would be returned
-            self.network
-                .get_peers_by_services(Services::MEMPOOL, min_peers)
-                .await
-                .map_err(|error| {
-                    log::error!(
-                        err = %error,
-                        "The transactions by address request couldn't be fulfilled"
-                    );
-
-                    RequestError::OutboundRequest(OutboundRequestError::SendError)
-                })?
+            // We tell the network to provide us with a vector that contains all the connected peers that support such services.
+            self.get_peers_for_service(Services::FULL_BLOCKS, min_peers)
+                .await?
         };
+
+        let mut sucess = false;
 
         // Subscribe to all peers that could provide the necessary services
         for peer_id in peers {
@@ -492,6 +499,7 @@ impl<N: Network> ConsensusProxy<N> {
                 Ok(response) => match response.result {
                     Ok(_) => {
                         //Done, we are subscribed at least to one peer, continue with the next one
+                        sucess = true;
                         continue;
                     }
                     Err(_) => {
@@ -505,6 +513,40 @@ impl<N: Network> ConsensusProxy<N> {
                     continue;
                 }
             }
+        }
+        if sucess {
+            Ok(())
+        } else {
+            Err(
+                nimiq_network_interface::request::RequestError::OutboundRequest(
+                    OutboundRequestError::NoReceiver,
+                ),
+            )
+        }
+    }
+
+    pub async fn unsubscribe_from_addresses(
+        &self,
+        addresses: Vec<Address>,
+        min_peers: usize,
+    ) -> Result<(), RequestError> {
+        // Unsubscribe to all peers
+        for peer_id in self
+            .get_peers_for_service(Services::FULL_BLOCKS, min_peers)
+            .await?
+        {
+            let _ = self
+                .network
+                .request::<RequestSubscribeToAddress>(
+                    RequestSubscribeToAddress {
+                        operation: AddressSubscriptionOperation::Unsubscribe,
+                        addresses: addresses.clone(),
+                    },
+                    peer_id,
+                )
+                .await;
+
+            // We don't care about the response, we just unsuscribe addresses from peers
         }
         Ok(())
     }

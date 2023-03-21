@@ -1,7 +1,8 @@
+use beserial::{Deserialize, Serialize};
 use futures::stream::BoxStream;
 use futures::StreamExt;
 use nimiq_hash::{Blake2bHash, Hash};
-use nimiq_network_interface::network::{NetworkEvent, SubscribeEvents};
+use nimiq_network_interface::network::{NetworkEvent, SubscribeEvents, Topic};
 use parking_lot::RwLock;
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
@@ -16,40 +17,70 @@ use nimiq_keys::Address;
 use nimiq_network_interface::request::Handle;
 use nimiq_network_interface::{network::Network, request::request_handler};
 
-use crate::messages::{AddressSubscriptionOperation, ResponseRequestTransactionsByAddress};
-use crate::messages::{PushAdressNotification, RequestSubscribeToAddress};
+use crate::messages::RequestSubscribeToAddress;
+use crate::messages::{AddressSubscriptionOperation, ResponseSubscribeToAddress};
 use crate::SubscribeToAdressesError::*;
 
 //The max number of peers that can be subscribed.
 pub const MAX_SUBSCRIBED_PEERS: usize = 5;
-//The max number of addresses, per peer, that can be subscribed
+//The max number of addresses that can be subscribed, per peer
 pub const MAX_SUBSCRIBED_PEERS_ADDRESSES: usize = 10;
 
-impl<N: Network>
-    Handle<N, ResponseRequestTransactionsByAddress, Arc<RwLock<RemoteEventDispatcherState<N>>>>
+/// Different kind of events that could generate notifications
+#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+#[repr(u8)]
+pub enum NotificationEvent {
+    BlockchainExtend,
+}
+
+/// Interesting Addresses Notifications:
+/// A collection of transaction receipts that might be interesting for some peer
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AddressNotification {
+    /// The Event that generated this notification
+    pub event: NotificationEvent,
+    /// Tuples of `(transaction_hash, block_number)`
+    #[beserial(len_type(u16, limit = 128))]
+    pub receipts: Vec<(Blake2bHash, u32)>,
+}
+
+/// Topic used to notify peers about transaction adddresses they are subscribed to
+/// The final notification is sent over a subtopic derived from this one, which is specific to each peer
+#[derive(Clone, Debug, Default)]
+pub struct AddressSubscriptionTopic;
+
+impl Topic for AddressSubscriptionTopic {
+    type Item = AddressNotification;
+
+    const BUFFER_SIZE: usize = 1024;
+    const NAME: &'static str = "transactions";
+    const VALIDATE: bool = true;
+}
+
+impl<N: Network> Handle<N, ResponseSubscribeToAddress, Arc<RwLock<RemoteEventDispatcherState<N>>>>
     for RequestSubscribeToAddress
 {
     fn handle(
         &self,
         peer_id: N::PeerId,
         state: &Arc<RwLock<RemoteEventDispatcherState<N>>>,
-    ) -> ResponseRequestTransactionsByAddress {
+    ) -> ResponseSubscribeToAddress {
         match self.operation {
             AddressSubscriptionOperation::Subscribe => {
-                if !state.read().contains_peer(&peer_id)
-                    && state.read().number_of_peers() > MAX_SUBSCRIBED_PEERS
-                {
-                    // If this is a subscription from a new peer and we already have to many peers we cannot accept new subscriptions
-                    return ResponseRequestTransactionsByAddress {
-                        result: Err(TooManyPeers),
-                    };
-                }
-
-                //TODO: handle properly how many addresses we want to support
-                if self.addresses.len() > MAX_SUBSCRIBED_PEERS_ADDRESSES {
-                    return ResponseRequestTransactionsByAddress {
-                        result: Err(TooManyAddresses),
-                    };
+                if let Some(peer_addreses) = state.read().subscribed_peers.get(&peer_id) {
+                    // We need to check if this peer already has too many addresses subscribed to us
+                    if peer_addreses.len() > MAX_SUBSCRIBED_PEERS_ADDRESSES {
+                        return ResponseSubscribeToAddress {
+                            result: Err(TooManyAddresses),
+                        };
+                    }
+                } else {
+                    // If this is a new peer, we need to check if we can attend it
+                    if state.read().number_of_peers() > MAX_SUBSCRIBED_PEERS {
+                        return ResponseSubscribeToAddress {
+                            result: Err(TooManyPeers),
+                        };
+                    }
                 }
 
                 state
@@ -58,9 +89,9 @@ impl<N: Network>
             }
 
             AddressSubscriptionOperation::Unsubscribe => {
-                //If we don't know this peer we just unsuscribe
+                //If we don't know this peer, we don't do anything
                 if !state.read().contains_peer(&peer_id) {
-                    return ResponseRequestTransactionsByAddress {
+                    return ResponseSubscribeToAddress {
                         result: Err(InvalidOperation),
                     };
                 }
@@ -70,7 +101,7 @@ impl<N: Network>
                     .remove_addresses(&peer_id, self.addresses.clone());
             }
         }
-        ResponseRequestTransactionsByAddress { result: Ok(()) }
+        ResponseSubscribeToAddress { result: Ok(()) }
     }
 }
 
@@ -140,8 +171,10 @@ impl<N: Network> RemoteEventDispatcherState<N> {
                 peer_addresses.remove(address);
             }
 
-            // If this peer doesn't have any interesting address left, then we just remove it
-            self.subscribed_peers.remove(peer_id);
+            if peer_addresses.is_empty() {
+                // If this peer doesn't have any interesting address left, then we just remove it
+                self.subscribed_peers.remove(peer_id);
+            }
         }
 
         // Remove the peer from the addresses
@@ -256,11 +289,12 @@ impl<N: Network> Future for RemoteEventDispatcher<N> {
                             tokio::spawn({
                                 async move {
                                     network
-                                        .message::<PushAdressNotification>(
-                                            PushAdressNotification {
+                                        .publish_subtopic::<AddressSubscriptionTopic>(
+                                            peer_id.to_string(),
+                                            AddressNotification {
                                                 receipts: receipts.clone(),
+                                                event: NotificationEvent::BlockchainExtend,
                                             },
-                                            peer_id,
                                         )
                                         .await
                                         .unwrap();

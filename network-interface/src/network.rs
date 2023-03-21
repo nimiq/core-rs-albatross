@@ -103,6 +103,9 @@ pub trait Network: Send + Sync + Unpin + 'static {
     /// Returns true when the given peer provides the services flags that are required by us
     fn peer_provides_required_services(&self, peer_id: Self::PeerId) -> bool;
 
+    /// Returns true when the given peer provides the services flags that are required by us
+    fn peer_provides_services(&self, peer_id: Self::PeerId, services: Services) -> bool;
+
     /// Disconnects a peer with a close reason
     async fn disconnect_peer(&self, peer_id: Self::PeerId, close_reason: CloseReason);
 

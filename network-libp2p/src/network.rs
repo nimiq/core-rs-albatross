@@ -1777,6 +1777,15 @@ impl NetworkInterface for Network {
         }
     }
 
+    fn peer_provides_services(&self, peer_id: PeerId, services: Services) -> bool {
+        if let Some(peer_info) = self.connected_peers.read().get(&peer_id) {
+            peer_info.get_services().contains(services)
+        } else {
+            // If we don't know the peer we return false
+            false
+        }
+    }
+
     async fn get_peers_by_services(
         &self,
         services: Services,
