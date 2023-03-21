@@ -426,6 +426,9 @@ where
             #[cfg(not(feature = "metrics"))]
             tokio::spawn({
                 async move {
+                    // The mempool is not updated while consensus is lost.
+                    // Thus, we need to check all transactions if they are still valid.
+                    mempool.mempool_update_full();
                     mempool.start_executors(network, None, None).await;
                 }
             });
@@ -434,6 +437,10 @@ where
                 let mempool_monitor = self.mempool_monitor.clone();
                 let ctrl_mempool_monitor = self.control_mempool_monitor.clone();
                 async move {
+                    // The mempool is not updated while consensus is lost.
+                    // Thus, we need to check all transactions if they are still valid.
+                    mempool.mempool_update_full();
+
                     mempool
                         .start_executors(network, Some(mempool_monitor), Some(ctrl_mempool_monitor))
                         .await;

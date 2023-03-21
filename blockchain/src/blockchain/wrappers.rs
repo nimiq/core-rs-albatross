@@ -130,8 +130,13 @@ impl Blockchain {
         self.state.accounts.size()
     }
 
-    pub fn get_account(&self, address: &Address) -> Account {
-        self.state.accounts.get_complete(address, None)
+    pub fn get_account_if_complete(&self, address: &Address) -> Option<Account> {
+        if let Ok(account) = self.state.accounts.get(address, None) {
+            Some(account)
+        } else {
+            warn!("Could not get account for address");
+            None
+        }
     }
 
     pub fn reserve_balance(

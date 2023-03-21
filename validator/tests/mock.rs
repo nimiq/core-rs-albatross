@@ -17,7 +17,8 @@ use nimiq_network_interface::{
     request::{MessageMarker, RequestCommon},
 };
 use nimiq_network_libp2p::Network;
-use nimiq_network_mock::MockHub;
+use nimiq_network_mock::{MockHub, MockNetwork};
+use nimiq_primitives::{coin::Coin, networks::NetworkId};
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     test_network::TestNetwork,
@@ -25,6 +26,7 @@ use nimiq_test_utils::{
         build_validator, build_validators, pop_validator_for_slot, seeded_rng, validator_for_slot,
     },
 };
+use nimiq_transaction_builder::TransactionBuilder;
 use nimiq_validator::aggregation::skip_block::SignedSkipBlockMessage;
 
 #[derive(Debug, Deserialize, Serialize)]

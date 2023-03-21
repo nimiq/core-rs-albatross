@@ -152,15 +152,10 @@ impl MerkleRadixTrie {
     /// Returns the root hash of the Merkle Radix Trie.
     pub fn root_hash_assert(&self, txn: &Transaction) -> Blake2bHash {
         let root = self.get_root(txn).unwrap();
-        let is_incomplete = root
-            .root_data
-            .as_ref()
-            .map(|data| data.incomplete.is_some())
-            .unwrap_or(false);
 
         // We should refuse to return a hash for a completely empty but incomplete trie.
         assert!(
-            !is_incomplete || root.has_children(),
+            self.is_complete(txn) || root.has_children(),
             "Cannot compute hash on an empty, incomplete trie"
         );
 
@@ -170,21 +165,16 @@ impl MerkleRadixTrie {
     /// Returns the root hash of the Merkle Radix Trie if the trie is complete.
     pub fn root_hash(&self, txn: &Transaction) -> Option<Blake2bHash> {
         let root = self.get_root(txn).unwrap();
-        let is_incomplete = root
-            .root_data
-            .as_ref()
-            .map(|data| data.incomplete.is_some())
-            .unwrap_or(false);
 
         // We should refuse to return a hash for a completely empty but incomplete trie.
-        if is_incomplete && !root.has_children() {
+        if !self.is_complete(txn) && !root.has_children() {
             return None;
         }
 
         let root_hash = root.hash();
 
         // Make sure the root hash can only be None if the trie is incomplete.
-        assert!(root_hash.is_some() || is_incomplete);
+        assert!(root_hash.is_some() || !self.is_complete(txn));
 
         root_hash
     }

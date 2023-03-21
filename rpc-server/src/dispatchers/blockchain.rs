@@ -492,13 +492,17 @@ impl BlockchainInterface for BlockchainDispatcher {
     ) -> RPCResult<Account, BlockchainState, Self::Error> {
         let blockchain_proxy = self.blockchain.read();
         if let BlockchainReadProxy::Full(ref blockchain) = blockchain_proxy {
-            let account = blockchain.get_account(&address);
-            Account::try_from_account(
-                address,
-                account,
-                BlockchainState::new(blockchain.block_number(), blockchain.head_hash()),
-            )
-            .map_err(Error::Core)
+            if let Some(account) = blockchain.get_account_if_complete(&address) {
+                Account::try_from_account(
+                    address,
+                    account,
+                    BlockchainState::new(blockchain.block_number(), blockchain.head_hash()),
+                )
+                .map_err(Error::Core)
+            } else {
+                log::warn!("Could not get account for address");
+                return Err(Error::NoConsensus);
+            }
         } else {
             Err(Error::NotSupportedForLightBlockchain)
         }
@@ -510,7 +514,12 @@ impl BlockchainInterface for BlockchainDispatcher {
     ) -> RPCResult<Vec<Validator>, BlockchainState, Self::Error> {
         let blockchain_proxy = self.blockchain.read();
         if let BlockchainReadProxy::Full(ref blockchain) = blockchain_proxy {
-            let staking_contract = blockchain.get_staking_contract();
+            let staking_contract =
+                if let Some(contract) = blockchain.get_staking_contract_if_complete() {
+                    contract
+                } else {
+                    return Err(Error::NoConsensus);
+                };
 
             let mut active_validators = vec![];
 

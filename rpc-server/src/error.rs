@@ -82,6 +82,9 @@ pub enum Error {
     #[error("Invalid argument: {0}")]
     InvalidArgument(String),
 
+    #[error("No consensus")]
+    NoConsensus,
+
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 }

@@ -30,6 +30,8 @@ pub enum VerifyErr {
     Known,
     #[error("Transaction is filtered")]
     Filtered,
+    #[error("Can't verify transaction without consensus")]
+    NoConsensus,
 }
 
 /// Verifies a transaction and adds it to the mempool.

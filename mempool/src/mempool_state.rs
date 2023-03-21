@@ -65,7 +65,11 @@ impl MempoolState {
         }
 
         // Reserve the balance necessary for this transaction on the sender account.
-        let sender_account = blockchain.get_account(&tx.sender);
+        let sender_account = if let Some(account) = blockchain.get_account_if_complete(&tx.sender) {
+            account
+        } else {
+            return Err(VerifyErr::NoConsensus);
+        };
         if let Some(sender_state) = self.state_by_sender.get_mut(&tx.sender) {
             let reserved_balance = &mut sender_state.reserved_balance;
             blockchain
@@ -120,7 +124,13 @@ impl MempoolState {
 
         if let Some(tx) = tx {
             if let Some(sender_state) = self.state_by_sender.get_mut(&tx.sender) {
-                let sender_account = blockchain.get_account(&tx.sender);
+                let sender_account =
+                    if let Some(account) = blockchain.get_account_if_complete(&tx.sender) {
+                        account
+                    } else {
+                        warn!("Could not get account for address");
+                        return None;
+                    };
                 blockchain
                     .release_balance(&sender_account, &tx, &mut sender_state.reserved_balance)
                     .expect("Failed to release balance");

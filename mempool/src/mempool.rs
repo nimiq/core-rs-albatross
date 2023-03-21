@@ -13,6 +13,7 @@ use nimiq_block::Block;
 use nimiq_blockchain::{Blockchain, TransactionVerificationCache};
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_keys::Address;
 use nimiq_network_interface::network::{Network, Topic};
 use nimiq_transaction::{ControlTransactionTopic, Transaction, TransactionTopic};
 
@@ -315,11 +316,7 @@ impl Mempool {
         let mut mempool_state = self.state.write();
 
         // First remove the transactions that are no longer valid due to age.
-        let next_block_number = blockchain.block_number() + 1;
-        let expired_txns = mempool_state.get_expired_txns(next_block_number);
-        for tx_hash in expired_txns {
-            mempool_state.remove(&blockchain, &tx_hash, EvictionReason::Expired);
-        }
+        self.prune_expired_transactions(&blockchain, &mut mempool_state);
 
         // Now iterate over the transactions in the adopted blocks:
         //  if transaction was known:
@@ -359,33 +356,7 @@ impl Mempool {
 
         // Update all sender balances that were affected by the adopted blocks.
         // Remove the transactions that have become invalid.
-        for address in affected_senders {
-            // The sender_state does not exist anymore if all transactions from this sender have
-            // been mined.
-            let mut sender_state = match mempool_state.state_by_sender.remove(&address) {
-                Some(state) => state,
-                None => continue,
-            };
-            sender_state.reserved_balance = ReservedBalance::new(address.clone());
-
-            // TODO: We should have per sender transactions ordered by fee to try to
-            //       keep the ones with higher fee
-            let sender_account = blockchain.get_account(&address);
-            sender_state.txns.retain(|tx_hash| {
-                let tx = mempool_state.get(tx_hash).unwrap();
-                let still_valid = blockchain
-                    .reserve_balance(&sender_account, tx, &mut sender_state.reserved_balance)
-                    .is_ok();
-                if !still_valid {
-                    mempool_state.remove(&blockchain, tx_hash, EvictionReason::Invalid);
-                }
-                still_valid
-            });
-
-            if !sender_state.txns.is_empty() {
-                mempool_state.state_by_sender.insert(address, sender_state);
-            }
-        }
+        Mempool::recompute_sender_balances(affected_senders, &blockchain, &mut mempool_state);
 
         // Iterate over the transactions in the reverted blocks,
         // what we need to know is if we need to add back the transaction into the mempool
@@ -403,6 +374,7 @@ impl Mempool {
                     }
 
                     // Check if transaction is still valid.
+                    let next_block_number = blockchain.block_number() + 1;
                     if !tx.is_valid_at(next_block_number) {
                         continue;
                     }
@@ -416,6 +388,91 @@ impl Mempool {
                     mempool_state.put(&blockchain, tx, TxPriority::Medium).ok();
                 }
             }
+        }
+    }
+
+    /// Get the mempool into a consistent and up-to-date state.
+    /// Needed after the consensus was lost and the mempool didn't receive any information during that time
+    /// - Removes transactions that expired, that were included in a block already or for which the sender is lacking funds by now.
+    /// - Recompute reserved balances.
+    pub fn mempool_update_full(&self) {
+        let blockchain = self.blockchain.read();
+        let mut mempool_state = self.state.write();
+
+        self.prune_expired_transactions(&blockchain, &mut mempool_state);
+
+        // Check for all transactions whether they have been included already.
+        for (tx_hash, _) in &mempool_state.regular_transactions.transactions.clone() {
+            if blockchain.contains_tx_in_validity_window(&tx_hash, None) {
+                mempool_state.remove(&blockchain, &tx_hash, EvictionReason::AlreadyIncluded);
+            }
+        }
+
+        // Recompute reserved balances, potentially removing by-now invalid transactions.
+        let all_known_senders: HashSet<Address> = mempool_state
+            .state_by_sender
+            .drain()
+            .map(|(address, _)| address)
+            .collect();
+
+        Mempool::recompute_sender_balances(all_known_senders, &blockchain, &mut mempool_state);
+    }
+
+    // Update all balances of senders with `addresses`.
+    // Remove the transactions that have become invalid.
+    fn recompute_sender_balances(
+        addresses: HashSet<Address>,
+        blockchain: &Blockchain,
+        mempool_state: &mut MempoolState,
+    ) {
+        for address in addresses {
+            // The sender_state does not exist anymore if all transactions from this sender have
+            // been mined.
+            let mut sender_state = match mempool_state.state_by_sender.remove(&address) {
+                Some(state) => state,
+                None => continue,
+            };
+            sender_state.reserved_balance = ReservedBalance::new(address.clone());
+
+            // TODO: We should have per sender transactions ordered by fee to try to
+            //       keep the ones with higher fee
+            let sender_account = if let Some(account) = blockchain.get_account_if_complete(&address)
+            {
+                account
+            } else {
+                warn!("Could not get account for address");
+                return;
+            };
+            sender_state.txns.retain(|tx_hash| {
+                let tx = match mempool_state.get(tx_hash) {
+                    Some(transaction) => transaction,
+                    None => return false,
+                };
+                let still_valid = blockchain
+                    .reserve_balance(&sender_account, tx, &mut sender_state.reserved_balance)
+                    .is_ok();
+                if !still_valid {
+                    mempool_state.remove(&blockchain, tx_hash, EvictionReason::Invalid);
+                }
+                still_valid
+            });
+
+            if !sender_state.txns.is_empty() {
+                mempool_state.state_by_sender.insert(address, sender_state);
+            }
+        }
+    }
+
+    /// Remove transactions that are expired and thus no longer valid.
+    fn prune_expired_transactions(
+        &self,
+        blockchain: &Blockchain,
+        mempool_state: &mut MempoolState,
+    ) {
+        let next_block_number = blockchain.block_number() + 1;
+        let expired_txns = mempool_state.get_expired_txns(next_block_number);
+        for tx_hash in expired_txns {
+            mempool_state.remove(&blockchain, &tx_hash, EvictionReason::Expired);
         }
     }
 
