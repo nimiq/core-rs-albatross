@@ -21,6 +21,7 @@ use crate::{
 
 pub use receipts::*;
 pub use staker::Staker;
+pub use store::StakingContractStore;
 #[cfg(feature = "interaction-traits")]
 pub use store::StakingContractStoreWrite;
 pub use validator::{Tombstone, Validator};

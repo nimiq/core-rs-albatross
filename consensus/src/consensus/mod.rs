@@ -37,6 +37,7 @@ use self::remote_event_dispatcher::RemoteEventDispatcher;
 
 pub mod consensus_proxy;
 mod head_requests;
+mod remote_data_store;
 #[cfg(feature = "full")]
 mod remote_event_dispatcher;
 

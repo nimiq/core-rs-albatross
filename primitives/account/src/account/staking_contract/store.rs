@@ -8,22 +8,23 @@ use crate::account::staking_contract::{Staker, Validator};
 use crate::data_store::DataStoreWrite;
 use crate::data_store_ops::DataStoreReadOps;
 
-struct StakingContractStore {}
+// Fixme: This shouldn't be pub but for now it is needed for `RemoteDataStore`
+pub struct StakingContractStore {}
 
 impl StakingContractStore {
     const PREFIX_VALIDATOR: u8 = 0;
     const PREFIX_STAKER: u8 = 1;
     const PREFIX_TOMBSTONE: u8 = 2;
 
-    fn validator_key(address: &Address) -> KeyNibbles {
+    pub fn validator_key(address: &Address) -> KeyNibbles {
         Self::prefixed_address(Self::PREFIX_VALIDATOR, address)
     }
 
-    fn staker_key(address: &Address) -> KeyNibbles {
+    pub fn staker_key(address: &Address) -> KeyNibbles {
         Self::prefixed_address(Self::PREFIX_STAKER, address)
     }
 
-    fn tombstone_key(address: &Address) -> KeyNibbles {
+    pub fn tombstone_key(address: &Address) -> KeyNibbles {
         Self::prefixed_address(Self::PREFIX_TOMBSTONE, address)
     }
 

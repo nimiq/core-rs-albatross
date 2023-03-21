@@ -10,6 +10,7 @@ pub use crate::account::{
 pub use crate::accounts::{Accounts, AccountsTrie};
 #[cfg(feature = "interaction-traits")]
 pub use crate::data_store::{DataStore, DataStoreRead, DataStoreWrite};
+pub use crate::data_store_ops::DataStoreReadOps;
 #[cfg(feature = "interaction-traits")]
 pub use crate::interaction_traits::*;
 pub use crate::logs::*;
