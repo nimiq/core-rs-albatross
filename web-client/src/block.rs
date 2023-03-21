@@ -3,12 +3,13 @@ use tsify::Tsify;
 use wasm_bindgen::prelude::*;
 
 use beserial::Serialize;
+use nimiq_block::Block;
 use nimiq_primitives::policy::Policy;
 
 /// JSON-compatible and human-readable format of blocks.
 #[derive(Tsify)]
 #[serde(rename_all = "camelCase")]
-pub struct PlainBlock {
+pub struct PlainBlockCommonFields {
     /// The block's unique hash, used as its identifier, in HEX format.
     pub hash: String,
     /// The block's on-chain size, in bytes.
@@ -41,9 +42,34 @@ pub struct PlainBlock {
     pub body_hash: String,
     /// A Merkle root over all of the transactions that happened in the current epoch, in HEX format.
     pub history_hash: String,
+}
 
+#[derive(Tsify)]
+#[serde(rename_all = "camelCase")]
+pub struct PlainMacroBlock {
     #[serde(flatten)]
-    pub additional_fields: PlainBlockAdditionalFields,
+    pub common: PlainBlockCommonFields,
+
+    /// If true, this macro block is an election block finalizing an epoch.
+    pub is_election_block: bool,
+    /// The round number this block was proposed in.
+    pub round: u32,
+    /// The hash of the header of the preceding election macro block, in HEX format.
+    pub prev_election_hash: String,
+}
+
+#[derive(Tsify)]
+#[serde(rename_all = "camelCase")]
+pub struct PlainMicroBlock {
+    #[serde(flatten)]
+    pub common: PlainBlockCommonFields,
+}
+
+#[derive(Tsify)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+pub enum PlainBlock {
+    Macro(PlainMacroBlock),
+    Micro(PlainMicroBlock),
 }
 
 // Manually implement serde::Serialize trait to ensure struct is serialized into a JS Object and not a Map.
@@ -57,40 +83,25 @@ impl serde::Serialize for PlainBlock {
     {
         let common_fields_length = 13 + /* type */ 1;
 
-        let length = match &self.additional_fields {
-            PlainBlockAdditionalFields::Macro { .. } => common_fields_length + 3,
-            PlainBlockAdditionalFields::Micro { .. } => common_fields_length, // + 0
+        let length = match &self {
+            PlainBlock::Macro(_) => common_fields_length + 3,
+            PlainBlock::Micro(_) => common_fields_length, // + 0
         };
 
         let mut plain = serializer.serialize_struct("PlainBlock", length)?;
-        plain.serialize_field("hash", &self.hash)?;
-        plain.serialize_field("size", &self.size)?;
-        plain.serialize_field("height", &self.height)?;
-        plain.serialize_field("batch", &self.batch)?;
-        plain.serialize_field("epoch", &self.epoch)?;
-        plain.serialize_field("timestamp", &self.timestamp)?;
 
-        plain.serialize_field("version", &self.version)?;
-        plain.serialize_field("prevHash", &self.prev_hash)?;
-        plain.serialize_field("seed", &self.seed)?;
-        plain.serialize_field("extraData", &self.extra_data)?;
-        plain.serialize_field("stateHash", &self.state_hash)?;
-        plain.serialize_field("bodyHash", &self.body_hash)?;
-        plain.serialize_field("historyHash", &self.history_hash)?;
-
-        match &self.additional_fields {
-            PlainBlockAdditionalFields::Macro {
-                is_election_block,
-                round,
-                prev_election_hash,
-            } => {
+        match &self {
+            PlainBlock::Macro(block) => {
                 plain.serialize_field("type", "macro")?;
-                plain.serialize_field("isElectionBlock", is_election_block)?;
-                plain.serialize_field("round", round)?;
-                plain.serialize_field("prevElectionHash", prev_election_hash)?;
+                serialize_common_fields(&mut plain, &block.common)?;
+
+                plain.serialize_field("isElectionBlock", &block.is_election_block)?;
+                plain.serialize_field("round", &block.round)?;
+                plain.serialize_field("prevElectionHash", &block.prev_election_hash)?;
             }
-            PlainBlockAdditionalFields::Micro {} => {
+            PlainBlock::Micro(block) => {
                 plain.serialize_field("type", "micro")?;
+                serialize_common_fields(&mut plain, &block.common)?;
             }
         }
 
@@ -98,12 +109,37 @@ impl serde::Serialize for PlainBlock {
     }
 }
 
+fn serialize_common_fields<S>(
+    plain: &mut S,
+    common: &PlainBlockCommonFields,
+) -> Result<(), S::Error>
+where
+    S: SerializeStruct,
+{
+    plain.serialize_field("hash", &common.hash)?;
+    plain.serialize_field("size", &common.size)?;
+    plain.serialize_field("height", &common.height)?;
+    plain.serialize_field("batch", &common.batch)?;
+    plain.serialize_field("epoch", &common.epoch)?;
+    plain.serialize_field("timestamp", &common.timestamp)?;
+
+    plain.serialize_field("version", &common.version)?;
+    plain.serialize_field("prevHash", &common.prev_hash)?;
+    plain.serialize_field("seed", &common.seed)?;
+    plain.serialize_field("extraData", &common.extra_data)?;
+    plain.serialize_field("stateHash", &common.state_hash)?;
+    plain.serialize_field("bodyHash", &common.body_hash)?;
+    plain.serialize_field("historyHash", &common.history_hash)?;
+
+    Ok(())
+}
+
 impl PlainBlock {
     /// Creates a PlainBlock struct that can be serialized to JS from a native [nimiq_block::Block].
     pub fn from_block(block: &nimiq_block::Block) -> Self {
         let block_number = block.block_number();
 
-        Self {
+        let common_fields = PlainBlockCommonFields {
             hash: block.hash().to_hex(),
             size: block.serialized_size() as u32,
             height: block_number,
@@ -118,37 +154,19 @@ impl PlainBlock {
             state_hash: block.state_root().to_hex(),
             body_hash: block.body_root().to_hex(),
             history_hash: block.history_root().to_hex(),
+        };
 
-            additional_fields: PlainBlockAdditionalFields::from_block(block),
-        }
-    }
-}
-
-#[derive(Tsify)]
-#[serde(rename_all = "camelCase", tag = "type")]
-pub enum PlainBlockAdditionalFields {
-    #[serde(rename_all = "camelCase")]
-    Macro {
-        /// If true, this macro block is an election block finalizing an epoch.
-        is_election_block: bool,
-        /// The round number this block was proposed in.
-        round: u32,
-        /// The hash of the header of the preceding election macro block, in HEX format.
-        prev_election_hash: String,
-    },
-    #[serde(rename_all = "camelCase")]
-    Micro {},
-}
-
-impl PlainBlockAdditionalFields {
-    pub fn from_block(block: &nimiq_block::Block) -> Self {
         match block {
-            nimiq_block::Block::Macro(block) => PlainBlockAdditionalFields::Macro {
+            Block::Macro(block) => PlainBlock::Macro(PlainMacroBlock {
+                common: common_fields,
+
                 is_election_block: block.is_election_block(),
                 round: block.round(),
                 prev_election_hash: block.header.parent_election_hash.to_hex(),
-            },
-            nimiq_block::Block::Micro(_block) => PlainBlockAdditionalFields::Micro {},
+            }),
+            Block::Micro(_block) => PlainBlock::Micro(PlainMicroBlock {
+                common: common_fields,
+            }),
         }
     }
 }
