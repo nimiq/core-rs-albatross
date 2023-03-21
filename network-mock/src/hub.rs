@@ -51,7 +51,7 @@ pub(crate) struct MockHubInner {
     /// Senders for gossipsub topics
     ///
     /// The data is Arc'd, such that cloning is cheap, and we need only a borrow when we deserialize.
-    pub gossipsub_topics: HashMap<&'static str, MockTopic>,
+    pub gossipsub_topics: HashMap<String, MockTopic>,
 
     /// Senders for dispatching requests
     pub request_senders: HashMap<RequestKey, mpsc::Sender<(Vec<u8>, MockRequestId, MockPeerId)>>,
@@ -71,7 +71,7 @@ pub(crate) struct MockHubInner {
 
 impl MockHubInner {
     /// Returns the requested MockTopic.
-    pub fn get_topic(&mut self, topic_name: &'static str) -> Option<&MockTopic> {
+    pub fn get_topic(&mut self, topic_name: &String) -> Option<&MockTopic> {
         self.gossipsub_topics.get(topic_name)
     }
 
@@ -79,7 +79,7 @@ impl MockHubInner {
     /// Return the MockTopic when a new address is inserted into the subscribed peer list.
     pub fn subscribe(
         &mut self,
-        topic_name: &'static str,
+        topic_name: String,
         address: MockAddress,
     ) -> Option<&mut MockTopic> {
         // Get the topic. If the topic doesn't exist yet, insert it into the topics list.
@@ -102,7 +102,7 @@ impl MockHubInner {
     /// Unsubscribe from a MockTopic.
     /// Return 'false' if the topic doesn't exist or if the peer wasn't subscribed to it.
     /// Otherwise, return 'true'
-    pub fn unsubscribe(&mut self, topic_name: &'static str, address: &MockAddress) -> bool {
+    pub fn unsubscribe(&mut self, topic_name: &String, address: &MockAddress) -> bool {
         if let Some(topic) = self.gossipsub_topics.get_mut(topic_name) {
             // Verify that the peer was actually subscribed to the topic.
             if !topic.peers.remove(address) {

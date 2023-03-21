@@ -126,6 +126,24 @@ pub trait Network: Send + Sync + Unpin + 'static {
     where
         T: Topic + Sync;
 
+    /// Subscribes to a Gossipsub subtopic, providing the subtopic name
+    async fn subscribe_subtopic<T>(
+        &self,
+        subtopic: String,
+    ) -> Result<BoxStream<'static, (T::Item, Self::PubsubId)>, Self::Error>
+    where
+        T: Topic + Sync;
+
+    /// Unsubscribes from a Gossipsub subtopic
+    async fn unsubscribe_subtopic<T>(&self, subtopic: String) -> Result<(), Self::Error>
+    where
+        T: Topic + Sync;
+
+    /// Publishes a message to a Gossipsub subtopic
+    async fn publish_subtopic<T>(&self, subtopic: String, item: T::Item) -> Result<(), Self::Error>
+    where
+        T: Topic + Sync;
+
     /// Validates a message received from a Gossipsub topic
     fn validate_message<T>(&self, id: Self::PubsubId, acceptance: MsgAcceptance)
     where

@@ -38,10 +38,10 @@ pub enum MockNetworkError {
     NotConnected,
 
     #[error("Peer is already subscribed to topic: {0}")]
-    AlreadySubscribed(&'static str),
+    AlreadySubscribed(String),
 
     #[error("Peer is already unsubscribed to topic: {0}")]
-    AlreadyUnsubscribed(&'static str),
+    AlreadyUnsubscribed(String),
 
     #[error("Can't respond to request: {0}")]
     CantRespond(MockRequestId),
@@ -365,7 +365,7 @@ impl Network for MockNetwork {
         let mut hub = self.hub.lock();
         let is_connected = Arc::clone(&self.is_connected);
 
-        let topic_name = T::NAME;
+        let topic_name = T::NAME.to_string();
 
         log::debug!(
             "Peer {} subscribing to topic '{}'",
@@ -375,7 +375,7 @@ impl Network for MockNetwork {
 
         // Add this peer to the topic list
         let sender: &broadcast::Sender<(Arc<Vec<u8>>, MockPeerId)> =
-            if let Some(topic) = hub.subscribe(topic_name, self.address) {
+            if let Some(topic) = hub.subscribe(topic_name.clone(), self.address) {
                 &topic.sender
             } else {
                 return Err(MockNetworkError::AlreadySubscribed(topic_name));
@@ -419,7 +419,7 @@ impl Network for MockNetwork {
     {
         let mut hub = self.hub.lock();
 
-        let topic_name = T::NAME;
+        let topic_name = T::NAME.to_string();
 
         log::debug!(
             "Peer {} unsubscribing from topic '{}'",
@@ -428,7 +428,7 @@ impl Network for MockNetwork {
         );
 
         if self.is_connected.load(Ordering::SeqCst) {
-            if hub.unsubscribe(topic_name, &self.address) {
+            if hub.unsubscribe(&topic_name, &self.address) {
                 Ok(())
             } else {
                 Err(MockNetworkError::AlreadyUnsubscribed(topic_name))
@@ -444,7 +444,7 @@ impl Network for MockNetwork {
     {
         let mut hub = self.hub.lock();
 
-        let topic_name = T::NAME;
+        let topic_name = T::NAME.to_string();
         let data = item.serialize_to_vec();
 
         log::debug!(
@@ -455,7 +455,126 @@ impl Network for MockNetwork {
         );
 
         if self.is_connected.load(Ordering::SeqCst) {
-            if let Some(topic) = hub.get_topic(topic_name) {
+            if let Some(topic) = hub.get_topic(&topic_name) {
+                topic
+                    .sender
+                    .send((Arc::new(data), self.address.into()))
+                    .unwrap();
+                Ok(())
+            } else {
+                log::debug!("No peer is subscribed to topic: '{}'", topic_name);
+                Ok(())
+            }
+        } else {
+            Err(MockNetworkError::NotConnected)
+        }
+    }
+
+    async fn subscribe_subtopic<T>(
+        &self,
+        subtopic: String,
+    ) -> Result<BoxStream<'static, (T::Item, Self::PubsubId)>, Self::Error>
+    where
+        T: Topic + Sync,
+    {
+        let mut hub = self.hub.lock();
+        let is_connected = Arc::clone(&self.is_connected);
+
+        let topic_name = format!("{}_{}", T::NAME.to_string(), subtopic);
+
+        log::debug!(
+            "Peer {} subscribing to subtopic '{}'",
+            self.address,
+            topic_name
+        );
+
+        // Add this peer to the topic list
+        let sender: &broadcast::Sender<(Arc<Vec<u8>>, MockPeerId)> =
+            if let Some(topic) = hub.subscribe(topic_name.clone(), self.address) {
+                &topic.sender
+            } else {
+                return Err(MockNetworkError::AlreadySubscribed(topic_name));
+            };
+
+        let stream = BroadcastStream::new(sender.subscribe()).filter_map(move |r| {
+            let is_connected = Arc::clone(&is_connected);
+
+            async move {
+                if is_connected.load(Ordering::SeqCst) {
+                    match r {
+                        Ok((data, peer_id)) => match T::Item::deserialize_from_vec(&data) {
+                            Ok(item) => return Some((item, peer_id)),
+                            Err(e) => {
+                                log::warn!("Dropped item because deserialization failed: {}", e)
+                            }
+                        },
+                        Err(BroadcastStreamRecvError::Lagged(_)) => {
+                            log::warn!("Mock gossipsub channel is lagging")
+                        }
+                    }
+                } else {
+                    log::debug!("Network not connected: Dropping gossipsub message.");
+                }
+
+                None
+            }
+        });
+
+        Ok(Box::pin(stream.map(|(topic, peer_id)| {
+            let id = MockId {
+                propagation_source: peer_id,
+            };
+            (topic, id)
+        })))
+    }
+
+    async fn unsubscribe_subtopic<T>(&self, subtopic: String) -> Result<(), Self::Error>
+    where
+        T: Topic + Sync,
+    {
+        let mut hub = self.hub.lock();
+
+        let topic_name = format!("{}_{}", T::NAME.to_string(), subtopic);
+
+        log::debug!(
+            "Peer {} unsubscribing from topic '{}'",
+            self.address,
+            topic_name
+        );
+
+        if self.is_connected.load(Ordering::SeqCst) {
+            if hub.unsubscribe(&topic_name, &self.address) {
+                Ok(())
+            } else {
+                Err(MockNetworkError::AlreadyUnsubscribed(topic_name))
+            }
+        } else {
+            Err(MockNetworkError::NotConnected)
+        }
+    }
+
+    async fn publish_subtopic<T: Topic>(
+        &self,
+        subtopic: String,
+        item: T::Item,
+    ) -> Result<(), Self::Error>
+    where
+        T: Topic + Sync,
+    {
+        let mut hub = self.hub.lock();
+
+        let topic_name = format!("{}_{}", T::NAME.to_string(), subtopic);
+        let data = item.serialize_to_vec();
+
+        log::debug!(
+            "Peer {} publishing on topic '{}': {:?}",
+            self.address,
+            topic_name,
+            item
+        );
+
+        if self.is_connected.load(Ordering::SeqCst) {
+            if let Some(topic) = hub.get_topic(&topic_name) {
                 topic
                     .sender
                     .send((Arc::new(data), self.address.into()))

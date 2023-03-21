@@ -39,17 +39,17 @@ pub enum NetworkError {
     GossipsubSubscription(libp2p::gossipsub::error::SubscriptionError),
 
     #[error("Already subscribed to topic: {topic_name}")]
-    AlreadySubscribed { topic_name: &'static str },
+    AlreadySubscribed { topic_name: String },
 
     #[error("Already unsubscribed to topic: {topic_name}")]
-    AlreadyUnsubscribed { topic_name: &'static str },
+    AlreadyUnsubscribed { topic_name: String },
 
     #[error("Unknown Request ID")]
     UnknownRequestId,
 
     #[error("Couldn't set topic score parameters")]
     TopicScoreParams {
-        topic_name: &'static str,
+        topic_name: String,
         error: &'static str,
     },
     #[error("Response channel closed: {0:?}")]

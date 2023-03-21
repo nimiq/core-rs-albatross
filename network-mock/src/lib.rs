@@ -204,7 +204,7 @@ pub mod tests {
         // Assert that we can unsubscribe from topics
         assert_eq!(Ok(()), net1.unsubscribe::<TestTopic>().await);
         assert_eq!(
-            Err(MockNetworkError::AlreadyUnsubscribed(TestTopic::NAME)),
+            Err(MockNetworkError::AlreadyUnsubscribed(TestTopic::NAME.to_string())),
             net1.unsubscribe::<TestTopic>().await
         );
     }
