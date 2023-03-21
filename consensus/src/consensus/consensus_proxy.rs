@@ -335,11 +335,12 @@ impl<N: Network> ConsensusProxy<N> {
                 peer_id = %peer_id,
                 "Performing accounts by address request to peer",
             );
+            let keys_to_verify: Vec<KeyNibbles> = unverified_keys.keys().cloned().collect();
             let response = self
                 .network
                 .request::<RequestTrieProof>(
                     RequestTrieProof {
-                        keys: unverified_keys.keys().cloned().collect(),
+                        keys: keys_to_verify.clone(),
                     },
                     peer_id,
                 )
@@ -355,27 +356,26 @@ impl<N: Network> ConsensusProxy<N> {
 
                             if let Some(block) = block {
                                 // Now we need to verify the proof
-                                if !proof.verify(block.state_root()) {
+                                if let Ok(values) =
+                                    proof.verify_values(block.state_root(), &keys_to_verify)
+                                {
+                                    // If the proof is valid, then we add the obtained accounts to our verified accounts vector.
+                                    for (key, value) in values {
+                                        if let Some(address) = unverified_keys.remove(&key) {
+                                            if let Ok(account) =
+                                                Account::deserialize_from_vec(&value)
+                                            {
+                                                verified_accounts.insert(address, account);
+                                            }
+                                        }
+                                    }
+                                } else {
                                     // If the proof does not verify, we disconnect from the peer
                                     log::debug!(peer=%peer_id,"Disconnecting from peer because the accounts proof didn't verify");
                                     self.network
                                         .disconnect_peer(peer_id, CloseReason::Other)
                                         .await;
                                     break;
-                                }
-                                // If the proof is valid, then we add the obtained accounts to our verified accounts vector.
-                                for trie_proof_node in proof.nodes {
-                                    if let Some(value) = trie_proof_node.value() {
-                                        if let Some(address) =
-                                            unverified_keys.remove(&trie_proof_node.key)
-                                        {
-                                            if let Ok(account) =
-                                                Account::deserialize_from_vec(value)
-                                            {
-                                                verified_accounts.insert(address, account);
-                                            }
-                                        }
-                                    }
                                 }
                             } else {
                                 // If we couldn't find the block, then we cannot verify the proof
