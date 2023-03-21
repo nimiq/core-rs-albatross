@@ -51,4 +51,4 @@ nimiq-test-log = { path = "../test-log" }
 [features]
 zkp-prover = ["ark-crypto-primitives/r1cs", "ark-mnt4-753/r1cs", "ark-mnt6-753/r1cs", "ark-groth16/r1cs", "nimiq-zkp-primitives/zkp-prover"]
 parallel = ["rayon", "ark-crypto-primitives/parallel", "ark-ec/parallel", "ark-ff/parallel", "ark-std/parallel", "ark-groth16/parallel", "nimiq-zkp-primitives/parallel"]
-test-setup = ["ark-poly"]
+test-setup = ["ark-poly", "zkp-prover"]
