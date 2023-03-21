@@ -37,17 +37,18 @@ pub struct TrieProofNode {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[repr(u8)]
 enum ProofValue {
-    Value(#[beserial(len_type(u16))] Vec<u8>),
-    Hash(Blake2bHash),
     None,
+    LeafValue(#[beserial(len_type(u16))] Vec<u8>),
+    HybridHash(Blake2bHash),
+    HybridValue(#[beserial(len_type(u16))] Vec<u8>),
 }
 
 impl From<TrieNode> for TrieProofNode {
     fn from(node: TrieNode) -> Self {
         let value = match (node.has_children(), node.value) {
             (_, None) => ProofValue::None,
-            (false, Some(val)) => ProofValue::Value(val),
-            (true, Some(val)) => ProofValue::Hash(val.hash()),
+            (false, Some(val)) => ProofValue::LeafValue(val),
+            (true, Some(val)) => ProofValue::HybridHash(val.hash()),
         };
         TrieProofNode {
             key: node.key,
@@ -58,6 +59,29 @@ impl From<TrieNode> for TrieProofNode {
 }
 
 impl TrieProofNode {
+    pub fn include_value(node: TrieNode) -> Self {
+        let value = match (node.has_children(), node.value) {
+            (_, None) => panic!("can't include value of a node without one"),
+            (false, Some(val)) => ProofValue::LeafValue(val),
+            (true, Some(val)) => ProofValue::HybridValue(val),
+        };
+        TrieProofNode {
+            key: node.key,
+            value,
+            children: node.children,
+        }
+    }
+}
+
+impl TrieProofNode {
+    pub fn into_value(self) -> Option<Vec<u8>> {
+        match self.value {
+            ProofValue::None => None,
+            ProofValue::LeafValue(value) => Some(value),
+            ProofValue::HybridHash(_) => None,
+            ProofValue::HybridValue(value) => Some(value),
+        }
+    }
     pub fn has_children(&self) -> bool {
         self.children.iter().any(|c| c.is_some())
     }
@@ -108,13 +132,17 @@ impl SerializeContent for TrieProofNode {
             ProofValue::None => {
                 writer.write_u8(0).unwrap();
             }
-            ProofValue::Value(val) => {
+            ProofValue::LeafValue(val) => {
                 writer.write_u8(1).unwrap();
                 size += val.serialize::<u16, _>(writer).unwrap();
             }
-            ProofValue::Hash(val_hash) => {
+            ProofValue::HybridHash(val_hash) => {
                 writer.write_u8(2).unwrap();
                 size += val_hash.serialize(writer).unwrap();
+            }
+            ProofValue::HybridValue(val) => {
+                writer.write_u8(2).unwrap();
+                size += val.hash::<Blake2bHash>().serialize(writer).unwrap();
             }
         }
         size += self.children.serialize(writer).unwrap();
@@ -132,7 +160,39 @@ mod test {
     use nimiq_hash::{Blake2bHash, Hash};
 
     #[test]
-    fn child_works() {
+    #[should_panic = "can't include value of a node without one"]
+    fn include_value_root() {
+        TrieProofNode::include_value(TrieNode::new_root());
+    }
+
+    #[test]
+    #[should_panic = "can't include value of a node without one"]
+    fn include_value_branch() {
+        let key: KeyNibbles = "cfb986".parse().unwrap();
+        let child_key_1 = "cfb986f5a".parse().unwrap();
+        let child_key_2 = "cfb986ab9".parse().unwrap();
+        let child_key_3 = "cfb9860f6".parse().unwrap();
+        let child_key_4 = "cfb986d50".parse().unwrap();
+
+        let mut branch_node = TrieNode::new_empty(key);
+        branch_node
+            .put_child(&child_key_1, "child_1".hash())
+            .unwrap();
+        branch_node
+            .put_child(&child_key_2, "child_2".hash())
+            .unwrap();
+        branch_node
+            .put_child(&child_key_3, "child_3".hash())
+            .unwrap();
+        branch_node
+            .put_child(&child_key_4, "child_4".hash())
+            .unwrap();
+
+        TrieProofNode::include_value(branch_node);
+    }
+
+    #[test]
+    fn hash_works() {
         let key: KeyNibbles = "cfb986".parse().unwrap();
         let child_key_1 = "cfb986f5a".parse().unwrap();
         let child_key_2 = "cfb986ab9".parse().unwrap();
@@ -157,11 +217,19 @@ mod test {
         );
         assert_eq!(
             leaf_node.hash_assert::<Blake2bHash>(),
-            TrieProofNode::from(leaf_node).hash(),
+            TrieProofNode::from(leaf_node.clone()).hash(),
+        );
+        assert_eq!(
+            leaf_node.hash_assert::<Blake2bHash>(),
+            TrieProofNode::include_value(leaf_node).hash(),
         );
         assert_eq!(
             hybrid_node.hash_assert::<Blake2bHash>(),
-            TrieProofNode::from(hybrid_node).hash(),
+            TrieProofNode::from(hybrid_node.clone()).hash(),
+        );
+        assert_eq!(
+            hybrid_node.hash_assert::<Blake2bHash>(),
+            TrieProofNode::include_value(hybrid_node).hash(),
         );
         assert_eq!(
             branch_node.hash_assert::<Blake2bHash>(),

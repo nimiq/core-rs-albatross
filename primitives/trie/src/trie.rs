@@ -549,7 +549,7 @@ impl MerkleRadixTrie {
                 .expect("trie proof failed for predecessor")
         } else {
             // Else just for the root if there are no items in the trie.
-            TrieProof::new(vec![self.get_root(txn).unwrap()])
+            TrieProof::new(vec![self.get_root(txn).unwrap().into()])
         };
         // The end can contain one nibble beyond the shared prefix of the next item not included and
         // the last item still included in the chunk.
@@ -902,7 +902,7 @@ impl MerkleRadixTrie {
                     "Failed to generate proof",
                 ))?
         } else {
-            TrieProof::new(vec![self.get_root(txn).unwrap()])
+            TrieProof::new(vec![self.get_root(txn).unwrap().into()])
         };
 
         // Then, clear the tree's stumps.
@@ -1189,9 +1189,9 @@ impl MerkleRadixTrie {
                 None => {
                     // Add the remaining nodes in the root path to the proof. Evidently they must
                     // be added in the reverse order.
-                    proof_nodes.push(pointer_node);
+                    proof_nodes.push(TrieProofNode::include_value(pointer_node));
                     root_path.reverse();
-                    proof_nodes.append(&mut root_path);
+                    proof_nodes.extend(root_path.drain(..).map(Into::into));
 
                     // Exit the loop.
                     break;
@@ -1209,7 +1209,7 @@ impl MerkleRadixTrie {
                         .expect("Root path must contain at least the root node!"),
                 );
 
-                proof_nodes.push(old_pointer_node);
+                proof_nodes.push(old_pointer_node.into());
             }
         }
 
@@ -1563,6 +1563,96 @@ mod tests {
     }
 
     #[test]
+    fn get_proof_values() {
+        //          |
+        //         cfb98
+        //        /     |
+        //       6    e0f6
+        //      /  \
+        //   ab9   f5a
+
+        let key_1 = "cfb986f5a".parse().unwrap();
+        let key_2 = "cfb98".parse().unwrap();
+        let key_3 = "cfb98e0f6".parse().unwrap();
+
+        let env = nimiq_database::volatile::VolatileEnvironment::new(10).unwrap();
+        let trie = MerkleRadixTrie::new(env.clone(), "database");
+        let mut txn = WriteTransaction::new(&env);
+
+        trie.put(&mut txn, &key_1, 1u8).expect("complete trie");
+        trie.put(&mut txn, &key_2, 2u8).expect("complete trie");
+        trie.put(&mut txn, &key_3, 3u8).expect("complete trie");
+        trie.update_root(&mut txn).expect("complete trie");
+
+        let proof_values = trie
+            .get_proof(&txn, vec![&key_1, &key_2, &key_3])
+            .unwrap()
+            .verify_values(
+                &trie.root_hash_assert(&txn),
+                &[key_1.clone(), key_2.clone(), key_3.clone()],
+            )
+            .unwrap();
+        assert_eq!(proof_values.len(), 3);
+        assert_eq!(proof_values[&key_1], vec![1]);
+        assert_eq!(proof_values[&key_2], vec![2]);
+        assert_eq!(proof_values[&key_3], vec![3]);
+
+        let proof_values = trie
+            .get_proof(&txn, vec![&key_1, &key_2])
+            .unwrap()
+            .verify_values(
+                &trie.root_hash_assert(&txn),
+                &[key_1.clone(), key_2.clone()],
+            )
+            .unwrap();
+        assert_eq!(proof_values.len(), 2);
+        assert_eq!(proof_values[&key_1], vec![1]);
+        assert_eq!(proof_values[&key_2], vec![2]);
+
+        let proof_values = trie
+            .get_proof(&txn, vec![&key_1, &key_3])
+            .unwrap()
+            .verify_values(
+                &trie.root_hash_assert(&txn),
+                &[key_1.clone(), key_3.clone()],
+            )
+            .unwrap();
+        assert_eq!(proof_values.len(), 2);
+        assert_eq!(proof_values[&key_1], vec![1]);
+        assert_eq!(proof_values[&key_3], vec![3]);
+
+        // Wrong values were proven.
+        assert!(trie
+            .get_proof(&txn, vec![&key_1, &key_2])
+            .unwrap()
+            .verify_values(
+                &trie.root_hash_assert(&txn),
+                &[key_1.clone(), key_3.clone()]
+            )
+            .is_err());
+
+        // Not all values were proven.
+        assert!(trie
+            .get_proof(&txn, vec![&key_1, &key_2])
+            .unwrap()
+            .verify_values(
+                &trie.root_hash_assert(&txn),
+                &[key_1.clone(), key_2.clone(), key_3.clone()]
+            )
+            .is_err());
+
+        // Too many values were proven.
+        assert!(trie
+            .get_proof(&txn, vec![&key_1, &key_2, &key_3])
+            .unwrap()
+            .verify_values(
+                &trie.root_hash_assert(&txn),
+                &[key_1.clone(), key_2.clone()]
+            )
+            .is_err());
+    }
+
+    #[test]
     fn hybrid_nodes_work() {
         let key_1 = "413f22".parse().unwrap();
         let key_2 = "413".parse().unwrap();
@@ -1686,7 +1776,7 @@ mod tests {
             TrieChunk::new(
                 Some(key_3.clone()),
                 Vec::new(),
-                TrieProof::new(vec![TrieNode::new_root()]),
+                TrieProof::new(vec![TrieNode::new_root().into()]),
             ),
             TrieNode::new_root().hash_assert(),
         )
@@ -1700,7 +1790,7 @@ mod tests {
             TrieChunk::new(
                 Some(key_3.clone()),
                 Vec::new(),
-                TrieProof::new(vec![proof_root.clone()]),
+                TrieProof::new(vec![proof_root.clone().into()]),
             ),
             proof_root.hash_assert(),
         )
@@ -1714,7 +1804,10 @@ mod tests {
             TrieChunk::new(
                 Some(key_1.clone()),
                 vec![TrieItem::new(key_2, vec![99])],
-                TrieProof::new(vec![proof_value_2.clone(), proof_root.clone()]),
+                TrieProof::new(vec![
+                    proof_value_2.clone().into(),
+                    proof_root.clone().into(),
+                ]),
             ),
             proof_root.hash_assert(),
         )
@@ -1728,7 +1821,10 @@ mod tests {
             TrieChunk::new(
                 None,
                 Vec::new(),
-                TrieProof::new(vec![proof_value_2.clone(), proof_root.clone()]),
+                TrieProof::new(vec![
+                    proof_value_2.clone().into(),
+                    proof_root.clone().into(),
+                ]),
             ),
             proof_root.hash_assert(),
         )
