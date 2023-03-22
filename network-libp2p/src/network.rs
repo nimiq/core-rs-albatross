@@ -1944,7 +1944,7 @@ impl NetworkInterface for Network {
     where
         T: Topic + Sync,
     {
-        let topic_name = format!("{}_{}", <T as Topic>::NAME.to_string(), subtopic);
+        let topic_name = format!("{}_{}", <T as Topic>::NAME, subtopic);
 
         self.subscribe_with_name::<T>(topic_name).await
     }
@@ -1961,7 +1961,7 @@ impl NetworkInterface for Network {
     where
         T: Topic + Sync,
     {
-        let topic_name = format!("{}_{}", <T as Topic>::NAME.to_string(), subtopic);
+        let topic_name = format!("{}_{}", <T as Topic>::NAME, subtopic);
         self.unsubscribe_with_name::<T>(topic_name).await
     }
 
@@ -1981,7 +1981,7 @@ impl NetworkInterface for Network {
     where
         T: Topic + Sync,
     {
-        let topic_name = format!("{}_{}", <T as Topic>::NAME.to_string(), subtopic);
+        let topic_name = format!("{}_{}", <T as Topic>::NAME, subtopic);
         self.publish_with_name::<T>(topic_name, item).await
     }
 

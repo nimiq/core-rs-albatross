@@ -487,7 +487,7 @@ impl Network for MockNetwork {
     where
         T: Topic + Sync,
     {
-        let topic_name = format!("{}_{}", T::NAME.to_string(), subtopic);
+        let topic_name = format!("{}_{}", T::NAME, subtopic);
         self.subscribe_with_name::<T>(topic_name).await
     }
 
@@ -503,7 +503,7 @@ impl Network for MockNetwork {
     where
         T: Topic + Sync,
     {
-        let topic_name = format!("{}_{}", T::NAME.to_string(), subtopic);
+        let topic_name = format!("{}_{}", T::NAME, subtopic);
         self.unsubscribe_with_name::<T>(topic_name).await
     }
 
@@ -523,7 +523,7 @@ impl Network for MockNetwork {
     where
         T: Topic + Sync,
     {
-        let topic_name = format!("{}_{}", T::NAME.to_string(), subtopic);
+        let topic_name = format!("{}_{}", T::NAME, subtopic);
         self.publish_with_name::<T>(topic_name, item).await
     }
 

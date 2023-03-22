@@ -1,5 +1,3 @@
-use futures::{stream::BoxStream, StreamExt};
-use parking_lot::RwLock;
 use std::{
     collections::{HashMap, HashSet},
     future::Future,
@@ -7,6 +5,9 @@ use std::{
     sync::Arc,
     task::{Context, Poll},
 };
+
+use futures::{stream::BoxStream, StreamExt};
+use parking_lot::RwLock;
 
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent};
@@ -132,7 +133,7 @@ impl<N: Network> RemoteEventDispatcherState<N> {
     pub fn remove_peer(&mut self, peer_id: &N::PeerId) {
         if let Some(peer_addresses) = self.subscribed_peers.get(peer_id) {
             // Obtain the addresses that are interested to this peer and remove the peer from those addresses.
-            peer_addresses.into_iter().for_each(|address| {
+            peer_addresses.iter().for_each(|address| {
                 if let Some(peers) = self.subscriptions.get_mut(address) {
                     peers.remove(peer_id);
                 }
@@ -145,9 +146,9 @@ impl<N: Network> RemoteEventDispatcherState<N> {
     /// Remove addresses from an specific peer, if there are no more addresses from this peer we remove it.
     pub fn remove_addresses(&mut self, peer_id: &N::PeerId, addresses: Vec<Address>) {
         if let Some(peer_addresses) = self.subscribed_peers.get_mut(peer_id) {
-            addresses.into_iter().for_each(|address| {
-                peer_addresses.remove(&address);
-                if let Some(peers) = self.subscriptions.get_mut(&address) {
+            addresses.iter().for_each(|address| {
+                peer_addresses.remove(address);
+                if let Some(peers) = self.subscriptions.get_mut(address) {
                     peers.remove(peer_id);
                 }
             });
@@ -220,73 +221,80 @@ impl<N: Network> Future for RemoteEventDispatcher<N> {
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         // Listen, and process blockchain events
         while let Poll::Ready(Some(event)) = self.blockchain_event_rx.poll_next_unpin(cx) {
+            let mut new_blocks = vec![];
+
             match event {
-                BlockchainEvent::Extended(block_hash) => {
+                BlockchainEvent::Extended(block_hash)
+                | BlockchainEvent::EpochFinalized(block_hash)
+                | BlockchainEvent::Finalized(block_hash) => {
                     let block = self
                         .blockchain
                         .read()
                         .get_block(&block_hash, true, None)
                         .expect("Head block not found");
 
-                    if let Some(transactions) = block.transactions() {
-                        // This hash map is used to collect all the notifications for a given peer.
-                        let mut peer_receipts: HashMap<N::PeerId, Vec<(Blake2bHash, u32)>> =
-                            HashMap::new();
+                    new_blocks.push(block);
+                }
+                BlockchainEvent::Rebranched(_reverted_blocks, adopted_blocks) => {
+                    // We dont't notify about reverted block, only adopted blocks
+                    new_blocks.extend(adopted_blocks.into_iter().map(|(_, block)| block));
+                }
+                BlockchainEvent::HistoryAdopted(_) => {
+                    //TODO: In the future we might be interested in other events
+                }
+            }
+            // This hash map is used to collect all the notifications for a given peer.
+            let mut peer_receipts: HashMap<N::PeerId, Vec<(Blake2bHash, u32)>> = HashMap::new();
 
-                        // First collect the list of peers that will be notified
-                        for txn in transactions {
-                            let txn = txn.get_raw_transaction();
+            // Collect all possible notifications
+            for block in new_blocks {
+                if let Some(transactions) = block.transactions() {
+                    // First collect the list of peers that will be notified
+                    for txn in transactions {
+                        let txn = txn.get_raw_transaction();
 
-                            // Process transaction senders
-                            if let Some(peers) = self.state.read().get_peers(&txn.sender) {
-                                for peer in peers {
-                                    if let Some(receipts) = peer_receipts.get_mut(&peer) {
-                                        receipts.push((txn.hash(), block.block_number()))
-                                    } else {
-                                        peer_receipts
-                                            .insert(peer, vec![(txn.hash(), block.block_number())]);
-                                    }
-                                }
-                            }
-                            // Process transaction recipients
-                            if let Some(peers) = self.state.read().get_peers(&txn.recipient) {
-                                for peer in peers {
-                                    if let Some(receipts) = peer_receipts.get_mut(&peer) {
-                                        receipts.push((txn.hash(), block.block_number()))
-                                    } else {
-                                        peer_receipts
-                                            .insert(peer, vec![(txn.hash(), block.block_number())]);
-                                    }
+                        // Process transaction senders
+                        if let Some(peers) = self.state.read().get_peers(&txn.sender) {
+                            for peer in peers {
+                                if let Some(receipts) = peer_receipts.get_mut(&peer) {
+                                    receipts.push((txn.hash(), block.block_number()))
+                                } else {
+                                    peer_receipts
+                                        .insert(peer, vec![(txn.hash(), block.block_number())]);
                                 }
                             }
                         }
-
-                        // Notify all interested peers
-                        for (peer_id, receipts) in peer_receipts {
-                            let network = Arc::clone(&self.network);
-                            tokio::spawn({
-                                async move {
-                                    network
-                                        .publish_subtopic::<AddressSubscriptionTopic>(
-                                            peer_id.to_string(),
-                                            AddressNotification {
-                                                receipts: receipts.clone(),
-                                                event: NotificationEvent::BlockchainExtend,
-                                            },
-                                        )
-                                        .await
-                                        .unwrap();
+                        // Process transaction recipients
+                        if let Some(peers) = self.state.read().get_peers(&txn.recipient) {
+                            for peer in peers {
+                                if let Some(receipts) = peer_receipts.get_mut(&peer) {
+                                    receipts.push((txn.hash(), block.block_number()))
+                                } else {
+                                    peer_receipts
+                                        .insert(peer, vec![(txn.hash(), block.block_number())]);
                                 }
-                            });
+                            }
                         }
                     }
                 }
-                BlockchainEvent::HistoryAdopted(_)
-                | BlockchainEvent::Rebranched(_, _)
-                | BlockchainEvent::Finalized(_)
-                | BlockchainEvent::EpochFinalized(_) => {
-                    //TODO: implement the kind of events that might be interesting for other peers
-                }
+            }
+            // Notify all interested peers
+            for (peer_id, receipts) in peer_receipts {
+                let network = Arc::clone(&self.network);
+                tokio::spawn({
+                    async move {
+                        network
+                            .publish_subtopic::<AddressSubscriptionTopic>(
+                                peer_id.to_string(),
+                                AddressNotification {
+                                    receipts: receipts.clone(),
+                                    event: NotificationEvent::BlockchainExtend,
+                                },
+                            )
+                            .await
+                            .unwrap();
+                    }
+                });
             }
         }
 

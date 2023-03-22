@@ -24,7 +24,7 @@ pub enum SubscribeToAdressesError {
     /// Already attending too many peers
     #[error("Too many peers")]
     TooManyPeers = 1,
-    /// Already attending too many peers
+    /// Already attending too many addresses
     #[error("Too many addresses")]
     TooManyAddresses = 2,
     /// Some of the provided parameters/operations was invalid
