@@ -128,8 +128,8 @@ const UNIT_KEY: &str = "6c9320ac201caf1f8eaa5b05f5d67a9e77826f3f6be266a0ecccc204
 const DEV_KEY: &str = "1ef7aad365c195462ed04c275d47189d5362bbfe36b5e93ce7ba2f3add5f439b";
 
 async fn main_inner() -> Result<(), Error> {
-    // Initialize deadlock detection
-    initialize_deadlock_detection();
+    // Keep for potential future reactivation
+    // initialize_deadlock_detection();
 
     // Parse command line.
     let spammer_command_line = SpammerCommandLine::parse();

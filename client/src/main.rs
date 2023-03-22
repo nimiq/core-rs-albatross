@@ -20,8 +20,8 @@ pub use nimiq::{
 };
 
 async fn main_inner() -> Result<(), Error> {
-    // Initialize deadlock detection
-    initialize_deadlock_detection();
+    // Keep for potential future reactivation
+    // initialize_deadlock_detection();
 
     // Parse command line.
     let command_line = CommandLine::parse();
