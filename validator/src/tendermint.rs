@@ -155,7 +155,7 @@ where
     ///
     /// This hash is NOT suited to be signed for BLS Aggregated signatures for the macro blocks, as those need to include the pk_tree_root.
     /// See MacroBlock::zkp_hash for more details.
-    fn hash_proposal(proposal_msg: &ProposalMessage<<Self as Protocol>::Proposal>) -> &[u8] {
+    fn hash_proposal(proposal_msg: &ProposalMessage<<Self as Protocol>::Proposal>) -> Vec<u8> {
         let mut h = Blake2sHasher::new();
 
         h.write_u8(Self::PROPOSAL_PREFIX)
@@ -179,8 +179,7 @@ where
             .serialize(&mut v)
             .expect("Must be able to serialize the hash.");
 
-        v.as_slice();
-        &[]
+        v
     }
 }
 
@@ -315,7 +314,7 @@ where
 
                     let data = Self::hash_proposal(&msg.message);
 
-                    if proposer.verify(&msg.signature.0, data) {
+                    if proposer.verify(&msg.signature.0, data.as_slice()) {
                         return Some(msg);
                     }
                 }
@@ -363,7 +362,7 @@ where
             .signing_key;
 
         // Verify the signature. The proposal is signed by the proposer of the round the proposal is used in
-        if !proposer.verify(&proposal.signature.0, data) {
+        if !proposer.verify(&proposal.signature.0, data.as_slice()) {
             return Err(ProposalError::InvalidSignature);
         }
 
@@ -448,7 +447,7 @@ where
     ) -> Self::ProposalSignature {
         let data = Self::hash_proposal(proposal_message);
         (
-            self.block_producer.signing_key.sign(data),
+            self.block_producer.signing_key.sign(data.as_slice()),
             self.validator_slot_band,
         )
     }
