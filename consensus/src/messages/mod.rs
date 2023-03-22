@@ -290,7 +290,7 @@ pub struct ResponseBlocksProof {
 
 impl RequestCommon for RequestBlocksProof {
     type Kind = RequestMarker;
-    const TYPE_ID: u16 = 215;
+    const TYPE_ID: u16 = 216;
     type Response = ResponseBlocksProof;
     const MAX_REQUESTS: u32 = MAX_REQUEST_BLOCKS_PROOF;
 }
