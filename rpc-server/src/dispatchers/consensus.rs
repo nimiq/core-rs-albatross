@@ -475,12 +475,12 @@ impl ConsensusInterface for ConsensusDispatcher {
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> RPCResult<String, (), Self::Error> {
-        let sig_sender =
-            SignatureProof::deserialize_from_vec(&hex::decode(htlc_sender_signature).unwrap())
-                .unwrap();
+        let sig_sender = SignatureProof::deserialize_from_vec(&hex::decode(htlc_sender_signature)?)
+            .map_err(|_| Error::InvalidArgument("Signing Key".to_string()))?;
+
         let sig_recipient =
-            SignatureProof::deserialize_from_vec(&hex::decode(htlc_recipient_signature).unwrap())
-                .unwrap();
+            SignatureProof::deserialize_from_vec(&hex::decode(htlc_recipient_signature)?)
+                .map_err(|_| Error::InvalidArgument("Recipient Key".to_string()))?;
 
         let transaction = TransactionBuilder::new_redeem_htlc_early(
             contract_address,
@@ -751,11 +751,13 @@ impl ConsensusInterface for ConsensusDispatcher {
         validity_start_height: ValidityStartHeight,
     ) -> RPCResult<String, (), Self::Error> {
         let voting_secret_key =
-            BlsSecretKey::deserialize_from_vec(&hex::decode(voting_secret_key).unwrap()).unwrap();
+            BlsSecretKey::deserialize_from_vec(&hex::decode(voting_secret_key)?)
+                .map_err(|_| Error::InvalidArgument("Voting Key".to_string()))?;
         let hot_keypair = BlsKeyPair::from(voting_secret_key);
 
         let signing_secret_key =
-            PrivateKey::deserialize_from_vec(&hex::decode(signing_secret_key).unwrap()).unwrap();
+            PrivateKey::deserialize_from_vec(&hex::decode(signing_secret_key)?)
+                .map_err(|_| Error::InvalidArgument("Signing Key".to_string()))?;
         let signing_key = PublicKey::from(&signing_secret_key);
 
         // Since JSON doesn't have a primitive for Option (it just has the null primitive), we can't
@@ -767,7 +769,10 @@ impl ConsensusInterface for ConsensusDispatcher {
         let signal_data: Option<Blake2bHash> = if signal_data.is_empty() {
             None
         } else {
-            Some(Blake2bHash::deserialize_from_vec(&hex::decode(signal_data).unwrap()).unwrap())
+            Some(
+                Blake2bHash::deserialize_from_vec(&hex::decode(signal_data)?)
+                    .map_err(|_| Error::InvalidArgument("Signal Data".to_string()))?,
+            )
         };
 
         let transaction = TransactionBuilder::new_create_validator(
@@ -838,8 +843,8 @@ impl ConsensusInterface for ConsensusDispatcher {
     ) -> RPCResult<String, (), Self::Error> {
         let new_voting_keypair = match new_voting_secret_key {
             Some(key) => {
-                let new_secret_key =
-                    BlsSecretKey::deserialize_from_vec(&hex::decode(key).unwrap()).unwrap();
+                let new_secret_key = BlsSecretKey::deserialize_from_vec(&hex::decode(key)?)
+                    .map_err(|_| Error::InvalidArgument("Voting Key".to_string()))?;
                 Some(BlsKeyPair::from(new_secret_key))
             }
             _ => None,
@@ -847,8 +852,8 @@ impl ConsensusInterface for ConsensusDispatcher {
 
         let new_signing_key = match new_signing_secret_key {
             Some(key) => {
-                let secret_key =
-                    PrivateKey::deserialize_from_vec(&hex::decode(key).unwrap()).unwrap();
+                let secret_key = PrivateKey::deserialize_from_vec(&hex::decode(key)?)
+                    .map_err(|_| Error::InvalidArgument("Signing Key".to_string()))?;
                 Some(PublicKey::from(&secret_key))
             }
             _ => None,
@@ -867,7 +872,8 @@ impl ConsensusInterface for ConsensusDispatcher {
                     Some(None)
                 } else {
                     Some(Some(
-                        Blake2bHash::deserialize_from_vec(&hex::decode(string).unwrap()).unwrap(),
+                        Blake2bHash::deserialize_from_vec(&hex::decode(string)?)
+                            .map_err(|_| Error::InvalidArgument("Signal Data".to_string()))?,
                     ))
                 }
             }
@@ -932,8 +938,9 @@ impl ConsensusInterface for ConsensusDispatcher {
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> RPCResult<String, (), Self::Error> {
-        let secret_key =
-            PrivateKey::deserialize_from_vec(&hex::decode(signing_secret_key).unwrap()).unwrap();
+        let secret_key = PrivateKey::deserialize_from_vec(&hex::decode(signing_secret_key)?)
+            .map_err(|_| Error::InvalidArgument("Signing Key".to_string()))?;
+
         let signing_key_pair = KeyPair::from(secret_key);
 
         let transaction = TransactionBuilder::new_deactivate_validator(
@@ -981,8 +988,8 @@ impl ConsensusInterface for ConsensusDispatcher {
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> RPCResult<String, (), Self::Error> {
-        let secret_key =
-            PrivateKey::deserialize_from_vec(&hex::decode(signing_secret_key).unwrap()).unwrap();
+        let secret_key = PrivateKey::deserialize_from_vec(&hex::decode(signing_secret_key)?)
+            .map_err(|_| Error::InvalidArgument("Signing Key".to_string()))?;
         let signing_key_pair = KeyPair::from(secret_key);
 
         let transaction = TransactionBuilder::new_reactivate_validator(
@@ -1030,8 +1037,9 @@ impl ConsensusInterface for ConsensusDispatcher {
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> RPCResult<String, (), Self::Error> {
-        let secret_key =
-            PrivateKey::deserialize_from_vec(&hex::decode(signing_secret_key).unwrap()).unwrap();
+        let secret_key = PrivateKey::deserialize_from_vec(&hex::decode(signing_secret_key)?)
+            .map_err(|_| Error::InvalidArgument("Signing Key".to_string()))?;
+
         let signing_key_pair = KeyPair::from(secret_key);
 
         let transaction = TransactionBuilder::new_unpark_validator(

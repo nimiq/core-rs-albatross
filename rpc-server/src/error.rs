@@ -79,6 +79,9 @@ pub enum Error {
     #[error("Multiple transactions found: {0}")]
     MultipleTransactionsFound(Blake2bHash),
 
+    #[error("Invalid argument: {0}")]
+    InvalidArgument(String),
+
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 }
