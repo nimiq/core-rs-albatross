@@ -244,7 +244,7 @@ impl Client {
 
     /// Adds an event listener for consensus-change events, such as when consensus is established or lost.
     #[wasm_bindgen(js_name = addConsensusChangedListener)]
-    pub fn add_consensus_changed_listener(
+    pub async fn add_consensus_changed_listener(
         &mut self,
         listener: ConsensusChangedListener,
     ) -> Result<usize, JsError> {
@@ -261,9 +261,9 @@ impl Client {
 
     /// Adds an event listener for new blocks added to the blockchain.
     #[wasm_bindgen(js_name = addHeadChangedListener)]
-    pub fn add_head_changed_listener(
+    pub async fn add_head_changed_listener(
         &mut self,
-        listener: HeadChangedListner,
+        listener: HeadChangedListener,
     ) -> Result<usize, JsError> {
         let listener = listener
             .dyn_into::<js_sys::Function>()
@@ -278,9 +278,9 @@ impl Client {
 
     /// Adds an event listener for peer-change events, such as when a new peer joins, or a peer leaves.
     #[wasm_bindgen(js_name = addPeerChangedListener)]
-    pub fn add_peer_changed_listener(
+    pub async fn add_peer_changed_listener(
         &mut self,
-        listener: PeerChangedListner,
+        listener: PeerChangedListener,
     ) -> Result<usize, JsError> {
         let listener = listener
             .dyn_into::<js_sys::Function>()
@@ -295,7 +295,7 @@ impl Client {
 
     /// Removes an event listener by its handle.
     #[wasm_bindgen(js_name = removeListener)]
-    pub fn remove_listener(&self, handle: usize) {
+    pub async fn remove_listener(&self, handle: usize) {
         self.consensus_changed_listeners
             .borrow_mut()
             .remove(&handle);
@@ -339,20 +339,20 @@ impl Client {
 
     /// Returns the block hash of the current blockchain head.
     #[wasm_bindgen(js_name = getHeadHash)]
-    pub fn get_head_hash(&self) -> String {
+    pub async fn get_head_hash(&self) -> String {
         self.inner.blockchain_head().hash().to_hex()
     }
 
     /// Returns the block number of the current blockchain head.
     #[wasm_bindgen(js_name = getHeadHeight)]
-    pub fn get_head_height(&self) -> u32 {
+    pub async fn get_head_height(&self) -> u32 {
         self.inner.blockchain_head().block_number()
     }
 
     /// Returns the current blockchain head block.
     /// Note that the web client is a light client and does not have block bodies, i.e. no transactions.
     #[wasm_bindgen(js_name = getHeadBlock)]
-    pub fn get_head_block(&self) -> Result<PlainBlockType, JsError> {
+    pub async fn get_head_block(&self) -> Result<PlainBlockType, JsError> {
         let block = self.inner.blockchain_head();
         Ok(serde_wasm_bindgen::to_value(&PlainBlock::from_block(&block))?.into())
     }
@@ -408,7 +408,7 @@ impl Client {
 
         tx.verify(Some(self.network_id))?;
 
-        let current_height = self.get_head_height();
+        let current_height = self.get_head_height().await;
 
         self.inner
             .consensus_proxy()
@@ -453,9 +453,8 @@ impl Client {
                         .consensus_proxy()
                         .request_transaction_by_hash_and_block_number(receipt.0, receipt.1, 1)
                         .await?;
-                    let current_block = self.get_head_height();
                     let details =
-                        PlainTransactionDetails::from_extended_transaction(&ext_tx, current_block);
+                        PlainTransactionDetails::from_extended_transaction(&ext_tx, receipt.1);
                     return Ok(serde_wasm_bindgen::to_value(&details)?.into());
                 }
             }
@@ -783,12 +782,12 @@ impl Client {
             )
             .await?;
 
-        let current_block = self.get_head_height();
+        let current_height = self.get_head_height().await;
 
         let plain_tx_details: Vec<_> = transactions
             .into_iter()
             .map(|ext_tx| {
-                PlainTransactionDetails::from_extended_transaction(&ext_tx, current_block)
+                PlainTransactionDetails::from_extended_transaction(&ext_tx, current_height)
             })
             .collect();
 
@@ -804,10 +803,10 @@ extern "C" {
     #[wasm_bindgen(
         typescript_type = "(hash: string, reason: string, reverted_blocks: string[], adopted_blocks: string[]) => any"
     )]
-    pub type HeadChangedListner;
+    pub type HeadChangedListener;
 
     #[wasm_bindgen(
         typescript_type = "(peer_id: string, reason: 'joined' | 'left', peer_count: number, peer_info?: PeerInfo) => any"
     )]
-    pub type PeerChangedListner;
+    pub type PeerChangedListener;
 }
