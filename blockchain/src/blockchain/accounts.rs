@@ -201,9 +201,9 @@ impl Blockchain {
         }
     }
 
-    pub fn get_accounts_proof(&self, keys: &[KeyNibbles]) -> Option<TrieProof> {
+    pub fn get_accounts_proof(&self, keys: Vec<&KeyNibbles>) -> Option<TrieProof> {
         let txn = ReadTransaction::new(&self.env);
 
-        self.state().accounts.tree.get_proof(&txn, keys.to_vec())
+        self.state().accounts.tree.get_proof(&txn, keys).ok()
     }
 }

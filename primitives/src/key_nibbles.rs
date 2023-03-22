@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::{borrow::Cow, cmp, fmt, ops, str, usize};
 
 use log::error;
@@ -203,6 +204,23 @@ impl KeyNibbles {
     #[must_use]
     pub fn suffix(&self, start: u8) -> Self {
         self.slice(start as usize, self.len())
+    }
+
+    pub fn to_address(&self) -> Option<Address> {
+        if self.len() != 2 * Address::len() {
+            return None;
+        }
+        Some(Address::from(&self.bytes[..Address::len()]))
+    }
+
+    /// Returns whether `self` or `other` comes first in post-order tree traversal.
+    pub fn post_order_cmp(&self, other: &Self) -> Ordering {
+        match (self.is_prefix_of(other), other.is_prefix_of(self)) {
+            (true, true) => Ordering::Equal,
+            (true, false) => Ordering::Greater,
+            (false, true) => Ordering::Less,
+            (false, false) => self.cmp(other),
+        }
     }
 }
 
@@ -489,5 +507,40 @@ mod tests {
         let key2: KeyNibbles = "123".parse().unwrap();
         let key2s: KeyNibbles = "1230".parse().unwrap();
         assert_eq!(key2.successor(), key2s);
+    }
+
+    #[test]
+    fn post_order_cmp_works() {
+        let keys: Vec<KeyNibbles> = ["cfb986f5a", "cfb98e0f6", "cfb98e0f", "cfb98", ""]
+            .into_iter()
+            .map(|s| s.parse().unwrap())
+            .collect();
+        for i in 0..keys.len() {
+            for j in i + 1..keys.len() {
+                assert_eq!(
+                    keys[i].post_order_cmp(&keys[j]),
+                    Ordering::Less,
+                    "{} < {}",
+                    keys[i],
+                    keys[j]
+                );
+                assert_eq!(
+                    keys[j].post_order_cmp(&keys[i]),
+                    Ordering::Greater,
+                    "{} > {}",
+                    keys[i],
+                    keys[j]
+                );
+            }
+        }
+        for key in &keys {
+            assert_eq!(
+                key.post_order_cmp(key),
+                Ordering::Equal,
+                "{} == {}",
+                key,
+                key
+            );
+        }
     }
 }

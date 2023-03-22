@@ -499,7 +499,7 @@ impl<N: Network> Handle<N, ResponseTrieProof, Arc<RwLock<Blockchain>>> for Reque
         let blockchain = blockchain.read();
 
         // We only prove accounts that exist in our current state
-        let proof = blockchain.get_accounts_proof(&self.keys);
+        let proof = blockchain.get_accounts_proof(self.keys.iter().collect());
 
         if proof.is_none() {
             // If we could not generate a proof we respond with an empty result

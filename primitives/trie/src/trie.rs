@@ -1,5 +1,5 @@
-use std::borrow::Borrow;
 use std::cmp;
+use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fmt;
 use std::mem;
@@ -547,7 +547,7 @@ impl MerkleRadixTrie {
                 .expect("trie proof failed for predecessor")
         } else {
             // Else just for the root if there are no items in the trie.
-            TrieProof::new(vec![self.get_root(txn).unwrap().into()])
+            TrieProof::new(vec![self.get_root(txn).unwrap().into()], Default::default())
         };
         // The end can contain one nibble beyond the shared prefix of the next item not included and
         // the last item still included in the chunk.
@@ -895,12 +895,9 @@ impl MerkleRadixTrie {
 
         // Next, we get a proof for the last remaining leaf.
         let proof = if let Some(last_remaining) = self.get_predecessor(txn, &start_key) {
-            self.get_proof(txn, vec![last_remaining])
-                .ok_or(MerkleRadixTrieError::InvalidChunk(
-                    "Failed to generate proof",
-                ))?
+            self.get_proof(txn, vec![&last_remaining]).unwrap()
         } else {
-            TrieProof::new(vec![self.get_root(txn).unwrap().into()])
+            TrieProof::new(vec![self.get_root(txn).unwrap().into()], Default::default())
         };
 
         // Then, clear the tree's stumps.
@@ -1086,9 +1083,14 @@ impl MerkleRadixTrie {
         }
     }
 
-    /// Produces a Merkle proof of the inclusion of the given keys in the Merkle Radix Trie. The
-    /// proof consists of the path from the leaves that we want to prove inclusion all the way up
-    /// to the root. For example, for the following trie:
+    /// Produces a Merkle proof of the inclusion of the given keys in the
+    /// Merkle Radix Trie.
+    ///
+    /// The proof consists of the path from the leaves that
+    /// we want to prove inclusion all the way up to the root. For example, for
+    /// the following trie:
+    ///
+    /// ```text
     ///              R
     ///              |
     ///              B1
@@ -1096,23 +1098,40 @@ impl MerkleRadixTrie {
     ///        B2   L3   B3
     ///       / \        / \
     ///      L1 L2      L4 L5
-    /// If we want a proof for the nodes L1 and L3, the proof will consist of the nodes L1, B2, L3,
-    /// B1 and R. Note that:
-    ///     1. Unlike Merkle proofs we don't need the adjacent branch nodes. That's because our
-    ///        branch nodes already include the hashes of its children.
-    ///     2. The nodes are always returned in post-order.
-    /// If any of the given keys doesn't exist this function just returns None.
-    /// The exclusion (non-inclusion) of keys in the Merkle Radix Trie could also be proven, but it
-    /// requires some light refactoring to the way proofs work.
-    pub fn get_proof<T>(&self, txn: &Transaction, mut keys: Vec<T>) -> Option<TrieProof>
-    where
-        T: Borrow<KeyNibbles>,
-    {
-        // We sort the keys to simplify traversal in post-order.
-        keys.sort_by(|k1, k2| k1.borrow().cmp(k2.borrow()));
+    /// ```
+    ///
+    /// If we want a proof for the nodes L1 and L3, the proof will consist of
+    /// the nodes L1, B2, L3, B1 and R.
+    ///
+    /// Note that:
+    ///
+    /// 1. Unlike Merkle proofs we don't need the adjacent branch nodes. That's
+    ///    because our branch nodes already include the hashes of its children.
+    ///
+    /// 2. The nodes are always returned in post-order.
+    pub fn get_proof(
+        &self,
+        txn: &Transaction,
+        mut keys: Vec<&KeyNibbles>,
+    ) -> Result<TrieProof, IncompleteTrie> {
+        // We sort the keys in post-order.
+        keys.sort_by(|&k1, &k2| k1.post_order_cmp(k2));
+
+        let missing_range = self.get_missing_range(txn);
+        if let Some(missing) = &missing_range {
+            if keys.iter().any(|&key| missing.contains(key)) {
+                return Err(IncompleteTrie);
+            }
+        }
+
+        let wanted_values: BTreeSet<&KeyNibbles> = keys.iter().cloned().collect();
+        let to_proof = |node: TrieNode| TrieProofNode::new(wanted_values.contains(&node.key), node);
 
         // Initialize the vector that will contain the proof.
         let mut proof_nodes = Vec::new();
+
+        // Initialize the map that specifies which keys are only proven indirectly.
+        let mut missing_proven_by = BTreeMap::new();
 
         // Initialize the pointer node, we will use it to go up and down the tree. We always start
         // at the root.
@@ -1128,56 +1147,35 @@ impl MerkleRadixTrie {
             .pop()
             .expect("There must be at least one key to prove!");
 
-        let missing_range = self.get_missing_range(txn);
-
         // Iterate over all the keys that we wish to prove.
         loop {
             // Go down the trie until we find a node with our key or we can't go any further.
             loop {
-                // If the key does not match, the requested key is not part of this trie. In
-                // this case, we can't produce a proof so we terminate now.
-                if !pointer_node.key.is_prefix_of(cur_key.borrow()) {
-                    error!(
-                        "Pointer node with key {} is not a prefix to the current node with key {}.",
-                        pointer_node.key,
-                        cur_key.borrow(),
-                    );
-                    return None;
-                }
-
-                // If the key fully matches, we have found the requested node. We must check that
-                // it is a leaf/hybrid node, we don't want to prove branch nodes.
-                if &pointer_node.key == cur_key.borrow() {
-                    if pointer_node.value.is_none() {
-                        error!(
-                            "Pointer node with key {} is a branch node. We don't want to prove branch nodes.",
-                            pointer_node.key,
-                        );
-                        return None;
-                    }
-
+                // If the key fully matches, we have found the requested node.
+                if pointer_node.key == *cur_key {
                     break;
                 }
 
                 // Otherwise, try to find a child of the pointer node that matches our key.
-                match pointer_node.child_key(cur_key.borrow(), &missing_range) {
-                    // If no matching child exists, then the requested key is not part of this
-                    // trie. Once again, we can't produce a proof so we terminate now.
-                    Err(_) => {
-                        error!(
-                            "Key {} is not a part of the trie. Can't produce the proof.",
-                            cur_key.borrow()
-                        );
-                        return None;
-                    }
-                    // If there's a child, then we update the pointer node and the root path, and
+                match pointer_node.child_key(cur_key, &missing_range) {
+                    // If there's a child, check whether it's on the right path.
+                    //
+                    // If so, we update the pointer node and the root path, and
                     // continue down the trie.
-                    Ok(child_key) => {
+                    Ok(child_key) if child_key.is_prefix_of(cur_key) => {
                         let old_pointer_node = mem::replace(
                             &mut pointer_node,
                             self.get_node(txn, &child_key).unwrap(),
                         );
                         root_path.push(old_pointer_node);
+                    }
+                    // Otherwise, no matching child exists, so the requested key is not part of this
+                    // trie.
+                    _ => {
+                        assert!(missing_proven_by
+                            .insert(cur_key.clone(), pointer_node.key.clone())
+                            .is_none());
+                        break;
                     }
                 }
             }
@@ -1187,9 +1185,9 @@ impl MerkleRadixTrie {
                 None => {
                     // Add the remaining nodes in the root path to the proof. Evidently they must
                     // be added in the reverse order.
-                    proof_nodes.push(TrieProofNode::include_value(pointer_node));
+                    proof_nodes.push(to_proof(pointer_node));
                     root_path.reverse();
-                    proof_nodes.extend(root_path.drain(..).map(Into::into));
+                    proof_nodes.extend(root_path.drain(..).map(to_proof));
 
                     // Exit the loop.
                     break;
@@ -1199,7 +1197,7 @@ impl MerkleRadixTrie {
 
             // Go up the root path until we get to a node that is a prefix to our current key.
             // Add the nodes you remove to the proof.
-            while !pointer_node.key.is_prefix_of(cur_key.borrow()) {
+            while !pointer_node.key.is_prefix_of(cur_key) {
                 let old_pointer_node = mem::replace(
                     &mut pointer_node,
                     root_path
@@ -1207,12 +1205,14 @@ impl MerkleRadixTrie {
                         .expect("Root path must contain at least the root node!"),
                 );
 
-                proof_nodes.push(old_pointer_node.into());
+                proof_nodes.push(to_proof(old_pointer_node));
             }
         }
 
+        proof_nodes.sort_by(|n1, n2| n1.key.post_order_cmp(&n2.key));
+
         // Return the proof.
-        Some(TrieProof::new(proof_nodes))
+        Ok(TrieProof::new(proof_nodes, missing_proven_by))
     }
 
     pub fn update_root(&self, txn: &mut WriteTransaction) -> Result<(), MerkleRadixTrieError> {
@@ -1559,11 +1559,13 @@ mod tests {
         assert_eq!(proof.nodes.len(), 3);
         assert_eq!(proof.verify(&trie.root_hash_assert(&txn)), true);
 
-        let proof = trie.get_proof(&txn, vec![&key_4, &key_2]);
-        assert!(proof.is_none());
+        let proof = trie.get_proof(&txn, vec![&key_4, &key_2]).unwrap();
+        assert_eq!(proof.nodes.len(), 4);
+        assert_eq!(proof.verify(&trie.root_hash_assert(&txn)), true);
 
-        let proof = trie.get_proof(&txn, vec![&key_4]);
-        assert!(proof.is_none());
+        let proof = trie.get_proof(&txn, vec![&key_4]).unwrap();
+        assert_eq!(proof.nodes.len(), 2);
+        assert_eq!(proof.verify(&trie.root_hash_assert(&txn)), true);
     }
 
     #[test]
@@ -1578,6 +1580,10 @@ mod tests {
         let key_1 = "cfb986f5a".parse().unwrap();
         let key_2 = "cfb98".parse().unwrap();
         let key_3 = "cfb98e0f6".parse().unwrap();
+        let key_4 = "cfb98e0f7".parse().unwrap();
+        let key_5 = "cfb98e".parse().unwrap();
+        let key_6 = "ca".parse().unwrap();
+        let key_7 = "b".parse().unwrap();
 
         let env = nimiq_database::volatile::VolatileEnvironment::new(10).unwrap();
         let trie = MerkleRadixTrie::new(env.clone(), "database");
@@ -1586,73 +1592,90 @@ mod tests {
         trie.put(&mut txn, &key_1, 1u8).expect("complete trie");
         trie.put(&mut txn, &key_2, 2u8).expect("complete trie");
         trie.put(&mut txn, &key_3, 3u8).expect("complete trie");
+        trie.put(&mut txn, &key_4, 4u8).expect("complete trie");
         trie.update_root(&mut txn).expect("complete trie");
 
         let proof_values = trie
             .get_proof(&txn, vec![&key_1, &key_2, &key_3])
             .unwrap()
-            .verify_values(
-                &trie.root_hash_assert(&txn),
-                &[key_1.clone(), key_2.clone(), key_3.clone()],
-            )
+            .verify_values(&trie.root_hash_assert(&txn), &[&key_1, &key_2, &key_3])
             .unwrap();
         assert_eq!(proof_values.len(), 3);
-        assert_eq!(proof_values[&key_1], vec![1]);
-        assert_eq!(proof_values[&key_2], vec![2]);
-        assert_eq!(proof_values[&key_3], vec![3]);
+        assert_eq!(proof_values[&key_1], Some(vec![1]));
+        assert_eq!(proof_values[&key_2], Some(vec![2]));
+        assert_eq!(proof_values[&key_3], Some(vec![3]));
 
         let proof_values = trie
             .get_proof(&txn, vec![&key_1, &key_2])
             .unwrap()
-            .verify_values(
-                &trie.root_hash_assert(&txn),
-                &[key_1.clone(), key_2.clone()],
-            )
+            .verify_values(&trie.root_hash_assert(&txn), &[&key_1, &key_2])
             .unwrap();
         assert_eq!(proof_values.len(), 2);
-        assert_eq!(proof_values[&key_1], vec![1]);
-        assert_eq!(proof_values[&key_2], vec![2]);
+        assert_eq!(proof_values[&key_1], Some(vec![1]));
+        assert_eq!(proof_values[&key_2], Some(vec![2]));
 
         let proof_values = trie
             .get_proof(&txn, vec![&key_1, &key_3])
             .unwrap()
-            .verify_values(
-                &trie.root_hash_assert(&txn),
-                &[key_1.clone(), key_3.clone()],
-            )
+            .verify_values(&trie.root_hash_assert(&txn), &[&key_1, &key_3])
             .unwrap();
         assert_eq!(proof_values.len(), 2);
-        assert_eq!(proof_values[&key_1], vec![1]);
-        assert_eq!(proof_values[&key_3], vec![3]);
+        assert_eq!(proof_values[&key_1], Some(vec![1]));
+        assert_eq!(proof_values[&key_3], Some(vec![3]));
+
+        // Empty nodes
+        let proof_values = trie
+            .get_proof(&txn, vec![&key_5])
+            .unwrap()
+            .verify_values(&trie.root_hash_assert(&txn), &[&key_5])
+            .unwrap();
+        assert_eq!(proof_values.len(), 1);
+        assert_eq!(proof_values[&key_5], None);
+
+        let proof_values = trie
+            .get_proof(&txn, vec![&key_2, &key_5])
+            .unwrap()
+            .verify_values(&trie.root_hash_assert(&txn), &[&key_2, &key_5])
+            .unwrap();
+        assert_eq!(proof_values.len(), 2);
+        assert_eq!(proof_values[&key_2], Some(vec![2]));
+        assert_eq!(proof_values[&key_5], None);
+
+        let proof_values = trie
+            .get_proof(&txn, vec![&key_5, &key_6, &key_7])
+            .unwrap()
+            .verify_values(&trie.root_hash_assert(&txn), &[&key_5, &key_6, &key_7])
+            .unwrap();
+        assert_eq!(proof_values.len(), 3);
+        assert_eq!(proof_values[&key_5], None);
+        assert_eq!(proof_values[&key_6], None);
+        assert_eq!(proof_values[&key_7], None);
 
         // Wrong values were proven.
         assert!(trie
             .get_proof(&txn, vec![&key_1, &key_2])
             .unwrap()
-            .verify_values(
-                &trie.root_hash_assert(&txn),
-                &[key_1.clone(), key_3.clone()]
-            )
+            .verify_values(&trie.root_hash_assert(&txn), &[&key_1, &key_3])
             .is_err());
 
         // Not all values were proven.
         assert!(trie
             .get_proof(&txn, vec![&key_1, &key_2])
             .unwrap()
-            .verify_values(
-                &trie.root_hash_assert(&txn),
-                &[key_1.clone(), key_2.clone(), key_3.clone()]
-            )
+            .verify_values(&trie.root_hash_assert(&txn), &[&key_1, &key_2, &key_3],)
             .is_err());
 
+        // Not all empty values were proven.
+        assert!(trie
+            .get_proof(&txn, vec![&key_5])
+            .unwrap()
+            .verify_values(&trie.root_hash_assert(&txn), &[&key_5, &key_6],)
+            .is_err());
         // Too many values were proven.
         assert!(trie
             .get_proof(&txn, vec![&key_1, &key_2, &key_3])
             .unwrap()
-            .verify_values(
-                &trie.root_hash_assert(&txn),
-                &[key_1.clone(), key_2.clone()]
-            )
+            .verify_values(&trie.root_hash_assert(&txn), &[&key_1, &key_2])
             .is_err());
     }
 
@@ -1780,7 +1803,7 @@ mod tests {
             TrieChunk::new(
                 Some(key_3.clone()),
                 Vec::new(),
-                TrieProof::new(vec![TrieNode::new_root().into()]),
+                TrieProof::new(vec![TrieNode::new_root().into()], Default::default()),
             ),
             TrieNode::new_root().hash_assert(),
         )
@@ -1794,7 +1817,7 @@ mod tests {
             TrieChunk::new(
                 Some(key_3.clone()),
                 Vec::new(),
-                TrieProof::new(vec![proof_root.clone().into()]),
+                TrieProof::new(vec![proof_root.clone().into()], Default::default()),
             ),
             proof_root.hash_assert(),
         )
@@ -1808,10 +1831,10 @@ mod tests {
             TrieChunk::new(
                 Some(key_1.clone()),
                 vec![TrieItem::new(key_2, vec![99])],
-                TrieProof::new(vec![
-                    proof_value_2.clone().into(),
-                    proof_root.clone().into(),
-                ]),
+                TrieProof::new(
+                    vec![proof_value_2.clone().into(), proof_root.clone().into()],
+                    Default::default(),
+                ),
             ),
             proof_root.hash_assert(),
         )
@@ -1825,10 +1848,10 @@ mod tests {
             TrieChunk::new(
                 None,
                 Vec::new(),
-                TrieProof::new(vec![
-                    proof_value_2.clone().into(),
-                    proof_root.clone().into(),
-                ]),
+                TrieProof::new(
+                    vec![proof_value_2.clone().into(), proof_root.clone().into()],
+                    Default::default(),
+                ),
             ),
             proof_root.hash_assert(),
         )

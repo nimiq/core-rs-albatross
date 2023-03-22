@@ -1,5 +1,6 @@
 use log::error;
-use std::collections::{BTreeMap, BTreeSet};
+use std::cmp::Ordering;
+use std::collections::BTreeMap;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_hash::{Blake2bHash, Hash};
@@ -7,9 +8,13 @@ use nimiq_hash::{Blake2bHash, Hash};
 use crate::key_nibbles::KeyNibbles;
 use crate::trie::trie_proof_node::TrieProofNode;
 
-/// A Merkle proof of the inclusion of some leaf nodes in the Merkle Radix Trie. The
-/// proof consists of the path from the leaves that we want to prove inclusion all the way up
-/// to the root. For example, for the following trie:
+/// A Merkle proof of the inclusion of some leaf nodes in the Merkle Radix
+/// Trie.
+///
+/// The proof consists of the path from the leaves that we want to prove
+/// inclusion all the way up to the root. For example, for the following trie:
+///
+/// ```text
 ///              R
 ///              |
 ///              B1
@@ -17,26 +22,37 @@ use crate::trie::trie_proof_node::TrieProofNode;
 ///        B2   L3   B3
 ///       / \        / \
 ///      L1 L2      L4 L5
-/// If we want a proof for the nodes L1 and L3, the proof will consist of the nodes L1, B2, L3,
-/// B1 and R. Note that:
-///     1. Unlike Merkle proofs we don't need the adjacent branch nodes. That's because our
-///        branch nodes already include the hashes of its children.
-///     2. The nodes are always returned in post-order.
-/// If any of the given keys doesn't exist this function just returns None.
-/// The exclusion (non-inclusion) of keys in the Merkle Radix Trie could also be proven, but it
-/// requires some light refactoring to the way proofs work.
-#[derive(Debug, Serialize, Deserialize, Clone)]
+/// ```
+///
+/// If we want a proof for the nodes L1 and L3, the proof will consist of the
+/// nodes L1, B2, L3, B1 and R.
+///
+/// Note that:
+///
+/// 1. Unlike Merkle proofs we don't need the adjacent branch nodes. That's
+///    because our branch nodes already include the hashes of its children.
+///
+/// 2. The nodes are always returned in post-order.
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct TrieProof {
     #[beserial(len_type(u16))]
     pub nodes: Vec<TrieProofNode>,
+    #[beserial(len_type(u16))]
+    missing_proven_by: BTreeMap<KeyNibbles, KeyNibbles>,
 }
 
 #[derive(Debug)]
 pub struct Error(&'static str);
 
 impl TrieProof {
-    pub fn new(nodes: Vec<TrieProofNode>) -> TrieProof {
-        TrieProof { nodes }
+    pub fn new(
+        nodes: Vec<TrieProofNode>,
+        missing_proven_by: BTreeMap<KeyNibbles, KeyNibbles>,
+    ) -> TrieProof {
+        TrieProof {
+            nodes,
+            missing_proven_by,
+        }
     }
 
     /// Verifies a proof against the given root hash. Note that this doesn't check that whatever keys
@@ -123,31 +139,73 @@ impl TrieProof {
     pub fn verify_values(
         self,
         root_hash: &Blake2bHash,
-        keys: &[KeyNibbles],
-    ) -> Result<BTreeMap<KeyNibbles, Vec<u8>>, Error> {
+        keys: &[&KeyNibbles],
+    ) -> Result<BTreeMap<KeyNibbles, Option<Vec<u8>>>, Error> {
         if !self.verify(root_hash) {
             return Err(Error("proof invalid"));
         }
-        let mut todo: BTreeSet<KeyNibbles> = keys.iter().cloned().collect();
+        // Sort the keys by their proving nodes so that we can go through the proof and the
+        // requested keys simultaneously.
+        let mut keys: Vec<_> = keys
+            .iter()
+            .cloned()
+            .map(|k| (self.missing_proven_by.get(k).unwrap_or(k), k))
+            .collect();
+        keys.sort_by(|&(k1p, k1), &(k2p, k2)| {
+            k1p.post_order_cmp(k2p).then_with(|| k1.post_order_cmp(k2))
+        });
+
+        let mut keys = keys.into_iter();
+        let mut nodes = self.nodes.into_iter();
+
+        let mut cur_key = keys.next();
+        let mut cur_node = nodes.next();
         let mut result = BTreeMap::new();
-        for node in self.nodes {
-            if todo.remove(&node.key) {
-                let key = node.key.clone();
-                match node.into_value() {
-                    None => return Err(Error("required value not present")),
-                    Some(value) => {
+        loop {
+            let cmp = cur_key
+                .and_then(|(k, _)| cur_node.as_ref().map(|n| k.post_order_cmp(&n.key)))
+                .unwrap_or(Ordering::Equal);
+            match (cmp, cur_key, cur_node) {
+                (_, None, None) => break,
+                (_, Some(_), None) | (Ordering::Less, Some(_), Some(_)) => {
+                    return Err(Error("not all requested proof values are present"))
+                }
+                (_, None, Some(n)) | (Ordering::Greater, Some(_), Some(n)) => {
+                    if n.into_value().ok().and_then(|v| v).is_some() {
+                        return Err(Error("value present that wasn't requested"));
+                    }
+                    cur_node = nodes.next();
+                }
+                (Ordering::Equal, Some((_, k)), Some(n)) => {
+                    if !n.key.is_prefix_of(k) {
+                        return Err(Error("tried to prove key with non-parent"));
+                    }
+                    if n.key == *k {
+                        // If we're exactly the right key, check the value of the node.
+                        let key = n.key.clone();
+                        let value = n
+                            .into_value()
+                            .map_err(|_| Error("requested hybrid node value missing"))?;
                         assert!(result.insert(key, value).is_none());
+                        cur_key = keys.next();
+                        cur_node = nodes.next();
+                    } else {
+                        // If we're not exactly the right key, we're trying to prove the
+                        // non-existence of a node.
+                        match n.child_key(k) {
+                            // No child found, everything is okay.
+                            Err(_) => {}
+                            // The child doesn't lead to our node, everything is okay.
+                            Ok(child_key) if !child_key.is_prefix_of(k) => {}
+                            // The child could potentially lead to our node.
+                            Ok(_) => return Err(Error("negative proof for node missing")),
+                        }
+                        assert!(result.insert(k.clone(), None).is_none());
+                        cur_key = keys.next();
+                        cur_node = Some(n);
                     }
                 }
-            } else {
-                // Nodes that weren't requested shouldn't have a value.
-                if node.into_value().is_some() {
-                    return Err(Error("value present that wasn't requested"));
-                }
             }
-        }
-        if !todo.is_empty() {
-            return Err(Error("not all requested proof values are present"));
         }
         Ok(result)
     }
@@ -203,66 +261,84 @@ mod tests {
         let wrong_root_hash = ":-E".hash::<Blake2bHash>();
 
         // Correct proofs.
-        let proof1 = TrieProof::new(vec![
-            l1.clone().into(),
-            l3.clone().into(),
-            l4.clone().into(),
-            b2.clone().into(),
-            l2.clone().into(),
-            b1.clone().into(),
-            r.clone().into(),
-        ]);
+        let proof1 = TrieProof::new(
+            vec![
+                l1.clone().into(),
+                l3.clone().into(),
+                l4.clone().into(),
+                b2.clone().into(),
+                l2.clone().into(),
+                b1.clone().into(),
+                r.clone().into(),
+            ],
+            Default::default(),
+        );
         assert!(proof1.verify(&root_hash));
         assert!(!proof1.verify(&wrong_root_hash));
 
-        let proof2 = TrieProof::new(vec![
-            l1.clone().into(),
-            l3.clone().into(),
-            b2.clone().into(),
-            b1.clone().into(),
-            r.clone().into(),
-        ]);
+        let proof2 = TrieProof::new(
+            vec![
+                l1.clone().into(),
+                l3.clone().into(),
+                b2.clone().into(),
+                b1.clone().into(),
+                r.clone().into(),
+            ],
+            Default::default(),
+        );
         assert!(proof2.verify(&root_hash));
         assert!(!proof2.verify(&wrong_root_hash));
 
-        let proof3 = TrieProof::new(vec![
-            l4.clone().into(),
-            b2.clone().into(),
-            b1.clone().into(),
-            r.clone().into(),
-        ]);
+        let proof3 = TrieProof::new(
+            vec![
+                l4.clone().into(),
+                b2.clone().into(),
+                b1.clone().into(),
+                r.clone().into(),
+            ],
+            Default::default(),
+        );
         assert!(proof3.verify(&root_hash));
         assert!(!proof3.verify(&wrong_root_hash));
 
         // Wrong proofs. Nodes in wrong order.
-        let proof1 = TrieProof::new(vec![
-            l1.clone().into(),
-            b2.clone().into(),
-            l3.clone().into(),
-            l4.clone().into(),
-            l2.clone().into(),
-            b1.clone().into(),
-            r.clone().into(),
-        ]);
+        let proof1 = TrieProof::new(
+            vec![
+                l1.clone().into(),
+                b2.clone().into(),
+                l3.clone().into(),
+                l4.clone().into(),
+                l2.clone().into(),
+                b1.clone().into(),
+                r.clone().into(),
+            ],
+            Default::default(),
+        );
         assert!(!proof1.verify(&root_hash));
         assert!(!proof1.verify(&wrong_root_hash));
 
-        let proof2 = TrieProof::new(vec![
-            l1.clone().into(),
-            l3.clone().into(),
-            r.clone().into(),
-            b2.clone().into(),
-            b1.clone().into(),
-        ]);
+        let proof2 = TrieProof::new(
+            vec![
+                l1.clone().into(),
+                l3.clone().into(),
+                r.clone().into(),
+                b2.clone().into(),
+                b1.clone().into(),
+            ],
+            Default::default(),
+        );
         assert!(!proof2.verify(&root_hash));
         assert!(!proof2.verify(&wrong_root_hash));
 
-        let proof3 = TrieProof::new(vec![
-            l4.clone().into(),
-            b1.clone().into(),
-            b2.clone().into(),
-            r.clone().into(),
-        ]);
+        let proof3 = TrieProof::new(
+            vec![
+                l4.clone().into(),
+                b1.clone().into(),
+                b2.clone().into(),
+                r.clone().into(),
+            ],
+            Default::default(),
+        );
         assert!(!proof3.verify(&root_hash));
         assert!(!proof3.verify(&wrong_root_hash));
 
@@ -276,34 +352,43 @@ mod tests {
         b1_wrong.put_child(&key_b2, ":-[".hash()).unwrap();
         b1_wrong.put_child(&key_l2, l2.hash_assert()).unwrap();
 
-        let proof1 = TrieProof::new(vec![
-            l1.clone().into(),
-            l3.clone().into(),
-            l4.clone().into(),
-            b2_wrong.clone().into(),
-            l2.clone().into(),
-            b1_wrong.clone().into(),
-            r.clone().into(),
-        ]);
+        let proof1 = TrieProof::new(
+            vec![
+                l1.clone().into(),
+                l3.clone().into(),
+                l4.clone().into(),
+                b2_wrong.clone().into(),
+                l2.clone().into(),
+                b1_wrong.clone().into(),
+                r.clone().into(),
+            ],
+            Default::default(),
+        );
         assert!(!proof1.verify(&root_hash));
         assert!(!proof1.verify(&wrong_root_hash));
 
-        let proof2 = TrieProof::new(vec![
-            l1.clone().into(),
-            l3.clone().into(),
-            b2_wrong.into(),
-            b1.clone().into(),
-            r.clone().into(),
-        ]);
+        let proof2 = TrieProof::new(
+            vec![
+                l1.clone().into(),
+                l3.clone().into(),
+                b2_wrong.into(),
+                b1.clone().into(),
+                r.clone().into(),
+            ],
+            Default::default(),
+        );
         assert!(!proof2.verify(&root_hash));
         assert!(!proof2.verify(&wrong_root_hash));
 
-        let proof3 = TrieProof::new(vec![
-            l4.clone().into(),
-            b2.clone().into(),
-            b1_wrong.into(),
-            r.clone().into(),
-        ]);
+        let proof3 = TrieProof::new(
+            vec![
+                l4.clone().into(),
+                b2.clone().into(),
+                b1_wrong.into(),
+                r.clone().into(),
+            ],
+            Default::default(),
+        );
         assert!(!proof3.verify(&root_hash));
         assert!(!proof3.verify(&wrong_root_hash));
 
@@ -319,29 +404,38 @@ mod tests {
         b1_wrong.put_child(&key_b2_wrong, b2.hash_assert()).unwrap();
         b1_wrong.put_child(&key_l2, l2.hash_assert()).unwrap();
 
-        let proof1 = TrieProof::new(vec![
-            l1.clone().into(),
-            l3.clone().into(),
-            l4.clone().into(),
-            b2_wrong.clone().into(),
-            l2.into(),
-            b1_wrong.clone().into(),
-            r.clone().into(),
-        ]);
+        let proof1 = TrieProof::new(
+            vec![
+                l1.clone().into(),
+                l3.clone().into(),
+                l4.clone().into(),
+                b2_wrong.clone().into(),
+                l2.into(),
+                b1_wrong.clone().into(),
+                r.clone().into(),
+            ],
+            Default::default(),
+        );
         assert!(!proof1.verify(&root_hash));
         assert!(!proof1.verify(&wrong_root_hash));
 
-        let proof2 = TrieProof::new(vec![
-            l1.into(),
-            l3.into(),
-            b2_wrong.into(),
-            b1.into(),
-            r.clone().into(),
-        ]);
+        let proof2 = TrieProof::new(
+            vec![
+                l1.into(),
+                l3.into(),
+                b2_wrong.into(),
+                b1.into(),
+                r.clone().into(),
+            ],
+            Default::default(),
+        );
         assert!(!proof2.verify(&root_hash));
         assert!(!proof2.verify(&wrong_root_hash));
 
-        let proof3 = TrieProof::new(vec![l4.into(), b2.into(), b1_wrong.into(), r.into()]);
+        let proof3 = TrieProof::new(
+            vec![l4.into(), b2.into(), b1_wrong.into(), r.into()],
+            Default::default(),
+        );
         assert!(!proof3.verify(&root_hash));
         assert!(!proof3.verify(&wrong_root_hash));
     }

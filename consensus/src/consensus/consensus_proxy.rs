@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -353,7 +353,7 @@ impl<N: Network> ConsensusProxy<N> {
         &self,
         addresses: Vec<Address>,
         min_peers: usize,
-    ) -> Result<Vec<(Address, Account)>, RequestError> {
+    ) -> Result<BTreeMap<Address, Option<Account>>, RequestError> {
         // First we tell the network to provide us with a vector that contains all the connected peers that support such services
         // Note: If the network could not provide enough peers that satisfies our requirement, then an error would be returned
         let peers = self
@@ -369,34 +369,16 @@ impl<N: Network> ConsensusProxy<N> {
                 RequestError::OutboundRequest(OutboundRequestError::SendError)
             })?;
 
-        let mut verified_accounts = HashMap::new();
+        let keys: Vec<KeyNibbles> = addresses.iter().map(Into::into).collect();
 
         for peer_id in peers {
-            // If we already verified all accounts we are done
-            if addresses.len() == verified_accounts.len() {
-                break;
-            }
-
-            let mut unverified_keys: HashMap<KeyNibbles, Address> = HashMap::from_iter(
-                addresses
-                    .iter()
-                    .filter(|&address| !verified_accounts.contains_key(address))
-                    .map(|address| (KeyNibbles::from(address), address.clone())),
-            );
-
             log::debug!(
                 peer_id = %peer_id,
                 "Performing accounts by address request to peer",
             );
-            let keys_to_verify: Vec<KeyNibbles> = unverified_keys.keys().cloned().collect();
             let response = self
                 .network
-                .request::<RequestTrieProof>(
-                    RequestTrieProof {
-                        keys: keys_to_verify.clone(),
-                    },
-                    peer_id,
-                )
+                .request::<RequestTrieProof>(RequestTrieProof { keys: keys.clone() }, peer_id)
                 .await;
 
             match response {
@@ -409,34 +391,35 @@ impl<N: Network> ConsensusProxy<N> {
 
                             if let Some(block) = block {
                                 // Now we need to verify the proof
-                                if let Ok(values) =
-                                    proof.verify_values(block.state_root(), &keys_to_verify)
-                                {
-                                    // If the proof is valid, then we add the obtained accounts to our verified accounts vector.
-                                    for (key, value) in values {
-                                        if let Some(address) = unverified_keys.remove(&key) {
-                                            if let Ok(account) =
-                                                Account::deserialize_from_vec(&value)
-                                            {
-                                                verified_accounts.insert(address, account);
-                                            }
-                                        }
-                                    }
+                                if let Ok(values) = proof.verify_values(
+                                    block.state_root(),
+                                    &keys.iter().collect::<Vec<_>>(),
+                                ) {
+                                    return Ok(values
+                                        .into_iter()
+                                        .map(|(key, value)| {
+                                            (
+                                                key.to_address().unwrap(),
+                                                value.map(|v| {
+                                                    Account::deserialize_from_vec(&v).unwrap()
+                                                }),
+                                            )
+                                        })
+                                        .collect());
                                 } else {
                                     // If the proof does not verify, we disconnect from the peer
-                                    log::debug!(peer=%peer_id,"Disconnecting from peer because the accounts proof didn't verify");
+                                    log::debug!(peer=%peer_id, "Disconnecting from peer because the accounts proof didn't verify");
                                     self.network
-                                        .disconnect_peer(peer_id, CloseReason::Other)
+                                        .disconnect_peer(peer_id, CloseReason::MaliciousPeer)
                                         .await;
-                                    break;
                                 }
                             } else {
                                 // If we couldn't find the block, then we cannot verify the proof
-                                log::debug!(block_hash=%block_hash,"Received an accounts proof, but we could not find the block that was used to generate the proof");
+                                log::debug!(block_hash=%block_hash, "Received an accounts proof, but we could not find the block that was used to generate the proof");
                             }
                         } else {
                             // The peer provided a proof but did not provide the block hash, this is considered malicious
-                            log::debug!(peer=%peer_id,"Disconnecting from peer because of mailicious behaviour during accounts proof");
+                            log::debug!(peer=%peer_id, "Disconnecting from peer because of mailicious behaviour during accounts proof");
                             self.network
                                 .disconnect_peer(peer_id, CloseReason::MaliciousPeer)
                                 .await;
@@ -448,12 +431,14 @@ impl<N: Network> ConsensusProxy<N> {
                 }
                 Err(error) => {
                     // If there was a request error with this peer we log an error
-                    log::error!(peer=%peer_id, err=%error,"There was an error requesting accounts proof from peer");
+                    log::error!(peer=%peer_id, err=%error, "There was an error requesting accounts proof from peer");
                 }
             }
         }
 
-        Ok(verified_accounts.into_iter().collect())
+        Err(RequestError::OutboundRequest(
+            OutboundRequestError::NoResponse,
+        ))
     }
 
     pub async fn subscribe_to_addresses(

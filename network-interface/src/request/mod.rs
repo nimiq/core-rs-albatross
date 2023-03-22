@@ -94,6 +94,9 @@ pub enum OutboundRequestError {
     /// The remote supports none of the requested protocols.
     #[error("Remote doesn't support requested protocol")]
     UnsupportedProtocols,
+    /// No response after asking a couple of peers.
+    #[error("No response after asking a couple of peers")]
+    NoResponse,
 }
 
 #[repr(u8)]
