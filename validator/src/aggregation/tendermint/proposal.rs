@@ -44,6 +44,7 @@ pub struct SignedProposal {
     pub(crate) round: u32,
     pub(crate) valid_round: Option<u32>,
     pub(crate) signature: SchnorrSignature,
+    pub(crate) signer: u16,
 }
 
 impl SignedProposal {
@@ -53,9 +54,9 @@ impl SignedProposal {
     pub fn into_tendermint_signed_message<Id>(
         self,
         id: Option<Id>,
-    ) -> SignedProposalMessage<Header<Id>, SchnorrSignature> {
+    ) -> SignedProposalMessage<Header<Id>, (SchnorrSignature, u16)> {
         SignedProposalMessage {
-            signature: self.signature,
+            signature: (self.signature, self.signer),
             message: ProposalMessage {
                 proposal: Header(self.proposal, id),
                 round: self.round,
@@ -65,13 +66,14 @@ impl SignedProposal {
     }
 }
 
-impl<Id> From<SignedProposalMessage<Header<Id>, SchnorrSignature>> for SignedProposal {
-    fn from(value: SignedProposalMessage<Header<Id>, SchnorrSignature>) -> Self {
+impl<Id> From<SignedProposalMessage<Header<Id>, (SchnorrSignature, u16)>> for SignedProposal {
+    fn from(value: SignedProposalMessage<Header<Id>, (SchnorrSignature, u16)>) -> Self {
         Self {
             proposal: value.message.proposal.0,
             valid_round: value.message.valid_round,
             round: value.message.round,
-            signature: value.signature,
+            signature: value.signature.0,
+            signer: value.signature.1,
         }
     }
 }

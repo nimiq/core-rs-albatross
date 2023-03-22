@@ -196,7 +196,7 @@ where
     type InherentHash = Blake2bHash;
     type Aggregation = TendermintContribution;
     type AggregationMessage = AggregateMessage;
-    type ProposalSignature = SchnorrSignature;
+    type ProposalSignature = (SchnorrSignature, u16);
 
     const F_PLUS_ONE: usize = Policy::F_PLUS_ONE as usize;
     const TWO_F_PLUS_ONE: usize = Policy::TWO_F_PLUS_ONE as usize;
@@ -315,7 +315,7 @@ where
 
                     let data = Self::hash_proposal(&msg.message);
 
-                    if proposer.verify(&msg.signature, data) {
+                    if proposer.verify(&msg.signature.0, data) {
                         return Some(msg);
                     }
                 }
@@ -363,7 +363,7 @@ where
             .signing_key;
 
         // Verify the signature. The proposal is signed by the proposer of the round the proposal is used in
-        if !proposer.verify(&proposal.signature, data) {
+        if !proposer.verify(&proposal.signature.0, data) {
             return Err(ProposalError::InvalidSignature);
         }
 
@@ -447,7 +447,10 @@ where
         proposal_message: &ProposalMessage<Self::Proposal>,
     ) -> Self::ProposalSignature {
         let data = Self::hash_proposal(proposal_message);
-        self.block_producer.signing_key.sign(data)
+        (
+            self.block_producer.signing_key.sign(data),
+            self.validator_slot_band,
+        )
     }
 
     fn create_aggregation(

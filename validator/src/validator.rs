@@ -958,7 +958,7 @@ where
 {
     type Item = SignedProposalMessage<
         Header<<TValidatorNetwork as ValidatorNetwork>::PubsubId>,
-        SchnorrSignature,
+        (SchnorrSignature, u16),
     >;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {

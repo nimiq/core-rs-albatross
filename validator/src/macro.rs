@@ -35,9 +35,15 @@ where
 {
     Update(MacroState),
     Decision(MacroBlock),
-    ProposalAccepted(SignedProposalMessage<Header<TValidatorNetwork::PubsubId>, SchnorrSignature>),
-    ProposalIgnored(SignedProposalMessage<Header<TValidatorNetwork::PubsubId>, SchnorrSignature>),
-    ProposalRejected(SignedProposalMessage<Header<TValidatorNetwork::PubsubId>, SchnorrSignature>),
+    ProposalAccepted(
+        SignedProposalMessage<Header<TValidatorNetwork::PubsubId>, (SchnorrSignature, u16)>,
+    ),
+    ProposalIgnored(
+        SignedProposalMessage<Header<TValidatorNetwork::PubsubId>, (SchnorrSignature, u16)>,
+    ),
+    ProposalRejected(
+        SignedProposalMessage<Header<TValidatorNetwork::PubsubId>, (SchnorrSignature, u16)>,
+    ),
 }
 
 pub struct ProposalTopic<TValidatorNetwork> {
@@ -79,7 +85,7 @@ where
             'static,
             SignedProposalMessage<
                 Header<<TValidatorNetwork as ValidatorNetwork>::PubsubId>,
-                SchnorrSignature,
+                (SchnorrSignature, u16),
             >,
         >,
     ) -> Self {

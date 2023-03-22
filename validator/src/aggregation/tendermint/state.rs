@@ -21,7 +21,7 @@ pub struct MacroState {
     round_number: u32,
     step: Step,
     known_proposals: BTreeMap<Blake2sHash, MacroHeader>,
-    round_proposals: BTreeMap<u32, BTreeMap<Blake2sHash, (Option<u32>, SchnorrSignature)>>,
+    round_proposals: BTreeMap<u32, BTreeMap<Blake2sHash, (Option<u32>, (SchnorrSignature, u16))>>,
     votes: BTreeMap<(u32, Step), Option<Blake2sHash>>,
     best_votes: BTreeMap<(u32, Step), TendermintContribution>,
     inherents: BTreeMap<Blake2bHash, MacroBody>,
@@ -123,7 +123,8 @@ impl MacroState {
             proposal,
             round: round_number,
             valid_round,
-            signature,
+            signature: signature.0,
+            signer: signature.1,
         })
     }
 }
