@@ -60,6 +60,7 @@ struct ActiveEpochState {
 
 struct BlockchainState {
     fork_proofs: ForkProofPool,
+    can_enforce_validity_window: bool,
 }
 
 /// Validator inactivity and parking state
@@ -172,6 +173,7 @@ where
 
         let blockchain_state = BlockchainState {
             fork_proofs: ForkProofPool::new(),
+            can_enforce_validity_window: false,
         };
 
         let database = env.open_database(Self::MACRO_STATE_DB_NAME.to_string());
@@ -416,6 +418,46 @@ where
         }
     }
 
+    fn init_mempool(&mut self) {
+        if let MempoolState::Inactive = self.mempool_state {
+            let mempool = Arc::clone(&self.mempool);
+            let network = Arc::clone(&self.consensus.network);
+            #[cfg(not(feature = "metrics"))]
+            tokio::spawn({
+                async move {
+                    mempool.start_executors(network, None, None).await;
+                }
+            });
+            #[cfg(feature = "metrics")]
+            tokio::spawn({
+                let mempool_monitor = self.mempool_monitor.clone();
+                let ctrl_mempool_monitor = self.control_mempool_monitor.clone();
+                async move {
+                    mempool
+                        .start_executors(network, Some(mempool_monitor), Some(ctrl_mempool_monitor))
+                        .await;
+                }
+            });
+            self.mempool_state = MempoolState::Active;
+        }
+    }
+
+    fn pause_validator(&mut self) {
+        self.blockchain_state.can_enforce_validity_window = false;
+    }
+
+    fn update_can_enforce_validity_window(&mut self) {
+        // Check and update if we can enforce the tx validity window.
+        // This is important if we use the state sync and do not have the relevant parts of the history yet.
+        if !self.blockchain_state.can_enforce_validity_window
+            && self.blockchain.read().can_enforce_validity_window()
+        {
+            self.blockchain_state.can_enforce_validity_window = true;
+            self.init();
+            self.init_mempool();
+        }
+    }
+
     fn on_blockchain_event(&mut self, event: BlockchainEvent) {
         match event {
             BlockchainEvent::Extended(ref hash) => self.on_blockchain_extended(hash),
@@ -423,7 +465,9 @@ where
             BlockchainEvent::Finalized(ref hash) => self.on_blockchain_extended(hash),
             BlockchainEvent::EpochFinalized(ref hash) => {
                 self.on_blockchain_extended(hash);
-                self.init_epoch()
+                if self.can_be_active() {
+                    self.init_epoch()
+                }
             }
             BlockchainEvent::Rebranched(ref old_chain, ref new_chain) => {
                 self.on_blockchain_rebranched(old_chain, new_chain)
@@ -432,8 +476,11 @@ where
     }
 
     fn on_blockchain_history_adopted(&mut self, _: &Blake2bHash) {
-        self.mempool.mempool_clean_up();
-        debug!("Performed a mempool clean up because new history was adopted");
+        // Mempool updates are only done once we can be active.
+        if self.can_be_active() {
+            self.mempool.mempool_clean_up();
+            debug!("Performed a mempool clean up because new history was adopted");
+        }
     }
 
     fn on_blockchain_extended(&mut self, hash: &Blake2bHash) {
@@ -446,8 +493,11 @@ where
 
         // Update mempool and blockchain state
         self.blockchain_state.fork_proofs.apply_block(&block);
-        self.mempool
-            .mempool_update(&vec![(hash.clone(), block)], [].as_ref());
+        // Mempool updates are only done once we can be active.
+        if self.can_be_active() {
+            self.mempool
+                .mempool_update(&vec![(hash.clone(), block)], [].as_ref());
+        }
     }
 
     fn on_blockchain_rebranched(
@@ -462,7 +512,10 @@ where
         for (_hash, block) in new_chain.iter() {
             self.blockchain_state.fork_proofs.apply_block(block);
         }
-        self.mempool.mempool_update(new_chain, old_chain);
+        // Mempool updates are only done once we can be active.
+        if self.can_be_active() {
+            self.mempool.mempool_update(new_chain, old_chain);
+        }
     }
 
     fn on_fork_event(&mut self, event: ForkEvent) {
@@ -616,8 +669,15 @@ where
         }
     }
 
+    /// Checks whether we are an active validator in the current epoch.
     fn is_active(&self) -> bool {
         self.epoch_state.is_some()
+    }
+
+    /// Checks whether the validator fulfills the conditions for producing valid blocks.
+    /// This includes having consensus, being able to extend the history tree and to enforce transaction validity.
+    fn can_be_active(&self) -> bool {
+        self.consensus.is_established() && self.blockchain_state.can_enforce_validity_window
     }
 
     fn get_staking_state(&self, blockchain: &Blockchain) -> ValidatorStakingState {
@@ -773,33 +833,10 @@ where
             match event {
                 Ok(ConsensusEvent::Established) => {
                     self.init();
-                    if let MempoolState::Inactive = self.mempool_state {
-                        let mempool = Arc::clone(&self.mempool);
-                        let network = Arc::clone(&self.consensus.network);
-                        #[cfg(not(feature = "metrics"))]
-                        tokio::spawn({
-                            async move {
-                                mempool.start_executors(network, None, None).await;
-                            }
-                        });
-                        #[cfg(feature = "metrics")]
-                        tokio::spawn({
-                            let mempool_monitor = self.mempool_monitor.clone();
-                            let ctrl_mempool_monitor = self.control_mempool_monitor.clone();
-                            async move {
-                                mempool
-                                    .start_executors(
-                                        network,
-                                        Some(mempool_monitor),
-                                        Some(ctrl_mempool_monitor),
-                                    )
-                                    .await;
-                            }
-                        });
-                        self.mempool_state = MempoolState::Active;
-                    }
+                    self.init_mempool();
                 }
                 Ok(ConsensusEvent::Lost) => {
+                    self.pause_validator();
                     if let MempoolState::Active = self.mempool_state {
                         let mempool = Arc::clone(&self.mempool);
                         let network = Arc::clone(&self.consensus.network);
@@ -816,11 +853,12 @@ where
         // Process blockchain updates.
         let mut received_event: Option<Blake2bHash> = None;
         while let Poll::Ready(Some(event)) = self.blockchain_event_rx.poll_next_unpin(cx) {
-            let consensus_established = self.consensus.is_established();
-            trace!(?event, consensus_established, "blockchain event");
-            if consensus_established {
-                let latest_hash = event.get_newest_hash();
-                self.on_blockchain_event(event);
+            self.update_can_enforce_validity_window();
+            let can_be_active = self.can_be_active();
+            trace!(?event, can_be_active, "blockchain event");
+            let latest_hash = event.get_newest_hash();
+            self.on_blockchain_event(event);
+            if can_be_active {
                 received_event = Some(latest_hash);
             }
         }
@@ -830,6 +868,7 @@ where
         }
 
         // Process fork events.
+        // We can already start with processing fork events before we can be active.
         while let Poll::Ready(Some(Ok(event))) = self.fork_event_rx.poll_next_unpin(cx) {
             let consensus_established = self.consensus.is_established();
             trace!(?event, consensus_established, "fork event");
@@ -839,7 +878,7 @@ where
         }
 
         // If we are an active validator, participate in block production.
-        if self.consensus.is_established() && self.is_active() {
+        if self.can_be_active() && self.is_active() {
             if self.macro_producer.is_some() {
                 self.poll_macro(cx);
             }
@@ -848,8 +887,8 @@ where
             }
         }
 
-        // Once consensus is established, check the validator staking state.
-        if self.consensus.is_established() {
+        // Once the validator can be active is established, check the validator staking state.
+        if self.can_be_active() {
             let blockchain = self.blockchain.read();
             match self.get_staking_state(&blockchain) {
                 ValidatorStakingState::Parked => match self.validator_state {

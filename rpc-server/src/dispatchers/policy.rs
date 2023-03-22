@@ -18,7 +18,7 @@ impl PolicyInterface for PolicyDispatcher {
         Ok(PolicyConstants {
             staking_contract_address: Policy::STAKING_CONTRACT_ADDRESS.to_string(),
             coinbase_address: Policy::COINBASE_ADDRESS.to_string(),
-            transaction_validity_window: Policy::TRANSACTION_VALIDITY_WINDOW,
+            transaction_validity_window: Policy::transaction_validity_window(),
             max_size_micro_body: Policy::MAX_SIZE_MICRO_BODY,
             version: Policy::VERSION,
             slots: Policy::SLOTS,

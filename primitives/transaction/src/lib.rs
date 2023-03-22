@@ -407,7 +407,7 @@ impl Transaction {
     }
 
     pub fn is_valid_at(&self, block_height: u32) -> bool {
-        let window = Policy::TRANSACTION_VALIDITY_WINDOW;
+        let window = Policy::transaction_validity_window();
         block_height
             >= self
                 .validity_start_height

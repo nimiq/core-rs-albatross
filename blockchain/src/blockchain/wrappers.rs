@@ -196,7 +196,7 @@ impl Blockchain {
     ) -> bool {
         let max_block_number = self
             .block_number()
-            .saturating_sub(Policy::TRANSACTION_VALIDITY_WINDOW);
+            .saturating_sub(Policy::transaction_validity_window());
         self.tx_in_validity_window(tx_hash, max_block_number, txn_opt)
     }
 
@@ -225,5 +225,28 @@ impl Blockchain {
         };
 
         self.state().accounts.tree.get_missing_range(txn)
+    }
+
+    /// Check if all blockchain conditions to run a validator are met.
+    /// These are:
+    /// - can verify/extend history tree
+    /// - can enforce transaction validity window
+    /// The second subsumes the first.
+    pub fn can_enforce_validity_window(&self) -> bool {
+        if self.state.can_verify_history {
+            // If we are in the first epoch, we can enforce the validity window.
+            if self.block_number() < Policy::transaction_validity_window() {
+                return true;
+            }
+
+            let first_validity_window_block =
+                self.block_number() - Policy::transaction_validity_window();
+            let election_block = Policy::election_block_after(first_validity_window_block);
+
+            // Check whether we do have a history tree for the epoch of the first validity window block.
+            // Length at will use the election block or the most recent existing block (in the same epoch).
+            return self.history_store.length_at(election_block, None) > 0;
+        }
+        false
     }
 }

@@ -23,6 +23,8 @@ pub struct Policy {
     pub tendermint_timeout_delta: u64,
     /// Maximum size of accounts trie chunks.
     pub state_chunks_max_size: u32,
+    /// Number of blocks a transaction is valid with Albatross consensus.
+    pub transaction_validity_window: u32,
 }
 
 impl Policy {
@@ -40,9 +42,6 @@ impl Policy {
         0x60, 0x03, 0x65, 0xab, 0x4e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00, 0x00,
     ]);
-
-    /// Number of blocks a transaction is valid with Albatross consensus.
-    pub const TRANSACTION_VALIDITY_WINDOW: u32 = 7200;
 
     /// The maximum allowed size, in bytes, for a micro block body.
     pub const MAX_SIZE_MICRO_BODY: usize = 100_000;
@@ -117,6 +116,13 @@ impl Policy {
     #[inline]
     fn get_blocks_per_epoch(&self) -> u32 {
         self.blocks_per_batch * self.batches_per_epoch as u32
+    }
+
+    #[inline]
+    pub fn transaction_validity_window() -> u32 {
+        GLOBAL_POLICY
+            .get_or_init(Self::default)
+            .transaction_validity_window
     }
 
     #[inline]
@@ -335,6 +341,7 @@ impl Default for Policy {
             tendermint_timeout_init: 1000,
             tendermint_timeout_delta: 1000,
             state_chunks_max_size: 200, // #Nodes/accounts 200, TODO: Simulate with different sizes
+            transaction_validity_window: 7200,
         }
     }
 }
@@ -345,6 +352,7 @@ pub const TEST_POLICY: Policy = Policy {
     tendermint_timeout_init: 1000,
     tendermint_timeout_delta: 1000,
     state_chunks_max_size: 2,
+    transaction_validity_window: 64,
 };
 
 #[cfg(test)]
@@ -353,14 +361,7 @@ mod tests {
     use nimiq_test_log::test;
 
     fn initialize_policy() {
-        let policy = Policy {
-            blocks_per_batch: 32,
-            batches_per_epoch: 4,
-            tendermint_timeout_init: 1000,
-            tendermint_timeout_delta: 1000,
-            state_chunks_max_size: 2,
-        };
-        let _ = Policy::get_or_init(policy);
+        let _ = Policy::get_or_init(TEST_POLICY);
     }
 
     #[test]

@@ -1116,7 +1116,7 @@ async fn mempool_update_aged_transaction() {
     let producer = BlockProducer::new(signing_key(), voting_key());
 
     let macro_blocks_to_be_produced =
-        Policy::TRANSACTION_VALIDITY_WINDOW / Policy::blocks_per_batch();
+        Policy::transaction_validity_window() / Policy::blocks_per_batch();
 
     // Now we produce blocks past the transaction validity window
     produce_macro_blocks_with_txns(
