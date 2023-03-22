@@ -462,14 +462,14 @@ impl<N: Network> ConsensusProxy<N> {
         min_peers: usize,
         peer_id: Option<N::PeerId>,
     ) -> Result<(), RequestError> {
-        //If we are provided a peer_id we perform the request only to this specific peer
+        // If we are provided a peer_id we perform the request only to this specific peer
         let peers = if let Some(peer_id) = peer_id {
             if self
                 .network
                 .peer_provides_services(peer_id, Services::FULL_BLOCKS)
             {
                 // Providing the specific peer can be used in cases where the light client receives notifications that a new peer joined the network
-                // and then it wants to subscribe to this new peer.
+                // and then it wants to subscribe to this specific peer.
                 vec![peer_id]
             } else {
                 vec![]
@@ -498,7 +498,7 @@ impl<N: Network> ConsensusProxy<N> {
             match response {
                 Ok(response) => match response.result {
                     Ok(_) => {
-                        //Done, we are subscribed at least to one peer, continue with the next one
+                        // Done, we are subscribed at least to one peer, continue with the next one
                         sucess = true;
                         continue;
                     }
@@ -530,7 +530,9 @@ impl<N: Network> ConsensusProxy<N> {
         addresses: Vec<Address>,
         min_peers: usize,
     ) -> Result<(), RequestError> {
-        // Unsubscribe to all peers
+        // Unsubscribe addresses from all peers
+        // Note: this does not mean that we will fully unsuscribe from a peer,
+        // we will unsuscribe only from the addresses that were suplied to this function
         for peer_id in self
             .get_peers_for_service(Services::FULL_BLOCKS, min_peers)
             .await?

@@ -1,6 +1,6 @@
-use beserial::{Deserialize, Serialize};
 use thiserror::Error;
 
+use beserial::{Deserialize, Serialize};
 use nimiq_blockchain_interface::BlockchainError;
 
 #[derive(Debug, Error)]
@@ -17,14 +17,15 @@ pub enum SyncError {
     NoValidSyncTarget,
 }
 
+/// Different errors that can be obtained when subscribing to transaction addresses.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Error, Eq, PartialEq, Serialize, Deserialize)]
 pub enum SubscribeToAdressesError {
     /// Already attending too many peers
-    #[error("TooManyPeers")]
+    #[error("Too many peers")]
     TooManyPeers = 1,
     /// Already attending too many peers
-    #[error("TooManyAddresses")]
+    #[error("Too many addresses")]
     TooManyAddresses = 2,
     /// Some of the provided parameters/operations was invalid
     #[error("Invalid operation")]

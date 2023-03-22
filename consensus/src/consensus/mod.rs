@@ -7,7 +7,6 @@ use std::time::Duration;
 
 use futures::{FutureExt, StreamExt};
 use instant::Instant;
-use nimiq_hash::Blake2bHash;
 use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
 #[cfg(not(target_family = "wasm"))]
 use tokio::time::{sleep, Sleep};
@@ -15,6 +14,7 @@ use tokio_stream::wrappers::BroadcastStream;
 
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
+use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{network::Network, request::request_handler};
 use nimiq_primitives::task_executor::TaskExecutor;
 use nimiq_zkp_component::zkp_component::ZKPComponentProxy;
@@ -166,7 +166,7 @@ impl<N: Network> Consensus<N> {
                 tokio::spawn(remote_event_dispatcher);
             }
             BlockchainProxy::Light(_) => {
-                //The light blockchain does not provide this functionality
+                // The light blockchain does not provide this functionality
             }
         }
     }

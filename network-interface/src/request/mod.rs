@@ -250,6 +250,7 @@ pub fn request_handler<
     }
 }
 
+/// Handler that takes care of sending messages to a network, similar to a request except that we don't expect an answer.
 pub fn message_handler<
     T: Send + Sync + Clone + 'static,
     Msg: MessageHandle<N, T> + Message,
@@ -270,7 +271,7 @@ pub fn message_handler<
                     tokio::spawn(async move {
                         log::trace!("{:?} {:#?}", peer_id, msg);
 
-                        //Messages do not have a response (so the response is ignored)
+                        // Messages do not have a response (so the response is ignored)
                         msg.message_handle(peer_id, &req_environment);
                     })
                     .await

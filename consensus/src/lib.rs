@@ -3,8 +3,7 @@ extern crate log;
 
 pub use consensus::consensus_proxy::ConsensusProxy;
 pub use consensus::{Consensus, ConsensusEvent, RemoteEvent};
-pub use error::Error;
-pub use error::SubscribeToAdressesError;
+pub use error::{Error, SubscribeToAdressesError};
 
 pub mod consensus;
 pub mod error;

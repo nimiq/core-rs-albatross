@@ -7,7 +7,7 @@ use nimiq_consensus::Consensus;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_network_interface::network::Network;
-use nimiq_network_mock::{MockHub, MockNetwork};
+use nimiq_network_mock::MockHub;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_primitives::policy::Policy;
 use nimiq_test_log::test;
@@ -17,11 +17,10 @@ use nimiq_test_utils::{
     node::TESTING_BLS_CACHE_MAX_CAPACITY,
 };
 use nimiq_transaction::extended_transaction::ExtTxData;
-use nimiq_transaction::{ExecutedTransaction, Transaction, TransactionFormat};
+use nimiq_transaction::{ExecutedTransaction, TransactionFormat};
 use nimiq_utils::time::OffsetTime;
 use nimiq_zkp_component::ZKPComponent;
 use parking_lot::{Mutex, RwLock};
-use std::any::Any;
 use std::str::FromStr;
 use std::sync::Arc;
 

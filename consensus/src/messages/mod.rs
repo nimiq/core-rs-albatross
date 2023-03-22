@@ -304,7 +304,7 @@ impl RequestCommon for RequestBlocksProof {
     const MAX_REQUESTS: u32 = MAX_REQUEST_BLOCKS_PROOF;
 }
 
-/// Operations supported for the txn events by address subscription
+/// Operations supported for the transaction address subscription
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum AddressSubscriptionOperation {
@@ -314,7 +314,7 @@ pub enum AddressSubscriptionOperation {
     Unsubscribe,
 }
 
-/// This request is used to initiate/update/terminate a subscription to events of some given addresses
+/// This request is used to subscribe or unsubscribe from specific addresses.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestSubscribeToAddress {
     /// The type of operation that is needed by the peer
@@ -326,11 +326,12 @@ pub struct RequestSubscribeToAddress {
 
 impl RequestCommon for RequestSubscribeToAddress {
     type Kind = RequestMarker;
-    const TYPE_ID: u16 = 215;
+    const TYPE_ID: u16 = 217;
     type Response = ResponseSubscribeToAddress;
     const MAX_REQUESTS: u32 = MAX_REQUEST_SUBSCRIBE_BY_ADDRESS;
 }
 
+/// The response when a peer tries to subscribe to some specific address.
 #[derive(Serialize, Deserialize)]
 pub struct ResponseSubscribeToAddress {
     /// Response used to specify if the request can be fullfiled or not
@@ -341,6 +342,7 @@ pub struct ResponseSubscribeToAddress {
 #[derive(Serialize, Deserialize, Copy, Clone, Debug)]
 #[repr(u8)]
 pub enum NotificationEvent {
+    /// A new block was pushed into the chain.
     BlockchainExtend,
 }
 
@@ -364,6 +366,6 @@ impl Topic for AddressSubscriptionTopic {
     type Item = AddressNotification;
 
     const BUFFER_SIZE: usize = 1024;
-    const NAME: &'static str = "transactions";
-    const VALIDATE: bool = true;
+    const NAME: &'static str = "AddressNotification";
+    const VALIDATE: bool = false;
 }
