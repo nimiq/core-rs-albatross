@@ -1746,6 +1746,86 @@ impl Network {
 
         output_rx.await?
     }
+
+    async fn subscribe_with_name<T>(
+        &self,
+        topic_name: String,
+    ) -> Result<BoxStream<'static, (T::Item, GossipsubId<PeerId>)>, NetworkError>
+    where
+        T: Topic + Sync,
+    {
+        let (tx, rx) = oneshot::channel();
+
+        self.action_tx
+            .clone()
+            .send(NetworkAction::Subscribe {
+                topic_name,
+                buffer_size: <T as Topic>::BUFFER_SIZE,
+                validate: <T as Topic>::VALIDATE,
+                output: tx,
+            })
+            .await?;
+
+        // Receive the mpsc::Receiver, but propagate errors first.
+        let subscribe_rx = ReceiverStream::new(rx.await??);
+
+        Ok(Box::pin(subscribe_rx.map(|(msg, msg_id, source)| {
+            let item: <T as Topic>::Item = Deserialize::deserialize_from_vec(&msg.data).unwrap();
+            let id = GossipsubId {
+                message_id: msg_id,
+                propagation_source: source,
+            };
+            (item, id)
+        })))
+    }
+
+    async fn unsubscribe_with_name<T>(&self, topic_name: String) -> Result<(), NetworkError>
+    where
+        T: Topic + Sync,
+    {
+        let (output_tx, output_rx) = oneshot::channel();
+
+        self.action_tx
+            .clone()
+            .send(NetworkAction::Unsubscribe {
+                topic_name,
+                output: output_tx,
+            })
+            .await?;
+
+        output_rx.await?
+    }
+
+    async fn publish_with_name<T>(
+        &self,
+        topic_name: String,
+        item: <T as Topic>::Item,
+    ) -> Result<(), NetworkError>
+    where
+        T: Topic + Sync,
+    {
+        let (output_tx, output_rx) = oneshot::channel();
+
+        let mut buf = vec![];
+        item.serialize(&mut buf)?;
+
+        self.action_tx
+            .clone()
+            .send(NetworkAction::Publish {
+                topic_name,
+                data: buf,
+                output: output_tx,
+            })
+            .await?;
+
+        output_rx.await??;
+
+        #[cfg(feature = "metrics")]
+        self.metrics
+            .note_published_pubsub_message(<T as Topic>::NAME);
+
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -1852,73 +1932,9 @@ impl NetworkInterface for Network {
     where
         T: Topic + Sync,
     {
-        let (tx, rx) = oneshot::channel();
+        let topic_name = <T as Topic>::NAME.to_string();
 
-        self.action_tx
-            .clone()
-            .send(NetworkAction::Subscribe {
-                topic_name: <T as Topic>::NAME.to_string(),
-                buffer_size: <T as Topic>::BUFFER_SIZE,
-                validate: <T as Topic>::VALIDATE,
-                output: tx,
-            })
-            .await?;
-
-        // Receive the mpsc::Receiver, but propagate errors first.
-        let subscribe_rx = ReceiverStream::new(rx.await??);
-
-        Ok(Box::pin(subscribe_rx.map(|(msg, msg_id, source)| {
-            let item: <T as Topic>::Item = Deserialize::deserialize_from_vec(&msg.data).unwrap();
-            let id = GossipsubId {
-                message_id: msg_id,
-                propagation_source: source,
-            };
-            (item, id)
-        })))
-    }
-
-    async fn unsubscribe<T>(&self) -> Result<(), Self::Error>
-    where
-        T: Topic + Sync,
-    {
-        let (output_tx, output_rx) = oneshot::channel();
-
-        self.action_tx
-            .clone()
-            .send(NetworkAction::Unsubscribe {
-                topic_name: <T as Topic>::NAME.to_string(),
-                output: output_tx,
-            })
-            .await?;
-
-        output_rx.await?
-    }
-
-    async fn publish<T>(&self, item: <T as Topic>::Item) -> Result<(), Self::Error>
-    where
-        T: Topic + Sync,
-    {
-        let (output_tx, output_rx) = oneshot::channel();
-
-        let mut buf = vec![];
-        item.serialize(&mut buf)?;
-
-        self.action_tx
-            .clone()
-            .send(NetworkAction::Publish {
-                topic_name: <T as Topic>::NAME.to_string(),
-                data: buf,
-                output: output_tx,
-            })
-            .await?;
-
-        output_rx.await??;
-
-        #[cfg(feature = "metrics")]
-        self.metrics
-            .note_published_pubsub_message(<T as Topic>::NAME);
-
-        Ok(())
+        self.subscribe_with_name::<T>(topic_name).await
     }
 
     async fn subscribe_subtopic<T>(
@@ -1928,47 +1944,33 @@ impl NetworkInterface for Network {
     where
         T: Topic + Sync,
     {
-        let (tx, rx) = oneshot::channel();
+        let topic_name = format!("{}_{}", <T as Topic>::NAME.to_string(), subtopic);
 
-        self.action_tx
-            .clone()
-            .send(NetworkAction::Subscribe {
-                // The subtopic name is a concatenation of the topic name + subtopic
-                topic_name: format!("{}_{}", <T as Topic>::NAME.to_string(), subtopic),
-                buffer_size: <T as Topic>::BUFFER_SIZE,
-                validate: <T as Topic>::VALIDATE,
-                output: tx,
-            })
-            .await?;
+        self.subscribe_with_name::<T>(topic_name).await
+    }
 
-        // Receive the mpsc::Receiver, but propagate errors first.
-        let subscribe_rx = ReceiverStream::new(rx.await??);
-
-        Ok(Box::pin(subscribe_rx.map(|(msg, msg_id, source)| {
-            let item: <T as Topic>::Item = Deserialize::deserialize_from_vec(&msg.data).unwrap();
-            let id = GossipsubId {
-                message_id: msg_id,
-                propagation_source: source,
-            };
-            (item, id)
-        })))
+    async fn unsubscribe<T>(&self) -> Result<(), Self::Error>
+    where
+        T: Topic + Sync,
+    {
+        let topic_name = <T as Topic>::NAME.to_string();
+        self.unsubscribe_with_name::<T>(topic_name).await
     }
 
     async fn unsubscribe_subtopic<T>(&self, subtopic: String) -> Result<(), Self::Error>
     where
         T: Topic + Sync,
     {
-        let (output_tx, output_rx) = oneshot::channel();
+        let topic_name = format!("{}_{}", <T as Topic>::NAME.to_string(), subtopic);
+        self.unsubscribe_with_name::<T>(topic_name).await
+    }
 
-        self.action_tx
-            .clone()
-            .send(NetworkAction::Unsubscribe {
-                topic_name: format!("{}_{}", <T as Topic>::NAME.to_string(), subtopic),
-                output: output_tx,
-            })
-            .await?;
-
-        output_rx.await?
+    async fn publish<T>(&self, item: <T as Topic>::Item) -> Result<(), Self::Error>
+    where
+        T: Topic + Sync,
+    {
+        let topic_name = <T as Topic>::NAME.to_string();
+        self.publish_with_name::<T>(topic_name, item).await
     }
 
     async fn publish_subtopic<T>(
@@ -1979,27 +1981,8 @@ impl NetworkInterface for Network {
     where
         T: Topic + Sync,
     {
-        let (output_tx, output_rx) = oneshot::channel();
-
-        let mut buf = vec![];
-        item.serialize(&mut buf)?;
-
-        self.action_tx
-            .clone()
-            .send(NetworkAction::Publish {
-                topic_name: format!("{}_{}", <T as Topic>::NAME.to_string(), subtopic),
-                data: buf,
-                output: output_tx,
-            })
-            .await?;
-
-        output_rx.await??;
-
-        #[cfg(feature = "metrics")]
-        self.metrics
-            .note_published_pubsub_message(<T as Topic>::NAME);
-
-        Ok(())
+        let topic_name = format!("{}_{}", <T as Topic>::NAME.to_string(), subtopic);
+        self.publish_with_name::<T>(topic_name, item).await
     }
 
     fn validate_message<T>(&self, pubsub_id: Self::PubsubId, acceptance: MsgAcceptance)

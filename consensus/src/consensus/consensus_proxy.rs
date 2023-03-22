@@ -530,9 +530,9 @@ impl<N: Network> ConsensusProxy<N> {
         addresses: Vec<Address>,
         min_peers: usize,
     ) -> Result<(), RequestError> {
-        // Unsubscribe addresses from all peers
-        // Note: this does not mean that we will fully unsuscribe from a peer,
-        // we will unsuscribe only from the addresses that were suplied to this function
+        // Unsubscribe given addresses from all peers
+        // Note: this does not mean that we will fully unsubscribe  from a peer,
+        // we will unsubscribe  only from the addresses that were supplied to this function
         for peer_id in self
             .get_peers_for_service(Services::FULL_BLOCKS, min_peers)
             .await?
@@ -548,7 +548,7 @@ impl<N: Network> ConsensusProxy<N> {
                 )
                 .await;
 
-            // We don't care about the response, we just unsuscribe addresses from peers
+            // We don't care about the response, we just unsubscribe addresses from peers
         }
         Ok(())
     }
