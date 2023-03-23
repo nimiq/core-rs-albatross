@@ -200,9 +200,9 @@ impl<N: Network> ConsensusProxy<N> {
         //  - Current batch: We use the current head to prove those transactions
 
         let blockchain = self.blockchain.read();
-        let election_head_number = blockchain.election_head().block_number();
-        let checkpoint_head_number = blockchain.macro_head().block_number();
-        let current_head_number = blockchain.head().block_number();
+        let election_head = blockchain.election_head();
+        let checkpoint_head = blockchain.macro_head();
+        let current_head = blockchain.head();
 
         // We drop the blockchain lock because it's no longer needed while we request proofs
         drop(blockchain);
@@ -223,22 +223,22 @@ impl<N: Network> ConsensusProxy<N> {
                     continue;
                 }
 
-                if block_number <= &election_head_number {
+                if block_number <= &election_head.block_number() {
                     // First Case: Transactions from finalized epochs
                     hashes_by_block
                         .entry(Policy::election_block_after(*block_number))
                         .or_insert(vec![])
                         .push(hash.clone());
-                } else if block_number <= &checkpoint_head_number {
+                } else if block_number <= &checkpoint_head.block_number() {
                     // Second Case: Transactions from a finalized batch in the current epoch
                     hashes_by_block
-                        .entry(checkpoint_head_number)
+                        .entry(checkpoint_head.block_number())
                         .or_insert(vec![])
                         .push(hash.clone());
                 } else {
                     // Third Case: Transanctions from the current batch
                     hashes_by_block
-                        .entry(current_head_number)
+                        .entry(current_head.block_number())
                         .or_insert(vec![])
                         .push(hash.clone());
                 }
@@ -270,11 +270,8 @@ impl<N: Network> ConsensusProxy<N> {
                                     .verify(block.history_root().clone())
                                     .map_or(false, |result| result);
 
-                                // Verify block inclusion
-                                if block.block_number() <= election_head_number {
-                                    // Cache election head such that it can't change between request and response
-                                    let election_head = self.blockchain.read().election_head();
-
+                                // Verify that the transaction proof fits to the chain
+                                if block.block_number() <= election_head.block_number() {
                                     // Request block inclusion proofs for txs of previous epochs
                                     let block_proof = {
                                         if let Ok(ResponseBlocksProof {
@@ -304,6 +301,17 @@ impl<N: Network> ConsensusProxy<N> {
                                                 .is_block_proven(&election_head, &macro_block);
                                     } else {
                                         log::debug!(peer=%peer_id, "Macro block expected in tx proof response");
+                                        continue;
+                                    }
+                                } else if block.block_number() <= checkpoint_head.block_number() {
+                                    // Check that the transaction inclusion proof actually proofs inclusion in the block we know
+                                    if block.hash() != checkpoint_head.hash() {
+                                        log::debug!(peer=%peer_id,"BlockProof does not correspond to expected block");
+                                        continue;
+                                    }
+                                } else {
+                                    if block.hash() != current_head.hash() {
+                                        log::debug!(peer=%peer_id,"BlockProof does not correspond to expected block");
                                         continue;
                                     }
                                 }
