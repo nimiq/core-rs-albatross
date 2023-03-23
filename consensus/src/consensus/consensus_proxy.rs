@@ -190,7 +190,7 @@ impl<N: Network> ConsensusProxy<N> {
             })
     }
 
-    async fn prove_transactions_from_receipts(
+    pub async fn prove_transactions_from_receipts(
         &self,
         receipts: Vec<(Blake2bHash, u32)>,
         min_peers: usize,

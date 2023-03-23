@@ -1,6 +1,14 @@
 extern crate alloc; // Required for wasm-bindgen-derive
 
-use std::{cell::RefCell, collections::HashMap, rc::Rc, str::FromStr};
+use std::{
+    cell::RefCell,
+    collections::{
+        hash_map::{Entry, HashMap},
+        HashSet,
+    },
+    rc::Rc,
+    str::FromStr,
+};
 
 use futures::StreamExt;
 use js_sys::{Array, Date, Promise};
@@ -162,10 +170,15 @@ pub struct Client {
     #[wasm_bindgen(readonly, js_name = networkId)]
     pub network_id: u8,
 
+    /// A hashmap from address to the count of listeners subscribed to it
+    subscribed_addresses: Rc<RefCell<HashMap<nimiq_keys::Address, u16>>>,
+
     listener_id: usize,
     consensus_changed_listeners: Rc<RefCell<HashMap<usize, js_sys::Function>>>,
     head_changed_listeners: Rc<RefCell<HashMap<usize, js_sys::Function>>>,
     peer_changed_listeners: Rc<RefCell<HashMap<usize, js_sys::Function>>>,
+    transaction_listeners:
+        Rc<RefCell<HashMap<usize, (js_sys::Function, HashSet<nimiq_keys::Address>)>>>,
 }
 
 #[wasm_bindgen]
@@ -230,16 +243,19 @@ impl Client {
         let client = Client {
             inner: client,
             network_id: from_network_id(web_config.network_id),
+            subscribed_addresses: Rc::new(RefCell::new(HashMap::new())),
             listener_id: 0,
             consensus_changed_listeners: Rc::new(RefCell::new(HashMap::with_capacity(1))),
             head_changed_listeners: Rc::new(RefCell::new(HashMap::with_capacity(1))),
             peer_changed_listeners: Rc::new(RefCell::new(HashMap::with_capacity(1))),
+            transaction_listeners: Rc::new(RefCell::new(HashMap::new())),
         };
 
         client.setup_offline_online_event_handlers();
         client.setup_consensus_events();
         client.setup_blockchain_events();
         client.setup_network_events();
+        client.setup_transaction_events().await;
 
         client
     }
@@ -295,6 +311,59 @@ impl Client {
         Ok(listener_id)
     }
 
+    /// Adds an event listener for transactions to and from the provided addresses.
+    ///
+    /// The listener is called for transactions when they are _included_ in the blockchain.
+    #[wasm_bindgen(js_name = addTransactionListener)]
+    pub async fn add_transaction_listener(
+        &mut self,
+        listener: TransactionListener,
+        addresses: &AddressAnyArrayType,
+    ) -> Result<usize, JsError> {
+        let listener = listener
+            .dyn_into::<js_sys::Function>()
+            .map_err(|_| JsError::new("listener is not a function"))?;
+
+        // Unpack the array of addresses
+        let js_value: &JsValue = addresses.unchecked_ref();
+        let array: &Array = js_value
+            .dyn_ref()
+            .ok_or_else(|| JsError::new("`addresses` must be an array"))?;
+        let mut addresses = HashSet::with_capacity(array.length().try_into()?);
+        for any in array.iter() {
+            let address = Address::from_any(&any.into())?;
+            addresses.insert(address.take_native());
+        }
+
+        if addresses.is_empty() {
+            return Err(JsError::new("No addresses provided"));
+        }
+
+        {
+            let mut subscribed_addresses = self.subscribed_addresses.borrow_mut();
+            for address in addresses.iter() {
+                subscribed_addresses
+                    .entry(address.clone())
+                    .and_modify(|count| *count += 1)
+                    .or_insert(1);
+            }
+        }
+
+        // Try subscribing at network first
+        self.inner
+            .consensus_proxy()
+            .subscribe_to_addresses(addresses.iter().cloned().collect(), 1, None)
+            .await?;
+
+        // If that worked, add to our listeners
+        let listener_id = self.next_listener_id();
+        self.transaction_listeners
+            .borrow_mut()
+            .insert(listener_id, (listener, addresses));
+
+        Ok(listener_id)
+    }
+
     /// Removes an event listener by its handle.
     #[wasm_bindgen(js_name = removeListener)]
     pub async fn remove_listener(&self, handle: usize) {
@@ -303,6 +372,33 @@ impl Client {
             .remove(&handle);
         self.head_changed_listeners.borrow_mut().remove(&handle);
         self.peer_changed_listeners.borrow_mut().remove(&handle);
+
+        if let Some((_, unsubscribed_addresses)) =
+            self.transaction_listeners.borrow_mut().remove(&handle)
+        {
+            let mut subscribed_addresses = self.subscribed_addresses.borrow_mut();
+            let mut removed_addresses = vec![];
+            for unsubscribed_address in unsubscribed_addresses {
+                if let Entry::Occupied(mut entry) =
+                    subscribed_addresses.entry(unsubscribed_address.clone())
+                {
+                    *entry.get_mut() -= 1;
+
+                    if entry.get() == &0 {
+                        entry.remove_entry();
+                        removed_addresses.push(unsubscribed_address);
+                    }
+                }
+            }
+            if !removed_addresses.is_empty() {
+                let owned_consensus = self.inner.consensus_proxy();
+                spawn_local(async move {
+                    let _ = owned_consensus
+                        .unsubscribe_from_addresses(removed_addresses, 1)
+                        .await;
+                });
+            }
+        }
     }
 
     /// Returns if the client currently has consensus with the network.
@@ -670,17 +766,40 @@ impl Client {
 
         let mut network_events = network.subscribe_events();
 
+        let subscribed_addresses = Rc::clone(&self.subscribed_addresses);
+
         let peer_listeners = Rc::clone(&self.peer_changed_listeners);
         let consensus_listeners = Rc::clone(&self.consensus_changed_listeners);
 
         spawn_local(async move {
             loop {
                 let details = match network_events.next().await {
-                    Some(Ok(NetworkEvent::PeerJoined(peer_id, peer_info))) => Some((
-                        peer_id.to_string(),
-                        "joined",
-                        Some(PeerInfo::from_native(peer_info)),
-                    )),
+                    Some(Ok(NetworkEvent::PeerJoined(peer_id, peer_info))) => {
+                        if subscribed_addresses.borrow().len() > 0 {
+                            // Subscribe to all addresses at the new peer
+                            let owned_consensus = consensus.clone();
+                            let owned_subscribed_addresses = Rc::clone(&subscribed_addresses);
+                            spawn_local(async move {
+                                let _ = owned_consensus
+                                    .subscribe_to_addresses(
+                                        owned_subscribed_addresses
+                                            .borrow()
+                                            .keys()
+                                            .cloned()
+                                            .collect(),
+                                        1,
+                                        Some(peer_id),
+                                    )
+                                    .await;
+                            });
+                        }
+
+                        Some((
+                            peer_id.to_string(),
+                            "joined",
+                            Some(PeerInfo::from_native(peer_info)),
+                        ))
+                    }
                     Some(Ok(NetworkEvent::PeerLeft(peer_id))) => {
                         Some((peer_id.to_string(), "left", None))
                     }
@@ -715,6 +834,52 @@ impl Client {
                     let this = JsValue::null();
                     for listener in peer_listeners.borrow().values() {
                         let _ = listener.apply(&this, &args);
+                    }
+                }
+            }
+        });
+    }
+
+    async fn setup_transaction_events(&self) {
+        let consensus = self.inner.consensus_proxy();
+
+        let transaction_listeners = Rc::clone(&self.transaction_listeners);
+
+        spawn_local(async move {
+            let mut address_notifications = consensus.subscribe_address_notifications().await;
+
+            while let Some((notification, _)) = address_notifications.next().await {
+                if let Ok(ext_txs) = consensus
+                    .prove_transactions_from_receipts(notification.receipts, 1)
+                    .await
+                {
+                    let this = JsValue::null();
+
+                    for ext_tx in ext_txs {
+                        let block_number = ext_tx.block_number;
+                        let block_time = ext_tx.block_time;
+
+                        let exe_tx = ext_tx.into_transaction().unwrap();
+                        let tx = exe_tx.get_raw_transaction();
+
+                        let details = PlainTransactionDetails::new(
+                            &Transaction::from_native(tx.clone()),
+                            TransactionState::Included,
+                            Some(exe_tx.succeeded()),
+                            Some(block_number),
+                            Some(block_time),
+                            Some(1),
+                        );
+
+                        if let Ok(js_value) = serde_wasm_bindgen::to_value(&details) {
+                            for (listener, addresses) in transaction_listeners.borrow().values() {
+                                if addresses.contains(&tx.sender)
+                                    || addresses.contains(&tx.recipient)
+                                {
+                                    let _ = listener.call1(&this, &js_value);
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -879,4 +1044,7 @@ extern "C" {
         typescript_type = "(peer_id: string, reason: 'joined' | 'left', peer_count: number, peer_info?: PeerInfo) => any"
     )]
     pub type PeerChangedListener;
+
+    #[wasm_bindgen(typescript_type = "(transaction: PlainTransactionDetails) => any")]
+    pub type TransactionListener;
 }
