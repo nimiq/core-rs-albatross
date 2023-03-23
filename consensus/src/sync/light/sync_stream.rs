@@ -20,6 +20,8 @@ use crate::sync::{
     syncer::{MacroSync, MacroSyncReturn},
 };
 
+use super::full_sync_threshold;
+
 impl<TNetwork: Network> LightMacroSync<TNetwork> {
     // This function is the one that starts the LightMacroSync process,
     // by adding peers into the MacroSync component.
@@ -66,11 +68,36 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                         // Apply a newer proof to the blockchain
                         let result = match self.blockchain {
                             #[cfg(feature = "full")]
-                            BlockchainProxy::Full(ref full_blockchain) => Blockchain::push_zkp(
-                                full_blockchain.upgradable_read(),
-                                Block::Macro(block),
-                                proof.proof.expect("Expected a zkp proof"),
-                            ),
+                            BlockchainProxy::Full(ref full_blockchain) => {
+                                let blockchain_urg = full_blockchain.upgradable_read();
+                                if block
+                                    .block_number()
+                                    .saturating_sub(blockchain_urg.block_number())
+                                    <= full_sync_threshold()
+                                {
+                                    // We deem this too close to do a macro sync, thus we are not pushing the zkp. This would
+                                    // clear the state and history store. Instead, we request the epoch ids from this peer.
+                                    log::debug!(
+                                        peer_id = ?peer_id,
+                                        "Peer is sufficiently close not to apply the zkp."
+                                    );
+
+                                    let future = Self::request_epoch_ids(
+                                        self.blockchain.clone(),
+                                        Arc::clone(&self.network),
+                                        peer_id,
+                                    )
+                                    .boxed();
+                                    self.epoch_ids_stream.push(future);
+
+                                    continue;
+                                }
+                                Blockchain::push_zkp(
+                                    blockchain_urg,
+                                    Block::Macro(block),
+                                    proof.proof.expect("Expected a zkp proof"),
+                                )
+                            }
                             BlockchainProxy::Light(ref light_blockchain) => {
                                 LightBlockchain::push_zkp(
                                     light_blockchain.upgradable_read(),
@@ -136,6 +163,19 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         cx: &mut Context<'_>,
     ) -> Poll<Option<MacroSyncReturn<TNetwork::PeerId>>> {
         while let Poll::Ready(Some(Some(epoch_ids))) = self.epoch_ids_stream.poll_next_unpin(cx) {
+            // Calculate an upper bound on the peer's head block.
+            // The upper bound is the last micro block of the latest batch of the peer.
+            #[cfg(feature = "full")]
+            let peer_head_upper_bound = epoch_ids
+                .checkpoint
+                .as_ref()
+                .map(|checkpoint| checkpoint.block_number)
+                .unwrap_or_else(|| {
+                    Policy::first_block_of(epoch_ids.checkpoint_epoch_number() as u32)
+                })
+                + Policy::blocks_per_batch()
+                - 1;
+
             // If the peer didn't find any of our locators, we are done with it and emit it.
             if !epoch_ids.locator_found {
                 debug!(
@@ -173,6 +213,19 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                     "Finished syncing with peer");
 
                 return Poll::Ready(Some(MacroSyncReturn::Good(epoch_ids.sender)));
+            } else {
+                #[cfg(feature = "full")]
+                if let BlockchainProxy::Full(_) = self.blockchain {
+                    if peer_head_upper_bound.saturating_sub(self.blockchain.read().block_number())
+                        <= full_sync_threshold()
+                    {
+                        log::debug!(
+                            peer_id = ?epoch_ids.sender,
+                            "Peer is sufficiently close for a live sync instead of macro sync."
+                        );
+                        return Poll::Ready(Some(MacroSyncReturn::Good(epoch_ids.sender)));
+                    }
+                }
             }
 
             // If the macro header process deems a peer useless, it is returned here and we emit it.

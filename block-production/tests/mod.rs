@@ -1052,7 +1052,7 @@ fn it_can_consume_all_validator_deposit() {
         &cold_key_pair,
         Coin::from_u64_unchecked(100),
         Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT - 100),
-        1,
+        blockchain.read().block_number(),
         NetworkId::UnitAlbatross,
     )
     .unwrap();
@@ -1109,7 +1109,7 @@ fn it_can_consume_all_validator_deposit() {
         &cold_key_pair,
         Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT - 100),
         Coin::from_u64_unchecked(1),
-        1,
+        blockchain.read().block_number(),
         NetworkId::UnitAlbatross,
     )
     .unwrap();
@@ -1257,7 +1257,7 @@ fn it_can_revert_failed_delete_validator() {
         &cold_key_pair,
         Coin::from_u64_unchecked(100),
         Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT - 100),
-        1,
+        blockchain.read().block_number(),
         NetworkId::UnitAlbatross,
     )
     .unwrap();

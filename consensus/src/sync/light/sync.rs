@@ -29,7 +29,7 @@ pub(crate) struct EpochIds<T> {
     pub ids: Vec<Blake2bHash>,
     /// The most recent checkpoint block in the latest epoch (if any)
     pub checkpoint: Option<Checkpoint>,
-    /// The first epoch number
+    /// Epoch number corresponding to the first hash in ids
     pub first_epoch_number: usize,
     /// The sender that created this struct
     pub sender: T,
@@ -92,7 +92,7 @@ impl PeerMacroRequests {
 
             true
         } else {
-            log::trace!("Received a response for a block that we didnt expect");
+            log::trace!("Received a response for a block that we didn't expect");
             false
         }
     }

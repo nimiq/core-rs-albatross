@@ -34,7 +34,6 @@ pub(crate) fn bagging<H: Merge, I: Iterator<Item = Result<(H, usize), Error>>>(
 }
 
 /// Computes a size proof for an iterator over peak positions.
-/// This function fails if there is less than 2 peaks.
 pub fn prove_num_leaves<
     H: Merge + Clone,
     T: Hash<H>,
@@ -65,9 +64,9 @@ pub fn prove_num_leaves<
     }
     match bagging_info {
         Some((size, Some(left_hash), Some(right_hash), _)) => {
-            Ok(SizeProof::MultipleItem(size as u64, left_hash, right_hash))
+            Ok(SizeProof::MultiplePeaks(size as u64, left_hash, right_hash))
         }
-        Some((size, None, None, hash)) => Ok(SizeProof::SingleItem(
+        Some((size, None, None, hash)) => Ok(SizeProof::SinglePeak(
             size as u64,
             f(hash).ok_or(Error::InconsistentStore)?,
         )),

@@ -16,6 +16,7 @@ use nimiq_zkp_component::zkp_component::ZKPComponentProxy;
 #[cfg(feature = "full")]
 use crate::sync::{
     history::HistoryMacroSync,
+    light::full_sync_threshold,
     live::{state_queue::StateQueue, StateLiveSync},
 };
 use crate::sync::{
@@ -97,7 +98,10 @@ impl<N: Network> SyncerProxy<N> {
         zkp_component_proxy: ZKPComponentProxy<N>,
         network_event_rx: SubscribeEvents<N::PeerId>,
     ) -> Self {
-        let queue_config = QueueConfig::default();
+        let queue_config = QueueConfig {
+            window_ahead_max: full_sync_threshold(),
+            ..Default::default()
+        };
 
         let block_queue = BlockQueue::new(
             Arc::clone(&network),

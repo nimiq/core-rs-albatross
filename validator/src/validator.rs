@@ -169,11 +169,12 @@ where
         let blockchain_rg = blockchain.read();
         let blockchain_event_rx = blockchain_rg.notifier_as_stream();
         let fork_event_rx = BroadcastStream::new(blockchain_rg.fork_notifier.subscribe());
+        let can_enforce_validity_window = blockchain_rg.can_enforce_validity_window();
         drop(blockchain_rg);
 
         let blockchain_state = BlockchainState {
             fork_proofs: ForkProofPool::new(),
-            can_enforce_validity_window: false,
+            can_enforce_validity_window,
         };
 
         let database = env.open_database(Self::MACRO_STATE_DB_NAME.to_string());
@@ -442,13 +443,15 @@ where
         }
     }
 
+    /// This function resets the validator state when consensus is lost.
     fn pause_validator(&mut self) {
+        // When we lose consensus we may no longer be able to enforce the validity window.
         self.blockchain_state.can_enforce_validity_window = false;
     }
 
+    /// Check and update if we can enforce the tx validity window.
+    /// This is important if we use the state sync and do not have the relevant parts of the history yet.
     fn update_can_enforce_validity_window(&mut self) {
-        // Check and update if we can enforce the tx validity window.
-        // This is important if we use the state sync and do not have the relevant parts of the history yet.
         if !self.blockchain_state.can_enforce_validity_window
             && self.blockchain.read().can_enforce_validity_window()
         {

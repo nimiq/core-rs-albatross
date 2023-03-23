@@ -1067,7 +1067,7 @@ impl HistoryStore {
         }
     }
 
-    fn prove_num_leaves(
+    pub fn prove_num_leaves(
         &self,
         epoch_number: u32,
         txn_option: Option<&Transaction>,
