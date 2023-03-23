@@ -1,19 +1,13 @@
-use parking_lot::RwLock;
 use std::sync::Arc;
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::StreamExt;
 
 use nimiq_block::Block;
-use nimiq_block_production::BlockProducer;
-use nimiq_blockchain::{Blockchain, BlockchainConfig};
+use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
-use nimiq_database::volatile::VolatileEnvironment;
-use nimiq_genesis::NetworkId;
 use nimiq_primitives::policy::Policy;
 use nimiq_test_log::test;
 use nimiq_test_utils::block_production::TemporaryBlockProducer;
-use nimiq_test_utils::blockchain::{signing_key, voting_key};
-use nimiq_utils::time::OffsetTime;
 
 #[test]
 fn it_can_rebranch_skip_block() {
