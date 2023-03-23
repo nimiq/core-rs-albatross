@@ -290,24 +290,6 @@ impl MerkleRadixTrie {
         self.get_node(txn, key)?.value
     }
 
-    /// Returns a chunk of the Merkle Radix Trie that starts at the key `start` (which might or not
-    /// be a part of the trie, if it is then it will be part of the chunk) and contains at most
-    /// `size` leaf nodes.
-    // FIXME This panics if a node in range can't be deserialized to T
-    pub fn get_chunk<T: Deserialize>(
-        &self,
-        txn: &TransactionProxy,
-        start: &KeyNibbles,
-        size: usize,
-    ) -> Vec<T> {
-        let chunk = self.get_trie_chunk(txn, start, size);
-
-        chunk
-            .into_iter()
-            .map(|node| T::deserialize_from_vec(&node.value.unwrap()).unwrap())
-            .collect()
-    }
-
     /// Insert a value into the Merkle Radix Trie at the given key. If the key already exists then
     /// it will overwrite it. You can't use this function to check the existence of a given key.
     pub fn put<T: Serialize>(
