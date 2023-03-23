@@ -339,7 +339,9 @@ impl Client {
             return Err(JsError::new("No addresses provided"));
         }
 
+        // Add addresses to our global list of subscribed addresses
         {
+            // Borrow RefCell in a new scope, as Clippy did not detect usage of drop(...).
             let mut subscribed_addresses = self.subscribed_addresses.borrow_mut();
             for address in addresses.iter() {
                 subscribed_addresses
@@ -349,17 +351,19 @@ impl Client {
             }
         }
 
-        // Try subscribing at network first
-        self.inner
-            .consensus_proxy()
-            .subscribe_to_addresses(addresses.iter().cloned().collect(), 1, None)
-            .await?;
-
-        // If that worked, add to our listeners
+        // Add to our listeners
         let listener_id = self.next_listener_id();
         self.transaction_listeners
             .borrow_mut()
-            .insert(listener_id, (listener, addresses));
+            .insert(listener_id, (listener, addresses.clone()));
+
+        // Then subscribe at network
+        // Ignore failure because we still want to return the listener ID to the caller.
+        let _ = self
+            .inner
+            .consensus_proxy()
+            .subscribe_to_addresses(addresses.into_iter().collect(), 1, None)
+            .await;
 
         Ok(listener_id)
     }
