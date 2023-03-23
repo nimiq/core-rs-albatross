@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use beserial::Serialize;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_derive::TryFromJsValue;
 
@@ -62,6 +63,10 @@ impl Address {
     #[wasm_bindgen(js_name = toHex)]
     pub fn to_hex(&self) -> String {
         self.inner.to_hex()
+    }
+
+    pub fn serialize(&self) -> Vec<u8> {
+        self.inner.serialize_to_vec()
     }
 }
 
