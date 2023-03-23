@@ -3,8 +3,6 @@ use parking_lot::{Mutex, RwLock};
 use rand::SeedableRng;
 #[cfg(feature = "zkp-prover")]
 use rand_chacha::ChaCha20Rng;
-#[cfg(feature = "zkp-prover")]
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use nimiq_block::Block;
@@ -43,9 +41,8 @@ use nimiq_validator_network::network_impl::ValidatorNetworkImpl;
 use nimiq_wallet::WalletStore;
 use nimiq_zkp::ZKP_VERIFYING_KEY;
 #[cfg(feature = "zkp-prover")]
-use nimiq_zkp_circuits::{
-    setup::{all_files_created, load_verifying_key_from_file, setup, DEVELOPMENT_SEED},
-    DEFAULT_KEYS_PATH,
+use nimiq_zkp_circuits::setup::{
+    all_files_created, load_verifying_key_from_file, setup, DEVELOPMENT_SEED,
 };
 #[cfg(feature = "database-storage")]
 use nimiq_zkp_component::proof_store::{DBProofStore, ProofStore};
@@ -161,7 +158,7 @@ impl ClientInner {
             );
             setup(
                 ChaCha20Rng::from_seed(DEVELOPMENT_SEED),
-                &PathBuf::from(DEFAULT_KEYS_PATH),
+                &config.zkp.prover_keys_path,
                 config.network_id,
                 config.zkp.prover_active,
             )?;

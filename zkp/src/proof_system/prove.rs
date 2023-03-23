@@ -984,7 +984,7 @@ fn proof_to_file<T: Pairing>(
 ) -> Result<(), NanoZKPError> {
     let proofs = path.join("proofs");
     if !proofs.is_dir() {
-        DirBuilder::new().create(&proofs)?;
+        DirBuilder::new().recursive(true).create(&proofs)?;
     }
 
     let suffix = match number {
