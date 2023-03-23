@@ -1,7 +1,7 @@
 extern crate alloc; // Required for wasm-bindgen-derive
 
 use std::{
-    cell::RefCell,
+    cell::{Cell, RefCell},
     collections::{
         hash_map::{Entry, HashMap},
         HashSet,
@@ -173,7 +173,7 @@ pub struct Client {
     /// A hashmap from address to the count of listeners subscribed to it
     subscribed_addresses: Rc<RefCell<HashMap<nimiq_keys::Address, u16>>>,
 
-    listener_id: usize,
+    listener_id: Cell<usize>,
     consensus_changed_listeners: Rc<RefCell<HashMap<usize, js_sys::Function>>>,
     head_changed_listeners: Rc<RefCell<HashMap<usize, js_sys::Function>>>,
     peer_changed_listeners: Rc<RefCell<HashMap<usize, js_sys::Function>>>,
@@ -244,7 +244,7 @@ impl Client {
             inner: client,
             network_id: from_network_id(web_config.network_id),
             subscribed_addresses: Rc::new(RefCell::new(HashMap::new())),
-            listener_id: 0,
+            listener_id: Cell::new(0),
             consensus_changed_listeners: Rc::new(RefCell::new(HashMap::with_capacity(1))),
             head_changed_listeners: Rc::new(RefCell::new(HashMap::with_capacity(1))),
             peer_changed_listeners: Rc::new(RefCell::new(HashMap::with_capacity(1))),
@@ -263,7 +263,7 @@ impl Client {
     /// Adds an event listener for consensus-change events, such as when consensus is established or lost.
     #[wasm_bindgen(js_name = addConsensusChangedListener)]
     pub async fn add_consensus_changed_listener(
-        &mut self,
+        &self,
         listener: ConsensusChangedListener,
     ) -> Result<usize, JsError> {
         let listener = listener
@@ -280,7 +280,7 @@ impl Client {
     /// Adds an event listener for new blocks added to the blockchain.
     #[wasm_bindgen(js_name = addHeadChangedListener)]
     pub async fn add_head_changed_listener(
-        &mut self,
+        &self,
         listener: HeadChangedListener,
     ) -> Result<usize, JsError> {
         let listener = listener
@@ -297,7 +297,7 @@ impl Client {
     /// Adds an event listener for peer-change events, such as when a new peer joins, or a peer leaves.
     #[wasm_bindgen(js_name = addPeerChangedListener)]
     pub async fn add_peer_changed_listener(
-        &mut self,
+        &self,
         listener: PeerChangedListener,
     ) -> Result<usize, JsError> {
         let listener = listener
@@ -316,7 +316,7 @@ impl Client {
     /// The listener is called for transactions when they are _included_ in the blockchain.
     #[wasm_bindgen(js_name = addTransactionListener)]
     pub async fn add_transaction_listener(
-        &mut self,
+        &self,
         listener: TransactionListener,
         addresses: &AddressAnyArrayType,
     ) -> Result<usize, JsError> {
@@ -886,9 +886,11 @@ impl Client {
         });
     }
 
-    fn next_listener_id(&mut self) -> usize {
-        self.listener_id += 1;
-        self.listener_id
+    fn next_listener_id(&self) -> usize {
+        let mut id = self.listener_id.get();
+        id += 1;
+        self.listener_id.set(id);
+        id
     }
 
     /// This function is used to query the network for transaction receipts from and to a
