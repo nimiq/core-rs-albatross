@@ -146,6 +146,7 @@ impl<N: Network> ConsensusProxy<N> {
             .filter(|(hash, block_number)| {
                 block_number > &since_block_height && !ignored_hashes.contains(hash)
             })
+            .map(|(hash, block_number)| (hash, Some(block_number)))
             .collect();
 
         self.prove_transactions_from_receipts(receipts, min_peers)
@@ -158,7 +159,24 @@ impl<N: Network> ConsensusProxy<N> {
         block_number: u32,
         min_peers: usize,
     ) -> Result<ExtendedTransaction, RequestError> {
-        let receipts = vec![(tx_hash, block_number)];
+        let receipts = vec![(tx_hash, Some(block_number))];
+        let mut txs = self
+            .prove_transactions_from_receipts(receipts, min_peers)
+            .await?;
+        match txs.pop() {
+            Some(tx) => Ok(tx),
+            None => Err(RequestError::OutboundRequest(
+                OutboundRequestError::NoReceiver,
+            )),
+        }
+    }
+
+    pub async fn request_transaction_by_hash(
+        &self,
+        tx_hash: Blake2bHash,
+        min_peers: usize,
+    ) -> Result<ExtendedTransaction, RequestError> {
+        let receipts = vec![(tx_hash, None)];
         let mut txs = self
             .prove_transactions_from_receipts(receipts, min_peers)
             .await?;
@@ -192,15 +210,9 @@ impl<N: Network> ConsensusProxy<N> {
 
     pub async fn prove_transactions_from_receipts(
         &self,
-        receipts: Vec<(Blake2bHash, u32)>,
+        receipts: Vec<(Blake2bHash, Option<u32>)>,
         min_peers: usize,
     ) -> Result<Vec<ExtendedTransaction>, RequestError> {
-        // Group transaction hashes by the block number that proves those transactions to reduce the number of requests
-        // There are three categories of block numbers:
-        //  - Finalized epochs: we use the election block number that finalized the respective epoch
-        //  - Finalized batch in the current epoch: We use the latest checkpoint block number
-        //  - Current batch: We use the current head to prove those transactions
-
         let blockchain = self.blockchain.read();
         let election_head = blockchain.election_head();
         let checkpoint_head = blockchain.macro_head();
@@ -212,7 +224,7 @@ impl<N: Network> ConsensusProxy<N> {
 
         if receipts
             .iter()
-            .any(|(_, block_number)| block_number > &current_block_number)
+            .any(|(_, block_number)| block_number.unwrap_or(0) > current_block_number)
         {
             log::error!(
                 head = current_block_number,
@@ -239,22 +251,36 @@ impl<N: Network> ConsensusProxy<N> {
                     continue;
                 }
 
-                if block_number <= &election_head.block_number() {
-                    // First Case: Transactions from finalized epochs
-                    hashes_by_block
-                        .entry(Policy::election_block_after(*block_number))
-                        .or_insert(vec![])
-                        .push(hash.clone());
-                } else if block_number <= &checkpoint_head.block_number() {
-                    // Second Case: Transactions from a finalized batch in the current epoch
-                    hashes_by_block
-                        .entry(checkpoint_head.block_number())
-                        .or_insert(vec![])
-                        .push(hash.clone());
+                // There are essentially two different cases that we need to handle
+                if let Some(block_number) = block_number {
+                    // Case A: We are provided a block number, so we need to determine which is the best proving block
+                    // There are three sub-categories of block numbers:
+                    //  - Finalized epochs: we use the election block number that finalized the respective epoch
+                    //  - Finalized batch in the current epoch: We use the latest checkpoint block number
+                    //  - Current batch: We use the current head to prove those transactions
+                    if block_number <= &election_head.block_number() {
+                        // First Case: Transactions from finalized epochs
+                        hashes_by_block
+                            .entry(Some(Policy::election_block_after(*block_number)))
+                            .or_insert(vec![])
+                            .push(hash.clone());
+                    } else if block_number <= &checkpoint_head.block_number() {
+                        // Second Case: Transactions from a finalized batch in the current epoch
+                        hashes_by_block
+                            .entry(Some(checkpoint_head.block_number()))
+                            .or_insert(vec![])
+                            .push(hash.clone());
+                    } else {
+                        // Third Case: Transanctions from the current batch
+                        hashes_by_block
+                            .entry(Some(current_head.block_number()))
+                            .or_insert(vec![])
+                            .push(hash.clone());
+                    }
                 } else {
-                    // Third Case: Transanctions from the current batch
+                    // Case B: We are not provided a block_number
                     hashes_by_block
-                        .entry(current_head.block_number())
+                        .entry(None)
                         .or_insert(vec![])
                         .push(hash.clone());
                 }
@@ -262,10 +288,14 @@ impl<N: Network> ConsensusProxy<N> {
 
             // Now we request proofs for each block and its hashes, according to its classification
             for (block_number, hashes) in hashes_by_block {
-                log::debug!(
-                block_number=%block_number,
-                "Performing txn proof request for block number",
-                    );
+                if let Some(block_number) = block_number {
+                    log::debug!(
+                    block_number=%block_number,
+                    "Performing txn proof request for block number");
+                } else {
+                    log::debug!("Performing txn proof request without block number");
+                }
+
                 let response = self
                     .network
                     .request::<RequestTransactionsProof>(

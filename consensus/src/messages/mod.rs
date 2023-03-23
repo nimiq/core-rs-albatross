@@ -233,7 +233,7 @@ pub struct ResponseTransactionsProof {
 pub struct RequestTransactionsProof {
     #[beserial(len_type(u16, limit = 128))]
     pub hashes: Vec<Blake2bHash>,
-    pub block_number: u32,
+    pub block_number: Option<u32>,
 }
 
 impl RequestCommon for RequestTransactionsProof {

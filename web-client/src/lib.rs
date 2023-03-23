@@ -906,8 +906,14 @@ impl Client {
                     }
                 }
 
+                let receipts = notification
+                    .receipts
+                    .into_iter()
+                    .map(|(hash, block_number)| (hash, Some(block_number)))
+                    .collect();
+
                 if let Ok(ext_txs) = consensus
-                    .prove_transactions_from_receipts(notification.receipts, 1)
+                    .prove_transactions_from_receipts(receipts, 1)
                     .await
                     .map_err(|e| {
                         log::error!("Failed to prove transactions from receipts: {}", e);
