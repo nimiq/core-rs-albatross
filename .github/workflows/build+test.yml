@@ -1,9 +1,13 @@
 name: Build + Test
 
 on:
-  - push
-  - pull_request
-  - merge_group
+  push:
+    branches:
+      - albatross
+      - testnet
+  pull_request:
+  merge_group:
+  workflow_dispatch:
 
 jobs:
 
