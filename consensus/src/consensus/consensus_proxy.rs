@@ -309,11 +309,9 @@ impl<N: Network> ConsensusProxy<N> {
                                         log::debug!(peer=%peer_id,"BlockProof does not correspond to expected block");
                                         continue;
                                     }
-                                } else {
-                                    if block.hash() != current_head.hash() {
-                                        log::debug!(peer=%peer_id,"BlockProof does not correspond to expected block");
-                                        continue;
-                                    }
+                                } else if block.hash() != current_head.hash() {
+                                    log::debug!(peer=%peer_id,"BlockProof does not correspond to expected block");
+                                    continue;
                                 }
 
                                 if verification_result {
