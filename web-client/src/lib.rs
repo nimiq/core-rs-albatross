@@ -27,7 +27,8 @@ use nimiq_network_interface::{
 };
 use nimiq_primitives::networks::NetworkId;
 
-use crate::address::{Address, AddressAnyType};
+use crate::account::{PlainAccount, PlainAccountArrayType, PlainAccountType};
+use crate::address::{Address, AddressAnyArrayType, AddressAnyType};
 use crate::block::{PlainBlock, PlainBlockType};
 use crate::peer_info::PeerInfo;
 use crate::transaction::{
@@ -38,6 +39,7 @@ use crate::transaction::{
 use crate::transaction_builder::TransactionBuilder;
 use crate::utils::from_network_id;
 
+mod account;
 mod address;
 mod block;
 mod key_pair;
@@ -388,6 +390,42 @@ impl Client {
             .read()
             .get_block_at(height, false)?;
         Ok(serde_wasm_bindgen::to_value(&PlainBlock::from_block(&block))?.into())
+    }
+
+    /// Fetches the account for the provided address from the network.
+    ///
+    /// Throws if the address cannot be parsed and on network errors.
+    #[wasm_bindgen(js_name = getAccount)]
+    pub async fn get_account(&self, address: &AddressAnyType) -> Result<PlainAccountType, JsError> {
+        let address = Address::from_any(address)?;
+        let plain_accounts = self.get_plain_accounts(vec![address]).await?;
+        let account = plain_accounts
+            .get(0)
+            .ok_or_else(|| JsError::new("Could not get account"))?;
+        Ok(serde_wasm_bindgen::to_value(account)?.into())
+    }
+
+    /// Fetches the accounts for the provided addresses from the network.
+    ///
+    /// Throws if an address cannot be parsed and on network errors.
+    #[wasm_bindgen(js_name = getAccounts)]
+    pub async fn get_accounts(
+        &self,
+        addresses: &AddressAnyArrayType,
+    ) -> Result<PlainAccountArrayType, JsError> {
+        // Unpack the array of addresses
+        let js_value: &JsValue = addresses.unchecked_ref();
+        let array: &Array = js_value
+            .dyn_ref()
+            .ok_or_else(|| JsError::new("`addresses` must be an array"))?;
+        let mut addresses = Vec::<_>::with_capacity(array.length().try_into()?);
+        for any in array.iter() {
+            let address = Address::from_any(&any.into())?;
+            addresses.push(address);
+        }
+
+        let plain_accounts = self.get_plain_accounts(addresses).await?;
+        Ok(serde_wasm_bindgen::to_value(&plain_accounts)?.into())
     }
 
     /// Instantiates a transaction builder class that provides helper methods to create transactions.
@@ -792,6 +830,38 @@ impl Client {
             .collect();
 
         Ok(serde_wasm_bindgen::to_value(&plain_tx_details)?.into())
+    }
+}
+
+impl Client {
+    pub async fn get_plain_accounts(
+        &self,
+        addresses: Vec<Address>,
+    ) -> Result<Vec<PlainAccount>, JsError> {
+        let native_addresses: Vec<nimiq_keys::Address> = addresses
+            .into_iter()
+            .map(|addr| addr.take_native())
+            .collect();
+
+        let accounts: HashMap<_, _> = self
+            .inner
+            .consensus_proxy()
+            .request_accounts_by_addresses(native_addresses.clone(), 1)
+            .await?
+            .into_iter()
+            .collect();
+
+        let mut ordered_accounts = vec![];
+        let default = nimiq_account::Account::default();
+
+        for address in &native_addresses {
+            if let Some(maybe_account) = accounts.get(address) {
+                let account = maybe_account.as_ref().unwrap_or(&default);
+                ordered_accounts.push(PlainAccount::from_native(account));
+            }
+        }
+
+        Ok(ordered_accounts)
     }
 }
 

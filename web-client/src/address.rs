@@ -87,4 +87,7 @@ impl Address {
 extern "C" {
     #[wasm_bindgen(typescript_type = "Address | string")]
     pub type AddressAnyType;
+
+    #[wasm_bindgen(typescript_type = "(Address | string)[]")]
+    pub type AddressAnyArrayType;
 }
