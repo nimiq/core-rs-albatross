@@ -402,9 +402,14 @@ impl Mempool {
         self.prune_expired_transactions(&blockchain, &mut mempool_state);
 
         // Check for all transactions whether they have been included already.
-        for (tx_hash, _) in &mempool_state.regular_transactions.transactions.clone() {
-            if blockchain.contains_tx_in_validity_window(&tx_hash, None) {
-                mempool_state.remove(&blockchain, &tx_hash, EvictionReason::AlreadyIncluded);
+        for tx_hash in mempool_state
+            .regular_transactions
+            .transactions
+            .clone()
+            .keys()
+        {
+            if blockchain.contains_tx_in_validity_window(tx_hash, None) {
+                mempool_state.remove(&blockchain, tx_hash, EvictionReason::AlreadyIncluded);
             }
         }
 
@@ -452,7 +457,7 @@ impl Mempool {
                     .reserve_balance(&sender_account, tx, &mut sender_state.reserved_balance)
                     .is_ok();
                 if !still_valid {
-                    mempool_state.remove(&blockchain, tx_hash, EvictionReason::Invalid);
+                    mempool_state.remove(blockchain, tx_hash, EvictionReason::Invalid);
                 }
                 still_valid
             });
@@ -472,7 +477,7 @@ impl Mempool {
         let next_block_number = blockchain.block_number() + 1;
         let expired_txns = mempool_state.get_expired_txns(next_block_number);
         for tx_hash in expired_txns {
-            mempool_state.remove(&blockchain, &tx_hash, EvictionReason::Expired);
+            mempool_state.remove(blockchain, &tx_hash, EvictionReason::Expired);
         }
     }
 
