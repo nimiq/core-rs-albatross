@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use beserial::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
 use crate::address::Address;
@@ -27,18 +28,25 @@ impl PublicKey {
     /// Deserializes a public key from a byte array.
     ///
     /// Throws when the byte array contains less than 32 bytes.
-    #[wasm_bindgen(js_name = fromBytes)]
-    pub fn deserialize(bytes: &[u8]) -> Result<PublicKey, JsError> {
-        match nimiq_keys::PublicKey::from_bytes(bytes) {
-            Ok(key) => Ok(PublicKey::from_native(key)),
-            Err(err) => Err(JsError::from(err)),
+    pub fn unserialize(bytes: &[u8]) -> Result<PublicKey, JsError> {
+        let key = nimiq_keys::PublicKey::deserialize(&mut &*bytes)?;
+        Ok(PublicKey::from_native(key))
+    }
+
+    /// Creates a new public key from a byte array.
+    ///
+    /// Throws when the byte array is not exactly 32 bytes long.
+    #[wasm_bindgen(constructor)]
+    pub fn new(bytes: &[u8]) -> Result<PublicKey, JsError> {
+        if bytes.len() != nimiq_keys::PublicKey::SIZE {
+            return Err(JsError::new("Public key primitive: Invalid length"));
         }
+        Self::unserialize(bytes)
     }
 
     /// Serializes the public key to a byte array.
-    #[wasm_bindgen(js_name = toBytes)]
     pub fn serialize(&self) -> Vec<u8> {
-        self.inner.as_bytes().to_vec()
+        self.inner.serialize_to_vec()
     }
 
     /// Parses a public key from its hex representation.
@@ -46,10 +54,8 @@ impl PublicKey {
     /// Throws when the string is not valid hex format or when it represents less than 32 bytes.
     #[wasm_bindgen(js_name = fromHex)]
     pub fn from_hex(hex: &str) -> Result<PublicKey, JsError> {
-        match nimiq_keys::PublicKey::from_str(hex) {
-            Ok(key) => Ok(PublicKey::from_native(key)),
-            Err(err) => Err(JsError::from(err)),
-        }
+        let key = nimiq_keys::PublicKey::from_str(hex)?;
+        Ok(PublicKey::from_native(key))
     }
 
     /// Formats the public key into a hex string.

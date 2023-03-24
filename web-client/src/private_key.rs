@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use beserial::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
 use nimiq_keys::SecureGenerate;
@@ -20,18 +21,25 @@ impl PrivateKey {
     /// Deserializes a private key from a byte array.
     ///
     /// Throws when the byte array contains less than 32 bytes.
-    #[wasm_bindgen(js_name = fromBytes)]
-    pub fn deserialize(bytes: &[u8]) -> Result<PrivateKey, JsError> {
-        match nimiq_keys::PrivateKey::from_bytes(bytes) {
-            Ok(key) => Ok(PrivateKey::from_native(key)),
-            Err(err) => Err(JsError::from(err)),
+    pub fn unserialize(bytes: &[u8]) -> Result<PrivateKey, JsError> {
+        let key = nimiq_keys::PrivateKey::deserialize(&mut &*bytes)?;
+        Ok(PrivateKey::from_native(key))
+    }
+
+    /// Creates a new private key from a byte array.
+    ///
+    /// Throws when the byte array is not exactly 32 bytes long.
+    #[wasm_bindgen(constructor)]
+    pub fn new(bytes: &[u8]) -> Result<PrivateKey, JsError> {
+        if bytes.len() != nimiq_keys::PrivateKey::SIZE {
+            return Err(JsError::new("Private key primitive: Invalid length"));
         }
+        Self::unserialize(bytes)
     }
 
     /// Serializes the private key to a byte array.
-    #[wasm_bindgen(js_name = toBytes)]
     pub fn serialize(&self) -> Vec<u8> {
-        self.inner.as_bytes().to_vec()
+        self.inner.serialize_to_vec()
     }
 
     /// Parses a private key from its hex representation.
@@ -39,10 +47,8 @@ impl PrivateKey {
     /// Throws when the string is not valid hex format or when it represents less than 32 bytes.
     #[wasm_bindgen(js_name = fromHex)]
     pub fn from_hex(hex: &str) -> Result<PrivateKey, JsError> {
-        match nimiq_keys::PrivateKey::from_str(hex) {
-            Ok(key) => Ok(PrivateKey::from_native(key)),
-            Err(err) => Err(JsError::from(err)),
-        }
+        let key = nimiq_keys::PrivateKey::from_str(hex)?;
+        Ok(PrivateKey::from_native(key))
     }
 
     /// Formats the private key into a hex string.

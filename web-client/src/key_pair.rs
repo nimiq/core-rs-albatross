@@ -1,3 +1,6 @@
+use std::str::FromStr;
+
+use beserial::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
 use nimiq_keys::SecureGenerate;
@@ -30,6 +33,43 @@ impl KeyPair {
         KeyPair::from_native(key_pair)
     }
 
+    /// Parses a keypair from its hex representation.
+    ///
+    /// Throws when the string is not valid hex format or when it represents less than 64 bytes.
+    #[wasm_bindgen(js_name = fromHex)]
+    pub fn from_hex(hex: &str) -> Result<KeyPair, JsError> {
+        let private = nimiq_keys::PrivateKey::from_str(&hex[0..64])?;
+        let public = nimiq_keys::PublicKey::from_str(&hex[64..])?;
+        // TODO: Deserialize locked state if bytes remaining
+        let key_pair = nimiq_keys::KeyPair { private, public };
+        Ok(KeyPair::from_native(key_pair))
+    }
+
+    /// Deserializes a keypair from a byte array.
+    ///
+    /// Throws when the byte array contains less than 64 bytes.
+    pub fn unserialize(bytes: &[u8]) -> Result<KeyPair, JsError> {
+        let key_pair = nimiq_keys::KeyPair::deserialize(&mut &*bytes)?;
+        // TODO: Deserialize locked state if bytes remaining
+        Ok(KeyPair::from_native(key_pair))
+    }
+
+    #[wasm_bindgen(constructor)]
+    pub fn new(private_key: &PrivateKey, public_key: &PublicKey) -> KeyPair {
+        let key_pair = nimiq_keys::KeyPair {
+            private: private_key.native_ref().clone(),
+            public: *public_key.native_ref(),
+        };
+        KeyPair::from_native(key_pair)
+    }
+
+    /// Serializes the keypair to a byte array.
+    pub fn serialize(&self) -> Vec<u8> {
+        let mut vec = self.inner.serialize_to_vec();
+        vec.push(0); // Unlocked state (locking is not yet implemented)
+        vec
+    }
+
     /// Signs arbitrary data, returns a signature object.
     pub fn sign(&self, data: &[u8]) -> Signature {
         Signature::from_native(self.inner.sign(data))
@@ -59,6 +99,12 @@ impl KeyPair {
     #[wasm_bindgen(js_name = toAddress)]
     pub fn to_address(&self) -> Address {
         Address::from_native(nimiq_keys::Address::from(&self.inner))
+    }
+
+    /// Formats the keypair into a hex string.
+    #[wasm_bindgen(js_name = toHex)]
+    pub fn to_hex(&self) -> String {
+        hex::encode(self.serialize())
     }
 }
 
