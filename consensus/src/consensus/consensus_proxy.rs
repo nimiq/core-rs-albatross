@@ -205,9 +205,23 @@ impl<N: Network> ConsensusProxy<N> {
         let election_head = blockchain.election_head();
         let checkpoint_head = blockchain.macro_head();
         let current_head = blockchain.head();
+        let current_block_number = current_head.block_number();
 
         // We drop the blockchain lock because it's no longer needed while we request proofs
         drop(blockchain);
+
+        if receipts
+            .iter()
+            .any(|(_, block_number)| block_number > &current_block_number)
+        {
+            log::error!(
+                head = current_block_number,
+                "Can't proof a transaction from the future"
+            );
+            return Err(RequestError::OutboundRequest(OutboundRequestError::Other(
+                "Can't proof a transaction from the future".to_string(),
+            )));
+        }
 
         let mut verified_transactions = HashMap::new();
 

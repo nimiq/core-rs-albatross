@@ -369,6 +369,7 @@ impl<N: Network> Handle<N, ResponseTransactionsProof, Arc<RwLock<Blockchain>>>
                 len = hashes.len(),
                 "Requested txn proof from finalized checkpoint block",
             );
+
             // If we were provided a block number corresponding to a checkpoint block, it needs to correspond to the current epoch
             // Otherwise, the requester should use the latest epoch number.
             if self.block_number < election_head {
@@ -405,9 +406,13 @@ impl<N: Network> Handle<N, ResponseTransactionsProof, Arc<RwLock<Blockchain>>>
                 len = hashes.len(),
                 "Requested txn proof from current batch",
             );
-            // If we were provided a block number corresponding to a micro block, it needs to correspond to the current batch
-            // Otherwise, the requester should use the latest checkpoint block number
-            if self.block_number < macro_head {
+            // If we were provided a block number corresponding to a micro block,
+            // it needs to correspond to at least the previous batch (we allow the
+            // previous batch also, to not fail when the client is a few blocks behind
+            // and we are already at or over a macro block).
+            // If the requested block is older than the previous batch, the requester
+            // should use the latest checkpoint block number instead.
+            if self.block_number < macro_head - Policy::blocks_per_batch() {
                 log::info!(
                     block_number = self.block_number,
                     "Requested txn proof from finalized batch, should use a checkpoint block instead",
@@ -420,7 +425,7 @@ impl<N: Network> Handle<N, ResponseTransactionsProof, Arc<RwLock<Blockchain>>>
 
             block = blockchain
                 .chain_store
-                .get_block_at(blockchain.block_number(), false, None)
+                .get_block_at(self.block_number, false, None)
                 .ok();
 
             if block.is_none() {

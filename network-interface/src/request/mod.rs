@@ -97,6 +97,9 @@ pub enum OutboundRequestError {
     /// No response after asking a couple of peers.
     #[error("No response after asking a couple of peers")]
     NoResponse,
+    /// Error that doesn't match any of the other error causes
+    #[error("Other: {0}")]
+    Other(String),
 }
 
 #[repr(u8)]
