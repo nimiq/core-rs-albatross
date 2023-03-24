@@ -18,11 +18,10 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
         // create  the aggregation if it does not exist yet.
         self.create_aggregation();
 
+        let round_and_step = (self.state.current_round, self.state.current_step);
+
         // get the best aggregate for the identifier. If it does not exist, there is nothing to check.
-        let current_best = self
-            .state
-            .best_votes
-            .get(&(self.state.current_round, self.state.current_step))?;
+        let current_best = self.state.best_votes.get(&round_and_step)?;
 
         // Get the number of total contributors.
         let total_contributors = current_best.all_contributors().len();
@@ -69,6 +68,11 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
             }
 
             // The proposal has at least 2f+1 votes.
+            log::debug!(
+                ?round_and_step,
+                proposal = ?proposal_hash,
+                "Aggregation resulted in Block polka",
+            );
             self.on_polka(proposal_hash);
 
             // Reset timeout.
@@ -84,6 +88,7 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
         // they are handled together.
         if none_contributor_count >= TProtocol::TWO_F_PLUS_ONE {
             // Vote against all proposals, as None has 2f+1 votes.
+            log::debug!(?round_and_step, "Aggregation resulted in None polka",);
             self.on_none_polka();
 
             // Reset timeout.
@@ -103,6 +108,7 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
         if !can_improve && total_contributors - remaining_contributor_count >= TProtocol::F_PLUS_ONE
         {
             // Vote against all proposals, as None has 2f+1 votes.
+            log::debug!(?round_and_step, "Aggregation resulted in None polka",);
             self.on_none_polka();
 
             // Reset timeout.
@@ -208,7 +214,7 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
 
         // create the aggregation if it does not exist yet
         if let Entry::Vacant(entry) = self.aggregation_senders.entry(id) {
-            log::debug!("Creating {:?}", &id);
+            log::debug!(?id, "Creating Aggregation");
             // Retrieve the vote this node is going to take.
             let vote = self.state.votes.get(&id).expect("").clone();
             // create the corresponding contribution necessary to start an aggregation

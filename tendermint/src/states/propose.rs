@@ -33,7 +33,7 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
             log::debug!(
                 current_round = self.state.current_round,
                 ?proposal_hash,
-                "Our turn, broadcasting set proposal",
+                "Our turn, broadcasting previously set proposal",
             );
 
             // Get the proposal.

@@ -508,23 +508,16 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
                         };
                     } else {
                         // // Request proposal, as it is not known.
-                        // log::debug!(
-                        //     ?round_and_step,
-                        //     ?best_vote,
-                        //     "Unknown Proposal exceeds 2f+1 votes, requesting proposal",
-                        // );
-
-                        // // Request the proposal, as it might be needed.
-                        // let response = self
-                        //     .dependencies
-                        //     .request_proposal(
-                        //         &proposal_hash,
-                        //         round_and_step.0,
-                        //         best_vote.contributors_for(Some(&proposal_hash))
-                        //     );
-
-                        // // Add it to the list of pending responses
-                        // self.requested_proposals.push(response);
+                        if !self
+                            .pending_proposal_requests
+                            .contains(&(proposal_hash.clone(), round_and_step.0))
+                        {
+                            log::debug!(
+                                ?round_and_step,
+                                ?best_vote,
+                                "Unknown Proposal exceeds 2f+1 votes, without being requested.",
+                            );
+                        }
                     }
                 }
 
@@ -596,8 +589,6 @@ impl<TProtocol: Protocol> Stream for Tendermint<TProtocol> {
             if let Some(signed_proposal) = signed_proposal {
                 if self.process_proposal(signed_proposal).is_some() {
                     should_export_state = true;
-                    // self.state_return_pending = false;
-                    // return Poll::Ready(Some(Return::Update(self.state.clone())));
                 }
             }
             // Do nothing if the future ultimately resolved to None.
@@ -651,11 +642,6 @@ impl<TProtocol: Protocol> Stream for Tendermint<TProtocol> {
         // If the state machine did return Poll::Pending there might have been a state change prior to it, that makes a state
         // export necessary.
         if state_machine_return.is_none() && (should_export_state || self.state_return_pending) {
-            log::error!(
-                "Returning state: {:?}, {:?}",
-                &should_export_state,
-                &self.state_return_pending
-            );
             // Whenever returning the state the state_return_pending flag should be reset
             self.state_return_pending = false;
             return Poll::Ready(Some(Return::Update(self.state.clone())));

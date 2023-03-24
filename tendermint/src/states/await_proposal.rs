@@ -52,6 +52,7 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
             }
             None => {
                 if self.check_proposal_timeout(cx) {
+                    log::debug!(round = self.state.current_round, "Proposal timed out",);
                     self.timeout = None;
                     Some(Return::Update(self.state.clone()))
                 } else {
@@ -65,6 +66,13 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
     ///
     /// This cannot fail and will always progress the step to Prevote.
     fn received_proposal_with_vr(&mut self, proposal_hash: TProtocol::ProposalHash, vr: u32) {
+        log::debug!(
+            round = self.state.current_round,
+            vr,
+            ?proposal_hash,
+            "Proposal with VR received",
+        );
+
         // Check if a vote for the proposal can be cast.
         // For that the VR must be in the past.
         // The instance must not be locked, or it must be able to unlock.
@@ -92,6 +100,11 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
     ///
     /// This cannot fail and will always progress the step to Prevote.
     fn received_proposal_without_vr(&mut self, proposal_hash: TProtocol::ProposalHash) {
+        log::debug!(
+            round = self.state.current_round,
+            ?proposal_hash,
+            "Proposal without VR received",
+        );
         // Check if allowed to vote for the proposal.
         if self.is_allowed_to_vote_on(&proposal_hash, None) {
             // Vote for the proposal if allowed to vote for the proposal.
