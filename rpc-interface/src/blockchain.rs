@@ -104,8 +104,15 @@ pub trait BlockchainInterface {
     async fn get_validator_by_address(
         &mut self,
         address: Address,
-        include_stakers: Option<bool>,
     ) -> RPCResult<Validator, BlockchainState, Self::Error>;
+
+    /// Fetches all stakers for a given validator.
+    /// IMPORTANT: This operation iterates over all stakers of the staking contract
+    /// and thus is extremely computationally expensive.
+    async fn get_stakers_by_validator_address(
+        &mut self,
+        address: Address,
+    ) -> RPCResult<Vec<Staker>, BlockchainState, Self::Error>;
 
     async fn get_staker_by_address(
         &mut self,

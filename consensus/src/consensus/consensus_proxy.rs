@@ -491,7 +491,7 @@ impl<N: Network> ConsensusProxy<N> {
                 .await?
         };
 
-        let mut sucess = false;
+        let mut success = false;
 
         // Subscribe to all peers that could provide the necessary services
         for peer_id in peers {
@@ -510,7 +510,7 @@ impl<N: Network> ConsensusProxy<N> {
                 Ok(response) => match response.result {
                     Ok(_) => {
                         // Done, we are subscribed at least to one peer, continue with the next one
-                        sucess = true;
+                        success = true;
                         continue;
                     }
                     Err(_) => {
@@ -525,7 +525,7 @@ impl<N: Network> ConsensusProxy<N> {
                 }
             }
         }
-        if sucess {
+        if success {
             Ok(())
         } else {
             Err(

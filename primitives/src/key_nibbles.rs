@@ -1,10 +1,13 @@
-use std::cmp::Ordering;
-use std::{borrow::Cow, cmp, fmt, ops, str, usize};
+use std::{
+    borrow::Cow,
+    cmp::{self, Ordering},
+    fmt, io, ops, str, usize,
+};
 
 use log::error;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
-use nimiq_database_value::AsDatabaseBytes;
+use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue};
 use nimiq_keys::Address;
 
 /// A compact representation of a node's key. It stores the key in big endian. Each byte
@@ -357,6 +360,15 @@ impl AsDatabaseBytes for KeyNibbles {
         // TODO: Improve KeyNibbles, so that no serialization is needed.
         let v = Serialize::serialize_to_vec(&self);
         Cow::Owned(v)
+    }
+}
+
+impl FromDatabaseValue for KeyNibbles {
+    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
+    where
+        Self: Sized,
+    {
+        KeyNibbles::deserialize_from_vec(bytes).map_err(|e| io::Error::new(io::ErrorKind::Other, e))
     }
 }
 

@@ -46,13 +46,11 @@ fn get_block_by_hash(
         .map(|block| block.into())
 }
 
-/// Tries to fetch a validator information given its address. It has an option to include a collection
-/// containing the addresses and stakes of all the stakers that are delegating to the validator.
-/// This function requires the read lock acquisition prior to its execution
+/// Tries to fetch a validator information given its address.
+/// This function requires the read lock acquisition prior to its execution.
 fn get_validator_by_address(
     blockchain_proxy: &BlockchainReadProxy,
     address: &Address,
-    _include_stakers: Option<bool>,
 ) -> RPCResult<Validator, BlockchainState, Error> {
     if let BlockchainReadProxy::Full(blockchain) = blockchain_proxy {
         let staking_contract = blockchain.get_staking_contract();
@@ -64,29 +62,8 @@ fn get_validator_by_address(
             return Err(Error::ValidatorNotFound(address.clone()));
         }
 
-        let stakers = None;
-
-        // FIXME We can't efficiently fetch the stakers, so we will need to scan.
-        // if include_stakers == Some(true) {
-        //     let staker_addresses =
-        //         StakingContract::get_validator_stakers(accounts_tree, &db_txn, address);
-        //
-        //     let mut stakers_list: Vec<Staker> = vec![];
-        //
-        //     for address in staker_addresses {
-        //         let mut staker = StakingContract::get_staker(accounts_tree, &db_txn, &address)
-        //             .unwrap()
-        //             .unwrap();
-        //         // Delegation is unnecessary because the address is in the parent struct.
-        //         staker.delegation = None;
-        //         stakers_list.push(Staker::from_staker(&staker));
-        //     }
-        //
-        //     stakers = Some(stakers_list);
-        // }
-
         Ok(RPCData::with_blockchain(
-            Validator::from_validator(&validator.unwrap(), stakers),
+            Validator::from_validator(&validator.unwrap()),
             blockchain_proxy,
         ))
     } else {
@@ -524,8 +501,7 @@ impl BlockchainInterface for BlockchainDispatcher {
             let mut active_validators = vec![];
 
             for (address, _) in staking_contract.active_validators {
-                if let Ok(rpc_result) = get_validator_by_address(&blockchain_proxy, &address, None)
-                {
+                if let Ok(rpc_result) = get_validator_by_address(&blockchain_proxy, &address) {
                     active_validators.push(rpc_result.data);
                 }
             }
@@ -608,14 +584,38 @@ impl BlockchainInterface for BlockchainDispatcher {
         }
     }
 
-    /// Tries to fetch a validator information given its address. It has an option to include a map
-    /// containing the addresses and stakes of all the stakers that are delegating to the validator.
+    /// Tries to fetch a validator information given its address.
     async fn get_validator_by_address(
         &mut self,
         address: Address,
-        include_stakers: Option<bool>,
     ) -> RPCResult<Validator, BlockchainState, Self::Error> {
-        get_validator_by_address(&self.blockchain.read(), &address, include_stakers)
+        get_validator_by_address(&self.blockchain.read(), &address)
+    }
+
+    /// Fetches all stakers for a given validator.
+    /// IMPORTANT: This operation iterates over all stakers of the staking contract
+    /// and thus is extremely computationally expensive.
+    /// This function requires the read lock acquisition prior to its execution.
+    async fn get_stakers_by_validator_address(
+        &mut self,
+        address: Address,
+    ) -> RPCResult<Vec<Staker>, BlockchainState, Self::Error> {
+        let blockchain_proxy = self.blockchain.read();
+
+        if let BlockchainReadProxy::Full(ref blockchain) = blockchain_proxy {
+            let staking_contract = blockchain.get_staking_contract();
+            let data_store = blockchain.get_staking_contract_store();
+            let db_txn = blockchain.read_transaction();
+            let staker =
+                staking_contract.get_stakers_for_validator(&data_store.read(&db_txn), &address);
+
+            Ok(RPCData::with_blockchain(
+                staker.iter().map(Staker::from_staker).collect(),
+                &blockchain_proxy,
+            ))
+        } else {
+            Err(Error::NotSupportedForLightBlockchain)
+        }
     }
 
     /// Tries to fetch a staker information given its address.
@@ -703,7 +703,7 @@ impl BlockchainInterface for BlockchainDispatcher {
                 let result = match event {
                     BlockchainEvent::EpochFinalized(..) => {
                         let blockchain_rg = blockchain.read();
-                        get_validator_by_address(&blockchain_rg, &address, Some(false))
+                        get_validator_by_address(&blockchain_rg, &address)
                             .map_or_else(|_| None, Some)
                     }
                     _ => None,

@@ -2,8 +2,12 @@ use beserial::{Deserialize, Serialize};
 use nimiq_database::{Transaction, WriteTransaction};
 use nimiq_keys::Address;
 use nimiq_primitives::key_nibbles::KeyNibbles;
+use nimiq_trie::trie::TrieNodeIter;
 
-use crate::{data_store_ops::DataStoreReadOps, AccountsTrie};
+use crate::{
+    data_store_ops::{DataStoreIterOps, DataStoreReadOps},
+    AccountsTrie,
+};
 
 pub struct DataStore<'a> {
     tree: &'a AccountsTrie,
@@ -57,6 +61,18 @@ pub struct DataStoreRead<'store, 'tree, 'txn, 'env> {
 impl<'store, 'tree, 'txn, 'env> DataStoreReadOps for DataStoreRead<'store, 'tree, 'txn, 'env> {
     fn get<T: Deserialize>(&self, key: &KeyNibbles) -> Option<T> {
         self.store.get(self.txn, key)
+    }
+}
+
+impl<'store, 'tree, 'txn, 'env> DataStoreIterOps for DataStoreRead<'store, 'tree, 'txn, 'env> {
+    type Iter<T: Deserialize> = TrieNodeIter<'txn, T>;
+
+    fn iter<T: Deserialize>(&self, start_key: &KeyNibbles, end_key: &KeyNibbles) -> Self::Iter<T> {
+        self.store.tree.iter_nodes(
+            self.txn,
+            &(&self.store.prefix + start_key),
+            &(&self.store.prefix + end_key),
+        )
     }
 }
 

@@ -16,7 +16,7 @@ use nimiq_vrf::{AliasMethod, VrfSeed, VrfUseCase};
 
 use crate::{
     account::staking_contract::store::{StakingContractStoreRead, StakingContractStoreReadOps},
-    data_store_ops::DataStoreReadOps,
+    data_store_ops::{DataStoreIterOps, DataStoreReadOps},
 };
 
 pub use receipts::*;
@@ -41,17 +41,11 @@ mod validator;
 /// staking contract subtrie. The subtrie has the following format:
 ///
 /// ```text
-/// STAKING_CONTRACT_ADDRESS
-///     |--> PATH_CONTRACT_MAIN: Staking(StakingContract)
+/// STAKING_CONTRACT_ADDRESS: StakingContract
+///     |--> PREFIX_VALIDATOR || VALIDATOR_ADDRESS: Validator
+///     |--> PREFIX_TOMBSTONE || VALIDATOR_ADDRESS: Tombstone
 ///     |
-///     |--> PATH_VALIDATORS_LIST
-///     |       |--> VALIDATOR_ADDRESS
-///     |               |--> PATH_VALIDATOR_MAIN: StakingValidator(Validator)
-///     |               |--> PATH_VALIDATOR_STAKERS_LIST
-///     |                       |--> STAKER_ADDRESS: StakingValidatorsStaker(Address)
-///     |
-///     |--> PATH_STAKERS_LIST
-///             |--> STAKER_ADDRESS: StakingStaker(Staker)
+///     |--> PREFIX_STAKER || STAKER_ADDRESS: Staker
 /// ```
 ///
 /// So, for example, if you want to get the validator with a given address then you just fetch the
@@ -60,8 +54,7 @@ mod validator;
 /// At a high level, the Staking Contract subtrie contains:
 ///     - The Staking contract main. A struct that contains general information about the Staking contract.
 ///     - A list of Validators. Each of them is a subtrie containing the Validator struct, with all
-///       the information relative to the Validator and a list of stakers that are validating for
-///       this validator (we store only the staker address).
+///       the information relative to the Validator.
 ///     - A list of Stakers, with each Staker struct containing all information about a staker.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
@@ -116,12 +109,23 @@ impl StakingContract {
     }
 
     /// Get a list containing the addresses of all stakers that are delegating for a given validator.
-    pub fn get_stakers_for_validator<T: DataStoreReadOps>(
+    /// IMPORTANT: This is a very expensive operation, iterating over all existing stakers in the contract.
+    pub fn get_stakers_for_validator<T: DataStoreReadOps + DataStoreIterOps>(
         &self,
-        _data_store: &T,
-        _address: &Address,
-    ) -> Vec<Address> {
-        todo!()
+        data_store: &T,
+        address: &Address,
+    ) -> Vec<Staker> {
+        let read = StakingContractStoreRead::new(data_store);
+
+        if let Some(validator) = read.get_validator(address) {
+            let num_stakers = validator.num_stakers;
+            return read
+                .iter_stakers()
+                .filter(|staker| staker.delegation.as_ref() == Some(address))
+                .take(num_stakers as usize)
+                .collect();
+        }
+        vec![]
     }
 
     /// Given a seed, it randomly distributes the validator slots across all validators. It is

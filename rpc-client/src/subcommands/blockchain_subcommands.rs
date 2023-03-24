@@ -123,15 +123,17 @@ pub enum BlockchainCommand {
     /// Returns information about the currently parked validators.
     ParkedValidators {},
 
-    /// Tries to fetch a validator information given its address. It has an option to include a map
-    /// containing the addresses and stakes of all the stakers that are delegating to the validator.
+    /// Tries to fetch a validator information given its address.
     ValidatorByAddress {
         /// The address to query by.
         address: Address,
+    },
 
-        /// Include the stakers of the validator.
-        #[clap(short = 's')]
-        include_stakers: Option<bool>,
+    /// Tries to fetch all stakers of a given validator.
+    /// IMPORTANT: This is a very expensive operation, iterating over all existing stakers in the contract.
+    StakersByValidator {
+        /// The validator address to query by.
+        address: Address,
     },
 
     /// Tries to fetch a staker information given its address.
@@ -301,17 +303,18 @@ impl HandleSubcommand for BlockchainCommand {
             BlockchainCommand::ParkedValidators {} => {
                 println!("{:#?}", client.blockchain.get_parked_validators().await?)
             }
-            BlockchainCommand::ValidatorByAddress {
-                address,
-                include_stakers,
-            } => println!(
+            BlockchainCommand::ValidatorByAddress { address } => println!(
+                "{:#?}",
+                client.blockchain.get_validator_by_address(address).await?
+            ),
+
+            BlockchainCommand::StakersByValidator { address } => println!(
                 "{:#?}",
                 client
                     .blockchain
-                    .get_validator_by_address(address, include_stakers)
+                    .get_stakers_by_validator_address(address)
                     .await?
             ),
-
             BlockchainCommand::Staker { address } => {
                 println!(
                     "{:#?}",

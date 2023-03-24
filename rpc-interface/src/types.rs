@@ -727,15 +727,10 @@ pub struct Validator {
     pub num_stakers: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub inactivity_flag: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub stakers: Option<Vec<Staker>>,
 }
 
 impl Validator {
-    pub fn from_validator(
-        validator: &nimiq_account::Validator,
-        stakers: Option<Vec<Staker>>,
-    ) -> Self {
+    pub fn from_validator(validator: &nimiq_account::Validator) -> Self {
         Validator {
             address: validator.address.clone(),
             signing_key: validator.signing_key,
@@ -745,7 +740,6 @@ impl Validator {
             balance: validator.total_stake,
             num_stakers: validator.num_stakers,
             inactivity_flag: validator.inactive_since,
-            stakers,
         }
     }
 }

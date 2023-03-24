@@ -1,14 +1,18 @@
-use std::cmp;
-use std::collections::{BTreeMap, BTreeSet};
-use std::error::Error;
-use std::fmt;
-use std::mem;
-use std::ops;
+use std::{
+    cmp,
+    collections::{BTreeMap, BTreeSet},
+    error::Error,
+    fmt,
+    marker::PhantomData,
+    mem, ops,
+};
 
 use log::error;
 
 use beserial::{Deserialize, Serialize};
-use nimiq_database::{Database, Environment, Transaction, WriteTransaction};
+use nimiq_database::{
+    cursor::ReadCursor, Cursor, Database, Environment, Transaction, WriteTransaction,
+};
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::{
     key_nibbles::KeyNibbles,
@@ -1438,6 +1442,56 @@ impl MerkleRadixTrie {
         }
 
         chunk
+    }
+
+    pub fn iter_nodes<'txn, T: Deserialize>(
+        &self,
+        txn: &'txn Transaction,
+        start_key: &KeyNibbles,
+        end_key: &KeyNibbles,
+    ) -> TrieNodeIter<'txn, T> {
+        assert_eq!(
+            start_key.len(),
+            end_key.len(),
+            "Start and end keys should have the same length"
+        );
+        TrieNodeIter::new(&self.db, txn, start_key, end_key.clone())
+    }
+}
+
+/// This iterator is meant to start at `start_key` and finish at `end_key`, both of these are inclusive.
+pub struct TrieNodeIter<'txn, T> {
+    cursor: Cursor<'txn>,
+    end_key: KeyNibbles,
+    _type: PhantomData<T>,
+}
+
+impl<'txn, T> TrieNodeIter<'txn, T> {
+    /// This iterator is meant to start at `start_key` and finish at `end_key`, both of these are inclusive.
+    fn new(db: &Database, txn: &Transaction, start_key: &KeyNibbles, end_key: KeyNibbles) -> Self {
+        let mut cursor = txn.cursor(db);
+
+        let _: Option<TrieNode> = cursor.seek_key(start_key);
+
+        Self {
+            cursor,
+            end_key,
+            _type: PhantomData,
+        }
+    }
+}
+
+impl<'txn, T: Deserialize> Iterator for TrieNodeIter<'txn, T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let (k, v) = self.cursor.get_current::<KeyNibbles, TrieNode>()?;
+        _ = self.cursor.next::<KeyNibbles, TrieNode>();
+
+        if k <= self.end_key {
+            return T::deserialize_from_vec(&v.value?).ok();
+        }
+        None
     }
 }
 

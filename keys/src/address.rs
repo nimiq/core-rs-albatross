@@ -40,6 +40,11 @@ impl Address {
     const CCODE: &'static str = "NQ";
     const NIMIQ_ALPHABET: &'static str = "0123456789ABCDEFGHJKLMNPQRSTUVXY";
 
+    /// The lexicographically first address.
+    pub const START_ADDRESS: Address = Address([0x00; 20]);
+    /// The lexicographically last address.
+    pub const END_ADDRESS: Address = Address([0xff; 20]);
+
     pub fn as_bytes(&self) -> &[u8] {
         &self.0
     }

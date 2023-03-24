@@ -96,6 +96,22 @@ fn generate_contract_2() {
 }
 
 #[test]
+fn can_iter_stakers() {
+    let env = VolatileEnvironment::new(10).unwrap();
+    let accounts = Accounts::new(env.clone());
+    let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+    let mut db_txn = WriteTransaction::new(&env);
+
+    let staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
+
+    let stakers =
+        staking_contract.get_stakers_for_validator(&data_store.read(&db_txn), &validator_address());
+
+    assert_eq!(stakers.len(), 1);
+    assert_eq!(stakers[0].balance, Coin::from_u64_unchecked(150_000_000));
+}
+
+#[test]
 fn it_can_de_serialize_a_staking_contract() {
     let bytes_1: Vec<u8> = hex::decode(CONTRACT_1).unwrap();
     let contract_1: StakingContract = Deserialize::deserialize(&mut &bytes_1[..]).unwrap();

@@ -6,7 +6,7 @@ use crate::account::staking_contract::validator::Tombstone;
 use crate::account::staking_contract::{Staker, Validator};
 #[cfg(feature = "interaction-traits")]
 use crate::data_store::DataStoreWrite;
-use crate::data_store_ops::DataStoreReadOps;
+use crate::data_store_ops::{DataStoreIterOps, DataStoreReadOps};
 
 // Fixme: This shouldn't be pub but for now it is needed for `RemoteDataStore`
 pub struct StakingContractStore {}
@@ -65,6 +65,15 @@ impl<'read, T: DataStoreReadOps> StakingContractStoreReadOps
 
     fn get_tombstone(&self, address: &Address) -> Option<Tombstone> {
         self.0.get(&StakingContractStore::tombstone_key(address))
+    }
+}
+
+impl<'read, T: DataStoreReadOps + DataStoreIterOps> StakingContractStoreRead<'read, T> {
+    pub(crate) fn iter_stakers(&self) -> impl Iterator<Item = Staker> {
+        self.0.iter(
+            &StakingContractStore::staker_key(&Address::START_ADDRESS),
+            &StakingContractStore::staker_key(&Address::END_ADDRESS),
+        )
     }
 }
 
