@@ -795,6 +795,11 @@ impl Client {
                                         Some(peer_id),
                                     )
                                     .await;
+                                log::debug!(
+                                    peer_id=%peer_id,
+                                    "Subscribed to {} addresses at new peer",
+                                    owned_subscribed_addresses.borrow().len(),
+                                );
                             });
                         }
 
@@ -853,9 +858,31 @@ impl Client {
             let mut address_notifications = consensus.subscribe_address_notifications().await;
 
             while let Some((notification, _)) = address_notifications.next().await {
+                {
+                    loop {
+                        let current_block_number =
+                            consensus.blockchain.read().head().block_number();
+                        if notification
+                            .receipts
+                            .iter()
+                            .any(|(_, block_number)| block_number > &current_block_number)
+                        {
+                            log::debug!("Received transaction receipt(s) from the future, waiting for the blockchain head to be updated...");
+                            let mut blockchain_events =
+                                consensus.blockchain.read().notifier_as_stream();
+                            let _ = blockchain_events.next().await;
+                        } else {
+                            break;
+                        }
+                    }
+                }
+
                 if let Ok(ext_txs) = consensus
                     .prove_transactions_from_receipts(notification.receipts, 1)
                     .await
+                    .map_err(|e| {
+                        log::error!("Failed to prove transactions from receipts: {}", e);
+                    })
                 {
                     let this = JsValue::null();
 
