@@ -15,7 +15,7 @@ a Proof-of-stake blockchain based on the [Albatross](https://arxiv.org/abs/1903.
 Nimiq 2.0 was conceived with performance in mind without sacrificing security.
 
 Currently, the protocol can be exercised in an environment aimed for developers where bugs are expected to happen.
-For more detailed information about how to connect and use the development network, please refer to the [Devnet](#devnet) section.
+For more detailed information about how to connect and use the testnet network, please refer to the [Testnet](#testnet) section.
 
 ## Table of Contents
 
@@ -111,26 +111,26 @@ nimiq-client -c path/to/client.toml
 
 Please take a look at the [`client.example.toml`](lib/src/config/config_file/client.example.toml) for all the configuration options.
 
-### Devnet
+### Testnet
 
-The development network is currently in a phase where we are giving RPC access to interested developers.
-Its main purpose is to invite all developers to exercise and test the Nimiq 2.0 RPC functionality (to see how it fits for
-their app use cases), and we invite them to file and report any [issues](https://github.com/nimiq/core-rs-albatross/issues/new)
-through our GitHub repository.
+The testnet network is currently in a phase open to the general public to use.
+Its main purpose is to invite everyone to exercise and test the Nimiq 2.0 functionality and we invite people to file and
+report any [issues](https://github.com/nimiq/core-rs-albatross/issues/new) through our GitHub repository.
 
-[ARPL](https://github.com/sisou/arpl) is the recommended command line tool to connect to the devnet RPC, like this:
+#### Getting funds
 
-```
-arpl -u "https://seed1.v2.nimiq-testnet.com:8648/?secret=<TOKEN>" status
-```
+There are two ways of getting funds:
 
-Using the TOKEN that will be given after requesting developer access from a team member through our social media channels.
-
-And get funds to experiment with it (for example, by becoming a validator) using the [Devnet Faucet](http://faucet.v2.nimiq-testnet.com/):
+- Using an account in the [Testnet Nimiq Wallet](https://<to_be_announced>) and requesting funds in the wallet.
+- Directly using the [Devnet Faucet](http://<to_be_announced>/):
 
 ```
-curl -X POST -H "Content-Type: application/x-www-form-urlencoded" -d "address=NQXX XXXX XXXX XXXX XXXX XXXX XXXX XXXX XXXX" https://faucet.v2.nimiq-testnet.com/tapit
+curl -X POST -H "Content-Type: application/x-www-form-urlencoded" -d "address=NQXX XXXX XXXX XXXX XXXX XXXX XXXX XXXX XXXX" https://<to_be_announced>/tapit
 ```
+
+#### Becoming a validator
+
+Check [this guide](docs/becoming_validator.md) for steps on becoming a validator.
 
 ## Contributing
 
