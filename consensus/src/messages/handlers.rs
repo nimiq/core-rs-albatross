@@ -441,7 +441,6 @@ fn prove_transaction(
     let mut verifier_state = None;
     let election_head = blockchain.election_head().block_number();
     let macro_head = blockchain.macro_head().block_number();
-    let current_head = blockchain.head().block_number();
 
     // Get the extended transaction from the history store
     let mut extended_transactions = blockchain

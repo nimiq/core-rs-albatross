@@ -959,6 +959,29 @@ impl Client {
         id
     }
 
+    pub async fn get_transaction(
+        &self,
+        hash: String,
+    ) -> Result<PlainTransactionDetailsType, JsError> {
+        let hash =
+            Blake2bHash::from_str(&hash).map_err(|_| JsError::new("Invalid transaction hash"))?;
+        let details = self
+            .inner
+            .consensus_proxy()
+            .prove_transactions_from_receipts(vec![(hash, None)], 1)
+            .await?
+            .into_iter()
+            .next()
+            .map(|ext_tx| {
+                PlainTransactionDetails::from_extended_transaction(
+                    &ext_tx,
+                    self.inner.blockchain_head().block_number(),
+                )
+            })
+            .ok_or_else(|| JsError::new("Transaction not found"))?;
+        Ok(serde_wasm_bindgen::to_value(&details)?.into())
+    }
+
     /// This function is used to query the network for transaction receipts from and to a
     /// specific address, that have been included in the chain.
     ///
