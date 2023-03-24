@@ -17,6 +17,8 @@ use nimiq_network_interface::{
     network::{Network, NetworkEvent, SubscribeEvents},
     request::{request_handler, Handle},
 };
+use nimiq_primitives::account::AccountType;
+use nimiq_transaction::account::staking_contract::IncomingStakingTransactionData;
 
 use crate::messages::{
     AddressNotification, AddressSubscriptionOperation, AddressSubscriptionTopic, NotificationEvent,
@@ -213,6 +215,25 @@ impl<N: Network> RemoteEventDispatcher<N> {
             network_event_rx: network_events,
         }
     }
+
+    /// This is a helper function to determine if we need to create notifications
+    fn add_notification_receipts(
+        &self,
+        address: &Address,
+        txn_hash: Blake2bHash,
+        block_number: u32,
+        peer_receipts: &mut HashMap<N::PeerId, Vec<(Blake2bHash, u32)>>,
+    ) {
+        if let Some(peers) = self.state.read().get_peers(address) {
+            for peer in peers {
+                if let Some(receipts) = peer_receipts.get_mut(&peer) {
+                    receipts.push((txn_hash.clone(), block_number))
+                } else {
+                    peer_receipts.insert(peer, vec![(txn_hash.clone(), block_number)]);
+                }
+            }
+        }
+    }
 }
 
 impl<N: Network> Future for RemoteEventDispatcher<N> {
@@ -240,7 +261,7 @@ impl<N: Network> Future for RemoteEventDispatcher<N> {
                     new_blocks.extend(adopted_blocks.into_iter().map(|(_, block)| block));
                 }
                 BlockchainEvent::HistoryAdopted(_) => {
-                    //TODO: In the future we might be interested in other events
+                    // In the future we might be interested in other events
                 }
             }
             // This hash map is used to collect all the notifications for a given peer.
@@ -253,27 +274,38 @@ impl<N: Network> Future for RemoteEventDispatcher<N> {
                     for txn in transactions {
                         let txn = txn.get_raw_transaction();
 
-                        // Process transaction senders
-                        if let Some(peers) = self.state.read().get_peers(&txn.sender) {
-                            for peer in peers {
-                                if let Some(receipts) = peer_receipts.get_mut(&peer) {
-                                    receipts.push((txn.hash(), block.block_number()))
-                                } else {
-                                    peer_receipts
-                                        .insert(peer, vec![(txn.hash(), block.block_number())]);
-                                }
-                            }
-                        }
+                        // Process transaction sender
+                        self.add_notification_receipts(
+                            &txn.sender,
+                            txn.hash(),
+                            block.block_number(),
+                            &mut peer_receipts,
+                        );
+
                         // Process transaction recipients
-                        if let Some(peers) = self.state.read().get_peers(&txn.recipient) {
-                            for peer in peers {
-                                if let Some(receipts) = peer_receipts.get_mut(&peer) {
-                                    receipts.push((txn.hash(), block.block_number()))
-                                } else {
-                                    peer_receipts
-                                        .insert(peer, vec![(txn.hash(), block.block_number())]);
-                                }
+                        self.add_notification_receipts(
+                            &txn.recipient,
+                            txn.hash(),
+                            block.block_number(),
+                            &mut peer_receipts,
+                        );
+
+                        // Process staking transaction (which are a special case)
+                        if txn.recipient_type == AccountType::Staking {
+                            // Parse transaction data
+                            let proof = IncomingStakingTransactionData::parse(txn).unwrap();
+
+                            if let IncomingStakingTransactionData::AddStake { staker_address } =
+                                proof
+                            {
+                                self.add_notification_receipts(
+                                    &staker_address,
+                                    txn.hash(),
+                                    block.block_number(),
+                                    &mut peer_receipts,
+                                );
                             }
+                            // In the future we might add other staking notifications
                         }
                     }
                 }
