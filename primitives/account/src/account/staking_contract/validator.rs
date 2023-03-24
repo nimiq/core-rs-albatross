@@ -55,30 +55,30 @@ use crate::{
 /// address). For the other transactions, the the signing key must be used.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Validator {
-    // The address of the validator. The corresponding key can be used to create, update or drop
-    // the validator.
+    /// The address of the validator. The corresponding key can be used to create, update or drop
+    /// the validator.
     pub address: Address,
-    // This key used to sign blocks. It is also used to retire, reactivate and unpark the validator.
+    /// The public key used to sign blocks. It is also used to retire, reactivate and unpark the validator.
     pub signing_key: SchnorrPublicKey,
-    // The voting key, it is used to vote for skip and macro blocks.
+    /// The voting public key, it is used to vote for skip and macro blocks.
     pub voting_key: BlsPublicKey,
-    // The reward address of the validator. All the block rewards are paid to this address.
+    /// The reward address of the validator. All the block rewards are paid to this address.
     pub reward_address: Address,
-    // Signaling field. Can be used to do chain upgrades or for any other purpose that requires
-    // validators to coordinate among themselves.
+    /// Signaling field. Can be used to do chain upgrades or for any other purpose that requires
+    /// validators to coordinate among themselves.
     pub signal_data: Option<Blake2bHash>,
-    // The total stake assigned to this validator. It includes the validator deposit as well as the
-    // coins delegated to him by stakers.
+    /// The total stake assigned to this validator. It includes the validator deposit as well as the
+    /// coins delegated to him by stakers.
     pub total_stake: Coin,
-    // The amount of coins deposited by this validator. The initial deposit is a fixed amount,
-    // however this value can be decremented by failing staking transactions due to fees.
+    /// The amount of coins deposited by this validator. The initial deposit is a fixed amount,
+    /// however this value can be decremented by failing staking transactions due to fees.
     pub deposit: Coin,
-    // The number of stakers that are delegating to this validator.
+    /// The number of stakers that are delegating to this validator.
     pub num_stakers: u64,
-    // An option indicating if the validator is inactive. If it is inactive, then it contains the
-    // block height at which it became inactive.
+    /// An option indicating if the validator is inactive. If it is inactive, then it contains the
+    /// block height at which it became inactive.
     pub inactive_since: Option<u32>,
-    // A flag indicating if the validator is retired.
+    /// A flag indicating if the validator is retired.
     pub retired: bool,
 }
 

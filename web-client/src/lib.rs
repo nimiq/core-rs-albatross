@@ -35,7 +35,10 @@ use nimiq_network_interface::{
 };
 use nimiq_primitives::networks::NetworkId;
 
-use crate::account::{PlainAccount, PlainAccountArrayType, PlainAccountType};
+use crate::account::{
+    PlainAccount, PlainAccountArrayType, PlainAccountType, PlainStaker, PlainStakerArrayType,
+    PlainStakerType, PlainValidator, PlainValidatorArrayType, PlainValidatorType,
+};
 use crate::address::{Address, AddressAnyArrayType, AddressAnyType};
 use crate::block::{PlainBlock, PlainBlockType};
 use crate::peer_info::PeerInfo;
@@ -324,20 +327,7 @@ impl Client {
             .dyn_into::<js_sys::Function>()
             .map_err(|_| JsError::new("listener is not a function"))?;
 
-        // Unpack the array of addresses
-        let js_value: &JsValue = addresses.unchecked_ref();
-        let array: &Array = js_value
-            .dyn_ref()
-            .ok_or_else(|| JsError::new("`addresses` must be an array"))?;
-        let mut addresses = HashSet::with_capacity(array.length().try_into()?);
-        for any in array.iter() {
-            let address = Address::from_any(&any.into())?;
-            addresses.insert(address.take_native());
-        }
-
-        if addresses.is_empty() {
-            return Err(JsError::new("No addresses provided"));
-        }
+        let addresses: HashSet<_, _> = Client::unpack_addresses(addresses)?.into_iter().collect();
 
         // Add addresses to our global list of subscribed addresses
         {
@@ -497,11 +487,9 @@ impl Client {
     /// Throws if the address cannot be parsed and on network errors.
     #[wasm_bindgen(js_name = getAccount)]
     pub async fn get_account(&self, address: &AddressAnyType) -> Result<PlainAccountType, JsError> {
-        let address = Address::from_any(address)?;
+        let address = Address::from_any(address)?.take_native();
         let plain_accounts = self.get_plain_accounts(vec![address]).await?;
-        let account = plain_accounts
-            .get(0)
-            .ok_or_else(|| JsError::new("Could not get account"))?;
+        let account = plain_accounts.get(0).unwrap();
         Ok(serde_wasm_bindgen::to_value(account)?.into())
     }
 
@@ -513,19 +501,60 @@ impl Client {
         &self,
         addresses: &AddressAnyArrayType,
     ) -> Result<PlainAccountArrayType, JsError> {
-        // Unpack the array of addresses
-        let js_value: &JsValue = addresses.unchecked_ref();
-        let array: &Array = js_value
-            .dyn_ref()
-            .ok_or_else(|| JsError::new("`addresses` must be an array"))?;
-        let mut addresses = Vec::<_>::with_capacity(array.length().try_into()?);
-        for any in array.iter() {
-            let address = Address::from_any(&any.into())?;
-            addresses.push(address);
-        }
-
+        let addresses = Client::unpack_addresses(addresses)?;
         let plain_accounts = self.get_plain_accounts(addresses).await?;
         Ok(serde_wasm_bindgen::to_value(&plain_accounts)?.into())
+    }
+
+    /// Fetches the staker for the provided address from the network.
+    ///
+    /// Throws if the address cannot be parsed and on network errors.
+    #[wasm_bindgen(js_name = getStaker)]
+    pub async fn get_staker(&self, address: &AddressAnyType) -> Result<PlainStakerType, JsError> {
+        let address = Address::from_any(address)?.take_native();
+        let plain_stakers = self.get_plain_stakers(vec![address]).await?;
+        let staker = plain_stakers.get(0).unwrap();
+        Ok(serde_wasm_bindgen::to_value(staker)?.into())
+    }
+
+    /// Fetches the stakers for the provided addresses from the network.
+    ///
+    /// Throws if an address cannot be parsed and on network errors.
+    #[wasm_bindgen(js_name = getStakers)]
+    pub async fn get_stakers(
+        &self,
+        addresses: &AddressAnyArrayType,
+    ) -> Result<PlainStakerArrayType, JsError> {
+        let addresses = Client::unpack_addresses(addresses)?;
+        let plain_stakers = self.get_plain_stakers(addresses).await?;
+        Ok(serde_wasm_bindgen::to_value(&plain_stakers)?.into())
+    }
+
+    /// Fetches the validator for the provided address from the network.
+    ///
+    /// Throws if the address cannot be parsed and on network errors.
+    #[wasm_bindgen(js_name = getValidator)]
+    pub async fn get_validator(
+        &self,
+        address: &AddressAnyType,
+    ) -> Result<PlainValidatorType, JsError> {
+        let address = Address::from_any(address)?.take_native();
+        let plain_validators = self.get_plain_validators(vec![address]).await?;
+        let validator = plain_validators.get(0).unwrap();
+        Ok(serde_wasm_bindgen::to_value(validator)?.into())
+    }
+
+    /// Fetches the validators for the provided addresses from the network.
+    ///
+    /// Throws if an address cannot be parsed and on network errors.
+    #[wasm_bindgen(js_name = getValidators)]
+    pub async fn get_validators(
+        &self,
+        addresses: &AddressAnyArrayType,
+    ) -> Result<PlainValidatorArrayType, JsError> {
+        let addresses = Client::unpack_addresses(addresses)?;
+        let plain_validators = self.get_plain_validators(addresses).await?;
+        Ok(serde_wasm_bindgen::to_value(&plain_validators)?.into())
     }
 
     /// Instantiates a transaction builder class that provides helper methods to create transactions.
@@ -1032,34 +1061,111 @@ impl Client {
 }
 
 impl Client {
-    pub async fn get_plain_accounts(
-        &self,
-        addresses: Vec<Address>,
-    ) -> Result<Vec<PlainAccount>, JsError> {
-        let native_addresses: Vec<nimiq_keys::Address> = addresses
-            .into_iter()
-            .map(|addr| addr.take_native())
-            .collect();
+    fn unpack_addresses(
+        addresses: &AddressAnyArrayType,
+    ) -> Result<Vec<nimiq_keys::Address>, JsError> {
+        // Unpack the array of addresses
+        let js_value: &JsValue = addresses.unchecked_ref();
+        let array: &Array = js_value
+            .dyn_ref()
+            .ok_or_else(|| JsError::new("`addresses` must be an array"))?;
 
-        let accounts: HashMap<_, _> = self
+        if array.length() == 0 {
+            return Err(JsError::new("No addresses provided"));
+        }
+
+        let mut addresses = Vec::<_>::with_capacity(array.length().try_into()?);
+        for any in array.iter() {
+            let address = Address::from_any(&any.into())?.take_native();
+            addresses.push(address);
+        }
+
+        Ok(addresses)
+    }
+
+    async fn get_plain_accounts(
+        &self,
+        addresses: Vec<nimiq_keys::Address>,
+    ) -> Result<Vec<PlainAccount>, JsError> {
+        let accounts = self
             .inner
             .consensus_proxy()
-            .request_accounts_by_addresses(native_addresses.clone(), 1)
-            .await?
-            .into_iter()
-            .collect();
+            .request_accounts_by_addresses(addresses.clone(), 1)
+            .await?;
 
         let mut ordered_accounts = vec![];
         let default = nimiq_account::Account::default();
 
-        for address in &native_addresses {
-            if let Some(maybe_account) = accounts.get(address) {
-                let account = maybe_account.as_ref().unwrap_or(&default);
-                ordered_accounts.push(PlainAccount::from_native(account));
-            }
+        for address in &addresses {
+            ordered_accounts.push(PlainAccount::from_native(
+                accounts
+                    .get(address)
+                    .ok_or(JsError::new(&format!(
+                        "Missing trie proof node for {}",
+                        address
+                    )))?
+                    .as_ref()
+                    .unwrap_or(&default),
+            ));
         }
 
         Ok(ordered_accounts)
+    }
+
+    async fn get_plain_stakers(
+        &self,
+        addresses: Vec<nimiq_keys::Address>,
+    ) -> Result<Vec<Option<PlainStaker>>, JsError> {
+        let stakers = self
+            .inner
+            .consensus_proxy()
+            .request_stakers_by_addresses(addresses.clone(), 1)
+            .await?;
+
+        let mut ordered_stakers = vec![];
+
+        for address in &addresses {
+            ordered_stakers.push(
+                stakers
+                    .get(address)
+                    .ok_or(JsError::new(&format!(
+                        "Missing trie proof node for {}",
+                        address
+                    )))?
+                    .as_ref()
+                    .map(PlainStaker::from_native),
+            );
+        }
+
+        Ok(ordered_stakers)
+    }
+
+    async fn get_plain_validators(
+        &self,
+        addresses: Vec<nimiq_keys::Address>,
+    ) -> Result<Vec<Option<PlainValidator>>, JsError> {
+        let validators = self
+            .inner
+            .consensus_proxy()
+            .request_validators_by_addresses(addresses.clone(), 1)
+            .await?;
+
+        let mut ordered_validators = vec![];
+
+        for address in &addresses {
+            ordered_validators.push(
+                validators
+                    .get(address)
+                    .ok_or(JsError::new(&format!(
+                        "Missing trie proof node for {}",
+                        address
+                    )))?
+                    .as_ref()
+                    .map(PlainValidator::from_native),
+            );
+        }
+
+        Ok(ordered_validators)
     }
 }
 

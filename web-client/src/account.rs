@@ -127,6 +127,75 @@ impl PlainAccount {
     }
 }
 
+/// JSON-compatible and human-readable format of a staker. E.g. delegation addresses are presented in their
+/// human-readable format.
+#[derive(serde::Serialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub struct PlainStaker {
+    /// The staker's balance.
+    balance: u64,
+    /// The address of the validator for which the staker is delegating its stake for. If it is not
+    /// delegating to any validator, this will be set to None.
+    delegation: Option<String>,
+}
+
+impl PlainStaker {
+    pub fn from_native(staker: &nimiq_account::Staker) -> PlainStaker {
+        PlainStaker {
+            delegation: staker
+                .delegation
+                .as_ref()
+                .map(|address| address.to_user_friendly_address()),
+            balance: staker.balance.into(),
+        }
+    }
+}
+
+/// JSON-compatible and human-readable format of a validator. E.g. reward addresses and public keys are presented in
+/// their human-readable format.
+#[derive(serde::Serialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub struct PlainValidator {
+    /// The public key used to sign blocks. It is also used to retire, reactivate and unpark the validator.
+    pub signing_public_key: String,
+    /// The voting public key, it is used to vote for skip and macro blocks.
+    pub voting_public_key: String,
+    /// The reward address of the validator. All the block rewards are paid to this address.
+    pub reward_address: String,
+    /// Signaling field. Can be used to do chain upgrades or for any other purpose that requires
+    /// validators to coordinate among themselves.
+    pub signal_data: Option<String>,
+    /// The total stake assigned to this validator. It includes the validator deposit as well as the
+    /// coins delegated to him by stakers.
+    pub total_stake: u64,
+    /// The amount of coins deposited by this validator. The initial deposit is a fixed amount,
+    /// however this value can be decremented by failing staking transactions due to fees.
+    pub deposit: u64,
+    /// The number of stakers that are delegating to this validator.
+    pub num_stakers: u64,
+    /// An option indicating if the validator is inactive. If it is inactive, then it contains the
+    /// block height at which it became inactive.
+    pub inactive_since: Option<u32>,
+    /// A flag indicating if the validator is retired.
+    pub retired: bool,
+}
+
+impl PlainValidator {
+    pub fn from_native(validator: &nimiq_account::Validator) -> PlainValidator {
+        PlainValidator {
+            signing_public_key: validator.signing_key.to_hex(),
+            voting_public_key: validator.voting_key.to_hex(),
+            reward_address: validator.reward_address.to_user_friendly_address(),
+            signal_data: validator.signal_data.as_ref().map(|data| data.to_hex()),
+            total_stake: validator.total_stake.into(),
+            deposit: validator.deposit.into(),
+            num_stakers: validator.num_stakers,
+            inactive_since: validator.inactive_since,
+            retired: validator.retired,
+        }
+    }
+}
+
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(typescript_type = "PlainAccount")]
@@ -134,4 +203,16 @@ extern "C" {
 
     #[wasm_bindgen(typescript_type = "PlainAccount[]")]
     pub type PlainAccountArrayType;
+
+    #[wasm_bindgen(typescript_type = "PlainStaker | undefined")]
+    pub type PlainStakerType;
+
+    #[wasm_bindgen(typescript_type = "(PlainStaker | undefined)[]")]
+    pub type PlainStakerArrayType;
+
+    #[wasm_bindgen(typescript_type = "PlainValidator | undefined")]
+    pub type PlainValidatorType;
+
+    #[wasm_bindgen(typescript_type = "(PlainValidator | undefined)[]")]
+    pub type PlainValidatorArrayType;
 }

@@ -26,13 +26,13 @@ use crate::{
 /// Unstake is an outgoing transaction from the staking contract.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Staker {
-    // The address of the staker. The corresponding key is used for all transactions (except Stake
-    // which is open to any address).
+    /// The address of the staker. The corresponding key is used for all transactions (except Stake
+    /// which is open to any address).
     pub address: Address,
-    // The staker's balance.
+    /// The staker's balance.
     pub balance: Coin,
-    // The address of the validator for which the staker is delegating its stake for. If it is not
-    // delegating to any validator, this will be set to None.
+    /// The address of the validator for which the staker is delegating its stake for. If it is not
+    /// delegating to any validator, this will be set to None.
     pub delegation: Option<Address>,
 }
 
