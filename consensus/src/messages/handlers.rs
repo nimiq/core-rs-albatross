@@ -393,7 +393,7 @@ impl<N: Network> Handle<N, ResponseTransactionsProof, Arc<RwLock<Blockchain>>>
                 let history_tree_len = chain_info.unwrap().history_tree_len;
                 verifier_state = Some(history_tree_len as usize);
             } else {
-                //If we could not find a block, we cannot fulfil the request
+                // If we could not find the block, we cannot fullfil the request
                 log::info!("Could not find the desired block to create the txn proof");
                 return ResponseTransactionsProof {
                     proof: None,

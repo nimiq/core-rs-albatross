@@ -322,11 +322,11 @@ impl<N: Network> ConsensusProxy<N> {
                                 } else if block.block_number() <= checkpoint_head.block_number() {
                                     // Check that the transaction inclusion proof actually proofs inclusion in the block we know
                                     if block.hash() != checkpoint_head.hash() {
-                                        log::debug!(peer=%peer_id,"BlockProof does not correspond to expected block");
+                                        log::debug!(peer=%peer_id, "BlockProof does not correspond to expected checkpoint block");
                                         continue;
                                     }
                                 } else if block.hash() != current_head.hash() {
-                                    log::debug!(peer=%peer_id,"BlockProof does not correspond to expected block");
+                                    log::debug!(block_number=%block.block_number(), peer=%peer_id, "BlockProof does not correspond to expected block");
                                     continue;
                                 }
 
@@ -336,7 +336,7 @@ impl<N: Network> ConsensusProxy<N> {
                                     }
                                 } else {
                                     // The proof didn't verify so we disconnect from this peer
-                                    log::debug!(peer=%peer_id,"Disconnecting from peer because the transaction proof didn't verify");
+                                    log::debug!(peer=%peer_id, "Disconnecting from peer because the transaction proof didn't verify");
                                     self.network
                                         .disconnect_peer(peer_id, CloseReason::Other)
                                         .await;
@@ -344,7 +344,7 @@ impl<N: Network> ConsensusProxy<N> {
                                 }
                             } else {
                                 // If we receive a proof but we do not receive a block, we disconnect from the peer
-                                log::debug!(peer=%peer_id,"Disconnecting from peer due to an inconsistency in the transaction proof response");
+                                log::debug!(peer=%peer_id, "Disconnecting from peer due to an inconsistency in the transaction proof response");
                                 self.network
                                     .disconnect_peer(peer_id, CloseReason::Other)
                                     .await;
@@ -356,7 +356,7 @@ impl<N: Network> ConsensusProxy<N> {
                     }
                     Err(error) => {
                         // If there was a request error with this peer we don't request anymore proofs from it
-                        log::error!(peer=%peer_id, err=%error,"There was an error requesting transaction proof from peer");
+                        log::error!(peer=%peer_id, err=%error, "There was an error requesting transaction proof from peer");
                         break;
                     }
                 }
