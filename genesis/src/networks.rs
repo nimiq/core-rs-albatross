@@ -125,6 +125,18 @@ lazy_static! {
         add(
             &mut m,
             NetworkInfo {
+                network_id: NetworkId::TestAlbatross,
+                name: "test-albatross",
+                genesis: include!(concat!(
+                    env!("OUT_DIR"),
+                    "/genesis/test-albatross/genesis.rs"
+                )),
+            },
+        );
+
+        add(
+            &mut m,
+            NetworkInfo {
                 network_id: NetworkId::UnitAlbatross,
                 name: "unit-albatross",
                 genesis: include!(concat!(

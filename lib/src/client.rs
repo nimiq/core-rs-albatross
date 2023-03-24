@@ -3,7 +3,7 @@ use parking_lot::{Mutex, RwLock};
 use rand::SeedableRng;
 #[cfg(feature = "zkp-prover")]
 use rand_chacha::ChaCha20Rng;
-use std::sync::Arc;
+use std::{io, sync::Arc};
 
 use nimiq_block::Block;
 #[cfg(feature = "full-consensus")]
@@ -49,6 +49,7 @@ use nimiq_zkp_component::proof_store::{DBProofStore, ProofStore};
 use nimiq_zkp_component::zkp_component::{
     ZKPComponent as AbstractZKPComponent, ZKPComponentProxy as AbstractZKPComponentProxy,
 };
+use nimiq_zkp_primitives::NanoZKPError;
 
 use crate::config::config::{ClientConfig, SyncMode};
 use crate::error::Error;
@@ -166,6 +167,18 @@ impl ClientInner {
             let vk = load_verifying_key_from_file(&config.zkp.prover_keys_path)?;
             assert_eq!(vk, *ZKP_VERIFYING_KEY, "Verifying keys don't match. The build in verifying keys don't match the newly generated ones.");
             log::debug!("Finished ZKP setup.");
+        } else if config.network_id == NetworkId::TestAlbatross
+            && config.zkp.prover_active
+            && !all_files_created(&config.zkp.prover_keys_path, config.zkp.prover_active)
+        {
+            log::error!(
+                "Proving keys missing, please place them in this folder: {:?}.",
+                config.zkp.prover_keys_path
+            );
+            return Err(Error::NanoZKP(NanoZKPError::Filesystem(io::Error::new(
+                io::ErrorKind::Other,
+                "Proving keys do not exist.",
+            ))));
         }
 
         // Initialize clock
