@@ -27,9 +27,9 @@ use crate::messages::{
 use crate::SubscribeToAdressesError::*;
 
 /// The max number of peers that can be subscribed.
-pub const MAX_SUBSCRIBED_PEERS: usize = 5;
+pub const MAX_SUBSCRIBED_PEERS: usize = 50;
 /// The max number of addresses that can be subscribed, per peer.
-pub const MAX_SUBSCRIBED_PEERS_ADDRESSES: usize = 10;
+pub const MAX_SUBSCRIBED_PEERS_ADDRESSES: usize = 250;
 
 impl<N: Network> Handle<N, ResponseSubscribeToAddress, Arc<RwLock<RemoteEventDispatcherState<N>>>>
     for RequestSubscribeToAddress
