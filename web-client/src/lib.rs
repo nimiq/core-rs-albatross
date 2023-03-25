@@ -10,8 +10,9 @@ use std::{
     str::FromStr,
 };
 
-use futures::StreamExt;
-use js_sys::{Array, Date, Promise};
+use futures::{channel::oneshot, future::select, future::Either};
+use futures_util::StreamExt;
+use js_sys::{Array, Promise};
 use log::level_filters::LevelFilter;
 use tsify::Tsify;
 use wasm_bindgen::prelude::*;
@@ -33,7 +34,7 @@ use nimiq_network_interface::{
     network::{CloseReason, Network, NetworkEvent},
     Multiaddr,
 };
-use nimiq_primitives::networks::NetworkId;
+use nimiq_primitives::{networks::NetworkId, policy::Policy};
 
 use crate::account::{
     PlainAccount, PlainAccountArrayType, PlainAccountType, PlainStaker, PlainStakerArrayType,
@@ -182,6 +183,10 @@ pub struct Client {
     peer_changed_listeners: Rc<RefCell<HashMap<usize, js_sys::Function>>>,
     transaction_listeners:
         Rc<RefCell<HashMap<usize, (js_sys::Function, HashSet<nimiq_keys::Address>)>>>,
+
+    /// Map from transaction hash as hex string to oneshot sender.
+    /// Used to await transaction events in `send_transaction`.
+    transaction_oneshots: Rc<RefCell<HashMap<String, oneshot::Sender<PlainTransactionDetails>>>>,
 }
 
 #[wasm_bindgen]
@@ -252,6 +257,7 @@ impl Client {
             head_changed_listeners: Rc::new(RefCell::new(HashMap::with_capacity(1))),
             peer_changed_listeners: Rc::new(RefCell::new(HashMap::with_capacity(1))),
             transaction_listeners: Rc::new(RefCell::new(HashMap::new())),
+            transaction_oneshots: Rc::new(RefCell::new(HashMap::new())),
         };
 
         client.setup_offline_online_event_handlers();
@@ -575,71 +581,86 @@ impl Client {
 
         tx.verify(Some(self.network_id))?;
 
-        let current_height = self.get_head_height().await;
+        // Check if we are already subscribed to the sender or recipient
+        let already_subscribed = self
+            .subscribed_addresses
+            .borrow()
+            // Check sender first, as apps are usually subscribed to the sender already
+            .contains_key(tx.sender().native_ref())
+            || self
+                .subscribed_addresses
+                .borrow()
+                .contains_key(tx.recipient().native_ref());
+        let mut subscribed_address = None;
 
-        self.inner
-            .consensus_proxy()
-            .send_transaction(tx.native())
-            .await?;
+        let consensus = self.inner.consensus_proxy();
 
-        // Until we have a proper way of subscribing & listening for inclusion events of transactions,
-        // we poll the sender's transaction receipts until we find the transaction's hash.
-        // TODO: Instead of polling, subscribe to the transaction's inclusion events, or the sender's tx events.
-        let tx_hash = tx.hash();
-        let start = Date::now();
-
-        loop {
-            // Sleep for 0.5s before requesting (again)
-            JsFuture::from(Promise::new(&mut |resolve, _| {
-                web_sys::window()
-                    .expect("Unable to get a reference to the JS `Window` object")
-                    .set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, 500)
-                    .unwrap();
-            }))
-            .await
-            .unwrap();
-
-            let receipts = self
-                .inner
-                .consensus_proxy()
-                .request_transaction_receipts_by_address(tx.sender().take_native(), 1, Some(10))
+        // If not subscribed, subscribe to the sender or recipient
+        if !already_subscribed {
+            // Subscribe to the recipient by default
+            subscribed_address = Some(tx.recipient().native());
+            if subscribed_address == Some(Policy::STAKING_CONTRACT_ADDRESS) {
+                // If the recipient is the staking contract, subscribe to the sender instead
+                // to not get flooded with notifications.
+                subscribed_address = Some(tx.sender().native());
+            }
+            let address = subscribed_address.clone().unwrap();
+            consensus
+                .subscribe_to_addresses(vec![address], 1, None)
                 .await?;
-
-            for receipt in receipts {
-                // The receipts are ordered newest first, so we can break the loop once receipts are older than
-                // the blockchain height when we started to avoid looping over receipts that cannot be the one
-                // we are looking for.
-                if receipt.1 <= current_height {
-                    break;
-                }
-
-                if receipt.0.to_hex() == tx_hash {
-                    // Get the full transaction
-                    let ext_tx = self
-                        .inner
-                        .consensus_proxy()
-                        .request_transaction_by_hash_and_block_number(receipt.0, receipt.1, 1)
-                        .await?;
-                    let details =
-                        PlainTransactionDetails::from_extended_transaction(&ext_tx, receipt.1);
-                    return Ok(serde_wasm_bindgen::to_value(&details)?.into());
-                }
-            }
-
-            if Date::now() - start >= 10_000.0 {
-                break;
-            }
         }
 
-        // If the transaction did not get included, return it as TransactionState::New
-        let details =
-            PlainTransactionDetails::new(&tx, TransactionState::New, None, None, None, None);
-        Ok(serde_wasm_bindgen::to_value(&details)?.into())
+        let hash = &tx.hash();
+
+        // Set a oneshot sender to receive the transaction when its notification arrives
+        let (sender, receiver) = oneshot::channel();
+        self.transaction_oneshots
+            .borrow_mut()
+            .insert(hash.clone(), sender);
+
+        // Actually send the transaction
+        consensus.send_transaction(tx.native()).await?;
+
+        let timeout = JsFuture::from(Promise::new(&mut |resolve, _| {
+            Client::window()
+                .set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, 10_000)
+                .unwrap();
+        }));
+
+        // Wait for the transaction (will be None if the timeout is reached first)
+        let res = select(receiver, timeout).await;
+
+        let maybe_details = if let Either::Left((res, _)) = res {
+            res.ok()
+        } else {
+            // If the timeout triggered, delete our oneshot sender
+            self.transaction_oneshots.borrow_mut().remove(hash);
+            None
+        };
+
+        // Unsubscribe from any address we subscribed to, without caring about the result
+        if let Some(address) = subscribed_address {
+            let owned_consensus = consensus.clone();
+            spawn_local(async move {
+                let _ = owned_consensus
+                    .unsubscribe_from_addresses(vec![address], 1)
+                    .await;
+            });
+        }
+
+        if let Some(details) = maybe_details {
+            // If we got a transactions, return it
+            Ok(serde_wasm_bindgen::to_value(&details)?.into())
+        } else {
+            // If the transaction did not get included, return it as TransactionState::New
+            let details =
+                PlainTransactionDetails::new(&tx, TransactionState::New, None, None, None, None);
+            Ok(serde_wasm_bindgen::to_value(&details)?.into())
+        }
     }
 
     fn setup_offline_online_event_handlers(&self) {
-        let window =
-            web_sys::window().expect("Unable to get a reference to the JS `Window` object");
+        let window = Client::window();
         let network = self.inner.network();
         let network1 = self.inner.network();
 
@@ -882,6 +903,7 @@ impl Client {
         let consensus = self.inner.consensus_proxy();
 
         let transaction_listeners = Rc::clone(&self.transaction_listeners);
+        let transaction_oneshots = Rc::clone(&self.transaction_oneshots);
 
         spawn_local(async move {
             let mut address_notifications = consensus.subscribe_address_notifications().await;
@@ -936,6 +958,13 @@ impl Client {
                             Some(block_time),
                             Some(1),
                         );
+
+                        if let Some(sender) = transaction_oneshots
+                            .borrow_mut()
+                            .remove(&details.transaction.transaction_hash)
+                        {
+                            let _ = sender.send(details.clone());
+                        }
 
                         if let Ok(js_value) = serde_wasm_bindgen::to_value(&details) {
                             for (listener, addresses) in transaction_listeners.borrow().values() {
@@ -1195,6 +1224,10 @@ impl Client {
         }
 
         Ok(ordered_validators)
+    }
+
+    fn window() -> web_sys::Window {
+        web_sys::window().expect("Unable to get a reference to the JS `Window` object")
     }
 }
 

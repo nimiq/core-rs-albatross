@@ -21,7 +21,8 @@ maintenance = { status = "experimental" }
 crate-type = ["cdylib"]
 
 [dependencies]
-futures = { package = "futures-util", version = "0.3" }
+futures = "0.3"
+futures-util = "0.3"
 hex = "0.4"
 js-sys = "0.3"
 log = { package = "tracing", version = "0.1", features = ["log"] }

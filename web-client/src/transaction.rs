@@ -431,13 +431,13 @@ impl Transaction {
 }
 
 /// Placeholder struct to serialize data of transactions as hex strings in the style of the Nimiq 1.0 library.
-#[derive(serde::Serialize, serde::Deserialize, Tsify)]
+#[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
 pub struct PlainTransactionData {
     pub raw: String,
 }
 
 /// Placeholder struct to serialize proofs of transactions as hex strings in the style of the Nimiq 1.0 library.
-#[derive(serde::Serialize, serde::Deserialize, Tsify)]
+#[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
 pub struct PlainTransactionProof {
     pub raw: String,
 }
@@ -445,7 +445,7 @@ pub struct PlainTransactionProof {
 /// JSON-compatible and human-readable format of transactions. E.g. addresses are presented in their human-readable
 /// format and address types and the network are represented as strings. Data and proof are serialized as an object
 /// describing their contents (not yet implemented, only the `{ raw: string }` fallback is available).
-#[derive(serde::Serialize, serde::Deserialize, Tsify)]
+#[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct PlainTransaction {
     /// The transaction's unique hash, used as its identifier. Sometimes also called `txId`.
@@ -501,7 +501,7 @@ pub struct PlainTransaction {
 }
 
 /// Describes the state of a transaction as known by the client.
-#[derive(serde::Serialize, serde::Deserialize, Tsify)]
+#[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
 #[serde(rename_all = "lowercase")]
 pub enum TransactionState {
     /// The transaction only exists locally and has not been broadcast or accepted by any peers.
@@ -526,7 +526,7 @@ pub enum TransactionState {
 /// JSON-compatible and human-readable format of transactions, including details about its state in the
 /// blockchain. Contains all fields from {@link PlainTransaction}, plus additional fields such as
 /// `blockHeight` and `timestamp` if the transaction is included in the blockchain.
-#[derive(serde::Deserialize, Tsify)]
+#[derive(Clone, serde::Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct PlainTransactionDetails {
     #[serde(flatten)]

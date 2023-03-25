@@ -4571,6 +4571,7 @@ name = "nimiq-web-client"
 version = "0.1.0"
 dependencies = [
  "beserial",
+ "futures",
  "futures-util",
  "hex",
  "js-sys",
