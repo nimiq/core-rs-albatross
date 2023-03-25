@@ -139,7 +139,7 @@ impl<N: Network> ConsensusProxy<N> {
         min_peers: usize,
         max: Option<u16>,
     ) -> Result<Vec<ExtendedTransaction>, RequestError> {
-        let receipts = self
+        let receipts: Vec<_> = self
             .request_transaction_receipts_by_address(address, min_peers, max)
             .await?
             .into_iter()
@@ -148,6 +148,10 @@ impl<N: Network> ConsensusProxy<N> {
             })
             .map(|(hash, block_number)| (hash, Some(block_number)))
             .collect();
+
+        if receipts.is_empty() {
+            return Ok(vec![]);
+        }
 
         self.prove_transactions_from_receipts(receipts, min_peers)
             .await
