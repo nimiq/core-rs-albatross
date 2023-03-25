@@ -124,10 +124,11 @@ where
     }
 
     fn get_next_peer(&mut self, start_index: usize) -> Option<TNetwork::PeerId> {
-        if !self.peers.read().is_empty() {
-            let index = start_index % self.peers.read().len();
+        let peers = self.peers.read();
+        if !peers.is_empty() {
+            let index = start_index % peers.len();
             // TODO: Maybe check if the peer connection is closed.
-            return Some(self.peers.read()[index]);
+            return Some(peers[index]);
         }
         None
     }
