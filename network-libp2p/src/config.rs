@@ -19,9 +19,9 @@ use crate::discovery::{behaviour::DiscoveryConfig, peer_contacts::PeerContact};
 pub struct TlsConfig {
     /// Private key (DER-encoded ASN.1 in either PKCS#8 or PKCS#1 format).
     pub private_key: Vec<u8>,
-    /// Certificates (in DER-encoded X.509 format). In this array one or more certificates could be encoded for
-    /// certificate chaining.
-    pub certificates: Vec<u8>,
+    /// Certificates (in DER-encoded X.509 format). Each of the entries of the vector is a certificate
+    /// represented in a `Vec<u8>`.
+    pub certificates: Vec<Vec<u8>>,
 }
 
 /// LibP2P network configuration

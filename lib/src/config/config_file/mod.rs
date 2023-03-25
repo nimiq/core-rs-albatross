@@ -152,9 +152,9 @@ pub struct Seed {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TlsSettings {
-    /// Path to a file containing the private key (DER-encoded ASN.1 in either PKCS#8 or PKCS#1 format).
+    /// Path to a file containing the private key (PEM-encoded ASN.1 in either PKCS#8 or PKCS#1 format).
     pub private_key: String,
-    /// Path to a file containing the certificates (in DER-encoded X.509 format). In this file several certificates
+    /// Path to a file containing the certificates (in PEM-encoded X.509 format). In this file several certificates
     /// could be added for certificate chaining.
     pub certificates: String,
 }

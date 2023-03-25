@@ -1,9 +1,11 @@
+use std::{fs, io, sync::Arc};
+
 use parking_lot::{Mutex, RwLock};
 #[cfg(feature = "zkp-prover")]
 use rand::SeedableRng;
 #[cfg(feature = "zkp-prover")]
 use rand_chacha::ChaCha20Rng;
-use std::{fs, io, sync::Arc};
+use rustls_pemfile::Item;
 
 use nimiq_block::Block;
 #[cfg(feature = "full-consensus")]
@@ -238,8 +240,34 @@ impl ClientInner {
             .collect();
 
         let tls_config = if let Some(tls_config) = config.network.tls {
-            let private_key = fs::read(tls_config.private_key)?;
-            let certificates = fs::read(tls_config.certificates)?;
+            // Check that the provided private key has the expected format and convert the PEM file to DER format.
+            let private_key = fs::read(tls_config.private_key).and_then(|private_key_bytes| {
+                match rustls_pemfile::read_one(&mut &*private_key_bytes)? {
+                    Some(Item::ECKey(key)) => Ok(key),
+                    Some(Item::PKCS8Key(key)) => Ok(key),
+                    Some(Item::RSAKey(key)) => Ok(key),
+                    _ => Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "Invalid TLS private key",
+                    )),
+                }
+            })?;
+            // Check that the provided certificates have the expected format and convert the PEM file to a list of
+            // certificates in DER format.
+            // We could have several certificates in the same file, read them all and build the array of certificates
+            // that the network requires.
+            let certificates = fs::read(tls_config.certificates).and_then(|certificate_bytes| {
+                rustls_pemfile::read_all(&mut &*certificate_bytes)?
+                    .into_iter()
+                    .map(|item| match item {
+                        Item::X509Certificate(cert) => Ok(cert),
+                        _ => Err(std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            "Invalid TLS certificate(s)",
+                        )),
+                    })
+                    .collect()
+            })?;
             Some(NetworkTls {
                 private_key,
                 certificates,

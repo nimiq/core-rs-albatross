@@ -319,9 +319,14 @@ impl Network {
             #[cfg(feature = "tokio-websocket")]
             if let Some(tls) = tls {
                 let priv_key = websocket::tls::PrivateKey::new(tls.private_key.clone());
-                let cert = websocket::tls::Certificate::new(tls.certificates.clone());
+                let certificates: Vec<_> = tls
+                    .certificates
+                    .clone()
+                    .into_iter()
+                    .map(websocket::tls::Certificate::new)
+                    .collect();
                 transport
-                    .set_tls_config(websocket::tls::Config::new(priv_key, vec![cert]).unwrap());
+                    .set_tls_config(websocket::tls::Config::new(priv_key, certificates).unwrap());
             }
 
             #[cfg(feature = "tokio-websocket")]
@@ -354,9 +359,14 @@ impl Network {
             #[cfg(feature = "tokio-websocket")]
             if let Some(tls) = tls {
                 let priv_key = websocket::tls::PrivateKey::new(tls.private_key.clone());
-                let cert = websocket::tls::Certificate::new(tls.certificates.clone());
+                let certificates: Vec<_> = tls
+                    .certificates
+                    .clone()
+                    .into_iter()
+                    .map(websocket::tls::Certificate::new)
+                    .collect();
                 transport
-                    .set_tls_config(websocket::tls::Config::new(priv_key, vec![cert]).unwrap());
+                    .set_tls_config(websocket::tls::Config::new(priv_key, certificates).unwrap());
             }
 
             #[cfg(all(feature = "wasm-websocket", not(feature = "tokio-websocket")))]
