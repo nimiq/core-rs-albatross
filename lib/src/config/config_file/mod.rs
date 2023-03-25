@@ -132,6 +132,9 @@ pub struct NetworkSettings {
     pub listen_addresses: Vec<String>,
 
     #[serde(default)]
+    pub advertised_addresses: Option<Vec<String>>,
+
+    #[serde(default)]
     pub seed_nodes: Vec<Seed>,
     #[serde(default)]
     pub user_agent: Option<String>,

@@ -28,6 +28,15 @@ seed_nodes = [
         { address = "/dns4/seed1.v2.nimiq-testnet.com/tcp/8443/ws" }
 ]
 
+# Optionally specify address(es) that will be advertised to peers instead of the ones in `listen_addresses`
+#
+# This can be used to advertise the public URL and port that peers should connect to, while
+# `listen_addresses` contains the loopback IP and port that this nodes listens on, which may
+# not be publicly reachable.
+#advertised_addresses = [
+#        "/dns4/my.public.domain.com/tcp/8443/wss",
+#]
+
 # User Agent
 #
 # String that describes what kind of node is running.

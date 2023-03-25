@@ -201,10 +201,17 @@ impl ClientInner {
             provided_services |= Services::VALIDATOR;
         }
 
-        // Generate my peer contact from identity keypair and my provided services
+        // Generate my peer contact from identity keypair, our own addresses
+        // (which could be the advertised addresses from the configuration file
+        // if they were passed or the listen addresses if not) and my provided services
         // Filter out unspecified IP addresses since those are not addresses suitable
         // for the contact book (for others to contact ourself).
-        let mut peer_contact_addresses = config.network.listen_addresses.clone();
+        let mut peer_contact_addresses = config
+            .network
+            .advertised_addresses
+            .as_ref()
+            .unwrap_or(&config.network.listen_addresses)
+            .clone();
         peer_contact_addresses.retain(|address| {
             let mut protocols = address.iter();
             match protocols.next() {
@@ -239,7 +246,13 @@ impl ClientInner {
             required_services,
         );
 
-        log::debug!("listen_addresses = {:?}", config.network.listen_addresses);
+        log::debug!(
+            addresses = ?config.network.listen_addresses,
+            "Listen addresses");
+        log::debug!(
+            addresses = ?config.network.advertised_addresses,
+            "Advertised addresses",
+        );
 
         let network =
             Arc::new(Network::new(Arc::clone(&time), network_config, executor.clone()).await);

@@ -101,6 +101,9 @@ pub struct NetworkConfig {
     #[builder(default)]
     pub listen_addresses: Vec<Multiaddr>,
 
+    #[builder(default)]
+    pub advertised_addresses: Option<Vec<Multiaddr>>,
+
     /// The user agent is a custom string that is sent during the handshake. Usually it contains
     /// the kind of node, Nimiq version, processor architecture and operating system. This enable
     /// gathering information on which Nimiq versions are being run on the network. A typical
@@ -674,6 +677,19 @@ impl ClientConfigBuilder {
                 .iter()
                 .map(|addr| addr.parse())
                 .collect::<Result<Vec<Multiaddr>, _>>()?,
+
+            advertised_addresses: if let Some(advertised_addresses) =
+                &config_file.network.advertised_addresses
+            {
+                Some(
+                    advertised_addresses
+                        .iter()
+                        .map(|addr| addr.parse())
+                        .collect::<Result<Vec<Multiaddr>, _>>()?,
+                )
+            } else {
+                None
+            },
 
             user_agent: config_file
                 .network
