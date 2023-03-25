@@ -3,7 +3,7 @@ use parking_lot::{Mutex, RwLock};
 use rand::SeedableRng;
 #[cfg(feature = "zkp-prover")]
 use rand_chacha::ChaCha20Rng;
-use std::{io, sync::Arc};
+use std::{fs, io, sync::Arc};
 
 use nimiq_block::Block;
 #[cfg(feature = "full-consensus")]
@@ -28,6 +28,7 @@ use nimiq_network_interface::{
 };
 use nimiq_network_libp2p::{
     discovery::peer_contacts::PeerContact, Config as NetworkConfig, Network,
+    TlsConfig as NetworkTls,
 };
 use nimiq_primitives::{policy::Policy, task_executor::TaskExecutor};
 use nimiq_utils::time::OffsetTime;
@@ -236,6 +237,17 @@ impl ClientInner {
             .map(|seed| seed.address)
             .collect();
 
+        let tls_config = if let Some(tls_config) = config.network.tls {
+            let private_key = fs::read(tls_config.private_key)?;
+            let certificates = fs::read(tls_config.certificates)?;
+            Some(NetworkTls {
+                private_key,
+                certificates,
+            })
+        } else {
+            None
+        };
+
         // Setup libp2p network
         let network_config = NetworkConfig::new(
             identity_keypair,
@@ -244,6 +256,7 @@ impl ClientInner {
             network_info.genesis_hash().clone(),
             false,
             required_services,
+            tls_config,
         );
 
         log::debug!(

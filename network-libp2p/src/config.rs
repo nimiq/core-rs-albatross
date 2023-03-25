@@ -15,6 +15,16 @@ use nimiq_network_interface::peer_info::Services;
 
 use crate::discovery::{behaviour::DiscoveryConfig, peer_contacts::PeerContact};
 
+/// TLS settings for configuring a secure WebSocket
+pub struct TlsConfig {
+    /// Private key (DER-encoded ASN.1 in either PKCS#8 or PKCS#1 format).
+    pub private_key: Vec<u8>,
+    /// Certificates (in DER-encoded X.509 format). In this array one or more certificates could be encoded for
+    /// certificate chaining.
+    pub certificates: Vec<u8>,
+}
+
+/// LibP2P network configuration
 pub struct Config {
     pub keypair: Keypair,
     pub peer_contact: PeerContact,
@@ -24,6 +34,7 @@ pub struct Config {
     pub gossipsub: GossipsubConfig,
     pub memory_transport: bool,
     pub required_services: Services,
+    pub tls: Option<TlsConfig>,
 }
 
 impl Config {
@@ -34,6 +45,7 @@ impl Config {
         genesis_hash: Blake2bHash,
         memory_transport: bool,
         required_services: Services,
+        tls_settings: Option<TlsConfig>,
     ) -> Self {
         // Hardcoding the minimum number of peers in mesh network before adding more
         // TODO: Maybe change this to a mesh limits configuration argument of this function
@@ -71,6 +83,7 @@ impl Config {
             gossipsub,
             memory_transport,
             required_services,
+            tls: tls_settings,
         }
     }
 }

@@ -18,6 +18,6 @@ pub const DISCOVERY_PROTOCOL: &[u8] = b"/nimiq/discovery/0.0.1";
 
 pub use libp2p::{self, identity::Keypair, swarm::NetworkInfo, PeerId};
 
-pub use config::Config;
+pub use config::{Config, TlsConfig};
 pub use error::NetworkError;
 pub use network::Network;

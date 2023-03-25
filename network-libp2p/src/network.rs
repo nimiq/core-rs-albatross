@@ -10,15 +10,15 @@ use bytes::{Buf, Bytes};
 use futures::{ready, stream::BoxStream, Stream, StreamExt};
 #[cfg(not(feature = "tokio-time"))]
 use instant::Instant;
-use libp2p::core::transport::MemoryTransport;
-use libp2p::gossipsub::PeerScoreParams;
-use libp2p::swarm::dial_opts::PeerCondition;
 use libp2p::{
     core,
-    core::{muxing::StreamMuxerBox, transport::Boxed},
+    core::{
+        muxing::StreamMuxerBox,
+        transport::{Boxed, MemoryTransport},
+    },
     gossipsub::{
         error::PublishError, GossipsubEvent, GossipsubMessage, IdentTopic, MessageAcceptance,
-        MessageId, TopicHash, TopicScoreParams,
+        MessageId, PeerScoreParams, TopicHash, TopicScoreParams,
     },
     identify::Event as IdentifyEvent,
     identity::Keypair,
@@ -29,7 +29,10 @@ use libp2p::{
     noise,
     ping::Success as PingSuccess,
     request_response::{OutboundFailure, RequestId, RequestResponseMessage, ResponseChannel},
-    swarm::{dial_opts::DialOpts, ConnectionLimits, NetworkInfo, SwarmBuilder, SwarmEvent},
+    swarm::{
+        dial_opts::{DialOpts, PeerCondition},
+        ConnectionLimits, NetworkInfo, SwarmBuilder, SwarmEvent,
+    },
     yamux, Multiaddr, PeerId, Swarm, Transport,
 };
 #[cfg(feature = "tokio-websocket")]
@@ -62,17 +65,15 @@ use nimiq_primitives::task_executor::TaskExecutor;
 use nimiq_utils::time::OffsetTime;
 use nimiq_validator_network::validator_record::SignedValidatorRecord;
 
-use crate::discovery::behaviour::DiscoveryEvent;
-use crate::discovery::peer_contacts::PeerContactBook;
 #[cfg(feature = "metrics")]
 use crate::network_metrics::NetworkMetrics;
-use crate::rate_limiting::PendingDeletion;
-use crate::rate_limiting::RateLimit;
 use crate::{
     behaviour::{NimiqBehaviour, NimiqEvent, NimiqNetworkBehaviourError, RequestResponseEvent},
     connection_pool::behaviour::ConnectionPoolEvent,
+    discovery::{behaviour::DiscoveryEvent, peer_contacts::PeerContactBook},
     dispatch::codecs::typed::{IncomingRequest, OutgoingResponse},
-    Config, NetworkError,
+    rate_limiting::{PendingDeletion, RateLimit},
+    Config, NetworkError, TlsConfig,
 };
 
 /// Maximum simultaneous libp2p connections per peer
@@ -303,16 +304,29 @@ impl Network {
     fn new_transport(
         keypair: &Keypair,
         memory_transport: bool,
+        tls: &Option<TlsConfig>,
     ) -> std::io::Result<Boxed<(PeerId, StreamMuxerBox)>> {
         if memory_transport {
             // Memory transport primary for testing
             // TODO: Use websocket over the memory transport
 
             #[cfg(feature = "tokio-websocket")]
-            let transport = websocket::WsConfig::new(dns::TokioDnsConfig::system(
+            let mut transport = websocket::WsConfig::new(dns::TokioDnsConfig::system(
                 tcp::tokio::Transport::new(tcp::Config::default().nodelay(true)),
-            )?)
-            .or_transport(MemoryTransport::default());
+            )?);
+
+            // Configure TLS if the configuration has the corresponding entry
+            #[cfg(feature = "tokio-websocket")]
+            if let Some(tls) = tls {
+                let priv_key = websocket::tls::PrivateKey::new(tls.private_key.clone());
+                let cert = websocket::tls::Certificate::new(tls.certificates.clone());
+                transport
+                    .set_tls_config(websocket::tls::Config::new(priv_key, vec![cert]).unwrap());
+            }
+
+            #[cfg(feature = "tokio-websocket")]
+            let transport = transport.or_transport(MemoryTransport::default());
+
             #[cfg(not(feature = "tokio-websocket"))]
             let transport = MemoryTransport::default();
             // Fixme: Handle wasm compatible transport
@@ -332,11 +346,22 @@ impl Network {
                 .boxed())
         } else {
             #[cfg(feature = "tokio-websocket")]
-            let transport = websocket::WsConfig::new(dns::TokioDnsConfig::system(
+            let mut transport = websocket::WsConfig::new(dns::TokioDnsConfig::system(
                 tcp::tokio::Transport::new(tcp::Config::default().nodelay(true)),
             )?);
+
+            // Configure TLS if the configuration has the corresponding entry
+            #[cfg(feature = "tokio-websocket")]
+            if let Some(tls) = tls {
+                let priv_key = websocket::tls::PrivateKey::new(tls.private_key.clone());
+                let cert = websocket::tls::Certificate::new(tls.certificates.clone());
+                transport
+                    .set_tls_config(websocket::tls::Config::new(priv_key, vec![cert]).unwrap());
+            }
+
             #[cfg(all(feature = "wasm-websocket", not(feature = "tokio-websocket")))]
             let transport = WebsocketTransport::default();
+
             #[cfg(all(not(feature = "tokio-websocket"), not(feature = "wasm-websocket")))]
             let transport = MemoryTransport::default();
 
@@ -365,7 +390,8 @@ impl Network {
     ) -> Swarm<NimiqBehaviour> {
         let local_peer_id = PeerId::from(config.keypair.public());
 
-        let transport = Self::new_transport(&config.keypair, config.memory_transport).unwrap();
+        let transport =
+            Self::new_transport(&config.keypair, config.memory_transport, &config.tls).unwrap();
 
         let behaviour = NimiqBehaviour::new(config, clock, contacts, peer_score_params);
 

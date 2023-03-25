@@ -48,12 +48,14 @@ seed_nodes = [
 
 ##############################################################################
 #
-# Identity file (PCKS#12) and password for private key
+# TLS network configuration:
+# - Identity file (DER-encoded X.509 format)
+# - private key (DER-encoded ASN.1 in either PKCS#8 or PKCS#1 format)
 #
 ##############################################################################
 #[network.tls]
-#identity_file = "./my.domain.p12"
-#identity_password = "secret"
+#private_key = "./my_private_key.der"
+#certificate = "./my_certificate.der"
 
 
 

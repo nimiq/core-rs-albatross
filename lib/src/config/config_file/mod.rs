@@ -148,11 +148,15 @@ pub struct Seed {
     pub address: Multiaddr,
 }
 
+/// Settings for configuring TLS for secure WebSocket
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TlsSettings {
-    pub identity_file: String,
-    pub identity_password: String,
+    /// Path to a file containing the private key (DER-encoded ASN.1 in either PKCS#8 or PKCS#1 format).
+    pub private_key: String,
+    /// Path to a file containing the certificates (in DER-encoded X.509 format). In this file several certificates
+    /// could be added for certificate chaining.
+    pub certificates: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Default)]

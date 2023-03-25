@@ -71,6 +71,7 @@ impl TestNetwork for Network {
             genesis_hash.clone(),
             true,
             Services::all(),
+            None,
         );
         let network = Arc::new(
             Network::new(

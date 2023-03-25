@@ -36,7 +36,7 @@ use crate::config::consts::default_bind;
 use crate::{
     config::{
         command_line::CommandLine,
-        config_file::{ConfigFile, Seed},
+        config_file::{ConfigFile, Seed, TlsSettings},
         paths,
         user_agent::UserAgent,
     },
@@ -98,6 +98,7 @@ impl Default for ConsensusConfig {
 #[derive(Debug, Clone, Builder, Default)]
 #[builder(setter(into))]
 pub struct NetworkConfig {
+    /// List of addresses this node is going to listen to
     #[builder(default)]
     pub listen_addresses: Vec<Multiaddr>,
 
@@ -114,8 +115,32 @@ pub struct NetworkConfig {
     #[builder(default)]
     pub user_agent: UserAgent,
 
+    /// List of seeds addresses
     #[builder(default)]
     pub seeds: Vec<Seed>,
+
+    /// Optional TLS configuration for secure WebSocket
+    #[builder(default)]
+    pub tls: Option<TlsConfig>,
+}
+
+/// Configuration for setting TLS for secure WebSocket
+#[derive(Debug, Clone, Default)]
+pub struct TlsConfig {
+    /// Path to a file containing the private key (DER-encoded ASN.1 in either PKCS#8 or PKCS#1 format).
+    pub private_key: String,
+    /// Path to a file containing the certificates (in DER-encoded X.509 format). In this file several certificates
+    /// could be added for certificate chaining.
+    pub certificates: String,
+}
+
+impl From<TlsSettings> for TlsConfig {
+    fn from(value: TlsSettings) -> Self {
+        Self {
+            private_key: value.private_key,
+            certificates: value.certificates,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -699,6 +724,8 @@ impl ClientConfigBuilder {
                 .unwrap_or_default(),
 
             seeds: config_file.network.seed_nodes.clone(),
+
+            tls: config_file.network.tls.as_ref().map(|s| s.clone().into()),
         });
 
         // Configure consensus

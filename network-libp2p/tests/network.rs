@@ -57,6 +57,7 @@ fn network_config(address: Multiaddr) -> Config {
         gossipsub,
         memory_transport: true,
         required_services: Services::all(),
+        tls: None,
     }
 }
 
