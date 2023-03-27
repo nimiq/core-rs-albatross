@@ -103,7 +103,7 @@ pub struct QueueConfig {
 impl Default for QueueConfig {
     fn default() -> Self {
         Self {
-            buffer_max: 4 * Policy::blocks_per_batch() as usize,
+            buffer_max: 10 * Policy::blocks_per_batch() as usize,
             window_ahead_max: 2 * Policy::blocks_per_batch(),
             tolerate_past_max: Policy::blocks_per_batch(),
             include_micro_bodies: true,

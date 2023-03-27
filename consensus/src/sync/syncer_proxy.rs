@@ -103,6 +103,7 @@ impl<N: Network> SyncerProxy<N> {
     ) -> Self {
         let mut queue_config = QueueConfig::default();
         queue_config.window_ahead_max = max(full_sync_threshold, queue_config.window_ahead_max);
+        queue_config.buffer_max = max(full_sync_threshold as usize, queue_config.buffer_max);
 
         let block_queue = BlockQueue::new(
             Arc::clone(&network),
