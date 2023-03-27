@@ -32,8 +32,8 @@ impl ChainOrdering {
         get_block_at: G,
     ) -> ChainOrdering
     where
-        F: Fn(&Blake2bHash, bool) -> Result<ChainInfo, BlockchainError>,
-        G: Fn(u32, bool) -> Result<Block, BlockchainError>,
+        F: Fn(&Blake2bHash) -> Result<ChainInfo, BlockchainError>,
+        G: Fn(u32) -> Result<Block, BlockchainError>,
     {
         let mut chain_order = ChainOrdering::Unknown;
 
@@ -66,7 +66,7 @@ impl ChainOrdering {
                 let prev_hash = prev.head.parent_hash();
                 blocks.push(prev.head.clone());
 
-                let prev_info = get_chain_info(prev_hash, false)
+                let prev_info = get_chain_info(prev_hash)
                     .expect("Corrupted store: Failed to find fork predecessor while rebranching");
 
                 current = prev;
@@ -90,7 +90,7 @@ impl ChainOrdering {
                 let current_block = blocks.pop().unwrap();
 
                 // Get equivalent block on main chain.
-                let current_on_main_chain = get_block_at(h, false)
+                let current_on_main_chain = get_block_at(h)
                     .expect("Corrupted store: Failed to find main chain equivalent of fork");
 
                 if current_block.is_skip() && !current_on_main_chain.is_skip() {

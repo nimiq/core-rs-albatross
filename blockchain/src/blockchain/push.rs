@@ -97,8 +97,8 @@ impl Blockchain {
             this.deref(),
             &block,
             &prev_info,
-            |hash, include_body| this.get_chain_info(hash, include_body, Some(&read_txn)),
-            |height, include_body| this.get_block_at(height, include_body, Some(&read_txn)),
+            |hash| this.get_chain_info(hash, false, Some(&read_txn)),
+            |height| this.get_block_at(height, false, Some(&read_txn)),
         );
         let prev_missing_range = this.get_missing_accounts_range(Some(&read_txn));
 

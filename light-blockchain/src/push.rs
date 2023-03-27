@@ -58,8 +58,8 @@ impl LightBlockchain {
             this.deref(),
             &block,
             &prev_info,
-            |hash, include_body| this.get_chain_info(hash, include_body),
-            |height, include_body| this.get_block_at(height, include_body),
+            |hash| this.get_chain_info(hash, false),
+            |height| this.get_block_at(height, false),
         );
 
         // Get the intended slot owner.
