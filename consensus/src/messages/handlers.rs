@@ -465,7 +465,7 @@ fn prove_transaction(
 
         let block = blockchain
             .chain_store
-            .get_block_at(election_head, false, None)
+            .get_block_at(proving_block_number, false, None)
             .ok();
 
         if let Some(ref block) = block {
