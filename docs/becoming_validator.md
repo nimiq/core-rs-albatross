@@ -1,4 +1,4 @@
-# Albatross Alpha testnet
+# Albatross Alpha Testnet
 
 ## Table of contents
 
@@ -15,7 +15,7 @@
 ## 1. Setup
 
 This guide assumes the client has been compiled. Check [this guide](../README.md#installation) for more information on installing the code.
-Also all of the commands in this guide are using `arpl` for sending JSON-RPC commands. To install it, use `npm`:
+Also all of the commands in this guide are using [arpl](https://github.com/sisou/arpl) for sending JSON-RPC commands. To install it, use `npm`:
 
 ```
 npm install -g @sisou/albatross-remote
@@ -51,7 +51,7 @@ cargo run --bin nimiq-bls
 
 You need to copy `~/.nimiq/client.toml.example` to `~/.nimiq/client.toml`. You can leave all configuration options as they are for now to start a basic full node.
 
-To be able to control your node and to stake and validate, you need to enable the JSON-RPC server in your `client.toml`. Check if the `#[rpc-server]` => `[rpc-server]` is uncommented around line 123.
+To be able to control your node and to stake and validate, you need to enable the JSON-RPC server in your `client.toml`. Please make sure the rpc section `[rpc-server]` in the configuration file is enabled.
 
 Note that you can also configure your node to use `history` as the `sync_mode`. For that, you could change the `consensus` section of your config file to set `sync_mode` like in the following example:
 
@@ -67,17 +67,30 @@ validator_address = "NQXX XXXX XXXX XXXX XXXX XXXX XXXX XXXX XXXX"
 signing_key_file = "signing_key.dat"
 voting_key_file = "voting_key.dat"
 fee_key_file = "fee_key.dat"
-#signing_key = "Schnorr Private Key"
-#fee_key = "Schnorr Private Key"
-#voting_key = "BLS Private Key"
+signing_key = "Schnorr Private Key"
+fee_key = "Schnorr Private Key"
+voting_key = "BLS Private Key"
 automatic_reactivate = true
 ```
 
-Replace the validator address with the one generated in [the previous step](#21-generating-your-validator-address-and-keys) and 
-then uncomment the `signing_key`, the `fee_key` and the `voting_key` fields. Put the respective private keys that were generated
-in [the previous step](#21-generating-your-validator-address-and-keys).
+Replace the validator address and keys generated accordingly.
 
-### 2.3 Sync the Blockchain
+### 2.3 TLS Certificate
+
+It is strongly recommended to use a TLS certificate, because in order for the nimiq-pos wallet to connect to a validator, it needs to establish a secure connection. In order to maintain a healthy decentralization level within the network, it is advisable for the nimiq-pos wallet to connect to as many diverse validators as possible.
+
+There are different services where a TLS certificate can be obtained, such as [Let's Encrypt](https://letsencrypt.org/).
+
+Once the certificate is obtained, it can be specified in the Network-TLS section within the config file:
+
+```
+[network.tls]
+private_key = "./my_private_key.pem"
+certificates = "./my_certificate.pem"
+```
+Note: The full chain of certificates necessary to verify the certificate's validity can be specified in the `pem` file. Usually this full chain is provided by the service that is used to create the TLS certificate.
+
+### 2.4 Sync the Blockchain
 
 After you finish your configuration, simply run the client from inside the `core-rs-albatross` directory with `cargo run —release —bin nimiq-client`. It will connect to the seed node, then to the other nodes in the network, and start finally syncing to the blockchain. See the next chapter to query your node for its status.
 
@@ -87,7 +100,7 @@ If you enabled the JSON-RPC Server in your node’s configuration, you can query
 To check the status of your client, first open an interactive session using the port configured in the [configuration section](#22-configure):
 
 ```
-bin/run -u <host> -p <port> repl
+bin/run repl -u ws://<host>:<port>/ws
 ```
 
 Once in the session, check the status with:
@@ -98,22 +111,18 @@ status
 
 ## 3. Become a Validator
 
-To become a validator, the process is to send a _create_ validator transaction. For that you need to have an account
-with at least the validator deposit fee (10 000 NIM). This guide assumes that this amount is present in the validator
-address. To check if that is the case, use:
+To become a validator, you need to send a _create_ validator transaction. For that you need to have an account
+with at least the validator deposit fee (10 000 NIM). This guide assumes that this amount is already present in the validator address. To check if that is the case, use:
 
 ```
 account:get <validator_address>
 ```
 
-
-This guide assumes that this condition is met and that the client that this RPC commands will be run for is already
-configured to validate (check [this guide](#22-configure) to setup you client).
-
+Note that validators are selected to produce blocks every epoch (every election block), so it may take some time for your validator to be elected to produce blocks.
 
 ### 3.1 Import your validator address
 
-1. Use the following command to import your validator private key:
+Use the following command to import your validator private key:
 
 ```
 account:import <validator_private_key>
@@ -132,7 +141,7 @@ account:unlock <validator_address>
 
 ### 3.3 Send Validator Transaction
 
-Finally, we become a validator:
+Finally, to become a validator:
 
 ```
 validator:new <validator_address> <signing_private_key> <voting_private_key>
@@ -143,13 +152,12 @@ is the private key of the BLS keypair generated for `voting_key`.
 
 ## 4. Stake on Behalf of a Validator
 
-You can stake your NIM on behalf of an online validator. Your staked NIM then count towards the validator’s stake, increasing their likelihood of becoming a block producer. Note that all block rewards are received by the validator's reward address, not yours. The arrangement of distributing rewards among stakers is made off-chain.
+You can stake your NIM on behalf of an online validator. Your staked NIM then count towards the validator’s stake, increasing their likelihood of producing a block. Note that all block rewards are received by the validator's reward address, not yours. The arrangement of distributing rewards among stakers is made off-chain and usually this is handled by a pool operator or the person who is operating the validator itself.
 
 ```
 stake:start <staker_address> <validator_address> <value>
 ```
 
-For the transaction to work, the account opf address `staker_address` must have a minimum of `value` in its balance.
 Also note that the value must be provided in Lunas.
 
 ## 5. Inactivate and Unstake
@@ -162,7 +170,6 @@ Inactivates the validator via RPC.
 validator:inactivate <validator_address> <validator_address> <signing_private_key>
 ```
 
-Where `signing_private_key` is the private key of the Schnorr keypair generated for `signing_key`.
 
 ### 5.2 Unstake delegated Stake
 
