@@ -413,7 +413,7 @@ fn prove_txns_with_block_number(
     }
 
     let proof = blockchain.history_store.prove(
-        Policy::epoch_at(block_number),
+        Policy::epoch_at(proving_block_number),
         hashes,
         verifier_state,
         None,
@@ -487,7 +487,7 @@ fn prove_transaction(
 
         // Prove the transaction
         let proof = blockchain.history_store.prove(
-            Policy::epoch_at(block_number),
+            Policy::epoch_at(proving_block_number),
             vec![transaction],
             verifier_state,
             None,
