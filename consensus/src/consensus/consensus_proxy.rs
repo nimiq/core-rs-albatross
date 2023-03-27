@@ -383,12 +383,8 @@ impl<N: Network> ConsensusProxy<N> {
                                         verified_transactions.insert(tx.tx_hash(), tx);
                                     }
                                 } else {
-                                    // The proof didn't verify so we disconnect from this peer
-                                    log::debug!(peer=%peer_id, "Disconnecting from peer because the transaction proof didn't verify");
-                                    self.network
-                                        .disconnect_peer(peer_id, CloseReason::Other)
-                                        .await;
-                                    break;
+                                    // The proof didn't verify so we continue with another peer
+                                    log::warn!(peer=%peer_id, "The transaction proof from this peer did not verify");
                                 }
                             } else {
                                 // If we receive a proof but we do not receive a block, we disconnect from the peer
