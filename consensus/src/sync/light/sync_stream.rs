@@ -171,6 +171,9 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                 .as_ref()
                 .map(|checkpoint| checkpoint.block_number)
                 .unwrap_or_else(|| {
+                    if epoch_ids.checkpoint_epoch_number() == 0 {
+                        return 0;
+                    }
                     Policy::first_block_of(epoch_ids.checkpoint_epoch_number() as u32)
                 })
                 + Policy::blocks_per_batch()
