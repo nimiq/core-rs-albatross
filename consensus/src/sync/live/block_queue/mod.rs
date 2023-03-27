@@ -293,27 +293,31 @@ impl<N: Network> BlockQueue<N> {
 
     /// Requests missing blocks.
     fn request_missing_blocks(&mut self, block_number: u32, block_hash: Blake2bHash) {
-        let blockchain = self.blockchain.read();
-        let head_hash = blockchain.head_hash();
-        let head_height = blockchain.block_number();
-        let macro_height = Policy::last_macro_block(head_height);
+        let (head_hash, head_height, macro_height, blocks) = {
+            let blockchain = self.blockchain.read();
+            let head_hash = blockchain.head_hash();
+            let head_height = blockchain.block_number();
+            let macro_height = Policy::last_macro_block(head_height);
 
-        log::debug!(
-            block_number,
-            %block_hash,
-            %head_hash,
-            macro_height,
-            "Requesting missing blocks",
-        );
+            log::debug!(
+                block_number,
+                %block_hash,
+                %head_hash,
+                macro_height,
+                "Requesting missing blocks",
+            );
 
-        // Get block locators. The blocks returned by `get_blocks` do *not* include the start block.
-        // FIXME We don't want to send the full batch as locators here.
-        let blocks = blockchain.get_blocks(
-            &head_hash,
-            head_height - macro_height,
-            false,
-            Direction::Backward,
-        );
+            // Get block locators. The blocks returned by `get_blocks` do *not* include the start block.
+            // FIXME We don't want to send the full batch as locators here.
+            let blocks = blockchain.get_blocks(
+                &head_hash,
+                head_height - macro_height,
+                false,
+                Direction::Backward,
+            );
+            (head_hash, head_height, macro_height, blocks)
+        };
+
         if let Ok(blocks) = blocks {
             let block_locators = blocks.into_iter().map(|block| block.hash());
 
