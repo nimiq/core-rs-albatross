@@ -131,6 +131,8 @@ pub struct LightMacroSync<TNetwork: Network> {
     pub(crate) block_headers: FuturesUnordered<
         BoxFuture<'static, (Result<Option<Block>, RequestError>, TNetwork::PeerId)>,
     >,
+    /// Minimum distance to light sync in #blocks from the peers head.
+    pub(crate) full_sync_threshold: u32,
     /// Task executor to be compatible with wasm and not wasm environments,
     pub(crate) executor: Box<dyn TaskExecutor + Send + 'static>,
     /// Waker used for the poll next function
@@ -143,6 +145,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         network: Arc<TNetwork>,
         network_event_rx: SubscribeEvents<TNetwork::PeerId>,
         zkp_component_proxy: ZKPComponentProxy<TNetwork>,
+        full_sync_threshold: u32,
         executor: impl TaskExecutor + Send + 'static,
     ) -> Self {
         Self {
@@ -155,6 +158,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
             zkp_requests: FuturesUnordered::new(),
             waker: None,
             executor: Box::new(executor),
+            full_sync_threshold,
             block_headers: Default::default(),
         }
     }

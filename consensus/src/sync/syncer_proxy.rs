@@ -1,6 +1,9 @@
-use std::pin::Pin;
-use std::sync::Arc;
-use std::task::{Context, Poll};
+use std::{
+    cmp::max,
+    pin::Pin,
+    sync::Arc,
+    task::{Context, Poll},
+};
 
 use futures::{Stream, StreamExt};
 use parking_lot::Mutex;
@@ -16,7 +19,6 @@ use nimiq_zkp_component::zkp_component::ZKPComponentProxy;
 #[cfg(feature = "full")]
 use crate::sync::{
     history::HistoryMacroSync,
-    light::full_sync_threshold,
     live::{state_queue::StateQueue, StateLiveSync},
 };
 use crate::sync::{
@@ -97,11 +99,10 @@ impl<N: Network> SyncerProxy<N> {
         bls_cache: Arc<Mutex<PublicKeyCache>>,
         zkp_component_proxy: ZKPComponentProxy<N>,
         network_event_rx: SubscribeEvents<N::PeerId>,
+        full_sync_threshold: u32,
     ) -> Self {
-        let queue_config = QueueConfig {
-            window_ahead_max: full_sync_threshold(),
-            ..Default::default()
-        };
+        let mut queue_config = QueueConfig::default();
+        queue_config.window_ahead_max = max(full_sync_threshold, queue_config.window_ahead_max);
 
         let block_queue = BlockQueue::new(
             Arc::clone(&network),
@@ -134,6 +135,7 @@ impl<N: Network> SyncerProxy<N> {
             network,
             network_event_rx,
             zkp_component_proxy,
+            full_sync_threshold,
             Box::new(|fut| {
                 tokio::spawn(fut);
             }),
@@ -175,6 +177,7 @@ impl<N: Network> SyncerProxy<N> {
             network,
             network_event_rx,
             zkp_component_proxy,
+            0, // Since the light sync does not keep state, we ignore the threshold.
             executor,
         );
 

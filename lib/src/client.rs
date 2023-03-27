@@ -14,8 +14,8 @@ use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_consensus::{
-    sync::syncer_proxy::SyncerProxy, Consensus as AbstractConsensus,
-    ConsensusProxy as AbstractConsensusProxy,
+    sync::{light::full_sync_threshold, syncer_proxy::SyncerProxy},
+    Consensus as AbstractConsensus, ConsensusProxy as AbstractConsensusProxy,
 };
 #[cfg(feature = "zkp-prover")]
 use nimiq_genesis::NetworkId;
@@ -435,6 +435,7 @@ impl ClientInner {
                     bls_cache,
                     zkp_component.proxy(),
                     network_events,
+                    full_sync_threshold(),
                 )
                 .await;
                 (blockchain_proxy, syncer, zkp_component)

@@ -39,7 +39,7 @@ use crate::{
 ///          |  ^     (*optional) automatically       ^
 ///          |  |                                     |
 ///          |  | unpark                              | automatically
-/// slashing |  |                                     |
+/// slashing |  | (automatic within an epoch)         |
 ///          |  |             +--------+              |
 ///          |  +-------------+        |              |
 ///          |                | parked +--------------+

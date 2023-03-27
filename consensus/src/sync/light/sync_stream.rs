@@ -20,8 +20,6 @@ use crate::sync::{
     syncer::{MacroSync, MacroSyncReturn},
 };
 
-use super::full_sync_threshold;
-
 impl<TNetwork: Network> LightMacroSync<TNetwork> {
     // This function is the one that starts the LightMacroSync process,
     // by adding peers into the MacroSync component.
@@ -73,7 +71,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                                 if block
                                     .block_number()
                                     .saturating_sub(blockchain_urg.block_number())
-                                    <= full_sync_threshold()
+                                    <= self.full_sync_threshold
                                 {
                                     // We deem this too close to do a macro sync, thus we are not pushing the zkp. This would
                                     // clear the state and history store. Instead, we request the epoch ids from this peer.
@@ -220,7 +218,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                 #[cfg(feature = "full")]
                 if let BlockchainProxy::Full(_) = self.blockchain {
                     if peer_head_upper_bound.saturating_sub(self.blockchain.read().block_number())
-                        <= full_sync_threshold()
+                        <= self.full_sync_threshold
                     {
                         log::debug!(
                             peer_id = ?epoch_ids.sender,
@@ -506,6 +504,7 @@ mod tests {
                 Arc::clone(&net1),
                 net1.subscribe_events(),
                 zkp_component_proxy,
+                0,
                 Box::new(|fut| {
                     tokio::spawn(fut);
                 }),
@@ -557,6 +556,7 @@ mod tests {
                 Arc::clone(&net1),
                 net1.subscribe_events(),
                 zkp_component_proxy,
+                0,
                 Box::new(|fut| {
                     tokio::spawn(fut);
                 }),
@@ -632,6 +632,7 @@ mod tests {
                 Arc::clone(&net1),
                 net1.subscribe_events(),
                 zkp_component_proxy,
+                0,
                 Box::new(|fut| {
                     tokio::spawn(fut);
                 }),
@@ -707,6 +708,7 @@ mod tests {
                 Arc::clone(&net1),
                 net1.subscribe_events(),
                 zkp_component_proxy,
+                0,
                 Box::new(|fut| {
                     tokio::spawn(fut);
                 }),
@@ -777,6 +779,7 @@ mod tests {
                 Arc::clone(&net1),
                 net1.subscribe_events(),
                 zkp_component_proxy,
+                0,
                 Box::new(|fut| {
                     tokio::spawn(fut);
                 }),
@@ -884,6 +887,7 @@ mod tests {
                 Arc::clone(&net1),
                 net1.subscribe_events(),
                 zkp_component_proxy,
+                0,
                 Box::new(|fut| {
                     tokio::spawn(fut);
                 }),

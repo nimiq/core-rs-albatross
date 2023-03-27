@@ -62,6 +62,7 @@ async fn syncer(
                 ))),
                 zkp_prover.proxy(),
                 network.subscribe_events(),
+                0,
             )
             .await
         }
@@ -275,6 +276,10 @@ pub async fn sync_two_peers(
     assert_eq!(
         blockchain2_proxy.read().election_head_hash(),
         consensus1_proxy.blockchain.read().election_head_hash(),
+    );
+    assert_eq!(
+        blockchain2_proxy.read().macro_head(),
+        consensus1_proxy.blockchain.read().macro_head(),
     );
     assert_eq!(
         blockchain2_proxy.read().macro_head_hash(),
