@@ -116,7 +116,7 @@ impl<N: Network> Stream for ChunkRequestComponent<N> {
             }
         }
 
-        // 3. Poll self.sync_queue, return results.
+        // 2. Poll self.sync_queue, return results.
         while let Poll::Ready(Some(result)) = self.sync_queue.poll_next_unpin(cx) {
             match result {
                 Ok((response, request, peer_id)) => {

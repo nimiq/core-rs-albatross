@@ -530,8 +530,7 @@ impl<N: Network> Stream for StateQueue<N> {
         }
 
         // 3. Receive blocks from BlockQueue.
-        let poll_res = self.block_queue.poll_next_unpin(cx);
-        match poll_res {
+        match self.block_queue.poll_next_unpin(cx) {
             Poll::Ready(Some(queued_block)) => {
                 return Poll::Ready(Some(self.on_blocks_received(queued_block)));
             }
