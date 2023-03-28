@@ -9,7 +9,13 @@ use beserial::{Deserialize, Serialize};
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId, policy::Policy};
 use nimiq_transaction::{
-    extended_transaction::ExtendedTransaction, TransactionFlags, TransactionFormat,
+    account::{
+        htlc_contract::CreationTransactionData as HtlcCreationTransactionData,
+        staking_contract::IncomingStakingTransactionData,
+        vesting_contract::CreationTransactionData as VestingCreationTransactionData,
+    },
+    extended_transaction::ExtendedTransaction,
+    TransactionFlags, TransactionFormat,
 };
 use nimiq_transaction_builder::TransactionProofBuilder;
 
@@ -400,8 +406,119 @@ impl Transaction {
                 .to_string()
                 .to_lowercase(),
             flags: self.flags(),
-            data: PlainTransactionData {
-                raw: hex::encode(self.data()),
+            data: {
+                if self.inner.recipient_type == AccountType::Staking {
+                    // Parse transaction data
+                    let data = IncomingStakingTransactionData::parse(&self.inner).unwrap();
+                    match data {
+                        IncomingStakingTransactionData::CreateStaker { delegation, .. } => {
+                            PlainTransactionData::CreateStaker(PlainCreateStakerData {
+                                raw: hex::encode(self.data()),
+                                delegation: delegation
+                                    .map(|address| address.to_user_friendly_address()),
+                            })
+                        }
+                        IncomingStakingTransactionData::AddStake { staker_address } => {
+                            PlainTransactionData::AddStake(PlainAddStakeData {
+                                raw: hex::encode(self.data()),
+                                staker: staker_address.to_user_friendly_address(),
+                            })
+                        }
+                        IncomingStakingTransactionData::UpdateStaker { new_delegation, .. } => {
+                            PlainTransactionData::UpdateStaker(PlainUpdateStakerData {
+                                raw: hex::encode(self.data()),
+                                new_delegation: new_delegation
+                                    .map(|address| address.to_user_friendly_address()),
+                            })
+                        }
+                        IncomingStakingTransactionData::CreateValidator {
+                            signing_key,
+                            voting_key,
+                            reward_address,
+                            signal_data,
+                            proof_of_knowledge,
+                            ..
+                        } => PlainTransactionData::CreateValidator(PlainCreateValidatorData {
+                            raw: hex::encode(self.data()),
+                            signing_key: signing_key.to_hex(),
+                            voting_key: voting_key.to_hex(),
+                            reward_address: reward_address.to_user_friendly_address(),
+                            signal_data: signal_data.map(|data| hex::encode(data)),
+                            proof_of_knowledge: proof_of_knowledge.to_hex(),
+                        }),
+                        IncomingStakingTransactionData::UpdateValidator {
+                            new_signing_key,
+                            new_voting_key,
+                            new_reward_address,
+                            new_signal_data,
+                            new_proof_of_knowledge,
+                            ..
+                        } => PlainTransactionData::UpdateValidator(PlainUpdateValidatorData {
+                            raw: hex::encode(self.data()),
+                            new_signing_key: new_signing_key
+                                .map(|signing_key| signing_key.to_hex()),
+                            new_voting_key: new_voting_key.map(|voting_key| voting_key.to_hex()),
+                            new_reward_address: new_reward_address
+                                .map(|reward_address| reward_address.to_user_friendly_address()),
+                            new_signal_data: new_signal_data
+                                .map(|signal_data| signal_data.map(|data| hex::encode(data))),
+                            new_proof_of_knowledge: new_proof_of_knowledge
+                                .map(|proof_of_knowledge| proof_of_knowledge.to_hex()),
+                        }),
+                        IncomingStakingTransactionData::UnparkValidator {
+                            validator_address,
+                            ..
+                        }
+                        | IncomingStakingTransactionData::DeactivateValidator {
+                            validator_address,
+                            ..
+                        }
+                        | IncomingStakingTransactionData::ReactivateValidator {
+                            validator_address,
+                            ..
+                        } => PlainTransactionData::GenericValidator(PlainValidatorData {
+                            raw: hex::encode(self.data()),
+                            validator: validator_address.to_user_friendly_address(),
+                        }),
+                        IncomingStakingTransactionData::RetireValidator { .. } => {
+                            PlainTransactionData::Raw(PlainRawData {
+                                raw: hex::encode(self.data()),
+                            })
+                        }
+                    }
+                    // In the future we might add other staking notifications
+                } else if self.inner.recipient_type == AccountType::Vesting {
+                    let data = VestingCreationTransactionData::parse(&self.inner).unwrap();
+                    PlainTransactionData::Vesting(PlainVestingData {
+                        raw: hex::encode(self.data()),
+                        owner: data.owner.to_user_friendly_address(),
+                        start_time: data.start_time,
+                        step_amount: data.step_amount.into(),
+                        time_step: data.time_step,
+                    })
+                } else if self.inner.recipient_type == AccountType::HTLC {
+                    let data = HtlcCreationTransactionData::parse(&self.inner).unwrap();
+                    PlainTransactionData::Htlc(PlainHtlcData {
+                        raw: hex::encode(self.data()),
+                        sender: data.sender.to_user_friendly_address(),
+                        recipient: data.recipient.to_user_friendly_address(),
+                        hash_algorithm: match data.hash_algorithm {
+                            nimiq_transaction::account::htlc_contract::HashAlgorithm::Blake2b => {
+                                "blake2b".to_string()
+                            }
+                            nimiq_transaction::account::htlc_contract::HashAlgorithm::Sha256 => {
+                                "sha256".to_string()
+                            }
+                        },
+                        hash_root: hex::encode(data.hash_root),
+                        hash_count: data.hash_count,
+                        timeout: data.timeout,
+                    })
+                } else {
+                    PlainTransactionData::Raw(PlainRawData {
+                        raw: hex::encode(self.data()),
+                    })
+                }
             },
             proof: PlainTransactionProof {
                 raw: hex::encode(self.proof()),
@@ -419,7 +536,17 @@ impl Transaction {
             Some(plain.recipient_type.into()),
             plain.value,
             plain.fee,
-            Some(hex::decode(&plain.data.raw)?),
+            Some(hex::decode(match plain.data {
+                PlainTransactionData::Raw(ref data) => &data.raw,
+                PlainTransactionData::Vesting(ref data) => &data.raw,
+                PlainTransactionData::Htlc(ref data) => &data.raw,
+                PlainTransactionData::CreateValidator(ref data) => &data.raw,
+                PlainTransactionData::UpdateValidator(ref data) => &data.raw,
+                PlainTransactionData::GenericValidator(ref data) => &data.raw,
+                PlainTransactionData::CreateStaker(ref data) => &data.raw,
+                PlainTransactionData::AddStake(ref data) => &data.raw,
+                PlainTransactionData::UpdateStaker(ref data) => &data.raw,
+            })?),
             Some(plain.flags),
             plain.validity_start_height,
             from_network_id(NetworkId::from_str(&plain.network)?),
@@ -432,8 +559,95 @@ impl Transaction {
 
 /// Placeholder struct to serialize data of transactions as hex strings in the style of the Nimiq 1.0 library.
 #[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
-pub struct PlainTransactionData {
+#[serde(untagged)]
+pub enum PlainTransactionData {
+    Raw(PlainRawData),
+    Vesting(PlainVestingData),
+    Htlc(PlainHtlcData),
+    CreateValidator(PlainCreateValidatorData),
+    UpdateValidator(PlainUpdateValidatorData),
+    GenericValidator(PlainValidatorData),
+    CreateStaker(PlainCreateStakerData),
+    AddStake(PlainAddStakeData),
+    UpdateStaker(PlainUpdateStakerData),
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
+pub struct PlainRawData {
     pub raw: String,
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub struct PlainVestingData {
+    pub raw: String,
+    pub owner: String,
+    pub start_time: u64,
+    pub time_step: u64,
+    pub step_amount: u64,
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub struct PlainHtlcData {
+    pub raw: String,
+    pub sender: String,
+    pub recipient: String,
+    pub hash_algorithm: String,
+    pub hash_root: String,
+    pub hash_count: u8,
+    pub timeout: u64,
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub struct PlainCreateValidatorData {
+    raw: String,
+    signing_key: String,
+    voting_key: String,
+    reward_address: String,
+    signal_data: Option<String>,
+    proof_of_knowledge: String,
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub struct PlainUpdateValidatorData {
+    raw: String,
+    new_signing_key: Option<String>,
+    new_voting_key: Option<String>,
+    new_reward_address: Option<String>,
+    new_signal_data: Option<Option<String>>,
+    new_proof_of_knowledge: Option<String>,
+}
+
+// Used for UnparkValidator, DeactivateValidator & ReactivateValidator, as they have the same fields.
+#[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub struct PlainValidatorData {
+    pub raw: String,
+    pub validator: String,
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub struct PlainCreateStakerData {
+    pub raw: String,
+    pub delegation: Option<String>,
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub struct PlainAddStakeData {
+    pub raw: String,
+    pub staker: String,
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub struct PlainUpdateStakerData {
+    pub raw: String,
+    pub new_delegation: Option<String>,
 }
 
 /// Placeholder struct to serialize proofs of transactions as hex strings in the style of the Nimiq 1.0 library.

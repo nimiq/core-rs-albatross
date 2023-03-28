@@ -44,9 +44,9 @@ use crate::address::{Address, AddressAnyArrayType, AddressAnyType};
 use crate::block::{PlainBlock, PlainBlockType};
 use crate::peer_info::PeerInfo;
 use crate::transaction::{
-    PlainTransactionDetails, PlainTransactionDetailsArrayType, PlainTransactionDetailsType,
-    PlainTransactionReceipt, PlainTransactionReceiptArrayType, Transaction, TransactionAnyType,
-    TransactionState,
+    PlainTransactionData, PlainTransactionDetails, PlainTransactionDetailsArrayType,
+    PlainTransactionDetailsType, PlainTransactionReceipt, PlainTransactionReceiptArrayType,
+    Transaction, TransactionAnyType, TransactionState,
 };
 use crate::transaction_builder::TransactionBuilder;
 use crate::utils::from_network_id;
@@ -966,10 +966,26 @@ impl Client {
                             let _ = sender.send(details.clone());
                         }
 
+                        let staker_address = if let PlainTransactionData::AddStake(data) =
+                            &details.transaction.data
+                        {
+                            Some(
+                                nimiq_keys::Address::from_user_friendly_address(&data.staker)
+                                    .unwrap(),
+                            )
+                        } else {
+                            None
+                        };
+
                         if let Ok(js_value) = serde_wasm_bindgen::to_value(&details) {
                             for (listener, addresses) in transaction_listeners.borrow().values() {
                                 if addresses.contains(&tx.sender)
                                     || addresses.contains(&tx.recipient)
+                                    || if let Some(ref address) = staker_address {
+                                        addresses.contains(address)
+                                    } else {
+                                        false
+                                    }
                                 {
                                     let _ = listener.call1(&this, &js_value);
                                 }
