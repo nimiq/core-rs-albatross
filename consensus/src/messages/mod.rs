@@ -13,7 +13,7 @@ use nimiq_network_interface::{
 use nimiq_primitives::{key_nibbles::KeyNibbles, trie::trie_proof::TrieProof};
 use nimiq_transaction::history_proof::HistoryTreeProof;
 
-use crate::error::SubscribeToAdressesError;
+use crate::error::SubscribeToAddressesError;
 
 mod handlers;
 
@@ -334,8 +334,8 @@ impl RequestCommon for RequestSubscribeToAddress {
 /// The response when a peer tries to subscribe to some specific address.
 #[derive(Serialize, Deserialize)]
 pub struct ResponseSubscribeToAddress {
-    /// Response used to specify if the request can be fullfiled or not
-    pub result: Result<(), SubscribeToAdressesError>,
+    /// Response used to specify if the request can be fulfilled or not
+    pub result: Result<(), SubscribeToAddressesError>,
 }
 
 /// Different kind of events that could generate notifications
@@ -357,7 +357,7 @@ pub struct AddressNotification {
     pub receipts: Vec<(Blake2bHash, u32)>,
 }
 
-/// Topic used to notify peers about transaction adddresses they are subscribed to
+/// Topic used to notify peers about transaction addresses they are subscribed to
 /// The final notification is sent over a subtopic derived from this one, which is specific to each peer
 #[derive(Clone, Debug, Default)]
 pub struct AddressSubscriptionTopic;

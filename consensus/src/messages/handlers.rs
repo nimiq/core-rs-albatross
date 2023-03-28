@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 #[cfg(feature = "full")]
 use std::{cmp, sync::Arc};
 
@@ -193,79 +192,92 @@ impl<N: Network> Handle<N, ResponseBlocks, BlockchainProxy> for RequestMissingBl
     fn handle(&self, _peer_id: N::PeerId, blockchain: &BlockchainProxy) -> ResponseBlocks {
         let blockchain = blockchain.read();
 
-        // TODO We might want to do a sanity check on the locator hashes and reject the request if
-        //  they they don't match up with the given target hash.
-
-        // Build a HashSet from the given locator hashes.
-        let locators = HashSet::<Blake2bHash>::from_iter(self.locators.iter().cloned());
-
-        // Walk the chain backwards from the target block until we find one of the locators or
-        // encounter a macro block. Return all blocks between the locator block (exclusive) and the
-        // target block (inclusive). If we stopped at a macro block instead of a locator, the macro
-        // block is included in the result.
-        let mut blocks = Vec::new();
-        let mut block_hash = self.target_hash.clone();
-        while !locators.contains(&block_hash) {
-            let block = blockchain.get_block(&block_hash, false);
-            if let Ok(block) = block {
-                let block = match block {
-                    // Macro bodies are always needed
-                    Block::Macro(_) => match blockchain.get_block(&block_hash, true) {
-                        Ok(block) => block,
-                        Err(error) => {
-                            debug!(
-                                %error,
-                                blocks_found = blocks.len(),
-                                block_hash = %block_hash,
-                                "ResponseBlocks - Failed to get macro block",
-                            );
-                            return ResponseBlocks { blocks: None };
-                        }
-                    },
-                    // Micro bodies are requested based on `include_micro_bodies`
-                    Block::Micro(_) => {
-                        if self.include_micro_bodies {
-                            match blockchain.get_block(&block_hash, true) {
-                                Ok(block) => block,
-                                Err(error) => {
-                                    debug!(
-                                        %error,
-                                        include_body = self.include_micro_bodies,
-                                        blocks_found = blocks.len(),
-                                        block_hash = %block_hash,
-                                        "ResponseBlocks - Failed to get micro block",
-                                    );
-                                    return ResponseBlocks { blocks: None };
-                                }
-                            }
-                        } else {
-                            // Micro bodies are not requested, so we can return the already block obtained
-                            block
-                        }
-                    }
-                };
-                let is_macro = block.is_macro();
-
-                block_hash = block.parent_hash().clone();
-                blocks.push(block);
-
-                if is_macro {
-                    break;
+        // Check that we know the target hash and that it is located on our main chain.
+        let target_block = match blockchain.get_chain_info(&self.target_hash, false) {
+            Ok(target_block) => {
+                if !target_block.on_main_chain {
+                    debug!(
+                        target_hash = %self.target_hash,
+                        "ResponseBlocks - target block not on main chain",
+                    );
+                    return ResponseBlocks { blocks: None };
                 }
-            } else {
-                // This can only happen if the target hash is unknown or after the chain was pruned.
-                // TODO Return the blocks we found instead of failing here?
+                target_block
+            }
+            Err(error) => {
                 debug!(
-                    blocks_found = blocks.len(),
-                    unknown_block_hash = %block_hash,
-                    "ResponseBlocks - unknown target block/predecessor",
+                    %error,
+                    target_hash = %self.target_hash,
+                    "ResponseBlocks - target hash not found",
                 );
                 return ResponseBlocks { blocks: None };
             }
+        };
+
+        // Find the first locator that is on our main chain.
+        // The locators are ordered from newest to oldest block.
+        let mut start_hash = None;
+        let mut start_block_number = None;
+        for locator in self.locators.iter() {
+            if let Ok(chain_info) = blockchain.get_chain_info(locator, false) {
+                if chain_info.on_main_chain {
+                    start_hash = Some(locator.clone());
+                    start_block_number = Some(chain_info.head.block_number());
+                    break;
+                }
+            }
         }
 
-        // Blocks are returned in ascending (forward) order.
-        blocks.reverse();
+        // If there is no match, reject the request.
+        if start_hash.is_none() {
+            debug!("ResponseBlocks - unknown locators",);
+            return ResponseBlocks { blocks: None };
+        }
+        let start_block_number = start_block_number.unwrap();
+        let start_hash = start_hash.unwrap();
+
+        // Get at most one batch of blocks from there.
+        let next_macro_block = Policy::macro_block_after(start_block_number);
+        let num_blocks = cmp::min(
+            next_macro_block - start_block_number,
+            target_block
+                .head
+                .block_number()
+                .saturating_sub(start_block_number),
+        );
+
+        // If the number of blocks to return is 0, we return early.
+        if num_blocks == 0 {
+            return ResponseBlocks {
+                blocks: Some(vec![]),
+            };
+        }
+
+        // Request `num_blocks - 1` micro blocks first and add the following macro block separately.
+        // We do this because we always include the body for macro blocks.
+        let mut blocks = match blockchain.get_blocks(
+            &start_hash,
+            num_blocks - 1,
+            self.include_micro_bodies,
+            Direction::Forward,
+        ) {
+            Ok(blocks) => blocks,
+            Err(error) => {
+                debug!(
+                    %error,
+                    start_hash = %start_hash,
+                    "ResponseBlocks - Failed to get blocks",
+                );
+                return ResponseBlocks { blocks: None };
+            }
+        };
+
+        if let Ok(block) = blockchain.get_block_at(
+            start_block_number + num_blocks,
+            self.include_micro_bodies || Policy::is_macro_block_at(start_block_number + num_blocks),
+        ) {
+            blocks.push(block);
+        }
 
         ResponseBlocks {
             blocks: Some(blocks),

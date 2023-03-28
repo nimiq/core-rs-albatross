@@ -24,7 +24,7 @@ use crate::messages::{
     AddressNotification, AddressSubscriptionOperation, AddressSubscriptionTopic, NotificationEvent,
     RequestSubscribeToAddress, ResponseSubscribeToAddress,
 };
-use crate::SubscribeToAdressesError::*;
+use crate::SubscribeToAddressesError::*;
 
 /// The max number of peers that can be subscribed.
 pub const MAX_SUBSCRIBED_PEERS: usize = 50;

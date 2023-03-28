@@ -20,7 +20,7 @@ pub enum SyncError {
 /// Different errors that can be obtained when subscribing to transaction addresses.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Error, Eq, PartialEq, Serialize, Deserialize)]
-pub enum SubscribeToAdressesError {
+pub enum SubscribeToAddressesError {
     /// Already attending too many peers
     #[error("Too many peers")]
     TooManyPeers = 1,
