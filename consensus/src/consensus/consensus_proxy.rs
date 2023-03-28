@@ -336,36 +336,43 @@ impl<N: Network> ConsensusProxy<N> {
 
                                 // Verify that the transaction proof fits to the chain
                                 if block.block_number() <= election_head.block_number() {
-                                    // Request block inclusion proofs for txs of previous epochs
-                                    let block_proof = {
-                                        if let Ok(ResponseBlocksProof {
-                                            proof: Some(block_proof),
-                                        }) = self
-                                            .network
-                                            .request::<RequestBlocksProof>(
-                                                RequestBlocksProof {
-                                                    election_head: election_head.block_number(),
-                                                    blocks: vec![block.block_number()],
-                                                },
-                                                peer_id,
-                                            )
-                                            .await
-                                        {
-                                            block_proof
+                                    let mut already_proven = false;
+                                    if let Some(ref interlink) = election_head.header.interlink {
+                                        already_proven = interlink.contains(&block.hash());
+                                    }
+
+                                    if !already_proven {
+                                        // Request block inclusion proofs for txs of previous epochs
+                                        let block_proof = {
+                                            if let Ok(ResponseBlocksProof {
+                                                proof: Some(block_proof),
+                                            }) = self
+                                                .network
+                                                .request::<RequestBlocksProof>(
+                                                    RequestBlocksProof {
+                                                        election_head: election_head.block_number(),
+                                                        blocks: vec![block.block_number()],
+                                                    },
+                                                    peer_id,
+                                                )
+                                                .await
+                                            {
+                                                block_proof
+                                            } else {
+                                                log::debug!(peer=%peer_id, "Error requesting block proof");
+                                                continue;
+                                            }
+                                        };
+
+                                        // Verify that the block is part of the chain using the block inclusion proof
+                                        if let Block::Macro(macro_block) = block {
+                                            verification_result = verification_result
+                                                && block_proof
+                                                    .is_block_proven(&election_head, &macro_block);
                                         } else {
-                                            log::debug!(peer=%peer_id, "Error requesting block proof");
+                                            log::debug!(peer=%peer_id, "Macro block expected in tx proof response");
                                             continue;
                                         }
-                                    };
-
-                                    // Verify that the block is part of the chain using the block inclusion proof
-                                    if let Block::Macro(macro_block) = block {
-                                        verification_result = verification_result
-                                            && block_proof
-                                                .is_block_proven(&election_head, &macro_block);
-                                    } else {
-                                        log::debug!(peer=%peer_id, "Macro block expected in tx proof response");
-                                        continue;
                                     }
                                 } else if block.block_number() <= checkpoint_head.block_number() {
                                     // Check that the transaction inclusion proof actually proofs inclusion in the block we know
