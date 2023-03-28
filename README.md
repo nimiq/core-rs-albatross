@@ -123,7 +123,7 @@ There are two ways of getting funds:
 - Directly using the [Devnet Faucet](https://faucet.pos.nimiq-testnet.com/):
 
 ```
-curl -X POST -H "Content-Type: application/x-www-form-urlencoded" -d "address=NQXX XXXX XXXX XXXX XXXX XXXX XXXX XXXX XXXX" https://faucet.v2.nimiq-testnet.com/tapit
+curl -X POST -H "Content-Type: application/x-www-form-urlencoded" -d "address=NQXX XXXX XXXX XXXX XXXX XXXX XXXX XXXX XXXX" https://faucet.pos.nimiq-testnet.com/tapit
 ```
 
 #### Becoming a validator
