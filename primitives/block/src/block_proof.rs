@@ -23,14 +23,21 @@ impl BlockInclusionProof {
         let mut hops = vec![];
 
         let mut current_hop = latest_number;
-        while current_hop - 1 > target_number {
+        let mut hop_contains_target_interlink = false;
+
+        // We're done if the election parent is the target or if the block contains an interlink to the target
+        while current_hop - 1 > target_number && !hop_contains_target_interlink {
             let previous_block_no = current_hop - 1;
             let interlink_count = (log2(previous_block_no as usize) as f32).floor() as u32;
             for i in (1..interlink_count + 1).rev() {
                 let interlink_divider = 2_u32.pow(i);
                 let ith_interlink = ((previous_block_no / interlink_divider) as f32).floor()
                     * interlink_divider as f32;
-                if ith_interlink >= target_number as f32 {
+                if ith_interlink == target_number as f32 {
+                    hop_contains_target_interlink = true;
+                    break;
+                }
+                if ith_interlink > target_number as f32 {
                     current_hop = ith_interlink as u32;
                     hops.push(current_hop);
                     break;
@@ -68,7 +75,7 @@ impl BlockInclusionProof {
             election_head.block_number(),
         );
 
-        // If we're at the 1st or 2nd macro block, there are no block proofs
+        // The election head might already have an interlink or prev_election_head link to the target
         if hops.is_empty() {
             return true;
         }

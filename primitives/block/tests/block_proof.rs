@@ -20,8 +20,12 @@ fn test_interlink_hops_to_block() {
     assert_interlink_hops(
         100,
         19435,
-        vec![16384, 8192, 4096, 2048, 1024, 512, 256, 128, 112, 104, 100],
+        vec![16384, 8192, 4096, 2048, 1024, 512, 256, 128, 112, 104],
     );
+
+    // If the election_head already contains an interlink or election_head to the target, the proof is empty
+    assert_interlink_hops(8, 10, vec![]);
+    assert_interlink_hops(9, 10, vec![]);
 }
 
 #[test]
@@ -65,6 +69,20 @@ fn test_is_block_proven() {
         ],
     };
     assert!(block_proof.is_block_proven(&blocks[&22], &blocks[&1]));
+
+    // Current election head: 22, target: 2. Claimed proof [16, 8, 4]
+    let block_proof = BlockInclusionProof {
+        proof: vec![blocks[&16].clone(), blocks[&8].clone(), blocks[&4].clone()],
+    };
+    assert!(block_proof.is_block_proven(&blocks[&22], &blocks[&2]));
+
+    // Current election head: 10, target: 8. Claimed proof []
+    let block_proof = BlockInclusionProof { proof: vec![] };
+    assert!(block_proof.is_block_proven(&blocks[&10], &blocks[&8]));
+
+    // Current election head: 10, target: 9. Claimed proof []
+    let block_proof = BlockInclusionProof { proof: vec![] };
+    assert!(block_proof.is_block_proven(&blocks[&10], &blocks[&9]));
 
     // Current election head: 22, target: 1. Claimed proof [17 (wrong), 8, 4, 2]
     let block_proof = BlockInclusionProof {
