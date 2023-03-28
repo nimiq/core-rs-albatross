@@ -115,17 +115,6 @@ pub enum ValidatorCommand {
         tx_commons: TxCommon,
     },
 
-    /// Sends a transaction to unpark this validator. You need to provide the address of a basic
-    /// account (the sender wallet) to pay the transaction fee.
-    /// The sender wallet must be unlocked prior to this command.
-    UnparkValidator {
-        /// The fee will be payed from this address. This wallet must be already unlocked.
-        sender_wallet: Address,
-
-        #[clap(flatten)]
-        tx_commons: TxCommon,
-    },
-
     /// Sends a transaction to delete this validator. The transaction fee will be paid from the
     /// validator deposit that is being returned.
     DeleteValidator {
@@ -302,39 +291,6 @@ impl HandleSubcommand for ValidatorCommand {
                     let txid = client
                         .consensus
                         .send_reactivate_validator_transaction(
-                            sender_wallet,
-                            validator_address,
-                            key_data,
-                            tx_commons.fee,
-                            tx_commons.validity_start_height,
-                        )
-                        .await?;
-                    println!("{txid:#?}");
-                }
-            }
-
-            ValidatorCommand::UnparkValidator {
-                sender_wallet,
-                tx_commons,
-            } => {
-                let validator_address = client.validator.get_address().await?.data;
-                let key_data = client.validator.get_signing_key().await?.data;
-                if tx_commons.dry {
-                    let tx = client
-                        .consensus
-                        .create_unpark_validator_transaction(
-                            sender_wallet,
-                            validator_address,
-                            key_data,
-                            tx_commons.fee,
-                            tx_commons.validity_start_height,
-                        )
-                        .await?;
-                    println!("{tx:#?}");
-                } else {
-                    let txid = client
-                        .consensus
-                        .send_unpark_validator_transaction(
                             sender_wallet,
                             validator_address,
                             key_data,

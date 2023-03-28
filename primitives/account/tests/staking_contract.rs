@@ -28,10 +28,6 @@ use nimiq_transaction::{
 };
 use nimiq_utils::key_rng::SecureGenerate;
 
-const CONTRACT_1: &str = "00000000000000000000000000000000000000000000";
-const CONTRACT_2: &str =
-    "0000000011e1a3000000000100000000000000000000000000000000000000000000000011e1a30000000001010101010101010101010101010101010101010101000000000000040102000000000000000000000170000000000001010101010101010101010101010101010101010100020000000a0001020202020202020202020202020202020202020200040064006500660068";
-
 const VALIDATOR_ADDRESS: &str = "83fa05dbe31f85e719f4c4fd67ebdba2e444d9f8";
 const VALIDATOR_PRIVATE_KEY: &str =
     "d0fbb3690f5308f457e245a3cc65ae8d6945155eadcac60d489ffc5583a60b9b";
@@ -58,12 +54,9 @@ fn generate_contract_2() {
         Coin::from_u64_unchecked(300_000_000),
     );
 
-    let mut parked_set = BTreeSet::new();
-    parked_set.insert(Address::from([1u8; 20]));
-
-    let mut current_lost_rewards = BitSet::new();
-    current_lost_rewards.insert(0);
-    current_lost_rewards.insert(10);
+    let mut current_batch_lost_rewards = BitSet::new();
+    current_batch_lost_rewards.insert(0);
+    current_batch_lost_rewards.insert(10);
 
     let mut previous_batch_lost_rewards = BitSet::new();
     previous_batch_lost_rewards.insert(100);
@@ -74,8 +67,8 @@ fn generate_contract_2() {
     let mut b_set = BTreeSet::new();
     b_set.insert(0);
     b_set.insert(10);
-    let mut current_disabled_slots = BTreeMap::new();
-    current_disabled_slots.insert(Address::from([1u8; 20]), b_set);
+    let mut current_epoch_disabled_slots = BTreeMap::new();
+    current_epoch_disabled_slots.insert(Address::from([1u8; 20]), b_set);
 
     let mut b_set = BTreeSet::new();
     b_set.insert(100);
@@ -88,10 +81,9 @@ fn generate_contract_2() {
     let contract = StakingContract {
         balance: Coin::from_u64_unchecked(300_000_000),
         active_validators,
-        parked_set,
-        current_lost_rewards,
+        current_batch_lost_rewards,
         previous_batch_lost_rewards,
-        current_disabled_slots,
+        current_epoch_disabled_slots,
         previous_epoch_disabled_slots,
     };
 
@@ -116,39 +108,37 @@ fn can_iter_stakers() {
 
 #[test]
 fn it_can_de_serialize_a_staking_contract() {
-    let bytes_1: Vec<u8> = hex::decode(CONTRACT_1).unwrap();
-    let contract_1: StakingContract = Deserialize::deserialize(&mut &bytes_1[..]).unwrap();
+    let contract_1 = StakingContract::default();
+    let contract_1a: StakingContract =
+        Deserialize::deserialize_from_vec(&contract_1.serialize_to_vec()).unwrap();
 
-    assert_eq!(contract_1.balance, 0.try_into().unwrap());
-    assert_eq!(contract_1.active_validators.len(), 0);
-    assert_eq!(contract_1.parked_set.len(), 0);
-    assert_eq!(contract_1.current_lost_rewards.len(), 0);
-    assert_eq!(contract_1.previous_batch_lost_rewards.len(), 0);
-    assert_eq!(contract_1.current_disabled_slots.len(), 0);
-    assert_eq!(contract_1.previous_epoch_disabled_slots.len(), 0);
+    assert_eq!(contract_1, contract_1a);
 
-    let mut bytes_1_out = Vec::<u8>::with_capacity(contract_1.serialized_size());
-    let size_1_out = contract_1.serialize(&mut bytes_1_out).unwrap();
+    let balance = Coin::from_u64_unchecked(300_000_000);
+    let mut current_batch_lost_rewards = BitSet::new();
+    current_batch_lost_rewards.insert(1);
+    current_batch_lost_rewards.insert(2);
+    let mut active_validators: BTreeMap<Address, Coin> = BTreeMap::new();
+    active_validators.insert(Address::START_ADDRESS, Coin::MAX);
+    let mut previous_batch_lost_rewards = current_batch_lost_rewards.clone();
+    previous_batch_lost_rewards.insert(3);
+    previous_batch_lost_rewards.insert(4);
+    let mut current_epoch_disabled_slots = BTreeMap::new();
+    current_epoch_disabled_slots.insert(Address::START_ADDRESS, BTreeSet::new());
+    let previous_epoch_disabled_slots = current_epoch_disabled_slots.clone();
 
-    assert_eq!(size_1_out, contract_1.serialized_size());
-    assert_eq!(hex::encode(bytes_1_out), CONTRACT_1);
+    let contract_2 = StakingContract {
+        balance,
+        active_validators,
+        current_batch_lost_rewards,
+        previous_batch_lost_rewards,
+        current_epoch_disabled_slots,
+        previous_epoch_disabled_slots,
+    };
+    let contract_2a: StakingContract =
+        Deserialize::deserialize_from_vec(&contract_2.serialize_to_vec()).unwrap();
 
-    let bytes_2: Vec<u8> = hex::decode(CONTRACT_2).unwrap();
-    let contract_2: StakingContract = Deserialize::deserialize(&mut &bytes_2[..]).unwrap();
-
-    assert_eq!(contract_2.balance, 300_000_000.try_into().unwrap());
-    assert_eq!(contract_2.active_validators.len(), 1);
-    assert_eq!(contract_2.parked_set.len(), 1);
-    assert_eq!(contract_2.current_lost_rewards.len(), 2);
-    assert_eq!(contract_2.previous_batch_lost_rewards.len(), 4);
-    assert_eq!(contract_2.current_disabled_slots.len(), 1);
-    assert_eq!(contract_2.previous_epoch_disabled_slots.len(), 1);
-
-    let mut bytes_2_out = Vec::<u8>::with_capacity(contract_2.serialized_size());
-    let size_2_out = contract_2.serialize(&mut bytes_2_out).unwrap();
-
-    assert_eq!(size_2_out, contract_2.serialized_size());
-    assert_eq!(hex::encode(bytes_2_out), CONTRACT_2);
+    assert_eq!(contract_2, contract_2a);
 }
 
 #[test]
@@ -462,142 +452,6 @@ fn update_validator_works() {
 }
 
 #[test]
-fn unpark_validator_works() {
-    let env = VolatileDatabase::new(10).unwrap();
-    let accounts = Accounts::new(env.clone());
-    let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
-    let block_state = BlockState::new(2, 2);
-    let mut db_txn = env.write_transaction();
-
-    let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
-
-    let validator_address = validator_address();
-    let cold_keypair = ed25519_key_pair(VALIDATOR_PRIVATE_KEY);
-    let signing_keypair = ed25519_key_pair(VALIDATOR_SIGNING_SECRET_KEY);
-
-    // To begin with, park and disable the validator.
-    let mut slots = BTreeSet::new();
-    slots.insert(1);
-    slots.insert(2);
-    slots.insert(3);
-
-    staking_contract
-        .parked_set
-        .insert(validator_address.clone());
-    staking_contract
-        .current_disabled_slots
-        .insert(validator_address.clone(), slots.clone());
-
-    // Works in the valid case.
-    let tx = make_signed_incoming_transaction(
-        IncomingStakingTransactionData::UnparkValidator {
-            validator_address: validator_address.clone(),
-            proof: SignatureProof::default(),
-        },
-        0,
-        &signing_keypair,
-    );
-
-    let receipt = staking_contract
-        .commit_incoming_transaction(
-            &tx,
-            &block_state,
-            data_store.write(&mut db_txn),
-            &mut TransactionLog::empty(),
-        )
-        .expect("Failed to commit transaction");
-
-    let expected_receipt = UnparkValidatorReceipt {
-        current_disabled_slots: Some(slots),
-    };
-    assert_eq!(receipt, Some(expected_receipt.into()));
-
-    assert!(!staking_contract.parked_set.contains(&validator_address));
-    assert!(!staking_contract
-        .current_disabled_slots
-        .contains_key(&validator_address));
-
-    // Try with an already unparked validator.
-    assert_eq!(
-        staking_contract.commit_incoming_transaction(
-            &tx,
-            &block_state,
-            data_store.write(&mut db_txn),
-            &mut TransactionLog::empty()
-        ),
-        Err(AccountError::InvalidForRecipient)
-    );
-
-    // Revert the transaction.
-    let mut tx_logger = TransactionLog::empty();
-    staking_contract
-        .revert_incoming_transaction(
-            &tx,
-            &block_state,
-            receipt,
-            data_store.write(&mut db_txn),
-            &mut tx_logger,
-        )
-        .expect("Failed to revert transaction");
-
-    assert_eq!(
-        tx_logger.logs,
-        vec![Log::UnparkValidator {
-            validator_address: validator_address.clone()
-        }]
-    );
-
-    assert!(staking_contract.parked_set.contains(&validator_address));
-    assert!(staking_contract
-        .current_disabled_slots
-        .contains_key(&validator_address));
-
-    // Try with a non-existent validator.
-    let fake_address = staker_address();
-
-    let tx = make_signed_incoming_transaction(
-        IncomingStakingTransactionData::UnparkValidator {
-            validator_address: fake_address.clone(),
-            proof: SignatureProof::default(),
-        },
-        0,
-        &signing_keypair,
-    );
-
-    assert_eq!(
-        staking_contract.commit_incoming_transaction(
-            &tx,
-            &block_state,
-            data_store.write(&mut db_txn),
-            &mut TransactionLog::empty()
-        ),
-        Err(AccountError::NonExistentAddress {
-            address: fake_address
-        })
-    );
-
-    // Try with a wrong signature.
-    let invalid_tx = make_signed_incoming_transaction(
-        IncomingStakingTransactionData::UnparkValidator {
-            validator_address: validator_address.clone(),
-            proof: SignatureProof::default(),
-        },
-        0,
-        &cold_keypair,
-    );
-
-    assert_eq!(
-        staking_contract.commit_incoming_transaction(
-            &invalid_tx,
-            &block_state,
-            data_store.write(&mut db_txn),
-            &mut TransactionLog::empty()
-        ),
-        Err(AccountError::InvalidSignature)
-    );
-}
-
-#[test]
 fn deactivate_validator_works() {
     let env = VolatileDatabase::new(10).unwrap();
     let accounts = Accounts::new(env.clone());
@@ -612,11 +466,6 @@ fn deactivate_validator_works() {
     let signing_key = ed25519_public_key(VALIDATOR_SIGNING_KEY);
     let signing_keypair = ed25519_key_pair(VALIDATOR_SIGNING_SECRET_KEY);
     let voting_key = bls_public_key(VALIDATOR_VOTING_KEY);
-
-    // First, park the validator.
-    staking_contract
-        .parked_set
-        .insert(validator_address.clone());
 
     // Works in the valid case.
     let tx = make_signed_incoming_transaction(
@@ -638,10 +487,7 @@ fn deactivate_validator_works() {
         )
         .expect("Failed to commit transaction");
 
-    assert_eq!(
-        receipt,
-        Some(DeactivateValidatorReceipt { was_parked: true }.into())
-    );
+    assert_eq!(receipt, None);
     assert_eq!(
         tx_logger.logs,
         vec![Log::DeactivateValidator {
@@ -668,7 +514,6 @@ fn deactivate_validator_works() {
     assert!(!staking_contract
         .active_validators
         .contains_key(&validator_address));
-    assert!(!staking_contract.parked_set.contains(&validator_address));
 
     // Try with an already inactive validator.
     assert_eq!(
@@ -719,7 +564,6 @@ fn deactivate_validator_works() {
     assert!(staking_contract
         .active_validators
         .contains_key(&validator_address));
-    assert!(staking_contract.parked_set.contains(&validator_address));
 
     // Try with a non-existent validator.
     let fake_address = staker_address();
@@ -823,7 +667,107 @@ fn reactivate_validator_works() {
 
     let expected_receipt = ReactivateValidatorReceipt {
         was_inactive_since: 2,
+        current_epoch_disabled_slots: None,
     };
+
+    assert_eq!(receipt, Some(expected_receipt.into()));
+    assert_eq!(
+        tx_logger.logs,
+        vec![Log::ReactivateValidator {
+            validator_address: validator_address.clone()
+        }]
+    );
+
+    let validator = staking_contract
+        .get_validator(&data_store.read(&db_txn), &validator_address)
+        .expect("Validator should exist");
+
+    assert_eq!(validator.address, validator_address);
+    assert_eq!(validator.signing_key, signing_key);
+    assert_eq!(validator.voting_key, voting_key);
+    assert_eq!(validator.reward_address, validator_address);
+    assert_eq!(validator.signal_data, None);
+    assert_eq!(
+        validator.total_stake,
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 150_000_000)
+    );
+    assert_eq!(validator.num_stakers, 1);
+    assert_eq!(validator.inactive_since, None);
+
+    assert_eq!(
+        staking_contract.active_validators.get(&validator_address),
+        Some(&Coin::from_u64_unchecked(
+            Policy::VALIDATOR_DEPOSIT + 150_000_000
+        ))
+    );
+
+    // Reactivate a slashed validator.
+    // Slash the validator slot.
+    let inherent = Inherent::Slash {
+        slot: SlashedSlot {
+            slot: 1,
+            validator_address: validator_address.clone(),
+            event_block: Policy::blocks_per_epoch() - 1,
+        },
+    };
+    let mut logs = vec![];
+    let mut inherent_logger = InherentLogger::new(&mut logs);
+    let receipt = staking_contract
+        .commit_inherent(
+            &inherent,
+            &block_state,
+            data_store.write(&mut db_txn),
+            &mut inherent_logger,
+        )
+        .expect("Failed to commit inherent");
+    assert_eq!(
+        receipt,
+        Some(
+            SlashReceipt {
+                newly_deactivated: true,
+                newly_disabled: true,
+                newly_lost_rewards: true
+            }
+            .into()
+        )
+    );
+    assert_eq!(
+        logs,
+        vec![
+            Log::Slash {
+                validator_address: validator_address.clone(),
+                event_block: Policy::blocks_per_epoch() - 1,
+                slot: 1,
+                newly_disabled: true,
+                newly_deactivated: true
+            },
+            Log::DeactivateValidator {
+                validator_address: validator_address.clone(),
+            }
+        ]
+    );
+
+    assert!(!staking_contract
+        .active_validators
+        .contains_key(&validator_address));
+
+    let mut tx_logger = TransactionLog::empty();
+    let receipt = staking_contract
+        .commit_incoming_transaction(
+            &tx,
+            &block_state,
+            data_store.write(&mut db_txn),
+            &mut tx_logger,
+        )
+        .expect("Failed to commit transaction");
+
+    let mut bitset = BTreeSet::new();
+    bitset.insert(1);
+    let expected_receipt = ReactivateValidatorReceipt {
+        was_inactive_since: 2,
+        current_epoch_disabled_slots: Some(bitset),
+    };
+
     assert_eq!(receipt, Some(expected_receipt.into()));
     assert_eq!(
         tx_logger.logs,
@@ -1010,15 +954,11 @@ fn retire_validator_works() {
         )
         .expect("Failed to commit transaction");
 
-    let expected_receipt = RetireValidatorReceipt {
-        was_active: true,
-        was_parked: false,
-    };
+    let expected_receipt = RetireValidatorReceipt { was_active: true };
     assert_eq!(receipt, Some(expected_receipt.into()));
 
-    assert!(!staking_contract.parked_set.contains(&validator_address));
     assert!(!staking_contract
-        .current_disabled_slots
+        .current_epoch_disabled_slots
         .contains_key(&validator_address));
     assert!(!staking_contract
         .previous_epoch_disabled_slots
@@ -2162,7 +2102,7 @@ fn slash_inherents_work() {
         .expect("Failed to commit inherent");
 
     let expected_receipt = SlashReceipt {
-        newly_parked: true,
+        newly_deactivated: true,
         newly_disabled: true,
         newly_lost_rewards: true,
     };
@@ -2176,23 +2116,22 @@ fn slash_inherents_work() {
                 event_block: slot.event_block,
                 slot: slot.slot,
                 newly_disabled: true,
+                newly_deactivated: true,
             },
-            Log::Park {
+            Log::DeactivateValidator {
                 validator_address: slot.validator_address.clone(),
-                event_block: slot.event_block,
             },
         ]
     );
 
-    assert!(staking_contract.parked_set.contains(&validator_address));
     assert!(staking_contract
-        .current_lost_rewards
+        .current_batch_lost_rewards
         .contains(slot.slot as usize));
     assert!(!staking_contract
         .previous_batch_lost_rewards
         .contains(slot.slot as usize));
     assert!(staking_contract
-        .current_disabled_slots
+        .current_epoch_disabled_slots
         .get(&validator_address)
         .unwrap()
         .contains(&slot.slot));
@@ -2226,7 +2165,7 @@ fn slash_inherents_work() {
         .expect("Failed to commit inherent");
 
     let expected_receipt = SlashReceipt {
-        newly_parked: true,
+        newly_deactivated: true,
         newly_disabled: true,
         newly_lost_rewards: true,
     };
@@ -2240,23 +2179,22 @@ fn slash_inherents_work() {
                 event_block: 2,
                 slot: slot.slot,
                 newly_disabled: true,
+                newly_deactivated: true,
             },
-            Log::Park {
+            Log::DeactivateValidator {
                 validator_address: slot.validator_address.clone(),
-                event_block: 1 + Policy::blocks_per_batch(),
             },
         ]
     );
 
-    assert!(staking_contract.parked_set.contains(&validator_address));
     assert!(!staking_contract
-        .current_lost_rewards
+        .current_batch_lost_rewards
         .contains(slot.slot as usize));
     assert!(staking_contract
         .previous_batch_lost_rewards
         .contains(slot.slot as usize));
     assert!(staking_contract
-        .current_disabled_slots
+        .current_epoch_disabled_slots
         .get(&validator_address)
         .unwrap()
         .contains(&slot.slot));
@@ -2290,7 +2228,7 @@ fn slash_inherents_work() {
         .expect("Failed to commit inherent");
 
     let expected_receipt = SlashReceipt {
-        newly_parked: true,
+        newly_deactivated: true,
         newly_disabled: false,
         newly_lost_rewards: true,
     };
@@ -2304,23 +2242,22 @@ fn slash_inherents_work() {
                 event_block: slot.event_block,
                 slot: slot.slot,
                 newly_disabled: false,
+                newly_deactivated: true
             },
-            Log::Park {
+            Log::DeactivateValidator {
                 validator_address: slot.validator_address,
-                event_block: 1 + Policy::blocks_per_epoch(),
             },
         ]
     );
 
-    assert!(staking_contract.parked_set.contains(&validator_address));
     assert!(!staking_contract
-        .current_lost_rewards
+        .current_batch_lost_rewards
         .contains(slot.slot as usize));
     assert!(staking_contract
         .previous_batch_lost_rewards
         .contains(slot.slot as usize));
     assert!(staking_contract
-        .current_disabled_slots
+        .current_epoch_disabled_slots
         .get(&validator_address)
         .is_none());
     assert!(staking_contract
@@ -2350,7 +2287,7 @@ fn finalize_batch_inherents_works() {
     let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
 
     // Prepare the staking contract.
-    staking_contract.current_lost_rewards.insert(0);
+    staking_contract.current_batch_lost_rewards.insert(0);
     staking_contract.previous_batch_lost_rewards.insert(1);
 
     // Works in the valid case.
@@ -2370,10 +2307,9 @@ fn finalize_batch_inherents_works() {
     assert_eq!(receipt, None);
     assert!(logs.is_empty());
 
-    assert!(staking_contract.parked_set.is_empty());
-    assert!(staking_contract.current_lost_rewards.is_empty());
+    assert!(staking_contract.current_batch_lost_rewards.is_empty());
     assert!(staking_contract.previous_batch_lost_rewards.contains(0));
-    assert!(staking_contract.current_disabled_slots.is_empty());
+    assert!(staking_contract.current_epoch_disabled_slots.is_empty());
     assert!(staking_contract.previous_epoch_disabled_slots.is_empty());
 
     // Cannot revert the inherent.
@@ -2401,24 +2337,63 @@ fn finalize_epoch_inherents_works() {
 
     let validator_address = validator_address();
 
-    // Prepare the staking contract.
-    staking_contract
-        .parked_set
-        .insert(validator_address.clone());
-    staking_contract.current_lost_rewards.insert(0);
-    staking_contract.previous_batch_lost_rewards.insert(1);
-    let mut set_c = BTreeSet::new();
-    set_c.insert(0);
-    staking_contract
-        .current_disabled_slots
-        .insert(validator_address.clone(), set_c.clone());
-    let mut set_p = BTreeSet::new();
-    set_p.insert(1);
+    // Pre polutate the previous epoch and batch related sets.
+    // To test proper behaviour upon epoch finalization.
+    staking_contract.previous_batch_lost_rewards.insert(10);
     staking_contract
         .previous_epoch_disabled_slots
-        .insert(validator_address.clone(), set_p);
+        .insert(Address::END_ADDRESS, BTreeSet::new());
 
-    // Works in the valid case.
+    // Slash the validator slot
+    let inherent = Inherent::Slash {
+        slot: SlashedSlot {
+            slot: 1,
+            validator_address: validator_address.clone(),
+            event_block: Policy::blocks_per_epoch() - 1,
+        },
+    };
+    let mut logs = vec![];
+    let mut inherent_logger = InherentLogger::new(&mut logs);
+    let receipt = staking_contract
+        .commit_inherent(
+            &inherent,
+            &block_state,
+            data_store.write(&mut db_txn),
+            &mut inherent_logger,
+        )
+        .expect("Failed to commit inherent");
+    assert_eq!(
+        receipt,
+        Some(
+            SlashReceipt {
+                newly_deactivated: true,
+                newly_disabled: true,
+                newly_lost_rewards: true
+            }
+            .into()
+        )
+    );
+    assert_eq!(
+        logs,
+        vec![
+            Log::Slash {
+                validator_address: validator_address.clone(),
+                event_block: Policy::blocks_per_epoch() - 1,
+                slot: 1,
+                newly_disabled: true,
+                newly_deactivated: true
+            },
+            Log::DeactivateValidator {
+                validator_address: validator_address.clone(),
+            }
+        ]
+    );
+
+    assert!(!staking_contract
+        .active_validators
+        .contains_key(&validator_address));
+
+    // Finalize epoch to check that the relevant sets are set properly.
     let inherent = Inherent::FinalizeEpoch;
 
     let mut logs = vec![];
@@ -2433,25 +2408,16 @@ fn finalize_epoch_inherents_works() {
         .expect("Failed to commit inherent");
 
     assert_eq!(receipt, None);
-    assert_eq!(
-        logs,
-        vec![Log::DeactivateValidator {
-            validator_address: validator_address.clone(),
-        }]
-    );
+    assert_eq!(logs, vec![]);
 
-    assert!(!staking_contract
-        .active_validators
-        .contains_key(&validator_address));
+    assert!(staking_contract.current_batch_lost_rewards.is_empty());
+    assert!(staking_contract.current_epoch_disabled_slots.is_empty());
 
-    assert!(staking_contract.parked_set.is_empty());
-
-    assert!(staking_contract.current_lost_rewards.is_empty());
     let mut bitset = BitSet::new();
-    bitset.insert(0);
+    bitset.insert(1);
     assert_eq!(staking_contract.previous_batch_lost_rewards, bitset);
-
-    assert!(staking_contract.current_disabled_slots.is_empty());
+    let mut set_c = BTreeSet::new();
+    set_c.insert(1);
     assert_eq!(
         staking_contract
             .previous_epoch_disabled_slots
@@ -2647,6 +2613,12 @@ fn revert_slash_inherent(
     validator_address: &Address,
     slot: u16,
 ) {
+    let newly_disabled = staking_contract
+        .current_epoch_disabled_slots
+        .contains_key(validator_address);
+    let newly_deactivated = !staking_contract
+        .active_validators
+        .contains_key(validator_address);
     let mut logs = vec![];
     let mut inherent_logger = InherentLogger::new(&mut logs);
     staking_contract
@@ -2667,28 +2639,27 @@ fn revert_slash_inherent(
     assert_eq!(
         logs,
         vec![
-            Log::Park {
+            Log::DeactivateValidator {
                 validator_address: validator_address.clone(),
-                event_block: block_state.number,
             },
             Log::Slash {
                 validator_address: validator_address.clone(),
                 event_block,
                 slot,
-                newly_disabled: true,
+                newly_disabled,
+                newly_deactivated,
             },
         ]
     );
 
-    assert!(!staking_contract.parked_set.contains(validator_address));
     assert!(!staking_contract
-        .current_lost_rewards
+        .current_batch_lost_rewards
         .contains(slot as usize));
     assert!(!staking_contract
         .previous_batch_lost_rewards
         .contains(slot as usize));
     assert!(staking_contract
-        .current_disabled_slots
+        .current_epoch_disabled_slots
         .get(validator_address)
         .is_none());
     assert!(staking_contract

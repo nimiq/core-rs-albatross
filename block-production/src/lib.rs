@@ -322,10 +322,10 @@ impl BlockProducer {
         let staking_contract = blockchain.get_staking_contract();
 
         // Calculate the disabled set for the current validator set.
-        let disabled_set = staking_contract.current_disabled_slots();
+        let disabled_set = staking_contract.current_epoch_disabled_slots();
 
         // Calculate the lost reward set for the current validator set.
-        let lost_reward_set = staking_contract.current_lost_rewards();
+        let lost_reward_set = staking_contract.current_batch_lost_rewards();
 
         // Calculate the reward transactions.
         let reward_transactions = blockchain.create_reward_transactions(

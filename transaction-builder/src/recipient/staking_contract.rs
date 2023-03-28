@@ -14,7 +14,6 @@ use crate::recipient::Recipient;
 ///         * Update (signaling)
 ///         * Deactivate (signaling)
 ///         * Reactivate (signaling)
-///         * Unpark (signaling)
 ///     - Staker
 ///         * Create
 ///         * Stake
@@ -83,20 +82,6 @@ impl StakingRecipientBuilder {
         self
     }
 
-    /// This method allows to prevent a validator from being automatically retired after slashing.
-    /// After misbehavior or being offline, a validator might be slashed.
-    /// This automatically moves a validator into a *parked* state. This means that
-    /// this validator will be automatically retired on the next election block.
-    /// This signaling transaction will prevent the automatic retirement.
-    /// It needs to be signed by the key pair corresponding to the signing key.
-    pub fn unpark_validator(&mut self, validator_address: Address) -> &mut Self {
-        self.data = Some(IncomingStakingTransactionData::UnparkValidator {
-            validator_address,
-            proof: Default::default(),
-        });
-        self
-    }
-
     /// This method allows to deactivate a validator entry. Inactive validators will not be considered
     /// for the validator selection.
     /// It needs to be signed by the key pair corresponding to the signing key.
@@ -110,7 +95,8 @@ impl StakingRecipientBuilder {
 
     /// This method allows to reactivate a validator. This reverts the inactivation of a validator
     /// and will result in the validator being considered for the validator selection again.
-    /// This is also used for the automatic reactivation of a validator if the setting is active.
+    /// This also resets any disabled slots of the given validator if it is selected in current
+    /// epoch and has previously been slashed.
     /// It needs to be signed by the key pair corresponding to the signing key.
     pub fn reactivate_validator(&mut self, validator_address: Address) -> &mut Self {
         self.data = Some(IncomingStakingTransactionData::ReactivateValidator {

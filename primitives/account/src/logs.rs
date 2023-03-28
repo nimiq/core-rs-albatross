@@ -99,9 +99,6 @@ pub enum Log {
     ReactivateValidator { validator_address: Address },
 
     #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
-    UnparkValidator { validator_address: Address },
-
-    #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
     CreateStaker {
         staker_address: Address,
         validator_address: Option<Address>,
@@ -145,17 +142,12 @@ pub enum Log {
     PayoutReward { to: Address, value: Coin },
 
     #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
-    Park {
-        validator_address: Address,
-        event_block: u32,
-    },
-
-    #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
     Slash {
         validator_address: Address,
         event_block: u32,
         slot: u16,
         newly_disabled: bool,
+        newly_deactivated: bool,
     },
 
     #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
@@ -230,7 +222,6 @@ impl Log {
             }
             Log::DeactivateValidator { validator_address } => validator_address == address,
             Log::ReactivateValidator { validator_address } => validator_address == address,
-            Log::UnparkValidator { validator_address } => validator_address == address,
             Log::CreateStaker {
                 staker_address,
                 validator_address,
@@ -285,9 +276,6 @@ impl Log {
                         .unwrap_or(false)
             }
             Log::PayoutReward { to, .. } => to == address,
-            Log::Park {
-                validator_address, ..
-            } => validator_address == address,
             Log::Slash {
                 validator_address, ..
             } => validator_address == address,
@@ -374,6 +362,12 @@ impl<'a> InherentLogger<'a> {
     pub fn rev_log(&mut self) {
         if let Some(ref mut inherents) = self.inherents {
             inherents.reverse()
+        }
+    }
+
+    pub(crate) fn push_tx_logger(&mut self, mut tx_logger: TransactionLog) {
+        if let Some(ref mut inherents) = self.inherents {
+            inherents.append(&mut tx_logger.logs)
         }
     }
 }

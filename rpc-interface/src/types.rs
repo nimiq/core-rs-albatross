@@ -394,13 +394,6 @@ pub struct SlashedSlots {
     pub disabled: BitSet,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ParkedSet {
-    pub block_number: u32,
-    pub validators: Vec<Address>,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ForkProof {
@@ -864,7 +857,6 @@ pub enum LogType {
     ValidatorFeeDeduction,
     DeactivateValidator,
     ReactivateValidator,
-    UnparkValidator,
     CreateStaker,
     Stake,
     UpdateStaker,
@@ -873,7 +865,6 @@ pub enum LogType {
     DeleteValidator,
     Unstake,
     PayoutReward,
-    Park,
     Slash,
     RevertContract,
     FailedTransaction,
@@ -914,7 +905,6 @@ impl LogType {
             Log::UpdateValidator { .. } => Self::UpdateValidator,
             Log::DeactivateValidator { .. } => Self::DeactivateValidator,
             Log::ReactivateValidator { .. } => Self::ReactivateValidator,
-            Log::UnparkValidator { .. } => Self::UnparkValidator,
             Log::CreateStaker { .. } => Self::CreateStaker,
             Log::Stake { .. } => Self::Stake,
             Log::UpdateStaker { .. } => Self::UpdateStaker,
@@ -922,7 +912,6 @@ impl LogType {
             Log::DeleteValidator { .. } => Self::DeleteValidator,
             Log::Unstake { .. } => Self::Unstake,
             Log::PayoutReward { .. } => Self::PayoutReward,
-            Log::Park { .. } => Self::Park,
             Log::Slash { .. } => Self::Slash,
             Log::RevertContract { .. } => Self::RevertContract,
             Log::FailedTransaction { .. } => Self::FailedTransaction,

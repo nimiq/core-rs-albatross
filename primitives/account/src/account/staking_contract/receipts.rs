@@ -12,7 +12,7 @@ use crate::{convert_receipt, AccountReceipt};
 /// those inherents/transactions.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct SlashReceipt {
-    pub newly_parked: bool,
+    pub newly_deactivated: bool,
     pub newly_disabled: bool,
     pub newly_lost_rewards: bool,
 }
@@ -28,28 +28,16 @@ pub struct UpdateValidatorReceipt {
 convert_receipt!(UpdateValidatorReceipt);
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub struct UnparkValidatorReceipt {
-    #[beserial(len_type(u16))]
-    pub current_disabled_slots: Option<BTreeSet<u16>>,
-}
-convert_receipt!(UnparkValidatorReceipt);
-
-#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub struct DeactivateValidatorReceipt {
-    pub was_parked: bool,
-}
-convert_receipt!(DeactivateValidatorReceipt);
-
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct ReactivateValidatorReceipt {
     pub was_inactive_since: u32,
+    #[beserial(len_type(u16))]
+    pub current_epoch_disabled_slots: Option<BTreeSet<u16>>,
 }
 convert_receipt!(ReactivateValidatorReceipt);
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct RetireValidatorReceipt {
     pub was_active: bool,
-    pub was_parked: bool,
 }
 convert_receipt!(RetireValidatorReceipt);
 

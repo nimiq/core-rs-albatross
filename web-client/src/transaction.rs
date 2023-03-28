@@ -482,11 +482,7 @@ impl Transaction {
                             new_proof_of_knowledge: new_proof_of_knowledge
                                 .map(|proof_of_knowledge| proof_of_knowledge.to_hex()),
                         }),
-                        IncomingStakingTransactionData::UnparkValidator {
-                            validator_address,
-                            ..
-                        }
-                        | IncomingStakingTransactionData::DeactivateValidator {
+                        IncomingStakingTransactionData::DeactivateValidator {
                             validator_address,
                             ..
                         }
@@ -638,7 +634,7 @@ pub struct PlainUpdateValidatorData {
     new_proof_of_knowledge: Option<String>,
 }
 
-// Used for UnparkValidator, DeactivateValidator & ReactivateValidator, as they have the same fields.
+// Used for DeactivateValidator & ReactivateValidator, as they have the same fields.
 #[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct PlainValidatorData {

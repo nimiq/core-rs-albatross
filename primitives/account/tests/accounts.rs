@@ -911,7 +911,6 @@ fn can_revert_transactions() {
             IncomingType::CreateHTLC,
             IncomingType::CreateValidator,
             IncomingType::UpdateValidator,
-            IncomingType::UnparkValidator,
             IncomingType::DeactivateValidator,
             IncomingType::ReactivateValidator,
             IncomingType::RetireValidator,
@@ -927,7 +926,6 @@ fn can_revert_transactions() {
                 recipient,
                 IncomingType::CreateValidator
                     | IncomingType::UpdateValidator
-                    | IncomingType::UnparkValidator
                     | IncomingType::DeactivateValidator
                     | IncomingType::ReactivateValidator
                     | IncomingType::RetireValidator
@@ -950,7 +948,6 @@ fn can_revert_transactions() {
                     && matches!(
                         recipient,
                         IncomingType::UpdateValidator
-                            | IncomingType::UnparkValidator
                             | IncomingType::RetireValidator
                             | IncomingType::DeactivateValidator
                             | IncomingType::ReactivateValidator

@@ -1,9 +1,8 @@
 use beserial::Serialize;
 use log::debug;
 use nimiq_account::{
-    Account, AccountInherentInteraction, Accounts, BasicAccount, BlockState,
-    HashedTimeLockedContract, InherentLogger, StakingContractStoreWrite, TransactionLog,
-    VestingContract,
+    Account, Accounts, BasicAccount, BlockState, HashedTimeLockedContract,
+    StakingContractStoreWrite, TransactionLog, VestingContract,
 };
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_database::traits::{Database, WriteTransaction};
@@ -11,7 +10,6 @@ use nimiq_hash::{Blake2bHash, Blake2bHasher, Hasher};
 use nimiq_keys::{Address, KeyPair, SecureGenerate};
 use nimiq_primitives::{
     account::AccountType, coin::Coin, key_nibbles::KeyNibbles, networks::NetworkId, policy::Policy,
-    slots::SlashedSlot,
 };
 use nimiq_transaction::{
     account::{
@@ -21,7 +19,6 @@ use nimiq_transaction::{
         staking_contract::IncomingStakingTransactionData,
         vesting_contract::CreationTransactionData as VestingCreationTransactionData,
     },
-    inherent::Inherent,
     SignatureProof, Transaction,
 };
 use nimiq_transaction_builder::TransactionProofBuilder;
@@ -30,7 +27,6 @@ use rand::{CryptoRng, Rng};
 pub enum ValidatorState {
     Active,
     Inactive,
-    Parked,
     Retired,
 }
 
@@ -77,7 +73,6 @@ pub enum IncomingType {
     // Staking Contract types
     CreateValidator,
     UpdateValidator,
-    UnparkValidator,
     DeactivateValidator,
     ReactivateValidator,
     RetireValidator,
@@ -92,7 +87,6 @@ impl IncomingType {
             self,
             IncomingType::CreateValidator
                 | IncomingType::UpdateValidator
-                | IncomingType::UnparkValidator
                 | IncomingType::DeactivateValidator
                 | IncomingType::ReactivateValidator
                 | IncomingType::RetireValidator
@@ -115,7 +109,6 @@ impl From<IncomingType> for AccountType {
             IncomingType::CreateHTLC => AccountType::HTLC,
             IncomingType::CreateValidator => AccountType::Staking,
             IncomingType::UpdateValidator => AccountType::Staking,
-            IncomingType::UnparkValidator => AccountType::Staking,
             IncomingType::DeactivateValidator => AccountType::Staking,
             IncomingType::ReactivateValidator => AccountType::Staking,
             IncomingType::RetireValidator => AccountType::Staking,
@@ -591,24 +584,6 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
                     staker_key_pair,
                 }
             }
-            IncomingType::UnparkValidator => {
-                let (mut validator_key_pair, _, staker_key_pair) =
-                    self.create_validator_and_staker(balance, ValidatorState::Parked);
-
-                // We can make the transaction fail by using a non-existing validator address.
-                if fail_recipient {
-                    validator_key_pair = KeyPair::generate(&mut self.rng);
-                }
-
-                IncomingAccountData::Staking {
-                    parameters: IncomingStakingTransactionData::UnparkValidator {
-                        validator_address: Address::from(&validator_key_pair),
-                        proof: SignatureProof::default(),
-                    },
-                    validator_key_pair,
-                    staker_key_pair,
-                }
-            }
             IncomingType::DeactivateValidator => {
                 let (mut validator_key_pair, _, staker_key_pair) =
                     self.create_validator_and_staker(balance, ValidatorState::Active);
@@ -779,22 +754,6 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
                         &mut TransactionLog::empty(),
                     )
                     .expect("Failed to deactivate validator");
-            }
-            ValidatorState::Parked => {
-                staking_contract
-                    .commit_inherent(
-                        &Inherent::Slash {
-                            slot: SlashedSlot {
-                                slot: 0,
-                                validator_address: Address::from(&validator_key_pair),
-                                event_block: 1,
-                            },
-                        },
-                        &BlockState { number: 1, time: 0 },
-                        data_store_write,
-                        &mut InherentLogger::empty(),
-                    )
-                    .expect("Failed to slash and park validator");
             }
             ValidatorState::Retired => {
                 staking_contract

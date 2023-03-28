@@ -1,5 +1,6 @@
 use std::{collections::BTreeSet, mem};
 
+use nimiq_keys::Address;
 use nimiq_primitives::{
     account::{AccountError, AccountType},
     coin::Coin,
@@ -115,16 +116,6 @@ impl AccountTransactionInteraction for StakingContract {
                 )
                 .map(|receipt| Some(receipt.into()))
             }
-            IncomingStakingTransactionData::UnparkValidator {
-                validator_address,
-                proof,
-            } => {
-                // Get the signer's address from the proof.
-                let signer = proof.compute_signer();
-
-                self.unpark_validator(&mut store, &validator_address, &signer, tx_logger)
-                    .map(|receipt| Some(receipt.into()))
-            }
             IncomingStakingTransactionData::DeactivateValidator {
                 validator_address,
                 proof,
@@ -139,7 +130,7 @@ impl AccountTransactionInteraction for StakingContract {
                     block_state.number,
                     tx_logger,
                 )
-                .map(|receipt| Some(receipt.into()))
+                .map(|_| None)
             }
             IncomingStakingTransactionData::ReactivateValidator {
                 validator_address,
@@ -225,20 +216,9 @@ impl AccountTransactionInteraction for StakingContract {
 
                 self.revert_update_validator(&mut store, &validator_address, receipt, tx_logger)
             }
-            IncomingStakingTransactionData::UnparkValidator {
-                validator_address, ..
-            } => {
-                let receipt = receipt.ok_or(AccountError::InvalidReceipt)?.try_into()?;
-
-                self.revert_unpark_validator(&mut store, &validator_address, receipt, tx_logger)
-            }
             IncomingStakingTransactionData::DeactivateValidator {
                 validator_address, ..
-            } => {
-                let receipt = receipt.ok_or(AccountError::InvalidReceipt)?.try_into()?;
-
-                self.revert_deactivate_validator(&mut store, &validator_address, receipt, tx_logger)
-            }
+            } => self.revert_deactivate_validator(&mut store, &validator_address, tx_logger),
             IncomingStakingTransactionData::ReactivateValidator {
                 validator_address, ..
             } => {
@@ -622,23 +602,21 @@ impl AccountInherentInteraction for StakingContract {
         match inherent {
             Inherent::Slash { slot } => {
                 // Check that the slashed validator does exist.
-                let store = StakingContractStoreWrite::new(&mut data_store);
-                store.expect_validator(&slot.validator_address)?;
+                let mut store = StakingContractStoreWrite::new(&mut data_store);
+                let validator = store.expect_validator(&slot.validator_address)?;
 
-                // Add the validator address to the parked set.
-                // TODO: The inherent might have originated from a fork proof for the previous epoch.
-                //  Right now, we don't care and start the parking period in the epoch the proof has been submitted.
-                let newly_parked = self.parked_set.insert(slot.validator_address.clone());
+                // Deactivate validator
+                let newly_deactivated = validator.is_active();
 
                 // Fork proof from previous epoch should affect:
                 // - previous_lost_rewards
                 // - previous_disabled_slots (not needed, because it's redundant with the lost rewards)
                 // Fork proof from current epoch, but previous batch should affect:
                 // - previous_lost_rewards
-                // - current_disabled_slots
+                // - current_epoch_disabled_slots
                 // All others:
-                // - current_lost_rewards
-                // - current_disabled_slots
+                // - current_batch_lost_rewards
+                // - current_epoch_disabled_slots
                 let newly_disabled;
                 let newly_lost_rewards;
 
@@ -659,17 +637,18 @@ impl AccountInherentInteraction for StakingContract {
                     self.previous_batch_lost_rewards.insert(slot.slot as usize);
 
                     newly_disabled = self
-                        .current_disabled_slots
+                        .current_epoch_disabled_slots
                         .entry(slot.validator_address.clone())
                         .or_insert_with(BTreeSet::new)
                         .insert(slot.slot);
                 } else {
-                    newly_lost_rewards = !self.current_lost_rewards.contains(slot.slot as usize);
+                    newly_lost_rewards =
+                        !self.current_batch_lost_rewards.contains(slot.slot as usize);
 
-                    self.current_lost_rewards.insert(slot.slot as usize);
+                    self.current_batch_lost_rewards.insert(slot.slot as usize);
 
                     newly_disabled = self
-                        .current_disabled_slots
+                        .current_epoch_disabled_slots
                         .entry(slot.validator_address.clone())
                         .or_insert_with(BTreeSet::new)
                         .insert(slot.slot);
@@ -681,18 +660,24 @@ impl AccountInherentInteraction for StakingContract {
                         event_block: slot.event_block,
                         slot: slot.slot,
                         newly_disabled,
+                        newly_deactivated,
                     });
                 }
-                if newly_parked {
-                    inherent_logger.push_log(Log::Park {
-                        validator_address: slot.validator_address.clone(),
-                        event_block: block_state.number,
-                    });
+                if newly_deactivated {
+                    let mut tx_logger = TransactionLog::empty();
+                    self.deactivate_validator(
+                        &mut store,
+                        &slot.validator_address,
+                        &Address::from(&validator.signing_key),
+                        block_state.number,
+                        &mut tx_logger,
+                    )?;
+                    inherent_logger.push_tx_logger(tx_logger);
                 }
 
                 Ok(Some(
                     SlashReceipt {
-                        newly_parked,
+                        newly_deactivated,
                         newly_disabled,
                         newly_lost_rewards,
                     }
@@ -701,38 +686,19 @@ impl AccountInherentInteraction for StakingContract {
             }
             Inherent::FinalizeBatch => {
                 // Clear the lost rewards set.
-                self.previous_batch_lost_rewards = mem::take(&mut self.current_lost_rewards);
+                self.previous_batch_lost_rewards = mem::take(&mut self.current_batch_lost_rewards);
 
                 // Since finalized batches cannot be reverted, we don't need any receipts.
                 Ok(None)
             }
             Inherent::FinalizeEpoch => {
                 // Clear the lost rewards set.
-                self.previous_batch_lost_rewards = mem::take(&mut self.current_lost_rewards);
-
-                // Parking set and disabled slots are cleared on epoch changes.
-                // But first, retire all validators that have been parked this epoch.
-                let mut store = StakingContractStoreWrite::new(&mut data_store);
-                for validator_address in &self.parked_set {
-                    // Get the validator and update it.
-                    let mut validator = store.expect_validator(validator_address)?;
-                    validator.inactive_since = Some(block_state.number);
-                    store.put_validator(validator_address, validator);
-
-                    // Update the staking contract.
-                    self.active_validators.remove(validator_address);
-
-                    inherent_logger.push_log(Log::DeactivateValidator {
-                        validator_address: validator_address.clone(),
-                    });
-                }
-
-                // Now we clear the parking set.
-                self.parked_set = BTreeSet::new();
+                self.previous_batch_lost_rewards = mem::take(&mut self.current_batch_lost_rewards);
 
                 // And the disabled slots.
                 // Optimization: We actually only need the old slots for the first batch of the epoch.
-                self.previous_epoch_disabled_slots = mem::take(&mut self.current_disabled_slots);
+                self.previous_epoch_disabled_slots =
+                    mem::take(&mut self.current_epoch_disabled_slots);
 
                 // Since finalized epochs cannot be reverted, we don't need any receipts.
                 Ok(None)
@@ -746,7 +712,7 @@ impl AccountInherentInteraction for StakingContract {
         inherent: &Inherent,
         block_state: &BlockState,
         receipt: Option<AccountReceipt>,
-        _data_store: DataStoreWrite,
+        mut data_store: DataStoreWrite,
         inherent_logger: &mut InherentLogger,
     ) -> Result<(), AccountError> {
         match inherent {
@@ -755,17 +721,15 @@ impl AccountInherentInteraction for StakingContract {
                     receipt.ok_or(AccountError::InvalidReceipt)?.try_into()?;
 
                 // Only remove if it was not already slashed.
-                if receipt.newly_parked {
-                    let has_been_removed = self.parked_set.remove(&slot.validator_address);
+                if receipt.newly_deactivated {
+                    let mut tx_logger = TransactionLog::empty();
+                    self.revert_deactivate_validator(
+                        &mut StakingContractStoreWrite::new(&mut data_store),
+                        &slot.validator_address,
+                        &mut tx_logger,
+                    )?;
 
-                    if !has_been_removed {
-                        return Err(AccountError::InvalidInherent);
-                    }
-
-                    inherent_logger.push_log(Log::Park {
-                        validator_address: slot.validator_address.clone(),
-                        event_block: block_state.number,
-                    });
+                    inherent_logger.push_tx_logger(tx_logger);
                 }
 
                 // Fork proof from previous epoch should affect:
@@ -773,24 +737,25 @@ impl AccountInherentInteraction for StakingContract {
                 // - previous_disabled_slots (not needed, because it's redundant with the lost rewards)
                 // Fork proof from current epoch, but previous batch should affect:
                 // - previous_lost_rewards
-                // - current_disabled_slots
+                // - current_epoch_disabled_slots
                 // All others:
-                // - current_lost_rewards
-                // - current_disabled_slots
+                // - current_batch_lost_rewards
+                // - current_epoch_disabled_slots
                 if receipt.newly_disabled {
                     if Policy::epoch_at(slot.event_block) < Policy::epoch_at(block_state.number) {
                         // Nothing to do.
                     } else {
                         let is_empty = {
                             let entry = self
-                                .current_disabled_slots
+                                .current_epoch_disabled_slots
                                 .get_mut(&slot.validator_address)
                                 .unwrap();
                             entry.remove(&slot.slot);
                             entry.is_empty()
                         };
                         if is_empty {
-                            self.current_disabled_slots.remove(&slot.validator_address);
+                            self.current_epoch_disabled_slots
+                                .remove(&slot.validator_address);
                         }
                     }
                 }
@@ -800,15 +765,15 @@ impl AccountInherentInteraction for StakingContract {
                     {
                         self.previous_batch_lost_rewards.remove(slot.slot as usize);
                     } else {
-                        self.current_lost_rewards.remove(slot.slot as usize);
+                        self.current_batch_lost_rewards.remove(slot.slot as usize);
                     }
 
-                    // Ordering matters here for testing purposes. The vec will be very small, therefore the performance hit is irrelevant.
                     inherent_logger.push_log(Log::Slash {
                         validator_address: slot.validator_address.clone(),
                         event_block: slot.event_block,
                         slot: slot.slot,
-                        newly_disabled: true,
+                        newly_disabled: receipt.newly_disabled,
+                        newly_deactivated: receipt.newly_deactivated,
                     });
                 }
 

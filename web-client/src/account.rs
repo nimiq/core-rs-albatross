@@ -36,10 +36,9 @@ pub struct PlainHtlcContract {
 pub struct PlainStakingContract {
     balance: u64,
     active_validators: Vec<(String, u64)>,
-    parked_set: Vec<String>,
-    current_lost_rewards: String,
+    current_batch_lost_rewards: String,
     previous_lost_rewards: String,
-    current_disabled_slots: Vec<(String, Vec<u16>)>,
+    current_epoch_disabled_slots: Vec<(String, Vec<u16>)>,
     previous_disabled_slots: Vec<(String, Vec<u16>)>,
 }
 
@@ -95,15 +94,10 @@ impl PlainAccount {
                         )
                     })
                     .collect(),
-                parked_set: acc
-                    .parked_set
-                    .iter()
-                    .map(|address| address.to_user_friendly_address())
-                    .collect(),
-                current_lost_rewards: acc.current_lost_rewards.to_string(),
+                current_batch_lost_rewards: acc.current_batch_lost_rewards.to_string(),
                 previous_lost_rewards: acc.previous_batch_lost_rewards.to_string(),
-                current_disabled_slots: acc
-                    .current_disabled_slots
+                current_epoch_disabled_slots: acc
+                    .current_epoch_disabled_slots
                     .iter()
                     .map(|(address, slots)| {
                         (
@@ -156,7 +150,7 @@ impl PlainStaker {
 #[derive(serde::Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct PlainValidator {
-    /// The public key used to sign blocks. It is also used to retire, reactivate and unpark the validator.
+    /// The public key used to sign blocks. It is also used to retire and reactivate the validator.
     pub signing_public_key: String,
     /// The voting public key, it is used to vote for skip and macro blocks.
     pub voting_public_key: String,

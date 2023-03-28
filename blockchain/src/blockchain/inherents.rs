@@ -175,7 +175,7 @@ impl Blockchain {
             staking_contract.previous_epoch_disabled_slots()
         } else {
             // Use the current epoch's disabled slots for the rest of the batches
-            staking_contract.current_disabled_slots()
+            staking_contract.current_epoch_disabled_slots()
         };
         let slashed_set = lost_rewards_set | disabled_set;
 

@@ -373,24 +373,6 @@ pub trait ConsensusInterface {
         validity_start_height: ValidityStartHeight,
     ) -> RPCResult<Blake2bHash, (), Self::Error>;
 
-    async fn create_unpark_validator_transaction(
-        &mut self,
-        sender_wallet: Address,
-        validator_address: Address,
-        signing_secret_key: String,
-        fee: Coin,
-        validity_start_height: ValidityStartHeight,
-    ) -> RPCResult<String, (), Self::Error>;
-
-    async fn send_unpark_validator_transaction(
-        &mut self,
-        sender_wallet: Address,
-        validator_address: Address,
-        signing_secret_key: String,
-        fee: Coin,
-        validity_start_height: ValidityStartHeight,
-    ) -> RPCResult<Blake2bHash, (), Self::Error>;
-
     async fn create_retire_validator_transaction(
         &mut self,
         sender_wallet: Address,

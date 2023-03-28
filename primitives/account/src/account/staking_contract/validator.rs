@@ -9,10 +9,7 @@ use nimiq_primitives::{account::AccountError, policy::Policy};
 #[cfg(feature = "interaction-traits")]
 use crate::{
     account::staking_contract::{
-        receipts::{
-            DeactivateValidatorReceipt, DeleteValidatorReceipt, ReactivateValidatorReceipt,
-            UnparkValidatorReceipt, UpdateValidatorReceipt,
-        },
+        receipts::{DeleteValidatorReceipt, ReactivateValidatorReceipt, UpdateValidatorReceipt},
         store::{
             StakingContractStoreReadOps, StakingContractStoreReadOpsExt, StakingContractStoreWrite,
         },
@@ -27,33 +24,29 @@ use crate::{
 /// 2. Update: Updates the validator.
 /// 3. Deactivate: Deactivates a validator. This action is reversible. (starts a cooldown period used for Delete).
 /// 4. Reactivate: Reactivates a validator.
-/// 5. Unpark: Prevents a validator from being automatically deactivated.
-/// 6. Delete: Deletes a validator (validator must have been inactive for the cooldown period).
-/// 7. Retire: Permanently retires a validator. This action is required for deletion.
+/// 5. Delete: Deletes a validator (validator must have been inactive for the cooldown period).
+/// 6. Retire: Permanently retires a validator. This action is required for deletion.
 ///
 /// The actions can be summarized by the following state diagram:
-///                                  retire
-///            +------------------------------------------------+
-///            |                                                |
-///        +---+----+         deactivate         +----------+   |    +---------+
-/// create |        +--------------------------->+          |   +--->+         |  delete
-///+------>+ active |                            | inactive +------->+ retired +---------->
-///        |        +<-- -- -- -- -- -- -- -- -- +          | retire |         |
-///        +-+--+---+         reactivate         +-----+----+        +---------+
-///          |  ^      (*optional) automatically       ^
-///          |  |                                      |
-///          |  | unpark                               |
-/// slashing |  | (automatic within an epoch)          |  automatically
-///          |  |              +--------+              |
-///          |  +--------------+        |              |
-///          |                 | parked +--------------+
-///          +---------------->+        |
-///                            +--------+
+///           +---+----+                            +---------+   
+///   create  |        |            retire          |         |  delete
+///+--------->+ active +--------------------------->+ retired +----------->
+///           |        |                            |         |
+///           +-+--+---+                            +----+----+
+///             |  ^                                     ^
+///             |  |                                     |
+///             |  | reactivate                          |
+/// slashing    |  | (*optional) automatically           |  retire
+/// or          |  |              +----------+           |
+/// deactivate  |  +--------------+          |           |
+///             |                 | inactive +-----------+
+///             +---------------->+          |
+///                               +----------+
 ///
 /// (*optional) The validator my be set to automatically reactivate itself upon inactivation.
-///             If this setting is not enabled the state change is triggered manually.
+///             If this setting is not enabled the state change can only be triggered manually.
 ///
-/// Create, Update, Deactivate, Retire, Re-activate and Unpark are incoming transactions to the staking contract.
+/// Create, Update, Deactivate, Retire and Re-activate are incoming transactions to the staking contract.
 /// Delete is an outgoing transaction from the staking contract.
 /// To Create, Update or Delete, the cold key must be used (the one corresponding to the validator
 /// address). For the other transactions, the the signing key must be used.
@@ -62,7 +55,7 @@ pub struct Validator {
     /// The address of the validator. The corresponding key can be used to create, update or drop
     /// the validator.
     pub address: Address,
-    /// The public key used to sign blocks. It is also used to retire, reactivate and unpark the validator.
+    /// The public key used to sign blocks. It is also used to retire and reactivate the validator.
     pub signing_key: SchnorrPublicKey,
     /// The voting public key, it is used to vote for skip and macro blocks.
     pub voting_key: BlsPublicKey,
@@ -275,71 +268,7 @@ impl StakingContract {
         Ok(())
     }
 
-    /// Removes a validator from the parked set and the disabled slots. This is used by validators
-    /// after they get slashed so that they can produce blocks again.
-    pub fn unpark_validator(
-        &mut self,
-        store: &mut StakingContractStoreWrite,
-        validator_address: &Address,
-        signer: &Address,
-        tx_logger: &mut TransactionLog,
-    ) -> Result<UnparkValidatorReceipt, AccountError> {
-        // Get the validator.
-        let validator = store.expect_validator(validator_address)?;
-
-        // Check that the validator is currently parked.
-        if !self.parked_set.contains(validator_address) {
-            debug!("Validator {} is not parked", validator_address);
-            return Err(AccountError::InvalidForRecipient);
-        }
-
-        // Check that the signer is correct.
-        if *signer != Address::from(&validator.signing_key) {
-            debug!("The transaction signer doesn't match the signing key of the validator.");
-            return Err(AccountError::InvalidSignature);
-        }
-
-        // Remove the validator from the parked_set.
-        self.parked_set.remove(validator_address);
-
-        // Clear the validators current disabled slots.
-        let current_disabled_slots = self.current_disabled_slots.remove(validator_address);
-
-        tx_logger.push_log(Log::UnparkValidator {
-            validator_address: validator_address.clone(),
-        });
-
-        Ok(UnparkValidatorReceipt {
-            current_disabled_slots,
-        })
-    }
-
-    /// Reverts an unpark transaction.
-    pub fn revert_unpark_validator(
-        &mut self,
-        _store: &mut StakingContractStoreWrite,
-        validator_address: &Address,
-        receipt: UnparkValidatorReceipt,
-        tx_logger: &mut TransactionLog,
-    ) -> Result<(), AccountError> {
-        // Re-add validator to parked_set.
-        self.parked_set.insert(validator_address.clone());
-
-        // Re-add current and previous disabled slots.
-        if let Some(slots) = receipt.current_disabled_slots {
-            self.current_disabled_slots
-                .insert(validator_address.clone(), slots);
-        }
-
-        tx_logger.push_log(Log::UnparkValidator {
-            validator_address: validator_address.clone(),
-        });
-
-        Ok(())
-    }
-
-    /// Deactivates a validator. It is necessary to retire a validator before dropping it. This also
-    /// removes the validator from the parking set.
+    /// Deactivates a validator. It is necessary to retire a validator before dropping it.
     pub fn deactivate_validator(
         &mut self,
         store: &mut StakingContractStoreWrite,
@@ -347,7 +276,7 @@ impl StakingContract {
         signer: &Address,
         block_number: u32,
         tx_logger: &mut TransactionLog,
-    ) -> Result<DeactivateValidatorReceipt, AccountError> {
+    ) -> Result<(), AccountError> {
         // Get the validator.
         let mut validator = store.expect_validator(validator_address)?;
 
@@ -374,9 +303,6 @@ impl StakingContract {
             .remove(validator_address)
             .expect("inconsistent contract state");
 
-        // Remove validator from parked_set.
-        let was_parked = self.parked_set.remove(validator_address);
-
         // Update validator entry.
         store.put_validator(validator_address, validator);
 
@@ -384,7 +310,7 @@ impl StakingContract {
             validator_address: validator_address.clone(),
         });
 
-        Ok(DeactivateValidatorReceipt { was_parked })
+        Ok(())
     }
 
     /// Reverts inactivating a validator.
@@ -392,7 +318,6 @@ impl StakingContract {
         &mut self,
         store: &mut StakingContractStoreWrite,
         validator_address: &Address,
-        receipt: DeactivateValidatorReceipt,
         tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         // Get the validator.
@@ -404,11 +329,6 @@ impl StakingContract {
         // Re-add validator to active_validators.
         self.active_validators
             .insert(validator_address.clone(), validator.total_stake);
-
-        // Re-add validator to parked_set if it was parked before.
-        if receipt.was_parked {
-            self.parked_set.insert(validator_address.clone());
-        }
 
         // Update validator entry.
         store.put_validator(validator_address, validator);
@@ -457,6 +377,10 @@ impl StakingContract {
             .take()
             .expect("validator is inactive");
 
+        // Clear the validator's current and previous disabled slots.
+        let current_epoch_disabled_slots =
+            self.current_epoch_disabled_slots.remove(validator_address);
+
         // Add validator to active_validators.
         self.active_validators
             .insert(validator_address.clone(), validator.total_stake);
@@ -468,7 +392,10 @@ impl StakingContract {
             validator_address: validator_address.clone(),
         });
 
-        Ok(ReactivateValidatorReceipt { was_inactive_since })
+        Ok(ReactivateValidatorReceipt {
+            was_inactive_since,
+            current_epoch_disabled_slots,
+        })
     }
 
     /// Reverts reactivating a validator.
@@ -484,6 +411,12 @@ impl StakingContract {
 
         // Restore validator inactive state.
         validator.inactive_since = Some(receipt.was_inactive_since);
+
+        // Re-add current and previous disabled slots.
+        if let Some(slots) = receipt.current_epoch_disabled_slots {
+            self.current_epoch_disabled_slots
+                .insert(validator_address.clone(), slots);
+        }
 
         // Remove validator from active_validators again.
         self.active_validators
@@ -501,6 +434,7 @@ impl StakingContract {
     }
 
     /// Retires a validator, permanently deactivating it.
+    /// It is necessary to retire a validator before deleting it.
     pub fn retire_validator(
         &mut self,
         store: &mut StakingContractStoreWrite,
@@ -525,15 +459,6 @@ impl StakingContract {
             validator_address: validator_address.clone(),
         });
 
-        // Remove validator from parked_set.
-        let was_parked = self.parked_set.remove(validator_address);
-
-        if was_parked {
-            tx_logger.push_log(Log::UnparkValidator {
-                validator_address: validator_address.clone(),
-            });
-        }
-
         // Deactivate the validator if it is still active.
         let was_active = validator.is_active();
         if was_active {
@@ -553,10 +478,7 @@ impl StakingContract {
         // Update validator entry.
         store.put_validator(validator_address, validator);
 
-        Ok(RetireValidatorReceipt {
-            was_active,
-            was_parked,
-        })
+        Ok(RetireValidatorReceipt { was_active })
     }
 
     /// Reverts retiring a validator.
@@ -583,14 +505,6 @@ impl StakingContract {
                 .insert(validator_address.clone(), validator.total_stake);
 
             tx_logger.push_log(Log::DeactivateValidator {
-                validator_address: validator_address.clone(),
-            });
-        }
-
-        // Re-add validator to parked_set if it was parked before.
-        if receipt.was_parked {
-            self.parked_set.insert(validator_address.clone());
-            tx_logger.push_log(Log::UnparkValidator {
                 validator_address: validator_address.clone(),
             });
         }

@@ -257,28 +257,6 @@ fn it_can_create_validator_transactions() {
 
     assert_eq!(tx, tx2);
 
-    // Unpark
-    let tx = make_signed_incoming_transaction(
-        IncomingStakingTransactionData::UnparkValidator {
-            validator_address: address.clone(),
-            proof: Default::default(),
-        },
-        0,
-        &key_pair,
-    );
-
-    let tx2 = TransactionBuilder::new_unpark_validator(
-        &key_pair,
-        address.clone(),
-        &key_pair,
-        100.try_into().unwrap(),
-        1,
-        NetworkId::Dummy,
-    )
-    .unwrap();
-
-    assert_eq!(tx, tx2);
-
     // Delete
     let tx = make_delete_transaction(&key_pair, Policy::VALIDATOR_DEPOSIT - 100);
 

@@ -12,7 +12,6 @@ use crate::{SignatureProof, Transaction, TransactionError};
 ///     - Validator
 ///         * Create
 ///         * Update
-///         * Unpark
 ///         * Deactivate
 ///         * Reactivate
 ///         * Retire
@@ -55,12 +54,6 @@ pub enum IncomingStakingTransactionData {
         #[cfg_attr(feature = "serde-derive", serde(skip))]
         proof: SignatureProof,
     },
-    UnparkValidator {
-        validator_address: Address,
-        // This proof is signed with the validator warm key.
-        #[cfg_attr(feature = "serde-derive", serde(skip))]
-        proof: SignatureProof,
-    },
     DeactivateValidator {
         validator_address: Address,
         // This proof is signed with the validator warm key.
@@ -98,7 +91,6 @@ impl IncomingStakingTransactionData {
         matches!(
             self,
             IncomingStakingTransactionData::UpdateValidator { .. }
-                | IncomingStakingTransactionData::UnparkValidator { .. }
                 | IncomingStakingTransactionData::DeactivateValidator { .. }
                 | IncomingStakingTransactionData::ReactivateValidator { .. }
                 | IncomingStakingTransactionData::RetireValidator { .. }
@@ -158,10 +150,6 @@ impl IncomingStakingTransactionData {
                 // Check that the signature is correct.
                 verify_transaction_signature(transaction, proof, true)?
             }
-            IncomingStakingTransactionData::UnparkValidator { proof, .. } => {
-                // Check that the signature is correct.
-                verify_transaction_signature(transaction, proof, true)?
-            }
             IncomingStakingTransactionData::DeactivateValidator { proof, .. } => {
                 // Check that the signature is correct.
                 verify_transaction_signature(transaction, proof, true)?
@@ -202,9 +190,6 @@ impl IncomingStakingTransactionData {
                 *proof = signature_proof;
             }
             IncomingStakingTransactionData::UpdateValidator { proof, .. } => {
-                *proof = signature_proof;
-            }
-            IncomingStakingTransactionData::UnparkValidator { proof, .. } => {
                 *proof = signature_proof;
             }
             IncomingStakingTransactionData::DeactivateValidator { proof, .. } => {

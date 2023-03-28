@@ -302,8 +302,8 @@ fn next_macro_block_proposal(
     // Get the staking contract PRIOR to any state changes.
     let staking_contract = blockchain.get_staking_contract();
 
-    let disabled_set = staking_contract.current_disabled_slots();
-    let lost_reward_set = staking_contract.current_lost_rewards();
+    let disabled_set = staking_contract.current_epoch_disabled_slots();
+    let lost_reward_set = staking_contract.current_batch_lost_rewards();
     let reward_transactions =
         blockchain.create_reward_transactions(state, &header, &staking_contract);
 

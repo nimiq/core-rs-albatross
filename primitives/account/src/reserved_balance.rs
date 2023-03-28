@@ -21,10 +21,6 @@ impl ReservedBalance {
         self.reserve_for(&self.address.clone(), available, amount)
     }
 
-    pub fn reserve_unchecked(&mut self, amount: Coin) -> Result<(), AccountError> {
-        self.reserve_for(&self.address.clone(), Coin::MAX, amount)
-    }
-
     pub fn reserve_for(
         &mut self,
         address: &Address,

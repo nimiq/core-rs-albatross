@@ -25,7 +25,7 @@ use nimiq_database::{
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::{Address, KeyPair as SchnorrKeyPair, Signature as SchnorrSignature};
 use nimiq_macros::store_waker;
-use nimiq_mempool::{config::MempoolConfig, mempool::Mempool, mempool_transactions::TxPriority};
+use nimiq_mempool::{config::MempoolConfig, mempool::Mempool};
 use nimiq_network_interface::{
     network::{MsgAcceptance, Network, PubsubId, Topic},
     request::request_handler,
@@ -52,7 +52,6 @@ use crate::{
 #[derive(PartialEq)]
 enum ValidatorStakingState {
     Active,
-    Parked,
     Inactive,
     NoStake,
 }
@@ -66,18 +65,10 @@ struct BlockchainState {
     can_enforce_validity_window: bool,
 }
 
-/// Validator inactivity and parking state
-enum ValidatorState {
-    /// Validator parking state
-    ParkingState {
-        park_tx_hash: Blake2bHash,
-        park_tx_validity_window_start: u32,
-    },
-    /// Validator inactive state
-    InactivityState {
-        inactive_tx_hash: Blake2bHash,
-        inactive_tx_validity_window_start: u32,
-    },
+/// Validator inactivity
+struct InactivityState {
+    inactive_tx_hash: Blake2bHash,
+    inactive_tx_validity_window_start: u32,
 }
 
 enum MempoolState {
@@ -129,7 +120,7 @@ where
 
     epoch_state: Option<ActiveEpochState>,
     blockchain_state: BlockchainState,
-    validator_state: Option<ValidatorState>,
+    validator_state: Option<InactivityState>,
     automatic_reactivate: Arc<AtomicBool>,
 
     macro_producer: Option<ProduceMacroBlock<TValidatorNetwork>>,
@@ -283,27 +274,21 @@ where
 
         // Check if the transaction was sent
         if let Some(validator_state) = &self.validator_state {
-            let (tx_hash, tx_validity_window_start) = match validator_state {
-                ValidatorState::ParkingState {
-                    park_tx_hash,
-                    park_tx_validity_window_start,
-                } => (park_tx_hash, park_tx_validity_window_start),
-                ValidatorState::InactivityState {
-                    inactive_tx_hash,
-                    inactive_tx_validity_window_start,
-                } => (inactive_tx_hash, inactive_tx_validity_window_start),
-            };
+            let tx_validity_window_start = validator_state.inactive_tx_validity_window_start;
             // Check that the transaction was sent in the validity window
             let staking_state = self.get_staking_state(&blockchain);
-            if (staking_state == ValidatorStakingState::Parked
-                || staking_state == ValidatorStakingState::Inactive)
+            if (staking_state == ValidatorStakingState::Inactive)
                 && blockchain.block_number()
                     >= tx_validity_window_start + Policy::blocks_per_epoch()
-                && !blockchain.tx_in_validity_window(tx_hash, *tx_validity_window_start, None)
+                && !blockchain.tx_in_validity_window(
+                    &validator_state.inactive_tx_hash,
+                    tx_validity_window_start,
+                    None,
+                )
             {
-                // If we are parked or inactive and no transaction has been seen in the expected validity window
-                // after an epoch, reset our parking or inactive state
-                log::debug!("Resetting state to re-send un-park/activate transactions since we are parked/inactive and validity window doesn't contain the transaction sent");
+                // If we are inactive and no transaction has been seen in the expected validity window
+                // after an epoch, reset our inactive state
+                log::debug!("Resetting state to re-send reactivate transactions since we are inactive and validity window doesn't contain the transaction sent");
                 self.validator_state = None;
             }
         }
@@ -694,20 +679,8 @@ where
     }
 
     fn get_staking_state(&self, blockchain: &Blockchain) -> ValidatorStakingState {
-        // First, check if the validator is parked.
         let validator_address = self.validator_address();
         let staking_contract = blockchain.get_staking_contract();
-
-        if staking_contract.parked_set.contains(&validator_address)
-            || staking_contract
-                .current_disabled_slots
-                .contains_key(&validator_address)
-            || staking_contract
-                .previous_epoch_disabled_slots
-                .contains_key(&validator_address)
-        {
-            return ValidatorStakingState::Parked;
-        }
 
         // Then fetch the validator to see if it is active.
         let data_store = blockchain.get_staking_contract_store();
@@ -723,51 +696,7 @@ where
             )
     }
 
-    fn unpark(&self, blockchain: &Blockchain) -> ValidatorState {
-        let validity_start_height = blockchain.block_number();
-
-        let unpark_transaction = TransactionBuilder::new_unpark_validator(
-            &self.fee_key(),
-            self.validator_address(),
-            &self.signing_key(),
-            Coin::ZERO,
-            validity_start_height,
-            blockchain.network_id(),
-        )
-        .unwrap(); // TODO: Handle transaction creation error
-        let tx_hash = unpark_transaction.hash();
-
-        let cn = self.consensus.clone();
-        let mempool = self.mempool.clone();
-
-        // We publish the unpark transaction
-        let publish_transaction = unpark_transaction.clone();
-        tokio::spawn(async move {
-            debug!("Publishing unpark transaction");
-            if cn.send_transaction(publish_transaction).await.is_err() {
-                error!("Failed to send unpark transaction");
-            }
-        });
-
-        // We also add the unpark transaction to our own mempool with high priority
-        tokio::spawn(async move {
-            debug!("Adding unpark transaction to mempool");
-            if mempool
-                .add_transaction(unpark_transaction, Some(TxPriority::High))
-                .await
-                .is_err()
-            {
-                error!("Failed adding unpark transaction into mempool");
-            }
-        });
-
-        ValidatorState::ParkingState {
-            park_tx_hash: tx_hash,
-            park_tx_validity_window_start: validity_start_height,
-        }
-    }
-
-    fn reactivate(&self, blockchain: &Blockchain) -> ValidatorState {
+    fn reactivate(&self, blockchain: &Blockchain) -> InactivityState {
         let validity_start_height = blockchain.block_number();
 
         let reactivate_transaction = TransactionBuilder::new_reactivate_validator(
@@ -793,7 +722,7 @@ where
             }
         });
 
-        ValidatorState::InactivityState {
+        InactivityState {
             inactive_tx_hash: tx_hash,
             inactive_tx_validity_window_start: validity_start_height,
         }
@@ -904,14 +833,6 @@ where
         if self.can_be_active() {
             let blockchain = self.blockchain.read();
             match self.get_staking_state(&blockchain) {
-                ValidatorStakingState::Parked => match self.validator_state {
-                    Some(ValidatorState::ParkingState { .. }) => {}
-                    _ => {
-                        let parking_state = self.unpark(&blockchain);
-                        drop(blockchain);
-                        self.validator_state = Some(parking_state);
-                    }
-                },
                 ValidatorStakingState::Active => {
                     drop(blockchain);
                     if self.validator_state.is_some() {
@@ -919,16 +840,15 @@ where
                         info!("Automatically reactivated.");
                     }
                 }
-                ValidatorStakingState::Inactive => match self.validator_state {
-                    Some(ValidatorState::InactivityState { .. }) => {}
-                    _ => {
-                        if self.automatic_reactivate.load(Ordering::Acquire) {
-                            let inactivity_state = self.reactivate(&blockchain);
-                            drop(blockchain);
-                            self.validator_state = Some(inactivity_state);
-                        }
+                ValidatorStakingState::Inactive => {
+                    if self.validator_state.is_none()
+                        && self.automatic_reactivate.load(Ordering::Acquire)
+                    {
+                        let inactivity_state = self.reactivate(&blockchain);
+                        drop(blockchain);
+                        self.validator_state = Some(inactivity_state);
                     }
-                },
+                }
                 ValidatorStakingState::NoStake => {}
             }
         }

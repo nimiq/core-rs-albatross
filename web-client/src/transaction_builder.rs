@@ -221,7 +221,5 @@ impl TransactionBuilder {
 
     // pub fn new_reactivate_validator()
 
-    // pub fn new_unpark_validator()
-
     // pub fn new_delete_validator()
 }

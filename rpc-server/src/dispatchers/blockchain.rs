@@ -10,8 +10,8 @@ use nimiq_rpc_interface::{
     blockchain::BlockchainInterface,
     types::{
         is_of_log_type_and_related_to_addresses, Account, Block, BlockLog, BlockchainState,
-        ExecutedTransaction, Inherent, LogType, ParkedSet, RPCData, RPCResult, SlashedSlots, Slot,
-        Staker, Validator,
+        ExecutedTransaction, Inherent, LogType, RPCData, RPCResult, SlashedSlots, Slot, Staker,
+        Validator,
     },
 };
 use tokio_stream::wrappers::BroadcastStream;
@@ -532,8 +532,8 @@ impl BlockchainInterface for BlockchainDispatcher {
             Ok(RPCData::with_blockchain(
                 SlashedSlots {
                     block_number,
-                    lost_rewards: staking_contract.current_lost_rewards(),
-                    disabled: staking_contract.current_disabled_slots(),
+                    lost_rewards: staking_contract.current_batch_lost_rewards(),
+                    disabled: staking_contract.current_epoch_disabled_slots(),
                 },
                 &blockchain_proxy,
             ))
@@ -559,29 +559,6 @@ impl BlockchainInterface for BlockchainDispatcher {
                     block_number,
                     lost_rewards: staking_contract.previous_batch_lost_rewards(),
                     disabled: staking_contract.previous_epoch_disabled_slots(),
-                },
-                &blockchain_proxy,
-            ))
-        } else {
-            Err(Error::NotSupportedForLightBlockchain)
-        }
-    }
-
-    /// Returns information about the currently parked validators.
-    async fn get_parked_validators(
-        &mut self,
-    ) -> RPCResult<ParkedSet, BlockchainState, Self::Error> {
-        let blockchain_proxy = self.blockchain.read();
-        if let BlockchainReadProxy::Full(ref blockchain) = blockchain_proxy {
-            let block_number = blockchain.block_number();
-            let staking_contract = blockchain
-                .get_staking_contract_if_complete(None)
-                .ok_or(Error::NoConsensus)?;
-
-            Ok(RPCData::with_blockchain(
-                ParkedSet {
-                    block_number,
-                    validators: staking_contract.parked_set(),
                 },
                 &blockchain_proxy,
             ))

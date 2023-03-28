@@ -212,11 +212,11 @@ impl Blockchain {
         }
 
         // Verify lost_rewards.
-        if body.lost_reward_set != staking_contract.current_lost_rewards() {
+        if body.lost_reward_set != staking_contract.current_batch_lost_rewards() {
             warn!(
                 %macro_block,
                 given_lost_rewards = ?body.lost_reward_set,
-                expected_lost_rewards = ?staking_contract.current_lost_rewards(),
+                expected_lost_rewards = ?staking_contract.current_batch_lost_rewards(),
                 reason = "Invalid lost rewards",
                 "Rejecting block"
             );
@@ -224,11 +224,11 @@ impl Blockchain {
         }
 
         // Verify disabled_slots.
-        if body.disabled_set != staking_contract.current_disabled_slots() {
+        if body.disabled_set != staking_contract.current_epoch_disabled_slots() {
             warn!(
                 %macro_block,
                 given_disabled_slots = ?body.disabled_set,
-                expected_disabled_slots = ?staking_contract.current_disabled_slots(),
+                expected_disabled_slots = ?staking_contract.current_epoch_disabled_slots(),
                 reason = "Invalid disabled slots",
                 "Rejecting block"
             );

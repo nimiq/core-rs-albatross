@@ -172,7 +172,6 @@ impl TransactionBuilder {
     /// * `update validator details`
     /// * `retire validators`
     /// * `re-activate validators`
-    /// * `unpark validators`
     /// * `update staker details`
     /// * `retire staker funds`
     /// * `re-activate staker funds`
@@ -1275,59 +1274,6 @@ impl TransactionBuilder {
         match proof_builder {
             TransactionProofBuilder::InStaking(mut builder) => {
                 builder.sign_with_key_pair(cold_key_pair);
-                let mut builder = builder.generate().unwrap().unwrap_basic();
-                builder.sign_with_key_pair(key_pair);
-                Ok(builder.generate().unwrap())
-            }
-            _ => unreachable!(),
-        }
-    }
-
-    /// Creates a transaction that unparks a *parked* validator, i.e. making it *active* again.
-    ///
-    /// # Arguments
-    ///
-    ///  - `key_pair`:              The key pair used to sign the transaction. The transaction fee
-    ///                             is taken from the account belonging to this key pair.
-    ///  - `validator_address`:     The validator address.
-    ///  - `signing_key_pair`:      The key pair that corresponds to the validator's signing key.
-    ///                             The data is signed using this key pair.
-    ///  - `fee`:                   Transaction fee.
-    ///  - `validity_start_height`: Block height from which this transaction is valid.
-    ///  - `network_id`:            ID of network for which the transaction is valid.
-    ///
-    /// # Returns
-    ///
-    /// The finalized transaction.
-    ///
-    /// # Note
-    ///
-    /// This is a *signaling transaction*.
-    ///
-    pub fn new_unpark_validator(
-        key_pair: &KeyPair,
-        validator_address: Address,
-        signing_key_pair: &KeyPair,
-        fee: Coin,
-        validity_start_height: u32,
-        network_id: NetworkId,
-    ) -> Result<Transaction, TransactionBuilderError> {
-        let mut recipient = Recipient::new_staking_builder();
-        recipient.unpark_validator(validator_address);
-
-        let mut builder = Self::new();
-        builder
-            .with_sender(Address::from(key_pair))
-            .with_recipient(recipient.generate().unwrap())
-            .with_value(Coin::ZERO)
-            .with_fee(fee)
-            .with_validity_start_height(validity_start_height)
-            .with_network_id(network_id);
-
-        let proof_builder = builder.generate()?;
-        match proof_builder {
-            TransactionProofBuilder::InStaking(mut builder) => {
-                builder.sign_with_key_pair(signing_key_pair);
                 let mut builder = builder.generate().unwrap().unwrap_basic();
                 builder.sign_with_key_pair(key_pair);
                 Ok(builder.generate().unwrap())

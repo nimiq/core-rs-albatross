@@ -1470,7 +1470,7 @@ async fn mempool_basic_prioritization_control_tx() {
     let address = Address::from_any_str(STAKER_ADDRESS).unwrap();
     let validator_address = Address::from_any_str(VALIDATOR_ADDRESS).unwrap();
 
-    let unpark = TransactionBuilder::new_unpark_validator(
+    let reactivate = TransactionBuilder::new_reactivate_validator(
         &key_pair,
         validator_address,
         &validator_signing_key,
@@ -1519,9 +1519,9 @@ async fn mempool_basic_prioritization_control_tx() {
         "Number of txns in mempool is not what is expected"
     );
 
-    // Insert unpark with high priority
+    // Insert reactivate with high priority
     mempool
-        .add_transaction(unpark.clone(), Some(TxPriority::High))
+        .add_transaction(reactivate.clone(), Some(TxPriority::High))
         .await
         .unwrap();
 
@@ -1535,8 +1535,8 @@ async fn mempool_basic_prioritization_control_tx() {
         "Number of txns is not what is expected"
     );
 
-    // We should obtain the txns in the reversed ordered as the unpark should have been prioritized.
-    assert_eq!(updated_txns[0], unpark);
+    // We should obtain the txns in the reversed ordered as the reactivate should have been prioritized.
+    assert_eq!(updated_txns[0], reactivate);
 
     // Now the mempool should have 0 total txns
     assert_eq!(

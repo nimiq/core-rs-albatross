@@ -185,7 +185,6 @@ impl Recipient {
     /// * [`update validator`]
     /// * [`retire validator`]
     /// * [`re-activate validator`]
-    /// * [`unpark validator`]
     /// * [`update staker`]
     /// * [`retire staker`]
     /// * [`re-activate staker`]

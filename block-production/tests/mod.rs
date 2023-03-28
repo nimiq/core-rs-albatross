@@ -2,10 +2,7 @@ use std::{convert::TryInto, sync::Arc};
 
 use beserial::Deserialize;
 use nimiq_block::{Block, ForkProof, MicroJustification};
-use nimiq_block_production::{
-    test_custom_block::{next_skip_block, BlockConfig},
-    BlockProducer,
-};
+use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
 use nimiq_bls::KeyPair as BlsKeyPair;
@@ -30,8 +27,6 @@ use nimiq_transaction_builder::TransactionBuilder;
 use nimiq_utils::time::OffsetTime;
 use parking_lot::RwLock;
 use tempfile::tempdir;
-
-const ADDRESS: &str = "NQ20TSB0DFSMUH9C15GQGAGJTTE4D3MA859E";
 
 pub const ACCOUNT_SECRET_KEY: &str =
     "6c9320ac201caf1f8eaa5b05f5d67a9e77826f3f6be266a0ecccc20416dc6587";
@@ -271,110 +266,6 @@ fn it_can_produce_a_chain_with_txns() {
             Ok(PushResult::Extended)
         );
     }
-}
-
-#[test]
-fn it_can_revert_unpark_transactions() {
-    let time = Arc::new(OffsetTime::new());
-    let env = VolatileDatabase::new(10).unwrap();
-    let blockchain = Arc::new(RwLock::new(
-        Blockchain::new(
-            env,
-            BlockchainConfig::default(),
-            NetworkId::UnitAlbatross,
-            time,
-        )
-        .unwrap(),
-    ));
-    let producer = BlockProducer::new(signing_key(), voting_key());
-
-    // #1: Skip block to park validator.
-    let bc = blockchain.upgradable_read();
-    let block = next_skip_block(&producer.voting_key, &bc, &BlockConfig::default());
-    let address = Address::from_any_str(ADDRESS).unwrap();
-
-    assert_eq!(
-        Blockchain::push(bc, Block::Micro(block)),
-        Ok(PushResult::Extended)
-    );
-    assert_eq!(blockchain.read().block_number(), 1);
-    assert!(blockchain
-        .read()
-        .get_staking_contract()
-        .parked_set
-        .contains(&address));
-
-    // #2: Block with unpark transaction.
-    // Unpark should succeed since the validator is parked.
-    let key_pair = signing_key();
-    let tx = TransactionBuilder::new_unpark_validator(
-        &key_pair,
-        address.clone(),
-        &key_pair,
-        Coin::ZERO,
-        1,
-        NetworkId::UnitAlbatross,
-    )
-    .unwrap();
-
-    let bc = blockchain.upgradable_read();
-    let block = producer.next_micro_block(
-        &bc,
-        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
-        vec![],
-        vec![tx],
-        vec![],
-        None,
-    );
-
-    assert_eq!(
-        Blockchain::push(bc, Block::Micro(block)),
-        Ok(PushResult::Extended)
-    );
-    assert_eq!(blockchain.read().block_number(), 2);
-    assert!(!blockchain
-        .read()
-        .get_staking_contract()
-        .parked_set
-        .contains(&address));
-
-    // #3: Block with another unpark transaction.
-    // Unpark should fail since the validator is no longer parked.
-    let key_pair = signing_key();
-    let tx = TransactionBuilder::new_unpark_validator(
-        &key_pair,
-        address.clone(),
-        &key_pair,
-        Coin::ZERO,
-        2,
-        NetworkId::UnitAlbatross,
-    )
-    .unwrap();
-
-    let bc = blockchain.upgradable_read();
-    let block = producer.next_micro_block(
-        &bc,
-        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
-        vec![],
-        vec![tx.clone()],
-        vec![],
-        None,
-    );
-
-    assert_eq!(
-        Blockchain::push(bc, Block::Micro(block.clone())),
-        Ok(PushResult::Extended)
-    );
-    assert_eq!(
-        block.body.unwrap().transactions[0],
-        ExecutedTransaction::Err(tx)
-    );
-
-    // Now revert all three blocks. This should succeed.
-    let bc = blockchain.upgradable_read();
-    let mut txn = bc.write_transaction();
-    let result = bc.revert_blocks(3, &mut txn);
-    assert_eq!(result, Ok(()));
 }
 
 #[test]

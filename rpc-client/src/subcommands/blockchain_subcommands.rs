@@ -117,9 +117,6 @@ pub enum BlockchainCommand {
         previous_slashed: bool,
     },
 
-    /// Returns information about the currently parked validators.
-    ParkedValidators {},
-
     /// Tries to fetch a validator information given its address.
     ValidatorByAddress {
         /// The address to query by.
@@ -296,9 +293,6 @@ impl HandleSubcommand for BlockchainCommand {
                         client.blockchain.get_previous_slashed_slots().await?
                     )
                 }
-            }
-            BlockchainCommand::ParkedValidators {} => {
-                println!("{:#?}", client.blockchain.get_parked_validators().await?)
             }
             BlockchainCommand::ValidatorByAddress { address } => println!(
                 "{:#?}",

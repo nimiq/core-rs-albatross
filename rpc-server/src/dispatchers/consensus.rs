@@ -1027,56 +1027,6 @@ impl ConsensusInterface for ConsensusDispatcher {
         self.send_raw_transaction(raw_tx).await
     }
 
-    /// Returns a serialized `unpark_validator` transaction. You need to provide the address of a basic
-    /// account (the sender wallet) to pay the transaction fee.
-    async fn create_unpark_validator_transaction(
-        &mut self,
-        sender_wallet: Address,
-        validator_address: Address,
-        signing_secret_key: String,
-        fee: Coin,
-        validity_start_height: ValidityStartHeight,
-    ) -> RPCResult<String, (), Self::Error> {
-        let secret_key = PrivateKey::deserialize_from_vec(&hex::decode(signing_secret_key)?)
-            .map_err(|_| Error::InvalidArgument("Signing Key".to_string()))?;
-
-        let signing_key_pair = KeyPair::from(secret_key);
-
-        let transaction = TransactionBuilder::new_unpark_validator(
-            &self.get_wallet_keypair(&sender_wallet)?,
-            validator_address,
-            &signing_key_pair,
-            fee,
-            self.validity_start_height(validity_start_height),
-            self.get_network_id(),
-        )?;
-
-        Ok(transaction_to_hex_string(&transaction).into())
-    }
-
-    /// Sends a `unpark_validator` transaction to the network. You need to provide the address of a basic
-    /// account (the sender wallet) to pay the transaction fee.
-    async fn send_unpark_validator_transaction(
-        &mut self,
-        sender_wallet: Address,
-        validator_address: Address,
-        signing_secret_key: String,
-        fee: Coin,
-        validity_start_height: ValidityStartHeight,
-    ) -> RPCResult<Blake2bHash, (), Self::Error> {
-        let raw_tx = self
-            .create_unpark_validator_transaction(
-                sender_wallet,
-                validator_address,
-                signing_secret_key,
-                fee,
-                validity_start_height,
-            )
-            .await?
-            .data;
-        self.send_raw_transaction(raw_tx).await
-    }
-
     /// Returns a serialized `retire_validator` transaction. You need to provide the address of a basic
     /// account (the sender wallet) to pay the transaction fee.
     async fn create_retire_validator_transaction(
