@@ -443,7 +443,7 @@ impl Transaction {
                             signing_key: signing_key.to_hex(),
                             voting_key: voting_key.to_hex(),
                             reward_address: reward_address.to_user_friendly_address(),
-                            signal_data: signal_data.map(|data| hex::encode(data)),
+                            signal_data: signal_data.map(hex::encode),
                             proof_of_knowledge: proof_of_knowledge.to_hex(),
                         }),
                         IncomingStakingTransactionData::UpdateValidator {
@@ -461,7 +461,7 @@ impl Transaction {
                             new_reward_address: new_reward_address
                                 .map(|reward_address| reward_address.to_user_friendly_address()),
                             new_signal_data: new_signal_data
-                                .map(|signal_data| signal_data.map(|data| hex::encode(data))),
+                                .map(|signal_data| signal_data.map(hex::encode)),
                             new_proof_of_knowledge: new_proof_of_knowledge
                                 .map(|proof_of_knowledge| proof_of_knowledge.to_hex()),
                         }),
