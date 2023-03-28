@@ -9,7 +9,7 @@ pub struct PlainBasicAccount {
 
 #[derive(serde::Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-pub struct PlainVestingAccount {
+pub struct PlainVestingContract {
     balance: u64,
     owner: String,
     start_time: u64,
@@ -20,7 +20,7 @@ pub struct PlainVestingAccount {
 
 #[derive(serde::Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-pub struct PlainHtlcAccount {
+pub struct PlainHtlcContract {
     balance: u64,
     sender: String,
     recipient: String,
@@ -33,7 +33,7 @@ pub struct PlainHtlcAccount {
 
 #[derive(serde::Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-pub struct PlainStakingAccount {
+pub struct PlainStakingContract {
     balance: u64,
     active_validators: Vec<(String, u64)>,
     parked_set: Vec<String>,
@@ -47,9 +47,9 @@ pub struct PlainStakingAccount {
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum PlainAccount {
     Basic(PlainBasicAccount),
-    Vesting(PlainVestingAccount),
-    Htlc(PlainHtlcAccount),
-    Staking(PlainStakingAccount),
+    Vesting(PlainVestingContract),
+    Htlc(PlainHtlcContract),
+    Staking(PlainStakingContract),
 }
 
 impl PlainAccount {
@@ -58,7 +58,7 @@ impl PlainAccount {
             nimiq_account::Account::Basic(acc) => PlainAccount::Basic(PlainBasicAccount {
                 balance: acc.balance.into(),
             }),
-            nimiq_account::Account::Vesting(acc) => PlainAccount::Vesting(PlainVestingAccount {
+            nimiq_account::Account::Vesting(acc) => PlainAccount::Vesting(PlainVestingContract {
                 balance: acc.balance.into(),
                 owner: acc.owner.to_user_friendly_address(),
                 start_time: acc.start_time,
@@ -66,7 +66,7 @@ impl PlainAccount {
                 step_amount: acc.step_amount.into(),
                 total_amount: acc.total_amount.into(),
             }),
-            nimiq_account::Account::HTLC(acc) => PlainAccount::Htlc(PlainHtlcAccount {
+            nimiq_account::Account::HTLC(acc) => PlainAccount::Htlc(PlainHtlcContract {
                 balance: acc.balance.into(),
                 sender: acc.sender.to_user_friendly_address(),
                 recipient: acc.recipient.to_user_friendly_address(),
@@ -83,7 +83,7 @@ impl PlainAccount {
                 timeout: acc.timeout,
                 total_amount: acc.total_amount.into(),
             }),
-            nimiq_account::Account::Staking(acc) => PlainAccount::Staking(PlainStakingAccount {
+            nimiq_account::Account::Staking(acc) => PlainAccount::Staking(PlainStakingContract {
                 balance: acc.balance.into(),
                 active_validators: acc
                     .active_validators
