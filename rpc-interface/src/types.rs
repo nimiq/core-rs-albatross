@@ -147,6 +147,8 @@ pub enum BlockAdditionalFields {
 
         // None if not an election block.
         #[serde(skip_serializing_if = "Option::is_none")]
+        interlink: Option<Vec<Blake2bHash>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         slots: Option<Vec<Slots>>,
         #[serde(skip_serializing_if = "Option::is_none")]
         lost_reward_set: Option<BitSet>,
@@ -237,6 +239,7 @@ impl Block {
                     additional_fields: BlockAdditionalFields::Macro {
                         is_election_block: Policy::is_election_block_at(block_number),
                         parent_election_hash: macro_block.header.parent_election_hash,
+                        interlink: macro_block.header.interlink,
                         slots,
                         lost_reward_set,
                         disabled_set,
