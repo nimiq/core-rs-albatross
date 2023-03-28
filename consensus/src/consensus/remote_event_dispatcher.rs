@@ -315,7 +315,7 @@ impl<N: Network> Future for RemoteEventDispatcher<N> {
                 let network = Arc::clone(&self.network);
                 tokio::spawn({
                     async move {
-                        network
+                        let _ = network
                             .publish_subtopic::<AddressSubscriptionTopic>(
                                 peer_id.to_string(),
                                 AddressNotification {
@@ -323,8 +323,7 @@ impl<N: Network> Future for RemoteEventDispatcher<N> {
                                     event: NotificationEvent::BlockchainExtend,
                                 },
                             )
-                            .await
-                            .unwrap();
+                            .await;
                     }
                 });
             }
