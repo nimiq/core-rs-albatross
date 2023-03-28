@@ -1,5 +1,6 @@
+use std::cmp;
 #[cfg(feature = "full")]
-use std::{cmp, sync::Arc};
+use std::sync::Arc;
 
 #[cfg(feature = "full")]
 use parking_lot::RwLock;
@@ -12,7 +13,6 @@ use nimiq_blockchain::{Blockchain, CHUNK_SIZE};
 use nimiq_blockchain_interface::{AbstractBlockchain, Direction};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_network_interface::{network::Network, request::Handle};
-#[cfg(feature = "full")]
 use nimiq_primitives::policy::Policy;
 
 use crate::messages::*;

@@ -1,5 +1,6 @@
+#[cfg(feature = "full")]
+use std::cmp::max;
 use std::{
-    cmp::max,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
