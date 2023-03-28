@@ -25,7 +25,7 @@ listen_addresses = [
 ]
 
 seed_nodes = [
-        { address = "/dns4/seed1.v2.nimiq-testnet.com/tcp/8443/ws" }
+        { address = "/dns4/seed1.pos.nimiq-testnet.com/tcp/8443/wss" }
 ]
 
 # Optionally specify address(es) that will be advertised to peers instead of the ones in `listen_addresses`

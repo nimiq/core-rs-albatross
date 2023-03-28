@@ -119,11 +119,11 @@ Its main purpose is to invite everyone to exercise and test the Nimiq Proof-of-S
 
 There are two ways of getting funds:
 
-- Using an account in the [Testnet Nimiq Wallet](https://<to_be_announced>) and requesting funds in the wallet.
-- Directly using the [Devnet Faucet](http://<to_be_announced>/):
+- Using an account in the [Testnet Nimiq Wallet](https://wallet.pos.nimiq-testnet.com/) and requesting funds in the wallet.
+- Directly using the [Devnet Faucet](https://faucet.pos.nimiq-testnet.com/):
 
 ```
-curl -X POST -H "Content-Type: application/x-www-form-urlencoded" -d "address=NQXX XXXX XXXX XXXX XXXX XXXX XXXX XXXX XXXX" https://<to_be_announced>/tapit
+curl -X POST -H "Content-Type: application/x-www-form-urlencoded" -d "address=NQXX XXXX XXXX XXXX XXXX XXXX XXXX XXXX XXXX" https://faucet.v2.nimiq-testnet.com/tapit
 ```
 
 #### Becoming a validator
