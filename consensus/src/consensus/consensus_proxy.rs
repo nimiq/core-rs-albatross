@@ -241,9 +241,19 @@ impl<N: Network> ConsensusProxy<N> {
 
         let mut verified_transactions = HashMap::new();
 
+        let full_node_cutoff = election_head.block_number() - Policy::blocks_per_epoch() + 1;
+        let can_query_full_nodes = receipts
+            .iter()
+            .all(|(_, block_number)| block_number.unwrap_or(0) > full_node_cutoff);
+        let peer_required_service = if can_query_full_nodes {
+            Services::FULL_BLOCKS
+        } else {
+            Services::TRANSACTION_INDEX
+        };
+
         // We obtain a list of connected peers that could satisfy our request and perform the request to each one:
         for peer_id in self
-            .get_peers_for_service(Services::TRANSACTION_INDEX, min_peers)
+            .get_peers_for_service(peer_required_service, min_peers)
             .await?
         {
             // This is the structure where we group transactions by their proving block number
