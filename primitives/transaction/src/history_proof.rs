@@ -25,7 +25,14 @@ impl HistoryTreeProof {
             .copied()
             .zip(self.history.iter())
             .collect();
-        self.proof.verify(&expected_root, &zipped).ok()
+        let result = self.proof.verify(&expected_root, &zipped);
+        match result {
+            Ok(res) => Some(res),
+            Err(error) => {
+                log::error!("{:?}", error);
+                None
+            }
+        }
     }
 }
 
