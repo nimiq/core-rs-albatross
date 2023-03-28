@@ -300,6 +300,10 @@ impl<N: Network> ConsensusProxy<N> {
                 }
             }
 
+            if hashes_by_block.is_empty() {
+                break;
+            }
+
             // Now we request proofs for each block and its hashes, according to its classification
             for (block_number, hashes) in hashes_by_block {
                 if let Some(block_number) = block_number {
