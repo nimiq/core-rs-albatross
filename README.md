@@ -1,18 +1,17 @@
-# Nimiq 2.0 implementation in Rust
+# Nimiq Proof-of-Stake
 
 ![nimiq](https://raw.githubusercontent.com/nimiq/designs/master/logo/RGB/colored/png/nimiq_logo_rgb_horizontal.png)
 
-> Rust implementation of the Nimiq 2.0 blockchain node
+> Rust implementation of the Nimiq Proof-of-Stake blockchain.
 
 [![Build Status](https://github.com/nimiq/core-rs-albatross/actions/workflows/build+test.yml/badge.svg?branch=albatross)](https://github.com/nimiq/core-rs-albatross/actions/workflows/build+test.yml?query=branch%3Aalbatross)
 [![dependency status](https://deps.rs/repo/github/nimiq/core-rs-albatross/status.svg)](https://deps.rs/repo/github/nimiq/core-rs-albatross)
 
 **[Nimiq](https://nimiq.com/)**  is a frictionless payment protocol for the web.
 
-This repository is currently under development. It contains the implementation of the Nimiq 2.0 protocol:
-a Proof-of-stake blockchain based on the [Albatross](https://arxiv.org/abs/1903.01589) consensus algorithm.
+This repository is currently under development. It contains the implementation of the Nimiq Proof-of-Stake protocol based on the [Albatross](https://arxiv.org/abs/1903.01589) consensus algorithm.
 
-Nimiq 2.0 was conceived with performance in mind without sacrificing security.
+Nimiq Proof-of-Stake was conceived with performance in mind without sacrificing security.
 
 Currently, the protocol can be exercised in an environment aimed for developers where bugs are expected to happen.
 For more detailed information about how to connect and use the testnet network, please refer to the [Testnet](#testnet) section.
@@ -24,15 +23,15 @@ For more detailed information about how to connect and use the testnet network, 
 - [Installation](#installation)
 - [Usage](#usage)
 - [Configuration](#configuration)
-- [Devnet](#devnet)
+- [Testnet](#testnet)
 - [Contributing](#contributing)
 - [License](#license)
 
 ## Background
 
-- [Nimiq 2.0 Portal](https://www.nimiq.com/albatross/): General information and high level details of the Nimiq 2.0 blockchain
-- [Nimiq Albatross White Paper](https://arxiv.org/abs/1903.01589): White paper describing the consensus algorithm used in Nimiq 2.0
-- [Nimiq 2.0 migration process](https://www.nimiq.com/blog/nimiq-20-albatross-hard-fork-preparations/): Migration process from Nimiq 1.0 to 2.0
+- [Nimiq Proof-of-Stake Portal](https://www.nimiq.com/albatross/): General information and high level details of the Nimiq Proof-of-Stake blockchain
+- [Nimiq Albatross White Paper](https://arxiv.org/abs/1903.01589): White paper describing the consensus algorithm used in Nimiq Proof-of-Stake
+- [Nimiq Proof-of-Stake migration process](https://www.nimiq.com/blog/nimiq-20-albatross-hard-fork-preparations/): Migration process to Nimiq Proof-of-Stake
 - [Nimiq 1.0 Developer Reference](https://nimiq-network.github.io/developer-reference/): Details of the protocol architecture.
 - [Nimiq 1.0 JavaScript implementation](https://github.com/nimiq/core-js/): Nimiq 1.0 implementation
 
@@ -114,8 +113,7 @@ Please take a look at the [`client.example.toml`](lib/src/config/config_file/cli
 ### Testnet
 
 The testnet network is currently in a phase open to the general public to use.
-Its main purpose is to invite everyone to exercise and test the Nimiq 2.0 functionality and we invite people to file and
-report any [issues](https://github.com/nimiq/core-rs-albatross/issues/new) through our GitHub repository.
+Its main purpose is to invite everyone to exercise and test the Nimiq Proof-of-Stake functionality and we invite people to file and report any [issues](https://github.com/nimiq/core-rs-albatross/issues/new) through our GitHub repository.
 
 #### Getting funds
 

@@ -1,4 +1,4 @@
-# Albatross Alpha Testnet
+# Proof-of-Stake Testnet
 
 ## Table of contents
 
