@@ -396,10 +396,8 @@ fn prove_txns_with_block_number(
         .ok();
 
     if let Some(ref block) = block {
-        // We have some extra work for a macro block
-        if Policy::is_macro_block_at(proving_block_number)
-            && !Policy::is_election_block_at(proving_block_number)
-        {
+        // We have some extra work in the current epoch, if the block we are proving is not our current head
+        if block.block_number() > election_head && block.block_number() < current_head {
             let chain_info = blockchain.get_chain_info(&block.hash(), false, None);
             let history_tree_len = chain_info.unwrap().history_tree_len;
             verifier_state = Some(history_tree_len as usize);
