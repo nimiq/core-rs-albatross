@@ -3,18 +3,16 @@ name = "nimiq-web-client"
 version = "0.1.0"
 authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 edition = "2021"
-description = "Nimiq's Rust to wasm web client"
+description = "Nimiq's Rust-to-WASM web client"
 homepage = "https://nimiq.com"
 repository = "https://github.com/nimiq/core-rs-albatross"
 license = "Apache-2.0"
 categories = ["cryptography::cryptocurrencies"]
-keywords = ["nimiq", "cryptocurrency", "blockchain"]
-exclude = ["db", "peer_key.dat"]
+keywords = ["nimiq", "cryptocurrency", "blockchain", "proof-of-stake"]
 
 [badges]
-travis-ci = { repository = "nimiq/core-rs", branch = "master" }
-is-it-maintained-issue-resolution = { repository = "nimiq/core-rs" }
-is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
+is-it-maintained-issue-resolution = { repository = "nimiq/core-rs-albatross" }
+is-it-maintained-open-issues = { repository = "nimiq/core-rs-albatross" }
 maintenance = { status = "experimental" }
 
 [lib]

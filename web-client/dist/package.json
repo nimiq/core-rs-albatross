@@ -1,0 +1,37 @@
+{
+  "name": "@nimiq/core-web",
+  "collaborators": [
+    "The Nimiq Core Development Team <info@nimiq.com>"
+  ],
+  "description": "Nimiq's Rust-to-WASM web client",
+  "version": "2.0.0-alpha.1.1",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nimiq/core-rs-albatross"
+  },
+  "files": [
+    "bundler/index_bg.js",
+    "bundler/index_bg.wasm",
+    "bundler/index_bg.wasm.d.ts",
+    "bundler/index.d.ts",
+    "bundler/index.js",
+    "web/index_bg.wasm",
+    "web/index_bg.wasm.d.ts",
+    "web/index.d.ts",
+    "web/index.js"
+  ],
+  "module": "bundler/index.js",
+  "homepage": "https://nimiq.com",
+  "types": "bundler/index.d.ts",
+  "sideEffects": [
+    "./bundler/index.js",
+    "./web/index.js"
+  ],
+  "keywords": [
+    "nimiq",
+    "cryptocurrency",
+    "blockchain",
+    "proof-of-stake"
+  ]
+}

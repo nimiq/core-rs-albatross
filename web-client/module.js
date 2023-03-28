@@ -5,6 +5,7 @@ window.Nimiq = Nimiq;
 init().then(async () => {
     const config = new Nimiq.ClientConfiguration();
     config.seedNodes(['/dns4/seed1.pos.nimiq-testnet.com/tcp/8443/wss']);
+    config.network('testalbatross');
     config.logLevel('debug');
 
     const client = await config.instantiateClient();
