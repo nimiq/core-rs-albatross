@@ -231,7 +231,7 @@ pub struct ResponseTransactionsProof {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestTransactionsProof {
-    #[beserial(len_type(u16, limit = 128))]
+    #[beserial(len_type(u16, limit = 512))]
     pub hashes: Vec<Blake2bHash>,
     pub block_number: Option<u32>,
 }
@@ -259,7 +259,7 @@ impl RequestCommon for RequestTransactionReceiptsByAddress {
 #[derive(Serialize, Deserialize)]
 pub struct ResponseTransactionReceiptsByAddress {
     /// Tuples of `(transaction_hash, block_number)`
-    #[beserial(len_type(u16, limit = 128))]
+    #[beserial(len_type(u16, limit = 512))]
     pub receipts: Vec<(Blake2bHash, u32)>,
 }
 
@@ -353,7 +353,7 @@ pub struct AddressNotification {
     /// The Event that generated this notification
     pub event: NotificationEvent,
     /// Tuples of `(transaction_hash, block_number)`
-    #[beserial(len_type(u16, limit = 128))]
+    #[beserial(len_type(u16, limit = 512))]
     pub receipts: Vec<(Blake2bHash, u32)>,
 }
 
