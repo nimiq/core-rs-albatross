@@ -265,7 +265,7 @@ pub struct ResponseTransactionReceiptsByAddress {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestTrieProof {
-    #[beserial(len_type(u16, limit = 128))]
+    #[beserial(len_type(u16, limit = 512))]
     /// Addresses for which the accounts trie proof is requested for
     pub keys: Vec<KeyNibbles>, //-> Accounts
 }
