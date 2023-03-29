@@ -93,7 +93,7 @@ pub(crate) enum NetworkAction {
     },
     DhtGet {
         key: Vec<u8>,
-        output: oneshot::Sender<Result<Option<Vec<u8>>, NetworkError>>,
+        output: oneshot::Sender<Result<Vec<u8>, NetworkError>>,
     },
     DhtPut {
         key: Vec<u8>,
@@ -181,7 +181,7 @@ impl<P: Clone> ValidateMessage<P> {
 #[derive(Default)]
 struct TaskState {
     dht_puts: HashMap<QueryId, oneshot::Sender<Result<(), NetworkError>>>,
-    dht_gets: HashMap<QueryId, oneshot::Sender<Result<Option<Vec<u8>>, NetworkError>>>,
+    dht_gets: HashMap<QueryId, oneshot::Sender<Result<Vec<u8>, NetworkError>>>,
     gossip_topics: HashMap<TopicHash, (mpsc::Sender<(GossipsubMessage, MessageId, PeerId)>, bool)>,
     is_bootstrapped: bool,
     requests: HashMap<RequestId, oneshot::Sender<Result<Bytes, RequestError>>>,
@@ -686,21 +686,46 @@ impl Network {
                 match event {
                     NimiqEvent::Dht(event) => {
                         match event {
-                            KademliaEvent::OutboundQueryProgressed { id, result, .. } => {
+                            KademliaEvent::OutboundQueryProgressed {
+                                id,
+                                result,
+                                stats: _,
+                                step,
+                            } => {
                                 match result {
-                                    QueryResult::GetRecord(result) => {
+                                    QueryResult::GetRecord(Ok(GetRecordOk::FoundRecord(
+                                        record,
+                                    ))) => {
                                         if let Some(output) = state.dht_gets.remove(&id) {
-                                            let result = result
-                                                .map_err(Into::into)
-                                                .map(|record| match record {
-                                                    GetRecordOk::FoundRecord(r) => Some(r.record.value),
-                                                    GetRecordOk::FinishedWithNoAdditionalRecord { cache_candidates: _ } => None,
-                                                });
-                                            if output.send(result).is_err() {
+                                            // Finish the query. We are only interested in the first result.
+                                            // TODO: Revisit this since we are using a Quorum of 1 to report the
+                                            // record to the application. We may want more but also need a way
+                                            // to verify and select the bests record.
+                                            swarm
+                                                .behaviour_mut()
+                                                .dht
+                                                .query_mut(&id)
+                                                .unwrap()
+                                                .finish();
+                                            if output.send(Ok(record.record.value)).is_err() {
                                                 error!(query_id = ?id, error = "receiver hung up", "could not send get record query result to channel");
                                             }
                                         } else {
-                                            warn!(query_id = ?id, "GetRecord query result for unknown query ID");
+                                            warn!(query_id = ?id, ?step, "GetRecord query result for unknown query ID");
+                                        }
+                                    }
+                                    QueryResult::GetRecord(Ok(
+                                        GetRecordOk::FinishedWithNoAdditionalRecord {
+                                            cache_candidates: _,
+                                        },
+                                    )) => {}
+                                    QueryResult::GetRecord(Err(error)) => {
+                                        if let Some(output) = state.dht_gets.remove(&id) {
+                                            if output.send(Err(error.into())).is_err() {
+                                                error!(query_id = ?id, error = "receiver hung up", "could not send get record query result error to channel");
+                                            }
+                                        } else {
+                                            warn!(query_id = ?id, ?step, "GetRecord query result error for unknown query ID");
                                         }
                                     }
                                     QueryResult::PutRecord(result) => {
@@ -1881,24 +1906,6 @@ impl NetworkInterface for Network {
         self.connected_peers.read().get(&peer_id).cloned()
     }
 
-    fn peer_provides_required_services(&self, peer_id: PeerId) -> bool {
-        if let Some(peer_info) = self.connected_peers.read().get(&peer_id) {
-            peer_info.get_services().contains(self.required_services)
-        } else {
-            // If we don't know the peer we return false
-            false
-        }
-    }
-
-    fn peer_provides_services(&self, peer_id: PeerId, services: Services) -> bool {
-        if let Some(peer_info) = self.connected_peers.read().get(&peer_id) {
-            peer_info.get_services().contains(services)
-        } else {
-            // If we don't know the peer we return false
-            false
-        }
-    }
-
     async fn get_peers_by_services(
         &self,
         services: Services,
@@ -1942,6 +1949,24 @@ impl NetworkInterface for Network {
         Ok(filtered_peers)
     }
 
+    fn peer_provides_required_services(&self, peer_id: PeerId) -> bool {
+        if let Some(peer_info) = self.connected_peers.read().get(&peer_id) {
+            peer_info.get_services().contains(self.required_services)
+        } else {
+            // If we don't know the peer we return false
+            false
+        }
+    }
+
+    fn peer_provides_services(&self, peer_id: PeerId, services: Services) -> bool {
+        if let Some(peer_info) = self.connected_peers.read().get(&peer_id) {
+            peer_info.get_services().contains(services)
+        } else {
+            // If we don't know the peer we return false
+            false
+        }
+    }
+
     async fn disconnect_peer(&self, peer_id: PeerId, close_reason: CloseReason) {
         if let Err(error) = self
             .action_tx
@@ -1970,6 +1995,22 @@ impl NetworkInterface for Network {
         self.subscribe_with_name::<T>(topic_name).await
     }
 
+    async fn unsubscribe<T>(&self) -> Result<(), Self::Error>
+    where
+        T: Topic + Sync,
+    {
+        let topic_name = <T as Topic>::NAME.to_string();
+        self.unsubscribe_with_name(topic_name).await
+    }
+
+    async fn publish<T>(&self, item: <T as Topic>::Item) -> Result<(), Self::Error>
+    where
+        T: Topic + Sync,
+    {
+        let topic_name = <T as Topic>::NAME.to_string();
+        self.publish_with_name::<T>(topic_name, item).await
+    }
+
     async fn subscribe_subtopic<T>(
         &self,
         subtopic: String,
@@ -1982,28 +2023,12 @@ impl NetworkInterface for Network {
         self.subscribe_with_name::<T>(topic_name).await
     }
 
-    async fn unsubscribe<T>(&self) -> Result<(), Self::Error>
-    where
-        T: Topic + Sync,
-    {
-        let topic_name = <T as Topic>::NAME.to_string();
-        self.unsubscribe_with_name(topic_name).await
-    }
-
     async fn unsubscribe_subtopic<T>(&self, subtopic: String) -> Result<(), Self::Error>
     where
         T: Topic + Sync,
     {
         let topic_name = format!("{}_{}", <T as Topic>::NAME, subtopic);
         self.unsubscribe_with_name(topic_name).await
-    }
-
-    async fn publish<T>(&self, item: <T as Topic>::Item) -> Result<(), Self::Error>
-    where
-        T: Topic + Sync,
-    {
-        let topic_name = <T as Topic>::NAME.to_string();
-        self.publish_with_name::<T>(topic_name, item).await
     }
 
     async fn publish_subtopic<T>(
@@ -2042,11 +2067,8 @@ impl NetworkInterface for Network {
             })
             .await?;
 
-        if let Some(data) = output_rx.await?? {
-            Ok(Some(Deserialize::deserialize_from_vec(&data)?))
-        } else {
-            Ok(None)
-        }
+        let data = output_rx.await??;
+        Ok(Some(Deserialize::deserialize_from_vec(&data)?))
     }
 
     async fn dht_put<K, V>(&self, k: &K, v: &V) -> Result<(), Self::Error>
