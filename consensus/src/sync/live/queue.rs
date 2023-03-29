@@ -445,9 +445,10 @@ fn blockchain_push<N: Network>(
         match blockchain {
             #[cfg(feature = "full")]
             BlockchainProxy::Full(ref blockchain) => {
-                let block_hash = blockchain.read().head_hash();
+                let bc = blockchain.upgradable_read();
+                let block_hash = bc.head_hash();
                 // We push the chunks.
-                let chunks_push_result = blockchain.read().commit_chunks(chunks, &block_hash);
+                let chunks_push_result = bc.commit_chunks(chunks, &block_hash);
                 blockchain_push_result = BlockchainPushResult::with_chunks_result(
                     chunks_push_result,
                     block_hash,
