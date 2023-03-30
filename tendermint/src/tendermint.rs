@@ -494,6 +494,7 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
                             }
                             Step::Precommit => {
                                 // The proposal exists and is valid. 2f+1 precommits have been seen.
+                                log::debug!(?round_and_step, "Aggregation produced decision value",);
 
                                 // Get the inherent
                                 let inherent = self

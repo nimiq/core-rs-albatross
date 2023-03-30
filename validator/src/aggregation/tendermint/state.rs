@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, io};
+use std::{collections::BTreeMap, fmt::Debug, io};
 
 use beserial::{Deserialize, DeserializeWithLength, Serialize, SerializeWithLength};
 use nimiq_block::{MacroBody, MacroHeader};
@@ -27,6 +27,20 @@ pub struct MacroState {
     inherents: BTreeMap<Blake2bHash, MacroBody>,
     locked: Option<(u32, Blake2sHash)>,
     valid: Option<(u32, Blake2sHash)>,
+}
+
+impl Debug for MacroState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut dbg = f.debug_struct("MacroState");
+        dbg.field("round", &self.round_number);
+        dbg.field("step", &self.step);
+        dbg.field("locked", &self.locked);
+        dbg.field("valid", &self.valid);
+        dbg.field("best_votes", &self.best_votes);
+        dbg.field("votes", &self.votes);
+
+        dbg.finish()
+    }
 }
 
 impl MacroState {

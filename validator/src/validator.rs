@@ -612,7 +612,7 @@ where
                 // In case of a new state update we need to store the new version of it disregarding
                 // any old state which potentially still lingers.
                 MappedReturn::Update(update) => {
-                    // trace!("Tendermint state update {:?}", update);
+                    trace!(?update, "Tendermint state update",);
                     let mut write_transaction = WriteTransaction::new(&self.env);
                     let expected_height = self.blockchain.read().block_number() + 1;
                     if expected_height != update.block_number {
