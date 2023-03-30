@@ -1005,6 +1005,8 @@ impl Client {
         id
     }
 
+    /// Fetches the transaction details for the given transaction hash.
+    #[wasm_bindgen(js_name = getTransaction)]
     pub async fn get_transaction(
         &self,
         hash: String,
