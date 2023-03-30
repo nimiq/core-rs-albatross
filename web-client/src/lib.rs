@@ -47,7 +47,7 @@ use crate::account::{
 };
 use crate::address::{Address, AddressAnyArrayType, AddressAnyType};
 use crate::block::{PlainBlock, PlainBlockType};
-use crate::peer_info::PeerInfo;
+use crate::peer_info::PlainPeerInfo;
 use crate::transaction::{
     PlainTransactionData, PlainTransactionDetails, PlainTransactionDetailsArrayType,
     PlainTransactionDetailsType, PlainTransactionReceipt, PlainTransactionReceiptArrayType,
@@ -857,7 +857,12 @@ impl Client {
                         Some((
                             peer_id.to_string(),
                             "joined",
-                            Some(PeerInfo::from_native(peer_info)),
+                            Some(
+                                serde_wasm_bindgen::to_value(&PlainPeerInfo::from_native(
+                                    peer_info,
+                                ))
+                                .unwrap(),
+                            ),
                         ))
                     }
                     Some(Ok(NetworkEvent::PeerLeft(peer_id))) => {
@@ -1257,7 +1262,7 @@ extern "C" {
     pub type HeadChangedListener;
 
     #[wasm_bindgen(
-        typescript_type = "(peer_id: string, reason: 'joined' | 'left', peer_count: number, peer_info?: PeerInfo) => any"
+        typescript_type = "(peer_id: string, reason: 'joined' | 'left', peer_count: number, peer_info?: PlainPeerInfo) => any"
     )]
     pub type PeerChangedListener;
 
