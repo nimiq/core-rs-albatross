@@ -1,7 +1,5 @@
 use wasm_bindgen::prelude::*;
 
-use nimiq_blockchain_interface::AbstractBlockchain;
-use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_primitives::{account::AccountType, coin::Coin, policy::Policy};
 use nimiq_transaction_builder::Recipient;
 
@@ -12,23 +10,7 @@ use crate::utils::to_network_id;
 /// The TransactionBuilder class provides helper methods to easily create standard types of transactions.
 /// It can only be instantiated from a Client with `client.transactionBuilder()`.
 #[wasm_bindgen]
-pub struct TransactionBuilder {
-    network_id: u8,
-    blockchain: BlockchainProxy,
-}
-
-impl TransactionBuilder {
-    pub fn new(network_id: u8, blockchain: BlockchainProxy) -> Self {
-        Self {
-            network_id,
-            blockchain,
-        }
-    }
-
-    pub fn block_number(&self) -> u32 {
-        self.blockchain.read().block_number()
-    }
-}
+pub struct TransactionBuilder;
 
 #[wasm_bindgen]
 impl TransactionBuilder {
@@ -40,13 +22,12 @@ impl TransactionBuilder {
     /// Throws when the numbers given for value and fee do not fit within a u64 or the networkId is unknown.
     #[wasm_bindgen(js_name = newBasic)]
     pub fn new_basic(
-        &self,
         sender: &Address,
         recipient: &Address,
         value: u64,
         fee: Option<u64>,
-        validity_start_height: Option<u32>,
-        network_id: Option<u8>,
+        validity_start_height: u32,
+        network_id: u8,
     ) -> Result<Transaction, JsError> {
         let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
         builder
@@ -54,10 +35,8 @@ impl TransactionBuilder {
             .with_recipient(Recipient::new_basic(recipient.native_ref().clone()))
             .with_value(Coin::try_from(value)?)
             .with_fee(Coin::try_from(fee.unwrap_or(0))?)
-            .with_validity_start_height(
-                validity_start_height.unwrap_or_else(|| self.block_number()),
-            )
-            .with_network_id(to_network_id(network_id.unwrap_or(self.network_id))?);
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(to_network_id(network_id)?);
 
         let proof_builder = builder.generate()?;
         let tx = proof_builder.preliminary_transaction().to_owned();
@@ -72,14 +51,13 @@ impl TransactionBuilder {
     /// Throws when the numbers given for value and fee do not fit within a u64 or the networkId is unknown.
     #[wasm_bindgen(js_name = newBasicWithData)]
     pub fn new_basic_with_data(
-        &self,
         sender: &Address,
         recipient: &Address,
         data: Vec<u8>,
         value: u64,
         fee: Option<u64>,
-        validity_start_height: Option<u32>,
-        network_id: Option<u8>,
+        validity_start_height: u32,
+        network_id: u8,
     ) -> Result<Transaction, JsError> {
         let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
         builder
@@ -90,10 +68,8 @@ impl TransactionBuilder {
             ))
             .with_value(Coin::try_from(value)?)
             .with_fee(Coin::try_from(fee.unwrap_or(0))?)
-            .with_validity_start_height(
-                validity_start_height.unwrap_or_else(|| self.block_number()),
-            )
-            .with_network_id(to_network_id(network_id.unwrap_or(self.network_id))?);
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(to_network_id(network_id)?);
 
         let proof_builder = builder.generate()?;
         let tx = proof_builder.preliminary_transaction().to_owned();
@@ -122,13 +98,12 @@ impl TransactionBuilder {
     /// Throws when the numbers given for value and fee do not fit within a u64 or the networkId is unknown.
     #[wasm_bindgen(js_name = newCreateStaker)]
     pub fn new_create_staker(
-        &self,
         sender: &Address,
         delegation: &Address,
         value: u64,
         fee: Option<u64>,
-        validity_start_height: Option<u32>,
-        network_id: Option<u8>,
+        validity_start_height: u32,
+        network_id: u8,
     ) -> Result<Transaction, JsError> {
         let mut recipient = Recipient::new_staking_builder();
         recipient.create_staker(Some(delegation.native_ref().clone()));
@@ -139,10 +114,8 @@ impl TransactionBuilder {
             .with_recipient(recipient.generate().unwrap())
             .with_value(Coin::try_from(value)?)
             .with_fee(Coin::try_from(fee.unwrap_or(0))?)
-            .with_validity_start_height(
-                validity_start_height.unwrap_or_else(|| self.block_number()),
-            )
-            .with_network_id(to_network_id(network_id.unwrap_or(self.network_id))?);
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(to_network_id(network_id)?);
 
         let proof_builder = builder.generate()?;
         let tx = proof_builder.preliminary_transaction().to_owned();
@@ -157,13 +130,12 @@ impl TransactionBuilder {
     /// Throws when the numbers given for value and fee do not fit within a u64 or the networkId is unknown.
     #[wasm_bindgen(js_name = newStake)]
     pub fn new_stake(
-        &self,
         sender: &Address,
         staker_address: &Address,
         value: u64,
         fee: Option<u64>,
-        validity_start_height: Option<u32>,
-        network_id: Option<u8>,
+        validity_start_height: u32,
+        network_id: u8,
     ) -> Result<Transaction, JsError> {
         let mut recipient = Recipient::new_staking_builder();
         recipient.stake(staker_address.native_ref().clone());
@@ -174,10 +146,8 @@ impl TransactionBuilder {
             .with_recipient(recipient.generate().unwrap())
             .with_value(Coin::try_from(value)?)
             .with_fee(Coin::try_from(fee.unwrap_or(0))?)
-            .with_validity_start_height(
-                validity_start_height.unwrap_or_else(|| self.block_number()),
-            )
-            .with_network_id(to_network_id(network_id.unwrap_or(self.network_id))?);
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(to_network_id(network_id)?);
 
         let proof_builder = builder.generate()?;
         let tx = proof_builder.preliminary_transaction().to_owned();
@@ -192,12 +162,11 @@ impl TransactionBuilder {
     /// Throws when the number given for fee does not fit within a u64 or the networkId is unknown.
     #[wasm_bindgen(js_name = newUpdateStaker)]
     pub fn new_update_staker(
-        &self,
         sender: &Address,
         new_delegation: &Address,
         fee: Option<u64>,
-        validity_start_height: Option<u32>,
-        network_id: Option<u8>,
+        validity_start_height: u32,
+        network_id: u8,
     ) -> Result<Transaction, JsError> {
         let mut recipient = Recipient::new_staking_builder();
         recipient.update_staker(Some(new_delegation.native_ref().clone()));
@@ -208,10 +177,8 @@ impl TransactionBuilder {
             .with_recipient(recipient.generate().unwrap())
             .with_value(Coin::ZERO)
             .with_fee(Coin::try_from(fee.unwrap_or(0))?)
-            .with_validity_start_height(
-                validity_start_height.unwrap_or_else(|| self.block_number()),
-            )
-            .with_network_id(to_network_id(network_id.unwrap_or(self.network_id))?);
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(to_network_id(network_id)?);
 
         let proof_builder = builder.generate()?;
         let tx = proof_builder.preliminary_transaction().to_owned();
@@ -226,12 +193,11 @@ impl TransactionBuilder {
     /// Throws when the numbers given for value and fee do not fit within a u64 or the networkId is unknown.
     #[wasm_bindgen(js_name = newUnstake)]
     pub fn new_unstake(
-        &self,
         recipient: &Address,
         value: u64,
         fee: Option<u64>,
-        validity_start_height: Option<u32>,
-        network_id: Option<u8>,
+        validity_start_height: u32,
+        network_id: u8,
     ) -> Result<Transaction, JsError> {
         let recipient = Recipient::new_basic(recipient.native_ref().clone());
 
@@ -242,10 +208,8 @@ impl TransactionBuilder {
             .with_recipient(recipient)
             .with_value(Coin::try_from(value)?)
             .with_fee(Coin::try_from(fee.unwrap_or(0))?)
-            .with_validity_start_height(
-                validity_start_height.unwrap_or_else(|| self.block_number()),
-            )
-            .with_network_id(to_network_id(network_id.unwrap_or(self.network_id))?);
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(to_network_id(network_id)?);
 
         let proof_builder = builder.generate()?;
         let tx = proof_builder.preliminary_transaction().to_owned();

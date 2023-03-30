@@ -327,6 +327,12 @@ impl Transaction {
         self.inner.serialized_size()
     }
 
+    /// Serializes the transaction into a HEX string.
+    #[wasm_bindgen(js_name = toHex)]
+    pub fn to_hex(&self) -> String {
+        hex::encode(self.serialize())
+    }
+
     /// Creates a JSON-compatible plain object representing the transaction.
     #[wasm_bindgen(js_name = toPlain)]
     pub fn to_plain(&self) -> Result<PlainTransactionType, JsError> {

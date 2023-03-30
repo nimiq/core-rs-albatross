@@ -53,7 +53,6 @@ use crate::transaction::{
     PlainTransactionDetailsType, PlainTransactionReceipt, PlainTransactionReceiptArrayType,
     Transaction, TransactionAnyType, TransactionState,
 };
-use crate::transaction_builder::TransactionBuilder;
 use crate::utils::from_network_id;
 
 mod account;
@@ -223,8 +222,7 @@ pub struct Client {
     inner: nimiq::client::Client,
 
     /// The network ID that the client is connecting to.
-    #[wasm_bindgen(readonly, js_name = networkId)]
-    pub network_id: u8,
+    network_id: u8,
 
     /// A hashmap from address to the count of listeners subscribed to it
     subscribed_addresses: Rc<RefCell<HashMap<nimiq_keys::Address, u16>>>,
@@ -456,6 +454,12 @@ impl Client {
         }
     }
 
+    /// Returns the network ID that the client is connecting to.
+    #[wasm_bindgen(js_name = getNetworkId)]
+    pub async fn get_network_id(&self) -> u8 {
+        self.network_id
+    }
+
     /// Returns if the client currently has consensus with the network.
     #[wasm_bindgen(js_name = isConsensusEstablished)]
     pub fn is_consensus_established(&self) -> bool {
@@ -616,12 +620,6 @@ impl Client {
         let addresses = Client::unpack_addresses(addresses)?;
         let plain_validators = self.get_plain_validators(addresses).await?;
         Ok(serde_wasm_bindgen::to_value(&plain_validators)?.into())
-    }
-
-    /// Instantiates a transaction builder class that provides helper methods to create transactions.
-    #[wasm_bindgen(js_name = transactionBuilder)]
-    pub fn transaction_builder(&self) -> TransactionBuilder {
-        TransactionBuilder::new(self.network_id, self.inner.blockchain())
     }
 
     /// Sends a transaction to the network and returns {@link PlainTransactionDetails}.
