@@ -31,7 +31,7 @@ use crate::utils::{from_network_id, to_network_id};
 /// Transactions require a valid signature proof over their serialized content.
 /// Furthermore, transactions are only valid for 2 hours after their validity-start block height.
 #[derive(TryFromJsValue)]
-#[wasm_bindgen(inspectable)]
+#[wasm_bindgen]
 #[derive(Clone)]
 pub struct Transaction {
     inner: nimiq_transaction::Transaction,
@@ -342,19 +342,19 @@ impl Transaction {
     pub fn from_any(tx: &TransactionAnyType) -> Result<Transaction, JsError> {
         let js_value: &JsValue = tx.unchecked_ref();
 
-        Transaction::try_from(js_value)
-            .or_else(|_| {
-                Transaction::from_plain_transaction(&serde_wasm_bindgen::from_value::<
-                    PlainTransaction,
-                >(js_value.clone())?)
-            })
-            .or_else(|_| {
-                Ok(Transaction::from_native(
-                    nimiq_transaction::Transaction::deserialize_from_vec(&hex::decode(
-                        serde_wasm_bindgen::from_value::<String>(js_value.to_owned())?,
-                    )?)?,
-                ))
-            })
+        if let Ok(transaction) = Transaction::try_from(js_value) {
+            Ok(transaction)
+        } else if let Ok(plain) =
+            serde_wasm_bindgen::from_value::<PlainTransaction>(js_value.clone())
+        {
+            Ok(Transaction::from_plain_transaction(&plain)?)
+        } else if let Ok(string) = serde_wasm_bindgen::from_value::<String>(js_value.to_owned()) {
+            Ok(Transaction::from_native(
+                nimiq_transaction::Transaction::deserialize_from_vec(&hex::decode(string)?)?,
+            ))
+        } else {
+            Err(JsError::new("Failed to parse transaction."))
+        }
     }
 
     /// Parses a transaction from a plain object.

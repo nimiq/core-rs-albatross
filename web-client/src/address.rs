@@ -22,11 +22,13 @@ impl Address {
     pub fn from_any(addr: &AddressAnyType) -> Result<Address, JsError> {
         let js_value: &JsValue = addr.unchecked_ref();
 
-        Address::try_from(js_value).or_else(|_| {
-            Address::from_string(&serde_wasm_bindgen::from_value::<String>(
-                js_value.to_owned(),
-            )?)
-        })
+        if let Ok(address) = Address::try_from(js_value) {
+            Ok(address)
+        } else if let Ok(string) = serde_wasm_bindgen::from_value::<String>(js_value.to_owned()) {
+            Ok(Address::from_string(&string)?)
+        } else {
+            Err(JsError::new("Could not parse address"))
+        }
     }
 
     /// Parses an address from a string representation, either user-friendly or hex format.
