@@ -3,7 +3,7 @@
 A very light Nimiq Proof-of-Stake client that runs in web browsers, compiled from Rust to WebAssembly.
 
 > **Note**
-> This web client is intended to be used in web browsers only, as it requires `window` to be available (no WASI support either).
+> This web client is intended to be used in web browsers only (no WASI support either). Other webworker-enabled environments are not yet targeted.
 
 ## 📦 Installation
 
@@ -36,18 +36,19 @@ const Nimiq = await import('@nimiq/core-web');
 const config = new Nimiq.ClientConfiguration();
 
 // Connect to the Albatross Testnet:
-// Optional, default is 'devalbatross'
+// Optional, default is 'testalbatross'
 config.network('testalbatross');
 
 // Specify the seed nodes to initially connect to:
+// Optional, default is ['/dns4/seed1.pos.nimiq-testnet.com/tcp/8443/wss']
 config.seedNodes(['/dns4/seed1.pos.nimiq-testnet.com/tcp/8443/wss']);
 
 // Change the lowest log level that is output to the console:
 // Optional, default is 'info'
-config.logLevel('debug');
+config.logLevel('info');
 
 // Instantiate and launch the client:
-const client = config.instantiateClient();
+const client = Nimiq.Client.create(config.build());
 ```
 
 ### With ES Modules
@@ -62,10 +63,11 @@ init().then(() => {
     const config = new Nimiq.ClientConfiguration();
 
     // Connect to the Albatross Testnet:
-    // Optional, default is 'devalbatross'
+    // Optional, default is 'testalbatross'
     config.network('testalbatross');
 
     // Specify the seed nodes to initially connect to:
+    // Optional, default is ['/dns4/seed1.pos.nimiq-testnet.com/tcp/8443/wss']
     config.seedNodes(['/dns4/seed1.pos.nimiq-testnet.com/tcp/8443/wss']);
 
     // Change the lowest log level that is output to the console:
@@ -73,24 +75,13 @@ init().then(() => {
     config.logLevel('debug');
 
     // Instantiate and launch the client:
-    const client = config.instantiateClient();
+    const client = Nimiq.Client.create(config.build());
 });
 ```
 
-## ⏩ A Note about Performance
-
-WebAssembly is single-threaded by default. Additionally, it runs on the website's main thread and thus can block the UI when it does computationally heavy stuff. We are investigating various ways to mitigate or prevent any UI freezes, but we are not there yet.
-
-We will be happy to hear from you if you have any experience in the following topics:
-
-- Running WASM in a webworker
-- Using threads in WASM with `SharedArrayBuffer`
-
-See 👇 for our communication channels.
-
 ## 🐛 Issues, Bugs and Feedback
 
-This is a very early version of the client code compiled to WebAssembly and as such there will be problems and friction, especially now that more people try it out in more environments than we could ever test ourselves.
+This is an early version of the client code compiled to WebAssembly and as such there will be problems and friction, especially now that more people try it out in more environments than we could ever test ourselves.
 
 If you encounter issues or you find a bug, please open an issue in our Github at https://github.com/nimiq/core-rs-albatross.
 
