@@ -4602,6 +4602,7 @@ dependencies = [
  "wasm-bindgen-derive",
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
+ "wasm-timer",
  "web-sys",
 ]
 
@@ -7349,9 +7350,8 @@ dependencies = [
 
 [[package]]
 name = "wasm-timer"
-version = "0.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be0ecb0db480561e9a7642b5d3e4187c128914e58aa84330b9493e3eb68c5e7f"
+version = "0.2.6"
+source = "git+https://github.com/sisou/wasm-timer.git#ba05e62cff7f09f11405b721936b141acf44defb"
 dependencies = [
  "futures",
  "js-sys",

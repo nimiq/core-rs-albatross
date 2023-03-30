@@ -8,15 +8,20 @@ use std::{
     },
     rc::Rc,
     str::FromStr,
+    time::Duration,
 };
 
 use futures::{channel::oneshot, future::select, future::Either};
 use futures_util::StreamExt;
-use js_sys::{Array, Promise};
+use js_sys::{global, Array, Function, JsString};
 use log::level_filters::LevelFilter;
 use tsify::Tsify;
-use wasm_bindgen::prelude::*;
-use wasm_bindgen_futures::{spawn_local, JsFuture};
+use wasm_bindgen::{
+    prelude::{wasm_bindgen, Closure, JsError, JsValue},
+    JsCast,
+};
+use wasm_bindgen_futures::spawn_local;
+use web_sys::MessageEvent;
 
 pub use nimiq::{
     client::Consensus,
@@ -178,11 +183,10 @@ pub struct Client {
     subscribed_addresses: Rc<RefCell<HashMap<nimiq_keys::Address, u16>>>,
 
     listener_id: Cell<usize>,
-    consensus_changed_listeners: Rc<RefCell<HashMap<usize, js_sys::Function>>>,
-    head_changed_listeners: Rc<RefCell<HashMap<usize, js_sys::Function>>>,
-    peer_changed_listeners: Rc<RefCell<HashMap<usize, js_sys::Function>>>,
-    transaction_listeners:
-        Rc<RefCell<HashMap<usize, (js_sys::Function, HashSet<nimiq_keys::Address>)>>>,
+    consensus_changed_listeners: Rc<RefCell<HashMap<usize, Function>>>,
+    head_changed_listeners: Rc<RefCell<HashMap<usize, Function>>>,
+    peer_changed_listeners: Rc<RefCell<HashMap<usize, Function>>>,
+    transaction_listeners: Rc<RefCell<HashMap<usize, (Function, HashSet<nimiq_keys::Address>)>>>,
 
     /// Map from transaction hash as hex string to oneshot sender.
     /// Used to await transaction events in `send_transaction`.
@@ -276,7 +280,7 @@ impl Client {
         listener: ConsensusChangedListener,
     ) -> Result<usize, JsError> {
         let listener = listener
-            .dyn_into::<js_sys::Function>()
+            .dyn_into::<Function>()
             .map_err(|_| JsError::new("listener is not a function"))?;
 
         let listener_id = self.next_listener_id();
@@ -293,7 +297,7 @@ impl Client {
         listener: HeadChangedListener,
     ) -> Result<usize, JsError> {
         let listener = listener
-            .dyn_into::<js_sys::Function>()
+            .dyn_into::<Function>()
             .map_err(|_| JsError::new("listener is not a function"))?;
 
         let listener_id = self.next_listener_id();
@@ -310,7 +314,7 @@ impl Client {
         listener: PeerChangedListener,
     ) -> Result<usize, JsError> {
         let listener = listener
-            .dyn_into::<js_sys::Function>()
+            .dyn_into::<Function>()
             .map_err(|_| JsError::new("listener is not a function"))?;
 
         let listener_id = self.next_listener_id();
@@ -330,7 +334,7 @@ impl Client {
         addresses: &AddressAnyArrayType,
     ) -> Result<usize, JsError> {
         let listener = listener
-            .dyn_into::<js_sys::Function>()
+            .dyn_into::<Function>()
             .map_err(|_| JsError::new("listener is not a function"))?;
 
         let addresses: HashSet<_, _> = Client::unpack_addresses(addresses)?.into_iter().collect();
@@ -621,11 +625,7 @@ impl Client {
         // Actually send the transaction
         consensus.send_transaction(tx.native()).await?;
 
-        let timeout = JsFuture::from(Promise::new(&mut |resolve, _| {
-            Client::window()
-                .set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, 10_000)
-                .unwrap();
-        }));
+        let timeout = wasm_timer::Delay::new(Duration::from_secs(10));
 
         // Wait for the transaction (will be None if the timeout is reached first)
         let res = select(receiver, timeout).await;
@@ -660,38 +660,39 @@ impl Client {
     }
 
     fn setup_offline_online_event_handlers(&self) {
-        let window = Client::window();
         let network = self.inner.network();
-        let network1 = self.inner.network();
 
         // Register online closure
-        let online_closure = Closure::<dyn Fn()>::new(move || {
-            let network = network.clone();
-            spawn_local(async move {
-                let network = network.clone();
-                network.restart_connecting().await;
-            });
+        let handler = Closure::<dyn Fn(MessageEvent) -> ()>::new(move |event: MessageEvent| {
+            match event.data().dyn_ref::<JsString>() {
+                Some(state) => {
+                    if state == &JsString::from_str("offline").unwrap() {
+                        log::warn!("Network went offline");
+                        let network = network.clone();
+                        spawn_local(async move {
+                            let network = network.clone();
+                            network.disconnect(CloseReason::GoingOffline).await;
+                        });
+                    }
+                    if state == &JsString::from_str("online").unwrap() {
+                        log::warn!("Network went online");
+                        let network = network.clone();
+                        spawn_local(async move {
+                            let network = network.clone();
+                            network.restart_connecting().await;
+                        });
+                    }
+                }
+                None => {}
+            }
         });
-        window
-            .add_event_listener_with_callback("online", online_closure.as_ref().unchecked_ref())
-            .expect("Unable to set callback for 'online' event");
 
-        // Register offline closure
-        let offline_closure = Closure::<dyn Fn()>::new(move || {
-            let network = network1.clone();
-            spawn_local(async move {
-                let network = network.clone();
-                network.disconnect(CloseReason::GoingOffline).await;
-            });
-        });
-        window
-            .add_event_listener_with_callback("offline", offline_closure.as_ref().unchecked_ref())
-            .expect("Unable to set callback for 'offline' event");
+        add_event_listener("message", handler.as_ref().unchecked_ref())
+            .expect("Unable to set event listener for 'message' event");
 
         // Closures can't be dropped since they will be needed outside the context
         // of this function
-        offline_closure.forget();
-        online_closure.forget();
+        handler.forget();
     }
 
     fn setup_consensus_events(&self) {
@@ -729,7 +730,7 @@ impl Client {
     }
 
     fn fire_consensus_event(
-        listeners: &Rc<RefCell<HashMap<usize, js_sys::Function>>>,
+        listeners: &Rc<RefCell<HashMap<usize, Function>>>,
         state: ConsensusState,
     ) {
         let state = JsValue::from(state.to_string());
@@ -1241,10 +1242,6 @@ impl Client {
 
         Ok(ordered_validators)
     }
-
-    fn window() -> web_sys::Window {
-        web_sys::window().expect("Unable to get a reference to the JS `Window` object")
-    }
 }
 
 #[wasm_bindgen]
@@ -1264,4 +1261,22 @@ extern "C" {
 
     #[wasm_bindgen(typescript_type = "(transaction: PlainTransactionDetails) => any")]
     pub type TransactionListener;
+
+
+#[wasm_bindgen]
+extern "C" {
+    pub type GlobalScope;
+
+    #[wasm_bindgen(catch, method, js_name = addEventListener)]
+    pub fn add_event_listener_with_callback(
+        this: &GlobalScope,
+        event: &str,
+        callback: &Function,
+    ) -> Result<(), wasm_bindgen::JsValue>;
+}
+
+fn add_event_listener(event: &str, callback: &Function) -> Result<(), wasm_bindgen::JsValue> {
+    let global_this = global();
+    let global_scope = global_this.unchecked_ref::<GlobalScope>();
+    global_scope.add_event_listener_with_callback(event, callback)
 }
