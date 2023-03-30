@@ -101,6 +101,17 @@ pub struct ClientConfiguration {
     log_level: String,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub struct PlainClientConfiguration {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub network_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub seed_nodes: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub log_level: Option<String>,
+}
+
 impl Default for ClientConfiguration {
     fn default() -> Self {
         Self {
@@ -151,10 +162,46 @@ impl ClientConfiguration {
         self.log_level = log_level.to_lowercase();
     }
 
-    /// Instantiates a client from this configuration builder.
-    #[wasm_bindgen(js_name = instantiateClient)]
-    pub async fn instantiate_client(&self) -> Client {
-        Client::create(self).await
+    // /// Instantiates a client from this configuration builder.
+    // #[wasm_bindgen(js_name = instantiateClient)]
+    // pub async fn instantiate_client(&self) -> Client {
+    //     match Client::create(&self.build()).await {
+    //         Ok(client) => client,
+    //         Err(_) => unreachable!(),
+    //     }
+    // }
+
+    pub fn build(&self) -> PlainClientConfigurationType {
+        serde_wasm_bindgen::to_value(&PlainClientConfiguration {
+            network_id: Some(self.network_id.to_string()),
+            seed_nodes: Some(self.seed_nodes.clone()),
+            log_level: Some(self.log_level.clone()),
+        })
+        .unwrap()
+        .into()
+    }
+}
+
+impl TryFrom<PlainClientConfiguration> for ClientConfiguration {
+    type Error = JsError;
+
+    fn try_from(config: PlainClientConfiguration) -> Result<ClientConfiguration, JsError> {
+        let mut client_config = ClientConfiguration::default();
+
+        if let Some(network_id) = config.network_id {
+            client_config.network_id = NetworkId::from_str(&network_id)
+                .map_err(|err| JsError::new(&format!("Invalid network ID: {}", err)))?;
+        }
+
+        if let Some(seed_nodes) = config.seed_nodes {
+            client_config.seed_nodes = seed_nodes;
+        }
+
+        if let Some(log_level) = config.log_level {
+            client_config.log_level = log_level;
+        }
+
+        Ok(client_config)
     }
 }
 
@@ -196,7 +243,11 @@ pub struct Client {
 #[wasm_bindgen]
 impl Client {
     /// Creates a new Client that automatically starts connecting to the network.
-    pub async fn create(web_config: &ClientConfiguration) -> Self {
+    pub async fn create(config: &PlainClientConfigurationType) -> Result<Client, JsError> {
+        let plain_config: PlainClientConfiguration =
+            serde_wasm_bindgen::from_value(config.clone().into())?;
+        let web_config = ClientConfiguration::try_from(plain_config)?;
+
         let log_settings = LogSettings {
             level: Some(LevelFilter::from_str(web_config.log_level.as_str()).unwrap()),
             ..Default::default()
@@ -270,7 +321,7 @@ impl Client {
         client.setup_network_events();
         client.setup_transaction_events().await;
 
-        client
+        Ok(client)
     }
 
     /// Adds an event listener for consensus-change events, such as when consensus is established or lost.
@@ -1269,6 +1320,9 @@ extern "C" {
     #[wasm_bindgen(typescript_type = "(transaction: PlainTransactionDetails) => any")]
     pub type TransactionListener;
 
+    #[wasm_bindgen(typescript_type = "PlainClientConfiguration")]
+    pub type PlainClientConfigurationType;
+}
 
 #[wasm_bindgen]
 extern "C" {
