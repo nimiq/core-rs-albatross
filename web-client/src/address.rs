@@ -2,13 +2,14 @@ use std::str::FromStr;
 
 use beserial::Serialize;
 use wasm_bindgen::prelude::*;
+#[cfg(feature = "primitives")]
 use wasm_bindgen_derive::TryFromJsValue;
 
 /// An object representing a Nimiq address.
 /// Offers methods to parse and format addresses from and to strings.
-#[derive(TryFromJsValue)]
+#[cfg_attr(feature = "primitives", derive(TryFromJsValue))]
 #[wasm_bindgen]
-#[derive(Clone)]
+#[cfg_attr(feature = "primitives", derive(Clone))]
 pub struct Address {
     inner: nimiq_keys::Address,
 }
@@ -22,9 +23,12 @@ impl Address {
     pub fn from_any(addr: &AddressAnyType) -> Result<Address, JsError> {
         let js_value: &JsValue = addr.unchecked_ref();
 
+        #[cfg(feature = "primitives")]
         if let Ok(address) = Address::try_from(js_value) {
-            Ok(address)
-        } else if let Ok(string) = serde_wasm_bindgen::from_value::<String>(js_value.to_owned()) {
+            return Ok(address);
+        }
+
+        if let Ok(string) = serde_wasm_bindgen::from_value::<String>(js_value.to_owned()) {
             Ok(Address::from_string(&string)?)
         } else {
             Err(JsError::new("Could not parse address"))

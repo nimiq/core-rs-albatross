@@ -3,18 +3,23 @@ use std::str::FromStr;
 use serde::ser::SerializeStruct;
 use tsify::Tsify;
 use wasm_bindgen::prelude::*;
+#[cfg(feature = "primitives")]
 use wasm_bindgen_derive::TryFromJsValue;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_hash::{Blake2bHash, Hash};
-use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId, policy::Policy};
+#[cfg(feature = "client")]
+use nimiq_primitives::policy::Policy;
+use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId};
+
+#[cfg(feature = "client")]
+use nimiq_transaction::extended_transaction::ExtendedTransaction;
 use nimiq_transaction::{
     account::{
         htlc_contract::CreationTransactionData as HtlcCreationTransactionData,
         staking_contract::IncomingStakingTransactionData,
         vesting_contract::CreationTransactionData as VestingCreationTransactionData,
     },
-    extended_transaction::ExtendedTransaction,
     TransactionFlags, TransactionFormat,
 };
 use nimiq_transaction_builder::TransactionProofBuilder;
@@ -30,9 +35,9 @@ use crate::utils::{from_network_id, to_network_id};
 ///
 /// Transactions require a valid signature proof over their serialized content.
 /// Furthermore, transactions are only valid for 2 hours after their validity-start block height.
-#[derive(TryFromJsValue)]
+#[cfg_attr(feature = "primitives", derive(TryFromJsValue))]
 #[wasm_bindgen]
-#[derive(Clone)]
+#[cfg_attr(feature = "primitives", derive(Clone))]
 pub struct Transaction {
     inner: nimiq_transaction::Transaction,
 }
@@ -348,11 +353,12 @@ impl Transaction {
     pub fn from_any(tx: &TransactionAnyType) -> Result<Transaction, JsError> {
         let js_value: &JsValue = tx.unchecked_ref();
 
+        #[cfg(feature = "primitives")]
         if let Ok(transaction) = Transaction::try_from(js_value) {
-            Ok(transaction)
-        } else if let Ok(plain) =
-            serde_wasm_bindgen::from_value::<PlainTransaction>(js_value.clone())
-        {
+            return Ok(transaction);
+        }
+
+        if let Ok(plain) = serde_wasm_bindgen::from_value::<PlainTransaction>(js_value.clone()) {
             Ok(Transaction::from_plain_transaction(&plain)?)
         } else if let Ok(string) = serde_wasm_bindgen::from_value::<String>(js_value.to_owned()) {
             Ok(Transaction::from_native(
@@ -801,6 +807,7 @@ impl serde::Serialize for PlainTransactionDetails {
     }
 }
 
+#[cfg(feature = "client")]
 impl PlainTransactionDetails {
     // Construct a TransactionDetails struct with all details manually
     pub fn new(
@@ -860,6 +867,7 @@ pub struct PlainTransactionReceipt {
     pub block_height: u32,
 }
 
+#[cfg(feature = "client")]
 impl PlainTransactionReceipt {
     /// Creates a PlainTransactionReceipt struct that can be serialized to JS.
     pub fn from_receipt(receipt: &(Blake2bHash, u32)) -> Self {

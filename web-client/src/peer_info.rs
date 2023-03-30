@@ -1,5 +1,6 @@
 use tsify::Tsify;
 
+#[cfg(feature = "client")]
 use nimiq_network_interface::peer_info::{NodeType, Services};
 
 /// Information about a networking peer.
@@ -14,6 +15,7 @@ pub struct PlainPeerInfo {
     pub node_type: String,
 }
 
+#[cfg(feature = "client")]
 impl PlainPeerInfo {
     pub fn from_native(peer_info: nimiq_network_interface::peer_info::PeerInfo) -> Self {
         let node_type = if peer_info

@@ -43,6 +43,7 @@ pub struct PlainStakingContract {
     previous_disabled_slots: Vec<(String, Vec<u16>)>,
 }
 
+#[cfg(feature = "client")]
 #[derive(serde::Serialize, Tsify)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum PlainAccount {
@@ -52,6 +53,7 @@ pub enum PlainAccount {
     Staking(PlainStakingContract),
 }
 
+#[cfg(feature = "client")]
 impl PlainAccount {
     pub fn from_native(account: &nimiq_account::Account) -> PlainAccount {
         match account {
@@ -139,6 +141,7 @@ pub struct PlainStaker {
     delegation: Option<String>,
 }
 
+#[cfg(feature = "client")]
 impl PlainStaker {
     pub fn from_native(staker: &nimiq_account::Staker) -> PlainStaker {
         PlainStaker {
@@ -180,6 +183,7 @@ pub struct PlainValidator {
     pub retired: bool,
 }
 
+#[cfg(feature = "client")]
 impl PlainValidator {
     pub fn from_native(validator: &nimiq_account::Validator) -> PlainValidator {
         PlainValidator {
