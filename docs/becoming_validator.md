@@ -35,7 +35,7 @@ For running a validator you need the following items:
 
 Note that we will use them in the following steps to configure your validator. Write down your public and private keys.
 
-To generate a Nimiq address or Schnorr keypair, you can use:
+To generate the Schnorr keypairs and the validator address, you can use:
 
 ```
 cargo run --bin nimiq-address
@@ -73,7 +73,15 @@ voting_key = "BLS Private Key"
 automatic_reactivate = true
 ```
 
-Replace the validator address and keys generated accordingly.
+Replace the validator address and keys generated accordingly:
+* The voting key in the config file corresponds to the secret key of the `nimiq-bls` command.
+* The signing key corresponds to the private key of the `nimiq-address` command.
+* The fee key corresponds to the private key of the `nimiq-address` command.
+* The validator address corresponds to the address of the `nimiq-address` command.
+
+Note: If you are creating a new validator from scratch, and you need to generate all those keys, then you will need to use the `nimiq-address` three times and the `nimiq-bls` one time.
+When sending the create validator transaction, as described below, the validator deposit will be paid from the `wallet` associated to the validator address.
+The `fee-key` is used to pay the fees associated to the automatic unpark/reactivate (if enabled).
 
 ### 2.3 TLS Certificate
 
