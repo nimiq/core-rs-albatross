@@ -104,8 +104,8 @@ pub struct ClientConfiguration {
 impl Default for ClientConfiguration {
     fn default() -> Self {
         Self {
-            network_id: NetworkId::DevAlbatross,
-            seed_nodes: vec![],
+            network_id: NetworkId::TestAlbatross,
+            seed_nodes: vec!["/dns4/seed1.pos.nimiq-testnet.com/tcp/8443/wss".to_string()],
             log_level: "info".to_string(),
         }
     }
