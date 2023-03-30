@@ -462,14 +462,14 @@ impl Client {
 
     /// Returns if the client currently has consensus with the network.
     #[wasm_bindgen(js_name = isConsensusEstablished)]
-    pub fn is_consensus_established(&self) -> bool {
+    pub async fn is_consensus_established(&self) -> bool {
         self.inner.consensus_proxy().is_established()
     }
 
     /// Returns a promise that resolves when the client has established consensus with the network.
     #[wasm_bindgen(js_name = waitForConsensusEstablished)]
     pub async fn wait_for_consensus_established(&self) -> Result<(), JsError> {
-        if self.is_consensus_established() {
+        if self.is_consensus_established().await {
             return Ok(());
         }
 
@@ -481,7 +481,7 @@ impl Client {
                 if let Ok(state) = event {
                     matches!(state, ConsensusEvent::Established)
                 } else {
-                    self.is_consensus_established()
+                    self.is_consensus_established().await
                 }
             })
             .await;
