@@ -114,7 +114,7 @@ impl Client {
     /// Creates a new Client that automatically starts connecting to the network.
     pub async fn create(config: &PlainClientConfigurationType) -> Result<Client, JsError> {
         let plain_config: PlainClientConfiguration =
-            serde_wasm_bindgen::from_value(config.clone().into())?;
+            serde_wasm_bindgen::from_value((*config).clone())?;
         let web_config = ClientConfiguration::try_from(plain_config)?;
 
         let log_settings = LogSettings {
@@ -583,27 +583,23 @@ impl Client {
         let network = self.inner.network();
 
         // Register online closure
-        let handler = Closure::<dyn Fn(MessageEvent) -> ()>::new(move |event: MessageEvent| {
-            match event.data().dyn_ref::<JsString>() {
-                Some(state) => {
-                    if state == &JsString::from_str("offline").unwrap() {
-                        log::warn!("Network went offline");
+        let handler = Closure::<dyn Fn(MessageEvent)>::new(move |event: MessageEvent| {
+            if let Some(state) = event.data().dyn_ref::<JsString>() {
+                if state == &JsString::from_str("offline").unwrap() {
+                    log::warn!("Network went offline");
+                    let network = network.clone();
+                    spawn_local(async move {
                         let network = network.clone();
-                        spawn_local(async move {
-                            let network = network.clone();
-                            network.disconnect(CloseReason::GoingOffline).await;
-                        });
-                    }
-                    if state == &JsString::from_str("online").unwrap() {
-                        log::warn!("Network went online");
+                        network.disconnect(CloseReason::GoingOffline).await;
+                    });
+                } else if state == &JsString::from_str("online").unwrap() {
+                    log::warn!("Network went online");
+                    let network = network.clone();
+                    spawn_local(async move {
                         let network = network.clone();
-                        spawn_local(async move {
-                            let network = network.clone();
-                            network.restart_connecting().await;
-                        });
-                    }
+                        network.restart_connecting().await;
+                    });
                 }
-                None => {}
             }
         });
 
