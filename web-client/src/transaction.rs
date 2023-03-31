@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+#[cfg(feature = "client")]
 use serde::ser::SerializeStruct;
 use tsify::Tsify;
 use wasm_bindgen::prelude::*;
@@ -22,9 +23,11 @@ use nimiq_transaction::{
     },
     TransactionFlags, TransactionFormat,
 };
+#[cfg(feature = "primitives")]
 use nimiq_transaction_builder::TransactionProofBuilder;
 
 use crate::address::Address;
+#[cfg(feature = "primitives")]
 use crate::key_pair::KeyPair;
 use crate::utils::{from_network_id, to_network_id};
 
@@ -138,6 +141,7 @@ impl Transaction {
     /// - For transaction to the staking contract, both signatures are made with the same keypair,
     ///   so it is not possible to interact with a staker that is different from the sender address
     ///   or using a different cold or signing key for validator transactions.
+    #[cfg(feature = "primitives")]
     pub fn sign(&self, key_pair: &KeyPair) -> Result<Transaction, JsError> {
         let proof_builder = TransactionProofBuilder::new(self.native_ref().clone());
         let signed_transaction = match proof_builder {
@@ -391,10 +395,12 @@ impl Transaction {
         &self.inner
     }
 
+    #[cfg(feature = "client")]
     pub fn native(&self) -> nimiq_transaction::Transaction {
         self.inner.clone()
     }
 
+    #[cfg(feature = "client")]
     pub fn take_native(self) -> nimiq_transaction::Transaction {
         self.inner
     }
@@ -726,6 +732,7 @@ pub struct PlainTransaction {
 }
 
 /// Describes the state of a transaction as known by the client.
+#[cfg(feature = "client")]
 #[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
 #[serde(rename_all = "lowercase")]
 pub enum TransactionState {
@@ -751,6 +758,7 @@ pub enum TransactionState {
 /// JSON-compatible and human-readable format of transactions, including details about its state in the
 /// blockchain. Contains all fields from {@link PlainTransaction}, plus additional fields such as
 /// `blockHeight` and `timestamp` if the transaction is included in the blockchain.
+#[cfg(feature = "client")]
 #[derive(Clone, serde::Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct PlainTransactionDetails {
@@ -772,6 +780,7 @@ pub struct PlainTransactionDetails {
 //
 // Unfortunately, serde cannot serialize a struct that includes a #[serde(flatten)] annotation into an Object,
 // and the Github issue for it is closed as "wontfix": https://github.com/serde-rs/serde/issues/1346
+#[cfg(feature = "client")]
 impl serde::Serialize for PlainTransactionDetails {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -858,6 +867,7 @@ impl PlainTransactionDetails {
 }
 
 /// JSON-compatible and human-readable format of transaction receipts.
+#[cfg(feature = "client")]
 #[derive(serde::Serialize, serde::Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct PlainTransactionReceipt {

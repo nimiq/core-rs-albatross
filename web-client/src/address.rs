@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+#[cfg(feature = "primitives")]
 use beserial::Serialize;
 use wasm_bindgen::prelude::*;
 #[cfg(feature = "primitives")]
@@ -46,6 +47,7 @@ impl Address {
     /// Parses an address from its user-friendly string representation.
     ///
     /// Throws when an address cannot be parsed from the string.
+    #[cfg(feature = "primitives")]
     #[wasm_bindgen(js_name = fromUserFriendlyAddress)]
     pub fn from_user_friendly_address(str: &str) -> Result<Address, JsError> {
         Ok(Address::from_native(
@@ -56,21 +58,24 @@ impl Address {
     /// Formats the address into a plain string format.
     #[wasm_bindgen(js_name = toPlain)]
     pub fn to_plain(&self) -> String {
-        self.to_user_friendly_address()
+        self.inner.to_user_friendly_address()
     }
 
     /// Formats the address into user-friendly IBAN format.
+    #[cfg(feature = "primitives")]
     #[wasm_bindgen(js_name = toUserFriendlyAddress)]
     pub fn to_user_friendly_address(&self) -> String {
         self.inner.to_user_friendly_address()
     }
 
     /// Formats the address into hex format.
+    #[cfg(feature = "primitives")]
     #[wasm_bindgen(js_name = toHex)]
     pub fn to_hex(&self) -> String {
         self.inner.to_hex()
     }
 
+    #[cfg(feature = "primitives")]
     pub fn serialize(&self) -> Vec<u8> {
         self.inner.serialize_to_vec()
     }
@@ -85,10 +90,12 @@ impl Address {
         &self.inner
     }
 
+    #[cfg(feature = "client")]
     pub fn native(&self) -> nimiq_keys::Address {
         self.inner.clone()
     }
 
+    #[cfg(feature = "client")]
     pub fn take_native(self) -> nimiq_keys::Address {
         self.inner
     }

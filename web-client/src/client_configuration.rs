@@ -1,9 +1,13 @@
+#[cfg(any(feature = "client", feature = "primitives"))]
 use std::str::FromStr;
 
+#[cfg(feature = "client")]
 use tsify::Tsify;
+use wasm_bindgen::prelude::wasm_bindgen;
+#[cfg(any(feature = "client", feature = "primitives"))]
+use wasm_bindgen::prelude::JsError;
 #[cfg(feature = "primitives")]
 use wasm_bindgen::prelude::JsValue;
-use wasm_bindgen::prelude::{wasm_bindgen, JsError};
 
 use nimiq_primitives::networks::NetworkId;
 
@@ -20,16 +24,16 @@ pub struct ClientConfiguration {
     pub log_level: String,
 }
 
+#[cfg(any(feature = "client", feature = "primitives"))]
 #[cfg_attr(feature = "primitives", derive(serde::Serialize))]
 #[cfg_attr(feature = "client", derive(serde::Deserialize))]
-#[derive(Tsify)]
-#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "client", derive(Tsify), serde(rename_all = "camelCase"))]
 pub struct PlainClientConfiguration {
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "client", serde(skip_serializing_if = "Option::is_none"))]
     pub network_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "client", serde(skip_serializing_if = "Option::is_none"))]
     pub seed_nodes: Option<Vec<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "client", serde(skip_serializing_if = "Option::is_none"))]
     pub log_level: Option<String>,
 }
 
@@ -43,12 +47,12 @@ impl Default for ClientConfiguration {
     }
 }
 
+#[cfg(feature = "primitives")]
 #[wasm_bindgen]
 impl ClientConfiguration {
     /// Creates a default client configuration that can be used to change the client's configuration.
     ///
     /// Use its `instantiateClient()` method to launch the client and connect to the network.
-    #[cfg(feature = "primitives")]
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         ClientConfiguration::default()
@@ -58,7 +62,6 @@ impl ClientConfiguration {
     ///
     /// Possible values are `'TestAlbatross' | 'DevAlbatross'`.
     /// Default is `'DevAlbatross'`.
-    #[cfg(feature = "primitives")]
     pub fn network(&mut self, network: String) -> Result<(), JsError> {
         self.network_id = NetworkId::from_str(&network)?;
         Ok(())
@@ -67,7 +70,6 @@ impl ClientConfiguration {
     /// Sets the list of seed nodes that are used to connect to the Nimiq Albatross network.
     ///
     /// Each array entry must be a proper Multiaddr format string.
-    #[cfg(feature = "primitives")]
     #[wasm_bindgen(js_name = seedNodes)]
     #[allow(clippy::boxed_local)]
     pub fn seed_nodes(&mut self, seeds: Box<[JsValue]>) {
@@ -81,7 +83,6 @@ impl ClientConfiguration {
     ///
     /// Possible values are `'trace' | 'debug' | 'info' | 'warn' | 'error'`.
     /// Default is `'info'`.
-    #[cfg(feature = "primitives")]
     #[wasm_bindgen(js_name = logLevel)]
     pub fn log_level(&mut self, log_level: String) {
         self.log_level = log_level.to_lowercase();
@@ -96,7 +97,6 @@ impl ClientConfiguration {
     //     }
     // }
 
-    #[cfg(feature = "primitives")]
     pub fn build(&self) -> PlainClientConfigurationType {
         serde_wasm_bindgen::to_value(&PlainClientConfiguration {
             network_id: Some(self.network_id.to_string()),
