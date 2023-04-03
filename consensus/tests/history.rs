@@ -537,15 +537,10 @@ async fn request_missing_blocks_across_macro_block() {
     // Instead of gossiping the block, we'll answer the missing blocks request
     mock_node.set_missing_block_handler(Some(|_mock_peer_id, req, blockchain| {
         assert_eq!(&req.target_hash, blockchain.read().head().parent_hash());
-
+        let genesis = req.locators.first().unwrap();
         let blocks = blockchain
             .read()
-            .get_blocks(
-                &blockchain.read().macro_head().header.parent_hash,
-                2,
-                true,
-                Direction::Forward,
-            )
+            .get_blocks(genesis, 2, true, Direction::Forward)
             .unwrap();
 
         ResponseBlocks {
@@ -553,37 +548,39 @@ async fn request_missing_blocks_across_macro_block() {
         }
     }));
     let req = mock_node.next().await.unwrap();
+    mock_node.set_missing_block_handler(None);
     assert_eq!(req, RequestMissingBlocks::TYPE_ID);
 
-    let macro_head = Block::Macro(mock_node.blockchain.read().macro_head());
-
-    // Run the block_queue one iteration, i.e. until it processed one block
+    // Run the block_queue one iteration, i.e. until it processed one block.
+    // Needs to be pulled again to send the request missing block over the network.
+    syncer.next().await;
     let _ = poll!(syncer.next());
 
-    // The blocks from the first missing blocks request should be buffered now
-    assert_eq!(blockchain1.read().block_number(), 0);
+    // The blocks from the first missing blocks request should be applied now
+    assert_eq!(blockchain1.read().block_number(), 2);
     let blocks = syncer
         .live_sync
         .queue()
         .buffered_blocks()
         .collect::<Vec<_>>();
-    assert_eq!(blocks.len(), 3);
+    assert_eq!(blocks.len(), 1);
     let (block_number, blocks) = blocks.get(0).unwrap();
-    assert_eq!(*block_number, macro_head.block_number());
-    assert_eq!(blocks[0], &macro_head);
+    assert_eq!(*block_number, block2.block_number());
+    assert_eq!(blocks[0], &block2);
 
     // Also we should've received a request to fill the second gap.
-    mock_node.set_missing_block_handler(None);
     let req = mock_node.next().await.unwrap();
     assert_eq!(req, RequestMissingBlocks::TYPE_ID);
 
-    // Run the block_queue until is has produced four events:
-    //   - ReceivedMissingBlocks (1-31)
-    //   - AcceptedBufferedBlock (32)
-    //   - AcceptedBufferedBlock (33)
+    // Run the block_queue until is has produced three events:
+    //   - ReceivedMissingBlocks (3-31)
+    //   - ReceivedMissingBlocks (32-33)
     //   - AcceptedBufferedBlock (34)
     syncer.next().await;
-    syncer.next().await;
+    let _ = poll!(syncer.next());
+    let req = mock_node.next().await.unwrap();
+    assert_eq!(req, RequestMissingBlocks::TYPE_ID);
+
     syncer.next().await;
     syncer.next().await;
 

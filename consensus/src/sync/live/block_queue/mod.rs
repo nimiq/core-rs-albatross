@@ -274,7 +274,7 @@ impl<N: Network> BlockQueue<N> {
         }
 
         // We don't know the predecessor of this block, request it.
-        self.request_missing_blocks(block_number - 1, parent_hash);
+        self.request_missing_blocks(block_number - 1, parent_hash, None);
     }
 
     fn insert_block_into_buffer(&mut self, block: Block, pubsub_id: Option<N::PubsubId>) -> bool {
@@ -292,20 +292,17 @@ impl<N: Network> BlockQueue<N> {
     }
 
     /// Requests missing blocks.
-    fn request_missing_blocks(&mut self, block_number: u32, block_hash: Blake2bHash) {
+    fn request_missing_blocks(
+        &mut self,
+        block_number: u32,
+        block_hash: Blake2bHash,
+        block_locator: Option<Blake2bHash>,
+    ) {
         let (head_hash, head_height, macro_height, blocks) = {
             let blockchain = self.blockchain.read();
             let head_hash = blockchain.head_hash();
             let head_height = blockchain.block_number();
             let macro_height = Policy::last_macro_block(head_height);
-
-            log::debug!(
-                block_number,
-                %block_hash,
-                %head_hash,
-                macro_height,
-                "Requesting missing blocks",
-            );
 
             // Get block locators. The blocks returned by `get_blocks` do *not* include the start block.
             // FIXME We don't want to send the full batch as locators here.
@@ -319,27 +316,100 @@ impl<N: Network> BlockQueue<N> {
         };
 
         if let Ok(blocks) = blocks {
+            log::debug!(
+                block_number,
+                %block_hash,
+                %head_hash,
+                macro_height,
+                "Requesting missing blocks",
+            );
+
             let block_locators = blocks.into_iter().map(|block| block.hash());
 
+            let init_block_locators = if let Some(block_locator) = block_locator {
+                vec![block_locator, head_hash]
+            } else {
+                vec![head_hash]
+            };
             // Prepend our current head hash.
-            let block_locators = vec![head_hash].into_iter().chain(block_locators).collect();
+            let block_locators = init_block_locators
+                .into_iter()
+                .chain(block_locators)
+                .collect();
 
             // FIXME Send missing blocks request to the peer that announced the block (first).
             self.request_component
-                .request_missing_blocks(block_hash, block_locators);
+                .request_missing_blocks(block_number, block_hash, block_locators);
         } else {
             log::error!(start_block = %head_hash, count = head_height - macro_height, "Couldn't get blocks")
         }
     }
 
     /// Handles missing blocks that were received.
-    fn handle_missing_blocks(&mut self, blocks: Vec<Block>) -> Option<QueuedBlock<N>> {
+    fn handle_missing_blocks(
+        &mut self,
+        target_block_number: u32,
+        target_hash: Blake2bHash,
+        blocks: Vec<Block>,
+    ) -> Option<QueuedBlock<N>> {
         if blocks.is_empty() {
             log::debug!("Received empty missing blocks response");
             return None;
         }
 
-        // FIXME Sanity-check blocks
+        // Checks that the first block was part of the chain or block locators.
+        let first_block = blocks.first()?;
+        if !self
+            .blockchain
+            .read()
+            .contains(first_block.parent_hash(), false)
+            && !self.blocks_pending_push.contains(first_block.parent_hash())
+            && !self
+                .buffer
+                .get(&first_block.block_number())
+                .map(|blocks| blocks.contains_key(first_block.parent_hash()))
+                .unwrap_or(false)
+        {
+            log::error!("Received invalid chain of missing blocks (first block not in chain or block locators)");
+            return None;
+        }
+        if first_block.block_number() > target_block_number {
+            log::error!(
+                first_block = first_block.block_number(),
+                target_block_number,
+                "Received invalid chain of missing blocks (first block > target)"
+            );
+            return None;
+        }
+
+        // Check that the chain of missing blocks is valid.
+        let mut previous = first_block;
+        for block in blocks.iter().skip(1) {
+            if block.block_number() == previous.block_number() + 1
+                && block.block_number() <= target_block_number
+                && block.parent_hash() == &previous.hash()
+            {
+                previous = block;
+            } else {
+                log::error!("Received invalid chain of missing blocks");
+                return None;
+            }
+        }
+
+        let last_block = blocks.last()?;
+        let block_hash = last_block.hash();
+        if last_block.block_number() == target_block_number && block_hash != target_hash {
+            log::error!(
+                target_block_number,
+                %block_hash,
+                %target_hash,
+                "Received invalid missing blocks (invalid target block)"
+            );
+            return None;
+        }
+        if block_hash != target_hash {
+            self.request_missing_blocks(target_block_number, target_hash, Some(block_hash));
+        }
 
         // Check whether the blockchain can push the missing blocks. This might not be the case if the reference
         // block used in the request is from a batch that we have not adopted yet.
@@ -566,8 +636,14 @@ impl<N: Network> Stream for BlockQueue<N> {
         loop {
             let poll_res = self.request_component.poll_next_unpin(cx);
             match poll_res {
-                Poll::Ready(Some(BlockRequestComponentEvent::ReceivedBlocks(blocks))) => {
-                    if let Some(block) = self.handle_missing_blocks(blocks) {
+                Poll::Ready(Some(BlockRequestComponentEvent::ReceivedBlocks(
+                    target_block_number,
+                    target_hash,
+                    blocks,
+                ))) => {
+                    if let Some(block) =
+                        self.handle_missing_blocks(target_block_number, target_hash, blocks)
+                    {
                         return Poll::Ready(Some(block));
                     }
                 }

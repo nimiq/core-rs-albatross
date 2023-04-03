@@ -241,7 +241,7 @@ impl<N: Network> ZKPComponent<N> {
                     log::info!("The zk proof was successfully load from disk");
                 }
             } else {
-                log::trace!("No zk proof found on the db");
+                log::info!("No zk proof found on the db");
             }
         }
     }

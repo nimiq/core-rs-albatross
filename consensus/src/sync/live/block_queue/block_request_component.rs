@@ -19,7 +19,8 @@ use crate::{
 
 #[derive(Debug)]
 pub enum BlockRequestComponentEvent {
-    ReceivedBlocks(Vec<Block>),
+    /// Received blocks for a target block number and block hash.
+    ReceivedBlocks(u32, Blake2bHash, Vec<Block>),
 }
 
 /// Peer Tracking & Block Request Component.
@@ -35,7 +36,8 @@ pub enum BlockRequestComponentEvent {
 /// The public interface allows to request blocks, which are not immediately returned.
 /// The blocks instead are returned by polling the component.
 pub struct BlockRequestComponent<N: Network> {
-    sync_queue: SyncQueue<N, (Blake2bHash, Vec<Blake2bHash>, bool), Vec<Block>>, // requesting missing blocks from peers
+    sync_queue:
+        SyncQueue<N, (u32, Blake2bHash, Vec<Blake2bHash>, bool), (u32, Blake2bHash, Vec<Block>)>, // requesting missing blocks from peers
     pub(crate) peers: Arc<RwLock<PeerList<N>>>,
     network_event_rx: SubscribeEvents<N::PeerId>,
     include_micro_bodies: bool,
@@ -56,18 +58,20 @@ impl<N: Network> BlockRequestComponent<N> {
                 vec![],
                 Arc::clone(&peers),
                 Self::NUM_PENDING_BLOCKS,
-                |(target_block_hash, locators, include_micro_bodies), network, peer_id| {
+                |(target_block_number, target_block_hash, locators, include_micro_bodies),
+                 network,
+                 peer_id| {
                     async move {
                         let res = Self::request_missing_blocks_from_peer(
                             network,
                             peer_id,
-                            target_block_hash,
+                            target_block_hash.clone(),
                             locators,
                             include_micro_bodies,
                         )
                         .await;
                         if let Ok(Some(missing_blocks)) = res {
-                            Some(missing_blocks)
+                            Some((target_block_number, target_block_hash, missing_blocks))
                         } else {
                             None
                         }
@@ -107,10 +111,12 @@ impl<N: Network> BlockRequestComponent<N> {
 
     pub fn request_missing_blocks(
         &mut self,
+        target_block_number: u32,
         target_block_hash: Blake2bHash,
         locators: Vec<Blake2bHash>,
     ) {
         self.sync_queue.add_ids(vec![(
+            target_block_number,
             target_block_hash,
             locators,
             self.include_micro_bodies,
@@ -152,13 +158,18 @@ impl<N: Network> Stream for BlockRequestComponent<N> {
         // 3. Poll self.sync_queue, return results.
         while let Poll::Ready(Some(result)) = self.sync_queue.poll_next_unpin(cx) {
             match result {
-                Ok(blocks) => {
-                    return Poll::Ready(Some(BlockRequestComponentEvent::ReceivedBlocks(blocks)))
+                Ok((target_block_number, target_hash, blocks)) => {
+                    return Poll::Ready(Some(BlockRequestComponentEvent::ReceivedBlocks(
+                        target_block_number,
+                        target_hash,
+                        blocks,
+                    )))
                 }
-                Err((target_hash, _, _)) => {
+                Err((target_block_number, target_hash, _, _)) => {
                     debug!(
-                        "Failed to retrieve missing blocks for target hash {}",
-                        target_hash
+                        target_block_number,
+                        ?target_hash,
+                        "Failed to retrieve missing blocks"
                     );
                     // TODO: Do we need to do anything else?
                     // We might want to return an event and delete the target hash from our buffer
