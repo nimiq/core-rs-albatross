@@ -31,7 +31,7 @@ optional peer_key NIMIQ_PEER_KEY string
 echo "listen_addresses = ["
 addr=($LISTEN_ADDRESSES)
 for node in "${addr[@]}"; do
-    echo "\"$node\""
+    echo "\"$node\","
 done
 echo "]"
 
@@ -40,7 +40,7 @@ if [[ ! -z "$ADVERTISED_ADDRESSES" ]]; then
     echo "advertised_addresses = ["
     addr=($ADVERTISED_ADDRESSES)
     for node in "${addr[@]}"; do
-        echo "\"$node\""
+        echo "\"$node\","
     done
     echo "]"
 fi
