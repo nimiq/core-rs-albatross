@@ -237,16 +237,24 @@ impl Blockchain {
     /// - can verify/extend history tree
     /// - can enforce transaction validity window
     /// The second subsumes the first.
+    /// All conditions are checked against the next block (which potentially hasn't been produced yet).
     pub fn can_enforce_validity_window(&self) -> bool {
         if self.state.can_verify_history {
-            // If we are in the first epoch, we can enforce the validity window.
-            if self.block_number() < Policy::transaction_validity_window() {
+            // If we are at the genesis block or in the first epoch and we can verify the history,
+            // we can also enforce the validity window.
+            if Policy::epoch_at(self.block_number() + 1) <= 1 {
                 return true;
             }
 
+            // Since the transaction validity window is smaller than an epoch and we're in epoch 2 or greater,
+            // the subtraction cannot fail.
+            // We then calculate the election block greater or equal to the first validity window block
+            // to be used in `length_at`. Using micro blocks in `length_at` can be tricky as they might be empty
+            // and not occur in the history store at all. Using the election block of the epoch will guarantee
+            // to return the length at the most recent existing block in this epoch.
             let first_validity_window_block =
-                self.block_number() - Policy::transaction_validity_window();
-            let election_block = Policy::election_block_after(first_validity_window_block);
+                self.block_number() + 1 - Policy::transaction_validity_window();
+            let election_block = Policy::election_block_after(first_validity_window_block - 1);
 
             // Check whether we do have a history tree for the epoch of the first validity window block.
             // Length at will use the election block or the most recent existing block (in the same epoch).
