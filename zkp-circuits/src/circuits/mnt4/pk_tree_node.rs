@@ -97,8 +97,9 @@ impl PKTreeNodeCircuit {
         let mut r_agg_pk_commitment = [0u8; 95];
         rng.fill_bytes(&mut r_agg_pk_commitment);
 
-        let mut signer_bitmap_chunk = Vec::with_capacity(Policy::SLOTS as usize);
-        for _ in 0..Policy::SLOTS {
+        let mut signer_bitmap_chunk =
+            Vec::with_capacity(Policy::SLOTS as usize / 2_usize.pow(tree_level as u32));
+        for _ in 0..Policy::SLOTS as usize / 2_usize.pow(tree_level as u32) {
             signer_bitmap_chunk.push(rng.gen());
         }
 

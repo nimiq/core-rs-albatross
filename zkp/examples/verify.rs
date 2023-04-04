@@ -5,9 +5,8 @@ use std::time::Instant;
 use ark_groth16::Proof;
 use ark_serialize::CanonicalDeserialize;
 
-use nimiq_primitives::policy::Policy;
-use nimiq_zkp::verify::verify;
-use nimiq_zkp::ZKP_VERIFYING_KEY;
+use nimiq_primitives::{networks::NetworkId, policy::Policy};
+use nimiq_zkp::{verify::verify, ZKP_VERIFYING_KEY};
 use nimiq_zkp_circuits::utils::create_test_blocks;
 
 /// Verifies a proof for a chain of election blocks. The random parameters generation uses always
@@ -15,6 +14,8 @@ use nimiq_zkp_circuits::utils::create_test_blocks;
 /// This function will simply print the verification result.
 /// Run this example with `cargo run --release --example verify`.
 fn main() {
+    ZKP_VERIFYING_KEY.init_with_network_id(NetworkId::DevAlbatross);
+
     // Ask user for the number of epochs.
     println!("Enter the number of epochs to verify:");
 
