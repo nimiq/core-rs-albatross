@@ -336,9 +336,16 @@ impl<N: Network> ConsensusProxy<N> {
 
                                 // Verify that the transaction proof fits to the chain
                                 if block.block_number() <= election_head.block_number() {
+                                    let block_hash = block.hash();
                                     let mut already_proven = false;
-                                    if let Some(ref interlink) = election_head.header.interlink {
-                                        already_proven = interlink.contains(&block.hash());
+                                    if election_head.hash() == block_hash
+                                        || election_head.header.parent_election_hash == block_hash
+                                    {
+                                        already_proven = true;
+                                    } else if let Some(ref interlink) =
+                                        election_head.header.interlink
+                                    {
+                                        already_proven = interlink.contains(&block_hash);
                                     }
 
                                     if !already_proven {
