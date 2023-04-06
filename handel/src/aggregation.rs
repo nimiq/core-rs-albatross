@@ -357,7 +357,7 @@ impl<T: Debug + Clone + 'static, P: Protocol<T>, N: Network<Contribution = P::Co
                                     store.put(
                                         todo.contribution.clone(),
                                         todo.level,
-                                        self.protocol.registry().signers_identity(&todo.contribution.contributors()),
+                                        self.protocol.registry(),
                                         self.protocol.identify(),
                                     );
                                 }

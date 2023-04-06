@@ -17,7 +17,7 @@ where
         &mut self,
         contribution: TProtocol::Contribution,
         level: usize,
-        identity: Identity,
+        registry: Arc<TProtocol::Registry>,
         identifier: TId,
     );
 
@@ -100,13 +100,13 @@ impl<TId: Clone + std::fmt::Debug + 'static, TProtocol: Protocol<TId>>
     fn check_merge(
         &self,
         contribution: &TProtocol::Contribution,
-        contributors: BitSet,
+        registry: Arc<TProtocol::Registry>,
         level: usize,
         identifier: TId,
     ) -> Option<TProtocol::Contribution> {
         if let Some((best_contribution, identity)) = self.best_contribution.get(&level) {
             let best_contributors = identity.as_bitset();
-            debug!(
+            trace!(
                 id = ?identifier.clone(),
                 ?best_contribution,
                 ?identity,
@@ -117,12 +117,42 @@ impl<TId: Clone + std::fmt::Debug + 'static, TProtocol: Protocol<TId>>
             // try to combine
             let mut contribution = contribution.clone();
 
-            // TODO
-            // we can ignore the error, if it's not possible to merge we continue
-            // contribution
-            //     .combine(best_contribution)
-            //     .unwrap_or_else(|e| trace!("check_merge: combining contributions failed: {}", e));
+            // If the combining fails, it is due to the contributions having an overlap.
+            // One may be the superset of the other which makes it the strictly better set.
+            // If that is the case the better can immediately be returned.
+            // Otherwise individual signatures must still be checked.
+            let contributors = if let Err(e) = contribution.combine(best_contribution) {
+                // The contributors of contribution represented as Identities.
+                let contributors = registry
+                    .signers_identity(&contribution.contributors())
+                    .as_bitset();
 
+                // merging failed. Check if contribution is a superset of best_contribution.
+                if contributors.is_superset(&best_contributors) {
+                    trace!(
+                        id = ?identifier.clone(),
+                        ?contribution,
+                        ?best_contribution,
+                        "New signature is superset of current best. Replacing",
+                    );
+                    return Some(contribution);
+                } else {
+                    trace!(
+                        id = ?identifier.clone(),
+                        ?contribution,
+                        ?best_contribution,
+                        error = ?e,
+                        "Combining contributions failed",
+                    );
+                    contributors
+                }
+            } else {
+                registry
+                    .signers_identity(&contribution.contributors())
+                    .as_bitset()
+            };
+
+            // Individual signatures of identities which this node has that are already verified.
             let individual_verified = self.individual_verified.get(level).unwrap_or_else(|| {
                 panic!("Individual verified contributions BitSet is missing for level {level}")
             });
@@ -131,9 +161,13 @@ impl<TId: Clone + std::fmt::Debug + 'static, TProtocol: Protocol<TId>>
             let complements = &(&contributors & individual_verified) ^ individual_verified;
 
             // check that if we combine we get a better signature
-            if complements.len() + contribution.num_contributors() <= best_contributors.len() {
-                // XXX .weight()?
-                // doesn't get better
+            if complements.len() + contributors.len() <= best_contributors.len() {
+                // This should not be observed really as the evaluator should filter signatures which cannot provide
+                // improvements out.
+                trace!(
+                    id = ?identifier.clone(),
+                    "No improvement possible",
+                );
                 None
             } else {
                 // put in the individual signatures
@@ -159,6 +193,13 @@ impl<TId: Clone + std::fmt::Debug + 'static, TProtocol: Protocol<TId>>
                 Some(contribution)
             }
         } else {
+            // This is normal whenever the first signature for a level is processed.
+            trace!(
+                id = ?identifier.clone(),
+                ?level,
+                contributors = ?contribution.contributors(),
+                "Level was empty",
+            );
             Some(contribution.clone())
         }
     }
@@ -173,10 +214,10 @@ where
         &mut self,
         contribution: TProtocol::Contribution,
         level: usize,
-        identity: Identity,
+        registry: Arc<TProtocol::Registry>,
         identifier: TId,
     ) {
-        if let Identity::Single(id) = identity {
+        if let Identity::Single(id) = registry.signers_identity(&contribution.contributors()) {
             self.individual_verified
                 .get_mut(level)
                 .unwrap_or_else(|| panic!("Missing Level {level}"))
@@ -184,17 +225,18 @@ where
             self.individual_contributions
                 .get_mut(level)
                 .unwrap_or_else(|| panic!("Missing Level {level}"))
-                .insert(id, (contribution.clone(), identity.clone()));
+                .insert(id, (contribution.clone(), Identity::Single(id)));
         }
 
         if let Some(best_contribution) = self.check_merge(
             &contribution,
-            identity.as_bitset(),
+            Arc::clone(&registry),
             level,
             identifier.clone(),
         ) {
+            let best_identity = registry.signers_identity(&best_contribution.contributors());
             self.best_contribution
-                .insert(level, (best_contribution, identity));
+                .insert(level, (best_contribution, best_identity));
             if level > self.best_level {
                 trace!(
                     id = ?identifier,
