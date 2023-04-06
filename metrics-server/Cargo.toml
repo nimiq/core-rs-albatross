@@ -27,7 +27,7 @@ tokio = { version = "1.26", features = [
     "rt-multi-thread",
     "tracing",
 ] }
-tokio-metrics = "0.1"
+tokio-metrics = "0.2"
 
 nimiq-blockchain = { path = "../blockchain", features = ["metrics"] }
 nimiq-blockchain-interface = { path = "../blockchain-interface" }
