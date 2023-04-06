@@ -18,7 +18,7 @@ is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
-bitflags = "1.0"
+bitflags = "2.1"
 hex = "0.4"
 lazy_static = "1.2"
 url = "2.3"
