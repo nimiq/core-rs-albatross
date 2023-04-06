@@ -510,6 +510,17 @@ impl BlockLog {
             | BlockLog::RevertedBlock { ref tx_logs, .. } => tx_logs,
         }
     }
+
+    pub fn inherent_logs(&self) -> &[Log] {
+        match self {
+            BlockLog::AppliedBlock {
+                ref inherent_logs, ..
+            }
+            | BlockLog::RevertedBlock {
+                ref inherent_logs, ..
+            } => inherent_logs,
+        }
+    }
 }
 // This structure stores the info/data associated to a successful transaction that was committed
 pub struct TransactionInfo {

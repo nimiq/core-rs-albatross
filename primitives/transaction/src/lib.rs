@@ -368,6 +368,14 @@ impl Transaction {
             return Err(TransactionError::InvalidForSender);
         }
 
+        if self.sender == self.recipient {
+            error!(
+                "The following transaction can't have the same sender and recipient:\n{:?}",
+                self
+            );
+            return Err(TransactionError::SenderEqualsRecipient);
+        }
+
         if self.network_id != network_id {
             return Err(TransactionError::ForeignNetwork);
         }

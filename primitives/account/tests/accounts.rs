@@ -1,5 +1,4 @@
-use std::convert::TryFrom;
-use std::time::Instant;
+use std::{convert::TryFrom, time::Instant};
 use tempfile::tempdir;
 
 use rand::{rngs::StdRng, SeedableRng};
@@ -13,26 +12,24 @@ use nimiq_bls::KeyPair as BLSKeyPair;
 use nimiq_database::{mdbx::MdbxEnvironment, volatile::VolatileEnvironment, WriteTransaction};
 use nimiq_genesis_builder::GenesisBuilder;
 use nimiq_keys::{Address, KeyPair, PrivateKey, PublicKey, SecureGenerate};
-use nimiq_primitives::{
-    account::AccountType, coin::Coin, key_nibbles::KeyNibbles, networks::NetworkId, policy::Policy,
-};
+use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId, policy::Policy};
 use nimiq_test_log::test;
 use nimiq_test_utils::test_transaction::{
     generate_accounts, generate_transactions, TestTransaction,
 };
-use nimiq_transaction::inherent::Inherent;
-use nimiq_transaction::{SignatureProof, Transaction};
+use nimiq_transaction::{inherent::Inherent, SignatureProof, Transaction};
+
+use crate::accounts_revert::TestCommitRevert;
 
 const VOLATILE_ENV: bool = true;
 
+mod accounts_revert;
+
 #[test]
 fn it_can_commit_and_revert_a_block_body() {
-    let env = VolatileEnvironment::new(10).unwrap();
-
-    let accounts = Accounts::new(env.clone());
+    let accounts = TestCommitRevert::new();
 
     let address_validator = Address::from([1u8; Address::SIZE]);
-
     let address_recipient = Address::from([2u8; Address::SIZE]);
 
     let reward = Inherent::Reward {
@@ -42,24 +39,15 @@ fn it_can_commit_and_revert_a_block_body() {
 
     let inherent_receipts = vec![InherentOperationReceipt::Ok(None)];
 
-    // let mut tx_logs = Vec::new();
-    //
-    // let inherent_logs = vec![Log::PayoutReward {
-    //     to: reward.target.clone(),
-    //     value: reward.value,
-    // }];
-
     assert_eq!(
         accounts.get_complete(&address_validator, None),
         Account::default(),
     );
 
-    let mut txn = WriteTransaction::new(&env);
     let block_state = BlockState::new(1, 1);
 
     let receipts = accounts
-        .commit(
-            &mut txn,
+        .commit_and_test(
             &[],
             &[reward.clone()],
             &block_state,
@@ -69,8 +57,6 @@ fn it_can_commit_and_revert_a_block_body() {
 
     assert_eq!(receipts.inherents, inherent_receipts);
     assert_eq!(receipts.transactions, vec![]);
-
-    txn.commit();
 
     assert_eq!(
         accounts.get_complete(&address_validator, None).balance(),
@@ -94,33 +80,15 @@ fn it_can_commit_and_revert_a_block_body() {
         TransactionReceipt::default(),
     )];
 
-    // tx_logs.push(TransactionLog::new(
-    //     tx.hash(),
-    //     vec![
-    //         Log::PayFee {
-    //             from: tx.sender.clone(),
-    //             fee: tx.fee,
-    //         },
-    //         Log::Transfer {
-    //             from: tx.sender.clone(),
-    //             to: tx.recipient.clone(),
-    //             amount: tx.value,
-    //             data: None,
-    //         },
-    //     ],
-    // ));
-
     assert_eq!(
         accounts.get_complete(&address_recipient, None),
         Account::default()
     );
 
-    let mut txn = WriteTransaction::new(&env);
     let block_state = BlockState::new(2, 2);
 
     let receipts = accounts
-        .commit(
-            &mut txn,
+        .commit_and_test(
             &transactions,
             &[reward.clone()],
             &block_state,
@@ -130,8 +98,6 @@ fn it_can_commit_and_revert_a_block_body() {
 
     assert_eq!(receipts.inherents, inherent_receipts);
     assert_eq!(receipts.transactions, transaction_receipts);
-
-    txn.commit();
 
     assert_eq!(
         accounts.get_complete(&address_recipient, None).balance(),
@@ -145,7 +111,7 @@ fn it_can_commit_and_revert_a_block_body() {
 
     assert_ne!(hash1, accounts.get_root_hash_assert(None));
 
-    let mut txn = WriteTransaction::new(&env);
+    let mut txn = WriteTransaction::new(&accounts.env);
 
     accounts
         .revert(
@@ -175,16 +141,11 @@ fn it_can_commit_and_revert_a_block_body() {
 
 #[test]
 fn it_correctly_rewards_validators() {
-    let env = VolatileEnvironment::new(10).unwrap();
-
-    let accounts = Accounts::new(env.clone());
+    let accounts = TestCommitRevert::new();
 
     let address_validator_1 = Address::from([1u8; Address::SIZE]);
-
     let address_validator_2 = Address::from([2u8; Address::SIZE]);
-
     let address_recipient_1 = Address::from([3u8; Address::SIZE]);
-
     let address_recipient_2 = Address::from([4u8; Address::SIZE]);
 
     // Validator 1 mines first block.
@@ -198,20 +159,11 @@ fn it_correctly_rewards_validators() {
         value: Coin::from_u64_unchecked(10000),
     };
 
-    let mut txn = WriteTransaction::new(&env);
     let block_state = BlockState::new(1, 1);
 
     assert!(accounts
-        .commit(
-            &mut txn,
-            &[],
-            &[reward],
-            &block_state,
-            &mut BlockLogger::empty()
-        )
+        .commit_and_test(&[], &[reward], &block_state, &mut BlockLogger::empty())
         .is_ok());
-
-    txn.commit();
 
     // Create transactions to Recipient 1 and Recipient 2.
     assert_eq!(
@@ -220,11 +172,8 @@ fn it_correctly_rewards_validators() {
     );
 
     let value1 = Coin::from_u64_unchecked(5);
-
     let fee1 = Coin::from_u64_unchecked(3);
-
     let value2 = Coin::from_u64_unchecked(7);
-
     let fee2 = Coin::from_u64_unchecked(11);
 
     let tx1 = Transaction::new_basic(
@@ -256,20 +205,16 @@ fn it_correctly_rewards_validators() {
         value: Coin::from_u64_unchecked(10000) + fee1 + fee2,
     };
 
-    let mut txn = WriteTransaction::new(&env);
     let block_state = BlockState::new(2, 2);
 
     assert!(accounts
-        .commit(
-            &mut txn,
-            &vec![tx1, tx2],
+        .commit_and_test(
+            &[tx1, tx2],
             &[reward],
             &block_state,
             &mut BlockLogger::empty()
         )
         .is_ok());
-
-    txn.commit();
 
     assert_eq!(
         accounts.get_complete(&address_validator_1, None).balance(),
@@ -294,12 +239,9 @@ fn it_correctly_rewards_validators() {
 
 #[test]
 fn it_checks_for_sufficient_funds() {
-    let env = VolatileEnvironment::new(10).unwrap();
-
-    let accounts = Accounts::new(env.clone());
+    let accounts = TestCommitRevert::new();
 
     let address_sender = Address::from([1u8; Address::SIZE]);
-
     let address_recipient = Address::from([2u8; Address::SIZE]);
 
     let mut tx = Transaction::new_basic(
@@ -331,19 +273,14 @@ fn it_checks_for_sufficient_funds() {
     // Fails as sender address does not exist.
     // Note this kind of transaction would be rejected by the mempool.
     let block_state = BlockState::new(1, 1);
-    {
-        let mut txn = WriteTransaction::new(&env);
-
-        assert!(accounts
-            .commit(
-                &mut txn,
-                &[tx.clone()],
-                &[reward.clone()],
-                &block_state,
-                &mut BlockLogger::empty()
-            )
-            .is_err());
-    }
+    assert!(accounts
+        .commit_and_test(
+            &[tx.clone()],
+            &[reward.clone()],
+            &block_state,
+            &mut BlockLogger::empty()
+        )
+        .is_err());
 
     assert_eq!(
         accounts.get_complete(&address_sender, None),
@@ -358,19 +295,9 @@ fn it_checks_for_sufficient_funds() {
     assert_eq!(hash1, accounts.get_root_hash_assert(None));
 
     // Give address_sender one block reward.
-    let mut txn = WriteTransaction::new(&env);
-
     assert!(accounts
-        .commit(
-            &mut txn,
-            &[],
-            &[reward],
-            &block_state,
-            &mut BlockLogger::empty()
-        )
+        .commit_and_test(&[], &[reward], &block_state, &mut BlockLogger::empty())
         .is_ok());
-
-    txn.commit();
 
     assert_eq!(
         accounts.get_complete(&address_sender, None).balance(),
@@ -392,7 +319,7 @@ fn it_checks_for_sufficient_funds() {
     tx.value = Coin::from_u64_unchecked(1000000);
     let block_state = BlockState::new(2, 2);
     {
-        let mut txn = WriteTransaction::new(&env);
+        let mut txn = WriteTransaction::new(&accounts.env);
 
         let receipts = accounts
             .commit(
@@ -429,39 +356,27 @@ fn it_checks_for_sufficient_funds() {
     let mut tx2 = tx.clone();
     tx2.value += Coin::from_u64_unchecked(10);
 
-    {
-        let mut txn = WriteTransaction::new(&env);
+    let receipts = accounts
+        .commit_and_test(&vec![tx, tx2], &[], &block_state, &mut BlockLogger::empty())
+        .unwrap();
 
-        let receipts = accounts
-            .commit(
-                &mut txn,
-                &vec![tx, tx2],
-                &[],
-                &block_state,
-                &mut BlockLogger::empty(),
-            )
-            .unwrap();
-
-        assert_eq!(
-            receipts.transactions,
-            vec![
-                TransactionOperationReceipt::Ok(TransactionReceipt::default()),
-                TransactionOperationReceipt::Err(TransactionReceipt::default()),
-            ]
-        );
-    }
+    assert_eq!(
+        receipts.transactions,
+        vec![
+            TransactionOperationReceipt::Ok(TransactionReceipt::default()),
+            TransactionOperationReceipt::Err(TransactionReceipt::default()),
+        ]
+    );
 
     assert_eq!(
         accounts.get_complete(&address_sender, None).balance(),
-        Coin::from_u64_unchecked(10000)
+        Coin::from_u64_unchecked(4988)
     );
 
     assert_eq!(
-        accounts.get_complete(&address_recipient, None),
-        Account::default()
+        accounts.get_complete(&address_recipient, None).balance(),
+        Coin::from_u64_unchecked(5010)
     );
-
-    assert_eq!(hash2, accounts.get_root_hash_assert(None));
 }
 
 #[test]
@@ -828,26 +743,7 @@ fn it_commits_valid_and_failing_txns() {
 
     let key_pair = KeyPair::from(priv_key);
 
-    let env = VolatileEnvironment::new(10).unwrap();
-    let accounts = Accounts::new(env.clone());
-
-    let mut db_txn = WriteTransaction::new(&env);
-
-    // We need to populate the acccounts trie with different testing accounts
-    let key_1 = KeyNibbles::from(&Address::from(&key_pair.public));
-
-    // Basic account where fees are deducted for failing txns
-    accounts
-        .tree
-        .put(
-            &mut db_txn,
-            &key_1,
-            Account::Basic(BasicAccount {
-                balance: Coin::from_u64_unchecked(1000),
-            }),
-        )
-        .expect("complete trie");
-
+    // We need to populate the accounts trie with different testing accounts
     // Vesting Contract
     let start_contract = VestingContract {
         balance: 1000.try_into().unwrap(),
@@ -858,18 +754,16 @@ fn it_commits_valid_and_failing_txns() {
         total_amount: 1000.try_into().unwrap(),
     };
 
-    accounts
-        .tree
-        .put(
-            &mut db_txn,
-            &KeyNibbles::from(&[1u8; 20][..]),
-            Account::Vesting(start_contract),
-        )
-        .expect("complete trie");
+    let accounts = TestCommitRevert::with_initial_state(&[
+        (
+            Address::from(&key_pair.public),
+            Account::Basic(BasicAccount {
+                balance: Coin::from_u64_unchecked(1000),
+            }),
+        ),
+        (Address([1u8; 20]), Account::Vesting(start_contract)),
+    ]);
 
-    db_txn.commit();
-
-    let mut db_txn = WriteTransaction::new(&env);
     // Create a transaction that tries to move more funds than available
     let mut tx = Transaction::new_basic(
         Address::from([1u8; 20]),
@@ -887,8 +781,7 @@ fn it_commits_valid_and_failing_txns() {
 
     let block_state = BlockState::new(1, 200);
     let receipts = accounts
-        .commit(
-            &mut db_txn,
+        .commit_and_test(
             &vec![tx.clone()],
             &[],
             &block_state,
@@ -902,8 +795,6 @@ fn it_commits_valid_and_failing_txns() {
             TransactionReceipt::default()
         )]
     );
-
-    db_txn.commit();
 
     // We should deduct the fee from the vesting contract balance
     assert_eq!(
@@ -932,21 +823,13 @@ fn it_commits_valid_and_failing_txns() {
     );
     tx.sender_type = AccountType::Basic;
 
-    let mut db_txn = WriteTransaction::new(&env);
-
     let signature = key_pair.sign(&tx.serialize_content()[..]);
     let signature_proof = SignatureProof::from(key_pair.public, signature);
     tx.proof = signature_proof.serialize_to_vec();
 
     let mut block_logger = BlockLogger::empty();
     let receipts = accounts
-        .commit(
-            &mut db_txn,
-            &vec![tx.clone()],
-            &[],
-            &block_state,
-            &mut block_logger,
-        )
+        .commit_and_test(&vec![tx.clone()], &[], &block_state, &mut block_logger)
         .unwrap();
     let block_logs = block_logger.build(0);
 
@@ -972,8 +855,6 @@ fn it_commits_valid_and_failing_txns() {
             }
         ]
     );
-
-    db_txn.commit();
 
     // The fee should be deducted from the sender
     assert_eq!(

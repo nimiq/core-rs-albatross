@@ -267,15 +267,7 @@ impl GenesisBuilder {
         accounts: &Accounts,
         txn: &mut WriteTransaction,
     ) -> Result<StakingContract, GenesisBuilderError> {
-        let mut staking_contract = StakingContract {
-            balance: Default::default(),
-            active_validators: Default::default(),
-            parked_set: Default::default(),
-            current_lost_rewards: Default::default(),
-            previous_lost_rewards: Default::default(),
-            current_disabled_slots: Default::default(),
-            previous_disabled_slots: Default::default(),
-        };
+        let mut staking_contract = StakingContract::default();
 
         // Get the deposit value.
         let deposit = Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT);

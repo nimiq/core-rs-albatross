@@ -25,33 +25,37 @@ use crate::{
 /// Actions concerning a validator are:
 /// 1. Create: Creates a validator.
 /// 2. Update: Updates the validator.
-/// 3. Deactivate: Deactivates a validator (also starts a cooldown period used for Delete).
+/// 3. Deactivate: Deactivates a validator. This action is reversible. (starts a cooldown period used for Delete).
 /// 4. Reactivate: Reactivates a validator.
 /// 5. Unpark: Prevents a validator from being automatically deactivated.
 /// 6. Delete: Deletes a validator (validator must have been inactive for the cooldown period).
+/// 7. Retire: Permanently retires a validator. This action is required for deletion.
 ///
 /// The actions can be summarized by the following state diagram:
-///        +--------+          retire           +----------+
-/// create |        +-------------------------->+          | drop
-///+------>+ active |                           | inactive +------>
-///        |        +<-- -- -- -- -- -- -- -- --+          |
-///        +-+--+---+        reactivate         +-----+----+
-///          |  ^     (*optional) automatically       ^
-///          |  |                                     |
-///          |  | unpark                              | automatically
-/// slashing |  | (automatic within an epoch)         |
-///          |  |             +--------+              |
-///          |  +-------------+        |              |
-///          |                | parked +--------------+
-///          +--------------->+        |
-///                           +--------+
+///                                  retire
+///            +------------------------------------------------+
+///            |                                                |
+///        +---+----+         deactivate         +----------+   |    +---------+
+/// create |        +--------------------------->+          |   +--->+         |  delete
+///+------>+ active |                            | inactive +------->+ retired +---------->
+///        |        +<-- -- -- -- -- -- -- -- -- +          | retire |         |
+///        +-+--+---+         reactivate         +-----+----+        +---------+
+///          |  ^      (*optional) automatically       ^
+///          |  |                                      |
+///          |  | unpark                               |
+/// slashing |  | (automatic within an epoch)          |  automatically
+///          |  |              +--------+              |
+///          |  +--------------+        |              |
+///          |                 | parked +--------------+
+///          +---------------->+        |
+///                            +--------+
 ///
 /// (*optional) The validator my be set to automatically reactivate itself upon inactivation.
 ///             If this setting is not enabled the state change is triggered manually.
 ///
-/// Create, Update, Retire, Re-activate and Unpark are incoming transactions to the staking contract.
-/// Drop is an outgoing transaction from the staking contract.
-/// To Create, Update or Drop, the cold key must be used (the one corresponding to the validator
+/// Create, Update, Deactivate, Retire, Re-activate and Unpark are incoming transactions to the staking contract.
+/// Delete is an outgoing transaction from the staking contract.
+/// To Create, Update or Delete, the cold key must be used (the one corresponding to the validator
 /// address). For the other transactions, the the signing key must be used.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Validator {

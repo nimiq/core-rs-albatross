@@ -14,14 +14,6 @@ impl AccountTransactionVerification for BasicAccountVerifier {
     fn verify_incoming_transaction(transaction: &Transaction) -> Result<(), TransactionError> {
         assert_eq!(transaction.recipient_type, AccountType::Basic);
 
-        if transaction.sender == transaction.recipient {
-            error!(
-                "The following transaction can't have the same sender and recipient:\n{:?}",
-                transaction
-            );
-            return Err(TransactionError::SenderEqualsRecipient);
-        }
-
         if transaction.value.is_zero() {
             error!(
                 "The following transaction can't have a zero value:\n{:?}",

@@ -5,5 +5,6 @@ pub mod mock_node;
 pub mod node;
 pub mod test_network;
 pub mod test_transaction;
+pub mod transactions;
 pub mod validator;
 pub mod zkp_test_data;

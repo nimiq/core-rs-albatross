@@ -1,0 +1,752 @@
+use log::debug;
+use nimiq_transaction_builder::TransactionProofBuilder;
+use rand::{CryptoRng, Rng};
+
+use beserial::Serialize;
+use nimiq_account::{
+    Account, AccountInherentInteraction, Accounts, BasicAccount, BlockState,
+    HashedTimeLockedContract, InherentLogger, StakingContractStoreWrite, TransactionLog,
+    VestingContract,
+};
+use nimiq_bls::KeyPair as BlsKeyPair;
+use nimiq_database::WriteTransaction;
+use nimiq_hash::{Blake2bHash, Blake2bHasher, Hasher};
+use nimiq_keys::{Address, KeyPair, SecureGenerate};
+use nimiq_primitives::{
+    account::AccountType, coin::Coin, key_nibbles::KeyNibbles, networks::NetworkId, policy::Policy,
+    slots::SlashedSlot,
+};
+use nimiq_transaction::{
+    account::{
+        htlc_contract::CreationTransactionData as HTLCCreationTransactionData,
+        htlc_contract::{AnyHash, HashAlgorithm},
+        staking_contract::IncomingStakingTransactionData,
+        vesting_contract::CreationTransactionData as VestingCreationTransactionData,
+    },
+    inherent::Inherent,
+    SignatureProof, Transaction,
+};
+
+pub enum ValidatorState {
+    Active,
+    Inactive,
+    Parked,
+    Retired,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum OutgoingType {
+    Basic,
+    Vesting,
+    HTLCRegularTransfer,
+    HTLCEarlyResolve,
+    HTLCTimeoutResolve,
+    // Staking Contract types
+    DeleteValidator,
+    RemoveStake,
+}
+
+impl From<OutgoingType> for AccountType {
+    fn from(value: OutgoingType) -> Self {
+        match value {
+            OutgoingType::Basic => AccountType::Basic,
+            OutgoingType::Vesting => AccountType::Vesting,
+            OutgoingType::HTLCRegularTransfer => AccountType::HTLC,
+            OutgoingType::HTLCEarlyResolve => AccountType::HTLC,
+            OutgoingType::HTLCTimeoutResolve => AccountType::HTLC,
+            OutgoingType::DeleteValidator => AccountType::Staking,
+            OutgoingType::RemoveStake => AccountType::Staking,
+        }
+    }
+}
+
+impl OutgoingType {
+    fn is_staking(&self) -> bool {
+        matches!(
+            self,
+            OutgoingType::RemoveStake | OutgoingType::DeleteValidator
+        )
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum IncomingType {
+    Basic,
+    CreateVesting,
+    CreateHTLC,
+    // Staking Contract types
+    CreateValidator,
+    UpdateValidator,
+    UnparkValidator,
+    DeactivateValidator,
+    ReactivateValidator,
+    RetireValidator,
+    CreateStaker,
+    AddStake,
+    UpdateStaker,
+}
+
+impl IncomingType {
+    fn is_validator_related(&self) -> bool {
+        matches!(
+            self,
+            IncomingType::CreateValidator
+                | IncomingType::UpdateValidator
+                | IncomingType::UnparkValidator
+                | IncomingType::DeactivateValidator
+                | IncomingType::ReactivateValidator
+                | IncomingType::RetireValidator
+        )
+    }
+}
+
+impl From<IncomingType> for AccountType {
+    fn from(value: IncomingType) -> Self {
+        match value {
+            IncomingType::Basic => AccountType::Basic,
+            IncomingType::CreateVesting => AccountType::Vesting,
+            IncomingType::CreateHTLC => AccountType::HTLC,
+            IncomingType::CreateValidator => AccountType::Staking,
+            IncomingType::UpdateValidator => AccountType::Staking,
+            IncomingType::UnparkValidator => AccountType::Staking,
+            IncomingType::DeactivateValidator => AccountType::Staking,
+            IncomingType::ReactivateValidator => AccountType::Staking,
+            IncomingType::RetireValidator => AccountType::Staking,
+            IncomingType::CreateStaker => AccountType::Staking,
+            IncomingType::AddStake => AccountType::Staking,
+            IncomingType::UpdateStaker => AccountType::Staking,
+        }
+    }
+}
+
+enum OutgoingAccountData {
+    Basic {
+        key_pair: KeyPair,
+    },
+    Vesting {
+        contract_address: Address,
+        owner_key_pair: KeyPair,
+    },
+    Htlc {
+        contract_address: Address,
+        sender_key_pair: KeyPair,
+        recipient_key_pair: KeyPair,
+        pre_image: AnyHash,
+        hash_root: AnyHash,
+    },
+    Staking {
+        validator_key_pair: KeyPair,
+        staker_key_pair: KeyPair,
+    },
+}
+
+impl OutgoingAccountData {
+    fn sender_address(&self) -> Address {
+        match self {
+            OutgoingAccountData::Basic { key_pair } => Address::from(key_pair),
+            OutgoingAccountData::Vesting {
+                contract_address, ..
+            } => contract_address.clone(),
+            OutgoingAccountData::Htlc {
+                contract_address, ..
+            } => contract_address.clone(),
+            OutgoingAccountData::Staking { .. } => Policy::STAKING_CONTRACT_ADDRESS.clone(),
+        }
+    }
+}
+
+enum IncomingAccountData {
+    Basic {
+        address: Address,
+    },
+    Vesting {
+        parameters: VestingCreationTransactionData,
+    },
+    Htlc {
+        parameters: HTLCCreationTransactionData,
+    },
+    Staking {
+        validator_key_pair: KeyPair,
+        staker_key_pair: KeyPair,
+        parameters: IncomingStakingTransactionData,
+    },
+}
+
+/// Can only generate valid transactions.
+pub struct TransactionsGenerator<R: Rng + CryptoRng> {
+    accounts: Accounts,
+    network_id: NetworkId,
+    rng: R,
+}
+
+impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
+    pub fn new(accounts: Accounts, network_id: NetworkId, rng: R) -> Self {
+        TransactionsGenerator {
+            accounts,
+            network_id,
+            rng,
+        }
+    }
+
+    pub fn create_transaction(
+        &mut self,
+        sender: OutgoingType,
+        recipient: IncomingType,
+        mut value: Coin,
+        fee: Coin,
+        block_state: &BlockState,
+    ) -> Transaction {
+        if recipient.is_validator_related() && sender.is_staking() {
+            panic!(
+                "It is not possible to have a transaction with both of the sender and recipient"
+            );
+        }
+
+        let sender_account = self.ensure_outgoing_account(sender, value + fee, block_state);
+        let recipient_account = self.ensure_incoming_account(recipient, value);
+
+        // First, create the preliminary unsigned transaction.
+        let tx = match recipient_account {
+            IncomingAccountData::Basic { ref address } => Transaction::new_extended(
+                sender_account.sender_address(),
+                sender.into(),
+                address.clone(),
+                recipient.into(),
+                value,
+                fee,
+                vec![],
+                block_state.number,
+                self.network_id,
+            ),
+            IncomingAccountData::Vesting { ref parameters } => Transaction::new_contract_creation(
+                parameters.serialize_to_vec(),
+                sender_account.sender_address(),
+                sender.into(),
+                recipient.into(),
+                value,
+                fee,
+                block_state.number,
+                self.network_id,
+            ),
+            IncomingAccountData::Htlc { ref parameters } => Transaction::new_contract_creation(
+                parameters.serialize_to_vec(),
+                sender_account.sender_address(),
+                sender.into(),
+                recipient.into(),
+                value,
+                fee,
+                block_state.number,
+                self.network_id,
+            ),
+            IncomingAccountData::Staking { ref parameters, .. } => {
+                if parameters.is_signaling() {
+                    Transaction::new_signaling(
+                        sender_account.sender_address(),
+                        sender.into(),
+                        Policy::STAKING_CONTRACT_ADDRESS.clone(),
+                        recipient.into(),
+                        Coin::ZERO,
+                        fee,
+                        parameters.serialize_to_vec(),
+                        block_state.number,
+                        self.network_id,
+                    )
+                } else {
+                    // Ensure that the value is the validator deposit if we are creating a validator.
+                    if matches!(recipient, IncomingType::CreateValidator) {
+                        value = Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT);
+                    }
+
+                    Transaction::new_extended(
+                        sender_account.sender_address(),
+                        sender.into(),
+                        Policy::STAKING_CONTRACT_ADDRESS.clone(),
+                        recipient.into(),
+                        value,
+                        fee,
+                        parameters.serialize_to_vec(),
+                        block_state.number,
+                        self.network_id,
+                    )
+                }
+            }
+        };
+
+        // Second, create a proof builder.
+        let mut proof_builder = TransactionProofBuilder::new(tx);
+
+        // Sign signalling transactions.
+        if let IncomingAccountData::Staking {
+            ref validator_key_pair,
+            ref staker_key_pair,
+            ..
+        } = recipient_account
+        {
+            let mut in_staking_proof_builder = proof_builder.unwrap_in_staking();
+            if recipient.is_validator_related() {
+                in_staking_proof_builder.sign_with_key_pair(validator_key_pair);
+            } else {
+                in_staking_proof_builder.sign_with_key_pair(staker_key_pair);
+            }
+            proof_builder = in_staking_proof_builder
+                .generate()
+                .expect("Cannot sign signalling transaction");
+        }
+
+        // Populate proof field of transaction.
+        match sender_account {
+            OutgoingAccountData::Basic { key_pair } => {
+                let mut basic_proof_builder = proof_builder.unwrap_basic();
+                basic_proof_builder.sign_with_key_pair(&key_pair);
+                basic_proof_builder
+                    .generate()
+                    .expect("Cannot create sender proof")
+            }
+            OutgoingAccountData::Vesting { owner_key_pair, .. } => {
+                let mut basic_proof_builder = proof_builder.unwrap_basic();
+                basic_proof_builder.sign_with_key_pair(&owner_key_pair);
+                basic_proof_builder
+                    .generate()
+                    .expect("Cannot create sender proof")
+            }
+            OutgoingAccountData::Htlc {
+                sender_key_pair,
+                recipient_key_pair,
+                pre_image,
+                hash_root,
+                ..
+            } => {
+                let mut htlc_proof_builder = proof_builder.unwrap_htlc();
+
+                match sender {
+                    OutgoingType::HTLCRegularTransfer => htlc_proof_builder.regular_transfer(
+                        HashAlgorithm::Blake2b,
+                        pre_image,
+                        1,
+                        hash_root,
+                        htlc_proof_builder.signature_with_key_pair(&recipient_key_pair),
+                    ),
+                    OutgoingType::HTLCEarlyResolve => htlc_proof_builder.early_resolve(
+                        htlc_proof_builder.signature_with_key_pair(&sender_key_pair),
+                        htlc_proof_builder.signature_with_key_pair(&recipient_key_pair),
+                    ),
+                    OutgoingType::HTLCTimeoutResolve => htlc_proof_builder.timeout_resolve(
+                        htlc_proof_builder.signature_with_key_pair(&sender_key_pair),
+                    ),
+                    _ => unreachable!(),
+                };
+
+                htlc_proof_builder
+                    .generate()
+                    .expect("Cannot create sender proof")
+            }
+            OutgoingAccountData::Staking {
+                validator_key_pair,
+                staker_key_pair,
+                ..
+            } => {
+                let mut out_staking_proof_builder = proof_builder.unwrap_out_staking();
+
+                match sender {
+                    OutgoingType::DeleteValidator => {
+                        out_staking_proof_builder.delete_validator(&validator_key_pair)
+                    }
+                    OutgoingType::RemoveStake => {
+                        out_staking_proof_builder.unstake(&staker_key_pair)
+                    }
+                    _ => unreachable!(),
+                };
+
+                out_staking_proof_builder
+                    .generate()
+                    .expect("Cannot create sender proof")
+            }
+        }
+    }
+
+    fn put_account<T: Serialize>(&self, address: &KeyNibbles, account: T) {
+        let mut txn = WriteTransaction::new(&self.accounts.env);
+        self.accounts
+            .tree
+            .put(&mut txn, address, account)
+            .expect("Failed to put initial accounts");
+        self.accounts
+            .tree
+            .update_root(&mut txn)
+            .expect("Tree must be complete");
+        txn.commit();
+    }
+
+    fn ensure_outgoing_account(
+        &mut self,
+        outgoing_type: OutgoingType,
+        balance: Coin,
+        block_state: &BlockState,
+    ) -> OutgoingAccountData {
+        match outgoing_type {
+            OutgoingType::Basic => {
+                // We create a new account with that balance.
+                let key_pair = KeyPair::generate(&mut self.rng);
+                let account = Account::Basic(BasicAccount { balance });
+
+                self.put_account(&KeyNibbles::from(&Address::from(&key_pair)), account);
+                OutgoingAccountData::Basic { key_pair }
+            }
+            OutgoingType::Vesting => {
+                // We create a new account with that balance.
+                let owner_key_pair = KeyPair::generate(&mut self.rng);
+                // Vesting account releases full balance basically immediately.
+                let account = Account::Vesting(VestingContract {
+                    balance,
+                    owner: Address::from(&owner_key_pair),
+                    start_time: 0,
+                    step_amount: balance,
+                    time_step: 1,
+                    total_amount: balance,
+                });
+                let contract_address = Address(self.rng.gen());
+
+                debug!(?contract_address, "Create vesting contract");
+                self.put_account(&KeyNibbles::from(&contract_address), account);
+                OutgoingAccountData::Vesting {
+                    contract_address,
+                    owner_key_pair,
+                }
+            }
+            OutgoingType::HTLCEarlyResolve
+            | OutgoingType::HTLCRegularTransfer
+            | OutgoingType::HTLCTimeoutResolve => {
+                // We create a new account with that balance.
+                let sender_key_pair = KeyPair::generate(&mut self.rng);
+                let recipient_key_pair = KeyPair::generate(&mut self.rng);
+
+                let timeout = if matches!(outgoing_type, OutgoingType::HTLCTimeoutResolve) {
+                    block_state.time.saturating_sub(1)
+                } else {
+                    block_state.time.saturating_add(10_000_000)
+                };
+
+                // HTLC account.
+                let pre_image = Blake2bHash(self.rng.gen());
+                let hash_root =
+                    AnyHash::from(Blake2bHasher::default().chain(&pre_image).finish().0);
+                let account = Account::HTLC(HashedTimeLockedContract {
+                    balance,
+                    sender: Address::from(&sender_key_pair),
+                    recipient: Address::from(&recipient_key_pair),
+                    hash_algorithm: HashAlgorithm::Blake2b,
+                    hash_root: hash_root.clone(),
+                    hash_count: 1,
+                    timeout,
+                    total_amount: balance,
+                });
+                let contract_address = Address(self.rng.gen());
+
+                debug!(?contract_address, "Create HTLC contract");
+                self.put_account(&KeyNibbles::from(&contract_address), account);
+                OutgoingAccountData::Htlc {
+                    contract_address,
+                    sender_key_pair,
+                    recipient_key_pair,
+                    pre_image: AnyHash::from(pre_image.0),
+                    hash_root,
+                }
+            }
+            OutgoingType::DeleteValidator | OutgoingType::RemoveStake => {
+                let (validator_key_pair, _, staker_key_pair) =
+                    self.create_validator_and_staker(balance, ValidatorState::Retired);
+                OutgoingAccountData::Staking {
+                    validator_key_pair,
+                    staker_key_pair,
+                }
+            }
+        }
+    }
+
+    fn ensure_incoming_account(
+        &mut self,
+        incoming_type: IncomingType,
+        balance: Coin,
+    ) -> IncomingAccountData {
+        match incoming_type {
+            IncomingType::Basic => IncomingAccountData::Basic {
+                address: Address(self.rng.gen()),
+            },
+            IncomingType::CreateVesting => IncomingAccountData::Vesting {
+                parameters: VestingCreationTransactionData {
+                    owner: Address(self.rng.gen()),
+                    start_time: 0,
+                    time_step: 1,
+                    step_amount: balance,
+                    total_amount: balance,
+                },
+            },
+            IncomingType::CreateHTLC => IncomingAccountData::Htlc {
+                parameters: HTLCCreationTransactionData {
+                    sender: Address(self.rng.gen()),
+                    recipient: Address(self.rng.gen()),
+                    hash_algorithm: HashAlgorithm::Blake2b,
+                    hash_root: AnyHash::default(),
+                    hash_count: 1,
+                    timeout: 100,
+                },
+            },
+            IncomingType::CreateValidator => {
+                let (_, _, staker_key_pair) =
+                    self.create_validator_and_staker(balance, ValidatorState::Active);
+                let validator_key_pair = KeyPair::generate(&mut self.rng);
+                let validator_voting_key_pair = BlsKeyPair::generate(&mut self.rng);
+                let validator_voting_key_compressed =
+                    validator_voting_key_pair.public_key.compress();
+
+                IncomingAccountData::Staking {
+                    parameters: IncomingStakingTransactionData::CreateValidator {
+                        signing_key: validator_key_pair.public,
+                        voting_key: validator_voting_key_compressed.clone(),
+                        reward_address: Address(self.rng.gen()),
+                        signal_data: None,
+                        proof_of_knowledge: validator_voting_key_pair
+                            .sign(&validator_voting_key_compressed.serialize_to_vec())
+                            .compress(),
+                        proof: SignatureProof::default(),
+                    },
+                    validator_key_pair,
+                    staker_key_pair,
+                }
+            }
+            IncomingType::UpdateValidator => {
+                let (validator_key_pair, _, staker_key_pair) =
+                    self.create_validator_and_staker(balance, ValidatorState::Active);
+
+                let new_validator_key_pair = KeyPair::generate(&mut self.rng);
+                let new_validator_voting_key_pair = BlsKeyPair::generate(&mut self.rng);
+                let new_validator_voting_key_compressed =
+                    new_validator_voting_key_pair.public_key.compress();
+
+                IncomingAccountData::Staking {
+                    parameters: IncomingStakingTransactionData::UpdateValidator {
+                        new_signing_key: Some(new_validator_key_pair.public),
+                        new_voting_key: Some(new_validator_voting_key_compressed.clone()),
+                        new_reward_address: Some(Address(self.rng.gen())),
+                        new_signal_data: None,
+                        new_proof_of_knowledge: Some(
+                            new_validator_voting_key_pair
+                                .sign(&new_validator_voting_key_compressed.serialize_to_vec())
+                                .compress(),
+                        ),
+                        proof: SignatureProof::default(),
+                    },
+                    validator_key_pair,
+                    staker_key_pair,
+                }
+            }
+            IncomingType::UnparkValidator => {
+                let (validator_key_pair, _, staker_key_pair) =
+                    self.create_validator_and_staker(balance, ValidatorState::Parked);
+                IncomingAccountData::Staking {
+                    parameters: IncomingStakingTransactionData::UnparkValidator {
+                        validator_address: Address::from(&validator_key_pair),
+                        proof: SignatureProof::default(),
+                    },
+                    validator_key_pair,
+                    staker_key_pair,
+                }
+            }
+            IncomingType::DeactivateValidator => {
+                let (validator_key_pair, _, staker_key_pair) =
+                    self.create_validator_and_staker(balance, ValidatorState::Active);
+                IncomingAccountData::Staking {
+                    parameters: IncomingStakingTransactionData::DeactivateValidator {
+                        validator_address: Address::from(&validator_key_pair),
+                        proof: SignatureProof::default(),
+                    },
+                    validator_key_pair,
+                    staker_key_pair,
+                }
+            }
+            IncomingType::ReactivateValidator => {
+                let (validator_key_pair, _, staker_key_pair) =
+                    self.create_validator_and_staker(balance, ValidatorState::Inactive);
+                IncomingAccountData::Staking {
+                    parameters: IncomingStakingTransactionData::ReactivateValidator {
+                        validator_address: Address::from(&validator_key_pair),
+                        proof: SignatureProof::default(),
+                    },
+                    validator_key_pair,
+                    staker_key_pair,
+                }
+            }
+            IncomingType::RetireValidator => {
+                let (validator_key_pair, _, staker_key_pair) =
+                    self.create_validator_and_staker(balance, ValidatorState::Active);
+                IncomingAccountData::Staking {
+                    parameters: IncomingStakingTransactionData::RetireValidator {
+                        proof: SignatureProof::default(),
+                    },
+                    validator_key_pair,
+                    staker_key_pair,
+                }
+            }
+            IncomingType::CreateStaker => {
+                let (validator_key_pair, _, _) =
+                    self.create_validator_and_staker(balance, ValidatorState::Active);
+
+                let staker_key_pair = KeyPair::generate(&mut self.rng);
+
+                IncomingAccountData::Staking {
+                    parameters: IncomingStakingTransactionData::CreateStaker {
+                        delegation: Some(Address::from(&validator_key_pair)),
+                        proof: SignatureProof::default(),
+                    },
+                    validator_key_pair,
+                    staker_key_pair,
+                }
+            }
+            IncomingType::AddStake => {
+                let (validator_key_pair, _, staker_key_pair) =
+                    self.create_validator_and_staker(balance, ValidatorState::Active);
+                IncomingAccountData::Staking {
+                    parameters: IncomingStakingTransactionData::AddStake {
+                        staker_address: Address::from(&staker_key_pair),
+                    },
+                    validator_key_pair,
+                    staker_key_pair,
+                }
+            }
+            IncomingType::UpdateStaker => {
+                // Create a staker that stakes for a validator.
+                let (_, _, staker_key_pair) =
+                    self.create_validator_and_staker(balance, ValidatorState::Active);
+                // Then create another validator to switch to.
+                let (validator_key_pair, _, _) =
+                    self.create_validator_and_staker(balance, ValidatorState::Active);
+                IncomingAccountData::Staking {
+                    parameters: IncomingStakingTransactionData::UpdateStaker {
+                        new_delegation: Some(Address::from(&validator_key_pair)),
+                        proof: SignatureProof::default(),
+                    },
+                    validator_key_pair,
+                    staker_key_pair,
+                }
+            }
+        }
+    }
+
+    /// Creates a new validator with a staker according to the params balance and `validator_state`.
+    /// It also inits the staking contract if no staking contract exists, otherwise it modifies the existing one.
+    /// Returns the keys for the new validator and staker in the order: `validator_key_pair` (used for all Schnorr keys),
+    /// `validator_voting_key_pair` and `staker_key_pair`.
+    pub fn create_validator_and_staker(
+        &mut self,
+        balance: Coin,
+        validator_state: ValidatorState,
+    ) -> (KeyPair, BlsKeyPair, KeyPair) {
+        // We create a new account with that balance.
+        let validator_key_pair = KeyPair::generate(&mut self.rng);
+        let validator_voting_key_pair = BlsKeyPair::generate(&mut self.rng);
+        let staker_key_pair = KeyPair::generate(&mut self.rng);
+
+        // Staking account.
+        let mut staking_contract = match self
+            .accounts
+            .get_complete(&Policy::STAKING_CONTRACT_ADDRESS, None)
+        {
+            Account::Staking(contract) => contract,
+            _ => Default::default(),
+        };
+
+        // Get the deposit value.
+        let deposit = Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT);
+
+        let mut txn = WriteTransaction::new(&self.accounts.env);
+        let data_store = self.accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+        let mut data_store_write = data_store.write(&mut txn);
+        let mut store = StakingContractStoreWrite::new(&mut data_store_write);
+
+        staking_contract
+            .create_validator(
+                &mut store,
+                &Address::from(&validator_key_pair),
+                validator_key_pair.public,
+                validator_voting_key_pair.public_key.compress(),
+                Address::from(&validator_key_pair),
+                None,
+                deposit,
+                &mut TransactionLog::empty(),
+            )
+            .expect("Failed to create validator");
+
+        match validator_state {
+            ValidatorState::Inactive => {
+                staking_contract
+                    .deactivate_validator(
+                        &mut store,
+                        &Address::from(&validator_key_pair),
+                        &Address::from(&validator_key_pair),
+                        0,
+                        &mut TransactionLog::empty(),
+                    )
+                    .expect("Failed to deactivate validator");
+            }
+            ValidatorState::Parked => {
+                staking_contract
+                    .commit_inherent(
+                        &Inherent::Slash {
+                            slot: SlashedSlot {
+                                slot: 0,
+                                validator_address: Address::from(&validator_key_pair),
+                                event_block: 1,
+                            },
+                        },
+                        &BlockState { number: 1, time: 0 },
+                        data_store_write,
+                        &mut InherentLogger::empty(),
+                    )
+                    .expect("Failed to slash and park validator");
+            }
+            ValidatorState::Retired => {
+                staking_contract
+                    .retire_validator(
+                        &mut store,
+                        &Address::from(&validator_key_pair),
+                        0,
+                        &mut TransactionLog::empty(),
+                    )
+                    .expect("Failed tor retire validator");
+            }
+            ValidatorState::Active => {} // Nothing to do here
+        }
+        let mut data_store_write = data_store.write(&mut txn);
+        let mut store = StakingContractStoreWrite::new(&mut data_store_write);
+
+        staking_contract
+            .create_staker(
+                &mut store,
+                &Address::from(&staker_key_pair),
+                balance,
+                None,
+                &mut TransactionLog::empty(),
+            )
+            .expect("Failed to create staker");
+
+        self.accounts
+            .tree
+            .put(
+                &mut txn,
+                &KeyNibbles::from(&Policy::STAKING_CONTRACT_ADDRESS),
+                Account::Staking(staking_contract),
+            )
+            .expect("Failed to store staking contract");
+        self.accounts
+            .tree
+            .update_root(&mut txn)
+            .expect("Tree must be complete");
+        txn.commit();
+
+        (
+            validator_key_pair,
+            validator_voting_key_pair,
+            staker_key_pair,
+        )
+    }
+}

@@ -18,14 +18,6 @@ impl AccountTransactionVerification for HashedTimeLockedContractVerifier {
     fn verify_incoming_transaction(transaction: &Transaction) -> Result<(), TransactionError> {
         assert_eq!(transaction.recipient_type, AccountType::HTLC);
 
-        if transaction.sender == transaction.recipient {
-            error!(
-                "The following transaction can't have the same sender and recipient:\n{:?}",
-                transaction
-            );
-            return Err(TransactionError::SenderEqualsRecipient);
-        }
-
         if !transaction
             .flags
             .contains(TransactionFlags::CONTRACT_CREATION)

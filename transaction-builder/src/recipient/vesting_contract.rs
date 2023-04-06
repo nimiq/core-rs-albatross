@@ -27,12 +27,12 @@ pub enum VestingRecipientBuilderError {
     #[error("The vesting start block is missing.")]
     NoStartBlock,
     /// The `step_blocks` field of the [`VestingRecipientBuilder`] has not been set.
-    /// Call [`with_step_distance`] to set this field.
+    /// Call [`with_time_step`] to set this field.
     ///
     /// [`VestingRecipientBuilder`]: struct.VestingRecipientBuilder.html
-    /// [`with_step_distance`]: struct.VestingRecipientBuilder.html#method.with_step_distance
-    #[error("The vesting step distance is missing.")]
-    NoStepDistance,
+    /// [`with_time_step`]: struct.VestingRecipientBuilder.html#method.with_time_step
+    #[error("The vesting time step is missing.")]
+    NoTimeStep,
     /// The `step_amount` field of the [`VestingRecipientBuilder`] has not been set.
     /// Call [`with_step_amount`] to set this field.
     ///
@@ -55,10 +55,10 @@ pub enum VestingRecipientBuilderError {
 ///
 /// The total of `total_amount` of funds can be unlocked over time:
 /// The contracts functionality begins at a starting block `start_block`.
-/// Starting from there, `step_amount` funds will be released every `step_distance` blocks.
+/// Starting from there, `step_amount` funds will be released every `time_step` blocks.
 ///
 /// That means that the first funds can be withdrawn at blockchain height
-/// `start_block + step_distance`.
+/// `start_block + time_step`.
 #[derive(Default)]
 pub struct VestingRecipientBuilder {
     owner: Option<Address>,
@@ -172,7 +172,7 @@ impl VestingRecipientBuilder {
                     .ok_or(VestingRecipientBuilderError::NoStartBlock)?,
                 time_step: self
                     .time_step
-                    .ok_or(VestingRecipientBuilderError::NoStepDistance)?,
+                    .ok_or(VestingRecipientBuilderError::NoTimeStep)?,
                 step_amount: self
                     .step_amount
                     .ok_or(VestingRecipientBuilderError::NoStepAmount)?,
