@@ -122,6 +122,9 @@ pub enum Log {
     },
 
     #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
+    RetireValidator { validator_address: Address },
+
+    #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
     DeleteValidator {
         validator_address: Address,
         reward_address: Address,
@@ -261,6 +264,7 @@ impl Log {
                         .map(|new_address| new_address == address)
                         .unwrap_or(false)
             }
+            Log::RetireValidator { validator_address } => validator_address == address,
             Log::DeleteValidator {
                 validator_address,
                 reward_address,

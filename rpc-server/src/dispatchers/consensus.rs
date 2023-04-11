@@ -1077,6 +1077,47 @@ impl ConsensusInterface for ConsensusDispatcher {
         self.send_raw_transaction(raw_tx).await
     }
 
+    /// Returns a serialized `retire_validator` transaction. You need to provide the address of a basic
+    /// account (the sender wallet) to pay the transaction fee.
+    async fn create_retire_validator_transaction(
+        &mut self,
+        sender_wallet: Address,
+        validator_wallet: Address,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<String, (), Self::Error> {
+        let transaction = TransactionBuilder::new_retire_validator(
+            &self.get_wallet_keypair(&sender_wallet)?,
+            &self.get_wallet_keypair(&validator_wallet)?,
+            fee,
+            self.validity_start_height(validity_start_height),
+            self.get_network_id(),
+        )?;
+
+        Ok(transaction_to_hex_string(&transaction).into())
+    }
+
+    /// Sends a `retire_validator` transaction to the network. You need to provide the address of a basic
+    /// account (the sender wallet) to pay the transaction fee.
+    async fn send_retire_validator_transaction(
+        &mut self,
+        sender_wallet: Address,
+        validator_wallet: Address,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<Blake2bHash, (), Self::Error> {
+        let raw_tx = self
+            .create_retire_validator_transaction(
+                sender_wallet,
+                validator_wallet,
+                fee,
+                validity_start_height,
+            )
+            .await?
+            .data;
+        self.send_raw_transaction(raw_tx).await
+    }
+
     /// Returns a serialized `delete_validator` transaction. The transaction fee will be paid from the
     /// validator deposit that is being returned.
     /// Note in order for this transaction to be accepted fee + value should be equal to the validator deposit, which is not a fixed value:
