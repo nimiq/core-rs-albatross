@@ -32,3 +32,5 @@ nimiq-primitives = { path = "../primitives", features = ["policy"] }
 nimiq-network-interface = { path = "../network-interface" }
 nimiq-network-mock = { path = "../network-mock" }
 nimiq-test-log = { path = "../test-log" }
+
+tokio = { version = "1.26", features = ["rt", "time", "macros"] }
