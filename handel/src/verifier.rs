@@ -20,7 +20,7 @@ impl VerificationResult {
 pub trait Verifier: Send + Sync {
     type Contribution: AggregatableContribution;
 
-    /// Verifies the correectness of `contribution`
+    /// Verifies the correctness of `contribution`
     /// * `contribution` - The contribution to verify
     async fn verify(&self, contribution: &Self::Contribution) -> VerificationResult;
 }

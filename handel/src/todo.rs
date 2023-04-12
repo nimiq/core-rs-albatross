@@ -32,8 +32,8 @@ impl<C: AggregatableContribution> fmt::Debug for TodoItem<C> {
 }
 
 impl<C: AggregatableContribution> TodoItem<C> {
-    /// Evaluated the contribution of the tTdoItem. It returns a score representing how useful
-    /// the contribution is, with `0` meaning not useful at all -> can be discarded and `>0`
+    /// Evaluated the contribution of the TodoItem. It returns a score representing how useful
+    /// the contribution is, with `0` meaning not useful at all -> can be discarded and `> 0`
     /// meaning more useful the higher the number.
     ///
     /// * `evaluator` - The evaluator used for the score computation

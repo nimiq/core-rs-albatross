@@ -24,7 +24,7 @@ pub struct LevelUpdate<C: AggregatableContribution> {
 }
 
 impl<C: AggregatableContribution> LevelUpdate<C> {
-    /// crate a new LevelUpdate
+    /// Create a new LevelUpdate
     /// * `aggregate` - The aggregated contribution
     /// * `individual` - The contribution of the sender, or none. Must have `individual.num_contributors() == 1`
     /// * `level` - The level this update belongs to
@@ -43,7 +43,7 @@ impl<C: AggregatableContribution> LevelUpdate<C> {
         self.origin as usize
     }
 
-    /// return the level this update is for
+    /// Returns the level this update is for
     pub fn level(&self) -> usize {
         self.level as usize
     }

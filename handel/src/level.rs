@@ -2,30 +2,43 @@ use std::cmp::min;
 use std::sync::Arc;
 
 use parking_lot::RwLock;
-use rand::seq::SliceRandom;
-use rand::thread_rng;
+use rand::{seq::SliceRandom, thread_rng};
 
-use crate::contribution::AggregatableContribution;
-use crate::partitioner::{Partitioner, PartitioningError};
+use crate::{
+    contribution::AggregatableContribution,
+    partitioner::{Partitioner, PartitioningError},
+};
 
+/// Struct that defines the state of a level
 #[derive(Clone, Debug)]
 pub struct LevelState {
+    /// Send is already started
     pub send_started: bool,
+    /// Receive is already completed
     pub receive_completed: bool,
+    /// The position of the peer where the next send must go to
     pub send_peers_pos: usize,
+    /// The size of the signature to send
     pub send_signature_size: usize,
+    /// The number of peers that a send is expected to go to
     pub send_peers_count: usize,
 }
 
+/// Struct that defines an Aggregation Level
 #[derive(Debug)]
 pub struct Level {
+    /// The ID of this level
     pub id: usize,
+    /// The Peer IDs on this level
     pub peer_ids: Vec<usize>,
+    /// The full size of the expected signature of this level
     pub send_expected_full_size: usize,
+    /// The state of this level
     pub state: RwLock<LevelState>,
 }
 
 impl Level {
+    /// Creates a new level given its id, the set of peers and the expected number of peers to consider this level send complete
     pub fn new(id: usize, peer_ids: Vec<usize>, send_expected_full_size: usize) -> Level {
         Level {
             id,
@@ -41,10 +54,12 @@ impl Level {
         }
     }
 
+    /// Returns the number of peers in this level
     pub fn num_peers(&self) -> usize {
         self.peer_ids.len()
     }
 
+    /// Creates a set of levels given a partitioner
     pub fn create_levels<P: Partitioner>(partitioner: Arc<P>) -> Vec<Level> {
         let mut levels: Vec<Level> = Vec::new();
         let mut first_active = false;
@@ -80,16 +95,19 @@ impl Level {
         levels
     }
 
+    /// Returns whether this level is active
     pub fn active(&self) -> bool {
         let state = self.state.read();
         state.send_started && state.send_peers_count < self.peer_ids.len()
     }
 
+    /// Returns whether this level is received complete
     pub fn receive_complete(&self) -> bool {
         let state = self.state.read();
         state.receive_completed
     }
 
+    /// Selects the set of next peers to send an update to for this level given a count of them
     pub fn select_next_peers(&self, count: usize) -> Vec<usize> {
         if self.id == 0 {
             vec![]
@@ -111,6 +129,7 @@ impl Level {
         }
     }
 
+    /// Updates the signature to send
     pub fn update_signature_to_send<C: AggregatableContribution>(&self, signature: &C) -> bool {
         let mut state = self.state.write();
 

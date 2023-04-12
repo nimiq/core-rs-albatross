@@ -263,6 +263,7 @@ impl<P: Protocol, N: Network<Contribution = P::Contribution>> NextAggregation<P,
 
     /// Send updates for every level to every peer accordingly.
     fn automatic_update(&mut self) {
+        // Skip level 0 since it only contains this node
         for level_id in 1..self.levels.len() {
             let (receive_complete, next_peers) = {
                 let level = self.levels.get(level_id).unwrap();
