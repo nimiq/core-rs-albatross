@@ -38,6 +38,7 @@ pub trait ContributionStore: Send + Sync {
 }
 
 #[derive(Clone, Debug)]
+/// An implementation of the `ContributionStore` trait
 pub struct ReplaceStore<P: Partitioner, C: AggregatableContribution> {
     /// The Partitioner used to create the Aggregation Tree.
     partitioner: Arc<P>,
@@ -188,17 +189,12 @@ impl<P: Partitioner, C: AggregatableContribution> ContributionStore for ReplaceS
         self.best_contribution.get(&level).map(|(c, _)| c)
     }
 
-    fn combined(&self, mut level: usize) -> Option<Self::Contribution> {
+    fn combined(&self, level: usize) -> Option<Self::Contribution> {
         // TODO: Cache this?
 
         let mut signatures = Vec::new();
         for (_, (signature, _)) in self.best_contribution.range(0..=level) {
             signatures.push(signature)
-        }
-
-        // ???
-        if level < self.partitioner.levels() - 1 {
-            level += 1;
         }
 
         self.partitioner.combine(signatures, level)
