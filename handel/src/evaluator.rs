@@ -16,44 +16,6 @@ pub trait Evaluator<C: AggregatableContribution>: Send + Sync {
     fn level_contains_id(&self, level: usize, id: usize) -> bool;
 }
 
-/// Every signature counts as a single vote
-pub struct SingleVote<S: ContributionStore, P: Partitioner> {
-    signature_store: Arc<S>,
-    partitioner: Arc<P>,
-    threshold: usize,
-}
-
-impl<S: ContributionStore, P: Partitioner> SingleVote<S, P> {
-    pub fn new(signature_store: Arc<S>, partitioner: Arc<P>, threshold: usize) -> Self {
-        Self {
-            signature_store,
-            partitioner,
-            threshold,
-        }
-    }
-}
-
-impl<C: AggregatableContribution, S: ContributionStore<Contribution = C>, P: Partitioner>
-    Evaluator<C> for SingleVote<S, P>
-{
-    fn evaluate(&self, _contribution: &C, _level: usize) -> usize {
-        // This is going to be used here, and we don't want any warnings
-        let _ = (&self.signature_store, &self.partitioner);
-
-        // TODO: The code from `WeightedVote` is what actually belongs here. And then the code in
-        // `WeightedVote` must be adapted to consider the weight of a signature.
-        unimplemented!();
-    }
-
-    fn is_final(&self, contribution: &C) -> bool {
-        contribution.num_contributors() >= self.threshold
-    }
-
-    fn level_contains_id(&self, level: usize, id: usize) -> bool {
-        self.partitioner.range(level).unwrap().contains(&id)
-    }
-}
-
 /// A signature counts as it was signed N times, where N is the signers weight
 ///
 /// NOTE: This can be used for ViewChanges
