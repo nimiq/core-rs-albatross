@@ -6,6 +6,7 @@ use futures::{
     stream::StreamExt,
 };
 use parking_lot::RwLock;
+use rand::{thread_rng, Rng};
 
 use beserial::{Deserialize, Serialize};
 use nimiq_bls::PublicKey;
@@ -214,10 +215,12 @@ async fn it_can_aggregate() {
 
     let mut hub = MockHub::default();
 
-    let contributor_num: usize = 7;
+    let mut rng = thread_rng();
+    let contributor_num: usize = rng.gen_range(7..15);
+    log::info!(contributor_num, "Running with");
 
     let mut networks: Vec<Arc<MockNetwork>> = vec![];
-    // Initialize `contributor_num networks and Handel Aggregations. Connect all the networks with each other.
+    // Initialize `contributor_num` networks and Handel Aggregations. Connect all the networks with each other.
     for id in 0..contributor_num {
         // Create a network with id = `id`
         let net = Arc::new(hub.new_network_with_address(id as u64));
@@ -293,12 +296,20 @@ async fn it_can_aggregate() {
         .checked_add(tokio::time::Duration::from_millis(300))
         .unwrap();
 
+    // The final value needs to be the sum of all contributions.
+    // For instance for `contributor_num = 7: 8 + 7 + 6 + 5 + 4 + 3 + 2 + 1 = 36`
+    let mut exp_agg_value = 0u64;
+    for i in 0..=contributor_num {
+        exp_agg_value += i as u64 + 1u64;
+    }
+
     loop {
         match tokio::time::timeout_at(deadline, aggregation.next()).await {
             Ok(Some(aggregate)) => {
-                // The final value needs to be the sum of all contributions: 8 + 7 + 6 + 5 + 4 + 3 + 2 + 1 = 36
-                if aggregate.num_contributors() == contributor_num + 1 && aggregate.value == 36 {
-                    // fully aggregated the result. breack the loop here
+                if aggregate.num_contributors() == contributor_num + 1
+                    && aggregate.value == exp_agg_value
+                {
+                    // fully aggregated the result. break the loop here
                     break;
                 }
             }
@@ -358,8 +369,11 @@ async fn it_can_aggregate() {
         "Not all contributions are present",
     );
 
-    // the final value needs to be the sum of all contributions: 8 + 7 + 6 + 5 + 4 + 3 + 2 + 1 = 36
-    assert_eq!(last_aggregate.value, 36, "Wrong aggregation result",);
+    // the final value needs to be the sum of all contributions: `exp_agg_value`
+    assert_eq!(
+        last_aggregate.value, exp_agg_value,
+        "Wrong aggregation result",
+    );
 
     *stopped.write() = true;
 }
