@@ -1,29 +1,30 @@
+use log::info;
+use rand::{rngs::StdRng, SeedableRng};
 use std::{convert::TryFrom, time::Instant};
 use tempfile::tempdir;
-
-use rand::{rngs::StdRng, SeedableRng};
 
 use beserial::{Deserialize, Serialize};
 use nimiq_account::{
     Account, Accounts, BasicAccount, BlockLogger, BlockState, InherentOperationReceipt, Log,
-    TransactionOperationReceipt, TransactionReceipt, VestingContract,
+    OperationReceipt, TransactionOperationReceipt, TransactionReceipt, VestingContract,
 };
 use nimiq_bls::KeyPair as BLSKeyPair;
 use nimiq_database::{mdbx::MdbxEnvironment, volatile::VolatileEnvironment, WriteTransaction};
 use nimiq_genesis_builder::GenesisBuilder;
 use nimiq_keys::{Address, KeyPair, PrivateKey, PublicKey, SecureGenerate};
-use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId, policy::Policy};
+use nimiq_primitives::{
+    account::AccountType, coin::Coin, networks::NetworkId, policy::Policy, slots::SlashedSlot,
+};
 use nimiq_test_log::test;
-use nimiq_test_utils::test_transaction::{
-    generate_accounts, generate_transactions, TestTransaction,
+use nimiq_test_utils::{
+    accounts_revert::TestCommitRevert,
+    test_transaction::{generate_accounts, generate_transactions, TestTransaction},
+    transactions::{IncomingType, OutgoingType, TransactionsGenerator, ValidatorState},
 };
 use nimiq_transaction::{inherent::Inherent, SignatureProof, Transaction};
-
-use crate::accounts_revert::TestCommitRevert;
+use rand::Rng;
 
 const VOLATILE_ENV: bool = true;
-
-mod accounts_revert;
 
 #[test]
 fn it_can_commit_and_revert_a_block_body() {
@@ -863,4 +864,171 @@ fn it_commits_valid_and_failing_txns() {
             .balance(),
         Coin::from_u64_unchecked(800)
     );
+}
+
+#[test]
+fn can_revert_transactions() {
+    let accounts = TestCommitRevert::new();
+    let mut generator = TransactionsGenerator::new(
+        Accounts::new(accounts.env.clone()),
+        NetworkId::UnitAlbatross,
+        rand::thread_rng(),
+    );
+
+    let block_state = BlockState::new(
+        Policy::blocks_per_epoch() + Policy::blocks_per_batch() + 1,
+        10,
+    );
+
+    for sender in [
+        OutgoingType::Basic,
+        OutgoingType::Vesting,
+        OutgoingType::HTLCRegularTransfer,
+        OutgoingType::HTLCEarlyResolve,
+        OutgoingType::HTLCTimeoutResolve,
+        OutgoingType::DeleteValidator,
+        OutgoingType::RemoveStake,
+    ] {
+        for recipient in [
+            IncomingType::Basic,
+            IncomingType::CreateVesting,
+            IncomingType::CreateHTLC,
+            IncomingType::CreateValidator,
+            IncomingType::UpdateValidator,
+            IncomingType::UnparkValidator,
+            IncomingType::DeactivateValidator,
+            IncomingType::ReactivateValidator,
+            IncomingType::RetireValidator,
+            IncomingType::CreateStaker,
+            IncomingType::AddStake,
+            IncomingType::UpdateStaker,
+        ] {
+            // Don't send from the staking contract to the staking contract.
+            if matches!(
+                sender,
+                OutgoingType::DeleteValidator | OutgoingType::RemoveStake
+            ) && matches!(
+                recipient,
+                IncomingType::CreateValidator
+                    | IncomingType::UpdateValidator
+                    | IncomingType::UnparkValidator
+                    | IncomingType::DeactivateValidator
+                    | IncomingType::ReactivateValidator
+                    | IncomingType::RetireValidator
+                    | IncomingType::CreateStaker
+                    | IncomingType::AddStake
+                    | IncomingType::UpdateStaker
+            ) {
+                continue;
+            }
+            for (fail_sender, fail_recipient) in
+                [(true, true), (true, false), (false, true), (false, false)]
+            {
+                if fail_recipient
+                    && !recipient.is_staker_related()
+                    && !recipient.is_validator_related()
+                {
+                    continue;
+                }
+                if fail_sender
+                    && matches!(
+                        recipient,
+                        IncomingType::UpdateValidator
+                            | IncomingType::UnparkValidator
+                            | IncomingType::RetireValidator
+                            | IncomingType::DeactivateValidator
+                            | IncomingType::ReactivateValidator
+                            | IncomingType::UpdateStaker
+                    )
+                {
+                    continue;
+                }
+                if let Some(tx) = generator.create_failing_transaction(
+                    sender,
+                    recipient,
+                    Coin::from_u64_unchecked(10),
+                    Coin::from_u64_unchecked(1),
+                    &block_state,
+                    fail_sender,
+                    fail_recipient,
+                ) {
+                    info!(
+                        ?sender,
+                        ?recipient,
+                        fail_sender,
+                        fail_recipient,
+                        "Testing transaction"
+                    );
+                    assert_eq!(tx.verify(NetworkId::UnitAlbatross), Ok(()));
+
+                    let receipts = accounts.test(&[tx], &[], &block_state);
+                    if fail_sender || fail_recipient {
+                        assert!(matches!(
+                            receipts.transactions[..],
+                            [OperationReceipt::Err(_)]
+                        ));
+                    } else {
+                        assert!(matches!(
+                            receipts.transactions[..],
+                            [OperationReceipt::Ok(_)]
+                        ));
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn can_revert_inherents() {
+    let accounts = TestCommitRevert::new();
+    let mut generator = TransactionsGenerator::new(
+        Accounts::new(accounts.env.clone()),
+        NetworkId::UnitAlbatross,
+        rand::thread_rng(),
+    );
+
+    let block_state = BlockState::new(
+        Policy::blocks_per_epoch() + Policy::blocks_per_batch() + 1,
+        10,
+    );
+
+    let mut rng = rand::thread_rng();
+
+    info!("Testing inherent Reward");
+    let inherent = Inherent::Reward {
+        target: Address(rng.gen()),
+        value: Coin::from_u64_unchecked(10),
+    };
+
+    // Inherents must always succeed.
+    let receipts = accounts.test(&[], &[inherent], &block_state);
+    assert!(matches!(receipts.inherents[..], [OperationReceipt::Ok(_)]));
+
+    let (validator_key_pair, _, _) =
+        generator.create_validator_and_staker(Coin::from_u64_unchecked(10), ValidatorState::Active);
+
+    info!("Testing inherent Slash");
+    let inherent = Inherent::Slash {
+        slot: SlashedSlot {
+            slot: rng.gen_range(0..Policy::SLOTS),
+            validator_address: Address::from(&validator_key_pair),
+            event_block: block_state.number - 1,
+        },
+    };
+
+    // Inherents must always succeed.
+    let receipts = accounts.test(&[], &[inherent], &block_state);
+    assert!(matches!(receipts.inherents[..], [OperationReceipt::Ok(_)]));
+
+    // Testing failing inherent.
+    info!("Testing inherent Reward");
+    let inherent = Inherent::Reward {
+        target: Policy::STAKING_CONTRACT_ADDRESS,
+        value: Coin::from_u64_unchecked(10),
+    };
+
+    // Inherents must always succeed.
+    let receipts = accounts.test(&[], &[inherent], &block_state);
+    assert!(matches!(receipts.inherents[..], [OperationReceipt::Err(_)]));
 }

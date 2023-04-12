@@ -4359,6 +4359,7 @@ dependencies = [
  "nimiq-zkp-circuits",
  "nimiq-zkp-component",
  "nimiq-zkp-primitives",
+ "num-traits",
  "parking_lot 0.12.1",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
