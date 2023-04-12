@@ -4,7 +4,7 @@ use std::{
         BTreeSet,
     },
     pin::Pin,
-    task::{Context, Poll},
+    task::{Context, Poll, Waker},
 };
 
 use futures::{
@@ -15,9 +15,10 @@ use tokio::{
     sync::mpsc,
     time::{error::Elapsed, Duration},
 };
+use tokio_stream::wrappers::ReceiverStream;
 
 use nimiq_collections::BitSet;
-use tokio_stream::wrappers::ReceiverStream;
+use nimiq_macros::store_waker;
 
 use crate::{
     protocol::{Aggregation, Protocol, SignedProposalMessage, TaggedAggregationMessage},
@@ -89,6 +90,9 @@ pub struct Tendermint<TProtocol: Protocol> {
     /// Used to dispatch messages to aggregations.
     pub(crate) aggregation_senders:
         BTreeMap<(u32, Step), mpsc::Sender<TProtocol::AggregationMessage>>,
+
+    /// Waker used for the poll next function
+    pub(crate) waker: Option<Waker>,
 }
 
 impl<TProtocol: Protocol> Tendermint<TProtocol> {
@@ -117,6 +121,7 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
             timeout: None,
             decision: false,
             state_return_pending: false,
+            waker: None,
         };
 
         this.init();
@@ -557,6 +562,12 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
 
                         // Add it to the list of pending responses
                         self.requested_proposals.push(response);
+
+                        // Pushing the future to FuturesUnordered above does not wake the task that
+                        // polls `requested_proposals`. Therefore, we need to wake the task manually.
+                        if let Some(waker) = &self.waker {
+                            waker.wake_by_ref();
+                        }
                     }
                 }
             }
@@ -569,6 +580,8 @@ impl<TProtocol: Protocol> Stream for Tendermint<TProtocol> {
     type Item = Return<TProtocol>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        store_waker!(self, waker, cx);
+
         // If a decision was returned previously this stream is terminated.
         if self.decision {
             return Poll::Ready(None);

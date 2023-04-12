@@ -4286,6 +4286,7 @@ dependencies = [
  "nimiq-block",
  "nimiq-collections",
  "nimiq-hash",
+ "nimiq-macros",
  "nimiq-primitives",
  "nimiq-test-log",
  "thiserror",

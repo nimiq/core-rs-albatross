@@ -23,6 +23,7 @@ beserial = { path = "../beserial", features = ["derive"] }
 nimiq-block = { path = "../primitives/block" }
 nimiq-collections = { path = "../collections" }
 nimiq-hash = { path = "../hash" }
+nimiq-macros = { path = "../macros" }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }
 
 [dev-dependencies]
