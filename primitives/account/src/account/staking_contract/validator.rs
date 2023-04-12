@@ -546,6 +546,10 @@ impl StakingContract {
         // Update validator entry.
         store.put_validator(validator_address, validator);
 
+        tx_logger.push_log(Log::RetireValidator {
+            validator_address: validator_address.clone(),
+        });
+
         Ok(RetireValidatorReceipt {
             was_active,
             was_parked,
