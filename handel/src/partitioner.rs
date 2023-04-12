@@ -120,6 +120,7 @@ impl Partitioner for BinomialPartitioner {
 mod tests {
     use super::*;
     use nimiq_test_log::test;
+    use rand::Rng;
 
     #[test]
     fn test_partitioner() {
@@ -139,8 +140,7 @@ mod tests {
         m = (1 << level - 1) - 1 = 100 - 1 = 011
         f = (1 << level)                   = 100
 
-
-        other_partitioner: node_id = 0
+        other_partitioner: node_id = 1
             ---ID---   -Level-
             0    000   . 1 . .
             1    001   0 . . .
@@ -201,10 +201,133 @@ mod tests {
     }
 
     #[test]
-    fn test_non_power_of_two() {
+    fn test_non_power_of_two_levels() {
         assert_eq!(BinomialPartitioner::new(0, 7).levels(), 4);
         assert_eq!(BinomialPartitioner::new(0, 6).levels(), 4);
         assert_eq!(BinomialPartitioner::new(0, 5).levels(), 4);
         assert_eq!(BinomialPartitioner::new(0, 4).levels(), 3);
+    }
+
+    #[test]
+    fn test_partitioner_non_power_of_two() {
+        /*
+        partitioner: node_id = 5
+            ---ID---   -Level-
+            0   0000   . . . 3 .
+            1   0001   . . . 3 .
+            2   0010   . . . 3 .
+            3   0011   . . . 3 .
+            4   0100   . 1 . . .
+            5   0101   0 . . . .
+            6   0110   . . 2 . .
+            7   0111   . . 2 . .
+            8   1000   . . . . 4
+            9   1001   . . . . 4
+           10   1010   . . . . 4
+           11   1011   . . . . 4
+           12   1100   . . . . 4
+           13   1101   . . . . 4
+           14   1110   . . . . 4
+           15   1111   . . . . 4
+
+        level = 4
+
+        other_partitioner: node_id = 9
+            ---ID---   -Level-
+            0   0000   . . . . 4
+            1   0001   . . . . 4
+            2   0010   . . . . 4
+            3   0011   . . . . 4
+            4   0100   . . . . 4
+            5   0101   . . . . 4
+            6   0110   . . . . 4
+            7   0111   . . . . 4
+            8   1000   . 1 . . .
+            9   1001   0 . . . .
+           10   1010   . . 2 . .
+           11   1011   . . 2 . .
+           12   1100   . . . 3 .
+           13   1101   . . . 3 .
+           14   1110   . . . 3 .
+           15   1111   . . . 3 .
+        */
+
+        let partitioner = BinomialPartitioner::new(5, 10);
+        let second_partitioner = BinomialPartitioner::new(9, 10);
+
+        assert_eq!(partitioner.levels(), 5);
+
+        assert_eq!(partitioner.range(0), Ok(5..=5), "Level 0");
+        assert_eq!(second_partitioner.range(0), Ok(9..=9), "Level 0");
+
+        assert_eq!(partitioner.range(1), Ok(4..=4), "Level 1");
+        assert_eq!(second_partitioner.range(1), Ok(8..=8), "Level 1");
+
+        // Note that in some cases, we would get ranges that correspond to ids outside of the range of num_ids
+        // I.e: we have some sparse subtrees
+        assert_eq!(partitioner.range(2), Ok(6..=7), "Level 2");
+        assert_eq!(second_partitioner.range(2), Ok(10..=11), "Level 2");
+
+        assert_eq!(partitioner.range(3), Ok(0..=3), "Level 3");
+        assert_eq!(second_partitioner.range(3), Ok(12..=15), "Level 3");
+
+        assert_eq!(partitioner.range(4), Ok(8..=15), "Level 4");
+        assert_eq!(second_partitioner.range(4), Ok(0..=7), "Level 4");
+
+        for level in 2..partitioner.levels() {
+            if partitioner
+                .range(level)
+                .unwrap()
+                .contains(&second_partitioner.node_id)
+            {
+                assert!(second_partitioner
+                    .range(level)
+                    .unwrap()
+                    .contains(&partitioner.node_id));
+            }
+        }
+
+        assert_eq!(
+            partitioner.range(5),
+            Err(PartitioningError::InvalidLevel { level: 5 })
+        );
+    }
+
+    #[test]
+    fn test_symmetry() {
+        let mut rng = rand::thread_rng();
+        let num_ids = rng.gen_range(8..512);
+
+        let node_id = rng.gen_range(0..num_ids);
+        let second_node_id = rng.gen_range(0..num_ids);
+
+        log::debug!(num_ids, node_id, second_node_id);
+
+        let partitioner = BinomialPartitioner::new(node_id, num_ids);
+        let second_partitioner = BinomialPartitioner::new(second_node_id, num_ids);
+
+        assert_eq!(partitioner.levels(), log2(num_ids - 1) + 2);
+
+        for level in 2..partitioner.levels() {
+            let range_len = (partitioner.range(level).unwrap().end()
+                - partitioner.range(level).unwrap().start())
+                + 1;
+
+            assert_eq!(
+                range_len as u32,
+                u32::pow(2, (level - 1).try_into().unwrap())
+            );
+
+            if partitioner
+                .range(level)
+                .unwrap()
+                .contains(&second_partitioner.node_id)
+            {
+                assert!(second_partitioner
+                    .range(level)
+                    .unwrap()
+                    .contains(&partitioner.node_id));
+            }
+        }
     }
 }
