@@ -279,8 +279,10 @@ impl AccountTransactionInteraction for StakingContract {
 
         // Parse transaction proof.
         let proof = OutgoingStakingTransactionProof::parse(transaction)?;
+        tx_logger.push_log(Log::pay_fee_log(transaction));
+        tx_logger.push_log(Log::transfer_log(transaction));
 
-        let result = match proof {
+        match proof {
             OutgoingStakingTransactionProof::DeleteValidator { proof } => {
                 // Get the validator address from the proof.
                 let validator_address = proof.compute_signer();
@@ -306,13 +308,7 @@ impl AccountTransactionInteraction for StakingContract {
                 )
                 .map(|receipt| receipt.map(|receipt| receipt.into()))
             }
-        };
-
-        // Ordering matters here for testing purposes. The vec will be very small, therefore the performance hit is irrelevant.
-        tx_logger.prepend_log(Log::transfer_log(transaction));
-        tx_logger.prepend_log(Log::pay_fee_log(transaction));
-
-        result
+        }
     }
 
     fn revert_outgoing_transaction(
@@ -328,10 +324,7 @@ impl AccountTransactionInteraction for StakingContract {
         // Parse transaction data.
         let data = OutgoingStakingTransactionProof::parse(transaction)?;
 
-        tx_logger.push_log(Log::pay_fee_log(transaction));
-        tx_logger.push_log(Log::transfer_log(transaction));
-
-        match data {
+        let result = match data {
             OutgoingStakingTransactionProof::DeleteValidator { proof } => {
                 // Get the validator address from the proof.
                 let validator_address = proof.compute_signer();
@@ -363,7 +356,12 @@ impl AccountTransactionInteraction for StakingContract {
                     tx_logger,
                 )
             }
-        }
+        };
+
+        tx_logger.push_log(Log::transfer_log(transaction));
+        tx_logger.push_log(Log::pay_fee_log(transaction));
+
+        result
     }
 
     fn commit_failed_transaction(
@@ -377,6 +375,8 @@ impl AccountTransactionInteraction for StakingContract {
 
         // Parse transaction proof.
         let data = OutgoingStakingTransactionProof::parse(transaction)?;
+
+        tx_logger.push_log(Log::pay_fee_log(transaction));
 
         let receipt = match data {
             // In the case of a failed Delete Validator we will:
@@ -448,8 +448,6 @@ impl AccountTransactionInteraction for StakingContract {
             }
         };
 
-        tx_logger.prepend_log(Log::pay_fee_log(transaction));
-
         Ok(receipt)
     }
 
@@ -466,11 +464,13 @@ impl AccountTransactionInteraction for StakingContract {
         // Parse transaction data.
         let data = OutgoingStakingTransactionProof::parse(transaction)?;
 
-        tx_logger.push_log(Log::pay_fee_log(transaction));
-
-        match data {
+        let result = match data {
             OutgoingStakingTransactionProof::DeleteValidator { proof } => {
                 let validator_address = proof.compute_signer();
+                tx_logger.push_log(Log::ValidatorFeeDeduction {
+                    validator_address: validator_address.clone(),
+                    fee: transaction.fee,
+                });
 
                 // Get or restore validator.
                 let mut validator = {
@@ -508,6 +508,10 @@ impl AccountTransactionInteraction for StakingContract {
             OutgoingStakingTransactionProof::RemoveStake { proof } => {
                 // Get the staker address from the proof.
                 let staker_address = proof.compute_signer();
+                tx_logger.push_log(Log::StakerFeeDeduction {
+                    staker_address: staker_address.clone(),
+                    fee: transaction.fee,
+                });
 
                 let receipt = match receipt {
                     Some(receipt) => Some(receipt.try_into()?),
@@ -519,10 +523,14 @@ impl AccountTransactionInteraction for StakingContract {
                     &staker_address,
                     transaction.fee,
                     receipt,
-                    tx_logger,
+                    &mut TransactionLog::empty(),
                 )
             }
-        }
+        };
+
+        tx_logger.push_log(Log::pay_fee_log(transaction));
+
+        result
     }
 
     fn reserve_balance(
@@ -786,7 +794,7 @@ impl AccountInherentInteraction for StakingContract {
                     }
 
                     // Ordering matters here for testing purposes. The vec will be very small, therefore the performance hit is irrelevant.
-                    inherent_logger.prepend_log(Log::Slash {
+                    inherent_logger.push_log(Log::Slash {
                         validator_address: slot.validator_address.clone(),
                         event_block: slot.event_block,
                         slot: slot.slot,

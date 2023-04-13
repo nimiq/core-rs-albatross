@@ -3,6 +3,7 @@ use std::io;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
+use nimiq_primitives::account::FailReason;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AccountReceipt(#[beserial(len_type(u16))] pub Vec<u8>);
@@ -54,7 +55,7 @@ pub type InherentReceipt = Option<AccountReceipt>;
 #[repr(u8)]
 pub enum OperationReceipt<T: Clone + Debug + Serialize + Deserialize> {
     Ok(T),
-    Err(T),
+    Err(T, FailReason),
 }
 
 pub type TransactionOperationReceipt = OperationReceipt<TransactionReceipt>;

@@ -447,7 +447,7 @@ impl ExecutedTransaction {
                 execution_result: true,
             },
 
-            nimiq_transaction::ExecutedTransaction::Err(tx) => ExecutedTransaction {
+            nimiq_transaction::ExecutedTransaction::Err(tx, ..) => ExecutedTransaction {
                 transaction: Transaction::from_blockchain(tx, block_number, timestamp, head_height),
                 execution_result: false,
             },

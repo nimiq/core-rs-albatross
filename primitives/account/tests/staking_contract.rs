@@ -1324,9 +1324,9 @@ fn delete_validator_works() {
     assert_eq!(
         tx_logger.logs,
         vec![
-            Log::PayFee {
-                from: tx.sender.clone(),
-                fee: tx.fee,
+            Log::DeleteValidator {
+                validator_address: validator_address.clone(),
+                reward_address: reward_address.clone(),
             },
             Log::Transfer {
                 from: tx.sender.clone(),
@@ -1334,10 +1334,10 @@ fn delete_validator_works() {
                 amount: tx.value,
                 data: None,
             },
-            Log::DeleteValidator {
-                validator_address: validator_address.clone(),
-                reward_address: reward_address.clone(),
-            }
+            Log::PayFee {
+                from: tx.sender.clone(),
+                fee: tx.fee,
+            },
         ]
     );
 
@@ -2057,9 +2057,10 @@ fn unstake_works() {
     assert_eq!(
         tx_logger.logs,
         vec![
-            Log::PayFee {
-                from: tx.sender.clone(),
-                fee: tx.fee,
+            Log::Unstake {
+                staker_address: staker_address.clone(),
+                validator_address: Some(validator_address.clone()),
+                value: Coin::from_u64_unchecked(50_000_000),
             },
             Log::Transfer {
                 from: tx.sender.clone(),
@@ -2067,11 +2068,10 @@ fn unstake_works() {
                 amount: tx.value,
                 data: None,
             },
-            Log::Unstake {
-                staker_address: staker_address.clone(),
-                validator_address: Some(validator_address.clone()),
-                value: Coin::from_u64_unchecked(50_000_000),
-            }
+            Log::PayFee {
+                from: tx.sender.clone(),
+                fee: tx.fee,
+            },
         ]
     );
 
@@ -2673,15 +2673,15 @@ fn revert_slash_inherent(
     assert_eq!(
         logs,
         vec![
+            Log::Park {
+                validator_address: validator_address.clone(),
+                event_block: block_state.number,
+            },
             Log::Slash {
                 validator_address: validator_address.clone(),
                 event_block,
                 slot,
                 newly_disabled: true,
-            },
-            Log::Park {
-                validator_address: validator_address.clone(),
-                event_block: block_state.number,
             },
         ]
     );

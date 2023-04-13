@@ -6,25 +6,28 @@ use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::account::AccountType;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_test_log::test;
-use nimiq_transaction::account::htlc_contract::{AnyHash, HashAlgorithm, ProofType};
+use nimiq_transaction::account::htlc_contract::{
+    AnyHash, CreationTransactionData, HashAlgorithm, OutgoingHTLCTransactionProof,
+};
 use nimiq_transaction::{SignatureProof, Transaction};
 use nimiq_transaction_builder::{Recipient, TransactionBuilder};
 
 #[test]
-#[allow(unused_must_use)]
 fn it_can_create_creation_transaction() {
-    let mut data: Vec<u8> = Vec::with_capacity(Address::SIZE * 2 + AnyHash::SIZE + 10);
     let sender = Address::from([0u8; 20]);
     let recipient = Address::from([0u8; 20]);
-    sender.serialize(&mut data);
-    recipient.serialize(&mut data);
-    HashAlgorithm::Blake2b.serialize(&mut data);
-    AnyHash::from([0u8; 32]).serialize(&mut data);
-    Serialize::serialize(&2u8, &mut data);
-    Serialize::serialize(&1000u64, &mut data);
+
+    let data = CreationTransactionData {
+        sender: sender.clone(),
+        recipient: recipient.clone(),
+        hash_algorithm: HashAlgorithm::Blake2b,
+        hash_root: AnyHash::from([0u8; 32]),
+        hash_count: 2,
+        timeout: 1000,
+    };
 
     let transaction = Transaction::new_contract_creation(
-        data,
+        data.serialize_to_vec(),
         sender.clone(),
         AccountType::Basic,
         AccountType::HTLC,
@@ -115,21 +118,19 @@ fn prepare_outgoing_transaction() -> (
 }
 
 #[test]
-#[allow(unused_must_use)]
 fn it_can_create_regular_transfer() {
     let (mut tx, pre_image, hash_root, _, _, recipient_key_pair, recipient_signature_proof) =
         prepare_outgoing_transaction();
 
     // regular: valid Blake-2b
-    let mut proof =
-        Vec::with_capacity(3 + 2 * AnyHash::SIZE + recipient_signature_proof.serialized_size());
-    Serialize::serialize(&ProofType::RegularTransfer, &mut proof);
-    Serialize::serialize(&HashAlgorithm::Blake2b, &mut proof);
-    Serialize::serialize(&1u8, &mut proof);
-    Serialize::serialize(&hash_root, &mut proof);
-    Serialize::serialize(&pre_image, &mut proof);
-    Serialize::serialize(&recipient_signature_proof, &mut proof);
-    tx.proof = proof;
+    let proof = OutgoingHTLCTransactionProof::RegularTransfer {
+        hash_algorithm: HashAlgorithm::Blake2b,
+        hash_depth: 1,
+        hash_root: hash_root.clone(),
+        pre_image: pre_image.clone(),
+        signature_proof: recipient_signature_proof,
+    };
+    tx.proof = proof.serialize_to_vec();
 
     let mut builder = TransactionBuilder::new();
     builder
@@ -154,7 +155,6 @@ fn it_can_create_regular_transfer() {
 }
 
 #[test]
-#[allow(unused_must_use)]
 fn it_can_create_early_resolve() {
     let (
         mut tx,
@@ -167,13 +167,11 @@ fn it_can_create_early_resolve() {
     ) = prepare_outgoing_transaction();
 
     // early resolve: valid
-    let mut proof = Vec::with_capacity(
-        1 + recipient_signature_proof.serialized_size() + sender_signature_proof.serialized_size(),
-    );
-    Serialize::serialize(&ProofType::EarlyResolve, &mut proof);
-    Serialize::serialize(&recipient_signature_proof, &mut proof);
-    Serialize::serialize(&sender_signature_proof, &mut proof);
-    tx.proof = proof;
+    let proof = OutgoingHTLCTransactionProof::EarlyResolve {
+        signature_proof_recipient: recipient_signature_proof,
+        signature_proof_sender: sender_signature_proof,
+    };
+    tx.proof = proof.serialize_to_vec();
 
     let mut builder = TransactionBuilder::new();
     builder
@@ -199,16 +197,15 @@ fn it_can_create_early_resolve() {
 }
 
 #[test]
-#[allow(unused_must_use)]
 fn it_can_create_timeout_resolve() {
     let (mut tx, _, _, sender_key_pair, sender_signature_proof, _, _) =
         prepare_outgoing_transaction();
 
     // timeout resolve: valid
-    let mut proof = Vec::with_capacity(1 + sender_signature_proof.serialized_size());
-    Serialize::serialize(&ProofType::TimeoutResolve, &mut proof);
-    Serialize::serialize(&sender_signature_proof, &mut proof);
-    tx.proof = proof;
+    let proof = OutgoingHTLCTransactionProof::TimeoutResolve {
+        signature_proof_sender: sender_signature_proof,
+    };
+    tx.proof = proof.serialize_to_vec();
 
     let mut builder = TransactionBuilder::new();
     builder

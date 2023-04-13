@@ -1,13 +1,13 @@
 use std::convert::{TryFrom, TryInto};
 
-use rand::thread_rng;
+use nimiq_test_utils::{
+    accounts_revert::TestCommitRevert, test_rng::test_rng, transactions::TransactionsGenerator,
+};
 
 use beserial::{Deserialize, Serialize, SerializingError};
 use nimiq_account::{
-    Account, AccountTransactionInteraction, Accounts, BlockState, Log, TransactionLog,
-    VestingContract,
+    Account, Accounts, BasicAccount, BlockState, Log, TransactionLog, VestingContract,
 };
-use nimiq_database::{volatile::VolatileEnvironment, WriteTransaction};
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::{
     account::{AccountError, AccountType},
@@ -17,7 +17,8 @@ use nimiq_primitives::{
 };
 use nimiq_test_log::test;
 use nimiq_transaction::{
-    account::AccountTransactionVerification, SignatureProof, Transaction, TransactionFlags,
+    account::{vesting_contract::CreationTransactionData, AccountTransactionVerification},
+    SignatureProof, Transaction, TransactionFlags,
 };
 use nimiq_utils::key_rng::SecureGenerate;
 
@@ -28,8 +29,7 @@ fn key_pair() -> KeyPair {
     KeyPair::from(PrivateKey::deserialize_from_vec(&hex::decode(OWNER_KEY).unwrap()).unwrap())
 }
 
-fn generate_contract() -> VestingContract {
-    let key_pair = key_pair();
+fn generate_contract(key_pair: &KeyPair) -> VestingContract {
     VestingContract {
         balance: 1000.try_into().unwrap(),
         owner: Address::from(&key_pair.public),
@@ -38,6 +38,35 @@ fn generate_contract() -> VestingContract {
         step_amount: 100.try_into().unwrap(),
         total_amount: 1000.try_into().unwrap(),
     }
+}
+
+fn init_tree() -> (TestCommitRevert, KeyPair, KeyPair) {
+    let accounts = TestCommitRevert::new();
+    let generator = TransactionsGenerator::new(
+        Accounts::new(accounts.env.clone()),
+        NetworkId::UnitAlbatross,
+        test_rng(true),
+    );
+
+    let mut rng = test_rng(true);
+
+    let key_1 = KeyPair::generate(&mut rng);
+    generator.put_account(
+        &Address::from(&key_1),
+        Account::Basic(BasicAccount {
+            balance: Coin::from_u64_unchecked(1000),
+        }),
+    );
+
+    let key_2 = KeyPair::generate(&mut rng);
+    generator.put_account(
+        &Address::from(&key_2),
+        Account::Basic(BasicAccount {
+            balance: Coin::from_u64_unchecked(1000),
+        }),
+    );
+
+    (accounts, key_1, key_2)
 }
 
 // This function is used to create the CONTRACT constant above.
@@ -97,7 +126,7 @@ fn it_can_verify_creation_transaction() {
         100.try_into().unwrap(),
         0.try_into().unwrap(),
         0,
-        NetworkId::Dummy,
+        NetworkId::UnitAlbatross,
     );
 
     // Invalid data
@@ -157,23 +186,37 @@ fn it_can_verify_creation_transaction() {
         AccountType::verify_incoming_transaction(&transaction),
         Ok(())
     );
+
+    // step amount > total amount
+    let data = CreationTransactionData {
+        owner: Address::from([0u8; 20]),
+        start_time: 100,
+        time_step: 0,
+        step_amount: Coin::try_from(1000).unwrap(),
+        total_amount: Coin::try_from(100).unwrap(),
+    };
+    transaction.data = data.serialize_to_vec();
+    transaction.recipient = transaction.contract_creation_address();
+    assert_eq!(
+        AccountType::verify_incoming_transaction(&transaction),
+        Ok(())
+    );
 }
 
 #[test]
 #[allow(unused_must_use)]
 fn it_can_create_contract_from_transaction() {
-    let env = VolatileEnvironment::new(10).unwrap();
-    let accounts = Accounts::new(env.clone());
+    let (accounts, key_1, _key_2) = init_tree();
+
     let block_state = BlockState::new(1, 1);
-    let mut db_txn = WriteTransaction::new(&env);
 
     // Transaction 1
     let mut data: Vec<u8> = Vec::with_capacity(Address::SIZE + 8);
-    let owner = Address::from([0u8; 20]);
+    let owner = Address::from(&key_1);
     Serialize::serialize(&owner, &mut data);
     Serialize::serialize(&1000u64, &mut data);
 
-    let mut transaction = Transaction::new_contract_creation(
+    let mut tx = Transaction::new_contract_creation(
         data,
         owner.clone(),
         AccountType::Basic,
@@ -181,25 +224,25 @@ fn it_can_create_contract_from_transaction() {
         100.try_into().unwrap(),
         0.try_into().unwrap(),
         0,
-        NetworkId::Dummy,
+        NetworkId::UnitAlbatross,
     );
 
-    let data_store = accounts.data_store(&transaction.contract_creation_address());
-
+    // First contract creation
     let mut tx_logger = TransactionLog::empty();
-    let contract = VestingContract::create_new_contract(
-        &transaction,
-        Coin::ZERO,
-        &block_state,
-        data_store.write(&mut db_txn),
-        &mut tx_logger,
-    )
-    .expect("Failed to create contract");
+    let contract = accounts
+        .test_create_new_contract::<VestingContract>(
+            &tx,
+            Coin::ZERO,
+            &block_state,
+            &mut tx_logger,
+            true,
+        )
+        .expect("Failed to create contract");
 
     assert_eq!(
         tx_logger.logs,
         vec![Log::VestingCreate {
-            contract_address: transaction.contract_creation_address(),
+            contract_address: tx.contract_creation_address(),
             owner: owner.clone(),
             start_time: 0,
             time_step: 1000,
@@ -227,20 +270,20 @@ fn it_can_create_contract_from_transaction() {
     Serialize::serialize(&0u64, &mut data);
     Serialize::serialize(&100u64, &mut data);
     Serialize::serialize(&Coin::try_from(50).unwrap(), &mut data);
-    transaction.data = data;
-    transaction.recipient = transaction.contract_creation_address();
-
-    let data_store = accounts.data_store(&transaction.contract_creation_address());
+    tx.data = data;
+    tx.recipient = tx.contract_creation_address();
 
     let mut tx_logger = TransactionLog::empty();
-    let contract = VestingContract::create_new_contract(
-        &transaction,
-        Coin::ZERO,
-        &block_state,
-        data_store.write(&mut db_txn),
-        &mut tx_logger,
-    )
-    .expect("Failed to create contract");
+
+    let contract = accounts
+        .test_create_new_contract::<VestingContract>(
+            &tx,
+            Coin::ZERO,
+            &block_state,
+            &mut tx_logger,
+            true,
+        )
+        .expect("Failed to create contract");
 
     let contract = match contract {
         Account::Vesting(contract) => contract,
@@ -262,20 +305,19 @@ fn it_can_create_contract_from_transaction() {
     Serialize::serialize(&100u64, &mut data);
     Serialize::serialize(&Coin::try_from(50).unwrap(), &mut data);
     Serialize::serialize(&Coin::try_from(150).unwrap(), &mut data);
-    transaction.data = data;
-    transaction.recipient = transaction.contract_creation_address();
-
-    let data_store = accounts.data_store(&transaction.contract_creation_address());
+    tx.data = data;
+    tx.recipient = tx.contract_creation_address();
 
     let mut tx_logger = TransactionLog::empty();
-    let contract = VestingContract::create_new_contract(
-        &transaction,
-        Coin::ZERO,
-        &block_state,
-        data_store.write(&mut db_txn),
-        &mut tx_logger,
-    )
-    .expect("Failed to create contract");
+    let contract = accounts
+        .test_create_new_contract::<VestingContract>(
+            &tx,
+            Coin::ZERO,
+            &block_state,
+            &mut tx_logger,
+            true,
+        )
+        .expect("Failed to create contract");
 
     let contract = match contract {
         Account::Vesting(contract) => contract,
@@ -290,20 +332,18 @@ fn it_can_create_contract_from_transaction() {
     assert_eq!(contract.total_amount, 150.try_into().unwrap());
 
     // Transaction 4: invalid data
-    transaction.data = Vec::with_capacity(Address::SIZE + 2);
-    Serialize::serialize(&owner, &mut transaction.data);
-    Serialize::serialize(&0u16, &mut transaction.data);
-    transaction.recipient = transaction.contract_creation_address();
-
-    let data_store = accounts.data_store(&transaction.contract_creation_address());
+    tx.data = Vec::with_capacity(Address::SIZE + 2);
+    Serialize::serialize(&owner, &mut tx.data);
+    Serialize::serialize(&0u16, &mut tx.data);
+    tx.recipient = tx.contract_creation_address();
 
     let mut tx_logger = TransactionLog::empty();
-    let result = VestingContract::create_new_contract(
-        &transaction,
+    let result = accounts.test_create_new_contract::<VestingContract>(
+        &tx,
         Coin::ZERO,
         &block_state,
-        data_store.write(&mut db_txn),
         &mut tx_logger,
+        true,
     );
 
     assert_eq!(
@@ -316,42 +356,29 @@ fn it_can_create_contract_from_transaction() {
 
 #[test]
 fn it_does_not_support_incoming_transactions() {
-    let env = VolatileEnvironment::new(10).unwrap();
-    let accounts = Accounts::new(env.clone());
-    let data_store = accounts.data_store(&Address::from([2u8; 20]));
+    let (accounts, key_1, key_2) = init_tree();
+
     let block_state = BlockState::new(1, 1);
-    let mut db_txn = WriteTransaction::new(&env);
 
     let mut tx = Transaction::new_basic(
-        Address::from([1u8; 20]),
-        Address::from([2u8; 20]),
+        Address::from(&key_1),
+        Address::from(&key_2),
         1.try_into().unwrap(),
         1000.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        NetworkId::UnitAlbatross,
     );
     tx.recipient_type = AccountType::Vesting;
 
-    let mut contract = generate_contract();
+    let mut contract = generate_contract(&key_1);
 
     let mut tx_logger = TransactionLog::empty();
-    let result = contract.commit_incoming_transaction(
+    let result = accounts.test_commit_incoming_transaction(
+        &mut contract,
         &tx,
         &block_state,
-        data_store.write(&mut db_txn),
         &mut tx_logger,
-    );
-
-    assert_eq!(tx_logger.logs.len(), 0);
-    assert_eq!(result, Err(AccountError::InvalidForRecipient));
-
-    let mut tx_logger = TransactionLog::empty();
-    let result = contract.revert_incoming_transaction(
-        &tx,
-        &block_state,
-        None,
-        data_store.write(&mut db_txn),
-        &mut tx_logger,
+        true,
     );
 
     assert_eq!(tx_logger.logs.len(), 0);
@@ -361,13 +388,14 @@ fn it_does_not_support_incoming_transactions() {
 #[test]
 fn it_can_verify_outgoing_transactions() {
     let key_pair = key_pair();
+
     let mut tx = Transaction::new_basic(
         Address::from([1u8; 20]),
         Address::from([2u8; 20]),
         1.try_into().unwrap(),
         1000.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        NetworkId::UnitAlbatross,
     );
     tx.sender_type = AccountType::Vesting;
 
@@ -400,23 +428,20 @@ fn it_can_verify_outgoing_transactions() {
 
 #[test]
 fn it_can_apply_and_revert_valid_transaction() {
-    let env = VolatileEnvironment::new(10).unwrap();
-    let accounts = Accounts::new(env.clone());
-    let data_store = accounts.data_store(&Address::from([1u8; 20]));
-    let block_state = BlockState::new(2, 200);
-    let mut db_txn = WriteTransaction::new(&env);
+    let (accounts, key_pair, key_2) = init_tree();
 
-    let key_pair = key_pair();
-    let start_contract = generate_contract();
+    let block_state = BlockState::new(2, 200);
+
+    let start_contract = generate_contract(&key_pair);
     let mut contract = start_contract.clone();
 
     let mut tx = Transaction::new_basic(
-        Address::from([1u8; 20]),
-        Address::from([2u8; 20]),
+        Address::from(&key_pair), // PITODO the new contract is not in the accounts
+        Address::from(&key_2),
         200.try_into().unwrap(),
         0.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        NetworkId::UnitAlbatross,
     );
     tx.sender_type = AccountType::Vesting;
 
@@ -425,13 +450,8 @@ fn it_can_apply_and_revert_valid_transaction() {
     tx.proof = signature_proof.serialize_to_vec();
 
     let mut tx_logger = TransactionLog::empty();
-    let receipt = contract
-        .commit_outgoing_transaction(
-            &tx,
-            &block_state,
-            data_store.write(&mut db_txn),
-            &mut tx_logger,
-        )
+    let _ = accounts
+        .test_commit_outgoing_transaction(&mut contract, &tx, &block_state, &mut tx_logger, true)
         .expect("Failed to commit transaction");
 
     assert_eq!(contract.balance, 800.try_into().unwrap());
@@ -451,72 +471,21 @@ fn it_can_apply_and_revert_valid_transaction() {
         ]
     );
 
-    let mut tx_logger = TransactionLog::empty();
-    contract
-        .revert_outgoing_transaction(
-            &tx,
-            &block_state,
-            receipt,
-            data_store.write(&mut db_txn),
-            &mut tx_logger,
-        )
-        .expect("Failed to revert transaction");
-
-    assert_eq!(contract, start_contract);
-    assert_eq!(
-        tx_logger.logs,
-        vec![
-            Log::PayFee {
-                from: tx.sender.clone(),
-                fee: tx.fee
-            },
-            Log::Transfer {
-                from: tx.sender.clone(),
-                to: tx.recipient.clone(),
-                amount: tx.value,
-                data: None
-            }
-        ]
-    );
-
-    let block_state = BlockState::new(1, 200);
+    let block_state = BlockState::new(3, 400);
 
     let mut tx_logger = TransactionLog::empty();
-    let receipt = contract
-        .commit_outgoing_transaction(
-            &tx,
-            &block_state,
-            data_store.write(&mut db_txn),
-            &mut tx_logger,
-        )
+    let _ = accounts
+        .test_commit_outgoing_transaction(&mut contract, &tx, &block_state, &mut tx_logger, true)
         .expect("Failed to commit transaction");
 
-    assert_eq!(contract.balance, 800.try_into().unwrap());
-
-    let mut tx_logger = TransactionLog::empty();
-    contract
-        .revert_outgoing_transaction(
-            &tx,
-            &block_state,
-            receipt,
-            data_store.write(&mut db_txn),
-            &mut tx_logger,
-        )
-        .expect("Failed to revert transaction");
-
-    assert_eq!(contract, start_contract);
+    assert_eq!(contract.balance, 600.try_into().unwrap());
 }
 
 #[test]
 fn it_refuses_invalid_transactions() {
-    let env = VolatileEnvironment::new(10).unwrap();
-    let accounts = Accounts::new(env.clone());
-    let data_store = accounts.data_store(&Address::from([1u8; 20]));
-    let mut db_txn = WriteTransaction::new(&env);
+    let (accounts, key_pair, key_pair_alt) = init_tree();
 
-    let key_pair = key_pair();
-    let key_pair_alt = KeyPair::generate(&mut thread_rng());
-    let mut contract = generate_contract();
+    let mut contract = generate_contract(&key_pair);
 
     let mut tx = Transaction::new_basic(
         Address::from([1u8; 20]),
@@ -524,7 +493,7 @@ fn it_refuses_invalid_transactions() {
         200.try_into().unwrap(),
         0.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        NetworkId::UnitAlbatross,
     );
     tx.sender_type = AccountType::Vesting;
 
@@ -536,11 +505,12 @@ fn it_refuses_invalid_transactions() {
     let block_state = BlockState::new(1, 200);
 
     let mut tx_logger = TransactionLog::empty();
-    let result = contract.commit_outgoing_transaction(
+    let result = accounts.test_commit_outgoing_transaction(
+        &mut contract,
         &tx,
         &block_state,
-        data_store.write(&mut db_txn),
         &mut tx_logger,
+        true,
     );
 
     assert_eq!(result, Err(AccountError::InvalidSignature));
@@ -554,11 +524,12 @@ fn it_refuses_invalid_transactions() {
     let block_state = BlockState::new(1, 100);
 
     let mut tx_logger = TransactionLog::empty();
-    let result = contract.commit_outgoing_transaction(
+    let result = accounts.test_commit_outgoing_transaction(
+        &mut contract,
         &tx,
         &block_state,
-        data_store.write(&mut db_txn),
         &mut tx_logger,
+        true,
     );
 
     assert_eq!(

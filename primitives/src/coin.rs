@@ -13,7 +13,7 @@ use thiserror::Error;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Default, Hash)]
 #[cfg_attr(
     feature = "serde-derive",
     derive(serde::Serialize, serde::Deserialize),

@@ -387,11 +387,11 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
         })
     }
 
-    fn put_account<T: Serialize>(&self, address: &KeyNibbles, account: T) {
+    pub fn put_account(&self, address: &Address, account: Account) {
         let mut txn = WriteTransaction::new(&self.accounts.env);
         self.accounts
             .tree
-            .put(&mut txn, address, account)
+            .put(&mut txn, &KeyNibbles::from(address), account)
             .expect("Failed to put initial accounts");
         self.accounts
             .tree
@@ -420,7 +420,7 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
                 let key_pair = KeyPair::generate(&mut self.rng);
                 let account = Account::Basic(BasicAccount { balance });
 
-                self.put_account(&KeyNibbles::from(&Address::from(&key_pair)), account);
+                self.put_account(&Address::from(&key_pair), account);
                 OutgoingAccountData::Basic { key_pair }
             }
             OutgoingType::Vesting => {
@@ -438,7 +438,7 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
                 let contract_address = Address(self.rng.gen());
 
                 debug!(?contract_address, "Create vesting contract");
-                self.put_account(&KeyNibbles::from(&contract_address), account);
+                self.put_account(&contract_address, account);
                 OutgoingAccountData::Vesting {
                     contract_address,
                     owner_key_pair,
@@ -474,7 +474,7 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
                 let contract_address = Address(self.rng.gen());
 
                 debug!(?contract_address, "Create HTLC contract");
-                self.put_account(&KeyNibbles::from(&contract_address), account);
+                self.put_account(&contract_address, account);
                 OutgoingAccountData::Htlc {
                     contract_address,
                     sender_key_pair,

@@ -156,6 +156,7 @@ impl Default for SignatureProof {
         }
     }
 }
+
 /// A wrapper around the Transaction struct that encodes the result of executing such transaction
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 #[repr(u8)]
@@ -177,14 +178,14 @@ impl ExecutedTransaction {
     pub fn failed(&self) -> bool {
         match self {
             ExecutedTransaction::Ok(_) => false,
-            ExecutedTransaction::Err(_) => true,
+            ExecutedTransaction::Err(..) => true,
         }
     }
 
     pub fn succeeded(&self) -> bool {
         match self {
             ExecutedTransaction::Ok(_) => true,
-            ExecutedTransaction::Err(_) => false,
+            ExecutedTransaction::Err(..) => false,
         }
     }
 
@@ -450,6 +451,14 @@ impl Transaction {
     pub fn total_value(&self) -> Coin {
         // Avoid wrapping in case this is called before verify().
         self.value.saturating_add(&self.fee)
+    }
+
+    pub fn sender(&self) -> &Address {
+        &self.sender
+    }
+
+    pub fn recipient(&self) -> &Address {
+        &self.recipient
     }
 }
 

@@ -3,7 +3,7 @@ use nimiq_database::{
 };
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
-use nimiq_primitives::account::AccountType;
+use nimiq_primitives::account::{AccountType, FailReason};
 use nimiq_primitives::trie::TrieItem;
 use nimiq_primitives::{
     account::AccountError,
@@ -266,7 +266,7 @@ impl Accounts {
             .zip(receipts.transactions.iter())
             .map(|(tx, receipt)| match receipt {
                 OperationReceipt::Ok(_) => ExecutedTransaction::Ok(tx.clone()),
-                OperationReceipt::Err(_) => ExecutedTransaction::Err(tx.clone()),
+                OperationReceipt::Err(..) => ExecutedTransaction::Err(tx.clone()),
             })
             .collect();
 
@@ -370,12 +370,13 @@ impl Accounts {
         match self.try_commit_transaction(txn, transaction, block_state, tx_logger) {
             Ok(receipt) => Ok(TransactionOperationReceipt::Ok(receipt)),
             Err(e) => {
+                let fail_reason = FailReason::from(e);
                 tx_logger.clear();
-                tx_logger.push_failed_log(transaction, e.to_string());
+                tx_logger.push_failed_log(transaction, fail_reason);
 
                 let receipt =
                     self.commit_failed_transaction(txn, transaction, block_state, tx_logger)?;
-                Ok(TransactionOperationReceipt::Err(receipt))
+                Ok(TransactionOperationReceipt::Err(receipt, fail_reason))
             }
         }
     }
@@ -403,7 +404,10 @@ impl Accounts {
                     block_state,
                     &mut TransactionLog::empty(),
                 )?;
-                Ok(TransactionOperationReceipt::Err(receipt))
+                Ok(TransactionOperationReceipt::Err(
+                    receipt,
+                    FailReason::Incomplete,
+                ))
             }
         }
     }
@@ -445,8 +449,6 @@ impl Accounts {
 
         // If recipient failed, revert sender.
         if let Err(e) = recipient_result {
-            // TODO Log error
-
             sender_account
                 .revert_outgoing_transaction(
                     transaction,
@@ -623,14 +625,14 @@ impl Accounts {
         let store = DataStore::new(&self.tree, address);
         let mut account = self.get_complete(address, Some(txn));
 
-        if let Ok(receipt) =
-            account.commit_inherent(inherent, block_state, store.write(txn), inherent_logger)
-        {
-            self.put(txn, address, account);
-            Ok(InherentOperationReceipt::Ok(receipt))
-        } else {
-            // TODO Log error
-            Ok(InherentOperationReceipt::Err(None))
+        let result =
+            account.commit_inherent(inherent, block_state, store.write(txn), inherent_logger);
+        match result {
+            Ok(receipt) => {
+                self.put(txn, address, account);
+                Ok(InherentOperationReceipt::Ok(receipt))
+            }
+            Err(e) => Ok(InherentOperationReceipt::Err(None, e.into())),
         }
     }
 
@@ -712,8 +714,17 @@ impl Accounts {
                 receipt,
                 tx_logger,
             ),
-            OperationReceipt::Err(receipt) => {
-                self.revert_failed_transaction(txn, transaction, block_state, receipt, tx_logger)
+            OperationReceipt::Err(receipt, fail_reason) => {
+                let result = self.revert_failed_transaction(
+                    txn,
+                    transaction,
+                    block_state,
+                    receipt,
+                    tx_logger,
+                );
+                tx_logger.push_failed_log(transaction, fail_reason);
+
+                result
             }
         }
     }
@@ -834,7 +845,7 @@ impl Accounts {
         // If the inherent operation failed, there is nothing to revert.
         let receipt = match receipt {
             OperationReceipt::Ok(receipt) => receipt,
-            OperationReceipt::Err(_) => return Ok(()),
+            OperationReceipt::Err(..) => return Ok(()),
         };
 
         let address = inherent.target();

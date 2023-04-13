@@ -109,3 +109,66 @@ impl From<CoinUnderflowError> for AccountError {
         }
     }
 }
+
+#[derive(Debug, Clone, Copy, Error, PartialEq, Eq, Serialize, Deserialize, Hash)]
+#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
+#[repr(u8)]
+pub enum FailReason {
+    #[error("Insufficient funds")]
+    InsufficientFunds,
+    #[error("Type mismatch")]
+    TypeMismatch,
+    #[error("Invalid signature")]
+    InvalidSignature,
+    #[error("Invalid for sender")]
+    InvalidForSender,
+    #[error("Invalid for recipient")]
+    InvalidForRecipient,
+    #[error("Invalid for target")]
+    InvalidForTarget,
+    #[error("Invalid receipt")]
+    InvalidReceipt,
+    #[error("Invalid serialization")]
+    InvalidSerialization,
+    #[error("Invalid transaction")]
+    InvalidTransaction,
+    #[error("Invalid coin value")]
+    InvalidCoinValue,
+    #[error("Invalid coin value (parse)")]
+    CoinParse,
+    #[error("Invalid coin value (convert)")]
+    CoinConvert,
+    #[error("Invalid inherent")]
+    InvalidInherent,
+    #[error("Address does not exist in the Accounts Tree.")]
+    NonExistentAddress,
+    #[error("There is already an account at that address in the Accounts Tree.")]
+    AlreadyExistentAddress,
+    #[error("Error during chunk processing")]
+    ChunkError,
+    #[error("Failing transaction failed for unknown reason")]
+    Incomplete,
+}
+
+impl From<AccountError> for FailReason {
+    fn from(err: AccountError) -> Self {
+        match err {
+            AccountError::InsufficientFunds { .. } => FailReason::InsufficientFunds,
+            AccountError::TypeMismatch { .. } => FailReason::TypeMismatch,
+            AccountError::InvalidSignature => FailReason::InvalidSignature,
+            AccountError::InvalidForSender => FailReason::InvalidForSender,
+            AccountError::InvalidForRecipient => FailReason::InvalidForRecipient,
+            AccountError::InvalidForTarget => FailReason::InvalidForTarget,
+            AccountError::InvalidReceipt => FailReason::InvalidReceipt,
+            AccountError::InvalidSerialization(_) => FailReason::InvalidSerialization,
+            AccountError::InvalidTransaction(_) => FailReason::InvalidTransaction,
+            AccountError::InvalidCoinValue => FailReason::InvalidCoinValue,
+            AccountError::CoinParse(_) => FailReason::CoinParse,
+            AccountError::CoinConvert(_) => FailReason::CoinConvert,
+            AccountError::InvalidInherent => FailReason::InvalidInherent,
+            AccountError::NonExistentAddress { .. } => FailReason::NonExistentAddress,
+            AccountError::AlreadyExistentAddress { .. } => FailReason::AlreadyExistentAddress,
+            AccountError::ChunkError(_) => FailReason::ChunkError,
+        }
+    }
+}

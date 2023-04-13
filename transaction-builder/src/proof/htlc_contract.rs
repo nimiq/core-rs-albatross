@@ -1,115 +1,17 @@
-use beserial::{Serialize, SerializingError, WriteBytesExt};
+use beserial::Serialize;
 use nimiq_hash::{Blake2bHash, Sha256Hash};
 use nimiq_keys::KeyPair;
-use nimiq_transaction::account::htlc_contract::{AnyHash, HashAlgorithm, ProofType};
+use nimiq_transaction::account::htlc_contract::{
+    AnyHash, HashAlgorithm, OutgoingHTLCTransactionProof,
+};
 use nimiq_transaction::{SignatureProof, Transaction};
-
-/// The `HtlcProof` represents a serializable form of all possible proof types
-/// for a transaction from a HTLC contract.
-///
-/// The funds can be unlocked by one of three mechanisms:
-/// 1. After a blockchain height called `timeout` is reached, the `sender` can withdraw the funds.
-///     (called `TimeoutResolve`)
-/// 2. The contract stores a `hash_root`. The `recipient` can withdraw the funds before the
-///     `timeout` has been reached by presenting a hash that will yield the `hash_root`
-///     when re-hashing it `hash_count` times.
-///     By presenting a hash that will yield the `hash_root` after re-hashing it k < `hash_count`
-///     times, the `recipient` can retrieve 1/k of the funds.
-///     (called `RegularTransfer`)
-/// 3. If both `sender` and `recipient` sign the transaction, the funds can be withdrawn at any time.
-///     (called `EarlyResolve`)
-#[derive(Clone, Debug)]
-pub enum HtlcProof {
-    RegularTransfer {
-        hash_algorithm: HashAlgorithm,
-        hash_depth: u8,
-        hash_root: AnyHash,
-        pre_image: AnyHash,
-        recipient_signature: SignatureProof,
-    },
-    EarlyResolve {
-        recipient_signature: SignatureProof,
-        sender_signature: SignatureProof,
-    },
-    TimeoutResolve {
-        signature: SignatureProof,
-    },
-}
-
-impl Serialize for HtlcProof {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        let mut size = 0;
-        match self {
-            HtlcProof::RegularTransfer {
-                hash_algorithm,
-                hash_depth,
-                hash_root,
-                pre_image,
-                recipient_signature,
-            } => {
-                size += ProofType::RegularTransfer.serialize(writer)?;
-                size += hash_algorithm.serialize(writer)?;
-                size += hash_depth.serialize(writer)?;
-                size += hash_root.serialize(writer)?;
-                size += pre_image.serialize(writer)?;
-                size += recipient_signature.serialize(writer)?;
-            }
-            HtlcProof::EarlyResolve {
-                recipient_signature,
-                sender_signature,
-            } => {
-                size += ProofType::EarlyResolve.serialize(writer)?;
-                size += recipient_signature.serialize(writer)?;
-                size += sender_signature.serialize(writer)?;
-            }
-            HtlcProof::TimeoutResolve { signature } => {
-                size += ProofType::TimeoutResolve.serialize(writer)?;
-                size += signature.serialize(writer)?;
-            }
-        }
-        Ok(size)
-    }
-
-    fn serialized_size(&self) -> usize {
-        let mut size = 0;
-        match self {
-            HtlcProof::RegularTransfer {
-                hash_algorithm,
-                hash_depth,
-                hash_root,
-                pre_image,
-                recipient_signature,
-            } => {
-                size += ProofType::RegularTransfer.serialized_size();
-                size += hash_algorithm.serialized_size();
-                size += hash_depth.serialized_size();
-                size += hash_root.serialized_size();
-                size += pre_image.serialized_size();
-                size += recipient_signature.serialized_size();
-            }
-            HtlcProof::EarlyResolve {
-                recipient_signature,
-                sender_signature,
-            } => {
-                size += ProofType::EarlyResolve.serialized_size();
-                size += recipient_signature.serialized_size();
-                size += sender_signature.serialized_size();
-            }
-            HtlcProof::TimeoutResolve { signature } => {
-                size += ProofType::TimeoutResolve.serialized_size();
-                size += signature.serialized_size();
-            }
-        }
-        size
-    }
-}
 
 /// The `HtlcProofBuilder` can be used to build proofs for transactions
 /// that originate in a HTLC contract.
 #[derive(Clone, Debug)]
 pub struct HtlcProofBuilder {
     pub transaction: Transaction,
-    proof: Option<HtlcProof>,
+    proof: Option<OutgoingHTLCTransactionProof>,
 }
 
 impl HtlcProofBuilder {
@@ -215,8 +117,8 @@ impl HtlcProofBuilder {
     ///
     /// [`signature_with_key_pair`]: struct.HtlcProofBuilder.html#method.signature_with_key_pair
     pub fn timeout_resolve(&mut self, sender_signature: SignatureProof) -> &mut Self {
-        self.proof = Some(HtlcProof::TimeoutResolve {
-            signature: sender_signature,
+        self.proof = Some(OutgoingHTLCTransactionProof::TimeoutResolve {
+            signature_proof_sender: sender_signature,
         });
         self
     }
@@ -272,9 +174,9 @@ impl HtlcProofBuilder {
         sender_signature: SignatureProof,
         recipient_signature: SignatureProof,
     ) -> &mut Self {
-        self.proof = Some(HtlcProof::EarlyResolve {
-            sender_signature,
-            recipient_signature,
+        self.proof = Some(OutgoingHTLCTransactionProof::EarlyResolve {
+            signature_proof_sender: sender_signature,
+            signature_proof_recipient: recipient_signature,
         });
         self
     }
@@ -298,12 +200,12 @@ impl HtlcProofBuilder {
         hash_root: AnyHash,
         recipient_signature: SignatureProof,
     ) -> &mut Self {
-        self.proof = Some(HtlcProof::RegularTransfer {
+        self.proof = Some(OutgoingHTLCTransactionProof::RegularTransfer {
             hash_algorithm,
             hash_depth: hash_count,
             hash_root,
             pre_image,
-            recipient_signature,
+            signature_proof: recipient_signature,
         });
         self
     }

@@ -4,11 +4,13 @@ use nimiq_primitives::account::AccountError;
 #[cfg(feature = "interaction-traits")]
 use nimiq_primitives::account::AccountType;
 use nimiq_primitives::coin::Coin;
-use nimiq_transaction::account::htlc_contract::{AnyHash, HashAlgorithm};
 #[cfg(feature = "interaction-traits")]
-use nimiq_transaction::account::htlc_contract::{CreationTransactionData, ProofType};
+use nimiq_transaction::account::htlc_contract::CreationTransactionData;
+use nimiq_transaction::account::htlc_contract::{
+    AnyHash, HashAlgorithm, OutgoingHTLCTransactionProof,
+};
 #[cfg(feature = "interaction-traits")]
-use nimiq_transaction::{inherent::Inherent, SignatureProof, Transaction};
+use nimiq_transaction::{inherent::Inherent, Transaction};
 
 use crate::{convert_receipt, AccountReceipt};
 #[cfg(feature = "interaction-traits")]
@@ -46,10 +48,16 @@ impl HashedTimeLockedContract {
         tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         let proof_buf = &mut &transaction.proof[..];
-        let proof_type: ProofType = Deserialize::deserialize(proof_buf)?;
+        let proof: OutgoingHTLCTransactionProof = Deserialize::deserialize(proof_buf)?;
 
-        match proof_type {
-            ProofType::RegularTransfer => {
+        match proof {
+            OutgoingHTLCTransactionProof::RegularTransfer {
+                hash_algorithm,
+                hash_depth,
+                hash_root,
+                pre_image,
+                signature_proof,
+            } => {
                 // Check that the contract has not expired yet.
                 if self.timeout < block_state.time {
                     warn!("HTLC has expired: {} < {}", self.timeout, block_state.time);
@@ -57,23 +65,12 @@ impl HashedTimeLockedContract {
                 }
 
                 // Check that the provided hash_root is correct.
-                let hash_algorithm: HashAlgorithm = Deserialize::deserialize(proof_buf)?;
-
-                let hash_depth: u8 = Deserialize::deserialize(proof_buf)?;
-
-                let hash_root: AnyHash = Deserialize::deserialize(proof_buf)?;
-
                 if hash_algorithm != self.hash_algorithm || hash_root != self.hash_root {
                     warn!("HTLC hash mismatch");
                     return Err(AccountError::InvalidForSender);
                 }
 
-                // Ignore pre_image.
-                let pre_image: AnyHash = Deserialize::deserialize(proof_buf)?;
-
                 // Check that the transaction is signed by the authorized recipient.
-                let signature_proof: SignatureProof = Deserialize::deserialize(proof_buf)?;
-
                 if !signature_proof.is_signed_by(&self.recipient) {
                     return Err(AccountError::InvalidSignature);
                 }
@@ -100,13 +97,11 @@ impl HashedTimeLockedContract {
                     hash_depth,
                 });
             }
-            ProofType::EarlyResolve => {
+            OutgoingHTLCTransactionProof::EarlyResolve {
+                signature_proof_recipient,
+                signature_proof_sender,
+            } => {
                 // Check that the transaction is signed by both parties.
-                let signature_proof_recipient: SignatureProof =
-                    Deserialize::deserialize(proof_buf)?;
-
-                let signature_proof_sender: SignatureProof = Deserialize::deserialize(proof_buf)?;
-
                 if !signature_proof_recipient.is_signed_by(&self.recipient)
                     || !signature_proof_sender.is_signed_by(&self.sender)
                 {
@@ -117,7 +112,9 @@ impl HashedTimeLockedContract {
                     contract_address: transaction.sender.clone(),
                 });
             }
-            ProofType::TimeoutResolve => {
+            OutgoingHTLCTransactionProof::TimeoutResolve {
+                signature_proof_sender,
+            } => {
                 // Check that the contract has expired.
                 if self.timeout >= block_state.time {
                     warn!(
@@ -128,9 +125,7 @@ impl HashedTimeLockedContract {
                 }
 
                 // Check that the transaction is signed by the original sender.
-                let signature_proof: SignatureProof = Deserialize::deserialize(proof_buf)?;
-
-                if !signature_proof.is_signed_by(&self.sender) {
+                if !signature_proof_sender.is_signed_by(&self.sender) {
                     return Err(AccountError::InvalidSignature);
                 }
 
@@ -229,12 +224,12 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         _data_store: DataStoreWrite,
         tx_logger: &mut TransactionLog,
     ) -> Result<Option<AccountReceipt>, AccountError> {
+        tx_logger.push_log(Log::pay_fee_log(transaction));
+        tx_logger.push_log(Log::transfer_log(transaction));
+
         let new_balance = self.balance.safe_sub(transaction.total_value())?;
         self.can_change_balance(transaction, new_balance, block_state, tx_logger)?;
         self.balance = new_balance;
-
-        tx_logger.prepend_log(Log::transfer_log(transaction));
-        tx_logger.prepend_log(Log::pay_fee_log(transaction));
 
         Ok(None)
     }
@@ -249,39 +244,35 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
     ) -> Result<(), AccountError> {
         self.balance += transaction.total_value();
 
-        tx_logger.push_log(Log::pay_fee_log(transaction));
-        tx_logger.push_log(Log::transfer_log(transaction));
-
         let proof_buf = &mut &transaction.proof[..];
-        let proof_type: ProofType = Deserialize::deserialize(proof_buf)?;
+        let proof: OutgoingHTLCTransactionProof = Deserialize::deserialize(proof_buf)?;
 
-        match proof_type {
-            ProofType::RegularTransfer => {
-                // Check that the provided hash_root is correct.
-                let _hash_algorithm: HashAlgorithm = Deserialize::deserialize(proof_buf)?;
-                let hash_depth: u8 = Deserialize::deserialize(proof_buf)?;
-                let _hash_root: AnyHash = Deserialize::deserialize(proof_buf)?;
-
-                // Ignore pre_image.
-                let pre_image: AnyHash = Deserialize::deserialize(proof_buf)?;
-
+        match proof {
+            OutgoingHTLCTransactionProof::RegularTransfer {
+                hash_depth,
+                pre_image,
+                ..
+            } => {
                 tx_logger.push_log(Log::HTLCRegularTransfer {
                     contract_address: transaction.sender.clone(),
                     pre_image,
                     hash_depth,
                 });
             }
-            ProofType::EarlyResolve => {
+            OutgoingHTLCTransactionProof::EarlyResolve { .. } => {
                 tx_logger.push_log(Log::HTLCEarlyResolve {
                     contract_address: transaction.sender.clone(),
                 });
             }
-            ProofType::TimeoutResolve => {
+            OutgoingHTLCTransactionProof::TimeoutResolve { .. } => {
                 tx_logger.push_log(Log::HTLCTimeoutResolve {
                     contract_address: transaction.sender.clone(),
                 });
             }
         };
+
+        tx_logger.push_log(Log::transfer_log(transaction));
+        tx_logger.push_log(Log::pay_fee_log(transaction));
 
         Ok(())
     }

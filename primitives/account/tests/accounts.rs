@@ -13,11 +13,16 @@ use nimiq_database::{mdbx::MdbxEnvironment, volatile::VolatileEnvironment, Write
 use nimiq_genesis_builder::GenesisBuilder;
 use nimiq_keys::{Address, KeyPair, PrivateKey, PublicKey, SecureGenerate};
 use nimiq_primitives::{
-    account::AccountType, coin::Coin, networks::NetworkId, policy::Policy, slots::SlashedSlot,
+    account::{AccountType, FailReason},
+    coin::Coin,
+    networks::NetworkId,
+    policy::Policy,
+    slots::SlashedSlot,
 };
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     accounts_revert::TestCommitRevert,
+    test_rng::test_rng,
     test_transaction::{generate_accounts, generate_transactions, TestTransaction},
     transactions::{IncomingType, OutgoingType, TransactionsGenerator, ValidatorState},
 };
@@ -335,7 +340,8 @@ fn it_checks_for_sufficient_funds() {
         assert_eq!(
             receipts.transactions,
             vec![TransactionOperationReceipt::Err(
-                TransactionReceipt::default()
+                TransactionReceipt::default(),
+                FailReason::InsufficientFunds
             )]
         );
     }
@@ -365,7 +371,10 @@ fn it_checks_for_sufficient_funds() {
         receipts.transactions,
         vec![
             TransactionOperationReceipt::Ok(TransactionReceipt::default()),
-            TransactionOperationReceipt::Err(TransactionReceipt::default()),
+            TransactionOperationReceipt::Err(
+                TransactionReceipt::default(),
+                FailReason::InsufficientFunds
+            ),
         ]
     );
 
@@ -793,7 +802,8 @@ fn it_commits_valid_and_failing_txns() {
     assert_eq!(
         receipts.transactions,
         vec![TransactionOperationReceipt::Err(
-            TransactionReceipt::default()
+            TransactionReceipt::default(),
+            FailReason::InsufficientFunds
         )]
     );
 
@@ -837,7 +847,8 @@ fn it_commits_valid_and_failing_txns() {
     assert_eq!(
         receipts.transactions,
         vec![TransactionOperationReceipt::Err(
-            TransactionReceipt::default()
+            TransactionReceipt::default(),
+            FailReason::InsufficientFunds
         )]
     );
     assert!(block_logs.transaction_logs()[0].failed);
@@ -847,8 +858,7 @@ fn it_commits_valid_and_failing_txns() {
             Log::FailedTransaction {
                 from: tx.sender.clone(),
                 to: tx.recipient.clone(),
-                failure_reason: "Insufficient funds: needed 0.02200, but has balance 0.01000"
-                    .to_string()
+                failure_reason: FailReason::InsufficientFunds
             },
             Log::PayFee {
                 from: tx.sender.clone(),
@@ -872,7 +882,7 @@ fn can_revert_transactions() {
     let mut generator = TransactionsGenerator::new(
         Accounts::new(accounts.env.clone()),
         NetworkId::UnitAlbatross,
-        rand::thread_rng(),
+        test_rng(false),
     );
 
     let block_state = BlockState::new(
@@ -965,7 +975,7 @@ fn can_revert_transactions() {
                     if fail_sender || fail_recipient {
                         assert!(matches!(
                             receipts.transactions[..],
-                            [OperationReceipt::Err(_)]
+                            [OperationReceipt::Err(..)]
                         ));
                     } else {
                         assert!(matches!(
@@ -985,7 +995,7 @@ fn can_revert_inherents() {
     let mut generator = TransactionsGenerator::new(
         Accounts::new(accounts.env.clone()),
         NetworkId::UnitAlbatross,
-        rand::thread_rng(),
+        test_rng(false),
     );
 
     let block_state = BlockState::new(
@@ -993,7 +1003,7 @@ fn can_revert_inherents() {
         10,
     );
 
-    let mut rng = rand::thread_rng();
+    let mut rng = test_rng(false);
 
     info!("Testing inherent Reward");
     let inherent = Inherent::Reward {
@@ -1030,5 +1040,8 @@ fn can_revert_inherents() {
 
     // Inherents must always succeed.
     let receipts = accounts.test(&[], &[inherent], &block_state);
-    assert!(matches!(receipts.inherents[..], [OperationReceipt::Err(_)]));
+    assert!(matches!(
+        receipts.inherents[..],
+        [OperationReceipt::Err(..)]
+    ));
 }

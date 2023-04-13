@@ -6,6 +6,7 @@ use crate::data_store::{DataStoreRead, DataStoreWrite};
 use crate::reserved_balance::ReservedBalance;
 use crate::{Account, AccountReceipt, InherentLogger, TransactionLog};
 
+#[derive(Default, Debug)]
 pub struct BlockState {
     pub number: u32,
     pub time: u64,

@@ -99,7 +99,7 @@ impl Blockchain {
                 for (index, receipt) in receipts.transactions.iter().enumerate() {
                     let matches = match receipt {
                         TransactionOperationReceipt::Ok(_) => body.transactions[index].succeeded(),
-                        TransactionOperationReceipt::Err(_) => body.transactions[index].failed(),
+                        TransactionOperationReceipt::Err(..) => body.transactions[index].failed(),
                     };
                     if !matches {
                         return Err(PushError::InvalidBlock(

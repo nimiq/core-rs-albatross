@@ -1,10 +1,79 @@
-use std::ops::Deref;
+use paste::paste;
+use std::{fmt::Debug, ops::Deref};
 
-use nimiq_account::{Account, Accounts, BlockLogger, BlockState, Receipts};
-use nimiq_database::{volatile::VolatileEnvironment, WriteTransaction};
+use nimiq_account::{
+    Account, AccountInherentInteraction, AccountReceipt, AccountTransactionInteraction, Accounts,
+    BlockLog, BlockLogger, BlockState, DataStore, InherentLogger, Receipts, TransactionLog,
+};
+use nimiq_database::{volatile::VolatileEnvironment, Environment, WriteTransaction};
 use nimiq_keys::Address;
-use nimiq_primitives::{account::AccountError, key_nibbles::KeyNibbles};
+use nimiq_primitives::{account::AccountError, coin::Coin, key_nibbles::KeyNibbles};
 use nimiq_transaction::{inherent::Inherent, Transaction};
+
+macro_rules! impl_accounts_trait {
+    ($fn_name: ident, $target: ident, $op_type: ty, $log_type: ty) => {
+        paste! {
+                pub fn [<test_commit_ $fn_name>]
+                <A: AccountTransactionInteraction + AccountInherentInteraction + Clone + Eq + Debug>(
+                &self,
+                account: &mut A,
+                operation: &$op_type,
+                block_state: &BlockState,
+                logger: &mut $log_type,
+                keep_commit: bool,
+            ) -> Result<Option<AccountReceipt>, AccountError> {
+                let mut txn = WriteTransaction::new(&self.accounts.env);
+                let initial_account = account.clone();
+                let initial_root_hash = self.accounts.get_root_hash_assert(Some(&txn));
+
+                let data_store = DataStore::new(&self.accounts.tree, &operation.$target());
+                let receipts = account.[<commit_ $fn_name>](
+                    operation,
+                    block_state,
+                    data_store.write(&mut txn),
+                    logger,
+                )?;
+
+                // Potentially keep the commit.
+                let intermediate_account_state = account.clone();
+                if keep_commit {
+                    txn.commit();
+                    txn = WriteTransaction::new(&self.accounts.env);
+                };
+
+                let mut revert_logger = $log_type::empty();
+                account.[<revert_ $fn_name>](
+                    operation,
+                    block_state,
+                    receipts.clone(),
+                    data_store.write(&mut txn),
+                    &mut revert_logger,
+                )?;
+
+                // Check account against initial account after revert.
+                assert_eq!(
+                    account, &initial_account,
+                    "Revert should reset the account state"
+                );
+                let current_root_hash = self.accounts.get_root_hash_assert(Some(&txn));
+                assert_eq!(
+                    initial_root_hash, current_root_hash,
+                    "Revert should reset the accounts root hash"
+                );
+                revert_logger.rev_log();
+
+                assert_eq!(&revert_logger, logger, "Logs for committing and reverting should be the same");
+
+                // If we keep the commit, revert account to intermediate state.
+                if keep_commit {
+                    *account = intermediate_account_state;
+                }
+
+                Ok(receipts)
+            }
+        }
+    };
+}
 
 pub struct TestCommitRevert {
     accounts: Accounts,
@@ -17,10 +86,19 @@ impl Default for TestCommitRevert {
 }
 
 impl TestCommitRevert {
+    impl_accounts_trait!(outgoing_transaction, sender, Transaction, TransactionLog);
+    impl_accounts_trait!(incoming_transaction, recipient, Transaction, TransactionLog);
+    impl_accounts_trait!(failed_transaction, sender, Transaction, TransactionLog);
+    impl_accounts_trait!(inherent, target, Inherent, InherentLogger);
+
     pub fn new() -> Self {
         let env = VolatileEnvironment::new(10).unwrap();
         let accounts = Accounts::new(env);
         TestCommitRevert { accounts }
+    }
+
+    pub fn env(&self) -> &Environment {
+        &self.accounts.env
     }
 
     pub fn with_initial_state(initial_accounts: &[(Address, Account)]) -> Self {
@@ -93,7 +171,7 @@ impl TestCommitRevert {
 
         // We only check whether the revert is consistent.
         // We do not do any checks on the intermediate state.
-
+        let mut rev_block_logger = BlockLogger::empty_reverted();
         self.accounts
             .revert(
                 &mut txn,
@@ -101,15 +179,101 @@ impl TestCommitRevert {
                 inherents,
                 block_state,
                 receipts.clone(),
-                &mut BlockLogger::empty(),
+                &mut rev_block_logger,
             )
             .expect("Failed to revert transactions and inherents");
 
         let current_root_hash = self.accounts.get_root_hash_assert(Some(&txn));
 
         assert_eq!(initial_root_hash, current_root_hash);
+        let block_log = block_logger.clone().build(0);
+        let rev_block_log = rev_block_logger.build(0);
+
+        match (block_log, rev_block_log) {
+            (
+                BlockLog::AppliedBlock {
+                    inherent_logs,
+                    tx_logs,
+                    ..
+                },
+                BlockLog::RevertedBlock {
+                    inherent_logs: mut rev_inherent_logs,
+                    tx_logs: rev_tx_logs,
+                    ..
+                },
+            ) => {
+                rev_inherent_logs.reverse();
+                assert_eq!(
+                    inherent_logs, rev_inherent_logs,
+                    "Inherent logs do not match"
+                );
+                assert_eq!(
+                    tx_logs,
+                    rev_tx_logs
+                        .into_iter()
+                        .rev()
+                        .map(|mut tx_log| {
+                            tx_log.rev_log();
+                            tx_log
+                        })
+                        .collect::<Vec<_>>(),
+                    "Tx logs logs do not match"
+                );
+            }
+            _ => panic!("Invalid block logs"),
+        }
 
         Ok(receipts)
+    }
+
+    pub fn test_create_new_contract<A: AccountTransactionInteraction + Clone + Eq + Debug>(
+        &self,
+        transaction: &Transaction,
+        initial_balance: Coin,
+        block_state: &BlockState,
+        tx_logger: &mut TransactionLog,
+        keep_commit: bool,
+    ) -> Result<Account, AccountError> {
+        let mut txn = WriteTransaction::new(&self.accounts.env);
+        let initial_root_hash = self.accounts.get_root_hash_assert(Some(&txn));
+
+        let data_store = DataStore::new(&self.accounts.tree, &transaction.recipient);
+        let mut account = A::create_new_contract(
+            transaction,
+            initial_balance,
+            block_state,
+            data_store.write(&mut txn),
+            tx_logger,
+        )?;
+
+        // Potentially keep the commit.
+        let intermediate_account_state = account.clone();
+        if keep_commit {
+            txn.commit();
+            txn = WriteTransaction::new(&self.accounts.env);
+        };
+
+        let mut revert_logger = TransactionLog::empty();
+        account.revert_new_contract(
+            transaction,
+            block_state,
+            data_store.write(&mut txn),
+            &mut revert_logger,
+        )?;
+
+        revert_logger.rev_log();
+
+        let current_root_hash = self.accounts.get_root_hash_assert(Some(&txn));
+        assert_eq!(
+            initial_root_hash, current_root_hash,
+            "Revert should reset the accounts root hash"
+        );
+        assert_eq!(
+            &revert_logger, tx_logger,
+            "Logs for committing and reverting should be the same"
+        );
+
+        Ok(intermediate_account_state)
     }
 }
 

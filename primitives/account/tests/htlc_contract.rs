@@ -2,12 +2,11 @@ use std::convert::TryInto;
 
 use beserial::{Deserialize, Serialize, SerializingError};
 use nimiq_account::{
-    Account, AccountPruningInteraction, AccountTransactionInteraction, Accounts, BlockState,
+    Account, AccountPruningInteraction, Accounts, BasicAccount, BlockState,
     HashedTimeLockedContract, Log, TransactionLog,
 };
-use nimiq_database::{volatile::VolatileEnvironment, WriteTransaction};
 use nimiq_hash::{Blake2bHasher, HashOutput, Hasher, Sha256Hasher};
-use nimiq_keys::{Address, KeyPair, PrivateKey};
+use nimiq_keys::{Address, KeyPair, PrivateKey, SecureGenerate};
 use nimiq_primitives::{
     account::{AccountError, AccountType},
     coin::Coin,
@@ -15,9 +14,14 @@ use nimiq_primitives::{
     transaction::TransactionError,
 };
 use nimiq_test_log::test;
+use nimiq_test_utils::{
+    accounts_revert::TestCommitRevert, test_rng::test_rng, transactions::TransactionsGenerator,
+};
 use nimiq_transaction::{
     account::{
-        htlc_contract::{AnyHash, HashAlgorithm, ProofType},
+        htlc_contract::{
+            AnyHash, CreationTransactionData, HashAlgorithm, OutgoingHTLCTransactionProof,
+        },
         AccountTransactionVerification,
     },
     SignatureProof, Transaction, TransactionFlags,
@@ -79,27 +83,25 @@ fn it_can_serialize_a_htlc() {
 }
 
 #[test]
-#[allow(unused_must_use)]
 fn it_can_verify_creation_transaction() {
-    let mut data: Vec<u8> = Vec::with_capacity(Address::SIZE * 2 + AnyHash::SIZE + 10);
-    let sender = Address::from([0u8; 20]);
-    let recipient = Address::from([0u8; 20]);
-    sender.serialize(&mut data);
-    recipient.serialize(&mut data);
-    HashAlgorithm::Blake2b.serialize(&mut data);
-    AnyHash::from([0u8; 32]).serialize(&mut data);
-    Serialize::serialize(&2u8, &mut data);
-    Serialize::serialize(&1000u64, &mut data);
+    let data = CreationTransactionData {
+        sender: Address::from([0u8; 20]),
+        recipient: Address::from([0u8; 20]),
+        hash_algorithm: HashAlgorithm::Blake2b,
+        hash_root: AnyHash::from([0u8; 32]),
+        hash_count: 2,
+        timeout: 1000,
+    };
 
     let mut transaction = Transaction::new_contract_creation(
         vec![],
-        sender,
+        data.sender.clone(),
         AccountType::Basic,
         AccountType::HTLC,
         100.try_into().unwrap(),
         0.try_into().unwrap(),
         0,
-        NetworkId::Dummy,
+        NetworkId::UnitAlbatross,
     );
 
     // Invalid data
@@ -107,7 +109,7 @@ fn it_can_verify_creation_transaction() {
         AccountType::verify_incoming_transaction(&transaction),
         Err(TransactionError::InvalidData)
     );
-    transaction.data = data;
+    transaction.data = data.serialize_to_vec();
 
     // Invalid recipient
     assert_eq!(
@@ -152,46 +154,42 @@ fn it_can_verify_creation_transaction() {
 }
 
 #[test]
-#[allow(unused_must_use)]
 fn it_can_create_contract_from_transaction() {
     // Create contract creation transaction.
-    let mut data: Vec<u8> = Vec::with_capacity(Address::SIZE * 2 + AnyHash::SIZE + 10);
-    let sender = Address::from([0u8; 20]);
-    let recipient = Address::from([0u8; 20]);
-    sender.serialize(&mut data);
-    recipient.serialize(&mut data);
-    HashAlgorithm::Blake2b.serialize(&mut data);
-    AnyHash::from([0u8; 32]).serialize(&mut data);
-    Serialize::serialize(&2u8, &mut data);
-    Serialize::serialize(&1000u64, &mut data);
+    let data = CreationTransactionData {
+        sender: Address::from([0u8; 20]),
+        recipient: Address::from([0u8; 20]),
+        hash_algorithm: HashAlgorithm::Blake2b,
+        hash_root: AnyHash::from([0u8; 32]),
+        hash_count: 2,
+        timeout: 1000,
+    };
 
     let transaction = Transaction::new_contract_creation(
-        data,
-        sender.clone(),
+        data.serialize_to_vec(),
+        data.sender.clone(),
         AccountType::Basic,
         AccountType::HTLC,
         100.try_into().unwrap(),
         0.try_into().unwrap(),
         0,
-        NetworkId::Dummy,
+        NetworkId::UnitAlbatross,
     );
 
     // Create contract from transaction.
-    let env = VolatileEnvironment::new(10).unwrap();
-    let accounts = Accounts::new(env.clone());
-    let data_store = accounts.data_store(&transaction.contract_creation_address());
+    let (accounts, _key_1, _key_2) = init_tree();
     let block_state = BlockState::new(1, 1);
-    let mut db_txn = WriteTransaction::new(&env);
 
     let mut tx_logger = TransactionLog::empty();
-    let htlc = HashedTimeLockedContract::create_new_contract(
-        &transaction,
-        Coin::ZERO,
-        &block_state,
-        data_store.write(&mut db_txn),
-        &mut tx_logger,
-    )
-    .expect("Failed to create HTLC");
+    let htlc = accounts
+        .test_create_new_contract::<HashedTimeLockedContract>(
+            &transaction,
+            Coin::ZERO,
+            &block_state,
+            &mut tx_logger,
+            true,
+        )
+        .expect("Failed to create HTLC");
 
     let htlc = match htlc {
         Account::HTLC(htlc) => htlc,
@@ -199,8 +197,8 @@ fn it_can_create_contract_from_transaction() {
     };
 
     assert_eq!(htlc.balance, 100.try_into().unwrap());
-    assert_eq!(htlc.sender, sender);
-    assert_eq!(htlc.recipient, recipient);
+    assert_eq!(htlc.sender, data.sender);
+    assert_eq!(htlc.recipient, data.recipient);
     assert_eq!(htlc.hash_root, AnyHash::from([0u8; 32]));
     assert_eq!(htlc.hash_count, 2);
     assert_eq!(htlc.timeout, 1000);
@@ -221,11 +219,8 @@ fn it_can_create_contract_from_transaction() {
 
 #[test]
 fn it_does_not_support_incoming_transactions() {
-    let env = VolatileEnvironment::new(10).unwrap();
-    let accounts = Accounts::new(env.clone());
-    let data_store = accounts.data_store(&Address::from([0u8; 20]));
+    let (accounts, _key_1, _key_2) = init_tree();
     let block_state = BlockState::new(1, 1);
-    let mut db_txn = WriteTransaction::new(&env);
 
     let (mut htlc, ..) = prepare_outgoing_transaction();
 
@@ -235,34 +230,468 @@ fn it_does_not_support_incoming_transactions() {
         1.try_into().unwrap(),
         1000.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        NetworkId::UnitAlbatross,
     );
     tx.recipient_type = AccountType::HTLC;
 
     let mut tx_logger = TransactionLog::empty();
     assert_eq!(
-        htlc.commit_incoming_transaction(
+        accounts.test_commit_incoming_transaction(
+            &mut htlc,
             &tx,
             &block_state,
-            data_store.write(&mut db_txn),
-            &mut tx_logger
+            &mut tx_logger,
+            true
         ),
         Err(AccountError::InvalidForRecipient)
     );
-    assert_eq!(tx_logger.logs.len(), 0);
+}
+
+#[test]
+fn it_can_verify_regular_transfer() {
+    let (_, mut tx, _, _, recipient_signature_proof) = prepare_outgoing_transaction();
+
+    // regular: valid Blake-2b
+    let proof = OutgoingHTLCTransactionProof::RegularTransfer {
+        hash_algorithm: HashAlgorithm::Blake2b,
+        hash_depth: 1,
+        hash_root: AnyHash::from(<[u8; 32]>::from(
+            Blake2bHasher::default().digest(&[0u8; 32]),
+        )),
+        pre_image: AnyHash::from([0u8; 32]),
+        signature_proof: recipient_signature_proof.clone(),
+    };
+    tx.proof = proof.serialize_to_vec();
+    assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
+
+    // regular: valid SHA-256
+    let proof = OutgoingHTLCTransactionProof::RegularTransfer {
+        hash_algorithm: HashAlgorithm::Sha256,
+        hash_depth: 1,
+        hash_root: AnyHash::from(<[u8; 32]>::from(Sha256Hasher::default().digest(&[0u8; 32]))),
+        pre_image: AnyHash::from([0u8; 32]),
+        signature_proof: recipient_signature_proof.clone(),
+    };
+    tx.proof = proof.serialize_to_vec();
+    assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
+
+    // regular: invalid hash
+    let bak = tx.proof[35];
+    tx.proof[35] = bak % 250 + 1;
+    assert_eq!(
+        AccountType::verify_outgoing_transaction(&tx),
+        Err(TransactionError::InvalidProof)
+    );
+    tx.proof[35] = bak;
+
+    // regular: invalid algorithm
+    tx.proof[1] = 99;
+    assert_eq!(
+        AccountType::verify_outgoing_transaction(&tx),
+        Err(TransactionError::InvalidSerialization(
+            SerializingError::InvalidValue
+        ))
+    );
+    tx.proof[1] = HashAlgorithm::Sha256 as u8;
+
+    // regular: invalid signature
+    // Proof is not a valid point, so Deserialize will result in an error.
+    tx.proof[72] = tx.proof[72] % 250 + 1;
+    assert_eq!(
+        AccountType::verify_outgoing_transaction(&tx),
+        Err(TransactionError::InvalidProof)
+    );
+
+    // regular: invalid signature
+    tx.proof[72] = tx.proof[72] % 250 + 2;
+    assert_eq!(
+        AccountType::verify_outgoing_transaction(&tx),
+        Err(TransactionError::InvalidProof)
+    );
+
+    // regular: invalid over-long
+    let proof = OutgoingHTLCTransactionProof::RegularTransfer {
+        hash_algorithm: HashAlgorithm::Blake2b,
+        hash_depth: 1,
+        hash_root: AnyHash::from(<[u8; 32]>::from(
+            Blake2bHasher::default().digest(&[0u8; 32]),
+        )),
+        pre_image: AnyHash::from([0u8; 32]),
+        signature_proof: recipient_signature_proof,
+    };
+    tx.proof = proof.serialize_to_vec();
+    tx.proof.push(0);
+
+    assert_eq!(
+        AccountType::verify_outgoing_transaction(&tx),
+        Err(TransactionError::InvalidProof)
+    );
+}
+
+#[test]
+fn it_can_verify_early_resolve() {
+    let (_, mut tx, _, sender_signature_proof, recipient_signature_proof) =
+        prepare_outgoing_transaction();
+
+    // early resolve: valid
+    let proof = OutgoingHTLCTransactionProof::EarlyResolve {
+        signature_proof_recipient: recipient_signature_proof.clone(),
+        signature_proof_sender: sender_signature_proof.clone(),
+    };
+    tx.proof = proof.serialize_to_vec();
+
+    assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
+
+    // early resolve: invalid signature 1
+    // Proof is not a valid point, so Deserialize will result in an error.
+    let bak = tx.proof[4];
+    tx.proof[4] = tx.proof[4] % 250 + 1;
+    assert_eq!(
+        AccountType::verify_outgoing_transaction(&tx),
+        Err(TransactionError::InvalidProof)
+    );
+    tx.proof[4] = bak;
+
+    // early resolve: invalid signature 2
+    let bak = tx.proof.len() - 2;
+    tx.proof[bak] = tx.proof[bak] % 250 + 1;
+    assert_eq!(
+        AccountType::verify_outgoing_transaction(&tx),
+        Err(TransactionError::InvalidProof)
+    );
+
+    // early resolve: invalid over-long
+    let proof = OutgoingHTLCTransactionProof::EarlyResolve {
+        signature_proof_recipient: recipient_signature_proof.clone(),
+        signature_proof_sender: sender_signature_proof,
+    };
+    tx.proof = proof.serialize_to_vec();
+    tx.proof.push(0);
+
+    assert_eq!(
+        AccountType::verify_outgoing_transaction(&tx),
+        Err(TransactionError::InvalidProof)
+    );
+}
+
+#[test]
+fn it_can_verify_timeout_resolve() {
+    let (_, mut tx, _, sender_signature_proof, _) = prepare_outgoing_transaction();
+
+    // timeout resolve: valid
+    let proof = OutgoingHTLCTransactionProof::TimeoutResolve {
+        signature_proof_sender: sender_signature_proof.clone(),
+    };
+    tx.proof = proof.serialize_to_vec();
+
+    assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
+
+    // timeout resolve: invalid signature
+    tx.proof[4] = tx.proof[4] % 250 + 1;
+    assert_eq!(
+        AccountType::verify_outgoing_transaction(&tx),
+        Err(TransactionError::InvalidProof)
+    );
+
+    // timeout resolve: invalid over-long
+    let proof = OutgoingHTLCTransactionProof::TimeoutResolve {
+        signature_proof_sender: sender_signature_proof.clone(),
+    };
+    tx.proof = proof.serialize_to_vec();
+    tx.proof.push(0);
+
+    assert_eq!(
+        AccountType::verify_outgoing_transaction(&tx),
+        Err(TransactionError::InvalidProof)
+    );
+}
+
+#[test]
+fn it_can_apply_and_revert_regular_transfer() {
+    let (accounts, _key_1, _key_2) = init_tree();
+    let block_state = BlockState::new(1, 1);
+
+    let (mut htlc, mut tx, pre_image, _sender_signature_proof, recipient_signature_proof) =
+        prepare_outgoing_transaction();
+
+    // regular transfer
+    let proof = OutgoingHTLCTransactionProof::RegularTransfer {
+        hash_algorithm: HashAlgorithm::Blake2b,
+        hash_depth: 2,
+        hash_root: htlc.hash_root.clone(),
+        pre_image: pre_image.clone(),
+        signature_proof: recipient_signature_proof,
+    };
+    tx.proof = proof.serialize_to_vec();
 
     let mut tx_logger = TransactionLog::empty();
+    let _receipt = accounts
+        .test_commit_outgoing_transaction(&mut htlc, &tx, &block_state, &mut tx_logger, true)
+        .expect("Failed to commit transaction");
+
+    assert!(htlc.can_be_pruned());
     assert_eq!(
-        htlc.revert_incoming_transaction(
-            &tx,
-            &block_state,
-            None,
-            data_store.write(&mut db_txn),
-            &mut tx_logger
-        ),
-        Err(AccountError::InvalidForRecipient)
+        tx_logger.logs,
+        vec![
+            Log::PayFee {
+                from: tx.sender.clone(),
+                fee: tx.fee
+            },
+            Log::Transfer {
+                from: tx.sender.clone(),
+                to: tx.recipient.clone(),
+                amount: tx.value,
+                data: None
+            },
+            Log::HTLCRegularTransfer {
+                contract_address: tx.sender,
+                pre_image: pre_image,
+                hash_depth: 2
+            }
+        ]
     );
-    assert_eq!(tx_logger.logs.len(), 0);
+}
+
+#[test]
+fn it_can_apply_and_revert_early_resolve() {
+    let (accounts, _key_1, _key_2) = init_tree();
+    let block_state = BlockState::new(1, 1);
+
+    let (mut htlc, mut tx, _pre_image, sender_signature_proof, recipient_signature_proof) =
+        prepare_outgoing_transaction();
+
+    // early resolve
+    let proof = OutgoingHTLCTransactionProof::EarlyResolve {
+        signature_proof_recipient: recipient_signature_proof,
+        signature_proof_sender: sender_signature_proof,
+    };
+    tx.proof = proof.serialize_to_vec();
+
+    let mut tx_logger = TransactionLog::empty();
+    let _receipt = accounts
+        .test_commit_outgoing_transaction(&mut htlc, &tx, &block_state, &mut tx_logger, true)
+        .expect("Failed to commit transaction");
+
+    assert!(htlc.can_be_pruned());
+    assert_eq!(
+        tx_logger.logs,
+        vec![
+            Log::PayFee {
+                from: tx.sender.clone(),
+                fee: tx.fee
+            },
+            Log::Transfer {
+                from: tx.sender.clone(),
+                to: tx.recipient.clone(),
+                amount: tx.value,
+                data: None
+            },
+            Log::HTLCEarlyResolve {
+                contract_address: tx.sender.clone(),
+            }
+        ]
+    );
+}
+
+#[test]
+fn it_can_apply_and_revert_timeout_resolve() {
+    let (accounts, _key_1, _key_2) = init_tree();
+
+    let (mut htlc, mut tx, _pre_image, sender_signature_proof, _recipient_signature_proof) =
+        prepare_outgoing_transaction();
+
+    // timeout resolve
+    let proof = OutgoingHTLCTransactionProof::TimeoutResolve {
+        signature_proof_sender: sender_signature_proof,
+    };
+    tx.proof = proof.serialize_to_vec();
+
+    let block_state = BlockState::new(1, 101);
+
+    let mut tx_logger = TransactionLog::empty();
+    let _ = accounts
+        .test_commit_outgoing_transaction(&mut htlc, &tx, &block_state, &mut tx_logger, true)
+        .expect("Failed to commit transaction");
+
+    assert!(htlc.can_be_pruned());
+    assert_eq!(
+        tx_logger.logs,
+        vec![
+            Log::PayFee {
+                from: tx.sender.clone(),
+                fee: tx.fee
+            },
+            Log::Transfer {
+                from: tx.sender.clone(),
+                to: tx.recipient.clone(),
+                amount: tx.value,
+                data: None
+            },
+            Log::HTLCTimeoutResolve {
+                contract_address: tx.sender,
+            }
+        ]
+    );
+}
+
+#[test]
+fn it_refuses_invalid_transactions() {
+    let (accounts, _key_1, _key_2) = init_tree();
+
+    let (start_contract, mut tx, pre_image, sender_signature_proof, recipient_signature_proof) =
+        prepare_outgoing_transaction();
+
+    // regular transfer: timeout passed
+    let proof = OutgoingHTLCTransactionProof::RegularTransfer {
+        hash_algorithm: HashAlgorithm::Blake2b,
+        hash_depth: 2,
+        hash_root: start_contract.hash_root.clone(),
+        pre_image: pre_image.clone(),
+        signature_proof: recipient_signature_proof.clone(),
+    };
+    tx.proof = proof.serialize_to_vec();
+
+    let mut htlc = start_contract.clone();
+
+    let block_state = BlockState::new(1, 101);
+
+    let mut tx_logger = TransactionLog::empty();
+    let result = accounts.test_commit_outgoing_transaction(
+        &mut htlc,
+        &tx,
+        &block_state,
+        &mut tx_logger,
+        true,
+    );
+
+    assert_eq!(result, Err(AccountError::InvalidForSender));
+
+    // regular transfer: hash mismatch
+    let proof = OutgoingHTLCTransactionProof::RegularTransfer {
+        hash_algorithm: HashAlgorithm::Blake2b,
+        hash_depth: 2,
+        hash_root: AnyHash::from([1u8; 32]),
+        pre_image: pre_image.clone(),
+        signature_proof: recipient_signature_proof.clone(),
+    };
+    tx.proof = proof.serialize_to_vec();
+
+    let block_state = BlockState::new(1, 1);
+
+    let mut tx_logger = TransactionLog::empty();
+    let result = accounts.test_commit_outgoing_transaction(
+        &mut htlc,
+        &tx,
+        &block_state,
+        &mut tx_logger,
+        true,
+    );
+
+    assert_eq!(result, Err(AccountError::InvalidForSender));
+
+    // regular transfer: invalid signature
+    let proof = OutgoingHTLCTransactionProof::RegularTransfer {
+        hash_algorithm: HashAlgorithm::Blake2b,
+        hash_depth: 2,
+        hash_root: start_contract.hash_root.clone(),
+        pre_image: pre_image.clone(),
+        signature_proof: sender_signature_proof.clone(),
+    };
+    tx.proof = proof.serialize_to_vec();
+
+    let mut tx_logger = TransactionLog::empty();
+    let result = accounts.test_commit_outgoing_transaction(
+        &mut htlc,
+        &tx,
+        &block_state,
+        &mut tx_logger,
+        true,
+    );
+
+    assert_eq!(result, Err(AccountError::InvalidSignature));
+
+    // regular transfer: underflow
+    let proof = OutgoingHTLCTransactionProof::RegularTransfer {
+        hash_algorithm: HashAlgorithm::Blake2b,
+        hash_depth: 1,
+        hash_root: start_contract.hash_root.clone(),
+        pre_image: AnyHash::from(<[u8; 32]>::from(
+            Blake2bHasher::default().digest(&(<[u8; 32]>::from(pre_image))),
+        )),
+        signature_proof: recipient_signature_proof.clone(),
+    };
+    tx.proof = proof.serialize_to_vec();
+
+    let mut tx_logger = TransactionLog::empty();
+    let result = accounts.test_commit_outgoing_transaction(
+        &mut htlc,
+        &tx,
+        &block_state,
+        &mut tx_logger,
+        true,
+    );
+
+    assert_eq!(
+        result,
+        Err(AccountError::InsufficientFunds {
+            needed: 1000.try_into().unwrap(),
+            balance: 500.try_into().unwrap()
+        })
+    );
+
+    // early resolve: invalid signature
+    let proof = OutgoingHTLCTransactionProof::EarlyResolve {
+        signature_proof_recipient: sender_signature_proof.clone(),
+        signature_proof_sender: recipient_signature_proof.clone(),
+    };
+    tx.proof = proof.serialize_to_vec();
+
+    let mut tx_logger = TransactionLog::empty();
+    let result = accounts.test_commit_outgoing_transaction(
+        &mut htlc,
+        &tx,
+        &block_state,
+        &mut tx_logger,
+        true,
+    );
+
+    assert_eq!(result, Err(AccountError::InvalidSignature));
+
+    // timeout resolve: timeout not expired
+    let proof = OutgoingHTLCTransactionProof::TimeoutResolve {
+        signature_proof_sender: sender_signature_proof,
+    };
+    tx.proof = proof.serialize_to_vec();
+
+    let mut tx_logger = TransactionLog::empty();
+    let result = accounts.test_commit_outgoing_transaction(
+        &mut htlc,
+        &tx,
+        &block_state,
+        &mut tx_logger,
+        true,
+    );
+
+    assert_eq!(result, Err(AccountError::InvalidForSender));
+
+    // timeout resolve: invalid signature
+    let proof = OutgoingHTLCTransactionProof::TimeoutResolve {
+        signature_proof_sender: recipient_signature_proof,
+    };
+    tx.proof = proof.serialize_to_vec();
+
+    let block_state = BlockState::new(1, 101);
+
+    let mut tx_logger = TransactionLog::empty();
+    let result = accounts.test_commit_outgoing_transaction(
+        &mut htlc,
+        &tx,
+        &block_state,
+        &mut tx_logger,
+        true,
+    );
+
+    assert_eq!(result, Err(AccountError::InvalidSignature));
 }
 
 fn prepare_outgoing_transaction() -> (
@@ -313,7 +742,7 @@ fn prepare_outgoing_transaction() -> (
         1000.try_into().unwrap(),
         0.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        NetworkId::UnitAlbatross,
     );
 
     let sender_signature = sender_key_pair.sign(&tx.serialize_content()[..]);
@@ -331,573 +760,31 @@ fn prepare_outgoing_transaction() -> (
     )
 }
 
-#[test]
-#[allow(unused_must_use)]
-fn it_can_verify_regular_transfer() {
-    let (_, mut tx, _, _, recipient_signature_proof) = prepare_outgoing_transaction();
-
-    // regular: valid Blake-2b
-    let mut proof =
-        Vec::with_capacity(3 + 2 * AnyHash::SIZE + recipient_signature_proof.serialized_size());
-    Serialize::serialize(&ProofType::RegularTransfer, &mut proof);
-    Serialize::serialize(&HashAlgorithm::Blake2b, &mut proof);
-    Serialize::serialize(&1u8, &mut proof);
-    Serialize::serialize(
-        &AnyHash::from(<[u8; 32]>::from(
-            Blake2bHasher::default().digest(&[0u8; 32]),
-        )),
-        &mut proof,
-    );
-    Serialize::serialize(&AnyHash::from([0u8; 32]), &mut proof);
-    Serialize::serialize(&recipient_signature_proof, &mut proof);
-    tx.proof = proof;
-    assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
-
-    // regular: valid SHA-256
-    proof = Vec::with_capacity(3 + 2 * AnyHash::SIZE + recipient_signature_proof.serialized_size());
-    Serialize::serialize(&ProofType::RegularTransfer, &mut proof);
-    Serialize::serialize(&HashAlgorithm::Sha256, &mut proof);
-    Serialize::serialize(&1u8, &mut proof);
-    Serialize::serialize(
-        &AnyHash::from(<[u8; 32]>::from(Sha256Hasher::default().digest(&[0u8; 32]))),
-        &mut proof,
-    );
-    Serialize::serialize(&AnyHash::from([0u8; 32]), &mut proof);
-    Serialize::serialize(&recipient_signature_proof, &mut proof);
-    tx.proof = proof;
-    assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
-
-    // regular: invalid hash
-    let bak = tx.proof[35];
-    tx.proof[35] = bak % 250 + 1;
-    assert_eq!(
-        AccountType::verify_outgoing_transaction(&tx),
-        Err(TransactionError::InvalidProof)
-    );
-    tx.proof[35] = bak;
-
-    // regular: invalid algorithm
-    tx.proof[1] = 99;
-    assert_eq!(
-        AccountType::verify_outgoing_transaction(&tx),
-        Err(TransactionError::InvalidSerialization(
-            SerializingError::InvalidValue
-        ))
-    );
-    tx.proof[1] = HashAlgorithm::Sha256 as u8;
-
-    // regular: invalid signature
-    // Proof is not a valid point, so Deserialize will result in an error.
-    tx.proof[72] = tx.proof[72] % 250 + 1;
-    assert_eq!(
-        AccountType::verify_outgoing_transaction(&tx),
-        Err(TransactionError::InvalidProof)
+fn init_tree() -> (TestCommitRevert, KeyPair, KeyPair) {
+    let accounts = TestCommitRevert::new();
+    let generator = TransactionsGenerator::new(
+        Accounts::new(accounts.env.clone()),
+        NetworkId::UnitAlbatross,
+        test_rng(true),
     );
 
-    // regular: invalid signature
-    tx.proof[72] = tx.proof[72] % 250 + 2;
-    assert_eq!(
-        AccountType::verify_outgoing_transaction(&tx),
-        Err(TransactionError::InvalidProof)
+    let mut rng = test_rng(true);
+
+    let key_1 = KeyPair::generate(&mut rng);
+    generator.put_account(
+        &Address::from(&key_1),
+        Account::Basic(BasicAccount {
+            balance: Coin::from_u64_unchecked(1000),
+        }),
     );
 
-    // regular: invalid over-long
-    proof = Vec::with_capacity(4 + 2 * AnyHash::SIZE + recipient_signature_proof.serialized_size());
-    Serialize::serialize(&ProofType::RegularTransfer, &mut proof);
-    Serialize::serialize(&HashAlgorithm::Blake2b, &mut proof);
-    Serialize::serialize(&1u8, &mut proof);
-    Serialize::serialize(
-        &AnyHash::from(<[u8; 32]>::from(
-            Blake2bHasher::default().digest(&[0u8; 32]),
-        )),
-        &mut proof,
-    );
-    Serialize::serialize(&AnyHash::from([0u8; 32]), &mut proof);
-    Serialize::serialize(&recipient_signature_proof, &mut proof);
-    Serialize::serialize(&0u8, &mut proof);
-    tx.proof = proof;
-    assert_eq!(
-        AccountType::verify_outgoing_transaction(&tx),
-        Err(TransactionError::InvalidProof)
-    );
-}
-
-#[test]
-#[allow(unused_must_use)]
-fn it_can_verify_early_resolve() {
-    let (_, mut tx, _, sender_signature_proof, recipient_signature_proof) =
-        prepare_outgoing_transaction();
-
-    // early resolve: valid
-    let mut proof = Vec::with_capacity(
-        1 + recipient_signature_proof.serialized_size() + sender_signature_proof.serialized_size(),
-    );
-    Serialize::serialize(&ProofType::EarlyResolve, &mut proof);
-    Serialize::serialize(&recipient_signature_proof, &mut proof);
-    Serialize::serialize(&sender_signature_proof, &mut proof);
-    tx.proof = proof;
-    assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
-
-    // early resolve: invalid signature 1
-    // Proof is not a valid point, so Deserialize will result in an error.
-    let bak = tx.proof[4];
-    tx.proof[4] = tx.proof[4] % 250 + 1;
-    assert_eq!(
-        AccountType::verify_outgoing_transaction(&tx),
-        Err(TransactionError::InvalidProof)
-    );
-    tx.proof[4] = bak;
-
-    // early resolve: invalid signature 2
-    let bak = tx.proof.len() - 2;
-    tx.proof[bak] = tx.proof[bak] % 250 + 1;
-    assert_eq!(
-        AccountType::verify_outgoing_transaction(&tx),
-        Err(TransactionError::InvalidProof)
+    let key_2 = KeyPair::generate(&mut rng);
+    generator.put_account(
+        &Address::from(&key_2),
+        Account::Basic(BasicAccount {
+            balance: Coin::from_u64_unchecked(1000),
+        }),
     );
 
-    // early resolve: invalid over-long
-    proof = Vec::with_capacity(
-        2 + recipient_signature_proof.serialized_size() + sender_signature_proof.serialized_size(),
-    );
-    Serialize::serialize(&ProofType::EarlyResolve, &mut proof);
-    Serialize::serialize(&recipient_signature_proof, &mut proof);
-    Serialize::serialize(&sender_signature_proof, &mut proof);
-    Serialize::serialize(&0u8, &mut proof);
-    tx.proof = proof;
-    assert_eq!(
-        AccountType::verify_outgoing_transaction(&tx),
-        Err(TransactionError::InvalidProof)
-    );
-}
-
-#[test]
-#[allow(unused_must_use)]
-fn it_can_verify_timeout_resolve() {
-    let (_, mut tx, _, sender_signature_proof, _) = prepare_outgoing_transaction();
-
-    // timeout resolve: valid
-    let mut proof = Vec::with_capacity(1 + sender_signature_proof.serialized_size());
-    Serialize::serialize(&ProofType::TimeoutResolve, &mut proof);
-    Serialize::serialize(&sender_signature_proof, &mut proof);
-    tx.proof = proof;
-    assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
-
-    // timeout resolve: invalid signature
-    tx.proof[4] = tx.proof[4] % 250 + 1;
-    assert_eq!(
-        AccountType::verify_outgoing_transaction(&tx),
-        Err(TransactionError::InvalidProof)
-    );
-
-    // timeout resolve: invalid over-long
-    proof = Vec::with_capacity(2 + sender_signature_proof.serialized_size());
-    Serialize::serialize(&ProofType::TimeoutResolve, &mut proof);
-    Serialize::serialize(&sender_signature_proof, &mut proof);
-    Serialize::serialize(&0u8, &mut proof);
-    tx.proof = proof;
-    assert_eq!(
-        AccountType::verify_outgoing_transaction(&tx),
-        Err(TransactionError::InvalidProof)
-    );
-}
-
-#[test]
-#[allow(unused_must_use)]
-fn it_can_apply_and_revert_valid_transaction() {
-    let env = VolatileEnvironment::new(10).unwrap();
-    let accounts = Accounts::new(env.clone());
-    let data_store = accounts.data_store(&Address::from([0u8; 20]));
-    let block_state = BlockState::new(1, 1);
-    let mut db_txn = WriteTransaction::new(&env);
-
-    let (start_contract, mut tx, pre_image, sender_signature_proof, recipient_signature_proof) =
-        prepare_outgoing_transaction();
-
-    // regular transfer
-    let mut proof =
-        Vec::with_capacity(3 + 2 * AnyHash::SIZE + recipient_signature_proof.serialized_size());
-    Serialize::serialize(&ProofType::RegularTransfer, &mut proof);
-    Serialize::serialize(&HashAlgorithm::Blake2b, &mut proof);
-    Serialize::serialize(&2u8, &mut proof);
-    Serialize::serialize(&start_contract.hash_root, &mut proof);
-    Serialize::serialize(&pre_image, &mut proof);
-    Serialize::serialize(&recipient_signature_proof, &mut proof);
-    tx.proof = proof;
-
-    let mut htlc = start_contract.clone();
-
-    let mut tx_logger = TransactionLog::empty();
-    let receipt = htlc
-        .commit_outgoing_transaction(
-            &tx,
-            &block_state,
-            data_store.write(&mut db_txn),
-            &mut tx_logger,
-        )
-        .expect("Failed to commit transaction");
-
-    assert!(htlc.can_be_pruned());
-    assert_eq!(
-        tx_logger.logs,
-        vec![
-            Log::PayFee {
-                from: tx.sender.clone(),
-                fee: tx.fee
-            },
-            Log::Transfer {
-                from: tx.sender.clone(),
-                to: tx.recipient.clone(),
-                amount: tx.value,
-                data: None
-            },
-            Log::HTLCRegularTransfer {
-                contract_address: tx.sender.clone(),
-                pre_image: pre_image.clone(),
-                hash_depth: 2
-            }
-        ]
-    );
-
-    let mut tx_logger = TransactionLog::empty();
-    htlc.revert_outgoing_transaction(
-        &tx,
-        &block_state,
-        receipt,
-        data_store.write(&mut db_txn),
-        &mut tx_logger,
-    )
-    .expect("Failed to revert transaction");
-
-    assert_eq!(htlc, start_contract);
-    assert_eq!(
-        tx_logger.logs,
-        vec![
-            Log::PayFee {
-                from: tx.sender.clone(),
-                fee: tx.fee
-            },
-            Log::Transfer {
-                from: tx.sender.clone(),
-                to: tx.recipient.clone(),
-                amount: tx.value,
-                data: None
-            },
-            Log::HTLCRegularTransfer {
-                contract_address: tx.sender.clone(),
-                pre_image,
-                hash_depth: 2
-            }
-        ]
-    );
-
-    // early resolve
-    let mut proof = Vec::with_capacity(
-        1 + recipient_signature_proof.serialized_size() + sender_signature_proof.serialized_size(),
-    );
-    Serialize::serialize(&ProofType::EarlyResolve, &mut proof);
-    Serialize::serialize(&recipient_signature_proof, &mut proof);
-    Serialize::serialize(&sender_signature_proof, &mut proof);
-    tx.proof = proof;
-
-    let mut tx_logger = TransactionLog::empty();
-    let receipt = htlc
-        .commit_outgoing_transaction(
-            &tx,
-            &block_state,
-            data_store.write(&mut db_txn),
-            &mut tx_logger,
-        )
-        .expect("Failed to commit transaction");
-
-    assert!(htlc.can_be_pruned());
-    assert_eq!(
-        tx_logger.logs,
-        vec![
-            Log::PayFee {
-                from: tx.sender.clone(),
-                fee: tx.fee
-            },
-            Log::Transfer {
-                from: tx.sender.clone(),
-                to: tx.recipient.clone(),
-                amount: tx.value,
-                data: None
-            },
-            Log::HTLCEarlyResolve {
-                contract_address: tx.sender.clone(),
-            }
-        ]
-    );
-
-    let mut tx_logger = TransactionLog::empty();
-    htlc.revert_outgoing_transaction(
-        &tx,
-        &block_state,
-        receipt,
-        data_store.write(&mut db_txn),
-        &mut tx_logger,
-    )
-    .expect("Failed to revert transaction");
-
-    assert_eq!(htlc, start_contract);
-    assert_eq!(
-        tx_logger.logs,
-        vec![
-            Log::PayFee {
-                from: tx.sender.clone(),
-                fee: tx.fee
-            },
-            Log::Transfer {
-                from: tx.sender.clone(),
-                to: tx.recipient.clone(),
-                amount: tx.value,
-                data: None
-            },
-            Log::HTLCEarlyResolve {
-                contract_address: tx.sender.clone(),
-            }
-        ]
-    );
-
-    // timeout resolve
-    let mut proof = Vec::with_capacity(1 + sender_signature_proof.serialized_size());
-    Serialize::serialize(&ProofType::TimeoutResolve, &mut proof);
-    Serialize::serialize(&sender_signature_proof, &mut proof);
-    tx.proof = proof;
-
-    let block_state = BlockState::new(1, 101);
-
-    let mut tx_logger = TransactionLog::empty();
-    let receipt = htlc
-        .commit_outgoing_transaction(
-            &tx,
-            &block_state,
-            data_store.write(&mut db_txn),
-            &mut tx_logger,
-        )
-        .expect("Failed to commit transaction");
-
-    assert!(htlc.can_be_pruned());
-    assert_eq!(
-        tx_logger.logs,
-        vec![
-            Log::PayFee {
-                from: tx.sender.clone(),
-                fee: tx.fee
-            },
-            Log::Transfer {
-                from: tx.sender.clone(),
-                to: tx.recipient.clone(),
-                amount: tx.value,
-                data: None
-            },
-            Log::HTLCTimeoutResolve {
-                contract_address: tx.sender.clone(),
-            }
-        ]
-    );
-
-    let mut tx_logger = TransactionLog::empty();
-    htlc.revert_outgoing_transaction(
-        &tx,
-        &block_state,
-        receipt,
-        data_store.write(&mut db_txn),
-        &mut tx_logger,
-    )
-    .expect("Failed to revert transaction");
-
-    assert_eq!(htlc, start_contract);
-    assert_eq!(
-        tx_logger.logs,
-        vec![
-            Log::PayFee {
-                from: tx.sender.clone(),
-                fee: tx.fee
-            },
-            Log::Transfer {
-                from: tx.sender.clone(),
-                to: tx.recipient,
-                amount: tx.value,
-                data: None
-            },
-            Log::HTLCTimeoutResolve {
-                contract_address: tx.sender,
-            }
-        ]
-    );
-}
-
-#[test]
-#[allow(unused_must_use)]
-fn it_refuses_invalid_transactions() {
-    let env = VolatileEnvironment::new(10).unwrap();
-    let accounts = Accounts::new(env.clone());
-    let data_store = accounts.data_store(&Address::from([0u8; 20]));
-    let mut db_txn = WriteTransaction::new(&env);
-
-    let (start_contract, mut tx, pre_image, sender_signature_proof, recipient_signature_proof) =
-        prepare_outgoing_transaction();
-
-    // regular transfer: timeout passed
-    let mut proof =
-        Vec::with_capacity(3 + 2 * AnyHash::SIZE + recipient_signature_proof.serialized_size());
-    Serialize::serialize(&ProofType::RegularTransfer, &mut proof);
-    Serialize::serialize(&HashAlgorithm::Blake2b, &mut proof);
-    Serialize::serialize(&2u8, &mut proof);
-    Serialize::serialize(&start_contract.hash_root, &mut proof);
-    Serialize::serialize(&pre_image, &mut proof);
-    Serialize::serialize(&recipient_signature_proof, &mut proof);
-    tx.proof = proof;
-
-    let mut htlc = start_contract.clone();
-
-    let block_state = BlockState::new(1, 101);
-
-    let mut tx_logger = TransactionLog::empty();
-    let result = htlc.commit_outgoing_transaction(
-        &tx,
-        &block_state,
-        data_store.write(&mut db_txn),
-        &mut tx_logger,
-    );
-
-    assert_eq!(result, Err(AccountError::InvalidForSender));
-    assert_eq!(tx_logger.logs.len(), 0);
-
-    // regular transfer: hash mismatch
-    let mut proof =
-        Vec::with_capacity(3 + 2 * AnyHash::SIZE + recipient_signature_proof.serialized_size());
-    Serialize::serialize(&ProofType::RegularTransfer, &mut proof);
-    Serialize::serialize(&HashAlgorithm::Blake2b, &mut proof);
-    Serialize::serialize(&2u8, &mut proof);
-    Serialize::serialize(&AnyHash::from([1u8; 32]), &mut proof);
-    Serialize::serialize(&pre_image, &mut proof);
-    Serialize::serialize(&recipient_signature_proof, &mut proof);
-    tx.proof = proof;
-
-    let block_state = BlockState::new(1, 1);
-
-    let mut tx_logger = TransactionLog::empty();
-    let result = htlc.commit_outgoing_transaction(
-        &tx,
-        &block_state,
-        data_store.write(&mut db_txn),
-        &mut tx_logger,
-    );
-
-    assert_eq!(result, Err(AccountError::InvalidForSender));
-    assert_eq!(tx_logger.logs.len(), 0);
-
-    // regular transfer: invalid signature
-    let mut proof =
-        Vec::with_capacity(3 + 2 * AnyHash::SIZE + recipient_signature_proof.serialized_size());
-    Serialize::serialize(&ProofType::RegularTransfer, &mut proof);
-    Serialize::serialize(&HashAlgorithm::Blake2b, &mut proof);
-    Serialize::serialize(&2u8, &mut proof);
-    Serialize::serialize(&start_contract.hash_root, &mut proof);
-    Serialize::serialize(&pre_image, &mut proof);
-    Serialize::serialize(&sender_signature_proof, &mut proof);
-    tx.proof = proof;
-
-    let mut tx_logger = TransactionLog::empty();
-    let result = htlc.commit_outgoing_transaction(
-        &tx,
-        &block_state,
-        data_store.write(&mut db_txn),
-        &mut tx_logger,
-    );
-
-    assert_eq!(result, Err(AccountError::InvalidSignature));
-    assert_eq!(tx_logger.logs.len(), 0);
-
-    // regular transfer: underflow
-    let mut proof =
-        Vec::with_capacity(3 + 2 * AnyHash::SIZE + recipient_signature_proof.serialized_size());
-    Serialize::serialize(&ProofType::RegularTransfer, &mut proof);
-    Serialize::serialize(&HashAlgorithm::Blake2b, &mut proof);
-    Serialize::serialize(&1u8, &mut proof);
-    Serialize::serialize(&start_contract.hash_root, &mut proof);
-    Serialize::serialize(
-        &AnyHash::from(<[u8; 32]>::from(
-            Blake2bHasher::default().digest(&(<[u8; 32]>::from(pre_image))),
-        )),
-        &mut proof,
-    );
-    Serialize::serialize(&recipient_signature_proof, &mut proof);
-    tx.proof = proof;
-
-    let mut tx_logger = TransactionLog::empty();
-    let result = htlc.commit_outgoing_transaction(
-        &tx,
-        &block_state,
-        data_store.write(&mut db_txn),
-        &mut tx_logger,
-    );
-
-    assert_eq!(
-        result,
-        Err(AccountError::InsufficientFunds {
-            needed: 1000.try_into().unwrap(),
-            balance: 500.try_into().unwrap()
-        })
-    );
-    assert_eq!(tx_logger.logs.len(), 0);
-
-    // early resolve: invalid signature
-    let mut proof = Vec::with_capacity(
-        1 + recipient_signature_proof.serialized_size() + sender_signature_proof.serialized_size(),
-    );
-    Serialize::serialize(&ProofType::EarlyResolve, &mut proof);
-    Serialize::serialize(&sender_signature_proof, &mut proof);
-    Serialize::serialize(&recipient_signature_proof, &mut proof);
-    tx.proof = proof;
-
-    let mut tx_logger = TransactionLog::empty();
-    let result = htlc.commit_outgoing_transaction(
-        &tx,
-        &block_state,
-        data_store.write(&mut db_txn),
-        &mut tx_logger,
-    );
-
-    assert_eq!(result, Err(AccountError::InvalidSignature));
-    assert_eq!(tx_logger.logs.len(), 0);
-
-    // timeout resolve: timeout not expired
-    let mut proof = Vec::with_capacity(1 + sender_signature_proof.serialized_size());
-    Serialize::serialize(&ProofType::TimeoutResolve, &mut proof);
-    Serialize::serialize(&sender_signature_proof, &mut proof);
-    tx.proof = proof;
-
-    let mut tx_logger = TransactionLog::empty();
-    let result = htlc.commit_outgoing_transaction(
-        &tx,
-        &block_state,
-        data_store.write(&mut db_txn),
-        &mut tx_logger,
-    );
-
-    assert_eq!(result, Err(AccountError::InvalidForSender));
-    assert_eq!(tx_logger.logs.len(), 0);
-
-    // timeout resolve: invalid signature
-    let mut proof = Vec::with_capacity(1 + recipient_signature_proof.serialized_size());
-    Serialize::serialize(&ProofType::TimeoutResolve, &mut proof);
-    Serialize::serialize(&recipient_signature_proof, &mut proof);
-    tx.proof = proof;
-
-    let block_state = BlockState::new(1, 101);
-
-    let mut tx_logger = TransactionLog::empty();
-    let result = htlc.commit_outgoing_transaction(
-        &tx,
-        &block_state,
-        data_store.write(&mut db_txn),
-        &mut tx_logger,
-    );
-
-    assert_eq!(result, Err(AccountError::InvalidSignature));
-    assert_eq!(tx_logger.logs.len(), 0);
+    (accounts, key_1, key_2)
 }

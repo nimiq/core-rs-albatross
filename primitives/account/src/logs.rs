@@ -2,13 +2,16 @@ use crate::TransactionOperationReceipt;
 use beserial::Serialize as BeSerialize;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
-use nimiq_primitives::{account::AccountType, coin::Coin};
+use nimiq_primitives::{
+    account::{AccountType, FailReason},
+    coin::Coin,
+};
 use nimiq_transaction::{
     account::htlc_contract::{AnyHash, HashAlgorithm},
     Transaction,
 };
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 // Renaming affects only the struct names and thus their tag, the "type" field.
 #[cfg_attr(
@@ -161,7 +164,7 @@ pub enum Log {
     FailedTransaction {
         from: Address,
         to: Address,
-        failure_reason: String,
+        failure_reason: FailReason,
     },
 }
 
@@ -316,7 +319,7 @@ impl TransactionLog {
         }
     }
 
-    pub fn push_failed_log(&mut self, transaction: &Transaction, reason: String) {
+    pub fn push_failed_log(&mut self, transaction: &Transaction, reason: FailReason) {
         self.failed = true;
 
         self.push_log(Log::FailedTransaction {
@@ -335,17 +338,16 @@ impl TransactionLog {
     }
 
     #[cfg(feature = "interaction-traits")]
-    pub(crate) fn prepend_log(&mut self, log: Log) {
-        self.logs.insert(0, log)
-    }
-
-    #[cfg(feature = "interaction-traits")]
     pub(crate) fn clear(&mut self) {
         self.logs.clear()
     }
+
+    pub fn rev_log(&mut self) {
+        self.logs.reverse()
+    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct InherentLogger<'a> {
     inherents: Option<&'a mut Vec<Log>>,
 }
@@ -368,15 +370,14 @@ impl<'a> InherentLogger<'a> {
         }
     }
 
-    #[cfg(feature = "interaction-traits")]
-    pub(crate) fn prepend_log(&mut self, log: Log) {
+    pub fn rev_log(&mut self) {
         if let Some(ref mut inherents) = self.inherents {
-            inherents.insert(0, log);
+            inherents.reverse()
         }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BlockLogger {
     block_log: BlockLog,
 }
@@ -392,6 +393,16 @@ impl BlockLogger {
             block_hash: Default::default(),
             block_number: 0,
             timestamp: 0,
+            tx_logs: vec![],
+            total_tx_size: 0,
+        })
+    }
+
+    pub fn empty_reverted() -> Self {
+        Self::new(BlockLog::RevertedBlock {
+            inherent_logs: vec![],
+            block_hash: Default::default(),
+            block_number: 0,
             tx_logs: vec![],
             total_tx_size: 0,
         })

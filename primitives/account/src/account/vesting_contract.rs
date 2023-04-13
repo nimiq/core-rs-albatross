@@ -173,8 +173,8 @@ impl AccountTransactionInteraction for VestingContract {
     ) -> Result<(), AccountError> {
         self.balance += transaction.total_value();
 
-        tx_logger.push_log(Log::pay_fee_log(transaction));
         tx_logger.push_log(Log::transfer_log(transaction));
+        tx_logger.push_log(Log::pay_fee_log(transaction));
 
         Ok(())
     }
