@@ -2552,7 +2552,6 @@ fn make_incoming_transaction(data: IncomingStakingTransactionData, value: u64) -
             AccountType::Basic,
             Policy::STAKING_CONTRACT_ADDRESS,
             AccountType::Staking,
-            value.try_into().unwrap(),
             100.try_into().unwrap(),
             data.serialize_to_vec(),
             1,

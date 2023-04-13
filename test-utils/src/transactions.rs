@@ -274,7 +274,6 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
                         sender.into(),
                         Policy::STAKING_CONTRACT_ADDRESS.clone(),
                         recipient.into(),
-                        Coin::ZERO,
                         fee,
                         parameters.serialize_to_vec(),
                         block_state.number,

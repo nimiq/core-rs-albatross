@@ -450,7 +450,6 @@ impl TransactionBuilder {
                 self.sender_type.unwrap_or(AccountType::Basic),
                 recipient.address().unwrap(), // For non-creation recipients, this should never return None.
                 recipient.account_type(),
-                value,
                 self.fee.unwrap_or(Coin::ZERO),
                 recipient.data(),
                 validity_start_height,

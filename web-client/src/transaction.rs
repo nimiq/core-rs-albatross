@@ -112,7 +112,6 @@ impl Transaction {
                 AccountType::try_from(sender_type.unwrap_or(0))?,
                 recipient.native_ref().clone(),
                 AccountType::try_from(recipient_type.unwrap_or(3))?,
-                Coin::try_from(value)?,
                 Coin::try_from(fee)?,
                 data.unwrap_throw(),
                 validity_start_height,
