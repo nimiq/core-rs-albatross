@@ -54,6 +54,7 @@ impl<C: AggregatableContribution> Eq for TodoItem<C> {}
 impl<C: AggregatableContribution> std::hash::Hash for TodoItem<C> {
     // TODO
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::hash::Hash::hash(&self.level, state);
         std::hash::Hash::hash(&self.contribution.contributors().to_string(), state);
     }
 }
