@@ -59,6 +59,11 @@ impl Level {
         self.peer_ids.len()
     }
 
+    /// Returns wether this level is empty
+    pub fn is_empty(&self) -> bool {
+        self.peer_ids.len() == 0
+    }
+
     /// Creates a set of levels given a partitioner
     pub fn create_levels<P: Partitioner>(partitioner: Arc<P>) -> Vec<Level> {
         let mut levels: Vec<Level> = Vec::new();
@@ -109,7 +114,7 @@ impl Level {
 
     /// Selects the set of next peers to send an update to for this level given a count of them
     pub fn select_next_peers(&self, count: usize) -> Vec<usize> {
-        if self.id == 0 {
+        if self.id == 0 || self.is_empty() {
             vec![]
         } else {
             let size = min(count, self.peer_ids.len());

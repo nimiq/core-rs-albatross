@@ -73,7 +73,11 @@ impl Partitioner for BinomialPartitioner {
     }
 
     fn level_size(&self, level: usize) -> usize {
-        2_usize.pow(level as u32)
+        if let Ok(range) = self.range(level) {
+            (range.end() - range.start()) + 1
+        } else {
+            0
+        }
     }
 
     fn range(&self, level: usize) -> Result<RangeInclusive<usize>, PartitioningError> {
@@ -88,7 +92,7 @@ impl Partitioner for BinomialPartitioner {
             let f = 1 << (level - 1);
 
             let min = (self.node_id ^ f) & !m;
-            let max = (self.node_id ^ f) | m;
+            let max = std::cmp::min((self.node_id ^ f) | m, self.num_ids - 1);
 
             if min > max {
                 Err(PartitioningError::EmptyLevel { level })
@@ -223,12 +227,6 @@ mod tests {
             7   0111   . . 2 . .
             8   1000   . . . . 4
             9   1001   . . . . 4
-           10   1010   . . . . 4
-           11   1011   . . . . 4
-           12   1100   . . . . 4
-           13   1101   . . . . 4
-           14   1110   . . . . 4
-           15   1111   . . . . 4
 
         level = 4
 
@@ -244,12 +242,6 @@ mod tests {
             7   0111   . . . . 4
             8   1000   . 1 . . .
             9   1001   0 . . . .
-           10   1010   . . 2 . .
-           11   1011   . . 2 . .
-           12   1100   . . . 3 .
-           13   1101   . . . 3 .
-           14   1110   . . . 3 .
-           15   1111   . . . 3 .
         */
 
         let partitioner = BinomialPartitioner::new(5, 10);
@@ -266,12 +258,20 @@ mod tests {
         // Note that in some cases, we would get ranges that correspond to ids outside of the range of num_ids
         // I.e: we have some sparse subtrees
         assert_eq!(partitioner.range(2), Ok(6..=7), "Level 2");
-        assert_eq!(second_partitioner.range(2), Ok(10..=11), "Level 2");
+        assert_eq!(
+            second_partitioner.range(2),
+            Err(PartitioningError::EmptyLevel { level: 2 }),
+            "Level 2"
+        );
 
         assert_eq!(partitioner.range(3), Ok(0..=3), "Level 3");
-        assert_eq!(second_partitioner.range(3), Ok(12..=15), "Level 3");
+        assert_eq!(
+            second_partitioner.range(3),
+            Err(PartitioningError::EmptyLevel { level: 3 }),
+            "Level 3"
+        );
 
-        assert_eq!(partitioner.range(4), Ok(8..=15), "Level 4");
+        assert_eq!(partitioner.range(4), Ok(8..=9), "Level 4");
         assert_eq!(second_partitioner.range(4), Ok(0..=7), "Level 4");
 
         for level in 2..partitioner.levels() {
@@ -307,26 +307,27 @@ mod tests {
         let second_partitioner = BinomialPartitioner::new(second_node_id, num_ids);
 
         assert_eq!(partitioner.levels(), log2(num_ids - 1) + 2);
+        let mut total_peers = 1; // In the for loop below we skip level 0 (that always have a peer)
 
-        for level in 2..partitioner.levels() {
-            let range_len = (partitioner.range(level).unwrap().end()
-                - partitioner.range(level).unwrap().start())
-                + 1;
+        for level in 1..partitioner.levels() {
+            if let Ok(range) = partitioner.range(level) {
+                let range_len: usize = (range.end() - range.start()) + 1;
 
-            assert_eq!(
-                range_len as u32,
-                u32::pow(2, (level - 1).try_into().unwrap())
-            );
+                // Some of the levels might be shorter than 2^(level-1) so we can't know the exact size unless
+                // we do the same bitwise ops
+                assert!(
+                    range_len <= u32::pow(2, (level - 1).try_into().unwrap()) as usize
+                        && range_len <= num_ids - total_peers,
+                );
 
-            if partitioner
-                .range(level)
-                .unwrap()
-                .contains(&second_partitioner.node_id)
-            {
-                assert!(second_partitioner
-                    .range(level)
-                    .unwrap()
-                    .contains(&partitioner.node_id));
+                total_peers += range_len;
+
+                if range.contains(&second_partitioner.node_id) {
+                    assert!(second_partitioner
+                        .range(level)
+                        .unwrap()
+                        .contains(&partitioner.node_id));
+                }
             }
         }
     }

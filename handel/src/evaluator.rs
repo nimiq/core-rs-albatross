@@ -200,6 +200,11 @@ impl<
         if level == self.partitioner.levels() {
             return true;
         }
-        self.partitioner.range(level).unwrap().contains(&id)
+        let range = self.partitioner.range(level);
+        if let Ok(range) = range {
+            range.contains(&id)
+        } else {
+            false
+        }
     }
 }

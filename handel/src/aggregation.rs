@@ -167,6 +167,11 @@ impl<P: Protocol, N: Network<Contribution = P::Contribution>> NextAggregation<P,
             level.num_peers()
         };
 
+        if num_peers == 0 {
+            trace!("Level {} is empty and thus complete", level_id);
+            return;
+        }
+
         // first get the current contributor count for this level. Release the lock as soon as possible
         // to continue working on todos.
         let num_contributors = {
@@ -268,14 +273,10 @@ impl<P: Protocol, N: Network<Contribution = P::Contribution>> NextAggregation<P,
         for level_id in 1..self.levels.len() {
             let (receive_complete, next_peers) = {
                 let level = self.levels.get(level_id).unwrap();
-                if level.active() {
-                    (
-                        level.receive_complete(),
-                        level.select_next_peers(self.config.peer_count),
-                    )
-                } else {
-                    return;
-                }
+                (
+                    level.receive_complete(),
+                    level.select_next_peers(self.config.peer_count),
+                )
             };
 
             // Get the current best aggregate from store (no clone() needed as that already happens within the store)
