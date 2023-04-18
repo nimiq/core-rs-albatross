@@ -107,45 +107,53 @@ impl<TNetwork: Network + Unpin> Stream for LevelUpdateSender<TNetwork> {
     type Item = ();
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let len = self.message_buffer.len();
-        // create futures if there is free room and if there are messages to send
-        while self.first < len && self.pending.len() < Self::MAX_PARALLEL_SENDS {
-            let first = self.first;
-            // take the first message
-            let (msg, next) = self
-                .message_buffer
-                .get_mut(first)
-                .expect("First must not point out of bounds")
-                .take()
-                .expect("First must point to a valid buffered message");
+        // Loop here such that after polling pending futures there is an opportunity to create new ones
+        // before returning.
+        loop {
+            let len = self.message_buffer.len();
 
-            // Create the future sending the message
-            let mut fut = self.network.send_to((msg, self.first));
-            // Poll it, and only add it to then pending futures if it is in fact pending.
-            if fut.poll_unpin(cx).is_pending() {
-                // If the Future does not resolve immediately add it to the pending futures.
-                self.pending.push(fut);
+            // create futures if there is free room and if there are messages to send
+            while self.first < len && self.pending.len() < Self::MAX_PARALLEL_SENDS {
+                let first = self.first;
+                // take the first message
+                let (msg, next) = self
+                    .message_buffer
+                    .get_mut(first)
+                    .expect("First must not point out of bounds")
+                    .take()
+                    .expect("First must point to a valid buffered message");
+
+                // Create the future sending the message
+                let mut fut = self.network.send_to((msg, self.first));
+                // Poll it, and only add it to the pending futures if it is in fact pending.
+                if fut.poll_unpin(cx).is_pending() {
+                    // If the Future does not resolve immediately add it to the pending futures.
+                    self.pending.push(fut);
+                }
+
+                // Update indices.
+                // Note that `next` might be `== len` here in the case of `first == last`
+                self.first = next;
+                if next == len {
+                    self.last = len;
+                }
             }
 
-            // Update indices.
-            // Note that `next` might be `== len` here in the case of `first == last`
-            self.first = next;
-            if next == len {
-                self.last = len;
+            // Keep on polling the futures until they no longer return a result.
+            while let Poll::Ready(Some(_)) = self.pending.poll_next_unpin(cx) {
+                // Nothing to do here. Message was send.
+            }
+            // Once there is either the maximum amount of parallel sends or there is no more messages
+            // in the buffer, break the loop returning poll pending.
+            if self.pending.len() == Self::MAX_PARALLEL_SENDS || self.first == len {
+                // Store a waker in case a message is added.
+                // This is necessary as this future will always return `Poll::Pending`, while the
+                // buffer might be empty and the pending futures might be empty as well.
+                store_waker!(self, waker, cx);
+
+                // Return `Poll::Pending` as this stream is neither allowed to produce items nor to terminate.
+                return Poll::Pending;
             }
         }
-
-        // Keep on polling the futures until they no longer return a result.
-        while let Poll::Ready(Some(_)) = self.pending.poll_next_unpin(cx) {
-            // nothing to do here. Message was send.
-        }
-
-        // store a waker in case a message is added.
-        // This is necessary as this future will always return Poll::Pending, while the
-        // buffer might be empty and the pending futures might be empty as well.
-        store_waker!(self, waker, cx);
-
-        // return Poll::Pending as this stream is neither allowed to produce items nor to terminate.
-        Poll::Pending
     }
 }
