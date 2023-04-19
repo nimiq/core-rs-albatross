@@ -7,61 +7,14 @@ use nimiq_account::{
 };
 use nimiq_database::WriteTransaction;
 use nimiq_keys::{Address, KeyPair, PrivateKey, SecureGenerate};
-use nimiq_primitives::{
-    account::{AccountError, AccountType},
-    coin::Coin,
-    networks::NetworkId,
-    transaction::TransactionError,
-};
+use nimiq_primitives::{account::AccountError, coin::Coin, networks::NetworkId};
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     accounts_revert::TestCommitRevert, test_rng::test_rng, transactions::TransactionsGenerator,
 };
-use nimiq_transaction::{account::AccountTransactionVerification, SignatureProof, Transaction};
+use nimiq_transaction::{SignatureProof, Transaction};
 
 const SECRET_KEY_1: &str = "d0fbb3690f5308f457e245a3cc65ae8d6945155eadcac60d489ffc5583a60b9b";
-
-#[test]
-fn it_does_not_allow_creation() {
-    let owner = Address::from([0u8; 20]);
-
-    let transaction = Transaction::new_contract_creation(
-        vec![],
-        owner,
-        AccountType::Basic,
-        AccountType::Basic,
-        100.try_into().unwrap(),
-        0.try_into().unwrap(),
-        0,
-        NetworkId::Dummy,
-    );
-
-    assert_eq!(
-        AccountType::verify_incoming_transaction(&transaction),
-        Err(TransactionError::InvalidForRecipient)
-    );
-}
-
-#[test]
-fn it_does_not_allow_signalling() {
-    let owner = Address::from([0u8; 20]);
-
-    let transaction = Transaction::new_signaling(
-        owner,
-        AccountType::Basic,
-        Address::from([1u8; 20]),
-        AccountType::Basic,
-        0.try_into().unwrap(),
-        vec![],
-        0,
-        NetworkId::Dummy,
-    );
-
-    assert_eq!(
-        AccountType::verify_incoming_transaction(&transaction),
-        Err(TransactionError::ZeroValue)
-    );
-}
 
 #[test]
 fn basic_transfer_works() {

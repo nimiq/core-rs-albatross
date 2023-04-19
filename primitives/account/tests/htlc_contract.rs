@@ -1,30 +1,26 @@
 use std::convert::TryInto;
 
-use beserial::{Deserialize, Serialize, SerializingError};
+use beserial::{Deserialize, Serialize};
 use nimiq_account::{
     Account, AccountPruningInteraction, Accounts, BasicAccount, BlockState,
     HashedTimeLockedContract, Log, TransactionLog,
 };
-use nimiq_hash::{Blake2bHasher, HashOutput, Hasher, Sha256Hasher};
+use nimiq_hash::{Blake2bHasher, HashOutput, Hasher};
 use nimiq_keys::{Address, KeyPair, PrivateKey, SecureGenerate};
 use nimiq_primitives::{
     account::{AccountError, AccountType},
     coin::Coin,
     networks::NetworkId,
-    transaction::TransactionError,
 };
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     accounts_revert::TestCommitRevert, test_rng::test_rng, transactions::TransactionsGenerator,
 };
 use nimiq_transaction::{
-    account::{
-        htlc_contract::{
-            AnyHash, CreationTransactionData, HashAlgorithm, OutgoingHTLCTransactionProof,
-        },
-        AccountTransactionVerification,
+    account::htlc_contract::{
+        AnyHash, CreationTransactionData, HashAlgorithm, OutgoingHTLCTransactionProof,
     },
-    SignatureProof, Transaction, TransactionFlags,
+    SignatureProof, Transaction,
 };
 
 const HTLC: &str = "00000000000000001b215589344cf570d36bec770825eae30b73213924786862babbdb05e7c4430612135eb2a836812303daebe368963c60d22098a5e9f1ebcb8e54d0b7beca942a2a0a9d95391804fe8f0100000000000296350000000000000001";
@@ -80,77 +76,6 @@ fn it_can_serialize_a_htlc() {
     let size = htlc.serialize(&mut bytes2).unwrap();
     assert_eq!(size, htlc.serialized_size());
     assert_eq!(hex::encode(bytes2), HTLC);
-}
-
-#[test]
-fn it_can_verify_creation_transaction() {
-    let data = CreationTransactionData {
-        sender: Address::from([0u8; 20]),
-        recipient: Address::from([0u8; 20]),
-        hash_algorithm: HashAlgorithm::Blake2b,
-        hash_root: AnyHash::from([0u8; 32]),
-        hash_count: 2,
-        timeout: 1000,
-    };
-
-    let mut transaction = Transaction::new_contract_creation(
-        vec![],
-        data.sender.clone(),
-        AccountType::Basic,
-        AccountType::HTLC,
-        100.try_into().unwrap(),
-        0.try_into().unwrap(),
-        0,
-        NetworkId::UnitAlbatross,
-    );
-
-    // Invalid data
-    assert_eq!(
-        AccountType::verify_incoming_transaction(&transaction),
-        Err(TransactionError::InvalidData)
-    );
-    transaction.data = data.serialize_to_vec();
-
-    // Invalid recipient
-    assert_eq!(
-        AccountType::verify_incoming_transaction(&transaction),
-        Err(TransactionError::InvalidForRecipient)
-    );
-    transaction.recipient = transaction.contract_creation_address();
-
-    // Valid
-    assert_eq!(
-        AccountType::verify_incoming_transaction(&transaction),
-        Ok(())
-    );
-
-    // Invalid transaction flags
-    transaction.flags = TransactionFlags::empty();
-    transaction.recipient = transaction.contract_creation_address();
-    assert_eq!(
-        AccountType::verify_incoming_transaction(&transaction),
-        Err(TransactionError::InvalidForRecipient)
-    );
-    transaction.flags = TransactionFlags::CONTRACT_CREATION;
-
-    // Invalid hash algorithm
-    transaction.data[40] = 200;
-    transaction.recipient = transaction.contract_creation_address();
-    assert_eq!(
-        AccountType::verify_incoming_transaction(&transaction),
-        Err(TransactionError::InvalidSerialization(
-            SerializingError::InvalidValue
-        ))
-    );
-    transaction.data[40] = 1;
-
-    // Invalid zero hash count
-    transaction.data[73] = 0;
-    transaction.recipient = transaction.contract_creation_address();
-    assert_eq!(
-        AccountType::verify_incoming_transaction(&transaction),
-        Err(TransactionError::InvalidData)
-    );
 }
 
 #[test]
@@ -244,165 +169,6 @@ fn it_does_not_support_incoming_transactions() {
             true
         ),
         Err(AccountError::InvalidForRecipient)
-    );
-}
-
-#[test]
-fn it_can_verify_regular_transfer() {
-    let (_, mut tx, _, _, recipient_signature_proof) = prepare_outgoing_transaction();
-
-    // regular: valid Blake-2b
-    let proof = OutgoingHTLCTransactionProof::RegularTransfer {
-        hash_algorithm: HashAlgorithm::Blake2b,
-        hash_depth: 1,
-        hash_root: AnyHash::from(<[u8; 32]>::from(
-            Blake2bHasher::default().digest(&[0u8; 32]),
-        )),
-        pre_image: AnyHash::from([0u8; 32]),
-        signature_proof: recipient_signature_proof.clone(),
-    };
-    tx.proof = proof.serialize_to_vec();
-    assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
-
-    // regular: valid SHA-256
-    let proof = OutgoingHTLCTransactionProof::RegularTransfer {
-        hash_algorithm: HashAlgorithm::Sha256,
-        hash_depth: 1,
-        hash_root: AnyHash::from(<[u8; 32]>::from(Sha256Hasher::default().digest(&[0u8; 32]))),
-        pre_image: AnyHash::from([0u8; 32]),
-        signature_proof: recipient_signature_proof.clone(),
-    };
-    tx.proof = proof.serialize_to_vec();
-    assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
-
-    // regular: invalid hash
-    let bak = tx.proof[35];
-    tx.proof[35] = bak % 250 + 1;
-    assert_eq!(
-        AccountType::verify_outgoing_transaction(&tx),
-        Err(TransactionError::InvalidProof)
-    );
-    tx.proof[35] = bak;
-
-    // regular: invalid algorithm
-    tx.proof[1] = 99;
-    assert_eq!(
-        AccountType::verify_outgoing_transaction(&tx),
-        Err(TransactionError::InvalidSerialization(
-            SerializingError::InvalidValue
-        ))
-    );
-    tx.proof[1] = HashAlgorithm::Sha256 as u8;
-
-    // regular: invalid signature
-    // Proof is not a valid point, so Deserialize will result in an error.
-    tx.proof[72] = tx.proof[72] % 250 + 1;
-    assert_eq!(
-        AccountType::verify_outgoing_transaction(&tx),
-        Err(TransactionError::InvalidProof)
-    );
-
-    // regular: invalid signature
-    tx.proof[72] = tx.proof[72] % 250 + 2;
-    assert_eq!(
-        AccountType::verify_outgoing_transaction(&tx),
-        Err(TransactionError::InvalidProof)
-    );
-
-    // regular: invalid over-long
-    let proof = OutgoingHTLCTransactionProof::RegularTransfer {
-        hash_algorithm: HashAlgorithm::Blake2b,
-        hash_depth: 1,
-        hash_root: AnyHash::from(<[u8; 32]>::from(
-            Blake2bHasher::default().digest(&[0u8; 32]),
-        )),
-        pre_image: AnyHash::from([0u8; 32]),
-        signature_proof: recipient_signature_proof,
-    };
-    tx.proof = proof.serialize_to_vec();
-    tx.proof.push(0);
-
-    assert_eq!(
-        AccountType::verify_outgoing_transaction(&tx),
-        Err(TransactionError::InvalidProof)
-    );
-}
-
-#[test]
-fn it_can_verify_early_resolve() {
-    let (_, mut tx, _, sender_signature_proof, recipient_signature_proof) =
-        prepare_outgoing_transaction();
-
-    // early resolve: valid
-    let proof = OutgoingHTLCTransactionProof::EarlyResolve {
-        signature_proof_recipient: recipient_signature_proof.clone(),
-        signature_proof_sender: sender_signature_proof.clone(),
-    };
-    tx.proof = proof.serialize_to_vec();
-
-    assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
-
-    // early resolve: invalid signature 1
-    // Proof is not a valid point, so Deserialize will result in an error.
-    let bak = tx.proof[4];
-    tx.proof[4] = tx.proof[4] % 250 + 1;
-    assert_eq!(
-        AccountType::verify_outgoing_transaction(&tx),
-        Err(TransactionError::InvalidProof)
-    );
-    tx.proof[4] = bak;
-
-    // early resolve: invalid signature 2
-    let bak = tx.proof.len() - 2;
-    tx.proof[bak] = tx.proof[bak] % 250 + 1;
-    assert_eq!(
-        AccountType::verify_outgoing_transaction(&tx),
-        Err(TransactionError::InvalidProof)
-    );
-
-    // early resolve: invalid over-long
-    let proof = OutgoingHTLCTransactionProof::EarlyResolve {
-        signature_proof_recipient: recipient_signature_proof.clone(),
-        signature_proof_sender: sender_signature_proof,
-    };
-    tx.proof = proof.serialize_to_vec();
-    tx.proof.push(0);
-
-    assert_eq!(
-        AccountType::verify_outgoing_transaction(&tx),
-        Err(TransactionError::InvalidProof)
-    );
-}
-
-#[test]
-fn it_can_verify_timeout_resolve() {
-    let (_, mut tx, _, sender_signature_proof, _) = prepare_outgoing_transaction();
-
-    // timeout resolve: valid
-    let proof = OutgoingHTLCTransactionProof::TimeoutResolve {
-        signature_proof_sender: sender_signature_proof.clone(),
-    };
-    tx.proof = proof.serialize_to_vec();
-
-    assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
-
-    // timeout resolve: invalid signature
-    tx.proof[4] = tx.proof[4] % 250 + 1;
-    assert_eq!(
-        AccountType::verify_outgoing_transaction(&tx),
-        Err(TransactionError::InvalidProof)
-    );
-
-    // timeout resolve: invalid over-long
-    let proof = OutgoingHTLCTransactionProof::TimeoutResolve {
-        signature_proof_sender: sender_signature_proof.clone(),
-    };
-    tx.proof = proof.serialize_to_vec();
-    tx.proof.push(0);
-
-    assert_eq!(
-        AccountType::verify_outgoing_transaction(&tx),
-        Err(TransactionError::InvalidProof)
     );
 }
 

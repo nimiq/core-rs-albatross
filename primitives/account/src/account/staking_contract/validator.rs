@@ -527,6 +527,18 @@ impl StakingContract {
 
         // Retire the validator.
         validator.retired = true;
+        tx_logger.push_log(Log::RetireValidator {
+            validator_address: validator_address.clone(),
+        });
+
+        // Remove validator from parked_set.
+        let was_parked = self.parked_set.remove(validator_address);
+
+        if was_parked {
+            tx_logger.push_log(Log::UnparkValidator {
+                validator_address: validator_address.clone(),
+            });
+        }
 
         // Deactivate the validator if it is still active.
         let was_active = validator.is_active();
@@ -544,21 +556,8 @@ impl StakingContract {
             });
         }
 
-        // Remove validator from parked_set.
-        let was_parked = self.parked_set.remove(validator_address);
-
-        if was_parked {
-            tx_logger.push_log(Log::UnparkValidator {
-                validator_address: validator_address.clone(),
-            });
-        }
-
         // Update validator entry.
         store.put_validator(validator_address, validator);
-
-        tx_logger.push_log(Log::RetireValidator {
-            validator_address: validator_address.clone(),
-        });
 
         Ok(RetireValidatorReceipt {
             was_active,
