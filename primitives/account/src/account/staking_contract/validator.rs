@@ -543,6 +543,12 @@ impl StakingContract {
         // Remove validator from parked_set.
         let was_parked = self.parked_set.remove(validator_address);
 
+        if was_parked {
+            tx_logger.push_log(Log::UnparkValidator {
+                validator_address: validator_address.clone(),
+            });
+        }
+
         // Update validator entry.
         store.put_validator(validator_address, validator);
 
@@ -587,7 +593,14 @@ impl StakingContract {
         // Re-add validator to parked_set if it was parked before.
         if receipt.was_parked {
             self.parked_set.insert(validator_address.clone());
+            tx_logger.push_log(Log::UnparkValidator {
+                validator_address: validator_address.clone(),
+            });
         }
+
+        tx_logger.push_log(Log::RetireValidator {
+            validator_address: validator_address.clone(),
+        });
 
         // Update validator entry.
         store.put_validator(validator_address, validator);
