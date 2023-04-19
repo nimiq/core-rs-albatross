@@ -1,5 +1,4 @@
 use log::info;
-use rand::{rngs::StdRng, SeedableRng};
 use std::{convert::TryFrom, time::Instant};
 use tempfile::tempdir;
 
@@ -406,7 +405,7 @@ fn accounts_performance() {
     };
 
     // Generate and sign transaction from an address
-    let mut rng = StdRng::seed_from_u64(0);
+    let mut rng = test_rng(true);
     let balance = 100;
     let mut mempool_transactions = vec![];
     let sender_balances = vec![num_txns as u64 * 10; num_txns];
@@ -420,9 +419,10 @@ fn accounts_performance() {
     let rewards = vec![reward; num_txns];
 
     // Generate recipient accounts
-    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, false);
+    let recipient_accounts =
+        generate_accounts(recipient_balances, &mut genesis_builder, false, &mut rng);
     // Generate sender accounts
-    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true);
+    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true, &mut rng);
 
     // Generate transactions
     for i in 0..num_txns {
@@ -519,7 +519,7 @@ fn accounts_performance_history_sync_batches_single_sender() {
     let total_txns = num_batches * Policy::blocks_per_batch() * num_txns;
 
     // Generate and sign transaction from an address
-    let mut rng = StdRng::seed_from_u64(0);
+    let mut rng = test_rng(true);
 
     let sender_balances = vec![100_000_000_000; 1];
     let recipient_balances = vec![0; total_txns as usize];
@@ -527,8 +527,9 @@ fn accounts_performance_history_sync_batches_single_sender() {
     let rewards = vec![];
 
     // Generate accounts
-    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, false);
-    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true);
+    let recipient_accounts =
+        generate_accounts(recipient_balances, &mut genesis_builder, false, &mut rng);
+    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true, &mut rng);
 
     let total_blocks = num_batches * Policy::blocks_per_batch();
 
@@ -643,7 +644,7 @@ fn accounts_performance_history_sync_batches_many_to_many() {
     let total_txns = num_batches * Policy::blocks_per_batch() * num_txns;
 
     // Generate and sign transaction from an address
-    let mut rng = StdRng::seed_from_u64(0);
+    let mut rng = test_rng(true);
 
     let sender_balances = vec![100_000_000_000; total_txns as usize];
     let recipient_balances = vec![10; total_txns as usize];
@@ -651,8 +652,9 @@ fn accounts_performance_history_sync_batches_many_to_many() {
     let rewards = vec![];
 
     // Generate accounts
-    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, true);
-    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true);
+    let recipient_accounts =
+        generate_accounts(recipient_balances, &mut genesis_builder, true, &mut rng);
+    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true, &mut rng);
 
     let total_blocks = num_batches * Policy::blocks_per_batch();
 

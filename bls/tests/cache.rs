@@ -1,8 +1,8 @@
 use std::cmp;
 
 use nimiq_bls::{cache::PublicKeyCache, lazy::LazyPublicKey, KeyPair};
+use nimiq_test_utils::test_rng::test_rng;
 use nimiq_utils::key_rng::SecureGenerate;
-use rand::thread_rng;
 
 #[test]
 fn removes_items_on_low_capacity() {
@@ -10,7 +10,7 @@ fn removes_items_on_low_capacity() {
 
     assert_eq!(cache.len(), 0, "should start empty");
 
-    let rng = &mut thread_rng();
+    let rng = &mut test_rng(false);
 
     for i in 0..3 {
         let keypair = KeyPair::generate(rng);
@@ -30,7 +30,7 @@ fn can_update_lazy_public_key() {
 
     assert_eq!(cache.len(), 0, "should start empty");
 
-    let rng = &mut thread_rng();
+    let rng = &mut test_rng(false);
 
     let keypair = KeyPair::generate(rng);
     assert_eq!(
@@ -56,7 +56,7 @@ fn does_not_store_duplicates() {
 
     assert_eq!(cache.len(), 0, "should start empty");
 
-    let rng = &mut thread_rng();
+    let rng = &mut test_rng(false);
 
     let keypair = KeyPair::generate(rng);
     assert_eq!(

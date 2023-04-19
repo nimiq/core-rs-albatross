@@ -107,13 +107,14 @@ mod tests {
     use nimiq_primitives::policy::Policy;
     use nimiq_primitives::slots::{Validator, Validators};
     use nimiq_test_log::test;
+    use nimiq_test_utils::test_rng::test_rng;
     use nimiq_utils::key_rng::SecureGenerate;
 
     use super::*;
 
     #[test]
     fn hash_and_sign_works() {
-        let mut rng = rand::thread_rng();
+        let mut rng = test_rng(false);
 
         // Create validators.
         let mut validator_vec = vec![];

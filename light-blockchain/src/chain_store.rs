@@ -351,8 +351,9 @@ impl ChainStore {
 mod tests {
     use nimiq_block::{MicroBlock, MicroHeader, MicroJustification};
     use nimiq_test_log::test;
+    use nimiq_test_utils::test_rng::test_rng;
 
-    use rand::{random, RngCore};
+    use rand::{Rng, RngCore};
 
     use super::*;
 
@@ -360,14 +361,15 @@ mod tests {
     fn put_and_get_works() {
         // Create blocks.
         let mut data = [0u8; 32];
-        rand::thread_rng().fill_bytes(&mut data);
+        let mut rng = test_rng(false);
+        rng.fill_bytes(&mut data);
         let hash_1 = Blake2bHash::from(data);
 
         let block_1 = Block::Micro(MicroBlock {
             header: MicroHeader {
-                version: random(),
+                version: rng.gen(),
                 block_number: 0,
-                timestamp: random(),
+                timestamp: rng.gen(),
                 parent_hash: hash_1.clone(),
                 seed: Default::default(),
                 extra_data: vec![],
@@ -380,14 +382,14 @@ mod tests {
         });
 
         let mut data = [0u8; 32];
-        rand::thread_rng().fill_bytes(&mut data);
+        rng.fill_bytes(&mut data);
         let hash_2 = Blake2bHash::from(data);
 
         let block_2 = Block::Micro(MicroBlock {
             header: MicroHeader {
-                version: random(),
+                version: rng.gen(),
                 block_number: 0,
-                timestamp: random(),
+                timestamp: rng.gen(),
                 parent_hash: hash_2.clone(),
                 seed: Default::default(),
                 extra_data: vec![],

@@ -2,7 +2,6 @@ use std::convert::TryInto;
 use std::sync::Arc;
 
 use parking_lot::RwLock;
-use rand::thread_rng;
 use tempfile::tempdir;
 
 use beserial::Deserialize;
@@ -20,9 +19,12 @@ use nimiq_keys::{
 };
 use nimiq_primitives::{coin::Coin, policy::Policy};
 use nimiq_test_log::test;
-use nimiq_test_utils::blockchain::{
-    fill_micro_blocks, fill_micro_blocks_with_txns, produce_macro_blocks, sign_macro_block,
-    signing_key, voting_key,
+use nimiq_test_utils::{
+    blockchain::{
+        fill_micro_blocks, fill_micro_blocks_with_txns, produce_macro_blocks, sign_macro_block,
+        signing_key, voting_key,
+    },
+    test_rng::test_rng,
 };
 use nimiq_transaction::ExecutedTransaction;
 use nimiq_transaction_builder::TransactionBuilder;
@@ -986,9 +988,10 @@ fn it_can_consume_all_validator_deposit() {
     let producer = BlockProducer::new(signing_key(), voting_key());
 
     // Add a new validator.
+    let mut rng = test_rng(false);
     let key_pair = ed25519_key_pair(ACCOUNT_SECRET_KEY);
-    let cold_key_pair = SchnorrKeyPair::generate(&mut thread_rng());
-    let voting_key_pair = BlsKeyPair::generate(&mut thread_rng());
+    let cold_key_pair = SchnorrKeyPair::generate(&mut rng);
+    let voting_key_pair = BlsKeyPair::generate(&mut rng);
     let create_tx = TransactionBuilder::new_create_validator(
         &key_pair,
         &cold_key_pair,
@@ -1191,9 +1194,10 @@ fn it_can_revert_failed_delete_validator() {
     let producer = BlockProducer::new(signing_key(), voting_key());
 
     // Add a new validator.
+    let mut rng = test_rng(false);
     let key_pair = ed25519_key_pair(ACCOUNT_SECRET_KEY);
-    let cold_key_pair = SchnorrKeyPair::generate(&mut thread_rng());
-    let voting_key_pair = BlsKeyPair::generate(&mut thread_rng());
+    let cold_key_pair = SchnorrKeyPair::generate(&mut rng);
+    let voting_key_pair = BlsKeyPair::generate(&mut rng);
     let create_tx = TransactionBuilder::new_create_validator(
         &key_pair,
         &cold_key_pair,
@@ -1338,6 +1342,7 @@ fn it_can_revert_failed_delete_validator() {
 
 #[test]
 fn it_can_revert_basic_and_create_contracts_txns() {
+    let mut rng = test_rng(false);
     let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(RwLock::new(
@@ -1355,7 +1360,7 @@ fn it_can_revert_basic_and_create_contracts_txns() {
     let mut transactions = vec![];
     let key_pair = ed25519_key_pair(ACCOUNT_SECRET_KEY);
 
-    let recipient_key_pair = SchnorrKeyPair::generate_default_csprng();
+    let recipient_key_pair = SchnorrKeyPair::generate(&mut rng);
     let address = Address::from(&recipient_key_pair.public);
 
     let tx = TransactionBuilder::new_basic(
@@ -1385,7 +1390,7 @@ fn it_can_revert_basic_and_create_contracts_txns() {
 
     transactions.push(tx);
 
-    let recipient_key_pair = SchnorrKeyPair::generate_default_csprng();
+    let recipient_key_pair = SchnorrKeyPair::generate(&mut rng);
     let address = Address::from(&recipient_key_pair.public);
 
     let tx = TransactionBuilder::new_basic(

@@ -11,14 +11,11 @@ use ark_r1cs_std::{
 use ark_relations::r1cs::{
     ConstraintSynthesizer, ConstraintSystemRef, SynthesisError, ToConstraintField,
 };
-use ark_std::{
-    rand::{rngs::StdRng, RngCore},
-    test_rng,
-};
+use ark_std::rand::RngCore;
 use nimiq_zkp_circuits::recursive::RecursiveInputVar;
-use rand::SeedableRng;
 
 use nimiq_test_log::test;
+use nimiq_test_utils::test_rng::test_rng;
 
 const NUMBER_OF_BYTES: usize = 128;
 
@@ -100,7 +97,7 @@ impl ConstraintSynthesizer<FqMNT6> for OuterCircuit {
 #[ignore]
 fn recursive_input_works() {
     // Create random number generator.
-    let rng = &mut StdRng::seed_from_u64(test_rng().next_u64());
+    let rng = &mut test_rng(false);
 
     // Create random bits and inputs for red.
     let mut bytes = [0u8; NUMBER_OF_BYTES];

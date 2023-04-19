@@ -1,8 +1,6 @@
 use std::sync::Arc;
 
 use parking_lot::RwLock;
-use rand::rngs::StdRng;
-use rand::SeedableRng;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
@@ -25,6 +23,7 @@ use nimiq_primitives::{coin::Coin, networks::NetworkId, policy::Policy};
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     blockchain::{produce_macro_blocks_with_txns, signing_key, voting_key},
+    test_rng::test_rng,
     test_transaction::{generate_accounts, generate_transactions, TestTransaction},
 };
 use nimiq_transaction::{ExecutedTransaction, Transaction};
@@ -282,7 +281,7 @@ fn create_dummy_micro_block(transactions: Option<Vec<Transaction>>) -> Block {
 #[test(tokio::test)]
 async fn push_same_tx_twice() {
     // Generate and sign transaction from an address
-    let mut rng = StdRng::seed_from_u64(0);
+    let mut rng = test_rng(true);
     let num_txns = 2;
     let mut mempool_transactions = vec![];
     let sender_balances = vec![10000; 1];
@@ -290,9 +289,10 @@ async fn push_same_tx_twice() {
     let mut genesis_builder = GenesisBuilder::default();
 
     // Generate recipient accounts
-    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, false);
+    let recipient_accounts =
+        generate_accounts(recipient_balances, &mut genesis_builder, false, &mut rng);
     // Generate sender accounts
-    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true);
+    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true, &mut rng);
 
     // Generate transactions
     for _ in 0..num_txns {
@@ -349,9 +349,11 @@ async fn valid_tx_not_in_blockchain() {
     let mut genesis_builder = GenesisBuilder::default();
 
     // Generate recipient accounts
-    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, false);
+    let mut rng = test_rng(false);
+    let recipient_accounts =
+        generate_accounts(recipient_balances, &mut genesis_builder, false, &mut rng);
     // Generate sender accounts
-    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, false);
+    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, false, &mut rng);
 
     // Generate transactions
     for i in 0..num_txns {
@@ -390,15 +392,16 @@ async fn valid_tx_not_in_blockchain() {
 #[test(tokio::test)]
 async fn push_tx_with_wrong_signature() {
     // Generate and sign transaction from an address
-    let mut rng = StdRng::seed_from_u64(0);
+    let mut rng = test_rng(true);
     let sender_balances = vec![10000; 1];
     let recipient_balances = vec![0; 1];
     let mut genesis_builder = GenesisBuilder::default();
 
     // Generate recipient accounts
-    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, false);
+    let recipient_accounts =
+        generate_accounts(recipient_balances, &mut genesis_builder, false, &mut rng);
     // Generate sender accounts
-    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true);
+    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true, &mut rng);
 
     // Generate transactions
     let mempool_transaction = TestTransaction {
@@ -446,7 +449,7 @@ async fn push_tx_with_wrong_signature() {
 #[test(tokio::test)]
 async fn mempool_get_txn_max_size() {
     // Generate and sign transaction from an address
-    let mut rng = StdRng::seed_from_u64(0);
+    let mut rng = test_rng(true);
     let balance = 40;
     let num_txns = 2;
     let mut mempool_transactions = vec![];
@@ -455,9 +458,10 @@ async fn mempool_get_txn_max_size() {
     let mut genesis_builder = GenesisBuilder::default();
 
     // Generate recipient accounts
-    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, false);
+    let recipient_accounts =
+        generate_accounts(recipient_balances, &mut genesis_builder, false, &mut rng);
     // Generate sender accounts
-    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true);
+    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true, &mut rng);
 
     // Generate transactions
     for i in 0..num_txns {
@@ -516,7 +520,7 @@ async fn mempool_get_txn_max_size() {
 #[test(tokio::test)]
 async fn mempool_get_txn_ordered() {
     // Generate and sign transaction from an address
-    let mut rng = StdRng::seed_from_u64(0);
+    let mut rng = test_rng(true);
     let balance = 40;
     let num_txns = 4;
     let mut mempool_transactions = vec![];
@@ -525,9 +529,10 @@ async fn mempool_get_txn_ordered() {
     let mut genesis_builder = GenesisBuilder::default();
 
     // Generate recipient accounts
-    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, false);
+    let recipient_accounts =
+        generate_accounts(recipient_balances, &mut genesis_builder, false, &mut rng);
     // Generate sender accounts
-    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true);
+    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true, &mut rng);
 
     // Generate transactions
     for i in 0..num_txns {
@@ -586,7 +591,7 @@ async fn mempool_get_txn_ordered() {
 #[test(tokio::test)]
 async fn push_tx_with_insufficient_balance() {
     // Generate and sign transaction from an address
-    let mut rng = StdRng::seed_from_u64(0);
+    let mut rng = test_rng(true);
     let balance = 25;
     let num_txns = 3;
     let txns_value: Vec<u64> = vec![balance, balance / (num_txns - 1), balance / (num_txns - 1)];
@@ -596,9 +601,10 @@ async fn push_tx_with_insufficient_balance() {
     let mut genesis_builder = GenesisBuilder::default();
 
     // Generate recipient accounts
-    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, false);
+    let recipient_accounts =
+        generate_accounts(recipient_balances, &mut genesis_builder, false, &mut rng);
     // Generate sender accounts
-    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true);
+    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true, &mut rng);
 
     // Generate transactions
     for i in 0..num_txns {
@@ -648,7 +654,7 @@ async fn push_tx_with_insufficient_balance() {
 
 #[test(tokio::test)]
 async fn multiple_transactions_multiple_senders() {
-    let mut rng = StdRng::seed_from_u64(0);
+    let mut rng = test_rng(true);
     let balance = 40;
     let num_txns = 9;
     let mut mempool_transactions = vec![];
@@ -657,9 +663,10 @@ async fn multiple_transactions_multiple_senders() {
     let mut genesis_builder = GenesisBuilder::default();
 
     // Generate recipient accounts
-    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, false);
+    let recipient_accounts =
+        generate_accounts(recipient_balances, &mut genesis_builder, false, &mut rng);
     // Generate sender accounts
-    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true);
+    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true, &mut rng);
 
     // Generate transactions
     for i in 0..num_txns {
@@ -717,7 +724,7 @@ async fn multiple_transactions_multiple_senders() {
 
 #[test(tokio::test(flavor = "multi_thread", worker_threads = 10))]
 async fn mempool_tps() {
-    let mut rng = StdRng::seed_from_u64(0);
+    let mut rng = test_rng(true);
     let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
     let mut genesis_builder = GenesisBuilder::default();
@@ -730,9 +737,10 @@ async fn mempool_tps() {
     let recipient_balances = vec![0; num_txns as usize];
 
     // Generate recipient accounts
-    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, false);
+    let recipient_accounts =
+        generate_accounts(recipient_balances, &mut genesis_builder, false, &mut rng);
     // Generate sender accounts
-    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true);
+    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true, &mut rng);
 
     // Generate transactions
     for i in 0..num_txns {
@@ -793,7 +801,7 @@ async fn mempool_tps() {
 
 #[test(tokio::test)]
 async fn multiple_start_stop() {
-    let mut rng = StdRng::seed_from_u64(0);
+    let mut rng = test_rng(true);
     let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
     let mut genesis_builder = GenesisBuilder::default();
@@ -807,9 +815,10 @@ async fn multiple_start_stop() {
     let recipient_balances = vec![0; num_txns as usize];
 
     // Generate recipient accounts
-    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, false);
+    let recipient_accounts =
+        generate_accounts(recipient_balances, &mut genesis_builder, false, &mut rng);
     // Generate sender accounts
-    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true);
+    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true, &mut rng);
 
     // Generate transactions
     for i in 0..num_txns {
@@ -853,7 +862,7 @@ async fn multiple_start_stop() {
 
 #[test(tokio::test(flavor = "multi_thread", worker_threads = 10))]
 async fn mempool_update() {
-    let mut rng = StdRng::seed_from_u64(0);
+    let mut rng = test_rng(true);
     let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
     let mut genesis_builder = GenesisBuilder::default();
@@ -866,9 +875,10 @@ async fn mempool_update() {
     let recipient_balances = vec![0; num_txns as usize];
 
     // Generate recipient accounts
-    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, false);
+    let recipient_accounts =
+        generate_accounts(recipient_balances, &mut genesis_builder, false, &mut rng);
     // Generate sender accounts
-    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true);
+    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true, &mut rng);
 
     // Generate transactions
     for i in 0..num_txns {
@@ -892,9 +902,10 @@ async fn mempool_update() {
     let recipient_balances = vec![0; num_txns as usize];
 
     // Generate recipient accounts
-    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, false);
+    let recipient_accounts =
+        generate_accounts(recipient_balances, &mut genesis_builder, false, &mut rng);
     // Generate sender accounts
-    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true);
+    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true, &mut rng);
 
     // Generate transactions
     for i in 0..num_txns {
@@ -928,9 +939,10 @@ async fn mempool_update() {
     let recipient_balances = vec![0; num_txns as usize];
 
     // Generate recipient accounts
-    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, false);
+    let recipient_accounts =
+        generate_accounts(recipient_balances, &mut genesis_builder, false, &mut rng);
     // Generate sender accounts
-    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true);
+    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true, &mut rng);
 
     // Generate transactions
     for i in 0..num_txns {
@@ -1036,7 +1048,7 @@ async fn mempool_update() {
 // that produces more than TRANSACTION_VALIDITY_WINDOW blocks, however, one
 // can easily change this parameter to some low number for testing purposes.
 async fn mempool_update_aged_transaction() {
-    let mut rng = StdRng::seed_from_u64(0);
+    let mut rng = test_rng(true);
     let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
     let mut genesis_builder = GenesisBuilder::default();
@@ -1049,9 +1061,10 @@ async fn mempool_update_aged_transaction() {
     let recipient_balances = vec![0; num_txns as usize];
 
     // Generate recipient accounts
-    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, false);
+    let recipient_accounts =
+        generate_accounts(recipient_balances, &mut genesis_builder, false, &mut rng);
     // Generate sender accounts
-    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true);
+    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true, &mut rng);
 
     // Generate transactions
     for i in 0..num_txns {
@@ -1149,7 +1162,7 @@ async fn mempool_update_aged_transaction() {
 
 #[test(tokio::test(flavor = "multi_thread", worker_threads = 10))]
 async fn mempool_update_not_enough_balance() {
-    let mut rng = StdRng::seed_from_u64(0);
+    let mut rng = test_rng(true);
     let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
     let mut genesis_builder = GenesisBuilder::default();
@@ -1162,9 +1175,10 @@ async fn mempool_update_not_enough_balance() {
     let recipient_balances = vec![0; num_txns as usize];
 
     // Generate recipient accounts
-    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, false);
+    let recipient_accounts =
+        generate_accounts(recipient_balances, &mut genesis_builder, false, &mut rng);
     // Generate sender accounts
-    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true);
+    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true, &mut rng);
 
     // Generate transactions
     for i in 0..num_txns {
@@ -1185,7 +1199,8 @@ async fn mempool_update_not_enough_balance() {
     let recipient_balances = vec![0; num_txns as usize];
 
     // Generate recipient accounts
-    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, false);
+    let recipient_accounts =
+        generate_accounts(recipient_balances, &mut genesis_builder, false, &mut rng);
     // Use same senders as before, because we want to test that the sender doesn't have enough funds to pay all pending txns
 
     // Generate transactions
@@ -1298,7 +1313,7 @@ async fn mempool_update_not_enough_balance() {
 
 #[test(tokio::test(flavor = "multi_thread", worker_threads = 10))]
 async fn mempool_update_pruned_account() {
-    let mut rng = StdRng::seed_from_u64(0);
+    let mut rng = test_rng(true);
     let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
     let mut genesis_builder = GenesisBuilder::default();
@@ -1311,9 +1326,10 @@ async fn mempool_update_pruned_account() {
     let recipient_balances = vec![0; num_txns as usize];
 
     // Generate recipient accounts
-    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, false);
+    let recipient_accounts =
+        generate_accounts(recipient_balances, &mut genesis_builder, false, &mut rng);
     // Generate sender accounts
-    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true);
+    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true, &mut rng);
 
     // Generate transactions
     for i in 0..num_txns {
@@ -1334,7 +1350,8 @@ async fn mempool_update_pruned_account() {
     let recipient_balances = vec![0; num_txns as usize];
 
     // Generate recipient accounts
-    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, false);
+    let recipient_accounts =
+        generate_accounts(recipient_balances, &mut genesis_builder, false, &mut rng);
     // Use same senders as before, because we want to test that the sender doesn't have enough funds to pay all pending txns
 
     // Generate transactions, these transactions will consume all the sender balance, which will cause the sender to be pruned
@@ -1532,7 +1549,7 @@ async fn mempool_basic_prioritization_control_tx() {
 
 #[test(tokio::test(flavor = "multi_thread", worker_threads = 10))]
 async fn mempool_regular_and_control_tx() {
-    let mut rng = StdRng::seed_from_u64(0);
+    let mut rng = test_rng(true);
     let balance = 100_000_000;
     let num_txns = 4;
     let mut mempool_transactions = vec![];
@@ -1541,9 +1558,10 @@ async fn mempool_regular_and_control_tx() {
     let mut genesis_builder = GenesisBuilder::default();
 
     // Generate recipient accounts
-    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, false);
+    let recipient_accounts =
+        generate_accounts(recipient_balances, &mut genesis_builder, false, &mut rng);
     // Generate sender accounts
-    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true);
+    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true, &mut rng);
 
     // Generate transactions
     for i in 0..num_txns {
@@ -1671,8 +1689,10 @@ async fn applies_total_tx_size_limits() {
     let sender_balances = vec![balance + num_txns * num_txns; num_txns as usize];
     let recipient_balances = vec![0; num_txns as usize];
 
-    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, false);
-    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true);
+    let mut rng = test_rng(false);
+    let recipient_accounts =
+        generate_accounts(recipient_balances, &mut genesis_builder, false, &mut rng);
+    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true, &mut rng);
 
     for i in 0..num_txns {
         let mempool_transaction = TestTransaction {
@@ -1686,7 +1706,7 @@ async fn applies_total_tx_size_limits() {
 
     let (txns, txns_len) = generate_transactions(mempool_transactions, true);
 
-    let mut rng = StdRng::seed_from_u64(0);
+    let mut rng = test_rng(true);
     genesis_builder.with_genesis_validator(
         Address::from(&SchnorrKeyPair::generate(&mut rng)),
         SchnorrPublicKey::from([0u8; 32]),

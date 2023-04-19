@@ -18,6 +18,7 @@ use nimiq_primitives::{
     slots::SlashedSlot,
 };
 use nimiq_test_log::test;
+use nimiq_test_utils::test_rng::test_rng;
 use nimiq_transaction::account::staking_contract::{
     IncomingStakingTransactionData, OutgoingStakingTransactionProof,
 };
@@ -306,6 +307,7 @@ fn create_validator_works() {
 
 #[test]
 fn update_validator_works() {
+    let mut rng = test_rng(false);
     let env = VolatileEnvironment::new(10).unwrap();
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
@@ -316,7 +318,7 @@ fn update_validator_works() {
 
     let validator_address = validator_address();
     let cold_keypair = ed25519_key_pair(VALIDATOR_PRIVATE_KEY);
-    let new_voting_keypair = BlsKeyPair::generate_default_csprng();
+    let new_voting_keypair = BlsKeyPair::generate(&mut rng);
     let new_reward_address = Some(Address::from([77u8; 20]));
 
     // Works in the valid case.

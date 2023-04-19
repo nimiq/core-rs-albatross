@@ -33,6 +33,7 @@ use nimiq_test_utils::{
     },
     mock_node::MockNode,
     node::TESTING_BLS_CACHE_MAX_CAPACITY,
+    test_rng::test_rng,
 };
 use nimiq_utils::time::OffsetTime;
 
@@ -248,7 +249,7 @@ async fn send_micro_blocks_out_of_order() {
         .live_sync
         .add_peer(mock_node.network.get_local_peer_id());
 
-    let mut rng = rand::thread_rng();
+    let mut rng = test_rng(false);
     let mut ordered_blocks = Vec::new();
 
     let mock_id = MockId::new(mock_node.network.get_local_peer_id());

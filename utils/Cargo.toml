@@ -36,6 +36,7 @@ nimiq-hash = { path = "../hash", optional = true }
 [dev-dependencies]
 nimiq-keys = { path = "../keys" }
 nimiq-test-log = { path = "../test-log" }
+nimiq-test-utils = { path = "../test-utils" }
 
 [features]
 crc = []

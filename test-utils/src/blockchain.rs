@@ -6,6 +6,7 @@ use rand::{rngs::StdRng, RngCore, SeedableRng};
 use std::time::Instant;
 
 use crate::blockchain_with_rng::*;
+use crate::test_rng::test_rng;
 use beserial::Deserialize;
 use nimiq_block::{
     Block, MacroBlock, MacroBody, MacroHeader, MultiSignature, SignedSkipBlockInfo, SkipBlockInfo,
@@ -65,7 +66,7 @@ pub fn produce_macro_blocks(
     blockchain: &Arc<RwLock<Blockchain>>,
     num_blocks: usize,
 ) {
-    produce_macro_blocks_with_rng(producer, blockchain, num_blocks, &mut rand::thread_rng())
+    produce_macro_blocks_with_rng(producer, blockchain, num_blocks, &mut test_rng(false))
 }
 
 /// Produces a series of macro blocks (and the corresponding batches).
@@ -103,17 +104,17 @@ pub fn produce_macro_blocks_with_txns(
 
 /// Create the next micro block with default parameters.
 pub fn next_micro_block(producer: &BlockProducer, blockchain: &Arc<RwLock<Blockchain>>) -> Block {
-    next_micro_block_with_rng(producer, blockchain, &mut rand::thread_rng())
+    next_micro_block_with_rng(producer, blockchain, &mut test_rng(false))
 }
 
 /// Creates and pushes a single micro block to the chain.
 pub fn push_micro_block(producer: &BlockProducer, blockchain: &Arc<RwLock<Blockchain>>) -> Block {
-    push_micro_block_with_rng(producer, blockchain, &mut rand::thread_rng())
+    push_micro_block_with_rng(producer, blockchain, &mut test_rng(false))
 }
 
 /// Fill batch with micro blocks.
 pub fn fill_micro_blocks(producer: &BlockProducer, blockchain: &Arc<RwLock<Blockchain>>) {
-    fill_micro_blocks_with_rng(producer, blockchain, &mut rand::thread_rng())
+    fill_micro_blocks_with_rng(producer, blockchain, &mut test_rng(false))
 }
 
 /// Fill batch with simple transactions to random recipients

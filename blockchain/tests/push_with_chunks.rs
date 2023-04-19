@@ -11,7 +11,7 @@ use nimiq_primitives::{
         trie_chunk::{TrieChunkWithStart, TrieItem},
     },
 };
-use nimiq_test_utils::block_production::TemporaryBlockProducer;
+use nimiq_test_utils::{block_production::TemporaryBlockProducer, test_rng::test_rng};
 use nimiq_transaction_builder::TransactionBuilder;
 
 macro_rules! check_invalid_chunk {
@@ -80,13 +80,14 @@ where
 
 #[test]
 fn can_push_blocks_into_incomplete_trie() {
+    let mut rng = test_rng(false);
     let temp_producer1 = TemporaryBlockProducer::new();
     let temp_producer2 = TemporaryBlockProducer::new_incomplete();
 
     // Block 1, 0 Chunks
     let key_pair = key_pair_with_funds();
 
-    let keypair = KeyPair::generate_default_csprng();
+    let keypair = KeyPair::generate(&mut rng);
     let address = Address::from(&keypair.public);
 
     let tx = TransactionBuilder::new_basic(
@@ -405,6 +406,7 @@ fn can_partially_apply_blocks() {
 
 #[test]
 fn can_detect_invalid_chunks() {
+    let mut rng = test_rng(false);
     // Chunks whose hash does not match (items are corrupted)
     check_invalid_chunk!(
         |invalid_chunk| invalid_chunk.chunk.items[1].value.push(1),
@@ -419,7 +421,7 @@ fn can_detect_invalid_chunks() {
     // Block 1, 0 Chunks
     let key_pair = key_pair_with_funds();
 
-    let keypair = KeyPair::generate_default_csprng();
+    let keypair = KeyPair::generate(&mut rng);
     let address = Address::from(&keypair.public);
 
     let tx = TransactionBuilder::new_basic(

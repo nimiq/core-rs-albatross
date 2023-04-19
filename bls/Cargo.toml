@@ -33,6 +33,7 @@ nimiq-utils = { path = "../utils", features = ["key-rng"] }
 
 [dev-dependencies]
 nimiq-test-log = { path = "../test-log" }
+nimiq-test-utils = { path = "../test-utils" }
 
 [features]
 cache = ["lazy"]

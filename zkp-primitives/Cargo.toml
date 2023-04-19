@@ -40,6 +40,7 @@ nimiq-collections = { path = "../collections" }
 nimiq-keys = { path = "../keys" }
 nimiq-primitives = { path = "../primitives", features = ["slots"] }
 nimiq-test-log = { path = "../test-log" }
+nimiq-test-utils = { path = "../test-utils" }
 nimiq-utils = { path = "../utils" }
 
 [features]

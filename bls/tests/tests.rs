@@ -1,16 +1,16 @@
 use ark_ec::CurveGroup;
-use rand::thread_rng;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_bls::*;
 use nimiq_test_log::test;
+use nimiq_test_utils::test_rng::test_rng;
 use nimiq_utils::key_rng::SecureGenerate;
 
 // Warning: You really should run these tests on release mode. Otherwise it will take too long.
 
 #[test]
 fn sign_verify() {
-    let rng = &mut thread_rng();
+    let rng = &mut test_rng(false);
 
     for i in 0..100 {
         let keypair = KeyPair::generate(rng);
@@ -25,7 +25,7 @@ fn sign_verify() {
 
 #[test]
 fn compress_uncompress() {
-    let rng = &mut thread_rng();
+    let rng = &mut test_rng(false);
 
     for i in 0..100 {
         let keypair = KeyPair::generate(rng);
@@ -45,7 +45,7 @@ fn compress_uncompress() {
 
 #[test]
 fn serialize_deserialize() {
-    let rng = &mut thread_rng();
+    let rng = &mut test_rng(false);
 
     for i in 0..100 {
         let keypair = KeyPair::generate(rng);
@@ -130,7 +130,7 @@ fn uncompress_compress() {
 
 #[test]
 fn aggregate_signatures_same_message() {
-    let rng = &mut thread_rng();
+    let rng = &mut test_rng(false);
 
     let message = "Same message";
 
@@ -157,7 +157,7 @@ fn aggregate_signatures_same_message() {
 
 #[test]
 fn aggregate_signatures_serialization() {
-    let rng = &mut thread_rng();
+    let rng = &mut test_rng(false);
 
     let message = "Same message";
 

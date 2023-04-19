@@ -139,6 +139,7 @@ pub trait TaggedPublicKey {
 mod tests {
     use nimiq_keys::{KeyPair, PublicKey, SecureGenerate, Signature};
     use nimiq_test_log::test;
+    use nimiq_test_utils::test_rng::test_rng;
 
     use beserial::{Deserialize, Serialize};
 
@@ -149,7 +150,7 @@ mod tests {
 
     impl TestKeypair {
         pub fn generate() -> Self {
-            Self(KeyPair::generate(&mut rand::thread_rng()))
+            Self(KeyPair::generate(&mut test_rng(false)))
         }
 
         pub fn public_key(&self) -> TestPublicKey {

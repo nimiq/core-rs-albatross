@@ -4,6 +4,7 @@ use nimiq_keys::{Address, KeyPair as SchnorrKeyPair, SecureGenerate};
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_transaction::{SignatureProof, Transaction};
+use rand::{CryptoRng, Rng};
 
 #[derive(Clone)]
 pub struct TestAccount {
@@ -19,16 +20,17 @@ pub struct TestTransaction {
     pub recipient: TestAccount,
 }
 
-pub fn generate_accounts(
+pub fn generate_accounts<R: Rng + CryptoRng>(
     balances: Vec<u64>,
     genesis_builder: &mut GenesisBuilder,
     add_to_genesis: bool,
+    rng: &mut R,
 ) -> Vec<TestAccount> {
     let mut mempool_accounts = vec![];
 
     for balance in balances {
         // Generate the txns_sender and txns_rec vectors to later generate transactions
-        let keypair = SchnorrKeyPair::generate_default_csprng();
+        let keypair = SchnorrKeyPair::generate(rng);
         let address = Address::from(&keypair.public);
         let mempool_account = TestAccount {
             keypair,

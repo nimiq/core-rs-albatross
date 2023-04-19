@@ -27,6 +27,7 @@ nimiq-macros = { path = "../macros" }
 
 [dev-dependencies]
 nimiq-test-log = { path = "../test-log" }
+nimiq-test-utils = { path = "../test-utils" }
 
 [features]
 serde-derive = ["serde", "serde-big-array"]

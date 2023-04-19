@@ -11,6 +11,7 @@ use nimiq_primitives::{
     transaction::TransactionError,
 };
 use nimiq_test_log::test;
+use nimiq_test_utils::test_rng::test_rng;
 use nimiq_transaction::account::staking_contract::{
     IncomingStakingTransactionData, OutgoingStakingTransactionProof,
 };
@@ -58,6 +59,7 @@ fn it_does_not_support_contract_creation() {
 
 #[test]
 fn create_validator() {
+    let mut rng = test_rng(false);
     let cold_keypair = ed25519_key_pair(VALIDATOR_PRIVATE_KEY);
 
     let signing_key =
@@ -117,7 +119,7 @@ fn create_validator() {
     );
 
     // Invalid proof of knowledge.
-    let other_pair = BlsKeyPair::generate_default_csprng();
+    let other_pair = BlsKeyPair::generate(&mut rng);
     let invalid_pok = other_pair.sign(&voting_key);
 
     let tx = make_signed_incoming_tx(
@@ -140,7 +142,7 @@ fn create_validator() {
     );
 
     // Invalid signature.
-    let other_pair = KeyPair::generate_default_csprng();
+    let other_pair = KeyPair::generate(&mut rng);
 
     let tx = make_signed_incoming_tx(
         IncomingStakingTransactionData::CreateValidator {
@@ -166,6 +168,7 @@ fn create_validator() {
 
 #[test]
 fn update_validator() {
+    let mut rng = test_rng(false);
     let cold_keypair = ed25519_key_pair(VALIDATOR_PRIVATE_KEY);
 
     let signing_key =
@@ -238,7 +241,7 @@ fn update_validator() {
     );
 
     // Invalid proof of knowledge.
-    let other_pair = BlsKeyPair::generate_default_csprng();
+    let other_pair = BlsKeyPair::generate(&mut rng);
     let invalid_pok = other_pair.sign(&voting_key);
 
     let tx = make_signed_incoming_tx(
@@ -261,7 +264,7 @@ fn update_validator() {
     );
 
     // Invalid signature.
-    let other_pair = KeyPair::generate_default_csprng();
+    let other_pair = KeyPair::generate(&mut rng);
 
     let tx = make_signed_incoming_tx(
         IncomingStakingTransactionData::UpdateValidator {
@@ -289,6 +292,7 @@ fn update_validator() {
 
 #[test]
 fn unpark_validator() {
+    let mut rng = test_rng(false);
     let signing_keypair = ed25519_key_pair(VALIDATOR_SIGNING_SECRET_KEY);
 
     // Test serialization and deserialization.
@@ -325,7 +329,7 @@ fn unpark_validator() {
     );
 
     // Invalid signature.
-    let other_pair = KeyPair::generate_default_csprng();
+    let other_pair = KeyPair::generate(&mut rng);
 
     let tx = make_signed_incoming_tx(
         IncomingStakingTransactionData::UnparkValidator {
@@ -345,6 +349,7 @@ fn unpark_validator() {
 
 #[test]
 fn deactivate_validator() {
+    let mut rng = test_rng(false);
     let signing_keypair = ed25519_key_pair(VALIDATOR_SIGNING_SECRET_KEY);
 
     // Test serialization and deserialization.
@@ -381,7 +386,7 @@ fn deactivate_validator() {
     );
 
     // Invalid signature.
-    let other_pair = KeyPair::generate_default_csprng();
+    let other_pair = KeyPair::generate(&mut rng);
 
     let tx = make_signed_incoming_tx(
         IncomingStakingTransactionData::DeactivateValidator {
@@ -401,6 +406,7 @@ fn deactivate_validator() {
 
 #[test]
 fn reactivate_validator() {
+    let mut rng = test_rng(false);
     let signing_keypair = ed25519_key_pair(VALIDATOR_SIGNING_SECRET_KEY);
 
     // Test serialization and deserialization.
@@ -437,7 +443,7 @@ fn reactivate_validator() {
     );
 
     // Invalid signature.
-    let other_pair = KeyPair::generate_default_csprng();
+    let other_pair = KeyPair::generate(&mut rng);
 
     let tx = make_signed_incoming_tx(
         IncomingStakingTransactionData::ReactivateValidator {
@@ -457,6 +463,7 @@ fn reactivate_validator() {
 
 #[test]
 fn retire_validator() {
+    let mut rng = test_rng(false);
     let signing_keypair = ed25519_key_pair(VALIDATOR_SIGNING_SECRET_KEY);
 
     // Test serialization and deserialization.
@@ -492,7 +499,7 @@ fn retire_validator() {
     );
 
     // Invalid signature.
-    let other_pair = KeyPair::generate_default_csprng();
+    let other_pair = KeyPair::generate(&mut rng);
 
     let tx = make_signed_incoming_tx(
         IncomingStakingTransactionData::RetireValidator {
@@ -511,6 +518,7 @@ fn retire_validator() {
 
 #[test]
 fn create_staker() {
+    let mut rng = test_rng(false);
     let keypair = ed25519_key_pair(STAKER_PRIVATE_KEY);
 
     // Test serialization and deserialization.
@@ -547,7 +555,7 @@ fn create_staker() {
     );
 
     // Invalid signature.
-    let other_pair = KeyPair::generate_default_csprng();
+    let other_pair = KeyPair::generate(&mut rng);
 
     let tx = make_signed_incoming_tx(
         IncomingStakingTransactionData::CreateStaker {
@@ -596,6 +604,7 @@ fn stake() {
 
 #[test]
 fn update_staker() {
+    let mut rng = test_rng(false);
     let keypair = ed25519_key_pair(STAKER_PRIVATE_KEY);
 
     // Test serialization and deserialization.
@@ -632,7 +641,7 @@ fn update_staker() {
     );
 
     // Invalid signature.
-    let other_pair = KeyPair::generate_default_csprng();
+    let other_pair = KeyPair::generate(&mut rng);
 
     let tx = make_signed_incoming_tx(
         IncomingStakingTransactionData::UpdateStaker {

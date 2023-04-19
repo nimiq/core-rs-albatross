@@ -2,12 +2,13 @@ use nimiq_keys::{
     Address, AddressParseError, KeyPair, PrivateKey, PublicKey, SecureGenerate, Signature,
 };
 use nimiq_test_log::test;
+use nimiq_test_utils::test_rng::test_rng;
 
 mod multisig;
 
 #[test]
 fn verify_created_signature() {
-    let key_pair = KeyPair::generate_default_csprng();
+    let key_pair = KeyPair::generate(&mut test_rng(false));
     let data = b"test";
     let signature = key_pair.sign(data);
     let valid = key_pair.public.verify(&signature, data);
@@ -16,7 +17,7 @@ fn verify_created_signature() {
 
 #[test]
 fn falsify_wrong_signature() {
-    let key_pair = KeyPair::generate_default_csprng();
+    let key_pair = KeyPair::generate(&mut test_rng(false));
     let signature = key_pair.sign(b"test");
     let valid = key_pair.public.verify(&signature, b"test2");
     assert_eq!(false, valid);

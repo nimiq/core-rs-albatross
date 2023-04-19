@@ -149,8 +149,9 @@ struct TestNetwork {}
 impl TestNetwork {
     async fn create_connected_networks() -> (Network, Network) {
         log::debug!("Creating connected test networks");
-        let addr1 = multiaddr![Memory(thread_rng().gen::<u64>())];
-        let addr2 = multiaddr![Memory(thread_rng().gen::<u64>())];
+        let mut rng = thread_rng();
+        let addr1 = multiaddr![Memory(rng.gen::<u64>())];
+        let addr2 = multiaddr![Memory(rng.gen::<u64>())];
 
         let net1 = Network::new(
             Arc::new(OffsetTime::new()),
@@ -202,10 +203,11 @@ impl TestNetwork {
         (Network, Multiaddr),
     ) {
         log::debug!("Creating connected test networks");
-        let addr1 = multiaddr![Memory(thread_rng().gen::<u64>())];
-        let addr2 = multiaddr![Memory(thread_rng().gen::<u64>())];
-        let addr3 = multiaddr![Memory(thread_rng().gen::<u64>())];
-        let addr4 = multiaddr![Memory(thread_rng().gen::<u64>())];
+        let mut rng = thread_rng();
+        let addr1 = multiaddr![Memory(rng.gen::<u64>())];
+        let addr2 = multiaddr![Memory(rng.gen::<u64>())];
+        let addr3 = multiaddr![Memory(rng.gen::<u64>())];
+        let addr4 = multiaddr![Memory(rng.gen::<u64>())];
 
         let net1 = Network::new(
             Arc::new(OffsetTime::new()),

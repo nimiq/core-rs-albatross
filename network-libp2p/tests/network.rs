@@ -127,8 +127,9 @@ impl TestNetwork {
 
 async fn create_connected_networks() -> (Network, Network) {
     log::debug!("creating connected test networks");
-    let addr1 = multiaddr![Memory(thread_rng().gen::<u64>())];
-    let addr2 = multiaddr![Memory(thread_rng().gen::<u64>())];
+    let mut rng = thread_rng();
+    let addr1 = multiaddr![Memory(rng.gen::<u64>())];
+    let addr2 = multiaddr![Memory(rng.gen::<u64>())];
 
     let net1 = Network::new(
         Arc::new(OffsetTime::new()),
@@ -174,8 +175,9 @@ async fn create_connected_networks() -> (Network, Network) {
 
 async fn create_double_connected_networks() -> (Network, Network) {
     log::debug!("Creating connected test networks");
-    let addr1 = multiaddr![Memory(thread_rng().gen::<u64>())];
-    let addr2 = multiaddr![Memory(thread_rng().gen::<u64>())];
+    let mut rng = thread_rng();
+    let addr1 = multiaddr![Memory(rng.gen::<u64>())];
+    let addr2 = multiaddr![Memory(rng.gen::<u64>())];
 
     let net1 = Network::new(
         Arc::new(OffsetTime::new()),
@@ -223,11 +225,11 @@ async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
     let mut networks = Vec::new();
     let mut addresses = Vec::new();
     let mut events = Vec::new();
-    let mut rng = rand::thread_rng();
+    let mut rng = thread_rng();
 
     // Create all the networks and addresses
     for peer in 0..n_peers {
-        let addr = multiaddr![Memory(thread_rng().gen::<u64>())];
+        let addr = multiaddr![Memory(rng.gen::<u64>())];
 
         log::debug!(index = peer, "Creating network");
 

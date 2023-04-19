@@ -310,12 +310,13 @@ impl Rng for VrfRng {
 mod tests {
     use nimiq_keys::SecureGenerate;
     use nimiq_test_log::test;
+    use nimiq_test_utils::test_rng::test_rng;
 
     use super::*;
 
     #[test]
     fn vrf_works_fuzzy() {
-        let mut rng = rand::thread_rng();
+        let mut rng = test_rng(false);
         let mut prev_seed = VrfSeed::default();
 
         for _ in 0..1000 {
@@ -333,7 +334,7 @@ mod tests {
 
     #[test]
     fn wrong_key_pair_fuzzy() {
-        let mut rng = rand::thread_rng();
+        let mut rng = test_rng(false);
         let key_pair = KeyPair::generate(&mut rng);
         let prev_seed = VrfSeed::default();
 
@@ -351,7 +352,7 @@ mod tests {
 
     #[test]
     fn wrong_prev_seed_fuzzy() {
-        let mut rng = rand::thread_rng();
+        let mut rng = test_rng(false);
         let key_pair = KeyPair::generate(&mut rng);
         let prev_seed = VrfSeed::default();
 
@@ -370,7 +371,7 @@ mod tests {
 
     #[test]
     fn wrong_seed_fuzzy() {
-        let mut rng = rand::thread_rng();
+        let mut rng = test_rng(false);
         let key_pair = KeyPair::generate(&mut rng);
         let prev_seed = VrfSeed::default();
 
