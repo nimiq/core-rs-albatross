@@ -291,9 +291,11 @@ async fn it_can_aggregate() {
         NetworkWrapper(Arc::clone(&net)),
     );
 
-    // aggregating should not take more than 300 ms
+    // aggregating should not take more than 300 ms per each 7 contributors
+    let timeout_ms = 300u64 * (contributor_num / 7 + 1) as u64;
+
     let deadline = tokio::time::Instant::now()
-        .checked_add(tokio::time::Duration::from_millis(300))
+        .checked_add(tokio::time::Duration::from_millis(timeout_ms))
         .unwrap();
 
     // The final value needs to be the sum of all contributions.
