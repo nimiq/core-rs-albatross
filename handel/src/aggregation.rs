@@ -130,7 +130,7 @@ impl<P: Protocol, N: Network<Contribution = P::Contribution>> NextAggregation<P,
                     self.send_update(
                         best,
                         level.id,
-                        level.receive_complete(),
+                        !level.receive_complete(),
                         level.select_next_peers(self.config.peer_count),
                     );
                 }
@@ -214,7 +214,7 @@ impl<P: Protocol, N: Network<Contribution = P::Contribution>> NextAggregation<P,
                     self.send_update(
                         multisig,
                         level.id,
-                        level.receive_complete(),
+                        !level.receive_complete(),
                         level.select_next_peers(self.config.peer_count),
                     );
                 }
@@ -224,7 +224,8 @@ impl<P: Protocol, N: Network<Contribution = P::Contribution>> NextAggregation<P,
 
     /// Send updated `contribution` for `level` to `count` peers
     ///
-    /// for incomplete levels the contribution containing solely this nodes contribution is sent alongside the aggregate
+    /// If the `send_individual` flag is set, the contribution containing solely
+    /// this node contribution is sent alongside the aggregate.
     fn send_update(
         &mut self,
         contribution: P::Contribution,
@@ -234,11 +235,11 @@ impl<P: Protocol, N: Network<Contribution = P::Contribution>> NextAggregation<P,
     ) {
         // If there are peers to send the update to send them
         if !peer_ids.is_empty() {
-            // If the send_individual flag is set the individual contribution is send alongside the aggregate.
+            // If the send_individual flag is set the individual contribution is sent alongside the aggregate.
             let individual = if send_individual {
-                None
-            } else {
                 Some(self.contribution.clone())
+            } else {
+                None
             };
 
             // Create the LevelUpdate
@@ -287,7 +288,7 @@ impl<P: Protocol, N: Network<Contribution = P::Contribution>> NextAggregation<P,
 
             // For an existing aggregate for this level send it around to the respective peers.
             if let Some(aggregate) = aggregate {
-                self.send_update(aggregate, level_id, receive_complete, next_peers);
+                self.send_update(aggregate, level_id, !receive_complete, next_peers);
             }
         }
     }

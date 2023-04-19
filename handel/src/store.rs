@@ -33,7 +33,7 @@ pub trait ContributionStore: Send + Sync {
     /// Panics if `level` is invalid.
     fn best(&self, level: usize) -> Option<&Self::Contribution>;
 
-    /// Returns the best combined multi-signature for all levels upto `level`.
+    /// Returns the best combined multi-signature for all levels up to `level`.
     fn combined(&self, level: usize) -> Option<Self::Contribution>;
 }
 
@@ -119,7 +119,7 @@ impl<P: Partitioner, C: AggregatableContribution> ReplaceStore<P, C> {
                         })
                         .get(&id)
                         .unwrap_or_else(|| {
-                            panic!("Individual contributioon {id} missing for level {level}")
+                            panic!("Individual contribution {id} missing for level {level}")
                         });
 
                     // merge individual signature into multisig
@@ -318,7 +318,7 @@ mod tests {
         }
 
         // Now try to insert a contribution using the same identity (1)
-        // Note that since we are using a previous identity, then we need to substract
+        // Note that since we are using a previous identity, then we need to subtract
         // the previous contribution from this identity to the value to be aggregated
         let mut third_contributors = BitSet::new();
         // Note that we are using a different contributor number

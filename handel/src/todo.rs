@@ -152,8 +152,8 @@ impl<C: AggregatableContribution, E: Evaluator<C>> Stream for TodoList<C, E> {
         while let Poll::Ready(Some(msg)) = self.input_stream.poll_next_unpin(cx) {
             // TODO the case where the msg is None is not being handled which could mean that:
             // The input has ended, i.e. there is no producer left.
-            // In testcases that could mean the other instances have completed their aggregations and droped their network instances.
-            // In reality this should never happen as the network should not terminate those streams, but try to aquire new Peers in this situation.
+            // In testcases that could mean the other instances have completed their aggregations and dropped their network instances.
+            // In reality this should never happen as the network should not terminate those streams, but try to acquire new Peers in this situation.
             // Panic here is viable, but makes testing a bit harder.
             // TODO more robust handling of this case, as the aggregation might not be able to finish here (depending on what todos are left).
 
