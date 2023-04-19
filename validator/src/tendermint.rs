@@ -89,7 +89,9 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> nimiq_handel::network::Netwo
 
         // create the send future and return it.
         async move {
-            nw.send_to(&[recipient], update_message).await;
+            if let Err(error) = nw.send_to(recipient, update_message).await {
+                log::error!(?error, recipient, "Failed to send message");
+            }
         }
         .boxed()
     }

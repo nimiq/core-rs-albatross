@@ -1,11 +1,8 @@
-use std::{
-    collections::{btree_map::Entry, BTreeMap},
-    sync::Arc,
-    time::Duration,
-};
+use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
-use futures::{future::join_all, lock::Mutex, stream::BoxStream, StreamExt, TryFutureExt};
+use futures::{stream::BoxStream, StreamExt, TryFutureExt};
+use parking_lot::RwLock;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_bls::{lazy::LazyPublicKey, CompressedPublicKey, SecretKey};
@@ -17,21 +14,26 @@ use nimiq_network_interface::{
 use super::{MessageStream, NetworkError, ValidatorNetwork};
 use crate::validator_record::{SignedValidatorRecord, ValidatorRecord};
 
+/// Validator Network state
 #[derive(Clone, Debug)]
 pub struct State<TPeerId> {
+    /// Set of public keys for each of the validators
     validator_keys: Vec<LazyPublicKey>,
+    /// Cache for mapping validator public keys to peer IDs
     validator_peer_id_cache: BTreeMap<CompressedPublicKey, TPeerId>,
 }
 
+/// Validator Network implementation
 #[derive(Debug)]
 pub struct ValidatorNetworkImpl<N>
 where
     N: Network,
     N::PeerId: Serialize + Deserialize,
 {
+    /// A reference to the network containing all peers
     network: Arc<N>,
-    // TODO: check if this should be a parking_lot::Mutex
-    state: Mutex<State<N::PeerId>>,
+    /// Internal state
+    state: RwLock<State<N::PeerId>>,
 }
 
 impl<N> ValidatorNetworkImpl<N>
@@ -42,7 +44,7 @@ where
     pub fn new(network: Arc<N>) -> Self {
         Self {
             network,
-            state: Mutex::new(State {
+            state: RwLock::new(State {
                 validator_keys: vec![],
                 validator_peer_id_cache: BTreeMap::new(),
             }),
@@ -99,31 +101,36 @@ where
         &self,
         validator_id: usize,
     ) -> Result<N::PeerId, NetworkError<N::Error>> {
-        let mut state = self.state.lock().await;
+        let (peer_id, public_key) = {
+            let state = self.state.read();
 
-        let public_key = state
-            .validator_keys
-            .get(validator_id)
-            .ok_or(NetworkError::UnknownValidator(validator_id))?
-            .clone();
+            let public_key = state
+                .validator_keys
+                .get(validator_id)
+                .ok_or(NetworkError::UnknownValidator(validator_id))?
+                .clone();
 
-        let entry = state
-            .validator_peer_id_cache
-            .entry(public_key.compressed().clone());
+            let peer_id = state
+                .validator_peer_id_cache
+                .get(&public_key.compressed().clone())
+                .cloned();
+            (peer_id, public_key)
+        };
 
-        match entry {
-            Entry::Occupied(occupied) => Ok(*occupied.get()),
-            Entry::Vacant(vacant) => {
-                if let Some(peer_id) = Self::resolve_peer_id(&self.network, &public_key).await? {
-                    Ok(*vacant.insert(peer_id))
-                } else {
-                    log::error!(
-                        "Could not find peer ID for validator in DHT: public_key = {:?}",
-                        public_key
-                    );
-                    Err(NetworkError::UnknownValidator(validator_id))
-                }
-            }
+        if let Some(peer_id) = peer_id {
+            Ok(peer_id)
+        } else if let Some(peer_id) = Self::resolve_peer_id(&self.network, &public_key).await? {
+            let mut state = self.state.write();
+            state
+                .validator_peer_id_cache
+                .insert(public_key.compressed().clone(), peer_id);
+            Ok(peer_id)
+        } else {
+            log::error!(
+                "Could not find peer ID for validator in DHT: public_key = {:?}",
+                public_key
+            );
+            Err(NetworkError::UnknownValidator(validator_id))
         }
     }
 }
@@ -151,7 +158,7 @@ where
             &validator_keys
         );
         // Create new peer ID cache, but keep validators that are still active.
-        let mut state = self.state.lock().await;
+        let mut state = self.state.write();
 
         let mut keep_cached = BTreeMap::new();
         for validator_key in &validator_keys {
@@ -169,66 +176,63 @@ where
 
     async fn send_to<M: Message + Clone>(
         &self,
-        validator_ids: &[usize],
+        validator_id: usize,
         msg: M,
-    ) -> Vec<Result<(), Self::Error>> {
-        let futures = validator_ids
-            .iter()
-            .copied()
-            .map(|validator_id| (validator_id, msg.clone()))
-            .map(|(validator_id, msg)| async move {
-                // previously, there was an `Option<>` here. why?
-                let peer_id = if let Ok(peer_id) = self.get_validator_peer_id(validator_id).await {
-                    // The peer was cached so the send is fast tracked
-                    peer_id
-                } else {
-                    // The peer could not be retrieved so we update the cache with a fresh lookup
-                    let mut state = self.state.lock().await;
+    ) -> Result<(), Self::Error> {
+        // previously, there was an `Option<>` here. why?
+        let peer_id = if let Ok(peer_id) = self.get_validator_peer_id(validator_id).await {
+            // The peer was cached so the send is fast tracked
+            peer_id
+        } else {
+            let public_key = {
+                // The peer could not be retrieved so we update the cache with a fresh lookup
+                let state = self.state.read();
 
-                    // get the public key for the validator_id, return NetworkError::UnknownValidator if it does not exist
-                    let public_key = state
-                        .validator_keys
-                        .get(validator_id)
-                        .ok_or(NetworkError::UnknownValidator(validator_id))?
-                        .clone();
+                // get the public key for the validator_id, return NetworkError::UnknownValidator if it does not exist
+                state
+                    .validator_keys
+                    .get(validator_id)
+                    .ok_or(NetworkError::UnknownValidator(validator_id))?
+                    .clone()
+            };
 
-                    // resolve the public key to the peer_id using the DHT record
-                    if let Some(peer_id) = Self::resolve_peer_id(&self.network, &public_key).await? {
-                        // set the cache with he new peer_id for this public key
-                        state
-                            .validator_peer_id_cache
-                            .insert(public_key.compressed().clone(), peer_id);
+            // resolve the public key to the peer_id using the DHT record
+            if let Some(peer_id) = Self::resolve_peer_id(&self.network, &public_key).await? {
+                // set the cache with he new peer_id for this public key
+                self.state
+                    .write()
+                    .validator_peer_id_cache
+                    .insert(public_key.compressed().clone(), peer_id);
 
-                        // try to get the peer for the peer_id. If it does not exist it should be dialed
-                        if !self.network.has_peer(peer_id) {
-                            log::debug!("Not connected to validator {} @ {:?}, dialing...", validator_id, peer_id);
-                            self.dial_peer(peer_id).await?;
-                        }
+                // try to get the peer for the peer_id. If it does not exist it should be dialed
+                if !self.network.has_peer(peer_id) {
+                    log::debug!(
+                        "Not connected to validator {} @ {:?}, dialing...",
+                        validator_id,
                         peer_id
-                    } else {
-                        log::error!(
+                    );
+                    self.dial_peer(peer_id).await?;
+                }
+                peer_id
+            } else {
+                log::error!(
                             "send_to failed; Could not find peer ID for validator in DHT: public_key = {:?}",
                             public_key
                         );
-                        return Err(NetworkError::UnknownValidator(validator_id));
-                    }
-                };
-                // We don't care about the response: spawn the request and intentionally dismiss
-                // the response
-                tokio::spawn({
-                    let network = Arc::clone(&self.network);
-                    async move{
-                        if let Err(error) = network.message(msg.clone(), peer_id).await {
-                            log::error!(%peer_id, %error, "could not send request");
-                        }
-                }});
-                Ok(())
-            });
-
-        join_all(futures)
-            .await
-            .into_iter()
-            .collect::<Vec<Result<(), Self::Error>>>()
+                return Err(NetworkError::UnknownValidator(validator_id));
+            }
+        };
+        // We don't care about the response: spawn the request and intentionally dismiss
+        // the response
+        tokio::spawn({
+            let network = Arc::clone(&self.network);
+            async move {
+                if let Err(error) = network.message(msg.clone(), peer_id).await {
+                    log::error!(%peer_id, %error, "could not send request");
+                }
+            }
+        });
+        Ok(())
     }
 
     async fn request<TRequest: Request>(
