@@ -409,6 +409,9 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
                     self.state.current_step = Step::Propose;
                     self.future_contributions
                         .retain(|round, _contributors| round > &self.state.current_round);
+
+                    // Return to account the state change
+                    return None;
                 }
             } else if let Some(sender) = self.aggregation_senders.get(&id) {
                 match sender.try_send(message.aggregation) {
