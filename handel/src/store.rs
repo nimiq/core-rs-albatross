@@ -1,16 +1,25 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use crate::identity::IdentityRegistry;
+use crate::partitioner::Partitioner;
+use crate::protocol::Protocol;
+use crate::{contribution::AggregatableContribution, identity::Identity};
 use nimiq_collections::bitset::BitSet;
 
-use crate::partitioner::Partitioner;
-use crate::{contribution::AggregatableContribution, identity::Identity};
-
-pub trait ContributionStore: Send + Sync {
-    type Contribution: AggregatableContribution;
-
+pub trait ContributionStore<TId, TProtocol>: Send + Sync
+where
+    TId: std::fmt::Debug + Clone + 'static,
+    TProtocol: Protocol<TId>,
+{
     /// Put `signature` into the store for level `level`.
-    fn put(&mut self, contribution: Self::Contribution, level: usize, id: Identity);
+    fn put(
+        &mut self,
+        contribution: TProtocol::Contribution,
+        level: usize,
+        identity: Identity,
+        identifier: TId,
+    );
 
     /// Return the number of the current best level.
     fn best_level(&self) -> usize;
@@ -26,22 +35,26 @@ pub trait ContributionStore: Send + Sync {
     /// Returns a `BTreeMap` of the individual signatures for the given `level`.
     ///
     /// Panics if `level` is invalid.
-    fn individual_signature(&self, level: usize, peer_id: usize) -> Option<&Self::Contribution>;
+    fn individual_signature(
+        &self,
+        level: usize,
+        peer_id: usize,
+    ) -> Option<&TProtocol::Contribution>;
 
     /// Returns the best multi-signature for the given `level`.
     ///
     /// Panics if `level` is invalid.
-    fn best(&self, level: usize) -> Option<&Self::Contribution>;
+    fn best(&self, level: usize) -> Option<&TProtocol::Contribution>;
 
-    /// Returns the best combined multi-signature for all levels up to `level`.
-    fn combined(&self, level: usize) -> Option<Self::Contribution>;
+    /// Returns the best combined multi-signature for all levels upto `level`.
+    fn combined(&self, level: usize) -> Option<TProtocol::Contribution>;
 }
 
 #[derive(Clone, Debug)]
 /// An implementation of the `ContributionStore` trait
-pub struct ReplaceStore<P: Partitioner, C: AggregatableContribution> {
+pub struct ReplaceStore<TId: Clone + std::fmt::Debug + 'static, TProtocol: Protocol<TId>> {
     /// The Partitioner used to create the Aggregation Tree.
-    partitioner: Arc<P>,
+    partitioner: Arc<TProtocol::Partitioner>,
 
     /// The currently best level
     best_level: usize,
@@ -55,15 +68,17 @@ pub struct ReplaceStore<P: Partitioner, C: AggregatableContribution> {
 
     /// All individual contributions
     /// level -> peer_id -> Contribution
-    individual_contributions: Vec<BTreeMap<usize, (C, Identity)>>,
+    individual_contributions: Vec<BTreeMap<usize, (TProtocol::Contribution, Identity)>>,
 
     /// The best Contribution at each level
-    best_contribution: BTreeMap<usize, (C, Identity)>,
+    best_contribution: BTreeMap<usize, (TProtocol::Contribution, Identity)>,
 }
 
-impl<P: Partitioner, C: AggregatableContribution> ReplaceStore<P, C> {
+impl<TId: Clone + std::fmt::Debug + 'static, TProtocol: Protocol<TId>>
+    ReplaceStore<TId, TProtocol>
+{
     /// Create a new Replace Store using the Partitioner `partitioner`.
-    pub fn new(partitioner: Arc<P>) -> Self {
+    pub fn new(partitioner: Arc<TProtocol::Partitioner>) -> Self {
         let n = partitioner.size();
         let mut individual_verified = Vec::with_capacity(partitioner.levels());
         let mut individual_signatures = Vec::with_capacity(partitioner.levels());
@@ -82,9 +97,22 @@ impl<P: Partitioner, C: AggregatableContribution> ReplaceStore<P, C> {
         }
     }
 
-    fn check_merge(&self, contribution: &C, contributors: BitSet, level: usize) -> Option<C> {
-        if let Some((_, identity)) = self.best_contribution.get(&level) {
+    fn check_merge(
+        &self,
+        contribution: &TProtocol::Contribution,
+        contributors: BitSet,
+        level: usize,
+        identifier: TId,
+    ) -> Option<TProtocol::Contribution> {
+        if let Some((best_contribution, identity)) = self.best_contribution.get(&level) {
             let best_contributors = identity.as_bitset();
+            debug!(
+                id = ?identifier.clone(),
+                ?best_contribution,
+                ?identity,
+                level,
+                "Current best for level"
+            );
 
             // try to combine
             let mut contribution = contribution.clone();
@@ -136,10 +164,18 @@ impl<P: Partitioner, C: AggregatableContribution> ReplaceStore<P, C> {
     }
 }
 
-impl<P: Partitioner, C: AggregatableContribution> ContributionStore for ReplaceStore<P, C> {
-    type Contribution = C;
-
-    fn put(&mut self, contribution: Self::Contribution, level: usize, identity: Identity) {
+impl<TId, TProtocol> ContributionStore<TId, TProtocol> for ReplaceStore<TId, TProtocol>
+where
+    TId: Clone + std::fmt::Debug + 'static,
+    TProtocol: Protocol<TId>,
+{
+    fn put(
+        &mut self,
+        contribution: TProtocol::Contribution,
+        level: usize,
+        identity: Identity,
+        identifier: TId,
+    ) {
         if let Identity::Single(id) = identity {
             self.individual_verified
                 .get_mut(level)
@@ -151,13 +187,20 @@ impl<P: Partitioner, C: AggregatableContribution> ContributionStore for ReplaceS
                 .insert(id, (contribution.clone(), identity.clone()));
         }
 
-        if let Some(best_contribution) =
-            self.check_merge(&contribution, identity.as_bitset(), level)
-        {
+        if let Some(best_contribution) = self.check_merge(
+            &contribution,
+            identity.as_bitset(),
+            level,
+            identifier.clone(),
+        ) {
             self.best_contribution
                 .insert(level, (best_contribution, identity));
             if level > self.best_level {
-                trace!(level, "New Best level");
+                trace!(
+                    id = ?identifier,
+                    ?level,
+                    "best level is now",
+                );
                 self.best_level = level;
             }
         }
@@ -177,7 +220,11 @@ impl<P: Partitioner, C: AggregatableContribution> ContributionStore for ReplaceS
             .unwrap_or_else(|| panic!("Invalid level: {level}"))
     }
 
-    fn individual_signature(&self, level: usize, peer_id: usize) -> Option<&Self::Contribution> {
+    fn individual_signature(
+        &self,
+        level: usize,
+        peer_id: usize,
+    ) -> Option<&TProtocol::Contribution> {
         self.individual_contributions
             .get(level)
             .unwrap_or_else(|| panic!("Invalid level: {level}"))
@@ -185,11 +232,11 @@ impl<P: Partitioner, C: AggregatableContribution> ContributionStore for ReplaceS
             .map(|(c, _)| c)
     }
 
-    fn best(&self, level: usize) -> Option<&Self::Contribution> {
+    fn best(&self, level: usize) -> Option<&TProtocol::Contribution> {
         self.best_contribution.get(&level).map(|(c, _)| c)
     }
 
-    fn combined(&self, level: usize) -> Option<Self::Contribution> {
+    fn combined(&self, mut level: usize) -> Option<TProtocol::Contribution> {
         // TODO: Cache this?
 
         let mut signatures = Vec::new();

@@ -432,6 +432,11 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
                         return Some(message);
                     }
                 }
+            } else {
+                log::debug!(
+                    ?message,
+                    "received level update for non running aggregation",
+                );
             }
         }
         None

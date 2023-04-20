@@ -30,10 +30,14 @@ use crate::{
 // * level.state RwLock
 // * Evaluator::new -> threshold (now covered outside of this crate)
 
-type LevelUpdateStream<P> = BoxStream<'static, LevelUpdate<<P as Protocol>::Contribution>>;
+type LevelUpdateStream<P, T> = BoxStream<'static, LevelUpdate<<P as Protocol<T>>::Contribution>>;
 
 /// Future implementation for the next aggregation event
-struct NextAggregation<P: Protocol, N: Network<Contribution = P::Contribution>> {
+struct NextAggregation<
+    T: Debug + Clone + 'static,
+    P: Protocol<T>,
+    N: Network<Contribution = P::Contribution>,
+> {
     /// Handel configuration
     config: Config,
 
@@ -41,7 +45,7 @@ struct NextAggregation<P: Protocol, N: Network<Contribution = P::Contribution>> 
     levels: Vec<Level>,
 
     /// Remaining Todos
-    todos: TodoList<P::Contribution, P::Evaluator>,
+    todos: TodoList<T, P>,
 
     /// The protocol specifying how this aggregation works.
     protocol: P,
@@ -62,12 +66,14 @@ struct NextAggregation<P: Protocol, N: Network<Contribution = P::Contribution>> 
     next_level_timeout: usize,
 }
 
-impl<P: Protocol, N: Network<Contribution = P::Contribution>> NextAggregation<P, N> {
+impl<T: Debug + Clone + 'static, P: Protocol<T>, N: Network<Contribution = P::Contribution>>
+    NextAggregation<T, P, N>
+{
     pub fn new(
         protocol: P,
         config: Config,
         own_contribution: P::Contribution,
-        input_stream: LevelUpdateStream<P>,
+        input_stream: LevelUpdateStream<P, T>,
         sender: LevelUpdateSender<N>,
     ) -> Self {
         // Invoke the partitioner to create the level structure of peers.
@@ -111,7 +117,11 @@ impl<P: Protocol, N: Network<Contribution = P::Contribution>> NextAggregation<P,
             .levels
             .get(level)
             .unwrap_or_else(|| panic!("Attempted to start invalid level {level}"));
-        trace!("Starting level {}: Peers: {:?}", level.id, level.peer_ids);
+        trace!(
+            id = ?self.protocol.identify(),
+            ?level,
+            "Starting level",
+        );
 
         // Try to Start the level
         if level.start() {
@@ -185,7 +195,11 @@ impl<P: Protocol, N: Network<Contribution = P::Contribution>> NextAggregation<P,
 
         // If the number of contributors on this level is equal to the number of peers on this level it is completed.
         if num_contributors == num_peers {
-            trace!("Level {} complete", level_id);
+            trace!(
+                id = ?self.protocol.identify(),
+                level_id,
+                "Level complete",
+            );
             {
                 // Acquire write lock and set the level state for this level to completed.
                 self.levels
@@ -300,7 +314,11 @@ impl<P: Protocol, N: Network<Contribution = P::Contribution>> NextAggregation<P,
         let level = self.next_level_timeout;
         // make sure such level exists
         if level < self.levels.len() {
-            trace!("Timeout at level {}", level);
+            trace!(
+                id = ?self.protocol.identify(),
+                ?level,
+                "Timeout at level",
+            );
 
             // next time the timeout triggers the next level needs activating
             self.next_level_timeout += 1;
@@ -336,7 +354,12 @@ impl<P: Protocol, N: Network<Contribution = P::Contribution>> NextAggregation<P,
                                 {
                                     let store = self.protocol.store();
                                     let mut store = store.write();
-                                    store.put(todo.contribution.clone(), todo.level, self.protocol.registry().signers_identity(&todo.contribution.contributors()));
+                                    store.put(
+                                        todo.contribution.clone(),
+                                        todo.level,
+                                        self.protocol.registry().signers_identity(&todo.contribution.contributors()),
+                                        self.protocol.identify(),
+                                    );
                                 }
 
                                 // in case the level of this todo has not started, start it now as we have already contributions on it.
@@ -357,7 +380,11 @@ impl<P: Protocol, N: Network<Contribution = P::Contribution>> NextAggregation<P,
                                 }
                             } else {
                                 // Invalid contributions create a warning, but do not terminate. -> Continue with the next best todo item.
-                                warn!("Invalid signature: {:?}", result);
+                                warn!(
+                                    id = ?self.protocol.identify(),
+                                    ?result,
+                                    "Invalid signature",
+                                );
                             }
                         },
                         None => {
@@ -370,19 +397,21 @@ impl<P: Protocol, N: Network<Contribution = P::Contribution>> NextAggregation<P,
         }
     }
 
-    fn into_inner(self) -> (LevelUpdateStream<P>, LevelUpdateSender<N>) {
+    fn into_inner(self) -> (LevelUpdateStream<P, T>, LevelUpdateSender<N>) {
         (self.todos.into_stream(), self.sender)
     }
 }
 
-struct FinishedAggregation<P: Protocol, N: Network> {
+struct FinishedAggregation<T: Debug + Clone + 'static, P: Protocol<T>, N: Network> {
     level_update: LevelUpdate<P::Contribution>,
-    input_stream: LevelUpdateStream<P>,
+    input_stream: LevelUpdateStream<P, T>,
     sender: LevelUpdateSender<N>,
 }
 
-impl<P: Protocol, N: Network<Contribution = P::Contribution>> FinishedAggregation<P, N> {
-    fn from(aggregation: NextAggregation<P, N>, aggregate: P::Contribution) -> Self {
+impl<T: Debug + Clone + 'static, P: Protocol<T>, N: Network<Contribution = P::Contribution>>
+    FinishedAggregation<T, P, N>
+{
+    fn from(aggregation: NextAggregation<T, P, N>, aggregate: P::Contribution) -> Self {
         let level_update = LevelUpdate::<P::Contribution>::new(
             aggregate,
             None,
@@ -400,8 +429,10 @@ impl<P: Protocol, N: Network<Contribution = P::Contribution>> FinishedAggregatio
     }
 }
 
-impl<P: Protocol, N: Network<Contribution = P::Contribution>> Future for FinishedAggregation<P, N> {
-    type Output = (P::Contribution, Option<NextAggregation<P, N>>);
+impl<T: Debug + Clone + 'static, P: Protocol<T>, N: Network<Contribution = P::Contribution>> Future
+    for FinishedAggregation<T, P, N>
+{
+    type Output = (P::Contribution, Option<NextAggregation<T, P, N>>);
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         // always returns Poll::Pending.
@@ -421,20 +452,26 @@ impl<P: Protocol, N: Network<Contribution = P::Contribution>> Future for Finishe
     }
 }
 /// Stream implementation for consecutive aggregation events
-pub struct Aggregation<P: Protocol, N: Network<Contribution = P::Contribution>> {
-    next_aggregation: Option<BoxFuture<'static, (P::Contribution, Option<NextAggregation<P, N>>)>>,
+pub struct Aggregation<
+    T: Debug + Clone + 'static,
+    P: Protocol<T>,
+    N: Network<Contribution = P::Contribution>,
+> {
+    next_aggregation:
+        Option<BoxFuture<'static, (P::Contribution, Option<NextAggregation<T, P, N>>)>>,
 }
 
 impl<
-        TProtocol: Protocol,
+        T: Debug + Clone + 'static,
+        TProtocol: Protocol<T>,
         TNetwork: Network<Contribution = TProtocol::Contribution> + Send + 'static,
-    > Aggregation<TProtocol, TNetwork>
+    > Aggregation<T, TProtocol, TNetwork>
 {
     pub fn new(
         protocol: TProtocol,
         config: Config,
         own_contribution: TProtocol::Contribution,
-        input_stream: LevelUpdateStream<TProtocol>,
+        input_stream: LevelUpdateStream<TProtocol, T>,
         network: TNetwork,
     ) -> Self {
         // Create the Sender, buffering a single message per recipient.
@@ -451,7 +488,12 @@ impl<
     }
 }
 
-impl<P: Protocol + Debug, N: Network<Contribution = P::Contribution>> Stream for Aggregation<P, N> {
+impl<
+        T: Debug + Clone + 'static,
+        P: Protocol<T> + Debug,
+        N: Network<Contribution = P::Contribution>,
+    > Stream for Aggregation<T, P, N>
+{
     type Item = P::Contribution;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {

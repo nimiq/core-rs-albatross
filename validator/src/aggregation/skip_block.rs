@@ -150,13 +150,14 @@ impl RequestCommon for SkipBlockUpdate {
 }
 
 struct SkipBlockAggregationProtocol {
-    verifier: Arc<<Self as Protocol>::Verifier>,
-    partitioner: Arc<<Self as Protocol>::Partitioner>,
-    evaluator: Arc<<Self as Protocol>::Evaluator>,
-    store: Arc<RwLock<<Self as Protocol>::Store>>,
-    registry: Arc<<Self as Protocol>::Registry>,
+    verifier: Arc<<Self as Protocol<u32>>::Verifier>,
+    partitioner: Arc<<Self as Protocol<u32>>::Partitioner>,
+    evaluator: Arc<<Self as Protocol<u32>>::Evaluator>,
+    store: Arc<RwLock<<Self as Protocol<u32>>::Store>>,
+    registry: Arc<<Self as Protocol<u32>>::Registry>,
 
     node_id: usize,
+    block_height: u32,
 }
 
 impl SkipBlockAggregationProtocol {
@@ -165,16 +166,16 @@ impl SkipBlockAggregationProtocol {
         node_id: usize,
         threshold: usize,
         message_hash: Blake2sHash,
+        block_height: u32,
     ) -> Self {
         let partitioner = Arc::new(BinomialPartitioner::new(
             node_id,
             validators.num_validators(),
         ));
 
-        let store = Arc::new(RwLock::new(ReplaceStore::<
-            BinomialPartitioner,
-            SignedSkipBlockMessage,
-        >::new(Arc::clone(&partitioner))));
+        let store = Arc::new(RwLock::new(ReplaceStore::<u32, Self>::new(Arc::clone(
+            &partitioner,
+        ))));
 
         let registry = Arc::new(ValidatorRegistry::new(validators));
 
@@ -195,16 +196,17 @@ impl SkipBlockAggregationProtocol {
             store,
             registry,
             node_id,
+            block_height,
         }
     }
 }
 
-impl Protocol for SkipBlockAggregationProtocol {
+impl Protocol<u32> for SkipBlockAggregationProtocol {
     type Contribution = SignedSkipBlockMessage;
     type Registry = ValidatorRegistry;
     type Verifier = MultithreadedVerifier<Self::Registry>;
-    type Store = ReplaceStore<Self::Partitioner, Self::Contribution>;
-    type Evaluator = WeightedVote<Self::Store, Self::Registry, Self::Partitioner>;
+    type Store = ReplaceStore<u32, Self>;
+    type Evaluator = WeightedVote<u32, Self>;
     type Partitioner = BinomialPartitioner;
 
     fn registry(&self) -> Arc<Self::Registry> {
@@ -225,6 +227,10 @@ impl Protocol for SkipBlockAggregationProtocol {
 
     fn partitioner(&self) -> Arc<Self::Partitioner> {
         self.partitioner.clone()
+    }
+
+    fn identify(&self) -> u32 {
+        self.block_height
     }
 
     fn node_id(&self) -> usize {
@@ -286,6 +292,7 @@ impl SkipBlockAggregation {
                 validator_id as usize,
                 policy::Policy::TWO_F_PLUS_ONE as usize,
                 message_hash,
+                skip_block_info.block_number,
             );
 
             let (input_switch, receiver) = InputStreamSwitch::new(

@@ -94,16 +94,14 @@ impl Verifier for DumbVerifier {
     }
 }
 
-pub type Store = ReplaceStore<BinomialPartitioner, Contribution>;
-
-pub type Evaluator = WeightedVote<Store, Registry, BinomialPartitioner>;
+pub type Evaluator = WeightedVote<usize, Protocol>;
 
 // The test protocol combining the other types.
 pub struct Protocol {
     verifier: Arc<DumbVerifier>,
     partitioner: Arc<BinomialPartitioner>,
     evaluator: Arc<Evaluator>,
-    store: Arc<RwLock<ReplaceStore<BinomialPartitioner, Contribution>>>,
+    store: Arc<RwLock<ReplaceStore<usize, Self>>>,
     registry: Arc<Registry>,
     node_id: usize,
 }
@@ -112,9 +110,9 @@ impl Protocol {
     pub fn new(node_id: usize, num_ids: usize, threshold: usize) -> Self {
         let partitioner = Arc::new(BinomialPartitioner::new(node_id, num_ids));
         let registry = Arc::new(Registry {});
-        let store = Arc::new(RwLock::new(
-            ReplaceStore::<BinomialPartitioner, Contribution>::new(partitioner.clone()),
-        ));
+        let store = Arc::new(RwLock::new(ReplaceStore::<usize, Self>::new(
+            partitioner.clone(),
+        )));
 
         let evaluator = Arc::new(WeightedVote::new(
             store.clone(),
@@ -151,13 +149,13 @@ impl<C: AggregatableContribution + 'static> RequestCommon for Update<C> {
     type Response = ();
 }
 
-impl protocol::Protocol for Protocol {
+impl protocol::Protocol<usize> for Protocol {
     type Contribution = Contribution;
     type Verifier = DumbVerifier;
     type Registry = Registry;
     type Partitioner = BinomialPartitioner;
-    type Store = Store;
-    type Evaluator = WeightedVote<Self::Store, Self::Registry, Self::Partitioner>;
+    type Store = ReplaceStore<usize, Self>;
+    type Evaluator = WeightedVote<usize, Self>;
 
     fn verifier(&self) -> Arc<Self::Verifier> {
         self.verifier.clone()
@@ -173,6 +171,9 @@ impl protocol::Protocol for Protocol {
     }
     fn partitioner(&self) -> Arc<Self::Partitioner> {
         self.partitioner.clone()
+    }
+    fn identify(&self) -> usize {
+        self.node_id
     }
     fn node_id(&self) -> usize {
         self.node_id
@@ -192,7 +193,6 @@ impl<N: NetworkInterface> Network for NetworkWrapper<N> {
         let nw = Arc::clone(&self.0);
         async move {
             for peer_id in nw.get_peers() {
-                println!("sending a msg to {:?}", &peer_id);
                 if let Err(err) = nw.message(update.clone(), peer_id).await {
                     log::error!("Error sending request to {}: {:?}", recipient, err);
                 }

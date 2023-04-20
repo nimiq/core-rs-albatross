@@ -4,15 +4,20 @@ use parking_lot::RwLock;
 
 use crate::identity::WeightRegistry;
 use crate::partitioner::Partitioner;
+use crate::protocol::Protocol;
 use crate::store::ContributionStore;
 use crate::{
     contribution::AggregatableContribution,
     identity::{Identity, IdentityRegistry},
 };
 
-pub trait Evaluator<C: AggregatableContribution>: Send + Sync {
-    fn evaluate(&self, signature: &C, level: usize) -> usize;
-    fn is_final(&self, signature: &C) -> bool;
+pub trait Evaluator<TId, TProtocol>: Send + Sync
+where
+    TId: Clone + std::fmt::Debug + 'static,
+    TProtocol: Protocol<TId>,
+{
+    fn evaluate(&self, signature: &TProtocol::Contribution, level: usize) -> usize;
+    fn is_final(&self, signature: &TProtocol::Contribution) -> bool;
     fn level_contains_id(&self, level: usize, id: usize) -> bool;
 }
 
@@ -20,21 +25,26 @@ pub trait Evaluator<C: AggregatableContribution>: Send + Sync {
 ///
 /// NOTE: This can be used for ViewChanges
 #[derive(Debug)]
-pub struct WeightedVote<S: ContributionStore, I: WeightRegistry + IdentityRegistry, P: Partitioner>
+pub struct WeightedVote<TId, TProtocol>
+where
+    TId: Clone + std::fmt::Debug + 'static,
+    TProtocol: Protocol<TId>,
 {
-    store: Arc<RwLock<S>>,
-    pub weights: Arc<I>,
-    partitioner: Arc<P>,
+    store: Arc<RwLock<TProtocol::Store>>,
+    pub weights: Arc<TProtocol::Registry>,
+    partitioner: Arc<TProtocol::Partitioner>,
     pub threshold: usize,
 }
 
-impl<S: ContributionStore, I: WeightRegistry + IdentityRegistry, P: Partitioner>
-    WeightedVote<S, I, P>
+impl<TId, TProtocol> WeightedVote<TId, TProtocol>
+where
+    TId: Clone + std::fmt::Debug + 'static,
+    TProtocol: Protocol<TId>,
 {
     pub fn new(
-        store: Arc<RwLock<S>>,
-        weights: Arc<I>,
-        partitioner: Arc<P>,
+        store: Arc<RwLock<TProtocol::Store>>,
+        weights: Arc<TProtocol::Registry>,
+        partitioner: Arc<TProtocol::Partitioner>,
         threshold: usize,
     ) -> Self {
         Self {
@@ -46,19 +56,17 @@ impl<S: ContributionStore, I: WeightRegistry + IdentityRegistry, P: Partitioner>
     }
 }
 
-impl<
-        C: AggregatableContribution,
-        S: ContributionStore<Contribution = C>,
-        I: WeightRegistry + IdentityRegistry,
-        P: Partitioner,
-    > Evaluator<C> for WeightedVote<S, I, P>
+impl<TId, TProtocol> Evaluator<TId, TProtocol> for WeightedVote<TId, TProtocol>
+where
+    TId: Clone + std::fmt::Debug + 'static,
+    TProtocol: Protocol<TId>,
 {
     /// takes an unverified contribution and scores it in terms of usefulness with
     ///
     /// `0` being not useful at all, can be discarded.
     ///
     /// `>0` being more useful the bigger the number.
-    fn evaluate(&self, contribution: &C, level: usize) -> usize {
+    fn evaluate(&self, contribution: &TProtocol::Contribution, level: usize) -> usize {
         // TODO: Consider weight
 
         // Special case for final aggregations
@@ -182,7 +190,7 @@ impl<
         }
     }
 
-    fn is_final(&self, signature: &C) -> bool {
+    fn is_final(&self, signature: &TProtocol::Contribution) -> bool {
         let votes = self
             .weights
             .signature_weight(signature)

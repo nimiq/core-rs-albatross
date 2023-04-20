@@ -11,6 +11,7 @@ use nimiq_macros::store_waker;
 
 use crate::contribution::AggregatableContribution;
 use crate::evaluator::Evaluator;
+use crate::protocol::Protocol;
 use crate::update::LevelUpdate;
 
 /// A TodoItem represents a contribution which has not yet been aggregated into the store.
@@ -37,7 +38,13 @@ impl<C: AggregatableContribution> TodoItem<C> {
     /// meaning more useful the higher the number.
     ///
     /// * `evaluator` - The evaluator used for the score computation
-    pub fn evaluate<E: Evaluator<C>>(&self, evaluator: Arc<E>) -> usize {
+    pub fn evaluate<
+        TId: Clone + std::fmt::Debug + 'static,
+        TProtocol: Protocol<TId, Contribution = C>,
+    >(
+        &self,
+        evaluator: Arc<TProtocol::Evaluator>,
+    ) -> usize {
         evaluator.evaluate(&self.contribution, self.level)
     }
 }
@@ -61,22 +68,33 @@ impl<C: AggregatableContribution> std::hash::Hash for TodoItem<C> {
 
 /// TodoItem list. Implements Stream to poll for the next best scoring TodoItem.
 /// Will dry the input stream every time a TodoItem is polled.
-pub(crate) struct TodoList<C: AggregatableContribution, E: Evaluator<C>> {
+pub(crate) struct TodoList<TId, TProtocol>
+where
+    TId: Clone + std::fmt::Debug + 'static,
+    TProtocol: Protocol<TId>,
+{
     /// List of TodoItems already polled from input stream
-    list: HashSet<TodoItem<C>>,
+    list: HashSet<TodoItem<TProtocol::Contribution>>,
     /// The evaluator used for scoring the individual todos
-    evaluator: Arc<E>,
+    evaluator: Arc<TProtocol::Evaluator>,
     /// The Stream where LevelUpdates can be polled from, which are subsequently converted into TodoItems
-    input_stream: BoxStream<'static, LevelUpdate<C>>,
+    input_stream: BoxStream<'static, LevelUpdate<TProtocol::Contribution>>,
 
     waker: Option<Waker>,
 }
 
-impl<C: AggregatableContribution, E: Evaluator<C>> TodoList<C, E> {
+impl<TId, TProtocol> TodoList<TId, TProtocol>
+where
+    TId: Clone + std::fmt::Debug + 'static,
+    TProtocol: Protocol<TId>,
+{
     /// Create a new TodoList
     /// * `evaluator` - The evaluator which will be used for TodoItem scoring
     /// * `input_stream` - The stream on which new LevelUpdates can be polled, which will then be converted into TodoItems
-    pub fn new(evaluator: Arc<E>, input_stream: BoxStream<'static, LevelUpdate<C>>) -> Self {
+    pub fn new(
+        evaluator: Arc<TProtocol::Evaluator>,
+        input_stream: BoxStream<'static, LevelUpdate<TProtocol::Contribution>>,
+    ) -> Self {
         Self {
             list: HashSet::new(),
             evaluator,
@@ -85,7 +103,7 @@ impl<C: AggregatableContribution, E: Evaluator<C>> TodoList<C, E> {
         }
     }
 
-    pub fn add_contribution(&mut self, contribution: C, level: usize) {
+    pub fn add_contribution(&mut self, contribution: TProtocol::Contribution, level: usize) {
         self.list.insert(TodoItem {
             contribution,
             level,
@@ -99,19 +117,23 @@ impl<C: AggregatableContribution, E: Evaluator<C>> TodoList<C, E> {
         }
     }
 
-    pub fn into_stream(self) -> BoxStream<'static, LevelUpdate<C>> {
+    pub fn into_stream(self) -> BoxStream<'static, LevelUpdate<TProtocol::Contribution>> {
         self.input_stream
     }
 }
 
-impl<C: AggregatableContribution, E: Evaluator<C>> Stream for TodoList<C, E> {
-    type Item = TodoItem<C>;
+impl<TId, TProtocol> Stream for TodoList<TId, TProtocol>
+where
+    TId: Clone + std::fmt::Debug + 'static,
+    TProtocol: Protocol<TId>,
+{
+    type Item = TodoItem<TProtocol::Contribution>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         // current best score
         let mut best_score: usize = 0;
         // retained set of todos. Same as self.list, but did not retain 0 score todos and the best todo.
-        let mut new_set: HashSet<TodoItem<C>> = HashSet::new();
+        let mut new_set: HashSet<Self::Item> = HashSet::new();
         // the current best TodoItem
         let mut best_todo: Option<Self::Item> = None;
         // A local copy is needed so mut self is not borrowed
@@ -123,7 +145,7 @@ impl<C: AggregatableContribution, E: Evaluator<C>> Stream for TodoList<C, E> {
         // Score already available TodoItems first
         for item in self.list.drain() {
             // Have the evaluator score each TodoItem.
-            let score = item.evaluate(Arc::clone(&ev));
+            let score = item.evaluate::<TId, TProtocol>(Arc::clone(&ev));
             // if an item has a score greater than 0 it is retained. Otherwise it is discarded
             if score > 0 {
                 if score > best_score {
@@ -169,10 +191,10 @@ impl<C: AggregatableContribution, E: Evaluator<C>> Stream for TodoList<C, E> {
                     level: msg.level as usize,
                 };
                 // Score the newly created TodoItem for the aggregate of the LevelUpdate
-                let score = aggregate_todo.evaluate(Arc::clone(&self.evaluator));
+                let score = aggregate_todo.evaluate::<TId, TProtocol>(Arc::clone(&self.evaluator));
                 // TodoItems with a score of 0 are discarded (meaning not added to the set of TodoItems).
                 if score > 0 {
-                    trace!("New todo with score: {}", &score);
+                    trace!("New todo with score: {}: {:?}", &score, &aggregate_todo);
                     if score > best_score {
                         // If the score is a new best remember the score and put the former best item into the list.
                         best_score = score;
@@ -194,7 +216,8 @@ impl<C: AggregatableContribution, E: Evaluator<C>> Stream for TodoList<C, E> {
                         level: msg.level as usize,
                     };
                     // Score the newly created TodoItem for the individual contribution of the LevelUpdate.
-                    let score = individual_todo.evaluate(Arc::clone(&self.evaluator));
+                    let score =
+                        individual_todo.evaluate::<TId, TProtocol>(Arc::clone(&self.evaluator));
                     // TodoItems with a score of 0 are discarded (meaning not added to the set of TodoItems).
                     if score > 0 {
                         if score > best_score {
@@ -213,9 +236,10 @@ impl<C: AggregatableContribution, E: Evaluator<C>> Stream for TodoList<C, E> {
                     }
                 }
             } else {
-                debug!(
+                trace!(
                     "Sender of update :{} is not on level {}",
-                    msg.origin, msg.level
+                    msg.origin,
+                    msg.level
                 );
             }
         }
