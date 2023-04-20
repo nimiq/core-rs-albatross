@@ -43,41 +43,39 @@ impl IdentityRegistry for ValidatorRegistry {
     fn signers_identity(&self, slots: &BitSet) -> Identity {
         if slots.is_empty() {
             // if there is no signers there is no identity.
-            Identity::None
-        } else {
-            // create a set of validator ids corresponding to the slots
-            let mut ids: HashSet<u16> = HashSet::new();
-            for slot in slots.iter() {
-                // insert each validator_address if there is one.
-                let _ = ids.insert(self.validators.get_band_from_slot(slot as u16));
-            }
+            return Identity::new(BitSet::default());
+        }
 
-            // if there is exactly no signer it needs to be rejected.
-            // should never happen as those get rejected earlier.
-            if ids.is_empty() {
-                Identity::None
-            } else {
-                // make sure that the bitset for the given validator's slots is exactly the same as the once given,
-                // as otherwise there would be a 'partial' slot layout for at least one of the validators.
-                // Since handel will not combine overlapping contributions those need to be rejected.
-                // this holds for Single and Multiple signatories.
-                let mut validators_slots = BitSet::new();
-                for validator_id in ids.iter() {
-                    for slot in self.get_slots(*validator_id).iter() {
-                        validators_slots.insert(*slot as usize);
-                    }
-                }
+        // Create a set of validator ids corresponding to the slots
+        let mut ids: HashSet<u16> = HashSet::new();
+        for slot in slots.iter() {
+            // Insert each validator_address if there is one.
+            let _ = ids.insert(self.validators.get_band_from_slot(slot as u16));
+        }
 
-                if &validators_slots != slots {
-                    // reject any slots which are not exhaustive for their validators.
-                    Identity::None
-                } else if ids.len() == 1 {
-                    Identity::Single(*ids.iter().next().unwrap() as usize)
-                } else {
-                    Identity::Multiple(ids.iter().map(|id| *id as usize).collect())
-                }
+        // If there is no signer it needs to be rejected.
+        // Should never happen as those get rejected earlier.
+        if ids.is_empty() {
+            return Identity::new(BitSet::default());
+        }
+
+        // Make sure that the bitset for the given validator's slots is exactly the same as the once given,
+        // as otherwise there would be a 'partial' slot layout for at least one of the validators.
+        // Since handel will not combine overlapping contributions those need to be rejected.
+        // This holds for Single and Multiple signatories.
+        let mut validators_slots = BitSet::new();
+        for validator_id in ids.iter() {
+            for slot in self.get_slots(*validator_id).iter() {
+                validators_slots.insert(*slot as usize);
             }
         }
+
+        if &validators_slots != slots {
+            // Reject any slots which are not exhaustive for their validators.
+            return Identity::new(BitSet::default());
+        }
+
+        Identity::new(BitSet::from_iter(ids.iter().map(|id| *id as usize)))
     }
 }
 

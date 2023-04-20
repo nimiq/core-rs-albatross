@@ -44,8 +44,9 @@ impl<C: AggregatableContribution> TodoItem<C> {
     >(
         &self,
         evaluator: Arc<TProtocol::Evaluator>,
+        id: TId,
     ) -> usize {
-        evaluator.evaluate(&self.contribution, self.level)
+        evaluator.evaluate(&self.contribution, self.level, id)
     }
 }
 
@@ -142,13 +143,15 @@ where
         // A local copy is needed so mut self is not borrowed
         let ev = Arc::clone(&self.evaluator);
 
+        let id = self.id.clone();
+
         // Scoring of items needs to be done every time a item is polled, as the scores might have
         // changed with the last aggregated contribution
 
         // Score already available TodoItems first
         for item in self.list.drain() {
             // Have the evaluator score each TodoItem.
-            let score = item.evaluate::<TId, TProtocol>(Arc::clone(&ev));
+            let score = item.evaluate::<TId, TProtocol>(Arc::clone(&ev), id.clone());
             // if an item has a score greater than 0 it is retained. Otherwise it is discarded
             if score > 0 {
                 if score > best_score {
@@ -178,7 +181,7 @@ where
         while let Poll::Ready(Some(msg)) = self.input_stream.poll_next_unpin(cx) {
             // TODO the case where the msg is None is not being handled which could mean that:
             // The input has ended, i.e. there is no producer left.
-            // In testcases that could mean the other instances have completed their aggregations and dropped their network instances.
+            // In Test cases that could mean the other instances have completed their aggregations and dropped their network instances.
             // In reality this should never happen as the network should not terminate those streams, but try to acquire new Peers in this situation.
             // Panic here is viable, but makes testing a bit harder.
             // TODO more robust handling of this case, as the aggregation might not be able to finish here (depending on what todos are left).
@@ -194,7 +197,8 @@ where
                     level: msg.level as usize,
                 };
                 // Score the newly created TodoItem for the aggregate of the LevelUpdate
-                let score = aggregate_todo.evaluate::<TId, TProtocol>(Arc::clone(&self.evaluator));
+                let score = aggregate_todo
+                    .evaluate::<TId, TProtocol>(Arc::clone(&self.evaluator), id.clone());
                 // TodoItems with a score of 0 are discarded (meaning not added to the set of TodoItems).
                 if score > 0 {
                     trace!(
@@ -224,8 +228,8 @@ where
                         level: msg.level as usize,
                     };
                     // Score the newly created TodoItem for the individual contribution of the LevelUpdate.
-                    let score =
-                        individual_todo.evaluate::<TId, TProtocol>(Arc::clone(&self.evaluator));
+                    let score = individual_todo
+                        .evaluate::<TId, TProtocol>(Arc::clone(&self.evaluator), self.id.clone());
                     // TodoItems with a score of 0 are discarded (meaning not added to the set of TodoItems).
                     if score > 0 {
                         if score > best_score {

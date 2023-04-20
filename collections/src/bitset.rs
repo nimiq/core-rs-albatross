@@ -12,7 +12,7 @@ fn index_and_mask(value: usize) -> (usize, u64) {
     (value >> 6, 1u64 << (value & 63))
 }
 
-#[derive(Clone, Eq)]
+#[derive(Clone, Eq, PartialOrd, Ord)]
 pub struct BitSet {
     store: Vec<u64>,
     count: usize,

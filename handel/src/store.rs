@@ -5,7 +5,6 @@ use crate::identity::IdentityRegistry;
 use crate::partitioner::Partitioner;
 use crate::protocol::Protocol;
 use crate::{contribution::AggregatableContribution, identity::Identity};
-use nimiq_collections::bitset::BitSet;
 
 pub trait ContributionStore<TId, TProtocol>: Send + Sync
 where
@@ -25,12 +24,12 @@ where
     fn best_level(&self) -> usize;
 
     /// Check whether we have an individual signature from a certain `peer_id`.
-    fn individual_received(&self, peer_id: usize) -> bool;
+    fn individual_received(&self, peer_id: &Identity) -> bool;
 
     /// Return a `BitSet` of the verified individual signatures we have for a given `level`.
     ///
     /// Panics if `level` is invalid.
-    fn individual_verified(&self, level: usize) -> &BitSet;
+    fn individual_verified(&self, level: usize) -> &Identity;
 
     /// Returns a `BTreeMap` of the individual signatures for the given `level`.
     ///
@@ -38,7 +37,7 @@ where
     fn individual_signature(
         &self,
         level: usize,
-        peer_id: usize,
+        peer_id: &Identity,
     ) -> Option<&TProtocol::Contribution>;
 
     /// Returns the best multi-signature for the given `level`.
@@ -60,15 +59,15 @@ pub struct ReplaceStore<TId: Clone + std::fmt::Debug + 'static, TProtocol: Proto
     best_level: usize,
 
     /// BitSet that contains the IDs of all individual contributions we already received
-    individual_received: BitSet,
+    individual_received: Identity,
 
     /// BitSets for all the individual contributions that we already verified
     /// level -> peer_id -> bool
-    individual_verified: Vec<BitSet>,
+    individual_verified: Vec<Identity>,
 
     /// All individual contributions
     /// level -> peer_id -> Contribution
-    individual_contributions: Vec<BTreeMap<usize, (TProtocol::Contribution, Identity)>>,
+    individual_contributions: Vec<BTreeMap<Identity, TProtocol::Contribution>>,
 
     /// The best Contribution at each level
     best_contribution: BTreeMap<usize, (TProtocol::Contribution, Identity)>,
@@ -79,18 +78,17 @@ impl<TId: Clone + std::fmt::Debug + 'static, TProtocol: Protocol<TId>>
 {
     /// Create a new Replace Store using the Partitioner `partitioner`.
     pub fn new(partitioner: Arc<TProtocol::Partitioner>) -> Self {
-        let n = partitioner.size();
         let mut individual_verified = Vec::with_capacity(partitioner.levels());
         let mut individual_signatures = Vec::with_capacity(partitioner.levels());
-        for level in 0..partitioner.levels() {
-            individual_verified.push(BitSet::with_capacity(partitioner.level_size(level)));
+        for _level in 0..partitioner.levels() {
+            individual_verified.push(Identity::default());
             individual_signatures.push(BTreeMap::new())
         }
 
         Self {
             partitioner,
             best_level: 0,
-            individual_received: BitSet::with_capacity(n),
+            individual_received: Identity::default(),
             individual_verified,
             individual_contributions: individual_signatures,
             best_contribution: BTreeMap::new(),
@@ -104,104 +102,104 @@ impl<TId: Clone + std::fmt::Debug + 'static, TProtocol: Protocol<TId>>
         level: usize,
         identifier: TId,
     ) -> Option<TProtocol::Contribution> {
-        if let Some((best_contribution, identity)) = self.best_contribution.get(&level) {
-            let best_contributors = identity.as_bitset();
-            trace!(
-                id = ?identifier.clone(),
-                ?best_contribution,
-                ?identity,
-                level,
-                "Current best for level"
-            );
+        let best_contribution = self.best_contribution.get(&level);
 
-            // try to combine
-            let mut contribution = contribution.clone();
-
-            // If the combining fails, it is due to the contributions having an overlap.
-            // One may be the superset of the other which makes it the strictly better set.
-            // If that is the case the better can immediately be returned.
-            // Otherwise individual signatures must still be checked.
-            let contributors = if let Err(e) = contribution.combine(best_contribution) {
-                // The contributors of contribution represented as Identities.
-                let contributors = registry
-                    .signers_identity(&contribution.contributors())
-                    .as_bitset();
-
-                // merging failed. Check if contribution is a superset of best_contribution.
-                if contributors.is_superset(&best_contributors) {
-                    trace!(
-                        id = ?identifier.clone(),
-                        ?contribution,
-                        ?best_contribution,
-                        "New signature is superset of current best. Replacing",
-                    );
-                    return Some(contribution);
-                } else {
-                    trace!(
-                        id = ?identifier.clone(),
-                        ?contribution,
-                        ?best_contribution,
-                        error = ?e,
-                        "Combining contributions failed",
-                    );
-                    contributors
-                }
-            } else {
-                registry
-                    .signers_identity(&contribution.contributors())
-                    .as_bitset()
-            };
-
-            // Individual signatures of identities which this node has that are already verified.
-            let individual_verified = self.individual_verified.get(level).unwrap_or_else(|| {
-                panic!("Individual verified contributions BitSet is missing for level {level}")
-            });
-
-            // the bits set here are verified individual signatures that can be added to `contribution`
-            let complements = &(&contributors & individual_verified) ^ individual_verified;
-
-            // check that if we combine we get a better signature
-            if complements.len() + contributors.len() <= best_contributors.len() {
-                // This should not be observed really as the evaluator should filter signatures which cannot provide
-                // improvements out.
-                trace!(
-                    id = ?identifier.clone(),
-                    "No improvement possible",
-                );
-                None
-            } else {
-                // put in the individual signatures
-                for id in complements.iter() {
-                    // get individual signature
-                    let individual = self
-                        .individual_contributions
-                        .get(level)
-                        .unwrap_or_else(|| {
-                            panic!("Individual contribution missing for level {level}")
-                        })
-                        .get(&id)
-                        .unwrap_or_else(|| {
-                            panic!("Individual contribution {id} missing for level {level}")
-                        });
-
-                    // merge individual signature into multisig
-                    contribution
-                        .combine(&individual.0)
-                        .unwrap_or_else(|e| panic!("Individual contribution from id={id} can't be added to aggregate contributions: {e}"));
-                }
-
-                Some(contribution)
-            }
-        } else {
+        if best_contribution.is_none() {
             // This is normal whenever the first signature for a level is processed.
             trace!(
-                id = ?identifier.clone(),
+                id = ?identifier,
                 ?level,
                 contributors = ?contribution.contributors(),
                 "Level was empty",
             );
-            Some(contribution.clone())
+            return Some(contribution.clone());
         }
+
+        let (best_contribution, best_contributors) = best_contribution.unwrap();
+
+        trace!(
+            id = ?identifier,
+            ?best_contribution,
+            ?best_contributors,
+            level,
+            "Current best for level"
+        );
+
+        // Try to combine
+        let mut contribution = contribution.clone();
+
+        // If combining fails, it is due to the contributions having an overlap.
+        // One may be the superset of the other which makes it the strictly better set.
+        // If that is the case the better can be immediately returned.
+        // Otherwise individual signatures must still be checked.
+        let contributors = if let Err(e) = contribution.combine(best_contribution) {
+            // The contributors of contribution represented as an Identity.
+            let contributors = registry.signers_identity(&contribution.contributors());
+
+            // Merging failed. Check if contribution is a superset of `best_contribution`.
+            if contributors.is_superset_of(best_contributors) {
+                trace!(
+                    id = ?identifier,
+                    ?contribution,
+                    ?best_contribution,
+                    "New signature is superset of current best. Replacing",
+                );
+                return Some(contribution);
+            } else {
+                trace!(
+                    id = ?identifier,
+                    ?contribution,
+                    ?best_contribution,
+                    error = ?e,
+                    "Combining contributions failed",
+                );
+                contributors
+            }
+        } else {
+            registry.signers_identity(&contribution.contributors())
+        };
+
+        // Individual signatures of identities which this node has that are already verified.
+        let individual_verified = self.individual_verified.get(level).unwrap_or_else(|| {
+            panic!("Individual verified contributions is missing for level {level}")
+        });
+
+        // The identity here describes which verified individual signatures that can be added to `contribution`
+        let complements = contributors.complement(individual_verified);
+
+        // Check that if we combine we get a better signature
+        if complements.len() + contributors.len() <= best_contributors.len() {
+            // This should not be observed really as the evaluator should filter signatures which cannot provide
+            // improvements out.
+            trace!(
+                id = ?identifier,
+                "No improvement possible",
+            );
+            return None;
+        }
+
+        // Put in the individual signatures
+        for id in complements.iter() {
+            // Get individual signature
+            let individual = self
+                .individual_contributions
+                .get(level)
+                .unwrap_or_else(|| panic!("Individual contribution missing for level {}", level))
+                .get(&id)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "Individual contribution {:?} missing for level {}",
+                        id, level
+                    )
+                });
+
+            // Merge individual signature into multisig
+            contribution
+                .combine(individual)
+                .unwrap_or_else(|e| panic!("Individual contribution from id={:?} can't be added to aggregate contributions: {:?}", id, e));
+        }
+
+        Some(contribution)
     }
 }
 
@@ -217,15 +215,23 @@ where
         registry: Arc<TProtocol::Registry>,
         identifier: TId,
     ) {
-        if let Identity::Single(id) = registry.signers_identity(&contribution.contributors()) {
+        let identity = registry.signers_identity(&contribution.contributors());
+        if identity.is_empty() {
+            return;
+        }
+
+        if identity.len() == 1 {
+            // Intersection is not allowed here, as it is assumed that the individual contribution
+            // does not exist prior to this call. If it does the evaluator has a bug.
             self.individual_verified
                 .get_mut(level)
                 .unwrap_or_else(|| panic!("Missing Level {level}"))
-                .insert(id);
+                .combine(&identity, false);
+
             self.individual_contributions
                 .get_mut(level)
                 .unwrap_or_else(|| panic!("Missing Level {level}"))
-                .insert(id, (contribution.clone(), Identity::Single(id)));
+                .insert(identity, contribution.clone());
         }
 
         if let Some(best_contribution) = self.check_merge(
@@ -252,11 +258,11 @@ where
         self.best_level
     }
 
-    fn individual_received(&self, peer_id: usize) -> bool {
-        self.individual_received.contains(peer_id)
+    fn individual_received(&self, identity: &Identity) -> bool {
+        self.individual_received.is_superset_of(identity)
     }
 
-    fn individual_verified(&self, level: usize) -> &BitSet {
+    fn individual_verified(&self, level: usize) -> &Identity {
         self.individual_verified
             .get(level)
             .unwrap_or_else(|| panic!("Invalid level: {level}"))
@@ -265,20 +271,23 @@ where
     fn individual_signature(
         &self,
         level: usize,
-        peer_id: usize,
+        identity: &Identity,
     ) -> Option<&TProtocol::Contribution> {
+        if identity.len() != 1 {
+            return None;
+        }
+
         self.individual_contributions
             .get(level)
             .unwrap_or_else(|| panic!("Invalid level: {level}"))
-            .get(&peer_id)
-            .map(|(c, _)| c)
+            .get(identity)
     }
 
     fn best(&self, level: usize) -> Option<&TProtocol::Contribution> {
         self.best_contribution.get(&level).map(|(c, _)| c)
     }
 
-    fn combined(&self, mut level: usize) -> Option<TProtocol::Contribution> {
+    fn combined(&self, level: usize) -> Option<TProtocol::Contribution> {
         // TODO: Cache this?
 
         let mut signatures = Vec::new();
@@ -292,14 +301,84 @@ where
 
 #[cfg(test)]
 mod tests {
+    use async_trait::async_trait;
     use parking_lot::RwLock;
     use rand::Rng;
 
     use beserial::{Deserialize, Serialize};
+    use nimiq_collections::BitSet;
     use nimiq_test_log::test;
 
     use super::*;
-    use crate::{contribution::ContributionError, partitioner::BinomialPartitioner};
+    use crate::{
+        contribution::ContributionError,
+        evaluator::WeightedVote,
+        identity::WeightRegistry,
+        partitioner::BinomialPartitioner,
+        verifier::{VerificationResult, Verifier},
+    };
+
+    /// Dummy Registry, unused except for TestProtocol type definition
+    pub struct TestRegistry {}
+    impl WeightRegistry for TestRegistry {
+        fn weight(&self, _id: usize) -> Option<usize> {
+            None
+        }
+    }
+    impl IdentityRegistry for TestRegistry {
+        fn public_key(&self, _id: usize) -> Option<nimiq_bls::PublicKey> {
+            None
+        }
+        fn signers_identity(&self, slots: &BitSet) -> Identity {
+            Identity::new(slots.clone())
+        }
+    }
+    pub struct TestVerifier {}
+    #[async_trait]
+    impl Verifier for TestVerifier {
+        type Contribution = Contribution;
+        async fn verify(&self, _contribution: &Self::Contribution) -> VerificationResult {
+            VerificationResult::Ok
+        }
+    }
+
+    /// Dummy Protocol. Unused, except for Generic
+    pub struct TestProtocol {
+        evaluator: Arc<<Self as Protocol<()>>::Evaluator>,
+        partitioner: Arc<<Self as Protocol<()>>::Partitioner>,
+        registry: Arc<<Self as Protocol<()>>::Registry>,
+        verifier: Arc<<Self as Protocol<()>>::Verifier>,
+        store: Arc<RwLock<<Self as Protocol<()>>::Store>>,
+    }
+    impl Protocol<()> for TestProtocol {
+        type Contribution = Contribution;
+        type Evaluator = WeightedVote<(), Self>;
+        type Partitioner = BinomialPartitioner;
+        type Registry = TestRegistry;
+        type Verifier = TestVerifier;
+        type Store = ReplaceStore<(), Self>;
+        fn identify(&self) -> () {
+            ()
+        }
+        fn node_id(&self) -> usize {
+            0
+        }
+        fn evaluator(&self) -> Arc<Self::Evaluator> {
+            Arc::clone(&self.evaluator)
+        }
+        fn partitioner(&self) -> Arc<Self::Partitioner> {
+            Arc::clone(&self.partitioner)
+        }
+        fn registry(&self) -> Arc<Self::Registry> {
+            Arc::clone(&self.registry)
+        }
+        fn verifier(&self) -> Arc<Self::Verifier> {
+            Arc::clone(&self.verifier)
+        }
+        fn store(&self) -> Arc<RwLock<Self::Store>> {
+            Arc::clone(&self.store)
+        }
+    }
 
     /// Dumb Aggregate adding numbers.
     #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -340,26 +419,28 @@ mod tests {
         // Create the partitions
         let partitioner = Arc::new(BinomialPartitioner::new(node_id, num_ids));
 
-        let store = Arc::new(RwLock::new(
-            ReplaceStore::<BinomialPartitioner, Contribution>::new(partitioner.clone()),
-        ));
+        let store = Arc::new(RwLock::new(ReplaceStore::<(), TestProtocol>::new(
+            partitioner.clone(),
+        )));
 
         // Define a level that is going to be used for the contributions
         let level = rng.gen_range(0..partitioner.levels()) as usize;
-        let single_identity = Identity::Single(0);
 
         // Create the first contribution
         let mut first_contributors = BitSet::new();
-        first_contributors.insert(1);
+        first_contributors.insert(0);
 
         let first_contribution = Contribution {
             value: 1,
             contributors: first_contributors,
         };
 
-        store
-            .write()
-            .put(first_contribution.clone(), level, single_identity);
+        store.write().put(
+            first_contribution.clone(),
+            level,
+            Arc::new(TestRegistry {}),
+            (),
+        );
 
         {
             let store = store.read();
@@ -373,18 +454,19 @@ mod tests {
 
         // Create a second contribution, using a different identity and a different contributor
         let mut second_contributors = BitSet::new();
-        second_contributors.insert(2);
-
-        let single_identity = Identity::Single(1);
+        second_contributors.insert(1);
 
         let second_contribution = Contribution {
             value: 10,
             contributors: second_contributors,
         };
 
-        store
-            .write()
-            .put(second_contribution.clone(), level, single_identity);
+        store.write().put(
+            second_contribution.clone(),
+            level,
+            Arc::new(TestRegistry {}),
+            (),
+        );
 
         {
             let store = store.read();
@@ -393,8 +475,8 @@ mod tests {
             if let Some(best) = current_best_contribution {
                 // Now the best contribution should be the aggregated one
                 let mut contributors = BitSet::new();
+                contributors.insert(0);
                 contributors.insert(1);
-                contributors.insert(2);
 
                 let aggregated_contribution = Contribution {
                     value: 11,
@@ -403,44 +485,6 @@ mod tests {
 
                 log::debug!(?best, "Current best contribution");
                 assert_eq!(aggregated_contribution, *best);
-            }
-        }
-
-        // Now try to insert a contribution using the same identity (1)
-        // Note that since we are using a previous identity, then we need to subtract
-        // the previous contribution from this identity to the value to be aggregated
-        let mut third_contributors = BitSet::new();
-        // Note that we are using a different contributor number
-        third_contributors.insert(8);
-
-        let single_identity = Identity::Single(1);
-
-        let second_contribution = Contribution {
-            value: 20,
-            contributors: third_contributors,
-        };
-
-        store
-            .write()
-            .put(second_contribution.clone(), level, single_identity);
-
-        {
-            let store = store.read();
-            let current_best_contribution = store.best(level);
-
-            if let Some(best) = current_best_contribution {
-                // Now the best contribution should be the aggregated one
-                let mut contributors = BitSet::new();
-                contributors.insert(1);
-                contributors.insert(8);
-
-                let aggregated_contribution = Contribution {
-                    value: 21,
-                    contributors,
-                };
-                assert_eq!(aggregated_contribution, *best);
-
-                log::debug!(?best, "Final best contribution");
             }
         }
     }

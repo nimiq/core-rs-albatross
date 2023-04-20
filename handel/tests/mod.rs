@@ -72,14 +72,8 @@ impl IdentityRegistry for Registry {
         None
     }
 
-    fn signers_identity(&self, signers: &BitSet) -> Identity {
-        if signers.len() == 1 {
-            Identity::Single(signers.iter().next().unwrap())
-        } else if !signers.is_empty() {
-            Identity::Multiple(signers.iter().collect())
-        } else {
-            Identity::None
-        }
+    fn signers_identity(&self, slots: &BitSet) -> Identity {
+        Identity::new(slots.clone())
     }
 }
 

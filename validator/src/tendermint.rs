@@ -15,10 +15,7 @@ use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_collections::BitSet;
-use nimiq_handel::{
-    aggregation::Aggregation,
-    identity::{Identity, IdentityRegistry},
-};
+use nimiq_handel::{aggregation::Aggregation, identity::IdentityRegistry};
 use nimiq_hash::{Blake2bHash, Blake2sHash, Blake2sHasher, Hash, Hasher, SerializeContent};
 use nimiq_keys::Signature as SchnorrSignature;
 use nimiq_primitives::{policy::Policy, slots::Validators};
@@ -267,12 +264,13 @@ where
         'static,
         Option<SignedProposalMessage<Self::Proposal, Self::ProposalSignature>>,
     > {
+        let identity = self.validator_registry.signers_identity(&candidates);
+        if identity.is_empty() {
+            return future::ready(None).boxed();
+        }
+
         // First out of the signatory slots calculate the signatory validators
-        let signers = match self.validator_registry.signers_identity(&candidates) {
-            Identity::None => return future::ready(None).boxed(),
-            Identity::Single(idx) => vec![idx],
-            Identity::Multiple(indexes) => indexes,
-        };
+        let candidate_peers = identity.as_vec();
 
         let request = RequestProposal {
             block_number: self.block_height,
@@ -282,7 +280,7 @@ where
 
         SingleResponseRequester::new(
             Arc::clone(&self.network),
-            signers,
+            candidate_peers,
             request,
             (Arc::clone(&self.blockchain), self.block_height),
             3,
