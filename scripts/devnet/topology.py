@@ -261,6 +261,11 @@ class Topology:
         # Register a handler for SIGINT (CTRL-c)
         signal.signal(signal.SIGINT, self.__sigint_handler)
 
+        # Continue with the rest of the nodes
+        for node in all_nodes:
+            logging.info(f"Building {node.get_name()}")
+            node.build()
+
         # Start all nodes, starting first with seeds
         for seed in self.seed_nodes:
             logging.info(f"Starting {seed.get_name()}")

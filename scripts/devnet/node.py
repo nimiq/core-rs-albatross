@@ -153,6 +153,22 @@ class Node:
         """
         return self.get_state_dir() + "/" + "devalbatross-history-consensus"
 
+    def build(self):
+        """
+        Builds the code for the current node
+        """
+        # Prepare the build command.
+        # Note: Use the `run` for the client since this will assure that
+        # when we call it later, it won't compile the code again.
+        # To exit the client, we will call it with `--help`
+        command = ["cargo", "run", "--bin", self.nimiq_exec]
+        if self.topology_settings.get_release():
+            command.append("--release")
+        command.extend(["--", "--help"])
+        subprocess.run(
+            command, cwd=self.topology_settings.get_nimiq_dir(), check=True,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
     def run(self):
         """
         Runs the process for the current node
