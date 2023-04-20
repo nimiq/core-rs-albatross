@@ -73,6 +73,7 @@ where
     TId: Clone + std::fmt::Debug + 'static,
     TProtocol: Protocol<TId>,
 {
+    id: TId,
     /// List of TodoItems already polled from input stream
     list: HashSet<TodoItem<TProtocol::Contribution>>,
     /// The evaluator used for scoring the individual todos
@@ -92,10 +93,12 @@ where
     /// * `evaluator` - The evaluator which will be used for TodoItem scoring
     /// * `input_stream` - The stream on which new LevelUpdates can be polled, which will then be converted into TodoItems
     pub fn new(
+        id: TId,
         evaluator: Arc<TProtocol::Evaluator>,
         input_stream: BoxStream<'static, LevelUpdate<TProtocol::Contribution>>,
     ) -> Self {
         Self {
+            id,
             list: HashSet::new(),
             evaluator,
             input_stream,
@@ -124,7 +127,7 @@ where
 
 impl<TId, TProtocol> Stream for TodoList<TId, TProtocol>
 where
-    TId: Clone + std::fmt::Debug + 'static,
+    TId: Clone + std::fmt::Debug + Unpin + 'static,
     TProtocol: Protocol<TId>,
 {
     type Item = TodoItem<TProtocol::Contribution>;
@@ -194,7 +197,12 @@ where
                 let score = aggregate_todo.evaluate::<TId, TProtocol>(Arc::clone(&self.evaluator));
                 // TodoItems with a score of 0 are discarded (meaning not added to the set of TodoItems).
                 if score > 0 {
-                    trace!("New todo with score: {}: {:?}", &score, &aggregate_todo);
+                    trace!(
+                        id = ?self.id,
+                        ?score,
+                        ?aggregate_todo,
+                        "New todo",
+                    );
                     if score > best_score {
                         // If the score is a new best remember the score and put the former best item into the list.
                         best_score = score;
@@ -237,9 +245,9 @@ where
                 }
             } else {
                 trace!(
-                    "Sender of update :{} is not on level {}",
-                    msg.origin,
-                    msg.level
+                    sender = ?msg.origin,
+                    level = ?msg.level,
+                    "Sender of update is not on the correct level",
                 );
             }
         }

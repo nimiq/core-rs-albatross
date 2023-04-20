@@ -65,7 +65,10 @@ impl Level {
     }
 
     /// Creates a set of levels given a partitioner
-    pub fn create_levels<P: Partitioner>(partitioner: Arc<P>) -> Vec<Level> {
+    pub fn create_levels<P: Partitioner, TId: std::fmt::Debug>(
+        partitioner: Arc<P>,
+        id: TId,
+    ) -> Vec<Level> {
         let mut levels: Vec<Level> = Vec::new();
         let mut first_active = false;
         let mut send_expected_full_size: usize = 1;
@@ -78,7 +81,12 @@ impl Level {
                     ids.shuffle(&mut rng);
 
                     let size = ids.len();
-                    trace!("Level {} peers: {:?}", i, ids);
+                    trace!(
+                        ?id,
+                        level = i,
+                        peers_on_level = ?ids,
+                        "Peers on Level",
+                    );
                     let level = Level::new(i, ids, send_expected_full_size);
 
                     if !first_active {
