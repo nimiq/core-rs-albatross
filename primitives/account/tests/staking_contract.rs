@@ -1054,9 +1054,14 @@ fn retire_validator_works() {
 
     assert_eq!(
         tx_logger.logs,
-        vec![Log::DeactivateValidator {
-            validator_address: validator_address.clone()
-        }]
+        vec![
+            Log::DeactivateValidator {
+                validator_address: validator_address.clone()
+            },
+            Log::RetireValidator {
+                validator_address: validator_address.clone()
+            }
+        ]
     );
 
     assert!(staking_contract
