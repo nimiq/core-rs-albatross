@@ -1815,10 +1815,7 @@ impl Network {
         })))
     }
 
-    async fn unsubscribe_with_name<T>(&self, topic_name: String) -> Result<(), NetworkError>
-    where
-        T: Topic + Sync,
-    {
+    async fn unsubscribe_with_name(&self, topic_name: String) -> Result<(), NetworkError> {
         let (output_tx, output_rx) = oneshot::channel();
 
         self.action_tx
@@ -1990,7 +1987,7 @@ impl NetworkInterface for Network {
         T: Topic + Sync,
     {
         let topic_name = <T as Topic>::NAME.to_string();
-        self.unsubscribe_with_name::<T>(topic_name).await
+        self.unsubscribe_with_name(topic_name).await
     }
 
     async fn unsubscribe_subtopic<T>(&self, subtopic: String) -> Result<(), Self::Error>
@@ -1998,7 +1995,7 @@ impl NetworkInterface for Network {
         T: Topic + Sync,
     {
         let topic_name = format!("{}_{}", <T as Topic>::NAME, subtopic);
-        self.unsubscribe_with_name::<T>(topic_name).await
+        self.unsubscribe_with_name(topic_name).await
     }
 
     async fn publish<T>(&self, item: <T as Topic>::Item) -> Result<(), Self::Error>

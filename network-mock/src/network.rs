@@ -370,10 +370,7 @@ impl MockNetwork {
         })))
     }
 
-    async fn unsubscribe_with_name<T>(&self, topic_name: String) -> Result<(), MockNetworkError>
-    where
-        T: Topic + Sync,
-    {
+    async fn unsubscribe_with_name(&self, topic_name: String) -> Result<(), MockNetworkError> {
         let mut hub = self.hub.lock();
 
         log::debug!(
@@ -496,7 +493,7 @@ impl Network for MockNetwork {
         T: Topic + Sync,
     {
         let topic_name = T::NAME.to_string();
-        self.unsubscribe_with_name::<T>(topic_name).await
+        self.unsubscribe_with_name(topic_name).await
     }
 
     async fn unsubscribe_subtopic<T>(&self, subtopic: String) -> Result<(), Self::Error>
@@ -504,7 +501,7 @@ impl Network for MockNetwork {
         T: Topic + Sync,
     {
         let topic_name = format!("{}_{}", T::NAME, subtopic);
-        self.unsubscribe_with_name::<T>(topic_name).await
+        self.unsubscribe_with_name(topic_name).await
     }
 
     async fn publish<T: Topic>(&self, item: T::Item) -> Result<(), Self::Error>
