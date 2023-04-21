@@ -1287,11 +1287,12 @@ dependencies = [
 
 [[package]]
 name = "curve25519-dalek"
-version = "4.0.0-rc.0"
+version = "4.0.0-rc.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8da00a7a9a4eb92a0a0f8e75660926d48f0d0f3c537e455c457bcdaa1e16b1ac"
+checksum = "03d928d978dbec61a1167414f5ec534f24bea0d7a0d24dd9b6233d3d8223e585"
 dependencies = [
  "cfg-if",
+ "digest 0.10.6",
  "fiat-crypto",
  "packed_simd_2",
  "platforms",
@@ -3823,7 +3824,7 @@ name = "nimiq-keys"
 version = "0.1.0"
 dependencies = [
  "beserial",
- "curve25519-dalek 3.2.0",
+ "curve25519-dalek 4.0.0-rc.2",
  "data-encoding",
  "ed25519-zebra",
  "hex",
@@ -4538,7 +4539,7 @@ version = "0.1.0"
 dependencies = [
  "beserial",
  "byteorder",
- "curve25519-dalek 3.2.0",
+ "curve25519-dalek 4.0.0-rc.2",
  "hex",
  "nimiq-hash",
  "nimiq-keys",
@@ -6215,14 +6216,14 @@ checksum = "5e9f0ab6ef7eb7353d9119c170a436d1bf248eea575ac42d19d12f4e34130831"
 
 [[package]]
 name = "snow"
-version = "0.9.1"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12ba5f4d4ff12bdb6a169ed51b7c48c0e0ac4b0b4b31012b2571e97d78d3201d"
+checksum = "774d05a3edae07ce6d68ea6984f3c05e9bba8927e3dd591e3b479e5b03213d0d"
 dependencies = [
  "aes-gcm 0.9.4",
  "blake2",
  "chacha20poly1305",
- "curve25519-dalek 4.0.0-rc.0",
+ "curve25519-dalek 4.0.0-rc.2",
  "rand_core 0.6.4",
  "ring",
  "rustc_version",

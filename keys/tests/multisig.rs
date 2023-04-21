@@ -317,8 +317,7 @@ fn it_correctly_calculates_commitments() {
     let scalar = Scalar::from_hash::<::sha2::Sha512>(h);
 
     // Compute the point [scalar]B.
-    let commitment: EdwardsPoint =
-        &scalar * &::curve25519_dalek::constants::ED25519_BASEPOINT_TABLE;
+    let commitment: EdwardsPoint = &scalar * ::curve25519_dalek::constants::ED25519_BASEPOINT_TABLE;
 
     assert_eq!(
         scalar.as_bytes(),
@@ -505,7 +504,7 @@ fn it_can_construct_commitments() {
 
         for i in 0..test.priv_keys.len() {
             let commitment: EdwardsPoint =
-                &test.secrets[i].0 * &::curve25519_dalek::constants::ED25519_BASEPOINT_TABLE;
+                &test.secrets[i].0 * ::curve25519_dalek::constants::ED25519_BASEPOINT_TABLE;
             assert_eq!(
                 (j, i, commitment.compress().to_bytes()),
                 (j, i, test.commitments[i].to_bytes())

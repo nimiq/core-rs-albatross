@@ -8,7 +8,7 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use curve25519_dalek::constants;
 use curve25519_dalek::edwards::{CompressedEdwardsY, EdwardsPoint};
 use curve25519_dalek::scalar::Scalar;
-use curve25519_dalek::traits::IsIdentity;
+use curve25519_dalek::traits::{BasepointTable, IsIdentity};
 use log::debug;
 use rand::{CryptoRng, RngCore};
 #[cfg(feature = "serde-derive")]
@@ -83,19 +83,27 @@ impl VrfSeed {
     pub fn verify(&self, prev_seed: &VrfSeed, public_key: &PublicKey) -> Result<(), VrfError> {
         // Deserialize signature.
         let V = CompressedEdwardsY::from_slice(&self.signature[..32])
+            .map_err(|_| VrfError::InvalidSignature)?
             .decompress()
             .ok_or(VrfError::InvalidSignature)?;
 
-        let h = Scalar::from_canonical_bytes(self.signature[32..64].try_into().unwrap())
-            .ok_or(VrfError::InvalidSignature)?;
+        let h_option = Scalar::from_canonical_bytes(self.signature[32..64].try_into().unwrap());
+        if h_option.is_none().into() {
+            return Err(VrfError::InvalidSignature);
+        }
+        let h = h_option.unwrap();
 
-        let s = Scalar::from_canonical_bytes(self.signature[64..].try_into().unwrap())
-            .ok_or(VrfError::InvalidSignature)?;
+        let s_option = Scalar::from_canonical_bytes(self.signature[64..].try_into().unwrap());
+        if s_option.is_none().into() {
+            return Err(VrfError::InvalidSignature);
+        }
+        let s = s_option.unwrap();
 
         // Deserialize public key.
         let A_bytes = public_key.as_bytes();
 
         let A = CompressedEdwardsY::from_slice(A_bytes)
+            .map_err(|_| VrfError::InvalidSignature)?
             .decompress()
             .ok_or(VrfError::InvalidSignature)?;
 
@@ -106,11 +114,11 @@ impl VrfSeed {
 
         // Follow the verification algorithm for VXEdDSA.
         // https://www.signal.org/docs/specifications/xeddsa/#vxeddsa
-        let B_v = EdwardsPoint::hash_from_bytes::<Sha512>(&[A_bytes, &message[..]].concat());
+        let B_v = EdwardsPoint::nonspec_map_to_curve::<Sha512>(&[A_bytes, &message[..]].concat());
         if A.is_small_order() || V.is_small_order() || B_v.is_identity() {
             return Err(VrfError::InvalidSignature);
         }
-        let R = &s * &constants::ED25519_BASEPOINT_TABLE - h * A;
+        let R = &s * constants::ED25519_BASEPOINT_TABLE - h * A;
         let R_v = s * B_v - h * V;
         let h_check = Scalar::hash_from_bytes::<Sha512>(
             &[
@@ -165,10 +173,10 @@ impl VrfSeed {
 
         // Follow the signing algorithm for VXEdDSA.
         // https://www.signal.org/docs/specifications/xeddsa/#vxeddsa
-        let B_v = EdwardsPoint::hash_from_bytes::<Sha512>(&[A_bytes, &message[..]].concat());
+        let B_v = EdwardsPoint::nonspec_map_to_curve::<Sha512>(&[A_bytes, &message[..]].concat());
         let V = (a * B_v).compress();
         let r = Scalar::hash_from_bytes::<Sha512>(&[a.as_bytes(), V.as_bytes(), &Z[..]].concat());
-        let R = (&r * &constants::ED25519_BASEPOINT_TABLE).compress();
+        let R = (&r * constants::ED25519_BASEPOINT_TABLE).compress();
         let R_v = (r * B_v).compress();
         let h = Scalar::hash_from_bytes::<Sha512>(
             &[
@@ -202,6 +210,7 @@ impl VrfSeed {
 
         // Calculate the point V and serialized it.
         let V = CompressedEdwardsY::from_slice(&self.signature[..32])
+            .expect("Tried to use an invalid signature for the VRF RNG!")
             .decompress()
             .expect("Tried to use an invalid signature for the VRF RNG!");
         let V_bytes = V.mul_by_cofactor().compress().to_bytes();
