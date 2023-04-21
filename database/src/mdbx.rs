@@ -13,7 +13,7 @@ type DbKvPair<'a> = (Cow<'a, [u8]>, Cow<'a, [u8]>);
 
 #[derive(Clone, Debug)]
 pub struct MdbxEnvironment {
-    env: Arc<libmdbx::Environment<NoWriteMap>>,
+    env: Arc<libmdbx::Database<NoWriteMap>>,
 }
 
 impl MdbxEnvironment {
@@ -44,7 +44,7 @@ impl MdbxEnvironment {
     ) -> Result<Self, Error> {
         fs::create_dir_all(path).map_err(Error::CreateDirectory)?;
 
-        let mut env = libmdbx::Environment::new();
+        let mut env = libmdbx::Database::new();
 
         // Configure the environment flags
         let geo = libmdbx::Geometry::<std::ops::Range<usize>> {
@@ -54,7 +54,7 @@ impl MdbxEnvironment {
 
         env.set_geometry(geo);
 
-        let db_flags = libmdbx::EnvironmentFlags {
+        let db_flags = libmdbx::DatabaseFlags {
             no_rdahead: true,
             mode: libmdbx::Mode::ReadWrite {
                 sync_mode: libmdbx::SyncMode::Durable,
@@ -65,7 +65,7 @@ impl MdbxEnvironment {
         env.set_flags(db_flags);
 
         // This is only required if multiple databases will be used in the environment.
-        env.set_max_dbs(max_dbs as usize);
+        env.set_max_tables(max_dbs as usize);
         if let Some(max_readers) = max_readers {
             env.set_max_readers(max_readers);
         }
@@ -86,23 +86,23 @@ impl MdbxEnvironment {
 
     pub(super) fn open_database(&self, name: String, flags: DatabaseFlags) -> MdbxDatabase {
         // This is an implicit transaction, so take the lock first.
-        let mut db_flags = libmdbx::DatabaseFlags::CREATE;
+        let mut db_flags = libmdbx::TableFlags::CREATE;
 
         // Translate flags.
         if flags.contains(DatabaseFlags::DUPLICATE_KEYS) {
-            db_flags.insert(libmdbx::DatabaseFlags::DUP_SORT);
+            db_flags.insert(libmdbx::TableFlags::DUP_SORT);
 
             if flags.contains(DatabaseFlags::DUP_FIXED_SIZE_VALUES) {
-                db_flags.insert(libmdbx::DatabaseFlags::DUP_FIXED);
+                db_flags.insert(libmdbx::TableFlags::DUP_FIXED);
             }
         }
         if flags.contains(DatabaseFlags::UINT_KEYS) {
-            db_flags.insert(libmdbx::DatabaseFlags::INTEGER_KEY);
+            db_flags.insert(libmdbx::TableFlags::INTEGER_KEY);
         }
 
         // Create the database
         let txn = self.env.begin_rw_txn().unwrap();
-        txn.create_db(Some(&name), db_flags).unwrap();
+        txn.create_table(Some(&name), db_flags).unwrap();
         txn.commit().unwrap();
 
         MdbxDatabase {
@@ -149,7 +149,7 @@ impl MdbxEnvironment {
 #[derive(Debug)]
 pub struct MdbxDatabase {
     db: String,
-    flags: libmdbx::DatabaseFlags,
+    flags: libmdbx::TableFlags,
 }
 
 pub struct MdbxReadTransaction<'env> {
@@ -168,7 +168,7 @@ impl<'env> MdbxReadTransaction<'env> {
         K: AsDatabaseBytes + ?Sized,
         V: FromDatabaseValue,
     {
-        let db = self.txn.open_db(Some(&db.db)).unwrap();
+        let db = self.txn.open_table(Some(&db.db)).unwrap();
 
         let result: Option<Cow<[u8]>> = self
             .txn
@@ -181,7 +181,7 @@ impl<'env> MdbxReadTransaction<'env> {
     pub(super) fn cursor<'txn>(&'txn self, db: &Database) -> MdbxCursor<'txn> {
         let db = self
             .txn
-            .open_db(Some(&db.persistent().unwrap().db))
+            .open_table(Some(&db.persistent().unwrap().db))
             .unwrap();
 
         let cursor = self.txn.cursor(&db).unwrap();
@@ -217,7 +217,7 @@ impl<'env> MdbxWriteTransaction<'env> {
         K: AsDatabaseBytes + ?Sized,
         V: FromDatabaseValue,
     {
-        let db = self.txn.create_db(Some(&db.db), db.flags).unwrap();
+        let db = self.txn.create_table(Some(&db.db), db.flags).unwrap();
 
         let result: Option<Cow<[u8]>> = self
             .txn
@@ -232,7 +232,7 @@ impl<'env> MdbxWriteTransaction<'env> {
         K: AsDatabaseBytes + ?Sized,
         V: IntoDatabaseValue + ?Sized,
     {
-        let db = self.txn.create_db(Some(&db.db), db.flags).unwrap();
+        let db = self.txn.create_table(Some(&db.db), db.flags).unwrap();
 
         let key = AsDatabaseBytes::as_database_bytes(key);
         let value_size = IntoDatabaseValue::database_byte_size(value);
@@ -250,7 +250,7 @@ impl<'env> MdbxWriteTransaction<'env> {
         K: AsDatabaseBytes + ?Sized,
         V: AsDatabaseBytes + ?Sized,
     {
-        let db = self.txn.create_db(Some(&db.db), db.flags).unwrap();
+        let db = self.txn.create_table(Some(&db.db), db.flags).unwrap();
 
         let key = AsDatabaseBytes::as_database_bytes(key);
         let value = AsDatabaseBytes::as_database_bytes(value);
@@ -262,7 +262,7 @@ impl<'env> MdbxWriteTransaction<'env> {
     where
         K: AsDatabaseBytes + ?Sized,
     {
-        let db = self.txn.create_db(Some(&db.db), db.flags).unwrap();
+        let db = self.txn.create_table(Some(&db.db), db.flags).unwrap();
 
         self.txn
             .del(&db, AsDatabaseBytes::as_database_bytes(key).as_ref(), None)
@@ -274,7 +274,7 @@ impl<'env> MdbxWriteTransaction<'env> {
         K: AsDatabaseBytes + ?Sized,
         V: AsDatabaseBytes + ?Sized,
     {
-        let db = self.txn.create_db(Some(&db.db), db.flags).unwrap();
+        let db = self.txn.create_table(Some(&db.db), db.flags).unwrap();
 
         self.txn
             .del(
@@ -292,7 +292,7 @@ impl<'env> MdbxWriteTransaction<'env> {
     pub(super) fn cursor<'txn>(&'txn self, db: &Database) -> MdbxCursor<'txn> {
         let db = self
             .txn
-            .open_db(Some(&db.persistent().unwrap().db))
+            .open_table(Some(&db.persistent().unwrap().db))
             .unwrap();
 
         let cursor = self.txn.cursor(&db).unwrap();
@@ -305,7 +305,7 @@ impl<'env> MdbxWriteTransaction<'env> {
     pub(super) fn write_cursor<'txn>(&'txn self, db: &Database) -> MdbxWriteCursor<'txn> {
         let db = self
             .txn
-            .open_db(Some(&db.persistent().unwrap().db))
+            .open_table(Some(&db.persistent().unwrap().db))
             .unwrap();
         let cursor = self.txn.cursor(&db).unwrap();
 
@@ -315,9 +315,9 @@ impl<'env> MdbxWriteTransaction<'env> {
     }
 
     pub(super) fn clear_database(&mut self, db: &MdbxDatabase) {
-        let db = self.txn.create_db(Some(&db.db), db.flags).unwrap();
+        let db = self.txn.create_table(Some(&db.db), db.flags).unwrap();
 
-        self.txn.clear_db(&db).unwrap();
+        self.txn.clear_table(&db).unwrap();
     }
 }
 
