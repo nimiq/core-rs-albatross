@@ -34,4 +34,4 @@ beserial = { path = "../beserial", features = ["derive", "libp2p"] }
 nimiq-test-log = { path = "../test-log" }
 
 [features]
-peer-contact-book-persistence = ["serde"]
+peer-contact-book-persistence = ["serde", "bitflags/serde"]

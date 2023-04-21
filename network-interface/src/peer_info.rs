@@ -5,11 +5,7 @@ use beserial::{Deserialize, Serialize};
 
 bitflags! {
     /// Bitmask of services
-    ///
-    ///
-    ///  - This just serializes to its numeric value for serde, but a list of strings would be nicer.
-    ///
-    #[derive(Serialize, Deserialize)]
+    #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
     #[cfg_attr(feature = "peer-contact-book-persistence", derive(serde::Serialize, serde::Deserialize), serde(transparent))]
     pub struct Services: u32 {
         /// The node provides at least the latest [`nimiq_primitives::policy::NUM_BLOCKS_VERIFICATION`] as full blocks.
