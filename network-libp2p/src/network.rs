@@ -721,11 +721,11 @@ impl Network {
                                     )) => {}
                                     QueryResult::GetRecord(Err(error)) => {
                                         if let Some(output) = state.dht_gets.remove(&id) {
-                                            if output.send(Err(error.into())).is_err() {
-                                                error!(query_id = ?id, error = "receiver hung up", "could not send get record query result error to channel");
+                                            if output.send(Err(error.clone().into())).is_err() {
+                                                error!(query_id = ?id, query_error=?error, error = "receiver hung up", "could not send get record query result error to channel");
                                             }
                                         } else {
-                                            warn!(query_id = ?id, ?step, "GetRecord query result error for unknown query ID");
+                                            warn!(query_id = ?id, ?step, query_error=?error, "GetRecord query result error for unknown query ID");
                                         }
                                     }
                                     QueryResult::PutRecord(result) => {
