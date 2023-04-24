@@ -12,13 +12,14 @@
   },
   "files": [
     "bundler",
+    "types",
     "web",
     "client-proxy.js",
     "transfer-handlers.js"
   ],
   "module": "bundler/index.js",
   "homepage": "https://nimiq.com",
-  "types": "bundler/index.d.ts",
+  "types": "types/index.d.ts",
   "sideEffects": [
     "./bundler/main-wasm/index.js",
     "./bundler/worker-wasm/index.js",
