@@ -7,7 +7,8 @@ it will panic if it is executed outside a web browser.
 
 ## Building the example
 
-To build the client, the recommended way is to use [`wasm-pack`](https://rustwasm.github.io/wasm-pack/). This tool can be obtained using:
+To build the client, the recommended way is to use [`wasm-pack`](https://rustwasm.github.io/wasm-pack/).
+This tool can be obtained using:
 
 ```
 cargo install wasm-pack
@@ -15,20 +16,15 @@ cargo install wasm-pack
 
 or via their website. Once installed, the client can be built from this directory:
 
-```bash
-wasm-pack build --target web --weak-refs
+```sh
+./scripts/build-web.sh
 ```
-
-> **Note**
-> The `--weak-refs` flag is available since wasm-pack v0.11.0.
-> For older versions prefix the command with `WASM_BINDGEN_WEAKREF=1` instead.
-> Check your installed version with `wasm-pack --version`.
 
 The above command will compile the Rust code to WebAssembly and generate the corresponding JS
 bindings required to run the client in a web browser.
 
-After the client has been built, this directory can be served with a web server
-(e.g. `python3 -m http.server`) and then the `index.html` file can be loaded from e.g. http://localhost:8000.
+After the client has been built, this directory can be served with a web server (e.g. `python3 -m http.server`)
+and then the `/example/index.html` file can be loaded from e.g. http://localhost:8000/example/index.html.
 
 ## Publishing to NPM
 
@@ -37,10 +33,8 @@ After the client has been built, this directory can be served with a web server
 
 To publish this package to NPM, run this command:
 
-```bash
-wasm-pack build --release --weak-refs --target bundler --out-dir dist/bundler --out-name index && \
-wasm-pack build --release --weak-refs --target web --out-dir dist/web --out-name index && \
-cd dist && \
-npm publish --tag next && \
-cd ..
+```sh
+./scripts/npm-publish.sh
 ```
+
+This script builds both the `web` and `bundler` targets and publishes the package.

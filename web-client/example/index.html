@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8" />
+    <title>Nimiq Web client example</title>
+  </head>
+  <body>
+    <script type="module" src="./module.js"></script>
+
+    <!-- Run an animation on the main thread (CPU) with JS -->
+    <div id="dead-mans-switch"></div>
+    <script>
+      const deadMansSwitch = document.querySelector('#dead-mans-switch');
+
+      let angle = 0;
+      window.setInterval(() => {
+        angle += 5;
+        if (angle >= 360) {
+          angle = 0;
+        }
+        deadMansSwitch.style.transform = `rotate(${angle}deg)`;
+      }, 20); // ~50x per second
+    </script>
+    <style>
+      body {
+        margin: 100px;
+      }
+
+      #dead-mans-switch {
+        width: 50px;
+        margin-left: -20px;
+        height: 5px;
+        background: black;
+      }
+    </style>
+  </body>
+</html>

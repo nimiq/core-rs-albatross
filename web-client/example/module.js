@@ -1,14 +1,12 @@
-import init, * as Nimiq from "./pkg/nimiq_web_client.js";
+import init, * as Nimiq from '../dist/web/index.js';
 
 window.Nimiq = Nimiq;
 
 init().then(async () => {
     const config = new Nimiq.ClientConfiguration();
-    config.seedNodes(['/dns4/seed1.pos.nimiq-testnet.com/tcp/8443/wss']);
-    config.network('testalbatross');
     config.logLevel('debug');
 
-    const client = await config.instantiateClient();
+    const client = await Nimiq.Client.create(config.build());
     window.client = client; // Prevent garbage collection and for playing around
 
     client.addConsensusChangedListener(
@@ -51,36 +49,38 @@ init().then(async () => {
      * @returns {Promise<string>}
      */
     window.sendBasicTransaction = async (privateKey, recipient, amount, message, fee = 0) => {
-        if (!client.isConsensusEstablished()) {
+        if (!await client.isConsensusEstablished()) {
             throw new Error('Consensus not yet established');
         }
 
         const keyPair = Nimiq.KeyPair.derive(Nimiq.PrivateKey.fromHex(privateKey));
-
-        const transactionBuilder = client.transactionBuilder();
 
         /** @type {Nimiq.Transaction} */
         let transaction;
         if (message) {
             const messageBytes = new TextEncoder().encode(message);
 
-            transaction = transactionBuilder.newBasicWithData(
+            transaction = Nimiq.TransactionBuilder.newBasicWithData(
                 keyPair.toAddress(),
                 Nimiq.Address.fromString(recipient),
                 messageBytes,
                 BigInt(amount),
                 BigInt(fee),
+                await client.getHeadHeight(),
+                await client.getNetworkId(),
             ).sign(keyPair);
         } else {
-            transaction = transactionBuilder.newBasic(
+            transaction = Nimiq.TransactionBuilder.newBasic(
                 keyPair.toAddress(),
                 Nimiq.Address.fromString(recipient),
                 BigInt(amount),
                 BigInt(fee),
+                await client.getHeadHeight(),
+                await client.getNetworkId(),
             ).sign(keyPair);
         }
 
-        return client.sendTransaction(transaction);
+        return client.sendTransaction(transaction.toHex());
     }
 
     /**
@@ -91,22 +91,22 @@ init().then(async () => {
      * @returns {Promise<string>}
      */
     window.sendCreateStakerTransaction = async (privateKey, delegation, amount, fee = 0) => {
-        if (!client.isConsensusEstablished()) {
+        if (!await client.isConsensusEstablished()) {
             throw new Error('Consensus not yet established');
         }
 
         const keyPair = Nimiq.KeyPair.derive(Nimiq.PrivateKey.fromHex(privateKey));
 
-        const transactionBuilder = client.transactionBuilder();
-
-        const transaction = transactionBuilder.newCreateStaker(
+        const transaction = Nimiq.TransactionBuilder.newCreateStaker(
             keyPair.toAddress(),
             Nimiq.Address.fromString(delegation),
             BigInt(amount),
             BigInt(fee),
+            await client.getHeadHeight(),
+            await client.getNetworkId(),
         ).sign(keyPair);
 
-        return client.sendTransaction(transaction);
+        return client.sendTransaction(transaction.toHex());
     }
 
     /**
@@ -116,21 +116,21 @@ init().then(async () => {
      * @returns {Promise<string>}
      */
     window.sendUpdateStakerTransaction = async (privateKey, newDelegation, fee = 0) => {
-        if (!client.isConsensusEstablished()) {
+        if (!await client.isConsensusEstablished()) {
             throw new Error('Consensus not yet established');
         }
 
         const keyPair = Nimiq.KeyPair.derive(Nimiq.PrivateKey.fromHex(privateKey));
 
-        const transactionBuilder = client.transactionBuilder();
-
-        const transaction = transactionBuilder.newUpdateStaker(
+        const transaction = Nimiq.TransactionBuilder.newUpdateStaker(
             keyPair.toAddress(),
             Nimiq.Address.fromString(newDelegation),
             BigInt(fee),
+            await client.getHeadHeight(),
+            await client.getNetworkId(),
         ).sign(keyPair);
 
-        return client.sendTransaction(transaction);
+        return client.sendTransaction(transaction.toHex());
     }
 
     /**
@@ -140,20 +140,20 @@ init().then(async () => {
      * @returns {Promise<string>}
      */
     window.sendUnstakeTransaction = async (privateKey, amount, fee = 0) => {
-        if (!client.isConsensusEstablished()) {
+        if (!await client.isConsensusEstablished()) {
             throw new Error('Consensus not yet established');
         }
 
         const keyPair = Nimiq.KeyPair.derive(Nimiq.PrivateKey.fromHex(privateKey));
 
-        const transactionBuilder = client.transactionBuilder();
-
-        const transaction = transactionBuilder.newUnstake(
+        const transaction = Nimiq.TransactionBuilder.newUnstake(
             keyPair.toAddress(),
             BigInt(amount),
             BigInt(fee),
+            await client.getHeadHeight(),
+            await client.getNetworkId(),
         ).sign(keyPair);
 
-        return client.sendTransaction(transaction);
+        return client.sendTransaction(transaction.toHex());
     }
 });

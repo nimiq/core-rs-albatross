@@ -11,27 +11,27 @@
     "url": "https://github.com/nimiq/core-rs-albatross"
   },
   "files": [
-    "bundler/index_bg.js",
-    "bundler/index_bg.wasm",
-    "bundler/index_bg.wasm.d.ts",
-    "bundler/index.d.ts",
-    "bundler/index.js",
-    "web/index_bg.wasm",
-    "web/index_bg.wasm.d.ts",
-    "web/index.d.ts",
-    "web/index.js"
+    "bundler",
+    "web",
+    "client-proxy.js",
+    "transfer-handlers.js"
   ],
   "module": "bundler/index.js",
   "homepage": "https://nimiq.com",
   "types": "bundler/index.d.ts",
   "sideEffects": [
-    "./bundler/index.js",
-    "./web/index.js"
+    "./bundler/main-wasm/index.js",
+    "./bundler/worker-wasm/index.js",
+    "./web/main-wasm/index.js",
+    "./web/worker-wasm/index.js"
   ],
   "keywords": [
     "nimiq",
     "cryptocurrency",
     "blockchain",
     "proof-of-stake"
-  ]
+  ],
+  "dependencies": {
+    "comlink": "^4.4.1"
+  }
 }
