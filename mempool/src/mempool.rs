@@ -401,24 +401,26 @@ impl Mempool {
 
         self.prune_expired_transactions(&blockchain, &mut mempool_state);
 
-        // Check for all transactions whether they have been included already.
-        for tx_hash in mempool_state
-            .regular_transactions
-            .transactions
-            .clone()
-            .keys()
-        {
-            if blockchain.contains_tx_in_validity_window(tx_hash, None) {
-                mempool_state.remove(&blockchain, tx_hash, EvictionReason::AlreadyIncluded);
-            }
+        // Remove all transactions that have already been included.
+        let regular_iter = mempool_state.regular_transactions.transactions.iter();
+        let control_iter = mempool_state.control_transactions.transactions.iter();
+        let included_txs = regular_iter
+            .chain(control_iter)
+            .map(|tx| tx.0)
+            .filter(|tx_hash| blockchain.contains_tx_in_validity_window(tx_hash, None))
+            .cloned()
+            .collect::<Vec<Blake2bHash>>();
+
+        for tx_hash in included_txs {
+            mempool_state.remove(&blockchain, &tx_hash, EvictionReason::AlreadyIncluded);
         }
 
-        // Recompute reserved balances, potentially removing by-now invalid transactions.
-        let all_known_senders: HashSet<Address> = mempool_state
+        // Recompute reserved balances, potentially removing transactions that have become invalid.
+        let all_known_senders = mempool_state
             .state_by_sender
-            .drain()
-            .map(|(address, _)| address)
-            .collect();
+            .keys()
+            .cloned()
+            .collect::<HashSet<Address>>();
 
         Mempool::recompute_sender_balances(all_known_senders, &blockchain, &mut mempool_state);
     }
@@ -439,15 +441,24 @@ impl Mempool {
             };
             sender_state.reserved_balance = ReservedBalance::new(address.clone());
 
-            // TODO: We should have per sender transactions ordered by fee to try to
-            //       keep the ones with higher fee
-            let sender_account = if let Some(account) = blockchain.get_account_if_complete(&address)
-            {
-                account
-            } else {
-                warn!("Could not get account for address");
-                return;
+            let sender_account = match blockchain.get_account_if_complete(&address) {
+                Some(account) => account,
+                None => {
+                    // We don't have the sender account so we can't do any balance tracking.
+                    // Remove all transactions from this sender.
+                    for hash in &sender_state.txns {
+                        mempool_state
+                            .regular_transactions
+                            .delete(hash)
+                            .or_else(|| mempool_state.control_transactions.delete(hash));
+                    }
+                    continue;
+                }
             };
+
+            // TODO We should have per sender transactions ordered by fee to try to
+            //  keep the ones with higher fee
+
             sender_state.txns.retain(|tx_hash| {
                 let tx = match mempool_state.get(tx_hash) {
                     Some(transaction) => transaction,

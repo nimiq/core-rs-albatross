@@ -65,11 +65,10 @@ impl MempoolState {
         }
 
         // Reserve the balance necessary for this transaction on the sender account.
-        let sender_account = if let Some(account) = blockchain.get_account_if_complete(&tx.sender) {
-            account
-        } else {
-            return Err(VerifyErr::NoConsensus);
-        };
+        let sender_account = blockchain
+            .get_account_if_complete(&tx.sender)
+            .ok_or(VerifyErr::NoConsensus)?;
+
         if let Some(sender_state) = self.state_by_sender.get_mut(&tx.sender) {
             let reserved_balance = &mut sender_state.reserved_balance;
             blockchain
@@ -120,35 +119,49 @@ impl MempoolState {
         let tx = self
             .regular_transactions
             .delete(tx_hash)
-            .or_else(|| self.control_transactions.delete(tx_hash));
+            .or_else(|| self.control_transactions.delete(tx_hash))?;
 
-        if let Some(tx) = tx {
-            if let Some(sender_state) = self.state_by_sender.get_mut(&tx.sender) {
-                let sender_account =
-                    if let Some(account) = blockchain.get_account_if_complete(&tx.sender) {
-                        account
-                    } else {
-                        warn!("Could not get account for address");
-                        return None;
-                    };
-                blockchain
-                    .release_balance(&sender_account, &tx, &mut sender_state.reserved_balance)
-                    .expect("Failed to release balance");
+        let sender_state = match self.state_by_sender.get_mut(&tx.sender) {
+            Some(state) => state,
+            None => return Some(tx),
+        };
 
-                sender_state.txns.remove(tx_hash);
-
-                if sender_state.txns.is_empty() {
-                    self.state_by_sender.remove(&tx.sender);
+        let sender_account = match blockchain.get_account_if_complete(&tx.sender) {
+            Some(account) => account,
+            None => {
+                // We don't know the sender account so we can't do any balance tracking.
+                // Throw away all transactions from this sender.
+                warn!(
+                    sender_address = %tx.sender,
+                    num_transactions = sender_state.txns.len(),
+                    "Sender account is gone"
+                );
+                for hash in &sender_state.txns {
+                    self.regular_transactions
+                        .delete(hash)
+                        .or_else(|| self.control_transactions.delete(hash));
                 }
+                self.state_by_sender.remove(&tx.sender);
+                return Some(tx);
             }
+        };
 
-            #[cfg(feature = "metrics")]
-            self.metrics.note_evicted(reason);
-
+        if !sender_state.txns.remove(tx_hash) {
             return Some(tx);
         }
 
-        None
+        blockchain
+            .release_balance(&sender_account, &tx, &mut sender_state.reserved_balance)
+            .expect("Failed to release balance");
+
+        if sender_state.txns.is_empty() {
+            self.state_by_sender.remove(&tx.sender);
+        }
+
+        #[cfg(feature = "metrics")]
+        self.metrics.note_evicted(reason);
+
+        Some(tx)
     }
 
     /// Retrieves all expired transaction hashes from both the `regular_transactions` and `control_transactions` vectors
