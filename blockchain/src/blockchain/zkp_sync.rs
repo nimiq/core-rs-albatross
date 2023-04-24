@@ -332,7 +332,7 @@ impl Blockchain {
         debug!(
             block = %this.state.main_chain.head,
             num_transactions,
-            kind = "zkp_extend",
+            kind = "push_macro",
             "Accepted block",
         );
 
