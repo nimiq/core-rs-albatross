@@ -426,17 +426,18 @@ impl Blockchain {
             num_blocks,
             "Need to revert micro blocks from the current epoch",
         );
+
         // Get the chain info for the head of the chain.
         let mut current_info = self
             .get_chain_info(&self.head_hash(), true, Some(write_txn))
-            .expect("Couldn't fetch chain info for the head of the chain!");
+            .expect("Couldn't fetch chain info for the head of the chain");
 
         // Revert each block individually.
         for _ in 0..num_blocks {
             // Get the chain info for the parent of the current head of the chain.
             let prev_info = self
                 .get_chain_info(current_info.head.parent_hash(), true, Some(write_txn))
-                .expect("Failed to find main chain predecessor while reverting blocks!");
+                .expect("Failed to find main chain predecessor while reverting blocks");
 
             // Revert the accounts tree. This also reverts the history store.
             self.revert_accounts(
@@ -446,6 +447,18 @@ impl Blockchain {
                 &mut BlockLogger::empty(),
             )?;
 
+            // Check that the block reverted cleanly.
+            // Since we are doing history sync, the accounts tree should always be complete.
+            let accounts_hash = self.state.accounts.get_root_hash_assert(Some(write_txn));
+            assert_eq!(
+                *prev_info.head.state_root(),
+                accounts_hash,
+                "Inconsistent state after reverting block {} - {:?}",
+                &current_info.head,
+                &current_info.head,
+            );
+
+            // Move on to the next block.
             current_info = prev_info;
         }
 

@@ -213,7 +213,7 @@ impl fmt::Display for MicroHeader {
 }
 
 /// The struct representing the body of a Micro block.
-#[derive(Clone, Eq, PartialEq, Serialize, Deserialize, SerializeContent)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, SerializeContent)]
 pub struct MicroBody {
     /// A vector containing the fork proofs for this block. It might be empty.
     #[beserial(len_type(u16))]
@@ -298,12 +298,3 @@ impl MicroBody {
 }
 
 impl Hash for MicroBody {}
-
-impl Debug for MicroBody {
-    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
-        let mut dbg = f.debug_struct("MicroBody");
-        dbg.field("num_fork_proofs", &self.fork_proofs.len());
-        dbg.field("num_transactions", &self.transactions.len());
-        dbg.finish()
-    }
-}

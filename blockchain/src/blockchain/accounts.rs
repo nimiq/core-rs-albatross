@@ -134,8 +134,8 @@ impl Blockchain {
         }
     }
 
-    /// Reverts the accounts given a block. This only applies to micro blocks and skip blocks, since macro blocks
-    /// are final and can't be reverted.
+    /// Reverts the accounts given a block. This only applies to micro blocks and skip blocks, since
+    /// macro blocks are final and can't be reverted.
     pub(crate) fn revert_accounts(
         &self,
         accounts: &Accounts,
@@ -143,62 +143,63 @@ impl Blockchain {
         block: &Block,
         block_logger: &mut BlockLogger,
     ) -> Result<u64, PushError> {
-        match block {
-            Block::Micro(ref micro_block) => {
-                debug!(
-                    block_number = &micro_block.header.block_number,
-                    "Reverting block"
-                );
-
-                // Verify accounts hash if the tree is complete or changes only happened in the complete part.
-                if let Some(accounts_hash) = accounts.get_root_hash(Some(txn)) {
-                    assert_eq!(
-                        micro_block.header.state_root, accounts_hash,
-                        "Failed to revert - inconsistent state"
-                    );
-                }
-
-                // Get the body of the block.
-                let body = micro_block.body.as_ref().unwrap();
-
-                let skip_block_info = SkipBlockInfo::from_micro_block(micro_block);
-
-                // Create the inherents from any forks or skip block info.
-                let inherents =
-                    self.create_slash_inherents(&body.fork_proofs, skip_block_info, Some(txn));
-
-                // Get the receipts for this block.
-                let receipts = self
-                    .chain_store
-                    .get_receipts(micro_block.header.block_number, Some(txn))
-                    .expect("Failed to revert - missing receipts");
-
-                // Revert the block from AccountsTree.
-                let block_state = BlockState::new(block.block_number(), block.timestamp());
-                let result = accounts.revert(
-                    txn,
-                    &body.get_raw_transactions(),
-                    &inherents,
-                    &block_state,
-                    receipts,
-                    block_logger,
-                );
-                if let Err(e) = result {
-                    panic!("Failed to revert - {e:?}");
-                }
-
-                // Remove the transactions from the History tree. For this you only need to calculate the
-                // number of transactions that you want to remove.
-                let num_txs = body.transactions.len() + inherents.len();
-                let (_, total_size) = self
-                    .history_store
-                    .remove_partial_history(txn, micro_block.epoch_number(), num_txs)
-                    .expect("Failed to remove partial history");
-
-                Ok(total_size)
-            }
-            Block::Macro(_) => unreachable!("Macro blocks are final and can't be reverted"),
+        if block.is_macro() {
+            panic!("Can't revert {block} - macro blocks are final");
         }
+
+        let block = block.unwrap_micro_ref();
+        let body = block.body.as_ref().unwrap();
+
+        debug!(
+            block = %block,
+            is_skip = block.is_skip_block(),
+            num_transactions = body.transactions.len(),
+            num_fork_proofs = body.fork_proofs.len(),
+            "Reverting block"
+        );
+
+        // Verify accounts hash if the tree is complete or changes only happened in the complete part.
+        if let Some(accounts_hash) = accounts.get_root_hash(Some(txn)) {
+            assert_eq!(
+                block.header.state_root, accounts_hash,
+                "Cannot revert {} - inconsistent state",
+                block,
+            );
+        }
+
+        // Create the inherents from any forks or skip block info.
+        let skip_block_info = SkipBlockInfo::from_micro_block(block);
+        let inherents = self.create_slash_inherents(&body.fork_proofs, skip_block_info, Some(txn));
+
+        // Get the receipts for this block.
+        let receipts = self
+            .chain_store
+            .get_receipts(block.block_number(), Some(txn))
+            .expect("Failed to revert - missing receipts");
+
+        // Revert the block from AccountsTree.
+        let block_state = BlockState::new(block.block_number(), block.header.timestamp);
+        let result = accounts.revert(
+            txn,
+            &body.get_raw_transactions(),
+            &inherents,
+            &block_state,
+            receipts,
+            block_logger,
+        );
+        if let Err(e) = result {
+            panic!("Failed to revert {block} - {e:?}");
+        }
+
+        // Remove the transactions from the History tree. For this you only need to calculate the
+        // number of transactions that you want to remove.
+        let num_txs = body.transactions.len() + inherents.len();
+        let (_, total_size) = self
+            .history_store
+            .remove_partial_history(txn, block.epoch_number(), num_txs)
+            .expect("Failed to remove partial history");
+
+        Ok(total_size)
     }
 
     pub fn get_accounts_proof(&self, keys: Vec<&KeyNibbles>) -> Option<TrieProof> {

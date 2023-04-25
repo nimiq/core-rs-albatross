@@ -427,7 +427,7 @@ impl Blockchain {
         while current.0 != ancestor.0 {
             let block = current.1.head.clone();
             if block.is_macro() {
-                panic!("Trying to rebranch across macro block");
+                panic!("Trying to rebranch across macro block {block}");
             }
 
             let prev_hash = block.parent_hash().clone();
@@ -448,6 +448,7 @@ impl Blockchain {
                     return Err(PushError::AccountsError(e));
                 }
             }
+
             let mut block_logger = BlockLogger::new_reverted(block.hash(), block.block_number());
             let total_tx_size = this.revert_accounts(
                 &this.state.accounts,
@@ -462,7 +463,9 @@ impl Blockchain {
                 assert_eq!(
                     prev_info.head.state_root(),
                     &accounts_hash,
-                    "Failed to revert main chain while rebranching - inconsistent state"
+                    "Inconsistent state after reverting block {} - {:?}",
+                    block,
+                    block,
                 );
             }
 
