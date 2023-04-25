@@ -14,10 +14,14 @@ impl LightBlockchain {
     /// a valid chain between the genesis block and that block.
     /// This brings the node from the genesis block all the way to the most recent election block.
     /// It is the default way to sync for a light node.
+    ///
+    /// When we get a ZKP from the ZKP component, it is already verified.
+    /// We can then set the `trusted_proof` flag to avoid the additional verification.
     pub fn push_zkp(
         this: RwLockUpgradableReadGuard<Self>,
         block: Block,
         proof: NanoProof,
+        trusted_proof: bool,
     ) -> Result<PushResult, PushError> {
         // Must be an election block.
         assert!(block.is_election());
@@ -57,19 +61,21 @@ impl LightBlockchain {
             .ok_or(PushError::InvalidBlock(BlockError::InvalidPkTreeRoot))?;
 
         // Verify the zk proof.
-        let verify_result = verify(
-            genesis_block_number,
-            genesis_header_hash,
-            &genesis_pk_tree_root,
-            final_block_number,
-            final_header_hash,
-            &final_pk_tree_root,
-            proof,
-            &ZKP_VERIFYING_KEY,
-        );
+        if !trusted_proof {
+            let verify_result = verify(
+                genesis_block_number,
+                genesis_header_hash,
+                &genesis_pk_tree_root,
+                final_block_number,
+                final_header_hash,
+                &final_pk_tree_root,
+                proof,
+                &ZKP_VERIFYING_KEY,
+            );
 
-        if verify_result.is_err() || !verify_result.unwrap() {
-            return Err(PushError::InvalidZKP);
+            if verify_result.is_err() || !verify_result.unwrap() {
+                return Err(PushError::InvalidZKP);
+            }
         }
 
         // At this point we know that the block is correct. We just have to push it.

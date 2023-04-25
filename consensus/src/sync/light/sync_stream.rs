@@ -94,6 +94,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                                     blockchain_urg,
                                     Block::Macro(block),
                                     proof.proof.expect("Expected a zkp proof"),
+                                    true,
                                 )
                             }
                             BlockchainProxy::Light(ref light_blockchain) => {
@@ -101,6 +102,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                                     light_blockchain.upgradable_read(),
                                     Block::Macro(block),
                                     proof.proof.expect("Expected a zkp proof"),
+                                    true,
                                 )
                             }
                         };
