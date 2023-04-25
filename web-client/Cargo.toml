@@ -73,4 +73,5 @@ nimiq-zkp-component = {path = "../zkp-component", default-features = false}
 
 [features]
 client = []
+default = ["client", "primitives"]
 primitives = ["wasm-bindgen-derive"]

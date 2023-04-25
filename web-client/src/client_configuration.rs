@@ -1,7 +1,6 @@
 #[cfg(any(feature = "client", feature = "primitives"))]
 use std::str::FromStr;
 
-#[cfg(feature = "client")]
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 #[cfg(any(feature = "client", feature = "primitives"))]
@@ -14,6 +13,7 @@ use nimiq_primitives::networks::NetworkId;
 /// Use this to provide initialization-time configuration to the Client.
 /// This is a simplified version of the configuration that is used for regular nodes,
 /// since not all configuration knobs are available when running inside a browser.
+#[derive(Debug)]
 #[wasm_bindgen]
 pub struct ClientConfiguration {
     #[wasm_bindgen(skip)]
@@ -27,7 +27,11 @@ pub struct ClientConfiguration {
 #[cfg(any(feature = "client", feature = "primitives"))]
 #[cfg_attr(feature = "primitives", derive(serde::Serialize))]
 #[cfg_attr(feature = "client", derive(serde::Deserialize))]
-#[cfg_attr(feature = "client", derive(Tsify), serde(rename_all = "camelCase"))]
+#[cfg_attr(
+    any(feature = "client", feature = "primitives"),
+    derive(Tsify),
+    serde(rename_all = "camelCase")
+)]
 pub struct PlainClientConfiguration {
     #[cfg_attr(feature = "client", serde(skip_serializing_if = "Option::is_none"))]
     pub network_id: Option<String>,

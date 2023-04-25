@@ -128,6 +128,8 @@ impl Client {
         // Initialize panic hook.
         initialize_panic_reporting();
 
+        log::info!(?web_config, "Web config");
+
         // Create config builder.
         let mut builder = ClientConfig::builder();
 
@@ -150,7 +152,7 @@ impl Client {
         config.network.seeds = seed_nodes;
         config.network_id = web_config.network_id;
 
-        log::debug!(?config, "Final configuration");
+        log::info!(?config, "Final configuration");
 
         // Create client from config.
         log::info!("Initializing light client");
