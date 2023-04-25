@@ -18,6 +18,7 @@ use nimiq_primitives::{
     trie::{
         error::MerkleRadixTrieError,
         trie_chunk::{TrieChunk, TrieChunkPushResult, TrieItem},
+        trie_diff::TrieDiff,
         trie_node::{RootData, TrieNode, TrieNodeKind},
         trie_proof::TrieProof,
         trie_proof_node::TrieProofNode,
@@ -1204,6 +1205,29 @@ impl MerkleRadixTrie {
         Ok(())
     }
 
+    pub fn apply_diff(
+        &self,
+        txn: &mut WriteTransactionProxy,
+        diff: TrieDiff,
+    ) -> Result<TrieDiff, MerkleRadixTrieError> {
+        let missing_range = self.get_missing_range(txn);
+        let mut result = BTreeMap::default();
+        for (key, value) in diff.0 {
+            if self.is_within_complete_part(&key, &missing_range) {
+                let old_value = self.get_raw(txn, &key);
+                if let Some(value) = value {
+                    self.put_raw(txn, &key, value, &missing_range);
+                } else {
+                    self.remove_raw(txn, &key, &missing_range);
+                };
+                assert!(result.insert(key, old_value).is_none());
+            } else {
+                self.update_within_missing_part_raw(txn, &key, &missing_range)?;
+            }
+        }
+        Ok(TrieDiff(result))
+    }
+
     fn is_within_complete_part(
         &self,
         key: &KeyNibbles,
@@ -1492,7 +1516,7 @@ impl<'txn, T: Deserialize> Iterator for TrieNodeIter<'txn, T> {
 
 #[cfg(test)]
 mod tests {
-    use nimiq_primitives::trie::trie_diff::{TrieDiff, ValueChange};
+    use nimiq_primitives::trie::trie_diff::{TrieDiffBuilder, ValueChange};
     use nimiq_test_log::test;
 
     use super::*;
@@ -1808,9 +1832,10 @@ mod tests {
         let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
 
         #[track_caller]
-        fn assert_diff(got: TrieDiff, mut wanted: Vec<(KeyNibbles, ValueChange)>) {
+        fn assert_diff(got: TrieDiffBuilder, mut wanted: Vec<(KeyNibbles, ValueChange)>) {
             wanted.sort_by_key(|item| item.0.clone());
             let got: Vec<_> = got
+                .changes
                 .iter()
                 .map(|(key, change)| (key.clone(), change.clone()))
                 .collect();

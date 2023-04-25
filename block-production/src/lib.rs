@@ -118,7 +118,7 @@ impl BlockProducer {
 
         // Update the state and calculate the state root.
         let block_state = BlockState::new(block_number, timestamp);
-        let (state_root, executed_txns) = blockchain
+        let (state_root, diff_root, executed_txns) = blockchain
             .state()
             .accounts
             .exercise_transactions(&transactions, &inherents, &block_state)
@@ -162,6 +162,7 @@ impl BlockProducer {
             extra_data,
             state_root,
             body_root: body.hash(),
+            diff_root,
             history_root,
         };
 
@@ -267,6 +268,7 @@ impl BlockProducer {
             extra_data,
             state_root: Blake2bHash::default(),
             body_root: Blake2sHash::default(),
+            diff_root: Blake2bHash::default(),
             history_root: Blake2bHash::default(),
         };
 
@@ -287,13 +289,14 @@ impl BlockProducer {
 
         // Update the state and add the state root to the header.
         let block_state = BlockState::new(block_number, timestamp);
-        let (root, _) = blockchain
+        let (state_root, diff_root, _) = blockchain
             .state()
             .accounts
             .exercise_transactions(&[], &inherents, &block_state)
             .expect("Failed to compute accounts hash during block production.");
 
-        macro_block.header.state_root = root;
+        macro_block.header.state_root = state_root;
+        macro_block.header.diff_root = diff_root;
 
         // Calculate the extended transactions from the transactions and the inherents.
         let ext_txs = ExtendedTransaction::from(

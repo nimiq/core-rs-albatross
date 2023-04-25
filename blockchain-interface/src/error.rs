@@ -57,6 +57,8 @@ pub enum BlockchainError {
     NoValidatorsFound,
     #[error("Invalid epoch ID")]
     InvalidEpoch,
+    #[error("Accounts diff not found")]
+    AccountsDiffNotFound,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -88,6 +90,8 @@ pub enum PushError {
     InvalidFork,
     #[error("Blockchain error: {0}")]
     BlockchainError(#[from] BlockchainError),
+    #[error("Push with incomplete accounts and without trie diff")]
+    MissingAccountsTrieDiff,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]

@@ -9,9 +9,11 @@ use nimiq_primitives::{
     key_nibbles::KeyNibbles,
     trie::{
         trie_chunk::{TrieChunk, TrieChunkPushResult},
+        trie_diff::TrieDiff,
         trie_proof::TrieProof,
         TrieItem,
     },
+    TreeProof,
 };
 use nimiq_transaction::{inherent::Inherent, ExecutedTransaction, Transaction, TransactionFlags};
 use nimiq_trie::{
@@ -21,9 +23,9 @@ use nimiq_trie::{
 
 use crate::{
     Account, AccountInherentInteraction, AccountPruningInteraction, AccountReceipt,
-    AccountTransactionInteraction, BlockLogger, BlockState, DataStore, InherentLogger,
-    InherentOperationReceipt, OperationReceipt, Receipts, ReservedBalance, TransactionLog,
-    TransactionOperationReceipt, TransactionReceipt,
+    AccountTransactionInteraction, BlockLogger, BlockState, CompleteReceipts, DataStore,
+    InherentLogger, InherentOperationReceipt, OperationReceipt, Receipts, ReservedBalance,
+    TransactionLog, TransactionOperationReceipt, TransactionReceipt,
 };
 
 /// An alias for the accounts tree.
@@ -255,11 +257,12 @@ impl Accounts {
         transactions: &[Transaction],
         inherents: &[Inherent],
         block_state: &BlockState,
-    ) -> Result<(Blake2bHash, Vec<ExecutedTransaction>), AccountError> {
+    ) -> Result<(Blake2bHash, Blake2bHash, Vec<ExecutedTransaction>), AccountError> {
         let mut raw_txn = self.env.write_transaction();
         let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
         assert!(self.is_complete(Some(&txn)), "Tree must be complete");
 
+        txn.start_recording();
         let receipts = self.commit(
             &mut txn,
             transactions,
@@ -267,6 +270,9 @@ impl Accounts {
             block_state,
             &mut BlockLogger::empty(),
         )?;
+        let diff = txn.stop_recording().into_forward_diff();
+        let diff_hash = TreeProof::new(diff.0.into_iter()).root_hash();
+
         assert_eq!(transactions.len(), receipts.transactions.len());
 
         let executed_txns = transactions
@@ -278,11 +284,11 @@ impl Accounts {
             })
             .collect();
 
-        let hash = self.get_root_hash_assert(Some(&txn));
+        let state_hash = self.get_root_hash_assert(Some(&txn));
 
         raw_txn.abort();
 
-        Ok((hash, executed_txns))
+        Ok((state_hash, diff_hash, executed_txns))
     }
 
     pub fn commit(
@@ -292,7 +298,7 @@ impl Accounts {
         inherents: &[Inherent],
         block_state: &BlockState,
         block_logger: &mut BlockLogger,
-    ) -> Result<Receipts, AccountError> {
+    ) -> Result<CompleteReceipts, AccountError> {
         let receipts =
             self.commit_batch(txn, transactions, inherents, block_state, block_logger)?;
         self.tree.update_root(txn).expect("Tree must be complete");
@@ -302,11 +308,9 @@ impl Accounts {
     pub fn commit_incomplete(
         &self,
         txn: &mut WriteTransactionProxy,
-        transactions: &[ExecutedTransaction],
-        inherents: &[Inherent],
-        block_state: &BlockState,
-    ) -> Result<Receipts, AccountError> {
-        let receipts = self.commit_batch_incomplete(txn, transactions, inherents, block_state)?;
+        diff: TrieDiff,
+    ) -> Result<TrieDiff, AccountError> {
+        let receipts = self.tree.apply_diff(txn, diff)?;
         self.tree.update_root(txn).ok();
         Ok(receipts)
     }
@@ -318,9 +322,9 @@ impl Accounts {
         inherents: &[Inherent],
         block_state: &BlockState,
         block_logger: &mut BlockLogger,
-    ) -> Result<Receipts, AccountError> {
+    ) -> Result<CompleteReceipts, AccountError> {
         assert!(self.is_complete(Some(txn)), "Tree must be complete");
-        let mut receipts = Receipts::default();
+        let mut receipts = CompleteReceipts::default();
 
         for transaction in transactions {
             let receipt = self.commit_transaction(
@@ -345,29 +349,6 @@ impl Accounts {
         Ok(receipts)
     }
 
-    pub fn commit_batch_incomplete(
-        &self,
-        txn: &mut WriteTransactionProxy,
-        transactions: &[ExecutedTransaction],
-        inherents: &[Inherent],
-        block_state: &BlockState,
-    ) -> Result<Receipts, AccountError> {
-        let mut receipts = Receipts::default();
-
-        for transaction in transactions {
-            let receipt = self.commit_transaction_incomplete(txn, transaction, block_state)?;
-            receipts.transactions.push(receipt);
-        }
-
-        for inherent in inherents {
-            let receipt =
-                self.commit_inherent(txn, inherent, block_state, &mut InherentLogger::empty())?;
-            receipts.inherents.push(receipt);
-        }
-
-        Ok(receipts)
-    }
-
     fn commit_transaction(
         &self,
         txn: &mut WriteTransactionProxy,
@@ -385,37 +366,6 @@ impl Accounts {
                 let receipt =
                     self.commit_failed_transaction(txn, transaction, block_state, tx_logger)?;
                 Ok(TransactionOperationReceipt::Err(receipt, fail_reason))
-            }
-        }
-    }
-
-    fn commit_transaction_incomplete(
-        &self,
-        txn: &mut WriteTransactionProxy,
-        transaction: &ExecutedTransaction,
-        block_state: &BlockState,
-    ) -> Result<TransactionOperationReceipt, AccountError> {
-        match transaction {
-            ExecutedTransaction::Ok(transaction) => {
-                let receipt = self.commit_successful_transaction(
-                    txn,
-                    transaction,
-                    block_state,
-                    &mut TransactionLog::empty(),
-                )?;
-                Ok(TransactionOperationReceipt::Ok(receipt))
-            }
-            ExecutedTransaction::Err(transaction) => {
-                let receipt = self.commit_failed_transaction(
-                    txn,
-                    transaction,
-                    block_state,
-                    &mut TransactionLog::empty(),
-                )?;
-                Ok(TransactionOperationReceipt::Err(
-                    receipt,
-                    FailReason::Incomplete,
-                ))
             }
         }
     }
@@ -479,59 +429,6 @@ impl Accounts {
         Ok(TransactionReceipt {
             sender_receipt,
             recipient_receipt: recipient_result.unwrap(),
-            pruned_account,
-        })
-    }
-
-    /// FIXME This function might leave the WriteTransactionProxy in an inconsistent state if it returns an error!
-    fn commit_successful_transaction(
-        &self,
-        txn: &mut WriteTransactionProxy,
-        transaction: &Transaction,
-        block_state: &BlockState,
-        tx_logger: &mut TransactionLog,
-    ) -> Result<TransactionReceipt, AccountError> {
-        // Commit sender.
-        let sender_address = &transaction.sender;
-        let mut sender_receipt = None;
-        let mut pruned_account = None;
-
-        if !self.mark_changed_if_missing(txn, sender_address) {
-            let sender_store = DataStore::new(&self.tree, sender_address);
-            let mut sender_account =
-                self.get_with_type(txn, sender_address, transaction.sender_type)?;
-
-            sender_receipt = sender_account.commit_outgoing_transaction(
-                transaction,
-                block_state,
-                sender_store.write(txn),
-                tx_logger,
-            )?;
-
-            pruned_account = self.put_or_prune(txn, sender_address, sender_account);
-        }
-
-        // Commit recipient.
-        let recipient_address = &transaction.recipient;
-        let mut recipient_receipt = None;
-
-        if !self.mark_changed_if_missing(txn, recipient_address) {
-            let mut recipient_account = Account::default();
-
-            recipient_receipt = self.commit_recipient(
-                txn,
-                transaction,
-                block_state,
-                &mut recipient_account,
-                tx_logger,
-            )?;
-
-            self.put(txn, recipient_address, recipient_account);
-        }
-
-        Ok(TransactionReceipt {
-            sender_receipt,
-            recipient_receipt,
             pruned_account,
         })
     }
@@ -652,15 +549,31 @@ impl Accounts {
         receipts: Receipts,
         block_logger: &mut BlockLogger,
     ) -> Result<(), AccountError> {
-        self.revert_batch(
-            txn,
-            transactions,
-            inherents,
-            block_state,
-            receipts,
-            block_logger,
-        )?;
+        match receipts {
+            Receipts::Complete(receipts) => {
+                self.revert_batch(
+                    txn,
+                    transactions,
+                    inherents,
+                    block_state,
+                    receipts,
+                    block_logger,
+                )?;
+            }
+            Receipts::Incomplete(diff) => {
+                self.revert_diff(txn, diff)?;
+            }
+        }
         self.tree.update_root(txn).ok();
+        Ok(())
+    }
+
+    pub fn revert_diff(
+        &self,
+        txn: &mut WriteTransactionProxy,
+        diff: TrieDiff,
+    ) -> Result<(), AccountError> {
+        self.tree.apply_diff(txn, diff)?;
         Ok(())
     }
 
@@ -670,7 +583,7 @@ impl Accounts {
         transactions: &[Transaction],
         inherents: &[Inherent],
         block_state: &BlockState,
-        receipts: Receipts,
+        receipts: CompleteReceipts,
         block_logger: &mut BlockLogger,
     ) -> Result<(), AccountError> {
         // Revert inherents in reverse order.

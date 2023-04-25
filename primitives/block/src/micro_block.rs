@@ -176,6 +176,8 @@ pub struct MicroHeader {
     /// The root of the Merkle tree of the body. It just acts as a commitment to the
     /// body.
     pub body_root: Blake2sHash,
+    /// The root of the trie diff tree proof.
+    pub diff_root: Blake2bHash,
     /// A Merkle root over all of the transactions that happened in the current epoch.
     pub history_root: Blake2bHash,
 }

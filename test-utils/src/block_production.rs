@@ -18,7 +18,9 @@ use nimiq_genesis::NetworkId;
 use nimiq_hash::Blake2sHash;
 use nimiq_keys::{KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey};
 use nimiq_primitives::{
-    key_nibbles::KeyNibbles, policy::Policy, trie::trie_chunk::TrieChunkWithStart,
+    key_nibbles::KeyNibbles,
+    policy::Policy,
+    trie::{trie_chunk::TrieChunkWithStart, trie_diff::TrieDiff},
 };
 use nimiq_serde::Deserialize;
 use nimiq_tendermint::ProposalMessage;
@@ -92,9 +94,10 @@ impl TemporaryBlockProducer {
     pub fn push_with_chunks(
         &self,
         block: Block,
+        diff: TrieDiff,
         chunks: Vec<TrieChunkWithStart>,
     ) -> Result<(PushResult, Result<ChunksPushResult, ChunksPushError>), PushError> {
-        Blockchain::push_with_chunks(self.blockchain.upgradable_read(), block, chunks)
+        Blockchain::push_with_chunks(self.blockchain.upgradable_read(), block, diff, chunks)
     }
 
     pub fn get_chunk(&self, start_key: KeyNibbles, limit: usize) -> TrieChunkWithStart {
@@ -120,6 +123,22 @@ impl TemporaryBlockProducer {
         let block = self.next_block_no_push_with_txs(extra_data, skip_block, transactions);
         assert_eq!(self.push(block.clone()), Ok(PushResult::Extended));
         block
+    }
+
+    pub fn next_block_and_diff_with_txs(
+        &self,
+        extra_data: Vec<u8>,
+        skip_block: bool,
+        transactions: Vec<Transaction>,
+    ) -> (Block, TrieDiff) {
+        let block = self.next_block_with_txs(extra_data, skip_block, transactions);
+        let diff = self
+            .blockchain
+            .read()
+            .chain_store
+            .get_accounts_diff(&block.hash(), None)
+            .unwrap();
+        (block, diff)
     }
 
     pub fn next_block_no_push(&self, extra_data: Vec<u8>, skip_block: bool) -> Block {

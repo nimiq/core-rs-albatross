@@ -239,7 +239,6 @@ impl MockNetwork {
             ));
         }
 
-        let hub = Arc::clone(&self.hub);
         let result = tokio::time::timeout(MockNetwork::REQUEST_TIMEOUT, rx).await;
         match result {
             Ok(Ok(data)) => match Req::Response::deserialize_from_vec(&data[..]) {
@@ -252,7 +251,7 @@ impl MockNetwork {
                 InboundRequestError::SenderFutureDropped,
             )),
             Err(_) => {
-                hub.lock().response_senders.remove(&request_id);
+                self.hub.lock().response_senders.remove(&request_id);
                 Err(RequestError::InboundRequest(InboundRequestError::Timeout))
             }
         }

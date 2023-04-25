@@ -1,4 +1,6 @@
 pub mod block_queue;
+#[cfg(feature = "full")]
+pub mod diff_queue;
 pub mod queue;
 #[cfg(feature = "full")]
 pub mod state_queue;

@@ -13,8 +13,12 @@ use nimiq_database::{
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::{
     policy::Policy,
-    trie::trie_chunk::{TrieChunkPushResult, TrieChunkWithStart},
+    trie::{
+        trie_chunk::{TrieChunkPushResult, TrieChunkWithStart},
+        trie_diff::TrieDiff,
+    },
 };
+use nimiq_trie::WriteTransactionProxy as TrieWriteTransactionProxy;
 use nimiq_vrf::VrfSeed;
 use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
 use tokio::sync::broadcast::Sender as BroadcastSender;
@@ -40,6 +44,7 @@ impl Blockchain {
         this: RwLockUpgradableReadGuard<Self>,
         block: Block,
         trusted: bool,
+        diff: Option<TrieDiff>,
         chunks: Vec<TrieChunkWithStart>,
     ) -> Result<(PushResult, Result<ChunksPushResult, ChunksPushError>), PushError> {
         // Ignore all blocks that precede (or are at the same height) as the most recent accepted
@@ -115,11 +120,18 @@ impl Blockchain {
                     chain_info.head.hash(),
                     chain_info,
                     prev_info,
+                    diff,
                     chunks,
                 );
             }
             ChainOrdering::Superior => {
-                return Blockchain::rebranch(this, chain_info.head.hash(), chain_info, chunks);
+                return Blockchain::rebranch(
+                    this,
+                    chain_info.head.hash(),
+                    chain_info,
+                    diff,
+                    chunks,
+                );
             }
             ChainOrdering::Inferior => {
                 debug!(block = %chain_info.head, "Storing block - on inferior chain");
@@ -134,6 +146,10 @@ impl Blockchain {
         let mut txn = this.write_transaction();
         this.chain_store
             .put_chain_info(&mut txn, &chain_info.head.hash(), &chain_info, true);
+        if let Some(diff) = &diff {
+            this.chain_store
+                .put_accounts_diff(&mut txn, &chain_info.head.hash(), diff);
+        }
         txn.commit();
 
         Ok((result, Ok(ChunksPushResult::EmptyChunks)))
@@ -155,15 +171,16 @@ impl Blockchain {
             this.get_missing_accounts_range(None).is_none(),
             "Should call push only for complete tries"
         );
-        Self::push_wrapperfn(this, block, false, vec![]).map(|res| res.0)
+        Self::push_wrapperfn(this, block, false, None, vec![]).map(|res| res.0)
     }
 
     pub fn push_with_chunks(
         this: RwLockUpgradableReadGuard<Self>,
         block: Block,
+        diff: TrieDiff,
         chunks: Vec<TrieChunkWithStart>,
     ) -> Result<(PushResult, Result<ChunksPushResult, ChunksPushError>), PushError> {
-        Self::push_wrapperfn(this, block, false, chunks)
+        Self::push_wrapperfn(this, block, false, Some(diff), chunks)
     }
 
     // To retain the option of having already taken a lock before this call the self was exchanged.
@@ -178,7 +195,7 @@ impl Blockchain {
         this: RwLockUpgradableReadGuard<Self>,
         block: Block,
     ) -> Result<PushResult, PushError> {
-        Self::push_wrapperfn(this, block, true, vec![]).map(|res| res.0)
+        Self::push_wrapperfn(this, block, true, None, vec![]).map(|res| res.0)
     }
 
     /// Commits a set of chunks to the blockchain.
@@ -233,16 +250,17 @@ impl Blockchain {
         this: RwLockUpgradableReadGuard<Self>,
         block: Block,
         trust: bool,
+        diff: Option<TrieDiff>,
         chunks: Vec<TrieChunkWithStart>,
     ) -> Result<(PushResult, Result<ChunksPushResult, ChunksPushError>), PushError> {
         #[cfg(not(feature = "metrics"))]
         {
-            Self::do_push(this, block, trust, chunks)
+            Self::do_push(this, block, trust, diff, chunks)
         }
         #[cfg(feature = "metrics")]
         {
             let metrics = this.metrics.clone();
-            let res = Self::do_push(this, block, trust, chunks);
+            let res = Self::do_push(this, block, trust, diff, chunks);
             metrics.note_push_result(&res);
             res
         }
@@ -254,6 +272,7 @@ impl Blockchain {
         block_hash: Blake2bHash,
         mut chain_info: ChainInfo,
         mut prev_info: ChainInfo,
+        diff: Option<TrieDiff>,
         chunks: Vec<TrieChunkWithStart>,
     ) -> Result<(PushResult, Result<ChunksPushResult, ChunksPushError>), PushError> {
         let mut txn = this.write_transaction();
@@ -267,8 +286,13 @@ impl Blockchain {
             block_number,
             chain_info.head.timestamp(),
         );
-        let total_tx_size =
-            this.check_and_commit(&this.state, &chain_info.head, &mut txn, &mut block_logger)?;
+        let total_tx_size = this.check_and_commit(
+            &this.state,
+            &chain_info.head,
+            diff,
+            &mut txn,
+            &mut block_logger,
+        )?;
 
         chain_info.on_main_chain = true;
         chain_info.set_cumulative_ext_tx_size(&prev_info, total_tx_size);
@@ -369,6 +393,7 @@ impl Blockchain {
         this: RwLockUpgradableReadGuard<Blockchain>,
         block_hash: Blake2bHash,
         chain_info: ChainInfo,
+        diff: Option<TrieDiff>,
         chunks: Vec<TrieChunkWithStart>,
     ) -> Result<(PushResult, Result<ChunksPushResult, ChunksPushError>), PushError> {
         let target_block = chain_info.head.header();
@@ -379,8 +404,9 @@ impl Blockchain {
         // Store the chain along the way.
         let read_txn = this.read_transaction();
 
-        let mut fork_chain: Vec<(Blake2bHash, ChainInfo)> = vec![];
-        let mut current: (Blake2bHash, ChainInfo) = (block_hash, chain_info);
+        let mut fork_chain: Vec<(Blake2bHash, ChainInfo, Option<TrieDiff>)> = vec![];
+        let mut current: (Blake2bHash, ChainInfo, Option<TrieDiff>) =
+            (block_hash, chain_info, diff);
 
         while !current.1.on_main_chain {
             let prev_hash = current.1.head.parent_hash().clone();
@@ -390,9 +416,14 @@ impl Blockchain {
                 .get_chain_info(&prev_hash, true, Some(&read_txn))
                 .expect("Corrupted store: Failed to find fork predecessor while rebranching");
 
+            let prev_diff = this
+                .chain_store
+                .get_accounts_diff(&prev_hash, Some(&read_txn))
+                .ok();
+
             fork_chain.push(current);
 
-            current = (prev_hash, prev_info);
+            current = (prev_hash, prev_info, prev_diff);
         }
         read_txn.close();
 
@@ -420,7 +451,7 @@ impl Blockchain {
 
         let mut write_txn = this.write_transaction();
 
-        current = (this.state.head_hash.clone(), this.state.main_chain.clone());
+        let mut current = (this.state.head_hash.clone(), this.state.main_chain.clone());
 
         let mut block_logs = vec![];
 
@@ -485,6 +516,7 @@ impl Blockchain {
             match this.check_and_commit(
                 &this.state,
                 &fork_block.1.head,
+                fork_block.2.clone(),
                 &mut write_txn,
                 &mut block_logger,
             ) {
@@ -595,7 +627,7 @@ impl Blockchain {
         }
 
         let mut adopted_blocks = Vec::with_capacity(fork_chain.len());
-        for (hash, chain_info) in fork_chain.into_iter().rev() {
+        for (hash, chain_info, _) in fork_chain.into_iter().rev() {
             debug!(
                 block = %chain_info.head,
                 num_transactions = chain_info.head.num_transactions(),
@@ -640,6 +672,7 @@ impl Blockchain {
         &self,
         state: &BlockchainState,
         block: &Block,
+        diff: Option<TrieDiff>,
         txn: &mut WriteTransactionProxy,
         block_logger: &mut BlockLogger,
     ) -> Result<u64, PushError> {
@@ -671,12 +704,25 @@ impl Blockchain {
         }
 
         // Commit block to AccountsTree.
-        let total_tx_size = self.commit_accounts(state, block, &mut txn.into(), block_logger).map_err(|e| {
-            warn!(%block, reason = "commit failed", error = &e as &dyn Error, "Rejecting block");
-            #[cfg(feature = "metrics")]
-            self.metrics.note_invalid_block();
-            e
-        })?;
+        let total_tx_size;
+        {
+            let is_complete = state.accounts.is_complete(Some(&txn));
+            let mut txn: TrieWriteTransactionProxy = txn.into();
+            if is_complete {
+                txn.start_recording();
+            }
+            total_tx_size = self.commit_accounts(state, block, diff, &mut txn, block_logger).map_err(|e| {
+                warn!(%block, reason = "commit failed", error = &e as &dyn Error, "Rejecting block");
+                #[cfg(feature = "metrics")]
+                self.metrics.note_invalid_block();
+                e
+            })?;
+            if is_complete {
+                let recorded_diff = txn.stop_recording().into_forward_diff();
+                self.chain_store
+                    .put_accounts_diff(txn.raw(), &block.hash(), &recorded_diff);
+            }
+        }
 
         // Verify the state against the block.
         if let Err(e) = self.verify_block_state(state, block, txn) {

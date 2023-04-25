@@ -11,6 +11,7 @@ use std::{
 };
 
 use blake2_rfc::{blake2b::Blake2b, blake2s::Blake2s};
+use byteorder::WriteBytesExt;
 use hex::FromHex;
 use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue};
 use nimiq_macros::{add_hex_io_fns_typed_arr, add_serialization_fns_typed_arr, create_typed_array};
@@ -410,5 +411,26 @@ impl SerializeContent for String {
 impl<'a, T: SerializeContent + ?Sized> SerializeContent for &'a T {
     fn serialize_content<W: io::Write, H: HashOutput>(&self, writer: &mut W) -> io::Result<()> {
         (**self).serialize_content::<W, H>(writer)
+    }
+}
+
+impl<T: SerializeContent> SerializeContent for Option<T> {
+    fn serialize_content<W: io::Write, H: HashOutput>(&self, writer: &mut W) -> io::Result<()> {
+        if let Some(inner) = self {
+            writer.write_u8(1)?;
+            inner.serialize_content::<W, H>(writer)?;
+            Ok(())
+        } else {
+            writer.write_u8(0)?;
+            Ok(())
+        }
+    }
+}
+
+impl<T: SerializeContent, U: SerializeContent> SerializeContent for (T, U) {
+    fn serialize_content<W: io::Write, H: HashOutput>(&self, writer: &mut W) -> io::Result<()> {
+        self.0.serialize_content::<W, H>(writer)?;
+        self.1.serialize_content::<W, H>(writer)?;
+        Ok(())
     }
 }

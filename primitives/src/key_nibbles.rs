@@ -1,9 +1,12 @@
+use byteorder::WriteBytesExt;
 use std::{
     cmp::{self, Ordering},
-    fmt, ops, str, usize,
+    fmt, io, ops, str, usize,
 };
 
 use log::error;
+
+use nimiq_hash::{HashOutput, SerializeContent};
 use nimiq_keys::Address;
 
 /// A compact representation of a node's key. It stores the key in big endian. Each byte
@@ -443,6 +446,14 @@ mod serde_derive {
             KeyNibbles::deserialize_from_vec(bytes)
                 .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
         }
+    }
+}
+
+impl SerializeContent for KeyNibbles {
+    fn serialize_content<W: io::Write, H: HashOutput>(&self, writer: &mut W) -> io::Result<()> {
+        writer.write_u8(self.length)?;
+        writer.write_all(&self.bytes[..self.bytes_len()])?;
+        Ok(())
     }
 }
 

@@ -1,10 +1,11 @@
-use std::collections::{btree_map, BTreeMap};
+use std::{collections::BTreeMap, io};
 
+use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_serde::{Deserialize, Serialize};
 
 use crate::key_nibbles::KeyNibbles;
 
-#[derive(Clone, Debug, Eq, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum ValueChange {
     Insert(Vec<u8>),
@@ -59,37 +60,55 @@ impl ValueChange {
     }
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct TrieDiff {
-    changes: BTreeMap<KeyNibbles, ValueChange>,
+#[derive(Clone, Debug, Default)]
+pub struct TrieDiffBuilder {
+    pub changes: BTreeMap<KeyNibbles, ValueChange>,
 }
 
-impl TrieDiff {
+impl TrieDiffBuilder {
     pub fn add_change(&mut self, key: KeyNibbles, value: ValueChange) {
         // TODO: maybe optimize for the non-existing case
         if let Some(result) = ValueChange::combine(self.changes.remove(&key), Some(value)) {
             assert!(self.changes.insert(key, result).is_none());
         }
     }
-    pub fn iter(&self) -> Iter {
-        Iter(self.changes.iter())
+    pub fn into_backward_diff(self) -> TrieDiff {
+        TrieDiff(
+            self.changes
+                .into_iter()
+                .map(|(k, v)| (k, v.into_old_and_new().0))
+                .collect(),
+        )
+    }
+    pub fn into_forward_diff(self) -> TrieDiff {
+        TrieDiff(
+            self.changes
+                .into_iter()
+                .map(|(k, v)| (k, v.into_old_and_new().1))
+                .collect(),
+        )
     }
 }
 
-pub struct Iter<'a>(btree_map::Iter<'a, KeyNibbles, ValueChange>);
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct TrieDiff(pub BTreeMap<KeyNibbles, Option<Vec<u8>>>);
 
-impl<'a> Iterator for Iter<'a> {
-    type Item = (&'a KeyNibbles, &'a ValueChange);
-    fn next(&mut self) -> Option<Self::Item> {
-        self.0.next()
+impl IntoDatabaseValue for TrieDiff {
+    fn database_byte_size(&self) -> usize {
+        self.serialized_size()
     }
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.0.size_hint()
+
+    fn copy_into_database(&self, mut bytes: &mut [u8]) {
+        Serialize::serialize(&self, &mut bytes).unwrap();
     }
 }
 
-impl<'a> DoubleEndedIterator for Iter<'a> {
-    fn next_back(&mut self) -> Option<Self::Item> {
-        self.0.next_back()
+impl FromDatabaseValue for TrieDiff {
+    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
+    where
+        Self: Sized,
+    {
+        Deserialize::deserialize_from_vec(bytes)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
     }
 }

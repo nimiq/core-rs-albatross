@@ -29,6 +29,7 @@ pub struct BlockConfig {
     pub missing_body: bool,
     pub body_hash: Option<Blake2sHash>,
     pub state_root: Option<Blake2bHash>,
+    pub diff_root: Option<Blake2bHash>,
     pub history_root: Option<Blake2bHash>,
 
     // Skip only
@@ -61,6 +62,7 @@ impl Default for BlockConfig {
             missing_body: false,
             body_hash: None,
             state_root: None,
+            diff_root: None,
             history_root: None,
             skip_block_proof: None,
             test_micro: true,
@@ -104,7 +106,7 @@ pub fn next_micro_block(
 
     let block_state = BlockState::new(block_number, timestamp);
 
-    let (state_root, executed_txns) = blockchain
+    let (state_root, diff_root, executed_txns) = blockchain
         .state()
         .accounts
         .exercise_transactions(&transactions, &inherents, &block_state)
@@ -144,6 +146,7 @@ pub fn next_micro_block(
         extra_data: config.extra_data.clone(),
         state_root,
         body_root: config.body_hash.clone().unwrap_or_else(|| body.hash()),
+        diff_root,
         history_root,
     };
 
@@ -192,14 +195,14 @@ pub fn next_skip_block(
 
     let block_state = BlockState::new(block_number, timestamp);
 
-    let state_root = config.state_root.clone().unwrap_or_else(|| {
-        let (state_root, _) = blockchain
-            .state()
-            .accounts
-            .exercise_transactions(&[], &inherents, &block_state)
-            .expect("Failed to compute accounts hash during block production");
-        state_root
-    });
+    let (real_state_root, real_diff_root, _) = blockchain
+        .state()
+        .accounts
+        .exercise_transactions(&[], &inherents, &block_state)
+        .expect("Failed to compute accounts hash during block production");
+
+    let state_root = config.state_root.clone().unwrap_or(real_state_root);
+    let diff_root = config.diff_root.clone().unwrap_or(real_diff_root);
 
     let ext_txs = ExtendedTransaction::from(
         blockchain.network_id,
@@ -235,6 +238,7 @@ pub fn next_skip_block(
         extra_data: config.extra_data.clone(),
         state_root,
         body_root: config.body_hash.clone().unwrap_or_else(|| body.hash()),
+        diff_root,
         history_root,
     };
 
@@ -295,6 +299,7 @@ fn next_macro_block_proposal(
         extra_data: config.extra_data.clone(),
         state_root: Blake2bHash::default(),
         body_root: Blake2sHash::default(),
+        diff_root: Blake2bHash::default(),
         history_root: Blake2bHash::default(),
     };
 
@@ -332,12 +337,13 @@ fn next_macro_block_proposal(
 
     let block_state = BlockState::new(block_number, timestamp);
 
-    let (root, _) = state
+    let (state_root, diff_root, _) = state
         .accounts
         .exercise_transactions(&[], &inherents, &block_state)
         .expect("Failed to compute accounts hash during block production.");
 
-    macro_block.header.state_root = root;
+    macro_block.header.state_root = state_root;
+    macro_block.header.diff_root = diff_root;
 
     let ext_txs = ExtendedTransaction::from(
         blockchain.network_id,

@@ -19,7 +19,7 @@ use pin_project::pin_project;
 #[cfg(feature = "full")]
 use crate::sync::{
     history::HistoryMacroSync,
-    live::{state_queue::StateQueue, StateLiveSync},
+    live::{diff_queue::DiffQueue, state_queue::StateQueue, StateLiveSync},
 };
 use crate::sync::{
     light::LightMacroSync,
@@ -112,15 +112,20 @@ impl<N: Network> SyncerProxy<N> {
         )
         .await;
 
-        let state_queue = match blockchain_proxy {
-            BlockchainProxy::Full(ref blockchain) => StateQueue::with_block_queue(
-                Arc::clone(&network),
-                Arc::clone(blockchain),
-                block_queue,
-                queue_config,
-            ),
+        let blockchain = match &blockchain_proxy {
+            BlockchainProxy::Full(blockchain) => Arc::clone(blockchain),
             BlockchainProxy::Light(_) => unreachable!(),
         };
+
+        let diff_queue =
+            DiffQueue::with_block_queue(Arc::clone(&network), Arc::clone(&blockchain), block_queue);
+
+        let state_queue = StateQueue::with_diff_queue(
+            Arc::clone(&network),
+            Arc::clone(&blockchain),
+            diff_queue,
+            queue_config,
+        );
 
         let live_sync = StateLiveSync::with_queue(
             blockchain_proxy.clone(),

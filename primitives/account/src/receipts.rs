@@ -1,7 +1,7 @@
 use std::{fmt::Debug, io};
 
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
-use nimiq_primitives::account::FailReason;
+use nimiq_primitives::{account::FailReason, trie::trie_diff::TrieDiff};
 use nimiq_serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -61,10 +61,29 @@ pub enum OperationReceipt<T: Clone + Debug + Serialize + Deserialize> {
 pub type TransactionOperationReceipt = OperationReceipt<TransactionReceipt>;
 pub type InherentOperationReceipt = OperationReceipt<InherentReceipt>;
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Receipts {
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct CompleteReceipts {
     pub transactions: Vec<TransactionOperationReceipt>,
     pub inherents: Vec<InherentOperationReceipt>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[repr(u8)]
+pub enum Receipts {
+    Complete(CompleteReceipts),
+    Incomplete(TrieDiff),
+}
+
+impl From<CompleteReceipts> for Receipts {
+    fn from(receipts: CompleteReceipts) -> Receipts {
+        Receipts::Complete(receipts)
+    }
+}
+
+impl From<TrieDiff> for Receipts {
+    fn from(diff: TrieDiff) -> Receipts {
+        Receipts::Incomplete(diff)
+    }
 }
 
 // TODO Implement sparse serialization for Receipts

@@ -61,7 +61,7 @@ pub struct BlockQueue<N: Network> {
 
     /// Buffered blocks - `block_height -> block_hash -> BlockAndId`.
     /// There can be multiple blocks at a height if there are forks.
-    pub(crate) buffer: BTreeMap<u32, HashMap<Blake2bHash, BlockAndId<N>>>,
+    buffer: BTreeMap<u32, HashMap<Blake2bHash, BlockAndId<N>>>,
 
     /// Hashes of blocks that are pending to be pushed to the chain.
     blocks_pending_push: BTreeSet<Blake2bHash>,

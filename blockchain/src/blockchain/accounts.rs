@@ -1,9 +1,14 @@
-use nimiq_account::{Account, Accounts, BlockLogger, BlockState, TransactionOperationReceipt};
+use nimiq_account::{
+    Account, Accounts, BlockLogger, BlockState, Receipts, TransactionOperationReceipt,
+};
 use nimiq_block::{Block, BlockError, SkipBlockInfo};
 use nimiq_blockchain_interface::PushError;
 use nimiq_database::{traits::Database, TransactionProxy};
 use nimiq_keys::Address;
-use nimiq_primitives::{key_nibbles::KeyNibbles, trie::trie_proof::TrieProof};
+use nimiq_primitives::{
+    key_nibbles::KeyNibbles,
+    trie::{trie_diff::TrieDiff, trie_proof::TrieProof},
+};
 use nimiq_serde::Deserialize;
 use nimiq_transaction::extended_transaction::ExtendedTransaction;
 use nimiq_trie::WriteTransactionProxy;
@@ -27,6 +32,7 @@ impl Blockchain {
         &self,
         state: &BlockchainState,
         block: &Block,
+        diff: Option<TrieDiff>,
         txn: &mut WriteTransactionProxy,
         block_logger: &mut BlockLogger,
     ) -> Result<u64, PushError> {
@@ -41,10 +47,16 @@ impl Blockchain {
                 let inherents = self.create_macro_block_inherents(macro_block);
 
                 // Commit block to AccountsTree and create the receipts.
-                let receipts = if accounts.is_complete(Some(txn)) {
-                    accounts.commit(txn, &[], &inherents, &block_state, block_logger)
+                let receipts: Result<Receipts, _> = if accounts.is_complete(Some(txn)) {
+                    accounts
+                        .commit(txn, &[], &inherents, &block_state, block_logger)
+                        .map(Into::into)
                 } else {
-                    accounts.commit_incomplete(txn, &[], &inherents, &block_state)
+                    if let Some(diff) = diff {
+                        accounts.commit_incomplete(txn, diff).map(Into::into)
+                    } else {
+                        return Err(PushError::MissingAccountsTrieDiff);
+                    }
                 };
 
                 // Check if the receipts contain an error.
@@ -89,36 +101,48 @@ impl Blockchain {
                     self.create_slash_inherents(&body.fork_proofs, skip_block_info, Some(txn));
 
                 // Commit block to AccountsTree and create the receipts.
-                let receipts = if accounts.is_complete(Some(txn)) {
-                    accounts.commit(
-                        txn,
-                        &body.get_raw_transactions(),
-                        &inherents,
-                        &block_state,
-                        block_logger,
-                    )
+                let receipts: Result<Receipts, _> = if accounts.is_complete(Some(txn)) {
+                    accounts
+                        .commit(
+                            txn,
+                            &body.get_raw_transactions(),
+                            &inherents,
+                            &block_state,
+                            block_logger,
+                        )
+                        .map(Into::into)
                 } else {
                     // We should not emit logs when syncing.
-                    accounts.commit_incomplete(txn, &body.transactions, &inherents, &block_state)
+                    if let Some(diff) = diff {
+                        accounts.commit_incomplete(txn, diff).map(Into::into)
+                    } else {
+                        return Err(PushError::MissingAccountsTrieDiff);
+                    }
                 };
 
                 // Check if the receipts contain an error.
-                if let Err(e) = receipts {
-                    return Err(PushError::AccountsError(e));
-                }
+                let receipts = match receipts {
+                    Err(e) => return Err(PushError::AccountsError(e)),
+                    Ok(receipts) => receipts,
+                };
 
                 // Check that the transaction results match the ones in the block.
-                let receipts = receipts.unwrap();
-                assert_eq!(receipts.transactions.len(), body.transactions.len());
-                for (index, receipt) in receipts.transactions.iter().enumerate() {
-                    let matches = match receipt {
-                        TransactionOperationReceipt::Ok(_) => body.transactions[index].succeeded(),
-                        TransactionOperationReceipt::Err(..) => body.transactions[index].failed(),
-                    };
-                    if !matches {
-                        return Err(PushError::InvalidBlock(
-                            BlockError::TransactionExecutionMismatch,
-                        ));
+                if let Receipts::Complete(receipts) = &receipts {
+                    assert_eq!(receipts.transactions.len(), body.transactions.len());
+                    for (index, receipt) in receipts.transactions.iter().enumerate() {
+                        let matches = match receipt {
+                            TransactionOperationReceipt::Ok(..) => {
+                                body.transactions[index].succeeded()
+                            }
+                            TransactionOperationReceipt::Err(..) => {
+                                body.transactions[index].failed()
+                            }
+                        };
+                        if !matches {
+                            return Err(PushError::InvalidBlock(
+                                BlockError::TransactionExecutionMismatch,
+                            ));
+                        }
                     }
                 }
 

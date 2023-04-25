@@ -164,6 +164,14 @@ impl Block {
         }
     }
 
+    /// Returns the diff root of the block.
+    pub fn diff_root(&self) -> &Blake2bHash {
+        match self {
+            Block::Macro(block) => &block.header.diff_root,
+            Block::Micro(block) => &block.header.diff_root,
+        }
+    }
+
     /// Returns the Blake2b hash of the block header.
     pub fn hash(&self) -> Blake2bHash {
         match self {

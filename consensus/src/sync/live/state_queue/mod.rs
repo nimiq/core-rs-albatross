@@ -18,15 +18,20 @@ use nimiq_network_interface::{
     network::Network,
     request::{RequestCommon, RequestMarker},
 };
-use nimiq_primitives::{key_nibbles::KeyNibbles, policy::Policy, trie::trie_chunk::TrieChunk};
+use nimiq_primitives::{
+    key_nibbles::KeyNibbles,
+    policy::Policy,
+    trie::{trie_chunk::TrieChunk, trie_diff::TrieDiff},
+};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 
 use self::chunk_request_component::ChunkRequestComponent;
 use super::{
-    block_queue::{BlockAndId, BlockQueue, QueuedBlock},
+    block_queue::BlockAndId,
     queue::{ChunkAndId, LiveSyncQueue, QueueConfig},
 };
+use crate::sync::live::diff_queue::{DiffQueue, QueuedDiff};
 
 /// The max number of chunk requests per peer.
 pub const MAX_REQUEST_RESPONSE_CHUNKS: u32 = 100;
@@ -85,12 +90,12 @@ impl RequestCommon for RequestChunk {
 }
 
 pub enum QueuedStateChunks<N: Network> {
-    Head(BlockAndId<N>, Vec<ChunkAndId<N>>),
-    Buffered(Vec<(BlockAndId<N>, Vec<ChunkAndId<N>>)>),
-    Missing(Vec<(Block, Vec<ChunkAndId<N>>)>),
+    Head(BlockAndId<N>, TrieDiff, Vec<ChunkAndId<N>>),
+    Buffered(Vec<(BlockAndId<N>, TrieDiff, Vec<ChunkAndId<N>>)>),
+    Missing(Vec<(Block, TrieDiff, Vec<ChunkAndId<N>>)>),
     HeadStateChunk(Vec<ChunkAndId<N>>),
-    TooFarFutureBlock(Block, N::PeerId),
-    TooDistantPastBlock(Block, N::PeerId),
+    TooFarFutureBlock(N::PeerId),
+    TooDistantPastBlock(N::PeerId),
     TooFarFutureChunk(ChunkAndId<N>),
     TooDistantPastChunk(ChunkAndId<N>),
     PeerIncompleteState(N::PeerId),
@@ -136,8 +141,7 @@ pub struct StateQueue<N: Network> {
     /// Reference to the network.
     network: Arc<N>,
 
-    /// The BlockQueue component.
-    block_queue: BlockQueue<N>,
+    diff_queue: DiffQueue<N>,
 
     /// The chunk request component.
     /// We use it to request chunks from up-to-date peers
@@ -165,16 +169,16 @@ pub struct StateQueue<N: Network> {
 }
 
 impl<N: Network> StateQueue<N> {
-    pub fn with_block_queue(
+    pub fn with_diff_queue(
         network: Arc<N>,
         blockchain: Arc<RwLock<Blockchain>>,
-        block_queue: BlockQueue<N>,
+        diff_queue: DiffQueue<N>,
         config: QueueConfig,
     ) -> Self {
         let chunk_request_component = ChunkRequestComponent::new(
             Arc::clone(&network),
             network.subscribe_events(),
-            block_queue.request_component.peer_list(),
+            diff_queue.diff_request_component.peer_list(),
         );
         let current_macro_height = Policy::last_macro_block(blockchain.read().block_number());
         let blockchain_rx = blockchain.read().notifier_as_stream();
@@ -191,7 +195,7 @@ impl<N: Network> StateQueue<N> {
             config,
             blockchain,
             network,
-            block_queue,
+            diff_queue,
             chunk_request_component,
             buffer: Default::default(),
             buffer_size: 0,
@@ -202,8 +206,8 @@ impl<N: Network> StateQueue<N> {
     }
 
     pub fn remove_invalid_blocks(&mut self, invalid_blocks: &mut HashSet<Blake2bHash>) {
-        // First we remove invalid blocks from the blockqueue.
-        self.block_queue.remove_invalid_blocks(invalid_blocks);
+        // First we remove invalid blocks from the diff queue.
+        self.diff_queue.remove_invalid_blocks(invalid_blocks);
 
         if invalid_blocks.is_empty() {
             return;
@@ -230,7 +234,7 @@ impl<N: Network> StateQueue<N> {
     }
 
     pub fn on_block_processed(&mut self, hash: &Blake2bHash) {
-        self.block_queue.on_block_processed(hash)
+        self.diff_queue.on_block_processed(hash)
     }
 
     pub fn buffered_chunks_len(&self) -> usize {
@@ -238,7 +242,7 @@ impl<N: Network> StateQueue<N> {
     }
 
     pub fn buffered_blocks_len(&self) -> usize {
-        self.block_queue.buffered_blocks_len()
+        self.diff_queue.buffered_blocks_len()
     }
 
     pub fn chunk_request_state(&self) -> &ChunkRequestState {
@@ -397,42 +401,41 @@ impl<N: Network> StateQueue<N> {
     /// Handles blocks received from the blockqueue.
     /// Upon a new block, we return it with any chunks we already have.
     /// If we receive multiple blocks at once, we always return the first and buffer the rest.
-    fn on_blocks_received(&mut self, queued_block: QueuedBlock<N>) -> QueuedStateChunks<N> {
+    fn on_blocks_received(&mut self, queued_block: QueuedDiff<N>) -> QueuedStateChunks<N> {
         match queued_block {
             // Received a single block and retrieve the corresponding chunks.
-            QueuedBlock::Head((block, pubsub_id)) => {
+            QueuedDiff::Head((block, pubsub_id), diff) => {
                 let chunks = self.get_block_chunks(&block);
-                QueuedStateChunks::Head((block, pubsub_id), chunks)
+                QueuedStateChunks::Head((block, pubsub_id), diff, chunks)
             }
-            QueuedBlock::Buffered(blocks) => {
+            QueuedDiff::Buffered(blocks) => {
                 // Received multiple blocks, get the chunks avl for all blocks.
                 let blocks_and_chunks = blocks
                     .into_iter()
-                    .map(|(block, pubsub_id)| {
+                    .map(|((block, pubsub_id), diff)| {
                         let chunks = self.get_block_chunks(&block);
-                        ((block, pubsub_id), chunks)
+                        ((block, pubsub_id), diff, chunks)
                     })
                     .collect();
                 QueuedStateChunks::Buffered(blocks_and_chunks)
             }
-            QueuedBlock::Missing(missing_blocks) => {
+            QueuedDiff::Missing(missing_blocks) => {
                 // Received multiple blocks, get the chunks avl for all blocks.
                 let blocks_and_chunks = missing_blocks
                     .into_iter()
-                    .map(|block| {
+                    .map(|(block, diff)| {
                         let chunks = self.get_block_chunks(&block);
-                        (block, chunks)
+                        (block, diff, chunks)
                     })
                     .collect();
                 QueuedStateChunks::Missing(blocks_and_chunks)
             }
             // Received too far away blocks (past). We forward the block queue event without chunks.
-            QueuedBlock::TooFarBehind(block, peer_id) => {
-                QueuedStateChunks::TooDistantPastBlock(block, peer_id)
-            }
+            QueuedDiff::TooFarBehind(peer_id) => QueuedStateChunks::TooDistantPastBlock(peer_id),
             // Received too far away blocks (future). We forward the block queue event without chunks.
-            QueuedBlock::TooFarAhead(block, peer_id) => {
-                QueuedStateChunks::TooFarFutureBlock(block, peer_id)
+            QueuedDiff::TooFarAhead(peer_id) => QueuedStateChunks::TooFarFutureBlock(peer_id),
+            QueuedDiff::PeerIncompleteState(peer_id) => {
+                QueuedStateChunks::PeerIncompleteState(peer_id)
             }
         }
     }
@@ -527,8 +530,8 @@ impl<N: Network> Stream for StateQueue<N> {
             self.request_chunk();
         }
 
-        // 3. Receive blocks from BlockQueue.
-        match self.block_queue.poll_next_unpin(cx) {
+        // 3. Receive blocks with diffs from DiffQueue.
+        match self.diff_queue.poll_next_unpin(cx) {
             Poll::Ready(Some(queued_block)) => {
                 return Poll::Ready(Some(self.on_blocks_received(queued_block)));
             }

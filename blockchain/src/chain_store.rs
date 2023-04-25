@@ -6,7 +6,7 @@ use nimiq_database::{
     DatabaseProxy, TableFlags, TableProxy, TransactionProxy, WriteTransactionProxy,
 };
 use nimiq_hash::Blake2bHash;
-use nimiq_primitives::policy::Policy;
+use nimiq_primitives::{policy::Policy, trie::trie_diff::TrieDiff};
 
 #[derive(Debug)]
 pub struct ChainStore {
@@ -20,6 +20,8 @@ pub struct ChainStore {
     height_idx: TableProxy,
     /// A database of the transaction receipts for a block, by their corresponding block hashes.
     receipt_table: TableProxy,
+    /// A database of accounts trie diffs for a block.
+    accounts_diff_table: TableProxy,
 }
 
 impl ChainStore {
@@ -27,6 +29,7 @@ impl ChainStore {
     const BLOCK_DB_NAME: &'static str = "Block";
     const HEIGHT_IDX_NAME: &'static str = "HeightIndex";
     const RECEIPT_DB_NAME: &'static str = "Receipts";
+    const ACCOUNTS_DIFF_DB_NAME: &'static str = "AccountsDiff";
 
     const HEAD_KEY: &'static str = "head";
 
@@ -39,12 +42,14 @@ impl ChainStore {
         );
         let receipt_table =
             db.open_table_with_flags(Self::RECEIPT_DB_NAME.to_string(), TableFlags::UINT_KEYS);
+        let accounts_diff_table = db.open_table(Self::ACCOUNTS_DIFF_DB_NAME.to_string());
         ChainStore {
             db,
             chain_table,
             block_table,
             height_idx,
             receipt_table,
+            accounts_diff_table,
         }
     }
 
@@ -53,6 +58,7 @@ impl ChainStore {
         txn.clear_database(&self.block_table);
         txn.clear_database(&self.height_idx);
         txn.clear_database(&self.receipt_table);
+        txn.clear_database(&self.accounts_diff_table);
     }
 
     pub fn get_head(&self, txn_option: Option<&TransactionProxy>) -> Option<Blake2bHash> {
@@ -597,6 +603,39 @@ impl ChainStore {
         while pos.is_some() {
             cursor.remove();
             pos = cursor.next();
+        }
+    }
+
+    pub fn put_accounts_diff(
+        &self,
+        txn: &mut WriteTransactionProxy,
+        hash: &Blake2bHash,
+        diff: &TrieDiff,
+    ) {
+        txn.put_reserve(&self.accounts_diff_table, hash, diff);
+    }
+
+    pub fn get_accounts_diff(
+        &self,
+        hash: &Blake2bHash,
+        txn_option: Option<&TransactionProxy>,
+    ) -> Result<TrieDiff, BlockchainError> {
+        let read_txn: TransactionProxy;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = self.db.read_transaction();
+                &read_txn
+            }
+        };
+
+        match txn.get(&self.accounts_diff_table, hash) {
+            Some(data) => Ok(data),
+            None => {
+                // Check if we know the block.
+                let _ = self.get_block(hash, false, Some(txn))?;
+                return Err(BlockchainError::AccountsDiffNotFound);
+            }
         }
     }
 }

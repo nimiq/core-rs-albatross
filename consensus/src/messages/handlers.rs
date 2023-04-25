@@ -7,7 +7,7 @@ use nimiq_block::Block;
 use nimiq_block::BlockInclusionProof;
 #[cfg(feature = "full")]
 use nimiq_blockchain::{Blockchain, CHUNK_SIZE};
-use nimiq_blockchain_interface::{AbstractBlockchain, Direction};
+use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainError, Direction};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_network_interface::{network::Network, request::Handle};
 use nimiq_primitives::policy::Policy;
@@ -16,7 +16,10 @@ use parking_lot::RwLock;
 
 use crate::messages::*;
 #[cfg(feature = "full")]
-use crate::sync::live::state_queue::{Chunk, RequestChunk, ResponseChunk};
+use crate::sync::live::{
+    diff_queue::{RequestPartialDiff, ResponsePartialDiff},
+    state_queue::{Chunk, RequestChunk, ResponseChunk},
+};
 
 impl<N: Network> Handle<N, MacroChain, BlockchainProxy> for RequestMacroChain {
     fn handle(&self, _peer_id: N::PeerId, blockchain: &BlockchainProxy) -> MacroChain {
@@ -311,6 +314,30 @@ impl<N: Network> Handle<N, ResponseChunk, Arc<RwLock<Blockchain>>> for RequestCh
             block_hash: blockchain_rg.head_hash(),
             chunk,
         })
+    }
+}
+
+#[cfg(feature = "full")]
+impl<N: Network> Handle<N, ResponsePartialDiff, Arc<RwLock<Blockchain>>> for RequestPartialDiff {
+    fn handle(
+        &self,
+        _peer_id: N::PeerId,
+        context: &Arc<RwLock<Blockchain>>,
+    ) -> ResponsePartialDiff {
+        let blockchain = context.read();
+        let txn = blockchain.read_transaction();
+        match blockchain
+            .chain_store
+            .get_accounts_diff(&self.block_hash, Some(&txn))
+        {
+            Ok(diff) => ResponsePartialDiff::PartialDiff(diff),
+            Err(BlockchainError::BlockNotFound) => ResponsePartialDiff::UnknownBlockHash,
+            Err(BlockchainError::AccountsDiffNotFound) => ResponsePartialDiff::IncompleteState,
+            Err(e) => {
+                error!("unexpected error while querying accounts diff: {}", e);
+                ResponsePartialDiff::IncompleteState
+            }
+        }
     }
 }
 

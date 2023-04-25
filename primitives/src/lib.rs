@@ -18,3 +18,9 @@ pub mod trie;
 pub mod task_executor;
 
 pub mod merkle_tree;
+
+#[cfg(feature = "tree_proof")]
+mod tree_proof;
+
+#[cfg(feature = "tree_proof")]
+pub use self::tree_proof::TreeProof;

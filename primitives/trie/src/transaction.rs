@@ -8,7 +8,7 @@ use nimiq_database::{
 use nimiq_primitives::{
     key_nibbles::KeyNibbles,
     trie::{
-        trie_diff::{TrieDiff, ValueChange},
+        trie_diff::{TrieDiffBuilder, ValueChange},
         trie_node::TrieNode,
     },
 };
@@ -48,7 +48,7 @@ impl From<Option<Vec<u8>>> for OldValue {
 
 pub struct WriteTransactionProxy<'txn, 'env> {
     raw: &'txn mut RawWriteTransactionProxy<'env>,
-    diff: Option<TrieDiff>,
+    diff: Option<TrieDiffBuilder>,
 }
 
 impl<'txn, 'env> From<&'txn mut RawWriteTransactionProxy<'env>>
@@ -64,7 +64,7 @@ impl<'txn, 'env> WriteTransactionProxy<'txn, 'env> {
         assert!(self.diff.is_none(), "cannot stack change recordings");
         self.diff = Some(Default::default());
     }
-    pub fn stop_recording(&mut self) -> TrieDiff {
+    pub fn stop_recording(&mut self) -> TrieDiffBuilder {
         self.diff
             .take()
             .expect("cannot stop change recording while none is active")

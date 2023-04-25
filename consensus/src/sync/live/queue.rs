@@ -1,5 +1,6 @@
 use std::{
     collections::{HashSet, VecDeque},
+    fmt,
     sync::Arc,
 };
 
@@ -18,7 +19,10 @@ use nimiq_network_interface::network::{MsgAcceptance, Network};
 use nimiq_primitives::{
     key_nibbles::KeyNibbles,
     policy::Policy,
-    trie::trie_chunk::{TrieChunk, TrieChunkWithStart},
+    trie::{
+        trie_chunk::{TrieChunk, TrieChunkWithStart},
+        trie_diff::TrieDiff,
+    },
 };
 use parking_lot::Mutex;
 #[cfg(not(target_family = "wasm"))]
@@ -30,6 +34,16 @@ pub struct ChunkAndId<N: Network> {
     pub chunk: TrieChunk,
     pub start_key: KeyNibbles,
     pub peer_id: N::PeerId,
+}
+
+impl<N: Network> fmt::Debug for ChunkAndId<N> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("ChunkAndId")
+            .field("chunk", &self.chunk)
+            .field("start_key", &self.start_key)
+            .field("peer_id", &self.peer_id)
+            .finish()
+    }
 }
 
 impl<N: Network> ChunkAndId<N> {
@@ -184,16 +198,18 @@ pub async fn push_block_and_chunks<N: Network>(
     bls_cache: Arc<Mutex<PublicKeyCache>>,
     pubsub_id: Option<N::PubsubId>,
     block: Block,
+    diff: TrieDiff,
     chunks: Vec<ChunkAndId<N>>,
 ) -> (
     Result<PushResult, PushError>,
     Result<ChunksPushResult, ChunksPushError>,
     Blake2bHash,
 ) {
-    let push_results =
-        spawn_blocking(move || blockchain_push(blockchain, bls_cache, Some(block), chunks))
-            .await
-            .expect("blockchain.push() should not panic");
+    let push_results = spawn_blocking(move || {
+        blockchain_push(blockchain, bls_cache, Some(block), Some(diff), chunks)
+    })
+    .await
+    .expect("blockchain.push() should not panic");
     validate_message(network, pubsub_id, &push_results.block_push_result, true);
 
     // TODO Ban peer depending on type of chunk error?
@@ -215,12 +231,13 @@ pub async fn push_block_only<N: Network>(
     include_body: bool,
 ) -> (Result<PushResult, PushError>, Blake2bHash) {
     #[cfg(not(target_family = "wasm"))]
-    let push_results =
-        spawn_blocking(move || blockchain_push::<N>(blockchain, bls_cache, Some(block), vec![]))
-            .await
-            .expect("blockchain.push() should not panic");
+    let push_results = spawn_blocking(move || {
+        blockchain_push::<N>(blockchain, bls_cache, Some(block), None, vec![])
+    })
+    .await
+    .expect("blockchain.push() should not panic");
     #[cfg(target_family = "wasm")]
-    let push_results = blockchain_push::<N>(blockchain, bls_cache, Some(block), vec![]);
+    let push_results = blockchain_push::<N>(blockchain, bls_cache, Some(block), None, vec![]);
 
     validate_message(
         network,
@@ -237,10 +254,10 @@ pub async fn push_block_only<N: Network>(
 /// Pushes a sequence of blocks to the blockchain.
 /// This case is different from pushing single blocks in a for loop,
 /// because an invalid block automatically invalidates the remainder of the sequence.
-pub async fn push_multiple_blocks_with_chunks<N: Network>(
+pub async fn push_multiple_blocks_impl<N: Network>(
     blockchain: BlockchainProxy,
     bls_cache: Arc<Mutex<PublicKeyCache>>,
-    blocks: Vec<(Block, Vec<ChunkAndId<N>>)>,
+    blocks: Vec<(Block, Option<TrieDiff>, Vec<ChunkAndId<N>>)>,
 ) -> (
     Result<PushResult, PushError>,
     Result<ChunksPushResult, ChunksPushError>,
@@ -257,7 +274,7 @@ pub async fn push_multiple_blocks_with_chunks<N: Network>(
     let mut push_result = Err(PushError::Orphan);
     let mut push_chunk_result = Ok(ChunksPushResult::EmptyChunks);
     // Try to push blocks, until we encounter an invalid block.
-    for (block, mut chunks) in block_iter.by_ref() {
+    for (block, diff, mut chunks) in block_iter.by_ref() {
         log::debug!("Pushing block {} from missing blocks response", block);
 
         let blockchain2 = blockchain.clone();
@@ -269,13 +286,13 @@ pub async fn push_multiple_blocks_with_chunks<N: Network>(
         }
         #[cfg(not(target_family = "wasm"))]
         let push_results = spawn_blocking(move || {
-            blockchain_push::<N>(blockchain2, bls_cache2, Some(block), chunks)
+            blockchain_push::<N>(blockchain2, bls_cache2, Some(block), diff, chunks)
         })
         .await
         .expect("blockchain.push() should not panic");
 
         #[cfg(target_family = "wasm")]
-        let push_results = blockchain_push::<N>(blockchain2, bls_cache2, Some(block), chunks);
+        let push_results = blockchain_push::<N>(blockchain2, bls_cache2, Some(block), diff, chunks);
 
         push_result = push_results.block_push_result.unwrap();
         let block_hash = push_results.block_hash;
@@ -311,7 +328,7 @@ pub async fn push_multiple_blocks_with_chunks<N: Network>(
     // TODO Ban peer depending on type of chunk error?
 
     // If there are remaining blocks in the iterator, those are invalid.
-    for (block, _) in block_iter {
+    for (block, ..) in block_iter {
         invalid_blocks.insert(block.hash());
     }
     (
@@ -320,6 +337,23 @@ pub async fn push_multiple_blocks_with_chunks<N: Network>(
         adopted_blocks,
         invalid_blocks,
     )
+}
+
+pub async fn push_multiple_blocks_with_chunks<N: Network>(
+    blockchain: BlockchainProxy,
+    bls_cache: Arc<Mutex<PublicKeyCache>>,
+    blocks: Vec<(Block, TrieDiff, Vec<ChunkAndId<N>>)>,
+) -> (
+    Result<PushResult, PushError>,
+    Result<ChunksPushResult, ChunksPushError>,
+    Vec<Blake2bHash>,
+    HashSet<Blake2bHash>,
+) {
+    let blocks = blocks
+        .into_iter()
+        .map(|(block, diff, chunks)| (block, Some(diff), chunks))
+        .collect();
+    push_multiple_blocks_impl(blockchain, bls_cache, blocks).await
 }
 
 /// Pushes a sequence of blocks to the blockchain.
@@ -334,8 +368,11 @@ pub async fn push_multiple_blocks<N: Network>(
     Vec<Blake2bHash>,
     HashSet<Blake2bHash>,
 ) {
-    let blocks = blocks.into_iter().map(|block| (block, vec![])).collect();
-    push_multiple_blocks_with_chunks::<N>(blockchain, bls_cache, blocks)
+    let blocks = blocks
+        .into_iter()
+        .map(|block| (block, None, vec![]))
+        .collect();
+    push_multiple_blocks_impl::<N>(blockchain, bls_cache, blocks)
         .map(|(push_result, _, adopted_blocks, invalid_blocks)| {
             (push_result, adopted_blocks, invalid_blocks)
         })
@@ -349,9 +386,10 @@ pub async fn push_chunks_only<N: Network>(
     bls_cache: Arc<Mutex<PublicKeyCache>>,
     chunks: Vec<ChunkAndId<N>>,
 ) -> (Result<ChunksPushResult, ChunksPushError>, Blake2bHash) {
-    let push_results = spawn_blocking(move || blockchain_push(blockchain, bls_cache, None, chunks))
-        .await
-        .expect("blockchain.push() should not panic");
+    let push_results =
+        spawn_blocking(move || blockchain_push(blockchain, bls_cache, None, None, chunks))
+            .await
+            .expect("blockchain.push() should not panic");
 
     // TODO Ban peer depending on type of chunk error?
 
@@ -368,6 +406,7 @@ fn blockchain_push<N: Network>(
     blockchain: BlockchainProxy,
     bls_cache: Arc<Mutex<PublicKeyCache>>,
     block: Option<Block>,
+    diff: Option<TrieDiff>,
     chunks: Vec<ChunkAndId<N>>,
 ) -> BlockchainPushResult<N> {
     #[cfg(feature = "full")]
@@ -384,8 +423,19 @@ fn blockchain_push<N: Network>(
             #[cfg(feature = "full")]
             BlockchainProxy::Full(ref blockchain) => {
                 // We push the block and if it fails we return immediately, without committing chunks.
-                let push_result =
-                    Blockchain::push_with_chunks(blockchain.upgradable_read(), block, chunks);
+                let push_result = match diff {
+                    Some(diff) => Blockchain::push_with_chunks(
+                        blockchain.upgradable_read(),
+                        block,
+                        diff,
+                        chunks,
+                    ),
+                    None => {
+                        assert!(chunks.is_empty());
+                        Blockchain::push(blockchain.upgradable_read(), block)
+                            .map(|r| (r, Ok(ChunksPushResult::EmptyChunks)))
+                    }
+                };
 
                 blockchain_push_result =
                     BlockchainPushResult::with_block_result(push_result, block_hash, &peer_ids);

@@ -25,17 +25,18 @@ use tokio_stream::wrappers::BroadcastStream;
 use self::consensus_proxy::ConsensusProxy;
 #[cfg(feature = "full")]
 use self::remote_event_dispatcher::RemoteEventDispatcher;
-#[cfg(feature = "full")]
-use crate::messages::{
-    RequestBatchSet, RequestBlocksProof, RequestHistoryChunk, RequestTransactionReceiptsByAddress,
-    RequestTransactionsProof, RequestTrieProof,
-};
-#[cfg(feature = "full")]
-use crate::sync::live::state_queue::RequestChunk;
 use crate::{
     consensus::head_requests::{HeadRequests, HeadRequestsResult},
     messages::{RequestBlock, RequestHead, RequestMacroChain, RequestMissingBlocks},
     sync::{syncer::LiveSyncPushEvent, syncer_proxy::SyncerProxy},
+};
+#[cfg(feature = "full")]
+use crate::{
+    messages::{
+        RequestBatchSet, RequestBlocksProof, RequestHistoryChunk,
+        RequestTransactionReceiptsByAddress, RequestTransactionsProof, RequestTrieProof,
+    },
+    sync::live::{diff_queue::RequestPartialDiff, state_queue::RequestChunk},
 };
 
 pub mod consensus_proxy;
@@ -198,6 +199,9 @@ impl<N: Network> Consensus<N> {
                 executor.exec(Box::pin(request_handler(network, stream, blockchain)));
 
                 let stream = network.receive_requests::<RequestHistoryChunk>();
+                executor.exec(Box::pin(request_handler(network, stream, blockchain)));
+
+                let stream = network.receive_requests::<RequestPartialDiff>();
                 executor.exec(Box::pin(request_handler(network, stream, blockchain)));
 
                 let stream = network.receive_requests::<RequestChunk>();

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use nimiq_block::Block;
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
-use nimiq_primitives::policy::Policy;
+use nimiq_primitives::{policy::Policy, trie::trie_diff::TrieDiff};
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     block_production::TemporaryBlockProducer, blockchain::produce_macro_blocks,
@@ -409,7 +409,8 @@ async fn can_enforce_validity_window() {
         assert!(Blockchain::push_with_chunks(
             producer2.blockchain.upgradable_read(),
             block,
-            vec![]
+            TrieDiff::default(),
+            vec![],
         )
         .is_ok());
     }
@@ -424,7 +425,8 @@ async fn can_enforce_validity_window() {
         assert!(Blockchain::push_with_chunks(
             producer2.blockchain.upgradable_read(),
             block,
-            vec![]
+            TrieDiff::default(),
+            vec![],
         )
         .is_ok());
     }
@@ -435,9 +437,13 @@ async fn can_enforce_validity_window() {
 
     // Produce one more block
     let block = producer1.next_block(vec![], false);
-    assert!(
-        Blockchain::push_with_chunks(producer2.blockchain.upgradable_read(), block, vec![]).is_ok()
-    );
+    assert!(Blockchain::push_with_chunks(
+        producer2.blockchain.upgradable_read(),
+        block,
+        TrieDiff::default(),
+        vec![]
+    )
+    .is_ok());
     assert!(
         producer2.blockchain.read().can_enforce_validity_window(),
         "Blockchain with blocks > validity window should be able to enforce it"

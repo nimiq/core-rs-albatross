@@ -19,7 +19,7 @@ nimiq-database = { path = "../database" }
 nimiq-hash = { path = "../hash" }
 nimiq-serde = { path = "../serde" }
 nimiq-keys = { path = "../keys", features = ["serde-derive"] }
-nimiq-primitives = { path = "../primitives", features = ["serde-derive"] }
+nimiq-primitives = { path = "../primitives", features = ["serde-derive", "tree_proof"] }
 nimiq-transaction = { path = "../primitives/transaction" }
 nimiq-trie = { path = "../primitives/trie" }
 nimiq-vrf = { path = "../vrf", features = ["serde-derive"] }

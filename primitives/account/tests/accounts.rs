@@ -128,7 +128,7 @@ fn it_can_commit_and_revert_a_block_body() {
             &transactions,
             &[reward],
             &block_state,
-            receipts,
+            receipts.into(),
             &mut BlockLogger::empty(),
         )
         .unwrap();

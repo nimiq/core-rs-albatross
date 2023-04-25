@@ -21,6 +21,7 @@ use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
 use nimiq_primitives::{
     account::AccountError, coin::Coin, key_nibbles::KeyNibbles, policy::Policy, trie::TrieItem,
+    TreeProof,
 };
 use nimiq_serde::{DeserializeError, Serialize};
 use nimiq_trie::WriteTransactionProxy;
@@ -345,6 +346,7 @@ impl GenesisBuilder {
             extra_data: supply.serialize_to_vec(),
             state_root,
             body_root,
+            diff_root: TreeProof::empty().root_hash(),
             history_root: Blake2bHash::default(),
         };
 

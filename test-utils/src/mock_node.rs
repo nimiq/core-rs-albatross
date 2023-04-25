@@ -1,7 +1,7 @@
 use std::{
     pin::Pin,
     sync::Arc,
-    task::{Context, Poll},
+    task::{Context, Poll, Waker},
 };
 
 use futures::{future::BoxFuture, ready, stream::BoxStream, FutureExt, Stream, StreamExt};
@@ -10,7 +10,7 @@ use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_consensus::{
     messages::*,
-    sync::live::state_queue::{RequestChunk, ResponseChunk},
+    sync::live::{diff_queue::RequestPartialDiff, state_queue::RequestChunk},
 };
 use nimiq_database::volatile::VolatileDatabase;
 use nimiq_network_interface::{
@@ -31,6 +31,8 @@ pub struct MockHandler<
 > {
     network: Arc<N>,
     subscription: BoxStream<'static, (Req, N::RequestId, N::PeerId)>,
+    paused: bool,
+    pause_waker: Option<Waker>,
     request_handler: Option<fn(N::PeerId, &Req, &T) -> Req::Response>,
     response_future: Option<BoxFuture<'static, u16>>,
     environment: T,
@@ -50,16 +52,27 @@ impl<
         Self {
             network,
             subscription,
+            paused: false,
+            pause_waker: None,
             request_handler: None,
             response_future: None,
             environment,
         }
     }
-    pub fn set_handler(
-        &mut self,
-        request_handler: Option<fn(N::PeerId, &Req, &T) -> Req::Response>,
-    ) {
-        self.request_handler = request_handler;
+    pub fn pause(&mut self) {
+        self.paused = true;
+    }
+    pub fn unpause(&mut self) {
+        if let Some(waker) = self.pause_waker.take() {
+            waker.wake();
+        }
+        self.paused = false;
+    }
+    pub fn set(&mut self, request_handler: fn(N::PeerId, &Req, &T) -> Req::Response) {
+        self.request_handler = Some(request_handler);
+    }
+    pub fn unset(&mut self) {
+        self.request_handler = None;
     }
 }
 
@@ -77,6 +90,11 @@ impl<
                 let req = ready!(response_future.poll_unpin(cx));
                 self.response_future = None;
                 return Poll::Ready(Some(req));
+            }
+
+            if self.paused {
+                self.pause_waker = Some(cx.waker().clone());
+                return Poll::Pending;
             }
 
             if let Some((request, request_id, peer_id)) =
@@ -123,6 +141,7 @@ pub struct MockNode<N: NetworkInterface + TestNetwork> {
     pub network: Arc<N>,
     pub blockchain: Arc<RwLock<Blockchain>>,
     pub request_missing_block_handler: MockHandler<N, RequestMissingBlocks, BlockchainProxy>,
+    pub request_partial_diff_handler: MockHandler<N, RequestPartialDiff, Arc<RwLock<Blockchain>>>,
     pub request_chunk_handler: MockHandler<N, RequestChunk, Arc<RwLock<Blockchain>>>,
 }
 
@@ -156,12 +175,18 @@ impl<N: NetworkInterface + TestNetwork> MockNode<N> {
         blockchain: Arc<RwLock<Blockchain>>,
     ) -> Self {
         let missing_block_subscription = network.receive_requests::<RequestMissingBlocks>();
+        let partial_diff_subscription = network.receive_requests::<RequestPartialDiff>();
         let chunk_subscription = network.receive_requests::<RequestChunk>();
 
         let request_missing_block_handler = MockHandler::new(
             Arc::clone(&network),
             missing_block_subscription,
             BlockchainProxy::Full(Arc::clone(&blockchain)),
+        );
+        let request_partial_diff_handler = MockHandler::new(
+            Arc::clone(&network),
+            partial_diff_subscription,
+            Arc::clone(&blockchain),
         );
         let request_chunk_handler = MockHandler::new(
             Arc::clone(&network),
@@ -173,28 +198,9 @@ impl<N: NetworkInterface + TestNetwork> MockNode<N> {
             network,
             blockchain,
             request_missing_block_handler,
+            request_partial_diff_handler,
             request_chunk_handler,
         }
-    }
-
-    pub fn set_missing_block_handler(
-        &mut self,
-        request_missing_block_handler: Option<
-            fn(N::PeerId, &RequestMissingBlocks, &BlockchainProxy) -> ResponseBlocks,
-        >,
-    ) {
-        self.request_missing_block_handler
-            .set_handler(request_missing_block_handler);
-    }
-
-    pub fn set_chunk_handler(
-        &mut self,
-        request_chunk_handler: Option<
-            fn(N::PeerId, &RequestChunk, &Arc<RwLock<Blockchain>>) -> ResponseChunk,
-        >,
-    ) {
-        self.request_chunk_handler
-            .set_handler(request_chunk_handler);
     }
 }
 
@@ -204,6 +210,10 @@ impl<N: NetworkInterface + TestNetwork> Stream for MockNode<N> {
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         // Fetching and processing block requests
         if let Poll::Ready(Some(request)) = self.request_missing_block_handler.poll_next_unpin(cx) {
+            return Poll::Ready(Some(request));
+        }
+
+        if let Poll::Ready(Some(request)) = self.request_partial_diff_handler.poll_next_unpin(cx) {
             return Poll::Ready(Some(request));
         }
 

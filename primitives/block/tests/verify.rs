@@ -24,6 +24,7 @@ fn test_verify_header_version() {
         extra_data: [].to_vec(),
         state_root: Blake2bHash::default(),
         body_root: Blake2sHash::default(),
+        diff_root: Blake2bHash::default(),
         history_root: Blake2bHash::default(),
     };
     let header = BlockHeader::Micro(micro_header.clone());
@@ -57,6 +58,7 @@ fn test_verify_header_extra_data() {
         extra_data: vec![0; 33],
         state_root: Blake2bHash::default(),
         body_root: Blake2sHash::default(),
+        diff_root: Blake2bHash::default(),
         history_root: Blake2bHash::default(),
     };
     let header = BlockHeader::Micro(micro_header.clone());
@@ -99,6 +101,7 @@ fn test_verify_body_root() {
         extra_data: vec![0; 30],
         state_root: Blake2bHash::default(),
         body_root: Blake2sHash::default(),
+        diff_root: Blake2bHash::default(),
         history_root: Blake2bHash::default(),
     };
 
@@ -141,6 +144,7 @@ fn test_verify_skip_block() {
         extra_data: vec![],
         state_root: Blake2bHash::default(),
         body_root: Blake2sHash::default(),
+        diff_root: Blake2bHash::default(),
         history_root: Blake2bHash::default(),
     };
 
@@ -196,6 +200,7 @@ fn test_verify_micro_block_body_txns() {
         extra_data: vec![],
         state_root: Blake2bHash::default(),
         body_root: Blake2sHash::default(),
+        diff_root: Blake2bHash::default(),
         history_root: Blake2bHash::default(),
     };
 
@@ -279,6 +284,7 @@ fn test_verify_micro_block_body_fork_proofs() {
         extra_data: vec![],
         state_root: Blake2bHash::default(),
         body_root: Blake2sHash::default(),
+        diff_root: Blake2bHash::default(),
         history_root: Blake2bHash::default(),
     };
 
@@ -305,6 +311,8 @@ fn test_verify_micro_block_body_fork_proofs() {
     let micro_justification = MicroJustification::Micro(Signature::default());
 
     let mut fork_proofs = vec![fork_proof_1, fork_proof_2, fork_proof_3];
+    fork_proofs.sort();
+    fork_proofs.reverse();
     let micro_body = MicroBody {
         fork_proofs: fork_proofs.clone(),
         transactions: [].to_vec(),
@@ -389,6 +397,7 @@ fn test_verify_election_macro_body() {
         extra_data: vec![0; 30],
         state_root: Blake2bHash::default(),
         body_root: Blake2sHash::default(),
+        diff_root: Blake2bHash::default(),
         history_root: Blake2bHash::default(),
     };
 

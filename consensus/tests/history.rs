@@ -536,20 +536,22 @@ async fn request_missing_blocks_across_macro_block() {
 
     // Also we should've received a request to fill the first gap.
     // Instead of gossiping the block, we'll answer the missing blocks request
-    mock_node.set_missing_block_handler(Some(|_mock_peer_id, req, blockchain| {
-        assert_eq!(&req.target_hash, blockchain.read().head().parent_hash());
-        let genesis = req.locators.first().unwrap();
-        let blocks = blockchain
-            .read()
-            .get_blocks(genesis, 2, true, Direction::Forward)
-            .unwrap();
+    mock_node
+        .request_missing_block_handler
+        .set(|_mock_peer_id, req, blockchain| {
+            assert_eq!(&req.target_hash, blockchain.read().head().parent_hash());
+            let genesis = req.locators.first().unwrap();
+            let blocks = blockchain
+                .read()
+                .get_blocks(genesis, 2, true, Direction::Forward)
+                .unwrap();
 
-        ResponseBlocks {
-            blocks: Some(blocks),
-        }
-    }));
+            ResponseBlocks {
+                blocks: Some(blocks),
+            }
+        });
     let req = mock_node.next().await.unwrap();
-    mock_node.set_missing_block_handler(None);
+    mock_node.request_missing_block_handler.unset();
     assert_eq!(req, RequestMissingBlocks::TYPE_ID);
 
     // Run the block_queue one iteration, i.e. until it processed one block.

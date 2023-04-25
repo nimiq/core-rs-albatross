@@ -4,7 +4,7 @@ use nimiq_block::{MacroBlock, MacroBody, MacroHeader, MultiSignature};
 use nimiq_bls::{AggregateSignature, CompressedPublicKey, KeyPair};
 use nimiq_collections::bitset::BitSet;
 use nimiq_handel::update::LevelUpdate;
-use nimiq_hash::{Blake2bHasher, Blake2sHash, Hasher};
+use nimiq_hash::{Blake2bHash, Blake2bHasher, Blake2sHash, Hasher};
 use nimiq_keys::{Address, PublicKey};
 use nimiq_primitives::slots::ValidatorsBuilder;
 use nimiq_serde::{Deserialize, Serialize};
@@ -99,7 +99,8 @@ fn it_can_convert_macro_block_into_slots() {
             extra_data: vec![],
             state_root: hash.clone(),
             body_root: Blake2sHash::default(),
-            history_root: [0u8; 32].into(),
+            diff_root: Blake2bHash::default(),
+            history_root: Blake2bHash::default(),
         },
         justification: None,
         body: Some(MacroBody {

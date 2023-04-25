@@ -172,7 +172,7 @@ pub struct MacroHeader {
     pub parent_hash: Blake2bHash,
     /// The hash of the header of the preceding election macro block.
     pub parent_election_hash: Blake2bHash,
-    /// Hashes of the last blocks dividable by 2^x
+    /// Hashes of the last blocks divisible by 2^x
     pub interlink: Option<Vec<Blake2bHash>>,
     /// The seed of the block. This is the BLS signature of the seed of the immediately preceding
     /// block (either micro or macro) using the validator key of the block proposer.
@@ -188,6 +188,8 @@ pub struct MacroHeader {
     pub state_root: Blake2bHash,
     /// The root of the Merkle tree of the body. It just acts as a commitment to the body.
     pub body_root: Blake2sHash,
+    /// The root of the trie diff tree proof.
+    pub diff_root: Blake2bHash,
     /// A merkle root over all of the transactions that happened in the current epoch.
     pub history_root: Blake2bHash,
 }

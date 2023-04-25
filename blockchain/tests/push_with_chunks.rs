@@ -8,6 +8,7 @@ use nimiq_primitives::{
     trie::{
         error::MerkleRadixTrieError,
         trie_chunk::{TrieChunkWithStart, TrieItem},
+        trie_diff::TrieDiff,
     },
 };
 use nimiq_serde::Deserialize;
@@ -53,7 +54,11 @@ where
     let valid_chunk2 = temp_producer1.get_chunk(next_chunk_start.clone(), 2);
 
     let (_, result) = temp_producer2
-        .push_with_chunks(block, vec![valid_chunk1, invalid_chunk, valid_chunk2])
+        .push_with_chunks(
+            block,
+            TrieDiff::default(),
+            vec![valid_chunk1, invalid_chunk, valid_chunk2],
+        )
         .expect("Block push should not fail");
 
     if let Err(ref e) = result {
@@ -100,9 +105,9 @@ fn can_push_blocks_into_incomplete_trie() {
     )
     .unwrap();
 
-    let block = temp_producer1.next_block_with_txs(vec![], false, vec![tx]);
+    let (block, diff) = temp_producer1.next_block_and_diff_with_txs(vec![], false, vec![tx]);
     assert_eq!(
-        temp_producer2.push_with_chunks(block, vec![]),
+        temp_producer2.push_with_chunks(block, diff, vec![]),
         Ok((PushResult::Extended, Ok(ChunksPushResult::EmptyChunks)))
     );
 
@@ -129,14 +134,14 @@ fn can_push_valid_chunks() {
     let chunk3_start = chunk2.chunk.end_key.clone().unwrap();
 
     assert_eq!(
-        temp_producer2.push_with_chunks(block, vec![chunk1, chunk2]),
+        temp_producer2.push_with_chunks(block, TrieDiff::default(), vec![chunk1, chunk2]),
         Ok((PushResult::Extended, Ok(ChunksPushResult::Chunks(2, 0))))
     );
 
     // Block 2, 0 Chunks
     let block = temp_producer1.next_block(vec![], false);
     assert_eq!(
-        temp_producer2.push_with_chunks(block, vec![]),
+        temp_producer2.push_with_chunks(block, TrieDiff::default(), vec![]),
         Ok((PushResult::Extended, Ok(ChunksPushResult::EmptyChunks)))
     );
 
@@ -145,7 +150,7 @@ fn can_push_valid_chunks() {
     let chunk3 = temp_producer1.get_chunk(chunk3_start, 3);
 
     assert_eq!(
-        temp_producer2.push_with_chunks(block, vec![chunk3]),
+        temp_producer2.push_with_chunks(block, TrieDiff::default(), vec![chunk3]),
         Ok((PushResult::Extended, Ok(ChunksPushResult::Chunks(1, 0))))
     );
 
@@ -185,7 +190,7 @@ fn can_ignore_chunks_with_invalid_start_key() {
     let chunk5_start = chunk1.chunk.end_key.clone().unwrap();
 
     assert_eq!(
-        temp_producer2.push_with_chunks(block, vec![chunk1, chunk2]),
+        temp_producer2.push_with_chunks(block, TrieDiff::default(), vec![chunk1, chunk2]),
         Ok((PushResult::Extended, Ok(ChunksPushResult::Chunks(1, 1))))
     );
     assert_eq!(
@@ -201,7 +206,7 @@ fn can_ignore_chunks_with_invalid_start_key() {
     let block = temp_producer1.next_block(vec![], false);
     let chunk3 = temp_producer1.get_chunk(KeyNibbles::ROOT, 3);
     assert_eq!(
-        temp_producer2.push_with_chunks(block, vec![chunk3]),
+        temp_producer2.push_with_chunks(block, TrieDiff::default(), vec![chunk3]),
         Ok((PushResult::Extended, Ok(ChunksPushResult::Chunks(0, 1))))
     );
 
@@ -211,7 +216,7 @@ fn can_ignore_chunks_with_invalid_start_key() {
     let chunk5 = temp_producer1.get_chunk(chunk5_start, 3);
 
     assert_eq!(
-        temp_producer2.push_with_chunks(block, vec![chunk4, chunk5]),
+        temp_producer2.push_with_chunks(block, TrieDiff::default(), vec![chunk4, chunk5]),
         Ok((PushResult::Extended, Ok(ChunksPushResult::Chunks(1, 1))))
     );
 
@@ -250,7 +255,7 @@ fn can_rebranch_and_revert_chunks() {
     let chunk1 = temp_producer1.get_chunk(KeyNibbles::ROOT, 1);
     let chunk2_start = chunk1.chunk.end_key.clone().unwrap();
     assert_eq!(
-        temp_producer2.push_with_chunks(block1, vec![chunk1]),
+        temp_producer2.push_with_chunks(block1, TrieDiff::default(), vec![chunk1]),
         Ok((PushResult::Extended, Ok(ChunksPushResult::Chunks(1, 0))))
     );
 
@@ -268,12 +273,12 @@ fn can_rebranch_and_revert_chunks() {
     let chunk2b = temp_producer1.get_chunk(chunk2_start, 3);
 
     assert_eq!(
-        temp_producer2.push_with_chunks(block2a, vec![chunk2a]),
+        temp_producer2.push_with_chunks(block2a, TrieDiff::default(), vec![chunk2a]),
         Ok((PushResult::Extended, Ok(ChunksPushResult::Chunks(1, 0))))
     );
 
     assert_eq!(
-        temp_producer2.push_with_chunks(block2b, vec![chunk2b]),
+        temp_producer2.push_with_chunks(block2b, TrieDiff::default(), vec![chunk2b]),
         Ok((PushResult::Rebranched, Ok(ChunksPushResult::Chunks(1, 0))))
     );
 
@@ -314,7 +319,7 @@ fn can_partially_apply_blocks() {
     let chunk1 = temp_producer1.get_chunk(KeyNibbles::ROOT, 3);
     let chunk2_start = chunk1.chunk.end_key.clone().unwrap();
     assert_eq!(
-        temp_producer2.push_with_chunks(block, vec![chunk1]),
+        temp_producer2.push_with_chunks(block, TrieDiff::default(), vec![chunk1]),
         Ok((PushResult::Extended, Ok(ChunksPushResult::Chunks(1, 0))))
     );
 
@@ -364,9 +369,9 @@ fn can_partially_apply_blocks() {
     )
     .unwrap();
 
-    let block = temp_producer1.next_block_with_txs(vec![], false, vec![tx1, tx2]);
+    let (block, diff) = temp_producer1.next_block_and_diff_with_txs(vec![], false, vec![tx1, tx2]);
     assert_eq!(
-        temp_producer2.push_with_chunks(block, vec![]),
+        temp_producer2.push_with_chunks(block, diff, vec![]),
         Ok((PushResult::Extended, Ok(ChunksPushResult::EmptyChunks)))
     );
 
@@ -384,7 +389,7 @@ fn can_partially_apply_blocks() {
     let block = temp_producer1.next_block_with_txs(vec![], false, vec![]);
     let chunk2 = temp_producer1.get_chunk(chunk2_start, 3);
     assert_eq!(
-        temp_producer2.push_with_chunks(block, vec![chunk2]),
+        temp_producer2.push_with_chunks(block, TrieDiff::default(), vec![chunk2]),
         Ok((PushResult::Extended, Ok(ChunksPushResult::Chunks(1, 0))))
     );
 

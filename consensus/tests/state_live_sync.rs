@@ -1,6 +1,6 @@
 use std::{sync::Arc, task::Poll};
 
-use futures::{join, poll, Future, FutureExt, StreamExt};
+use futures::{join, poll, Future, Stream, StreamExt};
 use log::info;
 use nimiq_block::Block;
 use nimiq_block_production::BlockProducer;
@@ -13,6 +13,7 @@ use nimiq_consensus::{
     sync::{
         live::{
             block_queue::BlockQueue,
+            diff_queue::{DiffQueue, RequestPartialDiff, ResponsePartialDiff},
             queue::QueueConfig,
             state_queue::{Chunk, ChunkRequestState, RequestChunk, ResponseChunk, StateQueue},
             StateLiveSync,
@@ -31,7 +32,7 @@ use nimiq_network_interface::{
     request::{Handle, RequestCommon},
 };
 use nimiq_network_mock::{MockHub, MockId, MockNetwork, MockPeerId};
-use nimiq_primitives::{key_nibbles::KeyNibbles, policy::Policy};
+use nimiq_primitives::{key_nibbles::KeyNibbles, policy::Policy, trie::trie_diff::TrieDiff};
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     block_production::TemporaryBlockProducer,
@@ -94,10 +95,16 @@ fn get_incomplete_live_sync(
         QueueConfig::default(),
     );
 
-    let state_queue = StateQueue::with_block_queue(
+    let diff_queue = DiffQueue::with_block_queue(
         Arc::clone(&network),
         Arc::clone(&incomplete_blockchain),
         block_queue,
+    );
+
+    let state_queue = StateQueue::with_diff_queue(
+        Arc::clone(&network),
+        Arc::clone(&incomplete_blockchain),
+        diff_queue,
         QueueConfig::default(),
     );
 
@@ -166,10 +173,13 @@ where
     // Will accept block.
     assert!(
         matches!(
-            live_sync.next().await,
-            Some(LiveSyncEvent::PushEvent(
-                LiveSyncPushEvent::AcceptedAnnouncedBlock(_)
-            )),
+            join!(mock_node.next(), live_sync.next()),
+            (
+                Some(RequestPartialDiff::TYPE_ID),
+                Some(LiveSyncEvent::PushEvent(
+                    LiveSyncPushEvent::AcceptedAnnouncedBlock(_)
+                )),
+            )
         ),
         "Should accept announced block"
     );
@@ -199,13 +209,17 @@ where
     // Modify response.
     pre_action(&mut mock_node);
 
-    let block_tx2 = block_tx.clone();
-    let mock_id2 = mock_id.clone();
-    let blockchain2 = Arc::clone(&mock_node.blockchain);
-    let mock_node_request = mock_node.next().then(|res| async move {
-        post_action(mock_id2, block_tx2, blockchain2).await;
-        res
-    });
+    let mock_node_request = {
+        let mock_id = mock_id.clone();
+        let block_tx = block_tx.clone();
+        let blockchain = Arc::clone(&mock_node.blockchain);
+        let mock_node = &mut mock_node;
+        async move {
+            let res = mock_node.next().await;
+            post_action(mock_id, block_tx, blockchain).await;
+            (res, mock_node.next().await)
+        }
+    };
 
     // Will request chunk.
     if should_accept_block {
@@ -213,7 +227,10 @@ where
             matches!(
                 join!(mock_node_request, live_sync.next()),
                 (
-                    Some(RequestChunk::TYPE_ID),
+                    (
+                        Some(RequestChunk::TYPE_ID),
+                        Some(RequestPartialDiff::TYPE_ID)
+                    ),
                     Some(LiveSyncEvent::PushEvent(
                         LiveSyncPushEvent::AcceptedAnnouncedBlock(_)
                     )),
@@ -226,7 +243,7 @@ where
             matches!(
                 join!(mock_node_request, live_sync.next()),
                 (
-                    Some(RequestChunk::TYPE_ID),
+                    (Some(_), Some(_)),
                     Some(LiveSyncEvent::PushEvent(LiveSyncPushEvent::RejectedBlock(
                         _
                     ))),
@@ -254,6 +271,14 @@ where
             || live_sync.queue().chunk_request_state() == &ChunkRequestState::Reset,
         "Should have reset"
     );
+}
+
+async fn next<S: Stream + Unpin>(mut stream: S, n: usize) -> Option<Vec<S::Item>> {
+    let mut result = Vec::new();
+    for _ in 0..n {
+        result.push(stream.next().await?);
+    }
+    Some(result)
 }
 
 #[test(tokio::test)]
@@ -296,10 +321,13 @@ async fn can_sync_state() {
     // Will request chunks and receive the block.
     assert!(
         matches!(
-            live_sync.next().await,
-            Some(LiveSyncEvent::PushEvent(
-                LiveSyncPushEvent::AcceptedAnnouncedBlock(_)
-            ))
+            join!(mock_node.next(), live_sync.next()),
+            (
+                Some(RequestPartialDiff::TYPE_ID),
+                Some(LiveSyncEvent::PushEvent(
+                    LiveSyncPushEvent::AcceptedAnnouncedBlock(_)
+                )),
+            )
         ),
         "Should immediately receive block"
     );
@@ -348,9 +376,9 @@ async fn can_sync_state() {
     // Will request missing blocks and apply those.
     assert!(
         matches!(
-            join!(mock_node.next(), live_sync.next()),
+            join!(next(&mut mock_node, 31), live_sync.next()),
             (
-                Some(RequestMissingBlocks::TYPE_ID),
+                Some(_),
                 Some(LiveSyncEvent::PushEvent(
                     LiveSyncPushEvent::ReceivedMissingBlocks(..)
                 )),
@@ -364,10 +392,13 @@ async fn can_sync_state() {
     // Will apply the buffered block.
     assert!(
         matches!(
-            live_sync.next().await,
-            Some(LiveSyncEvent::PushEvent(
-                LiveSyncPushEvent::AcceptedBufferedBlock(..)
-            ))
+            join!(mock_node.next(), live_sync.next()),
+            (
+                Some(RequestPartialDiff::TYPE_ID),
+                Some(LiveSyncEvent::PushEvent(
+                    LiveSyncPushEvent::AcceptedBufferedBlock(..)
+                )),
+            )
         ),
         "Should apply buffered block"
     );
@@ -380,10 +411,13 @@ async fn can_sync_state() {
     // Will apply the announced block.
     assert!(
         matches!(
-            live_sync.next().await,
-            Some(LiveSyncEvent::PushEvent(
-                LiveSyncPushEvent::AcceptedAnnouncedBlock(..)
-            ))
+            join!(mock_node.next(), live_sync.next()),
+            (
+                Some(RequestPartialDiff::TYPE_ID),
+                Some(LiveSyncEvent::PushEvent(
+                    LiveSyncPushEvent::AcceptedAnnouncedBlock(..)
+                )),
+            )
         ),
         "Should apply announced block"
     );
@@ -441,10 +475,13 @@ async fn revert_chunks_for_state_live_sync() {
     // Will request a chunk and receive the block.
     assert!(
         matches!(
-            live_sync.next().await,
-            Some(LiveSyncEvent::PushEvent(
-                LiveSyncPushEvent::AcceptedAnnouncedBlock(_)
-            ))
+            join!(mock_node.next(), live_sync.next()),
+            (
+                Some(RequestPartialDiff::TYPE_ID),
+                Some(LiveSyncEvent::PushEvent(
+                    LiveSyncPushEvent::AcceptedAnnouncedBlock(_)
+                )),
+            )
         ),
         "Should immediately receive block"
     );
@@ -498,12 +535,12 @@ async fn revert_chunks_for_state_live_sync() {
     // Will request a chunk and receive the block.
     assert!(
         matches!(
-            join!(mock_node.next(), live_sync.next()),
+            join!(next(&mut mock_node, 2), live_sync.next()),
             (
-                Some(RequestMissingBlocks::TYPE_ID),
+                Some(_),
                 Some(LiveSyncEvent::PushEvent(
                     LiveSyncPushEvent::ReceivedMissingBlocks(..)
-                ))
+                )),
             )
         ),
         "Should immediately receive block"
@@ -514,10 +551,13 @@ async fn revert_chunks_for_state_live_sync() {
     info!("Applying chunk #{}", 2);
     assert!(
         matches!(
-            live_sync.next().await,
-            Some(LiveSyncEvent::PushEvent(
-                LiveSyncPushEvent::AcceptedBufferedBlock(..)
-            ))
+            join!(mock_node.next(), live_sync.next()),
+            (
+                Some(RequestPartialDiff::TYPE_ID),
+                Some(LiveSyncEvent::PushEvent(
+                    LiveSyncPushEvent::AcceptedBufferedBlock(..)
+                )),
+            )
         ),
         "Should receive and accept chunks"
     );
@@ -579,18 +619,20 @@ async fn can_reset_chain_of_chunks() {
     // Respond with to be ignored chunk and then produce and gossip a new block.
     test_chunk_reset(
         |mock_node| {
-            mock_node.set_chunk_handler(Some(|_mock_peer_id, _request, blockchain| {
-                let blockchain_rg = blockchain.read();
-                let chunk = blockchain_rg
-                    .state
-                    .accounts
-                    .get_chunk(KeyNibbles::ROOT, 3, None);
-                ResponseChunk::Chunk(Chunk {
-                    block_number: blockchain_rg.block_number(),
-                    block_hash: blockchain_rg.head_hash(),
-                    chunk,
-                })
-            }));
+            mock_node
+                .request_chunk_handler
+                .set(|_mock_peer_id, _request, blockchain| {
+                    let blockchain_rg = blockchain.read();
+                    let chunk = blockchain_rg
+                        .state
+                        .accounts
+                        .get_chunk(KeyNibbles::ROOT, 3, None);
+                    ResponseChunk::Chunk(Chunk {
+                        block_number: blockchain_rg.block_number(),
+                        block_hash: blockchain_rg.head_hash(),
+                        chunk,
+                    })
+                });
         },
         |mock_id, block_tx, blockchain| async move {
             let producer = BlockProducer::new(signing_key(), voting_key());
@@ -606,21 +648,23 @@ async fn can_reset_chain_of_chunks() {
     // Respond with erroneous chunk and then produce and gossip a new block.
     test_chunk_reset(
         |mock_node| {
-            mock_node.set_chunk_handler(Some(|peer_id, request, blockchain| {
-                let mut chunk = <RequestChunk as Handle<
-                    MockNetwork,
-                    ResponseChunk,
-                    Arc<RwLock<Blockchain>>,
-                >>::handle(request, peer_id, blockchain);
-                // Make chunk invalid.
-                match chunk {
-                    ResponseChunk::Chunk(ref mut inner_chunk) => {
-                        inner_chunk.chunk.proof.nodes.pop();
+            mock_node
+                .request_chunk_handler
+                .set(|peer_id, request, blockchain| {
+                    let mut chunk = <RequestChunk as Handle<
+                        MockNetwork,
+                        ResponseChunk,
+                        Arc<RwLock<Blockchain>>,
+                    >>::handle(request, peer_id, blockchain);
+                    // Make chunk invalid.
+                    match chunk {
+                        ResponseChunk::Chunk(ref mut inner_chunk) => {
+                            inner_chunk.chunk.proof.nodes.pop();
+                        }
+                        _ => unreachable!(),
                     }
-                    _ => unreachable!(),
-                }
-                chunk
-            }));
+                    chunk
+                });
         },
         |mock_id, block_tx, blockchain| async move {
             let producer = BlockProducer::new(signing_key(), voting_key());
@@ -638,6 +682,10 @@ async fn can_reset_chain_of_chunks() {
         |mock_node| {
             let producer = BlockProducer::new(signing_key(), voting_key());
             push_micro_block(&producer, &mock_node.blockchain);
+
+            mock_node
+                .request_partial_diff_handler
+                .set(|_, _, _| ResponsePartialDiff::PartialDiff(TrieDiff::default()));
         },
         |mock_id, block_tx, blockchain| async move {
             let mut block = blockchain.read().head();
@@ -692,23 +740,29 @@ async fn can_remove_chunks_related_to_invalid_blocks() {
     live_sync.add_peer(mock_node.network.get_local_peer_id());
 
     // Return invalid missing block instead.
-    mock_node.set_missing_block_handler(Some(|mock_id, request, blockchain_proxy| {
-        let mut response = <RequestMissingBlocks as Handle<
-            MockNetwork,
-            ResponseBlocks,
-            BlockchainProxy,
-        >>::handle(request, mock_id, blockchain_proxy);
-        match response.blocks {
-            Some(ref mut blocks) => match blocks[0] {
-                Block::Micro(ref mut micro_block) => {
-                    micro_block.body = None;
-                }
+    mock_node
+        .request_missing_block_handler
+        .set(|mock_id, request, blockchain_proxy| {
+            let mut response = <RequestMissingBlocks as Handle<
+                MockNetwork,
+                ResponseBlocks,
+                BlockchainProxy,
+            >>::handle(request, mock_id, blockchain_proxy);
+            match response.blocks {
+                Some(ref mut blocks) => match blocks[0] {
+                    Block::Micro(ref mut micro_block) => {
+                        micro_block.body = None;
+                    }
+                    _ => unreachable!(),
+                },
                 _ => unreachable!(),
-            },
-            _ => unreachable!(),
-        }
-        response
-    }));
+            }
+            response
+        });
+
+    mock_node
+        .request_partial_diff_handler
+        .set(|_, _, _| ResponsePartialDiff::PartialDiff(TrieDiff::default()));
 
     let mock_node_fut = async move {
         let res1 = mock_node.next().await;
@@ -722,6 +776,7 @@ async fn can_remove_chunks_related_to_invalid_blocks() {
             *blockchain_wg = new_blockchain;
         }
 
+        assert_eq!(mock_node.next().await, Some(RequestPartialDiff::TYPE_ID));
         assert_eq!(mock_node.next().await, Some(RequestChunk::TYPE_ID));
         assert_eq!(mock_node.next().await, Some(RequestChunk::TYPE_ID));
         (res1, res2)
@@ -785,33 +840,38 @@ async fn clears_buffer_after_macro_block() {
 
     assert!(
         matches!(
-            live_sync.next().await,
-            Some(LiveSyncEvent::PushEvent(
-                LiveSyncPushEvent::AcceptedAnnouncedBlock(_)
-            ))
+            join!(mock_node.next(), live_sync.next()),
+            (
+                Some(RequestPartialDiff::TYPE_ID),
+                Some(LiveSyncEvent::PushEvent(
+                    LiveSyncPushEvent::AcceptedAnnouncedBlock(_)
+                )),
+            )
         ),
         "Should accept first block"
     );
 
     // Upon first chunk request, return a chunk for a non-existent block.
-    mock_node.set_chunk_handler(Some(|mock_id, request, blockchain| {
-        let mut chunk = <RequestChunk as nimiq_network_interface::request::Handle<
-            MockNetwork,
-            ResponseChunk,
-            Arc<RwLock<Blockchain>>,
-        >>::handle(request, mock_id, blockchain);
-        match chunk {
-            ResponseChunk::Chunk(ref mut inner_chunk) => {
-                inner_chunk.block_hash = Blake2bHash::default();
+    mock_node
+        .request_chunk_handler
+        .set(|mock_id, request, blockchain| {
+            let mut chunk = <RequestChunk as nimiq_network_interface::request::Handle<
+                MockNetwork,
+                ResponseChunk,
+                Arc<RwLock<Blockchain>>,
+            >>::handle(request, mock_id, blockchain);
+            match chunk {
+                ResponseChunk::Chunk(ref mut inner_chunk) => {
+                    inner_chunk.block_hash = Blake2bHash::default();
+                }
+                _ => unreachable!(),
             }
-            _ => unreachable!(),
-        }
-        chunk
-    }));
+            chunk
+        });
 
     let mock_node_fut = async move {
         assert_eq!(mock_node.next().await, Some(RequestChunk::TYPE_ID));
-        mock_node.set_chunk_handler(None);
+        mock_node.request_chunk_handler.unset();
         assert_eq!(mock_node.next().await, Some(RequestChunk::TYPE_ID));
         assert_eq!(mock_node.next().await, Some(RequestChunk::TYPE_ID));
         mock_node
@@ -835,12 +895,14 @@ async fn clears_buffer_after_macro_block() {
     produce_macro_blocks(&producer, &mock_node.blockchain, 1);
     gossip_head_block(&block_tx, mock_id.clone(), &mock_node.blockchain).await;
 
+    mock_node.request_chunk_handler.pause();
+
     // Apply missing blocks.
     assert!(
         matches!(
-            join!(mock_node.next(), live_sync.next()),
+            join!(next(&mut mock_node, 31), live_sync.next()),
             (
-                Some(RequestMissingBlocks::TYPE_ID),
+                Some(_),
                 Some(LiveSyncEvent::PushEvent(
                     LiveSyncPushEvent::ReceivedMissingBlocks(..)
                 ))
@@ -855,13 +917,18 @@ async fn clears_buffer_after_macro_block() {
 
     assert!(
         matches!(
-            live_sync.next().await,
-            Some(LiveSyncEvent::PushEvent(
-                LiveSyncPushEvent::AcceptedBufferedBlock(..)
-            ))
+            join!(mock_node.next(), live_sync.next()),
+            (
+                Some(RequestPartialDiff::TYPE_ID),
+                Some(LiveSyncEvent::PushEvent(
+                    LiveSyncPushEvent::AcceptedBufferedBlock(..)
+                )),
+            )
         ),
         "Should accept missing blocks"
     );
+
+    mock_node.request_chunk_handler.unpause();
 
     assert!(
         matches!(
@@ -870,7 +937,7 @@ async fn clears_buffer_after_macro_block() {
                 Some(RequestChunk::TYPE_ID),
                 Some(LiveSyncEvent::PushEvent(LiveSyncPushEvent::AcceptedChunks(
                     ..
-                )))
+                ))),
             )
         ),
         "Should accept chunks"

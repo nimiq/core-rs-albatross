@@ -439,6 +439,7 @@ where
             if let Err(error) = blockchain.commit_accounts(
                 state,
                 &block,
+                None,
                 &mut (&mut txn).into(),
                 &mut BlockLogger::empty(),
             ) {

@@ -32,7 +32,7 @@ pub enum BlockRequestComponentEvent {
 /// - The sync queue which manages the requests and responses.
 /// - The peers list.
 /// - The network stream of events used to remove the peers that have left.  
-/// - Weather we include the body of a block.
+/// - Whether we include the body of a block.
 ///
 /// The public interface allows to request blocks, which are not immediately returned.
 /// The blocks instead are returned by polling the component.

@@ -107,11 +107,11 @@ impl<N: Network> LiveSyncQueue<N> for StateQueue<N> {
     ) -> VecDeque<BoxFuture<'static, Self::PushResult>> {
         let mut future_results = VecDeque::new();
         match result {
-            QueuedStateChunks::Head((block, pubsub_id), chunks) => {
+            QueuedStateChunks::Head((block, pubsub_id), diff, chunks) => {
                 // Push block.
                 future_results.push_back(
                     queue::push_block_and_chunks(
-                        network, blockchain, bls_cache, pubsub_id, block, chunks,
+                        network, blockchain, bls_cache, pubsub_id, block, diff, chunks,
                     )
                     .map(|(push_result, push_chunk_error, hash)| {
                         PushOpResult::Head(push_result, push_chunk_error, hash)
@@ -120,13 +120,14 @@ impl<N: Network> LiveSyncQueue<N> for StateQueue<N> {
                 );
             }
             QueuedStateChunks::Buffered(buffered_blocks) => {
-                for ((block, pubsub_id), chunks) in buffered_blocks {
+                for ((block, pubsub_id), diff, chunks) in buffered_blocks {
                     let res = queue::push_block_and_chunks(
                         Arc::clone(&network),
                         blockchain.clone(),
                         Arc::clone(&bls_cache),
                         pubsub_id,
                         block,
+                        diff,
                         chunks,
                     )
                     .map(|(push_result, push_chunk_error, hash)| {
@@ -163,7 +164,7 @@ impl<N: Network> LiveSyncQueue<N> for StateQueue<N> {
                         .boxed(),
                 );
             }
-            QueuedStateChunks::TooFarFutureBlock(_, peer_id)
+            QueuedStateChunks::TooFarFutureBlock(peer_id)
             | QueuedStateChunks::TooFarFutureChunk(ChunkAndId { peer_id, .. }) => {
                 // Peer is too far ahead.
                 future_results.push_back(
@@ -172,7 +173,7 @@ impl<N: Network> LiveSyncQueue<N> for StateQueue<N> {
                 );
             }
             QueuedStateChunks::PeerIncompleteState(peer_id)
-            | QueuedStateChunks::TooDistantPastBlock(_, peer_id)
+            | QueuedStateChunks::TooDistantPastBlock(peer_id)
             | QueuedStateChunks::TooDistantPastChunk(ChunkAndId { peer_id, .. }) => {
                 // Peer is too far behind.
                 future_results.push_back(
@@ -215,7 +216,7 @@ impl<N: Network> LiveSyncQueue<N> for StateQueue<N> {
             ) => {
                 self.remove_invalid_blocks(&mut invalid_blocks);
 
-                self.block_queue.process_push_result(
+                self.diff_queue.process_push_result(
                     PushOpResult::Missing(
                         result,
                         push_chunks_result,
@@ -226,13 +227,13 @@ impl<N: Network> LiveSyncQueue<N> for StateQueue<N> {
                 )
             }
             item => self
-                .block_queue
+                .diff_queue
                 .process_push_result(item.into_block_push_result()?),
         }
     }
 
     fn num_peers(&self) -> usize {
-        self.block_queue.num_peers()
+        self.diff_queue.num_peers()
     }
 
     fn include_micro_bodies(&self) -> bool {
@@ -240,11 +241,11 @@ impl<N: Network> LiveSyncQueue<N> for StateQueue<N> {
     }
 
     fn peers(&self) -> Vec<N::PeerId> {
-        self.block_queue.peers()
+        self.diff_queue.peers()
     }
 
     fn add_peer(&self, peer_id: N::PeerId) {
-        self.block_queue.add_peer(peer_id)
+        self.diff_queue.add_peer(peer_id)
     }
 
     /// Adds an additional block stream by replacing the current block stream with a `select` of both streams.
@@ -252,7 +253,7 @@ impl<N: Network> LiveSyncQueue<N> for StateQueue<N> {
     where
         S: Stream<Item = (Block, N::PeerId, Option<N::PubsubId>)> + Send + 'static,
     {
-        self.block_queue.add_block_stream(block_stream)
+        self.diff_queue.add_block_stream(block_stream)
     }
 
     fn state_complete(&self) -> bool {
