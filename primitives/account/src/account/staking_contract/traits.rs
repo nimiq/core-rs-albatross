@@ -410,11 +410,11 @@ impl AccountTransactionInteraction for StakingContract {
                     // Update the validator entry.
                     store.put_validator(&validator_address, validator);
 
+                    // Update our balance.
+                    self.balance -= transaction.fee;
+
                     None
                 };
-
-                // Update our balance.
-                self.balance -= transaction.fee;
 
                 tx_logger.push_log(Log::ValidatorFeeDeduction {
                     validator_address,
