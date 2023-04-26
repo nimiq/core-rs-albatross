@@ -19,9 +19,11 @@ jobs:
     - uses: actions/cache@v3
       with:
         path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          target/
         key: cargo-${{ hashFiles('**/Cargo.toml') }}
     - uses: dtolnay/rust-toolchain@stable
       with:
@@ -33,17 +35,31 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    - name: "Free up disk space"
-      run: sudo rm -rf /usr/share/dotnet && sudo rm -rf /opt/ghc && sudo rm -rf "/usr/local/share/boost" && sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+    - name: Free Disk Space (Ubuntu)
+      uses: jlumbroso/free-disk-space@main
+      with:
+        # this might remove tools that are actually needed,
+        # if set to "true" but frees about 6 GB
+        tool-cache: true
+        
+        # all of these default to true, but feel free to set to
+        # "false" if necessary for your workflow
+        android: true
+        dotnet: true
+        haskell: true
+        large-packages: false
+        swap-storage: true
     - uses: actions/checkout@v3
     - name: "Check for duplicate message IDs"
       run: "! grep -rEoh --exclude-dir tests --exclude-dir target 'TYPE_ID: u16 = [^;]+;' | sort | uniq -d | grep '^'"
     - uses: actions/cache@v3
       with:
         path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          target/
         key: cargo-${{ hashFiles('**/Cargo.toml') }}
     - uses: dtolnay/rust-toolchain@stable
       with:
@@ -80,9 +96,11 @@ jobs:
     - uses: actions/cache@v3
       with:
         path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          target/
         key: cargo-${{ hashFiles('**/Cargo.toml') }}
     - uses: dtolnay/rust-toolchain@stable
       with:
@@ -100,15 +118,29 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    - name: "Free up disk space"
-      run: sudo rm -rf /usr/share/dotnet && sudo rm -rf /opt/ghc && sudo rm -rf "/usr/local/share/boost" && sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+    - name: Free Disk Space (Ubuntu)
+      uses: jlumbroso/free-disk-space@main
+      with:
+        # this might remove tools that are actually needed,
+        # if set to "true" but frees about 6 GB
+        tool-cache: true
+        
+        # all of these default to true, but feel free to set to
+        # "false" if necessary for your workflow
+        android: true
+        dotnet: true
+        haskell: true
+        large-packages: false
+        swap-storage: true
     - uses: actions/checkout@v3
     - uses: actions/cache@v3
       with:
         path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          target/
         key: cargo-${{ hashFiles('**/Cargo.toml') }}
     - uses: dtolnay/rust-toolchain@stable
       with:
@@ -137,9 +169,11 @@ jobs:
     - uses: actions/cache@v3
       with:
         path:
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          target/
         key: cargo-${{ hashFiles('**/Cargo.toml') }}
     - name: Set up Rust toolchain
       uses: dtolnay/rust-toolchain@stable
