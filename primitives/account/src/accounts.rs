@@ -168,6 +168,7 @@ impl Accounts {
     }
 
     fn put(&self, txn: &mut WriteTransaction, address: &Address, account: Account) {
+        assert!(!account.can_be_pruned());
         self.tree
             .put(txn, &KeyNibbles::from(address), account)
             .expect("Failed to put account into tree")
@@ -466,7 +467,6 @@ impl Accounts {
         let pruned_account = self.put_or_prune(txn, sender_address, sender_account);
 
         // Update recipient.
-        assert!(!recipient_account.can_be_pruned());
         self.put(txn, recipient_address, recipient_account);
 
         Ok(TransactionReceipt {
@@ -793,7 +793,8 @@ impl Accounts {
             )?;
 
             // Store sender.
-            self.put(txn, sender_address, sender_account);
+            // Reverting a zero-fee signaling transaction can create a prunable account.
+            self.put_or_prune(txn, sender_address, sender_account);
         }
 
         Ok(())
