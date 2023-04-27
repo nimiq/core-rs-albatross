@@ -488,4 +488,139 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn it_doesnt_get_better_contribution() {
+        let mut rng = rand::thread_rng();
+        let num_ids = rng.gen_range(8..512);
+
+        let node_id = rng.gen_range(0..num_ids);
+
+        log::debug!(num_ids, node_id);
+
+        // Create the partitions
+        let partitioner = Arc::new(BinomialPartitioner::new(node_id, num_ids));
+
+        let store = Arc::new(RwLock::new(ReplaceStore::<(), TestProtocol>::new(
+            partitioner.clone(),
+        )));
+
+        // Define a level that is going to be used for the contributions
+        let level = rng.gen_range(0..partitioner.levels()) as usize;
+
+        // Create the first contribution
+        let mut first_contributors = BitSet::new();
+        first_contributors.insert(1);
+        first_contributors.insert(2);
+        first_contributors.insert(3);
+        first_contributors.insert(4);
+
+        let first_contribution = Contribution {
+            value: 1,
+            contributors: first_contributors,
+        };
+
+        store.write().put(
+            first_contribution.clone(),
+            level,
+            Arc::new(TestRegistry {}),
+            (),
+        );
+
+        {
+            let store = store.read();
+            let best_contribution = store
+                .best(level)
+                .expect("We should have a best contribution");
+
+            assert_eq!(first_contribution, *best_contribution);
+            log::debug!(?best_contribution, "Current best contribution");
+        }
+
+        // Create a second contribution, using a different contributor set
+        // (with no repeated contributors from the first contribution)
+        let mut second_contributors = BitSet::new();
+        second_contributors.insert(5);
+        second_contributors.insert(6);
+
+        let second_contribution = Contribution {
+            value: 10,
+            contributors: second_contributors,
+        };
+
+        store.write().put(
+            second_contribution.clone(),
+            level,
+            Arc::new(TestRegistry {}),
+            (),
+        );
+
+        {
+            let store = store.read();
+            let best_contribution = store
+                .best(level)
+                .expect("We should have a best contribution");
+
+            // Now the best contribution should be the aggregated one
+            let mut contributors = BitSet::new();
+            contributors.insert(1);
+            contributors.insert(2);
+            contributors.insert(3);
+            contributors.insert(4);
+            contributors.insert(5);
+            contributors.insert(6);
+
+            let aggregated_contribution = Contribution {
+                value: 11,
+                contributors,
+            };
+
+            log::debug!(?best_contribution, "Current best contribution");
+            assert_eq!(aggregated_contribution, *best_contribution);
+        }
+
+        // Now try to insert a contribution using some of the same previous contributors
+        let mut third_contributors = BitSet::new();
+        // Note that we are using a different contributor number
+        third_contributors.insert(1);
+        third_contributors.insert(7);
+
+        let third_contribution = Contribution {
+            value: 100,
+            contributors: third_contributors,
+        };
+
+        store.write().put(
+            third_contribution.clone(),
+            level,
+            Arc::new(TestRegistry {}),
+            (),
+        );
+
+        {
+            let store = store.read();
+            let best_contribution = store
+                .best(level)
+                .expect("We should have a best contribution");
+
+            // Now the best contribution is still the previous one,
+            // since we don't have any new contributor
+
+            let mut contributors = BitSet::new();
+            contributors.insert(1);
+            contributors.insert(2);
+            contributors.insert(3);
+            contributors.insert(4);
+            contributors.insert(5);
+            contributors.insert(6);
+
+            let aggregated_contribution = Contribution {
+                value: 11,
+                contributors,
+            };
+            assert_eq!(aggregated_contribution, *best_contribution);
+
+            log::debug!(?best_contribution, "Final best contribution");
+        }
+    }
 }
