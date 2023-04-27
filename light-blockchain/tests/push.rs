@@ -446,6 +446,38 @@ fn it_can_rebranch_skip_block() {
 }
 
 #[test]
+fn it_can_ignore_orphan_blocks() {
+    // Build forks using two producers.
+    let temp_producer1 = TemporaryLightBlockProducer::new();
+    let temp_producer2 = TemporaryLightBlockProducer::new();
+
+    let block = temp_producer1.next_block(vec![], false);
+    temp_producer2.push(block).unwrap();
+
+    let inferior1 = temp_producer1.next_block(vec![], false);
+    let fork1 = temp_producer2.next_block(vec![], true);
+
+    let inferior2 = temp_producer1.next_block(vec![], false);
+    let fork2 = temp_producer2.next_block(vec![], false);
+
+    let inferior3 = temp_producer1.next_block(vec![], false);
+    let fork3 = temp_producer2.next_block(vec![], false);
+
+    // Try to push first inferior3, which at this point would be an orphan
+    assert_eq!(temp_producer2.push(inferior3), Err(PushError::Orphan));
+    assert_eq!(temp_producer2.push(inferior1), Ok(PushResult::Ignored));
+    assert_eq!(temp_producer2.push(inferior2), Ok(PushResult::Ignored));
+
+    // Try to push fork3, which should be orphan
+    assert_eq!(temp_producer1.push(fork3.clone()), Err(PushError::Orphan));
+
+    // Now check that we rebranch
+    assert_eq!(temp_producer1.push(fork1), Ok(PushResult::Rebranched));
+    assert_eq!(temp_producer1.push(fork2), Ok(PushResult::Extended));
+    assert_eq!(temp_producer1.push(fork3), Ok(PushResult::Extended));
+}
+
+#[test]
 fn micro_block_works_after_macro_block() {
     let temp_producer = TemporaryLightBlockProducer::new();
 
