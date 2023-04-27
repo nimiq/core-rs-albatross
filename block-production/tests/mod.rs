@@ -6,6 +6,7 @@ use tempfile::tempdir;
 
 use beserial::Deserialize;
 use nimiq_block::{Block, ForkProof, MicroJustification};
+use nimiq_block_production::test_custom_block::{next_skip_block, BlockConfig};
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
@@ -287,52 +288,28 @@ fn it_can_revert_unpark_transactions() {
     ));
     let producer = BlockProducer::new(signing_key(), voting_key());
 
-    // #1.0: Empty micro block
+    // #1: Skip block to park validator.
     let bc = blockchain.upgradable_read();
-
-    let block = producer.next_micro_block(
-        &bc,
-        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
-        vec![],
-        vec![],
-        vec![0x41],
-        None,
-    );
-
-    assert_eq!(
-        Blockchain::push(bc, Block::Micro(block)),
-        Ok(PushResult::Extended)
-    );
-
-    assert_eq!(blockchain.read().block_number(), 1);
-
-    let bc = blockchain.upgradable_read();
-
-    // One empty block
-    let block = producer.next_micro_block(
-        &bc,
-        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
-        vec![],
-        vec![],
-        vec![0x41],
-        None,
-    );
-
-    assert_eq!(
-        Blockchain::push(bc, Block::Micro(block)),
-        Ok(PushResult::Extended)
-    );
-
-    assert_eq!(blockchain.read().block_number(), 2);
-
-    // One block with staking transactions
-    let mut transactions = vec![];
-    let key_pair = signing_key();
+    let block = next_skip_block(&producer.voting_key, &bc, &BlockConfig::default());
     let address = Address::from_any_str(ADDRESS).unwrap();
 
+    assert_eq!(
+        Blockchain::push(bc, Block::Micro(block)),
+        Ok(PushResult::Extended)
+    );
+    assert_eq!(blockchain.read().block_number(), 1);
+    assert!(blockchain
+        .read()
+        .get_staking_contract()
+        .parked_set
+        .contains(&address));
+
+    // #2: Block with unpark transaction.
+    // Unpark should succeed since the validator is parked.
+    let key_pair = signing_key();
     let tx = TransactionBuilder::new_unpark_validator(
         &key_pair,
-        address,
+        address.clone(),
         &key_pair,
         Coin::ZERO,
         1,
@@ -340,17 +317,13 @@ fn it_can_revert_unpark_transactions() {
     )
     .unwrap();
 
-    transactions.push(tx);
-
     let bc = blockchain.upgradable_read();
-
-    // Block with staking transactions
     let block = producer.next_micro_block(
         &bc,
         bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
         vec![],
-        transactions,
-        vec![0x41],
+        vec![tx],
+        vec![],
         None,
     );
 
@@ -358,15 +331,49 @@ fn it_can_revert_unpark_transactions() {
         Blockchain::push(bc, Block::Micro(block)),
         Ok(PushResult::Extended)
     );
+    assert_eq!(blockchain.read().block_number(), 2);
+    assert!(!blockchain
+        .read()
+        .get_staking_contract()
+        .parked_set
+        .contains(&address));
 
-    assert_eq!(blockchain.read().block_number(), 3);
+    // #3: Block with another unpark transaction.
+    // Unpark should fail since the validator is no longer parked.
+    let key_pair = signing_key();
+    let tx = TransactionBuilder::new_unpark_validator(
+        &key_pair,
+        address.clone(),
+        &key_pair,
+        Coin::ZERO,
+        2,
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
 
     let bc = blockchain.upgradable_read();
+    let block = producer.next_micro_block(
+        &bc,
+        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        vec![],
+        vec![tx.clone()],
+        vec![],
+        None,
+    );
 
+    assert_eq!(
+        Blockchain::push(bc, Block::Micro(block.clone())),
+        Ok(PushResult::Extended)
+    );
+    assert_eq!(
+        block.body.unwrap().transactions[0],
+        ExecutedTransaction::Err(tx)
+    );
+
+    // Now revert all three blocks. This should succeed.
+    let bc = blockchain.upgradable_read();
     let mut txn = bc.write_transaction();
-
     let result = bc.revert_blocks(3, &mut txn);
-
     assert_eq!(result, Ok(()));
 }
 
@@ -840,103 +847,6 @@ fn it_can_revert_reactivate_transaction() {
         address,
         &signing_key_pair,
         100.try_into().unwrap(),
-        1,
-        NetworkId::UnitAlbatross,
-    )
-    .unwrap();
-
-    transactions.push(tx);
-
-    let bc = blockchain.upgradable_read();
-
-    // Block with staking transactions
-    let block = producer.next_micro_block(
-        &bc,
-        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
-        vec![],
-        transactions,
-        vec![0x41],
-        None,
-    );
-
-    assert_eq!(
-        Blockchain::push(bc, Block::Micro(block)),
-        Ok(PushResult::Extended)
-    );
-
-    assert_eq!(blockchain.read().block_number(), 2);
-
-    let bc = blockchain.upgradable_read();
-
-    let mut txn = bc.write_transaction();
-    // Revert the reactivate transaction
-    let result = bc.revert_blocks(2, &mut txn);
-
-    assert!(result.is_ok());
-}
-
-#[test]
-fn it_can_revert_unpark_transaction() {
-    let time = Arc::new(OffsetTime::new());
-    let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(RwLock::new(
-        Blockchain::new(
-            env,
-            BlockchainConfig::default(),
-            NetworkId::UnitAlbatross,
-            time,
-        )
-        .unwrap(),
-    ));
-    let producer = BlockProducer::new(signing_key(), voting_key());
-
-    // One block with staking transactions
-    let mut transactions = vec![];
-    let key_pair = ed25519_key_pair(ACCOUNT_SECRET_KEY);
-    let address =
-        Address::from_user_friendly_address("NQ20 TSB0 DFSM UH9C 15GQ GAGJ TTE4 D3MA 859E")
-            .unwrap();
-    let signing_key_pair = ed25519_key_pair(VALIDATOR_SIGNING_KEY);
-
-    let tx = TransactionBuilder::new_unpark_validator(
-        &key_pair,
-        address.clone(),
-        &signing_key_pair,
-        100.try_into().unwrap(),
-        1,
-        NetworkId::UnitAlbatross,
-    )
-    .unwrap();
-
-    transactions.push(tx);
-
-    let bc = blockchain.upgradable_read();
-
-    // Block with staking transactions
-    let block = producer.next_micro_block(
-        &bc,
-        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
-        vec![],
-        transactions,
-        vec![0x41],
-        None,
-    );
-
-    assert_eq!(
-        Blockchain::push(bc, Block::Micro(block)),
-        Ok(PushResult::Extended)
-    );
-
-    assert_eq!(blockchain.read().block_number(), 1);
-
-    //Now create the reactivate transaction
-
-    let mut transactions = vec![];
-    let tx = TransactionBuilder::new_reactivate_validator(
-        &key_pair,
-        address,
-        &signing_key_pair,
-        10.try_into().unwrap(),
         1,
         NetworkId::UnitAlbatross,
     )
