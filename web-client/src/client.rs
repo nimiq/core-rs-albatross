@@ -584,7 +584,7 @@ impl Client {
     fn setup_offline_online_event_handlers(&self) {
         let network = self.inner.network();
 
-        // Register online closure
+        // Register online/offline/visible closure
         let handler = Closure::<dyn Fn(MessageEvent)>::new(move |event: MessageEvent| {
             if let Some(state) = event.data().dyn_ref::<JsString>() {
                 if state == &JsString::from_str("offline").unwrap() {
@@ -596,6 +596,13 @@ impl Client {
                     });
                 } else if state == &JsString::from_str("online").unwrap() {
                     log::warn!("Network went online");
+                    let network = network.clone();
+                    spawn_local(async move {
+                        let network = network.clone();
+                        network.restart_connecting().await;
+                    });
+                } else if state == &JsString::from_str("visible").unwrap() {
+                    log::debug!("Content became visible: restarting network");
                     let network = network.clone();
                     spawn_local(async move {
                         let network = network.clone();

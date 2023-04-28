@@ -34,11 +34,16 @@ export function clientFactory(workerFactory, Comlink) {
             //            below completes.
             const client = Comlink.wrap(worker);
 
-            // Send offline/online events from the main thread, as Chromium-based browsers
+            // Send offline/online/visible events from the main thread, as Chromium-based browsers
             // do not support these events in web workers:
             // https://bugs.chromium.org/p/chromium/issues/detail?id=114475
             window.addEventListener('offline', () => worker.postMessage('offline'));
             window.addEventListener('online', () => worker.postMessage('online'));
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === "visible") {
+                    worker.postMessage('visible');
+                }
+            });
 
             // Create the client with the config in the worker
             console.log('Sending NIMIQ_INIT message to worker');
