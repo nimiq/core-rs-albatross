@@ -1,7 +1,6 @@
 #[macro_use]
 extern crate log;
 
-use std::convert::TryFrom;
 use std::fs::{read_to_string, OpenOptions};
 use std::io::Error as IoError;
 use std::path::Path;
@@ -33,8 +32,6 @@ mod config;
 pub enum GenesisBuilderError {
     #[error("No VRF seed to generate genesis block")]
     NoVrfSeed,
-    #[error("Invalid timestamp: {0}")]
-    InvalidTimestamp(OffsetDateTime),
     #[error("Serialization failed")]
     SerializingError(#[from] SerializingError),
     #[error("I/O error")]
@@ -238,8 +235,7 @@ impl GenesisBuilder {
             version: 1,
             block_number: 0,
             round: 0,
-            timestamp: u64::try_from(timestamp.unix_timestamp())
-                .map_err(|_| GenesisBuilderError::InvalidTimestamp(timestamp))?,
+            timestamp: timestamp.unix_timestamp() as u64 * 1000,
             parent_hash: [0u8; 32].into(),
             parent_election_hash: [0u8; 32].into(),
             interlink: Some(vec![]),
