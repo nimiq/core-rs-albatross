@@ -229,6 +229,17 @@ impl GenesisBuilder {
         // State root
         let state_root = accounts.get_root_hash_assert(Some(&txn));
         debug!("State root: {}", &state_root);
+
+        // Supply
+        let supply = accounts
+            .tree
+            .iter_nodes::<Account>(
+                &txn,
+                &KeyNibbles::from(&Address::START_ADDRESS),
+                &KeyNibbles::from(&Address::END_ADDRESS),
+            )
+            .fold(Coin::ZERO, |sum, account| sum + account.balance());
+
         txn.abort();
 
         // The header
@@ -241,7 +252,7 @@ impl GenesisBuilder {
             parent_election_hash: [0u8; 32].into(),
             interlink: Some(vec![]),
             seed,
-            extra_data: vec![],
+            extra_data: supply.serialize_to_vec(),
             state_root,
             body_root,
             history_root: Blake2bHash::default(),
