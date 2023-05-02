@@ -23,14 +23,6 @@ Comlink.transferHandlers.set('plain', {
     },
 });
 
-// Comlink.transferHandlers.set('WasmPointer', {
-//     canHandle: (obj) => obj instanceof Transaction || obj instanceof TransactionBuilder,
-//     serialize(obj) {
-//         return Comlink.transferHandlers.get('proxy').serialize(obj);
-//     },
-//     // Cannot receive functions from worker
-// });
-
 let initialized = false;
 
 async function init(config) {
@@ -43,7 +35,6 @@ async function init(config) {
     await wasm_bindgen('./worker-wasm/index_bg.wasm');
 
     const client = await Client.create(config);
-    // self.client = client; // Prevent garbage collection
     Comlink.expose(client);
 };
 
@@ -57,10 +48,8 @@ self.addEventListener('message', async (event) => {
     try {
         await init(config);
         self.postMessage({ ok: true });
-        // console.log('OK');
     } catch (error) {
         self.postMessage({ ok: false, error: error.message, stack: error.stack });
-        // console.error(error);
     }
 });
 

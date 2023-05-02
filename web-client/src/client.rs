@@ -26,7 +26,6 @@ pub use nimiq::{
     config::config_file::{LogSettings, Seed},
     extras::{panic::initialize_panic_reporting, web_logging::initialize_web_logging},
 };
-
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent};
 use nimiq_consensus::ConsensusEvent;
 use nimiq_hash::Blake2bHash;
@@ -497,7 +496,7 @@ impl Client {
 
     /// Sends a transaction to the network and returns {@link PlainTransactionDetails}.
     ///
-    /// Throws in case of a networking error.
+    /// Throws in case of network errors.
     #[wasm_bindgen(js_name = sendTransaction)]
     pub async fn send_transaction(
         &self,
@@ -574,11 +573,142 @@ impl Client {
             // If we got a transactions, return it
             Ok(serde_wasm_bindgen::to_value(&details)?.into())
         } else {
-            // If the transaction did not get included, return it as TransactionState::New
+            // If the transaction did not get included, return it as `TransactionState::New`
             let details =
                 PlainTransactionDetails::new(&tx, TransactionState::New, None, None, None, None);
             Ok(serde_wasm_bindgen::to_value(&details)?.into())
         }
+    }
+
+    /// Fetches the transaction details for the given transaction hash.
+    #[wasm_bindgen(js_name = getTransaction)]
+    pub async fn get_transaction(
+        &self,
+        hash: String,
+    ) -> Result<PlainTransactionDetailsType, JsError> {
+        let hash =
+            Blake2bHash::from_str(&hash).map_err(|_| JsError::new("Invalid transaction hash"))?;
+        let details = self
+            .inner
+            .consensus_proxy()
+            .prove_transactions_from_receipts(vec![(hash, None)], 1)
+            .await?
+            .into_iter()
+            .next()
+            .map(|ext_tx| {
+                PlainTransactionDetails::from_extended_transaction(
+                    &ext_tx,
+                    self.inner.blockchain_head().block_number(),
+                )
+            })
+            .ok_or_else(|| JsError::new("Transaction not found"))?;
+        Ok(serde_wasm_bindgen::to_value(&details)?.into())
+    }
+
+    /// This function is used to query the network for transaction receipts from and to a
+    /// specific address, that have been included in the chain.
+    ///
+    /// The obtained receipts are _not_ verified before being returned.
+    ///
+    /// Up to a `limit` number of transaction receipts are returned from newest to oldest.
+    /// If the network does not have at least `min_peers` to query, then an error is returned.
+    #[wasm_bindgen(js_name = getTransactionReceiptsByAddress)]
+    pub async fn get_transaction_receipts_by_address(
+        &self,
+        address: &AddressAnyType,
+        limit: Option<u16>,
+        min_peers: Option<usize>,
+    ) -> Result<PlainTransactionReceiptArrayType, JsError> {
+        if let Some(max) = limit {
+            if max > MAX_TRANSACTIONS_BY_ADDRESS {
+                return Err(JsError::new(
+                    "The maximum number of transaction receipts exceeds the one that is supported",
+                ));
+            }
+        }
+
+        let receipts = self
+            .inner
+            .consensus_proxy()
+            .request_transaction_receipts_by_address(
+                Address::from_any(address)?.take_native(),
+                min_peers.unwrap_or(1),
+                limit,
+            )
+            .await?;
+
+        let plain_tx_receipts: Vec<_> = receipts
+            .into_iter()
+            .map(|receipt| PlainTransactionReceipt::from_receipt(&receipt))
+            .collect();
+
+        Ok(serde_wasm_bindgen::to_value(&plain_tx_receipts)?.into())
+    }
+
+    /// This function is used to query the network for transactions from and to a specific
+    /// address, that have been included in the chain.
+    ///
+    /// The obtained transactions are verified before being returned.
+    ///
+    /// Up to a `limit` number of transactions are returned from newest to oldest.
+    /// If the network does not have at least `min_peers` to query, then an error is returned.
+    #[wasm_bindgen(js_name = getTransactionsByAddress)]
+    pub async fn get_transactions_by_address(
+        &self,
+        address: &AddressAnyType,
+        since_block_height: Option<u32>,
+        known_transaction_details: Option<PlainTransactionDetailsArrayType>,
+        limit: Option<u16>,
+        min_peers: Option<usize>,
+    ) -> Result<PlainTransactionDetailsArrayType, JsError> {
+        if let Some(max) = limit {
+            if max > MAX_TRANSACTIONS_BY_ADDRESS {
+                return Err(JsError::new(
+                    "The maximum number of transactions exceeds the one that is supported",
+                ));
+            }
+        }
+
+        let mut known_hashes = vec![];
+
+        if let Some(array) = known_transaction_details {
+            let plain_tx_details =
+                serde_wasm_bindgen::from_value::<Vec<PlainTransactionDetails>>(array.into())?;
+            for obj in plain_tx_details {
+                match obj.state {
+                    // Do not skip unconfirmed transactions
+                    TransactionState::New
+                    | TransactionState::Pending
+                    | TransactionState::Included => continue,
+                    _ => {
+                        known_hashes.push(Blake2bHash::from_str(&obj.transaction.transaction_hash)?)
+                    }
+                }
+            }
+        }
+
+        let transactions = self
+            .inner
+            .consensus_proxy()
+            .request_transactions_by_address(
+                Address::from_any(address)?.take_native(),
+                since_block_height.unwrap_or(0),
+                known_hashes,
+                min_peers.unwrap_or(1),
+                limit,
+            )
+            .await?;
+
+        let current_height = self.get_head_height().await;
+
+        let plain_tx_details: Vec<_> = transactions
+            .into_iter()
+            .map(|ext_tx| {
+                PlainTransactionDetails::from_extended_transaction(&ext_tx, current_height)
+            })
+            .collect();
+
+        Ok(serde_wasm_bindgen::to_value(&plain_tx_details)?.into())
     }
 
     fn setup_offline_online_event_handlers(&self) {
@@ -933,137 +1063,6 @@ impl Client {
         id += 1;
         self.listener_id.set(id);
         id
-    }
-
-    /// Fetches the transaction details for the given transaction hash.
-    #[wasm_bindgen(js_name = getTransaction)]
-    pub async fn get_transaction(
-        &self,
-        hash: String,
-    ) -> Result<PlainTransactionDetailsType, JsError> {
-        let hash =
-            Blake2bHash::from_str(&hash).map_err(|_| JsError::new("Invalid transaction hash"))?;
-        let details = self
-            .inner
-            .consensus_proxy()
-            .prove_transactions_from_receipts(vec![(hash, None)], 1)
-            .await?
-            .into_iter()
-            .next()
-            .map(|ext_tx| {
-                PlainTransactionDetails::from_extended_transaction(
-                    &ext_tx,
-                    self.inner.blockchain_head().block_number(),
-                )
-            })
-            .ok_or_else(|| JsError::new("Transaction not found"))?;
-        Ok(serde_wasm_bindgen::to_value(&details)?.into())
-    }
-
-    /// This function is used to query the network for transaction receipts from and to a
-    /// specific address, that have been included in the chain.
-    ///
-    /// The obtained receipts are _not_ verified before being returned.
-    ///
-    /// Up to a `limit` number of transaction receipts are returned from newest to oldest.
-    /// If the network does not have at least `min_peers` to query, then an error is returned.
-    #[wasm_bindgen(js_name = getTransactionReceiptsByAddress)]
-    pub async fn get_transaction_receipts_by_address(
-        &self,
-        address: &AddressAnyType,
-        limit: Option<u16>,
-        min_peers: Option<usize>,
-    ) -> Result<PlainTransactionReceiptArrayType, JsError> {
-        if let Some(max) = limit {
-            if max > MAX_TRANSACTIONS_BY_ADDRESS {
-                return Err(JsError::new(
-                    "The maximum number of transaction receipts exceeds the one that is supported",
-                ));
-            }
-        }
-
-        let receipts = self
-            .inner
-            .consensus_proxy()
-            .request_transaction_receipts_by_address(
-                Address::from_any(address)?.take_native(),
-                min_peers.unwrap_or(1),
-                limit,
-            )
-            .await?;
-
-        let plain_tx_receipts: Vec<_> = receipts
-            .into_iter()
-            .map(|receipt| PlainTransactionReceipt::from_receipt(&receipt))
-            .collect();
-
-        Ok(serde_wasm_bindgen::to_value(&plain_tx_receipts)?.into())
-    }
-
-    /// This function is used to query the network for transactions from and to a specific
-    /// address, that have been included in the chain.
-    ///
-    /// The obtained transactions are verified before being returned.
-    ///
-    /// Up to a `limit` number of transactions are returned from newest to oldest.
-    /// If the network does not have at least `min_peers` to query, then an error is returned.
-    #[wasm_bindgen(js_name = getTransactionsByAddress)]
-    pub async fn get_transactions_by_address(
-        &self,
-        address: &AddressAnyType,
-        since_block_height: Option<u32>,
-        known_transaction_details: Option<PlainTransactionDetailsArrayType>,
-        limit: Option<u16>,
-        min_peers: Option<usize>,
-    ) -> Result<PlainTransactionDetailsArrayType, JsError> {
-        if let Some(max) = limit {
-            if max > MAX_TRANSACTIONS_BY_ADDRESS {
-                return Err(JsError::new(
-                    "The maximum number of transactions exceeds the one that is supported",
-                ));
-            }
-        }
-
-        let mut known_hashes = vec![];
-
-        if let Some(array) = known_transaction_details {
-            let plain_tx_details =
-                serde_wasm_bindgen::from_value::<Vec<PlainTransactionDetails>>(array.into())?;
-            for obj in plain_tx_details {
-                match obj.state {
-                    // Do not skip unconfirmed transactions
-                    TransactionState::New
-                    | TransactionState::Pending
-                    | TransactionState::Included => continue,
-                    _ => {
-                        known_hashes.push(Blake2bHash::from_str(&obj.transaction.transaction_hash)?)
-                    }
-                }
-            }
-        }
-
-        let transactions = self
-            .inner
-            .consensus_proxy()
-            .request_transactions_by_address(
-                Address::from_any(address)?.take_native(),
-                since_block_height.unwrap_or(0),
-                known_hashes,
-                min_peers.unwrap_or(1),
-                limit,
-            )
-            .await?;
-
-        let current_height = self.get_head_height().await;
-
-        let plain_tx_details: Vec<_> = transactions
-            .into_iter()
-            .map(|ext_tx| {
-                PlainTransactionDetails::from_extended_transaction(&ext_tx, current_height)
-            })
-            .collect();
-
-        Ok(serde_wasm_bindgen::to_value(&plain_tx_details)?.into())
     }
 }
 

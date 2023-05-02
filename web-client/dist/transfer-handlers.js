@@ -25,11 +25,4 @@ export function setupMainThreadTransferHandlers(Comlink, classes) {
         },
         // deserialize(plain) {}, // Cannot receive class instances from worker
     });
-
-    // Comlink.transferHandlers.set('WasmPointer', {
-    //     canHandle: (_obj) => false, // Cannot send WasmPointers to worker, as they do not exist in the worker's memory
-    //     deserialize(port) {
-    //         return Comlink.transferHandlers.get('proxy').deserialize(port);
-    //     },
-    // });
 }

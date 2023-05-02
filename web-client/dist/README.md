@@ -3,7 +3,7 @@
 A very light Nimiq Proof-of-Stake client that runs in web browsers, compiled from Rust to WebAssembly.
 
 > **Note**
-> This web client is intended to be used in web browsers only (no WASI support either). Other webworker-enabled environments are not yet targeted.
+> This web client is intended to be used in web browsers only (no WASI support either). Other webworker-enabled environments are not yet supported.
 
 ## 📦 Installation
 

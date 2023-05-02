@@ -92,6 +92,7 @@ impl ClientConfiguration {
         self.log_level = log_level.to_lowercase();
     }
 
+    // TODO: Find a way to make this method work, maybe by using the synthetic Client from the main thread as an import?
     // /// Instantiates a client from this configuration builder.
     // #[wasm_bindgen(js_name = instantiateClient)]
     // pub async fn instantiate_client(&self) -> Client {
@@ -101,6 +102,7 @@ impl ClientConfiguration {
     //     }
     // }
 
+    /// Returns a plain configuration object to be passed to `Client.create`.
     pub fn build(&self) -> PlainClientConfigurationType {
         serde_wasm_bindgen::to_value(&PlainClientConfiguration {
             network_id: Some(self.network_id.to_string()),
