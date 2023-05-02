@@ -1111,7 +1111,7 @@ mod tests {
     #[test]
     fn length_at_works() {
         // Initialize History Store.
-        let env = VolatileDatabase::new(10).unwrap();
+        let env = VolatileDatabase::new(20).unwrap();
         let history_store = HistoryStore::new(env.clone());
 
         // Create extended transactions.
@@ -1139,7 +1139,7 @@ mod tests {
     #[test]
     fn get_root_from_ext_txs_works() {
         // Initialize History Store.
-        let env = VolatileDatabase::new(10).unwrap();
+        let env = VolatileDatabase::new(20).unwrap();
         let history_store = HistoryStore::new(env.clone());
 
         // Create extended transactions.
@@ -1165,7 +1165,7 @@ mod tests {
     #[test]
     fn get_ext_tx_by_hash_works() {
         // Initialize History Store.
-        let env = VolatileDatabase::new(10).unwrap();
+        let env = VolatileDatabase::new(20).unwrap();
         let history_store = HistoryStore::new(env.clone());
 
         // Create extended transactions.
@@ -1205,7 +1205,7 @@ mod tests {
     #[test]
     fn get_block_transactions_works() {
         // Initialize History Store.
-        let env = VolatileDatabase::new(10).unwrap();
+        let env = VolatileDatabase::new(20).unwrap();
         let history_store = HistoryStore::new(env.clone());
 
         // Create extended transactions.
@@ -1319,7 +1319,7 @@ mod tests {
     #[test]
     fn get_epoch_transactions_works() {
         // Initialize History Store.
-        let env = VolatileDatabase::new(10).unwrap();
+        let env = VolatileDatabase::new(20).unwrap();
         let history_store = HistoryStore::new(env.clone());
 
         // Create extended transactions.
@@ -1438,7 +1438,7 @@ mod tests {
     #[test]
     fn get_num_extended_transactions_works() {
         // Initialize History Store.
-        let env = VolatileDatabase::new(10).unwrap();
+        let env = VolatileDatabase::new(20).unwrap();
         let history_store = HistoryStore::new(env.clone());
 
         // Create extended transactions.
@@ -1466,7 +1466,7 @@ mod tests {
     #[test]
     fn get_tx_hashes_by_address_works() {
         // Initialize History Store.
-        let env = VolatileDatabase::new(10).unwrap();
+        let env = VolatileDatabase::new(20).unwrap();
         let history_store = HistoryStore::new(env.clone());
 
         // Create extended transactions.
@@ -1524,7 +1524,7 @@ mod tests {
     #[test]
     fn prove_works() {
         // Initialize History Store.
-        let env = VolatileDatabase::new(10).unwrap();
+        let env = VolatileDatabase::new(20).unwrap();
         let history_store = HistoryStore::new(env.clone());
 
         // Create extended transactions.
@@ -1588,7 +1588,7 @@ mod tests {
     #[test]
     fn prove_empty_tree_works() {
         // Initialize History Store.
-        let env = VolatileDatabase::new(10).unwrap();
+        let env = VolatileDatabase::new(20).unwrap();
         let history_store = HistoryStore::new(env.clone());
 
         let txn = env.write_transaction();
@@ -1607,7 +1607,7 @@ mod tests {
     #[test]
     fn get_indexes_for_block_works() {
         // Initialize History Store.
-        let env = VolatileDatabase::new(10).unwrap();
+        let env = VolatileDatabase::new(20).unwrap();
         let history_store = HistoryStore::new(env.clone());
         let mut txn = env.write_transaction();
 

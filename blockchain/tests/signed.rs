@@ -69,7 +69,7 @@ fn test_skip_block_single_signature() {
 fn test_replay() {
     let time = Arc::new(OffsetTime::new());
     // Create a blockchain to have access to the validator slots.
-    let env = VolatileDatabase::new(10).unwrap();
+    let env = VolatileDatabase::new(20).unwrap();
     let blockchain = Arc::new(
         Blockchain::new(
             env,

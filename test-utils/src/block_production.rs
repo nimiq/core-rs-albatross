@@ -61,7 +61,7 @@ impl TemporaryBlockProducer {
 
     pub fn new() -> Self {
         let time = Arc::new(OffsetTime::new());
-        let env = VolatileDatabase::new(10).unwrap();
+        let env = VolatileDatabase::new(20).unwrap();
         let blockchain = Arc::new(RwLock::new(
             Blockchain::new(
                 env,

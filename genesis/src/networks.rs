@@ -63,7 +63,7 @@ impl NetworkInfo {
 
 #[cfg(feature = "genesis-override")]
 fn read_genesis_config(config: &Path) -> Result<GenesisData, GenesisBuilderError> {
-    let env = VolatileDatabase::new(10).expect("Could not open a volatile database");
+    let env = VolatileDatabase::new(20).expect("Could not open a volatile database");
 
     let GenesisInfo {
         block,

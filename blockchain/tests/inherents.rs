@@ -15,7 +15,7 @@ use nimiq_vrf::VrfSeed;
 #[test]
 fn it_can_create_batch_finalization_inherents() {
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileDatabase::new(10).unwrap();
+    let env = VolatileDatabase::new(20).unwrap();
     let blockchain = Arc::new(
         Blockchain::new(
             env,
@@ -154,7 +154,7 @@ fn it_can_create_batch_finalization_inherents() {
 #[test]
 fn it_can_penalize_delayed_batch() {
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileDatabase::new(10).unwrap();
+    let env = VolatileDatabase::new(20).unwrap();
     let blockchain = Arc::new(
         Blockchain::new(
             env,

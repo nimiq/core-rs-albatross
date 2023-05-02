@@ -92,7 +92,7 @@ fn generate_contract_2() {
 
 #[test]
 fn can_iter_stakers() {
-    let env = VolatileDatabase::new(10).unwrap();
+    let env = VolatileDatabase::new(20).unwrap();
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let mut db_txn = env.write_transaction();
@@ -143,7 +143,7 @@ fn it_can_de_serialize_a_staking_contract() {
 
 #[test]
 fn can_get_it() {
-    let env = VolatileDatabase::new(10).unwrap();
+    let env = VolatileDatabase::new(20).unwrap();
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let mut db_txn = env.write_transaction();
@@ -173,7 +173,7 @@ fn can_get_it() {
 
 #[test]
 fn create_validator_works() {
-    let env = VolatileDatabase::new(10).unwrap();
+    let env = VolatileDatabase::new(20).unwrap();
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let block_state = BlockState::new(1, 1);
@@ -300,7 +300,7 @@ fn create_validator_works() {
 #[test]
 fn update_validator_works() {
     let mut rng = test_rng(false);
-    let env = VolatileDatabase::new(10).unwrap();
+    let env = VolatileDatabase::new(20).unwrap();
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let block_state = BlockState::new(2, 2);
@@ -453,7 +453,7 @@ fn update_validator_works() {
 
 #[test]
 fn deactivate_validator_works() {
-    let env = VolatileDatabase::new(10).unwrap();
+    let env = VolatileDatabase::new(20).unwrap();
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let block_state = BlockState::new(2, 2);
@@ -612,7 +612,7 @@ fn deactivate_validator_works() {
 
 #[test]
 fn reactivate_validator_works() {
-    let env = VolatileDatabase::new(10).unwrap();
+    let env = VolatileDatabase::new(20).unwrap();
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let block_state = BlockState::new(2, 2);
@@ -924,7 +924,7 @@ fn reactivate_validator_works() {
 
 #[test]
 fn retire_validator_works() {
-    let env = VolatileDatabase::new(10).unwrap();
+    let env = VolatileDatabase::new(20).unwrap();
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let block_state = BlockState::new(2, 2);
@@ -1026,7 +1026,7 @@ fn retire_validator_works() {
 
 #[test]
 fn delete_validator_works() {
-    let env = VolatileDatabase::new(10).unwrap();
+    let env = VolatileDatabase::new(20).unwrap();
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let block_state = BlockState::new(2, 2);
@@ -1305,7 +1305,7 @@ fn delete_validator_works() {
 
 #[test]
 fn create_staker_works() {
-    let env = VolatileDatabase::new(10).unwrap();
+    let env = VolatileDatabase::new(20).unwrap();
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let block_state = BlockState::new(2, 2);
@@ -1439,7 +1439,7 @@ fn create_staker_works() {
 
 #[test]
 fn stake_works() {
-    let env = VolatileDatabase::new(10).unwrap();
+    let env = VolatileDatabase::new(20).unwrap();
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let block_state = BlockState::new(2, 2);
@@ -1562,7 +1562,7 @@ fn stake_works() {
 
 #[test]
 fn update_staker_works() {
-    let env = VolatileDatabase::new(10).unwrap();
+    let env = VolatileDatabase::new(20).unwrap();
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let block_state = BlockState::new(2, 2);
@@ -1818,7 +1818,7 @@ fn update_staker_works() {
 
 #[test]
 fn unstake_works() {
-    let env = VolatileDatabase::new(10).unwrap();
+    let env = VolatileDatabase::new(20).unwrap();
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let block_state = BlockState::new(2, 2);
@@ -2042,7 +2042,7 @@ fn unstake_works() {
 
 #[test]
 fn reward_inherents_not_allowed() {
-    let env = VolatileDatabase::new(10).unwrap();
+    let env = VolatileDatabase::new(20).unwrap();
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let block_state = BlockState::new(2, 2);
@@ -2070,7 +2070,7 @@ fn reward_inherents_not_allowed() {
 
 #[test]
 fn slash_inherents_work() {
-    let env = VolatileDatabase::new(10).unwrap();
+    let env = VolatileDatabase::new(20).unwrap();
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let block_state = BlockState::new(2, 2);
@@ -2278,7 +2278,7 @@ fn slash_inherents_work() {
 
 #[test]
 fn finalize_batch_inherents_works() {
-    let env = VolatileDatabase::new(10).unwrap();
+    let env = VolatileDatabase::new(20).unwrap();
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let block_state = BlockState::new(Policy::blocks_per_batch(), 500);
@@ -2327,7 +2327,7 @@ fn finalize_batch_inherents_works() {
 
 #[test]
 fn finalize_epoch_inherents_works() {
-    let env = VolatileDatabase::new(10).unwrap();
+    let env = VolatileDatabase::new(20).unwrap();
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let block_state = BlockState::new(Policy::blocks_per_epoch(), 1000);

@@ -107,7 +107,7 @@ mod tests {
 
     #[test]
     fn data_store_works() {
-        let env = VolatileDatabase::new(10).unwrap();
+        let env = VolatileDatabase::new(20).unwrap();
         let tree = AccountsTrie::new(env.clone(), "accounts_trie");
         let store = DataStore::new(&tree, &Policy::STAKING_CONTRACT_ADDRESS);
 

@@ -46,7 +46,7 @@ use tokio_stream::wrappers::ReceiverStream;
 
 fn blockchain(complete: bool) -> Blockchain {
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileDatabase::new(10).unwrap();
+    let env = VolatileDatabase::new(20).unwrap();
     let blockchain = Blockchain::new(
         env.clone(),
         BlockchainConfig::default(),

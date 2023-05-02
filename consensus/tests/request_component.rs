@@ -18,7 +18,7 @@ use nimiq_test_utils::{
 #[test(tokio::test(flavor = "multi_thread", worker_threads = 4))]
 async fn test_request_component() {
     let mut hub = Some(MockHub::default());
-    let env = VolatileDatabase::new(10).expect("Could not open a volatile database");
+    let env = VolatileDatabase::new(20).expect("Could not open a volatile database");
 
     // Generate genesis block.
     let key = KeyPair::generate(&mut seeded_rng(0));
