@@ -12,6 +12,13 @@ Comlink.transferHandlers.set('function', {
     },
 });
 
+Comlink.transferHandlers.set('plain', {
+    canHandle: (_obj) => false, // Cannot send class instances to main thread
+    deserialize(plain) {
+        return plain;
+    },
+});
+
 // Comlink.transferHandlers.set('WasmPointer', {
 //     canHandle: (obj) => obj instanceof Transaction || obj instanceof TransactionBuilder,
 //     serialize(obj) {

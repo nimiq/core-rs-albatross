@@ -101,13 +101,22 @@ impl Address {
     }
 }
 
+#[cfg(feature = "primitives")]
 #[wasm_bindgen]
 extern "C" {
-    // #[wasm_bindgen(typescript_type = "Address | string")]
+    #[wasm_bindgen(typescript_type = "Address | string")]
+    pub type AddressAnyType;
+
+    #[wasm_bindgen(typescript_type = "(Address | string)[]")]
+    pub type AddressAnyArrayType;
+}
+
+#[cfg(not(feature = "primitives"))]
+#[wasm_bindgen]
+extern "C" {
     #[wasm_bindgen(typescript_type = "string")]
     pub type AddressAnyType;
 
-    // #[wasm_bindgen(typescript_type = "(Address | string)[]")]
     #[wasm_bindgen(typescript_type = "string[]")]
     pub type AddressAnyArrayType;
 }

@@ -1,9 +1,12 @@
 import * as Comlink from './comlink.min.mjs';
-import init from './main-wasm/index.js';
+import init, { Address, Transaction } from './main-wasm/index.js';
 import { clientFactory } from '../client-proxy.js';
 import { setupMainThreadTransferHandlers } from '../transfer-handlers.js';
 
-setupMainThreadTransferHandlers(Comlink);
+setupMainThreadTransferHandlers(Comlink, {
+    Address,
+    Transaction,
+});
 
 const Client = clientFactory(
     () => new Worker(new URL('./worker.js', import.meta.url)),

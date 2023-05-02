@@ -904,8 +904,18 @@ extern "C" {
 
     #[wasm_bindgen(typescript_type = "PlainTransactionReceipt[]")]
     pub type PlainTransactionReceiptArrayType;
+}
 
-    // #[wasm_bindgen(typescript_type = "Transaction | PlainTransaction | string")]
+#[cfg(feature = "primitives")]
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(typescript_type = "Transaction | PlainTransaction | string")]
+    pub type TransactionAnyType;
+}
+
+#[cfg(not(feature = "primitives"))]
+#[wasm_bindgen]
+extern "C" {
     #[wasm_bindgen(typescript_type = "PlainTransaction | string")]
     pub type TransactionAnyType;
 }
