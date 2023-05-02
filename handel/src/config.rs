@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+/// Handel configuration settings
 #[derive(Clone, Debug)]
 pub struct Config {
     /// Number of peers contacted during an update at each level

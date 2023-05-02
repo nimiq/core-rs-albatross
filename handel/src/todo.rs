@@ -74,6 +74,7 @@ where
     TId: Clone + std::fmt::Debug + 'static,
     TProtocol: Protocol<TId>,
 {
+    /// The ID of this aggregation
     id: TId,
     /// List of TodoItems already polled from input stream
     list: HashSet<TodoItem<TProtocol::Contribution>>,
@@ -81,7 +82,7 @@ where
     evaluator: Arc<TProtocol::Evaluator>,
     /// The Stream where LevelUpdates can be polled from, which are subsequently converted into TodoItems
     input_stream: BoxStream<'static, LevelUpdate<TProtocol::Contribution>>,
-
+    /// Waker used for the poll next function
     waker: Option<Waker>,
 }
 

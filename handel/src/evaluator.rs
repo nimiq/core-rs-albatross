@@ -10,28 +10,42 @@ use crate::{
     store::ContributionStore,
 };
 
+/// Trait for scoring or evaluating a contribution or signature.
 pub trait Evaluator<TId, TProtocol>: Send + Sync
 where
     TId: Clone + std::fmt::Debug + 'static,
     TProtocol: Protocol<TId>,
 {
+    /// Takes an unverified contribution and scores it in terms of usefulness with
+    ///
+    /// `0` being not useful at all, can be discarded.
+    /// `>0` being more useful the bigger the number.
     fn evaluate(&self, signature: &TProtocol::Contribution, level: usize, id: TId) -> usize;
+
+    /// Returns whether a signature could be considered final.
     fn is_final(&self, signature: &TProtocol::Contribution) -> bool;
+
+    /// Returns whether a level contains a specific peer ID.
     fn level_contains_id(&self, level: usize, id: usize) -> bool;
 }
 
 /// A signature counts as it was signed N times, where N is the signers weight
-///
-/// NOTE: This can be used for ViewChanges
 #[derive(Debug)]
 pub struct WeightedVote<TId, TProtocol>
 where
     TId: Clone + std::fmt::Debug + 'static,
     TProtocol: Protocol<TId>,
 {
+    /// The contribution store.
     store: Arc<RwLock<TProtocol::Store>>,
+
+    /// Registry that maps the signers to the weight they have in a signature.
     pub weights: Arc<TProtocol::Registry>,
+
+    /// Partitioner that registers the handel levels and its IDs.
     partitioner: Arc<TProtocol::Partitioner>,
+
+    /// Threshold after which a signature could be considered final according to the weights of the signers.
     pub threshold: usize,
 }
 
@@ -77,10 +91,9 @@ where
     TId: Clone + std::fmt::Debug + 'static,
     TProtocol: Protocol<TId>,
 {
-    /// takes an unverified contribution and scores it in terms of usefulness with
+    /// Takes an unverified contribution and scores it in terms of usefulness with
     ///
     /// `0` being not useful at all, can be discarded.
-    ///
     /// `>0` being more useful the bigger the number.
     fn evaluate(&self, contribution: &TProtocol::Contribution, level: usize, id: TId) -> usize {
         // Special case for final aggregations

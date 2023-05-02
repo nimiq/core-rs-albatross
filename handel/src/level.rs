@@ -31,14 +31,16 @@ pub struct Level {
     pub id: usize,
     /// The Peer IDs on this level
     pub peer_ids: Vec<usize>,
-    /// The full size of the expected signature of this level
+    /// The full size of the expected signature of the combined signature of
+    /// all levels up to (including) the current one.
     pub send_expected_full_size: usize,
     /// The state of this level
     pub state: RwLock<LevelState>,
 }
 
 impl Level {
-    /// Creates a new level given its id, the set of peers and the expected number of peers to consider this level send complete
+    /// Creates a new level given its id, the set of peers and the expected
+    /// number of peers to consider this level send complete
     pub fn new(id: usize, peer_ids: Vec<usize>, send_expected_full_size: usize) -> Level {
         Level {
             id,

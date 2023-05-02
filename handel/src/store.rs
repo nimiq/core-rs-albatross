@@ -6,6 +6,8 @@ use crate::partitioner::Partitioner;
 use crate::protocol::Protocol;
 use crate::{contribution::AggregatableContribution, identity::Identity};
 
+/// Trait that needs to be implemented to support the storage of contributions
+/// and the selection of the best contributions seen.
 pub trait ContributionStore<TId, TProtocol>: Send + Sync
 where
     TId: std::fmt::Debug + Clone + 'static,

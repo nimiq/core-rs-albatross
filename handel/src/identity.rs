@@ -92,18 +92,21 @@ impl BitXorAssign for Identity {
     }
 }
 
+/// A registry that maps slots to public keys or identities
 pub trait IdentityRegistry: Send + Sync {
-    /// Maps form Slot to PublicKey, returns None if the Slot does not exist.
+    /// Maps from Slot to PublicKey, returns None if the Slot does not exist.
     fn public_key(&self, id: usize) -> Option<PublicKey>;
 
     /// For a Set of Slots returns the Identity represented by those Slots.
     fn signers_identity(&self, slots: &BitSet) -> Identity;
 }
 
+/// A registry that maps slots to the corresponding signer's weight.
 pub trait WeightRegistry: Send + Sync {
     /// Given a Slot, returns the weight of that Slot.
     fn weight(&self, id: usize) -> Option<usize>;
 
+    /// Given a set of slots, returns the weight of all of the provided slots.
     fn signers_weight(&self, slots: &BitSet) -> Option<usize> {
         let mut votes = 0;
         for slot in slots.iter() {
@@ -112,6 +115,7 @@ pub trait WeightRegistry: Send + Sync {
         Some(votes)
     }
 
+    /// Returns the total weight of the signers in a signature
     fn signature_weight<C: AggregatableContribution>(&self, contribution: &C) -> Option<usize> {
         self.signers_weight(&contribution.contributors())
     }
