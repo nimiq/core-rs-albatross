@@ -172,7 +172,7 @@ async fn sync_ingredients() {
 
     // Setup first peer.
     let time = Arc::new(OffsetTime::new());
-    let env1 = VolatileDatabase::new(11).unwrap();
+    let env1 = VolatileDatabase::new(20).unwrap();
     let blockchain1 = Arc::new(RwLock::new(
         Blockchain::new(
             env1.clone(),
@@ -223,7 +223,7 @@ async fn sync_ingredients() {
     );
 
     // Setup second peer (not synced yet).
-    let env2 = VolatileDatabase::new(11).unwrap();
+    let env2 = VolatileDatabase::new(20).unwrap();
     let time = Arc::new(OffsetTime::new());
     let blockchain2 = Arc::new(RwLock::new(
         Blockchain::new(

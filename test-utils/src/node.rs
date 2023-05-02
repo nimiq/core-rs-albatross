@@ -56,7 +56,7 @@ impl<N: NetworkInterface + TestNetwork> Node<N> {
         is_prover_active: bool,
     ) -> Self {
         let block_hash = block.hash();
-        let env = VolatileDatabase::new(14).unwrap();
+        let env = VolatileDatabase::new(20).unwrap();
         let clock = Arc::new(OffsetTime::new());
         let blockchain = Arc::new(RwLock::new(
             Blockchain::with_genesis(

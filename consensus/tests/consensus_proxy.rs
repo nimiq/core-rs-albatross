@@ -28,7 +28,7 @@ async fn test_request_transactions_by_address() {
 
     let blockchain1 = Arc::new(RwLock::new(
         Blockchain::new(
-            VolatileDatabase::new(11).unwrap(),
+            VolatileDatabase::new(20).unwrap(),
             BlockchainConfig::default(),
             NetworkId::UnitAlbatross,
             Arc::new(OffsetTime::new()),

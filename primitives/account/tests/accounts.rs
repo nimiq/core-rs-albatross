@@ -396,7 +396,7 @@ fn it_checks_for_sufficient_funds() {
 fn accounts_performance() {
     let (env, num_txns) = if VOLATILE_ENV {
         let num_txns = 1_000;
-        let env = VolatileDatabase::new(10).unwrap();
+        let env = VolatileDatabase::new(20).unwrap();
 
         (env, num_txns)
     } else {
@@ -508,7 +508,7 @@ fn accounts_performance_history_sync_batches_single_sender() {
 
     let (env, num_txns) = if VOLATILE_ENV {
         let num_txns = 25;
-        let env = VolatileDatabase::new(10).unwrap();
+        let env = VolatileDatabase::new(20).unwrap();
 
         (env, num_txns)
     } else {
@@ -633,7 +633,7 @@ fn accounts_performance_history_sync_batches_many_to_many() {
 
     let (env, num_txns) = if VOLATILE_ENV {
         let num_txns = 25;
-        let env = VolatileDatabase::new(10).unwrap();
+        let env = VolatileDatabase::new(20).unwrap();
 
         (env, num_txns)
     } else {

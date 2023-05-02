@@ -40,7 +40,7 @@ impl RequestCommon for SkipBlockMessage {
 #[test(tokio::test)]
 async fn one_validator_can_create_micro_blocks() {
     let hub = MockHub::default();
-    let env = VolatileDatabase::new(10).expect("Could not open a volatile database");
+    let env = VolatileDatabase::new(20).expect("Could not open a volatile database");
 
     let voting_key = BlsKeyPair::generate(&mut seeded_rng(0));
     let validator_key = KeyPair::generate(&mut seeded_rng(0));
@@ -87,7 +87,7 @@ async fn one_validator_can_create_micro_blocks() {
 #[test(tokio::test)]
 async fn four_validators_can_create_micro_blocks() {
     let hub = MockHub::default();
-    let env = VolatileDatabase::new(10).expect("Could not open a volatile database");
+    let env = VolatileDatabase::new(20).expect("Could not open a volatile database");
 
     let validators = build_validators::<Network>(
         env,
@@ -115,7 +115,7 @@ async fn four_validators_can_create_micro_blocks() {
 #[test(tokio::test)]
 async fn four_validators_can_do_skip_block() {
     let hub = MockHub::default();
-    let env = VolatileDatabase::new(10).expect("Could not open a volatile database");
+    let env = VolatileDatabase::new(20).expect("Could not open a volatile database");
 
     let mut validators = build_validators::<Network>(
         env,
@@ -196,7 +196,7 @@ async fn validator_can_catch_up() {
     // third block producer needs to be disconnected as well and then reconnected to catch up to the second's skip blocks while not having seen the first one,
     // resulting in him producing the first block.
     let hub = MockHub::default();
-    let env = VolatileDatabase::new(10).expect("Could not open a volatile database");
+    let env = VolatileDatabase::new(20).expect("Could not open a volatile database");
 
     // In total 8 validator are registered. after 3 validators are taken offline the remaining 5 should not be able to progress on their own
     let mut validators = build_validators::<Network>(

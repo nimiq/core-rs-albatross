@@ -96,7 +96,7 @@ impl TestCommitRevert {
     impl_accounts_trait!(inherent, target, Inherent, InherentLogger);
 
     pub fn new() -> Self {
-        let env = VolatileDatabase::new(10).unwrap();
+        let env = VolatileDatabase::new(20).unwrap();
         let accounts = Accounts::new(env);
         TestCommitRevert { accounts }
     }

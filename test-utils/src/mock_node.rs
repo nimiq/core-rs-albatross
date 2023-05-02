@@ -134,7 +134,7 @@ impl<N: NetworkInterface + TestNetwork> MockNode<N> {
         hub: &mut Option<MockHub>,
     ) -> Self {
         let network = N::build_network(peer_id, block.hash(), hub).await;
-        let env = VolatileDatabase::new(14).unwrap();
+        let env = VolatileDatabase::new(20).unwrap();
         let clock = Arc::new(OffsetTime::new());
 
         let blockchain = Arc::new(RwLock::new(

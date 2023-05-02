@@ -16,7 +16,7 @@ fn main() {
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
-    let env = VolatileDatabase::new(10).expect("Could not open a volatile database");
+    let env = VolatileDatabase::new(20).expect("Could not open a volatile database");
     let args = env::args().collect::<Vec<String>>();
 
     if let Some(file) = args.get(1) {

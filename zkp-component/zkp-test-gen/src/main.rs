@@ -60,7 +60,7 @@ async fn main() -> Result<(), NanoZKPError> {
 
 fn blockchain() -> Arc<RwLock<Blockchain>> {
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileDatabase::new(10).unwrap();
+    let env = VolatileDatabase::new(20).unwrap();
     Arc::new(RwLock::new(
         Blockchain::new(
             env,
