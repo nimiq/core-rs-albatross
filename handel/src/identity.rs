@@ -116,3 +116,294 @@ pub trait WeightRegistry: Send + Sync {
         self.signers_weight(&contribution.contributors())
     }
 }
+
+#[cfg(test)]
+mod test {
+    use nimiq_collections::bitset::BitSet;
+    use nimiq_test_log::test;
+
+    use super::*;
+
+    #[test]
+    fn empty_identity() {
+        let identity = Identity::new(BitSet::new());
+
+        assert!(identity.len() == 0);
+        assert!(identity.is_empty());
+    }
+
+    #[test]
+    fn it_computes_superset() {
+        let empty_identity = Identity::new(BitSet::new());
+
+        let mut bitset = BitSet::new();
+        bitset.insert(2);
+        bitset.insert(10);
+        bitset.insert(64);
+        bitset.insert(93);
+        let identity_1 = Identity::new(bitset);
+
+        let mut bitset = BitSet::new();
+        bitset.insert(7);
+        bitset.insert(10);
+        bitset.insert(43);
+        bitset.insert(76);
+        let identity_2 = Identity::new(bitset);
+
+        // Identity 3 is a subset of identity 1
+        let mut bitset = BitSet::new();
+        bitset.insert(2);
+        bitset.insert(10);
+        let identity_3 = Identity::new(bitset);
+
+        // Test-out super set ops
+        assert!(identity_1.is_superset_of(&empty_identity));
+        assert!(identity_2.is_superset_of(&empty_identity));
+        assert!(identity_1.is_superset_of(&identity_3));
+        assert!(!identity_3.is_superset_of(&identity_1));
+        assert!(!identity_1.is_superset_of(&identity_2));
+        assert!(!identity_2.is_superset_of(&identity_1));
+        assert!(!identity_2.is_superset_of(&identity_3));
+        assert!(!identity_3.is_superset_of(&identity_2));
+    }
+
+    #[test]
+    fn it_computes_complement() {
+        let mut bitset = BitSet::new();
+        bitset.insert(2);
+        bitset.insert(10);
+        bitset.insert(64);
+        bitset.insert(93);
+        let identity_1 = Identity::new(bitset);
+
+        let mut bitset = BitSet::new();
+        bitset.insert(7);
+        bitset.insert(10);
+        bitset.insert(43);
+        bitset.insert(76);
+        let identity_2 = Identity::new(bitset);
+
+        // Identity 3 is a subset of identity 1
+        let mut bitset = BitSet::new();
+        bitset.insert(2);
+        bitset.insert(10);
+        let identity_3 = Identity::new(bitset);
+
+        // Expected complement of identity 1 and 2
+        let mut bitset = BitSet::new();
+        bitset.insert(7);
+        bitset.insert(43);
+        bitset.insert(76);
+        let exp_cmp_identity_1_2 = Identity::new(bitset);
+        let mut bitset = BitSet::new();
+        bitset.insert(2);
+        bitset.insert(64);
+        bitset.insert(93);
+        let exp_cmp_identity_2_1 = Identity::new(bitset);
+
+        // Expected complement of identity 2 and 3
+        let mut bitset = BitSet::new();
+        bitset.insert(2);
+        let exp_cmp_identity_2_3 = Identity::new(bitset);
+        let mut bitset = BitSet::new();
+        bitset.insert(7);
+        bitset.insert(43);
+        bitset.insert(76);
+        let exp_cmp_identity_3_2 = Identity::new(bitset);
+
+        // Expected complement of identity 1 and 3
+        let bitset = BitSet::new();
+        let exp_cmp_identity_1_3 = Identity::new(bitset);
+        let mut bitset = BitSet::new();
+        bitset.insert(64);
+        bitset.insert(93);
+        let exp_cmp_identity_3_1 = Identity::new(bitset);
+
+        // Test-out super set ops
+        assert_eq!(identity_1.complement(&identity_3), exp_cmp_identity_1_3);
+        assert_eq!(identity_3.complement(&identity_1), exp_cmp_identity_3_1);
+        assert_eq!(identity_1.complement(&identity_2), exp_cmp_identity_1_2);
+        assert_eq!(identity_2.complement(&identity_1), exp_cmp_identity_2_1);
+        assert_eq!(identity_2.complement(&identity_3), exp_cmp_identity_2_3);
+        assert_eq!(identity_3.complement(&identity_2), exp_cmp_identity_3_2);
+    }
+
+    #[test]
+    fn it_computes_intersection_size() {
+        let empty_identity = Identity::new(BitSet::new());
+
+        let mut bitset = BitSet::new();
+        bitset.insert(2);
+        bitset.insert(10);
+        bitset.insert(64);
+        bitset.insert(93);
+        let identity_1 = Identity::new(bitset);
+
+        let mut bitset = BitSet::new();
+        bitset.insert(7);
+        bitset.insert(15);
+        bitset.insert(64);
+        bitset.insert(76);
+        let identity_2 = Identity::new(bitset);
+
+        // Identity 3 is a subset of identity 1
+        let mut bitset = BitSet::new();
+        bitset.insert(2);
+        bitset.insert(10);
+        let identity_3 = Identity::new(bitset);
+
+        // Test-out intersection size
+        assert_eq!(identity_1.intersection_size(&empty_identity), 0);
+        assert_eq!(identity_2.intersection_size(&empty_identity), 0);
+        assert_eq!(identity_1.intersection_size(&identity_3), 2);
+        assert_eq!(identity_3.intersection_size(&identity_1), 2);
+        assert_eq!(identity_1.intersection_size(&identity_2), 1);
+        assert_eq!(identity_2.intersection_size(&identity_1), 1);
+        assert_eq!(identity_2.intersection_size(&identity_3), 0);
+        assert_eq!(identity_3.intersection_size(&identity_2), 0);
+    }
+
+    #[test]
+    fn it_can_combine_allowing_intersection() {
+        let mut bitset = BitSet::new();
+        bitset.insert(2);
+        bitset.insert(10);
+        bitset.insert(64);
+        bitset.insert(93);
+        let identity_1 = Identity::new(bitset);
+
+        let mut bitset = BitSet::new();
+        bitset.insert(7);
+        bitset.insert(10);
+        bitset.insert(43);
+        bitset.insert(76);
+        let identity_2 = Identity::new(bitset);
+
+        // Identity 3 is a subset of identity 1
+        let mut bitset = BitSet::new();
+        bitset.insert(2);
+        bitset.insert(10);
+        let identity_3 = Identity::new(bitset);
+
+        // Expected combined identity of identity 1 and 2
+        let mut bitset = identity_1.signers.clone();
+        bitset.insert(7);
+        bitset.insert(43);
+        bitset.insert(76);
+        let exp_cmb_identity_1_2 = Identity::new(bitset);
+
+        // Expected combined identity of identity 2 and 3
+        let mut bitset = identity_2.signers.clone();
+        bitset.insert(2);
+        let exp_cmb_identity_2_3 = Identity::new(bitset);
+
+        // Expected combined identity of identity 1 and 3
+        let exp_cmb_identity_1_3 = identity_1.clone();
+
+        // Test-out combine op allowing intersection
+        let mut cmb_identity_1_3 = identity_1.clone();
+        cmb_identity_1_3.combine(&identity_3, true);
+        let mut cmb_identity_3_1 = identity_3.clone();
+        cmb_identity_3_1.combine(&identity_1, true);
+        let mut cmb_identity_1_2 = identity_1.clone();
+        cmb_identity_1_2.combine(&identity_2, true);
+        let mut cmb_identity_2_1 = identity_2.clone();
+        cmb_identity_2_1.combine(&identity_1, true);
+        let mut cmb_identity_2_3 = identity_2.clone();
+        cmb_identity_2_3.combine(&identity_3, true);
+        let mut cmb_identity_3_2 = identity_3.clone();
+        cmb_identity_3_2.combine(&identity_2, true);
+
+        assert_eq!(cmb_identity_1_3, exp_cmb_identity_1_3);
+        assert_eq!(cmb_identity_3_1, exp_cmb_identity_1_3);
+        assert_eq!(cmb_identity_1_2, exp_cmb_identity_1_2);
+        assert_eq!(cmb_identity_2_1, exp_cmb_identity_1_2);
+        assert_eq!(cmb_identity_2_3, exp_cmb_identity_2_3);
+        assert_eq!(cmb_identity_3_2, exp_cmb_identity_2_3);
+    }
+
+    #[test]
+    #[should_panic]
+    fn it_cant_combine_without_intersection() {
+        let mut bitset = BitSet::new();
+        bitset.insert(2);
+        bitset.insert(10);
+        bitset.insert(64);
+        bitset.insert(93);
+        let identity_1 = Identity::new(bitset);
+
+        // Identity 3 is a subset of identity 1
+        let mut bitset = BitSet::new();
+        bitset.insert(2);
+        bitset.insert(10);
+        let identity_3 = Identity::new(bitset);
+
+        // Test-out combine op without allowing intersection
+        let mut cmb_identity_1_3 = identity_1.clone();
+        // Since identities 1 and 3 intersect, there must be a panic in the next line
+        cmb_identity_1_3.combine(&identity_3, false);
+    }
+
+    #[test]
+    fn it_computes_xor() {
+        let mut bitset = BitSet::new();
+        bitset.insert(2);
+        bitset.insert(10);
+        bitset.insert(64);
+        bitset.insert(93);
+        let identity_1 = Identity::new(bitset);
+
+        let mut bitset = BitSet::new();
+        bitset.insert(7);
+        bitset.insert(10);
+        bitset.insert(43);
+        bitset.insert(76);
+        let identity_2 = Identity::new(bitset);
+
+        // Identity 3 is a subset of identity 1
+        let mut bitset = BitSet::new();
+        bitset.insert(2);
+        bitset.insert(10);
+        let identity_3 = Identity::new(bitset);
+
+        // Expected xor of identity 1 and 2
+        let mut bitset = identity_1.signers.clone();
+        bitset.insert(7);
+        bitset.insert(43);
+        bitset.insert(76);
+        bitset.remove(10);
+        let exp_xor_identity_1_2 = Identity::new(bitset);
+
+        // Expected xor of identity 2 and 3
+        let mut bitset = identity_2.signers.clone();
+        bitset.insert(2);
+        bitset.remove(10);
+        let exp_xor_identity_2_3 = Identity::new(bitset);
+
+        // Expected xor of identity 1 and 3
+        let mut bitset = identity_1.signers.clone();
+        bitset.remove(2);
+        bitset.remove(10);
+        let exp_xor_identity_1_3 = Identity::new(bitset);
+
+        // Test-out xor op
+        assert_eq!(
+            identity_1.clone() ^ identity_3.clone(),
+            exp_xor_identity_1_3
+        );
+        assert_eq!(
+            identity_3.clone() ^ identity_1.clone(),
+            exp_xor_identity_1_3
+        );
+        assert_eq!(
+            identity_1.clone() ^ identity_2.clone(),
+            exp_xor_identity_1_2
+        );
+        assert_eq!(identity_2.clone() ^ identity_1, exp_xor_identity_1_2);
+        assert_eq!(
+            identity_2.clone() ^ identity_3.clone(),
+            exp_xor_identity_2_3
+        );
+        assert_eq!(identity_3 ^ identity_2, exp_xor_identity_2_3);
+    }
+}
