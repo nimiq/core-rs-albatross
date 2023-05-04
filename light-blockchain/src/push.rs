@@ -97,9 +97,19 @@ impl LightBlockchain {
             block.verify_macro_successor(&this.macro_head)?;
         }
 
-        let (slot_owner, _) = this
-            .get_slot_owner_at(block.block_number(), offset)
-            .expect("Failed to find slot owner!");
+        // Get the slot owner of the block. Note that the predecessor must be taken into account
+        // as the block is not guaranteed to be on the current main chain.
+        let slot_owner = this
+            .get_proposer_at(
+                block.block_number(),
+                offset,
+                predecessor.seed().entropy(),
+            )
+            .map_err(|error| {
+                log::warn!(%error, %block, reason = "failed to determine block proposer", "Rejecting block");
+                PushError::Orphan
+            })?
+            .0;
 
         // Verify that the block is valid for the given proposer.
         block.verify_proposer(&slot_owner.signing_key, predecessor.seed())?;

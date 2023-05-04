@@ -74,12 +74,20 @@ impl Blockchain {
                 block.block_number()
             };
 
-            let (proposer_slot, _) = self
-                .get_slot_owner_at(block.block_number(), offset, Some(txn))
+            // Get the validator for this round.
+            // The blocks predecessor is not necessarily on the main chain, thus the predecessors vrf seed is used.
+            let proposer_slot = self
+                .get_proposer_at(
+                    block.block_number(),
+                    offset,
+                    predecessor.seed().entropy(),
+                    Some(txn),
+                )
                 .map_err(|error| {
                     warn!(%error, %block, reason = "failed to determine block proposer", "Rejecting block");
                     PushError::Orphan
-                })?;
+                })?
+                .validator;
 
             // Verify that the block is valid for the given proposer.
             block.verify_proposer(&proposer_slot.signing_key, predecessor.seed())?;
