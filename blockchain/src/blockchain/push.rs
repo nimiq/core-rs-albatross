@@ -341,6 +341,9 @@ impl Blockchain {
         );
 
         // We shouldn't log errors if there are no listeners.
+        this.notifier
+            .send(BlockchainEvent::Extended(block_hash.clone()))
+            .ok();
         if is_election_block {
             this.notifier
                 .send(BlockchainEvent::EpochFinalized(block_hash))
@@ -348,10 +351,6 @@ impl Blockchain {
         } else if is_macro_block {
             this.notifier
                 .send(BlockchainEvent::Finalized(block_hash))
-                .ok();
-        } else {
-            this.notifier
-                .send(BlockchainEvent::Extended(block_hash))
                 .ok();
         }
 
@@ -615,10 +614,21 @@ impl Blockchain {
         this.metrics
             .note_rebranch(&reverted_blocks, &adopted_blocks);
 
-        // We do not log errors if there are no listeners
+        // We do not log errors if there are no listeners.
         this.notifier
             .send(BlockchainEvent::Rebranched(reverted_blocks, adopted_blocks))
             .ok();
+        if this.state.main_chain.head.is_election() {
+            this.notifier
+                .send(BlockchainEvent::EpochFinalized(
+                    this.state.head_hash.clone(),
+                ))
+                .ok();
+        } else if this.state.main_chain.head.is_macro() {
+            this.notifier
+                .send(BlockchainEvent::Finalized(this.state.head_hash.clone()))
+                .ok();
+        }
 
         send_vec(&this.log_notifier, block_logs);
 
