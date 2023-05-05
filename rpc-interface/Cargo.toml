@@ -25,7 +25,7 @@ futures = { package = "futures-util", version = "0.3" }
 serde = { version = "1.0", features = ["derive"] }
 serde_with = "2.2"
 thiserror = "1.0"
-clap = { version = "4.1", features = ["derive"] }
+clap = { version = "4.2", features = ["derive"] }
 parking_lot = "0.12"
 
 beserial = { path = "../beserial" }

@@ -14,7 +14,7 @@ path = "zkp-setup/main.rs"
 required-features = ["zkp-prover", "parallel", "test-setup"]
 
 [dependencies]
-clap = { version = "4.1", features = ["cargo", "string"] }
+clap = { version = "4.2", features = ["cargo", "string"] }
 hex = "0.4"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 rand = { version = "0.8", features = ["small_rng"] }
