@@ -91,27 +91,23 @@ impl<N: Network, T: Topic + Unpin + Sync> Future for MempoolExecutor<N, T> {
             tokio::task::spawn(async move {
                 tasks_count.fetch_add(1, AtomicOrdering::SeqCst);
 
-                // Verifying and pushing the TX in a separate scope to drop the lock that is returned by
-                // the verify_tx function immediately
-                let acceptance = {
-                    let verify_tx_ret = verify_tx(
-                        &tx,
-                        blockchain,
-                        network_id,
-                        &mempool_state,
-                        filter,
-                        TxPriority::Medium,
-                    )
-                    .await;
+                let verify_tx_ret = verify_tx(
+                    &tx,
+                    blockchain,
+                    network_id,
+                    &mempool_state,
+                    filter,
+                    TxPriority::Medium,
+                )
+                .await;
 
-                    match verify_tx_ret {
-                        Ok(_) => MsgAcceptance::Accept,
-                        // Reject the message if signature verification fails or transaction is invalid
-                        // for current validation window
-                        Err(VerifyErr::InvalidTransaction(_)) => MsgAcceptance::Reject,
-                        Err(VerifyErr::AlreadyIncluded) => MsgAcceptance::Reject,
-                        Err(_) => MsgAcceptance::Ignore,
-                    }
+                let acceptance = match verify_tx_ret {
+                    Ok(_) => MsgAcceptance::Accept,
+                    // Reject the message if signature verification fails or transaction is invalid
+                    // for current validation window
+                    Err(VerifyErr::InvalidTransaction(_)) => MsgAcceptance::Reject,
+                    Err(VerifyErr::AlreadyIncluded) => MsgAcceptance::Reject,
+                    Err(_) => MsgAcceptance::Ignore,
                 };
 
                 network.validate_message::<T>(pubsub_id, acceptance);
