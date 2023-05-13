@@ -24,7 +24,7 @@ log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = "0.12"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-serde_with = "2.2"
+serde_with = "3.0"
 thiserror = "1.0"
 tokio = "1.28"
 tokio-stream = "0.1"
