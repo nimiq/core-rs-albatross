@@ -240,13 +240,16 @@ impl IncomingStakingTransactionData {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum OutgoingStakingTransactionProof {
     DeleteValidator {
+        #[cfg_attr(feature = "serde-derive", serde(skip))]
         // This proof is signed with the validator cold key.
         proof: SignatureProof,
     },
     RemoveStake {
+        #[cfg_attr(feature = "serde-derive", serde(skip))]
         proof: SignatureProof,
     },
 }
