@@ -23,7 +23,7 @@ ark-serialize = "0.4"
 ark-std = "0.4"
 log = { package = "tracing", version = "0.1", features = ["log", "attributes"] }
 once_cell = "1.17"
-parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
+parking_lot = "0.12"
 rand = { version = "0.8", features = ["small_rng"] }
 thiserror = "1.0"
 
