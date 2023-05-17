@@ -1,8 +1,6 @@
 use std::convert::TryFrom;
 use std::{fmt, io};
 
-use bitflags::bitflags;
-
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
@@ -955,17 +953,25 @@ impl Deserialize for BlockBody {
     }
 }
 
-#[derive(Default, Serialize, Deserialize)]
-#[repr(transparent)]
-pub struct BlockComponentFlags(u8);
+// Workaround <https://github.com/bitflags/bitflags/issues/356>
+#[allow(clippy::assign_op_pattern)]
+mod flags {
+    use beserial::{Deserialize, Serialize};
+    use bitflags::bitflags;
 
-bitflags! {
-    impl BlockComponentFlags: u8 {
-        const HEADER  = 0b0000_0001;
-        const JUSTIFICATION = 0b0000_0010;
-        const BODY = 0b0000_0100;
+    #[derive(Default, Serialize, Deserialize)]
+    #[repr(transparent)]
+    pub struct BlockComponentFlags(u8);
+
+    bitflags! {
+        impl BlockComponentFlags: u8 {
+            const HEADER  = 0b0000_0001;
+            const JUSTIFICATION = 0b0000_0010;
+            const BODY = 0b0000_0100;
+        }
     }
 }
+pub use flags::*;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BlockComponents {

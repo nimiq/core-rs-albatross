@@ -6,7 +6,6 @@ use std::convert::TryFrom;
 use std::io;
 use std::sync::Arc;
 
-use bitflags::bitflags;
 use num_traits::SaturatingAdd;
 use thiserror::Error;
 
@@ -81,22 +80,29 @@ pub enum TransactionFormat {
     Basic = 0,
     Extended = 1,
 }
+// Workaround <https://github.com/bitflags/bitflags/issues/356>
+#[allow(clippy::assign_op_pattern)]
+mod flags {
+    use beserial::Serialize;
+    use bitflags::bitflags;
 
-#[derive(Default, Serialize, Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
-#[cfg_attr(
-    feature = "serde-derive",
-    derive(serde::Serialize, serde::Deserialize),
-    serde(try_from = "u8", into = "u8")
-)]
-#[repr(transparent)]
-pub struct TransactionFlags(u8);
+    #[derive(Default, Serialize, Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
+    #[cfg_attr(
+        feature = "serde-derive",
+        derive(serde::Serialize, serde::Deserialize),
+        serde(try_from = "u8", into = "u8")
+    )]
+    #[repr(transparent)]
+    pub struct TransactionFlags(u8);
 
-bitflags! {
-    impl TransactionFlags: u8 {
-        const CONTRACT_CREATION = 0b1;
-        const SIGNALING = 0b10;
+    bitflags! {
+        impl TransactionFlags: u8 {
+            const CONTRACT_CREATION = 0b1;
+            const SIGNALING = 0b10;
+        }
     }
 }
+pub use flags::*;
 
 #[derive(Debug, Error)]
 #[error("Invalid transaction flags: {0}")]

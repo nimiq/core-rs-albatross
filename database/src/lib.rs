@@ -7,8 +7,6 @@ use std::fmt;
 use std::io;
 use std::ops::Deref;
 
-use bitflags::bitflags;
-
 use crate::cursor::{ReadCursor, WriteCursor as WriteCursorTrait};
 
 #[macro_use]
@@ -50,19 +48,25 @@ impl From<libmdbx::Error> for Error {
     }
 }
 
-bitflags! {
-    #[derive(Default)]
-    pub struct DatabaseFlags: u32 {
-        /// Duplicate keys may be used in the database.
-        const DUPLICATE_KEYS        = 0b0000_0001;
-        /// This flag may only be used in combination with `DUPLICATE_KEYS`.
-        /// This option tells the database that the values for this database are all the same size.
-        const DUP_FIXED_SIZE_VALUES = 0b0000_0010;
-        /// Keys are binary integers in native byte order and will be sorted as such
-        /// (`std::os::raw::c_uint`, i.e. most likely `u32`).
-        const UINT_KEYS             = 0b0000_0100;
+// Workaround <https://github.com/bitflags/bitflags/issues/356>
+#[allow(clippy::assign_op_pattern)]
+mod flags {
+    use bitflags::bitflags;
+    bitflags! {
+        #[derive(Default)]
+        pub struct DatabaseFlags: u32 {
+            /// Duplicate keys may be used in the database.
+            const DUPLICATE_KEYS        = 0b0000_0001;
+            /// This flag may only be used in combination with `DUPLICATE_KEYS`.
+            /// This option tells the database that the values for this database are all the same size.
+            const DUP_FIXED_SIZE_VALUES = 0b0000_0010;
+            /// Keys are binary integers in native byte order and will be sorted as such
+            /// (`std::os::raw::c_uint`, i.e. most likely `u32`).
+            const UINT_KEYS             = 0b0000_0100;
+        }
     }
 }
+pub use flags::*;
 
 #[derive(Clone, Debug)]
 pub enum Environment {

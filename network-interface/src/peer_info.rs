@@ -1,53 +1,60 @@
-use bitflags::bitflags;
 use libp2p::Multiaddr;
 
 use beserial::{Deserialize, Serialize};
 
-/// Bitmask of services
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, PartialEq)]
-#[cfg_attr(
-    feature = "peer-contact-book-persistence",
-    derive(serde::Serialize, serde::Deserialize),
-    serde(transparent)
-)]
-#[repr(transparent)]
-pub struct Services(u32);
+// Workaround <https://github.com/bitflags/bitflags/issues/356>
+#[allow(clippy::assign_op_pattern)]
+mod flags {
+    use beserial::{Deserialize, Serialize};
+    use bitflags::bitflags;
 
-bitflags! {
-    impl Services: u32 {
-        /// The node provides at least the latest [`nimiq_primitives::policy::NUM_BLOCKS_VERIFICATION`] as full blocks.
-        const FULL_BLOCKS = 1 << 0;
+    /// Bitmask of services
+    #[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, PartialEq)]
+    #[cfg_attr(
+        feature = "peer-contact-book-persistence",
+        derive(serde::Serialize, serde::Deserialize),
+        serde(transparent)
+    )]
+    #[repr(transparent)]
+    pub struct Services(u32);
 
-        /// The node provides the full transaction history.
-        const HISTORY = 1 << 1;
+    bitflags! {
+        impl Services: u32 {
+            /// The node provides at least the latest [`nimiq_primitives::policy::NUM_BLOCKS_VERIFICATION`] as full blocks.
+            const FULL_BLOCKS = 1 << 0;
 
-        /// The node provides inclusion and exclusion proofs for accounts that are necessary to verify active accounts as
-        /// well as accounts in all transactions it provided from its mempool.
-        ///
-        /// However, if [`Services::ACCOUNTS_CHUNKS`] is not set, the node may occasionally not provide a proof if it
-        /// decided to prune the account from local storage.
-        const ACCOUNTS_PROOF = 1 << 3;
+            /// The node provides the full transaction history.
+            const HISTORY = 1 << 1;
 
-        /// The node provides the full accounts tree in form of chunks.
-        /// This implies that the client stores the full accounts tree.
-        const ACCOUNTS_CHUNKS = 1 << 4;
+            /// The node provides inclusion and exclusion proofs for accounts that are necessary to verify active accounts as
+            /// well as accounts in all transactions it provided from its mempool.
+            ///
+            /// However, if [`Services::ACCOUNTS_CHUNKS`] is not set, the node may occasionally not provide a proof if it
+            /// decided to prune the account from local storage.
+            const ACCOUNTS_PROOF = 1 << 3;
 
-        /// The node tries to stay on sync with the network wide mempool and will provide access to it.
-        ///
-        /// Nodes that do not have this flag set may occasionally announce transactions from their mempool and/or reply to
-        /// mempool requests to announce locally crafted transactions.
-        const MEMPOOL = 1 << 5;
+            /// The node provides the full accounts tree in form of chunks.
+            /// This implies that the client stores the full accounts tree.
+            const ACCOUNTS_CHUNKS = 1 << 4;
 
-        /// The node provides an index of transactions allowing it to find historic transactions by address or by hash.
-        /// Only history nodes will have this flag set.
-        /// Nodes that have this flag set may prune any part of their transaction index at their discretion, they do not
-        /// claim completeness of their results either.
-        const TRANSACTION_INDEX = 1 << 6;
+            /// The node tries to stay on sync with the network wide mempool and will provide access to it.
+            ///
+            /// Nodes that do not have this flag set may occasionally announce transactions from their mempool and/or reply to
+            /// mempool requests to announce locally crafted transactions.
+            const MEMPOOL = 1 << 5;
 
-        /// This node is configured as a validator, so it is interested for other validator nodes.
-        const VALIDATOR = 1 << 7;
+            /// The node provides an index of transactions allowing it to find historic transactions by address or by hash.
+            /// Only history nodes will have this flag set.
+            /// Nodes that have this flag set may prune any part of their transaction index at their discretion, they do not
+            /// claim completeness of their results either.
+            const TRANSACTION_INDEX = 1 << 6;
+
+            /// This node is configured as a validator, so it is interested for other validator nodes.
+            const VALIDATOR = 1 << 7;
+        }
     }
 }
+pub use flags::*;
 
 /// Enumeration for the different node types
 pub enum NodeType {
