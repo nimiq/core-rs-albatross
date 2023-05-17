@@ -37,6 +37,7 @@ nimiq-zkp-primitives = { path = "../zkp-primitives" }
 rand_chacha = "0.3.1"
 tracing-subscriber = { version = "0.3" }
 
+nimiq-log = { path = "../log" }
 nimiq-test-log = { path = "../test-log" }
 nimiq-test-utils = { path = "../test-utils" }
 nimiq-zkp-circuits = { path = "../zkp-circuits", features = ["zkp-prover"] }

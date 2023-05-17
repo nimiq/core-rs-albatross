@@ -12,6 +12,7 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::UniformRand;
 use rand::{thread_rng, CryptoRng, Rng};
 
+use beserial::{Deserialize, Serialize};
 use nimiq_primitives::policy::Policy;
 use nimiq_zkp_circuits::{
     bits::BitVec,
@@ -28,6 +29,40 @@ use nimiq_zkp_primitives::{
     pk_tree_construct, serialize_g1_mnt6, serialize_g2_mnt6, state_commitment, vk_commitment,
     MacroBlock, NanoZKPError, PK_TREE_DEPTH,
 };
+
+/// Checks whether cached proofs are compatible with the current proof.
+/// If not, it clears the folder and creates a new metadata file.
+///
+/// The metadata file stores the current header hash.
+pub fn update_proof_cache(
+    prover_keys_path: &Path,
+    current_header_hash: &[u8; 32],
+) -> Result<(), NanoZKPError> {
+    let proofs = prover_keys_path.join("proofs");
+    let metadata_file = proofs.join("meta_data.bin");
+
+    if metadata_file.exists() {
+        let mut file = File::open(&metadata_file)?;
+        let meta_data_hash: [u8; 32] = Deserialize::deserialize(&mut file)?;
+
+        // If the hash in the meta data matches, return.
+        if &meta_data_hash == current_header_hash {
+            return Ok(());
+        }
+    }
+
+    // Else, clear the folder.
+    if proofs.is_dir() {
+        fs::remove_dir_all(&proofs)?;
+    }
+
+    // Create a new meta data file.
+    DirBuilder::new().recursive(true).create(&proofs)?;
+    let mut file = File::create(&metadata_file)?;
+    current_header_hash.serialize(&mut file)?;
+
+    Ok(())
+}
 
 /// This function generates a proof for a new epoch, it uses the entire light macro sync. Note
 /// that the proof generation can easily take longer than 12 hours.
@@ -57,6 +92,9 @@ pub fn prove(
     // The path to where the `prover_keys` folder is stored in.
     prover_keys_path: &Path,
 ) -> Result<Proof<MNT6_753>, NanoZKPError> {
+    // Make sure proofs cache is up-to-date.
+    update_proof_cache(prover_keys_path, &block.header_hash)?;
+
     let rng = &mut thread_rng();
     let proofs = prover_keys_path.join("proofs");
 

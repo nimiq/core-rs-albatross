@@ -4719,6 +4719,7 @@ dependencies = [
  "ark-std",
  "beserial",
  "nimiq-bls",
+ "nimiq-log",
  "nimiq-primitives",
  "nimiq-test-log",
  "nimiq-test-utils",

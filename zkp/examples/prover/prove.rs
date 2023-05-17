@@ -4,10 +4,13 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use ark_groth16::Proof;
-use ark_relations::r1cs::{ConstraintLayer, TracingMode};
 use ark_serialize::CanonicalSerialize;
+use log::level_filters::LevelFilter;
+use tracing_subscriber::filter::Targets;
 use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 
+use nimiq_log::TargetsExt;
 use nimiq_zkp::prove::prove;
 use nimiq_zkp_circuits::utils::create_test_blocks;
 
@@ -29,10 +32,15 @@ fn main() {
 
     println!("====== Proof generation for Nano Sync initiated ======");
 
-    let mut layer = ConstraintLayer::default();
-    layer.mode = TracingMode::OnlyConstraints;
-    let subscriber = tracing_subscriber::Registry::default().with(layer);
-    let _guard = log::subscriber::set_default(subscriber);
+    tracing_subscriber::registry()
+        .with(
+            Targets::new()
+                .with_default(LevelFilter::INFO)
+                .with_nimiq_targets(LevelFilter::DEBUG)
+                .with_target("r1cs", LevelFilter::WARN)
+                .with_env(),
+        )
+        .init();
 
     let start = Instant::now();
 
