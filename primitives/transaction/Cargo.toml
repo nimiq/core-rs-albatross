@@ -12,7 +12,7 @@ license = "Apache-2.0"
 travis-ci = { repository = "nimiq/core-rs", branch = "master" }
 
 [dependencies]
-bitflags = "1.0"
+bitflags = "2.3"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 num-traits = "0.2"
 serde = { version = "1.0", optional = true }
