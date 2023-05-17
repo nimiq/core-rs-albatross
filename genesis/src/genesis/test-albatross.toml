@@ -53,42 +53,42 @@ reward_address = "NQ53 LC70 JHGH UEMV 2CAB DFQL JKHQ 21FS D3AY"
 
 [[stakers]]
 staker_address = "NQ55 J6P2 9SLR 0GFQ XJKM P3MB HRJN NLFT EQ30"
-balance = 1_000_000_000_00000
+balance = 10_000_000_00000
 delegation = "NQ70 JM4N PU3R Y2U2 9RGX ABJE VKA4 4TBB HKF1"
 
 [[stakers]]
 staker_address = "NQ45 L3VX GNGA VDRF V6FL Q66Q Q884 S269 0MRT"
-balance = 1_000_000_000_00000
+balance = 10_000_000_00000
 delegation = "NQ83 P1EH GRM8 HUE8 GS7L CBST UVDS 778L HEX4"
 
 [[stakers]]
 staker_address = "NQ94 4U2Y 8D9C VJJ6 1L1M FMG8 HUYL 7R6J AQ6Q"
-balance = 1_000_000_000_00000
+balance = 10_000_000_00000
 delegation = "NQ79 F94K NYV6 3V7D 68X6 FXAD 4PCM XMQR PP4U"
 
 [[stakers]]
 staker_address = "NQ88 XHD8 8ULG PF17 3Q7N 3SGN AAYE XGS9 GV1F"
-balance = 1_000_000_000_00000
+balance = 10_000_000_00000
 delegation = "NQ94 58R8 YDR5 05EX JTA4 37JU N1EK 6R3Q M9C5"
 
 [[stakers]]
 staker_address = "NQ91 YJNG P54M J335 JRVQ QDLY 4CYJ X5K9 R8RT"
-balance = 1_000_000_000_00000
+balance = 10_000_000_00000
 delegation = "NQ56 BBC5 B9RR PRT9 6V21 TJJ7 PJQ0 N5KA ELAU"
 
 [[stakers]]
 staker_address = "NQ62 JE6M Q130 MF10 M92K HQRR P394 L8MK HE7R"
-balance = 1_000_000_000_00000
+balance = 10_000_000_00000
 delegation = "NQ69 GF5T BFJG 9YEX 97VJ JJ27 D9VA 414K 7LG5"
 
 [[stakers]]
 staker_address = "NQ19 7SNT KSMT 0P1N M16R QJEB EYSJ M5BQ R673"
-balance = 1_000_000_000_00000
+balance = 10_000_000_00000
 delegation = "NQ85 UD3C U8F9 J1L9 J32V X9QX S3NJ BQ4L SCAN"
 
 [[stakers]]
 staker_address = "NQ53 LC70 JHGH UEMV 2CAB DFQL JKHQ 21FS D3AY"
-balance = 1_000_000_000_00000
+balance = 10_000_000_00000
 delegation = "NQ84 3NMP N7X3 90XQ G8PB 48V3 M15Y B9V0 6C41"
 
 [[accounts]]
