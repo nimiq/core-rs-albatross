@@ -760,7 +760,7 @@ dependencies = [
  "beserial",
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.15",
 ]
 
 [[package]]
@@ -3824,7 +3824,7 @@ version = "0.1.0"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.15",
 ]
 
 [[package]]
@@ -4401,9 +4401,10 @@ dependencies = [
 name = "nimiq-test-log-proc-macro"
 version = "0.1.0"
 dependencies = [
+ "darling 0.20.1",
  "nimiq-test-log",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.15",
  "tokio",
 ]
 

@@ -79,7 +79,9 @@
 
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use syn::{parse_macro_input, Data, DeriveInput, Ident, Index, Meta, Path};
+use syn::{
+    parse_macro_input, punctuated::Punctuated, Data, DeriveInput, Ident, Index, Meta, Token,
+};
 
 enum FieldAttribute {
     Uvar,
@@ -88,122 +90,114 @@ enum FieldAttribute {
     Discriminant(u64),
 }
 
-#[inline]
-fn cmp_ident(path: &Path, ident: &str) -> bool {
-    match path.get_ident() {
-        Some(id) => id == ident,
-        None => false,
-    }
-}
-
 // This will return a tuple once we have more options
 fn parse_field_attribs(attrs: &[syn::Attribute]) -> Option<FieldAttribute> {
     for attr in attrs {
-        if let Meta::List(ref meta_list) = attr.parse_meta().unwrap() {
-            // Something like #[beserial(_)]
-            if cmp_ident(&meta_list.path, "beserial") {
-                for nested in meta_list.nested.iter() {
-                    if let syn::NestedMeta::Meta(ref item) = nested {
-                        // item is what's inside of beserial(_)
-                        match item {
-                            // something nested with item(_)
-                            Meta::List(ref meta_list) => {
-                                if cmp_ident(&meta_list.path, "len_type") {
-                                    // len_type accepts the len type (mandatory) and a limit
-                                    let mut len_type = None;
-                                    let mut limit = None;
-                                    for nested in meta_list.nested.iter() {
-                                        if let syn::NestedMeta::Meta(ref item) = nested {
-                                            match item {
-                                                Meta::Path(value) => {
-                                                    if !cmp_ident(value, "u8")
-                                                        && !cmp_ident(value, "u16")
-                                                        && !cmp_ident(value, "u32")
-                                                    {
-                                                        panic!("beserial(len_type) must be one of [u8, u16, u32], but was {value:?}");
-                                                    }
-                                                    len_type =
-                                                        Some(value.get_ident().cloned().unwrap());
-                                                }
-                                                Meta::NameValue(name_value) => {
-                                                    if !cmp_ident(&name_value.path, "limit") {
-                                                        panic!("beserial(len_type) can only have an additional limit attribute, but was {name_value:?}");
-                                                    }
-                                                    // We do have something like beserial(discriminant = 123).
-                                                    // Parse discriminant.
-                                                    if let syn::Lit::Int(lit_int) = &name_value.lit
-                                                    {
-                                                        if let Ok(l) =
-                                                            lit_int.base10_parse::<usize>()
-                                                        {
-                                                            limit = Some(l);
-                                                        } else {
-                                                            panic!(
-                                                                "limit cannot be parsed as usize"
-                                                            );
-                                                        }
-                                                    } else {
-                                                        panic!("non-integer limit");
-                                                    }
-                                                }
-                                                _ => {}
-                                            }
-                                        }
-                                    }
-                                    if let Some(len_type) = len_type {
-                                        return Some(FieldAttribute::LenType(len_type, limit));
-                                    }
-                                }
-                                if cmp_ident(&meta_list.path, "skip") {
-                                    for nested in meta_list.nested.iter() {
-                                        if let syn::NestedMeta::Meta(Meta::NameValue(
-                                            meta_name_value,
-                                        )) = nested
+        if attr.path().is_ident("beserial") {
+            let nested = attr
+                .parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)
+                .unwrap();
+            for meta in nested {
+                match meta {
+                    Meta::List(ref meta_list) => {
+                        if meta_list.path.is_ident("len_type") {
+                            // len_type accepts the len type (mandatory) and a limit
+                            let mut len_type = None;
+                            let mut limit = None;
+                            let nested_meta = meta_list
+                                .parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)
+                                .unwrap();
+                            for nested in nested_meta {
+                                match nested {
+                                    Meta::Path(value) => {
+                                        if !value.is_ident("u8")
+                                            && !value.is_ident("u16")
+                                            && !value.is_ident("u32")
                                         {
-                                            if cmp_ident(&meta_name_value.path, "default") {
-                                                return Some(FieldAttribute::Skip(Some(
-                                                    meta_name_value.lit.clone(),
-                                                )));
+                                            panic!("beserial(len_type) must be one of [u8, u16, u32], but was {value:?}");
+                                        }
+                                        len_type = Some(value.get_ident().cloned().unwrap());
+                                    }
+                                    Meta::NameValue(name_value) => {
+                                        if !name_value.path.is_ident("limit") {
+                                            panic!("beserial(len_type) can only have an additional limit attribute, but was {name_value:?}");
+                                        }
+                                        // We do have something like beserial(discriminant = 123).
+                                        // Parse discriminant.
+                                        if let syn::Expr::Lit(expr_lit) = &name_value.value {
+                                            if let syn::Lit::Int(lit_int) = &expr_lit.lit {
+                                                if let Ok(l) = lit_int.base10_parse::<usize>() {
+                                                    limit = Some(l);
+                                                } else {
+                                                    panic!("limit cannot be parsed as usize");
+                                                }
+                                            } else {
+                                                panic!("non-literal limit");
                                             }
-                                        }
-                                    }
-                                    return Some(FieldAttribute::Skip(None));
-                                }
-                            }
-                            // Just a name, no additional nested ().
-                            Meta::Path(ref path) => {
-                                if cmp_ident(path, "skip") {
-                                    return Some(FieldAttribute::Skip(None));
-                                } else if cmp_ident(path, "uvar") {
-                                    return Some(FieldAttribute::Uvar);
-                                } else {
-                                    panic!("unknown flag for beserial: {path:?}")
-                                }
-                            }
-                            Meta::NameValue(ref name_value) => {
-                                if cmp_ident(&name_value.path, "discriminant") {
-                                    // We do have something like beserial(discriminant = 123).
-                                    // Parse discriminant.
-                                    if let syn::Lit::Int(lit_int) = &name_value.lit {
-                                        if let Ok(discriminant) = lit_int.base10_parse::<u64>() {
-                                            return Some(FieldAttribute::Discriminant(
-                                                discriminant,
-                                            ));
                                         } else {
-                                            panic!("discriminant cannot be parsed as u64");
+                                            panic!("non-integer limit");
                                         }
-                                    } else {
-                                        panic!("non-integer discriminant");
                                     }
-                                } else {
-                                    panic!("unknown flag for beserial: {name_value:?}")
+                                    _ => {}
                                 }
                             }
+                            if let Some(len_type) = len_type {
+                                return Some(FieldAttribute::LenType(len_type, limit));
+                            }
+                        } else if meta_list.path.is_ident("skip") {
+                            let mut skip_attr = None;
+                            meta_list
+                                .parse_nested_meta(|meta| {
+                                    if meta.path.is_ident("default") {
+                                        let value = meta.value()?;
+                                        let lit: syn::Lit = value.parse()?;
+                                        skip_attr = Some(FieldAttribute::Skip(Some(lit)));
+                                        return Ok(());
+                                    }
+                                    panic!("unrecognized beserial(skip)");
+                                })
+                                .expect("Can't parse 'beserial(skip)'");
+                            if skip_attr.is_some() {
+                                return skip_attr;
+                            }
+                        } else {
+                            panic!("Unrecognized list arguments for 'beserial'");
+                        }
+                    }
+                    // Just a name, no additional nested ().
+                    Meta::Path(ref path) => {
+                        if path.is_ident("skip") {
+                            return Some(FieldAttribute::Skip(None));
+                        } else if path.is_ident("uvar") {
+                            return Some(FieldAttribute::Uvar);
+                        } else {
+                            panic!("unknown flag for beserial: {path:?}")
+                        }
+                    }
+                    Meta::NameValue(ref name_value) => {
+                        if name_value.path.is_ident("discriminant") {
+                            // We do have something like beserial(discriminant = 123).
+                            // Parse discriminant.
+                            if let syn::Expr::Lit(expr_int) = &name_value.value {
+                                if let syn::Lit::Int(lit_int) = &expr_int.lit {
+                                    if let Ok(discriminant) = lit_int.base10_parse::<u64>() {
+                                        return Some(FieldAttribute::Discriminant(discriminant));
+                                    } else {
+                                        panic!("discriminant cannot be parsed as u64");
+                                    }
+                                } else {
+                                    panic!("non-integer discriminant");
+                                }
+                            } else {
+                                panic!("non-literal discriminant");
+                            }
+                        } else {
+                            panic!("unknown flag for beserial: {name_value:?}")
                         }
                     }
                 }
             }
-        }
+        };
     }
     None
 }
@@ -212,26 +206,28 @@ fn parse_enum_attribs(ast: &syn::DeriveInput) -> (Option<syn::Ident>, bool) {
     let mut enum_type: Option<syn::Ident> = Option::None;
     let mut uvar = false;
     for attr in &ast.attrs {
-        if let Meta::List(ref meta_list) = attr.parse_meta().unwrap() {
-            if cmp_ident(&meta_list.path, "repr") {
-                enum_type = meta_list.nested.first().and_then(|n| {
-                    if let syn::NestedMeta::Meta(Meta::Path(ref meta_type)) = n {
-                        meta_type.get_ident().cloned()
-                    } else {
-                        Option::None
-                    }
-                })
-            } else if cmp_ident(&meta_list.path, "beserial") {
-                for nested in meta_list.nested.iter() {
-                    if let syn::NestedMeta::Meta(Meta::Path(ref attr_ident)) = nested {
-                        if cmp_ident(attr_ident, "uvar") {
-                            uvar = true;
-                        } else {
-                            panic!("unknown flag for beserial: {attr_ident:?}")
-                        }
-                    }
+        // #[repr(N)]
+        if attr.path().is_ident("repr") {
+            attr.parse_nested_meta(|meta| {
+                let lit = meta
+                    .path
+                    .get_ident()
+                    .ok_or(meta.error("Unrecognized 'repr()'"))?
+                    .clone();
+                enum_type = Some(lit);
+                Ok(())
+            })
+            .expect("Unable to pase 'repr(N)'");
+        // #[beserial(uvar)]
+        } else if attr.path().is_ident("beserial") {
+            attr.parse_nested_meta(|meta| {
+                if meta.path.is_ident("uvar") {
+                    uvar = true;
+                    return Ok(());
                 }
-            }
+                Err(meta.error("Unrecognized 'beserial'"))
+            })
+            .expect("Unable to pase 'beserial(uvar)'");
         }
     }
     (enum_type, uvar)

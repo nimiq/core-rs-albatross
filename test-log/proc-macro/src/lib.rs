@@ -7,15 +7,10 @@
 //! initializes logging and/or tracing infrastructure before running
 //! tests.
 
+use darling::ast::NestedMeta;
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::parse_macro_input;
-use syn::parse_quote;
-use syn::AttributeArgs;
-use syn::ItemFn;
-use syn::Meta;
-use syn::NestedMeta;
-use syn::ReturnType;
+use syn::{parse_macro_input, parse_quote, ItemFn, Meta, ReturnType};
 
 /// A procedural macro for the `test` attribute.
 ///
@@ -71,7 +66,12 @@ use syn::ReturnType;
 /// ```
 #[proc_macro_attribute]
 pub fn test(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let args = parse_macro_input!(attr as AttributeArgs);
+    let args = match NestedMeta::parse_meta_list(attr.into()) {
+        Ok(v) => v,
+        Err(_) => {
+            panic!("unsupported arguments supplied: {}", quote! { attr });
+        }
+    };
     let input = parse_macro_input!(item as ItemFn);
 
     let inner_test = match args.as_slice() {
