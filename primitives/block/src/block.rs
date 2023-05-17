@@ -955,9 +955,12 @@ impl Deserialize for BlockBody {
     }
 }
 
+#[derive(Default, Serialize, Deserialize)]
+#[repr(transparent)]
+pub struct BlockComponentFlags(u8);
+
 bitflags! {
-    #[derive(Default, Serialize, Deserialize)]
-    pub struct BlockComponentFlags: u8 {
+    impl BlockComponentFlags: u8 {
         const HEADER  = 0b0000_0001;
         const JUSTIFICATION = 0b0000_0010;
         const BODY = 0b0000_0100;

@@ -82,10 +82,17 @@ pub enum TransactionFormat {
     Extended = 1,
 }
 
+#[derive(Default, Serialize, Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[cfg_attr(
+    feature = "serde-derive",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(try_from = "u8", into = "u8")
+)]
+#[repr(transparent)]
+pub struct TransactionFlags(u8);
+
 bitflags! {
-    #[derive(Default, Serialize)]
-    #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize), serde(try_from = "u8", into = "u8"))]
-    pub struct TransactionFlags: u8 {
+    impl TransactionFlags: u8 {
         const CONTRACT_CREATION = 0b1;
         const SIGNALING = 0b10;
     }

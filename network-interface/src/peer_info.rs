@@ -3,15 +3,18 @@ use libp2p::Multiaddr;
 
 use beserial::{Deserialize, Serialize};
 
+/// Bitmask of services
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg_attr(
+    feature = "peer-contact-book-persistence",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(transparent)
+)]
+#[repr(transparent)]
+pub struct Services(u32);
+
 bitflags! {
-    /// Bitmask of services
-    ///
-    ///
-    ///  - This just serializes to its numeric value for serde, but a list of strings would be nicer.
-    ///
-    #[derive(Serialize, Deserialize)]
-    #[cfg_attr(feature = "peer-contact-book-persistence", derive(serde::Serialize, serde::Deserialize), serde(transparent))]
-    pub struct Services: u32 {
+    impl Services: u32 {
         /// The node provides at least the latest [`nimiq_primitives::policy::NUM_BLOCKS_VERIFICATION`] as full blocks.
         const FULL_BLOCKS = 1 << 0;
 
