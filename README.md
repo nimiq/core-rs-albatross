@@ -59,14 +59,7 @@ After installing the previous packages, compiling the project is achieved throug
 
 ```bash
 git clone https://github.com/nimiq/core-rs-albatross
-cd core-rs
-cargo build
-```
-
-Note that this will build in debug mode, which is not as performant.
-To get the most speed out of the client, please build in release mode:
-
-```bash
+cd core-rs-albatross
 cargo build --release
 ```
 
@@ -87,7 +80,7 @@ cargo install --git https://github.com/nimiq/core-rs-albatross.git
 After installation, you can run the client directly, like this:
 
 ```bash
-nimiq-client
+cargo run --release --bin nimiq-client
 ```
 
 ### Configuration
@@ -96,15 +89,15 @@ By default the client will look for a configuration file in `$HOME/.nimiq/client
 In order to create this file yourself, you can use the example config file as follow:
 
 ```bash
-nimiq-client                                                   # Run the client. This will create the example config file.
+cargo run --release --bin nimiq-client                         # Run the client. This will create the example config file.
 cp $HOME/.nimiq/client.example.toml $HOME/.nimiq/client.toml   # Create your config from the example.
 nano $HOME/.nimiq/client.toml                                  # Edit the config. Explanations are included in the file.
 ```
 
-If you want to direcly specify your own configuration file when running the client, you can do so as follow:
+If you want to directly specify your own configuration file when running the client, you can do so as follow:
 
 ```bash
-nimiq-client -c path/to/client.toml
+cargo run --release --bin nimiq-client -- -c path/to/client.toml
 ```
 
 Please take a look at the [`client.example.toml`](lib/src/config/config_file/client.example.toml) for all the configuration options.
