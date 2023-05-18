@@ -3830,7 +3830,7 @@ dependencies = [
 [[package]]
 name = "nimiq-jsonrpc-client"
 version = "0.1.0"
-source = "git+https://github.com/nimiq/jsonrpc.git#81a328b4ca13a79340b45a1c783edf367eed50a3"
+source = "git+https://github.com/nimiq/jsonrpc.git#223ebb00744699bea4dc0eab01548b0ca882c005"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -3844,14 +3844,14 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tokio",
- "tokio-tungstenite 0.18.0",
+ "tokio-tungstenite 0.19.0",
  "url",
 ]
 
 [[package]]
 name = "nimiq-jsonrpc-core"
 version = "0.1.0"
-source = "git+https://github.com/nimiq/jsonrpc.git#81a328b4ca13a79340b45a1c783edf367eed50a3"
+source = "git+https://github.com/nimiq/jsonrpc.git#223ebb00744699bea4dc0eab01548b0ca882c005"
 dependencies = [
  "log",
  "serde",
@@ -3862,22 +3862,22 @@ dependencies = [
 [[package]]
 name = "nimiq-jsonrpc-derive"
 version = "0.1.0"
-source = "git+https://github.com/nimiq/jsonrpc.git#81a328b4ca13a79340b45a1c783edf367eed50a3"
+source = "git+https://github.com/nimiq/jsonrpc.git#223ebb00744699bea4dc0eab01548b0ca882c005"
 dependencies = [
- "darling 0.14.3",
+ "darling 0.20.1",
  "heck",
  "nimiq-jsonrpc-client",
  "nimiq-jsonrpc-core",
  "nimiq-jsonrpc-server",
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.15",
 ]
 
 [[package]]
 name = "nimiq-jsonrpc-server"
 version = "0.1.0"
-source = "git+https://github.com/nimiq/jsonrpc.git#81a328b4ca13a79340b45a1c783edf367eed50a3"
+source = "git+https://github.com/nimiq/jsonrpc.git#223ebb00744699bea4dc0eab01548b0ca882c005"
 dependencies = [
  "async-trait",
  "bytes",
@@ -6701,14 +6701,14 @@ dependencies = [
 
 [[package]]
 name = "tokio-tungstenite"
-version = "0.18.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "54319c93411147bced34cb5609a80e0a8e44c5999c93903a81cd866630ec0bfd"
+checksum = "ec509ac96e9a0c43427c74f003127d953a265737636129424288d27cb5c4b12c"
 dependencies = [
  "futures-util",
  "log",
  "tokio",
- "tungstenite 0.18.0",
+ "tungstenite 0.19.0",
 ]
 
 [[package]]
@@ -7080,13 +7080,13 @@ dependencies = [
 
 [[package]]
 name = "tungstenite"
-version = "0.18.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30ee6ab729cd4cf0fd55218530c4522ed30b7b6081752839b68fcec8d0960788"
+checksum = "15fba1a6d6bb030745759a9a2a588bfe8490fc8b4751a277db3a0be1c9ebbf67"
 dependencies = [
- "base64 0.13.1",
  "byteorder",
  "bytes",
+ "data-encoding",
  "http",
  "httparse",
  "log",
