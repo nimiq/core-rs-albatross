@@ -92,10 +92,13 @@ impl LightBlockchain {
         } else if epoch == 0 {
             Err(BlockchainError::InvalidEpoch)
         } else {
-            self.get_block_at(Policy::election_block_of(epoch - 1), true)?
-                .unwrap_macro()
-                .get_validators()
-                .ok_or(BlockchainError::NoValidatorsFound)
+            self.get_block_at(
+                Policy::election_block_of(epoch - 1).ok_or(BlockchainError::InvalidEpoch)?,
+                true,
+            )?
+            .unwrap_macro()
+            .get_validators()
+            .ok_or(BlockchainError::NoValidatorsFound)
         }
     }
 

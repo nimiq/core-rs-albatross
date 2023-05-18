@@ -295,8 +295,12 @@ impl BlockchainInterface for BlockchainDispatcher {
     ) -> RPCResult<Vec<ExecutedTransaction>, (), Self::Error> {
         if let BlockchainReadProxy::Full(blockchain) = self.blockchain.read() {
             // Calculate the numbers for the micro blocks in the batch.
-            let first_block = Policy::first_block_of_batch(batch_number);
-            let last_block = Policy::macro_block_of(batch_number);
+            let first_block = Policy::first_block_of_batch(batch_number).ok_or(
+                Error::InvalidArgument("Batch number out of bounds".to_string()),
+            )?;
+            let last_block = Policy::macro_block_of(batch_number).ok_or(Error::InvalidArgument(
+                "Batch number out of bounds".to_string(),
+            ))?;
 
             // Search all micro blocks of the batch to find the transactions.
             let mut transactions = vec![];
@@ -335,7 +339,9 @@ impl BlockchainInterface for BlockchainDispatcher {
         batch_number: u32,
     ) -> RPCResult<Vec<Inherent>, (), Self::Error> {
         if let BlockchainReadProxy::Full(blockchain) = self.blockchain.read() {
-            let macro_block_number = Policy::macro_block_of(batch_number);
+            let macro_block_number = Policy::macro_block_of(batch_number).ok_or(
+                Error::InvalidArgument("Batch number out of bounds".to_string()),
+            )?;
 
             // Check the batch's macro block to see if the batch includes slashes.
             let macro_block = blockchain
@@ -348,7 +354,9 @@ impl BlockchainInterface for BlockchainDispatcher {
 
             if !macro_body.lost_reward_set.is_empty() {
                 // Search all micro blocks of the batch to find the slash inherents.
-                let first_micro_block = Policy::first_block_of_batch(batch_number);
+                let first_micro_block = Policy::first_block_of_batch(batch_number).ok_or(
+                    Error::InvalidArgument("Batch number out of bounds".to_string()),
+                )?;
                 let last_micro_block = macro_block_number - 1;
 
                 for i in first_micro_block..=last_micro_block {

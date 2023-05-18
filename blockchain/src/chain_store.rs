@@ -545,7 +545,10 @@ impl ChainStore {
             return;
         }
 
-        for height in Policy::first_block_of(epoch_number)..Policy::election_block_of(epoch_number)
+        for height in Policy::first_block_of(epoch_number)
+            .expect("The supplied epoch_number is out of bounds")
+            ..Policy::election_block_of(epoch_number)
+                .expect("The supplied epoch_number is out of bounds")
         {
             let hashes = self.get_block_hashes_at(height, Some(txn));
             for hash in hashes {

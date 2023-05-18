@@ -264,30 +264,40 @@ impl Policy {
     }
 
     /// Returns the block number of the first block of the given epoch (which is always a micro block).
-    pub fn first_block_of(epoch: u32) -> u32 {
+    /// If the index is out of bounds, None is returned
+    pub fn first_block_of(epoch: u32) -> Option<u32> {
         if epoch == 0 {
             panic!("Called first_block_of for epoch 0");
         }
-        (epoch - 1) * Self::blocks_per_epoch() + 1
+
+        (epoch - 1)
+            .checked_mul(Self::blocks_per_epoch())?
+            .checked_add(1)
     }
 
     /// Returns the block number of the first block of the given batch (which is always a micro block).
-    pub fn first_block_of_batch(batch: u32) -> u32 {
+    /// If the index is out of bounds, None is returned
+    pub fn first_block_of_batch(batch: u32) -> Option<u32> {
         if batch == 0 {
             panic!("Called first_block_of_batch for batch 0");
         }
-        (batch - 1) * Self::blocks_per_batch() + 1
+
+        (batch - 1)
+            .checked_mul(Self::blocks_per_batch())?
+            .checked_add(1)
     }
 
     /// Returns the block number of the election macro block of the given epoch (which is always the last block).
-    pub fn election_block_of(epoch: u32) -> u32 {
-        epoch * Self::blocks_per_epoch()
+    /// If the index is out of bounds, None is returned
+    pub fn election_block_of(epoch: u32) -> Option<u32> {
+        epoch.checked_mul(Self::blocks_per_epoch())
     }
 
     /// Returns the block number of the macro block (checkpoint or election) of the given batch (which
     /// is always the last block).
-    pub fn macro_block_of(batch: u32) -> u32 {
-        batch * Self::blocks_per_batch()
+    /// If the index is out of bounds, None is returned
+    pub fn macro_block_of(batch: u32) -> Option<u32> {
+        batch.checked_mul(Self::blocks_per_batch())
     }
 
     /// Returns a boolean expressing if the batch at a given block number (height) is the first batch
@@ -479,14 +489,15 @@ mod tests {
     #[test]
     fn it_correctly_commutes_first_ofs() {
         initialize_policy();
-        assert_eq!(Policy::first_block_of(1), 1);
-        assert_eq!(Policy::first_block_of(2), 129);
+        assert_eq!(Policy::first_block_of(1), Some(1));
+        assert_eq!(Policy::first_block_of(2), Some(129));
 
-        assert_eq!(Policy::first_block_of_batch(1), 1);
-        assert_eq!(Policy::first_block_of_batch(2), 33);
-        assert_eq!(Policy::first_block_of_batch(3), 65);
-        assert_eq!(Policy::first_block_of_batch(4), 97);
-        assert_eq!(Policy::first_block_of_batch(5), 129);
+        assert_eq!(Policy::first_block_of_batch(1), Some(1));
+        assert_eq!(Policy::first_block_of_batch(2), Some(33));
+        assert_eq!(Policy::first_block_of_batch(3), Some(65));
+        assert_eq!(Policy::first_block_of_batch(4), Some(97));
+        assert_eq!(Policy::first_block_of_batch(5), Some(129));
+        assert_eq!(Policy::first_block_of_batch(4294967295), None);
     }
 
     #[test]

@@ -37,7 +37,11 @@ impl Blockchain {
             Err(BlockchainError::InvalidEpoch)
         } else {
             self.chain_store
-                .get_block_at(Policy::election_block_of(epoch - 1), true, txn)?
+                .get_block_at(
+                    Policy::election_block_of(epoch - 1).ok_or(BlockchainError::InvalidEpoch)?,
+                    true,
+                    txn,
+                )?
                 .unwrap_macro()
                 .get_validators()
                 .ok_or(BlockchainError::NoValidatorsFound)

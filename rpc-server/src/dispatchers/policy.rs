@@ -140,7 +140,10 @@ impl PolicyInterface for PolicyDispatcher {
             return Err(Error::EpochNumberNotZero);
         }
 
-        Ok(Policy::first_block_of(epoch).into())
+        match Policy::first_block_of(epoch) {
+            Some(block_number) => Ok(block_number.into()),
+            None => Err(Error::InvalidArgument("epoch".to_string())),
+        }
     }
 
     /// Returns the block number of the first block of the given batch (which is always a micro block).
@@ -149,18 +152,27 @@ impl PolicyInterface for PolicyDispatcher {
             return Err(Error::BatchNumberNotZero);
         }
 
-        Ok(Policy::first_block_of_batch(batch).into())
+        match Policy::first_block_of_batch(batch) {
+            Some(block_number) => Ok(block_number.into()),
+            None => Err(Error::InvalidArgument("batch".to_string())),
+        }
     }
 
     /// Returns the block number of the election macro block of the given epoch (which is always the last block).
     async fn get_election_block_of(&mut self, epoch: u32) -> RPCResult<u32, (), Self::Error> {
-        Ok(Policy::election_block_of(epoch).into())
+        match Policy::election_block_of(epoch) {
+            Some(block_number) => Ok(block_number.into()),
+            None => Err(Error::InvalidArgument("epoch".to_string())),
+        }
     }
 
     /// Returns the block number of the macro block (checkpoint or election) of the given batch (which
     /// is always the last block).
     async fn get_macro_block_of(&mut self, batch: u32) -> RPCResult<u32, (), Self::Error> {
-        Ok(Policy::macro_block_of(batch).into())
+        match Policy::macro_block_of(batch) {
+            Some(block_number) => Ok(block_number.into()),
+            None => Err(Error::InvalidArgument("batch".to_string())),
+        }
     }
 
     /// Returns a boolean expressing if the batch at a given block number (height) is the first batch

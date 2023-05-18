@@ -175,6 +175,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                         return 0;
                     }
                     Policy::first_block_of(epoch_ids.checkpoint_epoch_number() as u32)
+                        .expect("The supplied epoch number is out of bounds")
                 })
                 + Policy::blocks_per_batch()
                 - 1;
