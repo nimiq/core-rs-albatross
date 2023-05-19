@@ -188,8 +188,7 @@ impl<N: Network> BlockQueue<N> {
             );
             self.report_validation_result(pubsub_id, MsgAcceptance::Ignore);
 
-            if self.network.has_peer(peer_id) {
-                self.request_component.take_peer(&peer_id);
+            if self.request_component.take_peer(&peer_id).is_some() {
                 return Some(QueuedBlock::TooFarBehind(block, peer_id));
             }
         } else if parent_known {
@@ -206,8 +205,7 @@ impl<N: Network> BlockQueue<N> {
             );
             self.report_validation_result(pubsub_id, MsgAcceptance::Ignore);
 
-            if self.network.has_peer(peer_id) {
-                self.request_component.take_peer(&peer_id);
+            if self.request_component.take_peer(&peer_id).is_some() {
                 return Some(QueuedBlock::TooFarAhead(block, peer_id));
             }
         } else if self.buffer.len() >= self.config.buffer_max {
