@@ -100,6 +100,11 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
 
 impl<TNetwork: Network> MacroSync<TNetwork::PeerId> for HistoryMacroSync<TNetwork> {
     fn add_peer(&self, peer_id: TNetwork::PeerId) {
+        // Ignore peer if we already know it.
+        if self.peers.contains_key(&peer_id) {
+            return;
+        }
+
         debug!("Requesting epoch ids for peer: {:?}", peer_id);
         let future = Self::request_epoch_ids(
             Arc::clone(&self.blockchain),

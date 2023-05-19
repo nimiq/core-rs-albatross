@@ -115,6 +115,12 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
         &mut self,
         mut epoch_ids: EpochIds<TNetwork::PeerId>,
     ) -> Option<TNetwork::PeerId> {
+        // Ignore epoch_ids if we are already tracking the sending peer.
+        // We are going to request more ids from the sender once all already known ids are processed.
+        if self.peers.contains_key(&epoch_ids.sender) {
+            return None;
+        }
+
         // Read our current blockchain state.
         let (our_epoch_id, our_epoch_number, our_block_number) = {
             let blockchain = self.blockchain.read();
@@ -219,8 +225,8 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
             // more epoch ids from it when the job is processed.
             if let Some(cluster) = cluster {
                 let sender_peer_id = epoch_ids.sender;
-                cluster.add_peer(sender_peer_id);
-                self.peers.insert(sender_peer_id, 1);
+                assert!(cluster.add_peer(sender_peer_id));
+                assert!(self.peers.insert(sender_peer_id, 1).is_none());
                 return None;
             }
 
@@ -315,8 +321,9 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
 
                     // The peer's epoch ids matched at least a part of this (now potentially truncated) cluster,
                     // so we add the peer to this cluster. We also increment the peer's number of clusters.
-                    cluster.add_peer(sender_peer_id);
-                    num_clusters += 1;
+                    if cluster.add_peer(sender_peer_id) {
+                        num_clusters += 1;
+                    }
 
                     // Advance the id_index by the number of matched ids.
                     // If there are no more ids to cluster, we can stop iterating.
@@ -362,8 +369,10 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
                 {
                     // The peer's checkpoint id matched this cluster,
                     // so we add the peer to this cluster. We also increment the peer's number of clusters.
-                    cluster.add_peer(sender_peer_id);
-                    num_clusters += 1;
+                    if cluster.add_peer(sender_peer_id) {
+                        num_clusters += 1;
+                    }
+
                     found_cluster = true;
                     break;
                 }
