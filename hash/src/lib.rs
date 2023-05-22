@@ -98,24 +98,13 @@ pub trait HashOutput:
     + SerializeContent
     + Debug
     + std::hash::Hash
+    + Hash
 {
     type Builder: Hasher<Output = Self>;
 
     fn as_bytes(&self) -> &[u8];
     fn len() -> usize;
 }
-
-impl<Hash> SerializeContent for Hash
-where
-    Hash: HashOutput,
-{
-    fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<()> {
-        writer.write_all(self.as_bytes())?;
-        Ok(())
-    }
-}
-
-// Blake2b
 
 const BLAKE2B_LENGTH: usize = 32;
 create_typed_array!(Blake2bHash, u8, BLAKE2B_LENGTH);
@@ -131,6 +120,13 @@ impl HashOutput for Blake2bHash {
     }
     fn len() -> usize {
         BLAKE2B_LENGTH
+    }
+}
+
+impl SerializeContent for Blake2bHash {
+    fn serialize_content<W: io::Write, H: HashOutput>(&self, writer: &mut W) -> io::Result<()> {
+        writer.write_all(self.as_bytes())?;
+        Ok(())
     }
 }
 
@@ -217,6 +213,13 @@ impl HashOutput for Blake2sHash {
     }
 }
 
+impl SerializeContent for Blake2sHash {
+    fn serialize_content<W: io::Write, H: HashOutput>(&self, writer: &mut W) -> io::Result<()> {
+        writer.write_all(self.as_bytes())?;
+        Ok(())
+    }
+}
+
 impl Blake2sHasher {
     pub fn new() -> Self {
         Blake2sHasher(Blake2s::new(BLAKE2S_LENGTH))
@@ -269,6 +272,13 @@ impl HashOutput for Argon2dHash {
     }
     fn len() -> usize {
         ARGON2D_LENGTH
+    }
+}
+
+impl SerializeContent for Argon2dHash {
+    fn serialize_content<W: io::Write, H: HashOutput>(&self, writer: &mut W) -> io::Result<()> {
+        writer.write_all(self.as_bytes())?;
+        Ok(())
     }
 }
 
@@ -339,6 +349,13 @@ impl HashOutput for Sha256Hash {
     }
 }
 
+impl SerializeContent for Sha256Hash {
+    fn serialize_content<W: io::Write, H: HashOutput>(&self, writer: &mut W) -> io::Result<()> {
+        writer.write_all(self.as_bytes())?;
+        Ok(())
+    }
+}
+
 impl Sha256Hasher {
     pub fn new() -> Self {
         Sha256Hasher(Sha256::default())
@@ -375,25 +392,23 @@ add_hash_trait_arr!([u8; 32]);
 add_hash_trait_arr!([u8; 64]);
 add_hash_trait_arr!([u8]);
 add_hash_trait_arr!(Vec<u8>);
-impl<'a> SerializeContent for &'a [u8] {
-    fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<()> {
-        writer.write_all(self)?;
-        Ok(())
-    }
-}
 
-impl<'a> SerializeContent for &'a str {
-    fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<()> {
-        let b = self.as_bytes();
-        writer.write_all(b)?;
+impl SerializeContent for str {
+    fn serialize_content<W: io::Write, H: HashOutput>(&self, writer: &mut W) -> io::Result<()> {
+        writer.write_all(self.as_bytes())?;
         Ok(())
     }
 }
 
 impl SerializeContent for String {
-    fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<()> {
-        let b = self.as_bytes();
-        writer.write_all(b)?;
+    fn serialize_content<W: io::Write, H: HashOutput>(&self, writer: &mut W) -> io::Result<()> {
+        writer.write_all(self.as_bytes())?;
         Ok(())
+    }
+}
+
+impl<'a, T: SerializeContent + ?Sized> SerializeContent for &'a T {
+    fn serialize_content<W: io::Write, H: HashOutput>(&self, writer: &mut W) -> io::Result<()> {
+        (**self).serialize_content::<W, H>(writer)
     }
 }

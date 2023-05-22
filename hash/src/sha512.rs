@@ -136,6 +136,13 @@ impl HashOutput for Sha512Hash {
     }
 }
 
+impl SerializeContent for Sha512Hash {
+    fn serialize_content<W: io::Write, H: HashOutput>(&self, writer: &mut W) -> io::Result<()> {
+        writer.write_all(self.as_bytes())?;
+        Ok(())
+    }
+}
+
 impl Sha512Hasher {
     pub fn new() -> Self {
         Sha512Hasher(Sha512::default())
