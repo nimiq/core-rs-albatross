@@ -1,6 +1,7 @@
 use anyhow::Error;
 use async_trait::async_trait;
 use clap::Parser;
+
 use nimiq_rpc_interface::mempool::MempoolInterface;
 
 use super::accounts_subcommands::HandleSubcommand;
@@ -34,7 +35,7 @@ pub enum MempoolCommand {
 
 #[async_trait]
 impl HandleSubcommand for MempoolCommand {
-    async fn handle_subcommand(self, mut client: Client) -> Result<(), Error> {
+    async fn handle_subcommand(self, mut client: Client) -> Result<Client, Error> {
         match self {
             MempoolCommand::PushTransaction {
                 raw_tx,
@@ -67,6 +68,6 @@ impl HandleSubcommand for MempoolCommand {
                 println!("{:#?}", client.mempool.get_min_fee_per_byte().await?);
             }
         }
-        Ok(())
+        Ok(client)
     }
 }

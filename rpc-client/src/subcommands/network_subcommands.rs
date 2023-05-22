@@ -1,11 +1,11 @@
 use anyhow::Error;
 use async_trait::async_trait;
 use clap::Parser;
+
 use nimiq_rpc_interface::network::NetworkInterface;
 
-use crate::Client;
-
 use super::accounts_subcommands::HandleSubcommand;
+use crate::Client;
 
 #[derive(Debug, Parser)]
 pub enum NetworkCommand {
@@ -22,7 +22,7 @@ pub enum NetworkCommand {
 
 #[async_trait]
 impl HandleSubcommand for NetworkCommand {
-    async fn handle_subcommand(self, mut client: Client) -> Result<(), Error> {
+    async fn handle_subcommand(self, mut client: Client) -> Result<Client, Error> {
         match self {
             NetworkCommand::PeerId {} => {
                 println!("{:#?}", client.network.get_peer_id().await?);
@@ -35,6 +35,6 @@ impl HandleSubcommand for NetworkCommand {
                 }
             }
         }
-        Ok(())
+        Ok(client)
     }
 }

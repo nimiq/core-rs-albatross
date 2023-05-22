@@ -2,7 +2,7 @@ use anyhow::{bail, Error};
 use clap::Parser;
 use url::Url;
 
-use nimiq_jsonrpc_client::{websocket::WebsocketClient, ArcClient};
+use nimiq_jsonrpc_client::{websocket::WebsocketClient, ArcClient, Client as RPCclient};
 use nimiq_jsonrpc_core::Credentials;
 use nimiq_rpc_interface::{
     blockchain::BlockchainProxy, consensus::ConsensusProxy, mempool::MempoolProxy,
@@ -65,7 +65,7 @@ enum Command {
 }
 
 impl Command {
-    async fn run(self, client: Client) -> Result<(), Error> {
+    async fn run(self, client: Client) -> Result<Client, Error> {
         match self {
             Command::Policy(command) => command.handle_subcommand(client).await,
             Command::Blockchain(command) => command.handle_subcommand(client).await,
@@ -80,6 +80,7 @@ impl Command {
 }
 
 pub struct Client {
+    pub ws_client: ArcClient<WebsocketClient>,
     pub policy: PolicyProxy<ArcClient<WebsocketClient>>,
     pub blockchain: BlockchainProxy<ArcClient<WebsocketClient>>,
     pub consensus: ConsensusProxy<ArcClient<WebsocketClient>>,
@@ -102,8 +103,14 @@ impl Client {
             wallet: WalletProxy::new(client.clone()),
             validator: ValidatorProxy::new(client.clone()),
             network: NetworkProxy::new(client.clone()),
-            zkp_component: ZKPComponentProxy::new(client),
+            zkp_component: ZKPComponentProxy::new(client.clone()),
+            ws_client: client,
         })
+    }
+
+    /// Closes the WS connection
+    pub async fn close(&mut self) {
+        self.ws_client.close().await;
     }
 }
 
@@ -125,8 +132,8 @@ async fn run_app(opt: Opt) -> Result<(), Error> {
 
     let client = Client::new(url, credentials).await?;
 
-    opt.command.run(client).await?;
-
+    let mut client = opt.command.run(client).await?;
+    client.close().await;
     Ok(())
 }
 

@@ -1,12 +1,11 @@
-use clap::Parser;
-
 use anyhow::Error;
 use async_trait::async_trait;
+use clap::Parser;
+
 use nimiq_rpc_interface::policy::PolicyInterface;
 
-use crate::Client;
-
 use super::accounts_subcommands::HandleSubcommand;
+use crate::Client;
 
 #[derive(Debug, Parser)]
 pub enum PolicyCommand {
@@ -148,7 +147,7 @@ pub enum PolicyCommand {
 
 #[async_trait]
 impl HandleSubcommand for PolicyCommand {
-    async fn handle_subcommand(self, mut client: Client) -> Result<(), Error> {
+    async fn handle_subcommand(self, mut client: Client) -> Result<Client, Error> {
         match self {
             PolicyCommand::PolicyConstants {} => {
                 println!("{:#?}", client.policy.get_policy_constants().await?);
@@ -263,6 +262,6 @@ impl HandleSubcommand for PolicyCommand {
                 );
             }
         }
-        Ok(())
+        Ok(client)
     }
 }

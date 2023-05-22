@@ -1,4 +1,7 @@
+use anyhow::Error;
+use async_trait::async_trait;
 use clap::{Args, Parser};
+
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
 use nimiq_rpc_interface::{
@@ -6,9 +9,6 @@ use nimiq_rpc_interface::{
     types::{HashAlgorithm, ValidityStartHeight},
 };
 use nimiq_transaction::account::htlc_contract::AnyHash;
-
-use anyhow::Error;
-use async_trait::async_trait;
 
 use crate::Client;
 
@@ -282,7 +282,7 @@ pub enum TransactionCommand {
 
 #[async_trait]
 impl HandleSubcommand for TransactionCommand {
-    async fn handle_subcommand(self, mut client: Client) -> Result<(), Error> {
+    async fn handle_subcommand(self, mut client: Client) -> Result<Client, Error> {
         match self {
             TransactionCommand::Basic {
                 sender_wallet,
@@ -705,6 +705,6 @@ impl HandleSubcommand for TransactionCommand {
                 println!("{tx:#?}");
             }
         }
-        Ok(())
+        Ok(client)
     }
 }

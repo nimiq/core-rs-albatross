@@ -1,16 +1,15 @@
 use anyhow::Error;
 use async_trait::async_trait;
-
 use clap::Parser;
-use nimiq_rpc_interface::{blockchain::BlockchainInterface, wallet::WalletInterface};
 
 use nimiq_keys::{Address, PublicKey, Signature};
+use nimiq_rpc_interface::{blockchain::BlockchainInterface, wallet::WalletInterface};
 
 use crate::Client;
 
 #[async_trait]
 pub trait HandleSubcommand {
-    async fn handle_subcommand(self, mut client: Client) -> Result<(), Error>;
+    async fn handle_subcommand(self, mut client: Client) -> Result<Client, Error>;
 }
 
 #[derive(Debug, Parser)]
@@ -103,7 +102,7 @@ pub enum AccountCommand {
 
 #[async_trait]
 impl HandleSubcommand for AccountCommand {
-    async fn handle_subcommand(self, mut client: Client) -> Result<(), Error> {
+    async fn handle_subcommand(self, mut client: Client) -> Result<Client, Error> {
         match self {
             AccountCommand::List { short } => {
                 let accounts = client.wallet.list_accounts().await?.data;
@@ -178,6 +177,7 @@ impl HandleSubcommand for AccountCommand {
                 );
             }
         }
-        Ok(())
+
+        Ok(client)
     }
 }

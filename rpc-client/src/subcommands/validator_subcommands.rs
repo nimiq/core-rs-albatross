@@ -1,15 +1,14 @@
+use anyhow::Error;
+use async_trait::async_trait;
 use clap::Parser;
+
 use nimiq_keys::Address;
 use nimiq_rpc_interface::consensus::ConsensusInterface;
 use nimiq_rpc_interface::validator::ValidatorInterface;
 
-use anyhow::Error;
-use async_trait::async_trait;
-
-use crate::Client;
-
 use super::accounts_subcommands::HandleSubcommand;
 use super::transactions_subcommands::{TxCommon, TxCommonWithValue};
+use crate::Client;
 
 #[derive(Debug, Parser)]
 pub enum ValidatorCommand {
@@ -140,7 +139,7 @@ pub enum ValidatorCommand {
 
 #[async_trait]
 impl HandleSubcommand for ValidatorCommand {
-    async fn handle_subcommand(self, mut client: Client) -> Result<(), Error> {
+    async fn handle_subcommand(self, mut client: Client) -> Result<Client, Error> {
         match self {
             ValidatorCommand::ValidatorAddress {} => {
                 println!("{:#?}", client.validator.get_address().await?);
@@ -379,6 +378,6 @@ impl HandleSubcommand for ValidatorCommand {
                 }
             }
         }
-        Ok(())
+        Ok(client)
     }
 }

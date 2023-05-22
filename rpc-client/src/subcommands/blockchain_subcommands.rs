@@ -3,14 +3,14 @@ use async_trait::async_trait;
 use clap::ArgGroup;
 use clap::Parser;
 use futures::StreamExt;
+
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_rpc_interface::blockchain::BlockchainInterface;
 use nimiq_rpc_interface::types::LogType;
 
-use crate::Client;
-
 use super::accounts_subcommands::HandleSubcommand;
+use crate::Client;
 
 #[derive(Debug, Parser)]
 pub enum BlockchainCommand {
@@ -173,7 +173,7 @@ pub enum BlockchainCommand {
 
 #[async_trait]
 impl HandleSubcommand for BlockchainCommand {
-    async fn handle_subcommand(self, mut client: Client) -> Result<(), Error> {
+    async fn handle_subcommand(self, mut client: Client) -> Result<Client, Error> {
         match self {
             BlockchainCommand::Block {
                 block_hash,
@@ -366,6 +366,6 @@ impl HandleSubcommand for BlockchainCommand {
                 }
             }
         }
-        Ok(())
+        Ok(client)
     }
 }
