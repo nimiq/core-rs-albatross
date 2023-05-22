@@ -866,10 +866,10 @@ impl Network {
                             metrics.note_received_pubsub_message(&topic);
                         }
                         GossipsubEvent::Subscribed { peer_id, topic } => {
-                            debug!(%peer_id, %topic, "peer subscribed to topic");
+                            trace!(%peer_id, %topic, "peer subscribed to topic");
                         }
                         GossipsubEvent::Unsubscribed { peer_id, topic } => {
-                            debug!(%peer_id, %topic, "peer unsubscribed");
+                            trace!(%peer_id, %topic, "peer unsubscribed");
                         }
                         GossipsubEvent::GossipsubNotSupported { peer_id } => {
                             debug!(%peer_id, "gossipsub not supported");

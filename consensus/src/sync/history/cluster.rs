@@ -481,9 +481,8 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
 
         if batch_set.history_len > CHUNK_SIZE {
             log::info!(
-                "Downloading history for epoch #{}, batch set idx {}: {}/{} ({:.2}%)",
+                "Downloading history for epoch #{}: {}/{} ({:.2}%)",
                 batch_set.epoch_number(),
-                batch_set.batch_index,
                 batch_set.history.len(),
                 batch_set.history_len,
                 ((batch_set.history.len() + batch_set.history_offset) as f64

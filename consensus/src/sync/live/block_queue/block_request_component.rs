@@ -107,10 +107,6 @@ impl<N: Network> BlockRequestComponent<N> {
             .map(|response| response.blocks)
     }
 
-    pub fn add_peer(&self, peer_id: N::PeerId) {
-        self.peers.write().add_peer(peer_id);
-    }
-
     pub fn request_missing_blocks(
         &mut self,
         target_block_number: u32,
@@ -130,12 +126,8 @@ impl<N: Network> BlockRequestComponent<N> {
         self.pending_requests.contains(target_block_hash)
     }
 
-    pub fn num_peers(&self) -> usize {
-        self.peers.read().len()
-    }
-
-    pub fn peers(&self) -> Vec<N::PeerId> {
-        self.peers.read().peers().clone()
+    pub fn add_peer(&self, peer_id: N::PeerId) {
+        self.peers.write().add_peer(peer_id);
     }
 
     pub fn take_peer(&self, peer_id: &N::PeerId) -> Option<N::PeerId> {
@@ -143,6 +135,14 @@ impl<N: Network> BlockRequestComponent<N> {
             return Some(*peer_id);
         }
         None
+    }
+
+    pub fn num_peers(&self) -> usize {
+        self.peers.read().len()
+    }
+
+    pub fn peers(&self) -> Vec<N::PeerId> {
+        self.peers.read().peers().clone()
     }
 
     pub fn peer_list(&self) -> Arc<RwLock<PeerList<N>>> {

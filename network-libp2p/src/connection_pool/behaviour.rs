@@ -312,7 +312,7 @@ impl ConnectionPoolBehaviour {
     /// Note that this only takes effect if `start_connecting` function has
     /// been previously called.
     pub fn maintain_peers(&mut self) {
-        debug!(
+        trace!(
             peer_ids = %self.peer_ids,
             addresses = %self.addresses,
             "Maintaining peers"

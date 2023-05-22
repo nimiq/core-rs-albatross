@@ -164,7 +164,7 @@ impl<N: Network> BlockQueue<N> {
 
         if block_number < head_height.saturating_sub(self.config.tolerate_past_max) {
             log::warn!(
-                "Discarding block {} earlier than toleration window (max {})",
+                "Discarding block {} - too far behind (min {})",
                 block,
                 head_height - self.config.tolerate_past_max,
             );
@@ -181,7 +181,7 @@ impl<N: Network> BlockQueue<N> {
             }
         } else if block_number > head_height + self.config.window_ahead_max {
             log::warn!(
-                "Discarding block {} outside of buffer window (max {})",
+                "Discarding block {} - too far ahead (max {})",
                 block,
                 head_height + self.config.window_ahead_max,
             );
@@ -193,7 +193,7 @@ impl<N: Network> BlockQueue<N> {
         } else if self.buffer.len() >= self.config.buffer_max {
             // TODO: This does not account for the nested map
             log::warn!(
-                "Discarding block {}, buffer full (max {})",
+                "Discarding block {} - buffer full (max {})",
                 block,
                 self.buffer.len(),
             );
@@ -201,7 +201,7 @@ impl<N: Network> BlockQueue<N> {
         } else if block_number <= macro_height {
             // Block is from a previous batch/epoch, discard it.
             log::warn!(
-                "Discarding block {}, we're already at macro block #{}",
+                "Discarding block {} - we're already at macro block #{}",
                 block,
                 macro_height
             );
