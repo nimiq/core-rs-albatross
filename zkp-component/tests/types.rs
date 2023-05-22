@@ -4,7 +4,7 @@ use ark_groth16::Proof;
 use beserial::{Deserialize, Serialize};
 use nimiq_block::MacroBlock;
 use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue};
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake2sHash;
 use nimiq_primitives::policy::Policy;
 use nimiq_test_utils::zkp_test_data::ZKP_TEST_KEYS_PATH;
 use nimiq_zkp_component::types::{ProofInput, ZKPState, ZKProof};
@@ -51,7 +51,7 @@ fn it_serializes_and_deserializes_to_bytes_zk_proof() {
 fn it_serializes_and_deserializes_zkp_state() {
     let state = ZKPState {
         latest_pks: vec![Default::default(); 512],
-        latest_header_hash: Blake2bHash::default(),
+        latest_header_hash: Blake2sHash::default(),
         latest_block_number: Policy::blocks_per_epoch(),
         latest_proof: Some(Proof::default()),
     };
@@ -61,7 +61,7 @@ fn it_serializes_and_deserializes_zkp_state() {
 
     let state = ZKPState {
         latest_pks: vec![],
-        latest_header_hash: Blake2bHash::default(),
+        latest_header_hash: Blake2sHash::default(),
         latest_block_number: 0,
         latest_proof: None,
     };
@@ -74,7 +74,7 @@ fn it_serializes_and_deserializes_zkp_state() {
 fn it_serializes_and_deserializes_proof_input() {
     let proof_input = ProofInput {
         latest_pks: vec![Default::default()],
-        latest_header_hash: Blake2bHash::default(),
+        latest_header_hash: Blake2sHash::default(),
         block: MacroBlock::default(),
         previous_proof: Some(Proof::default()),
         genesis_state: [2; 95],
@@ -86,7 +86,7 @@ fn it_serializes_and_deserializes_proof_input() {
 
     let proof_input = ProofInput {
         latest_pks: vec![],
-        latest_header_hash: Blake2bHash::default(),
+        latest_header_hash: Blake2sHash::default(),
         block: MacroBlock::default(),
         previous_proof: None,
         genesis_state: [0; 95],

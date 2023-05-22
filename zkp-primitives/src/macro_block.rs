@@ -2,8 +2,9 @@ use std::ops::Mul;
 
 use ark_ec::Group;
 use ark_mnt6_753::{Fr, G1Projective};
+use beserial::Serialize;
 use nimiq_bls::Signature;
-use nimiq_hash::{Blake2sHash, Hash, HashOutput};
+use nimiq_hash::{Blake2sHash, Hash, SerializeContent};
 use nimiq_primitives::policy::Policy;
 use num_traits::identities::Zero;
 
@@ -15,7 +16,7 @@ pub struct MacroBlock {
     /// The Tendermint round number for this block.
     pub round_number: u32,
     /// This is simply the Blake2b hash of the entire macro block header.
-    pub header_hash: [u8; 32],
+    pub header_hash: Blake2sHash,
     /// This is the aggregated signature of the signers for this block.
     pub signature: G1Projective,
     /// This is a bitmap stating which validators signed this block.
@@ -23,8 +24,14 @@ pub struct MacroBlock {
 }
 
 impl MacroBlock {
+    pub const TENDERMINT_STEP: u8 = 0x04;
+
     /// This function generates a macro block that has no signature or bitmap.
-    pub fn without_signatures(block_number: u32, round_number: u32, header_hash: [u8; 32]) -> Self {
+    pub fn without_signatures(
+        block_number: u32,
+        round_number: u32,
+        header_hash: Blake2sHash,
+    ) -> Self {
         MacroBlock {
             block_number,
             round_number,
@@ -36,9 +43,9 @@ impl MacroBlock {
 
     /// This function signs a macro block given a validator's secret key and signer id (which is
     /// simply the position in the signer bitmap).
-    pub fn sign(&mut self, sk: &Fr, signer_id: usize, pk_tree_root: &[u8]) {
+    pub fn sign(&mut self, sk: &Fr, signer_id: usize) {
         // Generate the hash point for the signature.
-        let hash_point = self.hash(pk_tree_root);
+        let hash_point = self.hash();
 
         // Generates the signature.
         let signature = hash_point.mul(sk);
@@ -62,26 +69,8 @@ impl MacroBlock {
     ///     4. Finally, we take the second hash and map it to an elliptic curve point using the
     ///        "try-and-increment" method.
     /// The function || means concatenation.
-    pub fn hash(&self, pk_tree_root: &[u8]) -> G1Projective {
-        let mut first_bytes = self.header_hash.to_vec();
-
-        first_bytes.extend(pk_tree_root);
-
-        let first_hash = first_bytes.hash::<Blake2sHash>();
-
-        let mut second_bytes = vec![0x04];
-
-        second_bytes.extend_from_slice(&self.round_number.to_be_bytes());
-
-        second_bytes.extend_from_slice(&self.block_number.to_be_bytes());
-
-        second_bytes.push(0x01);
-
-        second_bytes.extend_from_slice(first_hash.as_bytes());
-
-        let second_hash = second_bytes.hash::<Blake2sHash>();
-
-        Signature::hash_to_g1(second_hash)
+    pub fn hash(&self) -> G1Projective {
+        Signature::hash_to_g1(Hash::hash::<Blake2sHash>(self)) // PITODO take clone away
     }
 }
 
@@ -90,10 +79,31 @@ impl Default for MacroBlock {
         MacroBlock {
             block_number: 0,
             round_number: 0,
-            header_hash: [0; 32],
+            header_hash: Blake2sHash::default(),
             signature: G1Projective::generator(),
             signer_bitmap: vec![true; Policy::SLOTS as usize],
         }
+    }
+}
+impl Hash for MacroBlock {}
+
+impl SerializeContent for MacroBlock {
+    fn serialize_content<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<usize> {
+        // First of all serialize step as this also serves as the unique prefix for this message type.
+        let mut size = Self::TENDERMINT_STEP.serialize(writer)?;
+
+        // serialize the round number
+        size += self.round_number.serialize(writer)?;
+
+        // serialize the block number
+        size += self.block_number.serialize(writer)?;
+
+        // serialize the proposal hash
+        let proposal_hash = Some(self.header_hash.clone());
+        size += proposal_hash.serialize(writer)?;
+
+        // And return the size
+        Ok(size)
     }
 }
 
@@ -112,7 +122,6 @@ mod tests {
     use nimiq_utils::key_rng::SecureGenerate;
 
     use super::*;
-    use crate::pk_tree_construct;
 
     #[test]
     fn hash_and_sign_works() {
@@ -148,19 +157,14 @@ mod tests {
 
         block.body = Some(body);
 
-        // Get the pk_tree_root.
-        let public_keys = validators.voting_keys_g2();
-
-        let pk_tree_root = pk_tree_construct(public_keys);
-
         // Get the header hash.
-        let header_hash = block.hash();
+        let header_hash = block.hash_blake2s();
 
         // Create the zkp_primitives MacroBlock.
-        let mut zkp_block = MacroBlock::without_signatures(0, 0, header_hash.into());
+        let mut zkp_block = MacroBlock::without_signatures(0, 0, header_hash);
 
         for (i, sk) in validator_keys.iter().enumerate() {
-            zkp_block.sign(sk, i, &pk_tree_root);
+            zkp_block.sign(sk, i);
         }
 
         // Create the TendermintProof using our signature.

@@ -74,31 +74,21 @@ pub fn simulate_merger_wrapper(
 
     let genesis_block_number = genesis_block.block_number();
     let genesis_header_hash = genesis_block.hash().into();
-    let genesis_pk_tree_root = genesis_block
-        .pk_tree_root()
-        .expect("Missing pk tree root in macro block.");
 
     let final_block_number = block.block_number();
     let final_header_hash = block.hash().into();
-    let final_pk_tree_root = block
-        .pk_tree_root()
-        .expect("Missing pk tree root in macro block.");
 
     // Prepare the inputs.
     let mut inputs = vec![];
 
     inputs.append(
-        &mut state_commitment(
-            genesis_block_number,
-            &genesis_header_hash,
-            &genesis_pk_tree_root,
-        )
-        .to_field_elements()
-        .unwrap(),
+        &mut state_commitment(genesis_block_number, &genesis_header_hash)
+            .to_field_elements()
+            .unwrap(),
     );
 
     inputs.append(
-        &mut state_commitment(final_block_number, &final_header_hash, &final_pk_tree_root)
+        &mut state_commitment(final_block_number, &final_header_hash)
             .to_field_elements()
             .unwrap(),
     );

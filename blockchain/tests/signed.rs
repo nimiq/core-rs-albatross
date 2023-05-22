@@ -88,7 +88,7 @@ fn test_replay() {
     block.header.block_number = 1;
 
     // create hash and prepare message
-    let block_hash = block.zkp_hash(true);
+    let block_hash = block.hash_blake2s();
 
     let validators = blockchain.current_validators().unwrap();
 

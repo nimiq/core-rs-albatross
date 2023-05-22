@@ -143,7 +143,7 @@ impl TemporaryBlockProducer {
             );
 
             // Calculate the block hash.
-            let block_hash = macro_block_proposal.zkp_hash(true);
+            let block_hash = macro_block_proposal.hash_blake2s();
 
             // Get validator set and make sure it exists.
             let validators = blockchain

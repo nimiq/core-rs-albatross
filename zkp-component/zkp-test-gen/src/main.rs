@@ -24,7 +24,7 @@ use nimiq_zkp_circuits::setup::{load_verifying_key_from_file, setup};
 use nimiq_zkp_component::{
     proof_gen_utils::generate_new_proof, proof_utils::validate_proof, types::ZKPState,
 };
-use nimiq_zkp_primitives::{pk_tree_construct, state_commitment, NanoZKPError};
+use nimiq_zkp_primitives::{state_commitment, NanoZKPError};
 use parking_lot::RwLock;
 use tracing_subscriber::{filter::Targets, prelude::*};
 
@@ -99,11 +99,8 @@ async fn produce_two_consecutive_valid_zk_proofs() {
     let genesis_block = network_info.genesis_block().unwrap_macro();
     let zkp_state = ZKPState::with_genesis(&genesis_block).expect("Invalid genesis block");
 
-    let genesis_state = state_commitment(
-        genesis_block.block_number(),
-        &genesis_block.hash().into(),
-        &pk_tree_construct(zkp_state.latest_pks.clone()),
-    );
+    let genesis_state =
+        state_commitment(genesis_block.block_number(), &genesis_block.hash().into());
 
     log::info!("Going to wait for the 1st proof");
     // Waits for the proof generation and verifies the proof.

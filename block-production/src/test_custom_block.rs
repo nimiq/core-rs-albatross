@@ -313,13 +313,8 @@ fn next_macro_block_proposal(
         None
     };
 
-    let pk_tree_root = validators
-        .as_ref()
-        .and_then(|validators| MacroBlock::calc_pk_tree_root(validators).ok());
-
     let body = MacroBody {
         validators,
-        pk_tree_root,
         lost_reward_set,
         disabled_set,
         transactions: reward_transactions,
@@ -419,7 +414,7 @@ pub fn next_macro_block(
 
     let macro_block_proposal = next_macro_block_proposal(signing_key, blockchain, config);
 
-    let block_hash = macro_block_proposal.zkp_hash(true);
+    let block_hash = macro_block_proposal.hash_blake2s();
 
     let validators =
         blockchain.get_validators_for_epoch(Policy::epoch_at(blockchain.block_number() + 1), None);

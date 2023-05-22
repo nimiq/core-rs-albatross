@@ -5,14 +5,17 @@ use ark_r1cs_std::{
     uint8::UInt8,
 };
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
-use nimiq_primitives::policy::Policy;
-use nimiq_zkp_primitives::{PEDERSEN_PARAMETERS, PK_TREE_BREADTH};
+use nimiq_primitives::{policy::Policy, slots::PK_TREE_BREADTH};
+use nimiq_zkp_primitives::PEDERSEN_PARAMETERS;
 use rand::{distributions::Standard, prelude::Distribution};
 
-use crate::gadgets::{
-    bits::BitVec,
-    mnt6::{DefaultPedersenHashGadget, DefaultPedersenParametersVar},
-    serialize::SerializeGadget,
+use crate::{
+    blake2s::evaluate_blake2s,
+    gadgets::{
+        bits::BitVec,
+        mnt6::{DefaultPedersenHashGadget, DefaultPedersenParametersVar},
+        serialize::SerializeGadget,
+    },
 };
 
 /// This is the leaf subcircuit of the PKTreeCircuit. This circuit main function is to process the
@@ -38,7 +41,7 @@ pub struct PKTreeLeafCircuit {
     pks: Vec<G2Projective>,
 
     // Inputs (public)
-    pk_node_hash: [u8; 95],
+    pk_node_hash: [u8; 32],
     agg_pk_commitment: [u8; 95],
     signer_bitmap_chunk: Vec<bool>,
 }
@@ -46,7 +49,7 @@ pub struct PKTreeLeafCircuit {
 impl PKTreeLeafCircuit {
     pub fn new(
         pks: Vec<G2Projective>,
-        pk_node_hash: [u8; 95],
+        pk_node_hash: [u8; 32],
         agg_pk_commitment: [u8; 95],
         signer_bitmap: Vec<bool>,
     ) -> Self {
@@ -86,8 +89,8 @@ impl ConstraintSynthesizer<MNT6Fq> for PKTreeLeafCircuit {
         for item in pks_var.iter() {
             bytes.extend(item.serialize_compressed(cs.clone())?);
         }
-        let leaf_hash = DefaultPedersenHashGadget::evaluate(&bytes, &pedersen_generators_var)?;
-        let leaf_hash_bytes = leaf_hash.serialize_compressed(cs.clone())?;
+
+        let leaf_hash_bytes = evaluate_blake2s(&bytes)?;
         leaf_hash_bytes.enforce_equal(&pk_node_hash_bytes)?;
 
         // Calculate the aggregate public key.
@@ -123,7 +126,7 @@ impl Distribution<PKTreeLeafCircuit> for Standard {
     fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> PKTreeLeafCircuit {
         let pks = vec![G2Projective::rand(rng); Policy::SLOTS as usize / PK_TREE_BREADTH];
 
-        let mut pk_tree_root = [0u8; 95];
+        let mut pk_tree_root = [0u8; 32];
         rng.fill_bytes(&mut pk_tree_root);
 
         let mut agg_pk_commitment = [0u8; 95];

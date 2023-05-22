@@ -83,8 +83,7 @@ pub enum BlockError {
 
     #[error("Incorrect validators")]
     InvalidValidators,
-    #[error("Incorrect PK Tree root")]
-    InvalidPkTreeRoot,
+
     #[error("Incorrect reward transactions")]
     InvalidRewardTransactions,
 

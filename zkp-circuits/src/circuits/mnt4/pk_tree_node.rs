@@ -33,8 +33,8 @@ pub struct PKTreeNodeCircuit {
     r_proof: Proof<MNT4_753>,
 
     // Inputs (public)
-    l_pk_node_hash: [u8; 95],
-    r_pk_node_hash: [u8; 95],
+    l_pk_node_hash: [u8; 32],
+    r_pk_node_hash: [u8; 32],
     l_agg_pk_commitment: [u8; 95],
     r_agg_pk_commitment: [u8; 95],
     signer_bitmap_chunk: Vec<bool>,
@@ -46,8 +46,8 @@ impl PKTreeNodeCircuit {
         vk_child: VerifyingKey<MNT4_753>,
         l_proof: Proof<MNT4_753>,
         r_proof: Proof<MNT4_753>,
-        l_pk_node_hash: [u8; 95],
-        r_pk_node_hash: [u8; 95],
+        l_pk_node_hash: [u8; 32],
+        r_pk_node_hash: [u8; 32],
         l_agg_pk_commitment: [u8; 95],
         r_agg_pk_commitment: [u8; 95],
         signer_bitmap_chunk: Vec<bool>,
@@ -85,9 +85,9 @@ impl PKTreeNodeCircuit {
         let mut pk_node_hash = [0u8; 95];
         rng.fill_bytes(&mut pk_node_hash);
 
-        let mut l_pk_node_hash = [0u8; 95];
+        let mut l_pk_node_hash = [0u8; 32];
         rng.fill_bytes(&mut l_pk_node_hash);
-        let mut r_pk_node_hash = [0u8; 95];
+        let mut r_pk_node_hash = [0u8; 32];
         rng.fill_bytes(&mut r_pk_node_hash);
 
         let mut l_agg_pk_commitment = [0u8; 95];

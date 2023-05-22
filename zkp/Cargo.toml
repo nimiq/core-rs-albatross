@@ -29,6 +29,8 @@ thiserror = "1.0"
 
 beserial = { path = "../beserial", features = ["derive"]}
 nimiq-bls = { path = "../bls" }
+nimiq-hash = { path = "../hash" }
+nimiq-keys = { path = "../keys" }
 nimiq-primitives = { path = "../primitives", features = ["policy", "networks"] }
 nimiq-zkp-circuits = { path = "../zkp-circuits" }
 nimiq-zkp-primitives = { path = "../zkp-primitives" }

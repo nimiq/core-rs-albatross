@@ -10,16 +10,18 @@ use ark_mnt6_753::{
 };
 use ark_r1cs_std::prelude::{AllocVar, Boolean, EqGadget, UInt32, UInt8};
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
+use nimiq_hash::Blake2sHash;
 use nimiq_primitives::policy::Policy;
 use nimiq_zkp_primitives::{MacroBlock, PEDERSEN_PARAMETERS};
 use rand::Rng;
 
 use super::pk_tree_node::{hash_g2, PkInnerNodeWindow};
-use crate::gadgets::{
-    mnt6::{DefaultPedersenParametersVar, MacroBlockGadget, StateCommitmentGadget},
-    pedersen::PedersenHashGadget,
-    recursive_input::RecursiveInputVar,
-    serialize::SerializeGadget,
+use crate::{
+    blake2s::evaluate_blake2s,
+    gadgets::{
+        mnt6::{DefaultPedersenParametersVar, MacroBlockGadget, StateCommitmentGadget},
+        recursive_input::RecursiveInputVar,
+    },
 };
 
 /// This is the macro block circuit. It takes as inputs the previous state commitment and final state commitment
@@ -35,12 +37,12 @@ pub struct MacroBlockCircuit {
 
     // Witnesses (private)
     proof: Proof<MNT6_753>,
-    prev_pk_tree_root: [u8; 95],
+    prev_pk_tree_root: [u8; 32],
     prev_header_hash: [u8; 32],
-    final_pk_tree_root: [u8; 95],
+    final_pk_tree_root: [u8; 32],
     block: MacroBlock,
-    l_pk_node_hash: [u8; 95],
-    r_pk_node_hash: [u8; 95],
+    l_pk_node_hash: [u8; 32],
+    r_pk_node_hash: [u8; 32],
     l_agg_pk_commitment: G2Projective,
     r_agg_pk_commitment: G2Projective,
 
@@ -53,12 +55,12 @@ impl MacroBlockCircuit {
     pub fn new(
         vk_pk_tree: VerifyingKey<MNT6_753>,
         proof: Proof<MNT6_753>,
-        prev_pk_tree_root: [u8; 95],
+        prev_pk_tree_root: [u8; 32],
         prev_header_hash: [u8; 32],
-        final_pk_tree_root: [u8; 95],
+        final_pk_tree_root: [u8; 32],
         block: MacroBlock,
-        l_pk_node_hash: [u8; 95],
-        r_pk_node_hash: [u8; 95],
+        l_pk_node_hash: [u8; 32],
+        r_pk_node_hash: [u8; 32],
         l_agg_pk_commitment: G2Projective,
         r_agg_pk_commitment: G2Projective,
         prev_state_commitment: [u8; 95],
@@ -87,7 +89,7 @@ impl MacroBlockCircuit {
             c: G1Affine::rand(rng),
         };
 
-        let mut prev_pk_tree_root = [0u8; 95];
+        let mut prev_pk_tree_root = [0u8; 32];
         rng.fill_bytes(&mut prev_pk_tree_root);
 
         let mut prev_header_hash = [0u8; 32];
@@ -97,7 +99,7 @@ impl MacroBlockCircuit {
 
         let round_number = u32::rand(rng);
 
-        let mut final_pk_tree_root = [0u8; 95];
+        let mut final_pk_tree_root = [0u8; 32];
         rng.fill_bytes(&mut final_pk_tree_root);
 
         let mut prev_state_commitment = [0u8; 95];
@@ -108,6 +110,7 @@ impl MacroBlockCircuit {
 
         let mut header_hash = [0u8; 32];
         rng.fill_bytes(&mut header_hash);
+        let header_hash = Blake2sHash::from(header_hash);
 
         let signature = G1Projective::rand(rng);
 
@@ -124,10 +127,10 @@ impl MacroBlockCircuit {
             signer_bitmap,
         };
 
-        let mut l_pk_node_hash = [0u8; 95];
+        let mut l_pk_node_hash = [0u8; 32];
         rng.fill_bytes(&mut l_pk_node_hash);
 
-        let mut r_pk_node_hash = [0u8; 95];
+        let mut r_pk_node_hash = [0u8; 32];
         rng.fill_bytes(&mut r_pk_node_hash);
 
         let l_agg_commitment = G2Projective::rand(rng);
@@ -247,11 +250,7 @@ impl ConstraintSynthesizer<MNT6Fq> for MacroBlockCircuit {
         let mut pk_node_hash_bytes = vec![];
         pk_node_hash_bytes.extend_from_slice(&l_pk_node_hash_bytes);
         pk_node_hash_bytes.extend_from_slice(&r_pk_node_hash_bytes);
-        let pedersen_hash = PedersenHashGadget::<_, _, PkInnerNodeWindow>::evaluate(
-            &pk_node_hash_bytes,
-            &pedersen_generators_var,
-        )?;
-        let pk_node_hash_bytes = pedersen_hash.serialize_compressed(cs.clone())?;
+        let pk_node_hash_bytes = evaluate_blake2s(&pk_node_hash_bytes)?;
 
         pk_node_hash_bytes.enforce_equal(&prev_pk_tree_root_bytes)?;
 

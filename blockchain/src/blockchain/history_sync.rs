@@ -73,7 +73,7 @@ impl Blockchain {
         }
 
         // Perform block intrinsic checks.
-        block.verify(true)?;
+        block.verify()?;
 
         // Verify that the block is a valid successor to the current macro head.
         block.verify_macro_successor(this.state.macro_info.head.unwrap_macro_ref())?;

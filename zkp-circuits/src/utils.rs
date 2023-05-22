@@ -1,8 +1,11 @@
 use ark_ec::Group;
 use ark_mnt6_753::{Fr as MNT6Fr, G2Projective as G2MNT6};
 use ark_std::{ops::MulAssign, UniformRand};
-use nimiq_primitives::policy::Policy;
-use nimiq_zkp_primitives::{pk_tree_construct, state_commitment, MacroBlock};
+use nimiq_bls::PublicKey as BlsPublicKey;
+use nimiq_hash::Blake2sHash;
+use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
+use nimiq_primitives::{policy::Policy, slots::ValidatorsBuilder};
+use nimiq_zkp_primitives::{state_commitment, MacroBlock};
 use rand::{rngs::SmallRng, seq::SliceRandom, RngCore, SeedableRng};
 
 /// Transforms a u8 into a vector of little endian bits.
@@ -25,7 +28,6 @@ pub fn create_test_blocks(
 ) -> (
     Vec<G2MNT6>,
     [u8; 32],
-    [u8; 95],
     Vec<G2MNT6>,
     MacroBlock,
     Option<[u8; 95]>,
@@ -80,11 +82,18 @@ pub fn create_test_blocks(
     // Create the final header hash.
     let mut final_header_hash = [0u8; 32];
     rng.fill_bytes(&mut final_header_hash);
+    let final_header_hash = Blake2sHash::from(final_header_hash);
 
     // There is no more randomness being generated from this point on.
 
-    // Calculate final public key tree root.
-    let final_pk_tree_root = pk_tree_construct(final_pks.clone());
+    let mut validators = ValidatorsBuilder::new();
+    for pk in &final_pks {
+        validators.push(
+            Address::default(),
+            BlsPublicKey::new(pk.clone()),
+            SchnorrPublicKey::default(),
+        );
+    }
 
     // Create the macro block.
     let mut block = MacroBlock::without_signatures(
@@ -95,15 +104,13 @@ pub fn create_test_blocks(
 
     for i in 0..Policy::SLOTS as usize {
         if signer_bitmap[i] {
-            block.sign(&prev_sks[i], i, &final_pk_tree_root);
+            block.sign(&prev_sks[i], i);
         }
     }
 
-    let prev_pk_tree_root = pk_tree_construct(prev_pks.clone());
-
     // If this is the first index (genesis), also return the genesis state commitment.
     let genesis_state_commitment = if index == 0 {
-        Some(state_commitment(0, &prev_header_hash, &prev_pk_tree_root))
+        Some(state_commitment(0, &prev_header_hash))
     } else {
         None
     };
@@ -112,7 +119,6 @@ pub fn create_test_blocks(
     (
         prev_pks,
         prev_header_hash,
-        prev_pk_tree_root,
         final_pks,
         block,
         genesis_state_commitment,

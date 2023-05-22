@@ -27,10 +27,10 @@ fn main() {
     println!("====== Generating random inputs ======");
 
     // Get initial random parameters.
-    let (_, genesis_header_hash, genesis_pk_tree_root, _, _, _) = create_test_blocks(0);
+    let (_, genesis_header_hash, _, _, _) = create_test_blocks(0);
 
     // Get final random parameters.
-    let (_, final_header_hash, final_pk_tree_root, _, _, _) = create_test_blocks(number_epochs);
+    let (_, final_header_hash, _, _, _) = create_test_blocks(number_epochs);
 
     // Load the proof from file.
     let mut file = File::open(format!("proofs/proof_epoch_{number_epochs}.bin")).unwrap();
@@ -45,10 +45,8 @@ fn main() {
     let result = verify(
         0,
         genesis_header_hash,
-        &genesis_pk_tree_root,
         Policy::blocks_per_epoch() * number_epochs as u32,
         final_header_hash,
-        &final_pk_tree_root,
         proof,
         &ZKP_VERIFYING_KEY,
     )

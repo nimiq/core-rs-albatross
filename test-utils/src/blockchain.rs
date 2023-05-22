@@ -183,7 +183,7 @@ pub fn sign_macro_block(
     };
 
     // Calculate block hash.
-    let block_hash = block.zkp_hash(true);
+    let block_hash = block.hash_blake2s();
 
     // Create the precommit tendermint vote.
     let precommit = TendermintVote {

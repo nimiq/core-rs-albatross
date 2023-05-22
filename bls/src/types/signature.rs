@@ -32,7 +32,7 @@ impl Signature {
         let mut bytes = vec![];
 
         for i in 0..3 {
-            let blake2x = Blake2sWithParameterBlock::new_blake2x(i, 0xffff); // PITODO: 96
+            let blake2x = Blake2sWithParameterBlock::new_blake2x(i, 0xffff);
 
             let mut result = blake2x.evaluate(hash.as_bytes());
 

@@ -7,7 +7,7 @@ use nimiq_hash_derive::SerializeContent;
 use nimiq_primitives::{policy::Policy, slots::Validators};
 use nimiq_transaction::reward::RewardTransaction;
 use nimiq_vrf::VrfSeed;
-use nimiq_zkp_primitives::{pk_tree_construct, MacroBlock as ZKPMacroBlock, PK_TREE_BREADTH};
+use nimiq_zkp_primitives::MacroBlock as ZKPMacroBlock;
 use thiserror::Error;
 
 use crate::{
@@ -37,44 +37,6 @@ impl MacroBlock {
     /// Returns the Blake2s hash of the block header.
     pub fn hash_blake2s(&self) -> Blake2sHash {
         self.header.hash()
-    }
-
-    /// Calculates the following function:
-    ///     zkp_hash = Blake2s( Blake2b(header) || pk_tree_root )
-    /// Where `pk_tree_root` is the root of a special Merkle tree containing the BLS public keys of
-    /// the validators for the next epoch.
-    /// The `pk_tree_root` is necessary for the Nano ZK proofs and needs to be inserted into the
-    /// signature for the macro blocks. The easiest way is to calculate this modified hash and then
-    /// use it as the signature message.
-    /// Also, the final hash is done with Blake2s because the ZKP circuits can only handle Blake2s.
-    /// Only election blocks have the `validators` field, which contain the validators for the next
-    /// epoch, so for checkpoint blocks the `pk_tree_root` doesn't exist. Then, for checkpoint blocks
-    /// this function simply returns:
-    ///     nano_zkp_hash = Blake2s( Blake2b(header) )
-    ///
-    /// If the header is an election macro block header the body must not be None. If it is this function will panic.
-    pub fn zkp_hash(&self, recalculate_pk_tree: bool) -> Blake2sHash {
-        self.header
-            .zkp_hash_with_body(&self.body, recalculate_pk_tree)
-    }
-
-    /// Calculates the PKTree root from the given validators.
-    pub fn calc_pk_tree_root(validators: &Validators) -> Result<Vec<u8>, BlockError> {
-        // Get the public keys.
-        let public_keys = validators.voting_keys_g2();
-
-        // Check the expected number of validators.
-        // This must be checked before `pk_tree_construct` since it assumes a correct value.
-        if public_keys.len() != Policy::SLOTS as usize || public_keys.len() % PK_TREE_BREADTH != 0 {
-            warn!(
-                num_pks = public_keys.len(),
-                "Unexpected number of validator public keys"
-            );
-            return Err(BlockError::InvalidValidators);
-        }
-
-        // Create the tree
-        Ok(pk_tree_construct(public_keys).to_vec())
     }
 
     /// Computes the next interlink from self.header.interlink
@@ -134,13 +96,6 @@ impl MacroBlock {
         Policy::epoch_at(self.header.block_number)
     }
 
-    /// Returns the pk tree root.
-    pub fn pk_tree_root(&self) -> Option<[u8; 95]> {
-        self.body.as_ref()?.pk_tree_root.as_ref()?[..]
-            .try_into()
-            .ok()
-    }
-
     /// Verifies that the block is valid for the given validators.
     pub(crate) fn verify_validators(&self, validators: &Validators) -> Result<(), BlockError> {
         // Verify the Tendermint proof.
@@ -165,7 +120,7 @@ impl<'a> TryFrom<&'a MacroBlock> for ZKPMacroBlock {
             Ok(ZKPMacroBlock {
                 block_number: block.block_number(),
                 round_number: proof.round,
-                header_hash: block.hash().into(),
+                header_hash: block.hash_blake2s(),
                 signature: proof.sig.signature.get_point(),
                 signer_bitmap: proof
                     .sig
@@ -178,7 +133,7 @@ impl<'a> TryFrom<&'a MacroBlock> for ZKPMacroBlock {
             Ok(ZKPMacroBlock::without_signatures(
                 block.block_number(),
                 0,
-                block.hash().into(),
+                block.hash_blake2s(),
             ))
         }
     }
@@ -227,64 +182,6 @@ pub struct MacroHeader {
     pub history_root: Blake2bHash,
 }
 
-impl MacroHeader {
-    /// Calculates the following function:
-    ///     nano_zkp_hash = Blake2s( Blake2b(header) || pk_tree_root )
-    /// Where `pk_tree_root` is the root of a special Merkle tree containing the BLS public keys of
-    /// the validators for the next epoch.
-    /// The `pk_tree_root` is necessary for the Nano ZK proofs and needs to be inserted into the
-    /// signature for the macro blocks. The easiest way is to calculate this modified hash and then
-    /// use it as the signature message.
-    /// Also, the final hash is done with Blake2s because the ZKP circuits can only handle Blake2s.
-    /// Only election blocks have the `validators` field, which contain the validators for the next
-    /// epoch, so for checkpoint blocks the `pk_tree_root` doesn't exist. Then, for checkpoint blocks
-    /// this function simply returns:
-    ///     nano_zkp_hash = Blake2s( Blake2b(header) )
-    ///
-    /// If the header is an election macro block header the body argument must not be `None`. If it is this function will panic.
-    pub fn zkp_hash_with_body(
-        &self,
-        body: &Option<MacroBody>,
-        force_recalculate_pk_tree: bool,
-    ) -> Blake2sHash {
-        if Policy::is_election_block_at(self.block_number) {
-            // Make sure the body exists if the header is an election macro block header.
-            let body = body
-                .as_ref()
-                .expect("Body must be present to calculate nano_zkp_hash for election blocks");
-            // Get the root from the body
-            let mut root = body.pk_tree_root.clone();
-            // Calculate the root in case it is none or the force_recalculation flag is set.
-            if root.is_none() || force_recalculate_pk_tree {
-                // For recalculation retrieve the validators
-                let validators = body
-                    .validators
-                    .as_ref()
-                    .expect("Validators must be present in election blocks");
-                // Start the calculation
-                root = Some(
-                    MacroBlock::calc_pk_tree_root(validators)
-                        .expect("pk tree root calculation for macro blocks must not fail."),
-                );
-            }
-            // Calculate the Blake2sHash with the root for election blocks.
-            self.nano_zkp_hash_with_root(root)
-        } else {
-            // Calculate the Blake2sHash with no root for checkpoint blocks, as they don't have one.
-            self.nano_zkp_hash_with_root(None)
-        }
-    }
-
-    /// Appends the pk_tree_root if existent to this headers Blake2b hash. Afterwards hashes to Blake2s.
-    pub fn nano_zkp_hash_with_root(&self, pk_tree_root: Option<Vec<u8>>) -> Blake2sHash {
-        let mut msg = self.hash::<Blake2bHash>().serialize_to_vec();
-        if let Some(mut root) = pk_tree_root {
-            msg.append(&mut root);
-        }
-        msg.hash()
-    }
-}
-
 impl Message for MacroHeader {
     const PREFIX: u8 = PREFIX_TENDERMINT_PROPOSAL;
 }
@@ -309,12 +206,6 @@ pub struct MacroBody {
     /// public key, their reward address and their assigned validator slots.
     /// Is only Some when the macro block is an election block.
     pub validators: Option<Validators>,
-    /// The root of a special Merkle tree over the next validator's voting keys. It is necessary to
-    /// verify the zero-knowledge proofs used in the light macro sync.
-    /// Is only Some when the macro block is an election block.
-    /// TODO: Change to fixed size array [u8; 95]
-    #[beserial(len_type(u8, limit = 96))]
-    pub pk_tree_root: Option<Vec<u8>>,
     /// A bitset representing which validator slots had their reward slashed at the time when this
     /// block was produced. It is used later on for reward distribution.
     pub lost_reward_set: BitSet,
@@ -328,33 +219,9 @@ pub struct MacroBody {
 }
 
 impl MacroBody {
-    pub(crate) fn verify(
-        &self,
-        is_election: bool,
-        check_pk_tree_root: bool,
-    ) -> Result<(), BlockError> {
+    pub(crate) fn verify(&self, is_election: bool) -> Result<(), BlockError> {
         if is_election != self.validators.is_some() {
             return Err(BlockError::InvalidValidators);
-        }
-
-        if is_election != self.pk_tree_root.is_some() {
-            return Err(BlockError::InvalidPkTreeRoot);
-        }
-
-        // If this is an election block and check_pk_tree_root is set,
-        // check if the pk_tree_root matches the validators.
-        if is_election && check_pk_tree_root {
-            match MacroBlock::calc_pk_tree_root(self.validators.as_ref().unwrap()) {
-                Ok(pk_tree_root) => {
-                    if pk_tree_root != *self.pk_tree_root.as_ref().unwrap() {
-                        return Err(BlockError::InvalidPkTreeRoot);
-                    }
-                }
-                Err(e) => {
-                    warn!(error=%e, "PK tree root building failed");
-                    return Err(e);
-                }
-            }
         }
 
         Ok(())

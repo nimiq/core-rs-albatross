@@ -55,17 +55,17 @@ impl StateCommitmentGadget {
 
 #[cfg(test)]
 mod tests {
-    use ark_mnt6_753::{Fq as MNT6Fq, G2Projective};
+    use ark_mnt6_753::Fq as MNT6Fq;
     use ark_r1cs_std::{
         prelude::{AllocVar, UInt32},
         R1CSVar,
     };
     use ark_relations::r1cs::ConstraintSystem;
     use ark_std::{test_rng, UniformRand};
+    use nimiq_hash::Blake2sHash;
     use nimiq_pedersen_generators::pedersen_generator_powers;
-    use nimiq_primitives::policy::Policy;
     use nimiq_test_log::test;
-    use nimiq_zkp_primitives::{pk_tree_construct, state_commitment};
+    use nimiq_zkp_primitives::state_commitment;
     use rand::RngCore;
 
     use super::*;
@@ -79,10 +79,6 @@ mod tests {
         // Create random number generator.
         let rng = &mut test_rng();
 
-        // Create random keys.
-        let g2_point = G2Projective::rand(rng);
-        let public_keys = vec![g2_point; Policy::SLOTS as usize];
-
         // Create random block number.
         let block_number = u32::rand(rng);
 
@@ -91,10 +87,10 @@ mod tests {
         rng.fill_bytes(&mut header_hash);
 
         // Construct the Merkle tree over the public keys.
-        let pk_tree_root = pk_tree_construct(public_keys);
+        let pk_tree_root = Blake2sHash::default().0;
 
         // Evaluate state commitment using the primitive version.
-        let primitive_comm = &state_commitment(block_number, &header_hash, &pk_tree_root);
+        let primitive_comm = &state_commitment(block_number, &header_hash);
 
         // Allocate the block number in the circuit.
         let block_number_var = UInt32::new_witness(cs.clone(), || Ok(block_number)).unwrap();

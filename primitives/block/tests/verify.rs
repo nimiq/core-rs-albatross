@@ -37,7 +37,7 @@ fn test_verify_header_version() {
     });
 
     // Error should remain at block level
-    assert_eq!(block.verify(false), Err(BlockError::UnsupportedVersion));
+    assert_eq!(block.verify(), Err(BlockError::UnsupportedVersion));
 
     // Fix the version and check that it passes
     micro_header.version = Policy::VERSION;
@@ -72,7 +72,7 @@ fn test_verify_header_extra_data() {
     });
 
     // Error should remain at block level
-    assert_eq!(block.verify(false), Err(BlockError::ExtraDataTooLarge));
+    assert_eq!(block.verify(), Err(BlockError::ExtraDataTooLarge));
 
     // Fix the extra data field and check that it passes
     micro_header.extra_data = vec![0; 32];
@@ -116,7 +116,7 @@ fn test_verify_body_root() {
     });
 
     // The body root check must fail
-    assert_eq!(block.verify(false), Err(BlockError::BodyHashMismatch));
+    assert_eq!(block.verify(), Err(BlockError::BodyHashMismatch));
 
     // Fix the body root and check that it passes
     micro_header.body_root = micro_body.hash();
@@ -126,7 +126,7 @@ fn test_verify_body_root() {
         body: Some(micro_body),
     });
 
-    assert_eq!(block.verify(false), Ok(()));
+    assert_eq!(block.verify(), Ok(()));
 }
 
 #[test]
@@ -170,7 +170,7 @@ fn test_verify_skip_block() {
     });
 
     // The skip block body should fail
-    assert_eq!(block.verify(false), Err(BlockError::InvalidSkipBlockBody));
+    assert_eq!(block.verify(), Err(BlockError::InvalidSkipBlockBody));
 
     // Fix the body with empty transactions and check that it passes
     micro_body.transactions = vec![];
@@ -181,7 +181,7 @@ fn test_verify_skip_block() {
         body: Some(micro_body),
     });
 
-    assert_eq!(block.verify(false), Ok(()));
+    assert_eq!(block.verify(), Ok(()));
 }
 
 #[test]
@@ -224,7 +224,7 @@ fn test_verify_micro_block_body_txns() {
     });
 
     // The body check should fail
-    assert_eq!(block.verify(false), Err(BlockError::DuplicateTransaction));
+    assert_eq!(block.verify(), Err(BlockError::DuplicateTransaction));
 
     // Fix the body with empty transactions and check that it passes
     txns_dup.pop();
@@ -236,7 +236,7 @@ fn test_verify_micro_block_body_txns() {
         body: Some(micro_body),
     });
 
-    assert_eq!(block.verify(false), Ok(()));
+    assert_eq!(block.verify(), Ok(()));
 
     // Now modify the validity start height
     let txns: Vec<ExecutedTransaction> = generate_transactions(
@@ -264,7 +264,7 @@ fn test_verify_micro_block_body_txns() {
     });
 
     // The body check should fail
-    assert_eq!(block.verify(false), Err(BlockError::ExpiredTransaction));
+    assert_eq!(block.verify(), Err(BlockError::ExpiredTransaction));
 }
 
 #[test]
@@ -318,7 +318,7 @@ fn test_verify_micro_block_body_fork_proofs() {
     });
 
     // The body check should fail
-    assert_eq!(block.verify(false), Err(BlockError::ForkProofsNotOrdered));
+    assert_eq!(block.verify(), Err(BlockError::ForkProofsNotOrdered));
 
     // Sort fork proofs and re-build block
     fork_proofs.sort();
@@ -334,7 +334,7 @@ fn test_verify_micro_block_body_fork_proofs() {
         body: Some(micro_body.clone()),
     });
 
-    assert_eq!(block.verify(false), Ok(()));
+    assert_eq!(block.verify(), Ok(()));
 
     // Lets have a duplicate fork proof
     fork_proofs.push(fork_proofs.last().unwrap().clone());
@@ -350,7 +350,7 @@ fn test_verify_micro_block_body_fork_proofs() {
         body: Some(micro_body.clone()),
     });
 
-    assert_eq!(block.verify(false), Err(BlockError::DuplicateForkProof));
+    assert_eq!(block.verify(), Err(BlockError::DuplicateForkProof));
 
     // Now modify the block height of the first header of the first fork proof
     let mut fork_proof = fork_proofs.pop().unwrap();
@@ -371,7 +371,7 @@ fn test_verify_micro_block_body_fork_proofs() {
     });
 
     // The first fork proof should no longer be valid
-    assert_eq!(block.verify(false), Err(BlockError::InvalidForkProof));
+    assert_eq!(block.verify(), Err(BlockError::InvalidForkProof));
 }
 
 #[test]
@@ -393,7 +393,6 @@ fn test_verify_election_macro_body() {
 
     let mut macro_body = MacroBody {
         validators: None,
-        pk_tree_root: None,
         lost_reward_set: BitSet::default(),
         disabled_set: BitSet::default(),
         transactions: vec![],
@@ -408,31 +407,18 @@ fn test_verify_election_macro_body() {
     });
 
     // The validators check should fail
-    assert_eq!(block.verify(false), Err(BlockError::InvalidValidators));
+    assert_eq!(block.verify(), Err(BlockError::InvalidValidators));
 
     // Fix the validators set
     macro_body.validators = Some(Validators::new(vec![]));
+
     macro_header.body_root = macro_body.hash();
     let block = Block::Macro(MacroBlock {
         header: macro_header.clone(),
         justification: None,
         body: Some(macro_body.clone()),
     });
-    // The PK tree root check should fail
-    assert_eq!(block.verify(false), Err(BlockError::InvalidPkTreeRoot));
-
-    // Fix the PK tree root set
-    macro_body.pk_tree_root = Some(vec![]);
-    macro_header.body_root = macro_body.hash();
-    let block = Block::Macro(MacroBlock {
-        header: macro_header.clone(),
-        justification: None,
-        body: Some(macro_body.clone()),
-    });
-
-    // Verification would fail since validators are empty
-    assert_eq!(block.verify(true), Err(BlockError::InvalidValidators));
 
     // Skipping the verification of the PK tree root should make the verify function to pass
-    assert_eq!(block.verify(false), Ok(()));
+    assert_eq!(block.verify(), Ok(()));
 }

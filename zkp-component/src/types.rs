@@ -13,7 +13,7 @@ use nimiq_block::MacroBlock;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue};
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake2sHash;
 use nimiq_network_interface::{
     network::{Network, Topic},
     request::{Handle, RequestCommon, RequestError, RequestMarker},
@@ -68,7 +68,7 @@ pub enum ZKPRequestEvent {
 #[derive(Clone, Debug, PartialEq)]
 pub struct ZKPState {
     pub latest_pks: Vec<G2MNT6>,
-    pub latest_header_hash: Blake2bHash,
+    pub latest_header_hash: Blake2sHash,
     pub latest_block_number: u32,
     pub latest_proof: Option<Proof<MNT6_753>>,
 }
@@ -301,7 +301,7 @@ fn ark_to_bserial_error(error: ArkSerializingError) -> BeserialSerializingError 
 pub struct ProofInput {
     pub block: MacroBlock,
     pub latest_pks: Vec<G2MNT6>,
-    pub latest_header_hash: Blake2bHash,
+    pub latest_header_hash: Blake2sHash,
     pub previous_proof: Option<Proof<MNT6_753>>,
     pub genesis_state: [u8; 95],
     pub prover_keys_path: PathBuf,
@@ -400,7 +400,7 @@ impl Deserialize for ProofInput {
             );
         }
 
-        let latest_header_hash: Blake2bHash = Deserialize::deserialize(reader)?;
+        let latest_header_hash: Blake2sHash = Deserialize::deserialize(reader)?;
 
         let is_some: bool = Deserialize::deserialize(reader)?;
         let mut previous_proof = None;

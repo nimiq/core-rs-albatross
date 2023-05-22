@@ -18,9 +18,12 @@ use nimiq_primitives::policy::Policy;
 use nimiq_zkp_primitives::PEDERSEN_PARAMETERS;
 use rand::Rng;
 
-use crate::gadgets::{
-    bits::BitVec, mnt6::DefaultPedersenParametersVar, pedersen::PedersenHashGadget,
-    recursive_input::RecursiveInputVar, serialize::SerializeGadget,
+use crate::{
+    blake2s::evaluate_blake2s,
+    gadgets::{
+        bits::BitVec, mnt6::DefaultPedersenParametersVar, pedersen::PedersenHashGadget,
+        recursive_input::RecursiveInputVar, serialize::SerializeGadget,
+    },
 };
 
 pub(super) type PkInnerNodeWindow = GenericWindow<4, MNT6Fq>;
@@ -61,13 +64,13 @@ pub struct PKTreeNodeCircuit {
     rl_agg_pk_commitment: G2Projective,
     rr_agg_pk_commitment: G2Projective,
 
-    ll_pk_node_hash: [u8; 95],
-    lr_pk_node_hash: [u8; 95],
-    rl_pk_node_hash: [u8; 95],
-    rr_pk_node_hash: [u8; 95],
+    ll_pk_node_hash: [u8; 32],
+    lr_pk_node_hash: [u8; 32],
+    rl_pk_node_hash: [u8; 32],
+    rr_pk_node_hash: [u8; 32],
 
     // Inputs (public)
-    pk_node_hash: [u8; 95],
+    pk_node_hash: [u8; 32],
     agg_pk_commitment: [u8; 95],
     signer_bitmap_chunk: Vec<bool>,
 }
@@ -82,11 +85,11 @@ impl PKTreeNodeCircuit {
         lr_agg_pk_commitment: G2Projective,
         rl_agg_pk_commitment: G2Projective,
         rr_agg_pk_commitment: G2Projective,
-        ll_pk_node_hash: [u8; 95],
-        lr_pk_node_hash: [u8; 95],
-        rl_pk_node_hash: [u8; 95],
-        rr_pk_node_hash: [u8; 95],
-        pk_node_hash: [u8; 95],
+        ll_pk_node_hash: [u8; 32],
+        lr_pk_node_hash: [u8; 32],
+        rl_pk_node_hash: [u8; 32],
+        rr_pk_node_hash: [u8; 32],
+        pk_node_hash: [u8; 32],
         agg_pk_commitment: [u8; 95],
         signer_bitmap_chunk: Vec<bool>,
     ) -> Self {
@@ -130,11 +133,11 @@ impl PKTreeNodeCircuit {
 
         let mut pk_node_hashes = vec![];
         for _ in 0..4 {
-            let mut pk_node_hash = [0u8; 95];
+            let mut pk_node_hash = [0u8; 32];
             rng.fill_bytes(&mut pk_node_hash);
             pk_node_hashes.push(pk_node_hash);
         }
-        let mut pk_node_hash = [0u8; 95];
+        let mut pk_node_hash = [0u8; 32];
         rng.fill_bytes(&mut pk_node_hash);
 
         let mut agg_pk_commitment = [0u8; 95];
@@ -242,29 +245,17 @@ impl ConstraintSynthesizer<MNT6Fq> for PKTreeNodeCircuit {
         let mut l_pk_node_hash_bytes = vec![];
         l_pk_node_hash_bytes.extend_from_slice(&ll_pk_node_hash_bytes);
         l_pk_node_hash_bytes.extend_from_slice(&lr_pk_node_hash_bytes);
-        let pedersen_hash = PedersenHashGadget::<_, _, PkInnerNodeWindow>::evaluate(
-            &l_pk_node_hash_bytes,
-            &pedersen_generators_var,
-        )?;
-        let l_pk_node_hash_bytes = pedersen_hash.serialize_compressed(cs.clone())?;
+        let l_pk_node_hash_bytes = evaluate_blake2s(&l_pk_node_hash_bytes)?;
 
         let mut r_pk_node_hash_bytes = vec![];
         r_pk_node_hash_bytes.extend_from_slice(&rl_pk_node_hash_bytes);
         r_pk_node_hash_bytes.extend_from_slice(&rr_pk_node_hash_bytes);
-        let pedersen_hash = PedersenHashGadget::<_, _, PkInnerNodeWindow>::evaluate(
-            &r_pk_node_hash_bytes,
-            &pedersen_generators_var,
-        )?;
-        let r_pk_node_hash_bytes = pedersen_hash.serialize_compressed(cs.clone())?;
+        let r_pk_node_hash_bytes = evaluate_blake2s(&r_pk_node_hash_bytes)?;
 
         let mut calculated_pk_node_hash_bytes = vec![];
         calculated_pk_node_hash_bytes.extend_from_slice(&l_pk_node_hash_bytes);
         calculated_pk_node_hash_bytes.extend_from_slice(&r_pk_node_hash_bytes);
-        let pedersen_hash = PedersenHashGadget::<_, _, PkInnerNodeWindow>::evaluate(
-            &calculated_pk_node_hash_bytes,
-            &pedersen_generators_var,
-        )?;
-        let calculated_pk_node_hash_bytes = pedersen_hash.serialize_compressed(cs)?;
+        let calculated_pk_node_hash_bytes = evaluate_blake2s(&calculated_pk_node_hash_bytes)?;
 
         calculated_pk_node_hash_bytes.enforce_equal(&pk_node_hash_bytes)?;
 

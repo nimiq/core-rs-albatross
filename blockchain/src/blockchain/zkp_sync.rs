@@ -50,7 +50,7 @@ impl Blockchain {
         }
 
         // Perform block intrinsic checks.
-        block.verify(false)?;
+        block.verify()?;
 
         // Prepare the inputs to verify the proof.
         let genesis_block = this
@@ -60,26 +60,16 @@ impl Blockchain {
         let genesis_hash = genesis_block.hash();
 
         let genesis_header_hash = <[u8; 32]>::from(genesis_hash.clone());
-        let genesis_pk_tree_root = genesis_block
-            .unwrap_macro_ref()
-            .pk_tree_root()
-            .ok_or(PushError::InvalidBlock(BlockError::InvalidPkTreeRoot))?;
         let final_block_number = block.block_number();
         let final_header_hash = <[u8; 32]>::from(block.hash());
-        let final_pk_tree_root = block
-            .unwrap_macro_ref()
-            .pk_tree_root()
-            .ok_or(PushError::InvalidBlock(BlockError::InvalidPkTreeRoot))?;
 
         // Verify the zk proof.
         if !trusted_proof {
             let verify_result = verify(
                 genesis_block.block_number(),
                 genesis_header_hash,
-                &genesis_pk_tree_root,
                 final_block_number,
                 final_header_hash,
-                &final_pk_tree_root,
                 proof,
                 &ZKP_VERIFYING_KEY,
             );
@@ -199,7 +189,7 @@ impl Blockchain {
         }
 
         // Perform block intrinsic checks.
-        block.verify(false)?;
+        block.verify()?;
 
         // Check if we have this block's successor.
         let prev_block = &this.state.election_head;
@@ -260,7 +250,7 @@ impl Blockchain {
         }
 
         // Perform block intrinsic checks.
-        block.verify(false)?;
+        block.verify()?;
 
         // Verify that the block is a valid macro successor to our current macro head.
         block.verify_macro_successor(this.state.macro_info.head.unwrap_macro_ref())?;

@@ -16,6 +16,8 @@
 //! ```
 use std::{cmp::max, collections::BTreeMap, slice::Iter};
 
+use ark_ec::CurveGroup;
+use ark_serialize::CanonicalSerialize;
 use beserial::{
     Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
     SerializingError, WriteBytesExt,
@@ -23,7 +25,12 @@ use beserial::{
 use nimiq_bls::{lazy::LazyPublicKey as LazyBlsPublicKey, G2Projective, PublicKey as BlsPublicKey};
 use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
 
-use crate::policy::Policy;
+use crate::{merkle_tree::merkle_tree_construct, policy::Policy};
+
+/// This is the depth of the PKTree circuit.
+pub const PK_TREE_DEPTH: usize = 5;
+/// This is the number of leaves in the PKTree circuit.
+pub const PK_TREE_BREADTH: usize = 2_usize.pow(PK_TREE_DEPTH as u32);
 
 /// A validator that owns some slots.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -158,6 +165,46 @@ impl Validators {
         }
 
         pks
+    }
+
+    /// This function is meant to calculate the public key tree "off-circuit". Generating the public key
+    /// tree with this function guarantees that it is compatible with the ZK circuit.
+    // These should be removed once pk_tree_root does something different than returning default
+    pub fn hash(&self) -> [u8; 32] {
+        let public_keys = self.voting_keys_g2();
+
+        // Checking that the number of public keys is equal to the number of validator slots.
+        assert_eq!(public_keys.len(), Policy::SLOTS as usize);
+
+        // Checking that the number of public keys is a multiple of the number of leaves.
+        assert_eq!(public_keys.len() % PK_TREE_BREADTH, 0);
+
+        // Serialize the public keys into bits.
+        #[cfg(not(feature = "parallel"))]
+        let iter = public_keys.iter();
+        #[cfg(feature = "parallel")]
+        let iter = self.public_keys.par_iter();
+        let bytes: Vec<u8> = iter
+            .flat_map(|pk| {
+                let mut buffer = [0u8; 285];
+                CanonicalSerialize::serialize_compressed(&pk.into_affine(), &mut &mut buffer[..])
+                    .unwrap();
+                buffer.to_vec()
+            })
+            .collect();
+
+        // Chunk the bits into the number of leaves.
+        let mut inputs = Vec::new();
+
+        for i in 0..PK_TREE_BREADTH {
+            inputs.push(
+                bytes[i * bytes.len() / PK_TREE_BREADTH..(i + 1) * bytes.len() / PK_TREE_BREADTH]
+                    .to_vec(),
+            );
+        }
+
+        // Calculate the merkle tree root.
+        merkle_tree_construct(inputs)
     }
 
     /// Iterates over the validators.

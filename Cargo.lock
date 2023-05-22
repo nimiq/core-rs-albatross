@@ -3479,7 +3479,6 @@ dependencies = [
 name = "nimiq-block"
 version = "0.1.0"
 dependencies = [
- "bencher",
  "beserial",
  "bitflags 1.3.2",
  "hex",
@@ -4194,6 +4193,9 @@ dependencies = [
 name = "nimiq-primitives"
 version = "0.1.0"
 dependencies = [
+ "ark-ec",
+ "ark-mnt6-753",
+ "ark-serialize",
  "beserial",
  "bitvec",
  "hex",
@@ -4711,6 +4713,8 @@ dependencies = [
  "ark-std",
  "beserial",
  "nimiq-bls",
+ "nimiq-hash",
+ "nimiq-keys",
  "nimiq-log",
  "nimiq-primitives",
  "nimiq-test-log",
@@ -4749,6 +4753,7 @@ dependencies = [
  "nimiq-bls",
  "nimiq-genesis",
  "nimiq-hash",
+ "nimiq-keys",
  "nimiq-pedersen-generators",
  "nimiq-primitives",
  "nimiq-test-log",

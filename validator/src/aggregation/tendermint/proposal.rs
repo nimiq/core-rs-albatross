@@ -28,9 +28,11 @@ impl Inherent<Blake2bHash> for Body {
 pub struct Header<Id>(pub MacroHeader, pub Option<Id>);
 
 impl<Id> Proposal<Blake2sHash, Body, Blake2bHash> for Header<Id> {
-    fn hash(&self, t: &Body) -> Blake2sHash {
-        self.0.zkp_hash_with_body(&Some(t.0.clone()), false)
+    fn hash(&self, _t: &Body) -> Blake2sHash {
+        // PITODO ask basti if we need the body
+        self.0.hash()
     }
+
     fn inherent_hash(&self) -> Blake2bHash {
         self.0.body_root.clone()
     }

@@ -7,17 +7,31 @@ use std::{
 
 use ark_groth16::Proof;
 use ark_serialize::CanonicalSerialize;
-use log::level_filters::LevelFilter;
+use log::metadata::LevelFilter;
 use nimiq_log::TargetsExt;
 use nimiq_zkp::prove::prove;
 use nimiq_zkp_circuits::utils::create_test_blocks;
-use tracing_subscriber::{filter::Targets, layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{filter::Targets, prelude::*};
+
+fn initialize() {
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer().with_writer(io::stderr))
+        .with(
+            Targets::new()
+                .with_default(LevelFilter::INFO)
+                .with_nimiq_targets(LevelFilter::DEBUG)
+                .with_target("r1cs", LevelFilter::WARN)
+                .with_env(),
+        )
+        .init();
+}
 
 /// Generates a proof for a chain of election blocks. The random parameters generation uses always
 /// the same seed, so it will always generate the same data (validators, signatures, etc).
 /// This function will simply output a proof for the final epoch and store it in file.
 /// Run this example with `cargo run --all-features --release --example prove`.
 fn main() {
+    initialize();
     // Ask user for the number of epochs.
     println!("Enter the number of epochs to prove:");
 
@@ -31,16 +45,6 @@ fn main() {
 
     println!("====== Proof generation for Nano Sync initiated ======");
 
-    tracing_subscriber::registry()
-        .with(
-            Targets::new()
-                .with_default(LevelFilter::INFO)
-                .with_nimiq_targets(LevelFilter::DEBUG)
-                .with_target("r1cs", LevelFilter::WARN)
-                .with_env(),
-        )
-        .init();
-
     let start = Instant::now();
 
     let mut genesis_state_commitment = [0; 95];
@@ -49,7 +53,7 @@ fn main() {
 
     for i in 0..number_epochs {
         // Get random parameters.
-        let (prev_pks, prev_header_hash, _, final_pks, block, genesis_state_commitment_opt) =
+        let (prev_pks, prev_header_hash, final_pks, block, genesis_state_commitment_opt) =
             create_test_blocks(i);
 
         // Create genesis data.

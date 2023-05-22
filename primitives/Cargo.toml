@@ -17,6 +17,9 @@ is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
+ark-ec = "0.4"
+ark-mnt6-753 = "0.4"
+ark-serialize = "0.4"
 bitvec = "1.0"
 hex = { version = "0.4", optional = true }
 lazy_static = { version = "1.2", optional = true }
@@ -33,10 +36,10 @@ wasm-bindgen = { version = "0.2", optional = true }
 
 beserial = { path = "../beserial", features = ["derive"] }
 nimiq-bls = { path = "../bls", features = ["beserial"], optional = true }
+nimiq-database-value = { path = "../database/database-value", optional = true }
 nimiq-hash = { path = "../hash", optional = true }
 nimiq-keys = { path = "../keys", optional = true }
 nimiq-utils = { path = "../utils", features = ["math"], optional = true }
-nimiq-database-value = { path = "../database/database-value", optional = true }
 
 [dev-dependencies]
 lazy_static = "1.2"
@@ -54,3 +57,5 @@ slots = ["beserial/bitvec", "nimiq-bls", "nimiq-keys", "nimiq-utils", "policy"]
 transaction = ["thiserror"]
 trie = ["key-nibbles", "nimiq-hash", "thiserror"]
 ts-types = ["serde", "tsify", "wasm-bindgen"]
+# parallel = ["rayon", "ark-ec/parallel", "ark-ff/parallel", "ark-std/parallel", "ark-groth16/parallel"]
+# zkp-prover = ["ark-mnt4-753/r1cs", "ark-mnt6-753/r1cs", "ark-groth16/r1cs"]

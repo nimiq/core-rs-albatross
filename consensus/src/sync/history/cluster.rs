@@ -226,7 +226,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         macro_predecessor: &Block,
         validators: &Validators,
     ) -> Result<(), HistoryRequestError> {
-        if let Err(error) = block.verify(true) {
+        if let Err(error) = block.verify() {
             warn!(%block, %error, reason = "Block intrinsic checks failed", "Invalid macro block");
             return Err(HistoryRequestError::InvalidMacroBlock);
         }

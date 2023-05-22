@@ -57,11 +57,8 @@ impl<N: Network> ZKProver<N> {
         let network_info = NetworkInfo::from_network_id(blockchain.read().network_id());
         let genesis_block = network_info.genesis_block().unwrap_macro();
 
-        let genesis_state = state_commitment(
-            genesis_block.block_number(),
-            &genesis_block.hash().into(),
-            &genesis_block.pk_tree_root().unwrap(),
-        );
+        let genesis_state =
+            state_commitment(genesis_block.block_number(), &genesis_block.hash().into());
 
         // Prepends the election blocks from the blockchain for which we don't have a proof yet
         let blockchain_rg = blockchain.read();
@@ -69,9 +66,13 @@ impl<N: Network> ZKProver<N> {
         let blockchain_election_height = blockchain_rg.state.election_head.block_number();
 
         let pending_election_blocks = if blockchain_election_height > current_state_height {
+            let block = blockchain_rg
+                .get_block_at(current_state_height, false, None)
+                .expect("Corresponding block of ZKP state block height should exist.");
+
             blockchain_rg
                 .get_macro_blocks(
-                    &zkp_state.read().latest_header_hash,
+                    &block.hash(),
                     (blockchain_election_height - current_state_height)
                         / Policy::blocks_per_epoch(),
                     true,

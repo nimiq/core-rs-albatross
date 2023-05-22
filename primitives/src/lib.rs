@@ -16,3 +16,5 @@ pub mod transaction;
 pub mod trie;
 
 pub mod task_executor;
+
+pub mod merkle_tree;

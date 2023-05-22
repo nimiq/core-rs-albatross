@@ -13,7 +13,13 @@ use ark_mnt6_753::{Fq as MNT6Fq, G1Projective as G1MNT6, G2Projective as G2MNT6,
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::UniformRand;
 use beserial::{Deserialize, Serialize};
-use nimiq_primitives::policy::Policy;
+use nimiq_bls::PublicKey as BlsPublicKey;
+use nimiq_hash::{Blake2sHash, Hash};
+use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
+use nimiq_primitives::{
+    policy::Policy,
+    slots::{ValidatorsBuilder, PK_TREE_DEPTH},
+};
 use nimiq_zkp_circuits::{
     bits::BitVec,
     circuits::{
@@ -25,8 +31,8 @@ use nimiq_zkp_circuits::{
     },
 };
 use nimiq_zkp_primitives::{
-    pedersen::default_pedersen_hash, pk_tree_construct, serialize_g1_mnt6, serialize_g2_mnt6,
-    state_commitment, vk_commitment, MacroBlock, NanoZKPError, PK_TREE_DEPTH,
+    pedersen::default_pedersen_hash, serialize_g1_mnt6, serialize_g2_mnt6, state_commitment,
+    vk_commitment, MacroBlock, NanoZKPError,
 };
 use rand::{thread_rng, CryptoRng, Rng};
 
@@ -99,10 +105,26 @@ pub fn prove(
     let proofs = prover_keys_path.join("proofs");
 
     // Calculate previous public key tree root.
-    let prev_pk_tree_root = pk_tree_construct(prev_pks.clone());
+    let mut validators = ValidatorsBuilder::new();
+    for pk in &prev_pks {
+        validators.push(
+            Address::default(),
+            BlsPublicKey::new(pk.clone()),
+            SchnorrPublicKey::default(),
+        );
+    }
+    let prev_pk_tree_root = validators.build().hash();
 
     // Calculate final public key tree root.
-    let final_pk_tree_root = pk_tree_construct(final_pks);
+    let mut validators = ValidatorsBuilder::new();
+    for pk in final_pks {
+        validators.push(
+            Address::default(),
+            BlsPublicKey::new(pk),
+            SchnorrPublicKey::default(),
+        );
+    }
+    let final_pk_tree_root = validators.build().hash();
 
     const NUM_PROOFS: usize = 4;
     let mut current_proof = 0;
@@ -138,15 +160,7 @@ pub fn prove(
             NUM_PROOFS,
         );
 
-        prove_macro_block_wrapper(
-            rng,
-            &prev_pk_tree_root,
-            prev_header_hash,
-            &final_pk_tree_root,
-            &block,
-            debug_mode,
-            prover_keys_path,
-        )?;
+        prove_macro_block_wrapper(rng, prev_header_hash, &block, debug_mode, prover_keys_path)?;
     }
 
     // Start generating proof for Merger.
@@ -160,9 +174,7 @@ pub fn prove(
 
         prove_merger(
             rng,
-            &prev_pk_tree_root,
             prev_header_hash,
-            &final_pk_tree_root,
             &block,
             genesis_data.clone(),
             debug_mode,
@@ -180,9 +192,7 @@ pub fn prove(
 
     let proof = prove_merger_wrapper(
         rng,
-        &prev_pk_tree_root,
         prev_header_hash,
-        &final_pk_tree_root,
         &block,
         genesis_data,
         debug_mode,
@@ -204,7 +214,7 @@ fn prove_pk_tree_leaf<R: CryptoRng + Rng>(
     debug_mode: bool,
     proof_caching: bool,
     dir_path: &Path,
-) -> Result<[u8; 95], NanoZKPError> {
+) -> Result<[u8; 32], NanoZKPError> {
     assert_eq!(pks.len(), signer_bitmap.len());
 
     let name = "pk_tree_5";
@@ -219,8 +229,7 @@ fn prove_pk_tree_leaf<R: CryptoRng + Rng>(
             agg_pk += pk;
         }
     }
-    let hash = default_pedersen_hash(&pk_node_hash);
-    let pk_node_hash = serialize_g1_mnt6(&hash);
+    let pk_node_hash = pk_node_hash.hash::<Blake2sHash>().0;
 
     let agg_pk_bytes = serialize_g2_mnt6(&agg_pk);
 
@@ -292,7 +301,7 @@ fn prove_pk_tree_node_mnt4<R: CryptoRng + Rng>(
     debug_mode: bool,
     proof_caching: bool,
     dir_path: &Path,
-) -> Result<([u8; 95], [u8; 95]), NanoZKPError> {
+) -> Result<([u8; 32], [u8; 32]), NanoZKPError> {
     assert_eq!(pks.len(), signer_bitmap.len());
 
     let name = format!("pk_tree_{}", tree_level);
@@ -465,7 +474,7 @@ fn prove_pk_tree_node_mnt6<R: CryptoRng + Rng>(
     debug_mode: bool,
     proof_caching: bool,
     dir_path: &Path,
-) -> Result<[u8; 95], NanoZKPError> {
+) -> Result<[u8; 32], NanoZKPError> {
     assert_eq!(pks.len(), signer_bitmap.len());
 
     let name = format!("pk_tree_{}", tree_level);
@@ -516,22 +525,19 @@ fn prove_pk_tree_node_mnt6<R: CryptoRng + Rng>(
     l_pk_node_hash.extend(ll_pk_node_hash);
     l_pk_node_hash.extend(lr_pk_node_hash);
 
-    let hash = default_pedersen_hash(&l_pk_node_hash);
-    let l_pk_node_hash = serialize_g1_mnt6(&hash);
+    let l_pk_node_hash = l_pk_node_hash.hash::<Blake2sHash>().0;
 
     let mut r_pk_node_hash = vec![];
     r_pk_node_hash.extend(rl_pk_node_hash);
     r_pk_node_hash.extend(rr_pk_node_hash);
 
-    let hash = default_pedersen_hash(&r_pk_node_hash);
-    let r_pk_node_hash = serialize_g1_mnt6(&hash);
+    let r_pk_node_hash = r_pk_node_hash.hash::<Blake2sHash>().0;
 
     let mut pk_node_hash = vec![];
     pk_node_hash.extend(l_pk_node_hash);
     pk_node_hash.extend(r_pk_node_hash);
 
-    let hash = default_pedersen_hash(&pk_node_hash);
-    let pk_node_hash = serialize_g1_mnt6(&hash);
+    let pk_node_hash = pk_node_hash.hash::<Blake2sHash>().0;
 
     if proof_caching && proofs.join(format!("{name}_{position}.bin")).exists() {
         return Ok(pk_node_hash);
@@ -661,9 +667,9 @@ fn prove_pk_tree_node_mnt6<R: CryptoRng + Rng>(
 fn prove_macro_block<R: CryptoRng + Rng>(
     rng: &mut R,
     prev_pks: &[G2MNT6],
-    prev_pk_tree_root: &[u8; 95],
+    prev_pk_tree_root: &[u8; 32],
     prev_header_hash: [u8; 32],
-    final_pk_tree_root: &[u8; 95],
+    final_pk_tree_root: &[u8; 32],
     block: &MacroBlock,
     debug_mode: bool,
     proof_caching: bool,
@@ -717,11 +723,9 @@ fn prove_macro_block<R: CryptoRng + Rng>(
     let prev_state_commitment = state_commitment(
         block.block_number - Policy::blocks_per_epoch(),
         &prev_header_hash,
-        prev_pk_tree_root,
     );
 
-    let final_state_commitment =
-        state_commitment(block.block_number, &block.header_hash, final_pk_tree_root);
+    let final_state_commitment = state_commitment(block.block_number, &block.header_hash.0);
 
     // Create the circuit.
     let circuit = MacroBlockCircuit::new(
@@ -767,9 +771,7 @@ fn prove_macro_block<R: CryptoRng + Rng>(
 
 fn prove_macro_block_wrapper<R: CryptoRng + Rng>(
     rng: &mut R,
-    prev_pk_tree_root: &[u8; 95],
     prev_header_hash: [u8; 32],
-    final_pk_tree_root: &[u8; 95],
     block: &MacroBlock,
     debug_mode: bool,
     path: &Path,
@@ -794,11 +796,9 @@ fn prove_macro_block_wrapper<R: CryptoRng + Rng>(
     let prev_state_commitment = state_commitment(
         block.block_number - Policy::blocks_per_epoch(),
         &prev_header_hash,
-        prev_pk_tree_root,
     );
 
-    let final_state_commitment =
-        state_commitment(block.block_number, &block.header_hash, final_pk_tree_root);
+    let final_state_commitment = state_commitment(block.block_number, &block.header_hash.0);
 
     // Create the circuit.
     let circuit = MacroBlockWrapperCircuit::new(
@@ -836,9 +836,7 @@ fn prove_macro_block_wrapper<R: CryptoRng + Rng>(
 
 fn prove_merger<R: CryptoRng + Rng>(
     rng: &mut R,
-    prev_pk_tree_root: &[u8; 95],
     prev_header_hash: [u8; 32],
-    final_pk_tree_root: &[u8; 95],
     block: &MacroBlock,
     genesis_data: Option<(Proof<MNT6_753>, [u8; 95])>,
     debug_mode: bool,
@@ -867,7 +865,6 @@ fn prove_merger<R: CryptoRng + Rng>(
     let intermediate_state_commitment = state_commitment(
         block.block_number - Policy::blocks_per_epoch(),
         &prev_header_hash,
-        prev_pk_tree_root,
     );
 
     // Create the proof for the previous epoch, the genesis state commitment and the genesis flag
@@ -886,8 +883,7 @@ fn prove_merger<R: CryptoRng + Rng>(
     };
 
     // Calculate the inputs.
-    let final_state_commitment =
-        state_commitment(block.block_number, &block.header_hash, final_pk_tree_root);
+    let final_state_commitment = state_commitment(block.block_number, &block.header_hash.0);
 
     let vk_commitment = vk_commitment(vk_merger_wrapper.clone());
 
@@ -933,9 +929,7 @@ fn prove_merger<R: CryptoRng + Rng>(
 
 fn prove_merger_wrapper<R: CryptoRng + Rng>(
     rng: &mut R,
-    prev_pk_tree_root: &[u8; 95],
     prev_header_hash: [u8; 32],
-    final_pk_tree_root: &[u8; 95],
     block: &MacroBlock,
     genesis_data: Option<(Proof<MNT6_753>, [u8; 95])>,
     debug_mode: bool,
@@ -965,13 +959,11 @@ fn prove_merger_wrapper<R: CryptoRng + Rng>(
         None => state_commitment(
             block.block_number - Policy::blocks_per_epoch(),
             &prev_header_hash,
-            prev_pk_tree_root,
         ),
         Some((_, x)) => x,
     };
 
-    let final_state_commitment =
-        state_commitment(block.block_number, &block.header_hash, final_pk_tree_root);
+    let final_state_commitment = state_commitment(block.block_number, &block.header_hash.0);
 
     let vk_commitment = vk_commitment(vk_merger_wrapper);
 

@@ -41,6 +41,7 @@ nimiq-hash = { path = "../hash" }
 nimiq-pedersen-generators = { path = "../zkp-primitives/pedersen-generators" }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }
 nimiq-zkp-primitives = { path = "../zkp-primitives" }
+nimiq-keys = { path = "../keys" }
 
 [dev-dependencies]
 ark-test-curves = { version = "0.4", features = ["bls12_381_curve"] }

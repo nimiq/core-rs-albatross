@@ -342,7 +342,7 @@ impl Block {
     /// Verifies the block.
     /// Note that only intrinsic verifications are performed and further checks
     /// are needed when completely verifying a block.
-    pub fn verify(&self, check_pk_tree_root: bool) -> Result<(), BlockError> {
+    pub fn verify(&self) -> Result<(), BlockError> {
         // Check the block type.
         if self.ty() != BlockType::of(self.header().block_number()) {
             return Err(BlockError::InvalidBlockType);
@@ -370,7 +370,7 @@ impl Block {
             // Perform block type specific body verification.
             match body {
                 BlockBody::Micro(body) => body.verify(self.is_skip(), header.block_number())?,
-                BlockBody::Macro(body) => body.verify(self.is_election(), check_pk_tree_root)?,
+                BlockBody::Macro(body) => body.verify(self.is_election())?,
             };
         }
 

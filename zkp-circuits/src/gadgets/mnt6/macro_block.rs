@@ -52,7 +52,7 @@ impl MacroBlockGadget {
         let enough_signers = self.check_signers(cs.clone())?;
 
         // Get the hash point for the signature.
-        let hash = self.get_hash(cs.clone(), pk_tree_root)?;
+        let hash = self.get_hash(cs.clone())?;
 
         // Check the validity of the signature.
         let valid_sig = CheckSigGadget::check_signature(cs, agg_pk, &hash, &self.signature)?;
@@ -73,44 +73,24 @@ impl MacroBlockGadget {
     ///     4. Finally, we take the second hash and map it to an elliptic curve point using the
     ///        "try-and-increment" method.
     /// The function || means concatenation.
-    pub fn get_hash(
-        &self,
-        cs: ConstraintSystemRef<MNT6Fq>,
-        pk_tree_root: &[UInt8<MNT6Fq>],
-    ) -> Result<G1Var, SynthesisError> {
-        // Initialize Boolean vector.
-        let mut first_bytes = vec![];
-
-        // Append the header hash.
-        first_bytes.extend_from_slice(&self.header_hash);
-
-        // Append the public key tree root.
-        first_bytes.extend_from_slice(pk_tree_root);
-
-        // Calculate hash using Blake2s.
-        let mut first_hash = evaluate_blake2s(&first_bytes)?;
-
+    pub fn get_hash(&self, cs: ConstraintSystemRef<MNT6Fq>) -> Result<G1Var, SynthesisError> {
         // Initialize Boolean vector.
         let mut second_bytes = vec![];
 
-        // Add the first byte.
-        second_bytes.push(UInt8::constant(0x04));
+        // Add the tendermint step.
+        second_bytes.push(UInt8::constant(MacroBlock::TENDERMINT_STEP));
 
         // The round number.
         let mut round_number_bytes = self.round_number.to_bytes_be()?;
-
         second_bytes.append(&mut round_number_bytes);
 
         // The block number.
         let mut block_number_bits = self.block_number.to_bytes_be()?;
-
         second_bytes.append(&mut block_number_bits);
 
-        // Add another byte.
+        // Add header hash represented as an option.
         second_bytes.push(UInt8::constant(0x01));
-
-        // Append the first hash.
-        second_bytes.append(&mut first_hash);
+        second_bytes.extend_from_slice(&self.header_hash);
 
         // Calculate hash using Blake2s.
         let second_hash = evaluate_blake2s(&second_bytes)?;
@@ -181,7 +161,7 @@ impl AllocVar<MacroBlock, MNT6Fq> for MacroBlockGadget {
 
         let round_number = UInt32::<MNT6Fq>::new_input(cs.clone(), || Ok(value.round_number))?;
 
-        let header_hash = OutputVar::new_input(cs.clone(), || Ok(&value.header_hash))?;
+        let header_hash = OutputVar::new_input(cs.clone(), || Ok(&value.header_hash.0))?;
         let header_hash = header_hash.0;
 
         let signer_bitmap = BitVec::<MNT6Fq>::new_input_vec(cs.clone(), &value.signer_bitmap[..])?;
@@ -218,7 +198,7 @@ impl AllocVar<MacroBlock, MNT6Fq> for MacroBlockGadget {
 
         let round_number = UInt32::<MNT6Fq>::new_witness(cs.clone(), || Ok(value.round_number))?;
 
-        let header_hash = OutputVar::new_witness(cs.clone(), || Ok(&value.header_hash))?;
+        let header_hash = OutputVar::new_witness(cs.clone(), || Ok(&value.header_hash.0))?;
         let header_hash = header_hash.0;
 
         let signer_bitmap =
@@ -245,6 +225,7 @@ mod tests {
     use ark_r1cs_std::{prelude::AllocVar, R1CSVar};
     use ark_relations::r1cs::ConstraintSystem;
     use ark_std::{ops::MulAssign, test_rng, UniformRand};
+    use nimiq_hash::Blake2sHash;
     use nimiq_primitives::policy::Policy;
     use nimiq_test_log::test;
     use rand::{Rng, RngCore};
@@ -262,10 +243,10 @@ mod tests {
         // Create block parameters.
         let mut bytes = [1u8; 95];
         rng.fill_bytes(&mut bytes);
-        let pk_tree_root = bytes.to_vec();
 
         let mut header_hash = [2u8; 32];
         rng.fill_bytes(&mut header_hash);
+        let header_hash = Blake2sHash::from(header_hash);
 
         let mut signer_bitmap = Vec::with_capacity(Policy::SLOTS as usize);
         for _ in 0..Policy::SLOTS {
@@ -281,16 +262,13 @@ mod tests {
         };
 
         // Calculate hash using the primitive version.
-        let primitive_hash = block.hash(&pk_tree_root);
+        let primitive_hash = block.hash();
 
         // Allocate parameters in the circuit.
         let block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(block)).unwrap();
 
-        let pk_tree_root_var =
-            Vec::<UInt8<MNT6Fq>>::new_witness(cs.clone(), || Ok(&pk_tree_root[..])).unwrap();
-
         // Calculate hash using the gadget version.
-        let gadget_hash = block_var.get_hash(cs, &pk_tree_root_var).unwrap();
+        let gadget_hash = block_var.get_hash(cs).unwrap();
 
         assert_eq!(primitive_hash, gadget_hash.value().unwrap())
     }
@@ -319,6 +297,7 @@ mod tests {
 
         let mut header_hash = [0u8; 32];
         rng.fill_bytes(&mut header_hash);
+        let header_hash = Blake2sHash::from(header_hash);
 
         let mut agg_pk = G2Projective::zero();
 
@@ -326,7 +305,7 @@ mod tests {
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
         for i in 0..Policy::TWO_F_PLUS_ONE as usize {
-            block.sign(&sk, i, &pk_tree_root);
+            block.sign(&sk, i);
             agg_pk += &pk;
         }
 
@@ -370,6 +349,7 @@ mod tests {
 
         let mut header_hash = [0u8; 32];
         rng.fill_bytes(&mut header_hash);
+        let header_hash = Blake2sHash::from(header_hash);
 
         let mut agg_pk = G2Projective::zero();
 
@@ -377,7 +357,7 @@ mod tests {
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
         for i in 0..Policy::TWO_F_PLUS_ONE as usize {
-            block.sign(&sk, i, &pk_tree_root);
+            block.sign(&sk, i);
             agg_pk += &pk;
         }
 
@@ -424,6 +404,7 @@ mod tests {
 
         let mut header_hash = [0u8; 32];
         rng.fill_bytes(&mut header_hash);
+        let header_hash = Blake2sHash::from(header_hash);
 
         let mut agg_pk = G2Projective::zero();
 
@@ -431,7 +412,7 @@ mod tests {
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
         for i in 0..Policy::TWO_F_PLUS_ONE as usize {
-            block.sign(&sk, i, &pk_tree_root);
+            block.sign(&sk, i);
             agg_pk += &pk;
         }
 
@@ -474,10 +455,10 @@ mod tests {
 
         let mut bytes = [0u8; 95];
         rng.fill_bytes(&mut bytes);
-        let pk_tree_root = bytes.to_vec();
 
         let mut header_hash = [0u8; 32];
         rng.fill_bytes(&mut header_hash);
+        let header_hash = Blake2sHash::from(header_hash);
 
         let mut agg_pk = G2Projective::zero();
 
@@ -485,7 +466,7 @@ mod tests {
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
         for i in 0..Policy::TWO_F_PLUS_ONE as usize {
-            block.sign(&sk, i, &pk_tree_root);
+            block.sign(&sk, i);
             agg_pk += &pk;
         }
 
@@ -534,6 +515,7 @@ mod tests {
 
         let mut header_hash = [0u8; 32];
         rng.fill_bytes(&mut header_hash);
+        let header_hash = Blake2sHash::from(header_hash);
 
         let mut agg_pk = G2Projective::zero();
 
@@ -541,7 +523,7 @@ mod tests {
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
         for i in 0..Policy::TWO_F_PLUS_ONE as usize {
-            block.sign(&sk, i, &pk_tree_root);
+            block.sign(&sk, i);
             agg_pk += &pk;
         }
 
@@ -588,6 +570,7 @@ mod tests {
 
         let mut header_hash = [0u8; 32];
         rng.fill_bytes(&mut header_hash);
+        let header_hash = Blake2sHash::from(header_hash);
 
         let mut agg_pk = G2Projective::zero();
 
@@ -595,13 +578,14 @@ mod tests {
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
         for i in 0..Policy::TWO_F_PLUS_ONE as usize {
-            block.sign(&sk, i, &pk_tree_root);
+            block.sign(&sk, i);
             agg_pk += &pk;
         }
 
         // Create wrong header hash.
         let mut header_hash = [0u8; 32];
         rng.fill_bytes(&mut header_hash);
+        let header_hash = Blake2sHash::from(header_hash);
         block.header_hash = header_hash;
 
         // Allocate parameters in the circuit.
@@ -644,6 +628,7 @@ mod tests {
 
         let mut header_hash = [0u8; 32];
         rng.fill_bytes(&mut header_hash);
+        let header_hash = Blake2sHash::from(header_hash);
 
         let mut agg_pk = G2Projective::zero();
 
@@ -651,7 +636,7 @@ mod tests {
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
         for i in 0..Policy::TWO_F_PLUS_ONE as usize {
-            block.sign(&sk, i, &pk_tree_root);
+            block.sign(&sk, i);
             agg_pk += &pk;
         }
 
@@ -698,6 +683,7 @@ mod tests {
 
         let mut header_hash = [0u8; 32];
         rng.fill_bytes(&mut header_hash);
+        let header_hash = Blake2sHash::from(header_hash);
 
         let mut agg_pk = G2Projective::zero();
 
@@ -705,7 +691,7 @@ mod tests {
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
         for i in 0..Policy::TWO_F_PLUS_ONE as usize - 1 {
-            block.sign(&sk, i, &pk_tree_root);
+            block.sign(&sk, i);
             agg_pk += &pk;
         }
 

@@ -1,4 +1,4 @@
-use nimiq_block::{Block, BlockError, BlockHeader, MacroBlock, MacroBody};
+use nimiq_block::{Block, BlockError, BlockHeader, MacroBody};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushError};
 use nimiq_database::TransactionProxy as DBTransaction;
 use nimiq_hash::{Blake2bHash, Hash};
@@ -22,7 +22,7 @@ impl Blockchain {
             .ok_or(PushError::InvalidBlock(BlockError::MissingBody))?;
 
         // Perform block intrinsic checks.
-        block.verify(!trusted)?;
+        block.verify()?;
 
         // Fetch predecessor block. Fail if it doesn't exist.
         let predecessor = self
@@ -249,15 +249,8 @@ impl Blockchain {
                     let real_lost_rewards = staking_contract.previous_lost_rewards();
                     let real_disabled_slots = staking_contract.previous_disabled_slots();
 
-                    // If we were not given a body, then we construct a body from our values and check
-                    // its hash against the block header.
-                    let real_pk_tree_root = real_validators
-                        .as_ref()
-                        .and_then(|validators| MacroBlock::calc_pk_tree_root(validators).ok());
-
                     let real_body = MacroBody {
                         validators: real_validators,
-                        pk_tree_root: real_pk_tree_root,
                         lost_reward_set: real_lost_rewards,
                         disabled_set: real_disabled_slots,
                         transactions: real_reward_transactions,

@@ -42,32 +42,21 @@ impl LightBlockchain {
         }
 
         // Perform block intrinsic checks.
-        block.verify(false)?;
+        block.verify()?;
 
         // Prepare the inputs to verify the proof.
         let genesis_block_number = this.genesis_block.block_number();
         let genesis_header_hash = <[u8; 32]>::from(this.genesis_block.hash());
-        let genesis_pk_tree_root = this
-            .genesis_block
-            .unwrap_macro_ref()
-            .pk_tree_root()
-            .ok_or(PushError::InvalidBlock(BlockError::InvalidPkTreeRoot))?;
         let final_block_number = block.block_number();
         let final_header_hash = <[u8; 32]>::from(block_hash.clone());
-        let final_pk_tree_root = block
-            .unwrap_macro_ref()
-            .pk_tree_root()
-            .ok_or(PushError::InvalidBlock(BlockError::InvalidPkTreeRoot))?;
 
         // Verify the zk proof.
         if !trusted_proof {
             let verify_result = verify(
                 genesis_block_number,
                 genesis_header_hash,
-                &genesis_pk_tree_root,
                 final_block_number,
                 final_header_hash,
-                &final_pk_tree_root,
                 proof,
                 &ZKP_VERIFYING_KEY,
             );
@@ -140,7 +129,7 @@ impl LightBlockchain {
         }
 
         // Perform block intrinsic checks.
-        block.verify(false)?;
+        block.verify()?;
 
         // Verify that the block is a valid macro successor to our current macro head.
         block.verify_macro_successor(&this.macro_head)?;

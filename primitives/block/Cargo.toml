@@ -12,13 +12,6 @@ license = "Apache-2.0"
 travis-ci = { repository = "nimiq/core-rs", branch = "master" }
 maintenance = { status = "experimental" }
 
-[[bench]]
-name = "pk_tree"
-harness = false
-
-[[example]]
-name = "pk_tree"
-
 [dependencies]
 bitflags = "1.0"
 thiserror = "1.0"
@@ -43,7 +36,6 @@ nimiq-utils = { path = "../../utils", features = ["merkle"] }
 nimiq-vrf = { path = "../../vrf" }
 
 [dev-dependencies]
-bencher = "0.1"
 nimiq-test-log = { path = "../../test-log" }
 nimiq-test-utils = { path = "../../test-utils" }
 num-traits = "0.2"

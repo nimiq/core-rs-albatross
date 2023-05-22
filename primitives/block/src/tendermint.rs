@@ -45,9 +45,8 @@ impl TendermintProof {
             return false;
         }
 
-        // Calculate the `zkp_hash`. This a special hash that is calculated using the `validators`
-        // field of the block body. It is necessary for the ZKP proofs used in the light macro sync.
-        let block_hash = block.zkp_hash(false);
+        // Calculate the `block_hash` as blake2s.
+        let block_hash = block.hash_blake2s();
 
         // Calculate the message that was actually signed by the validators.
         let message = TendermintVote {

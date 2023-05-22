@@ -25,7 +25,7 @@ impl HashToCurve {
 
         for i in 0..3 {
             // Initialize Blake2s parameters.
-            let blake2s_parameters = Blake2sWithParameterBlock::new_blake2x(i, 0xffff); // PITODO: 96
+            let blake2s_parameters = Blake2sWithParameterBlock::new_blake2x(i, 0xffff);
 
             // Calculate hash.
             hash_out.extend(evaluate_blake2s_with_parameters(

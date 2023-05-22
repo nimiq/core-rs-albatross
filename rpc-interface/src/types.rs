@@ -14,7 +14,7 @@ use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainError};
 use nimiq_blockchain_proxy::BlockchainReadProxy;
 use nimiq_bls::CompressedPublicKey;
 use nimiq_collections::BitSet;
-use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_keys::{Address, PublicKey};
 use nimiq_primitives::{coin::Coin, policy::Policy, slots::Validators};
 use nimiq_transaction::{
@@ -961,7 +961,7 @@ pub fn is_of_log_type_and_related_to_addresses(
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct ZKPState {
-    latest_header_hash: Blake2bHash,
+    latest_header_hash: Blake2sHash,
     latest_block_number: u32,
     latest_proof: Option<String>,
 }
