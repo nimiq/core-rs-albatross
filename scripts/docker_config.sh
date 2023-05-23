@@ -25,7 +25,7 @@ function optional () {
 }
 
 echo '[network]'
-required peer_key_file NIMIQ_PEER_KEY_FILE string
+optional peer_key_file NIMIQ_PEER_KEY_FILE string
 optional peer_key NIMIQ_PEER_KEY string
 
 echo "listen_addresses = ["
@@ -35,6 +35,15 @@ for node in "${addr[@]}"; do
 done
 echo "]"
 
+
+if [[ ! -z "$ADVERTISED_ADDRESSES" ]]; then
+    echo "advertised_addresses = ["
+    addr=($ADVERTISED_ADDRESSES)
+    for node in "${addr[@]}"; do
+        echo "\"$node\""
+    done
+    echo "]"
+fi
 
 nodes_arr=($NIMIQ_SEED_NODES)
 for node in "${nodes_arr[@]}"; do
@@ -51,6 +60,7 @@ fi
 
 echo '[consensus]'
 required network NIMIQ_NETWORK string
+optional sync_mode NIMIQ_SYNC_MODE string
 
 echo '[database]'
 entry path "/home/nimiq/database" string
@@ -72,14 +82,14 @@ if [[ "$ROTATING_LOG_ENABLED" == "true" ]]; then
 fi
 
 if [[ ! -z "${VALIDATOR_ADDRESS+x}" ]]; then
-echo '[validator]'
-required validator_address VALIDATOR_ADDRESS string
-optional voting_key_file VOTING_KEY_FILE string
-optional voting_key VOTING_KEY string
-optional fee_key_file FEE_KEY_FILE string
-optional fee_key FEE_KEY string
-optional signing_key_file SIGNING_KEY_FILE string
-optional signing_key SIGNING_KEY string
+    echo '[validator]'
+    required validator_address VALIDATOR_ADDRESS string
+    optional voting_key_file VOTING_KEY_FILE string
+    optional voting_key VOTING_KEY string
+    optional fee_key_file FEE_KEY_FILE string
+    optional fee_key FEE_KEY string
+    optional signing_key_file SIGNING_KEY_FILE string
+    optional signing_key SIGNING_KEY string
 fi
 
 if [[ "$RPC_ENABLED" == "true" ]]; then
@@ -102,4 +112,3 @@ optional creation_fee_per_byte MEMPOOL_CREATION_FEE_PER_BYTE number
 optional creation_value MEMPOOL_CREATION_VALUE number
 optional recipient_balance MEMPOOL_RECIPIENT_BALANCE number
 optional sender_balance MEMPOOL_SENDER_BALANCE number
-
