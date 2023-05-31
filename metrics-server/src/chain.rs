@@ -26,12 +26,19 @@ impl BlockMetrics {
 
         let bc = blockchain.clone();
         let closure = NumericClosureMetric::new_gauge(Box::new(move || {
-            bc.read().get_staking_contract().active_validators.len() as i64
+            bc.read()
+                .get_staking_contract_if_complete(None)
+                .map(|contract| contract.active_validators.len() as i64)
+                .unwrap_or(0)
         }));
         sub_registry.register("active_validators", "Number of active validators", closure);
 
         let closure = NumericClosureMetric::new_gauge(Box::new(move || {
-            blockchain.read().get_staking_contract().parked_set.len() as i64
+            blockchain
+                .read()
+                .get_staking_contract_if_complete(None)
+                .map(|contract| contract.parked_set.len() as i64)
+                .unwrap_or(0)
         }));
         sub_registry.register("parked_validators", "Number of parked validators", closure);
     }
