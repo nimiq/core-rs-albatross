@@ -52,17 +52,17 @@ fn get_validator_by_address(
     address: &Address,
 ) -> RPCResult<Validator, BlockchainState, Error> {
     if let BlockchainReadProxy::Full(blockchain) = blockchain_proxy {
-        let staking_contract = blockchain.get_staking_contract();
+        let staking_contract = blockchain
+            .get_staking_contract_if_complete(None)
+            .ok_or(Error::NoConsensus)?;
         let data_store = blockchain.get_staking_contract_store();
         let db_txn = blockchain.read_transaction();
-        let validator = staking_contract.get_validator(&data_store.read(&db_txn), address);
-
-        if validator.is_none() {
-            return Err(Error::ValidatorNotFound(address.clone()));
-        }
+        let validator = staking_contract
+            .get_validator(&data_store.read(&db_txn), address)
+            .ok_or_else(|| Error::ValidatorNotFound(address.clone()))?;
 
         Ok(RPCData::with_blockchain(
-            Validator::from_validator(&validator.unwrap()),
+            Validator::from_validator(&validator),
             blockchain_proxy,
         ))
     } else {
@@ -476,17 +476,15 @@ impl BlockchainInterface for BlockchainDispatcher {
     ) -> RPCResult<Account, BlockchainState, Self::Error> {
         let blockchain_proxy = self.blockchain.read();
         if let BlockchainReadProxy::Full(ref blockchain) = blockchain_proxy {
-            if let Some(account) = blockchain.get_account_if_complete(&address) {
-                Account::try_from_account(
-                    address,
-                    account,
-                    BlockchainState::new(blockchain.block_number(), blockchain.head_hash()),
-                )
-                .map_err(Error::Core)
-            } else {
-                log::warn!("Could not get account for address");
-                return Err(Error::NoConsensus);
-            }
+            let account = blockchain
+                .get_account_if_complete(&address)
+                .ok_or(Error::NoConsensus)?;
+            Account::try_from_account(
+                address,
+                account,
+                BlockchainState::new(blockchain.block_number(), blockchain.head_hash()),
+            )
+            .map_err(Error::Core)
         } else {
             Err(Error::NotSupportedForLightBlockchain)
         }
@@ -498,12 +496,9 @@ impl BlockchainInterface for BlockchainDispatcher {
     ) -> RPCResult<Vec<Validator>, BlockchainState, Self::Error> {
         let blockchain_proxy = self.blockchain.read();
         if let BlockchainReadProxy::Full(ref blockchain) = blockchain_proxy {
-            let staking_contract =
-                if let Some(contract) = blockchain.get_staking_contract_if_complete(None) {
-                    contract
-                } else {
-                    return Err(Error::NoConsensus);
-                };
+            let staking_contract = blockchain
+                .get_staking_contract_if_complete(None)
+                .ok_or(Error::NoConsensus)?;
 
             let mut active_validators = vec![];
 
@@ -529,9 +524,10 @@ impl BlockchainInterface for BlockchainDispatcher {
     ) -> RPCResult<SlashedSlots, BlockchainState, Self::Error> {
         let blockchain_proxy = self.blockchain.read();
         if let BlockchainReadProxy::Full(ref blockchain) = blockchain_proxy {
-            // FIXME: Race condition
             let block_number = blockchain.block_number();
-            let staking_contract = blockchain.get_staking_contract();
+            let staking_contract = blockchain
+                .get_staking_contract_if_complete(None)
+                .ok_or(Error::NoConsensus)?;
 
             Ok(RPCData::with_blockchain(
                 SlashedSlots {
@@ -553,9 +549,10 @@ impl BlockchainInterface for BlockchainDispatcher {
     ) -> RPCResult<SlashedSlots, BlockchainState, Self::Error> {
         let blockchain_proxy = self.blockchain.read();
         if let BlockchainReadProxy::Full(ref blockchain) = blockchain_proxy {
-            // FIXME: Race condition
             let block_number = blockchain.block_number();
-            let staking_contract = blockchain.get_staking_contract();
+            let staking_contract = blockchain
+                .get_staking_contract_if_complete(None)
+                .ok_or(Error::NoConsensus)?;
 
             Ok(RPCData::with_blockchain(
                 SlashedSlots {
@@ -577,7 +574,9 @@ impl BlockchainInterface for BlockchainDispatcher {
         let blockchain_proxy = self.blockchain.read();
         if let BlockchainReadProxy::Full(ref blockchain) = blockchain_proxy {
             let block_number = blockchain.block_number();
-            let staking_contract = blockchain.get_staking_contract();
+            let staking_contract = blockchain
+                .get_staking_contract_if_complete(None)
+                .ok_or(Error::NoConsensus)?;
 
             Ok(RPCData::with_blockchain(
                 ParkedSet {
@@ -610,7 +609,9 @@ impl BlockchainInterface for BlockchainDispatcher {
         let blockchain_proxy = self.blockchain.read();
 
         if let BlockchainReadProxy::Full(ref blockchain) = blockchain_proxy {
-            let staking_contract = blockchain.get_staking_contract();
+            let staking_contract = blockchain
+                .get_staking_contract_if_complete(None)
+                .ok_or(Error::NoConsensus)?;
             let data_store = blockchain.get_staking_contract_store();
             let db_txn = blockchain.read_transaction();
             let staker =
@@ -632,18 +633,19 @@ impl BlockchainInterface for BlockchainDispatcher {
     ) -> RPCResult<Staker, BlockchainState, Self::Error> {
         let blockchain_proxy = self.blockchain.read();
         if let BlockchainReadProxy::Full(ref blockchain) = blockchain_proxy {
-            let staking_contract = blockchain.get_staking_contract();
+            let staking_contract = blockchain
+                .get_staking_contract_if_complete(None)
+                .ok_or(Error::NoConsensus)?;
             let data_store = blockchain.get_staking_contract_store();
             let db_txn = blockchain.read_transaction();
-            let staker = staking_contract.get_staker(&data_store.read(&db_txn), &address);
+            let staker = staking_contract
+                .get_staker(&data_store.read(&db_txn), &address)
+                .ok_or(Error::StakerNotFound(address))?;
 
-            match staker {
-                Some(s) => Ok(RPCData::with_blockchain(
-                    Staker::from_staker(&s),
-                    &blockchain_proxy,
-                )),
-                None => Err(Error::StakerNotFound(address)),
-            }
+            Ok(RPCData::with_blockchain(
+                Staker::from_staker(&staker),
+                &blockchain_proxy,
+            ))
         } else {
             Err(Error::NotSupportedForLightBlockchain)
         }
