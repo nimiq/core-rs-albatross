@@ -112,12 +112,10 @@ impl Ord for ForkProof {
 }
 
 impl SerializeContent for ForkProof {
-    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
+    fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<usize> {
         Ok(self.serialize(writer)?)
     }
 }
-
-impl Hash for ForkProof {}
 
 impl std::hash::Hash for ForkProof {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {

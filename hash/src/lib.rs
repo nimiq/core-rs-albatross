@@ -27,13 +27,11 @@ pub mod sha512;
 macro_rules! add_hash_trait_arr {
     ($t: ty) => {
         impl SerializeContent for $t {
-            fn serialize_content<W: io::Write>(&self, state: &mut W) -> io::Result<usize> {
+            fn serialize_content<W: io::Write, H>(&self, state: &mut W) -> io::Result<usize> {
                 state.write_all(&self[..])?;
                 return Ok(self.len());
             }
         }
-
-        impl Hash for $t {}
     };
 }
 
@@ -41,13 +39,11 @@ macro_rules! add_hash_trait_arr {
 macro_rules! hash_typed_array {
     ($name: ident) => {
         impl ::nimiq_hash::SerializeContent for $name {
-            fn serialize_content<W: io::Write>(&self, state: &mut W) -> io::Result<usize> {
+            fn serialize_content<W: io::Write, H>(&self, state: &mut W) -> io::Result<usize> {
                 state.write_all(&self.0[..])?;
                 return Ok(Self::SIZE);
             }
         }
-
-        impl ::nimiq_hash::Hash for $name {}
     };
 }
 
@@ -61,7 +57,7 @@ pub trait Hasher: Default + io::Write {
     }
 
     fn hash<T: SerializeContent>(&mut self, h: &T) -> &mut Self {
-        h.serialize_content(self).unwrap();
+        h.serialize_content::<_, Self::Output>(self).unwrap();
         self
     }
 
@@ -73,13 +69,20 @@ pub trait Hasher: Default + io::Write {
 }
 
 pub trait SerializeContent {
-    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize>;
+    fn serialize_content<W: io::Write, H: HashOutput>(&self, writer: &mut W) -> io::Result<usize>;
 }
 
-pub trait Hash: SerializeContent {
+pub trait Hash {
+    fn hash<H: HashOutput>(&self) -> H;
+}
+
+impl<T> Hash for T
+where
+    T: SerializeContent,
+{
     fn hash<H: HashOutput>(&self) -> H {
         let mut h = H::Builder::default();
-        self.serialize_content(&mut h).unwrap();
+        self.serialize_content::<_, H>(&mut h).unwrap();
         h.finish()
     }
 }
@@ -101,11 +104,11 @@ pub trait HashOutput:
     fn len() -> usize;
 }
 
-impl<H> SerializeContent for H
+impl<Hash> SerializeContent for Hash
 where
-    H: HashOutput,
+    Hash: HashOutput,
 {
-    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
+    fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<usize> {
         writer.write_all(self.as_bytes())?;
         Ok(Self::len())
     }
@@ -366,27 +369,24 @@ add_hash_trait_arr!([u8; 64]);
 add_hash_trait_arr!([u8]);
 add_hash_trait_arr!(Vec<u8>);
 impl<'a> SerializeContent for &'a [u8] {
-    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
+    fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<usize> {
         writer.write_all(self)?;
         Ok(self.len())
     }
 }
-impl<'a> Hash for &'a [u8] {}
 
 impl<'a> SerializeContent for &'a str {
-    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
+    fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<usize> {
         let b = self.as_bytes();
         writer.write_all(b)?;
         Ok(b.len())
     }
 }
-impl<'a> Hash for &'a str {}
 
 impl SerializeContent for String {
-    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
+    fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<usize> {
         let b = self.as_bytes();
         writer.write_all(b)?;
         Ok(b.len())
     }
 }
-impl Hash for String {}

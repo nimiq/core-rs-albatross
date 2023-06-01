@@ -5,11 +5,10 @@ use std::{
 };
 
 use ark_groth16::Proof;
-use ark_mnt6_753::{G2Projective as G2MNT6, MNT6_753};
+use ark_mnt6_753::MNT6_753;
 use beserial::{Deserialize, Serialize};
 use nimiq_block::MacroBlock;
 use nimiq_zkp::prove::prove;
-use nimiq_zkp_primitives::MacroBlock as ZKPMacroBlock;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     process::Command,
@@ -21,49 +20,31 @@ use crate::types::*;
 
 /// Generates the zk proof and sends it through the channel provided. Upon failure, the error is sent trough the channel provided.
 pub fn generate_new_proof(
-    block: MacroBlock,
-    prev_pks: Vec<G2MNT6>,
-    prev_header_hash: [u8; 32],
+    prev_block: MacroBlock,
     previous_proof: Option<Proof<MNT6_753>>,
-    genesis_state: [u8; 95],
+    final_block: MacroBlock,
+    genesis_header_hash: [u8; 32],
     prover_keys_path: &Path,
 ) -> Result<ZKPState, ZKProofGenerationError> {
-    let validators = block.get_validators();
+    let proof = prove(
+        prev_block.clone(),
+        final_block.clone(),
+        previous_proof.map(|proof| (proof, genesis_header_hash)),
+        true,
+        true,
+        prover_keys_path,
+    );
 
-    if let Some(validators) = validators {
-        let final_pks: Vec<_> = validators
-            .voting_keys()
-            .into_iter()
-            .map(|pub_key| pub_key.public_key)
-            .collect();
-
-        let block = ZKPMacroBlock::try_from(&block).expect("Invalid election block");
-
-        let proof = prove(
-            prev_pks,
-            prev_header_hash,
-            final_pks.clone(),
-            block.clone(),
-            previous_proof.map(|proof| (proof, genesis_state)),
-            true,
-            true,
-            prover_keys_path,
-        );
-
-        return match proof {
-            Ok(proof) => Ok(ZKPState {
-                latest_pks: final_pks,
-                latest_header_hash: block.header_hash.into(),
-                latest_block_number: block.block_number,
-                latest_proof: Some(proof),
-            }),
-            Err(e) => {
-                log::error!("Encountered error during proving: {:?}", e);
-                Err(ZKProofGenerationError::from(e))
-            }
-        };
+    match proof {
+        Ok(proof) => Ok(ZKPState {
+            latest_block: final_block,
+            latest_proof: Some(proof),
+        }),
+        Err(e) => {
+            log::error!("Encountered error during proving: {:?}", e);
+            Err(ZKProofGenerationError::from(e))
+        }
     }
-    Err(ZKProofGenerationError::InvalidBlock)
 }
 
 /// Starts the prover in a new child process.

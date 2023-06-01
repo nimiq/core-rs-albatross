@@ -7,7 +7,7 @@ use nimiq_hash::{blake2s::Blake2sWithParameterBlock, HashOutput};
 
 use crate::{CompressedSignature, SigHash};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub struct Signature {
     /// The projective form is the longer one, with three coordinates. The
     /// affine form is the shorter one, with only two coordinates. Calculation
@@ -90,7 +90,7 @@ impl Signature {
     }
 
     /// Multiplies a Signature by a u16. It's useful when you need to
-    /// validator's signature by its number of slots.
+    /// multiply a validator's signature by its number of slots.
     #[must_use]
     pub fn multiply(&self, x: u16) -> Self {
         let signature = self.signature.mul_bigint([x as u64]);

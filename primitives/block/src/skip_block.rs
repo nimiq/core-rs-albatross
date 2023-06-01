@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_bls::AggregatePublicKey;
-use nimiq_hash::{Hash, SerializeContent};
+use nimiq_hash::SerializeContent;
 use nimiq_hash_derive::SerializeContent;
 use nimiq_primitives::{policy::Policy, slots::Validators};
 use nimiq_vrf::VrfEntropy;
@@ -42,8 +42,6 @@ impl SkipBlockInfo {
 impl Message for SkipBlockInfo {
     const PREFIX: u8 = PREFIX_SKIP_BLOCK_INFO;
 }
-
-impl Hash for SkipBlockInfo {}
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]

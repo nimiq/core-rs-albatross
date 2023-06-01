@@ -66,6 +66,14 @@ impl PublicKey {
         .unwrap();
         CompressedPublicKey { public_key: buffer }
     }
+
+    /// Multiplies a PublicKey by a u16. It's useful when you need to
+    /// multiply a validator's public key by its number of slots.
+    #[must_use]
+    pub fn multiply(&self, x: u16) -> Self {
+        let public_key = self.public_key.mul_bigint([x as u64]);
+        PublicKey { public_key }
+    }
 }
 
 impl Eq for PublicKey {}

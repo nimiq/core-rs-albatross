@@ -8,7 +8,7 @@ use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_database::volatile::VolatileDatabase;
 use nimiq_genesis_builder::GenesisBuilder;
-use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_keys::{
     Address, KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey,
     PublicKey as SchnorrPublicKey, SecureGenerate,
@@ -255,7 +255,7 @@ fn create_dummy_micro_block(transactions: Option<Vec<Transaction>>) -> Block {
         seed: VrfSeed::default(),
         extra_data: vec![0; 1],
         state_root: Blake2bHash::default(),
-        body_root: Blake2bHash::default(),
+        body_root: Blake2sHash::default(),
         history_root: Blake2bHash::default(),
     };
     let mut executed_txns: Vec<ExecutedTransaction> = Vec::new();

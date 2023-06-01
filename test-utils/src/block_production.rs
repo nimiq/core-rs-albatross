@@ -10,7 +10,9 @@ use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::{
     AbstractBlockchain, ChunksPushError, ChunksPushResult, PushError, PushResult,
 };
-use nimiq_bls::{AggregateSignature, KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
+use nimiq_bls::{
+    AggregatePublicKey, AggregateSignature, KeyPair as BlsKeyPair, SecretKey as BlsSecretKey,
+};
 use nimiq_collections::BitSet;
 use nimiq_database::{traits::WriteTransaction, volatile::VolatileDatabase};
 use nimiq_genesis::NetworkId;
@@ -150,18 +152,21 @@ impl TemporaryBlockProducer {
                 .get_validators_for_epoch(Policy::epoch_at(blockchain.block_number() + 1), None);
             assert!(validators.is_ok());
 
-            Block::Macro(TemporaryBlockProducer::finalize_macro_block(
-                ProposalMessage {
-                    valid_round: None,
-                    proposal: macro_block_proposal.header,
-                    round: 0u32,
-                },
-                macro_block_proposal
-                    .body
-                    .or_else(|| Some(MacroBody::default()))
-                    .unwrap(),
-                block_hash,
-            ))
+            Block::Macro(
+                TemporaryBlockProducer::finalize_macro_block(
+                    ProposalMessage {
+                        valid_round: None,
+                        proposal: macro_block_proposal.header,
+                        round: 0u32,
+                    },
+                    macro_block_proposal
+                        .body
+                        .or_else(|| Some(MacroBody::default()))
+                        .unwrap(),
+                    block_hash,
+                )
+                .0,
+            )
         } else if skip_block {
             Block::Micro(self.producer.next_micro_block(
                 &blockchain,
@@ -192,7 +197,7 @@ impl TemporaryBlockProducer {
         proposal: ProposalMessage<MacroHeader>,
         body: MacroBody,
         block_hash: Blake2sHash,
-    ) -> MacroBlock {
+    ) -> (MacroBlock, AggregatePublicKey) {
         let keypair = BlsKeyPair::from(
             BlsSecretKey::deserialize_from_vec(&hex::decode(VOTING_KEY).unwrap()).unwrap(),
         );
@@ -215,6 +220,9 @@ impl TemporaryBlockProducer {
             .sign(&vote)
             .multiply(Policy::SLOTS)]);
 
+        let agg_pk =
+            AggregatePublicKey::from_public_keys(&[keypair.public_key.multiply(Policy::SLOTS)]);
+
         // create and populate signers BitSet.
         let mut signers = BitSet::new();
         for i in 0..Policy::SLOTS {
@@ -227,11 +235,16 @@ impl TemporaryBlockProducer {
             sig: MultiSignature::new(signature, signers),
         });
 
-        MacroBlock {
-            header: proposal.proposal,
-            justification,
-            body: Some(body),
-        }
+        assert!(agg_pk.verify(&vote, &justification.as_ref().unwrap().sig.signature));
+
+        (
+            MacroBlock {
+                header: proposal.proposal,
+                justification,
+                body: Some(body),
+            },
+            agg_pk,
+        )
     }
 
     pub fn create_skip_block_proof(&self) -> SkipBlockProof {

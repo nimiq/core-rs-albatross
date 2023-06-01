@@ -1,12 +1,13 @@
+use ark_ec::Group;
 use nimiq_block::{
     Block, BlockError, BlockHeader, ForkProof, MacroBlock, MacroBody, MacroHeader, MicroBlock,
     MicroBody, MicroHeader, MicroJustification, MultiSignature, SkipBlockProof,
 };
-use nimiq_bls::AggregateSignature;
+use nimiq_bls::{AggregateSignature, G2Projective, PublicKey as BlsPublicKey};
 use nimiq_collections::BitSet;
-use nimiq_hash::{Blake2bHash, Hash};
-use nimiq_keys::{KeyPair, Signature};
-use nimiq_primitives::{networks::NetworkId, policy::Policy, slots::Validators};
+use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
+use nimiq_keys::{Address, KeyPair, PublicKey as SchnorrPublicKey, Signature};
+use nimiq_primitives::{networks::NetworkId, policy::Policy, slots::ValidatorsBuilder};
 use nimiq_test_log::test;
 use nimiq_test_utils::blockchain::generate_transactions;
 use nimiq_transaction::ExecutedTransaction;
@@ -22,7 +23,7 @@ fn test_verify_header_version() {
         seed: VrfSeed::default(),
         extra_data: [].to_vec(),
         state_root: Blake2bHash::default(),
-        body_root: Blake2bHash::default(),
+        body_root: Blake2sHash::default(),
         history_root: Blake2bHash::default(),
     };
     let header = BlockHeader::Micro(micro_header.clone());
@@ -55,7 +56,7 @@ fn test_verify_header_extra_data() {
         seed: VrfSeed::default(),
         extra_data: vec![0; 33],
         state_root: Blake2bHash::default(),
-        body_root: Blake2bHash::default(),
+        body_root: Blake2sHash::default(),
         history_root: Blake2bHash::default(),
     };
     let header = BlockHeader::Micro(micro_header.clone());
@@ -97,7 +98,7 @@ fn test_verify_body_root() {
         seed: VrfSeed::default(),
         extra_data: vec![0; 30],
         state_root: Blake2bHash::default(),
-        body_root: Blake2bHash::default(),
+        body_root: Blake2sHash::default(),
         history_root: Blake2bHash::default(),
     };
 
@@ -139,7 +140,7 @@ fn test_verify_skip_block() {
         seed: VrfSeed::default(),
         extra_data: vec![],
         state_root: Blake2bHash::default(),
-        body_root: Blake2bHash::default(),
+        body_root: Blake2sHash::default(),
         history_root: Blake2bHash::default(),
     };
 
@@ -194,7 +195,7 @@ fn test_verify_micro_block_body_txns() {
         seed: VrfSeed::default(),
         extra_data: vec![],
         state_root: Blake2bHash::default(),
-        body_root: Blake2bHash::default(),
+        body_root: Blake2sHash::default(),
         history_root: Blake2bHash::default(),
     };
 
@@ -277,7 +278,7 @@ fn test_verify_micro_block_body_fork_proofs() {
         seed: VrfSeed::default(),
         extra_data: vec![],
         state_root: Blake2bHash::default(),
-        body_root: Blake2bHash::default(),
+        body_root: Blake2sHash::default(),
         history_root: Blake2bHash::default(),
     };
 
@@ -387,7 +388,7 @@ fn test_verify_election_macro_body() {
         seed: VrfSeed::default(),
         extra_data: vec![0; 30],
         state_root: Blake2bHash::default(),
-        body_root: Blake2bHash::default(),
+        body_root: Blake2sHash::default(),
         history_root: Blake2bHash::default(),
     };
 
@@ -410,7 +411,15 @@ fn test_verify_election_macro_body() {
     assert_eq!(block.verify(), Err(BlockError::InvalidValidators));
 
     // Fix the validators set
-    macro_body.validators = Some(Validators::new(vec![]));
+    let mut validators = ValidatorsBuilder::new();
+    for _ in 0..Policy::SLOTS {
+        validators.push(
+            Address::default(),
+            BlsPublicKey::new(G2Projective::generator()).compress(),
+            SchnorrPublicKey::default(),
+        );
+    }
+    macro_body.validators = Some(validators.build());
 
     macro_header.body_root = macro_body.hash();
     let block = Block::Macro(MacroBlock {

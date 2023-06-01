@@ -574,7 +574,7 @@ impl Deserialize for Transaction {
 }
 
 impl SerializeContent for Transaction {
-    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
+    fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<usize> {
         let mut size = 0;
         size += SerializeWithLength::serialize::<u16, W>(&self.data, writer)?;
         size += Serialize::serialize(&self.sender, writer)?;
@@ -589,8 +589,6 @@ impl SerializeContent for Transaction {
         Ok(size)
     }
 }
-
-impl Hash for Transaction {}
 
 impl std::hash::Hash for Transaction {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {

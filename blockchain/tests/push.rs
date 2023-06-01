@@ -3,7 +3,7 @@ use nimiq_block_production::test_custom_block::{
     next_macro_block, next_micro_block, next_skip_block, BlockConfig,
 };
 use nimiq_blockchain_interface::{PushError, PushError::InvalidBlock, PushResult};
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::{Blake2bHash, Blake2sHash};
 use nimiq_primitives::policy::Policy;
 use nimiq_test_log::test;
 use nimiq_test_utils::block_production::TemporaryBlockProducer;
@@ -309,7 +309,7 @@ fn it_validates_block_time() {
 fn it_validates_body_hash() {
     expect_push_micro_block(
         BlockConfig {
-            body_hash: Some(Blake2bHash::default()),
+            body_hash: Some(Blake2sHash::default()),
             ..Default::default()
         },
         Err(InvalidBlock(BlockError::BodyHashMismatch)),

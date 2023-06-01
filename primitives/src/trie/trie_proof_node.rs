@@ -110,7 +110,7 @@ impl TrieProofNode {
 }
 
 impl SerializeContent for TrieProofNode {
-    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
+    fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<usize> {
         let mut size = 0;
         size += self.key.serialize(writer).unwrap();
         size += 1;
@@ -135,8 +135,6 @@ impl SerializeContent for TrieProofNode {
         Ok(size)
     }
 }
-
-impl Hash for TrieProofNode {}
 
 #[cfg(test)]
 mod test {

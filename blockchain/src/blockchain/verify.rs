@@ -1,7 +1,7 @@
 use nimiq_block::{Block, BlockError, BlockHeader, MacroBody};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushError};
 use nimiq_database::TransactionProxy as DBTransaction;
-use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_hash::{Blake2sHash, Hash};
 
 use crate::{blockchain_state::BlockchainState, Blockchain};
 
@@ -256,7 +256,7 @@ impl Blockchain {
                         transactions: real_reward_transactions,
                     };
 
-                    let real_body_hash = real_body.hash::<Blake2bHash>();
+                    let real_body_hash = real_body.hash::<Blake2sHash>();
                     if macro_block.header.body_root != real_body_hash {
                         warn!(
                             %block,

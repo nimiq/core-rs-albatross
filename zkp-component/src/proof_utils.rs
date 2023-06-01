@@ -1,5 +1,5 @@
 use ark_groth16::Proof;
-use ark_mnt6_753::{G2Projective as G2MNT6, MNT6_753};
+use ark_mnt6_753::MNT6_753;
 use nimiq_block::MacroBlock;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
@@ -25,7 +25,7 @@ pub fn validate_proof(
     if let Ok((new_block, genesis_block, proof)) =
         get_proof_macro_blocks(blockchain, proof, election_block)
     {
-        return validate_proof_get_new_state(proof, &new_block, genesis_block).is_ok();
+        return validate_proof_get_new_state(proof, new_block, genesis_block).is_ok();
     }
     false
 }
@@ -65,29 +65,17 @@ pub(crate) fn get_proof_macro_blocks(
 /// Validates proof and returns the new zkp state. Assumes the blocks provided are valid.
 pub(crate) fn validate_proof_get_new_state(
     proof: Proof<MNT6_753>,
-    new_block: &MacroBlock,
+    new_block: MacroBlock,
     genesis_block: MacroBlock,
 ) -> Result<ZKPState, Error> {
-    let new_pks: Vec<G2MNT6> = new_block
-        .get_validators()
-        .ok_or(Error::InvalidBlock)?
-        .voting_keys()
-        .into_iter()
-        .map(|pub_key| pub_key.public_key)
-        .collect();
-
     if verify(
-        genesis_block.block_number(),
         genesis_block.hash().into(),
-        new_block.block_number(),
         new_block.hash().into(),
         proof.clone(),
         &ZKP_VERIFYING_KEY,
     )? {
         return Ok(ZKPState {
-            latest_pks: new_pks,
-            latest_header_hash: new_block.hash_blake2s(),
-            latest_block_number: new_block.block_number(),
+            latest_block: new_block,
             latest_proof: Some(proof),
         });
     }

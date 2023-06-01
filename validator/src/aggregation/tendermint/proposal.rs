@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_block::{MacroBody, MacroHeader};
-use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
+use nimiq_hash::{Blake2sHash, Hash};
 use nimiq_keys::Signature as SchnorrSignature;
 use nimiq_network_interface::{
     network::Network,
@@ -16,8 +16,8 @@ use crate::aggregation::tendermint::state::MacroState;
 #[derive(Clone, std::fmt::Debug)]
 pub struct Body(pub MacroBody);
 
-impl Inherent<Blake2bHash> for Body {
-    fn hash(&self) -> Blake2bHash {
+impl Inherent<Blake2sHash> for Body {
+    fn hash(&self) -> Blake2sHash {
         self.0.hash()
     }
 }
@@ -27,13 +27,13 @@ impl Inherent<Blake2bHash> for Body {
 #[derive(Clone, std::fmt::Debug)]
 pub struct Header<Id>(pub MacroHeader, pub Option<Id>);
 
-impl<Id> Proposal<Blake2sHash, Body, Blake2bHash> for Header<Id> {
+impl<Id> Proposal<Blake2sHash, Body, Blake2sHash> for Header<Id> {
     fn hash(&self, _t: &Body) -> Blake2sHash {
         // PITODO ask basti if we need the body
         self.0.hash()
     }
 
-    fn inherent_hash(&self) -> Blake2bHash {
+    fn inherent_hash(&self) -> Blake2sHash {
         self.0.body_root.clone()
     }
 }

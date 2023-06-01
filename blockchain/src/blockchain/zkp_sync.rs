@@ -60,15 +60,12 @@ impl Blockchain {
         let genesis_hash = genesis_block.hash();
 
         let genesis_header_hash = <[u8; 32]>::from(genesis_hash.clone());
-        let final_block_number = block.block_number();
         let final_header_hash = <[u8; 32]>::from(block.hash());
 
         // Verify the zk proof.
         if !trusted_proof {
             let verify_result = verify(
-                genesis_block.block_number(),
                 genesis_header_hash,
-                final_block_number,
                 final_header_hash,
                 proof,
                 &ZKP_VERIFYING_KEY,

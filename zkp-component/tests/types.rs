@@ -4,8 +4,6 @@ use ark_groth16::Proof;
 use beserial::{Deserialize, Serialize};
 use nimiq_block::MacroBlock;
 use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue};
-use nimiq_hash::Blake2sHash;
-use nimiq_primitives::policy::Policy;
 use nimiq_test_utils::zkp_test_data::ZKP_TEST_KEYS_PATH;
 use nimiq_zkp_component::types::{ProofInput, ZKPState, ZKProof};
 
@@ -50,9 +48,7 @@ fn it_serializes_and_deserializes_to_bytes_zk_proof() {
 #[test]
 fn it_serializes_and_deserializes_zkp_state() {
     let state = ZKPState {
-        latest_pks: vec![Default::default(); 512],
-        latest_header_hash: Blake2sHash::default(),
-        latest_block_number: Policy::blocks_per_epoch(),
+        latest_block: MacroBlock::default(),
         latest_proof: Some(Proof::default()),
     };
     let serialized = Serialize::serialize_to_vec(&state);
@@ -60,9 +56,7 @@ fn it_serializes_and_deserializes_zkp_state() {
     assert_eq!(deserialized, state);
 
     let state = ZKPState {
-        latest_pks: vec![],
-        latest_header_hash: Blake2sHash::default(),
-        latest_block_number: 0,
+        latest_block: MacroBlock::default(),
         latest_proof: None,
     };
     let serialized = Serialize::serialize_to_vec(&state);
@@ -73,11 +67,10 @@ fn it_serializes_and_deserializes_zkp_state() {
 #[test]
 fn it_serializes_and_deserializes_proof_input() {
     let proof_input = ProofInput {
-        latest_pks: vec![Default::default()],
-        latest_header_hash: Blake2sHash::default(),
-        block: MacroBlock::default(),
+        previous_block: MacroBlock::default(),
         previous_proof: Some(Proof::default()),
-        genesis_state: [2; 95],
+        final_block: MacroBlock::default(),
+        genesis_header_hash: [2; 32],
         prover_keys_path: PathBuf::from(ZKP_TEST_KEYS_PATH),
     };
     let serialized = Serialize::serialize_to_vec(&proof_input);
@@ -85,11 +78,10 @@ fn it_serializes_and_deserializes_proof_input() {
     assert_eq!(deserialized, proof_input);
 
     let proof_input = ProofInput {
-        latest_pks: vec![],
-        latest_header_hash: Blake2sHash::default(),
-        block: MacroBlock::default(),
+        previous_block: MacroBlock::default(),
         previous_proof: None,
-        genesis_state: [0; 95],
+        final_block: MacroBlock::default(),
+        genesis_header_hash: [0; 32],
         prover_keys_path: PathBuf::from(ZKP_TEST_KEYS_PATH),
     };
     let serialized = Serialize::serialize_to_vec(&proof_input);

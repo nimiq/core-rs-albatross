@@ -7,7 +7,6 @@ pub(crate) mod gadgets;
 pub mod metadata;
 #[cfg(feature = "zkp-prover")]
 pub mod setup;
-pub mod utils;
 
 #[cfg(feature = "test-setup")]
 pub mod test_setup;

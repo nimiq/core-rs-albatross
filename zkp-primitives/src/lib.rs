@@ -3,16 +3,12 @@
 //! need an off-circuit version of a primitive that is however guaranteed to be consistent with the on-circuit
 //! primitive used by one of our zk-SNARKs. They are also used for testing.
 
-pub use macro_block::*;
 pub use pedersen::PEDERSEN_PARAMETERS;
 pub use serialize::*;
-pub use state_commitment::*;
 pub use vk_commitment::*;
 
-mod macro_block;
 pub mod pedersen;
 mod serialize;
-mod state_commitment;
 mod vk_commitment;
 
 use std::io;
@@ -34,4 +30,6 @@ pub enum NanoZKPError {
     Circuit(#[from] SynthesisError),
     #[error("empty proof")]
     EmptyProof,
+    #[error("invalid block")]
+    InvalidBlock,
 }

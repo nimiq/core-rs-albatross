@@ -25,7 +25,7 @@ use nimiq_database::{
     volatile::VolatileDatabase,
 };
 use nimiq_genesis::{NetworkId, NetworkInfo};
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::{Blake2bHash, Blake2sHash};
 use nimiq_network_interface::{
     network::Network,
     request::{Handle, RequestCommon},
@@ -643,7 +643,7 @@ async fn can_reset_chain_of_chunks() {
             let mut block = blockchain.read().head();
             match block {
                 Block::Micro(ref mut micro_block) => {
-                    micro_block.header.body_root = Blake2bHash::default();
+                    micro_block.header.body_root = Blake2sHash::default();
                 }
                 _ => unreachable!(),
             }

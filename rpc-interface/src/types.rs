@@ -20,6 +20,7 @@ use nimiq_primitives::{coin::Coin, policy::Policy, slots::Validators};
 use nimiq_transaction::{
     account::htlc_contract::{AnyHash, HashAlgorithm as HTLCContractHashAlgorithm},
     inherent::Inherent as BaseInherent,
+    reward::RewardTransaction,
 };
 use nimiq_vrf::VrfSeed;
 use serde::{Deserialize, Serialize};
@@ -123,7 +124,7 @@ pub struct Block {
     pub extra_data: Vec<u8>,
     pub state_hash: Blake2bHash,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub body_hash: Option<Blake2bHash>,
+    pub body_hash: Option<Blake2sHash>,
     pub history_hash: Blake2bHash,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -168,6 +169,64 @@ pub enum BlockAdditionalFields {
 }
 
 impl Block {
+    pub fn from_macro_block(
+        macro_block: nimiq_block::MacroBlock,
+        include_body: bool,
+    ) -> Result<Self, BlockchainError> {
+        let block_number = macro_block.block_number();
+        let timestamp = macro_block.timestamp();
+        let size = macro_block.serialized_size() as u32;
+        let batch = Policy::batch_at(block_number);
+        let epoch = Policy::epoch_at(block_number);
+
+        let slots = macro_block.get_validators().map(Slots::from_slots);
+
+        let (lost_reward_set, disabled_set) = match macro_block.body.clone() {
+            None => (None, None),
+            Some(body) => (Some(body.lost_reward_set), Some(body.disabled_set)),
+        };
+
+        // Get the reward inherents and convert them to reward transactions.
+        let mut transactions = None;
+        if include_body {
+            transactions = macro_block.body.as_ref().map(|body| {
+                body.transactions
+                    .iter()
+                    .map(|tx| ExecutedTransaction {
+                        transaction: Transaction::from_reward_tx(tx, block_number),
+                        execution_result: true,
+                    })
+                    .collect()
+            });
+        }
+
+        Ok(Block {
+            hash: macro_block.hash(),
+            size,
+            batch,
+            epoch,
+            version: macro_block.header.version,
+            number: block_number,
+            timestamp,
+            parent_hash: macro_block.header.parent_hash,
+            seed: macro_block.header.seed,
+            extra_data: macro_block.header.extra_data,
+            state_hash: macro_block.header.state_root,
+            body_hash: Some(macro_block.header.body_root),
+            history_hash: macro_block.header.history_root,
+            transactions,
+            additional_fields: BlockAdditionalFields::Macro {
+                is_election_block: Policy::is_election_block_at(block_number),
+                parent_election_hash: macro_block.header.parent_election_hash,
+                interlink: macro_block.header.interlink,
+                slots,
+                lost_reward_set,
+                disabled_set,
+                justification: macro_block.justification.map(TendermintProof::from),
+            },
+        })
+    }
+
     pub fn from_block(
         blockchain: &BlockchainReadProxy,
         block: nimiq_block::Block,
@@ -181,68 +240,7 @@ impl Block {
 
         match block {
             nimiq_block::Block::Macro(macro_block) => {
-                let slots = macro_block.get_validators().map(Slots::from_slots);
-
-                let (lost_reward_set, disabled_set) = match macro_block.body.clone() {
-                    None => (None, None),
-                    Some(body) => (Some(body.lost_reward_set), Some(body.disabled_set)),
-                };
-
-                // Get the reward inherents and convert them to reward transactions.
-                let transactions = if let BlockchainReadProxy::Full(blockchain) = blockchain {
-                    if include_body {
-                        let ext_txs = blockchain
-                            .history_store
-                            .get_block_transactions(block_number, None);
-
-                        let mut txs = vec![];
-
-                        for ext_tx in ext_txs {
-                            if ext_tx.is_inherent() {
-                                if let Ok(tx) = ext_tx.into_transaction() {
-                                    txs.push(ExecutedTransaction::from_blockchain(
-                                        tx,
-                                        block_number,
-                                        timestamp,
-                                        blockchain.block_number(),
-                                    ));
-                                }
-                            }
-                        }
-
-                        Some(txs)
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                };
-
-                Ok(Block {
-                    hash: macro_block.hash(),
-                    size,
-                    batch,
-                    epoch,
-                    version: macro_block.header.version,
-                    number: block_number,
-                    timestamp,
-                    parent_hash: macro_block.header.parent_hash,
-                    seed: macro_block.header.seed,
-                    extra_data: macro_block.header.extra_data,
-                    state_hash: macro_block.header.state_root,
-                    body_hash: Some(macro_block.header.body_root),
-                    history_hash: macro_block.header.history_root,
-                    transactions,
-                    additional_fields: BlockAdditionalFields::Macro {
-                        is_election_block: Policy::is_election_block_at(block_number),
-                        parent_election_hash: macro_block.header.parent_election_hash,
-                        interlink: macro_block.header.interlink,
-                        slots,
-                        lost_reward_set,
-                        disabled_set,
-                        justification: macro_block.justification.map(TendermintProof::from),
-                    },
-                })
+                Self::from_macro_block(macro_block, include_body)
             }
 
             nimiq_block::Block::Micro(micro_block) => {
@@ -452,7 +450,7 @@ impl ExecutedTransaction {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Transaction {
     pub hash: Blake2bHash,
@@ -516,6 +514,18 @@ impl Transaction {
             data: transaction.data,
             validity_start_height: transaction.validity_start_height,
             proof: transaction.proof,
+        }
+    }
+
+    fn from_reward_tx(reward_tx: &RewardTransaction, block_number: u32) -> Self {
+        Self {
+            block_number: Some(block_number),
+            from: Policy::COINBASE_ADDRESS,
+            to: reward_tx.recipient.clone(),
+            value: reward_tx.value,
+            fee: Coin::ZERO,
+            validity_start_height: block_number,
+            ..Default::default()
         }
     }
 }
@@ -961,20 +971,20 @@ pub fn is_of_log_type_and_related_to_addresses(
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct ZKPState {
-    latest_header_hash: Blake2sHash,
-    latest_block_number: u32,
+    latest_block: Block,
     latest_proof: Option<String>,
 }
 
 impl ZKPState {
     pub fn with_zkp_state(zkp_state: &nimiq_zkp_component::types::ZKPState) -> Self {
+        let latest_block = Block::from_macro_block(zkp_state.latest_block.clone(), true).unwrap();
         let latest_proof = zkp_state
             .latest_proof
             .as_ref()
             .map(|latest_proof| format!("{latest_proof:?}"));
+
         Self {
-            latest_header_hash: zkp_state.latest_header_hash.clone(),
-            latest_block_number: zkp_state.latest_block_number,
+            latest_block,
             latest_proof,
         }
     }

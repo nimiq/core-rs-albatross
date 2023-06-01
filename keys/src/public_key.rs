@@ -7,7 +7,7 @@ use std::{
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use hex::FromHex;
-use nimiq_hash::{Hash, SerializeContent};
+use nimiq_hash::SerializeContent;
 
 use crate::{
     errors::{KeysError, ParseError},
@@ -145,12 +145,10 @@ impl Serialize for PublicKey {
 }
 
 impl SerializeContent for PublicKey {
-    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
+    fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<usize> {
         Ok(self.serialize(writer)?)
     }
 }
-
-impl Hash for PublicKey {}
 
 impl std::hash::Hash for PublicKey {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {

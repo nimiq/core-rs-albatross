@@ -15,7 +15,6 @@ use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent, Direction}
 use nimiq_genesis::NetworkInfo;
 use nimiq_network_interface::network::Network;
 use nimiq_primitives::policy::Policy;
-use nimiq_zkp_primitives::state_commitment;
 use parking_lot::{lock_api::RwLockUpgradableReadGuard, RwLock, RwLockWriteGuard};
 use tokio::sync::oneshot::{channel, Sender};
 
@@ -39,7 +38,7 @@ pub struct ZKProver<N: Network> {
     sender: Option<Sender<()>>,
     pending_election_blocks: VecDeque<MacroBlock>,
     election_stream: BoxStream<'static, MacroBlock>,
-    genesis_state: [u8; 95],
+    genesis_header_hash: [u8; 32],
     proof_future:
         Option<BoxFuture<'static, Result<(ZKPState, MacroBlock), ZKProofGenerationError>>>,
     prover_keys_path: PathBuf,
@@ -57,12 +56,9 @@ impl<N: Network> ZKProver<N> {
         let network_info = NetworkInfo::from_network_id(blockchain.read().network_id());
         let genesis_block = network_info.genesis_block().unwrap_macro();
 
-        let genesis_state =
-            state_commitment(genesis_block.block_number(), &genesis_block.hash().into());
-
         // Prepends the election blocks from the blockchain for which we don't have a proof yet
         let blockchain_rg = blockchain.read();
-        let current_state_height = zkp_state.read().latest_block_number;
+        let current_state_height = zkp_state.read().latest_block.block_number();
         let blockchain_election_height = blockchain_rg.state.election_head.block_number();
 
         let pending_election_blocks = if blockchain_election_height > current_state_height {
@@ -111,7 +107,7 @@ impl<N: Network> ZKProver<N> {
             network,
             zkp_state,
             sender: None,
-            genesis_state,
+            genesis_header_hash: genesis_block.hash_blake2s().0,
             pending_election_blocks,
             election_stream: Box::pin(blockchain_election_rx),
             proof_future: None,
@@ -146,23 +142,24 @@ impl<N: Network> ZKProver<N> {
     fn launch_proof_generation(&mut self, block: MacroBlock) {
         let zkp_state = self.zkp_state.read();
         assert!(
-                zkp_state.latest_block_number
+                zkp_state.latest_block.block_number()
                 >= block.block_number() - Policy::blocks_per_epoch(),
                 "The current state (block height: {}) should never lag behind more than one epoch. Current height: {}",
-                zkp_state.latest_block_number,
+                zkp_state.latest_block,
                 block.block_number(),
             );
-        if zkp_state.latest_block_number == block.block_number() - Policy::blocks_per_epoch() {
+        if zkp_state.latest_block.block_number()
+            == block.block_number() - Policy::blocks_per_epoch()
+        {
             let (sender, recv) = channel();
             self.proof_future = Some(
                 launch_generate_new_proof(
                     recv,
                     ProofInput {
-                        block: block.clone(),
-                        latest_pks: zkp_state.latest_pks.clone(),
-                        latest_header_hash: zkp_state.latest_header_hash.clone(),
+                        previous_block: zkp_state.latest_block.clone(),
                         previous_proof: zkp_state.latest_proof.clone(),
-                        genesis_state: self.genesis_state,
+                        final_block: block.clone(),
+                        genesis_header_hash: self.genesis_header_hash,
                         prover_keys_path: self.prover_keys_path.clone(),
                     },
                     self.prover_path.clone(),
@@ -173,7 +170,7 @@ impl<N: Network> ZKProver<N> {
             self.sender = Some(sender);
         } else {
             log::debug!(
-                block_height = zkp_state.latest_block_number,
+                block_height = zkp_state.latest_block.block_number(),
                 current_height = block.block_number(),
                 "Won't generate zkp for a block of the past",
             );
@@ -215,7 +212,7 @@ impl<N: Network> Stream for ZKProver<N> {
 
                         // If we received a more recent proof in the meanwhile, we should have cancelled the proof generation process already.
                         assert!(
-                            zkp_state_lock.latest_block_number < new_zkp_state.latest_block_number,
+                            zkp_state_lock.latest_block.block_number() < new_zkp_state.latest_block.block_number(),
                             "The generated proof should always be more recent than the current state"
                         );
 

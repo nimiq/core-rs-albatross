@@ -1,13 +1,17 @@
 use std::fmt;
 
-use beserial::{Deserialize, Serialize};
+use ark_ec::Group;
+use beserial::{Deserialize, Serialize, SerializeWithLength};
+use nimiq_bls::{G2Projective, PublicKey as BlsPublicKey};
 use nimiq_collections::bitset::BitSet;
-use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, SerializeContent};
-use nimiq_hash_derive::SerializeContent;
-use nimiq_primitives::{policy::Policy, slots::Validators};
+use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, HashOutput, Hasher, SerializeContent};
+use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
+use nimiq_primitives::{
+    policy::Policy,
+    slots::{Validators, ValidatorsBuilder},
+};
 use nimiq_transaction::reward::RewardTransaction;
 use nimiq_vrf::VrfSeed;
-use nimiq_zkp_primitives::MacroBlock as ZKPMacroBlock;
 use thiserror::Error;
 
 use crate::{
@@ -86,6 +90,11 @@ impl MacroBlock {
         self.header.block_number
     }
 
+    /// Returns the block number of this macro block.
+    pub fn timestamp(&self) -> u64 {
+        self.header.timestamp
+    }
+
     /// Return the round of this macro block.
     pub fn round(&self) -> u32 {
         self.header.round
@@ -110,31 +119,34 @@ impl MacroBlock {
 
         Ok(())
     }
-}
 
-impl<'a> TryFrom<&'a MacroBlock> for ZKPMacroBlock {
-    type Error = ();
+    /// Creates a default block that has body and justification.
+    pub fn non_empty_default() -> Self {
+        let mut validators = ValidatorsBuilder::new();
+        for _ in 0..Policy::SLOTS {
+            validators.push(
+                Address::default(),
+                BlsPublicKey::new(G2Projective::generator()).compress(),
+                SchnorrPublicKey::default(),
+            );
+        }
 
-    fn try_from(block: &'a MacroBlock) -> Result<ZKPMacroBlock, Self::Error> {
-        if let Some(proof) = block.justification.as_ref() {
-            Ok(ZKPMacroBlock {
-                block_number: block.block_number(),
-                round_number: proof.round,
-                header_hash: block.hash_blake2s(),
-                signature: proof.sig.signature.get_point(),
-                signer_bitmap: proof
-                    .sig
-                    .signers
-                    .iter_bits()
-                    .take(Policy::SLOTS as usize)
-                    .collect(),
-            })
-        } else {
-            Ok(ZKPMacroBlock::without_signatures(
-                block.block_number(),
-                0,
-                block.hash_blake2s(),
-            ))
+        let validators = Some(validators.build());
+        let body = MacroBody {
+            validators,
+            ..Default::default()
+        };
+        let body_root = body.hash();
+        MacroBlock {
+            header: MacroHeader {
+                body_root,
+                ..Default::default()
+            },
+            body: Some(body),
+            justification: Some(TendermintProof {
+                round: 0,
+                sig: Default::default(),
+            }),
         }
     }
 }
@@ -146,7 +158,7 @@ impl fmt::Display for MacroBlock {
 }
 
 /// The struct representing the header of a Macro block (can be either checkpoint or election).
-#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize, SerializeContent)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MacroHeader {
     /// The version number of the block. Changing this always results in a hard fork.
     pub version: u16,
@@ -177,7 +189,7 @@ pub struct MacroHeader {
     /// state.
     pub state_root: Blake2bHash,
     /// The root of the Merkle tree of the body. It just acts as a commitment to the body.
-    pub body_root: Blake2bHash,
+    pub body_root: Blake2sHash,
     /// A merkle root over all of the transactions that happened in the current epoch.
     pub history_root: Blake2bHash,
 }
@@ -185,8 +197,6 @@ pub struct MacroHeader {
 impl Message for MacroHeader {
     const PREFIX: u8 = PREFIX_TENDERMINT_PROPOSAL;
 }
-
-impl Hash for MacroHeader {}
 
 impl fmt::Display for MacroHeader {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
@@ -199,8 +209,39 @@ impl fmt::Display for MacroHeader {
     }
 }
 
+impl SerializeContent for MacroHeader {
+    fn serialize_content<W: std::io::Write, H: HashOutput>(
+        &self,
+        writer: &mut W,
+    ) -> std::io::Result<usize> {
+        let mut size = 0;
+        size += self.version.serialize(writer)?;
+        size += self.block_number.serialize(writer)?;
+        size += self.round.serialize(writer)?;
+        let mut a = vec![];
+        self.round.serialize(&mut a)?;
+
+        size += self.timestamp.serialize(writer)?;
+        size += self.parent_hash.serialize(writer)?;
+        size += self.parent_election_hash.serialize(writer)?;
+
+        let interlink_hash = H::Builder::default()
+            .chain(&self.interlink.serialize_to_vec::<u8>())
+            .finish();
+        size += interlink_hash.serialize(writer)?;
+
+        size += self.seed.serialize(writer)?;
+        size += self.extra_data.serialize::<u8, _>(writer)?;
+        size += self.state_root.serialize(writer)?;
+        size += self.body_root.serialize(writer)?;
+        size += self.history_root.serialize(writer)?;
+
+        Ok(size)
+    }
+}
+
 /// The struct representing the body of a Macro block (can be either checkpoint or election).
-#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize, SerializeContent)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MacroBody {
     /// Contains all the information regarding the next validator set, i.e. their validator
     /// public key, their reward address and their assigned validator slots.
@@ -228,7 +269,28 @@ impl MacroBody {
     }
 }
 
-impl Hash for MacroBody {}
+impl SerializeContent for MacroBody {
+    fn serialize_content<W: std::io::Write, H: HashOutput>(
+        &self,
+        writer: &mut W,
+    ) -> std::io::Result<usize> {
+        let mut size = 0;
+        // PITODO: do we need to hash something if None?
+        if let Some(ref validators) = self.validators {
+            let pk_tree_root = validators.hash::<H>();
+            size += pk_tree_root.serialize(writer)?;
+        } else {
+            size += 0u8.serialize(writer)?;
+        }
+        size += self.lost_reward_set.serialize(writer)?;
+        size += self.disabled_set.serialize(writer)?;
+
+        let transactions_hash = self.transactions.serialize_to_vec::<u16>().hash::<H>();
+        size += transactions_hash.serialize(writer)?;
+
+        Ok(size)
+    }
+}
 
 #[derive(Error, Debug)]
 pub enum IntoSlotsError {

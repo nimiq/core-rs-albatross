@@ -14,7 +14,7 @@ use rand::Rng;
 
 use crate::gadgets::{mnt6::VKCommitmentGadget, recursive_input::RecursiveInputVar};
 
-/// This is the merger circuit. It takes as inputs the genesis state commitment, a final state commitment
+/// This is the merger circuit. It takes as inputs the genesis header hash, a final header hash
 /// and a verifying key and it produces a proof that there exist two valid SNARK proofs that transform
 /// the genesis state into the final state passing through some intermediate state.
 /// The circuit is composed of two SNARK verifiers in a row. It's used to verify a Merger Wrapper proof
@@ -44,12 +44,12 @@ pub struct MergerCircuit {
     proof_merger_wrapper: Proof<MNT6_753>,
     proof_macro_block_wrapper: Proof<MNT6_753>,
     vk_merger_wrapper: VerifyingKey<MNT6_753>,
-    intermediate_state_commitment: [u8; 95],
+    intermediate_header_hash: [u8; 32],
     genesis_flag: bool,
 
     // Inputs (public)
-    genesis_state_commitment: [u8; 95],
-    final_state_commitment: [u8; 95],
+    genesis_header_hash: [u8; 32],
+    final_header_hash: [u8; 32],
     vk_commitment: [u8; 95],
 }
 
@@ -59,10 +59,10 @@ impl MergerCircuit {
         proof_merger_wrapper: Proof<MNT6_753>,
         proof_macro_block_wrapper: Proof<MNT6_753>,
         vk_merger_wrapper: VerifyingKey<MNT6_753>,
-        intermediate_state_commitment: [u8; 95],
+        intermediate_header_hash: [u8; 32],
         genesis_flag: bool,
-        genesis_state_commitment: [u8; 95],
-        final_state_commitment: [u8; 95],
+        genesis_header_hash: [u8; 32],
+        final_header_hash: [u8; 32],
         vk_commitment: [u8; 95],
     ) -> Self {
         Self {
@@ -70,10 +70,10 @@ impl MergerCircuit {
             proof_merger_wrapper,
             proof_macro_block_wrapper,
             vk_merger_wrapper,
-            intermediate_state_commitment,
+            intermediate_header_hash,
             genesis_flag,
-            genesis_state_commitment,
-            final_state_commitment,
+            genesis_header_hash,
+            final_header_hash,
             vk_commitment,
         }
     }
@@ -97,19 +97,19 @@ impl MergerCircuit {
             beta_g2: G2Affine::rand(rng),
             gamma_g2: G2Affine::rand(rng),
             delta_g2: G2Affine::rand(rng),
-            gamma_abc_g1: vec![G1Affine::rand(rng); 7],
+            gamma_abc_g1: vec![G1Affine::rand(rng); 5],
         };
 
-        let mut intermediate_state_commitment = [0u8; 95];
-        rng.fill_bytes(&mut intermediate_state_commitment);
+        let mut intermediate_header_hash = [0u8; 32];
+        rng.fill_bytes(&mut intermediate_header_hash);
 
         let genesis_flag = bool::rand(rng);
 
-        let mut genesis_state_commitment = [0u8; 95];
-        rng.fill_bytes(&mut genesis_state_commitment);
+        let mut genesis_header_hash = [0u8; 32];
+        rng.fill_bytes(&mut genesis_header_hash);
 
-        let mut final_state_commitment = [0u8; 95];
-        rng.fill_bytes(&mut final_state_commitment);
+        let mut final_header_hash = [0u8; 32];
+        rng.fill_bytes(&mut final_header_hash);
 
         let mut vk_commitment = [0u8; 95];
         rng.fill_bytes(&mut vk_commitment);
@@ -120,10 +120,10 @@ impl MergerCircuit {
             proof_merger_wrapper,
             proof_macro_block_wrapper,
             vk_merger_wrapper,
-            intermediate_state_commitment,
+            intermediate_header_hash,
             genesis_flag,
-            genesis_state_commitment,
-            final_state_commitment,
+            genesis_header_hash,
+            final_header_hash,
             vk_commitment,
         )
     }
@@ -153,21 +153,20 @@ impl ConstraintSynthesizer<MNT6Fq> for MergerCircuit {
                 Ok(&self.vk_merger_wrapper)
             })?;
 
-        let intermediate_state_commitment_bytes =
-            UInt8::<MNT6Fq>::new_witness_vec(cs.clone(), &self.intermediate_state_commitment)?;
+        let intermediate_header_hash_bytes =
+            UInt8::<MNT6Fq>::new_witness_vec(cs.clone(), &self.intermediate_header_hash)?;
 
         let genesis_flag_var = Boolean::new_witness(cs.clone(), || Ok(&self.genesis_flag))?;
 
         // Allocate all the inputs.
         // Since we're only passing them through, allocate as Vec<FqVar>
-        let genesis_state_commitment_bytes =
-            UInt8::<MNT6Fq>::new_input_vec(cs.clone(), &self.genesis_state_commitment)?;
+        let genesis_header_hash_bytes =
+            UInt8::<MNT6Fq>::new_input_vec(cs.clone(), &self.genesis_header_hash)?;
 
-        let final_state_commitment_bytes =
-            UInt8::<MNT6Fq>::new_input_vec(cs.clone(), &self.final_state_commitment)?;
+        let final_header_hash_bytes =
+            UInt8::<MNT6Fq>::new_input_vec(cs.clone(), &self.final_header_hash)?;
 
-        let vk_commitment_bytes =
-            UInt8::<MNT6Fq>::new_input_vec(cs.clone(), &self.vk_commitment[..])?;
+        let vk_commitment_bytes = UInt8::<MNT6Fq>::new_input_vec(cs.clone(), &self.vk_commitment)?;
 
         // Verify equality for vk commitment. It just checks that the private input is correct by
         // committing to it and then comparing the result with the vk commitment given as a public input.
@@ -175,19 +174,25 @@ impl ConstraintSynthesizer<MNT6Fq> for MergerCircuit {
 
         vk_commitment_bytes.enforce_equal(&reference_commitment)?;
 
-        // Verify equality of genesis and intermediate state commitments. If the genesis flag is set to
+        // Verify equality of genesis and intermediate header hashes. If the genesis flag is set to
         // true, it enforces the equality. If it is set to false, it doesn't. This is necessary for
         // the genesis block, for the first merger circuit.
-        genesis_state_commitment_bytes
-            .conditional_enforce_equal(&intermediate_state_commitment_bytes, &genesis_flag_var)?;
+        genesis_header_hash_bytes
+            .conditional_enforce_equal(&intermediate_header_hash_bytes, &genesis_flag_var)?;
 
         // Verify the ZK proof for the Merger Wrapper circuit. If the genesis flag is set to false,
         // it enforces the verification. If it is set to true, it doesn't. This is necessary for
         // the first epoch, for the first merger circuit.
         let mut proof_inputs = RecursiveInputVar::new();
-        proof_inputs.push(&genesis_state_commitment_bytes)?;
-        proof_inputs.push(&intermediate_state_commitment_bytes)?;
+        proof_inputs.push(&genesis_header_hash_bytes)?;
+        proof_inputs.push(&intermediate_header_hash_bytes)?;
         proof_inputs.push(&vk_commitment_bytes)?;
+
+        eprintln!(
+            "merger_wrapper gamma_abc_g1: {}",
+            self.vk_merger_wrapper.gamma_abc_g1.len()
+        );
+        eprintln!("merger_wrapper number inputs: {}", proof_inputs.len());
 
         Groth16VerifierGadget::<MNT6_753, PairingVar>::verify(
             &vk_merger_wrapper_var,
@@ -198,8 +203,14 @@ impl ConstraintSynthesizer<MNT6Fq> for MergerCircuit {
 
         // Verify the ZK proof for the Macro Block Wrapper circuit.
         let mut proof_inputs = RecursiveInputVar::new();
-        proof_inputs.push(&intermediate_state_commitment_bytes)?;
-        proof_inputs.push(&final_state_commitment_bytes)?;
+        proof_inputs.push(&intermediate_header_hash_bytes)?;
+        proof_inputs.push(&final_header_hash_bytes)?;
+
+        eprintln!(
+            "macro_block gamma_abc_g1: {}",
+            self.vk_macro_block_wrapper.gamma_abc_g1.len()
+        );
+        eprintln!("macro_block number inputs: {}", proof_inputs.len());
 
         Groth16VerifierGadget::<MNT6_753, PairingVar>::verify(
             &vk_macro_block_wrapper_var,

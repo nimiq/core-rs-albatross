@@ -27,7 +27,7 @@ pub struct BlockConfig {
     pub parent_hash: Option<Blake2bHash>,
     pub seed: Option<VrfSeed>,
     pub missing_body: bool,
-    pub body_hash: Option<Blake2bHash>,
+    pub body_hash: Option<Blake2sHash>,
     pub state_root: Option<Blake2bHash>,
     pub history_root: Option<Blake2bHash>,
 
@@ -294,7 +294,7 @@ fn next_macro_block_proposal(
         seed,
         extra_data: config.extra_data.clone(),
         state_root: Blake2bHash::default(),
-        body_root: Blake2bHash::default(),
+        body_root: Blake2sHash::default(),
         history_root: Blake2bHash::default(),
     };
 

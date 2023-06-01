@@ -8,7 +8,7 @@ use std::{
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use curve25519_dalek::scalar::Scalar;
 use hex::FromHex;
-use nimiq_hash::{Hash, SerializeContent};
+use nimiq_hash::SerializeContent;
 use nimiq_utils::key_rng::SecureGenerate;
 use rand_core::{CryptoRng, RngCore};
 use sha2::{Digest as _, Sha512};
@@ -94,12 +94,10 @@ impl Serialize for PrivateKey {
 }
 
 impl SerializeContent for PrivateKey {
-    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
+    fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<usize> {
         Ok(self.serialize(writer)?)
     }
 }
-
-impl Hash for PrivateKey {}
 
 impl std::hash::Hash for PrivateKey {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {

@@ -24,7 +24,7 @@ use nimiq_zkp_circuits::setup::{load_verifying_key_from_file, setup};
 use nimiq_zkp_component::{
     proof_gen_utils::generate_new_proof, proof_utils::validate_proof, types::ZKPState,
 };
-use nimiq_zkp_primitives::{state_commitment, NanoZKPError};
+use nimiq_zkp_primitives::NanoZKPError;
 use parking_lot::RwLock;
 use tracing_subscriber::{filter::Targets, prelude::*};
 
@@ -99,17 +99,15 @@ async fn produce_two_consecutive_valid_zk_proofs() {
     let genesis_block = network_info.genesis_block().unwrap_macro();
     let zkp_state = ZKPState::with_genesis(&genesis_block).expect("Invalid genesis block");
 
-    let genesis_state =
-        state_commitment(genesis_block.block_number(), &genesis_block.hash().into());
+    let genesis_header_hash = genesis_block.hash_blake2s().0;
 
     log::info!("Going to wait for the 1st proof");
     // Waits for the proof generation and verifies the proof.
     let zkp_state = generate_new_proof(
-        block,
-        zkp_state.latest_pks,
-        zkp_state.latest_header_hash.into(),
+        zkp_state.latest_block,
         zkp_state.latest_proof,
-        genesis_state,
+        block,
+        genesis_header_hash,
         Path::new(DEFAULT_TEST_KEYS_PATH),
     )
     .unwrap();
@@ -133,11 +131,10 @@ async fn produce_two_consecutive_valid_zk_proofs() {
     log::info!("Going to wait for the 2nd proof");
 
     let zkp_state = generate_new_proof(
-        block,
-        zkp_state.latest_pks,
-        zkp_state.latest_header_hash.into(),
+        zkp_state.latest_block,
         zkp_state.latest_proof,
-        genesis_state,
+        block,
+        genesis_header_hash,
         Path::new(DEFAULT_TEST_KEYS_PATH),
     )
     .unwrap();

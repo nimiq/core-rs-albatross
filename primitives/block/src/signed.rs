@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use beserial::{Deserialize, Serialize, WriteBytesExt};
 use nimiq_bls::{PublicKey, SecretKey, SigHash, Signature};
-use nimiq_hash::{Blake2sHasher, Hasher, SerializeContent};
+use nimiq_hash::{Blake2sHash, Blake2sHasher, Hasher, SerializeContent};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SignedMessage<M: Message> {
@@ -71,7 +71,7 @@ pub trait Message:
         let mut h = Blake2sHasher::new();
         h.write_u8(Self::PREFIX)
             .expect("Failed to write prefix to hasher for signature.");
-        self.serialize_content(&mut h)
+        self.serialize_content::<_, Blake2sHash>(&mut h)
             .expect("Failed to write message to hasher for signature.");
         h.finish()
     }

@@ -3,7 +3,7 @@ use std::io;
 use beserial::{Deserialize, Serialize};
 use log::error;
 use nimiq_bls::AggregatePublicKey;
-use nimiq_hash::{Blake2sHash, Hash, SerializeContent};
+use nimiq_hash::{Blake2sHash, SerializeContent};
 use nimiq_primitives::{policy::Policy, slots::Validators};
 
 use crate::{
@@ -128,7 +128,7 @@ pub struct TendermintVote {
 /// * step byte, which is also the message prefix always comes first
 /// * options have the same byte length when they are None as when they are Some(x) to prevent overflowing one option into the other.
 impl SerializeContent for TendermintVote {
-    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
+    fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<usize> {
         // First of all serialize step as this also serves as the unique prefix for this message type.
         let mut size = self.id.step.serialize(writer)?;
 
@@ -145,5 +145,3 @@ impl SerializeContent for TendermintVote {
         Ok(size)
     }
 }
-
-impl Hash for TendermintVote {}

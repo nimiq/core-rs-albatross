@@ -45,17 +45,13 @@ impl LightBlockchain {
         block.verify()?;
 
         // Prepare the inputs to verify the proof.
-        let genesis_block_number = this.genesis_block.block_number();
         let genesis_header_hash = <[u8; 32]>::from(this.genesis_block.hash());
-        let final_block_number = block.block_number();
         let final_header_hash = <[u8; 32]>::from(block_hash.clone());
 
         // Verify the zk proof.
         if !trusted_proof {
             let verify_result = verify(
-                genesis_block_number,
                 genesis_header_hash,
-                final_block_number,
                 final_header_hash,
                 proof,
                 &ZKP_VERIFYING_KEY,

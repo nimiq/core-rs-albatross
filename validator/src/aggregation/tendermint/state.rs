@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, fmt::Debug, io};
 use beserial::{Deserialize, DeserializeWithLength, Serialize, SerializeWithLength};
 use nimiq_block::{MacroBody, MacroHeader};
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
-use nimiq_hash::{Blake2bHash, Blake2sHash};
+use nimiq_hash::Blake2sHash;
 use nimiq_keys::Signature as SchnorrSignature;
 use nimiq_tendermint::{State as TendermintState, Step};
 use nimiq_validator_network::ValidatorNetwork;
@@ -23,7 +23,7 @@ pub struct MacroState {
     round_proposals: BTreeMap<u32, BTreeMap<Blake2sHash, (Option<u32>, (SchnorrSignature, u16))>>,
     votes: BTreeMap<(u32, Step), Option<Blake2sHash>>,
     best_votes: BTreeMap<(u32, Step), TendermintContribution>,
-    inherents: BTreeMap<Blake2bHash, MacroBody>,
+    inherents: BTreeMap<Blake2sHash, MacroBody>,
     locked: Option<(u32, Blake2sHash)>,
     valid: Option<(u32, Blake2sHash)>,
 }

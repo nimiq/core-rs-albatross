@@ -3,8 +3,11 @@ use std::{fs::File, io, time::Instant};
 use ark_groth16::Proof;
 use ark_serialize::CanonicalDeserialize;
 use nimiq_primitives::{networks::NetworkId, policy::Policy};
+use nimiq_test_utils::{
+    block_production::TemporaryBlockProducer, blockchain_with_rng::produce_macro_blocks_with_rng,
+    test_rng::test_rng,
+};
 use nimiq_zkp::{verify::verify, ZKP_VERIFYING_KEY};
-use nimiq_zkp_circuits::utils::create_test_blocks;
 
 /// Verifies a proof for a chain of election blocks. The random parameters generation uses always
 /// the same seed, so it will always generate the same data (validators, signatures, etc).
@@ -22,15 +25,33 @@ fn main() {
         .read_line(&mut data)
         .expect("Couldn't read user input.");
 
-    let number_epochs: u64 = data.trim().parse().expect("Couldn't read user input.");
+    let number_epochs: u32 = data.trim().parse().expect("Couldn't read user input.");
 
     println!("====== Generating random inputs ======");
+    let block_producer = TemporaryBlockProducer::new();
 
     // Get initial random parameters.
-    let (_, genesis_header_hash, _, _, _) = create_test_blocks(0);
+    produce_macro_blocks_with_rng(
+        &block_producer.producer,
+        &block_producer.blockchain,
+        number_epochs as usize * Policy::batches_per_epoch() as usize,
+        &mut test_rng(true),
+    );
 
+    let blockchain_rg = block_producer.blockchain.read();
+    let genesis_header_hash = blockchain_rg
+        .get_block_at(0, true, None)
+        .unwrap()
+        .unwrap_macro()
+        .hash_blake2s()
+        .0;
     // Get final random parameters.
-    let (_, final_header_hash, _, _, _) = create_test_blocks(number_epochs);
+    let final_header_hash = blockchain_rg
+        .get_block_at(number_epochs * Policy::blocks_per_epoch(), true, None)
+        .unwrap()
+        .unwrap_macro()
+        .hash_blake2s()
+        .0;
 
     // Load the proof from file.
     let mut file = File::open(format!("proofs/proof_epoch_{number_epochs}.bin")).unwrap();
@@ -43,9 +64,7 @@ fn main() {
 
     // Verify proof.
     let result = verify(
-        0,
         genesis_header_hash,
-        Policy::blocks_per_epoch() * number_epochs as u32,
         final_header_hash,
         proof,
         &ZKP_VERIFYING_KEY,

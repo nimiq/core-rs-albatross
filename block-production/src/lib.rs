@@ -7,7 +7,7 @@ use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_database::traits::WriteTransaction;
-use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_keys::KeyPair as SchnorrKeyPair;
 use nimiq_primitives::policy::Policy;
 use nimiq_transaction::{
@@ -266,7 +266,7 @@ impl BlockProducer {
             seed,
             extra_data,
             state_root: Blake2bHash::default(),
-            body_root: Blake2bHash::default(),
+            body_root: Blake2sHash::default(),
             history_root: Blake2bHash::default(),
         };
 

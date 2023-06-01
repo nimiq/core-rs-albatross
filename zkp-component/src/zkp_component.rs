@@ -66,7 +66,7 @@ impl<N: Network> ZKPComponentProxy<N> {
         if zkp_requests_l.is_finished() {
             zkp_requests_l.request_zkps(
                 peers,
-                self.zkp_state.read().latest_block_number,
+                self.zkp_state.read().latest_block.block_number(),
                 request_election_block,
             );
             return true;
@@ -79,7 +79,7 @@ impl<N: Network> ZKPComponentProxy<N> {
         peer_id: N::PeerId,
         request_election_block: bool,
     ) -> (Result<Result<ZKPRequestEvent, Error>, RecvError>, N::PeerId) {
-        let block_number = self.zkp_state.read().latest_block_number;
+        let block_number = self.zkp_state.read().latest_block.block_number();
         let request =
             self.zkp_requests
                 .lock()
@@ -260,10 +260,10 @@ impl<N: Network> ZKPComponent<N> {
         let zkp_state_lock = self.zkp_state.upgradable_read();
 
         // Ensures that the proof is more recent than our current state and validates the proof.
-        if new_block.block_number() <= zkp_state_lock.latest_block_number {
+        if new_block.block_number() <= zkp_state_lock.latest_block.block_number() {
             return Err(Error::OutdatedProof);
         }
-        let new_zkp_state = validate_proof_get_new_state(proof, &new_block, genesis_block)?;
+        let new_zkp_state = validate_proof_get_new_state(proof, new_block.clone(), genesis_block)?;
 
         let mut zkp_state_lock = RwLockUpgradableReadGuard::upgrade(zkp_state_lock);
         *zkp_state_lock = new_zkp_state;

@@ -15,7 +15,7 @@ use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_collections::BitSet;
 use nimiq_database::traits::WriteTransaction;
 use nimiq_handel::{aggregation::Aggregation, identity::IdentityRegistry};
-use nimiq_hash::{Blake2bHash, Blake2sHash, Blake2sHasher, Hash, Hasher, SerializeContent};
+use nimiq_hash::{Blake2sHash, Blake2sHasher, Hash, Hasher, SerializeContent};
 use nimiq_keys::Signature as SchnorrSignature;
 use nimiq_primitives::{policy::Policy, slots::Validators};
 use nimiq_tendermint::{
@@ -162,7 +162,7 @@ where
         proposal_msg
             .proposal
             .0
-            .serialize_content(&mut h)
+            .serialize_content::<_, Blake2sHash>(&mut h)
             .expect("Must be able to serialize content of the proposal to hasher");
         proposal_msg
             .round
@@ -191,7 +191,7 @@ where
     type Proposal = Header<<TValidatorNetwork as ValidatorNetwork>::PubsubId>;
     type ProposalHash = Blake2sHash;
     type Inherent = Body;
-    type InherentHash = Blake2bHash;
+    type InherentHash = Blake2sHash;
     type Aggregation = TendermintContribution;
     type AggregationMessage = AggregateMessage;
     type ProposalSignature = (SchnorrSignature, u16);
@@ -520,7 +520,7 @@ where
             panic!("Not enough votes to produce a proof")
         } else {
             // make sure the body fits the proposal
-            if inherent.0.hash::<Blake2bHash>() == proposal.0.body_root {
+            if inherent.0.hash::<Blake2sHash>() == proposal.0.body_root {
                 // Assemble the block and return it.
                 MacroBlock {
                     header: proposal.0,

@@ -4,7 +4,7 @@ use nimiq_account::{BlockLogger, BlockState};
 use nimiq_block::{MacroBlock, MacroBody, MacroHeader};
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_database::{traits::WriteTransaction, volatile::VolatileDatabase};
-use nimiq_hash::{Blake2bHasher, Hasher};
+use nimiq_hash::{Blake2bHasher, Blake2sHasher, Hasher};
 use nimiq_keys::Address;
 use nimiq_primitives::{coin::Coin, networks::NetworkId, policy::Policy, slots::SlashedSlot};
 use nimiq_test_log::test;
@@ -27,6 +27,7 @@ fn it_can_create_batch_finalization_inherents() {
     );
 
     let hash = Blake2bHasher::default().digest(&[]);
+    let hash_blake2s = Blake2sHasher::default().digest(&[]);
     let macro_header = MacroHeader {
         version: 1,
         block_number: 42,
@@ -38,7 +39,7 @@ fn it_can_create_batch_finalization_inherents() {
         seed: VrfSeed::default(),
         extra_data: vec![],
         state_root: hash.clone(),
-        body_root: hash.clone(),
+        body_root: hash_blake2s,
         history_root: hash,
     };
 
@@ -198,6 +199,7 @@ fn it_can_penalize_delayed_batch() {
     );
 
     let hash = Blake2bHasher::default().digest(&[]);
+    let hash_blake2s = Blake2sHasher::default().digest(&[]);
     let macro_header = MacroHeader {
         version: 1,
         block_number: 42,
@@ -209,7 +211,7 @@ fn it_can_penalize_delayed_batch() {
         seed: VrfSeed::default(),
         extra_data: vec![],
         state_root: hash.clone(),
-        body_root: hash.clone(),
+        body_root: hash_blake2s,
         history_root: hash,
     };
 

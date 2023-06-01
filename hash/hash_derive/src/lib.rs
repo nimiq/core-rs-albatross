@@ -16,7 +16,7 @@ fn impl_serialize_content(ast: &syn::DeriveInput) -> TokenStream {
     let gen = quote! {
         impl SerializeContent for #name where #name: Serialize {
             #[allow(unused_mut,unused_variables)]
-            fn serialize_content<W: ::std::io::Write>(&self, writer: &mut W) -> ::std::io::Result<usize> {
+            fn serialize_content<W: ::std::io::Write, H>(&self, writer: &mut W) -> ::std::io::Result<usize> {
                 match self.serialize(writer) {
                     Ok(n) => Ok(n),
                     Err(e) => Err(e.into()),

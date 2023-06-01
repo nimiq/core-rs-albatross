@@ -8,7 +8,7 @@ This does not really belong here, but as there would otherwise be a cyclic depen
 TODO: Move this out of primitives and into validator/aggregation once the messages crate is no longer required.
 */
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 pub struct MultiSignature {
     pub signature: AggregateSignature,

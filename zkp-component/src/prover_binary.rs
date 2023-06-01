@@ -15,17 +15,16 @@ pub async fn prover_main() -> Result<(), SerializingError> {
 
     log::info!(
         "Starting proof generation for block {:?}",
-        proof_input.as_ref().map(|input| &input.block)
+        proof_input.as_ref().map(|input| &input.final_block)
     );
 
     // Then generate proof.
     let result = match proof_input {
         Ok(proof_input) => generate_new_proof(
-            proof_input.block,
-            proof_input.latest_pks,
-            proof_input.latest_header_hash.into(),
+            proof_input.previous_block,
             proof_input.previous_proof,
-            proof_input.genesis_state,
+            proof_input.final_block,
+            proof_input.genesis_header_hash,
             &proof_input.prover_keys_path,
         ),
         Err(e) => Err(ZKProofGenerationError::from(e)),

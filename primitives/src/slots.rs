@@ -23,6 +23,7 @@ use beserial::{
     SerializingError, WriteBytesExt,
 };
 use nimiq_bls::{lazy::LazyPublicKey as LazyBlsPublicKey, G2Projective, PublicKey as BlsPublicKey};
+use nimiq_hash::{Hash, HashOutput};
 use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
 
 use crate::{merkle_tree::merkle_tree_construct, policy::Policy};
@@ -167,10 +168,17 @@ impl Validators {
         pks
     }
 
+    /// Iterates over the validators.
+    pub fn iter(&self) -> Iter<Validator> {
+        self.validators.iter()
+    }
+}
+
+impl Hash for Validators {
     /// This function is meant to calculate the public key tree "off-circuit". Generating the public key
     /// tree with this function guarantees that it is compatible with the ZK circuit.
     // These should be removed once pk_tree_root does something different than returning default
-    pub fn hash(&self) -> [u8; 32] {
+    fn hash<H: HashOutput>(&self) -> H {
         let public_keys = self.voting_keys_g2();
 
         // Checking that the number of public keys is equal to the number of validator slots.
@@ -205,11 +213,6 @@ impl Validators {
 
         // Calculate the merkle tree root.
         merkle_tree_construct(inputs)
-    }
-
-    /// Iterates over the validators.
-    pub fn iter(&self) -> Iter<Validator> {
-        self.validators.iter()
     }
 }
 

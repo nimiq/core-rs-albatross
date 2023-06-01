@@ -7,9 +7,10 @@ use ark_serialize::CanonicalDeserialize;
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_genesis::NetworkInfo;
+use nimiq_hash::HashOutput;
 use nimiq_zkp_circuits::test_setup::ToxicWaste;
 use nimiq_zkp_component::types::ZKProof;
-use nimiq_zkp_primitives::{state_commitment, vk_commitment};
+use nimiq_zkp_primitives::vk_commitment;
 use parking_lot::RwLock;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
@@ -72,26 +73,14 @@ pub fn simulate_merger_wrapper(
     let network_info = NetworkInfo::from_network_id(blockchain.read().network_id());
     let genesis_block = network_info.genesis_block().unwrap_macro();
 
-    let genesis_block_number = genesis_block.block_number();
-    let genesis_header_hash = genesis_block.hash().into();
-
-    let final_block_number = block.block_number();
-    let final_header_hash = block.hash().into();
+    let mut genesis_header_hash = genesis_block.hash().as_bytes().to_field_elements().unwrap();
+    let mut final_header_hash = block.hash().as_bytes().to_field_elements().unwrap();
 
     // Prepare the inputs.
     let mut inputs = vec![];
 
-    inputs.append(
-        &mut state_commitment(genesis_block_number, &genesis_header_hash)
-            .to_field_elements()
-            .unwrap(),
-    );
-
-    inputs.append(
-        &mut state_commitment(final_block_number, &final_header_hash)
-            .to_field_elements()
-            .unwrap(),
-    );
+    inputs.append(&mut genesis_header_hash);
+    inputs.append(&mut final_header_hash);
 
     inputs.append(
         &mut vk_commitment(verifying_key.clone())

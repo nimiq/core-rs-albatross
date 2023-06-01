@@ -1,7 +1,7 @@
 use std::io;
 
 use beserial::Serialize;
-use nimiq_hash::SerializeContent;
+use nimiq_hash::{HashOutput, SerializeContent};
 use nimiq_keys::KeyPair;
 use nimiq_primitives::account::AccountType;
 use nimiq_transaction::{SignatureProof, Transaction};
@@ -304,22 +304,25 @@ impl TransactionProofBuilder {
 }
 
 impl SerializeContent for TransactionProofBuilder {
-    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> Result<usize, io::Error> {
+    fn serialize_content<W: io::Write, H: HashOutput>(
+        &self,
+        writer: &mut W,
+    ) -> Result<usize, io::Error> {
         match self {
             TransactionProofBuilder::Basic(builder) => {
-                SerializeContent::serialize_content(&builder.transaction, writer)
+                SerializeContent::serialize_content::<_, H>(&builder.transaction, writer)
             }
             TransactionProofBuilder::Vesting(builder) => {
-                SerializeContent::serialize_content(&builder.transaction, writer)
+                SerializeContent::serialize_content::<_, H>(&builder.transaction, writer)
             }
             TransactionProofBuilder::Htlc(builder) => {
-                SerializeContent::serialize_content(&builder.transaction, writer)
+                SerializeContent::serialize_content::<_, H>(&builder.transaction, writer)
             }
             TransactionProofBuilder::InStaking(builder) => {
-                SerializeContent::serialize_content(&builder.transaction, writer)
+                SerializeContent::serialize_content::<_, H>(&builder.transaction, writer)
             }
             TransactionProofBuilder::OutStaking(builder) => {
-                SerializeContent::serialize_content(&builder.transaction, writer)
+                SerializeContent::serialize_content::<_, H>(&builder.transaction, writer)
             }
         }
     }

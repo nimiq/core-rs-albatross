@@ -350,6 +350,7 @@ impl ChainStore {
 #[cfg(test)]
 mod tests {
     use nimiq_block::{MicroBlock, MicroHeader, MicroJustification};
+    use nimiq_hash::Blake2sHash;
     use nimiq_test_log::test;
     use nimiq_test_utils::test_rng::test_rng;
     use rand::{Rng, RngCore};
@@ -373,7 +374,7 @@ mod tests {
                 seed: Default::default(),
                 extra_data: vec![],
                 state_root: hash_1.clone(),
-                body_root: hash_1.clone(),
+                body_root: Blake2sHash::default(),
                 history_root: hash_1,
             },
             justification: Some(MicroJustification::Micro(Default::default())),
@@ -393,7 +394,7 @@ mod tests {
                 seed: Default::default(),
                 extra_data: vec![],
                 state_root: hash_2.clone(),
-                body_root: hash_2.clone(),
+                body_root: Blake2sHash::default(),
                 history_root: hash_2,
             },
             justification: Some(MicroJustification::Micro(Default::default())),

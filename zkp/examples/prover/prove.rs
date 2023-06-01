@@ -9,8 +9,12 @@ use ark_groth16::Proof;
 use ark_serialize::CanonicalSerialize;
 use log::metadata::LevelFilter;
 use nimiq_log::TargetsExt;
+use nimiq_primitives::policy::Policy;
+use nimiq_test_utils::{
+    block_production::TemporaryBlockProducer, blockchain_with_rng::produce_macro_blocks_with_rng,
+    test_rng::test_rng,
+};
 use nimiq_zkp::prove::prove;
-use nimiq_zkp_circuits::utils::create_test_blocks;
 use tracing_subscriber::{filter::Targets, prelude::*};
 
 fn initialize() {
@@ -41,36 +45,49 @@ fn main() {
         .read_line(&mut data)
         .expect("Couldn't read user input.");
 
-    let number_epochs: u64 = data.trim().parse().expect("Couldn't read user input.");
+    let number_epochs: u32 = data.trim().parse().expect("Couldn't read user input.");
 
     println!("====== Proof generation for Nano Sync initiated ======");
 
     let start = Instant::now();
 
-    let mut genesis_state_commitment = [0; 95];
+    let mut genesis_header_hash = [0; 32];
     let mut genesis_data = None;
     let mut proof = Proof::default();
 
+    let block_producer = TemporaryBlockProducer::new();
+    produce_macro_blocks_with_rng(
+        &block_producer.producer,
+        &block_producer.blockchain,
+        number_epochs as usize * Policy::batches_per_epoch() as usize,
+        &mut test_rng(true),
+    );
+
     for i in 0..number_epochs {
         // Get random parameters.
-        let (prev_pks, prev_header_hash, final_pks, block, genesis_state_commitment_opt) =
-            create_test_blocks(i);
+        let blockchain_rg = block_producer.blockchain.read();
+        let prev_block = blockchain_rg
+            .get_block_at(i * Policy::blocks_per_epoch(), true, None)
+            .unwrap()
+            .unwrap_macro();
+        let final_block = blockchain_rg
+            .get_block_at((i + 1) * Policy::blocks_per_epoch(), true, None)
+            .unwrap()
+            .unwrap_macro();
 
         // Create genesis data.
         if i == 0 {
-            genesis_state_commitment = genesis_state_commitment_opt.unwrap();
+            genesis_header_hash = prev_block.hash_blake2s().0;
         } else {
-            genesis_data = Some((proof, genesis_state_commitment.clone()))
-        };
+            genesis_data = Some((proof, genesis_header_hash.clone()))
+        }
 
         println!("Proving epoch {}", i + 1);
 
         // Generate proof.
         proof = prove(
-            prev_pks,
-            prev_header_hash,
-            final_pks.clone(),
-            block,
+            prev_block,
+            final_block,
             genesis_data.clone(),
             true,
             true,

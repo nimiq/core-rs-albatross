@@ -31,6 +31,10 @@ impl<F: PrimeField, CF: PrimeField> RecursiveInputVar<F, CF> {
         Ok(())
     }
 
+    pub fn len(&self) -> usize {
+        self.val.len()
+    }
+
     /// Takes a vector of Booleans and transforms it into a vector of a vector of Booleans, ready to be
     /// transformed into field elements, which is the way we represent inputs to circuits (as a gadget).
     /// This assumes that both the constraint field and the target field have the same size in bits

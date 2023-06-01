@@ -19,7 +19,7 @@ pub fn compute_root_from_content_slice<D: Hasher, T: SerializeContent>(values: &
     let mut v: Vec<D::Output> = Vec::with_capacity(values.len());
     for h in values {
         let mut hasher = D::default();
-        h.serialize_content(&mut hasher).unwrap();
+        h.serialize_content::<_, D::Output>(&mut hasher).unwrap();
         v.push(hasher.finish());
     }
     compute_root_from_hashes::<D::Output>(&v)

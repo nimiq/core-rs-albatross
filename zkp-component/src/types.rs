@@ -1,7 +1,7 @@
 use std::{borrow::Cow, io, path::PathBuf, sync::Arc};
 
 use ark_groth16::Proof;
-use ark_mnt6_753::{G2Projective as G2MNT6, MNT6_753};
+use ark_mnt6_753::MNT6_753;
 use ark_serialize::{
     CanonicalDeserialize, CanonicalSerialize, SerializationError as ArkSerializingError,
 };
@@ -13,12 +13,11 @@ use nimiq_block::MacroBlock;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue};
-use nimiq_hash::Blake2sHash;
 use nimiq_network_interface::{
     network::{Network, Topic},
     request::{Handle, RequestCommon, RequestError, RequestMarker},
 };
-use nimiq_zkp_primitives::{MacroBlock as ZKPMacroBlock, NanoZKPError};
+use nimiq_zkp_primitives::NanoZKPError;
 use parking_lot::RwLock;
 use thiserror::Error;
 
@@ -67,29 +66,14 @@ pub enum ZKPRequestEvent {
 /// The genesis block has no zk proof.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ZKPState {
-    pub latest_pks: Vec<G2MNT6>,
-    pub latest_header_hash: Blake2sHash,
-    pub latest_block_number: u32,
+    pub latest_block: MacroBlock,
     pub latest_proof: Option<Proof<MNT6_753>>,
 }
 
 impl ZKPState {
     pub fn with_genesis(genesis_block: &MacroBlock) -> Result<Self, Error> {
-        let latest_pks: Vec<_> = genesis_block
-            .get_validators()
-            .ok_or(Error::InvalidBlock)?
-            .voting_keys()
-            .into_iter()
-            .map(|pub_key| pub_key.public_key)
-            .collect();
-
-        let genesis_block =
-            ZKPMacroBlock::try_from(genesis_block).map_err(|_| Error::InvalidBlock)?;
-
         Ok(ZKPState {
-            latest_pks,
-            latest_header_hash: genesis_block.header_hash.into(),
-            latest_block_number: genesis_block.block_number,
+            latest_block: genesis_block.clone(),
             latest_proof: None,
         })
     }
@@ -103,18 +87,8 @@ impl Serialize for ZKPState {
         &self,
         writer: &mut W,
     ) -> Result<usize, beserial::SerializingError> {
-        let mut size = 0;
-        let count: u16 =
-            u16::try_from(self.latest_pks.len()).map_err(|_| SerializingError::Overflow)?;
-        size += Serialize::serialize(&count, writer)?;
-        for pk in self.latest_pks.iter() {
-            // Unchecked serialization happening here.
-            CanonicalSerialize::serialize_uncompressed(pk, writer.by_ref())
-                .map_err(ark_to_bserial_error)?;
-            size += CanonicalSerialize::uncompressed_size(pk);
-        }
-        size += Serialize::serialize(&self.latest_header_hash, writer)?;
-        size += Serialize::serialize(&self.latest_block_number, writer)?;
+        let mut size = Serialize::serialize(&self.latest_block, writer)?;
+
         size += Serialize::serialize(&self.latest_proof.is_some(), writer)?;
         if let Some(ref latest_proof) = self.latest_proof {
             CanonicalSerialize::serialize_uncompressed(latest_proof, writer)
@@ -124,12 +98,8 @@ impl Serialize for ZKPState {
         Ok(size)
     }
     fn serialized_size(&self) -> usize {
-        let mut size = 2; // count as u16
-        for pk in self.latest_pks.iter() {
-            size += CanonicalSerialize::uncompressed_size(pk);
-        }
-        size += Serialize::serialized_size(&self.latest_header_hash);
-        size += Serialize::serialized_size(&self.latest_block_number);
+        let mut size = Serialize::serialized_size(&self.latest_block);
+
         size += Serialize::serialized_size(&self.latest_proof.is_some());
         if let Some(ref latest_proof) = self.latest_proof {
             size += CanonicalSerialize::serialized_size(latest_proof, ark_serialize::Compress::No);
@@ -145,17 +115,7 @@ impl Deserialize for ZKPState {
     fn deserialize<R: beserial::ReadBytesExt>(
         reader: &mut R,
     ) -> Result<Self, BeserialSerializingError> {
-        let count: u16 = Deserialize::deserialize(reader)?;
-        let mut latest_pks: Vec<G2MNT6> = Vec::with_capacity(count as usize);
-        for _ in 0..count {
-            // Unchecked deserialization happening here.
-            latest_pks.push(
-                CanonicalDeserialize::deserialize_uncompressed_unchecked(reader.by_ref())
-                    .map_err(ark_to_bserial_error)?,
-            );
-        }
-        let latest_header_hash = Deserialize::deserialize(reader)?;
-        let latest_block_number = Deserialize::deserialize(reader)?;
+        let latest_block = Deserialize::deserialize(reader)?;
         let is_some: bool = Deserialize::deserialize(reader)?;
         let mut latest_proof = None;
         if is_some {
@@ -165,9 +125,7 @@ impl Deserialize for ZKPState {
             );
         }
         Ok(ZKPState {
-            latest_pks,
-            latest_header_hash,
-            latest_block_number,
+            latest_block,
             latest_proof,
         })
     }
@@ -217,7 +175,7 @@ impl ZKProof {
 impl From<ZKPState> for ZKProof {
     fn from(zkp_component_state: ZKPState) -> Self {
         Self {
-            block_number: zkp_component_state.latest_block_number,
+            block_number: zkp_component_state.latest_block.block_number(),
             proof: zkp_component_state.latest_proof,
         }
     }
@@ -299,22 +257,20 @@ fn ark_to_bserial_error(error: ArkSerializingError) -> BeserialSerializingError 
 /// The input to the proof generation process.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ProofInput {
-    pub block: MacroBlock,
-    pub latest_pks: Vec<G2MNT6>,
-    pub latest_header_hash: Blake2sHash,
+    pub previous_block: MacroBlock,
     pub previous_proof: Option<Proof<MNT6_753>>,
-    pub genesis_state: [u8; 95],
+    pub final_block: MacroBlock,
+    pub genesis_header_hash: [u8; 32],
     pub prover_keys_path: PathBuf,
 }
 
 impl Default for ProofInput {
     fn default() -> Self {
         Self {
-            block: Default::default(),
-            latest_pks: Default::default(),
-            latest_header_hash: Default::default(),
+            previous_block: Default::default(),
             previous_proof: Default::default(),
-            genesis_state: [0; 95],
+            final_block: Default::default(),
+            genesis_header_hash: [0; 32],
             prover_keys_path: Default::default(),
         }
     }
@@ -328,19 +284,7 @@ impl Serialize for ProofInput {
         &self,
         writer: &mut W,
     ) -> Result<usize, beserial::SerializingError> {
-        let mut size = Serialize::serialize(&self.block, writer)?;
-
-        let count: u16 =
-            u16::try_from(self.latest_pks.len()).map_err(|_| SerializingError::Overflow)?;
-        size += Serialize::serialize(&count, writer)?;
-        for pk in self.latest_pks.iter() {
-            // Unchecked serialization happening here.
-            CanonicalSerialize::serialize_uncompressed(pk, writer.by_ref())
-                .map_err(ark_to_bserial_error)?;
-            size += CanonicalSerialize::uncompressed_size(pk);
-        }
-
-        size += Serialize::serialize(&self.latest_header_hash, writer)?;
+        let mut size = Serialize::serialize(&self.previous_block, writer)?;
 
         size += Serialize::serialize(&self.previous_proof.is_some(), writer)?;
         if let Some(ref latest_proof) = self.previous_proof {
@@ -349,7 +293,9 @@ impl Serialize for ProofInput {
             size += CanonicalSerialize::serialized_size(latest_proof, ark_serialize::Compress::No);
         }
 
-        size += Serialize::serialize(&self.genesis_state, writer)?;
+        size += Serialize::serialize(&self.final_block, writer)?;
+
+        size += Serialize::serialize(&self.genesis_header_hash, writer)?;
 
         let path_buf = self.prover_keys_path.to_string_lossy().to_string();
         size += SerializeWithLength::serialize::<u16, _>(&path_buf, writer)?;
@@ -358,13 +304,7 @@ impl Serialize for ProofInput {
     }
 
     fn serialized_size(&self) -> usize {
-        let mut size = Serialize::serialized_size(&self.block);
-        size += 2; // count as u16
-        for pk in self.latest_pks.iter() {
-            size += CanonicalSerialize::uncompressed_size(pk);
-        }
-
-        size += Serialize::serialized_size(&self.latest_header_hash);
+        let mut size = Serialize::serialized_size(&self.previous_block);
 
         size += Serialize::serialized_size(&self.previous_proof.is_some());
         if let Some(ref previous_proof) = self.previous_proof {
@@ -372,7 +312,9 @@ impl Serialize for ProofInput {
                 CanonicalSerialize::serialized_size(previous_proof, ark_serialize::Compress::No);
         }
 
-        size += Serialize::serialized_size(&self.genesis_state);
+        size += Serialize::serialized_size(&self.final_block);
+
+        size += Serialize::serialized_size(&self.genesis_header_hash);
 
         let path_buf = self.prover_keys_path.to_string_lossy().to_string();
         size += SerializeWithLength::serialized_size::<u16>(&path_buf);
@@ -388,19 +330,7 @@ impl Deserialize for ProofInput {
     fn deserialize<R: beserial::ReadBytesExt>(
         reader: &mut R,
     ) -> Result<Self, BeserialSerializingError> {
-        let block = Deserialize::deserialize(reader)?;
-
-        let count: u16 = Deserialize::deserialize(reader)?;
-        let mut latest_pks: Vec<G2MNT6> = Vec::with_capacity(count as usize);
-        for _ in 0..count {
-            // Unchecked deserialization happening here.
-            latest_pks.push(
-                CanonicalDeserialize::deserialize_uncompressed_unchecked(reader.by_ref())
-                    .map_err(ark_to_bserial_error)?,
-            );
-        }
-
-        let latest_header_hash: Blake2sHash = Deserialize::deserialize(reader)?;
+        let previous_block = Deserialize::deserialize(reader)?;
 
         let is_some: bool = Deserialize::deserialize(reader)?;
         let mut previous_proof = None;
@@ -412,16 +342,17 @@ impl Deserialize for ProofInput {
             );
         }
 
-        let genesis_state = Deserialize::deserialize(reader)?;
+        let final_block = Deserialize::deserialize(reader)?;
+
+        let genesis_header_hash = Deserialize::deserialize(reader)?;
 
         let path_buf: String = DeserializeWithLength::deserialize::<u16, _>(reader)?;
 
         Ok(ProofInput {
-            block,
-            latest_pks,
-            latest_header_hash,
+            final_block,
             previous_proof,
-            genesis_state,
+            previous_block,
+            genesis_header_hash,
             prover_keys_path: PathBuf::from(path_buf),
         })
     }
@@ -542,7 +473,7 @@ impl<N: Network> Handle<N, RequestZKPResponse, Arc<ZKPStateEnvironment>> for Req
     fn handle(&self, _peer_id: N::PeerId, env: &Arc<ZKPStateEnvironment>) -> RequestZKPResponse {
         // First retrieve the ZKP proof and release the lock again.
         let zkp_state = env.zkp_state.read();
-        let latest_block_number = zkp_state.latest_block_number;
+        let latest_block_number = zkp_state.latest_block.block_number();
         if latest_block_number <= self.block_number {
             return RequestZKPResponse::Outdated(latest_block_number);
         }

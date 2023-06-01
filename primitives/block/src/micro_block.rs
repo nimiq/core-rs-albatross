@@ -2,7 +2,7 @@ use std::{cmp::Ordering, collections::HashSet, fmt, fmt::Debug, io};
 
 use beserial::{Deserialize, Serialize};
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
-use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
+use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, SerializeContent};
 use nimiq_hash_derive::SerializeContent;
 use nimiq_keys::{PublicKey, Signature};
 use nimiq_primitives::{policy::Policy, slots::Validators};
@@ -177,7 +177,7 @@ pub struct MicroHeader {
     pub state_root: Blake2bHash,
     /// The root of the Merkle tree of the body. It just acts as a commitment to the
     /// body.
-    pub body_root: Blake2bHash,
+    pub body_root: Blake2sHash,
     /// A Merkle root over all of the transactions that happened in the current epoch.
     pub history_root: Blake2bHash,
 }
@@ -191,8 +191,6 @@ impl MicroHeader {
             + /*seed*/ VrfSeed::SIZE + /*extra_data*/ 32 + /*state_root*/ 32
             + /*body_root*/ 32 + /*history_root*/ 32;
 }
-
-impl Hash for MicroHeader {}
 
 impl fmt::Display for MicroHeader {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
@@ -289,5 +287,3 @@ impl MicroBody {
         Ok(())
     }
 }
-
-impl Hash for MicroBody {}

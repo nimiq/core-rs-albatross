@@ -3,7 +3,7 @@ use std::io;
 use ark_mnt6_753::Fr;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
-use nimiq_hash::{Hash, SerializeContent};
+use nimiq_hash::SerializeContent;
 
 use crate::{
     AggregatePublicKey, AggregateSignature, CompressedPublicKey, CompressedSignature, KeyPair,
@@ -23,12 +23,10 @@ impl Serialize for CompressedPublicKey {
 }
 
 impl SerializeContent for CompressedPublicKey {
-    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
+    fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<usize> {
         Ok(self.serialize(writer)?)
     }
 }
-
-impl Hash for CompressedPublicKey {}
 
 impl std::hash::Hash for CompressedPublicKey {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -58,12 +56,10 @@ impl Serialize for CompressedSignature {
 }
 
 impl SerializeContent for CompressedSignature {
-    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
+    fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<usize> {
         Ok(self.serialize(writer)?)
     }
 }
-
-impl Hash for CompressedSignature {}
 
 impl std::hash::Hash for CompressedSignature {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -91,12 +87,10 @@ impl Serialize for PublicKey {
 }
 
 impl SerializeContent for PublicKey {
-    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
+    fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<usize> {
         Ok(self.serialize(writer)?)
     }
 }
-
-impl Hash for PublicKey {}
 
 impl Deserialize for PublicKey {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
@@ -118,12 +112,10 @@ impl Serialize for Signature {
 }
 
 impl SerializeContent for Signature {
-    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
+    fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<usize> {
         Ok(self.serialize(writer)?)
     }
 }
-
-impl Hash for Signature {}
 
 impl Deserialize for Signature {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {

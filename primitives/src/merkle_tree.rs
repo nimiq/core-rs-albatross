@@ -1,4 +1,4 @@
-use nimiq_hash::{Blake2sHash, Hash};
+use nimiq_hash::{Hash, HashOutput};
 #[cfg(feature = "parallel")]
 use rayon::{
     iter::{IntoParallelRefIterator, ParallelIterator},
@@ -15,7 +15,7 @@ use rayon::{
 ///                   o     o
 ///                  / \   / \
 ///                 0  1  2  3
-pub fn merkle_tree_construct(inputs: Vec<Vec<u8>>) -> [u8; 32] {
+pub fn merkle_tree_construct<H: HashOutput>(inputs: Vec<Vec<u8>>) -> H {
     // Checking that the inputs vector is not empty.
     assert!(!inputs.is_empty());
 
@@ -28,9 +28,7 @@ pub fn merkle_tree_construct(inputs: Vec<Vec<u8>>) -> [u8; 32] {
     #[cfg(feature = "parallel")]
     let iter = inputs.into_par_iter();
 
-    let mut nodes: Vec<Vec<u8>> = iter
-        .map(|bytes| bytes.hash::<Blake2sHash>().0.to_vec())
-        .collect();
+    let mut nodes: Vec<H> = iter.map(|bytes| bytes.hash::<H>()).collect();
 
     // Process each level of nodes.
     while nodes.len() > 1 {
@@ -40,7 +38,7 @@ pub fn merkle_tree_construct(inputs: Vec<Vec<u8>>) -> [u8; 32] {
         let iter = nodes.par_iter();
 
         // Serialize all the child nodes.
-        let bytes: Vec<u8> = iter.cloned().flatten().collect();
+        let bytes: Vec<u8> = iter.map(|h| h.as_bytes().to_vec()).flatten().collect();
 
         // Chunk the bits into the number of parent nodes.
         let mut chunks = Vec::new();
@@ -59,17 +57,12 @@ pub fn merkle_tree_construct(inputs: Vec<Vec<u8>>) -> [u8; 32] {
         #[cfg(feature = "parallel")]
         let iter = chunks.into_par_iter();
 
-        let mut next_nodes: Vec<Vec<u8>> = iter
-            .map(|bytes| bytes.hash::<Blake2sHash>().0.to_vec())
-            .collect();
+        let mut next_nodes: Vec<H> = iter.map(|bytes| bytes.hash::<H>()).collect();
 
         // Clear the child nodes and add the parent nodes.
         nodes.clear();
         nodes.append(&mut next_nodes);
     }
 
-    let mut result = [0; 32];
-    result.copy_from_slice(&nodes[0]);
-
-    result
+    nodes.pop().unwrap()
 }

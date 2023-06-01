@@ -149,7 +149,7 @@ impl Block {
     }
 
     /// Returns the body root of the block.
-    pub fn body_root(&self) -> &Blake2bHash {
+    pub fn body_root(&self) -> &Blake2sHash {
         match self {
             Block::Macro(ref block) => &block.header.body_root,
             Block::Micro(ref block) => &block.header.body_root,
@@ -682,7 +682,7 @@ impl BlockHeader {
     }
 
     /// Returns the body root of the block.
-    pub fn body_root(&self) -> &Blake2bHash {
+    pub fn body_root(&self) -> &Blake2sHash {
         match self {
             BlockHeader::Macro(ref header) => &header.body_root,
             BlockHeader::Micro(ref header) => &header.body_root,
@@ -782,8 +782,6 @@ impl BlockHeader {
         Ok(())
     }
 }
-
-impl Hash for BlockHeader {}
 
 impl Serialize for BlockHeader {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
@@ -894,7 +892,7 @@ impl BlockBody {
     }
 
     /// Returns the hash of the body.
-    pub fn hash(&self) -> Blake2bHash {
+    pub fn hash(&self) -> Blake2sHash {
         match self {
             BlockBody::Micro(body) => body.hash(),
             BlockBody::Macro(body) => body.hash(),

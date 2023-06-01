@@ -100,7 +100,7 @@ async fn loads_valid_zkp_state_from_db() {
 
     let zkp_proxy = zkp_prover.proxy();
     assert_eq!(
-        zkp_proxy.get_zkp_state().latest_block_number,
+        zkp_proxy.get_zkp_state().latest_block.block_number(),
         Policy::blocks_per_epoch(),
         "The load of the zkp state should have worked"
     );
@@ -135,7 +135,7 @@ async fn does_not_load_invalid_zkp_state_from_db() {
 
     let zkp_proxy = zkp_prover.proxy();
     assert_eq!(
-        zkp_proxy.get_zkp_state().latest_block_number,
+        zkp_proxy.get_zkp_state().latest_block.block_number(),
         0,
         "The load of the zkp state should have failed"
     );

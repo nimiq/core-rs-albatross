@@ -8,7 +8,7 @@ use crate::{AggregateSignature, PublicKey, SigHash};
 
 /// An aggregate public key. Mathematically, it is equivalent to a regular public key. However, we created a new type for it in order to help differentiate between the two use cases.
 #[derive(Clone, Copy)]
-pub struct AggregatePublicKey(pub(crate) PublicKey);
+pub struct AggregatePublicKey(pub PublicKey);
 
 impl AggregatePublicKey {
     /// Creates a new "empty" aggregate public key. It is simply the identity element of the elliptic curve, also known as the point at infinity.

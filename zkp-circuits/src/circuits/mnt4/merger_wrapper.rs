@@ -14,7 +14,7 @@ use rand::Rng;
 
 use crate::gadgets::recursive_input::RecursiveInputVar;
 
-/// This is the merger wrapper circuit. It takes as inputs the genesis state commitment, a final state
+/// This is the merger wrapper circuit. It takes as inputs the genesis header hash, a final state
 /// commitment and a verifying key commitment and it produces a proof that there exists a valid SNARK
 /// proof that transforms the genesis state into the final state.
 /// The circuit is basically only a SNARK verifier. Its use is just to change the elliptic curve
@@ -30,8 +30,8 @@ pub struct MergerWrapperCircuit {
     proof: Proof<MNT4_753>,
 
     // Inputs (public)
-    genesis_state_commitment: [u8; 95],
-    final_state_commitment: [u8; 95],
+    genesis_header_hash: [u8; 32],
+    final_header_hash: [u8; 32],
     vk_commitment: [u8; 95],
 }
 
@@ -39,15 +39,15 @@ impl MergerWrapperCircuit {
     pub fn new(
         vk_merger: VerifyingKey<MNT4_753>,
         proof: Proof<MNT4_753>,
-        genesis_state_commitment: [u8; 95],
-        final_state_commitment: [u8; 95],
+        genesis_header_hash: [u8; 32],
+        final_header_hash: [u8; 32],
         vk_commitment: [u8; 95],
     ) -> Self {
         Self {
             vk_merger,
             proof,
-            genesis_state_commitment,
-            final_state_commitment,
+            genesis_header_hash,
+            final_header_hash,
             vk_commitment,
         }
     }
@@ -60,11 +60,11 @@ impl MergerWrapperCircuit {
             c: G1Affine::rand(rng),
         };
 
-        let mut genesis_state_commitment = [0u8; 95];
-        rng.fill_bytes(&mut genesis_state_commitment);
+        let mut genesis_header_hash = [0u8; 32];
+        rng.fill_bytes(&mut genesis_header_hash);
 
-        let mut final_state_commitment = [0u8; 95];
-        rng.fill_bytes(&mut final_state_commitment);
+        let mut final_header_hash = [0u8; 32];
+        rng.fill_bytes(&mut final_header_hash);
 
         let mut vk_commitment = [0u8; 95];
         rng.fill_bytes(&mut vk_commitment);
@@ -73,8 +73,8 @@ impl MergerWrapperCircuit {
         MergerWrapperCircuit::new(
             vk_child,
             proof,
-            genesis_state_commitment,
-            final_state_commitment,
+            genesis_header_hash,
+            final_header_hash,
             vk_commitment,
         )
     }
@@ -92,18 +92,22 @@ impl ConstraintSynthesizer<MNT4Fq> for MergerWrapperCircuit {
             ProofVar::<MNT4_753, PairingVar>::new_witness(cs.clone(), || Ok(&self.proof))?;
 
         // Allocate all the inputs.
-        let genesis_state_commitment_var =
-            UInt8::<MNT4Fq>::new_input_vec(cs.clone(), &self.genesis_state_commitment)?;
+        eprintln!("inputs: {}", cs.num_instance_variables());
+        let genesis_header_hash_var =
+            UInt8::<MNT4Fq>::new_input_vec(cs.clone(), &self.genesis_header_hash)?;
 
-        let final_state_commitment_var =
-            UInt8::<MNT4Fq>::new_input_vec(cs.clone(), &self.final_state_commitment)?;
+        eprintln!("inputs: {}", cs.num_instance_variables());
+        let final_header_hash_var =
+            UInt8::<MNT4Fq>::new_input_vec(cs.clone(), &self.final_header_hash)?;
+        eprintln!("inputs: {}", cs.num_instance_variables());
 
-        let vk_commitment_var = UInt8::<MNT4Fq>::new_input_vec(cs, &self.vk_commitment)?;
+        let vk_commitment_var = UInt8::<MNT4Fq>::new_input_vec(cs.clone(), &self.vk_commitment)?;
+        eprintln!("inputs: {}", cs.num_instance_variables());
 
         // Verify the ZK proof.
         let mut proof_inputs = RecursiveInputVar::new();
-        proof_inputs.push(&genesis_state_commitment_var)?;
-        proof_inputs.push(&final_state_commitment_var)?;
+        proof_inputs.push(&genesis_header_hash_var)?;
+        proof_inputs.push(&final_header_hash_var)?;
         proof_inputs.push(&vk_commitment_var)?;
 
         Groth16VerifierGadget::<MNT4_753, PairingVar>::verify(

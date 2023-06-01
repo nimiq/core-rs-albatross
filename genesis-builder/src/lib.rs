@@ -17,7 +17,7 @@ use nimiq_database::{
     traits::{Database, WriteTransaction},
     DatabaseProxy, WriteTransactionProxy,
 };
-use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
 use nimiq_primitives::{
     account::AccountError, coin::Coin, key_nibbles::KeyNibbles, policy::Policy, trie::TrieItem,
@@ -221,7 +221,7 @@ impl GenesisBuilder {
             ..Default::default()
         };
 
-        let body_root = body.hash::<Blake2bHash>();
+        let body_root = body.hash::<Blake2sHash>();
         debug!("Body root: {}", &body_root);
 
         // State root

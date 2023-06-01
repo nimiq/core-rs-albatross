@@ -28,6 +28,7 @@ rand = { version = "0.8", features = ["small_rng"] }
 thiserror = "1.0"
 
 beserial = { path = "../beserial", features = ["derive"]}
+nimiq-block = { path = "../primitives/block" }
 nimiq-bls = { path = "../bls" }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }

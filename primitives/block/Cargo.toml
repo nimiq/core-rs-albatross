@@ -13,6 +13,7 @@ travis-ci = { repository = "nimiq/core-rs", branch = "master" }
 maintenance = { status = "experimental" }
 
 [dependencies]
+ark-ec = "0.4"
 bitflags = "1.0"
 thiserror = "1.0"
 hex = "0.4"

@@ -14,8 +14,8 @@ use rand::Rng;
 
 use crate::gadgets::recursive_input::RecursiveInputVar;
 
-/// This is the macro block wrapper circuit. It takes as inputs the previous state commitment and a
-/// final state commitment and it produces a proof that there exists a valid SNARK proof that transforms
+/// This is the macro block wrapper circuit. It takes as inputs the previous header hash and a
+/// final header hash and it produces a proof that there exists a valid SNARK proof that transforms
 /// the previous state into the final state.
 /// The circuit is basically only a SNARK verifier. Its use is just to change the elliptic curve
 /// that the proof exists in, which is sometimes needed for recursive composition of SNARK proofs.
@@ -30,22 +30,22 @@ pub struct MacroBlockWrapperCircuit {
     proof: Proof<MNT4_753>,
 
     // Inputs (public)
-    prev_state_commitment: [u8; 95],
-    final_state_commitment: [u8; 95],
+    prev_header_hash: [u8; 32],
+    final_header_hash: [u8; 32],
 }
 
 impl MacroBlockWrapperCircuit {
     pub fn new(
         vk_macro_block: VerifyingKey<MNT4_753>,
         proof: Proof<MNT4_753>,
-        prev_state_commitment: [u8; 95],
-        final_state_commitment: [u8; 95],
+        prev_header_hash: [u8; 32],
+        final_header_hash: [u8; 32],
     ) -> Self {
         Self {
             vk_macro_block,
             proof,
-            prev_state_commitment,
-            final_state_commitment,
+            prev_header_hash,
+            final_header_hash,
         }
     }
 
@@ -57,19 +57,14 @@ impl MacroBlockWrapperCircuit {
             c: G1Affine::rand(rng),
         };
 
-        let mut prev_state_commitment = [0u8; 95];
-        rng.fill_bytes(&mut prev_state_commitment);
+        let mut prev_header_hash = [0u8; 32];
+        rng.fill_bytes(&mut prev_header_hash);
 
-        let mut final_state_commitment = [0u8; 95];
-        rng.fill_bytes(&mut final_state_commitment);
+        let mut prev_header_hash = [0u8; 32];
+        rng.fill_bytes(&mut prev_header_hash);
 
         // Create parameters for our circuit
-        MacroBlockWrapperCircuit::new(
-            vk_child,
-            proof,
-            prev_state_commitment,
-            final_state_commitment,
-        )
+        MacroBlockWrapperCircuit::new(vk_child, proof, prev_header_hash, prev_header_hash)
     }
 }
 
@@ -87,16 +82,15 @@ impl ConstraintSynthesizer<MNT4Fq> for MacroBlockWrapperCircuit {
             ProofVar::<MNT4_753, PairingVar>::new_witness(cs.clone(), || Ok(&self.proof))?;
 
         // Allocate all the inputs.
-        let prev_state_commitment_var =
-            UInt8::<MNT4Fq>::new_input_vec(cs.clone(), &self.prev_state_commitment)?;
+        let prev_header_hash_var =
+            UInt8::<MNT4Fq>::new_input_vec(cs.clone(), &self.prev_header_hash)?;
 
-        let final_state_commitment_var =
-            UInt8::<MNT4Fq>::new_input_vec(cs, &self.final_state_commitment)?;
+        let final_header_hash_var = UInt8::<MNT4Fq>::new_input_vec(cs, &self.final_header_hash)?;
 
         // Verify the ZK proof.
         let mut proof_inputs = RecursiveInputVar::new();
-        proof_inputs.push(&prev_state_commitment_var)?;
-        proof_inputs.push(&final_state_commitment_var)?;
+        proof_inputs.push(&prev_header_hash_var)?;
+        proof_inputs.push(&final_header_hash_var)?;
 
         Groth16VerifierGadget::<MNT4_753, PairingVar>::verify(
             &vk_macro_block_var,

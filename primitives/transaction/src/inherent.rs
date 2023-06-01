@@ -1,5 +1,5 @@
 use beserial::{Deserialize, Serialize};
-use nimiq_hash::{Hash, SerializeContent};
+use nimiq_hash::SerializeContent;
 use nimiq_hash_derive::SerializeContent;
 use nimiq_keys::Address;
 use nimiq_primitives::{coin::Coin, policy::Policy, slots::SlashedSlot};
@@ -25,8 +25,6 @@ impl Inherent {
         }
     }
 }
-
-impl Hash for Inherent {}
 
 impl From<&RewardTransaction> for Inherent {
     fn from(tx: &RewardTransaction) -> Self {
