@@ -1,24 +1,24 @@
 use nimiq_account::Receipts;
 use nimiq_block::Block;
 use nimiq_blockchain_interface::{BlockchainError, ChainInfo, Direction};
-use nimiq_database::cursor::{ReadCursor, WriteCursor};
 use nimiq_database::{
-    Database, DatabaseFlags, Environment, ReadTransaction, Transaction, WriteTransaction,
+    traits::{Database, ReadCursor, ReadTransaction, WriteCursor, WriteTransaction},
+    DatabaseProxy, TableFlags, TableProxy, TransactionProxy, WriteTransactionProxy,
 };
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::policy::Policy;
 
 #[derive(Debug)]
 pub struct ChainStore {
-    env: Environment,
+    env: DatabaseProxy,
     // A database of chain infos (it excludes the block body) indexed by their block hashes.
-    chain_db: Database,
+    chain_db: TableProxy,
     // A database of block bodies indexed by their block hashes.
-    block_db: Database,
+    block_db: TableProxy,
     // A database of block hashes indexed by their block number.
-    height_idx: Database,
+    height_idx: TableProxy,
     // A database of the transaction receipts for a block, by their corresponding block hashes.
-    receipt_db: Database,
+    receipt_db: TableProxy,
 }
 
 impl ChainStore {
@@ -29,17 +29,15 @@ impl ChainStore {
 
     const HEAD_KEY: &'static str = "head";
 
-    pub fn new(env: Environment) -> Self {
-        let chain_db = env.open_database(Self::CHAIN_DB_NAME.to_string());
-        let block_db = env.open_database(Self::BLOCK_DB_NAME.to_string());
-        let height_idx = env.open_database_with_flags(
+    pub fn new(env: DatabaseProxy) -> Self {
+        let chain_db = env.open_table(Self::CHAIN_DB_NAME.to_string());
+        let block_db = env.open_table(Self::BLOCK_DB_NAME.to_string());
+        let height_idx = env.open_table_with_flags(
             Self::HEIGHT_IDX_NAME.to_string(),
-            DatabaseFlags::DUPLICATE_KEYS
-                | DatabaseFlags::DUP_FIXED_SIZE_VALUES
-                | DatabaseFlags::UINT_KEYS,
+            TableFlags::DUPLICATE_KEYS | TableFlags::DUP_FIXED_SIZE_VALUES | TableFlags::UINT_KEYS,
         );
-        let receipt_db = env
-            .open_database_with_flags(Self::RECEIPT_DB_NAME.to_string(), DatabaseFlags::UINT_KEYS);
+        let receipt_db =
+            env.open_table_with_flags(Self::RECEIPT_DB_NAME.to_string(), TableFlags::UINT_KEYS);
         ChainStore {
             env,
             chain_db,
@@ -49,21 +47,24 @@ impl ChainStore {
         }
     }
 
-    pub fn clear(&self, txn: &mut WriteTransaction) {
+    pub fn clear(&self, txn: &mut WriteTransactionProxy) {
         txn.clear_database(&self.chain_db);
         txn.clear_database(&self.block_db);
         txn.clear_database(&self.height_idx);
         txn.clear_database(&self.receipt_db);
     }
 
-    pub fn get_head(&self, txn_option: Option<&Transaction>) -> Option<Blake2bHash> {
+    pub fn get_head(&self, txn_option: Option<&TransactionProxy>) -> Option<Blake2bHash> {
         match txn_option {
             Some(txn) => txn.get(&self.chain_db, ChainStore::HEAD_KEY),
-            None => ReadTransaction::new(&self.env).get(&self.chain_db, ChainStore::HEAD_KEY),
+            None => self
+                .env
+                .read_transaction()
+                .get(&self.chain_db, ChainStore::HEAD_KEY),
         }
     }
 
-    pub fn set_head(&self, txn: &mut WriteTransaction, hash: &Blake2bHash) {
+    pub fn set_head(&self, txn: &mut WriteTransactionProxy, hash: &Blake2bHash) {
         txn.put(&self.chain_db, ChainStore::HEAD_KEY, hash);
     }
 
@@ -71,13 +72,13 @@ impl ChainStore {
         &self,
         hash: &Blake2bHash,
         include_body: bool,
-        txn_option: Option<&Transaction>,
+        txn_option: Option<&TransactionProxy>,
     ) -> Result<ChainInfo, BlockchainError> {
-        let read_txn: ReadTransaction;
+        let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(&self.env);
+                read_txn = self.env.read_transaction();
                 &read_txn
             }
         };
@@ -102,13 +103,13 @@ impl ChainStore {
         &self,
         block_height: u32,
         include_body: bool,
-        txn_option: Option<&Transaction>,
+        txn_option: Option<&TransactionProxy>,
     ) -> Result<ChainInfo, BlockchainError> {
-        let read_txn: ReadTransaction;
+        let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(&self.env);
+                read_txn = self.env.read_transaction();
                 &read_txn
             }
         };
@@ -150,7 +151,7 @@ impl ChainStore {
 
     pub fn put_chain_info(
         &self,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
         hash: &Blake2bHash,
         chain_info: &ChainInfo,
         include_body: bool,
@@ -172,13 +173,13 @@ impl ChainStore {
     pub fn get_epoch_chunks(
         &self,
         block_height: u32,
-        txn_option: Option<&Transaction>,
+        txn_option: Option<&TransactionProxy>,
     ) -> Result<Vec<Blake2bHash>, BlockchainError> {
-        let read_txn: ReadTransaction;
+        let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(&self.env);
+                read_txn = self.env.read_transaction();
                 &read_txn
             }
         };
@@ -218,7 +219,12 @@ impl ChainStore {
         Ok(blocks.into_iter().rev().collect())
     }
 
-    pub fn remove_chain_info(&self, txn: &mut WriteTransaction, hash: &Blake2bHash, height: u32) {
+    pub fn remove_chain_info(
+        &self,
+        txn: &mut WriteTransactionProxy,
+        hash: &Blake2bHash,
+        height: u32,
+    ) {
         txn.remove(&self.chain_db, hash);
         txn.remove(&self.block_db, hash);
         txn.remove_item(&self.height_idx, &height, hash);
@@ -228,13 +234,13 @@ impl ChainStore {
         &self,
         hash: &Blake2bHash,
         include_body: bool,
-        txn_option: Option<&Transaction>,
+        txn_option: Option<&TransactionProxy>,
     ) -> Result<Block, BlockchainError> {
-        let read_txn: ReadTransaction;
+        let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(&self.env);
+                read_txn = self.env.read_transaction();
                 &read_txn
             }
         };
@@ -253,7 +259,7 @@ impl ChainStore {
         &self,
         block_height: u32,
         include_body: bool,
-        txn_option: Option<&Transaction>,
+        txn_option: Option<&TransactionProxy>,
     ) -> Result<Block, BlockchainError> {
         self.get_chain_info_at(block_height, include_body, txn_option)
             .map(|chain_info| chain_info.head)
@@ -265,7 +271,7 @@ impl ChainStore {
         count: u32,
         include_body: bool,
         direction: Direction,
-        txn_option: Option<&Transaction>,
+        txn_option: Option<&TransactionProxy>,
     ) -> Result<Vec<Block>, BlockchainError> {
         match direction {
             Direction::Forward => {
@@ -280,13 +286,13 @@ impl ChainStore {
     pub fn get_block_hashes_at(
         &self,
         block_height: u32,
-        txn_option: Option<&Transaction>,
+        txn_option: Option<&TransactionProxy>,
     ) -> Vec<Blake2bHash> {
-        let read_txn: ReadTransaction;
+        let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(&self.env);
+                read_txn = self.env.read_transaction();
                 &read_txn
             }
         };
@@ -311,13 +317,13 @@ impl ChainStore {
         &self,
         block_height: u32,
         include_body: bool,
-        txn_option: Option<&Transaction>,
+        txn_option: Option<&TransactionProxy>,
     ) -> Result<Vec<Block>, BlockchainError> {
-        let read_txn: ReadTransaction;
+        let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(&self.env);
+                read_txn = self.env.read_transaction();
                 &read_txn
             }
         };
@@ -349,13 +355,13 @@ impl ChainStore {
         start_block_hash: &Blake2bHash,
         count: u32,
         include_body: bool,
-        txn_option: Option<&Transaction>,
+        txn_option: Option<&TransactionProxy>,
     ) -> Result<Vec<Block>, BlockchainError> {
-        let read_txn: ReadTransaction;
+        let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(&self.env);
+                read_txn = self.env.read_transaction();
                 &read_txn
             }
         };
@@ -381,13 +387,13 @@ impl ChainStore {
         start_block_hash: &Blake2bHash,
         count: u32,
         include_body: bool,
-        txn_option: Option<&Transaction>,
+        txn_option: Option<&TransactionProxy>,
     ) -> Result<Vec<Block>, BlockchainError> {
-        let read_txn: ReadTransaction;
+        let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(&self.env);
+                read_txn = self.env.read_transaction();
                 &read_txn
             }
         };
@@ -420,7 +426,7 @@ impl ChainStore {
         include_body: bool,
         direction: Direction,
         election_blocks_only: bool,
-        txn_option: Option<&Transaction>,
+        txn_option: Option<&TransactionProxy>,
     ) -> Result<Vec<Block>, BlockchainError> {
         match direction {
             Direction::Forward => self.get_macro_blocks_forward(
@@ -446,13 +452,13 @@ impl ChainStore {
         count: u32,
         election_blocks_only: bool,
         include_body: bool,
-        txn_option: Option<&Transaction>,
+        txn_option: Option<&TransactionProxy>,
     ) -> Result<Vec<Block>, BlockchainError> {
-        let read_txn: ReadTransaction;
+        let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(&self.env);
+                read_txn = self.env.read_transaction();
                 &read_txn
             }
         };
@@ -493,13 +499,13 @@ impl ChainStore {
         count: u32,
         election_blocks_only: bool,
         include_body: bool,
-        txn_option: Option<&Transaction>,
+        txn_option: Option<&TransactionProxy>,
     ) -> Result<Vec<Block>, BlockchainError> {
-        let read_txn: ReadTransaction;
+        let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(&self.env);
+                read_txn = self.env.read_transaction();
                 &read_txn
             }
         };
@@ -539,7 +545,7 @@ impl ChainStore {
         Ok(blocks)
     }
 
-    pub fn prune_epoch(&self, epoch_number: u32, txn: &mut WriteTransaction) {
+    pub fn prune_epoch(&self, epoch_number: u32, txn: &mut WriteTransactionProxy) {
         // The zero-th epoch is already pruned.
         if epoch_number == 0 {
             return;
@@ -566,20 +572,25 @@ impl ChainStore {
         }
     }
 
-    pub fn put_receipts(&self, txn: &mut WriteTransaction, block_height: u32, receipts: &Receipts) {
+    pub fn put_receipts(
+        &self,
+        txn: &mut WriteTransactionProxy,
+        block_height: u32,
+        receipts: &Receipts,
+    ) {
         txn.put_reserve(&self.receipt_db, &block_height, receipts);
     }
 
     pub fn get_receipts(
         &self,
         block_height: u32,
-        txn_option: Option<&Transaction>,
+        txn_option: Option<&TransactionProxy>,
     ) -> Option<Receipts> {
-        let read_txn: ReadTransaction;
+        let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(&self.env);
+                read_txn = self.env.read_transaction();
                 &read_txn
             }
         };
@@ -587,8 +598,8 @@ impl ChainStore {
         txn.get(&self.receipt_db, &block_height)
     }
 
-    pub fn clear_receipts(&self, txn: &mut WriteTransaction) {
-        let mut cursor = txn.write_cursor(&self.receipt_db);
+    pub fn clear_receipts(&self, txn: &mut WriteTransactionProxy) {
+        let mut cursor = WriteTransaction::cursor(txn, &self.receipt_db);
         let mut pos: Option<(u32, Receipts)> = cursor.first();
 
         while pos.is_some() {

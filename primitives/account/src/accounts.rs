@@ -1,14 +1,14 @@
 use nimiq_database::{
-    Environment, ReadTransaction, Transaction as DBTransaction, WriteTransaction,
+    traits::{Database, WriteTransaction},
+    DatabaseProxy, TransactionProxy as DBTransaction, WriteTransactionProxy,
 };
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
-use nimiq_primitives::account::{AccountType, FailReason};
-use nimiq_primitives::trie::TrieItem;
 use nimiq_primitives::{
-    account::AccountError,
+    account::{AccountError, AccountType, FailReason},
     key_nibbles::KeyNibbles,
     trie::trie_chunk::{TrieChunk, TrieChunkPushResult},
+    trie::TrieItem,
 };
 use nimiq_transaction::{inherent::Inherent, ExecutedTransaction, Transaction, TransactionFlags};
 use nimiq_trie::trie::{IncompleteTrie, MerkleRadixTrie};
@@ -29,31 +29,31 @@ pub type AccountsTrie = MerkleRadixTrie;
 /// directly update the accounts.
 #[derive(Debug)]
 pub struct Accounts {
-    pub env: Environment,
+    pub env: DatabaseProxy,
     pub tree: AccountsTrie,
 }
 
 impl Accounts {
     /// Creates a new Accounts.
-    pub fn new(env: Environment) -> Self {
+    pub fn new(env: DatabaseProxy) -> Self {
         let tree = AccountsTrie::new(env.clone(), "AccountsTrie");
         Accounts { env, tree }
     }
 
     /// Initializes the Accounts struct with a given list of accounts.
-    pub fn init(&self, txn: &mut WriteTransaction, genesis_accounts: Vec<TrieItem>) {
+    pub fn init(&self, txn: &mut WriteTransactionProxy, genesis_accounts: Vec<TrieItem>) {
         self.tree.init(txn, genesis_accounts)
     }
 
     /// Returns the number of accounts (incl. hybrid nodes) in the Accounts Trie.
     pub fn size(&self) -> u64 {
-        let txn = ReadTransaction::new(&self.env);
+        let txn = self.env.read_transaction();
         self.tree.num_leaves(&txn) + self.tree.num_hybrids(&txn)
     }
 
     /// Returns the number of branch nodes in the Accounts Trie.
     pub fn num_branches(&self) -> u64 {
-        self.tree.num_branches(&ReadTransaction::new(&self.env))
+        self.tree.num_branches(&self.env.read_transaction())
     }
 
     pub fn get(
@@ -66,7 +66,7 @@ impl Accounts {
             Some(txn) => Ok(self.tree.get(txn, &key)?.unwrap_or_default()),
             None => Ok(self
                 .tree
-                .get(&ReadTransaction::new(&self.env), &key)?
+                .get(&self.env.read_transaction(), &key)?
                 .unwrap_or_default()),
         }
     }
@@ -95,7 +95,7 @@ impl Accounts {
                 transaction,
                 reserved_balance,
                 block_state,
-                store.read(&ReadTransaction::new(&self.env)),
+                store.read(&self.env.read_transaction()),
             ),
         }
     }
@@ -115,7 +115,7 @@ impl Accounts {
             None => account.release_balance(
                 transaction,
                 reserved_balance,
-                store.read(&ReadTransaction::new(&self.env)),
+                store.read(&self.env.read_transaction()),
             ),
         }
     }
@@ -142,7 +142,7 @@ impl Accounts {
 
     fn get_or_restore(
         &self,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
         address: &Address,
         ty: AccountType,
         pruned_account: Option<&AccountReceipt>,
@@ -167,7 +167,7 @@ impl Accounts {
         }
     }
 
-    fn put(&self, txn: &mut WriteTransaction, address: &Address, account: Account) {
+    fn put(&self, txn: &mut WriteTransactionProxy, address: &Address, account: Account) {
         assert!(!account.can_be_pruned());
         self.tree
             .put(txn, &KeyNibbles::from(address), account)
@@ -176,7 +176,7 @@ impl Accounts {
 
     fn put_or_prune(
         &self,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
         address: &Address,
         account: Account,
     ) -> Option<AccountReceipt> {
@@ -191,7 +191,7 @@ impl Accounts {
         }
     }
 
-    fn prune(&self, txn: &mut WriteTransaction, address: &Address) {
+    fn prune(&self, txn: &mut WriteTransactionProxy, address: &Address) {
         // TODO Remove subtree
         self.tree.remove(txn, &KeyNibbles::from(address));
     }
@@ -199,31 +199,31 @@ impl Accounts {
     pub fn get_root_hash_assert(&self, txn_option: Option<&DBTransaction>) -> Blake2bHash {
         match txn_option {
             Some(txn) => self.tree.root_hash_assert(txn),
-            None => self.tree.root_hash_assert(&ReadTransaction::new(&self.env)),
+            None => self.tree.root_hash_assert(&self.env.read_transaction()),
         }
     }
 
     pub fn get_root_hash(&self, txn_option: Option<&DBTransaction>) -> Option<Blake2bHash> {
         match txn_option {
             Some(txn) => self.tree.root_hash(txn),
-            None => self.tree.root_hash(&ReadTransaction::new(&self.env)),
+            None => self.tree.root_hash(&self.env.read_transaction()),
         }
     }
 
-    pub fn reinitialize_as_incomplete(&self, txn: &mut WriteTransaction) {
+    pub fn reinitialize_as_incomplete(&self, txn: &mut WriteTransactionProxy) {
         self.tree.reinitialize_as_incomplete(txn)
     }
 
     pub fn is_complete(&self, txn_option: Option<&DBTransaction>) -> bool {
         match txn_option {
             Some(txn) => self.tree.is_complete(txn),
-            None => self.tree.is_complete(&ReadTransaction::new(&self.env)),
+            None => self.tree.is_complete(&self.env.read_transaction()),
         }
     }
 
     /// Marks the account at the given address as changed if it is missing.
     /// Returns true if the account is missing, false otherwise.
-    fn mark_changed_if_missing(&self, txn: &mut WriteTransaction, address: &Address) -> bool {
+    fn mark_changed_if_missing(&self, txn: &mut WriteTransactionProxy, address: &Address) -> bool {
         // We consider an account to be missing if the account itself or any of its children are missing.
         // Therefore we need to check if the rightmost child is contained in the missing range.
         let mut rightmost_key = [255u8; KeyNibbles::MAX_BYTES];
@@ -250,7 +250,7 @@ impl Accounts {
         inherents: &[Inherent],
         block_state: &BlockState,
     ) -> Result<(Blake2bHash, Vec<ExecutedTransaction>), AccountError> {
-        let mut txn = WriteTransaction::new(&self.env);
+        let mut txn = self.env.write_transaction();
         assert!(self.is_complete(Some(&txn)), "Tree must be complete");
 
         let receipts = self.commit(
@@ -280,7 +280,7 @@ impl Accounts {
 
     pub fn commit(
         &self,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
         transactions: &[Transaction],
         inherents: &[Inherent],
         block_state: &BlockState,
@@ -294,7 +294,7 @@ impl Accounts {
 
     pub fn commit_incomplete(
         &self,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
         transactions: &[ExecutedTransaction],
         inherents: &[Inherent],
         block_state: &BlockState,
@@ -306,7 +306,7 @@ impl Accounts {
 
     pub fn commit_batch(
         &self,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
         transactions: &[Transaction],
         inherents: &[Inherent],
         block_state: &BlockState,
@@ -340,7 +340,7 @@ impl Accounts {
 
     pub fn commit_batch_incomplete(
         &self,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
         transactions: &[ExecutedTransaction],
         inherents: &[Inherent],
         block_state: &BlockState,
@@ -363,7 +363,7 @@ impl Accounts {
 
     fn commit_transaction(
         &self,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
         transaction: &Transaction,
         block_state: &BlockState,
         tx_logger: &mut TransactionLog,
@@ -384,7 +384,7 @@ impl Accounts {
 
     fn commit_transaction_incomplete(
         &self,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
         transaction: &ExecutedTransaction,
         block_state: &BlockState,
     ) -> Result<TransactionOperationReceipt, AccountError> {
@@ -417,7 +417,7 @@ impl Accounts {
     /// (sender + recipient) or it returns an error and no state is changed.
     fn try_commit_transaction(
         &self,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
         transaction: &Transaction,
         block_state: &BlockState,
         tx_logger: &mut TransactionLog,
@@ -476,10 +476,10 @@ impl Accounts {
         })
     }
 
-    /// FIXME This function might leave the WriteTransaction in an inconsistent state if it returns an error!
+    /// FIXME This function might leave the WriteTransactionProxy in an inconsistent state if it returns an error!
     fn commit_successful_transaction(
         &self,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
         transaction: &Transaction,
         block_state: &BlockState,
         tx_logger: &mut TransactionLog,
@@ -531,7 +531,7 @@ impl Accounts {
 
     fn commit_recipient(
         &self,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
         transaction: &Transaction,
         block_state: &BlockState,
         recipient_account: &mut Account,
@@ -580,7 +580,7 @@ impl Accounts {
 
     fn commit_failed_transaction(
         &self,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
         transaction: &Transaction,
         block_state: &BlockState,
         tx_logger: &mut TransactionLog,
@@ -612,7 +612,7 @@ impl Accounts {
 
     fn commit_inherent(
         &self,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
         inherent: &Inherent,
         block_state: &BlockState,
         inherent_logger: &mut InherentLogger,
@@ -638,7 +638,7 @@ impl Accounts {
 
     pub fn revert(
         &self,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
         transactions: &[Transaction],
         inherents: &[Inherent],
         block_state: &BlockState,
@@ -659,7 +659,7 @@ impl Accounts {
 
     pub fn revert_batch(
         &self,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
         transactions: &[Transaction],
         inherents: &[Inherent],
         block_state: &BlockState,
@@ -700,7 +700,7 @@ impl Accounts {
 
     fn revert_transaction(
         &self,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
         transaction: &Transaction,
         block_state: &BlockState,
         receipt: TransactionOperationReceipt,
@@ -729,10 +729,10 @@ impl Accounts {
         }
     }
 
-    /// FIXME This function might leave the WriteTransaction in an inconsistent state if it returns an error!
+    /// FIXME This function might leave the WriteTransactionProxy in an inconsistent state if it returns an error!
     fn revert_successful_transaction(
         &self,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
         transaction: &Transaction,
         block_state: &BlockState,
         receipt: TransactionReceipt,
@@ -802,7 +802,7 @@ impl Accounts {
 
     fn revert_failed_transaction(
         &self,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
         transaction: &Transaction,
         block_state: &BlockState,
         receipt: TransactionReceipt,
@@ -837,7 +837,7 @@ impl Accounts {
 
     fn revert_inherent(
         &self,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
         inherent: &Inherent,
         block_state: &BlockState,
         receipt: InherentOperationReceipt,
@@ -871,14 +871,14 @@ impl Accounts {
         Ok(())
     }
 
-    pub fn finalize_batch(&self, txn: &mut WriteTransaction) {
+    pub fn finalize_batch(&self, txn: &mut WriteTransactionProxy) {
         // It is fine to have an incomplete trie here.
         self.tree.update_root(txn).ok();
     }
 
     pub fn commit_chunk(
         &self,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
         chunk: TrieChunk,
         expected_hash: Blake2bHash,
         start_key: KeyNibbles,
@@ -890,7 +890,7 @@ impl Accounts {
 
     pub fn revert_chunk(
         &self,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
         start_key: KeyNibbles,
     ) -> Result<(), AccountError> {
         self.tree.remove_chunk(txn, start_key)?;
@@ -907,7 +907,7 @@ impl Accounts {
             Some(txn) => self.tree.get_chunk_with_proof(txn, start_key.., limit),
             None => {
                 self.tree
-                    .get_chunk_with_proof(&ReadTransaction::new(&self.env), start_key.., limit)
+                    .get_chunk_with_proof(&self.env.read_transaction(), start_key.., limit)
             }
         }
     }

@@ -5,7 +5,7 @@ use parking_lot::RwLock;
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
-use nimiq_database::volatile::VolatileEnvironment;
+use nimiq_database::volatile::VolatileDatabase;
 use nimiq_genesis::NetworkId;
 use nimiq_primitives::policy::Policy;
 use nimiq_test_log::test;
@@ -27,7 +27,7 @@ fn history_sync_works() {
     let time = Arc::new(OffsetTime::new());
 
     // Create a blockchain to produce the macro blocks.
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileDatabase::new(10).unwrap();
 
     let blockchain = Arc::new(RwLock::new(
         Blockchain::new(
@@ -111,7 +111,7 @@ fn history_sync_works() {
 
     let time = Arc::new(OffsetTime::new());
     // Create a second blockchain to push these blocks.
-    let env2 = VolatileEnvironment::new(10).unwrap();
+    let env2 = VolatileDatabase::new(10).unwrap();
 
     let blockchain2 = Arc::new(RwLock::new(
         Blockchain::new(
@@ -181,7 +181,7 @@ fn history_sync_works_with_micro_blocks() {
     let time = Arc::new(OffsetTime::new());
 
     // Create a blockchain to produce the macro blocks.
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileDatabase::new(10).unwrap();
 
     let blockchain = Arc::new(RwLock::new(
         Blockchain::new(
@@ -274,7 +274,7 @@ fn history_sync_works_with_micro_blocks() {
 
     let time = Arc::new(OffsetTime::new());
     // Create a second blockchain to push these blocks.
-    let env2 = VolatileEnvironment::new(10).unwrap();
+    let env2 = VolatileDatabase::new(10).unwrap();
 
     let blockchain2 = Arc::new(RwLock::new(
         Blockchain::new(
@@ -347,7 +347,7 @@ fn history_sync_works_with_micro_blocks() {
 #[test]
 fn history_sync_works_with_diverging_history() {
     // Produce macro blocks to complete one epoch in blockchain1.
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileDatabase::new(10).unwrap();
     let time = Arc::new(OffsetTime::new());
     let blockchain1 = Arc::new(RwLock::new(
         Blockchain::new(
@@ -368,7 +368,7 @@ fn history_sync_works_with_diverging_history() {
     );
 
     // Produce some micro blocks (with a different history) in blockchain2.
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileDatabase::new(10).unwrap();
     let time = Arc::new(OffsetTime::new());
     let blockchain2 = Arc::new(RwLock::new(
         Blockchain::new(

@@ -424,13 +424,14 @@ mod tests {
     use std::sync::Arc;
 
     use futures::StreamExt;
+    use nimiq_database::traits::WriteTransaction;
     use parking_lot::RwLock;
 
     use nimiq_block_production::BlockProducer;
     use nimiq_blockchain::{Blockchain, BlockchainConfig};
     use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
     use nimiq_blockchain_proxy::BlockchainProxy;
-    use nimiq_database::volatile::VolatileEnvironment;
+    use nimiq_database::volatile::VolatileDatabase;
     use nimiq_light_blockchain::LightBlockchain;
     use nimiq_network_interface::{network::Network, request::request_handler};
     use nimiq_network_mock::{MockHub, MockNetwork};
@@ -446,7 +447,7 @@ mod tests {
 
     fn blockchain() -> BlockchainProxy {
         let time = Arc::new(OffsetTime::new());
-        let env = VolatileEnvironment::new(10).unwrap();
+        let env = VolatileDatabase::new(10).unwrap();
         BlockchainProxy::Full(Arc::new(RwLock::new(
             Blockchain::new(
                 env,

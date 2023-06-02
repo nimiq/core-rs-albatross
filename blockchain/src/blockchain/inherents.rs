@@ -31,7 +31,7 @@ impl Blockchain {
         &self,
         fork_proofs: &[ForkProof],
         skip_block_info: Option<SkipBlockInfo>,
-        txn_option: Option<&db::Transaction>,
+        txn_option: Option<&db::TransactionProxy>,
     ) -> Vec<Inherent> {
         let mut inherents = vec![];
 
@@ -52,7 +52,7 @@ impl Blockchain {
     pub fn inherent_from_fork_proof(
         &self,
         fork_proof: &ForkProof,
-        txn_option: Option<&db::Transaction>,
+        txn_option: Option<&db::TransactionProxy>,
     ) -> Inherent {
         // Get the slot owner and slot number for this block number.
         let proposer_slot = self
@@ -79,7 +79,7 @@ impl Blockchain {
     pub fn inherent_from_skip_block_info(
         &self,
         skip_block_info: &SkipBlockInfo,
-        txn_option: Option<&db::Transaction>,
+        txn_option: Option<&db::TransactionProxy>,
     ) -> Inherent {
         // Get the slot owner and slot number for this block number.
         let proposer_slot = self

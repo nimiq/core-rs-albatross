@@ -1,11 +1,9 @@
 use crate::blockchain_state::BlockchainState;
 use crate::Blockchain;
-use nimiq_account::{Accounts, BlockState};
-use nimiq_account::{BlockLogger, TransactionOperationReceipt};
+use nimiq_account::{Accounts, BlockLogger, BlockState, TransactionOperationReceipt};
 use nimiq_block::{Block, BlockError, SkipBlockInfo};
 use nimiq_blockchain_interface::PushError;
-use nimiq_database::ReadTransaction;
-use nimiq_database::WriteTransaction;
+use nimiq_database::{traits::Database, WriteTransactionProxy};
 use nimiq_primitives::{key_nibbles::KeyNibbles, trie::trie_proof::TrieProof};
 use nimiq_transaction::extended_transaction::ExtendedTransaction;
 
@@ -16,7 +14,7 @@ impl Blockchain {
         &self,
         state: &BlockchainState,
         block: &Block,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
         block_logger: &mut BlockLogger,
     ) -> Result<u64, PushError> {
         // Get the accounts from the state.
@@ -139,7 +137,7 @@ impl Blockchain {
     pub(crate) fn revert_accounts(
         &self,
         accounts: &Accounts,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
         block: &Block,
         block_logger: &mut BlockLogger,
     ) -> Result<u64, PushError> {
@@ -203,7 +201,7 @@ impl Blockchain {
     }
 
     pub fn get_accounts_proof(&self, keys: Vec<&KeyNibbles>) -> Option<TrieProof> {
-        let txn = ReadTransaction::new(&self.env);
+        let txn = self.env.read_transaction();
 
         self.state().accounts.tree.get_proof(&txn, keys).ok()
     }

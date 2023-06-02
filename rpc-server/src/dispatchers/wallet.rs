@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use nimiq_database::traits::WriteTransaction;
 use parking_lot::RwLock;
 
 use beserial::Deserialize;

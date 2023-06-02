@@ -8,7 +8,11 @@ use nimiq_account::{
     OperationReceipt, TransactionOperationReceipt, TransactionReceipt, VestingContract,
 };
 use nimiq_bls::KeyPair as BLSKeyPair;
-use nimiq_database::{mdbx::MdbxEnvironment, volatile::VolatileEnvironment, WriteTransaction};
+use nimiq_database::{
+    mdbx::MdbxDatabase,
+    traits::{Database, WriteTransaction},
+    volatile::VolatileDatabase,
+};
 use nimiq_genesis_builder::GenesisBuilder;
 use nimiq_keys::{Address, KeyPair, PrivateKey, PublicKey, SecureGenerate};
 use nimiq_primitives::{
@@ -116,7 +120,7 @@ fn it_can_commit_and_revert_a_block_body() {
 
     assert_ne!(hash1, accounts.get_root_hash_assert(None));
 
-    let mut txn = WriteTransaction::new(&accounts.env);
+    let mut txn = accounts.env.write_transaction();
 
     accounts
         .revert(
@@ -324,7 +328,7 @@ fn it_checks_for_sufficient_funds() {
     tx.value = Coin::from_u64_unchecked(1000000);
     let block_state = BlockState::new(2, 2);
     {
-        let mut txn = WriteTransaction::new(&accounts.env);
+        let mut txn = accounts.env.write_transaction();
 
         let receipts = accounts
             .commit(
@@ -392,7 +396,7 @@ fn it_checks_for_sufficient_funds() {
 fn accounts_performance() {
     let (env, num_txns) = if VOLATILE_ENV {
         let num_txns = 1_000;
-        let env = VolatileEnvironment::new(10).unwrap();
+        let env = VolatileDatabase::new(10).unwrap();
 
         (env, num_txns)
     } else {
@@ -400,7 +404,7 @@ fn accounts_performance() {
         let tmp_dir = tempdir().expect("Could not create temporal directory");
         let tmp_dir = tmp_dir.path().to_str().unwrap();
         log::debug!("Creating a non volatile environment in {}", tmp_dir);
-        let env = MdbxEnvironment::new(tmp_dir, 1024 * 1024 * 1024 * 1024, 21).unwrap();
+        let env = MdbxDatabase::new(tmp_dir, 1024 * 1024 * 1024 * 1024, 21).unwrap();
         (env, num_txns)
     };
 
@@ -448,7 +452,7 @@ fn accounts_performance() {
     let genesis_info = genesis_builder.generate(env.clone()).unwrap();
     let length = genesis_info.accounts.len();
     let accounts = Accounts::new(env.clone());
-    let mut txn = WriteTransaction::new(&env);
+    let mut txn = env.write_transaction();
     let start = Instant::now();
     accounts.init(&mut txn, genesis_info.accounts);
     let duration = start.elapsed();
@@ -468,7 +472,7 @@ fn accounts_performance() {
 
     println!("Done adding accounts to genesis {}", txns.len());
 
-    let mut txn = WriteTransaction::new(&env);
+    let mut txn = env.write_transaction();
     let block_state = BlockState::new(1, 1);
     let start = Instant::now();
     let result = accounts.commit(
@@ -504,7 +508,7 @@ fn accounts_performance_history_sync_batches_single_sender() {
 
     let (env, num_txns) = if VOLATILE_ENV {
         let num_txns = 25;
-        let env = VolatileEnvironment::new(10).unwrap();
+        let env = VolatileDatabase::new(10).unwrap();
 
         (env, num_txns)
     } else {
@@ -512,7 +516,7 @@ fn accounts_performance_history_sync_batches_single_sender() {
         let tmp_dir = tempdir().expect("Could not create temporal directory");
         let tmp_dir = tmp_dir.path().to_str().unwrap();
         log::debug!("Creating a non volatile environment in {}", tmp_dir);
-        let env = MdbxEnvironment::new(tmp_dir, 1024 * 1024 * 1024 * 1024, 21).unwrap();
+        let env = MdbxDatabase::new(tmp_dir, 1024 * 1024 * 1024 * 1024, 21).unwrap();
         (env, num_txns)
     };
 
@@ -567,7 +571,7 @@ fn accounts_performance_history_sync_batches_single_sender() {
     let genesis_info = genesis_builder.generate(env.clone()).unwrap();
     let length = genesis_info.accounts.len();
     let accounts = Accounts::new(env.clone());
-    let mut txn = WriteTransaction::new(&env);
+    let mut txn = env.write_transaction();
     let start = Instant::now();
     accounts.init(&mut txn, genesis_info.accounts);
     let duration = start.elapsed();
@@ -590,7 +594,7 @@ fn accounts_performance_history_sync_batches_single_sender() {
     let mut block_index = 0;
 
     for batch in 0..num_batches {
-        let mut txn = WriteTransaction::new(&env);
+        let mut txn = env.write_transaction();
 
         let batch_start = Instant::now();
 
@@ -629,7 +633,7 @@ fn accounts_performance_history_sync_batches_many_to_many() {
 
     let (env, num_txns) = if VOLATILE_ENV {
         let num_txns = 25;
-        let env = VolatileEnvironment::new(10).unwrap();
+        let env = VolatileDatabase::new(10).unwrap();
 
         (env, num_txns)
     } else {
@@ -637,7 +641,7 @@ fn accounts_performance_history_sync_batches_many_to_many() {
         let tmp_dir = tempdir().expect("Could not create temporal directory");
         let tmp_dir = tmp_dir.path().to_str().unwrap();
         log::debug!("Creating a non volatile environment in {}", tmp_dir);
-        let env = MdbxEnvironment::new(tmp_dir, 1024 * 1024 * 1024 * 1024, 21).unwrap();
+        let env = MdbxDatabase::new(tmp_dir, 1024 * 1024 * 1024 * 1024, 21).unwrap();
         (env, num_txns)
     };
 
@@ -692,7 +696,7 @@ fn accounts_performance_history_sync_batches_many_to_many() {
     let genesis_info = genesis_builder.generate(env.clone()).unwrap();
     let length = genesis_info.accounts.len();
     let accounts = Accounts::new(env.clone());
-    let mut txn = WriteTransaction::new(&env);
+    let mut txn = env.write_transaction();
     let start = Instant::now();
     accounts.init(&mut txn, genesis_info.accounts);
     let duration = start.elapsed();
@@ -713,7 +717,7 @@ fn accounts_performance_history_sync_batches_many_to_many() {
     let mut block_index = 0;
 
     for batch in 0..num_batches {
-        let mut txn = WriteTransaction::new(&env);
+        let mut txn = env.write_transaction();
 
         let batch_start = Instant::now();
 

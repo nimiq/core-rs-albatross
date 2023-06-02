@@ -7,7 +7,7 @@ use nimiq_block::{Block, BlockError};
 use nimiq_blockchain_interface::{
     AbstractBlockchain, BlockchainEvent, ChainInfo, PushError, PushResult,
 };
-use nimiq_database::WriteTransaction;
+use nimiq_database::{traits::WriteTransaction, WriteTransactionProxy};
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy::Policy;
 use nimiq_transaction::{
@@ -344,7 +344,7 @@ impl Blockchain {
         &self,
         block: &Block,
         history: &[ExtendedTransaction],
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
     ) -> usize {
         // Find the index of the first extended transaction in the current batch.
         let last_macro_block = Policy::last_macro_block(self.block_number());
@@ -420,7 +420,7 @@ impl Blockchain {
     pub fn revert_blocks(
         &self,
         num_blocks: u32,
-        write_txn: &mut WriteTransaction,
+        write_txn: &mut WriteTransactionProxy,
     ) -> Result<(), PushError> {
         debug!(
             num_blocks,

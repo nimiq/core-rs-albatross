@@ -10,7 +10,10 @@ use nimiq_blockchain_interface::{
     AbstractBlockchain, BlockchainEvent, ChainInfo, ChainOrdering, ChunksPushError,
     ChunksPushResult, ForkEvent, PushError, PushResult,
 };
-use nimiq_database::{ReadTransaction, WriteTransaction};
+use nimiq_database::{
+    traits::{ReadTransaction, WriteTransaction},
+    TransactionProxy, WriteTransactionProxy,
+};
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::{
     policy::Policy,
@@ -639,7 +642,7 @@ impl Blockchain {
         &self,
         state: &BlockchainState,
         block: &Block,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
         block_logger: &mut BlockLogger,
     ) -> Result<u64, PushError> {
         // Check transactions against replay attacks. This is only necessary for micro blocks.
@@ -679,7 +682,7 @@ impl Blockchain {
         Ok(total_tx_size)
     }
 
-    fn detect_forks(&self, txn: &ReadTransaction, block: &MicroBlock, prev_vrf_seed: &VrfSeed) {
+    fn detect_forks(&self, txn: &TransactionProxy, block: &MicroBlock, prev_vrf_seed: &VrfSeed) {
         assert!(!block.is_skip_block());
 
         // Check if there are two blocks in the same slot and with the same height. Since we already

@@ -3,7 +3,7 @@ use std::{sync::Arc, time::Duration};
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_bls::KeyPair as BLSKeyPair;
-use nimiq_database::volatile::VolatileEnvironment;
+use nimiq_database::volatile::VolatileDatabase;
 use nimiq_genesis_builder::GenesisBuilder;
 use nimiq_keys::{Address, KeyPair, SecureGenerate};
 use nimiq_network_mock::{MockHub, MockNetwork};
@@ -16,7 +16,7 @@ use nimiq_test_utils::validator::seeded_rng;
 #[test(tokio::test(flavor = "multi_thread", worker_threads = 4))]
 async fn test_request_component() {
     let mut hub = Some(MockHub::default());
-    let env = VolatileEnvironment::new(10).expect("Could not open a volatile database");
+    let env = VolatileDatabase::new(10).expect("Could not open a volatile database");
 
     // Generate genesis block.
     let key = KeyPair::generate(&mut seeded_rng(0));

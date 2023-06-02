@@ -20,6 +20,7 @@ maintenance = { status = "experimental" }
 bitflags = "1.0"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 tempfile = "3"
+thiserror = "1.0"
 libmdbx = "0.3.3"
 
 nimiq-database-value = { path = "database-value"}

@@ -10,7 +10,7 @@ use beserial::Deserialize;
 use beserial::{Serialize, SerializeWithLength};
 use nimiq_block::Block;
 #[cfg(feature = "genesis-override")]
-use nimiq_database::volatile::VolatileEnvironment;
+use nimiq_database::volatile::VolatileDatabase;
 #[cfg(feature = "genesis-override")]
 use nimiq_genesis_builder::{GenesisBuilder, GenesisBuilderError, GenesisInfo};
 use nimiq_hash::Blake2bHash;
@@ -70,7 +70,7 @@ impl NetworkInfo {
 
 #[cfg(feature = "genesis-override")]
 fn read_genesis_config(config: &Path) -> Result<GenesisData, GenesisBuilderError> {
-    let env = VolatileEnvironment::new(10).expect("Could not open a volatile database");
+    let env = VolatileDatabase::new(10).expect("Could not open a volatile database");
 
     let GenesisInfo {
         block,

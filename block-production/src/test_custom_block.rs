@@ -9,6 +9,7 @@ use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_bls::AggregateSignature;
 use nimiq_collections::BitSet;
+use nimiq_database::traits::WriteTransaction;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_primitives::policy::Policy;
 use nimiq_tendermint::ProposalMessage;

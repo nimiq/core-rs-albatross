@@ -9,7 +9,7 @@ use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_bls::{lazy::LazyPublicKey, AggregateSignature, KeyPair};
 use nimiq_collections::bitset::BitSet;
-use nimiq_database::volatile::VolatileEnvironment;
+use nimiq_database::volatile::VolatileDatabase;
 use nimiq_genesis::NetworkId;
 use nimiq_keys::{Address, PublicKey};
 use nimiq_primitives::{
@@ -69,7 +69,7 @@ fn test_skip_block_single_signature() {
 fn test_replay() {
     let time = Arc::new(OffsetTime::new());
     // Create a blockchain to have access to the validator slots.
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileDatabase::new(10).unwrap();
     let blockchain = Arc::new(
         Blockchain::new(
             env,

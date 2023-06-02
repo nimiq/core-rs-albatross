@@ -1,102 +1,25 @@
-use std::sync::Arc;
+mod cursor;
+mod database;
+mod transaction;
 
-use tempfile::TempDir;
-
-use super::mdbx::*;
-use super::*;
-use crate::traits::Database;
-
-#[derive(Debug)]
-pub struct VolatileDatabase {
-    temp_dir: Arc<TempDir>,
-    db: MdbxDatabase,
-}
-
-impl Clone for VolatileDatabase {
-    fn clone(&self) -> Self {
-        Self {
-            temp_dir: Arc::clone(&self.temp_dir),
-            db: self.db.clone(),
-        }
-    }
-}
-
-impl Database for VolatileDatabase {
-    type Table = VolatileTable;
-
-    type ReadTransaction<'db> = VolatileReadTransaction<'db>
-    where
-        Self: 'db;
-
-    type WriteTransaction<'db> = VolatileWriteTransaction<'db>
-    where
-        Self: 'db;
-
-    fn open_table(&self, name: String) -> Self::Table {
-        self.db.open_table(name)
-    }
-
-    fn open_table_with_flags(&self, name: String, flags: TableFlags) -> Self::Table {
-        self.db.open_table_with_flags(name, flags)
-    }
-
-    fn read_transaction<'db>(&'db self) -> Self::ReadTransaction<'db> {
-        self.db.read_transaction()
-    }
-
-    fn write_transaction<'db>(&'db self) -> Self::WriteTransaction<'db> {
-        self.db.write_transaction()
-    }
-}
-
-impl VolatileDatabase {
-    #[allow(clippy::new_ret_no_self)]
-    pub fn new(max_dbs: u32) -> Result<DatabaseProxy, Error> {
-        let temp_dir = TempDir::new().map_err(Error::CreateDirectory)?;
-        let db = MdbxDatabase::new_mdbx_database(
-            temp_dir.path(),
-            1024 * 1024 * 1024 * 1024,
-            max_dbs,
-            None,
-        )?;
-        Ok(DatabaseProxy::Volatile(VolatileDatabase {
-            temp_dir: Arc::new(temp_dir),
-            db,
-        }))
-    }
-
-    pub fn with_max_readers(max_dbs: u32, max_readers: u32) -> Result<DatabaseProxy, Error> {
-        let temp_dir = TempDir::new().map_err(Error::CreateDirectory)?;
-        let db = MdbxDatabase::new_mdbx_database(
-            temp_dir.path(),
-            1024 * 1024 * 1024 * 1024,
-            max_dbs,
-            Some(max_readers),
-        )?;
-        Ok(DatabaseProxy::Volatile(VolatileDatabase {
-            temp_dir: Arc::new(temp_dir),
-            db,
-        }))
-    }
-}
-
-pub type VolatileTable = MdbxTable;
-pub type VolatileReadTransaction<'db> = MdbxReadTransaction<'db>;
-pub type VolatileWriteTransaction<'db> = MdbxWriteTransaction<'db>;
-pub type VolatileCursor<'txn> = MdbxReadCursor<'txn>;
-pub type VolatileWriteCursor<'txn> = MdbxWriteCursor<'txn>;
+pub use self::{cursor::*, database::*, transaction::*};
 
 #[cfg(test)]
 mod tests {
-    use crate::traits::{ReadCursor, ReadTransaction, WriteTransaction};
+    use crate::{
+        traits::{Database, ReadCursor, ReadTransaction, WriteTransaction},
+        TableFlags,
+    };
 
     use super::*;
     use nimiq_test_log::test;
+    use tempfile::tempdir;
 
     #[test]
     fn it_can_save_basic_objects() {
-        let db = VolatileDatabase::new(1).unwrap();
+        let tempdir = tempdir().unwrap();
         {
+            let db = MdbxDatabase::new(tempdir.path().join("test"), 0, 1).unwrap();
             let table = db.open_table("test".to_string());
 
             // Read non-existent value.
@@ -156,8 +79,9 @@ mod tests {
 
     #[test]
     fn isolation_test() {
-        let db = VolatileDatabase::with_max_readers(1, 126).unwrap();
+        let tempdir = tempdir().unwrap();
         {
+            let db = MdbxDatabase::new(tempdir.path().join("test2"), 0, 1).unwrap();
             let table = db.open_table("test".to_string());
 
             // Read non-existent value.
@@ -189,12 +113,14 @@ mod tests {
                 Some("one".to_string())
             );
         }
+        tempdir.close().unwrap();
     }
 
     #[test]
     fn duplicates_test() {
-        let db = VolatileDatabase::with_max_readers(1, 126).unwrap();
+        let tempdir = tempdir().unwrap();
         {
+            let db = MdbxDatabase::new(tempdir.path().join("test3"), 0, 1).unwrap();
             let table = db.open_table_with_flags("test".to_string(), TableFlags::DUPLICATE_KEYS);
 
             // Write one value.
@@ -250,12 +176,14 @@ mod tests {
                 assert!(tx.get::<str, u32>(&table, "test").is_none());
             }
         }
+        tempdir.close().unwrap();
     }
 
     #[test]
     fn cursor_test() {
-        let db = VolatileDatabase::with_max_readers(1, 126).unwrap();
+        let tempdir = tempdir().unwrap();
         {
+            let db = MdbxDatabase::new(tempdir.path().join("test4"), 0, 1).unwrap();
             let table = db.open_table_with_flags("test".to_string(), TableFlags::DUPLICATE_KEYS);
 
             let test1: String = "test1".to_string();
@@ -291,14 +219,19 @@ mod tests {
             );
             assert!(cursor.seek_key::<str, u32>("test").is_none());
             assert_eq!(cursor.seek_key::<str, u32>("test1"), Some(12));
+            assert_eq!(cursor.count_duplicates(), 3);
             assert_eq!(cursor.last_duplicate::<u32>(), Some(5783));
+
             assert_eq!(
                 cursor.get_current::<String, u32>(),
                 Some((test1.clone(), 5783))
             );
+
             assert_eq!(cursor.get_current::<String, u32>(), Some((test1, 5783)));
             assert!(cursor.prev_no_duplicate::<String, u32>().is_none());
             assert_eq!(cursor.next::<String, u32>(), Some((test2, 5783)));
+            //            assert_eq!(cursor.seek_range_key::<String, u32>("test"), Some((test1.clone(), 12)));
         }
+        tempdir.close().unwrap();
     }
 }

@@ -5,7 +5,7 @@ use nimiq_account::{
     Account, Accounts, BasicAccount, BlockLogger, BlockState, Log, TransactionLog,
     TransactionOperationReceipt, TransactionReceipt,
 };
-use nimiq_database::WriteTransaction;
+use nimiq_database::traits::Database;
 use nimiq_keys::{Address, KeyPair, PrivateKey, SecureGenerate};
 use nimiq_primitives::{account::AccountError, coin::Coin, networks::NetworkId};
 use nimiq_test_log::test;
@@ -23,7 +23,7 @@ fn basic_transfer_works() {
     let sender_address = Address::from(&key_1);
     let recipient_address = Address::from(&key_2);
 
-    let db_txn = WriteTransaction::new(accounts.env());
+    let db_txn = accounts.env().write_transaction();
     let mut sender_account = accounts.get_complete(&sender_address, Some(&db_txn));
     let mut recipient_account = accounts.get_complete(&recipient_address, Some(&db_txn));
     drop(db_txn);
@@ -140,7 +140,7 @@ fn create_and_prune_works() {
         )]
     );
 
-    let db_txn = WriteTransaction::new(accounts.env());
+    let db_txn = accounts.env().write_transaction();
 
     assert_eq!(
         accounts

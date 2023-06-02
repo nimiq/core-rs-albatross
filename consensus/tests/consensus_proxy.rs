@@ -4,7 +4,7 @@ use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_consensus::sync::syncer_proxy::SyncerProxy;
 use nimiq_consensus::Consensus;
-use nimiq_database::volatile::VolatileEnvironment;
+use nimiq_database::volatile::VolatileDatabase;
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_network_interface::network::Network;
 use nimiq_network_mock::MockHub;
@@ -30,7 +30,7 @@ async fn test_request_transactions_by_address() {
 
     let blockchain1 = Arc::new(RwLock::new(
         Blockchain::new(
-            VolatileEnvironment::new(11).unwrap(),
+            VolatileDatabase::new(11).unwrap(),
             BlockchainConfig::default(),
             NetworkId::UnitAlbatross,
             Arc::new(OffsetTime::new()),

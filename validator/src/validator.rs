@@ -10,6 +10,7 @@ use std::time::Duration;
 
 use futures::stream::{BoxStream, Stream, StreamExt};
 use linked_hash_map::LinkedHashMap;
+use nimiq_database::traits::Database;
 use parking_lot::RwLock;
 #[cfg(feature = "metrics")]
 use tokio_metrics::TaskMonitor;
@@ -21,7 +22,10 @@ use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent, ForkEvent, PushResult};
 use nimiq_bls::{lazy::LazyPublicKey, KeyPair as BlsKeyPair};
 use nimiq_consensus::{Consensus, ConsensusEvent, ConsensusProxy};
-use nimiq_database::{Database, Environment, ReadTransaction, WriteTransaction};
+use nimiq_database::{
+    traits::{ReadTransaction, WriteTransaction},
+    DatabaseProxy, TableProxy,
+};
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::{Address, KeyPair as SchnorrKeyPair, Signature as SchnorrSignature};
 use nimiq_macros::store_waker;
@@ -30,8 +34,7 @@ use nimiq_network_interface::{
     network::{MsgAcceptance, Network, PubsubId, Topic},
     request::request_handler,
 };
-use nimiq_primitives::coin::Coin;
-use nimiq_primitives::policy::Policy;
+use nimiq_primitives::{coin::Coin, policy::Policy};
 use nimiq_tendermint::SignedProposalMessage;
 use nimiq_transaction_builder::TransactionBuilder;
 use nimiq_validator_network::ValidatorNetwork;
@@ -110,8 +113,8 @@ where
     pub blockchain: Arc<RwLock<Blockchain>>,
     network: Arc<TValidatorNetwork>,
 
-    database: Database,
-    env: Environment,
+    database: TableProxy,
+    env: DatabaseProxy,
 
     validator_address: Arc<RwLock<Address>>,
     signing_key: Arc<RwLock<SchnorrKeyPair>>,
@@ -153,7 +156,7 @@ where
     const FORK_PROOFS_MAX_SIZE: usize = 1_000; // bytes
 
     pub fn new(
-        env: Environment,
+        env: DatabaseProxy,
         consensus: &Consensus<TNetwork>,
         blockchain: Arc<RwLock<Blockchain>>,
         network: Arc<TValidatorNetwork>,
@@ -177,10 +180,10 @@ where
             can_enforce_validity_window,
         };
 
-        let database = env.open_database(Self::MACRO_STATE_DB_NAME.to_string());
+        let database = env.open_table(Self::MACRO_STATE_DB_NAME.to_string());
 
         let macro_state: Option<MacroState> = {
-            let read_transaction = ReadTransaction::new(&env);
+            let read_transaction = env.read_transaction();
             read_transaction.get(&database, Self::MACRO_STATE_KEY)
         };
         let macro_state = Arc::new(RwLock::new(macro_state));
@@ -613,7 +616,7 @@ where
                 // any old state which potentially still lingers.
                 MappedReturn::Update(update) => {
                     trace!(?update, "Tendermint state update",);
-                    let mut write_transaction = WriteTransaction::new(&self.env);
+                    let mut write_transaction = self.env.write_transaction();
                     let expected_height = self.blockchain.read().block_number() + 1;
                     if expected_height != update.block_number {
                         warn!(

@@ -1,5 +1,5 @@
 use beserial::{Deserialize, Serialize};
-use nimiq_database::{Transaction, WriteTransaction};
+use nimiq_database::{TransactionProxy, WriteTransactionProxy};
 use nimiq_keys::Address;
 use nimiq_primitives::key_nibbles::KeyNibbles;
 use nimiq_trie::trie::TrieNodeIter;
@@ -22,32 +22,32 @@ impl<'tree> DataStore<'tree> {
         }
     }
 
-    pub fn get<T: Deserialize>(&self, txn: &Transaction, key: &KeyNibbles) -> Option<T> {
+    pub fn get<T: Deserialize>(&self, txn: &TransactionProxy, key: &KeyNibbles) -> Option<T> {
         self.tree
             .get(txn, &(&self.prefix + key))
             .expect("Tree must be complete")
     }
 
-    pub fn put<T: Serialize>(&self, txn: &mut WriteTransaction, key: &KeyNibbles, value: T) {
+    pub fn put<T: Serialize>(&self, txn: &mut WriteTransactionProxy, key: &KeyNibbles, value: T) {
         self.tree
             .put(txn, &(&self.prefix + key), value)
             .expect("Tree must be complete")
     }
 
-    pub fn remove(&self, txn: &mut WriteTransaction, key: &KeyNibbles) {
+    pub fn remove(&self, txn: &mut WriteTransactionProxy, key: &KeyNibbles) {
         self.tree.remove(txn, &(&self.prefix + key))
     }
 
     pub fn read<'store, 'txn, 'env>(
         &'store self,
-        txn: &'txn Transaction<'env>,
+        txn: &'txn TransactionProxy<'env>,
     ) -> DataStoreRead<'store, 'tree, 'txn, 'env> {
         DataStoreRead { store: self, txn }
     }
 
     pub fn write<'store, 'txn, 'env>(
         &'store self,
-        txn: &'txn mut WriteTransaction<'env>,
+        txn: &'txn mut WriteTransactionProxy<'env>,
     ) -> DataStoreWrite<'store, 'tree, 'txn, 'env> {
         DataStoreWrite { store: self, txn }
     }
@@ -55,7 +55,7 @@ impl<'tree> DataStore<'tree> {
 
 pub struct DataStoreRead<'store, 'tree, 'txn, 'env> {
     store: &'store DataStore<'tree>,
-    txn: &'txn Transaction<'env>,
+    txn: &'txn TransactionProxy<'env>,
 }
 
 impl<'store, 'tree, 'txn, 'env> DataStoreReadOps for DataStoreRead<'store, 'tree, 'txn, 'env> {
@@ -78,7 +78,7 @@ impl<'store, 'tree, 'txn, 'env> DataStoreIterOps for DataStoreRead<'store, 'tree
 
 pub struct DataStoreWrite<'store, 'tree, 'txn, 'env> {
     store: &'store DataStore<'tree>,
-    txn: &'txn mut WriteTransaction<'env>,
+    txn: &'txn mut WriteTransactionProxy<'env>,
 }
 
 impl<'store, 'tree, 'txn, 'env> DataStoreWrite<'store, 'tree, 'txn, 'env> {
@@ -100,17 +100,17 @@ mod tests {
     use crate::data_store::DataStore;
     use crate::data_store_ops::DataStoreReadOps;
     use crate::AccountsTrie;
-    use nimiq_database::volatile::VolatileEnvironment;
-    use nimiq_database::{ReadTransaction, WriteTransaction};
+    use nimiq_database::traits::{Database, WriteTransaction};
+    use nimiq_database::volatile::VolatileDatabase;
     use nimiq_primitives::policy::Policy;
 
     #[test]
     fn data_store_works() {
-        let env = VolatileEnvironment::new(10).unwrap();
+        let env = VolatileDatabase::new(10).unwrap();
         let tree = AccountsTrie::new(env.clone(), "accounts_trie");
         let store = DataStore::new(&tree, &Policy::STAKING_CONTRACT_ADDRESS);
 
-        let mut txn = WriteTransaction::new(&env);
+        let mut txn = env.write_transaction();
         let mut write = store.write(&mut txn);
 
         let key_1 = "290d7f3".parse().unwrap();
@@ -133,7 +133,7 @@ mod tests {
         drop(write);
         txn.commit();
 
-        let txn = ReadTransaction::new(&env);
+        let txn = env.read_transaction();
         let read = store.read(&txn);
 
         assert_eq!(read.get::<i32>(&key_1), None);

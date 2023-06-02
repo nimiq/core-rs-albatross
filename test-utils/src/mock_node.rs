@@ -14,7 +14,7 @@ use nimiq_consensus::{
     messages::*,
     sync::live::state_queue::{RequestChunk, ResponseChunk},
 };
-use nimiq_database::volatile::VolatileEnvironment;
+use nimiq_database::volatile::VolatileDatabase;
 use nimiq_network_interface::{
     network::Network as NetworkInterface,
     request::{Handle, Request},
@@ -136,7 +136,7 @@ impl<N: NetworkInterface + TestNetwork> MockNode<N> {
         hub: &mut Option<MockHub>,
     ) -> Self {
         let network = N::build_network(peer_id, block.hash(), hub).await;
-        let env = VolatileEnvironment::new(14).unwrap();
+        let env = VolatileDatabase::new(14).unwrap();
         let clock = Arc::new(OffsetTime::new());
 
         let blockchain = Arc::new(RwLock::new(

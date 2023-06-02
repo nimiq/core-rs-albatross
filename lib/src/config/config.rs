@@ -14,7 +14,7 @@ use beserial::Deserialize;
 #[cfg(feature = "validator")]
 use nimiq_bls::{KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
 #[cfg(feature = "database-storage")]
-use nimiq_database::{mdbx::MdbxEnvironment, volatile::VolatileEnvironment, Environment};
+use nimiq_database::{mdbx::MdbxDatabase, volatile::VolatileDatabase, DatabaseProxy};
 #[cfg(feature = "validator")]
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 #[cfg(feature = "nimiq-mempool")]
@@ -310,13 +310,13 @@ impl StorageConfig {
         network_id: NetworkId,
         sync_mode: SyncMode,
         db_config: DatabaseConfig,
-    ) -> Result<Environment, Error> {
+    ) -> Result<DatabaseProxy, Error> {
         let db_name = format!("{network_id}-{sync_mode}-consensus").to_lowercase();
         log::info!("Opening database: {}", db_name);
 
         Ok(match self {
             StorageConfig::Volatile => {
-                VolatileEnvironment::with_max_readers(db_config.max_dbs, db_config.max_readers)?
+                VolatileDatabase::with_max_readers(db_config.max_dbs, db_config.max_readers)?
             }
             StorageConfig::Filesystem(file_storage) => {
                 let db_path = file_storage.database_parent.join(db_name);
@@ -329,7 +329,7 @@ impl StorageConfig {
                         ))
                     })?
                     .to_string();
-                MdbxEnvironment::new_with_max_readers(
+                MdbxDatabase::new_with_max_readers(
                     db_path,
                     db_config.size,
                     db_config.max_dbs,

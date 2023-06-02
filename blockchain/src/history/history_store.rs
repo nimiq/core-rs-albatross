@@ -2,19 +2,24 @@ use std::cmp;
 use std::collections::{HashSet, VecDeque};
 
 use beserial::Serialize;
-use nimiq_database::cursor::{ReadCursor, WriteCursor};
+use nimiq_database::traits::{Database, ReadTransaction, WriteTransaction};
 use nimiq_database::{
-    Database, DatabaseFlags, Environment, ReadTransaction, Transaction, WriteTransaction,
+    traits::{ReadCursor, WriteCursor},
+    DatabaseProxy, TableFlags, TableProxy, TransactionProxy, WriteTransactionProxy,
 };
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
-use nimiq_mmr::error::Error as MMRError;
-use nimiq_mmr::hash::Hash as MMRHash;
-use nimiq_mmr::mmr::partial::PartialMerkleMountainRange;
-use nimiq_mmr::mmr::position::leaf_number_to_index;
-use nimiq_mmr::mmr::proof::{RangeProof, SizeProof};
-use nimiq_mmr::mmr::MerkleMountainRange;
-use nimiq_mmr::store::memory::MemoryStore;
+use nimiq_mmr::{
+    error::Error as MMRError,
+    hash::Hash as MMRHash,
+    mmr::{
+        partial::PartialMerkleMountainRange,
+        position::leaf_number_to_index,
+        proof::{RangeProof, SizeProof},
+        MerkleMountainRange,
+    },
+    store::memory::MemoryStore,
+};
 use nimiq_primitives::policy::Policy;
 use nimiq_transaction::{
     extended_transaction::{ExtTxData, ExtendedTransaction},
@@ -31,20 +36,20 @@ use crate::history::{mmr_store::MMRStore, ordered_hash::OrderedHash, HistoryTree
 /// only has macro block headers) that that given transaction happened.
 #[derive(Debug)]
 pub struct HistoryStore {
-    env: Environment,
+    env: DatabaseProxy,
     // A database of all history trees indexed by their epoch number.
-    hist_tree_db: Database,
+    hist_tree_db: TableProxy,
     // A database of all extended transactions indexed by their hash (= leaf hash in the history
     // tree).
-    ext_tx_db: Database,
+    ext_tx_db: TableProxy,
     // A database of all leaf hashes and indexes indexed by the hash of the transaction. This way we
     // can start with a transaction hash and find it in the MMR.
-    tx_hash_db: Database,
+    tx_hash_db: TableProxy,
     // A database of the last leaf index for each block number.
-    last_leaf_db: Database,
+    last_leaf_db: TableProxy,
     // A database of all transaction (and reward inherent) hashes indexed by their sender and
     // recipient addresses.
-    address_db: Database,
+    address_db: TableProxy,
 }
 
 impl HistoryStore {
@@ -55,17 +60,17 @@ impl HistoryStore {
     const ADDRESS_DB_NAME: &'static str = "TxHashesByAddress";
 
     /// Creates a new HistoryStore.
-    pub fn new(env: Environment) -> Self {
-        let hist_tree_db = env.open_database(Self::HIST_TREE_DB_NAME.to_string());
-        let ext_tx_db = env.open_database(Self::EXT_TX_DB_NAME.to_string());
-        let tx_hash_db = env.open_database_with_flags(
+    pub fn new(env: DatabaseProxy) -> Self {
+        let hist_tree_db = env.open_table(Self::HIST_TREE_DB_NAME.to_string());
+        let ext_tx_db = env.open_table(Self::EXT_TX_DB_NAME.to_string());
+        let tx_hash_db = env.open_table_with_flags(
             Self::TX_HASH_DB_NAME.to_string(),
-            DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_FIXED_SIZE_VALUES,
+            TableFlags::DUPLICATE_KEYS | TableFlags::DUP_FIXED_SIZE_VALUES,
         );
-        let last_leaf_db = env.open_database(Self::LAST_LEAF_DB_NAME.to_string());
-        let address_db = env.open_database_with_flags(
+        let last_leaf_db = env.open_table(Self::LAST_LEAF_DB_NAME.to_string());
+        let address_db = env.open_table_with_flags(
             Self::ADDRESS_DB_NAME.to_string(),
-            DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_FIXED_SIZE_VALUES,
+            TableFlags::DUPLICATE_KEYS | TableFlags::DUP_FIXED_SIZE_VALUES,
         );
 
         HistoryStore {
@@ -78,7 +83,7 @@ impl HistoryStore {
         }
     }
 
-    pub fn clear(&self, txn: &mut WriteTransaction) {
+    pub fn clear(&self, txn: &mut WriteTransactionProxy) {
         txn.clear_database(&self.hist_tree_db);
         txn.clear_database(&self.ext_tx_db);
         txn.clear_database(&self.tx_hash_db);
@@ -89,12 +94,12 @@ impl HistoryStore {
     /// Returns the length (i.e. the number of leaves) of the History Tree at a given block height.
     /// Note that this returns the number of leaves for only the epoch of the given block height,
     /// this is because we have separate History Trees for separate epochs.
-    pub fn length_at(&self, block_number: u32, txn_option: Option<&Transaction>) -> u32 {
-        let read_txn: ReadTransaction;
+    pub fn length_at(&self, block_number: u32, txn_option: Option<&TransactionProxy>) -> u32 {
+        let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(&self.env);
+                read_txn = self.env.read_transaction();
                 &read_txn
             }
         };
@@ -125,12 +130,16 @@ impl HistoryStore {
     /// Returns the total length of the History Tree at a given epoch number.
     /// The size of the history length is useful for getting a proof for a previous state
     /// of the history tree.
-    pub fn total_len_at_epoch(&self, epoch_number: u32, txn_option: Option<&Transaction>) -> usize {
-        let read_txn: ReadTransaction;
+    pub fn total_len_at_epoch(
+        &self,
+        epoch_number: u32,
+        txn_option: Option<&TransactionProxy>,
+    ) -> usize {
+        let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(&self.env);
+                read_txn = self.env.read_transaction();
                 &read_txn
             }
         };
@@ -153,7 +162,7 @@ impl HistoryStore {
     ///     3. We only push transactions for one epoch at a time.
     pub fn add_to_history(
         &self,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
         epoch_number: u32,
         ext_txs: &[ExtendedTransaction],
     ) -> Option<(Blake2bHash, u64)> {
@@ -188,7 +197,7 @@ impl HistoryStore {
 
     fn remove_txns_from_history(
         &self,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
         hashes: Vec<(usize, Blake2bHash)>,
     ) -> u64 {
         // Set to keep track of the txs we are removing to remove them later
@@ -255,7 +264,7 @@ impl HistoryStore {
         }
 
         // Now prune the address database
-        let mut cursor = txn.write_cursor(&self.address_db);
+        let mut cursor = WriteTransaction::cursor(txn, &self.address_db);
 
         for address in affected_addresses {
             if cursor.seek_key::<Address, OrderedHash>(&address).is_none() {
@@ -282,7 +291,7 @@ impl HistoryStore {
     /// of the resulting tree and the total size of of the transactions removed.
     pub fn remove_partial_history(
         &self,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
         epoch_number: u32,
         num_ext_txs: usize,
     ) -> Option<(Blake2bHash, u64)> {
@@ -317,7 +326,7 @@ impl HistoryStore {
 
     /// Removes an existing history tree and all the extended transactions that were part of it.
     /// Returns None if there's no history tree corresponding to the given epoch number.
-    pub fn remove_history(&self, txn: &mut WriteTransaction, epoch_number: u32) -> Option<()> {
+    pub fn remove_history(&self, txn: &mut WriteTransactionProxy, epoch_number: u32) -> Option<()> {
         // Get the history tree.
         let mut tree = MerkleMountainRange::new(MMRStore::with_write_transaction(
             &self.hist_tree_db,
@@ -343,13 +352,13 @@ impl HistoryStore {
     pub fn get_history_tree_root(
         &self,
         epoch_number: u32,
-        txn_option: Option<&Transaction>,
+        txn_option: Option<&TransactionProxy>,
     ) -> Option<Blake2bHash> {
-        let read_txn: ReadTransaction;
+        let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(&self.env);
+                read_txn = self.env.read_transaction();
                 &read_txn
             }
         };
@@ -384,13 +393,13 @@ impl HistoryStore {
     pub fn get_ext_tx_by_hash(
         &self,
         tx_hash: &Blake2bHash,
-        txn_option: Option<&Transaction>,
+        txn_option: Option<&TransactionProxy>,
     ) -> Vec<ExtendedTransaction> {
-        let read_txn: ReadTransaction;
+        let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(&self.env);
+                read_txn = self.env.read_transaction();
                 &read_txn
             }
         };
@@ -413,13 +422,13 @@ impl HistoryStore {
     pub fn get_block_transactions(
         &self,
         block_number: u32,
-        txn_option: Option<&Transaction>,
+        txn_option: Option<&TransactionProxy>,
     ) -> Vec<ExtendedTransaction> {
-        let read_txn: ReadTransaction;
+        let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(&self.env);
+                read_txn = self.env.read_transaction();
                 &read_txn
             }
         };
@@ -450,13 +459,13 @@ impl HistoryStore {
     pub fn get_epoch_transactions(
         &self,
         epoch_number: u32,
-        txn_option: Option<&Transaction>,
+        txn_option: Option<&TransactionProxy>,
     ) -> Vec<ExtendedTransaction> {
-        let read_txn: ReadTransaction;
+        let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(&self.env);
+                read_txn = self.env.read_transaction();
                 &read_txn
             }
         };
@@ -483,13 +492,13 @@ impl HistoryStore {
     pub fn num_epoch_transactions(
         &self,
         epoch_number: u32,
-        txn_option: Option<&Transaction>,
+        txn_option: Option<&TransactionProxy>,
     ) -> usize {
-        let read_txn: ReadTransaction;
+        let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(&self.env);
+                read_txn = self.env.read_transaction();
                 &read_txn
             }
         };
@@ -508,13 +517,13 @@ impl HistoryStore {
     pub fn get_final_epoch_transactions(
         &self,
         epoch_number: u32,
-        txn_option: Option<&Transaction>,
+        txn_option: Option<&TransactionProxy>,
     ) -> Vec<ExtendedTransaction> {
-        let read_txn: ReadTransaction;
+        let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(&self.env);
+                read_txn = self.env.read_transaction();
                 &read_txn
             }
         };
@@ -558,13 +567,13 @@ impl HistoryStore {
     pub fn get_number_final_epoch_transactions(
         &self,
         epoch_number: u32,
-        txn_option: Option<&Transaction>,
+        txn_option: Option<&TransactionProxy>,
     ) -> usize {
-        let read_txn: ReadTransaction;
+        let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(&self.env);
+                read_txn = self.env.read_transaction();
                 &read_txn
             }
         };
@@ -606,13 +615,13 @@ impl HistoryStore {
     pub fn get_nonfinal_epoch_transactions(
         &self,
         epoch_number: u32,
-        txn_option: Option<&Transaction>,
+        txn_option: Option<&TransactionProxy>,
     ) -> Vec<ExtendedTransaction> {
-        let read_txn: ReadTransaction;
+        let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(&self.env);
+                read_txn = self.env.read_transaction();
                 &read_txn
             }
         };
@@ -657,17 +666,17 @@ impl HistoryStore {
         &self,
         address: &Address,
         max: u16,
-        txn_option: Option<&Transaction>,
+        txn_option: Option<&TransactionProxy>,
     ) -> Vec<Blake2bHash> {
         if max == 0 {
             return vec![];
         }
 
-        let read_txn: ReadTransaction;
+        let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(&self.env);
+                read_txn = self.env.read_transaction();
                 &read_txn
             }
         };
@@ -705,7 +714,7 @@ impl HistoryStore {
         epoch_number: u32,
         hashes: Vec<&Blake2bHash>,
         verifier_state: Option<usize>,
-        txn_option: Option<&Transaction>,
+        txn_option: Option<&TransactionProxy>,
     ) -> Option<HistoryTreeProof> {
         // Get the leaf indexes.
         let mut positions = vec![];
@@ -730,13 +739,13 @@ impl HistoryStore {
         epoch_number: u32,
         positions: Vec<usize>,
         verifier_state: Option<usize>,
-        txn_option: Option<&Transaction>,
+        txn_option: Option<&TransactionProxy>,
     ) -> Option<HistoryTreeProof> {
-        let read_txn: ReadTransaction;
+        let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(&self.env);
+                read_txn = self.env.read_transaction();
                 &read_txn
             }
         };
@@ -775,13 +784,13 @@ impl HistoryStore {
         verifier_block_number: u32,
         chunk_size: usize,
         chunk_index: usize,
-        txn_option: Option<&Transaction>,
+        txn_option: Option<&TransactionProxy>,
     ) -> Option<HistoryTreeChunk> {
-        let read_txn: ReadTransaction;
+        let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(&self.env);
+                read_txn = self.env.read_transaction();
                 &read_txn
             }
         };
@@ -826,7 +835,7 @@ impl HistoryStore {
         &self,
         epoch_number: u32,
         chunks: Vec<(Vec<ExtendedTransaction>, RangeProof<Blake2bHash>)>,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
     ) -> Result<Blake2bHash, MMRError> {
         // Get partial history tree for given epoch.
         let mut tree = PartialMerkleMountainRange::new(MMRStore::with_write_transaction(
@@ -865,13 +874,13 @@ impl HistoryStore {
     fn get_extended_tx(
         &self,
         leaf_hash: &Blake2bHash,
-        txn_option: Option<&Transaction>,
+        txn_option: Option<&TransactionProxy>,
     ) -> Option<ExtendedTransaction> {
-        let read_txn: ReadTransaction;
+        let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(&self.env);
+                read_txn = self.env.read_transaction();
                 &read_txn
             }
         };
@@ -883,7 +892,7 @@ impl HistoryStore {
     /// Returns the size of the serialized transaction
     fn put_extended_tx(
         &self,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
         leaf_hash: &Blake2bHash,
         leaf_index: u32,
         ext_tx: &ExtendedTransaction,
@@ -961,13 +970,13 @@ impl HistoryStore {
     fn get_leaves_by_tx_hash(
         &self,
         tx_hash: &Blake2bHash,
-        txn_option: Option<&Transaction>,
+        txn_option: Option<&TransactionProxy>,
     ) -> Vec<OrderedHash> {
-        let read_txn: ReadTransaction;
+        let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(&self.env);
+                read_txn = self.env.read_transaction();
                 &read_txn
             }
         };
@@ -993,13 +1002,13 @@ impl HistoryStore {
     fn get_indexes_for_block(
         &self,
         block_number: u32,
-        txn_option: Option<&Transaction>,
+        txn_option: Option<&TransactionProxy>,
     ) -> (u32, u32) {
-        let read_txn: ReadTransaction;
+        let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(&self.env);
+                read_txn = self.env.read_transaction();
                 &read_txn
             }
         };
@@ -1042,13 +1051,13 @@ impl HistoryStore {
     fn get_last_tx_index_for_address(
         &self,
         address: &Address,
-        txn_option: Option<&Transaction>,
+        txn_option: Option<&TransactionProxy>,
     ) -> u32 {
-        let read_txn: ReadTransaction;
+        let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(&self.env);
+                read_txn = self.env.read_transaction();
                 &read_txn
             }
         };
@@ -1070,13 +1079,13 @@ impl HistoryStore {
     pub fn prove_num_leaves(
         &self,
         epoch_number: u32,
-        txn_option: Option<&Transaction>,
+        txn_option: Option<&TransactionProxy>,
     ) -> Result<SizeProof<Blake2bHash, ExtendedTransaction>, MMRError> {
-        let read_txn: ReadTransaction;
+        let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(&self.env);
+                read_txn = self.env.read_transaction();
                 &read_txn
             }
         };
@@ -1096,7 +1105,7 @@ impl HistoryStore {
 
 #[cfg(test)]
 mod tests {
-    use nimiq_database::volatile::VolatileEnvironment;
+    use nimiq_database::volatile::VolatileDatabase;
     use nimiq_primitives::coin::Coin;
     use nimiq_primitives::networks::NetworkId;
     use nimiq_test_log::test;
@@ -1109,7 +1118,7 @@ mod tests {
     #[test]
     fn length_at_works() {
         // Initialize History Store.
-        let env = VolatileEnvironment::new(10).unwrap();
+        let env = VolatileDatabase::new(10).unwrap();
         let history_store = HistoryStore::new(env.clone());
 
         // Create extended transactions.
@@ -1121,7 +1130,7 @@ mod tests {
         let ext_txs = vec![ext_0, ext_1, ext_2, ext_3];
 
         // Add extended transactions to History Store.
-        let mut txn = WriteTransaction::new(&env);
+        let mut txn = env.write_transaction();
         history_store.add_to_history(&mut txn, 1, &ext_txs);
 
         // Verify method works.
@@ -1137,14 +1146,14 @@ mod tests {
     #[test]
     fn get_root_from_ext_txs_works() {
         // Initialize History Store.
-        let env = VolatileEnvironment::new(10).unwrap();
+        let env = VolatileDatabase::new(10).unwrap();
         let history_store = HistoryStore::new(env.clone());
 
         // Create extended transactions.
         let ext_txs = gen_ext_txs();
 
         // Add extended transactions to History Store.
-        let mut txn = WriteTransaction::new(&env);
+        let mut txn = env.write_transaction();
         history_store.add_to_history(&mut txn, 0, &ext_txs[..3]);
         history_store.add_to_history(&mut txn, 1, &ext_txs[3..]);
 
@@ -1163,14 +1172,14 @@ mod tests {
     #[test]
     fn get_ext_tx_by_hash_works() {
         // Initialize History Store.
-        let env = VolatileEnvironment::new(10).unwrap();
+        let env = VolatileDatabase::new(10).unwrap();
         let history_store = HistoryStore::new(env.clone());
 
         // Create extended transactions.
         let ext_txs = gen_ext_txs();
 
         // Add extended transactions to History Store.
-        let mut txn = WriteTransaction::new(&env);
+        let mut txn = env.write_transaction();
         history_store.add_to_history(&mut txn, 0, &ext_txs[..3]);
         history_store.add_to_history(&mut txn, 1, &ext_txs[3..]);
 
@@ -1203,14 +1212,14 @@ mod tests {
     #[test]
     fn get_block_transactions_works() {
         // Initialize History Store.
-        let env = VolatileEnvironment::new(10).unwrap();
+        let env = VolatileDatabase::new(10).unwrap();
         let history_store = HistoryStore::new(env.clone());
 
         // Create extended transactions.
         let ext_txs = gen_ext_txs();
 
         // Add extended transactions to History Store.
-        let mut txn = WriteTransaction::new(&env);
+        let mut txn = env.write_transaction();
         history_store.add_to_history(&mut txn, 0, &ext_txs[..3]);
         history_store.add_to_history(&mut txn, 1, &ext_txs[3..]);
 
@@ -1317,14 +1326,14 @@ mod tests {
     #[test]
     fn get_epoch_transactions_works() {
         // Initialize History Store.
-        let env = VolatileEnvironment::new(10).unwrap();
+        let env = VolatileDatabase::new(10).unwrap();
         let history_store = HistoryStore::new(env.clone());
 
         // Create extended transactions.
         let ext_txs = gen_ext_txs();
 
         // Add extended transactions to History Store.
-        let mut txn = WriteTransaction::new(&env);
+        let mut txn = env.write_transaction();
         history_store.add_to_history(&mut txn, 0, &ext_txs[..3]);
         history_store.add_to_history(&mut txn, 1, &ext_txs[3..]);
 
@@ -1436,14 +1445,14 @@ mod tests {
     #[test]
     fn get_num_extended_transactions_works() {
         // Initialize History Store.
-        let env = VolatileEnvironment::new(10).unwrap();
+        let env = VolatileDatabase::new(10).unwrap();
         let history_store = HistoryStore::new(env.clone());
 
         // Create extended transactions.
         let ext_txs = gen_ext_txs();
 
         // Add extended transactions to History Store.
-        let mut txn = WriteTransaction::new(&env);
+        let mut txn = env.write_transaction();
         history_store.add_to_history(&mut txn, 0, &ext_txs[..3]);
         history_store.add_to_history(&mut txn, 1, &ext_txs[3..]);
 
@@ -1464,14 +1473,14 @@ mod tests {
     #[test]
     fn get_tx_hashes_by_address_works() {
         // Initialize History Store.
-        let env = VolatileEnvironment::new(10).unwrap();
+        let env = VolatileDatabase::new(10).unwrap();
         let history_store = HistoryStore::new(env.clone());
 
         // Create extended transactions.
         let ext_txs = gen_ext_txs();
 
         // Add extended transactions to History Store.
-        let mut txn = WriteTransaction::new(&env);
+        let mut txn = env.write_transaction();
         history_store.add_to_history(&mut txn, 0, &ext_txs[..3]);
         history_store.add_to_history(&mut txn, 1, &ext_txs[3..]);
 
@@ -1522,14 +1531,14 @@ mod tests {
     #[test]
     fn prove_works() {
         // Initialize History Store.
-        let env = VolatileEnvironment::new(10).unwrap();
+        let env = VolatileDatabase::new(10).unwrap();
         let history_store = HistoryStore::new(env.clone());
 
         // Create extended transactions.
         let ext_txs = gen_ext_txs();
 
         // Add extended transactions to History Store.
-        let mut txn = WriteTransaction::new(&env);
+        let mut txn = env.write_transaction();
         history_store.add_to_history(&mut txn, 0, &ext_txs[..3]);
         history_store.add_to_history(&mut txn, 1, &ext_txs[3..]);
 
@@ -1586,10 +1595,10 @@ mod tests {
     #[test]
     fn prove_empty_tree_works() {
         // Initialize History Store.
-        let env = VolatileEnvironment::new(10).unwrap();
+        let env = VolatileDatabase::new(10).unwrap();
         let history_store = HistoryStore::new(env.clone());
 
-        let txn = WriteTransaction::new(&env);
+        let txn = env.write_transaction();
 
         // Verify method works.
         let root = history_store.get_history_tree_root(0, Some(&txn)).unwrap();
@@ -1605,9 +1614,9 @@ mod tests {
     #[test]
     fn get_indexes_for_block_works() {
         // Initialize History Store.
-        let env = VolatileEnvironment::new(10).unwrap();
+        let env = VolatileDatabase::new(10).unwrap();
         let history_store = HistoryStore::new(env.clone());
-        let mut txn = WriteTransaction::new(&env);
+        let mut txn = env.write_transaction();
 
         for i in 0..=(16 * Policy::blocks_per_batch()) {
             if Policy::is_macro_block_at(i) {

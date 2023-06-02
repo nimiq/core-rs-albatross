@@ -1,6 +1,6 @@
 use nimiq_block::{Block, BlockError, BlockHeader, MacroBlock, MacroBody};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushError};
-use nimiq_database::Transaction as DBTransaction;
+use nimiq_database::TransactionProxy as DBTransaction;
 use nimiq_hash::{Blake2bHash, Hash};
 
 use crate::blockchain_state::BlockchainState;

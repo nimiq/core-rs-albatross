@@ -3711,6 +3711,7 @@ dependencies = [
  "nimiq-database-value",
  "nimiq-test-log",
  "tempfile",
+ "thiserror",
  "tracing",
 ]
 

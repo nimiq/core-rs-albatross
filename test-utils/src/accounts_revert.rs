@@ -5,7 +5,11 @@ use nimiq_account::{
     Account, AccountInherentInteraction, AccountReceipt, AccountTransactionInteraction, Accounts,
     BlockLog, BlockLogger, BlockState, DataStore, InherentLogger, Receipts, TransactionLog,
 };
-use nimiq_database::{volatile::VolatileEnvironment, Environment, WriteTransaction};
+use nimiq_database::{
+    traits::{Database, WriteTransaction},
+    volatile::VolatileDatabase,
+    DatabaseProxy,
+};
 use nimiq_keys::Address;
 use nimiq_primitives::{account::AccountError, coin::Coin, key_nibbles::KeyNibbles};
 use nimiq_transaction::{inherent::Inherent, Transaction};
@@ -22,7 +26,7 @@ macro_rules! impl_accounts_trait {
                 logger: &mut $log_type,
                 keep_commit: bool,
             ) -> Result<Option<AccountReceipt>, AccountError> {
-                let mut txn = WriteTransaction::new(&self.accounts.env);
+                let mut txn = self.accounts.env.write_transaction();
                 let initial_account = account.clone();
                 let initial_root_hash = self.accounts.get_root_hash_assert(Some(&txn));
 
@@ -38,7 +42,7 @@ macro_rules! impl_accounts_trait {
                 let intermediate_account_state = account.clone();
                 if keep_commit {
                     txn.commit();
-                    txn = WriteTransaction::new(&self.accounts.env);
+                    txn = self.accounts.env.write_transaction();
                 };
 
                 let mut revert_logger = $log_type::empty();
@@ -92,18 +96,18 @@ impl TestCommitRevert {
     impl_accounts_trait!(inherent, target, Inherent, InherentLogger);
 
     pub fn new() -> Self {
-        let env = VolatileEnvironment::new(10).unwrap();
+        let env = VolatileDatabase::new(10).unwrap();
         let accounts = Accounts::new(env);
         TestCommitRevert { accounts }
     }
 
-    pub fn env(&self) -> &Environment {
+    pub fn env(&self) -> &DatabaseProxy {
         &self.accounts.env
     }
 
     pub fn with_initial_state(initial_accounts: &[(Address, Account)]) -> Self {
         let test = Self::new();
-        let mut txn = WriteTransaction::new(&test.accounts.env);
+        let mut txn = test.accounts.env.write_transaction();
 
         for (address, account) in initial_accounts {
             test.accounts
@@ -155,7 +159,7 @@ impl TestCommitRevert {
         block_logger: &mut BlockLogger,
         keep_commit: bool,
     ) -> Result<Receipts, AccountError> {
-        let mut txn = WriteTransaction::new(&self.accounts.env);
+        let mut txn = self.accounts.env.write_transaction();
 
         let initial_root_hash = self.accounts.get_root_hash_assert(Some(&txn));
 
@@ -166,7 +170,7 @@ impl TestCommitRevert {
         // Potentially keep the commit.
         if keep_commit {
             txn.commit();
-            txn = WriteTransaction::new(&self.accounts.env);
+            txn = self.accounts.env.write_transaction();
         }
 
         // We only check whether the revert is consistent.
@@ -234,7 +238,7 @@ impl TestCommitRevert {
         tx_logger: &mut TransactionLog,
         keep_commit: bool,
     ) -> Result<Account, AccountError> {
-        let mut txn = WriteTransaction::new(&self.accounts.env);
+        let mut txn = self.accounts.env.write_transaction();
         let initial_root_hash = self.accounts.get_root_hash_assert(Some(&txn));
 
         let data_store = DataStore::new(&self.accounts.tree, &transaction.recipient);
@@ -250,7 +254,7 @@ impl TestCommitRevert {
         let intermediate_account_state = account.clone();
         if keep_commit {
             txn.commit();
-            txn = WriteTransaction::new(&self.accounts.env);
+            txn = self.accounts.env.write_transaction();
         };
 
         let mut revert_logger = TransactionLog::empty();

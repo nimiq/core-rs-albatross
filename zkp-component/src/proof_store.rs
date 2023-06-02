@@ -1,5 +1,6 @@
+use nimiq_database::traits::{Database, ReadTransaction, WriteTransaction};
 #[cfg(feature = "database-storage")]
-use nimiq_database::{Database, Environment, ReadTransaction, WriteTransaction};
+use nimiq_database::{DatabaseProxy, TableProxy};
 
 use crate::types::*;
 
@@ -17,9 +18,9 @@ pub trait ProofStore: Send {
 #[derive(Debug)]
 pub struct DBProofStore {
     /// Environment for the DB creation and transaction handling.
-    env: Environment,
+    env: DatabaseProxy,
     // A database of the current zkp state.
-    zkp_db: Database,
+    zkp_db: TableProxy,
 }
 
 #[cfg(feature = "database-storage")]
@@ -27,8 +28,8 @@ impl DBProofStore {
     const PROOF_DB_NAME: &'static str = "ZKPState";
     const PROOF_KEY: &'static str = "proof";
 
-    pub fn new(env: Environment) -> Self {
-        let zkp_db = env.open_database(Self::PROOF_DB_NAME.to_string());
+    pub fn new(env: DatabaseProxy) -> Self {
+        let zkp_db = env.open_table(Self::PROOF_DB_NAME.to_string());
 
         Self { env, zkp_db }
     }
@@ -37,11 +38,13 @@ impl DBProofStore {
 #[cfg(feature = "database-storage")]
 impl ProofStore for DBProofStore {
     fn get_zkp(&self) -> Option<ZKProof> {
-        ReadTransaction::new(&self.env).get(&self.zkp_db, Self::PROOF_KEY)
+        self.env
+            .read_transaction()
+            .get(&self.zkp_db, Self::PROOF_KEY)
     }
 
     fn set_zkp(&self, zk_proof: &ZKProof) {
-        let mut tx = WriteTransaction::new(&self.env);
+        let mut tx = self.env.write_transaction();
         tx.put(&self.zkp_db, Self::PROOF_KEY, zk_proof);
         tx.commit();
     }

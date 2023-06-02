@@ -1,10 +1,11 @@
+use nimiq_database::traits::{Database, WriteTransaction};
 use std::sync::Arc;
 use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
 
 use nimiq_account::{Accounts, BlockLog};
 use nimiq_block::Block;
 use nimiq_blockchain_interface::{BlockchainError, BlockchainEvent, ChainInfo, ForkEvent};
-use nimiq_database::{Environment, ReadTransaction, WriteTransaction};
+use nimiq_database::{DatabaseProxy, TransactionProxy, WriteTransactionProxy};
 use nimiq_genesis::NetworkInfo;
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::trie::TrieItem;
@@ -24,7 +25,7 @@ const BROADCAST_MAX_CAPACITY: usize = 256;
 /// structure in this crate.
 pub struct Blockchain {
     /// The environment of the blockchain.
-    pub(crate) env: Environment,
+    pub(crate) env: DatabaseProxy,
     /// Blockchain configuration options
     pub config: BlockchainConfig,
     /// The network ID. It determines if this is the mainnet or one of the testnets.
@@ -76,7 +77,7 @@ impl Default for BlockchainConfig {
 impl Blockchain {
     /// Creates a new blockchain from a given environment and network ID.
     pub fn new(
-        env: Environment,
+        env: DatabaseProxy,
         config: BlockchainConfig,
         network_id: NetworkId,
         time: Arc<OffsetTime>,
@@ -96,7 +97,7 @@ impl Blockchain {
 
     /// Creates a new blockchain with the given genesis block.
     pub fn with_genesis(
-        env: Environment,
+        env: DatabaseProxy,
         config: BlockchainConfig,
         time: Arc<OffsetTime>,
         network_id: NetworkId,
@@ -132,7 +133,7 @@ impl Blockchain {
 
     /// Loads a blockchain from given inputs.
     fn load(
-        env: Environment,
+        env: DatabaseProxy,
         config: BlockchainConfig,
         chain_store: ChainStore,
         history_store: HistoryStore,
@@ -272,7 +273,7 @@ impl Blockchain {
 
     /// Initializes a blockchain.
     fn init(
-        env: Environment,
+        env: DatabaseProxy,
         config: BlockchainConfig,
         chain_store: ChainStore,
         history_store: HistoryStore,
@@ -292,7 +293,7 @@ impl Blockchain {
 
         // Initialize accounts.
         let accounts = Accounts::new(env.clone());
-        let mut txn = WriteTransaction::new(&env);
+        let mut txn = env.write_transaction();
         accounts.init(&mut txn, genesis_accounts);
 
         // Store genesis block.
@@ -338,12 +339,12 @@ impl Blockchain {
         (self.genesis_supply, self.genesis_timestamp)
     }
 
-    pub fn read_transaction(&self) -> ReadTransaction {
-        ReadTransaction::new(&self.env)
+    pub fn read_transaction(&self) -> TransactionProxy {
+        self.env.read_transaction()
     }
 
-    pub fn write_transaction(&self) -> WriteTransaction {
-        WriteTransaction::new(&self.env)
+    pub fn write_transaction(&self) -> WriteTransactionProxy {
+        self.env.write_transaction()
     }
 }
 

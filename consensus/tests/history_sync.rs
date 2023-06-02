@@ -17,7 +17,7 @@ use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_consensus::consensus::Consensus;
 use nimiq_consensus::sync::history::{cluster::SyncCluster, HistoryMacroSync};
-use nimiq_database::volatile::VolatileEnvironment;
+use nimiq_database::volatile::VolatileDatabase;
 use nimiq_genesis::NetworkId;
 use nimiq_network_interface::network::Network as NetworkInterface;
 use nimiq_network_libp2p::Network;
@@ -170,7 +170,7 @@ async fn sync_ingredients() {
 
     // Setup first peer.
     let time = Arc::new(OffsetTime::new());
-    let env1 = VolatileEnvironment::new(11).unwrap();
+    let env1 = VolatileDatabase::new(11).unwrap();
     let blockchain1 = Arc::new(RwLock::new(
         Blockchain::new(
             env1.clone(),
@@ -221,7 +221,7 @@ async fn sync_ingredients() {
     );
 
     // Setup second peer (not synced yet).
-    let env2 = VolatileEnvironment::new(11).unwrap();
+    let env2 = VolatileDatabase::new(11).unwrap();
     let time = Arc::new(OffsetTime::new());
     let blockchain2 = Arc::new(RwLock::new(
         Blockchain::new(

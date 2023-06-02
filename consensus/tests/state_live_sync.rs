@@ -25,7 +25,10 @@ use nimiq_consensus::{
         syncer::{LiveSync, LiveSyncEvent, LiveSyncPeerEvent, LiveSyncPushEvent},
     },
 };
-use nimiq_database::{volatile::VolatileEnvironment, WriteTransaction};
+use nimiq_database::{
+    traits::{Database, WriteTransaction},
+    volatile::VolatileDatabase,
+};
 use nimiq_genesis::{NetworkId, NetworkInfo};
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{
@@ -45,7 +48,7 @@ use nimiq_utils::{math::CeilingDiv, time::OffsetTime};
 
 fn blockchain(complete: bool) -> Blockchain {
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileDatabase::new(10).unwrap();
     let blockchain = Blockchain::new(
         env.clone(),
         BlockchainConfig::default(),
@@ -55,7 +58,7 @@ fn blockchain(complete: bool) -> Blockchain {
     .unwrap();
 
     if !complete {
-        let mut txn = WriteTransaction::new(&env);
+        let mut txn = env.write_transaction();
         blockchain
             .state
             .accounts

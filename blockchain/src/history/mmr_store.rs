@@ -1,15 +1,15 @@
 use std::cmp;
 use std::convert::TryInto;
 
-use nimiq_database::cursor::ReadCursor;
-use nimiq_database::{Database, Transaction, WriteTransaction};
+use nimiq_database::traits::{ReadCursor, ReadTransaction, WriteTransaction};
+use nimiq_database::{TableProxy, TransactionProxy, WriteTransactionProxy};
 use nimiq_hash::Blake2bHash;
 use nimiq_mmr::store::Store;
 
 #[derive(Debug)]
 enum Tx<'a, 'env> {
-    Write(&'a mut WriteTransaction<'env>),
-    Read(&'a Transaction<'env>),
+    Write(&'a mut WriteTransactionProxy<'env>),
+    Read(&'a TransactionProxy<'env>),
 }
 
 /// A store implementation for MMRs based on a single database of LMDB.
@@ -27,7 +27,7 @@ enum Tx<'a, 'env> {
 /// epoch has any nodes).
 #[derive(Debug)]
 pub struct MMRStore<'a, 'env> {
-    hist_tree_db: &'a Database,
+    hist_tree_db: &'a TableProxy,
     tx: Tx<'a, 'env>,
     epoch_number: u32,
     size: usize,
@@ -36,8 +36,8 @@ pub struct MMRStore<'a, 'env> {
 impl<'a, 'env> MMRStore<'a, 'env> {
     /// Create a read-only store.
     pub fn with_read_transaction(
-        hist_tree_db: &'a Database,
-        tx: &'a Transaction<'env>,
+        hist_tree_db: &'a TableProxy,
+        tx: &'a TransactionProxy<'env>,
         epoch_number: u32,
     ) -> Self {
         let size = Self::get_size(hist_tree_db, tx, epoch_number);
@@ -51,8 +51,8 @@ impl<'a, 'env> MMRStore<'a, 'env> {
 
     /// Create a writable store.
     pub fn with_write_transaction(
-        hist_tree_db: &'a Database,
-        tx: &'a mut WriteTransaction<'env>,
+        hist_tree_db: &'a TableProxy,
+        tx: &'a mut WriteTransactionProxy<'env>,
         epoch_number: u32,
     ) -> Self {
         let size = Self::get_size(hist_tree_db, tx, epoch_number);
@@ -65,7 +65,7 @@ impl<'a, 'env> MMRStore<'a, 'env> {
     }
 
     /// Calculates the size of MMR at a given epoch.
-    fn get_size(hist_tree_db: &Database, tx: &Transaction, epoch_number: u32) -> usize {
+    fn get_size(hist_tree_db: &TableProxy, tx: &TransactionProxy, epoch_number: u32) -> usize {
         // Calculate the key for the beginning of the next epoch, `epoch_number + 1 || 0`.
         let mut next_epoch = (epoch_number + 1).to_be_bytes().to_vec();
         next_epoch.extend_from_slice(&0usize.to_be_bytes());

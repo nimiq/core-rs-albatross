@@ -6,6 +6,7 @@ use std::fs::{read_to_string, OpenOptions};
 use std::io::Error as IoError;
 use std::path::Path;
 
+use nimiq_database::traits::{Database, WriteTransaction};
 use thiserror::Error;
 use time::OffsetDateTime;
 use toml::de::Error as TomlError;
@@ -16,7 +17,7 @@ use nimiq_account::{
 };
 use nimiq_block::{Block, MacroBlock, MacroBody, MacroHeader};
 use nimiq_bls::PublicKey as BlsPublicKey;
-use nimiq_database::{Environment, WriteTransaction};
+use nimiq_database::{DatabaseProxy, WriteTransactionProxy};
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
 use nimiq_primitives::trie::TrieItem;
@@ -163,7 +164,7 @@ impl GenesisBuilder {
         Ok(self)
     }
 
-    pub fn generate(&self, env: Environment) -> Result<GenesisInfo, GenesisBuilderError> {
+    pub fn generate(&self, env: DatabaseProxy) -> Result<GenesisInfo, GenesisBuilderError> {
         // Initialize the environment.
         let timestamp = self.timestamp.unwrap_or_else(OffsetDateTime::now_utc);
 
@@ -171,7 +172,7 @@ impl GenesisBuilder {
         let accounts = Accounts::new(env.clone());
 
         // Note: This line needs to be AFTER we call Accounts::new().
-        let mut txn = WriteTransaction::new(&env);
+        let mut txn = env.write_transaction();
 
         debug!("Genesis accounts");
         for genesis_account in &self.accounts {
@@ -265,7 +266,7 @@ impl GenesisBuilder {
     fn generate_staking_contract(
         &self,
         accounts: &Accounts,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
     ) -> Result<StakingContract, GenesisBuilderError> {
         let mut staking_contract = StakingContract::default();
 
@@ -313,7 +314,7 @@ impl GenesisBuilder {
 
     pub fn write_to_files<P: AsRef<Path>>(
         &self,
-        env: Environment,
+        env: DatabaseProxy,
         directory: P,
     ) -> Result<Blake2bHash, GenesisBuilderError> {
         let GenesisInfo {

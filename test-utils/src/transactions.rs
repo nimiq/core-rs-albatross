@@ -8,7 +8,7 @@ use nimiq_account::{
     VestingContract,
 };
 use nimiq_bls::KeyPair as BlsKeyPair;
-use nimiq_database::WriteTransaction;
+use nimiq_database::traits::{Database, WriteTransaction};
 use nimiq_hash::{Blake2bHash, Blake2bHasher, Hasher};
 use nimiq_keys::{Address, KeyPair, SecureGenerate};
 use nimiq_primitives::{
@@ -388,7 +388,7 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
     }
 
     pub fn put_account(&self, address: &Address, account: Account) {
-        let mut txn = WriteTransaction::new(&self.accounts.env);
+        let mut txn = self.accounts.env.write_transaction();
         self.accounts
             .tree
             .put(&mut txn, &KeyNibbles::from(address), account)
@@ -750,7 +750,7 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
         // Get the deposit value.
         let deposit = Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT);
 
-        let mut txn = WriteTransaction::new(&self.accounts.env);
+        let mut txn = self.accounts.env.write_transaction();
         let data_store = self.accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
         let mut data_store_write = data_store.write(&mut txn);
         let mut store = StakingContractStoreWrite::new(&mut data_store_write);

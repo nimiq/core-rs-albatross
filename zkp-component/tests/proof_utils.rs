@@ -8,7 +8,7 @@ use parking_lot::RwLock;
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_proxy::BlockchainProxy;
-use nimiq_database::volatile::VolatileEnvironment;
+use nimiq_database::volatile::VolatileDatabase;
 use nimiq_primitives::{networks::NetworkId, policy::Policy};
 use nimiq_test_log::test;
 use nimiq_test_utils::zkp_test_data::ZKP_TEST_KEYS_PATH;
@@ -25,7 +25,7 @@ use nimiq_zkp_component::types::ZKProof;
 
 fn blockchain() -> Arc<RwLock<Blockchain>> {
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileDatabase::new(10).unwrap();
     Arc::new(RwLock::new(
         Blockchain::new(
             env,
@@ -154,7 +154,7 @@ async fn can_detect_valid_proof_none_genesis_blocks() {
 
 #[test(tokio::test)]
 async fn can_store_and_load_zkp_state_from_db() {
-    let env = VolatileEnvironment::new(1).unwrap();
+    let env = VolatileDatabase::new(1).unwrap();
 
     let proof_store = DBProofStore::new(env);
     let new_proof = ZKProof {

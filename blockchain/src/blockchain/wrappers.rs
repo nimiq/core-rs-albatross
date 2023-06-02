@@ -4,7 +4,7 @@ use std::sync::Arc;
 use nimiq_account::{Account, BlockState, DataStore, ReservedBalance, StakingContract};
 use nimiq_block::Block;
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainError, ChainInfo, Direction};
-use nimiq_database::{ReadTransaction as DBReadTransaction, Transaction as DBTransaction};
+use nimiq_database::TransactionProxy as DBTransaction;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::{
@@ -220,7 +220,7 @@ impl Blockchain {
         &self,
         txn_opt: Option<&DBTransaction>,
     ) -> Option<RangeFrom<KeyNibbles>> {
-        let read_txn: DBReadTransaction;
+        let read_txn: DBTransaction;
         let txn = match txn_opt {
             Some(txn) => txn,
             None => {

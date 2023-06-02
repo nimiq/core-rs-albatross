@@ -9,7 +9,7 @@ use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
-use nimiq_database::volatile::VolatileEnvironment;
+use nimiq_database::volatile::VolatileDatabase;
 use nimiq_genesis::NetworkInfo;
 use nimiq_log::TargetsExt;
 use nimiq_primitives::{
@@ -60,7 +60,7 @@ async fn main() -> Result<(), NanoZKPError> {
 
 fn blockchain() -> Arc<RwLock<Blockchain>> {
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileDatabase::new(10).unwrap();
     Arc::new(RwLock::new(
         Blockchain::new(
             env,

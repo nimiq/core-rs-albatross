@@ -1,5 +1,6 @@
 use std::{cmp, mem};
 
+use nimiq_database::traits::{ReadTransaction, WriteTransaction};
 use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
 
 use nimiq_block::{Block, BlockError};

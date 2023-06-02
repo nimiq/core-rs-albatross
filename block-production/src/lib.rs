@@ -6,6 +6,7 @@ use nimiq_block::{
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_bls::KeyPair as BlsKeyPair;
+use nimiq_database::traits::WriteTransaction;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::KeyPair as SchnorrKeyPair;
 use nimiq_primitives::policy::Policy;

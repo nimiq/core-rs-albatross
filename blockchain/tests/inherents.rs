@@ -1,7 +1,8 @@
 use nimiq_account::{BlockLogger, BlockState};
 use nimiq_block::{MacroBlock, MacroBody, MacroHeader};
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
-use nimiq_database::volatile::VolatileEnvironment;
+use nimiq_database::traits::WriteTransaction;
+use nimiq_database::volatile::VolatileDatabase;
 use nimiq_hash::{Blake2bHasher, Hasher};
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
@@ -17,7 +18,7 @@ use std::sync::Arc;
 #[test]
 fn it_can_create_batch_finalization_inherents() {
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileDatabase::new(10).unwrap();
     let blockchain = Arc::new(
         Blockchain::new(
             env,
@@ -157,7 +158,7 @@ fn it_can_create_batch_finalization_inherents() {
 #[test]
 fn it_can_penalize_delayed_batch() {
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileDatabase::new(10).unwrap();
     let blockchain = Arc::new(
         Blockchain::new(
             env,

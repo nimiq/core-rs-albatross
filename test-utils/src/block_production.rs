@@ -14,7 +14,7 @@ use nimiq_blockchain_interface::{
 };
 use nimiq_bls::{AggregateSignature, KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
 use nimiq_collections::BitSet;
-use nimiq_database::volatile::VolatileEnvironment;
+use nimiq_database::{traits::WriteTransaction, volatile::VolatileDatabase};
 use nimiq_genesis::NetworkId;
 use nimiq_hash::Blake2sHash;
 use nimiq_keys::{KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey};
@@ -60,7 +60,7 @@ impl TemporaryBlockProducer {
 
     pub fn new() -> Self {
         let time = Arc::new(OffsetTime::new());
-        let env = VolatileEnvironment::new(10).unwrap();
+        let env = VolatileDatabase::new(10).unwrap();
         let blockchain = Arc::new(RwLock::new(
             Blockchain::new(
                 env,

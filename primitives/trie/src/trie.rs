@@ -11,7 +11,8 @@ use log::error;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_database::{
-    cursor::ReadCursor, Cursor, Database, Environment, Transaction, WriteTransaction,
+    traits::{Database, ReadCursor, ReadTransaction, WriteTransaction},
+    Cursor, DatabaseProxy, TableProxy, TransactionProxy, WriteTransactionProxy,
 };
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::{
@@ -40,7 +41,7 @@ use nimiq_primitives::{
 /// PITODO: Review use of unwrap/expect in the trie's methods.
 #[derive(Debug)]
 pub struct MerkleRadixTrie {
-    db: Database,
+    db: TableProxy,
 }
 
 /// Counts the number of updates performed.
@@ -104,27 +105,27 @@ impl Error for IncompleteTrie {}
 
 impl MerkleRadixTrie {
     /// Start a new Merkle Radix Trie with the given Environment and the given name.
-    pub fn new(env: Environment, name: &str) -> Self {
-        Self::new_impl(env, name, false)
+    pub fn new(db: DatabaseProxy, name: &str) -> Self {
+        Self::new_impl(db, name, false)
     }
 
-    pub fn new_incomplete(env: Environment, name: &str) -> Self {
+    pub fn new_incomplete(env: DatabaseProxy, name: &str) -> Self {
         Self::new_impl(env, name, true)
     }
 
-    fn new_impl(env: Environment, name: &str, incomplete: bool) -> Self {
-        let db = env.open_database(name.to_string());
+    fn new_impl(db: DatabaseProxy, name: &str, incomplete: bool) -> Self {
+        let table = db.open_table(name.to_string());
 
-        let tree = MerkleRadixTrie { db };
+        let tree = MerkleRadixTrie { db: table };
 
-        let mut txn = WriteTransaction::new(&env);
+        let mut txn = db.write_transaction();
         tree.init_root(&mut txn, incomplete);
         txn.commit();
 
         tree
     }
 
-    fn init_root(&self, txn: &mut WriteTransaction, incomplete: bool) {
+    fn init_root(&self, txn: &mut WriteTransactionProxy, incomplete: bool) {
         if self.get_root(txn).is_none() {
             let root = if incomplete {
                 TrieNode::new_root_incomplete()
@@ -135,7 +136,7 @@ impl MerkleRadixTrie {
         }
     }
 
-    pub fn init(&self, txn: &mut WriteTransaction, values: Vec<TrieItem>) {
+    pub fn init(&self, txn: &mut WriteTransactionProxy, values: Vec<TrieItem>) {
         assert!(self.is_complete(txn));
         assert_eq!(self.num_leaves(txn), 0);
         assert_eq!(self.num_hybrids(txn), 0);
@@ -148,13 +149,13 @@ impl MerkleRadixTrie {
     }
 
     /// Clears the database and initializes it as incomplete.
-    pub fn reinitialize_as_incomplete(&self, txn: &mut WriteTransaction) {
+    pub fn reinitialize_as_incomplete(&self, txn: &mut WriteTransactionProxy) {
         txn.clear_database(&self.db);
         self.init_root(txn, true);
     }
 
     /// Returns the root hash of the Merkle Radix Trie.
-    pub fn root_hash_assert(&self, txn: &Transaction) -> Blake2bHash {
+    pub fn root_hash_assert(&self, txn: &TransactionProxy) -> Blake2bHash {
         let root = self.get_root(txn).unwrap();
 
         // We should refuse to return a hash for a completely empty but incomplete trie.
@@ -167,7 +168,7 @@ impl MerkleRadixTrie {
     }
 
     /// Returns the root hash of the Merkle Radix Trie if the trie is complete.
-    pub fn root_hash(&self, txn: &Transaction) -> Option<Blake2bHash> {
+    pub fn root_hash(&self, txn: &TransactionProxy) -> Option<Blake2bHash> {
         let root = self.get_root(txn).unwrap();
 
         // We should refuse to return a hash for a completely empty but incomplete trie.
@@ -183,7 +184,7 @@ impl MerkleRadixTrie {
         root_hash
     }
 
-    pub fn is_complete(&self, txn: &Transaction) -> bool {
+    pub fn is_complete(&self, txn: &TransactionProxy) -> bool {
         self.get_root(txn)
             .unwrap()
             .root_data
@@ -193,22 +194,22 @@ impl MerkleRadixTrie {
     }
 
     /// Returns the number of branch nodes in the Merkle Radix Trie.
-    pub fn num_branches(&self, txn: &Transaction) -> u64 {
+    pub fn num_branches(&self, txn: &TransactionProxy) -> u64 {
         self.get_root(txn).unwrap().root_data.unwrap().num_branches
     }
 
     /// Returns the number of hybrid nodes in the Merkle Radix Trie.
-    pub fn num_hybrids(&self, txn: &Transaction) -> u64 {
+    pub fn num_hybrids(&self, txn: &TransactionProxy) -> u64 {
         self.get_root(txn).unwrap().root_data.unwrap().num_hybrids
     }
 
     /// Returns the number of leaf nodes in the Merkle Radix Trie.
-    pub fn num_leaves(&self, txn: &Transaction) -> u64 {
+    pub fn num_leaves(&self, txn: &TransactionProxy) -> u64 {
         self.get_root(txn).unwrap().root_data.unwrap().num_leaves
     }
 
     #[cfg(test)]
-    fn count_nodes(&self, txn: &Transaction) -> (u64, u64, u64) {
+    fn count_nodes(&self, txn: &TransactionProxy) -> (u64, u64, u64) {
         let mut num_branches = 0;
         let mut num_hybrids = 0;
         let mut num_leaves = 0;
@@ -255,13 +256,13 @@ impl MerkleRadixTrie {
         (num_branches, num_hybrids, num_leaves)
     }
 
-    fn get_node(&self, txn: &Transaction, key: &KeyNibbles) -> Option<TrieNode> {
+    fn get_node(&self, txn: &TransactionProxy, key: &KeyNibbles) -> Option<TrieNode> {
         let mut node: TrieNode = txn.get(&self.db, key)?;
         node.key = key.clone();
         Some(node)
     }
 
-    fn put_node(&self, txn: &mut WriteTransaction, node: &TrieNode) {
+    fn put_node(&self, txn: &mut WriteTransactionProxy, node: &TrieNode) {
         txn.put_reserve(&self.db, &node.key, node);
     }
 
@@ -269,7 +270,7 @@ impl MerkleRadixTrie {
     /// returns None.
     pub fn get<T: Deserialize>(
         &self,
-        txn: &Transaction,
+        txn: &TransactionProxy,
         key: &KeyNibbles,
     ) -> Result<Option<T>, IncompleteTrie> {
         let missing_range = self.get_missing_range(txn);
@@ -281,7 +282,7 @@ impl MerkleRadixTrie {
             .map(|v| T::deserialize_from_vec(&v).unwrap()))
     }
 
-    fn get_raw(&self, txn: &Transaction, key: &KeyNibbles) -> Option<Vec<u8>> {
+    fn get_raw(&self, txn: &TransactionProxy, key: &KeyNibbles) -> Option<Vec<u8>> {
         self.get_node(txn, key)?.value
     }
 
@@ -291,7 +292,7 @@ impl MerkleRadixTrie {
     // FIXME This panics if a node in range can't be deserialized to T
     pub fn get_chunk<T: Deserialize>(
         &self,
-        txn: &Transaction,
+        txn: &TransactionProxy,
         start: &KeyNibbles,
         size: usize,
     ) -> Vec<T> {
@@ -307,7 +308,7 @@ impl MerkleRadixTrie {
     /// it will overwrite it. You can't use this function to check the existence of a given key.
     pub fn put<T: Serialize>(
         &self,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
         key: &KeyNibbles,
         value: T,
     ) -> Result<(), MerkleRadixTrieError> {
@@ -325,7 +326,7 @@ impl MerkleRadixTrie {
     /// Removes the value in the Merkle Radix Trie at the given key. If the key doesn't exist
     /// then this function just returns silently. You can't use this to check the existence of a
     /// given prefix.
-    pub fn remove(&self, txn: &mut WriteTransaction, key: &KeyNibbles) {
+    pub fn remove(&self, txn: &mut WriteTransactionProxy, key: &KeyNibbles) {
         let missing_range = self.get_missing_range(txn);
         if self.is_within_complete_part(key, &missing_range) {
             self.remove_raw(txn, key, &missing_range);
@@ -340,7 +341,7 @@ impl MerkleRadixTrie {
     /// it will overwrite it. You can't use this function to check the existence of a given key.
     fn put_raw(
         &self,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
         key: &KeyNibbles,
         value: Vec<u8>,
         missing_range: &Option<ops::RangeFrom<KeyNibbles>>,
@@ -454,7 +455,7 @@ impl MerkleRadixTrie {
 
     pub fn update_within_missing_part(
         &self,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
         key: &KeyNibbles,
     ) -> Result<(), MerkleRadixTrieError> {
         let missing_range = self.get_missing_range(txn);
@@ -466,7 +467,7 @@ impl MerkleRadixTrie {
     /// but we cannot provide the accurate hash until a new chunk has been pushed.
     fn update_within_missing_part_raw(
         &self,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
         key: &KeyNibbles,
         missing_range: &Option<ops::RangeFrom<KeyNibbles>>,
     ) -> Result<(), MerkleRadixTrieError> {
@@ -517,7 +518,7 @@ impl MerkleRadixTrie {
 
     pub fn get_chunk_with_proof(
         &self,
-        txn: &Transaction,
+        txn: &TransactionProxy,
         keys: ops::RangeFrom<KeyNibbles>,
         limit: usize,
     ) -> TrieChunk {
@@ -558,7 +559,7 @@ impl MerkleRadixTrie {
 
     /// Removes empty stump children on the rightmost path in the tree.
     /// These stumps are stored in the existing nodes to mark the (yet) missing parts of the partial tree.
-    fn clear_stumps(&self, txn: &mut WriteTransaction, keys: ops::RangeFrom<KeyNibbles>) {
+    fn clear_stumps(&self, txn: &mut WriteTransactionProxy, keys: ops::RangeFrom<KeyNibbles>) {
         // Start by getting the root node.
         let mut cur_node = self
             .get_root(txn)
@@ -660,7 +661,7 @@ impl MerkleRadixTrie {
     /// We can know which children are missing by looking at the trie proof of this path.
     fn mark_stumps(
         &self,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
         keys: ops::RangeFrom<KeyNibbles>,
         last_item_proof: &[TrieProofNode],
     ) -> Result<(), MerkleRadixTrieError> {
@@ -744,7 +745,7 @@ impl MerkleRadixTrie {
     /// `start_key` is inclusive and is meant to check if the chunk is a consecutive chunk.
     pub fn put_chunk(
         &self,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
         start_key: KeyNibbles,
         chunk: TrieChunk,
         expected_hash: Blake2bHash,
@@ -865,7 +866,7 @@ impl MerkleRadixTrie {
     /// `start_key` is inclusive and marks the first key to be removed.
     pub fn remove_chunk(
         &self,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
         start_key: KeyNibbles,
     ) -> Result<(), MerkleRadixTrieError> {
         let missing_range = self.get_missing_range(txn);
@@ -919,7 +920,7 @@ impl MerkleRadixTrie {
     /// given prefix.
     fn remove_raw(
         &self,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
         key: &KeyNibbles,
         missing_range: &Option<ops::RangeFrom<KeyNibbles>>,
     ) {
@@ -1105,7 +1106,7 @@ impl MerkleRadixTrie {
     /// 2. The nodes are always returned in post-order.
     pub fn get_proof(
         &self,
-        txn: &Transaction,
+        txn: &TransactionProxy,
         mut keys: Vec<&KeyNibbles>,
     ) -> Result<TrieProof, IncompleteTrie> {
         // We sort the keys in post-order.
@@ -1209,7 +1210,7 @@ impl MerkleRadixTrie {
         Ok(TrieProof::new(proof_nodes, missing_proven_by))
     }
 
-    pub fn update_root(&self, txn: &mut WriteTransaction) -> Result<(), MerkleRadixTrieError> {
+    pub fn update_root(&self, txn: &mut WriteTransactionProxy) -> Result<(), MerkleRadixTrieError> {
         let missing_range = self.get_missing_range(txn);
         self.update_hashes(txn, &KeyNibbles::ROOT, &missing_range)
             .map_err(|_| MerkleRadixTrieError::IncompleteTrie)?;
@@ -1229,7 +1230,7 @@ impl MerkleRadixTrie {
 
     /// Returns the range of missing keys in the partial tree.
     /// If the tree is complete, it returns `None`.
-    pub fn get_missing_range(&self, txn: &Transaction) -> Option<ops::RangeFrom<KeyNibbles>> {
+    pub fn get_missing_range(&self, txn: &TransactionProxy) -> Option<ops::RangeFrom<KeyNibbles>> {
         self.get_root(txn)
             .expect("trie needs root node")
             .root_data
@@ -1238,7 +1239,7 @@ impl MerkleRadixTrie {
     }
 
     /// Returns the root node, if there is one.
-    fn get_root(&self, txn: &Transaction) -> Option<TrieNode> {
+    fn get_root(&self, txn: &TransactionProxy) -> Option<TrieNode> {
         self.get_node(txn, &KeyNibbles::ROOT)
     }
 
@@ -1246,7 +1247,7 @@ impl MerkleRadixTrie {
     /// path starts at the root node and that each consecutive node is a child of the previous node.
     fn update_keys(
         &self,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
         mut root_path: Vec<TrieNode>,
         count_updates: CountUpdates,
     ) {
@@ -1288,7 +1289,7 @@ impl MerkleRadixTrie {
     /// Updates the hashes of all dirty nodes in the subtree specified by `key`.
     fn update_hashes(
         &self,
-        txn: &mut WriteTransaction,
+        txn: &mut WriteTransactionProxy,
         key: &KeyNibbles,
         missing_range: &Option<ops::RangeFrom<KeyNibbles>>,
     ) -> Result<Blake2bHash, IncompleteTrie> {
@@ -1318,7 +1319,7 @@ impl MerkleRadixTrie {
     }
 
     /// Returns the last key containing a value before the given key.
-    fn get_predecessor(&self, txn: &Transaction, key: &KeyNibbles) -> Option<KeyNibbles> {
+    fn get_predecessor(&self, txn: &TransactionProxy, key: &KeyNibbles) -> Option<KeyNibbles> {
         let mut predecessor_branch = None;
         let mut cur_node = self
             .get_root(txn)
@@ -1398,7 +1399,12 @@ impl MerkleRadixTrie {
 
     /// Returns the nodes of the chunk of the Merkle Radix Trie that starts at the key `start` and
     /// has size `size`. This is used by the `get_chunk` and `get_chunk_proof` functions.
-    fn get_trie_chunk(&self, txn: &Transaction, start: &KeyNibbles, size: usize) -> Vec<TrieNode> {
+    fn get_trie_chunk(
+        &self,
+        txn: &TransactionProxy,
+        start: &KeyNibbles,
+        size: usize,
+    ) -> Vec<TrieNode> {
         let mut chunk = Vec::new();
 
         if size == 0 {
@@ -1446,7 +1452,7 @@ impl MerkleRadixTrie {
 
     pub fn iter_nodes<'txn, T: Deserialize>(
         &self,
-        txn: &'txn Transaction,
+        txn: &'txn TransactionProxy,
         start_key: &KeyNibbles,
         end_key: &KeyNibbles,
     ) -> TrieNodeIter<'txn, T> {
@@ -1468,7 +1474,12 @@ pub struct TrieNodeIter<'txn, T> {
 
 impl<'txn, T> TrieNodeIter<'txn, T> {
     /// This iterator is meant to start at `start_key` and finish at `end_key`, both of these are inclusive.
-    fn new(db: &Database, txn: &Transaction, start_key: &KeyNibbles, end_key: KeyNibbles) -> Self {
+    fn new(
+        db: &TableProxy,
+        txn: &TransactionProxy,
+        start_key: &KeyNibbles,
+        end_key: KeyNibbles,
+    ) -> Self {
         let mut cursor = txn.cursor(db);
 
         let _: Option<TrieNode> = cursor.seek_key(start_key);
@@ -1507,9 +1518,9 @@ mod tests {
         let key_3 = "413b397fa".parse().unwrap();
         let key_4 = "cfb986f5a".parse().unwrap();
 
-        let env = nimiq_database::volatile::VolatileEnvironment::new(10).unwrap();
+        let env = nimiq_database::volatile::VolatileDatabase::new(10).unwrap();
         let trie = MerkleRadixTrie::new(env.clone(), "database");
-        let mut txn = WriteTransaction::new(&env);
+        let mut txn = env.write_transaction();
 
         assert_eq!(trie.count_nodes(&txn), (0, 0, 0));
 
@@ -1570,9 +1581,9 @@ mod tests {
         let key_3 = "cfb98e0f6".parse().unwrap();
         let key_4 = "cfb98e0f5".parse().unwrap();
 
-        let env = nimiq_database::volatile::VolatileEnvironment::new(10).unwrap();
+        let env = nimiq_database::volatile::VolatileDatabase::new(10).unwrap();
         let trie = MerkleRadixTrie::new(env.clone(), "database");
-        let mut txn = WriteTransaction::new(&env);
+        let mut txn = env.write_transaction();
 
         trie.put(&mut txn, &key_1, 9).expect("complete trie");
         trie.put(&mut txn, &key_2, 8).expect("complete trie");
@@ -1629,9 +1640,9 @@ mod tests {
         let key_6 = "ca".parse().unwrap();
         let key_7 = "b".parse().unwrap();
 
-        let env = nimiq_database::volatile::VolatileEnvironment::new(10).unwrap();
+        let env = nimiq_database::volatile::VolatileDatabase::new(10).unwrap();
         let trie = MerkleRadixTrie::new(env.clone(), "database");
-        let mut txn = WriteTransaction::new(&env);
+        let mut txn = env.write_transaction();
 
         trie.put(&mut txn, &key_1, 1u8).expect("complete trie");
         trie.put(&mut txn, &key_2, 2u8).expect("complete trie");
@@ -1731,9 +1742,9 @@ mod tests {
         let key_4 = "413b391".parse().unwrap();
         let key_5 = "412324".parse().unwrap();
 
-        let env = nimiq_database::volatile::VolatileEnvironment::new(10).unwrap();
+        let env = nimiq_database::volatile::VolatileDatabase::new(10).unwrap();
         let trie = MerkleRadixTrie::new(env.clone(), "database");
-        let mut txn = WriteTransaction::new(&env);
+        let mut txn = env.write_transaction();
 
         let initial_hash = trie.root_hash_assert(&txn);
         assert_eq!(trie.count_nodes(&txn), (0, 0, 0));
@@ -1800,9 +1811,9 @@ mod tests {
         let key_6 = "413f227fb".parse().unwrap();
         let key_7 = "413f227fa0".parse().unwrap();
 
-        let env = nimiq_database::volatile::VolatileEnvironment::new(10).unwrap();
+        let env = nimiq_database::volatile::VolatileDatabase::new(10).unwrap();
         let trie = MerkleRadixTrie::new(env.clone(), "database");
-        let mut txn = WriteTransaction::new(&env);
+        let mut txn = env.write_transaction();
 
         assert_eq!(trie.get_predecessor(&txn, &KeyNibbles::ROOT), None);
         assert_eq!(trie.get_predecessor(&txn, &key_1), None);
@@ -1836,9 +1847,9 @@ mod tests {
             .put_child(&proof_value_2.key, proof_value_2.hash_assert())
             .unwrap();
 
-        let env = nimiq_database::volatile::VolatileEnvironment::new(10).unwrap();
+        let env = nimiq_database::volatile::VolatileDatabase::new(10).unwrap();
         let trie = MerkleRadixTrie::new_incomplete(env.clone(), "database");
-        let mut txn = WriteTransaction::new(&env);
+        let mut txn = env.write_transaction();
         assert!(!trie.is_complete(&txn));
 
         trie.put_chunk(
@@ -1912,9 +1923,9 @@ mod tests {
         let key_4 = "413b391".parse().unwrap();
         let key_5: KeyNibbles = "412324".parse().unwrap();
 
-        let env = nimiq_database::volatile::VolatileEnvironment::new(10).unwrap();
+        let env = nimiq_database::volatile::VolatileDatabase::new(10).unwrap();
         let original = MerkleRadixTrie::new(env.clone(), "original");
-        let mut txn = WriteTransaction::new(&env);
+        let mut txn = env.write_transaction();
 
         original
             .put(&mut txn, &key_1, 80085)
@@ -1936,10 +1947,10 @@ mod tests {
 
     #[test]
     fn complete_tree_does_not_accept_chunks() {
-        let env = nimiq_database::volatile::VolatileEnvironment::new(10).unwrap();
+        let env = nimiq_database::volatile::VolatileDatabase::new(10).unwrap();
         let original = MerkleRadixTrie::new(env.clone(), "original");
         let trie = MerkleRadixTrie::new(env.clone(), "copy");
-        let mut txn = WriteTransaction::new(&env);
+        let mut txn = env.write_transaction();
 
         let hash = original.root_hash_assert(&txn);
 
@@ -1958,10 +1969,10 @@ mod tests {
         let key_4 = "413b391".parse().unwrap();
         let key_5 = "412324".parse().unwrap();
 
-        let env = nimiq_database::volatile::VolatileEnvironment::new(10).unwrap();
+        let env = nimiq_database::volatile::VolatileDatabase::new(10).unwrap();
         let original = MerkleRadixTrie::new(env.clone(), "original");
         let trie = MerkleRadixTrie::new_incomplete(env.clone(), "copy");
-        let mut txn = WriteTransaction::new(&env);
+        let mut txn = env.write_transaction();
 
         original
             .put(&mut txn, &key_1, 80085)
@@ -2025,7 +2036,7 @@ mod tests {
         let key_4 = "413b391".parse().unwrap();
         let key_5 = "412324".parse().unwrap();
 
-        let env = nimiq_database::volatile::VolatileEnvironment::new(10).unwrap();
+        let env = nimiq_database::volatile::VolatileDatabase::new(10).unwrap();
         let original = MerkleRadixTrie::new(env.clone(), "original");
         let tries: Vec<_> = (1..5)
             .map(|i| {
@@ -2035,7 +2046,7 @@ mod tests {
                 )
             })
             .collect();
-        let mut txn = WriteTransaction::new(&env);
+        let mut txn = env.write_transaction();
 
         original
             .put(&mut txn, &key_1, 80085)
@@ -2081,7 +2092,7 @@ mod tests {
         let key_4 = "1c".parse().unwrap();
         let key_5 = "81".parse().unwrap();
 
-        let env = nimiq_database::volatile::VolatileEnvironment::new(10).unwrap();
+        let env = nimiq_database::volatile::VolatileDatabase::new(10).unwrap();
         let original = MerkleRadixTrie::new(env.clone(), "original");
         let tries: Vec<_> = (1..5)
             .map(|i| {
@@ -2091,7 +2102,7 @@ mod tests {
                 )
             })
             .collect();
-        let mut txn = WriteTransaction::new(&env);
+        let mut txn = env.write_transaction();
 
         original
             .put(&mut txn, &key_1, 80085)
@@ -2138,12 +2149,12 @@ mod tests {
         let key_4 = "413b391".parse().unwrap();
         let key_5 = "412324".parse().unwrap();
 
-        let env = nimiq_database::volatile::VolatileEnvironment::new(10).unwrap();
+        let env = nimiq_database::volatile::VolatileDatabase::new(10).unwrap();
         let original = MerkleRadixTrie::new(env.clone(), "original");
         let tries: Vec<_> = (1..5)
             .map(|i| {
                 let trie = MerkleRadixTrie::new(env.clone(), &format!("copy{i}"));
-                let mut txn = WriteTransaction::new(&env);
+                let mut txn = env.write_transaction();
                 trie.put(&mut txn, &key_1, 80085).expect("complete trie");
                 trie.put(&mut txn, &key_2, 999).expect("complete trie");
                 trie.put(&mut txn, &key_3, 1337).expect("complete trie");
@@ -2156,7 +2167,7 @@ mod tests {
                 (i, trie)
             })
             .collect();
-        let mut txn = WriteTransaction::new(&env);
+        let mut txn = env.write_transaction();
 
         original
             .put(&mut txn, &key_1, 80085)
@@ -2219,10 +2230,10 @@ mod tests {
         let key_3 = "413f227fa".parse().unwrap();
         let key_4 = "413b391".parse().unwrap();
 
-        let env = nimiq_database::volatile::VolatileEnvironment::new(10).unwrap();
+        let env = nimiq_database::volatile::VolatileDatabase::new(10).unwrap();
         let original = MerkleRadixTrie::new(env.clone(), "original");
 
-        let mut txn = WriteTransaction::new(&env);
+        let mut txn = env.write_transaction();
 
         original
             .put(&mut txn, &key_1, 80085)
@@ -2236,7 +2247,7 @@ mod tests {
 
         txn.abort();
 
-        let txn = WriteTransaction::new(&env);
+        let txn = env.write_transaction();
         assert_eq!(original.num_branches(&txn), 0);
         assert_eq!(original.num_hybrids(&txn), 0);
         assert_eq!(original.num_leaves(&txn), 0);
@@ -2261,10 +2272,10 @@ mod tests {
         let key_3 = "413f227fa".parse().unwrap();
         let key_4 = "413b391".parse().unwrap();
 
-        let env = nimiq_database::volatile::VolatileEnvironment::new(10).unwrap();
+        let env = nimiq_database::volatile::VolatileDatabase::new(10).unwrap();
         let original = MerkleRadixTrie::new(env.clone(), "original");
 
-        let mut txn = WriteTransaction::new(&env);
+        let mut txn = env.write_transaction();
 
         // Add the nodes and make sure put works correctly.
         original
@@ -2295,10 +2306,10 @@ mod tests {
     fn remove_chunk_on_empty_tree() {
         let key_1 = "413f22".parse().unwrap();
 
-        let env = nimiq_database::volatile::VolatileEnvironment::new(10).unwrap();
+        let env = nimiq_database::volatile::VolatileDatabase::new(10).unwrap();
         let original = MerkleRadixTrie::new(env.clone(), "original");
 
-        let mut txn = WriteTransaction::new(&env);
+        let mut txn = env.write_transaction();
 
         original.remove_chunk(&mut txn, key_1).unwrap();
         assert!(original.is_complete(&txn));
@@ -2312,10 +2323,10 @@ mod tests {
         let key_4 = "413b391".parse().unwrap();
         let key_5: KeyNibbles = "415324".parse().unwrap();
 
-        let env = nimiq_database::volatile::VolatileEnvironment::new(10).unwrap();
+        let env = nimiq_database::volatile::VolatileDatabase::new(10).unwrap();
         let original = MerkleRadixTrie::new(env.clone(), "original");
 
-        let mut txn = WriteTransaction::new(&env);
+        let mut txn = env.write_transaction();
 
         original
             .put(&mut txn, &key_1, 80085)
@@ -2347,10 +2358,10 @@ mod tests {
         let key_3 = "413f227fa".parse().unwrap();
         let key_4 = "413b391".parse().unwrap();
 
-        let env = nimiq_database::volatile::VolatileEnvironment::new(10).unwrap();
+        let env = nimiq_database::volatile::VolatileDatabase::new(10).unwrap();
         let original = MerkleRadixTrie::new(env.clone(), "original");
 
-        let mut txn = WriteTransaction::new(&env);
+        let mut txn = env.write_transaction();
         assert!(original.is_complete(&txn));
 
         original
