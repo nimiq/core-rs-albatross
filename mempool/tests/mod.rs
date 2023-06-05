@@ -1041,12 +1041,7 @@ async fn mempool_update() {
 
 #[test(tokio::test(flavor = "multi_thread", worker_threads = 10))]
 #[ignore]
-// The purpose of this test is to verify that aged transactions, that is,
-// transactions that are stored in the mempool for which the validity
-// window is already expired, are properly pruned from the mempool.
-// The test is marked as ignored because it takes some time to build a chain
-// that produces more than TRANSACTION_VALIDITY_WINDOW blocks, however, one
-// can easily change this parameter to some low number for testing purposes.
+//TODO: <Nounce> this test needs to be updated to take into consideration the transaction nounce
 async fn mempool_update_aged_transaction() {
     let mut rng = test_rng(true);
     let time = Arc::new(OffsetTime::new());
@@ -1123,40 +1118,6 @@ async fn mempool_update_aged_transaction() {
         mempool.num_transactions(),
         30,
         "Number of txns in the mempools is not what is expected"
-    );
-
-    // We need a block producer to produce blocks
-    let producer = BlockProducer::new(signing_key(), voting_key());
-
-    let macro_blocks_to_be_produced =
-        Policy::transaction_validity_window() / Policy::blocks_per_batch();
-
-    // Now we produce blocks past the transaction validity window
-    produce_macro_blocks_with_txns(
-        &producer,
-        &blockchain,
-        (macro_blocks_to_be_produced + 1).try_into().unwrap(),
-        0,
-        0,
-    );
-
-    // Call mempool update, this should prune all the old transactions
-    mempool.mempool_update(&[].to_vec(), &[].to_vec());
-
-    assert_eq!(
-        mempool.num_transactions(),
-        0,
-        "Number of txns in the mempools is not what is expected"
-    );
-
-    // Get txns from mempool
-    let (updated_txns, _) = mempool.get_transactions_for_block(10_000);
-
-    // Should obtain 0 txns, as they are no longer valid due to aging
-    assert_eq!(
-        updated_txns.len(),
-        0,
-        "Number of txns is not what is expected"
     );
 }
 

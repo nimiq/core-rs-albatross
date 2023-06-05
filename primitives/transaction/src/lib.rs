@@ -414,13 +414,9 @@ impl Transaction {
         }
     }
 
-    pub fn is_valid_at(&self, block_height: u32) -> bool {
-        let window = Policy::transaction_validity_window();
-        block_height
-            >= self
-                .validity_start_height
-                .saturating_sub(Policy::blocks_per_batch())
-            && block_height < self.validity_start_height + window
+    pub fn is_valid_at(&self, _block_height: u32) -> bool {
+        //TODO: <Nonce> Re implement the transaction valid check using the nonce
+        true
     }
 
     pub fn contract_creation_address(&self) -> Address {

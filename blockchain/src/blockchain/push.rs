@@ -650,17 +650,9 @@ impl Blockchain {
             let transactions = block.transactions();
 
             if let Some(tx_vec) = transactions {
-                for transaction in tx_vec {
-                    let tx_hash = transaction.get_raw_transaction().hash();
-                    if self.contains_tx_in_validity_window(&tx_hash, Some(txn)) {
-                        warn!(
-                            %block,
-                            reason = "transaction already included",
-                            transaction_hash = %tx_hash,
-                            "Rejecting block",
-                        );
-                        return Err(PushError::DuplicateTransaction);
-                    }
+                for _transaction in tx_vec {
+                    //TODO: <Nonce> We used to have the transaction validity window check here
+                    // the equivalent check might be moved to the accounts itself, as part of commiting accounts
                 }
             }
         }

@@ -330,7 +330,6 @@ impl From<nimiq_block::TendermintProof> for TendermintProof {
 pub struct PolicyConstants {
     pub staking_contract_address: String,
     pub coinbase_address: String,
-    pub transaction_validity_window: u32,
     pub max_size_micro_body: usize,
     pub version: u16,
     pub slots: u16,

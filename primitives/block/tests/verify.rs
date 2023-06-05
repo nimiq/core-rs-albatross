@@ -238,33 +238,7 @@ fn test_verify_micro_block_body_txns() {
 
     assert_eq!(block.verify(false), Ok(()));
 
-    // Now modify the validity start height
-    let txns: Vec<ExecutedTransaction> = generate_transactions(
-        &KeyPair::default(),
-        Policy::blocks_per_epoch(),
-        NetworkId::UnitAlbatross,
-        5,
-        0,
-    )
-    .iter()
-    .map(|tx| ExecutedTransaction::Ok(tx.clone()))
-    .collect();
-
-    let micro_body = MicroBody {
-        fork_proofs: [].to_vec(),
-        transactions: txns.clone(),
-    };
-
-    // Build a block with body with the expired transactions
-    micro_header.body_root = micro_body.hash();
-    let block = Block::Micro(MicroBlock {
-        header: micro_header.clone(),
-        justification: Some(micro_justification),
-        body: Some(micro_body.clone()),
-    });
-
-    // The body check should fail
-    assert_eq!(block.verify(false), Err(BlockError::ExpiredTransaction));
+    //TODO: <Nounce> Update test
 }
 
 #[test]

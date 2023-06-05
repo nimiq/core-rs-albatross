@@ -286,9 +286,7 @@ impl Mempool {
 
         for transaction in &transactions {
             let tx_hash: Blake2bHash = transaction.hash();
-            if blockchain.contains_tx_in_validity_window(&tx_hash, None) {
-                mempool_state.remove(&blockchain, &tx_hash, EvictionReason::AlreadyIncluded);
-            }
+            // TODO: <Nonce> Include nonce functionality into the mempool
         }
     }
 
@@ -380,9 +378,7 @@ impl Mempool {
                     }
 
                     // Check that the transaction has not already been included.
-                    if blockchain.contains_tx_in_validity_window(&tx_hash, None) {
-                        continue;
-                    }
+                    // TODO: <Nonce> Include nonce functionality into the mempool
 
                     // Add the transaction to the mempool. Balance checks are performed within put().
                     mempool_state.put(&blockchain, tx, TxPriority::Medium).ok();
@@ -402,18 +398,7 @@ impl Mempool {
         self.prune_expired_transactions(&blockchain, &mut mempool_state);
 
         // Remove all transactions that have already been included.
-        let regular_iter = mempool_state.regular_transactions.transactions.iter();
-        let control_iter = mempool_state.control_transactions.transactions.iter();
-        let included_txs = regular_iter
-            .chain(control_iter)
-            .map(|tx| tx.0)
-            .filter(|tx_hash| blockchain.contains_tx_in_validity_window(tx_hash, None))
-            .cloned()
-            .collect::<Vec<Blake2bHash>>();
-
-        for tx_hash in included_txs {
-            mempool_state.remove(&blockchain, &tx_hash, EvictionReason::AlreadyIncluded);
-        }
+        // TODO: <Nonce> Include nonce functionality into the mempool
 
         // Recompute reserved balances, potentially removing transactions that have become invalid.
         let all_known_senders = mempool_state

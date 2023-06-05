@@ -64,10 +64,7 @@ pub(crate) async fn verify_tx(
         return Err(VerifyErr::InvalidBlockNumber);
     }
 
-    if blockchain.contains_tx_in_validity_window(&transaction.hash(), None) {
-        log::debug!("Transaction has already been mined");
-        return Err(VerifyErr::AlreadyIncluded);
-    }
+    // TODO: <Nonce> Include nonce functionality into the mempool
 
     // 4. Acquire the mempool state write lock
     let mut mempool_state = mempool_state.write();

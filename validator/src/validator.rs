@@ -62,7 +62,6 @@ struct ActiveEpochState {
 
 struct BlockchainState {
     fork_proofs: ForkProofPool,
-    can_enforce_validity_window: bool,
 }
 
 /// Validator inactivity and parking state
@@ -171,12 +170,10 @@ where
         let blockchain_rg = blockchain.read();
         let blockchain_event_rx = blockchain_rg.notifier_as_stream();
         let fork_event_rx = BroadcastStream::new(blockchain_rg.fork_notifier.subscribe());
-        let can_enforce_validity_window = blockchain_rg.can_enforce_validity_window();
         drop(blockchain_rg);
 
         let blockchain_state = BlockchainState {
             fork_proofs: ForkProofPool::new(),
-            can_enforce_validity_window,
         };
 
         let database = env.open_table(Self::MACRO_STATE_DB_NAME.to_string());
@@ -292,19 +289,8 @@ where
                     inactive_tx_validity_window_start,
                 } => (inactive_tx_hash, inactive_tx_validity_window_start),
             };
-            // Check that the transaction was sent in the validity window
-            let staking_state = self.get_staking_state(&blockchain);
-            if (staking_state == ValidatorStakingState::Parked
-                || staking_state == ValidatorStakingState::Inactive)
-                && blockchain.block_number()
-                    >= tx_validity_window_start + Policy::blocks_per_epoch()
-                && !blockchain.tx_in_validity_window(tx_hash, *tx_validity_window_start, None)
-            {
-                // If we are parked or inactive and no transaction has been seen in the expected validity window
-                // after an epoch, reset our parking or inactive state
-                log::debug!("Resetting state to re-send un-park/activate transactions since we are parked/inactive and validity window doesn't contain the transaction sent");
-                self.validator_state = None;
-            }
+
+            //TODO: <Nonce> Include the nonce check into the equation
         }
 
         let validators = blockchain.current_validators().unwrap();
@@ -449,24 +435,6 @@ where
                 }
             });
             self.mempool_state = MempoolState::Active;
-        }
-    }
-
-    /// This function resets the validator state when consensus is lost.
-    fn pause_validator(&mut self) {
-        // When we lose consensus we may no longer be able to enforce the validity window.
-        self.blockchain_state.can_enforce_validity_window = false;
-    }
-
-    /// Check and update if we can enforce the tx validity window.
-    /// This is important if we use the state sync and do not have the relevant parts of the history yet.
-    fn update_can_enforce_validity_window(&mut self) {
-        if !self.blockchain_state.can_enforce_validity_window
-            && self.blockchain.read().can_enforce_validity_window()
-        {
-            self.blockchain_state.can_enforce_validity_window = true;
-            self.init();
-            self.init_mempool();
         }
     }
 
@@ -687,9 +655,9 @@ where
     }
 
     /// Checks whether the validator fulfills the conditions for producing valid blocks.
-    /// This includes having consensus, being able to extend the history tree and to enforce transaction validity.
+    /// This includes having consensus and potentially other checks that might be added in the future
     fn can_be_active(&self) -> bool {
-        self.consensus.is_established() && self.blockchain_state.can_enforce_validity_window
+        self.consensus.is_established()
     }
 
     fn get_staking_state(&self, blockchain: &Blockchain) -> ValidatorStakingState {
@@ -848,7 +816,6 @@ where
                     self.init_mempool();
                 }
                 Ok(ConsensusEvent::Lost) => {
-                    self.pause_validator();
                     if let MempoolState::Active = self.mempool_state {
                         let mempool = Arc::clone(&self.mempool);
                         let network = Arc::clone(&self.consensus.network);
@@ -865,7 +832,6 @@ where
         // Process blockchain updates.
         let mut received_event: Option<Blake2bHash> = None;
         while let Poll::Ready(Some(event)) = self.blockchain_event_rx.poll_next_unpin(cx) {
-            self.update_can_enforce_validity_window();
             let can_be_active = self.can_be_active();
             trace!(?event, can_be_active, "blockchain event");
             let latest_hash = event.get_newest_hash();
