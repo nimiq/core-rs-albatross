@@ -10,6 +10,7 @@ use nimiq_mempool::mempool_transactions::TxPriority;
 use nimiq_rpc_interface::mempool::MempoolInterface;
 use nimiq_rpc_interface::types::RPCResult;
 use nimiq_rpc_interface::types::{HashOrTx, MempoolInfo};
+use nimiq_transaction::Transaction;
 
 use crate::error::Error;
 
@@ -91,5 +92,16 @@ impl MempoolInterface for MempoolDispatcher {
 
     async fn get_min_fee_per_byte(&mut self) -> RPCResult<f64, (), Self::Error> {
         Ok(self.mempool.get_rules().tx_fee_per_byte.into())
+    }
+
+    async fn get_transaction_from_mempool(
+        &mut self,
+        hash: Blake2bHash,
+    ) -> RPCResult<Transaction, (), Self::Error> {
+        if let Some(tx) = self.mempool.get_transaction_by_hash(&hash) {
+            return Ok(tx.into());
+        } else {
+            return Err(Error::TransactionNotFound(hash));
+        }
     }
 }
