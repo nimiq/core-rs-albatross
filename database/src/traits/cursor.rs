@@ -1,6 +1,11 @@
 use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue};
 
-pub trait ReadCursor<'txn> {
+pub trait ReadCursor<'txn>: Clone {
+    type IntoIter<K, V>: Iterator<Item = (K, V)>
+    where
+        K: FromDatabaseValue,
+        V: FromDatabaseValue;
+
     fn first<K, V>(&mut self) -> Option<(K, V)>
     where
         K: FromDatabaseValue,
@@ -65,6 +70,21 @@ pub trait ReadCursor<'txn> {
         V: FromDatabaseValue;
 
     fn count_duplicates(&mut self) -> usize;
+
+    fn into_iter_start<K, V>(self) -> Self::IntoIter<K, V>
+    where
+        K: FromDatabaseValue,
+        V: FromDatabaseValue;
+
+    fn into_iter_dup_of<K, V>(self, key: &K) -> Self::IntoIter<K, V>
+    where
+        K: AsDatabaseBytes + FromDatabaseValue,
+        V: FromDatabaseValue;
+
+    fn into_iter_from<K, V>(self, key: &K) -> Self::IntoIter<K, V>
+    where
+        K: AsDatabaseBytes + FromDatabaseValue,
+        V: FromDatabaseValue;
 }
 
 pub trait WriteCursor<'txn>: ReadCursor<'txn> {

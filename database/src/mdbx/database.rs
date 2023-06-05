@@ -51,11 +51,11 @@ impl Database for MdbxDatabase {
         MdbxTable { name }
     }
 
-    fn read_transaction<'db>(&'db self) -> Self::ReadTransaction<'db> {
+    fn read_transaction(&self) -> Self::ReadTransaction<'_> {
         MdbxReadTransaction::new(self.db.begin_ro_txn().unwrap())
     }
 
-    fn write_transaction<'db>(&'db self) -> Self::WriteTransaction<'db> {
+    fn write_transaction(&self) -> Self::WriteTransaction<'_> {
         MdbxWriteTransaction::new(self.db.begin_rw_txn().unwrap())
     }
 }

@@ -40,11 +40,11 @@ impl Database for VolatileDatabase {
         self.db.open_table_with_flags(name, flags)
     }
 
-    fn read_transaction<'db>(&'db self) -> Self::ReadTransaction<'db> {
+    fn read_transaction(&self) -> Self::ReadTransaction<'_> {
         self.db.read_transaction()
     }
 
-    fn write_transaction<'db>(&'db self) -> Self::WriteTransaction<'db> {
+    fn write_transaction(&self) -> Self::WriteTransaction<'_> {
         self.db.write_transaction()
     }
 }

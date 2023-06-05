@@ -39,16 +39,11 @@ impl WalletStore {
             }
         };
 
-        let mut wallets = Vec::new();
-        let mut cursor = txn.cursor(&self.wallet_db);
-        let mut wallet: Option<(Address, Locked<WalletAccount>)> = cursor.first();
-
-        while let Some((address, _)) = wallet {
-            wallets.push(address);
-            wallet = cursor.next();
-        }
-
-        wallets
+        let cursor = txn.cursor(&self.wallet_db);
+        cursor
+            .into_iter_start::<_, Locked<WalletAccount>>()
+            .map(|(address, _)| address)
+            .collect()
     }
 
     pub fn get(

@@ -63,7 +63,7 @@ impl<'db> WriteTransaction<'db> for MdbxWriteTransaction<'db> {
         K: AsDatabaseBytes + ?Sized,
         V: IntoDatabaseValue + ?Sized,
     {
-        let table = self.open_table(&table);
+        let table = self.open_table(table);
 
         let key = AsDatabaseBytes::as_database_bytes(key);
         let value_size = IntoDatabaseValue::database_byte_size(value);
@@ -81,7 +81,7 @@ impl<'db> WriteTransaction<'db> for MdbxWriteTransaction<'db> {
         K: AsDatabaseBytes + ?Sized,
         V: AsDatabaseBytes + ?Sized,
     {
-        let table = self.open_table(&table);
+        let table = self.open_table(table);
 
         let key = AsDatabaseBytes::as_database_bytes(key);
         let value = AsDatabaseBytes::as_database_bytes(value);
@@ -95,7 +95,7 @@ impl<'db> WriteTransaction<'db> for MdbxWriteTransaction<'db> {
     where
         K: AsDatabaseBytes + ?Sized,
     {
-        let table = self.open_table(&table);
+        let table = self.open_table(table);
 
         self.txn
             .del(
@@ -111,7 +111,7 @@ impl<'db> WriteTransaction<'db> for MdbxWriteTransaction<'db> {
         K: AsDatabaseBytes + ?Sized,
         V: AsDatabaseBytes + ?Sized,
     {
-        let table = self.open_table(&table);
+        let table = self.open_table(table);
 
         self.txn
             .del(
@@ -133,7 +133,7 @@ impl<'db> WriteTransaction<'db> for MdbxWriteTransaction<'db> {
     }
 
     fn clear_database(&mut self, table: &MdbxTable) {
-        let table = self.open_table(&table);
+        let table = self.open_table(table);
 
         self.txn.clear_table(&table).unwrap();
     }

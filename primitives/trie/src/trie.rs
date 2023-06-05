@@ -12,7 +12,7 @@ use log::error;
 use beserial::{Deserialize, Serialize};
 use nimiq_database::{
     traits::{Database, ReadCursor, ReadTransaction, WriteTransaction},
-    Cursor, DatabaseProxy, TableProxy, TransactionProxy, WriteTransactionProxy,
+    DatabaseProxy, IntoIterProxy, TableProxy, TransactionProxy, WriteTransactionProxy,
 };
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::{
@@ -1467,7 +1467,7 @@ impl MerkleRadixTrie {
 
 /// This iterator is meant to start at `start_key` and finish at `end_key`, both of these are inclusive.
 pub struct TrieNodeIter<'txn, T> {
-    cursor: Cursor<'txn>,
+    iter: IntoIterProxy<'txn, KeyNibbles, TrieNode>,
     end_key: KeyNibbles,
     _type: PhantomData<T>,
 }
@@ -1480,12 +1480,10 @@ impl<'txn, T> TrieNodeIter<'txn, T> {
         start_key: &KeyNibbles,
         end_key: KeyNibbles,
     ) -> Self {
-        let mut cursor = txn.cursor(db);
-
-        let _: Option<TrieNode> = cursor.seek_key(start_key);
+        let cursor = txn.cursor(db);
 
         Self {
-            cursor,
+            iter: cursor.into_iter_from(start_key),
             end_key,
             _type: PhantomData,
         }
@@ -1496,8 +1494,7 @@ impl<'txn, T: Deserialize> Iterator for TrieNodeIter<'txn, T> {
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let (k, v) = self.cursor.get_current::<KeyNibbles, TrieNode>()?;
-        _ = self.cursor.next::<KeyNibbles, TrieNode>();
+        let (k, v) = self.iter.next()?;
 
         if k <= self.end_key {
             return T::deserialize_from_vec(&v.value?).ok();

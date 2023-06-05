@@ -115,28 +115,28 @@ impl ChainStore {
         };
 
         // Seek to the first block at the given height.
-        let mut cursor = txn.cursor(&self.height_idx);
-        let mut block_hash = cursor
-            .seek_key::<u32, Blake2bHash>(&block_height)
-            .ok_or(BlockchainError::BlockNotFound)?;
+        let cursor = txn.cursor(&self.height_idx);
+        let block_hash_iter = cursor
+            .into_iter_dup_of::<u32, Blake2bHash>(&block_height)
+            .map(|(_height, hash)| hash);
 
         // Iterate until we find the main chain block.
-        let mut chain_info = loop {
-            let chain_info: ChainInfo = txn
-                .get(&self.chain_db, &block_hash)
+        let mut chain_info = None;
+        let mut block_hash = None;
+        for tmp_block_hash in block_hash_iter {
+            let tmp_chain_info: ChainInfo = txn
+                .get(&self.chain_db, &tmp_block_hash)
                 .expect("Corrupted store: ChainInfo referenced from index not found");
 
             // If it's on the main chain we can return from loop
-            if chain_info.on_main_chain {
-                break chain_info;
+            if tmp_chain_info.on_main_chain {
+                chain_info = Some(tmp_chain_info);
+                block_hash = Some(tmp_block_hash);
+                break;
             }
-
-            // Get next block hash
-            block_hash = match cursor.next_duplicate::<u32, Blake2bHash>() {
-                Some((_, hash)) => hash,
-                None => return Err(BlockchainError::BlockNotFound),
-            };
-        };
+        }
+        let mut chain_info = chain_info.ok_or(BlockchainError::BlockNotFound)?;
+        let block_hash = block_hash.unwrap();
 
         if include_body {
             if let Some(block) = txn.get(&self.block_db, &block_hash) {
@@ -297,20 +297,13 @@ impl ChainStore {
             }
         };
 
-        let mut hashes: Vec<Blake2bHash> = Vec::new();
         // Seek the hash of the first block at the given height and add it to our hashes vector
-        let mut cursor = txn.cursor(&self.height_idx);
-        let mut hash = cursor
-            .seek_key::<u32, Blake2bHash>(&block_height)
-            .map(|hash| (0u32, hash));
+        let cursor = txn.cursor(&self.height_idx);
 
-        // Get any other block hash at the given height and add them to our hashes vector
-        while let Some((_, h)) = hash {
-            hashes.push(h);
-            hash = cursor.next_duplicate::<u32, Blake2bHash>();
-        }
-
-        hashes
+        cursor
+            .into_iter_dup_of::<_, Blake2bHash>(&block_height)
+            .map(|(_, hash)| hash)
+            .collect()
     }
 
     pub fn get_blocks_at(
@@ -328,23 +321,16 @@ impl ChainStore {
             }
         };
 
-        // Seek to the first block at the given height.
+        // Iterate all blocks at the given height.
         let mut blocks = Vec::new();
-        let mut cursor = txn.cursor(&self.height_idx);
-        let mut block_hash = match cursor.seek_key::<u32, Blake2bHash>(&block_height) {
-            Some(hash) => hash,
-            None => return Err(BlockchainError::BlockNotFound),
-        };
+        let cursor = txn.cursor(&self.height_idx);
+        let iter = cursor.into_iter_dup_of(&block_height).map(|(_, hash)| hash);
 
-        // Iterate until we find all blocks at the same height.
-        while let Ok(block) = self.get_block(&block_hash, include_body, Some(txn)) {
-            blocks.push(block);
-
-            // Get next block hash.
-            block_hash = match cursor.next_duplicate::<u32, Blake2bHash>() {
-                Some((_, hash)) => hash,
-                None => break,
-            };
+        for block_hash in iter {
+            blocks.push(
+                self.get_block(&block_hash, include_body, Some(txn))
+                    .expect("Corrupted store: Block referenced from index not found"),
+            );
         }
 
         Ok(blocks)

@@ -1,8 +1,9 @@
 mod cursor;
 mod database;
+mod iterators;
 mod transaction;
 
-pub use self::{cursor::*, database::*, transaction::*};
+pub use self::{cursor::*, database::*, iterators::*, transaction::*};
 
 #[cfg(test)]
 mod tests {

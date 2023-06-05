@@ -1,8 +1,9 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, marker::PhantomData};
 
 use libmdbx::{TransactionKind, WriteFlags, RO, RW};
 use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue};
 
+use super::IntoIter;
 use crate::traits::{ReadCursor, WriteCursor};
 
 use super::DbKvPair;
@@ -26,6 +27,11 @@ impl<'txn, Kind> ReadCursor<'txn> for MdbxCursor<'txn, Kind>
 where
     Kind: TransactionKind,
 {
+    type IntoIter<K, V> = IntoIter<'txn, Kind, K, V>
+    where
+        K: FromDatabaseValue,
+        V: FromDatabaseValue;
+
     fn first<K, V>(&mut self) -> Option<(K, V)>
     where
         K: FromDatabaseValue,
@@ -190,6 +196,55 @@ where
             return self.cursor.iter_dup_of::<(), ()>(&key).count();
         } else {
             0_usize
+        }
+    }
+
+    fn into_iter_start<K, V>(self) -> Self::IntoIter<K, V>
+    where
+        K: FromDatabaseValue,
+        V: FromDatabaseValue,
+    {
+        Self::IntoIter {
+            iter: self.cursor.into_iter_start(),
+            _k: PhantomData,
+            _v: PhantomData,
+        }
+    }
+
+    fn into_iter_dup_of<K, V>(self, key: &K) -> Self::IntoIter<K, V>
+    where
+        K: AsDatabaseBytes + FromDatabaseValue,
+        V: FromDatabaseValue,
+    {
+        let key = AsDatabaseBytes::as_database_bytes(key);
+        Self::IntoIter {
+            iter: self.cursor.into_iter_dup_of(key.as_ref()),
+            _k: PhantomData,
+            _v: PhantomData,
+        }
+    }
+
+    fn into_iter_from<K, V>(self, key: &K) -> Self::IntoIter<K, V>
+    where
+        K: AsDatabaseBytes + FromDatabaseValue,
+        V: FromDatabaseValue,
+    {
+        let key = AsDatabaseBytes::as_database_bytes(key);
+        Self::IntoIter {
+            iter: self.cursor.into_iter_from(key.as_ref()),
+            _k: PhantomData,
+            _v: PhantomData,
+        }
+    }
+}
+
+impl<'txn, Kind> Clone for MdbxCursor<'txn, Kind>
+where
+    Kind: TransactionKind,
+{
+    fn clone(&self) -> Self {
+        Self {
+            cursor: self.cursor.clone(),
         }
     }
 }

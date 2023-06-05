@@ -1,18 +1,28 @@
+use libmdbx::{RO, RW};
+
+use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue};
+
 use crate::{
-    mdbx::{MdbxReadCursor, MdbxWriteCursor},
+    mdbx::{IntoIter, MdbxReadCursor, MdbxWriteCursor},
     traits::ReadCursor,
 };
 
+#[derive(Clone)]
 pub enum CursorProxy<'txn> {
     ReadCursor(MdbxReadCursor<'txn>),
     WriteCursor(MdbxWriteCursor<'txn>),
 }
 
 impl<'txn> ReadCursor<'txn> for CursorProxy<'txn> {
+    type IntoIter<K, V> = IntoIterProxy<'txn, K, V>
+    where
+        K: FromDatabaseValue,
+        V: FromDatabaseValue;
+
     fn first<K, V>(&mut self) -> Option<(K, V)>
     where
-        K: nimiq_database_value::FromDatabaseValue,
-        V: nimiq_database_value::FromDatabaseValue,
+        K: FromDatabaseValue,
+        V: FromDatabaseValue,
     {
         match self {
             CursorProxy::ReadCursor(cursor) => cursor.first(),
@@ -22,7 +32,7 @@ impl<'txn> ReadCursor<'txn> for CursorProxy<'txn> {
 
     fn first_duplicate<V>(&mut self) -> Option<V>
     where
-        V: nimiq_database_value::FromDatabaseValue,
+        V: FromDatabaseValue,
     {
         match self {
             CursorProxy::ReadCursor(cursor) => cursor.first_duplicate(),
@@ -32,8 +42,8 @@ impl<'txn> ReadCursor<'txn> for CursorProxy<'txn> {
 
     fn last<K, V>(&mut self) -> Option<(K, V)>
     where
-        K: nimiq_database_value::FromDatabaseValue,
-        V: nimiq_database_value::FromDatabaseValue,
+        K: FromDatabaseValue,
+        V: FromDatabaseValue,
     {
         match self {
             CursorProxy::ReadCursor(cursor) => cursor.last(),
@@ -43,7 +53,7 @@ impl<'txn> ReadCursor<'txn> for CursorProxy<'txn> {
 
     fn last_duplicate<V>(&mut self) -> Option<V>
     where
-        V: nimiq_database_value::FromDatabaseValue,
+        V: FromDatabaseValue,
     {
         match self {
             CursorProxy::ReadCursor(cursor) => cursor.last_duplicate(),
@@ -53,8 +63,8 @@ impl<'txn> ReadCursor<'txn> for CursorProxy<'txn> {
 
     fn get_current<K, V>(&mut self) -> Option<(K, V)>
     where
-        K: nimiq_database_value::FromDatabaseValue,
-        V: nimiq_database_value::FromDatabaseValue,
+        K: FromDatabaseValue,
+        V: FromDatabaseValue,
     {
         match self {
             CursorProxy::ReadCursor(cursor) => cursor.get_current(),
@@ -64,8 +74,8 @@ impl<'txn> ReadCursor<'txn> for CursorProxy<'txn> {
 
     fn next<K, V>(&mut self) -> Option<(K, V)>
     where
-        K: nimiq_database_value::FromDatabaseValue,
-        V: nimiq_database_value::FromDatabaseValue,
+        K: FromDatabaseValue,
+        V: FromDatabaseValue,
     {
         match self {
             CursorProxy::ReadCursor(cursor) => cursor.next(),
@@ -75,8 +85,8 @@ impl<'txn> ReadCursor<'txn> for CursorProxy<'txn> {
 
     fn next_duplicate<K, V>(&mut self) -> Option<(K, V)>
     where
-        K: nimiq_database_value::FromDatabaseValue,
-        V: nimiq_database_value::FromDatabaseValue,
+        K: FromDatabaseValue,
+        V: FromDatabaseValue,
     {
         match self {
             CursorProxy::ReadCursor(cursor) => cursor.next_duplicate(),
@@ -86,8 +96,8 @@ impl<'txn> ReadCursor<'txn> for CursorProxy<'txn> {
 
     fn next_no_duplicate<K, V>(&mut self) -> Option<(K, V)>
     where
-        K: nimiq_database_value::FromDatabaseValue,
-        V: nimiq_database_value::FromDatabaseValue,
+        K: FromDatabaseValue,
+        V: FromDatabaseValue,
     {
         match self {
             CursorProxy::ReadCursor(cursor) => cursor.next_no_duplicate(),
@@ -97,8 +107,8 @@ impl<'txn> ReadCursor<'txn> for CursorProxy<'txn> {
 
     fn prev<K, V>(&mut self) -> Option<(K, V)>
     where
-        K: nimiq_database_value::FromDatabaseValue,
-        V: nimiq_database_value::FromDatabaseValue,
+        K: FromDatabaseValue,
+        V: FromDatabaseValue,
     {
         match self {
             CursorProxy::ReadCursor(cursor) => cursor.prev(),
@@ -108,8 +118,8 @@ impl<'txn> ReadCursor<'txn> for CursorProxy<'txn> {
 
     fn prev_duplicate<K, V>(&mut self) -> Option<(K, V)>
     where
-        K: nimiq_database_value::FromDatabaseValue,
-        V: nimiq_database_value::FromDatabaseValue,
+        K: FromDatabaseValue,
+        V: FromDatabaseValue,
     {
         match self {
             CursorProxy::ReadCursor(cursor) => cursor.prev_duplicate(),
@@ -119,8 +129,8 @@ impl<'txn> ReadCursor<'txn> for CursorProxy<'txn> {
 
     fn prev_no_duplicate<K, V>(&mut self) -> Option<(K, V)>
     where
-        K: nimiq_database_value::FromDatabaseValue,
-        V: nimiq_database_value::FromDatabaseValue,
+        K: FromDatabaseValue,
+        V: FromDatabaseValue,
     {
         match self {
             CursorProxy::ReadCursor(cursor) => cursor.prev_no_duplicate(),
@@ -130,8 +140,8 @@ impl<'txn> ReadCursor<'txn> for CursorProxy<'txn> {
 
     fn seek_key<K, V>(&mut self, key: &K) -> Option<V>
     where
-        K: nimiq_database_value::AsDatabaseBytes + ?Sized,
-        V: nimiq_database_value::FromDatabaseValue,
+        K: AsDatabaseBytes + ?Sized,
+        V: FromDatabaseValue,
     {
         match self {
             CursorProxy::ReadCursor(cursor) => cursor.seek_key(key),
@@ -141,8 +151,8 @@ impl<'txn> ReadCursor<'txn> for CursorProxy<'txn> {
 
     fn seek_range_key<K, V>(&mut self, key: &K) -> Option<(K, V)>
     where
-        K: nimiq_database_value::AsDatabaseBytes + nimiq_database_value::FromDatabaseValue,
-        V: nimiq_database_value::FromDatabaseValue,
+        K: AsDatabaseBytes + FromDatabaseValue,
+        V: FromDatabaseValue,
     {
         match self {
             CursorProxy::ReadCursor(cursor) => cursor.seek_range_key(key),
@@ -154,6 +164,61 @@ impl<'txn> ReadCursor<'txn> for CursorProxy<'txn> {
         match self {
             CursorProxy::ReadCursor(cursor) => cursor.count_duplicates(),
             CursorProxy::WriteCursor(cursor) => cursor.count_duplicates(),
+        }
+    }
+
+    fn into_iter_start<K, V>(self) -> Self::IntoIter<K, V>
+    where
+        K: FromDatabaseValue,
+        V: FromDatabaseValue,
+    {
+        match self {
+            CursorProxy::ReadCursor(cursor) => IntoIterProxy::ReadIter(cursor.into_iter_start()),
+            CursorProxy::WriteCursor(cursor) => IntoIterProxy::WriteIter(cursor.into_iter_start()),
+        }
+    }
+
+    fn into_iter_dup_of<K, V>(self, key: &K) -> Self::IntoIter<K, V>
+    where
+        K: AsDatabaseBytes + FromDatabaseValue,
+        V: FromDatabaseValue,
+    {
+        match self {
+            CursorProxy::ReadCursor(cursor) => {
+                IntoIterProxy::ReadIter(cursor.into_iter_dup_of(key))
+            }
+            CursorProxy::WriteCursor(cursor) => {
+                IntoIterProxy::WriteIter(cursor.into_iter_dup_of(key))
+            }
+        }
+    }
+
+    fn into_iter_from<K, V>(self, key: &K) -> Self::IntoIter<K, V>
+    where
+        K: AsDatabaseBytes + FromDatabaseValue,
+        V: FromDatabaseValue,
+    {
+        match self {
+            CursorProxy::ReadCursor(cursor) => IntoIterProxy::ReadIter(cursor.into_iter_from(key)),
+            CursorProxy::WriteCursor(cursor) => {
+                IntoIterProxy::WriteIter(cursor.into_iter_from(key))
+            }
+        }
+    }
+}
+
+pub enum IntoIterProxy<'txn, K: FromDatabaseValue, V: FromDatabaseValue> {
+    ReadIter(IntoIter<'txn, RO, K, V>),
+    WriteIter(IntoIter<'txn, RW, K, V>),
+}
+
+impl<'txn, K: FromDatabaseValue, V: FromDatabaseValue> Iterator for IntoIterProxy<'txn, K, V> {
+    type Item = (K, V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            IntoIterProxy::ReadIter(iter) => iter.next(),
+            IntoIterProxy::WriteIter(iter) => iter.next(),
         }
     }
 }

@@ -1,6 +1,8 @@
-use nimiq_database::traits::{Database, ReadTransaction, WriteTransaction};
 #[cfg(feature = "database-storage")]
-use nimiq_database::{DatabaseProxy, TableProxy};
+use nimiq_database::{
+    traits::{Database, ReadTransaction, WriteTransaction},
+    DatabaseProxy, TableProxy,
+};
 
 use crate::types::*;
 

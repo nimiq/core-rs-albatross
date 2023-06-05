@@ -33,7 +33,7 @@ impl Database for DatabaseProxy {
         }
     }
 
-    fn read_transaction<'db>(&'db self) -> Self::ReadTransaction<'db> {
+    fn read_transaction(&self) -> Self::ReadTransaction<'_> {
         match self {
             DatabaseProxy::Volatile(ref db) => {
                 TransactionProxy::ReadTransaction(db.read_transaction())
@@ -44,7 +44,7 @@ impl Database for DatabaseProxy {
         }
     }
 
-    fn write_transaction<'db>(&'db self) -> Self::WriteTransaction<'db> {
+    fn write_transaction(&self) -> Self::WriteTransaction<'_> {
         match self {
             DatabaseProxy::Volatile(ref db) => WriteTransactionProxy::new(db.write_transaction()),
             DatabaseProxy::Persistent(ref db) => WriteTransactionProxy::new(db.write_transaction()),

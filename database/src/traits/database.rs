@@ -12,7 +12,7 @@ pub trait Database: Sized {
 
     fn open_table(&self, name: String) -> Self::Table;
     fn open_table_with_flags(&self, name: String, flags: TableFlags) -> Self::Table;
-    fn read_transaction<'db>(&'db self) -> Self::ReadTransaction<'db>;
-    fn write_transaction<'db>(&'db self) -> Self::WriteTransaction<'db>;
+    fn read_transaction(&self) -> Self::ReadTransaction<'_>;
+    fn write_transaction(&self) -> Self::WriteTransaction<'_>;
     fn close(self) {}
 }

@@ -981,21 +981,13 @@ impl HistoryStore {
             }
         };
 
-        let mut leaf_hashes = vec![];
+        // Iterate leaf hashes at the given transaction hash.
+        let cursor = txn.cursor(&self.tx_hash_db);
 
-        // Seek to the first leaf hash at the given transaction hash.
-        let mut cursor = txn.cursor(&self.tx_hash_db);
-        match cursor.seek_key::<Blake2bHash, OrderedHash>(tx_hash) {
-            Some(leaf_hash) => leaf_hashes.push(leaf_hash),
-            None => return leaf_hashes,
-        };
-
-        // Iterate over leaf hashes for this transaction hash.
-        while let Some((_, leaf_hash)) = cursor.next_duplicate::<Blake2bHash, OrderedHash>() {
-            leaf_hashes.push(leaf_hash);
-        }
-
-        leaf_hashes
+        cursor
+            .into_iter_dup_of::<Blake2bHash, OrderedHash>(tx_hash)
+            .map(|(_, leaf_hash)| leaf_hash)
+            .collect()
     }
 
     /// Returns the range of leaf indexes corresponding to the given block number.
