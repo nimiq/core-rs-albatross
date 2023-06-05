@@ -21,7 +21,7 @@
 [network]
 
 listen_addresses = [
-        "/ip4/0.0.0.0/tcp/9100/ws",
+        "/ip4/0.0.0.0/tcp/8443/ws",
 ]
 
 seed_nodes = [
