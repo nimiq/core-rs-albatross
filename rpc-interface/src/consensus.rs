@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 
-use crate::types::{RPCResult, Transaction, ValidityStartHeight};
+use crate::types::{RPCResult, Transaction};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
@@ -31,7 +31,7 @@ pub trait ConsensusInterface {
         recipient: Address,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<String, (), Self::Error>;
 
     async fn send_basic_transaction(
@@ -40,7 +40,7 @@ pub trait ConsensusInterface {
         recipient: Address,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<Blake2bHash, (), Self::Error>;
 
     async fn create_basic_transaction_with_data(
@@ -50,7 +50,7 @@ pub trait ConsensusInterface {
         data: String,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<String, (), Self::Error>;
 
     async fn send_basic_transaction_with_data(
@@ -60,7 +60,7 @@ pub trait ConsensusInterface {
         data: String,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<Blake2bHash, (), Self::Error>;
 
     async fn create_new_vesting_transaction(
@@ -72,7 +72,7 @@ pub trait ConsensusInterface {
         num_steps: u32,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<String, (), Self::Error>;
 
     async fn send_new_vesting_transaction(
@@ -84,7 +84,7 @@ pub trait ConsensusInterface {
         num_steps: u32,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<Blake2bHash, (), Self::Error>;
 
     async fn create_redeem_vesting_transaction(
@@ -94,7 +94,7 @@ pub trait ConsensusInterface {
         recipient: Address,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<String, (), Self::Error>;
 
     async fn send_redeem_vesting_transaction(
@@ -104,7 +104,7 @@ pub trait ConsensusInterface {
         recipient: Address,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<Blake2bHash, (), Self::Error>;
 
     async fn create_new_htlc_transaction(
@@ -118,7 +118,7 @@ pub trait ConsensusInterface {
         timeout: u64,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<String, (), Self::Error>;
 
     async fn send_new_htlc_transaction(
@@ -132,7 +132,7 @@ pub trait ConsensusInterface {
         timeout: u64,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<Blake2bHash, (), Self::Error>;
 
     async fn create_redeem_regular_htlc_transaction(
@@ -146,7 +146,7 @@ pub trait ConsensusInterface {
         hash_algorithm: HashAlgorithm,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<String, (), Self::Error>;
 
     async fn send_redeem_regular_htlc_transaction(
@@ -160,7 +160,7 @@ pub trait ConsensusInterface {
         hash_algorithm: HashAlgorithm,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<Blake2bHash, (), Self::Error>;
 
     async fn create_redeem_timeout_htlc_transaction(
@@ -170,7 +170,7 @@ pub trait ConsensusInterface {
         recipient: Address,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<String, (), Self::Error>;
 
     async fn send_redeem_timeout_htlc_transaction(
@@ -180,7 +180,7 @@ pub trait ConsensusInterface {
         recipient: Address,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<Blake2bHash, (), Self::Error>;
 
     async fn create_redeem_early_htlc_transaction(
@@ -191,7 +191,7 @@ pub trait ConsensusInterface {
         htlc_recipient_signature: String,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<String, (), Self::Error>;
 
     async fn send_redeem_early_htlc_transaction(
@@ -202,7 +202,7 @@ pub trait ConsensusInterface {
         htlc_recipient_signature: String,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<Blake2bHash, (), Self::Error>;
 
     async fn sign_redeem_early_htlc_transaction(
@@ -212,7 +212,7 @@ pub trait ConsensusInterface {
         recipient: Address,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<String, (), Self::Error>;
 
     async fn create_new_staker_transaction(
@@ -222,7 +222,7 @@ pub trait ConsensusInterface {
         delegation: Option<Address>,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<String, (), Self::Error>;
 
     async fn send_new_staker_transaction(
@@ -232,7 +232,7 @@ pub trait ConsensusInterface {
         delegation: Option<Address>,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<Blake2bHash, (), Self::Error>;
 
     async fn create_stake_transaction(
@@ -241,7 +241,7 @@ pub trait ConsensusInterface {
         staker_address: Address,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<String, (), Self::Error>;
 
     async fn send_stake_transaction(
@@ -250,7 +250,7 @@ pub trait ConsensusInterface {
         staker_address: Address,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<Blake2bHash, (), Self::Error>;
 
     async fn create_update_staker_transaction(
@@ -259,7 +259,7 @@ pub trait ConsensusInterface {
         staker_wallet: Address,
         new_delegation: Option<Address>,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<String, (), Self::Error>;
 
     async fn send_update_staker_transaction(
@@ -268,7 +268,7 @@ pub trait ConsensusInterface {
         staker_wallet: Address,
         new_delegation: Option<Address>,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<Blake2bHash, (), Self::Error>;
 
     async fn create_unstake_transaction(
@@ -277,7 +277,7 @@ pub trait ConsensusInterface {
         recipient: Address,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<String, (), Self::Error>;
 
     async fn send_unstake_transaction(
@@ -286,7 +286,7 @@ pub trait ConsensusInterface {
         recipient: Address,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<Blake2bHash, (), Self::Error>;
 
     async fn create_new_validator_transaction(
@@ -298,7 +298,7 @@ pub trait ConsensusInterface {
         reward_address: Address,
         signal_data: String,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<String, (), Self::Error>;
 
     async fn send_new_validator_transaction(
@@ -310,7 +310,7 @@ pub trait ConsensusInterface {
         reward_address: Address,
         signal_data: String,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<Blake2bHash, (), Self::Error>;
 
     async fn create_update_validator_transaction(
@@ -322,7 +322,7 @@ pub trait ConsensusInterface {
         new_reward_address: Option<Address>,
         new_signal_data: Option<String>,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<String, (), Self::Error>;
 
     async fn send_update_validator_transaction(
@@ -334,7 +334,7 @@ pub trait ConsensusInterface {
         new_reward_address: Option<Address>,
         new_signal_data: Option<String>,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<Blake2bHash, (), Self::Error>;
 
     async fn create_deactivate_validator_transaction(
@@ -343,7 +343,7 @@ pub trait ConsensusInterface {
         validator_address: Address,
         signing_secret_key: String,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<String, (), Self::Error>;
 
     async fn send_deactivate_validator_transaction(
@@ -352,7 +352,7 @@ pub trait ConsensusInterface {
         validator_address: Address,
         signing_secret_key: String,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<Blake2bHash, (), Self::Error>;
 
     async fn create_reactivate_validator_transaction(
@@ -361,7 +361,7 @@ pub trait ConsensusInterface {
         validator_address: Address,
         signing_secret_key: String,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<String, (), Self::Error>;
 
     async fn send_reactivate_validator_transaction(
@@ -370,7 +370,7 @@ pub trait ConsensusInterface {
         validator_address: Address,
         signing_secret_key: String,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<Blake2bHash, (), Self::Error>;
 
     async fn create_unpark_validator_transaction(
@@ -379,7 +379,7 @@ pub trait ConsensusInterface {
         validator_address: Address,
         signing_secret_key: String,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<String, (), Self::Error>;
 
     async fn send_unpark_validator_transaction(
@@ -388,7 +388,7 @@ pub trait ConsensusInterface {
         validator_address: Address,
         signing_secret_key: String,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<Blake2bHash, (), Self::Error>;
 
     async fn create_retire_validator_transaction(
@@ -396,7 +396,7 @@ pub trait ConsensusInterface {
         sender_wallet: Address,
         validator_wallet: Address,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<String, (), Self::Error>;
 
     async fn send_retire_validator_transaction(
@@ -404,7 +404,7 @@ pub trait ConsensusInterface {
         sender_wallet: Address,
         validator_wallet: Address,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<Blake2bHash, (), Self::Error>;
 
     async fn create_delete_validator_transaction(
@@ -413,7 +413,7 @@ pub trait ConsensusInterface {
         recipient: Address,
         fee: Coin,
         value: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<String, (), Self::Error>;
 
     async fn send_delete_validator_transaction(
@@ -422,6 +422,6 @@ pub trait ConsensusInterface {
         recipient: Address,
         fee: Coin,
         value: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<Blake2bHash, (), Self::Error>;
 }

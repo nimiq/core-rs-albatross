@@ -208,7 +208,7 @@ pub struct Transaction {
     pub recipient_type: AccountType,
     pub value: Coin,
     pub fee: Coin,
-    pub validity_start_height: u32,
+    pub nonce: u64,
     pub network_id: NetworkId,
     pub flags: TransactionFlags,
     pub proof: Vec<u8>,
@@ -224,7 +224,7 @@ impl Transaction {
         recipient: Address,
         value: Coin,
         fee: Coin,
-        validity_start_height: u32,
+        nonce: u64,
         network_id: NetworkId,
     ) -> Self {
         Self {
@@ -235,7 +235,7 @@ impl Transaction {
             recipient_type: AccountType::Basic,
             value,
             fee,
-            validity_start_height,
+            nonce,
             network_id,
             flags: TransactionFlags::empty(),
             proof: Vec::new(),
@@ -251,7 +251,7 @@ impl Transaction {
         value: Coin,
         fee: Coin,
         data: Vec<u8>,
-        validity_start_height: u32,
+        nonce: u64,
         network_id: NetworkId,
     ) -> Self {
         Self {
@@ -262,7 +262,7 @@ impl Transaction {
             recipient_type,
             value,
             fee,
-            validity_start_height,
+            nonce,
             network_id,
             flags: TransactionFlags::empty(),
             proof: Vec::new(),
@@ -277,7 +277,7 @@ impl Transaction {
         recipient_type: AccountType,
         fee: Coin,
         data: Vec<u8>,
-        validity_start_height: u32,
+        nonce: u64,
         network_id: NetworkId,
     ) -> Self {
         Self {
@@ -288,7 +288,7 @@ impl Transaction {
             recipient_type,
             value: Coin::ZERO,
             fee,
-            validity_start_height,
+            nonce,
             network_id,
             flags: TransactionFlags::SIGNALING,
             proof: Vec::new(),
@@ -303,7 +303,7 @@ impl Transaction {
         recipient_type: AccountType,
         value: Coin,
         fee: Coin,
-        validity_start_height: u32,
+        nonce: u64,
         network_id: NetworkId,
     ) -> Self {
         let mut tx = Self {
@@ -314,7 +314,7 @@ impl Transaction {
             recipient_type,
             value,
             fee,
-            validity_start_height,
+            nonce,
             network_id,
             flags: TransactionFlags::CONTRACT_CREATION,
             proof: Vec::new(),
@@ -438,7 +438,7 @@ impl Transaction {
         res.append(&mut self.recipient_type.serialize_to_vec());
         res.append(&mut self.value.serialize_to_vec());
         res.append(&mut self.fee.serialize_to_vec());
-        res.append(&mut self.validity_start_height.serialize_to_vec());
+        res.append(&mut self.nonce.serialize_to_vec());
         res.append(&mut self.network_id.serialize_to_vec());
         res.append(&mut self.flags.serialize_to_vec());
         res
@@ -469,7 +469,7 @@ impl Serialize for Transaction {
                 size += Serialize::serialize(&self.recipient, writer)?;
                 size += Serialize::serialize(&self.value, writer)?;
                 size += Serialize::serialize(&self.fee, writer)?;
-                size += Serialize::serialize(&self.validity_start_height, writer)?;
+                size += Serialize::serialize(&self.nonce, writer)?;
                 size += Serialize::serialize(&self.network_id, writer)?;
                 size += Serialize::serialize(&signature_proof.signature, writer)?;
                 Ok(size)
@@ -484,7 +484,7 @@ impl Serialize for Transaction {
                 size += Serialize::serialize(&self.recipient_type, writer)?;
                 size += Serialize::serialize(&self.value, writer)?;
                 size += Serialize::serialize(&self.fee, writer)?;
-                size += Serialize::serialize(&self.validity_start_height, writer)?;
+                size += Serialize::serialize(&self.nonce, writer)?;
                 size += Serialize::serialize(&self.network_id, writer)?;
                 size += Serialize::serialize(&self.flags, writer)?;
                 size += SerializeWithLength::serialize::<u16, W>(&self.proof, writer)?;
@@ -502,7 +502,7 @@ impl Serialize for Transaction {
                 size += Serialize::serialized_size(&self.recipient);
                 size += Serialize::serialized_size(&self.value);
                 size += Serialize::serialized_size(&self.fee);
-                size += Serialize::serialized_size(&self.validity_start_height);
+                size += Serialize::serialized_size(&self.nonce);
                 size += Serialize::serialized_size(&self.network_id);
                 size += Serialize::serialized_size(&signature_proof.signature);
                 size
@@ -516,7 +516,7 @@ impl Serialize for Transaction {
                 size += Serialize::serialized_size(&self.recipient_type);
                 size += Serialize::serialized_size(&self.value);
                 size += Serialize::serialized_size(&self.fee);
-                size += Serialize::serialized_size(&self.validity_start_height);
+                size += Serialize::serialized_size(&self.nonce);
                 size += Serialize::serialized_size(&self.network_id);
                 size += Serialize::serialized_size(&self.flags);
                 size += SerializeWithLength::serialized_size::<u16>(&self.proof);
@@ -540,7 +540,7 @@ impl Deserialize for Transaction {
                     recipient_type: AccountType::Basic,
                     value: Deserialize::deserialize(reader)?,
                     fee: Deserialize::deserialize(reader)?,
-                    validity_start_height: Deserialize::deserialize(reader)?,
+                    nonce: Deserialize::deserialize(reader)?,
                     network_id: Deserialize::deserialize(reader)?,
                     flags: TransactionFlags::empty(),
                     proof: SignatureProof::from(
@@ -559,7 +559,7 @@ impl Deserialize for Transaction {
                 recipient_type: Deserialize::deserialize(reader)?,
                 value: Deserialize::deserialize(reader)?,
                 fee: Deserialize::deserialize(reader)?,
-                validity_start_height: Deserialize::deserialize(reader)?,
+                nonce: Deserialize::deserialize(reader)?,
                 network_id: Deserialize::deserialize(reader)?,
                 flags: Deserialize::deserialize(reader)?,
                 proof: DeserializeWithLength::deserialize::<u16, R>(reader)?,
@@ -579,7 +579,7 @@ impl SerializeContent for Transaction {
         size += Serialize::serialize(&self.recipient_type, writer)?;
         size += Serialize::serialize(&self.value, writer)?;
         size += Serialize::serialize(&self.fee, writer)?;
-        size += Serialize::serialize(&self.validity_start_height, writer)?;
+        size += Serialize::serialize(&self.nonce, writer)?;
         size += Serialize::serialize(&self.network_id, writer)?;
         size += Serialize::serialize(&self.flags, writer)?;
         Ok(size)
@@ -602,7 +602,7 @@ impl PartialEq for Transaction {
             && self.recipient_type == other.recipient_type
             && self.value == other.value
             && self.fee == other.fee
-            && self.validity_start_height == other.validity_start_height
+            && self.nonce == other.nonce
             && self.network_id == other.network_id
             && self.flags == other.flags
             && self.data == other.data
@@ -619,7 +619,7 @@ impl Ord for Transaction {
     fn cmp(&self, other: &Self) -> Ordering {
         Ordering::Equal
             .then_with(|| self.recipient.cmp(&other.recipient))
-            .then_with(|| self.validity_start_height.cmp(&other.validity_start_height))
+            .then_with(|| self.nonce.cmp(&other.nonce))
             .then_with(|| other.fee.cmp(&self.fee))
             .then_with(|| other.value.cmp(&self.value))
             .then_with(|| self.sender.cmp(&other.sender))

@@ -53,17 +53,6 @@ pub(crate) async fn verify_tx(
     // 2. Acquire blockchain read lock
     let blockchain = blockchain.read();
 
-    // 3. Check validity window and already included
-    let block_number = blockchain.block_number() + 1;
-    if !transaction.is_valid_at(block_number) {
-        debug!(
-            block_number,
-            validity_start_height = transaction.validity_start_height,
-            "Mempool-verify tx invalid at this block height"
-        );
-        return Err(VerifyErr::InvalidBlockNumber);
-    }
-
     // TODO: <Nonce> Include nonce functionality into the mempool
 
     // 4. Acquire the mempool state write lock

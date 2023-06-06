@@ -198,8 +198,9 @@ impl MempoolTransactions {
 
         self.tx_counter += 1;
 
-        self.oldest_transactions
-            .push(tx_hash, Reverse(tx.validity_start_height));
+        //TODO: <Nounce> Oldest transactions structure needs to be updated accordingly
+        //self.oldest_transactions
+        //    .push(tx_hash, Reverse(tx.validity_start_height));
 
         // Update total tx size
         self.total_size += tx.serialized_size();

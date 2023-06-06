@@ -12,9 +12,7 @@ use nimiq_keys::{Address, KeyPair, PrivateKey, PublicKey};
 use nimiq_network_libp2p::Network;
 use nimiq_primitives::{coin::Coin, networks::NetworkId};
 use nimiq_rpc_interface::{
-    consensus::ConsensusInterface,
-    types::RPCResult,
-    types::{Transaction as RPCTransaction, ValidityStartHeight},
+    consensus::ConsensusInterface, types::RPCResult, types::Transaction as RPCTransaction,
 };
 use nimiq_transaction::account::htlc_contract::{AnyHash, HashAlgorithm};
 use nimiq_transaction::{SignatureProof, Transaction};
@@ -54,12 +52,6 @@ impl ConsensusDispatcher {
     /// Returns the network ID for our current blockchain.
     fn get_network_id(&self) -> NetworkId {
         self.consensus.blockchain.read().network_id()
-    }
-
-    /// Calculates the actual block number for the validity start height given the ValidityStartHeight
-    /// struct.
-    fn validity_start_height(&self, validity_start_height: ValidityStartHeight) -> u32 {
-        validity_start_height.block_number(self.consensus.blockchain.read().block_number())
     }
 }
 
@@ -107,14 +99,14 @@ impl ConsensusInterface for ConsensusDispatcher {
         recipient: Address,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<String, (), Self::Error> {
         let transaction = TransactionBuilder::new_basic(
             &self.get_wallet_keypair(&wallet)?,
             recipient,
             value,
             fee,
-            self.validity_start_height(validity_start_height),
+            nonce,
             self.get_network_id(),
         )?;
 
@@ -128,10 +120,10 @@ impl ConsensusInterface for ConsensusDispatcher {
         recipient: Address,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<Blake2bHash, (), Self::Error> {
         let raw_tx = self
-            .create_basic_transaction(wallet, recipient, value, fee, validity_start_height)
+            .create_basic_transaction(wallet, recipient, value, fee, nonce)
             .await?
             .data;
         self.send_raw_transaction(raw_tx).await
@@ -145,7 +137,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         data: String,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<String, (), Self::Error> {
         let transaction = TransactionBuilder::new_basic_with_data(
             &self.get_wallet_keypair(&wallet)?,
@@ -153,7 +145,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             hex::decode(data).unwrap(),
             value,
             fee,
-            self.validity_start_height(validity_start_height),
+            nonce,
             self.get_network_id(),
         )?;
 
@@ -168,17 +160,10 @@ impl ConsensusInterface for ConsensusDispatcher {
         data: String,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<Blake2bHash, (), Self::Error> {
         let raw_tx = self
-            .create_basic_transaction_with_data(
-                wallet,
-                recipient,
-                data,
-                value,
-                fee,
-                validity_start_height,
-            )
+            .create_basic_transaction_with_data(wallet, recipient, data, value, fee, nonce)
             .await?
             .data;
         self.send_raw_transaction(raw_tx).await
@@ -194,7 +179,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         num_steps: u32,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<String, (), Self::Error> {
         let transaction = TransactionBuilder::new_create_vesting(
             &self.get_wallet_keypair(&wallet)?,
@@ -204,7 +189,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             num_steps,
             value,
             fee,
-            self.validity_start_height(validity_start_height),
+            nonce,
             self.get_network_id(),
         )?;
 
@@ -221,18 +206,11 @@ impl ConsensusInterface for ConsensusDispatcher {
         num_steps: u32,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<Blake2bHash, (), Self::Error> {
         let raw_tx = self
             .create_new_vesting_transaction(
-                wallet,
-                owner,
-                start_time,
-                time_step,
-                num_steps,
-                value,
-                fee,
-                validity_start_height,
+                wallet, owner, start_time, time_step, num_steps, value, fee, nonce,
             )
             .await?
             .data;
@@ -247,7 +225,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         recipient: Address,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<String, (), Self::Error> {
         let transaction = TransactionBuilder::new_redeem_vesting(
             &self.get_wallet_keypair(&wallet)?,
@@ -255,7 +233,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             recipient,
             value,
             fee,
-            self.validity_start_height(validity_start_height),
+            nonce,
             self.get_network_id(),
         )?;
 
@@ -270,7 +248,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         recipient: Address,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<Blake2bHash, (), Self::Error> {
         let raw_tx = self
             .create_redeem_vesting_transaction(
@@ -279,7 +257,7 @@ impl ConsensusInterface for ConsensusDispatcher {
                 recipient,
                 value,
                 fee,
-                validity_start_height,
+                nonce,
             )
             .await?
             .data;
@@ -298,7 +276,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         timeout: u64,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<String, (), Self::Error> {
         let transaction = TransactionBuilder::new_create_htlc(
             &self.get_wallet_keypair(&wallet)?,
@@ -310,7 +288,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             timeout,
             value,
             fee,
-            self.validity_start_height(validity_start_height),
+            nonce,
             self.get_network_id(),
         )?;
 
@@ -329,7 +307,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         timeout: u64,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<Blake2bHash, (), Self::Error> {
         let raw_tx = self
             .create_new_htlc_transaction(
@@ -342,7 +320,7 @@ impl ConsensusInterface for ConsensusDispatcher {
                 timeout,
                 value,
                 fee,
-                validity_start_height,
+                nonce,
             )
             .await?
             .data;
@@ -362,7 +340,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         hash_algorithm: HashAlgorithm,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<String, (), Self::Error> {
         let transaction = TransactionBuilder::new_redeem_htlc_regular(
             &self.get_wallet_keypair(&wallet)?,
@@ -374,7 +352,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             hash_algorithm,
             value,
             fee,
-            self.validity_start_height(validity_start_height),
+            nonce,
             self.get_network_id(),
         )?;
 
@@ -394,7 +372,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         hash_algorithm: HashAlgorithm,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<Blake2bHash, (), Self::Error> {
         let raw_tx = self
             .create_redeem_regular_htlc_transaction(
@@ -407,7 +385,7 @@ impl ConsensusInterface for ConsensusDispatcher {
                 hash_algorithm,
                 value,
                 fee,
-                validity_start_height,
+                nonce,
             )
             .await?
             .data;
@@ -423,7 +401,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         recipient: Address,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<String, (), Self::Error> {
         let transaction = TransactionBuilder::new_redeem_htlc_timeout(
             &self.get_wallet_keypair(&wallet)?,
@@ -431,7 +409,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             recipient,
             value,
             fee,
-            self.validity_start_height(validity_start_height),
+            nonce,
             self.get_network_id(),
         )?;
 
@@ -447,7 +425,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         recipient: Address,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<Blake2bHash, (), Self::Error> {
         let raw_tx = self
             .create_redeem_timeout_htlc_transaction(
@@ -456,7 +434,7 @@ impl ConsensusInterface for ConsensusDispatcher {
                 recipient,
                 value,
                 fee,
-                validity_start_height,
+                nonce,
             )
             .await?
             .data;
@@ -473,7 +451,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         htlc_recipient_signature: String,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<String, (), Self::Error> {
         let sig_sender = SignatureProof::deserialize_from_vec(&hex::decode(htlc_sender_signature)?)
             .map_err(|_| Error::InvalidArgument("Signing Key".to_string()))?;
@@ -489,7 +467,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             sig_recipient,
             value,
             fee,
-            self.validity_start_height(validity_start_height),
+            nonce,
             self.get_network_id(),
         )?;
 
@@ -506,7 +484,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         htlc_recipient_signature: String,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<Blake2bHash, (), Self::Error> {
         let raw_tx = self
             .create_redeem_early_htlc_transaction(
@@ -516,7 +494,7 @@ impl ConsensusInterface for ConsensusDispatcher {
                 htlc_recipient_signature,
                 value,
                 fee,
-                validity_start_height,
+                nonce,
             )
             .await?
             .data;
@@ -532,7 +510,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         recipient: Address,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<String, (), Self::Error> {
         let sig = TransactionBuilder::sign_htlc_early(
             &self.get_wallet_keypair(&wallet)?,
@@ -540,7 +518,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             recipient,
             value,
             fee,
-            self.validity_start_height(validity_start_height),
+            nonce,
             self.get_network_id(),
         )?;
 
@@ -556,7 +534,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         delegation: Option<Address>,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<String, (), Self::Error> {
         let transaction = TransactionBuilder::new_create_staker(
             &self.get_wallet_keypair(&sender_wallet)?,
@@ -564,7 +542,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             delegation,
             value,
             fee,
-            self.validity_start_height(validity_start_height),
+            nonce,
             self.get_network_id(),
         )?;
 
@@ -580,7 +558,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         delegation: Option<Address>,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<Blake2bHash, (), Self::Error> {
         let raw_tx = self
             .create_new_staker_transaction(
@@ -589,7 +567,7 @@ impl ConsensusInterface for ConsensusDispatcher {
                 delegation,
                 value,
                 fee,
-                validity_start_height,
+                nonce,
             )
             .await?
             .data;
@@ -604,14 +582,14 @@ impl ConsensusInterface for ConsensusDispatcher {
         staker_address: Address,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<String, (), Self::Error> {
         let transaction = TransactionBuilder::new_stake(
             &self.get_wallet_keypair(&sender_wallet)?,
             staker_address,
             value,
             fee,
-            self.validity_start_height(validity_start_height),
+            nonce,
             self.get_network_id(),
         )?;
 
@@ -626,16 +604,10 @@ impl ConsensusInterface for ConsensusDispatcher {
         staker_address: Address,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<Blake2bHash, (), Self::Error> {
         let raw_tx = self
-            .create_stake_transaction(
-                sender_wallet,
-                staker_address,
-                value,
-                fee,
-                validity_start_height,
-            )
+            .create_stake_transaction(sender_wallet, staker_address, value, fee, nonce)
             .await?
             .data;
 
@@ -651,7 +623,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         staker_wallet: Address,
         new_delegation: Option<Address>,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<String, (), Self::Error> {
         let sender_key = match sender_wallet {
             None => None,
@@ -663,7 +635,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             &self.get_wallet_keypair(&staker_wallet)?,
             new_delegation,
             fee,
-            self.validity_start_height(validity_start_height),
+            nonce,
             self.get_network_id(),
         )?;
 
@@ -679,7 +651,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         staker_wallet: Address,
         new_delegation: Option<Address>,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<Blake2bHash, (), Self::Error> {
         let raw_tx = self
             .create_update_staker_transaction(
@@ -687,7 +659,7 @@ impl ConsensusInterface for ConsensusDispatcher {
                 staker_wallet,
                 new_delegation,
                 fee,
-                validity_start_height,
+                nonce,
             )
             .await?
             .data;
@@ -702,14 +674,14 @@ impl ConsensusInterface for ConsensusDispatcher {
         recipient: Address,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<String, (), Self::Error> {
         let transaction = TransactionBuilder::new_unstake(
             &self.get_wallet_keypair(&staker_wallet)?,
             recipient,
             value,
             fee,
-            self.validity_start_height(validity_start_height),
+            nonce,
             self.get_network_id(),
         )?;
 
@@ -724,10 +696,10 @@ impl ConsensusInterface for ConsensusDispatcher {
         recipient: Address,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<Blake2bHash, (), Self::Error> {
         let raw_tx = self
-            .create_unstake_transaction(staker_wallet, recipient, value, fee, validity_start_height)
+            .create_unstake_transaction(staker_wallet, recipient, value, fee, nonce)
             .await?
             .data;
         self.send_raw_transaction(raw_tx).await
@@ -748,7 +720,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         reward_address: Address,
         signal_data: String,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<String, (), Self::Error> {
         let voting_secret_key =
             BlsSecretKey::deserialize_from_vec(&hex::decode(voting_secret_key)?)
@@ -783,7 +755,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             reward_address,
             signal_data,
             fee,
-            self.validity_start_height(validity_start_height),
+            nonce,
             self.get_network_id(),
         )?;
 
@@ -805,7 +777,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         reward_address: Address,
         signal_data: String,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<Blake2bHash, (), Self::Error> {
         let raw_tx = self
             .create_new_validator_transaction(
@@ -816,7 +788,7 @@ impl ConsensusInterface for ConsensusDispatcher {
                 reward_address,
                 signal_data,
                 fee,
-                validity_start_height,
+                nonce,
             )
             .await?
             .data;
@@ -839,7 +811,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         new_reward_address: Option<Address>,
         new_signal_data: Option<String>,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<String, (), Self::Error> {
         let new_voting_keypair = match new_voting_secret_key {
             Some(key) => {
@@ -887,7 +859,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             new_reward_address,
             new_signal_data,
             fee,
-            self.validity_start_height(validity_start_height),
+            nonce,
             self.get_network_id(),
         )?;
 
@@ -910,7 +882,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         new_reward_address: Option<Address>,
         new_signal_data: Option<String>,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<Blake2bHash, (), Self::Error> {
         let raw_tx = self
             .create_update_validator_transaction(
@@ -921,7 +893,7 @@ impl ConsensusInterface for ConsensusDispatcher {
                 new_reward_address,
                 new_signal_data,
                 fee,
-                validity_start_height,
+                nonce,
             )
             .await?
             .data;
@@ -936,7 +908,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         validator_address: Address,
         signing_secret_key: String,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<String, (), Self::Error> {
         let secret_key = PrivateKey::deserialize_from_vec(&hex::decode(signing_secret_key)?)
             .map_err(|_| Error::InvalidArgument("Signing Key".to_string()))?;
@@ -948,7 +920,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             validator_address,
             &signing_key_pair,
             fee,
-            self.validity_start_height(validity_start_height),
+            nonce,
             self.get_network_id(),
         )?;
 
@@ -963,7 +935,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         validator_address: Address,
         signing_secret_key: String,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<Blake2bHash, (), Self::Error> {
         let raw_tx = self
             .create_deactivate_validator_transaction(
@@ -971,7 +943,7 @@ impl ConsensusInterface for ConsensusDispatcher {
                 validator_address,
                 signing_secret_key,
                 fee,
-                validity_start_height,
+                nonce,
             )
             .await?
             .data;
@@ -986,7 +958,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         validator_address: Address,
         signing_secret_key: String,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<String, (), Self::Error> {
         let secret_key = PrivateKey::deserialize_from_vec(&hex::decode(signing_secret_key)?)
             .map_err(|_| Error::InvalidArgument("Signing Key".to_string()))?;
@@ -997,7 +969,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             validator_address,
             &signing_key_pair,
             fee,
-            self.validity_start_height(validity_start_height),
+            nonce,
             self.get_network_id(),
         )?;
 
@@ -1012,7 +984,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         validator_address: Address,
         signing_secret_key: String,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<Blake2bHash, (), Self::Error> {
         let raw_tx = self
             .create_reactivate_validator_transaction(
@@ -1020,7 +992,7 @@ impl ConsensusInterface for ConsensusDispatcher {
                 validator_address,
                 signing_secret_key,
                 fee,
-                validity_start_height,
+                nonce,
             )
             .await?
             .data;
@@ -1035,7 +1007,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         validator_address: Address,
         signing_secret_key: String,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<String, (), Self::Error> {
         let secret_key = PrivateKey::deserialize_from_vec(&hex::decode(signing_secret_key)?)
             .map_err(|_| Error::InvalidArgument("Signing Key".to_string()))?;
@@ -1047,7 +1019,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             validator_address,
             &signing_key_pair,
             fee,
-            self.validity_start_height(validity_start_height),
+            nonce,
             self.get_network_id(),
         )?;
 
@@ -1062,7 +1034,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         validator_address: Address,
         signing_secret_key: String,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<Blake2bHash, (), Self::Error> {
         let raw_tx = self
             .create_unpark_validator_transaction(
@@ -1070,7 +1042,7 @@ impl ConsensusInterface for ConsensusDispatcher {
                 validator_address,
                 signing_secret_key,
                 fee,
-                validity_start_height,
+                nonce,
             )
             .await?
             .data;
@@ -1084,13 +1056,13 @@ impl ConsensusInterface for ConsensusDispatcher {
         sender_wallet: Address,
         validator_wallet: Address,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<String, (), Self::Error> {
         let transaction = TransactionBuilder::new_retire_validator(
             &self.get_wallet_keypair(&sender_wallet)?,
             &self.get_wallet_keypair(&validator_wallet)?,
             fee,
-            self.validity_start_height(validity_start_height),
+            nonce,
             self.get_network_id(),
         )?;
 
@@ -1104,15 +1076,10 @@ impl ConsensusInterface for ConsensusDispatcher {
         sender_wallet: Address,
         validator_wallet: Address,
         fee: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<Blake2bHash, (), Self::Error> {
         let raw_tx = self
-            .create_retire_validator_transaction(
-                sender_wallet,
-                validator_wallet,
-                fee,
-                validity_start_height,
-            )
+            .create_retire_validator_transaction(sender_wallet, validator_wallet, fee, nonce)
             .await?
             .data;
         self.send_raw_transaction(raw_tx).await
@@ -1128,14 +1095,14 @@ impl ConsensusInterface for ConsensusDispatcher {
         recipient: Address,
         fee: Coin,
         value: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<String, (), Self::Error> {
         let transaction = TransactionBuilder::new_delete_validator(
             recipient,
             &self.get_wallet_keypair(&validator_wallet)?,
             fee,
             value,
-            self.validity_start_height(validity_start_height),
+            nonce,
             self.get_network_id(),
         )?;
 
@@ -1150,16 +1117,10 @@ impl ConsensusInterface for ConsensusDispatcher {
         recipient: Address,
         fee: Coin,
         value: Coin,
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     ) -> RPCResult<Blake2bHash, (), Self::Error> {
         let raw_tx = self
-            .create_delete_validator_transaction(
-                validator_wallet,
-                recipient,
-                fee,
-                value,
-                validity_start_height,
-            )
+            .create_delete_validator_transaction(validator_wallet, recipient, fee, value, nonce)
             .await?
             .data;
         self.send_raw_transaction(raw_tx).await

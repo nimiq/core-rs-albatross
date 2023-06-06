@@ -4,10 +4,7 @@ use clap::{Args, Parser};
 
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
-use nimiq_rpc_interface::{
-    consensus::ConsensusInterface,
-    types::{HashAlgorithm, ValidityStartHeight},
-};
+use nimiq_rpc_interface::{consensus::ConsensusInterface, types::HashAlgorithm};
 use nimiq_transaction::account::htlc_contract::AnyHash;
 
 use crate::Client;
@@ -20,11 +17,9 @@ pub struct TxCommon {
     #[clap(short, long, default_value = "0")]
     pub fee: Coin,
 
-    /// The block height from which on the transaction could be applied. The maximum amount of blocks the transaction is valid for
-    /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
-    /// If absent it defaults to the current block height at time of processing.
+    /// The transaction nonce value, it must have a valid value in order for the txn to be acepted
     #[clap(short, long, default_value_t)]
-    pub validity_start_height: ValidityStartHeight,
+    pub nonce: u64,
 
     /// Don't actually send the transaction, but output the transaction as hex string.
     #[clap(long)]
@@ -272,11 +267,9 @@ pub enum TransactionCommand {
         #[clap(short, long, default_value = "0")]
         fee: Coin,
 
-        /// The block height from which on the transaction could be applied. The maximum amount of blocks the transaction is valid for
-        /// is specified in `TRANSACTION_VALIDITY_WINDOW`.
-        /// If absent it defaults to the current block height at time of processing.
+        /// The transaction nonce value
         #[clap(short, long, default_value_t)]
-        validity_start_height: ValidityStartHeight,
+        nonce: u64,
     },
 }
 
@@ -297,7 +290,7 @@ impl HandleSubcommand for TransactionCommand {
                             recipient,
                             tx_commons.value,
                             tx_commons.common_tx_fields.fee,
-                            tx_commons.common_tx_fields.validity_start_height,
+                            tx_commons.common_tx_fields.nonce,
                         )
                         .await?;
                     println!("{tx:#?}");
@@ -309,7 +302,7 @@ impl HandleSubcommand for TransactionCommand {
                             recipient,
                             tx_commons.value,
                             tx_commons.common_tx_fields.fee,
-                            tx_commons.common_tx_fields.validity_start_height,
+                            tx_commons.common_tx_fields.nonce,
                         )
                         .await?;
                     println!("{txid:#?}");
@@ -330,7 +323,7 @@ impl HandleSubcommand for TransactionCommand {
                             delegation,
                             tx_commons.value,
                             tx_commons.common_tx_fields.fee,
-                            tx_commons.common_tx_fields.validity_start_height,
+                            tx_commons.common_tx_fields.nonce,
                         )
                         .await?;
                     println!("{tx:#?}");
@@ -343,7 +336,7 @@ impl HandleSubcommand for TransactionCommand {
                             delegation,
                             tx_commons.value,
                             tx_commons.common_tx_fields.fee,
-                            tx_commons.common_tx_fields.validity_start_height,
+                            tx_commons.common_tx_fields.nonce,
                         )
                         .await?;
                     println!("{txid:#?}");
@@ -362,7 +355,7 @@ impl HandleSubcommand for TransactionCommand {
                             staker_address,
                             tx_commons.value,
                             tx_commons.common_tx_fields.fee,
-                            tx_commons.common_tx_fields.validity_start_height,
+                            tx_commons.common_tx_fields.nonce,
                         )
                         .await?;
                     println!("{tx:#?}");
@@ -374,7 +367,7 @@ impl HandleSubcommand for TransactionCommand {
                             staker_address,
                             tx_commons.value,
                             tx_commons.common_tx_fields.fee,
-                            tx_commons.common_tx_fields.validity_start_height,
+                            tx_commons.common_tx_fields.nonce,
                         )
                         .await?;
                     println!("{txid:#?}");
@@ -394,7 +387,7 @@ impl HandleSubcommand for TransactionCommand {
                             staker_wallet,
                             new_delegation,
                             tx_commons.fee,
-                            tx_commons.validity_start_height,
+                            tx_commons.nonce,
                         )
                         .await?;
                     println!("{tx:#?}");
@@ -406,7 +399,7 @@ impl HandleSubcommand for TransactionCommand {
                             staker_wallet,
                             new_delegation,
                             tx_commons.fee,
-                            tx_commons.validity_start_height,
+                            tx_commons.nonce,
                         )
                         .await?;
                     println!("{txid:#?}");
@@ -425,7 +418,7 @@ impl HandleSubcommand for TransactionCommand {
                             recipient,
                             tx_commons.value,
                             tx_commons.common_tx_fields.fee,
-                            tx_commons.common_tx_fields.validity_start_height,
+                            tx_commons.common_tx_fields.nonce,
                         )
                         .await?;
                     println!("{tx:#?}");
@@ -437,7 +430,7 @@ impl HandleSubcommand for TransactionCommand {
                             recipient,
                             tx_commons.value,
                             tx_commons.common_tx_fields.fee,
-                            tx_commons.common_tx_fields.validity_start_height,
+                            tx_commons.common_tx_fields.nonce,
                         )
                         .await?;
                     println!("{txid:#?}");
@@ -463,7 +456,7 @@ impl HandleSubcommand for TransactionCommand {
                             num_steps,
                             tx_commons.value,
                             tx_commons.common_tx_fields.fee,
-                            tx_commons.common_tx_fields.validity_start_height,
+                            tx_commons.common_tx_fields.nonce,
                         )
                         .await?;
                     println!("{tx:#?}");
@@ -478,7 +471,7 @@ impl HandleSubcommand for TransactionCommand {
                             num_steps,
                             tx_commons.value,
                             tx_commons.common_tx_fields.fee,
-                            tx_commons.common_tx_fields.validity_start_height,
+                            tx_commons.common_tx_fields.nonce,
                         )
                         .await?;
                     println!("{txid:#?}");
@@ -499,7 +492,7 @@ impl HandleSubcommand for TransactionCommand {
                             recipient,
                             tx_commons.value,
                             tx_commons.common_tx_fields.fee,
-                            tx_commons.common_tx_fields.validity_start_height,
+                            tx_commons.common_tx_fields.nonce,
                         )
                         .await?;
                     println!("{tx:#?}");
@@ -512,7 +505,7 @@ impl HandleSubcommand for TransactionCommand {
                             recipient,
                             tx_commons.value,
                             tx_commons.common_tx_fields.fee,
-                            tx_commons.common_tx_fields.validity_start_height,
+                            tx_commons.common_tx_fields.nonce,
                         )
                         .await?;
                     println!("{txid:#?}");
@@ -542,7 +535,7 @@ impl HandleSubcommand for TransactionCommand {
                             timeout,
                             tx_commons.value,
                             tx_commons.common_tx_fields.fee,
-                            tx_commons.common_tx_fields.validity_start_height,
+                            tx_commons.common_tx_fields.nonce,
                         )
                         .await?;
                     println!("{tx:#?}");
@@ -559,7 +552,7 @@ impl HandleSubcommand for TransactionCommand {
                             timeout,
                             tx_commons.value,
                             tx_commons.common_tx_fields.fee,
-                            tx_commons.common_tx_fields.validity_start_height,
+                            tx_commons.common_tx_fields.nonce,
                         )
                         .await?;
                     println!("{txid:#?}");
@@ -588,7 +581,7 @@ impl HandleSubcommand for TransactionCommand {
                             hash_algorithm.into(),
                             tx_commons.value,
                             tx_commons.common_tx_fields.fee,
-                            tx_commons.common_tx_fields.validity_start_height,
+                            tx_commons.common_tx_fields.nonce,
                         )
                         .await?;
                     println!("{tx:#?}");
@@ -605,7 +598,7 @@ impl HandleSubcommand for TransactionCommand {
                             hash_algorithm.into(),
                             tx_commons.value,
                             tx_commons.common_tx_fields.fee,
-                            tx_commons.common_tx_fields.validity_start_height,
+                            tx_commons.common_tx_fields.nonce,
                         )
                         .await?;
                     println!("{txid:#?}");
@@ -626,7 +619,7 @@ impl HandleSubcommand for TransactionCommand {
                             htlc_recipient,
                             tx_commons.value,
                             tx_commons.common_tx_fields.fee,
-                            tx_commons.common_tx_fields.validity_start_height,
+                            tx_commons.common_tx_fields.nonce,
                         )
                         .await?;
                     println!("{tx:#?}");
@@ -639,7 +632,7 @@ impl HandleSubcommand for TransactionCommand {
                             htlc_recipient,
                             tx_commons.value,
                             tx_commons.common_tx_fields.fee,
-                            tx_commons.common_tx_fields.validity_start_height,
+                            tx_commons.common_tx_fields.nonce,
                         )
                         .await?;
                     println!("{txid:#?}");
@@ -663,7 +656,7 @@ impl HandleSubcommand for TransactionCommand {
                             htlc_recipient_signature,
                             tx_commons.value,
                             tx_commons.common_tx_fields.fee,
-                            tx_commons.common_tx_fields.validity_start_height,
+                            tx_commons.common_tx_fields.nonce,
                         )
                         .await?;
                     println!("{tx:#?}");
@@ -677,7 +670,7 @@ impl HandleSubcommand for TransactionCommand {
                             htlc_recipient_signature,
                             tx_commons.value,
                             tx_commons.common_tx_fields.fee,
-                            tx_commons.common_tx_fields.validity_start_height,
+                            tx_commons.common_tx_fields.nonce,
                         )
                         .await?;
                     println!("{txid:#?}");
@@ -689,7 +682,7 @@ impl HandleSubcommand for TransactionCommand {
                 htlc_recipient,
                 value,
                 fee,
-                validity_start_height,
+                nonce,
             } => {
                 let tx = client
                     .consensus
@@ -699,7 +692,7 @@ impl HandleSubcommand for TransactionCommand {
                         htlc_recipient,
                         value,
                         fee,
-                        validity_start_height,
+                        nonce,
                     )
                     .await?;
                 println!("{tx:#?}");

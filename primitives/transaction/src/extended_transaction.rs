@@ -153,7 +153,7 @@ impl ExtendedTransaction {
                         target,
                         value,
                         Coin::ZERO,
-                        self.block_number,
+                        self.block_number.into(),
                         self.network_id,
                     );
                     Ok(ExecutedTransaction::Ok(txn))

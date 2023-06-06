@@ -230,6 +230,9 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
             self.ensure_outgoing_account(sender, value, fee, block_state, fail_sender);
         let recipient_account = self.ensure_incoming_account(recipient, value, fail_recipient);
 
+        //TODO: <Nonce> Obtain the proper nonce value to be used
+        let nonce = 0;
+
         // First, create the preliminary unsigned transaction.
         let tx = match recipient_account {
             IncomingAccountData::Basic { ref address } => Transaction::new_extended(
@@ -240,7 +243,7 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
                 value,
                 fee,
                 vec![],
-                block_state.number,
+                nonce,
                 self.network_id,
             ),
             IncomingAccountData::Vesting { ref parameters } => Transaction::new_contract_creation(
@@ -250,7 +253,7 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
                 recipient.into(),
                 value,
                 fee,
-                block_state.number,
+                nonce,
                 self.network_id,
             ),
             IncomingAccountData::Htlc { ref parameters } => Transaction::new_contract_creation(
@@ -260,7 +263,7 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
                 recipient.into(),
                 value,
                 fee,
-                block_state.number,
+                nonce,
                 self.network_id,
             ),
             IncomingAccountData::Staking { ref parameters, .. } => {
@@ -276,7 +279,7 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
                         recipient.into(),
                         fee,
                         parameters.serialize_to_vec(),
-                        block_state.number,
+                        nonce,
                         self.network_id,
                     )
                 } else {
@@ -288,7 +291,7 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
                         value,
                         fee,
                         parameters.serialize_to_vec(),
-                        block_state.number,
+                        nonce,
                         self.network_id,
                     )
                 }

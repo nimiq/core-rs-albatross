@@ -49,49 +49,6 @@ impl From<nimiq_transaction::Transaction> for HashOrTx {
     }
 }
 
-#[derive(Copy, Clone, Debug, SerializeDisplay, DeserializeFromStr)]
-pub enum ValidityStartHeight {
-    Absolute(u32),
-    Relative(u32),
-}
-
-impl ValidityStartHeight {
-    pub fn block_number(self, current_block_number: u32) -> u32 {
-        match self {
-            Self::Absolute(n) => n,
-            Self::Relative(n) => n + current_block_number,
-        }
-    }
-}
-
-impl Default for ValidityStartHeight {
-    fn default() -> Self {
-        Self::Relative(0)
-    }
-}
-
-impl Display for ValidityStartHeight {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        match self {
-            Self::Absolute(n) => write!(f, "{n}"),
-            Self::Relative(n) => write!(f, "+{n}"),
-        }
-    }
-}
-
-impl FromStr for ValidityStartHeight {
-    type Err = <u32 as FromStr>::Err;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let s = s.trim();
-        if let Some(stripped) = s.strip_prefix('+') {
-            Ok(Self::Relative(stripped.parse()?))
-        } else {
-            Ok(Self::Absolute(s.parse()?))
-        }
-    }
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize, ValueEnum)]
 #[serde(rename_all = "kebab-case")]
 pub enum HashAlgorithm {
@@ -472,7 +429,7 @@ pub struct Transaction {
     #[serde(with = "crate::serde_helpers::hex")]
     pub data: Vec<u8>,
     pub flags: u8,
-    pub validity_start_height: u32,
+    pub nonce: u64,
     #[serde(with = "crate::serde_helpers::hex")]
     pub proof: Vec<u8>,
 }
@@ -516,7 +473,7 @@ impl Transaction {
             fee: transaction.fee,
             flags: transaction.flags.bits(),
             data: transaction.data,
-            validity_start_height: transaction.validity_start_height,
+            nonce: transaction.nonce,
             proof: transaction.proof,
         }
     }

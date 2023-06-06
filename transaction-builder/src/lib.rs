@@ -39,13 +39,13 @@ pub enum TransactionBuilderError {
     /// [`with_value`]: struct.TransactionBuilder.html#method.with_value
     #[error("The transaction value is missing.")]
     NoValue,
-    /// The `validity_start_height` field of the [`TransactionBuilder`] has not been set.
-    /// Call [`with_validity_start_height`] to set this field.
+    /// The `nonce` field of the [`TransactionBuilder`] has not been set.
+    /// Call [`with_nonce`] to set this field.
     ///
     /// [`TransactionBuilder`]: struct.TransactionBuilder.html
-    /// [`with_validity_start_height`]: struct.TransactionBuilder.html#method.with_validity_start_height
-    #[error("The transaction's validity start height is missing.")]
-    NoValidityStartHeight,
+    /// [`with_nonce`]: struct.TransactionBuilder.html#method.with_nonce
+    #[error("The transaction's nonce is missing.")]
+    NoNonce,
     /// The `network_id` field of the [`TransactionBuilder`] has not been set.
     /// Call [`with_network_id`] to set this field.
     ///
@@ -97,7 +97,7 @@ pub struct TransactionBuilder {
     value: Option<Coin>,
     fee: Option<Coin>,
     recipient: Option<Recipient>,
-    validity_start_height: Option<u32>,
+    nonce: Option<u64>,
     network_id: Option<NetworkId>,
 }
 
@@ -151,7 +151,7 @@ impl TransactionBuilder {
         sender: Address,
         recipient: Recipient,
         value: Coin,
-        validity_start_height: u32,
+        nonce: u64,
         network_id: NetworkId,
     ) -> Self {
         let mut builder = Self::default();
@@ -159,7 +159,7 @@ impl TransactionBuilder {
             .with_sender(sender)
             .with_recipient(recipient)
             .with_value(value)
-            .with_validity_start_height(validity_start_height)
+            .with_nonce(nonce)
             .with_network_id(network_id);
         builder
     }
@@ -363,24 +363,24 @@ impl TransactionBuilder {
         self
     }
 
-    /// Sets the `validity_start_height` for the transaction.
+    /// Sets the `nonce` for the transaction.
     ///
-    /// The validity start height is a *required* field and must always be set.
-    /// It restricts the validity of the transaction to a blockchain height
-    /// and prevents replay attacks.
+    /// This is a *required* field and must always be set.
+    /// This field prevents from replay attacks.
     ///
-    /// In most cases, this number should be set to the current blockchain height.
-    ///
+    ///  Consecutive transactions from a given sender should have consecutive nonces.
+    ///  The blockchain should be queried to know which is the right nonce to be used.
+    ///  
     /// # Examples
     ///
     /// ```
     /// use nimiq_transaction_builder::TransactionBuilder;
     ///
     /// let mut builder = TransactionBuilder::new();
-    /// builder.with_validity_start_height(13377);
+    /// builder.with_nonce(13377);
     /// ```
-    pub fn with_validity_start_height(&mut self, validity_start_height: u32) -> &mut Self {
-        self.validity_start_height = Some(validity_start_height);
+    pub fn with_nonce(&mut self, nonce: u64) -> &mut Self {
+        self.nonce = Some(nonce);
         self
     }
 
@@ -421,9 +421,7 @@ impl TransactionBuilder {
         let recipient = self.recipient.ok_or(TransactionBuilderError::NoRecipient)?;
 
         let value = self.value.ok_or(TransactionBuilderError::NoValue)?;
-        let validity_start_height = self
-            .validity_start_height
-            .ok_or(TransactionBuilderError::NoValidityStartHeight)?;
+        let nonce = self.nonce.ok_or(TransactionBuilderError::NoNonce)?;
         let network_id = self
             .network_id
             .ok_or(TransactionBuilderError::NoNetworkId)?;
@@ -441,7 +439,7 @@ impl TransactionBuilder {
                 recipient.account_type(),
                 value,
                 self.fee.unwrap_or(Coin::ZERO),
-                validity_start_height,
+                nonce,
                 network_id,
             )
         } else if recipient.is_signaling() {
@@ -452,7 +450,7 @@ impl TransactionBuilder {
                 recipient.account_type(),
                 self.fee.unwrap_or(Coin::ZERO),
                 recipient.data(),
-                validity_start_height,
+                nonce,
                 network_id,
             )
         } else {
@@ -464,7 +462,7 @@ impl TransactionBuilder {
                 value,
                 self.fee.unwrap_or(Coin::ZERO),
                 recipient.data(),
-                validity_start_height,
+                nonce,
                 network_id,
             )
         };
@@ -497,7 +495,7 @@ impl TransactionBuilder {
         recipient: Address,
         value: Coin,
         fee: Coin,
-        validity_start_height: u32,
+        nonce: u64,
         network_id: NetworkId,
     ) -> Result<Transaction, TransactionBuilderError> {
         let sender = Address::from(key_pair);
@@ -507,7 +505,7 @@ impl TransactionBuilder {
             .with_recipient(Recipient::new_basic(recipient))
             .with_value(value)
             .with_fee(fee)
-            .with_validity_start_height(validity_start_height)
+            .with_nonce(nonce)
             .with_network_id(network_id);
 
         let proof_builder = builder.generate()?;
@@ -544,7 +542,7 @@ impl TransactionBuilder {
         data: Vec<u8>,
         value: Coin,
         fee: Coin,
-        validity_start_height: u32,
+        nonce: u64,
         network_id: NetworkId,
     ) -> Result<Transaction, TransactionBuilderError> {
         let sender = Address::from(key_pair);
@@ -555,7 +553,7 @@ impl TransactionBuilder {
             .with_recipient(Recipient::new_basic_with_data(recipient, data))
             .with_value(value)
             .with_fee(fee)
-            .with_validity_start_height(validity_start_height)
+            .with_nonce(nonce)
             .with_network_id(network_id);
 
         let proof_builder = builder.generate()?;
@@ -598,7 +596,7 @@ impl TransactionBuilder {
         num_steps: u32,
         value: Coin,
         fee: Coin,
-        validity_start_height: u32,
+        nonce: u64,
         network_id: NetworkId,
     ) -> Result<Transaction, TransactionBuilderError> {
         let mut recipient = Recipient::new_vesting_builder(owner);
@@ -610,7 +608,7 @@ impl TransactionBuilder {
             .with_recipient(recipient.generate().unwrap())
             .with_value(value)
             .with_fee(fee)
-            .with_validity_start_height(validity_start_height)
+            .with_nonce(nonce)
             .with_network_id(network_id);
 
         let proof_builder = builder.generate()?;
@@ -646,7 +644,7 @@ impl TransactionBuilder {
         recipient: Address,
         value: Coin,
         fee: Coin,
-        validity_start_height: u32,
+        nonce: u64,
         network_id: NetworkId,
     ) -> Result<Transaction, TransactionBuilderError> {
         let mut builder = Self::new();
@@ -656,7 +654,7 @@ impl TransactionBuilder {
             .with_recipient(Recipient::new_basic(recipient))
             .with_value(value)
             .with_fee(fee)
-            .with_validity_start_height(validity_start_height)
+            .with_nonce(nonce)
             .with_network_id(network_id);
 
         let proof_builder = builder.generate()?;
@@ -704,7 +702,7 @@ impl TransactionBuilder {
         timeout: u64,
         value: Coin,
         fee: Coin,
-        validity_start_height: u32,
+        nonce: u64,
         network_id: NetworkId,
     ) -> Result<Transaction, TransactionBuilderError> {
         let mut recipient = Recipient::new_htlc_builder();
@@ -720,7 +718,7 @@ impl TransactionBuilder {
             .with_recipient(recipient.generate().unwrap())
             .with_value(value)
             .with_fee(fee)
-            .with_validity_start_height(validity_start_height)
+            .with_nonce(nonce)
             .with_network_id(network_id);
 
         let proof_builder = builder.generate()?;
@@ -771,7 +769,7 @@ impl TransactionBuilder {
         hash_algorithm: HashAlgorithm,
         value: Coin,
         fee: Coin,
-        validity_start_height: u32,
+        nonce: u64,
         network_id: NetworkId,
     ) -> Result<Transaction, TransactionBuilderError> {
         let mut builder = Self::new();
@@ -781,7 +779,7 @@ impl TransactionBuilder {
             .with_recipient(Recipient::new_basic(recipient))
             .with_value(value)
             .with_fee(fee)
-            .with_validity_start_height(validity_start_height)
+            .with_nonce(nonce)
             .with_network_id(network_id);
 
         let proof_builder = builder.generate()?;
@@ -820,7 +818,7 @@ impl TransactionBuilder {
         recipient: Address,
         value: Coin,
         fee: Coin,
-        validity_start_height: u32,
+        nonce: u64,
         network_id: NetworkId,
     ) -> Result<Transaction, TransactionBuilderError> {
         let mut builder = Self::new();
@@ -830,7 +828,7 @@ impl TransactionBuilder {
             .with_recipient(Recipient::new_basic(recipient))
             .with_value(value)
             .with_fee(fee)
-            .with_validity_start_height(validity_start_height)
+            .with_nonce(nonce)
             .with_network_id(network_id);
 
         let proof_builder = builder.generate()?;
@@ -872,7 +870,7 @@ impl TransactionBuilder {
         htlc_recipient_signature: SignatureProof,
         value: Coin,
         fee: Coin,
-        validity_start_height: u32,
+        nonce: u64,
         network_id: NetworkId,
     ) -> Result<Transaction, TransactionBuilderError> {
         let mut builder = Self::new();
@@ -882,7 +880,7 @@ impl TransactionBuilder {
             .with_recipient(Recipient::new_basic(recipient))
             .with_value(value)
             .with_fee(fee)
-            .with_validity_start_height(validity_start_height)
+            .with_nonce(nonce)
             .with_network_id(network_id);
 
         let proof_builder = builder.generate()?;
@@ -921,7 +919,7 @@ impl TransactionBuilder {
         recipient: Address,
         value: Coin,
         fee: Coin,
-        validity_start_height: u32,
+        nonce: u64,
         network_id: NetworkId,
     ) -> Result<SignatureProof, TransactionBuilderError> {
         let mut builder = Self::new();
@@ -931,7 +929,7 @@ impl TransactionBuilder {
             .with_recipient(Recipient::new_basic(recipient))
             .with_value(value)
             .with_fee(fee)
-            .with_validity_start_height(validity_start_height)
+            .with_nonce(nonce)
             .with_network_id(network_id);
 
         let proof_builder = builder.generate()?;
@@ -966,7 +964,7 @@ impl TransactionBuilder {
         delegation: Option<Address>,
         value: Coin,
         fee: Coin,
-        validity_start_height: u32,
+        nonce: u64,
         network_id: NetworkId,
     ) -> Result<Transaction, TransactionBuilderError> {
         let mut recipient = Recipient::new_staking_builder();
@@ -978,7 +976,7 @@ impl TransactionBuilder {
             .with_recipient(recipient.generate().unwrap())
             .with_value(value)
             .with_fee(fee)
-            .with_validity_start_height(validity_start_height)
+            .with_nonce(nonce)
             .with_network_id(network_id);
 
         let proof_builder = builder.generate()?;
@@ -1016,7 +1014,7 @@ impl TransactionBuilder {
         staker_address: Address,
         value: Coin,
         fee: Coin,
-        validity_start_height: u32,
+        nonce: u64,
         network_id: NetworkId,
     ) -> Result<Transaction, TransactionBuilderError> {
         let mut recipient = Recipient::new_staking_builder();
@@ -1028,7 +1026,7 @@ impl TransactionBuilder {
             .with_recipient(recipient.generate().unwrap())
             .with_value(value)
             .with_fee(fee)
-            .with_validity_start_height(validity_start_height)
+            .with_nonce(nonce)
             .with_network_id(network_id);
 
         let proof_builder = builder.generate()?;
@@ -1072,7 +1070,7 @@ impl TransactionBuilder {
         staker_key_pair: &KeyPair,
         new_delegation: Option<Address>,
         fee: Coin,
-        validity_start_height: u32,
+        nonce: u64,
         network_id: NetworkId,
     ) -> Result<Transaction, TransactionBuilderError> {
         let mut recipient = Recipient::new_staking_builder();
@@ -1083,7 +1081,7 @@ impl TransactionBuilder {
             .with_recipient(recipient.generate().unwrap())
             .with_value(Coin::ZERO)
             .with_fee(fee)
-            .with_validity_start_height(validity_start_height)
+            .with_nonce(nonce)
             .with_network_id(network_id);
 
         match key_pair {
@@ -1140,7 +1138,7 @@ impl TransactionBuilder {
         recipient: Address,
         value: Coin,
         fee: Coin,
-        validity_start_height: u32,
+        nonce: u64,
         network_id: NetworkId,
     ) -> Result<Transaction, TransactionBuilderError> {
         let recipient = Recipient::new_basic(recipient);
@@ -1152,7 +1150,7 @@ impl TransactionBuilder {
             .with_recipient(recipient)
             .with_value(value)
             .with_fee(fee)
-            .with_validity_start_height(validity_start_height)
+            .with_nonce(nonce)
             .with_network_id(network_id);
 
         let proof_builder = builder.generate()?;
@@ -1193,7 +1191,7 @@ impl TransactionBuilder {
         reward_address: Address,
         signal_data: Option<Blake2bHash>,
         fee: Coin,
-        validity_start_height: u32,
+        nonce: u64,
         network_id: NetworkId,
     ) -> Result<Transaction, TransactionBuilderError> {
         let mut recipient = Recipient::new_staking_builder();
@@ -1205,7 +1203,7 @@ impl TransactionBuilder {
             .with_recipient(recipient.generate().unwrap())
             .with_value(Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT))
             .with_fee(fee)
-            .with_validity_start_height(validity_start_height)
+            .with_nonce(nonce)
             .with_network_id(network_id);
 
         let proof_builder = builder.generate()?;
@@ -1252,7 +1250,7 @@ impl TransactionBuilder {
         new_reward_address: Option<Address>,
         new_signal_data: Option<Option<Blake2bHash>>,
         fee: Coin,
-        validity_start_height: u32,
+        nonce: u64,
         network_id: NetworkId,
     ) -> Result<Transaction, TransactionBuilderError> {
         let mut recipient = Recipient::new_staking_builder();
@@ -1269,7 +1267,7 @@ impl TransactionBuilder {
             .with_recipient(recipient.generate().unwrap())
             .with_value(Coin::ZERO)
             .with_fee(fee)
-            .with_validity_start_height(validity_start_height)
+            .with_nonce(nonce)
             .with_network_id(network_id);
 
         let proof_builder = builder.generate()?;
@@ -1310,7 +1308,7 @@ impl TransactionBuilder {
         validator_address: Address,
         signing_key_pair: &KeyPair,
         fee: Coin,
-        validity_start_height: u32,
+        nonce: u64,
         network_id: NetworkId,
     ) -> Result<Transaction, TransactionBuilderError> {
         let mut recipient = Recipient::new_staking_builder();
@@ -1322,7 +1320,7 @@ impl TransactionBuilder {
             .with_recipient(recipient.generate().unwrap())
             .with_value(Coin::ZERO)
             .with_fee(fee)
-            .with_validity_start_height(validity_start_height)
+            .with_nonce(nonce)
             .with_network_id(network_id);
 
         let proof_builder = builder.generate()?;
@@ -1363,7 +1361,7 @@ impl TransactionBuilder {
         validator_address: Address,
         signing_key_pair: &KeyPair,
         fee: Coin,
-        validity_start_height: u32,
+        nonce: u64,
         network_id: NetworkId,
     ) -> Result<Transaction, TransactionBuilderError> {
         let mut recipient = Recipient::new_staking_builder();
@@ -1375,7 +1373,7 @@ impl TransactionBuilder {
             .with_recipient(recipient.generate().unwrap())
             .with_value(Coin::ZERO)
             .with_fee(fee)
-            .with_validity_start_height(validity_start_height)
+            .with_nonce(nonce)
             .with_network_id(network_id);
 
         let proof_builder = builder.generate()?;
@@ -1416,7 +1414,7 @@ impl TransactionBuilder {
         validator_address: Address,
         signing_key_pair: &KeyPair,
         fee: Coin,
-        validity_start_height: u32,
+        nonce: u64,
         network_id: NetworkId,
     ) -> Result<Transaction, TransactionBuilderError> {
         let mut recipient = Recipient::new_staking_builder();
@@ -1428,7 +1426,7 @@ impl TransactionBuilder {
             .with_recipient(recipient.generate().unwrap())
             .with_value(Coin::ZERO)
             .with_fee(fee)
-            .with_validity_start_height(validity_start_height)
+            .with_nonce(nonce)
             .with_network_id(network_id);
 
         let proof_builder = builder.generate()?;
@@ -1467,7 +1465,7 @@ impl TransactionBuilder {
         key_pair: &KeyPair,
         cold_key_pair: &KeyPair,
         fee: Coin,
-        validity_start_height: u32,
+        nonce: u64,
         network_id: NetworkId,
     ) -> Result<Transaction, TransactionBuilderError> {
         let mut recipient = Recipient::new_staking_builder();
@@ -1479,7 +1477,7 @@ impl TransactionBuilder {
             .with_recipient(recipient.generate().unwrap())
             .with_value(Coin::ZERO)
             .with_fee(fee)
-            .with_validity_start_height(validity_start_height)
+            .with_nonce(nonce)
             .with_network_id(network_id);
 
         let proof_builder = builder.generate()?;
@@ -1515,7 +1513,7 @@ impl TransactionBuilder {
         cold_key_pair: &KeyPair,
         fee: Coin,
         value: Coin,
-        validity_start_height: u32,
+        nonce: u64,
         network_id: NetworkId,
     ) -> Result<Transaction, TransactionBuilderError> {
         let recipient = Recipient::new_basic(recipient);
@@ -1527,7 +1525,7 @@ impl TransactionBuilder {
             .with_recipient(recipient)
             .with_value(value)
             .with_fee(fee)
-            .with_validity_start_height(validity_start_height)
+            .with_nonce(nonce)
             .with_network_id(network_id);
 
         let proof_builder = builder.generate()?;

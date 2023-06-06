@@ -35,7 +35,7 @@ impl WalletAccount {
         recipient: Address,
         value: Coin,
         fee: Coin,
-        validity_start_height: u32,
+        nonce: u64,
         network_id: NetworkId,
     ) -> Transaction {
         let mut transaction = Transaction::new_basic(
@@ -43,7 +43,7 @@ impl WalletAccount {
             recipient,
             value,
             fee,
-            validity_start_height,
+            nonce,
             network_id,
         );
         self.sign_transaction(&mut transaction);

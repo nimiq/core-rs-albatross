@@ -69,12 +69,12 @@ enum ValidatorState {
     /// Validator parking state
     ParkingState {
         park_tx_hash: Blake2bHash,
-        park_tx_validity_window_start: u32,
+        park_tx_nonce: u64,
     },
     /// Validator inactive state
     InactivityState {
         inactive_tx_hash: Blake2bHash,
-        inactive_tx_validity_window_start: u32,
+        inactive_tx_nonce: u64,
     },
 }
 
@@ -279,15 +279,15 @@ where
 
         // Check if the transaction was sent
         if let Some(validator_state) = &self.validator_state {
-            let (tx_hash, tx_validity_window_start) = match validator_state {
+            let (tx_hash, tx_nonce) = match validator_state {
                 ValidatorState::ParkingState {
                     park_tx_hash,
-                    park_tx_validity_window_start,
-                } => (park_tx_hash, park_tx_validity_window_start),
+                    park_tx_nonce,
+                } => (park_tx_hash, park_tx_nonce),
                 ValidatorState::InactivityState {
                     inactive_tx_hash,
-                    inactive_tx_validity_window_start,
-                } => (inactive_tx_hash, inactive_tx_validity_window_start),
+                    inactive_tx_nonce,
+                } => (inactive_tx_hash, inactive_tx_nonce),
             };
 
             //TODO: <Nonce> Include the nonce check into the equation
@@ -691,14 +691,15 @@ where
     }
 
     fn unpark(&self, blockchain: &Blockchain) -> ValidatorState {
-        let validity_start_height = blockchain.block_number();
+        //TODO: <Nonce> Need to obtain the right nonce value to be used here
+        let nonce = 0;
 
         let unpark_transaction = TransactionBuilder::new_unpark_validator(
             &self.fee_key(),
             self.validator_address(),
             &self.signing_key(),
             Coin::ZERO,
-            validity_start_height,
+            nonce,
             blockchain.network_id(),
         )
         .unwrap(); // TODO: Handle transaction creation error
@@ -730,19 +731,20 @@ where
 
         ValidatorState::ParkingState {
             park_tx_hash: tx_hash,
-            park_tx_validity_window_start: validity_start_height,
+            park_tx_nonce: nonce,
         }
     }
 
     fn reactivate(&self, blockchain: &Blockchain) -> ValidatorState {
-        let validity_start_height = blockchain.block_number();
+        //TODO: <Nonce> Need to obtain the right nonce value to be used here
+        let nonce = 0;
 
         let reactivate_transaction = TransactionBuilder::new_reactivate_validator(
             &self.fee_key(),
             self.validator_address(),
             &self.signing_key(),
             Coin::ZERO,
-            validity_start_height,
+            nonce,
             blockchain.network_id(),
         )
         .unwrap(); // TODO: Handle transaction creation error
@@ -762,7 +764,7 @@ where
 
         ValidatorState::InactivityState {
             inactive_tx_hash: tx_hash,
-            inactive_tx_validity_window_start: validity_start_height,
+            inactive_tx_nonce: nonce,
         }
     }
 

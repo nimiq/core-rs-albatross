@@ -85,7 +85,7 @@ impl Transaction {
         fee: u64,
         data: Option<Vec<u8>>,
         flags: Option<u8>,
-        validity_start_height: u32,
+        nonce: u64,
         network_id: u8,
     ) -> Result<Transaction, JsError> {
         let flags = TransactionFlags::try_from(flags.unwrap_or(0b0))?;
@@ -100,7 +100,7 @@ impl Transaction {
                 Coin::try_from(value)?,
                 Coin::try_from(fee)?,
                 data.unwrap_or(Vec::new()),
-                validity_start_height,
+                nonce,
                 to_network_id(network_id)?,
             )
         } else if flags.contains(TransactionFlags::CONTRACT_CREATION) {
@@ -111,7 +111,7 @@ impl Transaction {
                 AccountType::try_from(recipient_type.unwrap_throw())?,
                 Coin::try_from(value)?,
                 Coin::try_from(fee)?,
-                validity_start_height,
+                nonce,
                 to_network_id(network_id)?,
             )
         } else if flags.contains(TransactionFlags::SIGNALING) {
@@ -122,7 +122,7 @@ impl Transaction {
                 AccountType::try_from(recipient_type.unwrap_or(3))?,
                 Coin::try_from(fee)?,
                 data.unwrap_throw(),
-                validity_start_height,
+                nonce,
                 to_network_id(network_id)?,
             )
         } else {
@@ -294,10 +294,10 @@ impl Transaction {
         self.inner.fee_per_byte()
     }
 
-    /// The transaction's validity-start height. The transaction is valid for 2 hours after this block height.
-    #[wasm_bindgen(getter, js_name = validityStartHeight)]
-    pub fn validity_start_height(&self) -> u32 {
-        self.inner.validity_start_height
+    /// The transaction's nonce.
+    #[wasm_bindgen(getter, js_name = nonce)]
+    pub fn nonce(&self) -> u64 {
+        self.inner.nonce
     }
 
     /// The transaction's network ID.
@@ -416,7 +416,7 @@ impl Transaction {
             value: self.value(),
             fee: self.fee(),
             fee_per_byte: self.fee_per_byte(),
-            validity_start_height: self.validity_start_height(),
+            nonce: self.nonce(),
             network: to_network_id(self.network_id())
                 .ok()
                 .unwrap()
@@ -565,7 +565,7 @@ impl Transaction {
                 PlainTransactionData::UpdateStaker(ref data) => &data.raw,
             })?),
             Some(plain.flags),
-            plain.validity_start_height,
+            plain.nonce,
             from_network_id(NetworkId::from_str(&plain.network)?),
         )?;
         tx.set_proof(hex::decode(&plain.proof.raw)?);
@@ -707,7 +707,7 @@ pub struct PlainTransaction {
     /// The transaction's fee-per-byte in luna (NIM's smallest unit).
     pub fee_per_byte: f64,
     /// The block height at which this transaction becomes valid. It is then valid for 7200 blocks (~2 hours).
-    pub validity_start_height: u32,
+    pub nonce: u64,
     /// The network name on which this transaction is valid.
     pub network: String,
     /// Any flags that this transaction carries. `0b1 = 1` means it's a contract-creation transaction, `0b10 = 2`
@@ -796,10 +796,7 @@ impl serde::Serialize for PlainTransactionDetails {
         plain.serialize_field("value", &self.transaction.value)?;
         plain.serialize_field("fee", &self.transaction.fee)?;
         plain.serialize_field("feePerByte", &self.transaction.fee_per_byte)?;
-        plain.serialize_field(
-            "validityStartHeight",
-            &self.transaction.validity_start_height,
-        )?;
+        plain.serialize_field("validityStartHeight", &self.transaction.nonce)?;
         plain.serialize_field("network", &self.transaction.network)?;
         plain.serialize_field("flags", &self.transaction.flags)?;
         plain.serialize_field("data", &self.transaction.data)?;

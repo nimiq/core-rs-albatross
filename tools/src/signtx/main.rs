@@ -61,12 +61,12 @@ fn run_app() -> Result<(), Error> {
                 .help("Send transaction with VALUE fee."),
         )
         .arg(
-            Arg::new("validity_start_height")
-                .short('H')
-                .long("validity-start-height")
-                .value_name("HEIGHT")
-                .value_parser(value_parser!(u32))
-                .help("Set validity start height"),
+            Arg::new("nonce")
+                .short('O')
+                .long("nonce")
+                .value_name("NOUNCE")
+                .value_parser(value_parser!(u64))
+                .help("Set nonce value"),
         )
         .arg(
             Arg::new("network_id")
@@ -95,21 +95,12 @@ fn run_app() -> Result<(), Error> {
         )?;
         let value = Coin::from_str(matches.get_one::<String>("value").ok_or(AppError::Value)?)?;
         let fee = Coin::from_str(matches.get_one::<String>("fee").ok_or(AppError::Fee)?)?;
-        let validity_start_height = matches
-            .get_one::<u32>("validity_start_height")
-            .ok_or(AppError::ValidityStartHeight)?;
+        let nonce = matches.get_one::<u64>("nonce").ok_or(AppError::Nonce)?;
         let network_id = match matches.get_one::<String>("network_id") {
             Some(s) => NetworkId::from_str(s)?,
             None => NetworkId::Main,
         };
-        Transaction::new_basic(
-            from_address,
-            to_address,
-            value,
-            fee,
-            *validity_start_height,
-            network_id,
-        )
+        Transaction::new_basic(from_address, to_address, value, fee, *nonce, network_id)
     };
 
     // sign transaction
@@ -147,6 +138,6 @@ enum AppError {
     Value,
     #[error("Transaction fee is missing")]
     Fee,
-    #[error("Validity start height is missing")]
-    ValidityStartHeight,
+    #[error("Nonce value is missing")]
+    Nonce,
 }

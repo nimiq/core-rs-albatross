@@ -32,7 +32,7 @@ pub const UNIT_KEY: &str = "6c9320ac201caf1f8eaa5b05f5d67a9e77826f3f6be266a0eccc
 
 pub fn generate_transactions(
     key_pair: &KeyPair,
-    start_height: u32,
+    start_nonce: u64,
     network_id: NetworkId,
     count: usize,
     rng_seed: u64,
@@ -50,7 +50,7 @@ pub fn generate_transactions(
             recipient,
             Coin::from_u64_unchecked(1),
             Coin::from_u64_unchecked(2),
-            start_height,
+            start_nonce,
             network_id,
         )
         .unwrap();
@@ -134,10 +134,13 @@ pub fn fill_micro_blocks_with_txns(
         log::debug!(" Current Height: {}", i);
         let blockchain = blockchain.upgradable_read();
 
+        //TODO: <Nounce> Need to obtain the proper start nonce
+        let start_nonce = 0;
+
         // Generate the transactions.
         let txns = generate_transactions(
             &key_pair,
-            i,
+            start_nonce,
             NetworkId::UnitAlbatross,
             num_transactions,
             rng_seed,

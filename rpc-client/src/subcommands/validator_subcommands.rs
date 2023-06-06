@@ -183,7 +183,7 @@ impl HandleSubcommand for ValidatorCommand {
                             reward_address,
                             signal_data,
                             tx_commons.fee,
-                            tx_commons.validity_start_height,
+                            tx_commons.nonce,
                         )
                         .await?;
                     println!("{tx:#?}");
@@ -198,7 +198,7 @@ impl HandleSubcommand for ValidatorCommand {
                             reward_address,
                             signal_data,
                             tx_commons.fee,
-                            tx_commons.validity_start_height,
+                            tx_commons.nonce,
                         )
                         .await?;
                     println!("{txid:#?}");
@@ -225,7 +225,7 @@ impl HandleSubcommand for ValidatorCommand {
                             new_reward_address,
                             new_signal_data,
                             tx_commons.fee,
-                            tx_commons.validity_start_height,
+                            tx_commons.nonce,
                         )
                         .await?;
                     println!("{tx:#?}");
@@ -240,7 +240,7 @@ impl HandleSubcommand for ValidatorCommand {
                             new_reward_address,
                             new_signal_data,
                             tx_commons.fee,
-                            tx_commons.validity_start_height,
+                            tx_commons.nonce,
                         )
                         .await?;
                     println!("{txid:#?}");
@@ -261,7 +261,7 @@ impl HandleSubcommand for ValidatorCommand {
                             validator_address,
                             key_data,
                             tx_commons.fee,
-                            tx_commons.validity_start_height,
+                            tx_commons.nonce,
                         )
                         .await?;
                     println!("{tx:#?}");
@@ -273,7 +273,7 @@ impl HandleSubcommand for ValidatorCommand {
                             validator_address,
                             key_data,
                             tx_commons.fee,
-                            tx_commons.validity_start_height,
+                            tx_commons.nonce,
                         )
                         .await?;
                     println!("{txid:#?}");
@@ -294,7 +294,7 @@ impl HandleSubcommand for ValidatorCommand {
                             validator_address,
                             key_data,
                             tx_commons.fee,
-                            tx_commons.validity_start_height,
+                            tx_commons.nonce,
                         )
                         .await?;
                     println!("{tx:#?}");
@@ -306,7 +306,7 @@ impl HandleSubcommand for ValidatorCommand {
                             validator_address,
                             key_data,
                             tx_commons.fee,
-                            tx_commons.validity_start_height,
+                            tx_commons.nonce,
                         )
                         .await?;
                     println!("{txid:#?}");
@@ -327,7 +327,7 @@ impl HandleSubcommand for ValidatorCommand {
                             validator_address,
                             key_data,
                             tx_commons.fee,
-                            tx_commons.validity_start_height,
+                            tx_commons.nonce,
                         )
                         .await?;
                     println!("{tx:#?}");
@@ -339,7 +339,7 @@ impl HandleSubcommand for ValidatorCommand {
                             validator_address,
                             key_data,
                             tx_commons.fee,
-                            tx_commons.validity_start_height,
+                            tx_commons.nonce,
                         )
                         .await?;
                     println!("{txid:#?}");
@@ -359,7 +359,7 @@ impl HandleSubcommand for ValidatorCommand {
                             recipient_address,
                             tx_commons.common_tx_fields.fee,
                             tx_commons.value,
-                            tx_commons.common_tx_fields.validity_start_height,
+                            tx_commons.common_tx_fields.nonce,
                         )
                         .await?;
                     println!("{tx:#?}");
@@ -371,7 +371,7 @@ impl HandleSubcommand for ValidatorCommand {
                             recipient_address,
                             tx_commons.common_tx_fields.fee,
                             tx_commons.value,
-                            tx_commons.common_tx_fields.validity_start_height,
+                            tx_commons.common_tx_fields.nonce,
                         )
                         .await?;
                     println!("{txid:#?}");

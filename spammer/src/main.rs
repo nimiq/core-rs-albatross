@@ -396,12 +396,15 @@ async fn spam(
         let mut rng = thread_rng();
         let new_count;
 
+        //TODO: <Nonce> need to generate appropiate nounces
+        let start_nonce = 0;
+
         let txs = match choices[dist.sample(&mut rng)] {
             SpamType::BaseBasicTransaction => {
                 new_count = config.tpb;
                 generate_basic_transactions(
                     &key_pair,
-                    number,
+                    start_nonce,
                     net_id,
                     new_count,
                     config.clone(),
@@ -412,7 +415,7 @@ async fn spam(
                 new_count = rng.gen_range(config.tpb * 10..config.tpb * 20);
                 generate_basic_transactions(
                     &key_pair,
-                    number,
+                    start_nonce,
                     net_id,
                     new_count,
                     config.clone(),
@@ -421,7 +424,7 @@ async fn spam(
             }
             SpamType::Vesting => {
                 new_count = rng.gen_range(0..config.tpb);
-                generate_vesting_contracts(&key_pair, number, net_id, new_count, state)
+                generate_vesting_contracts(&key_pair, start_nonce, net_id, new_count, state)
             }
         };
 
@@ -445,7 +448,7 @@ async fn spam(
 
 fn generate_basic_transactions(
     key_pair: &KeyPair,
-    start_height: u32,
+    start_nonce: u64,
     network_id: NetworkId,
     count: usize,
     config: Arc<SpammerGenerationOptions>,
@@ -455,7 +458,7 @@ fn generate_basic_transactions(
 
     let mut rng = thread_rng();
 
-    for _ in 0..count {
+    for i in 0..count {
         let current_block_number = state.read().unwrap().current_block_number;
         let mut state = state.write().unwrap();
 
@@ -488,7 +491,7 @@ fn generate_basic_transactions(
                 recipient,
                 amount,
                 Coin::ZERO,
-                start_height,
+                start_nonce + i as u64,
                 network_id,
             )
             .unwrap();
@@ -525,7 +528,7 @@ fn generate_basic_transactions(
             recipient,
             amount,
             Coin::ZERO,
-            start_height,
+            start_nonce + i as u64,
             network_id,
         )
         .unwrap();
@@ -537,7 +540,7 @@ fn generate_basic_transactions(
 
 fn generate_vesting_contracts(
     key_pair: &KeyPair,
-    start_height: u32,
+    start_nonce: u64,
     network_id: NetworkId,
     count: usize,
     state: Arc<RwLock<SpammerState>>,
@@ -559,7 +562,7 @@ fn generate_vesting_contracts(
                 Address::from(&contract.key_pair),
                 Coin::from_u64_unchecked(10),
                 Coin::ZERO,
-                start_height,
+                start_nonce,
                 network_id,
             )
             .unwrap();
@@ -568,7 +571,7 @@ fn generate_vesting_contracts(
         }
     });
 
-    for _ in 0..count {
+    for i in 0..count {
         let new_kp = KeyPair::generate(&mut rng);
         let recipient = Address::from(&new_kp);
 
@@ -580,7 +583,7 @@ fn generate_vesting_contracts(
             1,
             Coin::from_u64_unchecked(10),
             Coin::ZERO,
-            start_height,
+            start_nonce + i as u64,
             network_id,
         )
         .unwrap();

@@ -26,7 +26,7 @@ impl TransactionBuilder {
         recipient: &Address,
         value: u64,
         fee: Option<u64>,
-        validity_start_height: u32,
+        nonce: u64,
         network_id: u8,
     ) -> Result<Transaction, JsError> {
         let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
@@ -35,7 +35,7 @@ impl TransactionBuilder {
             .with_recipient(Recipient::new_basic(recipient.native_ref().clone()))
             .with_value(Coin::try_from(value)?)
             .with_fee(Coin::try_from(fee.unwrap_or(0))?)
-            .with_validity_start_height(validity_start_height)
+            .with_nonce(nonce)
             .with_network_id(to_network_id(network_id)?);
 
         let proof_builder = builder.generate()?;
@@ -56,7 +56,7 @@ impl TransactionBuilder {
         data: Vec<u8>,
         value: u64,
         fee: Option<u64>,
-        validity_start_height: u32,
+        nonce: u64,
         network_id: u8,
     ) -> Result<Transaction, JsError> {
         let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
@@ -68,7 +68,7 @@ impl TransactionBuilder {
             ))
             .with_value(Coin::try_from(value)?)
             .with_fee(Coin::try_from(fee.unwrap_or(0))?)
-            .with_validity_start_height(validity_start_height)
+            .with_nonce(nonce)
             .with_network_id(to_network_id(network_id)?);
 
         let proof_builder = builder.generate()?;
@@ -102,7 +102,7 @@ impl TransactionBuilder {
         delegation: &Address,
         value: u64,
         fee: Option<u64>,
-        validity_start_height: u32,
+        nonce: u64,
         network_id: u8,
     ) -> Result<Transaction, JsError> {
         let mut recipient = Recipient::new_staking_builder();
@@ -114,7 +114,7 @@ impl TransactionBuilder {
             .with_recipient(recipient.generate().unwrap())
             .with_value(Coin::try_from(value)?)
             .with_fee(Coin::try_from(fee.unwrap_or(0))?)
-            .with_validity_start_height(validity_start_height)
+            .with_nonce(nonce)
             .with_network_id(to_network_id(network_id)?);
 
         let proof_builder = builder.generate()?;
@@ -134,7 +134,7 @@ impl TransactionBuilder {
         staker_address: &Address,
         value: u64,
         fee: Option<u64>,
-        validity_start_height: u32,
+        nonce: u64,
         network_id: u8,
     ) -> Result<Transaction, JsError> {
         let mut recipient = Recipient::new_staking_builder();
@@ -146,7 +146,7 @@ impl TransactionBuilder {
             .with_recipient(recipient.generate().unwrap())
             .with_value(Coin::try_from(value)?)
             .with_fee(Coin::try_from(fee.unwrap_or(0))?)
-            .with_validity_start_height(validity_start_height)
+            .with_nonce(nonce)
             .with_network_id(to_network_id(network_id)?);
 
         let proof_builder = builder.generate()?;
@@ -165,7 +165,7 @@ impl TransactionBuilder {
         sender: &Address,
         new_delegation: &Address,
         fee: Option<u64>,
-        validity_start_height: u32,
+        nonce: u64,
         network_id: u8,
     ) -> Result<Transaction, JsError> {
         let mut recipient = Recipient::new_staking_builder();
@@ -177,7 +177,7 @@ impl TransactionBuilder {
             .with_recipient(recipient.generate().unwrap())
             .with_value(Coin::ZERO)
             .with_fee(Coin::try_from(fee.unwrap_or(0))?)
-            .with_validity_start_height(validity_start_height)
+            .with_nonce(nonce)
             .with_network_id(to_network_id(network_id)?);
 
         let proof_builder = builder.generate()?;
@@ -196,7 +196,7 @@ impl TransactionBuilder {
         recipient: &Address,
         value: u64,
         fee: Option<u64>,
-        validity_start_height: u32,
+        nonce: u64,
         network_id: u8,
     ) -> Result<Transaction, JsError> {
         let recipient = Recipient::new_basic(recipient.native_ref().clone());
@@ -208,7 +208,7 @@ impl TransactionBuilder {
             .with_recipient(recipient)
             .with_value(Coin::try_from(value)?)
             .with_fee(Coin::try_from(fee.unwrap_or(0))?)
-            .with_validity_start_height(validity_start_height)
+            .with_nonce(nonce)
             .with_network_id(to_network_id(network_id)?);
 
         let proof_builder = builder.generate()?;
