@@ -75,6 +75,9 @@ fn main() {
             .unwrap()
             .unwrap_macro();
 
+        log::error!("Block 1 {:?}", prev_block);
+        log::error!("Block 2 {:?}", final_block);
+
         // Create genesis data.
         if i == 0 {
             genesis_header_hash = prev_block.hash_blake2s().0;

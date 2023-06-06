@@ -4,7 +4,7 @@ use std::borrow::Borrow;
 use ark_ff::One;
 use ark_mnt6_753::{
     constraints::{FqVar, G1Var, G2Var},
-    Fq as MNT6Fq,
+    Fq as MNT6Fq, G1Projective,
 };
 use ark_r1cs_std::{
     alloc::AllocationMode,
@@ -12,6 +12,7 @@ use ark_r1cs_std::{
     uint16::UInt16,
 };
 use ark_relations::r1cs::{ConstraintSystemRef, Namespace, SynthesisError};
+use ark_std::Zero;
 use nimiq_block::{MacroBlock, TendermintStep};
 use nimiq_hash::{Blake2sHash, Hash, HashOutput, SerializeContent};
 use nimiq_primitives::policy::Policy;
@@ -199,17 +200,24 @@ impl AllocVar<MacroBlock, MNT6Fq> for MacroBlockGadget {
             Err(_) => MacroBlock::non_empty_default(),
         };
 
-        let justification = &value
-            .justification
-            .ok_or(SynthesisError::AssignmentMissing)?;
+        let signature;
+        let signer_bitmap: Vec<bool>;
+        let justification_round;
+        if let Some(ref justification) = value.justification {
+            signature = justification.sig.signature.get_point();
+            signer_bitmap = justification
+                .sig
+                .signers
+                .iter_bits()
+                .take(Policy::SLOTS as usize)
+                .collect();
+            justification_round = justification.round;
+        } else {
+            signature = G1Projective::zero();
+            signer_bitmap = vec![false; Policy::SLOTS as usize];
+            justification_round = 0;
+        }
 
-        let signature = justification.sig.signature.get_point();
-        let signer_bitmap: Vec<bool> = justification
-            .sig
-            .signers
-            .iter_bits()
-            .take(Policy::SLOTS as usize)
-            .collect();
         let version = UInt16::<MNT6Fq>::new_input(cs.clone(), || Ok(value.header.version))?;
         let block_number =
             UInt32::<MNT6Fq>::new_input(cs.clone(), || Ok(value.header.block_number))?;
@@ -248,7 +256,7 @@ impl AllocVar<MacroBlock, MNT6Fq> for MacroBlockGadget {
         let signer_bitmap = signer_bitmap.0;
 
         let signature = G1Var::new_input(cs.clone(), || Ok(signature))?;
-        let round = UInt32::<MNT6Fq>::new_input(cs, || Ok(justification.round))?;
+        let round = UInt32::<MNT6Fq>::new_input(cs, || Ok(justification_round))?;
 
         Ok(MacroBlockGadget {
             version,
@@ -276,17 +284,23 @@ impl AllocVar<MacroBlock, MNT6Fq> for MacroBlockGadget {
             Err(_) => MacroBlock::non_empty_default(),
         };
 
-        let justification = &value
-            .justification
-            .ok_or(SynthesisError::AssignmentMissing)?;
-
-        let signature = justification.sig.signature.get_point();
-        let signer_bitmap: Vec<bool> = justification
-            .sig
-            .signers
-            .iter_bits()
-            .take(Policy::SLOTS as usize)
-            .collect();
+        let signature;
+        let signer_bitmap: Vec<bool>;
+        let justification_round;
+        if let Some(ref justification) = value.justification {
+            signature = justification.sig.signature.get_point();
+            signer_bitmap = justification
+                .sig
+                .signers
+                .iter_bits()
+                .take(Policy::SLOTS as usize)
+                .collect();
+            justification_round = justification.round;
+        } else {
+            signature = G1Projective::zero();
+            signer_bitmap = vec![false; Policy::SLOTS as usize];
+            justification_round = 0;
+        }
 
         let version = UInt16::<MNT6Fq>::new_witness(cs.clone(), || Ok(value.header.version))?;
         let block_number =
@@ -329,7 +343,7 @@ impl AllocVar<MacroBlock, MNT6Fq> for MacroBlockGadget {
         let signer_bitmap = signer_bitmap.0;
 
         let signature = G1Var::new_witness(cs.clone(), || Ok(signature))?;
-        let round = UInt32::<MNT6Fq>::new_witness(cs, || Ok(justification.round))?;
+        let round = UInt32::<MNT6Fq>::new_witness(cs, || Ok(justification_round))?;
 
         Ok(MacroBlockGadget {
             version,

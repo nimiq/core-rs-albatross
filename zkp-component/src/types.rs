@@ -255,25 +255,13 @@ fn ark_to_bserial_error(error: ArkSerializingError) -> BeserialSerializingError 
 }
 
 /// The input to the proof generation process.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Default)]
 pub struct ProofInput {
     pub previous_block: MacroBlock,
     pub previous_proof: Option<Proof<MNT6_753>>,
     pub final_block: MacroBlock,
     pub genesis_header_hash: [u8; 32],
     pub prover_keys_path: PathBuf,
-}
-
-impl Default for ProofInput {
-    fn default() -> Self {
-        Self {
-            previous_block: Default::default(),
-            previous_proof: Default::default(),
-            final_block: Default::default(),
-            genesis_header_hash: [0; 32],
-            prover_keys_path: Default::default(),
-        }
-    }
 }
 
 /// The serialization of the ProofInput is unsafe over the network.

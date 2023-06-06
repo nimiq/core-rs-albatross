@@ -92,17 +92,11 @@ impl ConstraintSynthesizer<MNT4Fq> for MergerWrapperCircuit {
             ProofVar::<MNT4_753, PairingVar>::new_witness(cs.clone(), || Ok(&self.proof))?;
 
         // Allocate all the inputs.
-        eprintln!("inputs: {}", cs.num_instance_variables());
         let genesis_header_hash_var =
             UInt8::<MNT4Fq>::new_input_vec(cs.clone(), &self.genesis_header_hash)?;
-
-        eprintln!("inputs: {}", cs.num_instance_variables());
         let final_header_hash_var =
             UInt8::<MNT4Fq>::new_input_vec(cs.clone(), &self.final_header_hash)?;
-        eprintln!("inputs: {}", cs.num_instance_variables());
-
-        let vk_commitment_var = UInt8::<MNT4Fq>::new_input_vec(cs.clone(), &self.vk_commitment)?;
-        eprintln!("inputs: {}", cs.num_instance_variables());
+        let vk_commitment_var = UInt8::<MNT4Fq>::new_input_vec(cs, &self.vk_commitment)?;
 
         // Verify the ZK proof.
         let mut proof_inputs = RecursiveInputVar::new();

@@ -284,7 +284,7 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
                 match self.protocol.verify_proposal(&proposal, None, false) {
                     Ok(inherent) => {
                         // Use proposal and created inherent to produce the hash
-                        let proposal_hash = proposal.message.proposal.hash(&inherent);
+                        let proposal_hash = proposal.message.proposal.hash();
 
                         // Cache the inherent
                         inherent_entry.insert(inherent);
@@ -312,7 +312,7 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
             }
             Entry::Occupied(inherent_entry) => {
                 // The inherent is known. Use proposal and inherent to create the hash.
-                let proposal_hash = proposal.message.proposal.hash(inherent_entry.get());
+                let proposal_hash = proposal.message.proposal.hash();
 
                 // Using the hash, retrieve the proposal, if it is already known.
                 if let Entry::Vacant(proposal_entry) =

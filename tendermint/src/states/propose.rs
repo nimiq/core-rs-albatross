@@ -139,7 +139,7 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
             let signature = self.protocol.sign_proposal(&message);
 
             // Hash it for identification and voting.
-            let proposal_hash = message.proposal.hash(&inherent);
+            let proposal_hash = message.proposal.hash();
 
             // Cache the inherents created for the proposal. If they already exist overwrite them, as they must be identical.
             if let Some(_inherent) = self.state.inherents.insert(inherent.hash(), inherent) {

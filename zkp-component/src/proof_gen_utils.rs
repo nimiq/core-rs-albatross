@@ -27,7 +27,7 @@ pub fn generate_new_proof(
     prover_keys_path: &Path,
 ) -> Result<ZKPState, ZKProofGenerationError> {
     let proof = prove(
-        prev_block.clone(),
+        prev_block,
         final_block.clone(),
         previous_proof.map(|proof| (proof, genesis_header_hash)),
         true,

@@ -57,9 +57,9 @@ pub trait Aggregation<ProposalHash>:
 /// * the proposal itself is signed by the Validator proposing it alongside its round and valid_round.
 ///     The signing and verification of it is done in Deps::sign_proposal and Deps::verify_proposal.
 /// * the proposal is signed, potentially using a different signature scheme for the aggregation itself.
-pub trait Proposal<ProposalHash, Inherent, InherentHash> {
+pub trait Proposal<ProposalHash, InherentHash> {
     /// Hash of the proposal. May include parts of the inherent.
-    fn hash(&self, inherent: &Inherent) -> ProposalHash;
+    fn hash(&self) -> ProposalHash;
 
     /// Identifies the inherent which goes alongside this proposal. Multiple proposals might have the same inherent.
     fn inherent_hash(&self) -> InherentHash;
@@ -71,7 +71,7 @@ pub trait Inherent<InherentHash> {
 }
 
 pub trait Protocol: Clone + Send + Sync + Unpin + Sized + 'static {
-    type Proposal: Proposal<Self::ProposalHash, Self::Inherent, Self::InherentHash>
+    type Proposal: Proposal<Self::ProposalHash, Self::InherentHash>
         + Unpin
         + Clone
         + std::fmt::Debug;

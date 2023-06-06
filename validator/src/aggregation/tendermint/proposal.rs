@@ -27,9 +27,8 @@ impl Inherent<Blake2sHash> for Body {
 #[derive(Clone, std::fmt::Debug)]
 pub struct Header<Id>(pub MacroHeader, pub Option<Id>);
 
-impl<Id> Proposal<Blake2sHash, Body, Blake2sHash> for Header<Id> {
-    fn hash(&self, _t: &Body) -> Blake2sHash {
-        // PITODO ask basti if we need the body
+impl<Id> Proposal<Blake2sHash, Blake2sHash> for Header<Id> {
+    fn hash(&self) -> Blake2sHash {
         self.0.hash()
     }
 

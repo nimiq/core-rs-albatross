@@ -2,18 +2,35 @@ use std::{fs::File, io, time::Instant};
 
 use ark_groth16::Proof;
 use ark_serialize::CanonicalDeserialize;
+use log::metadata::LevelFilter;
+use nimiq_log::TargetsExt;
 use nimiq_primitives::{networks::NetworkId, policy::Policy};
 use nimiq_test_utils::{
     block_production::TemporaryBlockProducer, blockchain_with_rng::produce_macro_blocks_with_rng,
     test_rng::test_rng,
 };
 use nimiq_zkp::{verify::verify, ZKP_VERIFYING_KEY};
+use tracing_subscriber::{filter::Targets, prelude::*};
+
+fn initialize() {
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer().with_writer(io::stderr))
+        .with(
+            Targets::new()
+                .with_default(LevelFilter::INFO)
+                .with_nimiq_targets(LevelFilter::DEBUG)
+                .with_target("r1cs", LevelFilter::WARN)
+                .with_env(),
+        )
+        .init();
+}
 
 /// Verifies a proof for a chain of election blocks. The random parameters generation uses always
 /// the same seed, so it will always generate the same data (validators, signatures, etc).
 /// This function will simply print the verification result.
 /// Run this example with `cargo run --release --example verify`.
 fn main() {
+    initialize();
     ZKP_VERIFYING_KEY.init_with_network_id(NetworkId::DevAlbatross);
 
     // Ask user for the number of epochs.

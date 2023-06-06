@@ -513,7 +513,7 @@ where
         // make sure the proof is sufficient for the proposal
         let proof = aggregation
             .contributions
-            .get(&Some(proposal.hash(&inherent)))
+            .get(&Some(proposal.hash()))
             .expect("must have header hash present in aggregate");
 
         if proof.signers.len() < Policy::TWO_F_PLUS_ONE as usize {

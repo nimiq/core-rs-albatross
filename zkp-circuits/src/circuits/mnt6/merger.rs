@@ -188,12 +188,6 @@ impl ConstraintSynthesizer<MNT6Fq> for MergerCircuit {
         proof_inputs.push(&intermediate_header_hash_bytes)?;
         proof_inputs.push(&vk_commitment_bytes)?;
 
-        eprintln!(
-            "merger_wrapper gamma_abc_g1: {}",
-            self.vk_merger_wrapper.gamma_abc_g1.len()
-        );
-        eprintln!("merger_wrapper number inputs: {}", proof_inputs.len());
-
         Groth16VerifierGadget::<MNT6_753, PairingVar>::verify(
             &vk_merger_wrapper_var,
             &proof_inputs.into(),
@@ -205,12 +199,6 @@ impl ConstraintSynthesizer<MNT6Fq> for MergerCircuit {
         let mut proof_inputs = RecursiveInputVar::new();
         proof_inputs.push(&intermediate_header_hash_bytes)?;
         proof_inputs.push(&final_header_hash_bytes)?;
-
-        eprintln!(
-            "macro_block gamma_abc_g1: {}",
-            self.vk_macro_block_wrapper.gamma_abc_g1.len()
-        );
-        eprintln!("macro_block number inputs: {}", proof_inputs.len());
 
         Groth16VerifierGadget::<MNT6_753, PairingVar>::verify(
             &vk_macro_block_wrapper_var,

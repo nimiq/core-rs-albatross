@@ -16,8 +16,8 @@ pub mod helper;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TestProposal(pub u32);
-impl Proposal<u32, TestInherent, u32> for TestProposal {
-    fn hash(&self, _t: &TestInherent) -> u32 {
+impl Proposal<u32, u32> for TestProposal {
+    fn hash(&self) -> u32 {
         self.0
     }
     fn inherent_hash(&self) -> u32 {

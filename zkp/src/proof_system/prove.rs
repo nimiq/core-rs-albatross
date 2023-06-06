@@ -128,8 +128,8 @@ pub fn prove(
 
         prove_macro_block_wrapper(
             rng,
-            prev_header_hash.clone(),
-            final_header_hash.clone(),
+            prev_header_hash,
+            final_header_hash,
             debug_mode,
             prover_keys_path,
         )?;
@@ -146,8 +146,8 @@ pub fn prove(
 
         prove_merger(
             rng,
-            prev_header_hash.clone(),
-            final_header_hash.clone(),
+            prev_header_hash,
+            final_header_hash,
             genesis_data.clone(),
             debug_mode,
             prover_keys_path,
@@ -164,8 +164,8 @@ pub fn prove(
 
     let proof = prove_merger_wrapper(
         rng,
-        prev_header_hash.clone(),
-        final_header_hash.clone(),
+        prev_header_hash,
+        final_header_hash,
         genesis_data,
         debug_mode,
         prover_keys_path,
@@ -716,8 +716,8 @@ fn prove_macro_block<R: CryptoRng + Rng>(
         prev_block,
         final_block,
     );
-    let prev_header_hash = circuit.prev_header_hash.clone();
-    let final_header_hash = circuit.final_header_hash.clone();
+    let prev_header_hash = circuit.prev_header_hash;
+    let final_header_hash = circuit.final_header_hash;
 
     // Create the proof.
     let proof = Groth16::<MNT4_753>::prove(&proving_key, circuit, rng)?;

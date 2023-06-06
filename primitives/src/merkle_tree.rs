@@ -38,8 +38,7 @@ pub fn merkle_tree_construct<H: HashOutput>(inputs: Vec<Vec<u8>>) -> H {
         let iter = nodes.par_iter();
 
         // Serialize all the child nodes.
-        let bytes: Vec<u8> = iter.map(|h| h.as_bytes().to_vec()).flatten().collect();
-
+        let bytes: Vec<u8> = iter.flat_map(|h| h.as_bytes().to_vec()).collect();
         // Chunk the bits into the number of parent nodes.
         let mut chunks = Vec::new();
 
