@@ -6,7 +6,6 @@ use std::fs::{read_to_string, OpenOptions};
 use std::io::Error as IoError;
 use std::path::Path;
 
-use nimiq_database::traits::{Database, WriteTransaction};
 use thiserror::Error;
 use time::OffsetDateTime;
 use toml::de::Error as TomlError;
@@ -17,12 +16,14 @@ use nimiq_account::{
 };
 use nimiq_block::{Block, MacroBlock, MacroBody, MacroHeader};
 use nimiq_bls::PublicKey as BlsPublicKey;
-use nimiq_database::{DatabaseProxy, WriteTransactionProxy};
+use nimiq_database::{
+    traits::{Database, WriteTransaction},
+    DatabaseProxy, WriteTransactionProxy,
+};
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
-use nimiq_primitives::trie::TrieItem;
 use nimiq_primitives::{
-    account::AccountError, coin::Coin, key_nibbles::KeyNibbles, policy::Policy,
+    account::AccountError, coin::Coin, key_nibbles::KeyNibbles, policy::Policy, trie::TrieItem,
 };
 use nimiq_vrf::VrfSeed;
 

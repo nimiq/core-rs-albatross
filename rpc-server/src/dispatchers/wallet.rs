@@ -1,13 +1,15 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use nimiq_database::traits::WriteTransaction;
 use parking_lot::RwLock;
 
 use beserial::Deserialize;
+use nimiq_database::traits::WriteTransaction;
 use nimiq_keys::{Address, KeyPair, PrivateKey, PublicKey, Signature};
-use nimiq_rpc_interface::types::RPCResult;
-use nimiq_rpc_interface::wallet::{ReturnAccount, ReturnSignature, WalletInterface};
+use nimiq_rpc_interface::{
+    types::RPCResult,
+    wallet::{ReturnAccount, ReturnSignature, WalletInterface},
+};
 use nimiq_utils::otp::Locked;
 use nimiq_wallet::{WalletAccount, WalletStore};
 

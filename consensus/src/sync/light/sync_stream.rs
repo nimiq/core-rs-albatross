@@ -424,14 +424,13 @@ mod tests {
     use std::sync::Arc;
 
     use futures::StreamExt;
-    use nimiq_database::traits::WriteTransaction;
     use parking_lot::RwLock;
 
     use nimiq_block_production::BlockProducer;
     use nimiq_blockchain::{Blockchain, BlockchainConfig};
     use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
     use nimiq_blockchain_proxy::BlockchainProxy;
-    use nimiq_database::volatile::VolatileDatabase;
+    use nimiq_database::{traits::WriteTransaction, volatile::VolatileDatabase};
     use nimiq_light_blockchain::LightBlockchain;
     use nimiq_network_interface::{network::Network, request::request_handler};
     use nimiq_network_mock::{MockHub, MockNetwork};
@@ -441,7 +440,6 @@ mod tests {
     use nimiq_utils::time::OffsetTime;
 
     use crate::messages::{RequestBlock, RequestMacroChain};
-
     use crate::sync::light::LightMacroSync;
     use crate::sync::syncer::MacroSyncReturn;
 

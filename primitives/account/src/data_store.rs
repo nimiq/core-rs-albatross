@@ -97,12 +97,13 @@ impl<'store, 'tree, 'txn, 'env> DataStoreWrite<'store, 'tree, 'txn, 'env> {
 
 #[cfg(test)]
 mod tests {
-    use crate::data_store::DataStore;
-    use crate::data_store_ops::DataStoreReadOps;
-    use crate::AccountsTrie;
-    use nimiq_database::traits::{Database, WriteTransaction};
-    use nimiq_database::volatile::VolatileDatabase;
+    use nimiq_database::{
+        traits::{Database, WriteTransaction},
+        volatile::VolatileDatabase,
+    };
     use nimiq_primitives::policy::Policy;
+
+    use crate::{data_store::DataStore, data_store_ops::DataStoreReadOps, AccountsTrie};
 
     #[test]
     fn data_store_works() {

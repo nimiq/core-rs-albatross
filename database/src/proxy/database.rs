@@ -2,6 +2,7 @@ use crate::{
     mdbx, traits::Database, volatile, TableProxy, TransactionProxy, WriteTransactionProxy,
 };
 
+/// A database handle that can hold multiple tables.
 #[derive(Clone, Debug)]
 pub enum DatabaseProxy {
     Volatile(volatile::VolatileDatabase),

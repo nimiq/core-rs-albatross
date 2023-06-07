@@ -18,13 +18,13 @@ use crate::Transaction as BlockchainTransaction;
 /// transaction or inherent) on the blockchain.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ExtendedTransaction {
-    // The ID of the network where the transaction happened.
+    /// The ID of the network where the transaction happened.
     pub network_id: NetworkId,
-    // The number of the block when the transaction happened.
+    /// The number of the block when the transaction happened.
     pub block_number: u32,
-    // The timestamp of the block when the transaction happened.
+    /// The timestamp of the block when the transaction happened.
     pub block_time: u64,
-    // A struct containing the transaction data.
+    /// A struct containing the transaction data.
     pub data: ExtTxData,
 }
 

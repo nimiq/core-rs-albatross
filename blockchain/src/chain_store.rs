@@ -10,15 +10,16 @@ use nimiq_primitives::policy::Policy;
 
 #[derive(Debug)]
 pub struct ChainStore {
-    env: DatabaseProxy,
-    // A database of chain infos (it excludes the block body) indexed by their block hashes.
-    chain_db: TableProxy,
-    // A database of block bodies indexed by their block hashes.
-    block_db: TableProxy,
-    // A database of block hashes indexed by their block number.
+    /// Database handle.
+    db: DatabaseProxy,
+    /// A database of chain infos (it excludes the block body) indexed by their block hashes.
+    chain_table: TableProxy,
+    /// A database of block bodies indexed by their block hashes.
+    block_table: TableProxy,
+    /// A database of block hashes indexed by their block number.
     height_idx: TableProxy,
-    // A database of the transaction receipts for a block, by their corresponding block hashes.
-    receipt_db: TableProxy,
+    /// A database of the transaction receipts for a block, by their corresponding block hashes.
+    receipt_table: TableProxy,
 }
 
 impl ChainStore {
@@ -29,43 +30,43 @@ impl ChainStore {
 
     const HEAD_KEY: &'static str = "head";
 
-    pub fn new(env: DatabaseProxy) -> Self {
-        let chain_db = env.open_table(Self::CHAIN_DB_NAME.to_string());
-        let block_db = env.open_table(Self::BLOCK_DB_NAME.to_string());
-        let height_idx = env.open_table_with_flags(
+    pub fn new(db: DatabaseProxy) -> Self {
+        let chain_table = db.open_table(Self::CHAIN_DB_NAME.to_string());
+        let block_table = db.open_table(Self::BLOCK_DB_NAME.to_string());
+        let height_idx = db.open_table_with_flags(
             Self::HEIGHT_IDX_NAME.to_string(),
             TableFlags::DUPLICATE_KEYS | TableFlags::DUP_FIXED_SIZE_VALUES | TableFlags::UINT_KEYS,
         );
-        let receipt_db =
-            env.open_table_with_flags(Self::RECEIPT_DB_NAME.to_string(), TableFlags::UINT_KEYS);
+        let receipt_table =
+            db.open_table_with_flags(Self::RECEIPT_DB_NAME.to_string(), TableFlags::UINT_KEYS);
         ChainStore {
-            env,
-            chain_db,
-            block_db,
+            db,
+            chain_table,
+            block_table,
             height_idx,
-            receipt_db,
+            receipt_table,
         }
     }
 
     pub fn clear(&self, txn: &mut WriteTransactionProxy) {
-        txn.clear_database(&self.chain_db);
-        txn.clear_database(&self.block_db);
+        txn.clear_database(&self.chain_table);
+        txn.clear_database(&self.block_table);
         txn.clear_database(&self.height_idx);
-        txn.clear_database(&self.receipt_db);
+        txn.clear_database(&self.receipt_table);
     }
 
     pub fn get_head(&self, txn_option: Option<&TransactionProxy>) -> Option<Blake2bHash> {
         match txn_option {
-            Some(txn) => txn.get(&self.chain_db, ChainStore::HEAD_KEY),
+            Some(txn) => txn.get(&self.chain_table, ChainStore::HEAD_KEY),
             None => self
-                .env
+                .db
                 .read_transaction()
-                .get(&self.chain_db, ChainStore::HEAD_KEY),
+                .get(&self.chain_table, ChainStore::HEAD_KEY),
         }
     }
 
     pub fn set_head(&self, txn: &mut WriteTransactionProxy, hash: &Blake2bHash) {
-        txn.put(&self.chain_db, ChainStore::HEAD_KEY, hash);
+        txn.put(&self.chain_table, ChainStore::HEAD_KEY, hash);
     }
 
     pub fn get_chain_info(
@@ -78,18 +79,18 @@ impl ChainStore {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = self.env.read_transaction();
+                read_txn = self.db.read_transaction();
                 &read_txn
             }
         };
 
-        let mut chain_info: ChainInfo = match txn.get(&self.chain_db, hash) {
+        let mut chain_info: ChainInfo = match txn.get(&self.chain_table, hash) {
             Some(data) => data,
             None => return Err(BlockchainError::BlockNotFound),
         };
 
         if include_body {
-            if let Some(block) = txn.get(&self.block_db, hash) {
+            if let Some(block) = txn.get(&self.block_table, hash) {
                 chain_info.head = block;
             } else {
                 warn!("Block body requested but not present");
@@ -109,7 +110,7 @@ impl ChainStore {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = self.env.read_transaction();
+                read_txn = self.db.read_transaction();
                 &read_txn
             }
         };
@@ -125,7 +126,7 @@ impl ChainStore {
         let mut block_hash = None;
         for tmp_block_hash in block_hash_iter {
             let tmp_chain_info: ChainInfo = txn
-                .get(&self.chain_db, &tmp_block_hash)
+                .get(&self.chain_table, &tmp_block_hash)
                 .expect("Corrupted store: ChainInfo referenced from index not found");
 
             // If it's on the main chain we can return from loop
@@ -139,7 +140,7 @@ impl ChainStore {
         let block_hash = block_hash.unwrap();
 
         if include_body {
-            if let Some(block) = txn.get(&self.block_db, &block_hash) {
+            if let Some(block) = txn.get(&self.block_table, &block_hash) {
                 chain_info.head = block;
             } else {
                 warn!("Block body requested but not present");
@@ -158,11 +159,11 @@ impl ChainStore {
     ) {
         // Store chain data. Block body will not be persisted because the serialization of ChainInfo
         // ignores the block body.
-        txn.put_reserve(&self.chain_db, hash, chain_info);
+        txn.put_reserve(&self.chain_table, hash, chain_info);
 
         // Store body if requested.
         if include_body {
-            txn.put_reserve(&self.block_db, hash, &chain_info.head);
+            txn.put_reserve(&self.block_table, hash, &chain_info.head);
         }
 
         // Add to height index.
@@ -179,7 +180,7 @@ impl ChainStore {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = self.env.read_transaction();
+                read_txn = self.db.read_transaction();
                 &read_txn
             }
         };
@@ -225,8 +226,8 @@ impl ChainStore {
         hash: &Blake2bHash,
         height: u32,
     ) {
-        txn.remove(&self.chain_db, hash);
-        txn.remove(&self.block_db, hash);
+        txn.remove(&self.chain_table, hash);
+        txn.remove(&self.block_table, hash);
         txn.remove_item(&self.height_idx, &height, hash);
     }
 
@@ -240,16 +241,16 @@ impl ChainStore {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = self.env.read_transaction();
+                read_txn = self.db.read_transaction();
                 &read_txn
             }
         };
 
         if include_body {
-            txn.get(&self.block_db, hash)
+            txn.get(&self.block_table, hash)
                 .ok_or(BlockchainError::BlockNotFound)
         } else {
-            txn.get(&self.chain_db, hash)
+            txn.get(&self.chain_table, hash)
                 .map(|chain_info: ChainInfo| chain_info.head)
                 .ok_or(BlockchainError::BlockNotFound)
         }
@@ -292,7 +293,7 @@ impl ChainStore {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = self.env.read_transaction();
+                read_txn = self.db.read_transaction();
                 &read_txn
             }
         };
@@ -316,7 +317,7 @@ impl ChainStore {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = self.env.read_transaction();
+                read_txn = self.db.read_transaction();
                 &read_txn
             }
         };
@@ -329,7 +330,12 @@ impl ChainStore {
         for block_hash in iter {
             blocks.push(
                 self.get_block(&block_hash, include_body, Some(txn))
-                    .expect("Corrupted store: Block referenced from index not found"),
+                    .unwrap_or_else(|_| {
+                        panic!(
+                            "Corrupted store: Block {} referenced from index not found",
+                            block_hash
+                        )
+                    }),
             );
         }
 
@@ -347,7 +353,7 @@ impl ChainStore {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = self.env.read_transaction();
+                read_txn = self.db.read_transaction();
                 &read_txn
             }
         };
@@ -379,7 +385,7 @@ impl ChainStore {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = self.env.read_transaction();
+                read_txn = self.db.read_transaction();
                 &read_txn
             }
         };
@@ -444,7 +450,7 @@ impl ChainStore {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = self.env.read_transaction();
+                read_txn = self.db.read_transaction();
                 &read_txn
             }
         };
@@ -491,7 +497,7 @@ impl ChainStore {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = self.env.read_transaction();
+                read_txn = self.db.read_transaction();
                 &read_txn
             }
         };
@@ -545,13 +551,13 @@ impl ChainStore {
             let hashes = self.get_block_hashes_at(height, Some(txn));
             for hash in hashes {
                 let chain_info: ChainInfo = txn
-                    .get(&self.chain_db, &hash)
+                    .get(&self.chain_table, &hash)
                     .expect("Corrupted store: ChainInfo referenced from index not found");
                 // If we detect a block whose prunable flag is set to false, we don't prune it
                 // Then we need to keep the previous macro block
                 if chain_info.prunable {
-                    txn.remove(&self.chain_db, &hash);
-                    txn.remove(&self.block_db, &hash);
+                    txn.remove(&self.chain_table, &hash);
+                    txn.remove(&self.block_table, &hash);
                     txn.remove_item(&self.height_idx, &height, &hash);
                 }
             }
@@ -564,7 +570,7 @@ impl ChainStore {
         block_height: u32,
         receipts: &Receipts,
     ) {
-        txn.put_reserve(&self.receipt_db, &block_height, receipts);
+        txn.put_reserve(&self.receipt_table, &block_height, receipts);
     }
 
     pub fn get_receipts(
@@ -576,16 +582,16 @@ impl ChainStore {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = self.env.read_transaction();
+                read_txn = self.db.read_transaction();
                 &read_txn
             }
         };
 
-        txn.get(&self.receipt_db, &block_height)
+        txn.get(&self.receipt_table, &block_height)
     }
 
     pub fn clear_receipts(&self, txn: &mut WriteTransactionProxy) {
-        let mut cursor = WriteTransaction::cursor(txn, &self.receipt_db);
+        let mut cursor = WriteTransaction::cursor(txn, &self.receipt_table);
         let mut pos: Option<(u32, Receipts)> = cursor.first();
 
         while pos.is_some() {

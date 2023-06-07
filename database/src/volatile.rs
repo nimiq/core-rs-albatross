@@ -6,6 +6,7 @@ use super::mdbx::*;
 use super::*;
 use crate::traits::Database;
 
+/// A database instantiation that is not permanently stored.
 #[derive(Debug)]
 pub struct VolatileDatabase {
     temp_dir: Arc<TempDir>,

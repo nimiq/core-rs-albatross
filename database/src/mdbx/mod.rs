@@ -158,7 +158,7 @@ mod tests {
             assert_eq!(txw.get::<str, u32>(&table, "test"), Some(125));
             txw.commit();
 
-            // Have a new ReadTransaction read the smallest value.
+            // Have a new ReadTransaction read the smaller value.
             {
                 let tx = db.read_transaction();
                 assert_eq!(tx.get::<str, u32>(&table, "test"), Some(125));
@@ -231,7 +231,6 @@ mod tests {
             assert_eq!(cursor.get_current::<String, u32>(), Some((test1, 5783)));
             assert!(cursor.prev_no_duplicate::<String, u32>().is_none());
             assert_eq!(cursor.next::<String, u32>(), Some((test2, 5783)));
-            //            assert_eq!(cursor.seek_range_key::<String, u32>("test"), Some((test1.clone(), 12)));
         }
         tempdir.close().unwrap();
     }

@@ -9,6 +9,8 @@ use super::{MdbxReadTransaction, MdbxWriteTransaction};
 
 pub(super) type DbKvPair<'a> = (Cow<'a, [u8]>, Cow<'a, [u8]>);
 
+/// Wrapper around the mdbx database handle.
+/// A database can hold multiple tables.
 #[derive(Clone, Debug)]
 pub struct MdbxDatabase {
     pub(super) db: Arc<libmdbx::Database<NoWriteMap>>,
@@ -100,7 +102,7 @@ impl MdbxDatabase {
 
         let mut db = libmdbx::Database::new();
 
-        // Configure the environment flags
+        // Configure the database flags
         let geo = libmdbx::Geometry::<std::ops::Range<usize>> {
             size: Some(0..size),
             ..Default::default()
@@ -118,7 +120,7 @@ impl MdbxDatabase {
 
         db.set_flags(db_flags);
 
-        // This is only required if multiple databases will be used in the environment.
+        // This is only required if multiple tables will be used in the database.
         db.set_max_tables(max_tables as usize);
         if let Some(max_readers) = max_readers {
             db.set_max_readers(max_readers);
@@ -128,7 +130,7 @@ impl MdbxDatabase {
 
         let info = db.info()?;
         let cur_mapsize = info.map_size();
-        info!("MDBX memory map size: {}", cur_mapsize);
+        info!(cur_mapsize, "MDBX memory map size");
 
         let mdbx = MdbxDatabase { db: Arc::new(db) };
         if mdbx.need_resize(0) {
@@ -145,11 +147,13 @@ impl MdbxDatabase {
         let size_used = (stat.page_size() as usize) * (info.last_pgno() + 1);
 
         if threshold_size > 0 && info.map_size() - size_used < threshold_size {
-            info!("DB resize (threshold-based)");
-            info!("DB map size: {}", info.map_size());
-            info!("Space used: {}", size_used);
-            info!("Space remaining: {}", info.map_size() - size_used);
-            info!("Size threshold: {}", threshold_size);
+            info!(
+                size_used,
+                threshold_size,
+                map_size = info.map_size(),
+                space_remaining = info.map_size() - size_used,
+                "DB settings (threshold-based)"
+            );
             return true;
         }
 
@@ -158,13 +162,12 @@ impl MdbxDatabase {
         let resize_percent: f64 = 1_f64;
 
         if (size_used as f64) / (info.map_size() as f64) > resize_percent {
-            info!("DB resize (percent-based)");
-            info!("DB map size: {}", info.map_size());
-            info!("Space used: {}", size_used);
-            info!("Space remaining: {}", info.map_size() - size_used);
             info!(
-                "Percent used: {:.2}",
-                (size_used as f64) / (info.map_size() as f64)
+                map_size = info.map_size(),
+                size_used,
+                space_remaining = info.map_size() - size_used,
+                percent_used = (size_used as f64) / (info.map_size() as f64),
+                "DB resize (percent-based)"
             );
             return true;
         }
@@ -173,6 +176,8 @@ impl MdbxDatabase {
     }
 }
 
+/// A table handle for the mdbx database.
+/// It is used to reference tables during transactions.
 #[derive(Debug)]
 pub struct MdbxTable {
     pub(super) name: String,

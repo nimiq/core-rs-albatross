@@ -6,13 +6,7 @@ pub use cursor::*;
 pub use database::*;
 pub use transaction::*;
 
-use crate::{
-    mdbx::MdbxTable,
-    traits::{ReadTransaction, WriteTransaction},
-};
+use crate::mdbx::MdbxTable;
 
+/// A table handle that is used to reference tables during transactions.
 pub type TableProxy = MdbxTable;
-
-pub type Cursor<'txn> = <TransactionProxy<'txn> as ReadTransaction<'txn>>::Cursor<'txn>;
-pub type WriteCursor<'txn> =
-    <WriteTransactionProxy<'txn> as WriteTransaction<'txn>>::WriteCursor<'txn>;

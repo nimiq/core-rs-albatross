@@ -7,8 +7,7 @@ use nimiq_bls::{
     CompressedPublicKey as BlsPublicKey, KeyPair as BlsKeyPair, SecretKey as BlsSecretKey,
 };
 use nimiq_collections::BitSet;
-use nimiq_database::traits::Database;
-use nimiq_database::volatile::VolatileDatabase;
+use nimiq_database::{traits::Database, volatile::VolatileDatabase};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::{Address, KeyPair, PrivateKey, PublicKey};
 use nimiq_primitives::{
@@ -20,11 +19,11 @@ use nimiq_primitives::{
 };
 use nimiq_test_log::test;
 use nimiq_test_utils::test_rng::test_rng;
-use nimiq_transaction::account::staking_contract::{
-    IncomingStakingTransactionData, OutgoingStakingTransactionProof,
+use nimiq_transaction::{
+    account::staking_contract::{IncomingStakingTransactionData, OutgoingStakingTransactionProof},
+    inherent::Inherent,
+    SignatureProof, Transaction,
 };
-use nimiq_transaction::inherent::Inherent;
-use nimiq_transaction::{SignatureProof, Transaction};
 use nimiq_utils::key_rng::SecureGenerate;
 
 const CONTRACT_1: &str = "00000000000000000000000000000000000000000000";

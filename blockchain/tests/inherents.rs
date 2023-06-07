@@ -1,19 +1,16 @@
+use std::sync::Arc;
+
 use nimiq_account::{BlockLogger, BlockState};
 use nimiq_block::{MacroBlock, MacroBody, MacroHeader};
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
-use nimiq_database::traits::WriteTransaction;
-use nimiq_database::volatile::VolatileDatabase;
+use nimiq_database::{traits::WriteTransaction, volatile::VolatileDatabase};
 use nimiq_hash::{Blake2bHasher, Hasher};
 use nimiq_keys::Address;
-use nimiq_primitives::coin::Coin;
-use nimiq_primitives::networks::NetworkId;
-use nimiq_primitives::policy::Policy;
-use nimiq_primitives::slots::SlashedSlot;
+use nimiq_primitives::{coin::Coin, networks::NetworkId, policy::Policy, slots::SlashedSlot};
 use nimiq_test_log::test;
 use nimiq_transaction::inherent::Inherent;
 use nimiq_utils::time::OffsetTime;
 use nimiq_vrf::VrfSeed;
-use std::sync::Arc;
 
 #[test]
 fn it_can_create_batch_finalization_inherents() {

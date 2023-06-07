@@ -10,7 +10,6 @@ use std::time::Duration;
 
 use futures::stream::{BoxStream, Stream, StreamExt};
 use linked_hash_map::LinkedHashMap;
-use nimiq_database::traits::Database;
 use parking_lot::RwLock;
 #[cfg(feature = "metrics")]
 use tokio_metrics::TaskMonitor;
@@ -23,7 +22,7 @@ use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent, ForkEvent,
 use nimiq_bls::{lazy::LazyPublicKey, KeyPair as BlsKeyPair};
 use nimiq_consensus::{Consensus, ConsensusEvent, ConsensusProxy};
 use nimiq_database::{
-    traits::{ReadTransaction, WriteTransaction},
+    traits::{Database, ReadTransaction, WriteTransaction},
     DatabaseProxy, TableProxy,
 };
 use nimiq_hash::{Blake2bHash, Hash};

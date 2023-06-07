@@ -1,15 +1,18 @@
-use nimiq_database::traits::{Database, WriteTransaction};
 use std::sync::Arc;
 use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
 
 use nimiq_account::{Accounts, BlockLog};
 use nimiq_block::Block;
 use nimiq_blockchain_interface::{BlockchainError, BlockchainEvent, ChainInfo, ForkEvent};
-use nimiq_database::{DatabaseProxy, TransactionProxy, WriteTransactionProxy};
+use nimiq_database::{
+    traits::{Database, WriteTransaction},
+    DatabaseProxy, TransactionProxy, WriteTransactionProxy,
+};
 use nimiq_genesis::NetworkInfo;
 use nimiq_hash::Blake2bHash;
-use nimiq_primitives::trie::TrieItem;
-use nimiq_primitives::{coin::Coin, networks::NetworkId, policy::Policy, slots::Validators};
+use nimiq_primitives::{
+    coin::Coin, networks::NetworkId, policy::Policy, slots::Validators, trie::TrieItem,
+};
 use nimiq_utils::time::OffsetTime;
 
 #[cfg(feature = "metrics")]

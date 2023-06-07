@@ -7,6 +7,7 @@ use crate::{
     traits::ReadCursor,
 };
 
+/// A cursor for navigating the entries within a table.
 #[derive(Clone)]
 pub enum CursorProxy<'txn> {
     ReadCursor(MdbxReadCursor<'txn>),
@@ -207,6 +208,7 @@ impl<'txn> ReadCursor<'txn> for CursorProxy<'txn> {
     }
 }
 
+/// Iterates over database entries (key, value pairs).
 pub enum IntoIterProxy<'txn, K: FromDatabaseValue, V: FromDatabaseValue> {
     ReadIter(IntoIter<'txn, RO, K, V>),
     WriteIter(IntoIter<'txn, RW, K, V>),

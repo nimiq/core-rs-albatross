@@ -2,7 +2,9 @@ use bitflags::bitflags;
 
 mod error;
 pub mod mdbx;
+/// Database implementation that can handle volatile and persistent storage.
 pub mod proxy;
+/// Abstraction for methods related to the database.
 pub mod traits;
 pub mod volatile;
 

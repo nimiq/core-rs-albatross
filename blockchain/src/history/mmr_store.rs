@@ -1,8 +1,10 @@
 use std::cmp;
 use std::convert::TryInto;
 
-use nimiq_database::traits::{ReadCursor, ReadTransaction, WriteTransaction};
-use nimiq_database::{TableProxy, TransactionProxy, WriteTransactionProxy};
+use nimiq_database::{
+    traits::{ReadCursor, ReadTransaction, WriteTransaction},
+    TableProxy, TransactionProxy, WriteTransactionProxy,
+};
 use nimiq_hash::Blake2bHash;
 use nimiq_mmr::store::Store;
 
@@ -27,7 +29,7 @@ enum Tx<'a, 'env> {
 /// epoch has any nodes).
 #[derive(Debug)]
 pub struct MMRStore<'a, 'env> {
-    hist_tree_db: &'a TableProxy,
+    hist_tree_table: &'a TableProxy,
     tx: Tx<'a, 'env>,
     epoch_number: u32,
     size: usize,
@@ -36,13 +38,13 @@ pub struct MMRStore<'a, 'env> {
 impl<'a, 'env> MMRStore<'a, 'env> {
     /// Create a read-only store.
     pub fn with_read_transaction(
-        hist_tree_db: &'a TableProxy,
+        hist_tree_table: &'a TableProxy,
         tx: &'a TransactionProxy<'env>,
         epoch_number: u32,
     ) -> Self {
-        let size = Self::get_size(hist_tree_db, tx, epoch_number);
+        let size = Self::get_size(hist_tree_table, tx, epoch_number);
         MMRStore {
-            hist_tree_db,
+            hist_tree_table,
             tx: Tx::Read(tx),
             epoch_number,
             size,
@@ -51,13 +53,13 @@ impl<'a, 'env> MMRStore<'a, 'env> {
 
     /// Create a writable store.
     pub fn with_write_transaction(
-        hist_tree_db: &'a TableProxy,
+        hist_tree_table: &'a TableProxy,
         tx: &'a mut WriteTransactionProxy<'env>,
         epoch_number: u32,
     ) -> Self {
-        let size = Self::get_size(hist_tree_db, tx, epoch_number);
+        let size = Self::get_size(hist_tree_table, tx, epoch_number);
         MMRStore {
-            hist_tree_db,
+            hist_tree_table,
             tx: Tx::Write(tx),
             epoch_number,
             size,
@@ -65,13 +67,13 @@ impl<'a, 'env> MMRStore<'a, 'env> {
     }
 
     /// Calculates the size of MMR at a given epoch.
-    fn get_size(hist_tree_db: &TableProxy, tx: &TransactionProxy, epoch_number: u32) -> usize {
+    fn get_size(hist_tree_table: &TableProxy, tx: &TransactionProxy, epoch_number: u32) -> usize {
         // Calculate the key for the beginning of the next epoch, `epoch_number + 1 || 0`.
         let mut next_epoch = (epoch_number + 1).to_be_bytes().to_vec();
         next_epoch.extend_from_slice(&0usize.to_be_bytes());
 
         // Initialize the cursor for the database.
-        let mut cursor = tx.cursor(hist_tree_db);
+        let mut cursor = tx.cursor(hist_tree_table);
 
         // Try to get the cursor on the key `epoch_number + 1 || 0`. If that key doesn't exist, then
         // the cursor will continue until it finds the next key, which we know will be of the form
@@ -123,7 +125,7 @@ impl<'a, 'env> Store<Blake2bHash> for MMRStore<'a, 'env> {
     fn push(&mut self, elem: Blake2bHash) {
         if let Tx::Write(ref mut tx) = self.tx {
             let key = index_to_key(self.epoch_number, self.size);
-            tx.put(self.hist_tree_db, &key, &elem);
+            tx.put(self.hist_tree_table, &key, &elem);
             self.size += 1;
         }
     }
@@ -132,7 +134,7 @@ impl<'a, 'env> Store<Blake2bHash> for MMRStore<'a, 'env> {
         if let Tx::Write(ref mut tx) = self.tx {
             for _ in 0..cmp::min(num_elems, self.size) {
                 let key = index_to_key(self.epoch_number, self.size - 1);
-                tx.remove(self.hist_tree_db, &key);
+                tx.remove(self.hist_tree_table, &key);
                 self.size -= 1;
             }
         }
@@ -141,8 +143,8 @@ impl<'a, 'env> Store<Blake2bHash> for MMRStore<'a, 'env> {
     fn get(&self, pos: usize) -> Option<Blake2bHash> {
         let key = index_to_key(self.epoch_number, pos);
         match self.tx {
-            Tx::Read(tx) => tx.get(self.hist_tree_db, &key),
-            Tx::Write(ref tx) => tx.get(self.hist_tree_db, &key),
+            Tx::Read(tx) => tx.get(self.hist_tree_table, &key),
+            Tx::Write(ref tx) => tx.get(self.hist_tree_table, &key),
         }
     }
 

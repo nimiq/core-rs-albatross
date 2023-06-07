@@ -6,12 +6,15 @@ use crate::{
     CursorProxy, TableProxy,
 };
 
+/// A transaction handle for read-only transactions.
+/// Read-write transactions can be dereferenced into this type.
 #[derive(Debug)]
 pub enum TransactionProxy<'db> {
     ReadTransaction(MdbxReadTransaction<'db>),
     WriteTransaction(MdbxWriteTransaction<'db>),
 }
 
+/// A transaction handle for read-write transactions.
 #[derive(Debug)]
 pub struct WriteTransactionProxy<'db> {
     txn: TransactionProxy<'db>,

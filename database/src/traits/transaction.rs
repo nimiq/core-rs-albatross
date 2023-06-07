@@ -2,6 +2,7 @@ use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue, IntoDatabaseValue
 
 use super::{ReadCursor, WriteCursor};
 
+/// Read-transactions can only perform read operations on a database.
 pub trait ReadTransaction<'db>: Sized {
     type Table;
     type Cursor<'txn>: ReadCursor<'txn>
@@ -18,6 +19,7 @@ pub trait ReadTransaction<'db>: Sized {
     fn cursor<'txn>(&'txn self, table: &Self::Table) -> Self::Cursor<'txn>;
 }
 
+/// Write-transactions can perform read and write operations on a database.
 pub trait WriteTransaction<'db>: ReadTransaction<'db> + Sized {
     type WriteCursor<'txn>: WriteCursor<'txn>
     where

@@ -1,18 +1,19 @@
 use std::convert::TryInto;
 use std::sync::Arc;
 
-use nimiq_database::traits::WriteTransaction;
 use parking_lot::RwLock;
 use tempfile::tempdir;
 
 use beserial::Deserialize;
 use nimiq_block::{Block, ForkProof, MicroJustification};
-use nimiq_block_production::test_custom_block::{next_skip_block, BlockConfig};
-use nimiq_block_production::BlockProducer;
+use nimiq_block_production::{
+    test_custom_block::{next_skip_block, BlockConfig},
+    BlockProducer,
+};
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
 use nimiq_bls::KeyPair as BlsKeyPair;
-use nimiq_database::{mdbx::MdbxDatabase, volatile::VolatileDatabase};
+use nimiq_database::{mdbx::MdbxDatabase, traits::WriteTransaction, volatile::VolatileDatabase};
 use nimiq_genesis::NetworkId;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::{

@@ -1,16 +1,20 @@
 use std::borrow::Cow;
 
 use libmdbx::{NoWriteMap, TransactionKind, WriteFlags, RO, RW};
+
 use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue, IntoDatabaseValue};
 
 use super::{MdbxCursor, MdbxTable, MdbxWriteCursor};
 use crate::traits::{ReadTransaction, WriteTransaction};
 
+/// Wrapper around mdbx transactions that only exposes our own traits.
 #[derive(Debug)]
 pub struct MdbxTransaction<'db, K: TransactionKind> {
     txn: libmdbx::Transaction<'db, K, NoWriteMap>,
 }
+/// Instantiation for read-only transactions.
 pub type MdbxReadTransaction<'db> = MdbxTransaction<'db, RO>;
+/// Instantiation for read-write transactions.
 pub type MdbxWriteTransaction<'db> = MdbxTransaction<'db, RW>;
 
 impl<'db, Kind> MdbxTransaction<'db, Kind>

@@ -1,17 +1,20 @@
 use std::{borrow::Cow, marker::PhantomData};
 
 use libmdbx::{TransactionKind, WriteFlags, RO, RW};
+
 use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue};
 
-use super::IntoIter;
+use super::{DbKvPair, IntoIter};
 use crate::traits::{ReadCursor, WriteCursor};
 
-use super::DbKvPair;
-
+/// A cursor for navigating the entries within a table.
+/// Wraps the libmdbx cursor so that we only expose our own methods.
 pub struct MdbxCursor<'txn, K: TransactionKind> {
     cursor: libmdbx::Cursor<'txn, K>,
 }
+/// Instantiation of the `MdbxCursor` for read transactions.
 pub type MdbxReadCursor<'txn> = MdbxCursor<'txn, RO>;
+/// Instantiation of the `MdbxCursor` for write transactions.
 pub type MdbxWriteCursor<'txn> = MdbxCursor<'txn, RW>;
 
 impl<'txn, Kind> MdbxCursor<'txn, Kind>

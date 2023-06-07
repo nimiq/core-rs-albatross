@@ -2,9 +2,8 @@ use std::cmp;
 use std::collections::{HashSet, VecDeque};
 
 use beserial::Serialize;
-use nimiq_database::traits::{Database, ReadTransaction, WriteTransaction};
 use nimiq_database::{
-    traits::{ReadCursor, WriteCursor},
+    traits::{Database, ReadCursor, ReadTransaction, WriteCursor, WriteTransaction},
     DatabaseProxy, TableFlags, TableProxy, TransactionProxy, WriteTransactionProxy,
 };
 use nimiq_hash::Blake2bHash;
@@ -36,20 +35,21 @@ use crate::history::{mmr_store::MMRStore, ordered_hash::OrderedHash, HistoryTree
 /// only has macro block headers) that that given transaction happened.
 #[derive(Debug)]
 pub struct HistoryStore {
-    env: DatabaseProxy,
-    // A database of all history trees indexed by their epoch number.
-    hist_tree_db: TableProxy,
-    // A database of all extended transactions indexed by their hash (= leaf hash in the history
-    // tree).
-    ext_tx_db: TableProxy,
-    // A database of all leaf hashes and indexes indexed by the hash of the transaction. This way we
-    // can start with a transaction hash and find it in the MMR.
-    tx_hash_db: TableProxy,
-    // A database of the last leaf index for each block number.
-    last_leaf_db: TableProxy,
-    // A database of all transaction (and reward inherent) hashes indexed by their sender and
-    // recipient addresses.
-    address_db: TableProxy,
+    /// Database handle.
+    db: DatabaseProxy,
+    /// A database of all history trees indexed by their epoch number.
+    hist_tree_table: TableProxy,
+    /// A database of all extended transactions indexed by their hash (= leaf hash in the history
+    /// tree).
+    ext_tx_table: TableProxy,
+    /// A database of all leaf hashes and indexes indexed by the hash of the transaction. This way we
+    /// can start with a transaction hash and find it in the MMR.
+    tx_hash_table: TableProxy,
+    /// A database of the last leaf index for each block number.
+    last_leaf_table: TableProxy,
+    /// A database of all transaction (and reward inherent) hashes indexed by their sender and
+    /// recipient addresses.
+    address_table: TableProxy,
 }
 
 impl HistoryStore {
@@ -60,35 +60,35 @@ impl HistoryStore {
     const ADDRESS_DB_NAME: &'static str = "TxHashesByAddress";
 
     /// Creates a new HistoryStore.
-    pub fn new(env: DatabaseProxy) -> Self {
-        let hist_tree_db = env.open_table(Self::HIST_TREE_DB_NAME.to_string());
-        let ext_tx_db = env.open_table(Self::EXT_TX_DB_NAME.to_string());
-        let tx_hash_db = env.open_table_with_flags(
+    pub fn new(db: DatabaseProxy) -> Self {
+        let hist_tree_table = db.open_table(Self::HIST_TREE_DB_NAME.to_string());
+        let ext_tx_table = db.open_table(Self::EXT_TX_DB_NAME.to_string());
+        let tx_hash_table = db.open_table_with_flags(
             Self::TX_HASH_DB_NAME.to_string(),
             TableFlags::DUPLICATE_KEYS | TableFlags::DUP_FIXED_SIZE_VALUES,
         );
-        let last_leaf_db = env.open_table(Self::LAST_LEAF_DB_NAME.to_string());
-        let address_db = env.open_table_with_flags(
+        let last_leaf_table = db.open_table(Self::LAST_LEAF_DB_NAME.to_string());
+        let address_table = db.open_table_with_flags(
             Self::ADDRESS_DB_NAME.to_string(),
             TableFlags::DUPLICATE_KEYS | TableFlags::DUP_FIXED_SIZE_VALUES,
         );
 
         HistoryStore {
-            env,
-            hist_tree_db,
-            ext_tx_db,
-            tx_hash_db,
-            last_leaf_db,
-            address_db,
+            db,
+            hist_tree_table,
+            ext_tx_table,
+            tx_hash_table,
+            last_leaf_table,
+            address_table,
         }
     }
 
     pub fn clear(&self, txn: &mut WriteTransactionProxy) {
-        txn.clear_database(&self.hist_tree_db);
-        txn.clear_database(&self.ext_tx_db);
-        txn.clear_database(&self.tx_hash_db);
-        txn.clear_database(&self.last_leaf_db);
-        txn.clear_database(&self.address_db);
+        txn.clear_database(&self.hist_tree_table);
+        txn.clear_database(&self.ext_tx_table);
+        txn.clear_database(&self.tx_hash_table);
+        txn.clear_database(&self.last_leaf_table);
+        txn.clear_database(&self.address_table);
     }
 
     /// Returns the length (i.e. the number of leaves) of the History Tree at a given block height.
@@ -99,12 +99,12 @@ impl HistoryStore {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = self.env.read_transaction();
+                read_txn = self.db.read_transaction();
                 &read_txn
             }
         };
 
-        let mut cursor = txn.cursor(&self.last_leaf_db);
+        let mut cursor = txn.cursor(&self.last_leaf_table);
 
         // Seek to the last leaf index of the block, if it exists.
         match cursor.seek_key::<u32, u32>(&block_number.to_be()) {
@@ -139,13 +139,13 @@ impl HistoryStore {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = self.env.read_transaction();
+                read_txn = self.db.read_transaction();
                 &read_txn
             }
         };
         // Get history tree for given epoch.
         let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(
-            &self.hist_tree_db,
+            &self.hist_tree_table,
             txn,
             epoch_number,
         ));
@@ -168,7 +168,7 @@ impl HistoryStore {
     ) -> Option<(Blake2bHash, u64)> {
         // Get the history tree.
         let mut tree = MerkleMountainRange::new(MMRStore::with_write_transaction(
-            &self.hist_tree_db,
+            &self.hist_tree_table,
             txn,
             epoch_number,
         ));
@@ -208,7 +208,7 @@ impl HistoryStore {
         let mut txns_size = 0u64;
 
         for (leaf_index, leaf_hash) in hashes {
-            let tx_opt: Option<ExtendedTransaction> = txn.get(&self.ext_tx_db, &leaf_hash);
+            let tx_opt: Option<ExtendedTransaction> = txn.get(&self.ext_tx_table, &leaf_hash);
 
             let ext_tx = match tx_opt {
                 Some(v) => v,
@@ -216,13 +216,13 @@ impl HistoryStore {
             };
 
             // Remove it from the extended transaction database.
-            txn.remove(&self.ext_tx_db, &leaf_hash);
+            txn.remove(&self.ext_tx_table, &leaf_hash);
 
             // Remove it from the transaction hash database.
             let tx_hash = ext_tx.tx_hash();
 
             txn.remove_item(
-                &self.tx_hash_db,
+                &self.tx_hash_table,
                 &tx_hash,
                 &OrderedHash {
                     index: leaf_index as u32,
@@ -239,10 +239,10 @@ impl HistoryStore {
             let (start, end) = self.get_indexes_for_block(block_number, Some(txn));
 
             if end - start == 1 {
-                txn.remove(&self.last_leaf_db, &block_number.to_be());
+                txn.remove(&self.last_leaf_table, &block_number.to_be());
             } else {
                 txn.put(
-                    &self.last_leaf_db,
+                    &self.last_leaf_table,
                     &block_number.to_be(),
                     &(leaf_index as u32 - 1),
                 );
@@ -264,7 +264,7 @@ impl HistoryStore {
         }
 
         // Now prune the address database
-        let mut cursor = WriteTransaction::cursor(txn, &self.address_db);
+        let mut cursor = WriteTransaction::cursor(txn, &self.address_table);
 
         for address in affected_addresses {
             if cursor.seek_key::<Address, OrderedHash>(&address).is_none() {
@@ -297,7 +297,7 @@ impl HistoryStore {
     ) -> Option<(Blake2bHash, u64)> {
         // Get the history tree.
         let mut tree = MerkleMountainRange::new(MMRStore::with_write_transaction(
-            &self.hist_tree_db,
+            &self.hist_tree_table,
             txn,
             epoch_number,
         ));
@@ -329,7 +329,7 @@ impl HistoryStore {
     pub fn remove_history(&self, txn: &mut WriteTransactionProxy, epoch_number: u32) -> Option<()> {
         // Get the history tree.
         let mut tree = MerkleMountainRange::new(MMRStore::with_write_transaction(
-            &self.hist_tree_db,
+            &self.hist_tree_table,
             txn,
             epoch_number,
         ));
@@ -358,14 +358,14 @@ impl HistoryStore {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = self.env.read_transaction();
+                read_txn = self.db.read_transaction();
                 &read_txn
             }
         };
 
         // Get the history tree.
         let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(
-            &self.hist_tree_db,
+            &self.hist_tree_table,
             txn,
             epoch_number,
         ));
@@ -399,7 +399,7 @@ impl HistoryStore {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = self.env.read_transaction();
+                read_txn = self.db.read_transaction();
                 &read_txn
             }
         };
@@ -428,14 +428,14 @@ impl HistoryStore {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = self.env.read_transaction();
+                read_txn = self.db.read_transaction();
                 &read_txn
             }
         };
 
         // Get the history tree.
         let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(
-            &self.hist_tree_db,
+            &self.hist_tree_table,
             txn,
             Policy::epoch_at(block_number),
         ));
@@ -465,14 +465,14 @@ impl HistoryStore {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = self.env.read_transaction();
+                read_txn = self.db.read_transaction();
                 &read_txn
             }
         };
 
         // Get history tree for given epoch.
         let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(
-            &self.hist_tree_db,
+            &self.hist_tree_table,
             txn,
             epoch_number,
         ));
@@ -498,14 +498,14 @@ impl HistoryStore {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = self.env.read_transaction();
+                read_txn = self.db.read_transaction();
                 &read_txn
             }
         };
 
         // Get history tree for given epoch.
         let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(
-            &self.hist_tree_db,
+            &self.hist_tree_table,
             txn,
             epoch_number,
         ));
@@ -523,14 +523,14 @@ impl HistoryStore {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = self.env.read_transaction();
+                read_txn = self.db.read_transaction();
                 &read_txn
             }
         };
 
         // Get history tree for given epoch.
         let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(
-            &self.hist_tree_db,
+            &self.hist_tree_table,
             txn,
             epoch_number,
         ));
@@ -573,14 +573,14 @@ impl HistoryStore {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = self.env.read_transaction();
+                read_txn = self.db.read_transaction();
                 &read_txn
             }
         };
 
         // Get history tree for given epoch.
         let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(
-            &self.hist_tree_db,
+            &self.hist_tree_table,
             txn,
             epoch_number,
         ));
@@ -621,14 +621,14 @@ impl HistoryStore {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = self.env.read_transaction();
+                read_txn = self.db.read_transaction();
                 &read_txn
             }
         };
 
         // Get history tree for given epoch.
         let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(
-            &self.hist_tree_db,
+            &self.hist_tree_table,
             txn,
             epoch_number,
         ));
@@ -676,7 +676,7 @@ impl HistoryStore {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = self.env.read_transaction();
+                read_txn = self.db.read_transaction();
                 &read_txn
             }
         };
@@ -684,7 +684,7 @@ impl HistoryStore {
         let mut tx_hashes = vec![];
 
         // Seek to the first transaction hash at the given address. If there's none, stop here.
-        let mut cursor = txn.cursor(&self.address_db);
+        let mut cursor = txn.cursor(&self.address_table);
 
         if cursor.seek_key::<Address, OrderedHash>(address).is_none() {
             return tx_hashes;
@@ -745,14 +745,14 @@ impl HistoryStore {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = self.env.read_transaction();
+                read_txn = self.db.read_transaction();
                 &read_txn
             }
         };
 
         // Get history tree for given epoch.
         let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(
-            &self.hist_tree_db,
+            &self.hist_tree_table,
             txn,
             epoch_number,
         ));
@@ -790,14 +790,14 @@ impl HistoryStore {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = self.env.read_transaction();
+                read_txn = self.db.read_transaction();
                 &read_txn
             }
         };
 
         // Get history tree for given epoch.
         let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(
-            &self.hist_tree_db,
+            &self.hist_tree_table,
             txn,
             epoch_number,
         ));
@@ -839,7 +839,7 @@ impl HistoryStore {
     ) -> Result<Blake2bHash, MMRError> {
         // Get partial history tree for given epoch.
         let mut tree = PartialMerkleMountainRange::new(MMRStore::with_write_transaction(
-            &self.hist_tree_db,
+            &self.hist_tree_table,
             txn,
             epoch_number,
         ));
@@ -880,12 +880,12 @@ impl HistoryStore {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = self.env.read_transaction();
+                read_txn = self.db.read_transaction();
                 &read_txn
             }
         };
 
-        txn.get(&self.ext_tx_db, leaf_hash)
+        txn.get(&self.ext_tx_table, leaf_hash)
     }
 
     /// Inserts a extended transaction into the History Store's transaction databases.
@@ -897,12 +897,12 @@ impl HistoryStore {
         leaf_index: u32,
         ext_tx: &ExtendedTransaction,
     ) -> usize {
-        txn.put_reserve(&self.ext_tx_db, leaf_hash, ext_tx);
+        txn.put_reserve(&self.ext_tx_table, leaf_hash, ext_tx);
 
         let tx_hash = ext_tx.tx_hash();
 
         txn.put(
-            &self.tx_hash_db,
+            &self.tx_hash_table,
             &tx_hash,
             &OrderedHash {
                 index: leaf_index,
@@ -913,7 +913,7 @@ impl HistoryStore {
         // We need to convert the block number to big-endian since that's how the LMDB database
         // orders the keys.
         txn.put(
-            &self.last_leaf_db,
+            &self.last_leaf_table,
             &ext_tx.block_number.to_be(),
             &leaf_index,
         );
@@ -925,7 +925,7 @@ impl HistoryStore {
                 let index_tx_sender = self.get_last_tx_index_for_address(&tx.sender, Some(txn)) + 1;
 
                 txn.put(
-                    &self.address_db,
+                    &self.address_table,
                     &tx.sender,
                     &OrderedHash {
                         index: index_tx_sender,
@@ -937,7 +937,7 @@ impl HistoryStore {
                     self.get_last_tx_index_for_address(&tx.recipient, Some(txn)) + 1;
 
                 txn.put(
-                    &self.address_db,
+                    &self.address_table,
                     &tx.recipient,
                     &OrderedHash {
                         index: index_tx_recipient,
@@ -952,7 +952,7 @@ impl HistoryStore {
                         self.get_last_tx_index_for_address(target, Some(txn)) + 1;
 
                     txn.put(
-                        &self.address_db,
+                        &self.address_table,
                         target,
                         &OrderedHash {
                             index: index_tx_recipient,
@@ -976,13 +976,13 @@ impl HistoryStore {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = self.env.read_transaction();
+                read_txn = self.db.read_transaction();
                 &read_txn
             }
         };
 
         // Iterate leaf hashes at the given transaction hash.
-        let cursor = txn.cursor(&self.tx_hash_db);
+        let cursor = txn.cursor(&self.tx_hash_table);
 
         cursor
             .into_iter_dup_of::<Blake2bHash, OrderedHash>(tx_hash)
@@ -1000,13 +1000,13 @@ impl HistoryStore {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = self.env.read_transaction();
+                read_txn = self.db.read_transaction();
                 &read_txn
             }
         };
 
         // Seek to the last leaf index of the block, if it exists.
-        let mut cursor = txn.cursor(&self.last_leaf_db);
+        let mut cursor = txn.cursor(&self.last_leaf_table);
 
         let end = match cursor.seek_key::<u32, u32>(&block_number.to_be()) {
             // If the block number doesn't exist in the database that's because it doesn't contain
@@ -1049,13 +1049,13 @@ impl HistoryStore {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = self.env.read_transaction();
+                read_txn = self.db.read_transaction();
                 &read_txn
             }
         };
 
         // Seek the first key with the given address.
-        let mut cursor = txn.cursor(&self.address_db);
+        let mut cursor = txn.cursor(&self.address_table);
 
         if cursor.seek_key::<Address, OrderedHash>(address).is_none() {
             return 0;
@@ -1077,14 +1077,14 @@ impl HistoryStore {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = self.env.read_transaction();
+                read_txn = self.db.read_transaction();
                 &read_txn
             }
         };
 
         // Get the history tree.
         let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(
-            &self.hist_tree_db,
+            &self.hist_tree_table,
             txn,
             epoch_number,
         ));

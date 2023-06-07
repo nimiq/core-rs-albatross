@@ -4,6 +4,8 @@ use libmdbx::TransactionKind;
 
 use nimiq_database_value::FromDatabaseValue;
 
+/// Iterates over database entries (key, value pairs).
+/// Can be instantiated for both read and write transactions.
 pub struct IntoIter<'txn, Kind: TransactionKind, K: FromDatabaseValue, V: FromDatabaseValue> {
     pub(super) iter:
         <libmdbx::IterDup<'txn, 'txn, Kind, Cow<'txn, [u8]>, Cow<'txn, [u8]>> as Iterator>::Item,
