@@ -117,19 +117,13 @@ impl Blockchain {
     /// an account has enough funds).
     /// It receives a block as input but that block is only required to have a header (the body and
     /// justification are optional, we don't need them).
-    /// In the case of a macro block the checks we perform vary a little depending if we provide a
-    /// block with a body:
-    /// - With body: we check each field of the body against the same field calculated from our
-    ///   current state.
-    /// - Without body: we construct a body using fields calculated from our current state and
-    ///   compare its hash with the body hash in the header. In this case we return the calculated
-    ///   body.
+    /// Macro block specific checks are done in `verify_macro_block_state`
     pub fn verify_block_state(
         &self,
         state: &BlockchainState,
         block: &Block,
         txn_opt: Option<&DBTransaction>,
-    ) -> Result<Option<MacroBody>, PushError> {
+    ) -> Result<(), PushError> {
         let accounts = &state.accounts;
 
         // Use a common read transaction for the whole function if none was given.
@@ -183,11 +177,24 @@ impl Blockchain {
             }
         }
 
-        // Get the staking contract without using the database transaction (i.e., PRIOR to any changes).
-        if let Some(staking_contract) = self.get_staking_contract_if_complete() {
-            // For macro blocks we have additional checks. We simply construct what the body should be
-            // from our own state and then compare it with the body hash in the header.
-            if let Block::Macro(macro_block) = block {
+        Ok(())
+    }
+
+    /// Verifies a block against the blockchain state BEFORE changes to the accounts tree and thus to the staking contract.
+    /// Some fields in the staking contract are cleared using the FinalizeBatch and FinalizeEpoch Inherents in preparation for the next batch.
+    /// Thus, we need to compare the respective fields in the block before clearing the staking contract.
+    /// The checks we perform vary a little depending if we provide a block with a body:
+    /// - With body: we check each field of the body against the same field calculated from our current state.
+    /// - Without body: we construct a body using fields calculated from our current state and
+    ///   compare its hash with the body hash in the header. In this case we return the calculated body.
+    pub fn verify_macro_block_state(
+        &self,
+        state: &BlockchainState,
+        block: &Block,
+        txn: &DBTransaction,
+    ) -> Result<Option<MacroBody>, PushError> {
+        if let Block::Macro(macro_block) = block {
+            if let Some(staking_contract) = self.get_staking_contract_if_complete(Some(txn)) {
                 // Check the real values against the block.
                 // Get the validators.
                 let real_validators = if macro_block.is_election_block() {
@@ -199,17 +206,16 @@ impl Blockchain {
                 let real_reward_transactions =
                     self.create_reward_transactions(state, &macro_block.header, &staking_contract);
 
+                // Get the lost rewards and disabled sets.
+                let real_lost_rewards = staking_contract.current_lost_rewards();
+                let real_disabled_slots = staking_contract.current_disabled_slots();
+
                 if let Some(body) = &macro_block.body {
-                    // Get the lost rewards and disabled sets.
-
-                    let real_lost_rewards = staking_contract.previous_lost_rewards();
-                    let real_disabled_slots = staking_contract.previous_disabled_slots();
-
                     // If we were given a body, then check each value against the corresponding value in
                     // the body.
                     if real_lost_rewards != body.lost_reward_set {
                         warn!(
-                            %block,
+                            %macro_block,
                             reason = "lost rewards set doesn't match real lost rewards set",
                             "Rejecting block"
                         );
@@ -217,7 +223,7 @@ impl Blockchain {
                     }
                     if real_disabled_slots != body.disabled_set {
                         warn!(
-                            %block,
+                            %macro_block,
                             reason = "Disabled set doesn't match real disabled set",
                             "Rejecting block"
                         );
@@ -225,7 +231,7 @@ impl Blockchain {
                     }
                     if real_validators != body.validators {
                         warn!(
-                            %block,
+                            %macro_block,
                             reason = "Validators don't match real validators",
                             "Rejecting block"
                         );
@@ -233,7 +239,7 @@ impl Blockchain {
                     }
                     if real_reward_transactions != body.transactions {
                         warn!(
-                            %block,
+                            %macro_block,
                             reason = "Reward transactions do not match",
                             "Rejecting block"
                         );
@@ -245,10 +251,6 @@ impl Blockchain {
                     // We don't need to check the zkp_hash here since it was already checked in the
                     // `verify_block_body` method.
 
-                    // Get the lost rewards and disabled sets.
-                    let real_lost_rewards = staking_contract.previous_lost_rewards();
-                    let real_disabled_slots = staking_contract.previous_disabled_slots();
-
                     let real_body = MacroBody {
                         validators: real_validators,
                         lost_reward_set: real_lost_rewards,
@@ -259,7 +261,7 @@ impl Blockchain {
                     let real_body_hash = real_body.hash::<Blake2sHash>();
                     if macro_block.header.body_root != real_body_hash {
                         warn!(
-                            %block,
+                            %macro_block,
                             header_root = %macro_block.header.body_root,
                             body_hash   = %real_body_hash,
                             reason = "Header body hash doesn't match real body hash",
@@ -273,7 +275,6 @@ impl Blockchain {
                 }
             }
         }
-
         Ok(None)
     }
 }

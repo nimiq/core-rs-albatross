@@ -663,6 +663,13 @@ impl Blockchain {
             }
         }
 
+        // Macro blocks: Verify the state against the block before modifying the staking contract.
+        // (FinalizeBatch and FinalizeEpoch Inherents clear some fields in preparation for the next epoch.)
+        if let Err(e) = self.verify_macro_block_state(state, block, txn) {
+            warn!(%block, reason = "bad state", error = &e as &dyn Error, "Rejecting block");
+            return Err(e);
+        }
+
         // Commit block to AccountsTree.
         let total_tx_size = self.commit_accounts(state, block, txn, block_logger).map_err(|e| {
             warn!(%block, reason = "commit failed", error = &e as &dyn Error, "Rejecting block");

@@ -100,16 +100,19 @@ impl Blockchain {
 
     /// Returns the current staking contract.
     pub fn get_staking_contract(&self) -> StakingContract {
-        self.get_staking_contract_if_complete()
+        self.get_staking_contract_if_complete(None)
             .expect("We should always have the staking contract.")
     }
 
     /// Returns the current staking contract.
-    pub fn get_staking_contract_if_complete(&self) -> Option<StakingContract> {
+    pub fn get_staking_contract_if_complete(
+        &self,
+        txn_option: Option<&DBTransaction>,
+    ) -> Option<StakingContract> {
         let staking_contract = self
             .state
             .accounts
-            .get(&Policy::STAKING_CONTRACT_ADDRESS, None)
+            .get(&Policy::STAKING_CONTRACT_ADDRESS, txn_option)
             .ok()?;
         match staking_contract {
             Account::Staking(x) => Some(x),

@@ -428,7 +428,12 @@ where
             // Check the validity of the block against our state. If it is invalid, we return a proposal
             // timeout. This also returns the block body that matches the block header
             // (assuming that the block is valid).
-            let verification_result = blockchain.verify_block_state(state, &block, Some(&txn));
+            if let Err(error) = blockchain.verify_block_state(state, &block, Some(&txn)) {
+                log::debug!(?error, "Invalid block state");
+                return Err(ProposalError::InvalidProposal);
+            }
+
+            let verification_result = blockchain.verify_macro_block_state(state, &block, &txn);
             txn.abort();
             match verification_result {
                 Ok(Some(inherent)) => Ok(Body(inherent)),

@@ -50,8 +50,8 @@ fn it_can_create_batch_finalization_inherents() {
 
     let body = MacroBody {
         validators: None,
-        lost_reward_set: staking_contract.previous_lost_rewards(),
-        disabled_set: staking_contract.previous_disabled_slots(),
+        lost_reward_set: staking_contract.current_lost_rewards(),
+        disabled_set: staking_contract.current_disabled_slots(),
         transactions: reward_transactions,
     };
 
@@ -111,8 +111,8 @@ fn it_can_create_batch_finalization_inherents() {
         blockchain.create_reward_transactions(blockchain.state(), &macro_header, &staking_contract);
     let body = MacroBody {
         validators: None,
-        lost_reward_set: staking_contract.previous_lost_rewards(),
-        disabled_set: staking_contract.previous_disabled_slots(),
+        lost_reward_set: staking_contract.current_lost_rewards(),
+        disabled_set: staking_contract.current_disabled_slots(),
         transactions: reward_transactions,
     };
     let macro_block = MacroBlock {
@@ -221,8 +221,8 @@ fn it_can_penalize_delayed_batch() {
 
     let body = MacroBody {
         validators: None,
-        lost_reward_set: staking_contract.previous_lost_rewards(),
-        disabled_set: staking_contract.previous_disabled_slots(),
+        lost_reward_set: staking_contract.current_lost_rewards(),
+        disabled_set: staking_contract.current_disabled_slots(),
         transactions: reward_transactions,
     };
 

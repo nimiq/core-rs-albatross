@@ -499,7 +499,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         let blockchain_proxy = self.blockchain.read();
         if let BlockchainReadProxy::Full(ref blockchain) = blockchain_proxy {
             let staking_contract =
-                if let Some(contract) = blockchain.get_staking_contract_if_complete() {
+                if let Some(contract) = blockchain.get_staking_contract_if_complete(None) {
                     contract
                 } else {
                     return Err(Error::NoConsensus);
