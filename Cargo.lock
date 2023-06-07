@@ -4489,6 +4489,7 @@ dependencies = [
  "nimiq-test-log",
  "nimiq-test-utils",
  "nimiq-utils",
+ "nimiq-vrf",
  "num-traits",
  "serde",
  "strum_macros",

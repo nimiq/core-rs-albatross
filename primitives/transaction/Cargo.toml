@@ -32,6 +32,7 @@ nimiq-mmr = { path = "../mmr" }
 nimiq-network-interface = { path = "../../network-interface" }
 nimiq-primitives = { path = "..", features = ["account", "coin", "networks", "policy", "serde-derive", "slots"] }
 nimiq-utils = { path = "../../utils", features = ["merkle"] }
+nimiq-vrf = { path = "../../vrf" }
 
 [dev-dependencies]
 hex = "0.4"

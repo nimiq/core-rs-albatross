@@ -26,6 +26,7 @@ use nimiq_transaction::{
     SignatureProof, Transaction,
 };
 use nimiq_transaction_builder::TransactionProofBuilder;
+use nimiq_vrf::VrfSeed;
 
 pub enum ValidatorState {
     Active,
@@ -421,7 +422,10 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
             OutgoingType::Basic => {
                 // We create a new account with that balance.
                 let key_pair = KeyPair::generate(&mut self.rng);
-                let account = Account::Basic(BasicAccount { balance });
+                let account = Account::Basic(BasicAccount {
+                    balance,
+                    nonce: None,
+                });
 
                 self.put_account(&Address::from(&key_pair), account);
                 OutgoingAccountData::Basic { key_pair }
@@ -432,6 +436,7 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
                 // Vesting account releases full balance basically immediately.
                 let account = Account::Vesting(VestingContract {
                     balance,
+                    nonce: 0,
                     owner: Address::from(&owner_key_pair),
                     start_time: 0,
                     step_amount: balance,
@@ -466,6 +471,7 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
                     AnyHash::from(Blake2bHasher::default().chain(&pre_image).finish().0);
                 let account = Account::HTLC(HashedTimeLockedContract {
                     balance,
+                    nonce: 0,
                     sender: Address::from(&sender_key_pair),
                     recipient: Address::from(&recipient_key_pair),
                     hash_algorithm: HashAlgorithm::Blake2b,
@@ -793,7 +799,11 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
                                 event_block: 1,
                             },
                         },
-                        &BlockState { number: 1, time: 0 },
+                        &BlockState {
+                            number: 1,
+                            time: 0,
+                            entropy: VrfSeed::default().entropy(),
+                        },
                         data_store_write,
                         &mut InherentLogger::empty(),
                     )

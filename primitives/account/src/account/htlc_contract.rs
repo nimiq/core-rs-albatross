@@ -1,3 +1,5 @@
+use std::ops::{AddAssign, SubAssign};
+
 use beserial::{Deserialize, Serialize};
 use nimiq_keys::Address;
 use nimiq_primitives::account::AccountError;
@@ -29,6 +31,7 @@ use crate::{
 #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
 pub struct HashedTimeLockedContract {
     pub balance: Coin,
+    pub nonce: u64,
     pub sender: Address,
     pub recipient: Address,
     pub hash_algorithm: HashAlgorithm,
@@ -144,6 +147,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
     fn create_new_contract(
         transaction: &Transaction,
         initial_balance: Coin,
+        initial_nonce: u64,
         _block_state: &BlockState,
         _data_store: DataStoreWrite,
         tx_logger: &mut TransactionLog,
@@ -170,6 +174,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
             hash_count: data.hash_count,
             timeout: data.timeout,
             total_amount: transaction.value,
+            nonce: initial_nonce,
         }))
     }
 
@@ -227,9 +232,16 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         tx_logger.push_log(Log::pay_fee_log(transaction));
         tx_logger.push_log(Log::transfer_log(transaction));
 
+        if transaction.nonce != self.nonce {
+            return Err(AccountError::InvalidNonce);
+        }
+
         let new_balance = self.balance.safe_sub(transaction.total_value())?;
         self.can_change_balance(transaction, new_balance, block_state, tx_logger)?;
         self.balance = new_balance;
+
+        // Increase the nonce value by 1 to prevent replay attacks.
+        self.nonce.add_assign(1);
 
         Ok(None)
     }
@@ -274,6 +286,8 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         tx_logger.push_log(Log::transfer_log(transaction));
         tx_logger.push_log(Log::pay_fee_log(transaction));
 
+        self.nonce.sub_assign(1);
+
         Ok(())
     }
 
@@ -293,6 +307,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
             &mut TransactionLog::empty(),
         )?;
         self.balance = new_balance;
+        self.nonce.add_assign(1);
 
         tx_logger.push_log(Log::pay_fee_log(transaction));
 
@@ -308,6 +323,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         self.balance += transaction.fee;
+        self.nonce.sub_assign(1);
 
         tx_logger.push_log(Log::pay_fee_log(transaction));
 
@@ -398,6 +414,7 @@ impl AccountPruningInteraction for HashedTimeLockedContract {
 struct PrunedHashedTimeLockContract {
     pub sender: Address,
     pub recipient: Address,
+    pub nonce: u64,
     pub hash_algorithm: HashAlgorithm,
     pub hash_root: AnyHash,
     pub hash_count: u8,
@@ -410,6 +427,7 @@ impl From<HashedTimeLockedContract> for PrunedHashedTimeLockContract {
         PrunedHashedTimeLockContract {
             sender: contract.sender,
             recipient: contract.recipient,
+            nonce: contract.nonce,
             hash_algorithm: contract.hash_algorithm,
             hash_root: contract.hash_root,
             hash_count: contract.hash_count,
@@ -424,6 +442,7 @@ impl From<PrunedHashedTimeLockContract> for HashedTimeLockedContract {
         HashedTimeLockedContract {
             balance: Coin::ZERO,
             sender: receipt.sender,
+            nonce: receipt.nonce,
             recipient: receipt.recipient,
             hash_algorithm: receipt.hash_algorithm,
             hash_root: receipt.hash_root,

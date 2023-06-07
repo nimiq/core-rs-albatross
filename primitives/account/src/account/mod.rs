@@ -79,9 +79,28 @@ impl Account {
         }
     }
 
+    pub fn get_nonce(&self) -> Option<u64> {
+        match *self {
+            Account::Basic(ref account) => account.nonce,
+            Account::Vesting(ref account) => Some(account.nonce),
+            Account::HTLC(ref account) => Some(account.nonce),
+            Account::Staking(_) => todo!(),
+        }
+    }
+
+    pub fn set_nonce(&mut self, nonce: u64) {
+        match *self {
+            Account::Basic(ref mut account) => account.nonce = Some(nonce),
+            // Nonce is inherited from basic accounts into Vesting/HTLC contracts
+            Account::Vesting(_) => todo!(),
+            Account::HTLC(_) => todo!(),
+            Account::Staking(_) => todo!(),
+        }
+    }
+
     #[cfg(feature = "interaction-traits")]
-    pub(crate) fn default_with_balance(balance: Coin) -> Self {
-        Account::Basic(BasicAccount { balance })
+    pub(crate) fn default_with_nonce_and_balance(nonce: Option<u64>, balance: Coin) -> Self {
+        Account::Basic(BasicAccount { balance, nonce })
     }
 }
 
@@ -96,6 +115,7 @@ impl AccountTransactionInteraction for Account {
     fn create_new_contract(
         transaction: &Transaction,
         initial_balance: Coin,
+        initial_nonce: u64,
         block_state: &BlockState,
         data_store: DataStoreWrite,
         tx_logger: &mut TransactionLog,
@@ -108,6 +128,7 @@ impl AccountTransactionInteraction for Account {
             create_new_contract,
             transaction,
             initial_balance,
+            initial_nonce,
             block_state,
             data_store,
             tx_logger

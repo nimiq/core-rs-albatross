@@ -1,3 +1,5 @@
+use std::ops::{AddAssign, SubAssign};
+
 use beserial::{Deserialize, Serialize};
 use nimiq_keys::Address;
 #[cfg(feature = "interaction-traits")]
@@ -25,6 +27,7 @@ use crate::{
 #[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
 pub struct VestingContract {
     pub balance: Coin,
+    pub nonce: u64,
     pub owner: Address,
     pub start_time: u64,
     pub time_step: u64,
@@ -79,6 +82,7 @@ impl AccountTransactionInteraction for VestingContract {
     fn create_new_contract(
         transaction: &Transaction,
         initial_balance: Coin,
+        initial_nonce: u64,
         _block_state: &BlockState,
         _data_store: DataStoreWrite,
         tx_logger: &mut TransactionLog,
@@ -101,6 +105,7 @@ impl AccountTransactionInteraction for VestingContract {
             time_step: data.time_step,
             step_amount: data.step_amount,
             total_amount: data.total_amount,
+            nonce: initial_nonce,
         }))
     }
 
@@ -157,6 +162,9 @@ impl AccountTransactionInteraction for VestingContract {
         self.can_change_balance(transaction, new_balance, block_state)?;
         self.balance = new_balance;
 
+        // Increase the nonce value by 1 to prevent replay attacks.
+        self.nonce.add_assign(1);
+
         tx_logger.push_log(Log::pay_fee_log(transaction));
         tx_logger.push_log(Log::transfer_log(transaction));
 
@@ -176,6 +184,8 @@ impl AccountTransactionInteraction for VestingContract {
         tx_logger.push_log(Log::transfer_log(transaction));
         tx_logger.push_log(Log::pay_fee_log(transaction));
 
+        self.nonce.sub_assign(1);
+
         Ok(())
     }
 
@@ -190,6 +200,7 @@ impl AccountTransactionInteraction for VestingContract {
         // XXX This check should not be necessary since are also checking this in reserve_balance()
         self.can_change_balance(transaction, new_balance, block_state)?;
         self.balance = new_balance;
+        self.nonce.add_assign(1);
 
         tx_logger.push_log(Log::pay_fee_log(transaction));
 
@@ -205,6 +216,7 @@ impl AccountTransactionInteraction for VestingContract {
         tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         self.balance += transaction.fee;
+        self.nonce.sub_assign(1);
 
         tx_logger.push_log(Log::pay_fee_log(transaction));
 
@@ -287,6 +299,7 @@ impl AccountPruningInteraction for VestingContract {
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 struct PrunedVestingContract {
     pub owner: Address,
+    pub nonce: u64,
     pub start_time: u64,
     pub time_step: u64,
     pub step_amount: Coin,
@@ -297,6 +310,7 @@ impl From<VestingContract> for PrunedVestingContract {
     fn from(contract: VestingContract) -> Self {
         PrunedVestingContract {
             owner: contract.owner,
+            nonce: contract.nonce,
             start_time: contract.start_time,
             time_step: contract.time_step,
             step_amount: contract.step_amount,
@@ -310,6 +324,7 @@ impl From<PrunedVestingContract> for VestingContract {
         VestingContract {
             balance: Coin::ZERO,
             owner: receipt.owner,
+            nonce: receipt.nonce,
             start_time: receipt.start_time,
             time_step: receipt.time_step,
             step_amount: receipt.step_amount,

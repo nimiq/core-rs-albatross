@@ -178,6 +178,7 @@ impl GenesisBuilder {
 
             let account = Account::Basic(BasicAccount {
                 balance: genesis_account.balance,
+                nonce: Some(0),
             });
 
             accounts

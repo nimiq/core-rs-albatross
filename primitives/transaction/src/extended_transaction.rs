@@ -9,6 +9,8 @@ use nimiq_mmr::hash::Hash as MMRHash;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_primitives::policy::Policy;
+use nimiq_vrf::VrfEntropy;
+use nimiq_vrf::VrfSeed;
 
 use crate::inherent::Inherent;
 use crate::ExecutedTransaction;
@@ -24,6 +26,9 @@ pub struct ExtendedTransaction {
     pub block_number: u32,
     /// The timestamp of the block when the transaction happened.
     pub block_time: u64,
+    /// The vrf seed of the block when the transaction happened.
+    // TODO: Space-wise this is not optimal.
+    pub block_entropy: VrfEntropy,
     /// A struct containing the transaction data.
     pub data: ExtTxData,
 }
@@ -54,6 +59,7 @@ impl ExtendedTransaction {
         network_id: NetworkId,
         block_number: u32,
         block_time: u64,
+        block_entropy: VrfEntropy,
         transactions: Vec<ExecutedTransaction>,
         inherents: Vec<Inherent>,
     ) -> Vec<ExtendedTransaction> {
@@ -64,6 +70,7 @@ impl ExtendedTransaction {
                 network_id,
                 block_number,
                 block_time,
+                block_entropy: block_entropy.clone(),
                 data: ExtTxData::Basic(transaction),
             })
         }
@@ -75,6 +82,7 @@ impl ExtendedTransaction {
                         network_id,
                         block_number,
                         block_time,
+                        block_entropy: block_entropy.clone(),
                         data: ExtTxData::Inherent(inherent),
                     })
                 }
@@ -181,6 +189,7 @@ impl Serialize for ExtendedTransaction {
         size += Serialize::serialize(&self.network_id, writer)?;
         size += Serialize::serialize(&self.block_number, writer)?;
         size += Serialize::serialize(&self.block_time, writer)?;
+        size += Serialize::serialize(&self.block_entropy, writer)?;
         size += Serialize::serialize(&self.data, writer)?;
         Ok(size)
     }
@@ -190,6 +199,7 @@ impl Serialize for ExtendedTransaction {
         size += Serialize::serialized_size(&self.network_id);
         size += Serialize::serialized_size(&self.block_number);
         size += Serialize::serialized_size(&self.block_time);
+        size += Serialize::serialized_size(&self.block_entropy);
         size += Serialize::serialized_size(&self.data);
         size
     }
@@ -200,11 +210,13 @@ impl Deserialize for ExtendedTransaction {
         let network_id: NetworkId = Deserialize::deserialize(reader)?;
         let block_number: u32 = Deserialize::deserialize(reader)?;
         let block_time: u64 = Deserialize::deserialize(reader)?;
+        let block_entropy: VrfEntropy = Deserialize::deserialize(reader)?;
         let data: ExtTxData = Deserialize::deserialize(reader)?;
         Ok(ExtendedTransaction {
             network_id,
             block_number,
             block_time,
+            block_entropy,
             data,
         })
     }

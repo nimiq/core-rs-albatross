@@ -1,6 +1,7 @@
 use nimiq_primitives::account::AccountType;
 use nimiq_primitives::{account::AccountError, coin::Coin};
 use nimiq_transaction::{inherent::Inherent, Transaction};
+use nimiq_vrf::VrfEntropy;
 
 use crate::data_store::{DataStoreRead, DataStoreWrite};
 use crate::reserved_balance::ReservedBalance;
@@ -10,13 +11,15 @@ use crate::{Account, AccountReceipt, InherentLogger, TransactionLog};
 pub struct BlockState {
     pub number: u32,
     pub time: u64,
+    pub entropy: VrfEntropy,
 }
 
 impl BlockState {
-    pub fn new(block_number: u32, block_time: u64) -> Self {
+    pub fn new(block_number: u32, block_time: u64, block_entropy: VrfEntropy) -> Self {
         Self {
             number: block_number,
             time: block_time,
+            entropy: block_entropy,
         }
     }
 }
@@ -25,6 +28,7 @@ pub trait AccountTransactionInteraction: Sized {
     fn create_new_contract(
         transaction: &Transaction,
         initial_balance: Coin,
+        initial_nonce: u64,
         block_state: &BlockState,
         data_store: DataStoreWrite,
         tx_logger: &mut TransactionLog,

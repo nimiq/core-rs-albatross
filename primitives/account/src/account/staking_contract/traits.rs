@@ -25,6 +25,7 @@ impl AccountTransactionInteraction for StakingContract {
     fn create_new_contract(
         _transaction: &Transaction,
         _initial_balance: Coin,
+        _initial_nonce: u64,
         _block_state: &BlockState,
         _data_store: DataStoreWrite,
         _tx_logger: &mut TransactionLog,

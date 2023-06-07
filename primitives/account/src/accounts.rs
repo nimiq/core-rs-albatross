@@ -12,6 +12,7 @@ use nimiq_primitives::{
 };
 use nimiq_transaction::{inherent::Inherent, ExecutedTransaction, Transaction, TransactionFlags};
 use nimiq_trie::trie::{IncompleteTrie, MerkleRadixTrie};
+use nimiq_vrf::{Rng, VrfUseCase};
 
 use crate::{
     Account, AccountInherentInteraction, AccountPruningInteraction, AccountReceipt,
@@ -553,9 +554,22 @@ impl Accounts {
                 .get_with_type(txn, recipient_address, AccountType::Basic)
                 .expect("contract creation target must be a basic account");
 
+            if recipient_account.get_nonce().is_none() {
+                // Assign a new nonce value based on the VRF seed
+                let mut rng = block_state
+                    .entropy
+                    .clone()
+                    .rng(VrfUseCase::ViewSlotSelection);
+
+                recipient_account.set_nonce(rng.next_u64());
+            }
+
             Account::create_new_contract(
                 transaction,
                 recipient_account.balance(),
+                recipient_account
+                    .get_nonce()
+                    .expect("Nonce must have been assigned"),
                 block_state,
                 recipient_store.write(txn),
                 tx_logger,
@@ -568,6 +582,16 @@ impl Accounts {
             self.get_with_type(txn, recipient_address, transaction.recipient_type)
                 .and_then(|account| {
                     *recipient_account = account;
+
+                    if recipient_account.get_nonce().is_none() {
+                        // Assign a new nonce value based on the VRF seed
+                        let mut rng = block_state
+                            .entropy
+                            .clone()
+                            .rng(VrfUseCase::ViewSlotSelection);
+                        recipient_account.set_nonce(rng.next_u64());
+                    }
+
                     recipient_account.commit_incoming_transaction(
                         transaction,
                         block_state,
@@ -757,7 +781,10 @@ impl Accounts {
                     tx_logger,
                 )?;
 
-                recipient_account = Account::default_with_balance(recipient_account.balance());
+                recipient_account = Account::default_with_nonce_and_balance(
+                    recipient_account.get_nonce(),
+                    recipient_account.balance(),
+                );
             } else {
                 recipient_account.revert_incoming_transaction(
                     transaction,

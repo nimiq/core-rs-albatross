@@ -19,7 +19,11 @@ impl Blockchain {
     ) -> Result<u64, PushError> {
         // Get the accounts from the state.
         let accounts = &state.accounts;
-        let block_state = BlockState::new(block.block_number(), block.timestamp());
+        let block_state = BlockState::new(
+            block.block_number(),
+            block.timestamp(),
+            block.seed().entropy(),
+        );
 
         // Check the type of the block.
         match block {
@@ -50,6 +54,7 @@ impl Blockchain {
                         self.network_id,
                         macro_block.header.block_number,
                         macro_block.header.timestamp,
+                        macro_block.header.seed.entropy(),
                         vec![],
                         inherents,
                     );
@@ -117,9 +122,12 @@ impl Blockchain {
                         self.network_id,
                         micro_block.header.block_number,
                         micro_block.header.timestamp,
+                        micro_block.header.seed.entropy(),
                         body.transactions.clone(),
                         inherents,
                     );
+                    //TODO: It would be better to store the block_state in the history store and
+                    // associate a group of extended transactions to it
                     total_tx_size = self
                         .history_store
                         .add_to_history(txn, micro_block.epoch_number(), &ext_txs)
@@ -176,7 +184,11 @@ impl Blockchain {
             .expect("Failed to revert - missing receipts");
 
         // Revert the block from AccountsTree.
-        let block_state = BlockState::new(block.block_number(), block.header.timestamp);
+        let block_state = BlockState::new(
+            block.block_number(),
+            block.header.timestamp,
+            block.header.seed.entropy(),
+        );
         let result = accounts.revert(
             txn,
             &body.get_raw_transactions(),

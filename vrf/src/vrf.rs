@@ -39,6 +39,8 @@ pub enum VrfUseCase {
     ViewSlotSelection = 3,
     /// Used to randomly distribute the rewards.
     RewardDistribution = 4,
+    /// Used to generate new nonces
+    Nonce = 5,
 }
 
 create_typed_array!(VrfEntropy, u8, 32);

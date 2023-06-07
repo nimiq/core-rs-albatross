@@ -1,3 +1,5 @@
+use std::ops::{AddAssign, SubAssign};
+
 use beserial::{Deserialize, Serialize};
 #[cfg(feature = "interaction-traits")]
 use nimiq_primitives::account::{AccountError, AccountType};
@@ -20,6 +22,7 @@ use crate::{
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 pub struct BasicAccount {
     pub balance: Coin,
+    pub nonce: Option<u64>,
 }
 
 #[cfg(feature = "interaction-traits")]
@@ -27,6 +30,7 @@ impl AccountTransactionInteraction for BasicAccount {
     fn create_new_contract(
         _transaction: &Transaction,
         _initial_balance: Coin,
+        _initial_nonce: u64,
         _block_state: &BlockState,
         _data_store: DataStoreWrite,
         _tx_logger: &mut TransactionLog,
@@ -76,6 +80,13 @@ impl AccountTransactionInteraction for BasicAccount {
     ) -> Result<Option<AccountReceipt>, AccountError> {
         self.balance.safe_sub_assign(transaction.total_value())?;
 
+        if transaction.nonce != self.nonce.expect("Nonce value must be some") {
+            return Err(AccountError::InvalidNonce);
+        }
+
+        // Increase the nonce value by 1 to prevent replay attacks.
+        self.nonce.expect("Nonce value must be some").add_assign(1);
+
         tx_logger.push_log(Log::pay_fee_log(transaction));
         tx_logger.push_log(Log::transfer_log(transaction));
 
@@ -91,6 +102,9 @@ impl AccountTransactionInteraction for BasicAccount {
         tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         self.balance += transaction.total_value();
+        self.nonce
+            .expect("Nonce value must have been already assigned")
+            .sub_assign(1);
 
         tx_logger.push_log(Log::transfer_log(transaction));
         tx_logger.push_log(Log::pay_fee_log(transaction));
@@ -106,7 +120,7 @@ impl AccountTransactionInteraction for BasicAccount {
         tx_logger: &mut TransactionLog,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         self.balance.safe_sub_assign(transaction.fee)?;
-
+        self.nonce.expect("Nonce value must be some").add_assign(1);
         tx_logger.push_log(Log::pay_fee_log(transaction));
 
         Ok(None)
@@ -121,6 +135,9 @@ impl AccountTransactionInteraction for BasicAccount {
         tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         self.balance += transaction.fee;
+        self.nonce
+            .expect("Nonce value must have been already assigned")
+            .sub_assign(1);
 
         tx_logger.push_log(Log::pay_fee_log(transaction));
 

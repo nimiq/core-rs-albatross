@@ -145,7 +145,11 @@ impl Blockchain {
         transaction: &Transaction,
         reserved_balance: &mut ReservedBalance,
     ) -> Result<(), AccountError> {
-        let block_state = BlockState::new(self.block_number(), self.timestamp());
+        let block_state = BlockState::new(
+            self.block_number(),
+            self.timestamp(),
+            self.head().seed().entropy(),
+        );
         self.state.accounts.reserve_balance(
             account,
             transaction,

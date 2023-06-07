@@ -87,6 +87,8 @@ pub enum AccountError {
     InvalidTransaction(#[from] TransactionError),
     #[error("Invalid coin value")]
     InvalidCoinValue,
+    #[error("Invalid nonce value")]
+    InvalidNonce,
     #[error("Invalid coin value: {0}")]
     CoinParse(#[from] CoinParseError),
     #[error("Invalid coin value: {0}")]
@@ -134,6 +136,8 @@ pub enum FailReason {
     InvalidTransaction,
     #[error("Invalid coin value")]
     InvalidCoinValue,
+    #[error("Invalid nonce value")]
+    InvalidNonce,
     #[error("Invalid coin value (parse)")]
     CoinParse,
     #[error("Invalid coin value (convert)")]
@@ -169,6 +173,7 @@ impl From<AccountError> for FailReason {
             AccountError::NonExistentAddress { .. } => FailReason::NonExistentAddress,
             AccountError::AlreadyExistentAddress { .. } => FailReason::AlreadyExistentAddress,
             AccountError::ChunkError(_) => FailReason::ChunkError,
+            AccountError::InvalidNonce { .. } => FailReason::InvalidNonce,
         }
     }
 }

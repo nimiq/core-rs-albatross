@@ -117,7 +117,7 @@ impl BlockProducer {
         let inherents = blockchain.create_slash_inherents(&fork_proofs, skip_block_info, None);
 
         // Update the state and calculate the state root.
-        let block_state = BlockState::new(block_number, timestamp);
+        let block_state = BlockState::new(block_number, timestamp, seed.entropy());
         let (state_root, executed_txns) = blockchain
             .state()
             .accounts
@@ -129,6 +129,7 @@ impl BlockProducer {
             blockchain.network_id,
             block_number,
             timestamp,
+            seed.entropy(),
             executed_txns.clone(),
             inherents,
         );
@@ -263,7 +264,7 @@ impl BlockProducer {
             parent_hash,
             parent_election_hash,
             interlink,
-            seed,
+            seed: seed.clone(),
             extra_data,
             state_root: Blake2bHash::default(),
             body_root: Blake2bHash::default(),
@@ -328,7 +329,7 @@ impl BlockProducer {
         let inherents: Vec<Inherent> = blockchain.create_macro_block_inherents(&macro_block);
 
         // Update the state and add the state root to the header.
-        let block_state = BlockState::new(block_number, timestamp);
+        let block_state = BlockState::new(block_number, timestamp, seed.entropy());
         let (root, _) = state
             .accounts
             .exercise_transactions(&[], &inherents, &block_state)
@@ -341,6 +342,7 @@ impl BlockProducer {
             blockchain.network_id,
             block_number,
             timestamp,
+            seed.entropy(),
             vec![],
             inherents,
         );

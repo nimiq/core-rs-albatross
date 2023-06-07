@@ -156,6 +156,7 @@ impl Blockchain {
         // Ignore the extended transactions that were already added in past macro blocks.
         let mut block_numbers = vec![];
         let mut block_timestamps = vec![];
+        let mut block_entropy = vec![];
         let mut block_transactions = vec![];
         let mut block_inherents = vec![];
         let mut prev = 0;
@@ -164,6 +165,7 @@ impl Blockchain {
             if ext_tx.block_number > prev {
                 block_numbers.push(ext_tx.block_number);
                 block_timestamps.push(ext_tx.block_time);
+                block_entropy.push(ext_tx.block_entropy.clone());
                 block_transactions.push(vec![]);
                 block_inherents.push(vec![]);
                 prev = ext_tx.block_number;
@@ -203,7 +205,11 @@ impl Blockchain {
                 .collect();
 
             // Commit block to AccountsTree and create the receipts.
-            let block_state = BlockState::new(block_numbers[i], block_timestamps[i]);
+            let block_state = BlockState::new(
+                block_numbers[i],
+                block_timestamps[i],
+                block_entropy[i].clone(),
+            );
             let receipts = this.state.accounts.commit_batch(
                 &mut txn,
                 &txns,

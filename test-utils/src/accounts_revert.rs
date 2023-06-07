@@ -245,6 +245,7 @@ impl TestCommitRevert {
         let mut account = A::create_new_contract(
             transaction,
             initial_balance,
+            0,
             block_state,
             data_store.write(&mut txn),
             tx_logger,
