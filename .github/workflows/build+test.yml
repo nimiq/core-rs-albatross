@@ -27,7 +27,7 @@ jobs:
         key: cargo-${{ hashFiles('**/Cargo.toml') }}
     - uses: dtolnay/rust-toolchain@stable
       with:
-        toolchain: stable
+        toolchain: nightly
         components: rustfmt
     - run: cargo fmt --all -- --check
 
