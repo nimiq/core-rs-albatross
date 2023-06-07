@@ -1,9 +1,7 @@
-use lazy_static::lazy_static;
-
 use beserial::{Deserialize, Serialize};
+use lazy_static::lazy_static;
 use nimiq_keys::{Address, KeyPair, PrivateKey};
-use nimiq_primitives::coin::Coin;
-use nimiq_primitives::networks::NetworkId;
+use nimiq_primitives::{coin::Coin, networks::NetworkId};
 use nimiq_test_log::test;
 use nimiq_wallet::WalletAccount;
 

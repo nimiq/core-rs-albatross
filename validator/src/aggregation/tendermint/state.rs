@@ -8,12 +8,11 @@ use nimiq_keys::Signature as SchnorrSignature;
 use nimiq_tendermint::{State as TendermintState, Step};
 use nimiq_validator_network::ValidatorNetwork;
 
-use crate::tendermint::TendermintProtocol;
-
 use super::{
     contribution::TendermintContribution,
     proposal::{Body, Header, SignedProposal},
 };
+use crate::tendermint::TendermintProtocol;
 
 #[derive(Clone)]
 pub struct MacroState {

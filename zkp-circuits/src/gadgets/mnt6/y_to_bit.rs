@@ -61,7 +61,6 @@ mod tests {
     use ark_r1cs_std::{prelude::AllocVar, R1CSVar};
     use ark_relations::r1cs::ConstraintSystem;
     use ark_std::{test_rng, UniformRand};
-
     use nimiq_test_log::test;
     use nimiq_zkp_primitives::{serialize_g1_mnt6, serialize_g2_mnt6};
 

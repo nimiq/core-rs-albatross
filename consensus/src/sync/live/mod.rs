@@ -3,26 +3,25 @@ pub mod queue;
 #[cfg(feature = "full")]
 pub mod state_queue;
 
-use futures::{future::BoxFuture, Stream, StreamExt};
-use parking_lot::Mutex;
 use std::{
     collections::VecDeque,
     pin::Pin,
     sync::Arc,
     task::{ready, Context, Poll},
 };
-use tokio::sync::mpsc::{channel as mpsc, Sender as MpscSender};
-use tokio_stream::wrappers::ReceiverStream;
 
+use futures::{future::BoxFuture, Stream, StreamExt};
 use nimiq_block::Block;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_network_interface::network::Network;
+use parking_lot::Mutex;
+use tokio::sync::mpsc::{channel as mpsc, Sender as MpscSender};
+use tokio_stream::wrappers::ReceiverStream;
 
 #[cfg(feature = "full")]
 use self::state_queue::StateQueue;
 use self::{block_queue::BlockQueue, queue::LiveSyncQueue};
-
 use super::syncer::{LiveSync, LiveSyncEvent};
 
 pub type BlockLiveSync<N> = LiveSyncer<N, BlockQueue<N>>;

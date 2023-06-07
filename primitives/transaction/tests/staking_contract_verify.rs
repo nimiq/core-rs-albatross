@@ -12,10 +12,13 @@ use nimiq_primitives::{
 };
 use nimiq_test_log::test;
 use nimiq_test_utils::test_rng::test_rng;
-use nimiq_transaction::account::staking_contract::{
-    IncomingStakingTransactionData, OutgoingStakingTransactionProof,
+use nimiq_transaction::{
+    account::{
+        staking_contract::{IncomingStakingTransactionData, OutgoingStakingTransactionProof},
+        AccountTransactionVerification,
+    },
+    SignatureProof, Transaction,
 };
-use nimiq_transaction::{account::AccountTransactionVerification, SignatureProof, Transaction};
 use nimiq_utils::key_rng::SecureGenerate;
 
 const VALIDATOR_ADDRESS: &str = "83fa05dbe31f85e719f4c4fd67ebdba2e444d9f8";

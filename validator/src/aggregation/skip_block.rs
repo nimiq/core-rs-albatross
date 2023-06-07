@@ -1,39 +1,40 @@
-use std::fmt;
-use std::pin::Pin;
-use std::sync::Arc;
-use std::task::{Context, Poll};
-use std::time::Duration;
+use std::{
+    fmt,
+    pin::Pin,
+    sync::Arc,
+    task::{Context, Poll},
+    time::Duration,
+};
 
+use beserial::{Deserialize, Serialize};
 use futures::{
     future::FutureExt,
     ready,
     stream::{select, BoxStream, Stream, StreamExt},
 };
+use nimiq_block::{Message, MultiSignature, SignedSkipBlockInfo, SkipBlockInfo, SkipBlockProof};
+use nimiq_bls::{AggregateSignature, KeyPair};
+use nimiq_collections::BitSet;
+use nimiq_handel::{
+    aggregation::Aggregation,
+    config::Config,
+    contribution::{AggregatableContribution, ContributionError},
+    evaluator::WeightedVote,
+    identity::WeightRegistry,
+    partitioner::BinomialPartitioner,
+    protocol::Protocol,
+    store::ReplaceStore,
+    update::LevelUpdate,
+};
+use nimiq_hash::Blake2sHash;
+use nimiq_network_interface::request::{MessageMarker, RequestCommon};
+use nimiq_primitives::{policy, slots::Validators};
+use nimiq_validator_network::ValidatorNetwork;
 use parking_lot::RwLock;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
-use beserial::{Deserialize, Serialize};
-use nimiq_block::{Message, MultiSignature, SignedSkipBlockInfo, SkipBlockInfo, SkipBlockProof};
-use nimiq_bls::{AggregateSignature, KeyPair};
-use nimiq_collections::BitSet;
-use nimiq_handel::aggregation::Aggregation;
-use nimiq_handel::config::Config;
-use nimiq_handel::contribution::{AggregatableContribution, ContributionError};
-use nimiq_handel::evaluator::WeightedVote;
-use nimiq_handel::identity::WeightRegistry;
-use nimiq_handel::partitioner::BinomialPartitioner;
-use nimiq_handel::protocol::Protocol;
-use nimiq_handel::store::ReplaceStore;
-use nimiq_handel::update::LevelUpdate;
-use nimiq_hash::Blake2sHash;
-use nimiq_network_interface::request::{MessageMarker, RequestCommon};
-use nimiq_primitives::policy;
-use nimiq_primitives::slots::Validators;
-use nimiq_validator_network::ValidatorNetwork;
-
-use super::registry::ValidatorRegistry;
-use super::verifier::MultithreadedVerifier;
+use super::{registry::ValidatorRegistry, verifier::MultithreadedVerifier};
 
 enum SkipBlockResult {
     SkipBlock(SignedSkipBlockMessage),

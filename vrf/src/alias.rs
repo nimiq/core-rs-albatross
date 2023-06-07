@@ -1,11 +1,12 @@
 #![allow(non_snake_case)]
 
-use std::cmp::{Ord, Ordering, PartialOrd};
-use std::fmt::Debug;
-use std::ops::{Add, Mul, Sub};
+use std::{
+    cmp::{Ord, Ordering, PartialOrd},
+    fmt::Debug,
+    ops::{Add, Mul, Sub},
+};
 
-use num_traits::sign::Unsigned;
-use num_traits::{FromPrimitive, ToPrimitive};
+use num_traits::{sign::Unsigned, FromPrimitive, ToPrimitive};
 
 use crate::rng::Rng;
 

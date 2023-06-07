@@ -1,10 +1,7 @@
-use std::convert::TryFrom;
-use std::fmt;
-use std::str::FromStr;
-
-use hex::FromHex;
+use std::{convert::TryFrom, fmt, str::FromStr};
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
+use hex::FromHex;
 
 use crate::errors::{KeysError, ParseError};
 

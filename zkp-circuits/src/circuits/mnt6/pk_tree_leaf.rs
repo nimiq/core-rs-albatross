@@ -5,10 +5,9 @@ use ark_r1cs_std::{
     uint8::UInt8,
 };
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
-use rand::{distributions::Standard, prelude::Distribution};
-
 use nimiq_primitives::policy::Policy;
 use nimiq_zkp_primitives::{PEDERSEN_PARAMETERS, PK_TREE_BREADTH};
+use rand::{distributions::Standard, prelude::Distribution};
 
 use crate::gadgets::{
     bits::BitVec,

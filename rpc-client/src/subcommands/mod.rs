@@ -1,5 +1,4 @@
-pub use accounts_subcommands::AccountCommand;
-pub use accounts_subcommands::HandleSubcommand;
+pub use accounts_subcommands::{AccountCommand, HandleSubcommand};
 pub use blockchain_subcommands::BlockchainCommand;
 pub use mempool_subcommands::MempoolCommand;
 pub use network_subcommands::NetworkCommand;

@@ -1,8 +1,7 @@
 use std::ops::RangeInclusive;
 
-use thiserror::Error;
-
 use nimiq_utils::math::log2;
+use thiserror::Error;
 
 use crate::contribution::AggregatableContribution;
 
@@ -122,9 +121,10 @@ impl Partitioner for BinomialPartitioner {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use nimiq_test_log::test;
     use rand::Rng;
+
+    use super::*;
 
     #[test]
     fn test_partitioner() {

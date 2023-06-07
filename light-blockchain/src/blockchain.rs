@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
-
 use nimiq_block::{Block, MacroBlock};
 use nimiq_blockchain_interface::{
     AbstractBlockchain, BlockchainError, BlockchainEvent, ChainInfo, ForkEvent,
@@ -15,6 +13,7 @@ use nimiq_primitives::{
 };
 use nimiq_utils::time::OffsetTime;
 use nimiq_vrf::{Rng, VrfEntropy, VrfUseCase};
+use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
 
 use crate::chain_store::ChainStore;
 

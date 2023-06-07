@@ -1,13 +1,11 @@
-use std::net::SocketAddr;
-use std::sync::Arc;
+use std::{net::SocketAddr, sync::Arc};
 
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_consensus::ConsensusProxy;
 #[cfg(feature = "nimiq-mempool")]
 use nimiq_mempool::mempool::Mempool;
-use nimiq_network_interface::network::Network;
-
 pub use nimiq_metrics_server::NimiqTaskMonitor;
+use nimiq_network_interface::network::Network;
 
 pub fn start_metrics_server<TNetwork: Network>(
     addr: SocketAddr,

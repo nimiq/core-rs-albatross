@@ -1,17 +1,16 @@
-use std::convert::TryFrom;
-use std::fmt;
-use std::io;
-use std::iter::Sum;
-use std::ops::{Add, AddAssign, Div, Rem, Sub, SubAssign};
-use std::str::FromStr;
-
-use lazy_static::lazy_static;
-use num_traits::identities::Zero;
-use num_traits::{SaturatingAdd, SaturatingSub};
-use regex::Regex;
-use thiserror::Error;
+use std::{
+    convert::TryFrom,
+    fmt, io,
+    iter::Sum,
+    ops::{Add, AddAssign, Div, Rem, Sub, SubAssign},
+    str::FromStr,
+};
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
+use lazy_static::lazy_static;
+use num_traits::{identities::Zero, SaturatingAdd, SaturatingSub};
+use regex::Regex;
+use thiserror::Error;
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Default, Hash)]
 #[cfg_attr(

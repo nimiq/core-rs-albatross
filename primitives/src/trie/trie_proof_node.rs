@@ -1,9 +1,8 @@
-use log::error;
+use std::io;
 
 use beserial::{Deserialize, Serialize, SerializeWithLength, WriteBytesExt};
+use log::error;
 use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
-
-use std::io;
 
 use crate::{
     key_nibbles::KeyNibbles,
@@ -141,10 +140,12 @@ impl Hash for TrieProofNode {}
 
 #[cfg(test)]
 mod test {
-    use crate::key_nibbles::KeyNibbles;
-    use crate::trie::trie_node::TrieNode;
-    use crate::trie::trie_proof_node::TrieProofNode;
     use nimiq_hash::{Blake2bHash, Hash};
+
+    use crate::{
+        key_nibbles::KeyNibbles,
+        trie::{trie_node::TrieNode, trie_proof_node::TrieProofNode},
+    };
 
     #[test]
     fn hash_works() {

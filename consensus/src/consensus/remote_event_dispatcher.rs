@@ -7,8 +7,6 @@ use std::{
 };
 
 use futures::{stream::BoxStream, StreamExt};
-use parking_lot::RwLock;
-
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent};
 use nimiq_hash::{Blake2bHash, Hash};
@@ -19,12 +17,15 @@ use nimiq_network_interface::{
 };
 use nimiq_primitives::account::AccountType;
 use nimiq_transaction::account::staking_contract::IncomingStakingTransactionData;
+use parking_lot::RwLock;
 
-use crate::messages::{
-    AddressNotification, AddressSubscriptionOperation, AddressSubscriptionTopic, NotificationEvent,
-    RequestSubscribeToAddress, ResponseSubscribeToAddress,
+use crate::{
+    messages::{
+        AddressNotification, AddressSubscriptionOperation, AddressSubscriptionTopic,
+        NotificationEvent, RequestSubscribeToAddress, ResponseSubscribeToAddress,
+    },
+    SubscribeToAddressesError::*,
 };
-use crate::SubscribeToAddressesError::*;
 
 /// The max number of peers that can be subscribed.
 pub const MAX_SUBSCRIBED_PEERS: usize = 50;

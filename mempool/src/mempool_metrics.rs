@@ -1,9 +1,10 @@
-use crate::mempool_state::EvictionReason;
 use prometheus_client::{
     encoding::{EncodeLabelSet, EncodeLabelValue},
     metrics::{counter::Counter, family::Family},
     registry::Registry,
 };
+
+use crate::mempool_state::EvictionReason;
 
 #[derive(Default, Clone)]
 pub struct MempoolMetrics {

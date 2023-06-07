@@ -1,14 +1,13 @@
 #[cfg(any(feature = "client", feature = "primitives"))]
 use std::str::FromStr;
 
+use nimiq_primitives::networks::NetworkId;
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 #[cfg(any(feature = "client", feature = "primitives"))]
 use wasm_bindgen::prelude::JsError;
 #[cfg(feature = "primitives")]
 use wasm_bindgen::prelude::JsValue;
-
-use nimiq_primitives::networks::NetworkId;
 
 /// Use this to provide initialization-time configuration to the Client.
 /// This is a simplified version of the configuration that is used for regular nodes,

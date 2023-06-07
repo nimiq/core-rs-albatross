@@ -1,7 +1,6 @@
 use anyhow::Error;
 use async_trait::async_trait;
 use clap::Parser;
-
 use nimiq_rpc_interface::network::NetworkInterface;
 
 use super::accounts_subcommands::HandleSubcommand;

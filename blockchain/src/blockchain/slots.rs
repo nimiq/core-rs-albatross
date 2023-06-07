@@ -1,8 +1,10 @@
 use nimiq_blockchain_interface::BlockchainError;
 use nimiq_collections::BitSet;
 use nimiq_database::TransactionProxy;
-use nimiq_primitives::policy::Policy;
-use nimiq_primitives::slots::{Validator, Validators};
+use nimiq_primitives::{
+    policy::Policy,
+    slots::{Validator, Validators},
+};
 use nimiq_vrf::{Rng, VrfEntropy, VrfSeed, VrfUseCase};
 
 use crate::Blockchain;

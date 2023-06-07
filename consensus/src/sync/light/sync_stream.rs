@@ -1,9 +1,10 @@
-use std::pin::Pin;
-use std::sync::Arc;
-use std::task::{Context, Poll};
+use std::{
+    pin::Pin,
+    sync::Arc,
+    task::{Context, Poll},
+};
 
 use futures::{FutureExt, Stream, StreamExt};
-
 use nimiq_block::Block;
 #[cfg(feature = "full")]
 use nimiq_blockchain::Blockchain;
@@ -424,8 +425,6 @@ mod tests {
     use std::sync::Arc;
 
     use futures::StreamExt;
-    use parking_lot::RwLock;
-
     use nimiq_block_production::BlockProducer;
     use nimiq_blockchain::{Blockchain, BlockchainConfig};
     use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
@@ -438,10 +437,12 @@ mod tests {
     use nimiq_test_log::test;
     use nimiq_test_utils::blockchain::{produce_macro_blocks_with_txns, signing_key, voting_key};
     use nimiq_utils::time::OffsetTime;
+    use parking_lot::RwLock;
 
-    use crate::messages::{RequestBlock, RequestMacroChain};
-    use crate::sync::light::LightMacroSync;
-    use crate::sync::syncer::MacroSyncReturn;
+    use crate::{
+        messages::{RequestBlock, RequestMacroChain},
+        sync::{light::LightMacroSync, syncer::MacroSyncReturn},
+    };
 
     fn blockchain() -> BlockchainProxy {
         let time = Arc::new(OffsetTime::new());

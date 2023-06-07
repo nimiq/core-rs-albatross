@@ -1,8 +1,7 @@
 use std::{collections::HashMap, convert::TryFrom, fmt::Display, str::FromStr};
 
-use serde::{de::Error, Deserialize, Deserializer};
-
 use nimiq_primitives::coin::Coin;
+use serde::{de::Error, Deserialize, Deserializer};
 
 pub(crate) fn deserialize_coin<'de, D>(deserializer: D) -> Result<Coin, D::Error>
 where

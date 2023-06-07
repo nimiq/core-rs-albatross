@@ -2,13 +2,11 @@ use ark_groth16::constraints::VerifyingKeyVar;
 use ark_mnt6_753::{constraints::PairingVar, Fq as MNT6Fq, MNT6_753};
 use ark_r1cs_std::{alloc::AllocVar, uint8::UInt8};
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
-
 use nimiq_pedersen_generators::DefaultWindow;
 use nimiq_zkp_primitives::PEDERSEN_PARAMETERS;
 
-use crate::gadgets::{pedersen::PedersenHashGadget, serialize::SerializeGadget};
-
 use super::DefaultPedersenParametersVar;
+use crate::gadgets::{pedersen::PedersenHashGadget, serialize::SerializeGadget};
 
 /// This gadget is meant to calculate a commitment in-circuit for a verifying key of a SNARK in the
 /// MNT6-753 curve. This means we can open this commitment inside of a circuit in the MNT4-753 curve
@@ -68,13 +66,11 @@ mod tests {
     use ark_ec::CurveGroup;
     use ark_groth16::{constraints::VerifyingKeyVar, VerifyingKey};
     use ark_mnt6_753::{
-        constraints::PairingVar,
-        Fq as MNT6Fq, MNT6_753, {G1Projective, G2Projective},
+        constraints::PairingVar, Fq as MNT6Fq, G1Projective, G2Projective, MNT6_753,
     };
     use ark_r1cs_std::{prelude::AllocVar, R1CSVar};
     use ark_relations::r1cs::ConstraintSystem;
     use ark_std::{test_rng, UniformRand};
-
     use nimiq_test_log::test;
     use nimiq_zkp_primitives::vk_commitment;
 

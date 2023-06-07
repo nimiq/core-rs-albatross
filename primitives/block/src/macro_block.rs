@@ -1,21 +1,20 @@
 use std::fmt;
 
-use nimiq_transaction::reward::RewardTransaction;
-use thiserror::Error;
-
 use beserial::{Deserialize, Serialize};
 use nimiq_collections::bitset::BitSet;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, SerializeContent};
 use nimiq_hash_derive::SerializeContent;
-use nimiq_primitives::policy::Policy;
-use nimiq_primitives::slots::Validators;
+use nimiq_primitives::{policy::Policy, slots::Validators};
+use nimiq_transaction::reward::RewardTransaction;
 use nimiq_vrf::VrfSeed;
-use nimiq_zkp_primitives::MacroBlock as ZKPMacroBlock;
-use nimiq_zkp_primitives::{pk_tree_construct, PK_TREE_BREADTH};
+use nimiq_zkp_primitives::{pk_tree_construct, MacroBlock as ZKPMacroBlock, PK_TREE_BREADTH};
+use thiserror::Error;
 
-use crate::signed::{Message, PREFIX_TENDERMINT_PROPOSAL};
-use crate::tendermint::TendermintProof;
-use crate::BlockError;
+use crate::{
+    signed::{Message, PREFIX_TENDERMINT_PROPOSAL},
+    tendermint::TendermintProof,
+    BlockError,
+};
 
 /// The struct representing a Macro block (can be either checkpoint or election).
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]

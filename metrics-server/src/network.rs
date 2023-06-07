@@ -1,8 +1,9 @@
+use std::sync::Arc;
+
+use nimiq_network_libp2p::Network;
 use prometheus_client::registry::Registry;
 
 use crate::NumericClosureMetric;
-use nimiq_network_libp2p::Network;
-use std::sync::Arc;
 
 pub struct NetworkMetrics {}
 

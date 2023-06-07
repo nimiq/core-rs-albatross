@@ -3,7 +3,6 @@ use ark_ec::mnt6::MNT6;
 use ark_ff::ToConstraintField;
 use ark_groth16::{Groth16, Proof, VerifyingKey};
 use ark_mnt6_753::{Config, MNT6_753};
-
 use nimiq_zkp_primitives::{state_commitment, vk_commitment, NanoZKPError};
 
 /// This function verifies a proof for the Merger Wrapper circuit, which implicitly is a proof for

@@ -1,5 +1,4 @@
-use std::env;
-use std::process::exit;
+use std::{env, process::exit};
 
 use nimiq_database::volatile::VolatileDatabase;
 use nimiq_genesis_builder::{GenesisBuilder, GenesisInfo};

@@ -1,16 +1,16 @@
-use parking_lot::RwLock;
 use std::sync::Arc;
 
 use nimiq_block::TendermintIdentifier;
-use nimiq_handel::evaluator::WeightedVote;
-use nimiq_handel::partitioner::BinomialPartitioner;
-use nimiq_handel::protocol::Protocol;
-use nimiq_handel::store::ReplaceStore;
+use nimiq_handel::{
+    evaluator::WeightedVote, partitioner::BinomialPartitioner, protocol::Protocol,
+    store::ReplaceStore,
+};
+use parking_lot::RwLock;
 
-use super::super::registry::ValidatorRegistry;
-
-use super::contribution::TendermintContribution;
-use super::verifier::TendermintVerifier;
+use super::{
+    super::registry::ValidatorRegistry, contribution::TendermintContribution,
+    verifier::TendermintVerifier,
+};
 
 #[derive(std::fmt::Debug)]
 pub(crate) struct TendermintAggregationProtocol {

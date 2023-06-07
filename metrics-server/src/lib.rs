@@ -1,28 +1,25 @@
-use std::fmt::Debug;
-use std::net::SocketAddr;
+use std::{fmt::Debug, net::SocketAddr, sync::Arc};
 
-use prometheus_client::encoding::{EncodeGaugeValue, EncodeMetric, MetricEncoder};
-use prometheus_client::registry::Registry;
-
-use parking_lot::RwLock;
-use tokio_metrics::TaskMonitor;
-
-use crate::chain::BlockMetrics;
-use crate::consensus::ConsensusMetrics;
-use crate::mempool::MempoolMetrics;
-use crate::network::NetworkMetrics;
-use crate::server::metrics_server;
-#[cfg(tokio_unstable)]
-use crate::tokio_runtime::TokioRuntimeMetrics;
-use crate::tokio_task::TokioTaskMetrics;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_consensus::ConsensusProxy;
 use nimiq_mempool::mempool::Mempool;
 use nimiq_network_interface::network::Network;
-use prometheus_client::metrics::MetricType;
-use std::sync::Arc;
+use parking_lot::RwLock;
+use prometheus_client::{
+    encoding::{EncodeGaugeValue, EncodeMetric, MetricEncoder},
+    metrics::MetricType,
+    registry::Registry,
+};
 #[cfg(tokio_unstable)]
 use tokio_metrics::RuntimeMonitor;
+use tokio_metrics::TaskMonitor;
+
+#[cfg(tokio_unstable)]
+use crate::tokio_runtime::TokioRuntimeMetrics;
+use crate::{
+    chain::BlockMetrics, consensus::ConsensusMetrics, mempool::MempoolMetrics,
+    network::NetworkMetrics, server::metrics_server, tokio_task::TokioTaskMetrics,
+};
 
 mod chain;
 mod consensus;

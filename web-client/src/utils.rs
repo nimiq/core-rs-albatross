@@ -1,6 +1,5 @@
-use wasm_bindgen::JsError;
-
 use nimiq_primitives::networks::NetworkId;
+use wasm_bindgen::JsError;
 
 /// Convert a NetworkId to u8
 pub fn from_network_id(network_id: NetworkId) -> u8 {

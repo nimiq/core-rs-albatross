@@ -1,5 +1,4 @@
-use std::cmp::min;
-use std::sync::Arc;
+use std::{cmp::min, sync::Arc};
 
 use parking_lot::RwLock;
 use rand::{seq::SliceRandom, thread_rng};
@@ -179,11 +178,10 @@ impl Level {
 
 #[cfg(test)]
 mod test {
-    use rand::Rng;
-
     use beserial::{Deserialize, Serialize};
     use nimiq_collections::bitset::BitSet;
     use nimiq_test_log::test;
+    use rand::Rng;
 
     use super::*;
     use crate::contribution::ContributionError;

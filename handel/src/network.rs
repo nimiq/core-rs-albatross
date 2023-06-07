@@ -8,7 +8,6 @@ use futures::{
     stream::{FuturesUnordered, StreamExt},
     Stream,
 };
-
 use nimiq_macros::store_waker;
 
 use crate::{contribution::AggregatableContribution, update::LevelUpdate};
@@ -162,13 +161,12 @@ impl<TNetwork: Network + Unpin> Stream for LevelUpdateSender<TNetwork> {
 mod test {
     use std::{sync::Arc, task::Context};
 
-    use futures::{FutureExt, StreamExt};
-    use parking_lot::Mutex;
-    use tokio::time;
-
     use beserial::{Deserialize, Serialize};
+    use futures::{FutureExt, StreamExt};
     use nimiq_collections::BitSet;
     use nimiq_test_log::test;
+    use parking_lot::Mutex;
+    use tokio::time;
 
     use crate::{
         contribution::{AggregatableContribution, ContributionError},

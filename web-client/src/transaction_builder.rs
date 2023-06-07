@@ -1,11 +1,8 @@
-use wasm_bindgen::prelude::*;
-
 use nimiq_primitives::{account::AccountType, coin::Coin, policy::Policy};
 use nimiq_transaction_builder::Recipient;
+use wasm_bindgen::prelude::*;
 
-use crate::address::Address;
-use crate::transaction::Transaction;
-use crate::utils::to_network_id;
+use crate::{address::Address, transaction::Transaction, utils::to_network_id};
 
 /// The TransactionBuilder class provides helper methods to easily create standard types of transactions.
 /// It can only be instantiated from a Client with `client.transactionBuilder()`.

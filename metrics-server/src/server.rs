@@ -1,18 +1,15 @@
-use prometheus_client::encoding::text::encode;
-use prometheus_client::registry::Registry;
+use std::{
+    future::Future,
+    net::SocketAddr,
+    pin::Pin,
+    sync::Arc,
+    task::{Context, Poll},
+};
 
-use hyper::http::StatusCode;
-use hyper::service::Service;
-use hyper::{Body, Method, Request, Response, Server};
-
+use hyper::{http::StatusCode, service::Service, Body, Method, Request, Response, Server};
 use log::{error, info};
-
 use parking_lot::RwLock;
-use std::future::Future;
-use std::net::SocketAddr;
-use std::pin::Pin;
-use std::sync::Arc;
-use std::task::{Context, Poll};
+use prometheus_client::{encoding::text::encode, registry::Registry};
 
 pub async fn metrics_server(addr: SocketAddr, registry: Registry) -> Result<(), std::io::Error> {
     let server = Server::bind(&addr).serve(MakeMetricService::new(registry));

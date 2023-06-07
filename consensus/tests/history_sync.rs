@@ -1,33 +1,35 @@
 mod sync_utils;
 
-use std::sync::Arc;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use futures::StreamExt;
-use nimiq_blockchain_proxy::BlockchainProxy;
-use nimiq_bls::cache::PublicKeyCache;
-use nimiq_consensus::sync::syncer_proxy::SyncerProxy;
-use nimiq_test_log::test;
-use nimiq_test_utils::node::TESTING_BLS_CACHE_MAX_CAPACITY;
-use nimiq_zkp_component::ZKPComponent;
-use parking_lot::{Mutex, RwLock};
-
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::AbstractBlockchain;
-use nimiq_consensus::consensus::Consensus;
-use nimiq_consensus::sync::history::{cluster::SyncCluster, HistoryMacroSync};
+use nimiq_blockchain_proxy::BlockchainProxy;
+use nimiq_bls::cache::PublicKeyCache;
+use nimiq_consensus::{
+    consensus::Consensus,
+    sync::{
+        history::{cluster::SyncCluster, HistoryMacroSync},
+        syncer_proxy::SyncerProxy,
+    },
+};
 use nimiq_database::volatile::VolatileDatabase;
 use nimiq_genesis::NetworkId;
 use nimiq_network_interface::network::Network as NetworkInterface;
 use nimiq_network_libp2p::Network;
 use nimiq_network_mock::MockHub;
 use nimiq_primitives::policy::Policy;
+use nimiq_test_log::test;
 use nimiq_test_utils::{
     blockchain::{produce_macro_blocks, signing_key, voting_key},
+    node::TESTING_BLS_CACHE_MAX_CAPACITY,
     test_network::TestNetwork,
 };
 use nimiq_utils::time::OffsetTime;
+use nimiq_zkp_component::ZKPComponent;
+use parking_lot::{Mutex, RwLock};
 
 use crate::sync_utils::{sync_two_peers, SyncMode};
 

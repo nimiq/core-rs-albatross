@@ -1,12 +1,5 @@
-use std::str::FromStr;
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc, time::Instant};
 
-use parking_lot::RwLock;
-use rand::{rngs::StdRng, RngCore, SeedableRng};
-use std::time::Instant;
-
-use crate::blockchain_with_rng::*;
-use crate::test_rng::test_rng;
 use beserial::Deserialize;
 use nimiq_block::{
     Block, MacroBlock, MacroBody, MacroHeader, MultiSignature, SignedSkipBlockInfo, SkipBlockInfo,
@@ -18,12 +11,16 @@ use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
 use nimiq_bls::{AggregateSignature, KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
 use nimiq_collections::BitSet;
 use nimiq_genesis::NetworkId;
-use nimiq_keys::{Address, KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey};
-use nimiq_keys::{KeyPair, PrivateKey};
-use nimiq_primitives::coin::Coin;
-use nimiq_primitives::policy::Policy;
+use nimiq_keys::{
+    Address, KeyPair as SchnorrKeyPair, KeyPair, PrivateKey as SchnorrPrivateKey, PrivateKey,
+};
+use nimiq_primitives::{coin::Coin, policy::Policy};
 use nimiq_transaction::Transaction;
 use nimiq_transaction_builder::TransactionBuilder;
+use parking_lot::RwLock;
+use rand::{rngs::StdRng, RngCore, SeedableRng};
+
+use crate::{blockchain_with_rng::*, test_rng::test_rng};
 
 /// Secret keys of validator. Tests run with `genesis/src/genesis/unit-albatross.toml`
 pub const SIGNING_KEY: &str = "041580cc67e66e9e08b68fd9e4c9deb68737168fbe7488de2638c2e906c2f5ad";

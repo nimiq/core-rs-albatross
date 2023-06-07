@@ -1,12 +1,9 @@
 use log::level_filters::LevelFilter;
 use nimiq_log::TargetsExt;
 use nimiq_primitives::policy::{Policy, TEST_POLICY};
-use parking_lot::Once;
-use tracing_subscriber::filter::Targets;
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
-
 pub use nimiq_test_log_proc_macro::test;
+use parking_lot::Once;
+use tracing_subscriber::{filter::Targets, layer::SubscriberExt, util::SubscriberInitExt};
 
 static INITIALIZE: Once = Once::new();
 

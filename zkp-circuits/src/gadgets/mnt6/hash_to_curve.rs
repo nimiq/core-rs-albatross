@@ -4,15 +4,13 @@ use ark_r1cs_std::{
     fields::{fp::FpVar, FieldVar},
     prelude::{AllocVar, EqGadget},
     uint8::UInt8,
-    ToBitsGadget, {R1CSVar, ToConstraintFieldGadget},
+    R1CSVar, ToBitsGadget, ToConstraintFieldGadget,
 };
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 use ark_std::Zero;
-
 use nimiq_hash::blake2s::Blake2sWithParameterBlock;
 
-use crate::blake2s::evaluate_blake2s_with_parameters;
-use crate::gadgets::y_to_bit::YToBitGadget;
+use crate::{blake2s::evaluate_blake2s_with_parameters, gadgets::y_to_bit::YToBitGadget};
 
 /// This gadget implements the functionality to hash a message into an elliptic curve point.
 pub struct HashToCurve;

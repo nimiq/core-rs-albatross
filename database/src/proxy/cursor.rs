@@ -1,5 +1,4 @@
 use libmdbx::{RO, RW};
-
 use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue};
 
 use crate::{

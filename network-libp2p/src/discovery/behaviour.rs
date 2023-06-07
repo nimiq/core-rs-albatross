@@ -15,12 +15,11 @@ use libp2p::{
     },
     Multiaddr, PeerId,
 };
-use parking_lot::RwLock;
-use wasm_timer::Interval;
-
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::peer_info::Services;
 use nimiq_utils::time::OffsetTime;
+use parking_lot::RwLock;
+use wasm_timer::Interval;
 
 use super::{
     handler::{DiscoveryHandler, HandlerInEvent, HandlerOutEvent},

@@ -14,13 +14,12 @@ use ark_relations::r1cs::{
 };
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{cfg_into_iter, cfg_iter, rand::Rng};
+use nimiq_zkp_primitives::NanoZKPError;
 use rand::CryptoRng;
 #[cfg(feature = "parallel")]
 use rayon::iter::{
     IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator, ParallelIterator,
 };
-
-use nimiq_zkp_primitives::NanoZKPError;
 
 use crate::{circuits::mnt4::MergerWrapperCircuit, setup::keys_to_file};
 
@@ -273,8 +272,6 @@ pub fn setup_merger_wrapper_simulation<R: Rng + CryptoRng>(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     use ark_crypto_primitives::snark::SNARK;
     use ark_ff::ToConstraintField;
     use ark_groth16::Groth16;
@@ -282,8 +279,9 @@ mod tests {
     use ark_r1cs_std::{prelude::EqGadget, uint8::UInt8};
     use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
     use ark_std::test_rng;
-
     use nimiq_test_log::test;
+
+    use super::*;
 
     #[derive(Clone)]
     pub struct InnerCircuit {

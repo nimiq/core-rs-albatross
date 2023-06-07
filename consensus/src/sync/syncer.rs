@@ -1,11 +1,12 @@
-use std::collections::{HashMap, HashSet};
-use std::pin::Pin;
-use std::task::{Context, Poll};
-use std::time::Duration;
+use std::{
+    collections::{HashMap, HashSet},
+    pin::Pin,
+    task::{Context, Poll},
+    time::Duration,
+};
 
 use futures::{Stream, StreamExt};
 use instant::Instant;
-
 use nimiq_block::Block;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::network::Network;

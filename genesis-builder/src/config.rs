@@ -1,14 +1,12 @@
 use std::convert::TryFrom;
 
-use serde::de::Error;
-use serde::{Deserialize, Deserializer};
-use time::OffsetDateTime;
-
 use beserial::Deserialize as BDeserialize;
 use nimiq_bls::PublicKey as BlsPublicKey;
 use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
 use nimiq_primitives::coin::Coin;
 use nimiq_vrf::VrfSeed;
+use serde::{de::Error, Deserialize, Deserializer};
+use time::OffsetDateTime;
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct GenesisConfig {

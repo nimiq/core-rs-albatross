@@ -8,9 +8,11 @@ use nimiq_genesis_builder::GenesisBuilder;
 use nimiq_keys::{Address, KeyPair, SecureGenerate};
 use nimiq_network_mock::{MockHub, MockNetwork};
 use nimiq_test_log::test;
-use nimiq_test_utils::blockchain::{produce_macro_blocks, signing_key, voting_key};
-use nimiq_test_utils::node::Node;
-use nimiq_test_utils::validator::seeded_rng;
+use nimiq_test_utils::{
+    blockchain::{produce_macro_blocks, signing_key, voting_key},
+    node::Node,
+    validator::seeded_rng,
+};
 
 #[ignore]
 #[test(tokio::test(flavor = "multi_thread", worker_threads = 4))]

@@ -1,5 +1,4 @@
-use std::iter;
-use std::sync::Arc;
+use std::{iter, sync::Arc};
 
 use libp2p::{
     core::either::EitherError,
@@ -20,9 +19,8 @@ use libp2p::{
     swarm::{ConnectionHandlerUpgrErr, NetworkBehaviour},
     Multiaddr, PeerId,
 };
-use parking_lot::RwLock;
-
 use nimiq_utils::time::OffsetTime;
+use parking_lot::RwLock;
 
 use crate::{
     connection_pool::{

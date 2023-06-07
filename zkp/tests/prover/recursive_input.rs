@@ -1,9 +1,10 @@
 use ark_crypto_primitives::snark::{CircuitSpecificSetupSNARK, SNARKGadget, SNARK};
-use ark_groth16::constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar};
-use ark_groth16::{Groth16, Proof, VerifyingKey};
+use ark_groth16::{
+    constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar},
+    Groth16, Proof, VerifyingKey,
+};
 use ark_mnt4_753::{Fq as FqMNT4, MNT4_753};
-use ark_mnt6_753::constraints::PairingVar;
-use ark_mnt6_753::{Fq as FqMNT6, MNT6_753};
+use ark_mnt6_753::{constraints::PairingVar, Fq as FqMNT6, MNT6_753};
 use ark_r1cs_std::{
     prelude::{AllocVar, Boolean, EqGadget},
     uint8::UInt8,
@@ -12,10 +13,9 @@ use ark_relations::r1cs::{
     ConstraintSynthesizer, ConstraintSystemRef, SynthesisError, ToConstraintField,
 };
 use ark_std::rand::RngCore;
-use nimiq_zkp_circuits::recursive::RecursiveInputVar;
-
 use nimiq_test_log::test;
 use nimiq_test_utils::test_rng::test_rng;
+use nimiq_zkp_circuits::recursive::RecursiveInputVar;
 
 const NUMBER_OF_BYTES: usize = 128;
 

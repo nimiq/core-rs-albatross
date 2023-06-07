@@ -1,7 +1,6 @@
-use rand::thread_rng;
-
 use nimiq_bls::*;
 use nimiq_utils::key_rng::SecureGenerate;
+use rand::thread_rng;
 
 fn main() {
     let rng = &mut thread_rng();

@@ -1,7 +1,6 @@
 use std::borrow::Cow;
 
 use libmdbx::{NoWriteMap, TransactionKind, WriteFlags, RO, RW};
-
 use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue, IntoDatabaseValue};
 
 use super::{MdbxCursor, MdbxTable, MdbxWriteCursor};

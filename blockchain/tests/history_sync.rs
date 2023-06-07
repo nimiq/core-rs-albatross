@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use parking_lot::RwLock;
-
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
@@ -14,6 +12,7 @@ use nimiq_test_utils::blockchain::{
     voting_key,
 };
 use nimiq_utils::time::OffsetTime;
+use parking_lot::RwLock;
 
 // Tests if the basic history sync works. It will try to push a succession of election and checkpoint
 // blocks. It does test if election blocks can be pushed after checkpoint blocks and vice-versa. It

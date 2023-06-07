@@ -1,9 +1,9 @@
 //! This module generates `Serialize` and `Deserialize` implementations for the `std::net`
 //! IP address structs and enums.
 
-use crate::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
-
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
+
+use crate::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 
 macro_rules! impl_serialize_ipaddr {
     ($name: ident, $bytes: expr) => {

@@ -1,10 +1,9 @@
 use std::{cmp::Ordering, fmt};
 
+use nimiq_hash::Hash;
 use parking_lot::{
     MappedRwLockReadGuard, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard, RwLockWriteGuard,
 };
-
-use nimiq_hash::Hash;
 
 use crate::{CompressedPublicKey, PublicKey, SigHash, Signature};
 

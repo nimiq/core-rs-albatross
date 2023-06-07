@@ -1,25 +1,17 @@
-use std::collections::VecDeque;
-use std::path::PathBuf;
-use std::str::FromStr;
+use std::{
+    collections::VecDeque,
+    path::PathBuf,
+    str::FromStr,
+    sync::{Arc, RwLock},
+};
 
 use clap::Parser;
 use futures::StreamExt;
 use log::info;
-use rand::{
-    distributions::{Distribution, WeightedIndex},
-    thread_rng, Rng,
-};
-
-use serde::Deserialize;
-
-use std::sync::{Arc, RwLock};
-
 use nimiq::client::ConsensusProxy;
 pub use nimiq::{
     client::{Client, Consensus},
-    config::command_line::CommandLine,
-    config::config::ClientConfig,
-    config::config_file::ConfigFile,
+    config::{command_line::CommandLine, config::ClientConfig, config_file::ConfigFile},
     error::Error,
     extras::{
         deadlock::initialize_deadlock_detection,
@@ -32,10 +24,14 @@ use nimiq_block::BlockType;
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent};
 use nimiq_keys::{Address, KeyPair, PrivateKey, SecureGenerate};
 use nimiq_mempool::mempool::Mempool;
-use nimiq_primitives::coin::Coin;
-use nimiq_primitives::networks::NetworkId;
+use nimiq_primitives::{coin::Coin, networks::NetworkId};
 use nimiq_transaction::Transaction;
 use nimiq_transaction_builder::TransactionBuilder;
+use rand::{
+    distributions::{Distribution, WeightedIndex},
+    thread_rng, Rng,
+};
+use serde::Deserialize;
 
 #[derive(Debug, Parser)]
 pub struct SpammerCommandLine {

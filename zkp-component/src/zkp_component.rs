@@ -1,32 +1,31 @@
-use futures::{Future, StreamExt};
 #[cfg(feature = "zkp-prover")]
 use std::path::PathBuf;
-use std::pin::Pin;
-use std::sync::Arc;
-use std::task::{Context, Poll};
+use std::{
+    pin::Pin,
+    sync::Arc,
+    task::{Context, Poll},
+};
+
+use futures::{stream::BoxStream, Future, StreamExt};
+use nimiq_block::MacroBlock;
+use nimiq_blockchain_interface::AbstractBlockchain;
+use nimiq_blockchain_proxy::BlockchainProxy;
+use nimiq_genesis::NetworkInfo;
+use nimiq_network_interface::{
+    network::{MsgAcceptance, Network, PubsubId},
+    request::request_handler,
+};
+use nimiq_primitives::task_executor::TaskExecutor;
+use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use tokio::sync::{
     broadcast::{channel as broadcast, Sender as BroadcastSender},
     oneshot::error::RecvError,
 };
 use tokio_stream::wrappers::BroadcastStream;
 
-use nimiq_genesis::NetworkInfo;
-use nimiq_network_interface::network::{MsgAcceptance, PubsubId};
-use nimiq_primitives::task_executor::TaskExecutor;
-use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
-
-use nimiq_block::MacroBlock;
-use nimiq_blockchain_interface::AbstractBlockchain;
-use nimiq_blockchain_proxy::BlockchainProxy;
-use nimiq_network_interface::{network::Network, request::request_handler};
-
-use crate::proof_store::ProofStore;
-use crate::proof_utils::*;
-use crate::types::*;
 #[cfg(feature = "zkp-prover")]
 use crate::zkp_prover::ZKProver;
-use crate::zkp_requests::ZKPRequests;
-use futures::stream::BoxStream;
+use crate::{proof_store::ProofStore, proof_utils::*, types::*, zkp_requests::ZKPRequests};
 
 pub type ZKProofsStream<N> = BoxStream<'static, (ZKProof, <N as Network>::PubsubId)>;
 

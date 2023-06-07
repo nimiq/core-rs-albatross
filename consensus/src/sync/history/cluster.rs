@@ -1,15 +1,16 @@
-use std::collections::VecDeque;
-use std::fmt::Formatter;
-use std::pin::Pin;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
-use std::task::{Context, Poll};
+use std::{
+    collections::VecDeque,
+    fmt::Formatter,
+    pin::Pin,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
+    task::{Context, Poll},
+};
 
 use futures::{FutureExt, Stream, StreamExt};
 use lazy_static::lazy_static;
-use parking_lot::RwLock;
-use thiserror::Error;
-
 use nimiq_block::{Block, MacroBlock};
 use nimiq_blockchain::{Blockchain, HistoryTreeChunk, CHUNK_SIZE};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushError, PushResult};
@@ -18,11 +19,12 @@ use nimiq_network_interface::{network::Network, request::RequestError};
 use nimiq_primitives::{policy::Policy, slots::Validators};
 use nimiq_transaction::extended_transaction::ExtendedTransaction;
 use nimiq_utils::math::CeilingDiv;
+use parking_lot::RwLock;
+use thiserror::Error;
 
-use crate::sync::peer_list::PeerList;
 use crate::{
     messages::{BatchSetInfo, HistoryChunk, RequestBatchSet, RequestHistoryChunk},
-    sync::sync_queue::SyncQueue,
+    sync::{peer_list::PeerList, sync_queue::SyncQueue},
 };
 
 /// Error enumeration for history sync request

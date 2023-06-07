@@ -1,15 +1,9 @@
-use futures::{future::BoxFuture, FutureExt, Stream};
-use nimiq_light_blockchain::LightBlockchain;
-use nimiq_primitives::policy::Policy;
 use std::{
     collections::{HashSet, VecDeque},
     sync::Arc,
 };
-#[cfg(not(target_family = "wasm"))]
-use tokio::task::spawn_blocking;
 
-use parking_lot::Mutex;
-
+use futures::{future::BoxFuture, FutureExt, Stream};
 use nimiq_block::{Block, BlockHeaderTopic, BlockTopic};
 #[cfg(feature = "full")]
 use nimiq_blockchain::Blockchain;
@@ -19,11 +13,16 @@ use nimiq_blockchain_interface::{
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_hash::Blake2bHash;
+use nimiq_light_blockchain::LightBlockchain;
 use nimiq_network_interface::network::{MsgAcceptance, Network};
 use nimiq_primitives::{
     key_nibbles::KeyNibbles,
+    policy::Policy,
     trie::trie_chunk::{TrieChunk, TrieChunkWithStart},
 };
+use parking_lot::Mutex;
+#[cfg(not(target_family = "wasm"))]
+use tokio::task::spawn_blocking;
 
 use crate::sync::syncer::LiveSyncEvent;
 

@@ -1,5 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
+use beserial::{Deserialize, Serialize};
 use futures::{Stream, StreamExt};
 use libp2p::{
     gossipsub::GossipsubConfigBuilder,
@@ -8,10 +9,6 @@ use libp2p::{
     swarm::KeepAlive,
     PeerId,
 };
-use rand::{thread_rng, Rng};
-use tokio::time::timeout;
-
-use beserial::{Deserialize, Serialize};
 use nimiq_network_interface::{
     network::{CloseReason, MsgAcceptance, Network as NetworkInterface, NetworkEvent, Topic},
     peer_info::Services,
@@ -22,6 +19,8 @@ use nimiq_network_libp2p::{
 };
 use nimiq_test_log::test;
 use nimiq_utils::time::OffsetTime;
+use rand::{thread_rng, Rng};
+use tokio::time::timeout;
 
 fn network_config(address: Multiaddr) -> Config {
     let keypair = Keypair::generate_ed25519();

@@ -1,11 +1,9 @@
 use ark_mnt6_753::G2Projective;
+use nimiq_primitives::policy::Policy;
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
-use nimiq_primitives::policy::Policy;
-
-use crate::merkle_tree::merkle_tree_construct;
-use crate::serialize::serialize_g2_mnt6;
+use crate::{merkle_tree::merkle_tree_construct, serialize::serialize_g2_mnt6};
 
 /// This is the depth of the PKTree circuit.
 pub const PK_TREE_DEPTH: usize = 5;

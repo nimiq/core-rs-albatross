@@ -8,16 +8,15 @@ mod header;
 mod reader;
 mod writer;
 
-pub use self::reader::MessageReader;
-pub use self::writer::MessageWriter;
+pub use self::{reader::MessageReader, writer::MessageWriter};
 
 #[cfg(test)]
 mod tests {
     use beserial::{Deserialize, Serialize};
     use futures::{io::Cursor, SinkExt, StreamExt};
+    use nimiq_test_log::test;
 
     use super::{MessageReader, MessageWriter};
-    use nimiq_test_log::test;
 
     #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
     struct TestMessage {

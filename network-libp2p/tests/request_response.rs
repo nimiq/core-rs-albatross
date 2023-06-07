@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use beserial::{Deserialize, Serialize};
 use futures::{future::join_all, StreamExt};
 use libp2p::{
     core::multiaddr::{multiaddr, Multiaddr},
@@ -7,12 +8,6 @@ use libp2p::{
     identity::Keypair,
     swarm::KeepAlive,
 };
-use rand::{thread_rng, Rng};
-use tokio::time::Duration;
-#[cfg(feature = "tokio-time")]
-use tokio::time::Instant;
-
-use beserial::{Deserialize, Serialize};
 #[cfg(feature = "tokio-time")]
 use nimiq_network_interface::network::CloseReason;
 use nimiq_network_interface::{
@@ -29,6 +24,10 @@ use nimiq_network_libp2p::{
 };
 use nimiq_test_log::test;
 use nimiq_utils::time::OffsetTime;
+use rand::{thread_rng, Rng};
+use tokio::time::Duration;
+#[cfg(feature = "tokio-time")]
+use tokio::time::Instant;
 
 /// The max number of TestRequests per peer (used for regular tests only).
 const MAX_REQUEST_RESPONSE_TEST_REQUEST: u32 = 1000;

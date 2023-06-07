@@ -10,9 +10,8 @@ use ark_r1cs_std::{
     uint8::UInt8,
 };
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
-use rand::Rng;
-
 use nimiq_primitives::policy::Policy;
+use rand::Rng;
 
 use crate::gadgets::{bits::BitVec, recursive_input::RecursiveInputVar};
 

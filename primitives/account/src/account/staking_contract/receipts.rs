@@ -1,11 +1,12 @@
 use std::collections::BTreeSet;
 
-use crate::{convert_receipt, AccountReceipt};
 use beserial::{Deserialize, Serialize};
 use nimiq_bls::CompressedPublicKey as BlsPublicKey;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
 use nimiq_primitives::account::AccountError;
+
+use crate::{convert_receipt, AccountReceipt};
 
 /// A collection of receipts for inherents/transactions. This is necessary to be able to revert
 /// those inherents/transactions.

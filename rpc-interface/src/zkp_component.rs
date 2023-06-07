@@ -1,5 +1,6 @@
-use crate::types::{RPCResult, ZKPState};
 use async_trait::async_trait;
+
+use crate::types::{RPCResult, ZKPState};
 
 #[nimiq_jsonrpc_derive::proxy(name = "ZKPComponentProxy", rename_all = "camelCase")]
 #[async_trait]

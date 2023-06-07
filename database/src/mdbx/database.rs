@@ -3,9 +3,8 @@ use std::{borrow::Cow, fs, path::Path, sync::Arc};
 use libmdbx::NoWriteMap;
 use log::info;
 
-use crate::{traits::Database, DatabaseProxy, Error, TableFlags};
-
 use super::{MdbxReadTransaction, MdbxWriteTransaction};
+use crate::{traits::Database, DatabaseProxy, Error, TableFlags};
 
 pub(super) type DbKvPair<'a> = (Cow<'a, [u8]>, Cow<'a, [u8]>);
 

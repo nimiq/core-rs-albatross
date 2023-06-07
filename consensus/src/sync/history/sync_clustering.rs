@@ -1,7 +1,4 @@
-use std::collections::VecDeque;
-use std::sync::Arc;
-
-use parking_lot::RwLock;
+use std::{collections::VecDeque, sync::Arc};
 
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::AbstractBlockchain;
@@ -11,13 +8,20 @@ use nimiq_network_interface::{
     request::RequestError,
 };
 use nimiq_primitives::policy::Policy;
+use parking_lot::RwLock;
 
-use crate::messages::{MacroChain, RequestMacroChain};
-use crate::sync::history::cluster::{SyncCluster, SyncClusterResult};
-use crate::sync::history::sync::{EpochIds, Job};
-use crate::sync::history::HistoryMacroSync;
-use crate::sync::peer_list::PeerList;
-use crate::sync::syncer::MacroSync;
+use crate::{
+    messages::{MacroChain, RequestMacroChain},
+    sync::{
+        history::{
+            cluster::{SyncCluster, SyncClusterResult},
+            sync::{EpochIds, Job},
+            HistoryMacroSync,
+        },
+        peer_list::PeerList,
+        syncer::MacroSync,
+    },
+};
 
 impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
     pub(crate) async fn request_epoch_ids(
@@ -560,21 +564,20 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
 mod tests {
     use std::sync::Arc;
 
-    use parking_lot::RwLock;
-
     use nimiq_blockchain::{Blockchain, BlockchainConfig};
     use nimiq_database::volatile::VolatileDatabase;
     use nimiq_hash::Blake2bHash;
     use nimiq_network_interface::network::Network;
     use nimiq_network_mock::{MockHub, MockNetwork, MockPeerId};
-    use nimiq_primitives::networks::NetworkId;
-    use nimiq_primitives::policy::Policy;
+    use nimiq_primitives::{networks::NetworkId, policy::Policy};
     use nimiq_test_log::test;
     use nimiq_utils::time::OffsetTime;
+    use parking_lot::RwLock;
 
-    use crate::messages::Checkpoint;
-    use crate::sync::history::sync::EpochIds;
-    use crate::sync::history::HistoryMacroSync;
+    use crate::{
+        messages::Checkpoint,
+        sync::history::{sync::EpochIds, HistoryMacroSync},
+    };
 
     fn generate_epoch_ids(
         sender: MockPeerId,

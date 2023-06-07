@@ -1,15 +1,14 @@
 use beserial::{Deserialize, Serialize};
 #[cfg(feature = "interaction-traits")]
 use nimiq_primitives::account::AccountError;
-use nimiq_primitives::account::AccountType;
-use nimiq_primitives::coin::Coin;
+use nimiq_primitives::{account::AccountType, coin::Coin};
 #[cfg(feature = "interaction-traits")]
 use nimiq_transaction::{inherent::Inherent, Transaction, TransactionFlags};
 
-use crate::account::basic_account::BasicAccount;
-use crate::account::htlc_contract::HashedTimeLockedContract;
-use crate::account::staking_contract::StakingContract;
-use crate::account::vesting_contract::VestingContract;
+use crate::account::{
+    basic_account::BasicAccount, htlc_contract::HashedTimeLockedContract,
+    staking_contract::StakingContract, vesting_contract::VestingContract,
+};
 #[cfg(feature = "interaction-traits")]
 use crate::{
     data_store::{DataStoreRead, DataStoreWrite},

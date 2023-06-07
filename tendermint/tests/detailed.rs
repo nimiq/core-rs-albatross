@@ -1,12 +1,11 @@
 use std::collections::BTreeMap;
 
 use futures::stream::{self, StreamExt};
-use tokio::sync::mpsc;
-use tokio_stream::wrappers::ReceiverStream;
-
 use nimiq_collections::BitSet;
 use nimiq_tendermint::*;
 use nimiq_test_log::test;
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
 
 pub mod common;
 

@@ -1,6 +1,7 @@
+use std::collections::HashMap;
+
 use nimiq_block::{BlockInclusionProof, MacroBlock, MacroHeader};
 use nimiq_primitives::policy::Policy;
-use std::collections::HashMap;
 
 #[test]
 fn test_interlink_hops_to_block() {

@@ -1,7 +1,8 @@
-use crate::error::Error;
-use crate::hash::{Hash, Merge};
-
 use super::proof::SizeProof;
+use crate::{
+    error::Error,
+    hash::{Hash, Merge},
+};
 
 const USIZE_BITS: u32 = 0usize.count_zeros();
 
@@ -76,10 +77,10 @@ pub fn prove_num_leaves<
 
 #[cfg(test)]
 pub(crate) mod test_utils {
-    use crate::hash::{Hash, Merge};
+    use nimiq_test_log::test;
 
     use super::*;
-    use nimiq_test_log::test;
+    use crate::hash::{Hash, Merge};
 
     pub(crate) fn hash_perfect_tree<H: Merge, T: Hash<H>>(values: &[T]) -> Option<H> {
         let len = values.len();
@@ -185,9 +186,8 @@ pub(crate) mod test_utils {
 
 #[cfg(test)]
 mod tests {
-    use crate::mmr::utils::test_utils::TestHash;
-
     use super::*;
+    use crate::mmr::utils::test_utils::TestHash;
 
     #[test]
     fn it_correctly_compute_bit_length() {

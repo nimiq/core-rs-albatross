@@ -1,15 +1,15 @@
-use beserial::ReadBytesExt;
+use beserial::{Deserialize, ReadBytesExt, Serialize};
 use log::error;
-use strum_macros::Display;
-
-use crate::account::AccountTransactionVerification;
-use crate::SignatureProof;
-use crate::{Transaction, TransactionError, TransactionFlags};
-use beserial::{Deserialize, Serialize};
 use nimiq_hash::{Blake2bHasher, Hasher, Sha256Hasher};
 use nimiq_keys::Address;
 use nimiq_macros::{add_hex_io_fns_typed_arr, create_typed_array};
 use nimiq_primitives::account::AccountType;
+use strum_macros::Display;
+
+use crate::{
+    account::AccountTransactionVerification, SignatureProof, Transaction, TransactionError,
+    TransactionFlags,
+};
 
 /// The verifier trait for a hash time locked contract. This only uses data available in the transaction.
 pub struct HashedTimeLockedContractVerifier {}

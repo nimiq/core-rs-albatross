@@ -1,10 +1,14 @@
-use log::{level_filters::LevelFilter, Level, Subscriber};
-use std::env;
-use std::fs::{self, File};
-use std::io;
 #[cfg(all(tokio_unstable, feature = "tokio-console"))]
 use std::net::ToSocketAddrs;
-use std::sync::Arc;
+use std::{
+    env,
+    fs::{self, File},
+    io,
+    sync::Arc,
+};
+
+use log::{level_filters::LevelFilter, Level, Subscriber};
+use nimiq_log::{Formatting, MaybeSystemTime, TargetsExt};
 use tracing_subscriber::{
     filter::Targets, layer::SubscriberExt, registry::LookupSpan, util::SubscriberInitExt, Layer,
 };
@@ -13,7 +17,6 @@ use crate::{
     config::{command_line::CommandLine, config_file::LogSettings},
     error::Error,
 };
-use nimiq_log::{Formatting, MaybeSystemTime, TargetsExt};
 
 pub const DEFAULT_LEVEL: LevelFilter = LevelFilter::INFO;
 

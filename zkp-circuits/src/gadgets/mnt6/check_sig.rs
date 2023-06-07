@@ -1,8 +1,7 @@
 use ark_ec::Group;
-use ark_mnt6_753::Fq as MNT6Fq;
 use ark_mnt6_753::{
     constraints::{G1Var, G2Var, PairingVar},
-    G2Projective,
+    Fq as MNT6Fq, G2Projective,
 };
 use ark_r1cs_std::prelude::{AllocVar, Boolean, EqGadget, PairingVar as PV};
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};

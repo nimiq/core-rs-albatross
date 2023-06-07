@@ -1,16 +1,15 @@
-use log::error;
 use std::io;
 
 use beserial::{Deserialize, Serialize};
+use log::error;
 use nimiq_bls::AggregatePublicKey;
 use nimiq_hash::{Blake2sHash, Hash, SerializeContent};
-use nimiq_primitives::policy::Policy;
-use nimiq_primitives::slots::Validators;
+use nimiq_primitives::{policy::Policy, slots::Validators};
 
-use crate::signed::{
-    PREFIX_TENDERMINT_COMMIT, PREFIX_TENDERMINT_PREPARE, PREFIX_TENDERMINT_PROPOSAL,
+use crate::{
+    signed::{PREFIX_TENDERMINT_COMMIT, PREFIX_TENDERMINT_PREPARE, PREFIX_TENDERMINT_PROPOSAL},
+    MacroBlock, MultiSignature,
 };
-use crate::{MacroBlock, MultiSignature};
 
 /// The proof for a block produced by Tendermint.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]

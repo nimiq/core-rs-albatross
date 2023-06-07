@@ -1,12 +1,5 @@
 use std::{fs, io, sync::Arc};
 
-use parking_lot::{Mutex, RwLock};
-#[cfg(feature = "zkp-prover")]
-use rand::SeedableRng;
-#[cfg(feature = "zkp-prover")]
-use rand_chacha::ChaCha20Rng;
-use rustls_pemfile::Item;
-
 use nimiq_block::Block;
 #[cfg(feature = "full-consensus")]
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
@@ -53,9 +46,17 @@ use nimiq_zkp_component::zkp_component::{
     ZKPComponent as AbstractZKPComponent, ZKPComponentProxy as AbstractZKPComponentProxy,
 };
 use nimiq_zkp_primitives::NanoZKPError;
+use parking_lot::{Mutex, RwLock};
+#[cfg(feature = "zkp-prover")]
+use rand::SeedableRng;
+#[cfg(feature = "zkp-prover")]
+use rand_chacha::ChaCha20Rng;
+use rustls_pemfile::Item;
 
-use crate::config::config::{ClientConfig, SyncMode};
-use crate::error::Error;
+use crate::{
+    config::config::{ClientConfig, SyncMode},
+    error::Error,
+};
 
 /// Alias for the Consensus and Validator specialized over libp2p network
 pub type Consensus = AbstractConsensus<Network>;

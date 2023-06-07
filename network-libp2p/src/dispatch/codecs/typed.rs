@@ -6,12 +6,13 @@
 //! message, extracting the type ID and performing consistency checks.
 //!
 
-use std::fmt::Debug;
-use std::io;
+use std::{fmt::Debug, io};
 
 use futures::{AsyncRead, AsyncWrite, AsyncWriteExt};
-use libp2p::core::{upgrade, ProtocolName};
-use libp2p::request_response::RequestResponseCodec;
+use libp2p::{
+    core::{upgrade, ProtocolName},
+    request_response::RequestResponseCodec,
+};
 
 use crate::REQRES_PROTOCOL;
 

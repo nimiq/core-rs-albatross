@@ -1,9 +1,8 @@
 use beserial::{Deserialize, Serialize};
 use nimiq_keys::Address;
-use nimiq_primitives::account::AccountError;
 #[cfg(feature = "interaction-traits")]
 use nimiq_primitives::account::AccountType;
-use nimiq_primitives::coin::Coin;
+use nimiq_primitives::{account::AccountError, coin::Coin};
 #[cfg(feature = "interaction-traits")]
 use nimiq_transaction::account::htlc_contract::CreationTransactionData;
 use nimiq_transaction::account::htlc_contract::{

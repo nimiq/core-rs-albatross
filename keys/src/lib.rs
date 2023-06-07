@@ -1,11 +1,6 @@
 pub use nimiq_utils::key_rng::{SecureGenerate, SecureRng};
 
-pub use self::address::*;
-pub use self::errors::*;
-pub use self::key_pair::*;
-pub use self::private_key::*;
-pub use self::public_key::*;
-pub use self::signature::*;
+pub use self::{address::*, errors::*, key_pair::*, private_key::*, public_key::*, signature::*};
 
 #[macro_export]
 macro_rules! implement_simple_add_sum_traits {

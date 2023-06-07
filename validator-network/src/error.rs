@@ -1,7 +1,6 @@
-use thiserror::Error;
-
 use beserial::SerializingError;
 use nimiq_network_interface::{network::SendError, request::RequestError};
+use thiserror::Error;
 
 /// No notion of connected or disconnected!
 /// If a peer is not connected the connection must be pursued.

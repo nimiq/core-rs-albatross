@@ -1,7 +1,5 @@
-use log::debug;
-use rand::{CryptoRng, Rng};
-
 use beserial::Serialize;
+use log::debug;
 use nimiq_account::{
     Account, AccountInherentInteraction, Accounts, BasicAccount, BlockState,
     HashedTimeLockedContract, InherentLogger, StakingContractStoreWrite, TransactionLog,
@@ -17,8 +15,9 @@ use nimiq_primitives::{
 };
 use nimiq_transaction::{
     account::{
-        htlc_contract::CreationTransactionData as HTLCCreationTransactionData,
-        htlc_contract::{AnyHash, HashAlgorithm},
+        htlc_contract::{
+            AnyHash, CreationTransactionData as HTLCCreationTransactionData, HashAlgorithm,
+        },
         staking_contract::IncomingStakingTransactionData,
         vesting_contract::CreationTransactionData as VestingCreationTransactionData,
     },
@@ -26,6 +25,7 @@ use nimiq_transaction::{
     SignatureProof, Transaction,
 };
 use nimiq_transaction_builder::TransactionProofBuilder;
+use rand::{CryptoRng, Rng};
 
 pub enum ValidatorState {
     Active,

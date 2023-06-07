@@ -81,7 +81,6 @@ mod tests_mnt4 {
     use ark_r1cs_std::{prelude::AllocVar, R1CSVar};
     use ark_relations::r1cs::ConstraintSystem;
     use ark_std::{test_rng, UniformRand};
-
     use nimiq_test_log::test;
     use nimiq_zkp_primitives::{serialize_g1_mnt4, serialize_g2_mnt4};
 
@@ -149,13 +148,13 @@ mod tests_mnt4 {
 
 #[cfg(test)]
 mod tests_mnt6 {
-    use ark_mnt6_753::constraints::{G1Var, G2Var};
-    use ark_mnt6_753::Fq as MNT4Fq;
-    use ark_mnt6_753::{G1Projective, G2Projective};
+    use ark_mnt6_753::{
+        constraints::{G1Var, G2Var},
+        Fq as MNT4Fq, G1Projective, G2Projective,
+    };
     use ark_r1cs_std::{prelude::AllocVar, R1CSVar};
     use ark_relations::r1cs::ConstraintSystem;
     use ark_std::{test_rng, UniformRand};
-
     use nimiq_test_log::test;
     use nimiq_zkp_primitives::{serialize_g1_mnt6, serialize_g2_mnt6};
 

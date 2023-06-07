@@ -1,5 +1,7 @@
-use std::cmp;
-use std::collections::{HashSet, VecDeque};
+use std::{
+    cmp,
+    collections::{HashSet, VecDeque},
+};
 
 use beserial::Serialize;
 use nimiq_database::{
@@ -1098,8 +1100,7 @@ impl HistoryStore {
 #[cfg(test)]
 mod tests {
     use nimiq_database::volatile::VolatileDatabase;
-    use nimiq_primitives::coin::Coin;
-    use nimiq_primitives::networks::NetworkId;
+    use nimiq_primitives::{coin::Coin, networks::NetworkId};
     use nimiq_test_log::test;
     use nimiq_transaction::{
         inherent::Inherent, ExecutedTransaction, Transaction as BlockchainTransaction,

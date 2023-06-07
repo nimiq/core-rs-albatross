@@ -1,11 +1,14 @@
-use std::collections::HashMap;
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::Arc;
-use std::task::{Context, Poll};
+use std::{
+    collections::HashMap,
+    future::Future,
+    pin::Pin,
+    sync::Arc,
+    task::{Context, Poll},
+};
 
 use async_trait::async_trait;
 use base64::Engine;
+use beserial::{Deserialize, Serialize};
 use bytes::{Buf, Bytes};
 use futures::{ready, stream::BoxStream, Stream, StreamExt};
 #[cfg(not(feature = "tokio-time"))]
@@ -40,15 +43,6 @@ use libp2p::{dns, tcp, websocket};
 #[cfg(all(feature = "wasm-websocket", not(feature = "tokio-websocket")))]
 use libp2p_websys_transport::WebsocketTransport;
 use log::Instrument;
-use parking_lot::{Mutex, RwLock};
-use tokio::sync::{broadcast, mpsc, oneshot};
-#[cfg(feature = "tokio-time")]
-use tokio::time::{Instant, Interval};
-use tokio_stream::wrappers::{BroadcastStream, ReceiverStream};
-#[cfg(not(feature = "tokio-time"))]
-use wasm_timer::Interval;
-
-use beserial::{Deserialize, Serialize};
 use nimiq_bls::CompressedPublicKey;
 use nimiq_network_interface::{
     network::{
@@ -64,6 +58,13 @@ use nimiq_network_interface::{
 use nimiq_primitives::task_executor::TaskExecutor;
 use nimiq_utils::time::OffsetTime;
 use nimiq_validator_network::validator_record::SignedValidatorRecord;
+use parking_lot::{Mutex, RwLock};
+use tokio::sync::{broadcast, mpsc, oneshot};
+#[cfg(feature = "tokio-time")]
+use tokio::time::{Instant, Interval};
+use tokio_stream::wrappers::{BroadcastStream, ReceiverStream};
+#[cfg(not(feature = "tokio-time"))]
+use wasm_timer::Interval;
 
 #[cfg(feature = "metrics")]
 use crate::network_metrics::NetworkMetrics;

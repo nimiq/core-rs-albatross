@@ -1,6 +1,5 @@
-use tsify::Tsify;
-
 use nimiq_network_interface::peer_info::{NodeType, Services};
+use tsify::Tsify;
 
 /// Information about a networking peer.
 #[derive(serde::Serialize, Tsify)]

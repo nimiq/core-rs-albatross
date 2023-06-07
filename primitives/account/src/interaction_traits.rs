@@ -1,10 +1,14 @@
-use nimiq_primitives::account::AccountType;
-use nimiq_primitives::{account::AccountError, coin::Coin};
+use nimiq_primitives::{
+    account::{AccountError, AccountType},
+    coin::Coin,
+};
 use nimiq_transaction::{inherent::Inherent, Transaction};
 
-use crate::data_store::{DataStoreRead, DataStoreWrite};
-use crate::reserved_balance::ReservedBalance;
-use crate::{Account, AccountReceipt, InherentLogger, TransactionLog};
+use crate::{
+    data_store::{DataStoreRead, DataStoreWrite},
+    reserved_balance::ReservedBalance,
+    Account, AccountReceipt, InherentLogger, TransactionLog,
+};
 
 #[derive(Default, Debug)]
 pub struct BlockState {

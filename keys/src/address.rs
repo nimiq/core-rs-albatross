@@ -1,20 +1,12 @@
-use std::borrow::Cow;
-use std::char;
-use std::convert::From;
-use std::fmt;
-use std::io;
-use std::iter::Iterator;
-use std::str::FromStr;
+use std::{borrow::Cow, char, convert::From, fmt, io, iter::Iterator, str::FromStr};
 
 use hex::FromHex;
-use thiserror::Error;
-
 use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue};
 use nimiq_hash::{hash_typed_array, Blake2bHash, Blake2bHasher, Hasher};
 use nimiq_macros::create_typed_array;
+use thiserror::Error;
 
-use crate::key_pair::KeyPair;
-use crate::PublicKey;
+use crate::{key_pair::KeyPair, PublicKey};
 
 create_typed_array!(Address, u8, 20);
 hash_typed_array!(Address);

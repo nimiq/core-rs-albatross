@@ -1,6 +1,7 @@
-use std::sync::atomic::{AtomicI64, Ordering};
-use std::time::Duration;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    sync::atomic::{AtomicI64, Ordering},
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 
 /// Time with fixed offset from wall-clock, in milliseconds
 #[derive(Debug, Default)]

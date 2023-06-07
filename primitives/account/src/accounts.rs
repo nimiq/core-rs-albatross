@@ -7,8 +7,10 @@ use nimiq_keys::Address;
 use nimiq_primitives::{
     account::{AccountError, AccountType, FailReason},
     key_nibbles::KeyNibbles,
-    trie::trie_chunk::{TrieChunk, TrieChunkPushResult},
-    trie::TrieItem,
+    trie::{
+        trie_chunk::{TrieChunk, TrieChunkPushResult},
+        TrieItem,
+    },
 };
 use nimiq_transaction::{inherent::Inherent, ExecutedTransaction, Transaction, TransactionFlags};
 use nimiq_trie::trie::{IncompleteTrie, MerkleRadixTrie};

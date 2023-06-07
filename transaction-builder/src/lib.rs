@@ -1,15 +1,14 @@
-use thiserror::Error;
-
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::{Address, KeyPair, PublicKey};
-use nimiq_primitives::policy::Policy;
-use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId};
-use nimiq_transaction::account::htlc_contract::{AnyHash, HashAlgorithm};
-use nimiq_transaction::{SignatureProof, Transaction};
+use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId, policy::Policy};
+use nimiq_transaction::{
+    account::htlc_contract::{AnyHash, HashAlgorithm},
+    SignatureProof, Transaction,
+};
+use thiserror::Error;
 
-pub use crate::proof::TransactionProofBuilder;
-pub use crate::recipient::Recipient;
+pub use crate::{proof::TransactionProofBuilder, recipient::Recipient};
 
 pub mod proof;
 pub mod recipient;

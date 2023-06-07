@@ -3,8 +3,7 @@ use std::fmt;
 use ark_ec::{AffineRepr, Group};
 use ark_ff::{One, PrimeField, ToConstraintField};
 use ark_mnt6_753::{Fq, G1Affine, G1Projective};
-use nimiq_hash::blake2s::Blake2sWithParameterBlock;
-use nimiq_hash::HashOutput;
+use nimiq_hash::{blake2s::Blake2sWithParameterBlock, HashOutput};
 
 use crate::{CompressedSignature, SigHash};
 

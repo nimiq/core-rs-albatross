@@ -1,22 +1,15 @@
-use std::cmp::Ordering;
-use std::collections::HashSet;
-use std::fmt::Debug;
-use std::{fmt, io};
+use std::{cmp::Ordering, collections::HashSet, fmt, fmt::Debug, io};
 
-use crate::{BlockError, SkipBlockInfo};
 use beserial::{Deserialize, Serialize};
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
 use nimiq_hash_derive::SerializeContent;
 use nimiq_keys::{PublicKey, Signature};
-use nimiq_primitives::policy::Policy;
-use nimiq_primitives::slots::Validators;
-use nimiq_transaction::ExecutedTransaction;
-use nimiq_transaction::Transaction;
+use nimiq_primitives::{policy::Policy, slots::Validators};
+use nimiq_transaction::{ExecutedTransaction, Transaction};
 use nimiq_vrf::VrfSeed;
 
-use crate::fork_proof::ForkProof;
-use crate::skip_block::SkipBlockProof;
+use crate::{fork_proof::ForkProof, skip_block::SkipBlockProof, BlockError, SkipBlockInfo};
 
 /// The struct representing a Micro block.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]

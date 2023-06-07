@@ -1,20 +1,19 @@
-use std::cmp::Ordering;
-use std::fmt::{Debug, Error, Formatter};
-use std::io;
-use std::str;
-
-use blake2_rfc::blake2b::Blake2b;
-use blake2_rfc::blake2s::Blake2s;
-use hex::FromHex;
-use sha2::{Digest, Sha256, Sha512};
+use std::{
+    borrow::Cow,
+    cmp::Ordering,
+    fmt::{Debug, Error, Formatter},
+    io, str,
+};
 
 use beserial::{Deserialize, Serialize};
+use blake2_rfc::{blake2b::Blake2b, blake2s::Blake2s};
+use hex::FromHex;
+use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue};
 use nimiq_macros::{add_hex_io_fns_typed_arr, create_typed_array};
+use nimiq_mmr::hash::Merge;
+use sha2::{Digest, Sha256, Sha512};
 
 pub use self::sha512::*;
-use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue};
-use nimiq_mmr::hash::Merge;
-use std::borrow::Cow;
 
 pub mod argon2kdf;
 pub mod blake2s;

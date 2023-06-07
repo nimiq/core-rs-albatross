@@ -4,17 +4,16 @@ use std::{
     time::Duration,
 };
 
+use beserial::{Deserialize, Serialize};
 use instant::SystemTime;
 use libp2p::{
     gossipsub::Gossipsub,
     identity::{Keypair, PublicKey},
     Multiaddr, PeerId,
 };
-use parking_lot::RwLock;
-
-use beserial::{Deserialize, Serialize};
 use nimiq_network_interface::peer_info::Services;
 use nimiq_utils::tagged_signing::{TaggedKeypair, TaggedSignable, TaggedSignature};
+use parking_lot::RwLock;
 
 /// A plain peer contact. This contains:
 ///

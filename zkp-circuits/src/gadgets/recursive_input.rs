@@ -69,10 +69,11 @@ impl<F: PrimeField, CF: PrimeField> From<RecursiveInputVar<F, CF>> for BooleanIn
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use ark_mnt4_753::Fq as MNT4Fq;
     use ark_mnt6_753::Fq as MNT6Fq;
     use ark_r1cs_std::{uint8::UInt8, R1CSVar};
+
+    use super::*;
 
     const BYTES: [u8; 95] = [
         227, 90, 6, 29, 55, 139, 106, 148, 42, 203, 6, 18, 181, 134, 13, 109, 178, 112, 145, 3,

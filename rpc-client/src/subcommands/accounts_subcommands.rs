@@ -1,7 +1,6 @@
 use anyhow::Error;
 use async_trait::async_trait;
 use clap::Parser;
-
 use nimiq_keys::{Address, PublicKey, Signature};
 use nimiq_rpc_interface::{blockchain::BlockchainInterface, wallet::WalletInterface};
 

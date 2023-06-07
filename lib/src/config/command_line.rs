@@ -2,9 +2,8 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use log::level_filters::{LevelFilter, ParseLevelFilterError};
-use thiserror::Error;
-
 use nimiq_primitives::networks::NetworkId;
+use thiserror::Error;
 
 use crate::config::config_file::SyncMode;
 

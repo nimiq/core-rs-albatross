@@ -1,7 +1,6 @@
 use anyhow::Error;
 use async_trait::async_trait;
 use clap::{Args, Parser};
-
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
 use nimiq_rpc_interface::{
@@ -10,9 +9,8 @@ use nimiq_rpc_interface::{
 };
 use nimiq_transaction::account::htlc_contract::AnyHash;
 
-use crate::Client;
-
 use super::accounts_subcommands::HandleSubcommand;
+use crate::Client;
 
 #[derive(Debug, Args)]
 pub struct TxCommon {

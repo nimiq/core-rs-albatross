@@ -1,13 +1,18 @@
+use std::{env, fmt};
+
 use ansi_term::{Color, Style};
 use log::{level_filters::LevelFilter, Event, Level, Subscriber};
-use std::{env, fmt};
 use time::format_description::well_known::Iso8601;
 use tracing_log::NormalizeEvent;
-use tracing_subscriber::filter::Targets;
-use tracing_subscriber::fmt::format::Writer;
-use tracing_subscriber::fmt::time::{FormatTime, UtcTime};
-use tracing_subscriber::fmt::{FmtContext, FormatEvent, FormatFields, FormattedFields};
-use tracing_subscriber::registry::LookupSpan;
+use tracing_subscriber::{
+    filter::Targets,
+    fmt::{
+        format::Writer,
+        time::{FormatTime, UtcTime},
+        FmtContext, FormatEvent, FormatFields, FormattedFields,
+    },
+    registry::LookupSpan,
+};
 
 pub static NIMIQ_MODULES: &[&str] = &[
     "beserial",

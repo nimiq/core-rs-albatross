@@ -1,6 +1,6 @@
-use async_trait::async_trait;
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{network::Network as NetworkInterface, peer_info::Services};
 use nimiq_network_libp2p::{

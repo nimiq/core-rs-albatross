@@ -1,5 +1,4 @@
 use hex::FromHex;
-
 use nimiq_hash::pbkdf2::*;
 use nimiq_test_log::test;
 

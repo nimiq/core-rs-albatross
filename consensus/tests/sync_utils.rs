@@ -2,30 +2,30 @@ use std::sync::Arc;
 
 use futures::{future, StreamExt};
 use nimiq_block::{BlockHeaderTopic, BlockTopic};
-use nimiq_blockchain_proxy::BlockchainProxy;
-use nimiq_bls::cache::PublicKeyCache;
-use nimiq_consensus::sync::syncer::MacroSyncReturn;
-use nimiq_consensus::sync::syncer_proxy::SyncerProxy;
-use nimiq_light_blockchain::LightBlockchain;
-use nimiq_primitives::policy::Policy;
-use nimiq_test_utils::node::TESTING_BLS_CACHE_MAX_CAPACITY;
-use nimiq_zkp_component::ZKPComponent;
-use parking_lot::{Mutex, RwLock};
-
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent, Direction};
-use nimiq_consensus::consensus::Consensus;
+use nimiq_blockchain_proxy::BlockchainProxy;
+use nimiq_bls::cache::PublicKeyCache;
+use nimiq_consensus::{
+    consensus::Consensus,
+    sync::{syncer::MacroSyncReturn, syncer_proxy::SyncerProxy},
+};
 use nimiq_database::volatile::VolatileDatabase;
 use nimiq_genesis::NetworkId;
+use nimiq_light_blockchain::LightBlockchain;
 use nimiq_network_interface::network::Network as NetworkInterface;
 use nimiq_network_libp2p::Network;
 use nimiq_network_mock::MockHub;
+use nimiq_primitives::policy::Policy;
 use nimiq_test_utils::{
     blockchain::{produce_macro_blocks_with_txns, signing_key, voting_key},
+    node::TESTING_BLS_CACHE_MAX_CAPACITY,
     test_network::TestNetwork,
 };
 use nimiq_utils::time::OffsetTime;
+use nimiq_zkp_component::ZKPComponent;
+use parking_lot::{Mutex, RwLock};
 use tokio::spawn;
 
 #[allow(dead_code)]

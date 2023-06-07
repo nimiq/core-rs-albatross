@@ -184,8 +184,9 @@ pub fn leaf_number_to_index(leaf_number: usize) -> usize {
 mod tests {
     use std::collections::HashSet;
 
-    use super::*;
     use nimiq_test_log::test;
+
+    use super::*;
 
     #[test]
     fn it_correctly_computes_positions() {

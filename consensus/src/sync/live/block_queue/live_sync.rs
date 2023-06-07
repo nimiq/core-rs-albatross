@@ -6,11 +6,8 @@ use std::{
 
 use futures::{
     future::{self, BoxFuture},
-    FutureExt, Stream,
-};
-use futures::{
     stream::{empty, select},
-    StreamExt,
+    FutureExt, Stream, StreamExt,
 };
 use nimiq_block::Block;
 use nimiq_blockchain_interface::{PushError, PushResult};

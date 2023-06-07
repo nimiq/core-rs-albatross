@@ -1,21 +1,21 @@
-use std::cmp;
-use std::cmp::Ordering;
-use std::collections::binary_heap::PeekMut;
-use std::collections::{BinaryHeap, VecDeque};
-use std::fmt::Debug;
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::Arc;
-use std::task::{Context, Poll, Waker};
+use std::{
+    cmp,
+    cmp::Ordering,
+    collections::{binary_heap::PeekMut, BinaryHeap, VecDeque},
+    fmt::Debug,
+    future::Future,
+    pin::Pin,
+    sync::Arc,
+    task::{Context, Poll, Waker},
+};
 
 use futures::{
     future, future::BoxFuture, ready, stream::FuturesUnordered, FutureExt, Stream, StreamExt,
 };
-use parking_lot::RwLock;
-use pin_project::pin_project;
-
 use nimiq_macros::store_waker;
 use nimiq_network_interface::network::Network;
+use parking_lot::RwLock;
+use pin_project::pin_project;
 
 use super::peer_list::PeerList;
 
@@ -336,11 +336,12 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-    use std::task::{Context, Poll};
+    use std::{
+        sync::Arc,
+        task::{Context, Poll},
+    };
 
     use futures::{future, task::noop_waker_ref, FutureExt, StreamExt};
-
     use nimiq_network_mock::MockHub;
 
     use crate::sync::sync_queue::SyncQueue;

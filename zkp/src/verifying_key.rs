@@ -4,11 +4,10 @@ use ark_ec::mnt6::MNT6;
 use ark_groth16::VerifyingKey;
 use ark_mnt6_753::Config;
 use ark_serialize::CanonicalDeserialize;
-use once_cell::sync::OnceCell;
-
 use beserial::Deserialize;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_zkp_circuits::metadata::VerifyingKeyMetadata;
+use once_cell::sync::OnceCell;
 
 pub struct ZKPVerifyingKey {
     cell: OnceCell<VerifyingKey<MNT6<Config>>>,

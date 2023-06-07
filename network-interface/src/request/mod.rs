@@ -1,14 +1,8 @@
-use std::fmt;
-use std::io;
-use std::sync::Arc;
-use std::time::Duration;
-
-use futures::stream::BoxStream;
-use futures::Future;
-use futures::StreamExt;
-use thiserror::Error;
+use std::{fmt, io, sync::Arc, time::Duration};
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
+use futures::{stream::BoxStream, Future, StreamExt};
+use thiserror::Error;
 
 // The max number of request to be processed per peerID and per request type.
 

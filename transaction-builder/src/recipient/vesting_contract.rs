@@ -1,10 +1,9 @@
 use std::ops::Div;
 
-use thiserror::Error;
-
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
 use nimiq_transaction::account::vesting_contract::CreationTransactionData as VestingCreationData;
+use thiserror::Error;
 
 use crate::recipient::Recipient;
 

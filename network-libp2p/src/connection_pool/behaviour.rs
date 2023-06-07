@@ -8,26 +8,23 @@ use std::{
 use futures::StreamExt;
 use instant::Instant;
 use ip_network::IpNetwork;
-use libp2p::swarm::{dial_opts::PeerCondition, NotifyHandler};
 use libp2p::{
     core::{connection::ConnectionId, multiaddr::Protocol, ConnectedPoint},
     swarm::{
-        dial_opts::DialOpts, ConnectionHandler, DialError, IntoConnectionHandler, NetworkBehaviour,
-        NetworkBehaviourAction, PollParameters,
+        dial_opts::{DialOpts, PeerCondition},
+        ConnectionHandler, DialError, IntoConnectionHandler, NetworkBehaviour,
+        NetworkBehaviourAction, NotifyHandler, PollParameters,
     },
     Multiaddr, PeerId,
 };
-use parking_lot::RwLock;
-use rand::seq::IteratorRandom;
-use rand::thread_rng;
-use wasm_timer::Interval;
-
 use nimiq_macros::store_waker;
 use nimiq_network_interface::{network::CloseReason, peer_info::Services};
-
-use crate::discovery::peer_contacts::PeerContactBook;
+use parking_lot::RwLock;
+use rand::{seq::IteratorRandom, thread_rng};
+use wasm_timer::Interval;
 
 use super::handler::{ConnectionPoolHandler, ConnectionPoolHandlerError};
+use crate::discovery::peer_contacts::PeerContactBook;
 
 #[derive(Clone, Debug)]
 struct ConnectionPoolLimits {

@@ -1,25 +1,31 @@
-use std::collections::BTreeSet;
-use std::mem;
+use std::{collections::BTreeSet, mem};
 
-use nimiq_primitives::account::AccountType;
-use nimiq_primitives::{account::AccountError, coin::Coin, policy::Policy};
-use nimiq_transaction::account::staking_contract::{
-    IncomingStakingTransactionData, OutgoingStakingTransactionProof,
+use nimiq_primitives::{
+    account::{AccountError, AccountType},
+    coin::Coin,
+    policy::Policy,
 };
-use nimiq_transaction::{inherent::Inherent, Transaction};
+use nimiq_transaction::{
+    account::staking_contract::{IncomingStakingTransactionData, OutgoingStakingTransactionProof},
+    inherent::Inherent,
+    Transaction,
+};
 
-use crate::account::staking_contract::store::{
-    StakingContractStoreRead, StakingContractStoreReadOps, StakingContractStoreReadOpsExt,
-    StakingContractStoreWrite,
-};
-use crate::reserved_balance::ReservedBalance;
 use crate::{
-    account::staking_contract::{receipts::SlashReceipt, StakingContract},
+    account::staking_contract::{
+        receipts::SlashReceipt,
+        store::{
+            StakingContractStoreRead, StakingContractStoreReadOps, StakingContractStoreReadOpsExt,
+            StakingContractStoreWrite,
+        },
+        StakingContract,
+    },
     data_store::{DataStoreRead, DataStoreWrite},
     interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction},
-    Account, AccountPruningInteraction, AccountReceipt, BlockState,
+    reserved_balance::ReservedBalance,
+    Account, AccountPruningInteraction, AccountReceipt, BlockState, InherentLogger, Log,
+    TransactionLog,
 };
-use crate::{InherentLogger, Log, TransactionLog};
 
 impl AccountTransactionInteraction for StakingContract {
     fn create_new_contract(

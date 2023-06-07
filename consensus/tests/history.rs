@@ -5,25 +5,21 @@ use std::{
 };
 
 use futures::{poll, Stream, StreamExt};
-use nimiq_blockchain_proxy::BlockchainProxy;
-use nimiq_bls::cache::PublicKeyCache;
-use nimiq_consensus::messages::{RequestMissingBlocks, ResponseBlocks};
-use nimiq_consensus::sync::live::queue::QueueConfig;
-use nimiq_network_interface::request::RequestCommon;
-use parking_lot::{Mutex, RwLock};
-use rand::Rng;
-use tokio::sync::mpsc;
-use tokio_stream::wrappers::ReceiverStream;
-
 use nimiq_block::Block;
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::{AbstractBlockchain, Direction};
-use nimiq_consensus::sync::live::block_queue::BlockQueue;
-use nimiq_consensus::sync::live::BlockLiveSync;
-use nimiq_consensus::sync::syncer::{LiveSync, MacroSync, MacroSyncReturn, Syncer};
+use nimiq_blockchain_proxy::BlockchainProxy;
+use nimiq_bls::cache::PublicKeyCache;
+use nimiq_consensus::{
+    messages::{RequestMissingBlocks, ResponseBlocks},
+    sync::{
+        live::{block_queue::BlockQueue, queue::QueueConfig, BlockLiveSync},
+        syncer::{LiveSync, MacroSync, MacroSyncReturn, Syncer},
+    },
+};
 use nimiq_database::volatile::VolatileDatabase;
-use nimiq_network_interface::network::Network;
+use nimiq_network_interface::{network::Network, request::RequestCommon};
 use nimiq_network_mock::{MockHub, MockId, MockPeerId};
 use nimiq_primitives::networks::NetworkId;
 use nimiq_test_log::test;
@@ -36,6 +32,10 @@ use nimiq_test_utils::{
     test_rng::test_rng,
 };
 use nimiq_utils::time::OffsetTime;
+use parking_lot::{Mutex, RwLock};
+use rand::Rng;
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
 
 #[derive(Default)]
 struct MockHistorySyncStream {

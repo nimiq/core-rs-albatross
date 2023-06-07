@@ -7,14 +7,14 @@ pub use self::{cursor::*, database::*, iterators::*, transaction::*};
 
 #[cfg(test)]
 mod tests {
+    use nimiq_test_log::test;
+    use tempfile::tempdir;
+
+    use super::*;
     use crate::{
         traits::{Database, ReadCursor, ReadTransaction, WriteTransaction},
         TableFlags,
     };
-
-    use super::*;
-    use nimiq_test_log::test;
-    use tempfile::tempdir;
 
     #[test]
     fn it_can_save_basic_objects() {

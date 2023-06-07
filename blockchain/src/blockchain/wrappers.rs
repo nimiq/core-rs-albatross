@@ -1,3 +1,4 @@
+use std::ops::RangeFrom;
 #[cfg(feature = "metrics")]
 use std::sync::Arc;
 
@@ -11,7 +12,6 @@ use nimiq_primitives::{
     account::AccountError, key_nibbles::KeyNibbles, policy::Policy, slots::Validator,
 };
 use nimiq_transaction::Transaction;
-use std::ops::RangeFrom;
 
 #[cfg(feature = "metrics")]
 use crate::chain_metrics::BlockchainMetrics;

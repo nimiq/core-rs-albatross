@@ -1,9 +1,9 @@
-use thiserror::Error;
-
 use nimiq_hash::{Blake2bHash, Sha256Hash};
 use nimiq_keys::Address;
-use nimiq_transaction::account::htlc_contract::CreationTransactionData as HtlcCreationData;
-use nimiq_transaction::account::htlc_contract::{AnyHash, HashAlgorithm};
+use nimiq_transaction::account::htlc_contract::{
+    AnyHash, CreationTransactionData as HtlcCreationData, HashAlgorithm,
+};
+use thiserror::Error;
 
 use crate::recipient::Recipient;
 

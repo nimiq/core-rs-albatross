@@ -4,9 +4,8 @@ use std::{
     fmt, io, ops, str, usize,
 };
 
-use log::error;
-
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
+use log::error;
 use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue};
 use nimiq_keys::Address;
 
@@ -404,8 +403,9 @@ impl Deserialize for KeyNibbles {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use nimiq_test_log::test;
+
+    use super::*;
 
     #[test]
     fn to_from_str_works() {

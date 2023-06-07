@@ -2,8 +2,7 @@ use std::cmp;
 
 use nimiq_hash::{Blake2bHash, Blake2bHasher};
 use nimiq_test_log::test;
-use nimiq_utils::merkle::compute_root_from_content;
-use nimiq_utils::merkle::partial::*;
+use nimiq_utils::merkle::{compute_root_from_content, partial::*};
 
 #[test]
 fn it_correctly_computes_a_simple_proof() {

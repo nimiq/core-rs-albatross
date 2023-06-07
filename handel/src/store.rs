@@ -1,10 +1,11 @@
-use std::collections::BTreeMap;
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
-use crate::identity::IdentityRegistry;
-use crate::partitioner::Partitioner;
-use crate::protocol::Protocol;
-use crate::{contribution::AggregatableContribution, identity::Identity};
+use crate::{
+    contribution::AggregatableContribution,
+    identity::{Identity, IdentityRegistry},
+    partitioner::Partitioner,
+    protocol::Protocol,
+};
 
 /// Trait that needs to be implemented to support the storage of contributions
 /// and the selection of the best contributions seen.
@@ -304,12 +305,11 @@ where
 #[cfg(test)]
 mod tests {
     use async_trait::async_trait;
-    use parking_lot::RwLock;
-    use rand::Rng;
-
     use beserial::{Deserialize, Serialize};
     use nimiq_collections::BitSet;
     use nimiq_test_log::test;
+    use parking_lot::RwLock;
+    use rand::Rng;
 
     use super::*;
     use crate::{

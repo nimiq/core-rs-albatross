@@ -1,22 +1,27 @@
-use std::future::Future;
-use std::marker::PhantomData;
-use std::pin::Pin;
-use std::sync::atomic::{AtomicU32, Ordering as AtomicOrdering};
-use std::sync::Arc;
-use std::task::{Context, Poll};
+use std::{
+    future::Future,
+    marker::PhantomData,
+    pin::Pin,
+    sync::{
+        atomic::{AtomicU32, Ordering as AtomicOrdering},
+        Arc,
+    },
+    task::{Context, Poll},
+};
 
 use futures::{ready, stream::BoxStream, StreamExt};
-use parking_lot::RwLock;
-
 use nimiq_blockchain::Blockchain;
 use nimiq_network_interface::network::{MsgAcceptance, Network, Topic};
 use nimiq_primitives::networks::NetworkId;
 use nimiq_transaction::Transaction;
+use parking_lot::RwLock;
 
-use crate::filter::MempoolFilter;
-use crate::mempool_state::MempoolState;
-use crate::mempool_transactions::TxPriority;
-use crate::verify::{verify_tx, VerifyErr};
+use crate::{
+    filter::MempoolFilter,
+    mempool_state::MempoolState,
+    mempool_transactions::TxPriority,
+    verify::{verify_tx, VerifyErr},
+};
 
 const CONCURRENT_VERIF_TASKS: u32 = 1000;
 

@@ -1,18 +1,17 @@
-use std::fs::{DirBuilder, File};
-use std::io;
-use std::path::{Path, PathBuf};
-use std::time::Instant;
+use std::{
+    fs::{DirBuilder, File},
+    io,
+    path::{Path, PathBuf},
+    time::Instant,
+};
 
 use ark_groth16::Proof;
 use ark_serialize::CanonicalSerialize;
 use log::level_filters::LevelFilter;
-use tracing_subscriber::filter::Targets;
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
-
 use nimiq_log::TargetsExt;
 use nimiq_zkp::prove::prove;
 use nimiq_zkp_circuits::utils::create_test_blocks;
+use tracing_subscriber::{filter::Targets, layer::SubscriberExt, util::SubscriberInitExt};
 
 /// Generates a proof for a chain of election blocks. The random parameters generation uses always
 /// the same seed, so it will always generate the same data (validators, signatures, etc).

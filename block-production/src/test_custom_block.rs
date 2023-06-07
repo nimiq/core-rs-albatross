@@ -1,4 +1,3 @@
-use crate::{BlsKeyPair, SchnorrKeyPair};
 use nimiq_account::BlockState;
 use nimiq_block::{
     Block, ForkProof, MacroBlock, MacroBody, MacroHeader, MicroBlock, MicroBody, MicroHeader,
@@ -17,6 +16,8 @@ use nimiq_transaction::{
     extended_transaction::ExtendedTransaction, inherent::Inherent, Transaction,
 };
 use nimiq_vrf::VrfSeed;
+
+use crate::{BlsKeyPair, SchnorrKeyPair};
 
 #[derive(Clone)]
 pub struct BlockConfig {

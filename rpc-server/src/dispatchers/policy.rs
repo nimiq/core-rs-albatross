@@ -1,8 +1,9 @@
 use async_trait::async_trait;
-
 use nimiq_primitives::policy::Policy;
-use nimiq_rpc_interface::policy::PolicyInterface;
-use nimiq_rpc_interface::types::{PolicyConstants, RPCResult};
+use nimiq_rpc_interface::{
+    policy::PolicyInterface,
+    types::{PolicyConstants, RPCResult},
+};
 
 use crate::error::Error;
 

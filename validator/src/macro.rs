@@ -9,8 +9,6 @@ use futures::{
     future,
     stream::{BoxStream, Stream, StreamExt},
 };
-use parking_lot::RwLock;
-
 use nimiq_block::MacroBlock;
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::Blockchain;
@@ -19,6 +17,7 @@ use nimiq_network_interface::network::Topic;
 use nimiq_primitives::slots::Validators;
 use nimiq_tendermint::{Return as TendermintReturn, SignedProposalMessage, Tendermint};
 use nimiq_validator_network::ValidatorNetwork;
+use parking_lot::RwLock;
 
 use crate::{
     aggregation::tendermint::{

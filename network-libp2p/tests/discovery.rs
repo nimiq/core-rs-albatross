@@ -16,18 +16,16 @@ use libp2p::{
     yamux::YamuxConfig,
     PeerId, Transport,
 };
-use parking_lot::RwLock;
-use rand::{thread_rng, Rng};
-
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::peer_info::Services;
 use nimiq_network_libp2p::discovery::{
     behaviour::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryEvent},
-    peer_contacts::PeerContact,
-    peer_contacts::{PeerContactBook, SignedPeerContact},
+    peer_contacts::{PeerContact, PeerContactBook, SignedPeerContact},
 };
 use nimiq_test_log::test;
 use nimiq_utils::time::OffsetTime;
+use parking_lot::RwLock;
+use rand::{thread_rng, Rng};
 
 struct TestNode {
     peer_id: PeerId,

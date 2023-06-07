@@ -1,13 +1,11 @@
-use std::collections::HashMap;
-use std::env;
 #[cfg(feature = "genesis-override")]
 use std::path::Path;
-
-use lazy_static::lazy_static;
+use std::{collections::HashMap, env};
 
 use beserial::Deserialize;
 #[cfg(feature = "genesis-override")]
 use beserial::{Serialize, SerializeWithLength};
+use lazy_static::lazy_static;
 use nimiq_block::Block;
 #[cfg(feature = "genesis-override")]
 use nimiq_database::volatile::VolatileDatabase;

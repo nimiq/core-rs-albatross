@@ -1,6 +1,8 @@
-use std::fs;
-use std::fs::{DirBuilder, File};
-use std::path::Path;
+use std::{
+    fs,
+    fs::{DirBuilder, File},
+    path::Path,
+};
 
 use ark_crypto_primitives::snark::SNARK;
 use ark_ec::{pairing::Pairing, CurveGroup};
@@ -10,25 +12,23 @@ use ark_mnt4_753::{Fq as MNT4Fq, MNT4_753};
 use ark_mnt6_753::{Fq as MNT6Fq, G1Projective as G1MNT6, G2Projective as G2MNT6, MNT6_753};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::UniformRand;
-use rand::{thread_rng, CryptoRng, Rng};
-
 use beserial::{Deserialize, Serialize};
 use nimiq_primitives::policy::Policy;
 use nimiq_zkp_circuits::{
     bits::BitVec,
-    circuits::mnt4::{
-        MacroBlockWrapperCircuit, MergerWrapperCircuit, PKTreeNodeCircuit as NodeMNT4,
-    },
-    circuits::mnt6::{
-        MacroBlockCircuit, MergerCircuit, PKTreeLeafCircuit as LeafMNT6,
-        PKTreeNodeCircuit as NodeMNT6,
+    circuits::{
+        mnt4::{MacroBlockWrapperCircuit, MergerWrapperCircuit, PKTreeNodeCircuit as NodeMNT4},
+        mnt6::{
+            MacroBlockCircuit, MergerCircuit, PKTreeLeafCircuit as LeafMNT6,
+            PKTreeNodeCircuit as NodeMNT6,
+        },
     },
 };
-use nimiq_zkp_primitives::pedersen::default_pedersen_hash;
 use nimiq_zkp_primitives::{
-    pk_tree_construct, serialize_g1_mnt6, serialize_g2_mnt6, state_commitment, vk_commitment,
-    MacroBlock, NanoZKPError, PK_TREE_DEPTH,
+    pedersen::default_pedersen_hash, pk_tree_construct, serialize_g1_mnt6, serialize_g2_mnt6,
+    state_commitment, vk_commitment, MacroBlock, NanoZKPError, PK_TREE_DEPTH,
 };
+use rand::{thread_rng, CryptoRng, Rng};
 
 /// Checks whether cached proofs are compatible with the current proof.
 /// If not, it clears the folder and creates a new metadata file.

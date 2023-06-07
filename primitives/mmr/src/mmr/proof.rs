@@ -1,10 +1,14 @@
 use std::collections::VecDeque;
 
-use crate::error::Error;
-use crate::hash::{Hash, Merge};
-use crate::mmr::peaks::PeakIterator;
-use crate::mmr::position::{leaf_number_to_index, Position};
-use crate::mmr::utils::bagging;
+use crate::{
+    error::Error,
+    hash::{Hash, Merge},
+    mmr::{
+        peaks::PeakIterator,
+        position::{leaf_number_to_index, Position},
+        utils::bagging,
+    },
+};
 
 #[derive(Clone, Debug)]
 pub enum SizeProof<H: Merge, T: Hash<H>> {
@@ -294,14 +298,14 @@ impl<H: Merge + Clone + Eq> RangeProof<H> {
 mod tests {
     use std::ops::RangeInclusive;
 
-    use crate::error::Error;
-    use crate::mmr::utils::test_utils::TestHash;
-    use crate::mmr::MerkleMountainRange;
-    use crate::store::memory::MemoryStore;
-    use crate::store::Store;
+    use nimiq_test_log::test;
 
     use super::*;
-    use nimiq_test_log::test;
+    use crate::{
+        error::Error,
+        mmr::{utils::test_utils::TestHash, MerkleMountainRange},
+        store::{memory::MemoryStore, Store},
+    };
 
     #[test]
     fn it_correctly_constructs_proofs() {

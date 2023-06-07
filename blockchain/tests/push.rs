@@ -1,7 +1,7 @@
-use nimiq_block::Block;
-use nimiq_block::BlockError;
-use nimiq_block_production::test_custom_block::next_skip_block;
-use nimiq_block_production::test_custom_block::{next_macro_block, next_micro_block, BlockConfig};
+use nimiq_block::{Block, BlockError};
+use nimiq_block_production::test_custom_block::{
+    next_macro_block, next_micro_block, next_skip_block, BlockConfig,
+};
 use nimiq_blockchain_interface::{PushError, PushError::InvalidBlock, PushResult};
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::policy::Policy;

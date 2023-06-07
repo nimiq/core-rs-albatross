@@ -9,21 +9,18 @@ use std::{
     time::Duration,
 };
 
-use futures::{channel::oneshot, future::select, future::Either};
+use futures::{
+    channel::oneshot,
+    future::{select, Either},
+};
 use futures_util::StreamExt;
 use js_sys::{global, Array, Function, JsString};
 use log::level_filters::LevelFilter;
-use tsify::Tsify;
-use wasm_bindgen::{
-    prelude::{wasm_bindgen, Closure, JsError, JsValue},
-    JsCast,
-};
-use wasm_bindgen_futures::spawn_local;
-use web_sys::MessageEvent;
-
 pub use nimiq::{
-    config::config::ClientConfig,
-    config::config_file::{LogSettings, Seed},
+    config::{
+        config::ClientConfig,
+        config_file::{LogSettings, Seed},
+    },
     extras::{panic::initialize_panic_reporting, web_logging::initialize_web_logging},
 };
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent};
@@ -34,23 +31,32 @@ use nimiq_network_interface::{
     Multiaddr,
 };
 use nimiq_primitives::policy::Policy;
+use tsify::Tsify;
+use wasm_bindgen::{
+    prelude::{wasm_bindgen, Closure, JsError, JsValue},
+    JsCast,
+};
+use wasm_bindgen_futures::spawn_local;
+use web_sys::MessageEvent;
 
-use crate::account::{
-    PlainAccount, PlainAccountArrayType, PlainAccountType, PlainStaker, PlainStakerArrayType,
-    PlainStakerType, PlainValidator, PlainValidatorArrayType, PlainValidatorType,
+use crate::{
+    account::{
+        PlainAccount, PlainAccountArrayType, PlainAccountType, PlainStaker, PlainStakerArrayType,
+        PlainStakerType, PlainValidator, PlainValidatorArrayType, PlainValidatorType,
+    },
+    address::{Address, AddressAnyArrayType, AddressAnyType},
+    block::{PlainBlock, PlainBlockType},
+    client_configuration::{
+        ClientConfiguration, PlainClientConfiguration, PlainClientConfigurationType,
+    },
+    peer_info::PlainPeerInfo,
+    transaction::{
+        PlainTransactionData, PlainTransactionDetails, PlainTransactionDetailsArrayType,
+        PlainTransactionDetailsType, PlainTransactionReceipt, PlainTransactionReceiptArrayType,
+        Transaction, TransactionAnyType, TransactionState,
+    },
+    utils::from_network_id,
 };
-use crate::address::{Address, AddressAnyArrayType, AddressAnyType};
-use crate::block::{PlainBlock, PlainBlockType};
-use crate::client_configuration::{
-    ClientConfiguration, PlainClientConfiguration, PlainClientConfigurationType,
-};
-use crate::peer_info::PlainPeerInfo;
-use crate::transaction::{
-    PlainTransactionData, PlainTransactionDetails, PlainTransactionDetailsArrayType,
-    PlainTransactionDetailsType, PlainTransactionReceipt, PlainTransactionReceiptArrayType,
-    Transaction, TransactionAnyType, TransactionState,
-};
-use crate::utils::from_network_id;
 
 /// Maximum number of transactions that can be requested by address
 pub const MAX_TRANSACTIONS_BY_ADDRESS: u16 = 500;

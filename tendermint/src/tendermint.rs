@@ -11,14 +11,13 @@ use futures::{
     future::{BoxFuture, FutureExt},
     stream::{BoxStream, FuturesUnordered, SelectAll, Stream, StreamExt},
 };
+use nimiq_collections::BitSet;
+use nimiq_macros::store_waker;
 use tokio::{
     sync::mpsc,
     time::{error::Elapsed, Duration},
 };
 use tokio_stream::wrappers::ReceiverStream;
-
-use nimiq_collections::BitSet;
-use nimiq_macros::store_waker;
 
 use crate::{
     protocol::{Aggregation, Protocol, SignedProposalMessage, TaggedAggregationMessage},

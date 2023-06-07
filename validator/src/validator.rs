@@ -1,20 +1,17 @@
-use std::error::Error;
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
+use std::{
+    error::Error,
+    future::Future,
+    pin::Pin,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    task::{Context, Poll, Waker},
+    time::Duration,
 };
-use std::task::{Context, Poll, Waker};
-use std::time::Duration;
 
 use futures::stream::{BoxStream, Stream, StreamExt};
 use linked_hash_map::LinkedHashMap;
-use parking_lot::RwLock;
-#[cfg(feature = "metrics")]
-use tokio_metrics::TaskMonitor;
-use tokio_stream::wrappers::BroadcastStream;
-
 use nimiq_block::{Block, BlockHeaderTopic, BlockTopic, BlockType};
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::Blockchain;
@@ -37,6 +34,10 @@ use nimiq_primitives::{coin::Coin, policy::Policy};
 use nimiq_tendermint::SignedProposalMessage;
 use nimiq_transaction_builder::TransactionBuilder;
 use nimiq_validator_network::ValidatorNetwork;
+use parking_lot::RwLock;
+#[cfg(feature = "metrics")]
+use tokio_metrics::TaskMonitor;
+use tokio_stream::wrappers::BroadcastStream;
 
 use crate::{
     aggregation::tendermint::{

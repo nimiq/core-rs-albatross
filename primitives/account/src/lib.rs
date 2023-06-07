@@ -2,20 +2,22 @@
 #[macro_use]
 extern crate log;
 
-pub use crate::account::{
-    basic_account::BasicAccount, htlc_contract::HashedTimeLockedContract, staking_contract::*,
-    vesting_contract::VestingContract, Account,
-};
 #[cfg(feature = "accounts")]
 pub use crate::accounts::{Accounts, AccountsTrie};
 #[cfg(feature = "interaction-traits")]
 pub use crate::data_store::{DataStore, DataStoreRead, DataStoreWrite};
-pub use crate::data_store_ops::DataStoreReadOps;
 #[cfg(feature = "interaction-traits")]
 pub use crate::interaction_traits::*;
-pub use crate::logs::*;
-pub use crate::receipts::*;
-pub use crate::reserved_balance::ReservedBalance;
+pub use crate::{
+    account::{
+        basic_account::BasicAccount, htlc_contract::HashedTimeLockedContract, staking_contract::*,
+        vesting_contract::VestingContract, Account,
+    },
+    data_store_ops::DataStoreReadOps,
+    logs::*,
+    receipts::*,
+    reserved_balance::ReservedBalance,
+};
 
 mod account;
 #[cfg(feature = "accounts")]

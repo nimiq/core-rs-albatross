@@ -7,9 +7,8 @@ use std::{
     mem, ops,
 };
 
-use log::error;
-
 use beserial::{Deserialize, Serialize};
+use log::error;
 use nimiq_database::{
     traits::{Database, ReadCursor, ReadTransaction, WriteTransaction},
     DatabaseProxy, IntoIterProxy, TableProxy, TransactionProxy, WriteTransactionProxy,
@@ -19,9 +18,7 @@ use nimiq_primitives::{
     key_nibbles::KeyNibbles,
     trie::{
         error::MerkleRadixTrieError,
-        trie_chunk::TrieChunk,
-        trie_chunk::TrieChunkPushResult,
-        trie_chunk::TrieItem,
+        trie_chunk::{TrieChunk, TrieChunkPushResult, TrieItem},
         trie_node::{RootData, TrieNode, TrieNodeKind},
         trie_proof::TrieProof,
         trie_proof_node::TrieProofNode,
@@ -1505,8 +1502,9 @@ impl<'txn, T: Deserialize> Iterator for TrieNodeIter<'txn, T> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use nimiq_test_log::test;
+
+    use super::*;
 
     #[test]
     fn get_put_remove_works() {

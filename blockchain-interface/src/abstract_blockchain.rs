@@ -1,13 +1,16 @@
 use futures::stream::BoxStream;
-
 use nimiq_block::{Block, BlockType, MacroBlock};
 use nimiq_hash::Blake2bHash;
-use nimiq_primitives::networks::NetworkId;
-use nimiq_primitives::policy::Policy;
-use nimiq_primitives::slots::{Validator, Validators};
+use nimiq_primitives::{
+    networks::NetworkId,
+    policy::Policy,
+    slots::{Validator, Validators},
+};
 
-use crate::error::{BlockchainError, BlockchainEvent, Direction};
-use crate::{ChainInfo, ForkEvent};
+use crate::{
+    error::{BlockchainError, BlockchainEvent, Direction},
+    ChainInfo, ForkEvent,
+};
 
 /// Defines several basic methods for blockchains.
 pub trait AbstractBlockchain {

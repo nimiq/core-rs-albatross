@@ -8,9 +8,7 @@ use std::{
     task::{Context, Poll},
 };
 
-use futures::stream::BoxStream;
-use futures::{Stream, StreamExt};
-
+use futures::{stream::BoxStream, Stream, StreamExt};
 use nimiq_block::{Block, BlockHeaderTopic, BlockTopic};
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent, Direction, ForkEvent};
 use nimiq_blockchain_proxy::BlockchainProxy;
@@ -19,7 +17,6 @@ use nimiq_network_interface::network::{MsgAcceptance, Network, PubsubId};
 use nimiq_primitives::policy::Policy;
 
 use self::block_request_component::BlockRequestComponent;
-
 use super::{
     block_queue::block_request_component::BlockRequestComponentEvent,
     queue::{LiveSyncQueue, QueueConfig},

@@ -1,6 +1,8 @@
-use std::fmt;
-use std::iter::{repeat, FromIterator};
-use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign};
+use std::{
+    fmt,
+    iter::{repeat, FromIterator},
+    ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign},
+};
 
 use beserial::{
     uvar, Deserialize, FromPrimitive, ReadBytesExt, Serialize, SerializingError, ToPrimitive,
@@ -466,9 +468,10 @@ mod serde_derive {
 
 #[cfg(test)]
 mod tests {
-    use super::BitSet;
     use beserial::{Deserialize, Serialize};
     use nimiq_test_log::test;
+
+    use super::BitSet;
 
     fn sample_bitset() -> BitSet {
         let mut set = BitSet::new();

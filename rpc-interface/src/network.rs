@@ -1,5 +1,6 @@
-use crate::types::RPCResult;
 use async_trait::async_trait;
+
+use crate::types::RPCResult;
 
 #[nimiq_jsonrpc_derive::proxy(name = "NetworkProxy", rename_all = "camelCase")]
 #[async_trait]

@@ -1,5 +1,4 @@
 use futures::{future, stream::BoxStream, StreamExt};
-
 use nimiq_block::{Block, MacroBlock};
 use nimiq_blockchain_interface::{
     AbstractBlockchain, BlockchainError, BlockchainEvent, ChainInfo, Direction, ForkEvent,

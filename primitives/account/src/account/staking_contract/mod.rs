@@ -1,5 +1,4 @@
-use std::collections::btree_set::BTreeSet;
-use std::collections::BTreeMap;
+use std::collections::{btree_set::BTreeSet, BTreeMap};
 
 use beserial::{
     Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
@@ -13,18 +12,17 @@ use nimiq_primitives::{
     slots::{Validators, ValidatorsBuilder},
 };
 use nimiq_vrf::{AliasMethod, VrfSeed, VrfUseCase};
-
-use crate::{
-    account::staking_contract::store::{StakingContractStoreRead, StakingContractStoreReadOps},
-    data_store_ops::{DataStoreIterOps, DataStoreReadOps},
-};
-
 pub use receipts::*;
 pub use staker::Staker;
 pub use store::StakingContractStore;
 #[cfg(feature = "interaction-traits")]
 pub use store::StakingContractStoreWrite;
 pub use validator::{Tombstone, Validator};
+
+use crate::{
+    account::staking_contract::store::{StakingContractStoreRead, StakingContractStoreReadOps},
+    data_store_ops::{DataStoreIterOps, DataStoreReadOps},
+};
 
 mod receipts;
 mod staker;

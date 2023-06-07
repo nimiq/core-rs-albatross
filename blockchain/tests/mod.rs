@@ -1,6 +1,4 @@
 use std::sync::Arc;
-use tokio_stream::wrappers::BroadcastStream;
-use tokio_stream::StreamExt;
 
 use nimiq_block::Block;
 use nimiq_blockchain::Blockchain;
@@ -10,6 +8,7 @@ use nimiq_test_log::test;
 use nimiq_test_utils::{
     block_production::TemporaryBlockProducer, blockchain::produce_macro_blocks,
 };
+use tokio_stream::{wrappers::BroadcastStream, StreamExt};
 
 #[test]
 fn it_can_rebranch_skip_block() {

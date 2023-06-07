@@ -1,18 +1,16 @@
-use core::pin::Pin;
-use core::task::{Context, Poll};
-use std::collections::HashSet;
-use std::fmt;
-use std::sync::Arc;
-use std::task::Waker;
+use core::{
+    pin::Pin,
+    task::{Context, Poll},
+};
+use std::{collections::HashSet, fmt, sync::Arc, task::Waker};
 
 use futures::{stream::BoxStream, Stream, StreamExt};
-
 use nimiq_macros::store_waker;
 
-use crate::contribution::AggregatableContribution;
-use crate::evaluator::Evaluator;
-use crate::protocol::Protocol;
-use crate::update::LevelUpdate;
+use crate::{
+    contribution::AggregatableContribution, evaluator::Evaluator, protocol::Protocol,
+    update::LevelUpdate,
+};
 
 /// A TodoItem represents a contribution which has not yet been aggregated into the store.
 #[derive(Clone)]

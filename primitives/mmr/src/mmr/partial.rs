@@ -1,16 +1,17 @@
-use std::collections::VecDeque;
-use std::marker::PhantomData;
-use std::ops::Range;
+use std::{collections::VecDeque, marker::PhantomData, ops::Range};
 
-use crate::error::Error;
-use crate::hash::{Hash, Merge};
-use crate::mmr::peaks::PeakIterator;
-use crate::mmr::position::{leaf_number_to_index, Position};
-use crate::mmr::proof::RangeProof;
-use crate::mmr::utils::bagging;
-use crate::mmr::MerkleMountainRange;
-use crate::store::memory::MemoryTransaction;
-use crate::store::Store;
+use crate::{
+    error::Error,
+    hash::{Hash, Merge},
+    mmr::{
+        peaks::PeakIterator,
+        position::{leaf_number_to_index, Position},
+        proof::RangeProof,
+        utils::bagging,
+        MerkleMountainRange,
+    },
+    store::{memory::MemoryTransaction, Store},
+};
 
 /// A struct that holds part of a MMR. Its main use is to construct a full MMR from a series of proofs.
 pub struct PartialMerkleMountainRange<H, S: Store<H>> {
@@ -302,14 +303,14 @@ impl<H: Merge + PartialEq + Clone, S: Store<H>> PartialMerkleMountainRange<H, S>
 mod tests {
     use std::cmp;
 
-    use crate::error::Error;
-    use crate::mmr::utils::test_utils::TestHash;
-    use crate::mmr::MerkleMountainRange;
-    use crate::store::memory::MemoryStore;
-    use crate::store::Store;
+    use nimiq_test_log::test;
 
     use super::*;
-    use nimiq_test_log::test;
+    use crate::{
+        error::Error,
+        mmr::{utils::test_utils::TestHash, MerkleMountainRange},
+        store::{memory::MemoryStore, Store},
+    };
 
     #[test]
     fn it_correctly_verifies_range_proofs() {

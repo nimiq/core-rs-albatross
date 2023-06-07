@@ -1,6 +1,4 @@
-use std::env;
-use std::fmt;
-use std::str::FromStr;
+use std::{env, fmt, str::FromStr};
 
 /// A user agent string.
 ///

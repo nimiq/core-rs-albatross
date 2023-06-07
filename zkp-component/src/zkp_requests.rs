@@ -1,19 +1,16 @@
-use std::pin::Pin;
-use std::sync::Arc;
-use std::task::{Context, Poll, Waker};
+use std::{
+    pin::Pin,
+    sync::Arc,
+    task::{Context, Poll, Waker},
+};
 
-use futures::future::BoxFuture;
-use futures::{FutureExt, Stream, StreamExt};
-
+use futures::{future::BoxFuture, stream::FuturesUnordered, FutureExt, Stream, StreamExt};
+use nimiq_block::MacroBlock;
 use nimiq_macros::store_waker;
-use nimiq_network_interface::request::RequestError;
+use nimiq_network_interface::{network::Network, request::RequestError};
 use tokio::sync::oneshot::{channel, Receiver, Sender};
 
-use nimiq_block::MacroBlock;
-use nimiq_network_interface::network::Network;
-
 use crate::types::*;
-use futures::stream::FuturesUnordered;
 
 pub struct ZKPRequestsItem<N: Network> {
     pub peer_id: N::PeerId,

@@ -1,17 +1,14 @@
-use std::borrow::Borrow;
-use std::error;
-use std::fmt;
-use std::iter::Sum;
-use std::ops::Add;
+use std::{borrow::Borrow, error, fmt, iter::Sum, ops::Add};
 
-use curve25519_dalek::constants;
-use curve25519_dalek::edwards::{CompressedEdwardsY, EdwardsPoint};
-use curve25519_dalek::scalar::Scalar;
-use curve25519_dalek::traits::Identity;
+use curve25519_dalek::{
+    constants,
+    edwards::{CompressedEdwardsY, EdwardsPoint},
+    scalar::Scalar,
+    traits::Identity,
+};
+use nimiq_utils::key_rng::{CryptoRng, RngCore, SecureGenerate};
 use rand::Rng;
 use sha2::{self, Digest, Sha512};
-
-use nimiq_utils::key_rng::{CryptoRng, RngCore, SecureGenerate};
 
 use crate::{KeyPair, PublicKey, Signature};
 

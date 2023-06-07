@@ -1,7 +1,5 @@
 use std::{cmp, mem};
 
-use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
-
 use nimiq_block::{Block, BlockError};
 use nimiq_blockchain_interface::{
     AbstractBlockchain, BlockchainEvent, ChainInfo, PushError, PushResult,
@@ -9,6 +7,7 @@ use nimiq_blockchain_interface::{
 use nimiq_database::traits::{ReadTransaction, WriteTransaction};
 use nimiq_primitives::policy::Policy;
 use nimiq_zkp::{verify::verify, NanoProof, ZKP_VERIFYING_KEY};
+use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
 
 use crate::Blockchain;
 

@@ -1,9 +1,7 @@
-use futures::{future, StreamExt};
-use rand::{rngs::StdRng, SeedableRng};
 use std::sync::Arc;
-use tokio_stream::wrappers::BroadcastStream;
 
 use beserial::{Deserialize, Serialize};
+use futures::{future, StreamExt};
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_consensus::{Consensus, ConsensusEvent};
@@ -15,9 +13,10 @@ use nimiq_network_interface::network::Network as NetworkInterface;
 use nimiq_network_mock::MockHub;
 use nimiq_validator::validator::Validator;
 use nimiq_validator_network::network_impl::ValidatorNetworkImpl;
+use rand::{rngs::StdRng, SeedableRng};
+use tokio_stream::wrappers::BroadcastStream;
 
-use crate::node::Node;
-use crate::test_network::TestNetwork;
+use crate::{node::Node, test_network::TestNetwork};
 
 pub fn seeded_rng(seed: u64) -> StdRng {
     StdRng::seed_from_u64(seed)

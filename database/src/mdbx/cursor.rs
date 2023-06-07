@@ -1,7 +1,6 @@
 use std::{borrow::Cow, marker::PhantomData};
 
 use libmdbx::{TransactionKind, WriteFlags, RO, RW};
-
 use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue};
 
 use super::{DbKvPair, IntoIter};

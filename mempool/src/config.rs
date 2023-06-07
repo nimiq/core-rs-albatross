@@ -1,5 +1,7 @@
-use crate::filter::{MempoolFilter, MempoolRules};
-use crate::mempool::Mempool;
+use crate::{
+    filter::{MempoolFilter, MempoolRules},
+    mempool::Mempool,
+};
 
 /// Struct defining a Mempool configuration
 #[derive(Debug, Clone)]

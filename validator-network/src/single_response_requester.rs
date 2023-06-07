@@ -9,7 +9,6 @@ use futures::{
     stream::FuturesUnordered,
     StreamExt,
 };
-
 use nimiq_network_interface::request::{Request, RequestCommon};
 
 use crate::ValidatorNetwork;

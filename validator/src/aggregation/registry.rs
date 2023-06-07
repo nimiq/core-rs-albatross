@@ -3,8 +3,7 @@ use std::collections::HashSet;
 use nimiq_bls::PublicKey;
 use nimiq_collections::BitSet;
 use nimiq_handel::identity::{Identity, IdentityRegistry, WeightRegistry};
-use nimiq_primitives::policy::Policy;
-use nimiq_primitives::slots::Validators;
+use nimiq_primitives::{policy::Policy, slots::Validators};
 
 /// Implementation for Handel registry using a `Validators` list.
 #[derive(Debug)]

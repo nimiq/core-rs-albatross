@@ -1,5 +1,7 @@
-use std::collections::{BTreeMap, BTreeSet};
-use std::convert::TryInto;
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    convert::TryInto,
+};
 
 use beserial::{Deserialize, Serialize};
 use nimiq_account::*;

@@ -1,18 +1,14 @@
-use std::io::stdin;
-use std::process::exit;
-use std::str::FromStr;
+use std::{io::stdin, process::exit, str::FromStr};
 
 use anyhow::Error;
+use beserial::{Deserialize, Serialize};
 use clap::{
     crate_authors, crate_description, crate_version, value_parser, Arg, ArgAction, Command,
 };
-use thiserror::Error;
-
-use beserial::{Deserialize, Serialize};
 use nimiq_keys::{Address, KeyPair, PrivateKey};
-use nimiq_primitives::coin::Coin;
-use nimiq_primitives::networks::NetworkId;
+use nimiq_primitives::{coin::Coin, networks::NetworkId};
 use nimiq_transaction::Transaction;
+use thiserror::Error;
 
 fn run_app() -> Result<(), Error> {
     let matches = Command::new("Sign transaction")

@@ -1,11 +1,10 @@
-use crate::reward::RewardTransaction;
 use beserial::{Deserialize, Serialize};
 use nimiq_hash::{Hash, SerializeContent};
 use nimiq_hash_derive::SerializeContent;
 use nimiq_keys::Address;
-use nimiq_primitives::coin::Coin;
-use nimiq_primitives::policy::Policy;
-use nimiq_primitives::slots::SlashedSlot;
+use nimiq_primitives::{coin::Coin, policy::Policy, slots::SlashedSlot};
+
+use crate::reward::RewardTransaction;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, SerializeContent, Deserialize)]
 #[repr(u8)]

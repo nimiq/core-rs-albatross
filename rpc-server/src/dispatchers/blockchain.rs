@@ -1,19 +1,18 @@
 use async_trait::async_trait;
 use futures::{future, stream::BoxStream, StreamExt};
-
 use nimiq_account::{BlockLog as BBlockLog, TransactionLog};
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent};
 use nimiq_blockchain_proxy::{BlockchainProxy, BlockchainReadProxy};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::policy::Policy;
-use nimiq_rpc_interface::types::{
-    is_of_log_type_and_related_to_addresses, BlockLog, BlockchainState, ParkedSet, RPCData,
-    RPCResult, Validator,
-};
 use nimiq_rpc_interface::{
     blockchain::BlockchainInterface,
-    types::{Account, Block, ExecutedTransaction, Inherent, LogType, SlashedSlots, Slot, Staker},
+    types::{
+        is_of_log_type_and_related_to_addresses, Account, Block, BlockLog, BlockchainState,
+        ExecutedTransaction, Inherent, LogType, ParkedSet, RPCData, RPCResult, SlashedSlots, Slot,
+        Staker, Validator,
+    },
 };
 use tokio_stream::wrappers::BroadcastStream;
 

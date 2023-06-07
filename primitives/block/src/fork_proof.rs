@@ -1,5 +1,4 @@
-use std::cmp::Ordering;
-use std::io;
+use std::{cmp::Ordering, io};
 
 use beserial::{Deserialize, Serialize};
 use nimiq_hash::{Blake2bHash, Hash, HashOutput, SerializeContent};

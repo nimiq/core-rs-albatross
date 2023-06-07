@@ -1,12 +1,13 @@
-use std::fmt::{Debug, Display};
-use std::hash::Hash;
+use std::{
+    fmt::{Debug, Display},
+    hash::Hash,
+};
 
 use async_trait::async_trait;
+use beserial::{Deserialize, Serialize, SerializingError};
 use futures::stream::BoxStream;
 use thiserror::Error;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
-
-use beserial::{Deserialize, Serialize, SerializingError};
 
 use crate::{
     peer_info::*,

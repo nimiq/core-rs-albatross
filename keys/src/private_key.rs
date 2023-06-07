@@ -1,16 +1,17 @@
-use std::convert::{TryFrom, TryInto};
-use std::fmt::{Debug, Error, Formatter};
-use std::io;
-use std::str::FromStr;
-
-use curve25519_dalek::scalar::Scalar;
-use hex::FromHex;
-use rand_core::{CryptoRng, RngCore};
-use sha2::{Digest as _, Sha512};
+use std::{
+    convert::{TryFrom, TryInto},
+    fmt::{Debug, Error, Formatter},
+    io,
+    str::FromStr,
+};
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
+use curve25519_dalek::scalar::Scalar;
+use hex::FromHex;
 use nimiq_hash::{Hash, SerializeContent};
 use nimiq_utils::key_rng::SecureGenerate;
+use rand_core::{CryptoRng, RngCore};
+use sha2::{Digest as _, Sha512};
 
 use crate::errors::{KeysError, ParseError};
 

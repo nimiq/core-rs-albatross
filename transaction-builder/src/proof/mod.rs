@@ -6,8 +6,10 @@ use nimiq_keys::KeyPair;
 use nimiq_primitives::account::AccountType;
 use nimiq_transaction::{SignatureProof, Transaction};
 
-use crate::proof::htlc_contract::HtlcProofBuilder;
-use crate::proof::staking_contract::{StakingDataBuilder, StakingProofBuilder};
+use crate::proof::{
+    htlc_contract::HtlcProofBuilder,
+    staking_contract::{StakingDataBuilder, StakingProofBuilder},
+};
 
 pub mod htlc_contract;
 pub mod staking_contract;

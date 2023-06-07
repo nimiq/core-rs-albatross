@@ -1,11 +1,10 @@
 use log::error;
-
 use nimiq_primitives::account::AccountType;
 
-use crate::account::AccountTransactionVerification;
-use crate::{Transaction, TransactionError, TransactionFlags};
-
 pub use self::structs::*;
+use crate::{
+    account::AccountTransactionVerification, Transaction, TransactionError, TransactionFlags,
+};
 
 pub mod structs;
 

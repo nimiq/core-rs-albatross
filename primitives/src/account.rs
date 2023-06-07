@@ -1,14 +1,12 @@
 use std::convert::TryFrom;
 
+use beserial::{Deserialize, Serialize, SerializingError};
+use nimiq_keys::Address;
 use strum_macros::Display;
 use thiserror::Error;
 
-use beserial::{Deserialize, Serialize, SerializingError};
-use nimiq_keys::Address;
-
-use crate::coin::CoinUnderflowError;
 use crate::{
-    coin::{Coin, CoinConvertError, CoinParseError},
+    coin::{Coin, CoinConvertError, CoinParseError, CoinUnderflowError},
     transaction::TransactionError,
     trie::error::MerkleRadixTrieError,
 };

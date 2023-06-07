@@ -3,11 +3,10 @@ use ark_r1cs_std::{prelude::UInt32, uint8::UInt8};
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 use nimiq_pedersen_generators::GenericWindow;
 
+use super::DefaultPedersenParametersVar;
 use crate::gadgets::{
     be_bytes::ToBeBytesGadget, pedersen::PedersenHashGadget, serialize::SerializeGadget,
 };
-
-use super::DefaultPedersenParametersVar;
 
 /// This gadget is meant to calculate the "state commitment" in-circuit, which is simply a commitment,
 /// for a given block, of the block number concatenated with the root of a Merkle tree over the public
@@ -64,15 +63,13 @@ mod tests {
     use ark_relations::r1cs::ConstraintSystem;
     use ark_std::{test_rng, UniformRand};
     use nimiq_pedersen_generators::pedersen_generator_powers;
-    use rand::RngCore;
-
     use nimiq_primitives::policy::Policy;
     use nimiq_test_log::test;
     use nimiq_zkp_primitives::{pk_tree_construct, state_commitment};
-
-    use crate::gadgets::pedersen::PedersenParametersVar;
+    use rand::RngCore;
 
     use super::*;
+    use crate::gadgets::pedersen::PedersenParametersVar;
 
     #[test]
     fn state_commitment_works() {

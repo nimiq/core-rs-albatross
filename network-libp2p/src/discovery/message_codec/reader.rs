@@ -1,12 +1,13 @@
-use std::marker::PhantomData;
-use std::pin::Pin;
-use std::task::{Context, Poll};
+use std::{
+    marker::PhantomData,
+    pin::Pin,
+    task::{Context, Poll},
+};
 
+use beserial::{Deserialize, SerializingError};
 use bytes::{Buf, BytesMut};
 use futures::{AsyncRead, Stream};
 use pin_project::pin_project;
-
-use beserial::{Deserialize, SerializingError};
 
 use super::header::Header;
 
@@ -227,14 +228,12 @@ where
 
 #[cfg(test)]
 mod tests {
+    use beserial::{Deserialize, Serialize};
     use bytes::{BufMut, BytesMut};
     use futures::{io::Cursor, StreamExt};
-
-    use beserial::{Deserialize, Serialize};
-
-    use super::Header;
-    use super::MessageReader;
     use nimiq_test_log::test;
+
+    use super::{Header, MessageReader};
 
     #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
     struct TestMessage {

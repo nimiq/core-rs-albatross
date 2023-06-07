@@ -2,12 +2,11 @@ use std::io;
 
 use log::level_filters::LevelFilter;
 use nimiq_genesis::NetworkId;
-use tracing_subscriber::{filter::Targets, prelude::*};
-
 use nimiq_log::TargetsExt;
 use nimiq_primitives::policy::{Policy, TEST_POLICY};
 use nimiq_zkp::ZKP_VERIFYING_KEY;
 use nimiq_zkp_component::prover_binary::prover_main;
+use tracing_subscriber::{filter::Targets, prelude::*};
 
 /// This binary is only used in tests.
 #[tokio::main]

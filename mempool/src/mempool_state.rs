@@ -1,17 +1,20 @@
-use nimiq_account::ReservedBalance;
-use nimiq_blockchain::Blockchain;
 use std::collections::{HashMap, HashSet};
 #[cfg(feature = "metrics")]
 use std::sync::Arc;
 
-#[cfg(feature = "metrics")]
-use crate::mempool_metrics::MempoolMetrics;
-use crate::mempool_transactions::{MempoolTransactions, TxPriority};
-use crate::verify::VerifyErr;
+use nimiq_account::ReservedBalance;
+use nimiq_blockchain::Blockchain;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
 use nimiq_primitives::account::AccountType;
 use nimiq_transaction::Transaction;
+
+#[cfg(feature = "metrics")]
+use crate::mempool_metrics::MempoolMetrics;
+use crate::{
+    mempool_transactions::{MempoolTransactions, TxPriority},
+    verify::VerifyErr,
+};
 
 pub(crate) struct MempoolState {
     // Container where the regular transactions are stored

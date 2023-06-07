@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
 
 use nimiq_account::{Accounts, BlockLog};
 use nimiq_block::Block;
@@ -14,6 +13,7 @@ use nimiq_primitives::{
     coin::Coin, networks::NetworkId, policy::Policy, slots::Validators, trie::TrieItem,
 };
 use nimiq_utils::time::OffsetTime;
+use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
 
 #[cfg(feature = "metrics")]
 use crate::chain_metrics::BlockchainMetrics;

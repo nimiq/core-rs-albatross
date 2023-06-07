@@ -112,8 +112,9 @@ impl Iterator for RevPeakIterator {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use nimiq_test_log::test;
+
+    use super::*;
 
     #[test]
     fn it_correctly_iterates_peaks() {

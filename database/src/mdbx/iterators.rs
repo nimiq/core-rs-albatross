@@ -1,7 +1,6 @@
 use std::{borrow::Cow, marker::PhantomData};
 
 use libmdbx::TransactionKind;
-
 use nimiq_database_value::FromDatabaseValue;
 
 /// Iterates over database entries (key, value pairs).

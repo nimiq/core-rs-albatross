@@ -1,10 +1,7 @@
+use beserial::Serialize;
 use wasm_bindgen::prelude::*;
 
-use beserial::Serialize;
-
-use crate::address::Address;
-use crate::public_key::PublicKey;
-use crate::signature::Signature;
+use crate::{address::Address, public_key::PublicKey, signature::Signature};
 
 /// A signature proof represents a signature together with its public key and the public key's merkle path.
 /// It is used as the proof for transactions.

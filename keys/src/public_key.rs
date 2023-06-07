@@ -1,17 +1,18 @@
-use std::cmp::Ordering;
-use std::convert::TryFrom;
-use std::convert::TryInto;
-use std::fmt;
-use std::io;
-use std::str::FromStr;
-
-use hex::FromHex;
+use std::{
+    cmp::Ordering,
+    convert::{TryFrom, TryInto},
+    fmt, io,
+    str::FromStr,
+};
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
+use hex::FromHex;
 use nimiq_hash::{Hash, SerializeContent};
 
-use crate::errors::{KeysError, ParseError};
-use crate::{PrivateKey, Signature};
+use crate::{
+    errors::{KeysError, ParseError},
+    PrivateKey, Signature,
+};
 
 #[derive(Clone, Copy)]
 pub struct PublicKey(pub ed25519_zebra::VerificationKeyBytes);

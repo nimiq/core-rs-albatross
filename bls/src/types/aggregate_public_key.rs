@@ -2,7 +2,6 @@ use std::fmt;
 
 use ark_ff::Zero;
 use ark_mnt6_753::G2Projective;
-
 use nimiq_hash::Hash;
 
 use crate::{AggregateSignature, PublicKey, SigHash};

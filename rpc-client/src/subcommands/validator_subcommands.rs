@@ -1,13 +1,13 @@
 use anyhow::Error;
 use async_trait::async_trait;
 use clap::Parser;
-
 use nimiq_keys::Address;
-use nimiq_rpc_interface::consensus::ConsensusInterface;
-use nimiq_rpc_interface::validator::ValidatorInterface;
+use nimiq_rpc_interface::{consensus::ConsensusInterface, validator::ValidatorInterface};
 
-use super::accounts_subcommands::HandleSubcommand;
-use super::transactions_subcommands::{TxCommon, TxCommonWithValue};
+use super::{
+    accounts_subcommands::HandleSubcommand,
+    transactions_subcommands::{TxCommon, TxCommonWithValue},
+};
 use crate::Client;
 
 #[derive(Debug, Parser)]

@@ -4,8 +4,7 @@ use std::fmt;
 #[cfg(feature = "beserial")]
 use beserial::Serialize;
 use nimiq_hash::Hash;
-use nimiq_utils::key_rng::SecureGenerate;
-use nimiq_utils::key_rng::{CryptoRng, RngCore};
+use nimiq_utils::key_rng::{CryptoRng, RngCore, SecureGenerate};
 
 use crate::{PublicKey, SecretKey, SigHash, Signature};
 

@@ -1,10 +1,9 @@
-use serde::ser::SerializeStruct;
-use tsify::Tsify;
-use wasm_bindgen::prelude::*;
-
 use beserial::Serialize;
 use nimiq_block::Block;
 use nimiq_primitives::policy::Policy;
+use serde::ser::SerializeStruct;
+use tsify::Tsify;
+use wasm_bindgen::prelude::*;
 
 /// JSON-compatible and human-readable format of blocks.
 #[derive(Tsify)]

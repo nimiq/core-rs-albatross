@@ -1,11 +1,11 @@
-use log::error;
-
 use beserial::Deserialize;
+use log::error;
 use nimiq_primitives::account::AccountType;
 
-use crate::account::AccountTransactionVerification;
-use crate::SignatureProof;
-use crate::{Transaction, TransactionError, TransactionFlags};
+use crate::{
+    account::AccountTransactionVerification, SignatureProof, Transaction, TransactionError,
+    TransactionFlags,
+};
 
 /// The verifier trait for a basic account. This only uses data available in the transaction.
 pub struct BasicAccountVerifier {}

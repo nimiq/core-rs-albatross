@@ -1,18 +1,14 @@
-use parking_lot::RwLock;
 use std::sync::Arc;
-use thiserror::Error;
 
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_hash::Hash;
-use nimiq_primitives::networks::NetworkId;
-use nimiq_primitives::transaction::TransactionError;
-
+use nimiq_primitives::{networks::NetworkId, transaction::TransactionError};
 use nimiq_transaction::Transaction;
+use parking_lot::RwLock;
+use thiserror::Error;
 
-use crate::filter::MempoolFilter;
-use crate::mempool_state::MempoolState;
-use crate::mempool_transactions::TxPriority;
+use crate::{filter::MempoolFilter, mempool_state::MempoolState, mempool_transactions::TxPriority};
 
 /// Error codes for the transaction verification
 #[derive(Error, Debug, PartialEq, Eq)]

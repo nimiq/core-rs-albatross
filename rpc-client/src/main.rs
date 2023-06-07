@@ -1,7 +1,5 @@
 use anyhow::{bail, Error};
 use clap::Parser;
-use url::Url;
-
 use nimiq_jsonrpc_client::{websocket::WebsocketClient, ArcClient, Client as RPCclient};
 use nimiq_jsonrpc_core::Credentials;
 use nimiq_rpc_interface::{
@@ -9,6 +7,7 @@ use nimiq_rpc_interface::{
     network::NetworkProxy, policy::PolicyProxy, validator::ValidatorProxy, wallet::WalletProxy,
     zkp_component::ZKPComponentProxy,
 };
+use url::Url;
 pub mod subcommands;
 
 use crate::subcommands::*;

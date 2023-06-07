@@ -7,15 +7,14 @@ use std::{
 };
 
 use futures::{Stream, StreamExt};
-use parking_lot::Mutex;
-use pin_project::pin_project;
-
 use nimiq_block::Block;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_network_interface::network::{Network, SubscribeEvents};
 use nimiq_primitives::task_executor::TaskExecutor;
 use nimiq_zkp_component::zkp_component::ZKPComponentProxy;
+use parking_lot::Mutex;
+use pin_project::pin_project;
 
 #[cfg(feature = "full")]
 use crate::sync::{

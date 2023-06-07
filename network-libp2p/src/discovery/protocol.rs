@@ -1,12 +1,11 @@
+use beserial::{Deserialize, Serialize, SerializingError};
 use futures::{future, AsyncRead, AsyncWrite};
 use libp2p::{core::UpgradeInfo, identity::Keypair, InboundUpgrade, Multiaddr, OutboundUpgrade};
-use rand::{thread_rng, RngCore};
-
-use beserial::{Deserialize, Serialize, SerializingError};
 use nimiq_hash::Blake2bHash;
 use nimiq_macros::{add_hex_io_fns_typed_arr, create_typed_array};
 use nimiq_network_interface::peer_info::Services;
 use nimiq_utils::tagged_signing::{TaggedSignable, TaggedSignature};
+use rand::{thread_rng, RngCore};
 
 use super::{
     message_codec::{MessageReader, MessageWriter},

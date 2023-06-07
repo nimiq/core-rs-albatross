@@ -3,12 +3,10 @@ use std::fmt;
 
 use ark_ff::{UniformRand, Zero};
 use ark_mnt6_753::{Fr, G1Projective};
-
 #[cfg(feature = "beserial")]
 use beserial::Serialize;
 use nimiq_hash::Hash;
-use nimiq_utils::key_rng::SecureGenerate;
-use nimiq_utils::key_rng::{CryptoRng, RngCore};
+use nimiq_utils::key_rng::{CryptoRng, RngCore, SecureGenerate};
 
 use crate::{CompressedSignature, SigHash, Signature};
 

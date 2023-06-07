@@ -1,6 +1,7 @@
-use super::{create_parameters, DefaultPoseidonParameters};
 use ark_crypto_primitives::sponge::poseidon::{PoseidonConfig, PoseidonDefaultConfigEntry};
 use ark_mnt6_753::Fq;
+
+use super::{create_parameters, DefaultPoseidonParameters};
 
 // Parameters have been generated using the reference implementation here: https://extgit.iaik.tugraz.at/krypto/hadeshash/-/blob/master/code/generate_parameters_grain.sage
 // Partial rounds have been rounded up to the nearest multiple of `t`.

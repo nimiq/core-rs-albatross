@@ -1,10 +1,4 @@
-use std::borrow::Cow;
-use std::cmp::Ordering;
-use std::error;
-use std::fmt;
-use std::io;
-use std::io::Write;
-use std::ops::Deref;
+use std::{borrow::Cow, cmp::Ordering, error, fmt, io, io::Write, ops::Deref};
 
 use beserial::{
     Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
@@ -563,9 +557,9 @@ pub type Blake2bMerkleProof = MerkleProof<Blake2bHash>;
 #[cfg(test)]
 mod tests {
     use nimiq_hash::Blake2bHasher;
+    use nimiq_test_log::test;
 
     use super::*;
-    use nimiq_test_log::test;
 
     #[test]
     fn it_correctly_computes_a_simple_proof() {

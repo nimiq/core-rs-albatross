@@ -1,14 +1,13 @@
-use std::fmt;
-use std::str;
-use std::str::FromStr;
+use std::{fmt, str, str::FromStr};
 
 use bitvec::{field::BitField, order::Msb0, slice::BitSlice, vec::BitVec, view::BitView};
-use unicode_normalization::UnicodeNormalization;
-
-use nimiq_hash::pbkdf2::{compute_pbkdf2_sha512, Pbkdf2Error};
-use nimiq_hash::{HashOutput, Hasher, Sha256Hasher};
+use nimiq_hash::{
+    pbkdf2::{compute_pbkdf2_sha512, Pbkdf2Error},
+    HashOutput, Hasher, Sha256Hasher,
+};
 use nimiq_macros::{add_hex_io_fns_typed_arr, create_typed_array};
 use nimiq_utils::crc::Crc8Computer;
+use unicode_normalization::UnicodeNormalization;
 
 #[cfg(feature = "key-derivation")]
 pub mod key_derivation;

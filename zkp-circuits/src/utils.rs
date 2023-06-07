@@ -1,10 +1,9 @@
 use ark_ec::Group;
 use ark_mnt6_753::{Fr as MNT6Fr, G2Projective as G2MNT6};
 use ark_std::{ops::MulAssign, UniformRand};
-use rand::{rngs::SmallRng, seq::SliceRandom, RngCore, SeedableRng};
-
 use nimiq_primitives::policy::Policy;
 use nimiq_zkp_primitives::{pk_tree_construct, state_commitment, MacroBlock};
+use rand::{rngs::SmallRng, seq::SliceRandom, RngCore, SeedableRng};
 
 /// Transforms a u8 into a vector of little endian bits.
 pub fn byte_to_le_bits(mut byte: u8) -> Vec<bool> {

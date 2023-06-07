@@ -14,9 +14,7 @@
 //!                      |             SlotBand                      |    SlotBand       |
 //!                      +-------------------------------------------+-------------------+
 //! ```
-use std::cmp::max;
-use std::collections::BTreeMap;
-use std::slice::Iter;
+use std::{cmp::max, collections::BTreeMap, slice::Iter};
 
 use beserial::{
     Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,

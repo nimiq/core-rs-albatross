@@ -4,16 +4,15 @@ use ark_ff::ToConstraintField;
 use ark_groth16::VerifyingKey;
 use ark_mnt6_753::MNT6_753;
 use ark_serialize::CanonicalDeserialize;
-use nimiq_zkp_component::types::ZKProof;
-use parking_lot::RwLock;
-use rand::{Rng, SeedableRng};
-use rand_chacha::ChaCha20Rng;
-
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_genesis::NetworkInfo;
 use nimiq_zkp_circuits::test_setup::ToxicWaste;
+use nimiq_zkp_component::types::ZKProof;
 use nimiq_zkp_primitives::{state_commitment, vk_commitment};
+use parking_lot::RwLock;
+use rand::{Rng, SeedableRng};
+use rand_chacha::ChaCha20Rng;
 
 pub fn get_base_seed() -> ChaCha20Rng {
     let seed = [

@@ -1,8 +1,10 @@
-use crate::MacroBlock;
+use std::collections::HashMap;
+
 use beserial::{Deserialize, Serialize};
 use nimiq_primitives::policy::Policy;
 use nimiq_utils::math::log2;
-use std::collections::HashMap;
+
+use crate::MacroBlock;
 
 // Block inclusion proofs proof that a block is part of the blockchain.
 // The proof consists of an interlink chain from the current election head down to the target block.

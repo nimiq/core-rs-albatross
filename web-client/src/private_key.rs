@@ -1,9 +1,8 @@
 use std::str::FromStr;
 
-use wasm_bindgen::prelude::*;
-
 use beserial::{Deserialize, Serialize};
 use nimiq_keys::SecureGenerate;
+use wasm_bindgen::prelude::*;
 
 /// The secret (private) part of an asymmetric key pair that is typically used to digitally sign or decrypt data.
 #[wasm_bindgen]

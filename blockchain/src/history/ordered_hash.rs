@@ -1,6 +1,4 @@
-use std::borrow::Cow;
-use std::convert::TryInto;
-use std::io;
+use std::{borrow::Cow, convert::TryInto, io};
 
 use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue};
 use nimiq_hash::{Blake2bHash, HashOutput};

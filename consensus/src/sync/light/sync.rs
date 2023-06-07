@@ -1,9 +1,10 @@
-use std::collections::{HashMap, VecDeque};
-use std::sync::Arc;
-use std::task::Waker;
+use std::{
+    collections::{HashMap, VecDeque},
+    sync::Arc,
+    task::Waker,
+};
 
 use futures::{future::BoxFuture, stream::FuturesUnordered, FutureExt};
-
 use nimiq_block::Block;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::Blake2bHash;

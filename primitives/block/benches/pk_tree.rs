@@ -3,11 +3,12 @@ extern crate bencher;
 
 use bencher::Bencher;
 use nimiq_block::MacroBlock;
-use nimiq_bls::lazy::LazyPublicKey;
-use nimiq_bls::KeyPair as BlsKeyPair;
+use nimiq_bls::{lazy::LazyPublicKey, KeyPair as BlsKeyPair};
 use nimiq_keys::{Address, KeyPair as SchnorrKeyPair, SecureGenerate};
-use nimiq_primitives::policy::Policy;
-use nimiq_primitives::slots::{Validators, ValidatorsBuilder};
+use nimiq_primitives::{
+    policy::Policy,
+    slots::{Validators, ValidatorsBuilder},
+};
 use nimiq_test_utils::zkp_test_data::get_base_seed;
 
 // Benchmarks for the pk tree root computation.

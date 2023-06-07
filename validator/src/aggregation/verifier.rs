@@ -1,10 +1,11 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-
 use nimiq_bls::AggregatePublicKey;
-use nimiq_handel::identity::IdentityRegistry;
-use nimiq_handel::verifier::{VerificationResult, Verifier};
+use nimiq_handel::{
+    identity::IdentityRegistry,
+    verifier::{VerificationResult, Verifier},
+};
 use nimiq_hash::Blake2sHash;
 
 use super::skip_block::SignedSkipBlockMessage;

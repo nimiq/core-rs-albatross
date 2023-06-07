@@ -1,12 +1,9 @@
 use std::str::FromStr;
 
+use beserial::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
-use beserial::{Deserialize, Serialize};
-
-use crate::address::Address;
-use crate::private_key::PrivateKey;
-use crate::signature::Signature;
+use crate::{address::Address, private_key::PrivateKey, signature::Signature};
 
 /// The non-secret (public) part of an asymmetric key pair that is typically used to digitally verify or encrypt data.
 #[wasm_bindgen]

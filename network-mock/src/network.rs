@@ -1,17 +1,14 @@
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::Duration,
 };
-use std::time::Duration;
 
 use async_trait::async_trait;
-use futures::{stream::BoxStream, StreamExt};
-use parking_lot::{Mutex, RwLock};
-use thiserror::Error;
-use tokio::sync::{broadcast, mpsc, oneshot};
-use tokio_stream::wrappers::{errors::BroadcastStreamRecvError, BroadcastStream, ReceiverStream};
-
 use beserial::{Deserialize, Serialize};
+use futures::{stream::BoxStream, StreamExt};
 use nimiq_network_interface::{
     network::{
         CloseReason, MsgAcceptance, Network, NetworkEvent, PubsubId, SubscribeEvents, Topic,
@@ -22,9 +19,15 @@ use nimiq_network_interface::{
         RequestKind, RequestType,
     },
 };
+use parking_lot::{Mutex, RwLock};
+use thiserror::Error;
+use tokio::sync::{broadcast, mpsc, oneshot};
+use tokio_stream::wrappers::{errors::BroadcastStreamRecvError, BroadcastStream, ReceiverStream};
 
-use crate::hub::{MockHubInner, RequestKey, ResponseSender};
-use crate::{observable_hash_map, MockAddress, MockPeerId, ObservableHashMap};
+use crate::{
+    hub::{MockHubInner, RequestKey, ResponseSender},
+    observable_hash_map, MockAddress, MockPeerId, ObservableHashMap,
+};
 
 #[derive(Debug, Error, Eq, PartialEq)]
 pub enum MockNetworkError {

@@ -1,7 +1,8 @@
-use crate::NumericClosureMetric;
 use nimiq_consensus::ConsensusProxy;
 use nimiq_network_interface::network::Network;
 use prometheus_client::registry::Registry;
+
+use crate::NumericClosureMetric;
 
 pub struct ConsensusMetrics {}
 

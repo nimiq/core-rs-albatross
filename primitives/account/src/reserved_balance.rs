@@ -1,7 +1,7 @@
-use nimiq_keys::Address;
-use nimiq_primitives::account::AccountError;
-use nimiq_primitives::coin::Coin;
 use std::collections::BTreeMap;
+
+use nimiq_keys::Address;
+use nimiq_primitives::{account::AccountError, coin::Coin};
 
 #[derive(Clone)]
 pub struct ReservedBalance {

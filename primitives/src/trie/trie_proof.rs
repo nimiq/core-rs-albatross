@@ -1,12 +1,10 @@
-use log::error;
-use std::cmp::Ordering;
-use std::collections::BTreeMap;
+use std::{cmp::Ordering, collections::BTreeMap};
 
 use beserial::{Deserialize, Serialize};
+use log::error;
 use nimiq_hash::{Blake2bHash, Hash};
 
-use crate::key_nibbles::KeyNibbles;
-use crate::trie::trie_proof_node::TrieProofNode;
+use crate::{key_nibbles::KeyNibbles, trie::trie_proof_node::TrieProofNode};
 
 /// A Merkle proof of the inclusion of some leaf nodes in the Merkle Radix
 /// Trie.
@@ -213,10 +211,11 @@ impl TrieProof {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::trie::trie_node::TrieNode;
     use nimiq_hash::Hash;
     use nimiq_test_log::test;
+
+    use super::*;
+    use crate::trie::trie_node::TrieNode;
 
     // We're going to construct proofs based on this tree:
     //

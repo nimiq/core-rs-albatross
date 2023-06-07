@@ -1,4 +1,3 @@
-use paste::paste;
 use std::{fmt::Debug, ops::Deref};
 
 use nimiq_account::{
@@ -13,6 +12,7 @@ use nimiq_database::{
 use nimiq_keys::Address;
 use nimiq_primitives::{account::AccountError, coin::Coin, key_nibbles::KeyNibbles};
 use nimiq_transaction::{inherent::Inherent, Transaction};
+use paste::paste;
 
 macro_rules! impl_accounts_trait {
     ($fn_name: ident, $target: ident, $op_type: ty, $log_type: ty) => {

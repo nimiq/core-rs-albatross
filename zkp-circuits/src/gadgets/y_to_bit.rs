@@ -3,7 +3,7 @@ use ark_r1cs_std::{
     boolean::Boolean,
     fields::fp::FpVar,
     prelude::{AllocVar, EqGadget, FieldVar},
-    {R1CSVar, ToBitsGadget},
+    R1CSVar, ToBitsGadget,
 };
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 

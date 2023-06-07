@@ -4,8 +4,7 @@ use beserial::{Deserialize, Serialize};
 use nimiq_bls::AggregatePublicKey;
 use nimiq_hash::{Hash, SerializeContent};
 use nimiq_hash_derive::SerializeContent;
-use nimiq_primitives::policy::Policy;
-use nimiq_primitives::slots::Validators;
+use nimiq_primitives::{policy::Policy, slots::Validators};
 use nimiq_vrf::VrfEntropy;
 
 use crate::{Message, MicroBlock, MultiSignature, SignedMessage, PREFIX_SKIP_BLOCK_INFO};

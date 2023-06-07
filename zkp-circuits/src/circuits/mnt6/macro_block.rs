@@ -10,19 +10,17 @@ use ark_mnt6_753::{
 };
 use ark_r1cs_std::prelude::{AllocVar, Boolean, EqGadget, UInt32, UInt8};
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
-use rand::Rng;
-
 use nimiq_primitives::policy::Policy;
 use nimiq_zkp_primitives::{MacroBlock, PEDERSEN_PARAMETERS};
+use rand::Rng;
 
+use super::pk_tree_node::{hash_g2, PkInnerNodeWindow};
 use crate::gadgets::{
     mnt6::{DefaultPedersenParametersVar, MacroBlockGadget, StateCommitmentGadget},
     pedersen::PedersenHashGadget,
     recursive_input::RecursiveInputVar,
     serialize::SerializeGadget,
 };
-
-use super::pk_tree_node::{hash_g2, PkInnerNodeWindow};
 
 /// This is the macro block circuit. It takes as inputs the previous state commitment and final state commitment
 /// and it produces a proof that there exists a valid macro block that transforms the previous state

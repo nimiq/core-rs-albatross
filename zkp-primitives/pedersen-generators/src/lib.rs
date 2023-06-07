@@ -3,9 +3,8 @@ use std::marker::PhantomData;
 use ark_crypto_primitives::crh::pedersen::Window;
 use ark_ff::PrimeField;
 use ark_mnt6_753::G1Projective;
-pub use generators::pedersen_generator_powers;
-pub use generators::PedersenParameters;
 use generators::POINT_CAPACITY;
+pub use generators::{pedersen_generator_powers, PedersenParameters};
 use nimiq_primitives::policy::Policy;
 
 mod generators;

@@ -1,8 +1,6 @@
 use std::sync::Arc;
 
 use futures::stream::BoxStream;
-use parking_lot::{RwLock, RwLockReadGuard};
-
 use nimiq_block::{Block, MacroBlock};
 #[cfg(feature = "full")]
 use nimiq_blockchain::Blockchain;
@@ -15,6 +13,7 @@ use nimiq_primitives::{
     networks::NetworkId,
     slots::{Validator, Validators},
 };
+use parking_lot::{RwLock, RwLockReadGuard};
 
 macro_rules! gen_blockchain_match {
     ($self: ident, $t: ident, $f: ident $(, $arg:expr )*) => {

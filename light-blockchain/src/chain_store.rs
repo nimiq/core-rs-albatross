@@ -352,7 +352,6 @@ mod tests {
     use nimiq_block::{MicroBlock, MicroHeader, MicroJustification};
     use nimiq_test_log::test;
     use nimiq_test_utils::test_rng::test_rng;
-
     use rand::{Rng, RngCore};
 
     use super::*;

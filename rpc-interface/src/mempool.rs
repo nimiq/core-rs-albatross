@@ -1,7 +1,8 @@
-use crate::types::{HashOrTx, MempoolInfo, RPCResult};
 use async_trait::async_trait;
 use nimiq_hash::Blake2bHash;
 use nimiq_transaction::Transaction;
+
+use crate::types::{HashOrTx, MempoolInfo, RPCResult};
 
 #[nimiq_jsonrpc_derive::proxy(name = "MempoolProxy", rename_all = "camelCase")]
 #[async_trait]

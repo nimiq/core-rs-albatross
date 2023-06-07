@@ -1,5 +1,7 @@
-use std::fs::{DirBuilder, File};
-use std::path::Path;
+use std::{
+    fs::{DirBuilder, File},
+    path::Path,
+};
 
 use ark_crypto_primitives::snark::CircuitSpecificSetupSNARK;
 use ark_ec::{mnt6::MNT6, pairing::Pairing};
@@ -7,23 +9,21 @@ use ark_groth16::{Groth16, ProvingKey, VerifyingKey};
 use ark_mnt4_753::MNT4_753;
 use ark_mnt6_753::{Config, MNT6_753};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use rand::{CryptoRng, Rng};
-
 use nimiq_genesis::NetworkInfo;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_zkp_primitives::NanoZKPError;
+use rand::{CryptoRng, Rng};
 
 use crate::{
-    circuits::mnt4::{
-        MacroBlockWrapperCircuit, MergerWrapperCircuit, PKTreeNodeCircuit as NodeMNT4,
+    circuits::{
+        mnt4::{MacroBlockWrapperCircuit, MergerWrapperCircuit, PKTreeNodeCircuit as NodeMNT4},
+        mnt6::{
+            MacroBlockCircuit, MergerCircuit, PKTreeLeafCircuit as LeafMNT6,
+            PKTreeNodeCircuit as NodeMNT6,
+        },
     },
-    circuits::mnt6::{
-        MacroBlockCircuit, MergerCircuit, PKTreeLeafCircuit as LeafMNT6,
-        PKTreeNodeCircuit as NodeMNT6,
-    },
+    metadata::VerifyingKeyMetadata,
 };
-
-use crate::metadata::VerifyingKeyMetadata;
 
 pub const DEVELOPMENT_SEED: [u8; 32] = [
     1, 0, 52, 0, 0, 0, 0, 0, 1, 0, 10, 0, 22, 32, 0, 0, 2, 0, 55, 49, 0, 11, 0, 0, 3, 0, 0, 0, 0,

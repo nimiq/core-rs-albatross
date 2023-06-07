@@ -4,15 +4,12 @@ use beserial::{Deserialize, Serialize};
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::{Address, KeyPair, PrivateKey};
-use nimiq_primitives::account::AccountType;
-use nimiq_primitives::coin::Coin;
-use nimiq_primitives::networks::NetworkId;
-use nimiq_primitives::policy::Policy;
+use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId, policy::Policy};
 use nimiq_test_log::test;
-use nimiq_transaction::account::staking_contract::{
-    IncomingStakingTransactionData, OutgoingStakingTransactionProof,
+use nimiq_transaction::{
+    account::staking_contract::{IncomingStakingTransactionData, OutgoingStakingTransactionProof},
+    SignatureProof, Transaction,
 };
-use nimiq_transaction::{SignatureProof, Transaction};
 use nimiq_transaction_builder::{TransactionBuilder, TransactionBuilderError};
 
 const ADDRESS: &str = "9cd82948650d902d95d52ea2ec91eae6deb0c9fe";

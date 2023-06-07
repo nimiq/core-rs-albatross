@@ -1,10 +1,6 @@
 use std::{path::Path, time::Instant};
 
 use clap::Parser;
-use nimiq_zkp_primitives::NanoZKPError;
-use rand::SeedableRng;
-use rand_chacha::ChaCha20Rng;
-
 use nimiq_primitives::{
     networks::NetworkId,
     policy::{Policy, TEST_POLICY},
@@ -14,6 +10,9 @@ use nimiq_zkp_circuits::{
     test_setup::{setup_merger_wrapper_simulation, UNIT_TOXIC_WASTE_SEED},
     DEFAULT_KEYS_PATH,
 };
+use nimiq_zkp_primitives::NanoZKPError;
+use rand::SeedableRng;
+use rand_chacha::ChaCha20Rng;
 
 // This is a copied constant from nimiq-test-utils.
 const DEFAULT_TEST_KEYS_PATH: &str = ".zkp_tests";

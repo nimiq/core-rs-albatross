@@ -1,13 +1,10 @@
 use anyhow::Error;
 use async_trait::async_trait;
-use clap::ArgGroup;
-use clap::Parser;
+use clap::{ArgGroup, Parser};
 use futures::StreamExt;
-
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
-use nimiq_rpc_interface::blockchain::BlockchainInterface;
-use nimiq_rpc_interface::types::LogType;
+use nimiq_rpc_interface::{blockchain::BlockchainInterface, types::LogType};
 
 use super::accounts_subcommands::HandleSubcommand;
 use crate::Client;

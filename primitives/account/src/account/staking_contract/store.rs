@@ -1,12 +1,12 @@
 use nimiq_keys::Address;
-use nimiq_primitives::account::AccountError;
-use nimiq_primitives::key_nibbles::KeyNibbles;
+use nimiq_primitives::{account::AccountError, key_nibbles::KeyNibbles};
 
-use crate::account::staking_contract::validator::Tombstone;
-use crate::account::staking_contract::{Staker, Validator};
 #[cfg(feature = "interaction-traits")]
 use crate::data_store::DataStoreWrite;
-use crate::data_store_ops::{DataStoreIterOps, DataStoreReadOps};
+use crate::{
+    account::staking_contract::{validator::Tombstone, Staker, Validator},
+    data_store_ops::{DataStoreIterOps, DataStoreReadOps},
+};
 
 // Fixme: This shouldn't be pub but for now it is needed for `RemoteDataStore`
 pub struct StakingContractStore {}

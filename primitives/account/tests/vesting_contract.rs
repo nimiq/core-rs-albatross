@@ -1,9 +1,5 @@
 use std::convert::{TryFrom, TryInto};
 
-use nimiq_test_utils::{
-    accounts_revert::TestCommitRevert, test_rng::test_rng, transactions::TransactionsGenerator,
-};
-
 use beserial::{Deserialize, Serialize};
 use nimiq_account::{
     Account, Accounts, BasicAccount, BlockState, Log, TransactionLog, VestingContract,
@@ -16,6 +12,9 @@ use nimiq_primitives::{
     transaction::TransactionError,
 };
 use nimiq_test_log::test;
+use nimiq_test_utils::{
+    accounts_revert::TestCommitRevert, test_rng::test_rng, transactions::TransactionsGenerator,
+};
 use nimiq_transaction::{SignatureProof, Transaction};
 use nimiq_utils::key_rng::SecureGenerate;
 

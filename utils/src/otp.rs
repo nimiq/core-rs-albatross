@@ -1,17 +1,17 @@
-use std::marker::PhantomData;
-use std::ops::{Deref, DerefMut};
+use std::{
+    io,
+    marker::PhantomData,
+    ops::{Deref, DerefMut},
+};
 
+use beserial::{
+    Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
+    SerializingError, WriteBytesExt,
+};
 use clear_on_drop::clear::Clear;
-use rand::rngs::OsRng;
-use rand::RngCore;
-
-use beserial::ReadBytesExt;
-use beserial::SerializingError;
-use beserial::WriteBytesExt;
-use beserial::{Deserialize, DeserializeWithLength, Serialize, SerializeWithLength};
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::argon2kdf::{compute_argon2_kdf, Argon2Error};
-use std::io;
+use rand::{rngs::OsRng, RngCore};
 
 pub trait Verify {
     fn verify(&self) -> bool;

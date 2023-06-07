@@ -2,7 +2,6 @@ use ark_crypto_primitives::crh::pedersen::{Parameters, Window};
 use ark_ec::{AffineRepr, CurveGroup, Group};
 use ark_ff::{One, PrimeField, ToConstraintField};
 use ark_mnt6_753::{Fq, G1Affine, G1Projective};
-
 use nimiq_hash::blake2s::Blake2sWithParameterBlock;
 
 use crate::rand_gen::generate_random_seed;

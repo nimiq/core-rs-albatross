@@ -1,9 +1,10 @@
-use std::fmt::{Display, Error, Formatter};
-use std::str::FromStr;
-
-use thiserror::Error;
+use std::{
+    fmt::{Display, Error, Formatter},
+    str::FromStr,
+};
 
 use beserial::{Deserialize, Serialize};
+use thiserror::Error;
 
 #[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]

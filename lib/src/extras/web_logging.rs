@@ -1,11 +1,11 @@
 use log::{level_filters::LevelFilter, Level};
+use nimiq_log::{Formatting, MaybeSystemTime, TargetsExt};
 use tracing_subscriber::{
     filter::Targets, fmt::format::Pretty, layer::SubscriberExt, util::SubscriberInitExt, Layer,
 };
 use tracing_web::{performance_layer, MakeConsoleWriter};
 
 use crate::{config::config_file::LogSettings, error::Error};
-use nimiq_log::{Formatting, MaybeSystemTime, TargetsExt};
 
 pub const DEFAULT_LEVEL: LevelFilter = LevelFilter::INFO;
 

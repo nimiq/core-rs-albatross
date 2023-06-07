@@ -1,5 +1,4 @@
-use nimiq_block::Block;
-use nimiq_block::BlockBody::Micro;
+use nimiq_block::{Block, BlockBody::Micro};
 use nimiq_blockchain_interface::{ChunksPushError, ChunksPushResult, PushError, PushResult};
 use nimiq_hash::Blake2bHash;
 use prometheus_client::{

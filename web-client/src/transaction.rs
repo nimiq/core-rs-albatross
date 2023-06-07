@@ -1,18 +1,10 @@
 use std::str::FromStr;
 
-#[cfg(feature = "client")]
-use serde::ser::SerializeStruct;
-use tsify::Tsify;
-use wasm_bindgen::prelude::*;
-#[cfg(feature = "primitives")]
-use wasm_bindgen_derive::TryFromJsValue;
-
 use beserial::{Deserialize, Serialize};
 use nimiq_hash::{Blake2bHash, Hash};
 #[cfg(feature = "client")]
 use nimiq_primitives::policy::Policy;
 use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId};
-
 #[cfg(feature = "client")]
 use nimiq_transaction::extended_transaction::ExtendedTransaction;
 use nimiq_transaction::{
@@ -25,11 +17,19 @@ use nimiq_transaction::{
 };
 #[cfg(feature = "primitives")]
 use nimiq_transaction_builder::TransactionProofBuilder;
+#[cfg(feature = "client")]
+use serde::ser::SerializeStruct;
+use tsify::Tsify;
+use wasm_bindgen::prelude::*;
+#[cfg(feature = "primitives")]
+use wasm_bindgen_derive::TryFromJsValue;
 
-use crate::address::Address;
 #[cfg(feature = "primitives")]
 use crate::key_pair::KeyPair;
-use crate::utils::{from_network_id, to_network_id};
+use crate::{
+    address::Address,
+    utils::{from_network_id, to_network_id},
+};
 
 /// Transactions describe a transfer of value, usually from the sender to the recipient.
 /// However, transactions can also have no value, when they are used to _signal_ a change in the staking contract.

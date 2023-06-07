@@ -1,9 +1,5 @@
 use std::sync::Arc;
 
-use parking_lot::RwLock;
-use tokio::sync::mpsc;
-use tokio_stream::wrappers::ReceiverStream;
-
 use beserial::{Deserialize, Serialize};
 use nimiq_block::{Block, MicroBlock, MicroBody, MicroHeader};
 use nimiq_block_production::BlockProducer;
@@ -30,6 +26,9 @@ use nimiq_transaction::{ExecutedTransaction, Transaction};
 use nimiq_transaction_builder::TransactionBuilder;
 use nimiq_utils::time::OffsetTime;
 use nimiq_vrf::VrfSeed;
+use parking_lot::RwLock;
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
 
 const NUM_TXNS_START_STOP: usize = 100;
 

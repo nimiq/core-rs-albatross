@@ -4,8 +4,7 @@ use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError};
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Hash, HashOutput, Sha256Hash};
 use nimiq_keys::{Address, KeyPair, PublicKey, SecureGenerate, Signature};
-use nimiq_primitives::coin::Coin;
-use nimiq_primitives::networks::NetworkId;
+use nimiq_primitives::{coin::Coin, networks::NetworkId};
 use nimiq_transaction::{SignatureProof, Transaction};
 use nimiq_utils::otp::Verify;
 

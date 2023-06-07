@@ -1,13 +1,6 @@
-use std::collections::HashMap;
-use std::fs::read_to_string;
-use std::path::Path;
-use std::str::FromStr;
+use std::{collections::HashMap, fs::read_to_string, path::Path, str::FromStr};
 
 use log::level_filters::LevelFilter;
-use serde_derive::Deserialize;
-use thiserror::Error;
-use url::Url;
-
 #[cfg(feature = "nimiq-mempool")]
 use nimiq_mempool::{
     config::MempoolConfig,
@@ -16,6 +9,9 @@ use nimiq_mempool::{
 };
 use nimiq_network_interface::Multiaddr;
 use nimiq_primitives::{coin::Coin, networks::NetworkId};
+use serde_derive::Deserialize;
+use thiserror::Error;
+use url::Url;
 
 use crate::{
     config::{command_line::CommandLine, config, config_file::serialization::*, paths},

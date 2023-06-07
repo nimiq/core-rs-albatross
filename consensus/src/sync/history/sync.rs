@@ -1,17 +1,22 @@
-use std::collections::{HashMap, VecDeque};
-use std::sync::Arc;
-use std::task::Waker;
+use std::{
+    collections::{HashMap, VecDeque},
+    sync::Arc,
+    task::Waker,
+};
 
 use futures::{future::BoxFuture, stream::FuturesUnordered, FutureExt};
-use parking_lot::RwLock;
-
 use nimiq_blockchain::Blockchain;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::network::{Network, SubscribeEvents};
+use parking_lot::RwLock;
 
-use crate::messages::Checkpoint;
-use crate::sync::history::cluster::{SyncCluster, SyncClusterResult};
-use crate::sync::syncer::MacroSync;
+use crate::{
+    messages::Checkpoint,
+    sync::{
+        history::cluster::{SyncCluster, SyncClusterResult},
+        syncer::MacroSync,
+    },
+};
 
 #[derive(Clone)]
 pub(crate) struct EpochIds<T> {

@@ -1,26 +1,26 @@
-use std::path::PathBuf;
-use std::sync::Arc;
-
-use parking_lot::{Mutex, RwLock};
+use std::{path::PathBuf, sync::Arc};
 
 use nimiq_block::Block;
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_consensus::{sync::syncer_proxy::SyncerProxy, Consensus};
-use nimiq_database::volatile::VolatileDatabase;
-use nimiq_database::DatabaseProxy;
+use nimiq_database::{volatile::VolatileDatabase, DatabaseProxy};
 use nimiq_genesis_builder::GenesisInfo;
 use nimiq_network_interface::network::Network as NetworkInterface;
 use nimiq_network_mock::MockHub;
-use nimiq_primitives::networks::NetworkId;
-use nimiq_primitives::trie::TrieItem;
+use nimiq_primitives::{networks::NetworkId, trie::TrieItem};
 use nimiq_utils::time::OffsetTime;
-use nimiq_zkp_component::proof_store::ProofStore;
-use nimiq_zkp_component::{proof_store::DBProofStore, ZKPComponent};
+use nimiq_zkp_component::{
+    proof_store::{DBProofStore, ProofStore},
+    ZKPComponent,
+};
+use parking_lot::{Mutex, RwLock};
 
-use crate::test_network::TestNetwork;
-use crate::zkp_test_data::{zkp_test_exe, ZKP_TEST_KEYS_PATH};
+use crate::{
+    test_network::TestNetwork,
+    zkp_test_data::{zkp_test_exe, ZKP_TEST_KEYS_PATH},
+};
 
 pub const TESTING_BLS_CACHE_MAX_CAPACITY: usize = 100;
 

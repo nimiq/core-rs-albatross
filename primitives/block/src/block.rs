@@ -1,24 +1,22 @@
-use std::convert::TryFrom;
-use std::{fmt, io};
-
-use bitflags::bitflags;
+use std::{convert::TryFrom, fmt, io};
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
+use bitflags::bitflags;
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, SerializeContent};
 use nimiq_hash_derive::SerializeContent;
 use nimiq_keys::PublicKey;
 use nimiq_network_interface::network::Topic;
-use nimiq_primitives::coin::Coin;
-use nimiq_primitives::policy::Policy;
-use nimiq_primitives::slots::Validators;
+use nimiq_primitives::{coin::Coin, policy::Policy, slots::Validators};
 use nimiq_transaction::ExecutedTransaction;
 use nimiq_vrf::VrfSeed;
 
-use crate::macro_block::{MacroBlock, MacroHeader};
-use crate::micro_block::{MicroBlock, MicroHeader};
-use crate::{BlockError, MacroBody, MicroBody, MicroJustification, TendermintProof};
+use crate::{
+    macro_block::{MacroBlock, MacroHeader},
+    micro_block::{MicroBlock, MicroHeader},
+    BlockError, MacroBody, MicroBody, MicroJustification, TendermintProof,
+};
 
 /// These network topics are used to subscribe and request Blocks and Block Headers respectively
 #[derive(Clone, Debug, Default)]

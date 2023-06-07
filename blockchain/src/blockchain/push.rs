@@ -1,8 +1,4 @@
-use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
-use std::cmp;
-use std::error::Error;
-use std::ops::Deref;
-use tokio::sync::broadcast::Sender as BroadcastSender;
+use std::{cmp, error::Error, ops::Deref};
 
 use nimiq_account::{BlockLog, BlockLogger};
 use nimiq_block::{Block, ForkProof, MicroBlock};
@@ -20,6 +16,8 @@ use nimiq_primitives::{
     trie::trie_chunk::{TrieChunkPushResult, TrieChunkWithStart},
 };
 use nimiq_vrf::VrfSeed;
+use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
+use tokio::sync::broadcast::Sender as BroadcastSender;
 
 use crate::{blockchain_state::BlockchainState, Blockchain};
 

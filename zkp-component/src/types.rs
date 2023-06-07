@@ -1,12 +1,10 @@
-use std::io;
-use std::sync::Arc;
+use std::{borrow::Cow, io, path::PathBuf, sync::Arc};
 
 use ark_groth16::Proof;
 use ark_mnt6_753::{G2Projective as G2MNT6, MNT6_753};
 use ark_serialize::{
     CanonicalDeserialize, CanonicalSerialize, SerializationError as ArkSerializingError,
 };
-
 use beserial::{
     Deserialize, DeserializeWithLength, Serialize, SerializeWithLength, SerializingError,
     SerializingError as BeserialSerializingError,
@@ -16,18 +14,12 @@ use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue};
 use nimiq_hash::Blake2bHash;
-use nimiq_network_interface::network::Network;
-use nimiq_network_interface::request::{Handle, RequestError};
 use nimiq_network_interface::{
-    network::Topic,
-    request::{RequestCommon, RequestMarker},
+    network::{Network, Topic},
+    request::{Handle, RequestCommon, RequestError, RequestMarker},
 };
-use nimiq_zkp_primitives::MacroBlock as ZKPMacroBlock;
+use nimiq_zkp_primitives::{MacroBlock as ZKPMacroBlock, NanoZKPError};
 use parking_lot::RwLock;
-use std::borrow::Cow;
-use std::path::PathBuf;
-
-use nimiq_zkp_primitives::NanoZKPError;
 use thiserror::Error;
 
 use crate::ZKPComponent;

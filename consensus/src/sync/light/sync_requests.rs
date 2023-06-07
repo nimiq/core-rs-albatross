@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use futures::FutureExt;
-
 use nimiq_block::Block;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
@@ -18,10 +17,12 @@ use nimiq_zkp_component::{
     zkp_component::ZKPComponentProxy,
 };
 
-use crate::messages::{MacroChain, RequestBlock, RequestMacroChain};
-use crate::sync::light::{
-    sync::{EpochIds, PeerMacroRequests},
-    LightMacroSync,
+use crate::{
+    messages::{MacroChain, RequestBlock, RequestMacroChain},
+    sync::light::{
+        sync::{EpochIds, PeerMacroRequests},
+        LightMacroSync,
+    },
 };
 
 impl<TNetwork: Network> LightMacroSync<TNetwork> {

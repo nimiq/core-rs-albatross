@@ -1,8 +1,4 @@
-use std::borrow::Cow;
-use std::ffi::CStr;
-use std::io;
-use std::mem;
-use std::slice;
+use std::{borrow::Cow, ffi::CStr, io, mem, slice};
 
 pub trait IntoDatabaseValue {
     fn database_byte_size(&self) -> usize;

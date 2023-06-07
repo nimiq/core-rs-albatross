@@ -1,6 +1,7 @@
-use crate::types::RPCResult;
 use async_trait::async_trait;
 use nimiq_keys::Address;
+
+use crate::types::RPCResult;
 
 #[nimiq_jsonrpc_derive::proxy(name = "ValidatorProxy", rename_all = "camelCase")]
 #[async_trait]

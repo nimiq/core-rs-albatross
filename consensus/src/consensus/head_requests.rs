@@ -1,12 +1,13 @@
-use std::collections::HashSet;
-use std::future::Future;
-use std::mem;
-use std::pin::Pin;
-use std::sync::Arc;
-use std::task::{Context, Poll};
+use std::{
+    collections::HashSet,
+    future::Future,
+    mem,
+    pin::Pin,
+    sync::Arc,
+    task::{Context, Poll},
+};
 
 use futures::{future::BoxFuture, stream::FuturesUnordered, FutureExt, StreamExt};
-
 use nimiq_block::Block;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;

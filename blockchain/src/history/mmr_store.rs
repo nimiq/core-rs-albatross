@@ -1,5 +1,4 @@
-use std::cmp;
-use std::convert::TryInto;
+use std::{cmp, convert::TryInto};
 
 use nimiq_database::{
     traits::{ReadCursor, ReadTransaction, WriteTransaction},

@@ -1,8 +1,7 @@
 use std::cmp;
 
-use once_cell::sync::OnceCell;
-
 use nimiq_keys::Address;
+use once_cell::sync::OnceCell;
 
 /// Global policy
 static GLOBAL_POLICY: OnceCell<Policy> = OnceCell::new();
@@ -367,8 +366,9 @@ pub const TEST_POLICY: Policy = Policy {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use nimiq_test_log::test;
+
+    use super::*;
 
     fn initialize_policy() {
         let _ = Policy::get_or_init(TEST_POLICY);

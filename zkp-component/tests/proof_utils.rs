@@ -1,27 +1,25 @@
-use std::path::Path;
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use ark_groth16::Proof;
-use nimiq_zkp::ZKP_VERIFYING_KEY;
-use parking_lot::RwLock;
-
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_database::volatile::VolatileDatabase;
 use nimiq_primitives::{networks::NetworkId, policy::Policy};
 use nimiq_test_log::test;
-use nimiq_test_utils::zkp_test_data::ZKP_TEST_KEYS_PATH;
 use nimiq_test_utils::{
     blockchain::{signing_key, voting_key},
     blockchain_with_rng::produce_macro_blocks_with_rng,
-    zkp_test_data::{get_base_seed, simulate_merger_wrapper},
+    zkp_test_data::{get_base_seed, simulate_merger_wrapper, ZKP_TEST_KEYS_PATH},
 };
 use nimiq_utils::time::OffsetTime;
-
-use nimiq_zkp_component::proof_store::{DBProofStore, ProofStore};
-use nimiq_zkp_component::proof_utils::validate_proof;
-use nimiq_zkp_component::types::ZKProof;
+use nimiq_zkp::ZKP_VERIFYING_KEY;
+use nimiq_zkp_component::{
+    proof_store::{DBProofStore, ProofStore},
+    proof_utils::validate_proof,
+    types::ZKProof,
+};
+use parking_lot::RwLock;
 
 fn blockchain() -> Arc<RwLock<Blockchain>> {
     let time = Arc::new(OffsetTime::new());

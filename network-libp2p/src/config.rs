@@ -1,15 +1,15 @@
-use libp2p::{
-    gossipsub::{GossipsubConfig, GossipsubConfigBuilder, MessageId},
-    identity::Keypair,
-    kad::{KademliaBucketInserts, KademliaConfig, KademliaStoreInserts},
-    Multiaddr,
-};
 use std::{
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
     time::Duration,
 };
 
+use libp2p::{
+    gossipsub::{GossipsubConfig, GossipsubConfigBuilder, MessageId},
+    identity::Keypair,
+    kad::{KademliaBucketInserts, KademliaConfig, KademliaStoreInserts},
+    Multiaddr,
+};
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::peer_info::Services;
 

@@ -1,9 +1,9 @@
 use async_trait::async_trait;
-
 use nimiq_network_libp2p::Network;
-use nimiq_rpc_interface::types::RPCResult;
-use nimiq_rpc_interface::types::ZKPState;
-use nimiq_rpc_interface::zkp_component::ZKPComponentInterface;
+use nimiq_rpc_interface::{
+    types::{RPCResult, ZKPState},
+    zkp_component::ZKPComponentInterface,
+};
 use nimiq_zkp_component::zkp_component::ZKPComponentProxy;
 
 use crate::error::Error;

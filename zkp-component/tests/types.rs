@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
 use ark_groth16::Proof;
-
 use beserial::{Deserialize, Serialize};
 use nimiq_block::MacroBlock;
 use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue};

@@ -1,16 +1,14 @@
-use std::collections::VecDeque;
-use std::error::Error;
-use std::future;
-use std::path::PathBuf;
-use std::pin::Pin;
-use std::sync::Arc;
-use std::task::{Context, Poll};
+use std::{
+    collections::VecDeque,
+    error::Error,
+    future,
+    path::PathBuf,
+    pin::Pin,
+    sync::Arc,
+    task::{Context, Poll},
+};
 
 use futures::{future::BoxFuture, stream::BoxStream, FutureExt, Stream, StreamExt};
-use parking_lot::lock_api::RwLockUpgradableReadGuard;
-use parking_lot::{RwLock, RwLockWriteGuard};
-use tokio::sync::oneshot::{channel, Sender};
-
 use nimiq_block::{Block, MacroBlock};
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent, Direction};
@@ -18,9 +16,10 @@ use nimiq_genesis::NetworkInfo;
 use nimiq_network_interface::network::Network;
 use nimiq_primitives::policy::Policy;
 use nimiq_zkp_primitives::state_commitment;
+use parking_lot::{lock_api::RwLockUpgradableReadGuard, RwLock, RwLockWriteGuard};
+use tokio::sync::oneshot::{channel, Sender};
 
-use crate::proof_gen_utils::*;
-use crate::types::*;
+use crate::{proof_gen_utils::*, types::*};
 
 /// ZK Prover generates the zk proof for an election block. It has:
 ///

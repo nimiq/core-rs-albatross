@@ -3,8 +3,7 @@ use nimiq_blockchain_interface::{AbstractBlockchain, PushError};
 use nimiq_database::TransactionProxy as DBTransaction;
 use nimiq_hash::{Blake2bHash, Hash};
 
-use crate::blockchain_state::BlockchainState;
-use crate::Blockchain;
+use crate::{blockchain_state::BlockchainState, Blockchain};
 
 /// Implements methods to verify the validity of blocks.
 impl Blockchain {

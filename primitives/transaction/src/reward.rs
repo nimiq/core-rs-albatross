@@ -1,5 +1,4 @@
 use beserial::{Deserialize, Serialize};
-
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
 

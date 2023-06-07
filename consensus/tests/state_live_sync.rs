@@ -1,12 +1,7 @@
-use std::sync::Arc;
-use std::task::Poll;
+use std::{sync::Arc, task::Poll};
 
 use futures::{join, poll, Future, FutureExt, StreamExt};
 use log::info;
-use parking_lot::{Mutex, RwLock};
-use tokio::sync::mpsc::{self, Sender};
-use tokio_stream::wrappers::ReceiverStream;
-
 use nimiq_block::Block;
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
@@ -45,6 +40,9 @@ use nimiq_test_utils::{
     node::TESTING_BLS_CACHE_MAX_CAPACITY,
 };
 use nimiq_utils::{math::CeilingDiv, time::OffsetTime};
+use parking_lot::{Mutex, RwLock};
+use tokio::sync::mpsc::{self, Sender};
+use tokio_stream::wrappers::ReceiverStream;
 
 fn blockchain(complete: bool) -> Blockchain {
     let time = Arc::new(OffsetTime::new());

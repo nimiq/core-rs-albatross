@@ -1,16 +1,13 @@
 use std::str::FromStr;
 
-use wasm_bindgen::prelude::*;
-
 use beserial::{Deserialize, Serialize};
 use nimiq_keys::SecureGenerate;
+use wasm_bindgen::prelude::*;
 
-use crate::address::Address;
-use crate::private_key::PrivateKey;
-use crate::public_key::PublicKey;
-use crate::signature::Signature;
-use crate::signature_proof::SignatureProof;
-use crate::transaction::Transaction;
+use crate::{
+    address::Address, private_key::PrivateKey, public_key::PublicKey, signature::Signature,
+    signature_proof::SignatureProof, transaction::Transaction,
+};
 
 /// A keypair represents a private key and its respective public key.
 /// It is used for signing data, usually transactions.

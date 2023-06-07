@@ -1,28 +1,26 @@
+use std::{str::FromStr, sync::Arc};
+
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
-use nimiq_consensus::sync::syncer_proxy::SyncerProxy;
-use nimiq_consensus::Consensus;
+use nimiq_consensus::{sync::syncer_proxy::SyncerProxy, Consensus};
 use nimiq_database::volatile::VolatileDatabase;
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_network_interface::network::Network;
 use nimiq_network_mock::MockHub;
-use nimiq_primitives::networks::NetworkId;
-use nimiq_primitives::policy::Policy;
+use nimiq_primitives::{networks::NetworkId, policy::Policy};
 use nimiq_test_log::test;
-use nimiq_test_utils::blockchain::{fill_micro_blocks_with_txns, UNIT_KEY};
 use nimiq_test_utils::{
-    blockchain::{produce_macro_blocks, signing_key, voting_key},
+    blockchain::{
+        fill_micro_blocks_with_txns, produce_macro_blocks, signing_key, voting_key, UNIT_KEY,
+    },
     node::TESTING_BLS_CACHE_MAX_CAPACITY,
 };
-use nimiq_transaction::extended_transaction::ExtTxData;
-use nimiq_transaction::{ExecutedTransaction, TransactionFormat};
+use nimiq_transaction::{extended_transaction::ExtTxData, ExecutedTransaction, TransactionFormat};
 use nimiq_utils::time::OffsetTime;
 use nimiq_zkp_component::ZKPComponent;
 use parking_lot::{Mutex, RwLock};
-use std::str::FromStr;
-use std::sync::Arc;
 
 #[test(tokio::test)]
 async fn test_request_transactions_by_address() {

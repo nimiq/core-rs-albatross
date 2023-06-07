@@ -1,8 +1,4 @@
-use std::convert::TryInto;
-use std::sync::Arc;
-
-use parking_lot::RwLock;
-use tempfile::tempdir;
+use std::{convert::TryInto, sync::Arc};
 
 use beserial::Deserialize;
 use nimiq_block::{Block, ForkProof, MicroJustification};
@@ -32,6 +28,8 @@ use nimiq_test_utils::{
 use nimiq_transaction::ExecutedTransaction;
 use nimiq_transaction_builder::TransactionBuilder;
 use nimiq_utils::time::OffsetTime;
+use parking_lot::RwLock;
+use tempfile::tempdir;
 
 const ADDRESS: &str = "NQ20TSB0DFSMUH9C15GQGAGJTTE4D3MA859E";
 

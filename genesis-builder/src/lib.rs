@@ -1,13 +1,11 @@
 #[macro_use]
 extern crate log;
 
-use std::fs::{read_to_string, OpenOptions};
-use std::io::Error as IoError;
-use std::path::Path;
-
-use thiserror::Error;
-use time::OffsetDateTime;
-use toml::de::Error as TomlError;
+use std::{
+    fs::{read_to_string, OpenOptions},
+    io::Error as IoError,
+    path::Path,
+};
 
 use beserial::{Serialize, SerializeWithLength, SerializingError};
 use nimiq_account::{
@@ -25,6 +23,9 @@ use nimiq_primitives::{
     account::AccountError, coin::Coin, key_nibbles::KeyNibbles, policy::Policy, trie::TrieItem,
 };
 use nimiq_vrf::VrfSeed;
+use thiserror::Error;
+use time::OffsetDateTime;
+use toml::de::Error as TomlError;
 
 mod config;
 

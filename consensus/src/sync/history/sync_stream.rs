@@ -1,19 +1,24 @@
-use std::pin::Pin;
-use std::sync::Arc;
-use std::task::{Context, Poll};
+use std::{
+    pin::Pin,
+    sync::Arc,
+    task::{Context, Poll},
+};
 
 use futures::{FutureExt, Stream, StreamExt};
-use tokio::task::spawn_blocking;
-
 use nimiq_block::Block;
 use nimiq_blockchain::Blockchain;
 use nimiq_macros::store_waker;
 use nimiq_network_interface::network::{Network, NetworkEvent};
+use tokio::task::spawn_blocking;
 
-use crate::sync::history::cluster::{SyncCluster, SyncClusterResult};
-use crate::sync::history::sync::Job;
-use crate::sync::history::HistoryMacroSync;
-use crate::sync::syncer::{MacroSync, MacroSyncReturn};
+use crate::sync::{
+    history::{
+        cluster::{SyncCluster, SyncClusterResult},
+        sync::Job,
+        HistoryMacroSync,
+    },
+    syncer::{MacroSync, MacroSyncReturn},
+};
 
 impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
     fn poll_network_events(
@@ -239,28 +244,26 @@ impl<TNetwork: Network> Stream for HistoryMacroSync<TNetwork> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-    use std::task::Poll;
+    use std::{sync::Arc, task::Poll};
 
     use futures::{Stream, StreamExt};
     use nimiq_block_production::BlockProducer;
-    use nimiq_network_interface::request::request_handler;
-    use parking_lot::RwLock;
-
     use nimiq_blockchain::{Blockchain, BlockchainConfig};
     use nimiq_blockchain_interface::AbstractBlockchain;
     use nimiq_blockchain_proxy::BlockchainProxy;
     use nimiq_database::volatile::VolatileDatabase;
-    use nimiq_network_interface::network::Network;
+    use nimiq_network_interface::{network::Network, request::request_handler};
     use nimiq_network_mock::{MockHub, MockNetwork};
-    use nimiq_primitives::networks::NetworkId;
-    use nimiq_primitives::policy::Policy;
+    use nimiq_primitives::{networks::NetworkId, policy::Policy};
     use nimiq_test_log::test;
     use nimiq_test_utils::blockchain::{produce_macro_blocks_with_txns, signing_key, voting_key};
     use nimiq_utils::time::OffsetTime;
+    use parking_lot::RwLock;
 
-    use crate::messages::{RequestBatchSet, RequestHistoryChunk, RequestMacroChain};
-    use crate::sync::{history::HistoryMacroSync, syncer::MacroSyncReturn};
+    use crate::{
+        messages::{RequestBatchSet, RequestHistoryChunk, RequestMacroChain},
+        sync::{history::HistoryMacroSync, syncer::MacroSyncReturn},
+    };
 
     fn blockchain() -> Arc<RwLock<Blockchain>> {
         let time = Arc::new(OffsetTime::new());

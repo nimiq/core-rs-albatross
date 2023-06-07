@@ -6,27 +6,24 @@ use std::{
     str::FromStr,
 };
 
-use clap::ValueEnum;
-use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainError};
-use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, DeserializeFromStr, DisplayFromStr, SerializeDisplay};
-
 use beserial::Serialize as BeSerialize;
+use clap::ValueEnum;
 use nimiq_account::{BlockLog as BBlockLog, Log, TransactionLog};
 use nimiq_block::{MicroJustification, MultiSignature};
-
+use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainError};
 use nimiq_blockchain_proxy::BlockchainReadProxy;
 use nimiq_bls::CompressedPublicKey;
 use nimiq_collections::BitSet;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::{Address, PublicKey};
-use nimiq_primitives::coin::Coin;
-use nimiq_primitives::policy::Policy;
-use nimiq_primitives::slots::Validators;
-use nimiq_transaction::account::htlc_contract::AnyHash;
-use nimiq_transaction::account::htlc_contract::HashAlgorithm as HTLCContractHashAlgorithm;
-use nimiq_transaction::inherent::Inherent as BaseInherent;
+use nimiq_primitives::{coin::Coin, policy::Policy, slots::Validators};
+use nimiq_transaction::{
+    account::htlc_contract::{AnyHash, HashAlgorithm as HTLCContractHashAlgorithm},
+    inherent::Inherent as BaseInherent,
+};
 use nimiq_vrf::VrfSeed;
+use serde::{Deserialize, Serialize};
+use serde_with::{serde_as, DeserializeFromStr, DisplayFromStr, SerializeDisplay};
 
 use crate::error::Error;
 

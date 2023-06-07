@@ -2,8 +2,7 @@ use std::cmp;
 
 use nimiq_hash::{Blake2bHash, Blake2bHasher};
 use nimiq_test_log::test;
-use nimiq_utils::merkle::compute_root_from_content;
-use nimiq_utils::merkle::incremental::*;
+use nimiq_utils::merkle::{compute_root_from_content, incremental::*};
 
 fn incremental(values: &[&str], chunk_size: usize) -> Vec<IncrementalMerkleProof<Blake2bHash>> {
     let mut builder = IncrementalMerkleProofBuilder::<Blake2bHash>::new(chunk_size).unwrap();

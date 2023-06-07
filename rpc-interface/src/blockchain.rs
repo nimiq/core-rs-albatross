@@ -1,6 +1,5 @@
 use async_trait::async_trait;
 use futures::stream::BoxStream;
-
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 

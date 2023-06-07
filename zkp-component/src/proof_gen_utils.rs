@@ -1,19 +1,20 @@
-use std::env;
-use std::path::{Path, PathBuf};
-use std::process::Stdio;
+use std::{
+    env,
+    path::{Path, PathBuf},
+    process::Stdio,
+};
 
 use ark_groth16::Proof;
 use ark_mnt6_753::{G2Projective as G2MNT6, MNT6_753};
+use beserial::{Deserialize, Serialize};
+use nimiq_block::MacroBlock;
+use nimiq_zkp::prove::prove;
+use nimiq_zkp_primitives::MacroBlock as ZKPMacroBlock;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     process::Command,
     sync::oneshot::Receiver,
 };
-
-use beserial::{Deserialize, Serialize};
-use nimiq_block::MacroBlock;
-use nimiq_zkp::prove::prove;
-use nimiq_zkp_primitives::MacroBlock as ZKPMacroBlock;
 
 use super::types::ZKPState;
 use crate::types::*;

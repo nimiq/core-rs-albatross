@@ -1,13 +1,14 @@
-use futures::future::{AbortHandle, Abortable};
-use futures::lock::{Mutex, MutexGuard};
-use futures::stream::BoxStream;
-use parking_lot::RwLock;
-use std::collections::HashSet;
-use std::sync::atomic::AtomicU32;
-use std::sync::Arc;
-use tokio_metrics::TaskMonitor;
+use std::{
+    collections::HashSet,
+    sync::{atomic::AtomicU32, Arc},
+};
 
 use beserial::Serialize;
+use futures::{
+    future::{AbortHandle, Abortable},
+    lock::{Mutex, MutexGuard},
+    stream::BoxStream,
+};
 use nimiq_account::ReservedBalance;
 use nimiq_block::Block;
 use nimiq_blockchain::{Blockchain, TransactionVerificationCache};
@@ -16,15 +17,19 @@ use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
 use nimiq_network_interface::network::{Network, Topic};
 use nimiq_transaction::{ControlTransactionTopic, Transaction, TransactionTopic};
+use parking_lot::RwLock;
+use tokio_metrics::TaskMonitor;
 
-use crate::config::MempoolConfig;
-use crate::executor::MempoolExecutor;
-use crate::filter::{MempoolFilter, MempoolRules};
 #[cfg(feature = "metrics")]
 use crate::mempool_metrics::MempoolMetrics;
-use crate::mempool_state::{EvictionReason, MempoolState};
-use crate::mempool_transactions::{MempoolTransactions, TxPriority};
-use crate::verify::{verify_tx, VerifyErr};
+use crate::{
+    config::MempoolConfig,
+    executor::MempoolExecutor,
+    filter::{MempoolFilter, MempoolRules},
+    mempool_state::{EvictionReason, MempoolState},
+    mempool_transactions::{MempoolTransactions, TxPriority},
+    verify::{verify_tx, VerifyErr},
+};
 
 /// Struct defining the Mempool
 pub struct Mempool {

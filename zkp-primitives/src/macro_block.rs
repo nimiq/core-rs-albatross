@@ -1,11 +1,11 @@
-use ark_ec::Group;
-use ark_mnt6_753::{Fr, G1Projective};
-use num_traits::identities::Zero;
 use std::ops::Mul;
 
+use ark_ec::Group;
+use ark_mnt6_753::{Fr, G1Projective};
 use nimiq_bls::Signature;
 use nimiq_hash::{Blake2sHash, Hash, HashOutput};
 use nimiq_primitives::policy::Policy;
+use num_traits::identities::Zero;
 
 /// A struct representing an election macro block in Albatross.
 #[derive(Clone)]
@@ -99,18 +99,20 @@ impl Default for MacroBlock {
 
 #[cfg(test)]
 mod tests {
-    use crate::pk_tree_construct;
     use nimiq_block::{MacroBlock as Block, MacroBody as Body, MultiSignature, TendermintProof};
     use nimiq_bls::{AggregateSignature, KeyPair};
     use nimiq_collections::BitSet;
     use nimiq_keys::{Address, PublicKey as SchnorrPK};
-    use nimiq_primitives::policy::Policy;
-    use nimiq_primitives::slots::{Validator, Validators};
+    use nimiq_primitives::{
+        policy::Policy,
+        slots::{Validator, Validators},
+    };
     use nimiq_test_log::test;
     use nimiq_test_utils::test_rng::test_rng;
     use nimiq_utils::key_rng::SecureGenerate;
 
     use super::*;
+    use crate::pk_tree_construct;
 
     #[test]
     fn hash_and_sign_works() {

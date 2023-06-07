@@ -1,7 +1,6 @@
 use async_trait::async_trait;
 
-use crate::types::PolicyConstants;
-use crate::types::RPCResult;
+use crate::types::{PolicyConstants, RPCResult};
 
 #[nimiq_jsonrpc_derive::proxy(name = "PolicyProxy", rename_all = "camelCase")]
 #[async_trait]

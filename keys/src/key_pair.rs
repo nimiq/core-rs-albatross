@@ -1,8 +1,7 @@
-use ed25519_zebra::{SigningKey, VerificationKeyBytes};
-use rand_core::{CryptoRng, RngCore};
-
 use beserial::{Deserialize, Serialize};
+use ed25519_zebra::{SigningKey, VerificationKeyBytes};
 use nimiq_utils::key_rng::SecureGenerate;
+use rand_core::{CryptoRng, RngCore};
 
 use crate::{PrivateKey, PublicKey, Signature};
 

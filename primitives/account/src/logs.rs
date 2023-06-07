@@ -1,4 +1,3 @@
-use crate::TransactionOperationReceipt;
 use beserial::Serialize as BeSerialize;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
@@ -10,6 +9,8 @@ use nimiq_transaction::{
     account::htlc_contract::{AnyHash, HashAlgorithm},
     Transaction,
 };
+
+use crate::TransactionOperationReceipt;
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]

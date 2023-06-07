@@ -1,6 +1,9 @@
-use std::collections::{hash_map, HashMap};
-use std::fmt;
-use std::hash::Hash;
+use std::{
+    collections::{hash_map, HashMap},
+    fmt,
+    hash::Hash,
+};
+
 use tokio::sync::broadcast;
 
 #[derive(Clone)]

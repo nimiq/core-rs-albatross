@@ -1,13 +1,10 @@
 use std::borrow::Cow;
 
-use byteorder::{BigEndian, WriteBytesExt};
-use regex::Regex;
-
 use beserial::Serialize;
-use nimiq_hash::hmac::*;
-use nimiq_hash::Sha512Hash;
-use nimiq_keys::Address;
-use nimiq_keys::{PrivateKey, PublicKey};
+use byteorder::{BigEndian, WriteBytesExt};
+use nimiq_hash::{hmac::*, Sha512Hash};
+use nimiq_keys::{Address, PrivateKey, PublicKey};
+use regex::Regex;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ExtendedPrivateKey {

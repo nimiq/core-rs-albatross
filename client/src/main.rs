@@ -1,14 +1,10 @@
 use std::time::Duration;
 
 use log::info;
-
 use nimiq::prover::prover_main;
-
 pub use nimiq::{
     client::{Client, Consensus},
-    config::command_line::CommandLine,
-    config::config::ClientConfig,
-    config::config_file::ConfigFile,
+    config::{command_line::CommandLine, config::ClientConfig, config_file::ConfigFile},
     error::Error,
     extras::{
         deadlock::initialize_deadlock_detection,

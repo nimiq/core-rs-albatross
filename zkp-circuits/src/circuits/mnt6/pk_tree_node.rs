@@ -13,11 +13,10 @@ use ark_r1cs_std::{
     uint8::UInt8,
 };
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
-use rand::Rng;
-
 use nimiq_pedersen_generators::GenericWindow;
 use nimiq_primitives::policy::Policy;
 use nimiq_zkp_primitives::PEDERSEN_PARAMETERS;
+use rand::Rng;
 
 use crate::gadgets::{
     bits::BitVec, mnt6::DefaultPedersenParametersVar, pedersen::PedersenHashGadget,

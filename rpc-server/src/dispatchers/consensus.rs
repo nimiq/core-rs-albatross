@@ -1,8 +1,6 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use parking_lot::RwLock;
-
 use beserial::{Deserialize, Serialize};
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_bls::{KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
@@ -13,12 +11,14 @@ use nimiq_network_libp2p::Network;
 use nimiq_primitives::{coin::Coin, networks::NetworkId};
 use nimiq_rpc_interface::{
     consensus::ConsensusInterface,
-    types::RPCResult,
-    types::{Transaction as RPCTransaction, ValidityStartHeight},
+    types::{RPCResult, Transaction as RPCTransaction, ValidityStartHeight},
 };
-use nimiq_transaction::account::htlc_contract::{AnyHash, HashAlgorithm};
-use nimiq_transaction::{SignatureProof, Transaction};
+use nimiq_transaction::{
+    account::htlc_contract::{AnyHash, HashAlgorithm},
+    SignatureProof, Transaction,
+};
 use nimiq_transaction_builder::TransactionBuilder;
+use parking_lot::RwLock;
 
 use crate::{error::Error, wallets::UnlockedWallets};
 

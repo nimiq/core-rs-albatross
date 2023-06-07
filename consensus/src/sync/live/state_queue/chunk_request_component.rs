@@ -5,17 +5,15 @@ use std::{
 };
 
 use futures::{FutureExt, Stream, StreamExt};
-use parking_lot::RwLock;
-
 use nimiq_network_interface::{
     network::{Network, NetworkEvent, SubscribeEvents},
     request::RequestError,
 };
 use nimiq_primitives::key_nibbles::KeyNibbles;
-
-use crate::sync::{peer_list::PeerList, sync_queue::SyncQueue};
+use parking_lot::RwLock;
 
 use super::{RequestChunk, ResponseChunk};
+use crate::sync::{peer_list::PeerList, sync_queue::SyncQueue};
 
 /// Peer Tracking & Chunk Request Component.
 /// This component returns only the responses that respect the size limit specified on

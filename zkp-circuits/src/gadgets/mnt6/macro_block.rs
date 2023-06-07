@@ -12,15 +12,17 @@ use ark_r1cs_std::{
     prelude::{AllocVar, Boolean, CondSelectGadget, FieldVar, UInt32, UInt8},
 };
 use ark_relations::r1cs::{ConstraintSystemRef, Namespace, SynthesisError};
-
 use nimiq_primitives::policy::Policy;
 use nimiq_zkp_primitives::MacroBlock;
 
-use crate::gadgets::{
-    be_bytes::ToBeBytesGadget,
-    mnt6::{CheckSigGadget, HashToCurve},
+use crate::{
+    blake2s::evaluate_blake2s,
+    gadgets::{
+        be_bytes::ToBeBytesGadget,
+        bits::BitVec,
+        mnt6::{CheckSigGadget, HashToCurve},
+    },
 };
-use crate::{blake2s::evaluate_blake2s, gadgets::bits::BitVec};
 
 /// A gadget that contains utilities to verify the validity of a macro block. Mainly it checks that:
 ///  1. The macro block was signed by the aggregate public key.
@@ -243,10 +245,9 @@ mod tests {
     use ark_r1cs_std::{prelude::AllocVar, R1CSVar};
     use ark_relations::r1cs::ConstraintSystem;
     use ark_std::{ops::MulAssign, test_rng, UniformRand};
-    use rand::{Rng, RngCore};
-
     use nimiq_primitives::policy::Policy;
     use nimiq_test_log::test;
+    use rand::{Rng, RngCore};
 
     use super::*;
 

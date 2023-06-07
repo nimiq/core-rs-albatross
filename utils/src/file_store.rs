@@ -4,9 +4,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use thiserror::Error;
-
 use beserial::{Deserialize, Serialize, SerializingError};
+use thiserror::Error;
 
 pub struct FileStore {
     path: PathBuf,

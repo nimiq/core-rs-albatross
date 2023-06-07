@@ -1,10 +1,11 @@
+use std::time::Duration;
+
 use libp2p::gossipsub::TopicHash;
 use prometheus_client::{
     encoding::EncodeLabelSet,
     metrics::{counter::Counter, family::Family, histogram::Histogram},
     registry::Registry,
 };
-use std::time::Duration;
 
 pub struct NetworkMetrics {
     gossipsub_messages_received: Family<TopicLabels, Counter>,

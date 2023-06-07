@@ -1,39 +1,42 @@
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::task::{Context, Poll};
-use std::time::Duration;
+use std::{
+    future::Future,
+    pin::Pin,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    task::{Context, Poll},
+    time::Duration,
+};
 
 use futures::{FutureExt, StreamExt};
 use instant::Instant;
-use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
-#[cfg(not(target_family = "wasm"))]
-use tokio::time::{sleep, Sleep};
-use tokio_stream::wrappers::BroadcastStream;
-
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{network::Network, request::request_handler};
 use nimiq_primitives::task_executor::TaskExecutor;
 use nimiq_zkp_component::zkp_component::ZKPComponentProxy;
+use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
+#[cfg(not(target_family = "wasm"))]
+use tokio::time::{sleep, Sleep};
+use tokio_stream::wrappers::BroadcastStream;
 
-use crate::consensus::head_requests::{HeadRequests, HeadRequestsResult};
+use self::consensus_proxy::ConsensusProxy;
+#[cfg(feature = "full")]
+use self::remote_event_dispatcher::RemoteEventDispatcher;
 #[cfg(feature = "full")]
 use crate::messages::{
     RequestBatchSet, RequestBlocksProof, RequestHistoryChunk, RequestTransactionReceiptsByAddress,
     RequestTransactionsProof, RequestTrieProof,
 };
-use crate::messages::{RequestBlock, RequestHead, RequestMacroChain, RequestMissingBlocks};
-
 #[cfg(feature = "full")]
 use crate::sync::live::state_queue::RequestChunk;
-use crate::sync::{syncer::LiveSyncPushEvent, syncer_proxy::SyncerProxy};
-
-use self::consensus_proxy::ConsensusProxy;
-#[cfg(feature = "full")]
-use self::remote_event_dispatcher::RemoteEventDispatcher;
+use crate::{
+    consensus::head_requests::{HeadRequests, HeadRequestsResult},
+    messages::{RequestBlock, RequestHead, RequestMacroChain, RequestMissingBlocks},
+    sync::{syncer::LiveSyncPushEvent, syncer_proxy::SyncerProxy},
+};
 
 pub mod consensus_proxy;
 mod head_requests;

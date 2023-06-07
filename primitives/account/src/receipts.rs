@@ -1,5 +1,4 @@
-use std::fmt::Debug;
-use std::io;
+use std::{fmt::Debug, io};
 
 use beserial::{Deserialize, Serialize};
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};

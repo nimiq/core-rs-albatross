@@ -9,7 +9,6 @@ use std::{
 use ark_ec::AffineRepr;
 use ark_mnt6_753::G2Affine;
 use ark_serialize::CanonicalDeserialize;
-
 #[cfg(feature = "beserial")]
 use beserial::Deserialize;
 

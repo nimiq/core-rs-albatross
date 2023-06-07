@@ -1,8 +1,7 @@
-use crate::utils::Step;
-
 use futures::{future::BoxFuture, stream::BoxStream};
-
 use nimiq_collections::BitSet;
+
+use crate::utils::Step;
 
 /// Error for proposal verification. Currently not really used, but in place to allow for potential
 /// punishment of misbehaving contributors to the tendermint protocol.

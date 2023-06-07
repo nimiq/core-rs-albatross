@@ -1,13 +1,12 @@
-use log::error;
-
 use beserial::{Deserialize, Serialize, SerializingError, WriteBytesExt};
+use log::error;
 use nimiq_keys::Address;
-use nimiq_primitives::account::AccountType;
-use nimiq_primitives::coin::Coin;
+use nimiq_primitives::{account::AccountType, coin::Coin};
 
-use crate::account::AccountTransactionVerification;
-use crate::SignatureProof;
-use crate::{Transaction, TransactionError, TransactionFlags};
+use crate::{
+    account::AccountTransactionVerification, SignatureProof, Transaction, TransactionError,
+    TransactionFlags,
+};
 
 /// The verifier trait for a basic account. This only uses data available in the transaction.
 pub struct VestingContractVerifier {}

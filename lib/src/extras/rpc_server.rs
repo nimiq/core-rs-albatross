@@ -1,17 +1,13 @@
 use std::{collections::HashSet, iter::FromIterator, sync::Arc};
 
-use nimiq_rpc_server::dispatchers::*;
-
 use nimiq_jsonrpc_core::Credentials;
 use nimiq_jsonrpc_server::{AllowListDispatcher, Config, ModularDispatcher, Server as _Server};
-
+use nimiq_rpc_server::dispatchers::*;
 use nimiq_wallet::WalletStore;
 
-use crate::client::Client;
 #[cfg(feature = "rpc-server")]
 use crate::config::config::RpcServerConfig;
-use crate::config::consts::default_bind;
-use crate::error::Error;
+use crate::{client::Client, config::consts::default_bind, error::Error};
 
 pub type Server = _Server<AllowListDispatcher<ModularDispatcher>>;
 

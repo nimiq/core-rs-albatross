@@ -1,9 +1,8 @@
-use nimiq_jsonrpc_core::RpcError;
-use thiserror::Error;
-
 use nimiq_hash::Blake2bHash;
+use nimiq_jsonrpc_core::RpcError;
 use nimiq_keys::Address;
 use nimiq_mempool::verify::VerifyErr;
+use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum Error {

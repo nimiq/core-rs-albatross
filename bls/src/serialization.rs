@@ -2,7 +2,6 @@ use std::io;
 
 use ark_mnt6_753::Fr;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use nimiq_hash::{Hash, SerializeContent};
 

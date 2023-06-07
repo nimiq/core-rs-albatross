@@ -1,7 +1,5 @@
 use std::ops::Deref;
 
-use parking_lot::RwLockUpgradableReadGuard;
-
 use nimiq_block::{Block, BlockError, ForkProof, MacroHeader, MicroBlock};
 use nimiq_blockchain_interface::{
     AbstractBlockchain, BlockchainEvent, ChainInfo, ChainOrdering, ForkEvent, PushError, PushResult,
@@ -9,6 +7,7 @@ use nimiq_blockchain_interface::{
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::policy::Policy;
 use nimiq_vrf::VrfSeed;
+use parking_lot::RwLockUpgradableReadGuard;
 
 use crate::blockchain::LightBlockchain;
 

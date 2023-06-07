@@ -2,8 +2,7 @@ use std::sync::Arc;
 
 use tempfile::TempDir;
 
-use super::mdbx::*;
-use super::*;
+use super::{mdbx::*, *};
 use crate::traits::Database;
 
 /// A database instantiation that is not permanently stored.
@@ -89,10 +88,10 @@ pub type VolatileWriteCursor<'txn> = MdbxWriteCursor<'txn>;
 
 #[cfg(test)]
 mod tests {
-    use crate::traits::{ReadCursor, ReadTransaction, WriteTransaction};
+    use nimiq_test_log::test;
 
     use super::*;
-    use nimiq_test_log::test;
+    use crate::traits::{ReadCursor, ReadTransaction, WriteTransaction};
 
     #[test]
     fn it_can_save_basic_objects() {

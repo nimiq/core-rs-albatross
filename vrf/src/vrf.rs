@@ -1,24 +1,23 @@
 #![allow(non_snake_case)]
 
-use std::fmt;
-use std::hash::Hash;
-use std::io::Write;
+use std::{fmt, hash::Hash, io::Write};
 
+use beserial::{Deserialize, Serialize, SerializingError};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use curve25519_dalek::constants;
-use curve25519_dalek::edwards::{CompressedEdwardsY, EdwardsPoint};
-use curve25519_dalek::scalar::Scalar;
-use curve25519_dalek::traits::IsIdentity;
+use curve25519_dalek::{
+    constants,
+    edwards::{CompressedEdwardsY, EdwardsPoint},
+    scalar::Scalar,
+    traits::IsIdentity,
+};
 use log::debug;
+use nimiq_hash::{Blake2bHash, Blake2bHasher, HashOutput, Hasher};
+use nimiq_keys::{KeyPair, PublicKey};
+use nimiq_macros::create_typed_array;
 use rand::{CryptoRng, RngCore};
 #[cfg(feature = "serde-derive")]
 use serde_big_array::BigArray;
 use sha2::{Digest, Sha256, Sha512};
-
-use beserial::{Deserialize, Serialize, SerializingError};
-use nimiq_hash::{Blake2bHash, Blake2bHasher, HashOutput, Hasher};
-use nimiq_keys::{KeyPair, PublicKey};
-use nimiq_macros::create_typed_array;
 
 use crate::rng::Rng;
 

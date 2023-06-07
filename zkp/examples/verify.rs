@@ -1,10 +1,7 @@
-use std::fs::File;
-use std::io;
-use std::time::Instant;
+use std::{fs::File, io, time::Instant};
 
 use ark_groth16::Proof;
 use ark_serialize::CanonicalDeserialize;
-
 use nimiq_primitives::{networks::NetworkId, policy::Policy};
 use nimiq_zkp::{verify::verify, ZKP_VERIFYING_KEY};
 use nimiq_zkp_circuits::utils::create_test_blocks;

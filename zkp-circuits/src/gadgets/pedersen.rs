@@ -93,11 +93,10 @@ mod tests {
     use ark_r1cs_std::{prelude::AllocVar, R1CSVar};
     use ark_relations::r1cs::ConstraintSystem;
     use ark_std::test_rng;
-    use nimiq_zkp_primitives::pedersen::pedersen_hash;
-    use rand::RngCore;
-
     use nimiq_pedersen_generators::{pedersen_generator_powers, GenericWindow};
     use nimiq_test_log::test;
+    use nimiq_zkp_primitives::pedersen::pedersen_hash;
+    use rand::RngCore;
 
     use super::*;
 

@@ -1,6 +1,7 @@
-use crate::types::RPCResult;
 use async_trait::async_trait;
 use nimiq_keys::{Address, PrivateKey, PublicKey, Signature};
+
+use crate::types::RPCResult;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]

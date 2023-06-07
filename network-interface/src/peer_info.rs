@@ -1,7 +1,6 @@
+use beserial::{Deserialize, Serialize};
 use bitflags::bitflags;
 use libp2p::Multiaddr;
-
-use beserial::{Deserialize, Serialize};
 
 bitflags! {
     /// Bitmask of services

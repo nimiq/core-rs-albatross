@@ -1,7 +1,6 @@
 use std::{path::Path, sync::Arc};
 
 use futures::StreamExt;
-
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_proxy::BlockchainProxy;
@@ -15,15 +14,15 @@ use nimiq_test_utils::{
     blockchain_with_rng::produce_macro_blocks_with_rng,
     zkp_test_data::{get_base_seed, simulate_merger_wrapper, ZKP_TEST_KEYS_PATH},
 };
-
-use nimiq_zkp::ZKP_VERIFYING_KEY;
-use nimiq_zkp_component::proof_store::{DBProofStore, ProofStore};
-use nimiq_zkp_component::proof_utils::validate_proof;
-use nimiq_zkp_component::zkp_requests::ZKPRequests;
-use nimiq_zkp_component::ZKPComponent;
-use parking_lot::RwLock;
-
 use nimiq_utils::time::OffsetTime;
+use nimiq_zkp::ZKP_VERIFYING_KEY;
+use nimiq_zkp_component::{
+    proof_store::{DBProofStore, ProofStore},
+    proof_utils::validate_proof,
+    zkp_requests::ZKPRequests,
+    ZKPComponent,
+};
+use parking_lot::RwLock;
 
 fn blockchain() -> Arc<RwLock<Blockchain>> {
     let time = Arc::new(OffsetTime::new());

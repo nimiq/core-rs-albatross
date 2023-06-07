@@ -1,9 +1,9 @@
 use beserial::{Deserialize, Serialize};
 use nimiq_keys::KeyPair;
-use nimiq_transaction::account::staking_contract::{
-    IncomingStakingTransactionData, OutgoingStakingTransactionProof,
+use nimiq_transaction::{
+    account::staking_contract::{IncomingStakingTransactionData, OutgoingStakingTransactionProof},
+    SignatureProof, Transaction,
 };
-use nimiq_transaction::{SignatureProof, Transaction};
 
 use crate::proof::TransactionProofBuilder;
 

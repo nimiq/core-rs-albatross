@@ -5,7 +5,6 @@ use std::{
 
 use beserial::Serialize;
 use keyed_priority_queue::KeyedPriorityQueue;
-
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_transaction::Transaction;
 

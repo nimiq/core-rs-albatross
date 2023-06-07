@@ -1,10 +1,12 @@
 use nimiq_primitives::account::AccountType;
 
-use crate::account::basic_account::BasicAccountVerifier;
-use crate::account::htlc_contract::HashedTimeLockedContractVerifier;
-use crate::account::staking_contract::StakingContractVerifier;
-use crate::account::vesting_contract::VestingContractVerifier;
-use crate::{Transaction, TransactionError};
+use crate::{
+    account::{
+        basic_account::BasicAccountVerifier, htlc_contract::HashedTimeLockedContractVerifier,
+        staking_contract::StakingContractVerifier, vesting_contract::VestingContractVerifier,
+    },
+    Transaction, TransactionError,
+};
 
 pub mod basic_account;
 pub mod htlc_contract;

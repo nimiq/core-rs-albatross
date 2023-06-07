@@ -1,6 +1,4 @@
-use std::convert::TryInto;
-use std::io;
-use std::ops::RangeFrom;
+use std::{convert::TryInto, io, ops::RangeFrom};
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use nimiq_block::{

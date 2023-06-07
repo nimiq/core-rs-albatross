@@ -1,13 +1,12 @@
-use std::cmp;
-use std::pin::Pin;
-use std::sync::Arc;
-use std::task::{Context, Poll};
-use std::time::{Duration, SystemTime};
+use std::{
+    cmp,
+    pin::Pin,
+    sync::Arc,
+    task::{Context, Poll},
+    time::{Duration, SystemTime},
+};
 
 use futures::{future::BoxFuture, ready, FutureExt, Stream};
-use parking_lot::RwLock;
-use tokio::time;
-
 use nimiq_block::{Block, ForkProof, MicroBlock, SkipBlockInfo};
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::Blockchain;
@@ -16,6 +15,8 @@ use nimiq_mempool::mempool::Mempool;
 use nimiq_utils::time::systemtime_to_timestamp;
 use nimiq_validator_network::ValidatorNetwork;
 use nimiq_vrf::VrfSeed;
+use parking_lot::RwLock;
+use tokio::time;
 
 use crate::aggregation::skip_block::SkipBlockAggregation;
 

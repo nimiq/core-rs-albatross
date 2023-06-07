@@ -1,4 +1,3 @@
-use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
 use std::error::Error;
 
 use beserial::Serialize;
@@ -8,13 +7,13 @@ use nimiq_blockchain_interface::{
     AbstractBlockchain, BlockchainEvent, ChainInfo, PushError, PushResult,
 };
 use nimiq_database::{traits::WriteTransaction, WriteTransactionProxy};
-use nimiq_primitives::coin::Coin;
-use nimiq_primitives::policy::Policy;
+use nimiq_primitives::{coin::Coin, policy::Policy};
 use nimiq_transaction::{
     extended_transaction::{ExtTxData, ExtendedTransaction},
     inherent::Inherent,
     Transaction,
 };
+use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
 
 use crate::Blockchain;
 

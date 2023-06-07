@@ -4,13 +4,14 @@ use std::{
     sync::{atomic::AtomicBool, Arc},
 };
 
+use nimiq_network_interface::{peer_info::PeerInfo, request::RequestType};
 use parking_lot::{Mutex, RwLock};
 use tokio::sync::{broadcast, mpsc, oneshot};
 
-use nimiq_network_interface::{peer_info::PeerInfo, request::RequestType};
-
-use crate::network::{MockNetwork, MockRequestId};
-use crate::{MockAddress, MockPeerId, ObservableHashMap};
+use crate::{
+    network::{MockNetwork, MockRequestId},
+    MockAddress, MockPeerId, ObservableHashMap,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct SenderKey {

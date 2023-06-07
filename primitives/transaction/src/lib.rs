@@ -1,28 +1,28 @@
 #[macro_use]
 extern crate log;
 
-use std::cmp::{Ord, Ordering};
-use std::convert::TryFrom;
-use std::io;
-use std::sync::Arc;
-
-use bitflags::bitflags;
-use num_traits::SaturatingAdd;
-use thiserror::Error;
+use std::{
+    cmp::{Ord, Ordering},
+    convert::TryFrom,
+    io,
+    sync::Arc,
+};
 
 use beserial::{
     Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
     SerializingError, WriteBytesExt,
 };
+use bitflags::bitflags;
 use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
-use nimiq_keys::Address;
-use nimiq_keys::{PublicKey, Signature};
+use nimiq_keys::{Address, PublicKey, Signature};
 use nimiq_network_interface::network::Topic;
 use nimiq_primitives::{
     account::AccountType, coin::Coin, networks::NetworkId, policy::Policy,
     transaction::TransactionError,
 };
 use nimiq_utils::merkle::{Blake2bMerklePath, Blake2bMerkleProof};
+use num_traits::SaturatingAdd;
+use thiserror::Error;
 
 use crate::account::AccountTransactionVerification;
 

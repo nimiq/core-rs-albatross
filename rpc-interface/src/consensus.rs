@@ -1,10 +1,10 @@
 use async_trait::async_trait;
-
-use crate::types::{RPCResult, Transaction, ValidityStartHeight};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
 use nimiq_transaction::account::htlc_contract::{AnyHash, HashAlgorithm};
+
+use crate::types::{RPCResult, Transaction, ValidityStartHeight};
 
 #[nimiq_jsonrpc_derive::proxy(name = "ConsensusProxy", rename_all = "camelCase")]
 #[async_trait]

@@ -1,8 +1,9 @@
+use std::sync::Arc;
+
+use nimiq_mempool::mempool::Mempool;
 use prometheus_client::registry::Registry;
 
 use crate::NumericClosureMetric;
-use nimiq_mempool::mempool::Mempool;
-use std::sync::Arc;
 
 pub struct MempoolMetrics {}
 

@@ -1,11 +1,12 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::{
+    collections::{BTreeMap, HashMap, HashSet},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
 
 use futures::stream::BoxStream;
-use tokio::sync::broadcast::Sender as BroadcastSender;
-use tokio_stream::wrappers::BroadcastStream;
-
 use nimiq_account::{Account, Staker, Validator};
 use nimiq_block::Block;
 use nimiq_blockchain_interface::AbstractBlockchain;
@@ -22,6 +23,8 @@ use nimiq_transaction::{
     extended_transaction::ExtendedTransaction, ControlTransactionTopic, Transaction,
     TransactionTopic,
 };
+use tokio::sync::broadcast::Sender as BroadcastSender;
+use tokio_stream::wrappers::BroadcastStream;
 
 use crate::{
     consensus::remote_data_store::RemoteDataStore,

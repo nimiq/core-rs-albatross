@@ -3,12 +3,14 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use parking_lot::RwLock;
 
-use crate::contribution::AggregatableContribution;
-use crate::evaluator::Evaluator;
-use crate::identity::{IdentityRegistry, WeightRegistry};
-use crate::partitioner::Partitioner;
-use crate::store::ContributionStore;
-use crate::verifier::{VerificationResult, Verifier};
+use crate::{
+    contribution::AggregatableContribution,
+    evaluator::Evaluator,
+    identity::{IdentityRegistry, WeightRegistry},
+    partitioner::Partitioner,
+    store::ContributionStore,
+    verifier::{VerificationResult, Verifier},
+};
 
 #[async_trait]
 pub trait Protocol<TId: Clone + std::fmt::Debug + 'static>: Send + Sync + Sized + 'static {

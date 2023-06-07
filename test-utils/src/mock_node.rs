@@ -1,12 +1,10 @@
-use std::pin::Pin;
-use std::task::Context;
-use std::{sync::Arc, task::Poll};
+use std::{
+    pin::Pin,
+    sync::Arc,
+    task::{Context, Poll},
+};
 
-use futures::future::BoxFuture;
-use futures::stream::BoxStream;
-use futures::{ready, FutureExt, Stream, StreamExt};
-use parking_lot::RwLock;
-
+use futures::{future::BoxFuture, ready, stream::BoxStream, FutureExt, Stream, StreamExt};
 use nimiq_block::Block;
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_proxy::BlockchainProxy;
@@ -20,9 +18,9 @@ use nimiq_network_interface::{
     request::{Handle, Request},
 };
 use nimiq_network_mock::MockHub;
-use nimiq_primitives::networks::NetworkId;
-use nimiq_primitives::trie::TrieItem;
+use nimiq_primitives::{networks::NetworkId, trie::TrieItem};
 use nimiq_utils::time::OffsetTime;
+use parking_lot::RwLock;
 
 use crate::test_network::TestNetwork;
 

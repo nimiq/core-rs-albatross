@@ -7,11 +7,10 @@ use futures::{
     future::{self, FutureExt},
     stream::{BoxStream, StreamExt},
 };
-use tokio::{sync::mpsc, time::timeout};
-use tokio_stream::wrappers::ReceiverStream;
-
 use nimiq_collections::BitSet;
 use nimiq_tendermint::*;
+use tokio::{sync::mpsc, time::timeout};
+use tokio_stream::wrappers::ReceiverStream;
 
 pub mod helper;
 

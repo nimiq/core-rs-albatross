@@ -6,7 +6,6 @@ pub use ark_mnt6_753::G2Projective;
 use ark_mnt6_753::{G1Projective, MNT6_753};
 use ark_serialize::CanonicalSerialize;
 use log::error;
-
 use nimiq_hash::Hash;
 
 use crate::{CompressedPublicKey, SecretKey, SigHash, Signature};

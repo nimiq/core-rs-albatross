@@ -1,14 +1,10 @@
-use std::io;
-use std::ops;
-use std::ops::RangeFrom;
-use std::slice;
-
-use log::error;
+use std::{io, ops, ops::RangeFrom, slice};
 
 use beserial::{
     Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
     SerializingError, WriteBytesExt,
 };
+use log::error;
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Blake2bHash, Hash, HashOutput, Hasher};
 

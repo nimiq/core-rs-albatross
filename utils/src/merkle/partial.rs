@@ -1,5 +1,4 @@
-use std::io::Write;
-use std::ops::Range;
+use std::{io::Write, ops::Range};
 
 use beserial::{Deserialize, Serialize};
 use nimiq_hash::{Blake2bHash, HashOutput, Hasher, SerializeContent};

@@ -1,5 +1,7 @@
-use std::collections::{BTreeMap, HashMap};
-use std::sync::Arc;
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
 
 use beserial::Deserialize;
 use nimiq_account::{
