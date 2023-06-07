@@ -259,10 +259,9 @@ pub fn setup_merger_wrapper_simulation<R: Rng + CryptoRng>(
     let circuit = MergerWrapperCircuit::rand(vk_merger, rng);
 
     let (toxic_waste, pk) = ToxicWaste::setup_groth16(circuit, rng)?;
-    let vk = pk.vk.clone();
 
     // Save keys to file.
-    keys_to_file(&pk, &vk, "merger_wrapper", path)?;
+    keys_to_file(&pk, &pk.vk, "merger_wrapper", path)?;
 
     // Save toxic waste to file.
     let mut file = File::create(path.join("toxic_waste.bin"))?;

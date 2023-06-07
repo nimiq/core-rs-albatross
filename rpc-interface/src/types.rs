@@ -1,6 +1,6 @@
-///! Defines the types used by the JSON RPC API[1]
-///!
-///! [1] https://github.com/nimiq/core-js/wiki/JSON-RPC-API#common-data-types
+//! Defines the types used by the JSON RPC API[1]
+//!
+//! [1] https://github.com/nimiq/core-js/wiki/JSON-RPC-API#common-data-types
 use std::{
     fmt::{self, Display, Formatter},
     str::FromStr,

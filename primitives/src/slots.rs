@@ -1,21 +1,20 @@
+//! # Slot allocation primitives
+//!
+//! This module contains data structures describing the allocation of slots.
+//!
+//! The graphic below shows how slots relate to validators. In the example we have two
+//! validators that produce blocks distributed over a total of 16 slots. Validator #0
+//! produces blocks for slots (0 - A). Validator #2 works similarly.
+//!
+//! ```plain
+//!                      +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+//!              Slots   | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | A | B | C | D | E | F |
+//!                      +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+//!          Validators  |             Validator #0                  |    Validator #1   |
+//!                      |             SlotBand                      |    SlotBand       |
+//!                      +-------------------------------------------+-------------------+
+//! ```
 use std::cmp::max;
-///! # Slot allocation primitives
-///!
-///! This module contains data structures describing the allocation of slots.
-///!
-///! The graphic below shows how slots relate to validators. In the example we have two
-///! validators that produce blocks distributed over a total of 16 slots. Validator #0
-///! produces blocks for slots (0 - A). Validator #2 works similarly.
-///!
-///! ```plain
-///!                      +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
-///!              Slots   | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | A | B | C | D | E | F |
-///!                      +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
-///!          Validators  |             Validator #0                  |    Validator #1   |
-///!                      |             SlotBand                      |    SlotBand       |
-///!                      +-------------------------------------------+-------------------+
-///! ```
-///!
 use std::collections::BTreeMap;
 use std::slice::Iter;
 
