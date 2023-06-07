@@ -67,25 +67,30 @@ jobs:
         components: llvm-tools-preview
     - name: Install Protoc
       run: sudo apt-get install protobuf-compiler
-    - name: Install cargo-llvm-cov
-      run: cargo install cargo-llvm-cov
-    - name: Remove possible stale artifacts
-      run: cargo llvm-cov clean --workspace
-    - name: Run test with coverage instrumentation
-      run: cargo llvm-cov --all-features
+    - name: Install cargo-nextest
+      run: curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+    # Coverage is disabled for now since at the moment it has a considerable performance impact in the CI
+    #- name: Install cargo-llvm-cov
+    #  run: cargo install cargo-llvm-cov
+    #- name: Remove possible stale artifacts
+    #  run: cargo llvm-cov clean --workspace
+    #- name: Run test with coverage instrumentation
+    #  run: cargo llvm-cov nextest --all-features
       # Fixme: --doctest is not supported in stable. See:
       # https://github.com/taiki-e/cargo-llvm-cov/tree/7448e48b438797efb446a98ebd8ff22d3fae5ebe#known-limitations
       # run: cargo llvm-cov --all-features --doctests
-    - name: Generate coverage report
-      run: cargo llvm-cov report --lcov --output-path coverage.lcov
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
-      with:
-        files: coverage.lcov
-        fail_ci_if_error: false
-        flags: unittests
-        name: Nimiq code coverage
-        verbose: true
+    #- name: Generate coverage report
+    #  run: cargo llvm-cov report --lcov --output-path coverage.lcov
+    #- name: Upload coverage to Codecov
+    #  uses: codecov/codecov-action@v3
+    #  with:
+    #    files: coverage.lcov
+    #    fail_ci_if_error: false
+    #    flags: unittests
+    #    name: Nimiq code coverage
+    #    verbose: true
+    - name: Run tests
+      run: cargo nextest run --all-features
 
   clippy:
     if: github.event_name != 'push' || github.event.pusher.name != 'dependabot[bot]'
