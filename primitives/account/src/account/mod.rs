@@ -91,7 +91,7 @@ impl Account {
     pub fn set_nonce(&mut self, nonce: u64) {
         match *self {
             Account::Basic(ref mut account) => account.nonce = Some(nonce),
-            // Nonce is inherited from basic accounts into Vesting/HTLC contracts
+            // Nonce is inherited from basic accounts into contracts
             Account::Vesting(_) => todo!(),
             Account::HTLC(_) => todo!(),
             Account::Staking(_) => todo!(),

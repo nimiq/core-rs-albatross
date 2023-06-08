@@ -22,8 +22,8 @@ pub enum VerifyErr {
     InvalidTransaction(#[from] TransactionError),
     #[error("Transaction already included in chain")]
     AlreadyIncluded,
-    #[error("Transaction not valid at current block number")]
-    InvalidBlockNumber,
+    #[error("Transaction nonce is not correct")]
+    InvalidNonce,
     #[error("Insufficient funds to execute transaction")]
     InsufficientFunds,
     #[error("Transaction already in mempool")]
@@ -53,18 +53,16 @@ pub(crate) async fn verify_tx(
     // 2. Acquire blockchain read lock
     let blockchain = blockchain.read();
 
-    // TODO: <Nonce> Include nonce functionality into the mempool
-
-    // 4. Acquire the mempool state write lock
+    // 3. Acquire the mempool state write lock
     let mut mempool_state = mempool_state.write();
 
-    // 5. Check if we already know the transaction
+    // 4. Check if we already know the transaction
     if mempool_state.contains(&transaction.hash()) {
         // We already know this transaction, no need to process
         return Err(VerifyErr::Known);
     }
 
-    // 6. Check if the transaction is going to be filtered.
+    // 5. Check if the transaction is going to be filtered.
     {
         let filter = filter.read();
         if !filter.accepts_transaction(transaction) || filter.blacklisted(&transaction.hash()) {
@@ -74,7 +72,7 @@ pub(crate) async fn verify_tx(
         }
     }
 
-    // 7. Add transaction to the mempool. Balance checks are performed within put().
+    // 6. Add transaction to the mempool. Balance and nonce checks are performed within put().
     mempool_state.put(&blockchain, transaction, priority)?;
 
     Ok(())

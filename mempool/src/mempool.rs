@@ -313,9 +313,6 @@ impl Mempool {
         let blockchain = self.blockchain.read();
         let mut mempool_state = self.state.write();
 
-        // First remove the transactions that are no longer valid due to age.
-        self.prune_expired_transactions(&blockchain, &mut mempool_state);
-
         // Now iterate over the transactions in the adopted blocks:
         //  if transaction was known:
         //    remove it from the mempool
@@ -395,8 +392,6 @@ impl Mempool {
         let blockchain = self.blockchain.read();
         let mut mempool_state = self.state.write();
 
-        self.prune_expired_transactions(&blockchain, &mut mempool_state);
-
         // Remove all transactions that have already been included.
         // TODO: <Nonce> Include nonce functionality into the mempool
 
@@ -461,19 +456,6 @@ impl Mempool {
             if !sender_state.txns.is_empty() {
                 mempool_state.state_by_sender.insert(address, sender_state);
             }
-        }
-    }
-
-    /// Remove transactions that are expired and thus no longer valid.
-    fn prune_expired_transactions(
-        &self,
-        blockchain: &Blockchain,
-        mempool_state: &mut MempoolState,
-    ) {
-        let next_block_number = blockchain.block_number() + 1;
-        let expired_txns = mempool_state.get_expired_txns(next_block_number);
-        for tx_hash in expired_txns {
-            mempool_state.remove(blockchain, &tx_hash, EvictionReason::Expired);
         }
     }
 

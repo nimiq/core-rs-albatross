@@ -140,32 +140,6 @@ impl MempoolTransactions {
         self.transactions.len()
     }
 
-    // This function is used to remove the transactions that are no longer valid at a given block number.
-    pub fn get_expired_txns(&mut self, block_number: u32) -> Vec<Blake2bHash> {
-        let mut expired_txns = vec![];
-        loop {
-            // Get the hash of the oldest transaction.
-            let tx_hash = match self.oldest_transactions.peek() {
-                None => break,
-                Some((tx_hash, _)) => tx_hash.clone(),
-            };
-
-            // Get a reference to the transaction.
-            let tx = self.get(&tx_hash).unwrap();
-
-            // Check if it is still valid.
-            if tx.is_valid_at(block_number) {
-                // No need to process more transactions, since we arrived to the oldest one that is valid
-                break;
-            } else {
-                // Remove the transaction from the oldest struct to continue collecting expired txns.
-                self.oldest_transactions.remove(&tx_hash);
-                expired_txns.push(tx_hash);
-            }
-        }
-        expired_txns
-    }
-
     pub fn get(&self, hash: &Blake2bHash) -> Option<&Transaction> {
         self.transactions.get(hash)
     }
@@ -198,7 +172,7 @@ impl MempoolTransactions {
 
         self.tx_counter += 1;
 
-        //TODO: <Nounce> Oldest transactions structure needs to be updated accordingly
+        //TODO: <Nonce> Oldest transactions structure needs to be updated accordingly
         //self.oldest_transactions
         //    .push(tx_hash, Reverse(tx.validity_start_height));
 

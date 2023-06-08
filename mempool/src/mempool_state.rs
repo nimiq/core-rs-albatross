@@ -74,18 +74,30 @@ impl MempoolState {
             blockchain
                 .reserve_balance(&sender_account, tx, reserved_balance)
                 .map_err(|_| VerifyErr::InsufficientFunds)?;
-            sender_state.txns.insert(tx.hash());
+
+            if tx.nonce == sender_state.current_nonce {
+                // If the transaction contains the right nonce we accept it, otherwise we ignore it
+                sender_state.txns.insert(tx.hash());
+                sender_state.current_nonce += 1;
+            }
         } else {
             let mut reserved_balance = ReservedBalance::new(tx.sender.clone());
             blockchain
                 .reserve_balance(&sender_account, tx, &mut reserved_balance)
                 .map_err(|_| VerifyErr::InsufficientFunds)?;
 
-            let sender_state = SenderPendingState {
-                reserved_balance,
-                txns: HashSet::from([tx.hash()]),
-            };
-            self.state_by_sender.insert(tx.sender.clone(), sender_state);
+            let current_nonce = sender_account
+                .get_nonce()
+                .expect("The account must have a nonce associated with it");
+
+            if tx.nonce == current_nonce {
+                let sender_state = SenderPendingState {
+                    reserved_balance,
+                    txns: HashSet::from([tx.hash()]),
+                    current_nonce: current_nonce + 1,
+                };
+                self.state_by_sender.insert(tx.sender.clone(), sender_state);
+            }
         }
 
         // If we are adding a staking transaction we insert it into the control txns container
@@ -163,13 +175,6 @@ impl MempoolState {
 
         Some(tx)
     }
-
-    /// Retrieves all expired transaction hashes from both the `regular_transactions` and `control_transactions` vectors
-    pub fn get_expired_txns(&mut self, block_number: u32) -> Vec<Blake2bHash> {
-        let mut expired_txns = self.control_transactions.get_expired_txns(block_number);
-        expired_txns.append(&mut self.regular_transactions.get_expired_txns(block_number));
-        expired_txns
-    }
 }
 
 #[derive(Clone)]
@@ -186,5 +191,9 @@ pub(crate) struct SenderPendingState {
     pub(crate) reserved_balance: ReservedBalance,
 
     // Transaction hashes for this sender.
+    // This needs to be ordered by nonce
     pub(crate) txns: HashSet<Blake2bHash>,
+
+    // Current nonce value for this sender
+    pub(crate) current_nonce: u64,
 }
